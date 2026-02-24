@@ -1,0 +1,63 @@
+name: Deploy ARLS Backend (Docker -> ACR -> WebApp Container)
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ACR_LOGIN_SERVER: acrsecurityopsprod001-eneccucxdcfedqhm.azurecr.io
+  IMAGE_REPO: hr-backend
+  AZURE_WEBAPP_NAME: rg-arls-backend
+  AZURE_RESOURCE_GROUP: rg-arls-dev
+  WEBSITES_PORT: "8080"
+
+jobs:
+  build_push_and_set_container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_2D0BAD1277E54D68AB1AEE8365610001 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_6AFAB1BB33A243268F5F062CEB3B4BDB }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_5430C5FDF1CF4649BA67C8ACAD76CE82 }}
+
+      - name: ACR Login (push)
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ env.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_PUSH_USERNAME }}
+          password: ${{ secrets.ACR_PUSH_PASSWORD }}
+
+      - name: Build & Push image (latest + sha)
+        run: |
+          IMAGE_SHA=${{ github.sha }}
+          IMAGE_LATEST=${ACR_LOGIN_SERVER}/${IMAGE_REPO}:latest
+          IMAGE_COMMIT=${ACR_LOGIN_SERVER}/${IMAGE_REPO}:${IMAGE_SHA}
+          docker build -t "${IMAGE_LATEST}" -t "${IMAGE_COMMIT}" .
+          docker push "${IMAGE_LATEST}"
+          docker push "${IMAGE_COMMIT}"
+
+      - name: Configure WebApp port + container image
+        run: |
+          az webapp config appsettings set \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --settings WEBSITES_PORT="${WEBSITES_PORT}" PORT="${WEBSITES_PORT}"
+
+          az webapp config container set \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --docker-custom-image-name "${ACR_LOGIN_SERVER}/${IMAGE_REPO}:latest" \
+            --docker-registry-server-url "https://${ACR_LOGIN_SERVER}"
+
+      - name: Restart WebApp
+        run: |
+          az webapp restart --name "${AZURE_WEBAPP_NAME}" --resource-group "${AZURE_RESOURCE_GROUP}"
