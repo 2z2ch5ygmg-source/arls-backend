@@ -608,24 +608,31 @@ def _require_integration_manager(user: dict) -> str:
     return role
 
 
+def _normalize_tenant_code(value: str | None) -> str:
+    return str(value or "").strip().lower()
+
+
 def _resolve_tenant_by_code(conn, tenant_code: str):
+    normalized_code = _normalize_tenant_code(tenant_code)
+    if not normalized_code:
+        return None
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT id, tenant_code, tenant_name, COALESCE(is_active, TRUE) AS is_active
             FROM tenants
-            WHERE tenant_code = %s
+            WHERE lower(trim(tenant_code)) = %s
             LIMIT 1
             """,
-            (tenant_code,),
+            (normalized_code,),
         )
         return cur.fetchone()
 
 
 def _resolve_target_tenant(conn, user: dict, tenant_code: str | None):
     actor_role = _require_integration_manager(user)
-    own_tenant_code = str(user.get("tenant_code") or "").strip().upper()
-    requested_tenant_code = str(tenant_code or "").strip().upper()
+    own_tenant_code = _normalize_tenant_code(user.get("tenant_code"))
+    requested_tenant_code = _normalize_tenant_code(tenant_code)
 
     if actor_role != "dev":
         if requested_tenant_code and requested_tenant_code != own_tenant_code:
