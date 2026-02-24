@@ -18,6 +18,7 @@ from ...integration_center.feature_flags import (
     build_feature_flag_defaults,
 )
 from ...utils.permissions import normalize_role
+from ...utils.tenant_context import resolve_scoped_tenant
 from . import integrations as integrations_router
 
 router = APIRouter(prefix="/reports", tags=["reports"], dependencies=[Depends(apply_rate_limit)])
@@ -33,39 +34,13 @@ FEATURE_FLAG_DEFAULTS = build_feature_flag_defaults(settings)
 
 
 def _resolve_target_tenant(conn, user: dict, tenant_code: str | None):
-    actor_role = normalize_role(user.get("role"))
-    own_tenant_code = str(user.get("tenant_code") or "").strip().upper()
-    requested_tenant_code = str(tenant_code or "").strip().upper()
-
-    if actor_role != "dev":
-        if requested_tenant_code and requested_tenant_code != own_tenant_code:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={"error": "FORBIDDEN", "message": "다른 테넌트 조회 권한이 없습니다."},
-            )
-        requested_tenant_code = own_tenant_code
-    elif not requested_tenant_code:
-        requested_tenant_code = own_tenant_code
-
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT id, tenant_code, tenant_name
-            FROM tenants
-            WHERE tenant_code = %s
-              AND COALESCE(is_active, TRUE) = TRUE
-            LIMIT 1
-            """,
-            (requested_tenant_code,),
-        )
-        row = cur.fetchone()
-
-    if not row:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error": "TENANT_NOT_FOUND", "message": "테넌트를 찾을 수 없습니다."},
-        )
-    return row
+    return resolve_scoped_tenant(
+        conn,
+        user,
+        query_tenant_code=tenant_code,
+        header_tenant_id=user.get("active_tenant_id"),
+        require_dev_context=True,
+    )
 
 
 def _is_apple_tenant(tenant_row: dict[str, Any]) -> bool:

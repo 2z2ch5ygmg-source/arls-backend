@@ -8,6 +8,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from .db import get_connection
 from .security import decode_token
 from .utils.permissions import normalize_role, normalize_user_role
+from .utils.tenant_context import normalize_tenant_identifier
 from .utils.guards import IDEMPOTENCY, RATE_LIMITER
 
 security_scheme = HTTPBearer(auto_error=False)
@@ -34,6 +35,7 @@ def get_db_conn():
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
     conn=Depends(get_db_conn),
 ):
     if credentials is None:
@@ -82,6 +84,7 @@ def get_current_user(
 
     result = dict(row)
     result["role"] = normalize_user_role(result.get("role"))
+    result["active_tenant_id"] = normalize_tenant_identifier(x_tenant_id)
     return result
 
 

@@ -21,6 +21,7 @@ from ...utils.permissions import (
     is_super_admin,
     normalize_role,
 )
+from ...utils.tenant_context import resolve_scoped_tenant
 
 router = APIRouter(prefix="/sites", tags=["sites"], dependencies=[Depends(apply_rate_limit)])
 
@@ -247,27 +248,14 @@ def _resolve_super_admin_scoped_tenant(conn, tenant_ref: str | None, *, required
 
 
 def _resolve_target_tenant(conn, user, tenant_code: str | None, tenant_id: str | None = None):
-    own_tenant_id = str(user.get("tenant_id") or "").strip()
-    own_tenant_code = str(user.get("tenant_code") or "").strip().upper()
-    requested_tenant_code = str(tenant_id or tenant_code or "").strip().lower()
-
-    if not is_super_admin(user["role"]):
-        # Non-DEV roles are always scoped to their own tenant.
-        # Legacy data may store code/id differently, so resolve by id first then code.
-        row = _resolve_tenant_row_any(conn, own_tenant_id) or _resolve_tenant_row_any(conn, own_tenant_code)
-        if row:
-            if not bool(row.get("is_active", True)) or bool(row.get("is_deleted", False)):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail={"error": "TENANT_DISABLED", "message": "tenant disabled"},
-                )
-            return row
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error": "TENANT_SCOPE_INVALID", "message": "권한 테넌트를 확인할 수 없습니다."},
-        )
-
-    return _resolve_super_admin_scoped_tenant(conn, requested_tenant_code, required=True)
+    return resolve_scoped_tenant(
+        conn,
+        user,
+        query_tenant_code=tenant_code,
+        body_tenant_id=tenant_id,
+        header_tenant_id=user.get("active_tenant_id"),
+        require_dev_context=True,
+    )
 
 
 def _generate_next_site_code(conn, tenant_id: str) -> str:
@@ -592,24 +580,11 @@ def list_sites(
             detail={"error": "FORBIDDEN", "message": "접근 권한이 없습니다."},
         )
 
-    active_filter = _active_filter_to_bool(active)
-    clauses = []
-    params: list = []
+    tenant = _resolve_target_tenant(conn, user, tenant_code)
 
-    requested_tenant_code = str(tenant_code or "").strip().lower()
-    if role_scope == ROLE_DEV:
-        scoped_tenant = _resolve_super_admin_scoped_tenant(conn, requested_tenant_code, required=True)
-        clauses.append("s.tenant_id = %s")
-        params.append(scoped_tenant["id"])
-    else:
-        own_tenant_code = str(user.get("tenant_code") or "").strip().lower()
-        if requested_tenant_code and requested_tenant_code != own_tenant_code:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={"error": "FORBIDDEN", "message": "접근 권한이 없습니다."},
-            )
-        clauses.append("s.tenant_id = %s")
-        params.append(user["tenant_id"])
+    active_filter = _active_filter_to_bool(active)
+    clauses = ["s.tenant_id = %s"]
+    params: list = [tenant["id"]]
 
     if company_code:
         clauses.append("c.company_code = %s")

@@ -11,6 +11,7 @@ from ...config import settings
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
 from ...schemas import EmployeeCreate, EmployeeOut, EmployeeUpdate
 from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, normalize_role, normalize_user_role
+from ...utils.tenant_context import canonical_tenant_identifier, resolve_scoped_tenant
 
 router = APIRouter(prefix="/employees", tags=["employees"], dependencies=[Depends(apply_rate_limit)])
 logger = logging.getLogger(__name__)
@@ -21,14 +22,7 @@ def _raise_api_error(status_code: int, code: str, message: str):
 
 
 def _normalize_tenant_code(value: str | None) -> str:
-    return str(value or "").strip().lower()
-
-
-def _validate_target_tenant_row(row: dict | None):
-    if not row:
-        _raise_api_error(status.HTTP_404_NOT_FOUND, "TENANT_NOT_FOUND", "tenant not found")
-    if row.get("is_deleted") or row.get("is_active") is False:
-        _raise_api_error(status.HTTP_403_FORBIDDEN, "TENANT_DISABLED", "tenant disabled")
+    return canonical_tenant_identifier(value)
 
 
 def _lookup_relation_ids(conn, tenant_id, company_code, site_code):
@@ -248,74 +242,19 @@ def _post_employee_sync_to_soc(
 
 
 def _resolve_target_tenant(conn, user, tenant_code: str | None, tenant_id: str | None = None):
-    own_tenant_id = str(user["tenant_id"])
-    own_tenant_code = str(user.get("tenant_code") or "").strip()
-    own_tenant_code_normalized = _normalize_tenant_code(own_tenant_code)
-    requested_tenant_id = str(tenant_id or "").strip()
-    requested_tenant_code_raw = str(tenant_code or "").strip()
-    requested_tenant_code_normalized = _normalize_tenant_code(requested_tenant_code_raw)
-    actor_role = normalize_role(user["role"])
-
-    logger.info(
-        "employees.resolve_tenant start role=%s tenant_id_raw=%s tenant_code_raw=%s tenant_code_normalized=%s",
-        actor_role,
-        requested_tenant_id,
-        requested_tenant_code_raw,
-        requested_tenant_code_normalized,
+    row = resolve_scoped_tenant(
+        conn,
+        user,
+        query_tenant_code=tenant_code,
+        body_tenant_id=tenant_id,
+        header_tenant_id=user.get("active_tenant_id"),
+        require_dev_context=True,
     )
-
-    if actor_role != ROLE_DEV:
-        if requested_tenant_id and requested_tenant_id != own_tenant_id:
-            _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "forbidden")
-        if requested_tenant_code_normalized and requested_tenant_code_normalized != own_tenant_code_normalized:
-            _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "forbidden")
-        return {"id": own_tenant_id, "tenant_code": own_tenant_code}
-
-    if requested_tenant_id:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, tenant_code,
-                       COALESCE(is_active, TRUE) AS is_active,
-                       COALESCE(is_deleted, FALSE) AS is_deleted
-                FROM tenants
-                WHERE id = %s
-                LIMIT 1
-                """,
-                (requested_tenant_id,),
-            )
-            row = cur.fetchone()
-        _validate_target_tenant_row(row)
-        logger.info(
-            "employees.resolve_tenant resolved tenant_id=%s tenant_code=%s by=tenant_id",
-            row["id"],
-            row["tenant_code"],
-        )
-        return row
-
-    if not requested_tenant_code_normalized:
-        return {"id": own_tenant_id, "tenant_code": own_tenant_code}
-
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT id, tenant_code,
-                   COALESCE(is_active, TRUE) AS is_active,
-                   COALESCE(is_deleted, FALSE) AS is_deleted
-            FROM tenants
-            WHERE lower(trim(tenant_code)) = %s
-            LIMIT 1
-            """,
-            (requested_tenant_code_normalized,),
-        )
-        row = cur.fetchone()
-    _validate_target_tenant_row(row)
     logger.info(
-        "employees.resolve_tenant resolved tenant_id=%s tenant_code=%s by=tenant_code(raw=%s normalized=%s)",
-        row["id"],
-        row["tenant_code"],
-        requested_tenant_code_raw,
-        requested_tenant_code_normalized,
+        "employees.resolve_tenant resolved role=%s tenant_id=%s tenant_code=%s",
+        normalize_role(user["role"]),
+        row.get("id"),
+        row.get("tenant_code"),
     )
     return row
 

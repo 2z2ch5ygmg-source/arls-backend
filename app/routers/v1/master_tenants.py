@@ -14,6 +14,7 @@ from psycopg import sql
 from ...config import settings
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
 from ...utils.permissions import can_manage_tenant, normalize_role
+from ...utils.tenant_context import build_tenant_identifier_candidates, canonical_tenant_identifier
 
 MASTER_TENANT_CODE = "MASTER"
 PURGE_CONFIRM_PHRASE = "DELETE ALL TENANTS EXCEPT MASTER"
@@ -62,7 +63,7 @@ def _fetch_tenant(conn, tenant_id: uuid.UUID):
 
 
 def _normalize_tenant_code(value: str | None) -> str:
-    return str(value or "").strip().lower()
+    return canonical_tenant_identifier(value)
 
 
 def _has_column(conn, table_name: str, column_name: str) -> bool:
@@ -135,9 +136,10 @@ def _resolve_tenant_by_ref(conn, tenant_ref: str):
                 return row
 
         normalized_code = _normalize_tenant_code(ref)
+        normalized_candidates = list(build_tenant_identifier_candidates(normalized_code)) or [normalized_code]
         cur.execute(
-            f"{base_sql} WHERE lower(trim(tenant_code)) = %s LIMIT 1",
-            (normalized_code,),
+            f"{base_sql} WHERE lower(trim(tenant_code)) = ANY(%s::text[]) LIMIT 1",
+            (normalized_candidates,),
         )
         row = cur.fetchone()
     return row

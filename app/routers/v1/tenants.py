@@ -19,37 +19,40 @@ from ...utils.permissions import (
     normalize_role,
     user_role_sql_variants,
 )
+from ...utils.tenant_context import (
+    TENANT_ID_PATTERN,
+    build_tenant_identifier_candidates,
+    canonical_tenant_identifier,
+)
 
 router = APIRouter(prefix="/tenants", tags=["tenants"], dependencies=[Depends(apply_rate_limit)])
 logger = logging.getLogger(__name__)
 
 
 def _normalize_tenant_code(value: str | None) -> str:
-    return str(value or "").strip().lower()
-
-
-TENANT_CODE_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    return canonical_tenant_identifier(value)
 
 
 def _slugify_tenant_name(value: str) -> str:
-    normalized = re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower())
-    normalized = re.sub(r"-+", "-", normalized).strip("-")
+    normalized = re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().lower())
+    normalized = re.sub(r"_+", "_", normalized).strip("_")
     return normalized or "company"
 
 
 def _resolve_unique_tenant_code(conn, base_code: str) -> str:
     normalized_base = _normalize_tenant_code(base_code) or "company"
     for idx in range(1, 10000):
-        candidate = normalized_base if idx == 1 else f"{normalized_base}-{idx}"
+        candidate = normalized_base if idx == 1 else f"{normalized_base}_{idx}"
+        candidate_aliases = list(build_tenant_identifier_candidates(candidate)) or [candidate]
         with conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT 1
                 FROM tenants
-                WHERE lower(trim(tenant_code)) = %s
+                WHERE lower(trim(tenant_code)) = ANY(%s::text[])
                 LIMIT 1
                 """,
-                (candidate,),
+                (candidate_aliases,),
             )
             exists = cur.fetchone()
         if not exists:
@@ -108,10 +111,10 @@ def create_tenant(payload: TenantCreate, conn=Depends(get_db_conn), user=Depends
             },
         )
 
-    tenant_code_input = _normalize_tenant_code(payload.tenant_code)
+    tenant_code_input_raw = str(payload.tenant_code or "").strip().lower()
     tenant_code_auto = _slugify_tenant_name(tenant_name)
-    if tenant_code_input:
-        if not TENANT_CODE_PATTERN.fullmatch(tenant_code_input):
+    if tenant_code_input_raw:
+        if not TENANT_ID_PATTERN.fullmatch(tenant_code_input_raw):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
@@ -120,14 +123,15 @@ def create_tenant(payload: TenantCreate, conn=Depends(get_db_conn), user=Depends
                     "fields": {"tenant_code": "invalid"},
                 },
             )
-        tenant_code_normalized = tenant_code_input
+        tenant_code_normalized = tenant_code_input_raw
     else:
         tenant_code_normalized = _resolve_unique_tenant_code(conn, tenant_code_auto)
 
     tenant_id = uuid.uuid4()
     try:
         with conn.cursor() as cur:
-            if tenant_code_input:
+            if tenant_code_input_raw:
+                candidate_aliases = list(build_tenant_identifier_candidates(tenant_code_normalized)) or [tenant_code_normalized]
                 cur.execute(
                     """
                     SELECT id,
@@ -135,10 +139,10 @@ def create_tenant(payload: TenantCreate, conn=Depends(get_db_conn), user=Depends
                            COALESCE(is_active, TRUE) AS is_active,
                            COALESCE(is_deleted, FALSE) AS is_deleted
                     FROM tenants
-                    WHERE lower(trim(tenant_code)) = %s
+                    WHERE lower(trim(tenant_code)) = ANY(%s::text[])
                     LIMIT 1
                     """,
-                    (tenant_code_normalized,),
+                    (candidate_aliases,),
                 )
                 existing = cur.fetchone()
                 if existing:

@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 PRIMARY_FRONTEND_ORIGIN = "https://rgarlsfront50018.z12.web.core.windows.net"
 ACCESS_CONTROL_ALLOW_METHODS = "GET, POST, PUT, DELETE, OPTIONS"
-ACCESS_CONTROL_ALLOW_HEADERS = "Authorization, Content-Type, Idempotency-Key"
+ACCESS_CONTROL_ALLOW_HEADERS = "Authorization, Content-Type, Idempotency-Key, X-Tenant-Id"
 
 origins = settings.cors_origins
 origin_regex = settings.cors_origin_regex
@@ -65,7 +65,7 @@ app.add_middleware(
     allow_origin_regex=origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Tenant-Id"],
 )
 
 

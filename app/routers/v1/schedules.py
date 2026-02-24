@@ -58,6 +58,7 @@ from ...services.p1_schedule import (
     upsert_support_assignment,
 )
 from ...utils.permissions import can_manage_schedule, is_super_admin, normalize_role
+from ...utils.tenant_context import resolve_scoped_tenant
 
 router = APIRouter(prefix="/schedules", tags=["schedules"], dependencies=[Depends(apply_rate_limit)])
 
@@ -377,47 +378,13 @@ def _lookup_refs(conn, tenant_id: str, tenant_code: str, company_code: str, site
 
 
 def _resolve_target_tenant(conn, user, tenant_code: str | None):
-    own_tenant_id = user["tenant_id"]
-    own_tenant_code = str(user.get("tenant_code") or "").strip()
-    own_tenant_code_normalized = own_tenant_code.lower()
-    requested_tenant_code = str(tenant_code or "").strip()
-    requested_tenant_code_normalized = requested_tenant_code.lower()
-
-    if not is_super_admin(user["role"]):
-        if requested_tenant_code_normalized and requested_tenant_code_normalized != own_tenant_code_normalized:
-            raise HTTPException(
-                status_code=403,
-                detail={"error": "FORBIDDEN", "message": "tenant mismatch"},
-            )
-        return {"id": own_tenant_id, "tenant_code": own_tenant_code}
-
-    if not requested_tenant_code_normalized:
-        return {"id": own_tenant_id, "tenant_code": own_tenant_code}
-
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT id, tenant_code,
-                   COALESCE(is_active, TRUE) AS is_active,
-                   COALESCE(is_deleted, FALSE) AS is_deleted
-            FROM tenants
-            WHERE lower(trim(tenant_code)) = %s
-            LIMIT 1
-            """,
-            (requested_tenant_code_normalized,),
-        )
-        row = cur.fetchone()
-    if not row:
-        raise HTTPException(
-            status_code=404,
-            detail={"error": "TENANT_NOT_FOUND", "message": "tenant not found"},
-        )
-    if row.get("is_deleted") or row.get("is_active") is False:
-        raise HTTPException(
-            status_code=403,
-            detail={"error": "TENANT_DISABLED", "message": "tenant disabled"},
-        )
-    return row
+    return resolve_scoped_tenant(
+        conn,
+        user,
+        query_tenant_code=tenant_code,
+        header_tenant_id=user.get("active_tenant_id"),
+        require_dev_context=True,
+    )
 
 
 @router.get("")

@@ -62,6 +62,7 @@ from ...services.p1_schedule import (
     upsert_pending_apple_daytime_ot_from_checkout,
 )
 from ...utils.permissions import normalize_role
+from ...utils.tenant_context import canonical_tenant_identifier, fetch_tenant_row_any, resolve_scoped_tenant
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
@@ -609,49 +610,27 @@ def _require_integration_manager(user: dict) -> str:
 
 
 def _normalize_tenant_code(value: str | None) -> str:
-    return str(value or "").strip().lower()
+    return canonical_tenant_identifier(value)
 
 
 def _resolve_tenant_by_code(conn, tenant_code: str):
-    normalized_code = _normalize_tenant_code(tenant_code)
-    if not normalized_code:
+    row = fetch_tenant_row_any(conn, tenant_code)
+    if not row:
         return None
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT id, tenant_code, tenant_name, COALESCE(is_active, TRUE) AS is_active
-            FROM tenants
-            WHERE lower(trim(tenant_code)) = %s
-            LIMIT 1
-            """,
-            (normalized_code,),
-        )
-        return cur.fetchone()
+    if not bool(row.get("is_active", True)) or bool(row.get("is_deleted", False)):
+        return None
+    return row
 
 
 def _resolve_target_tenant(conn, user: dict, tenant_code: str | None):
-    actor_role = _require_integration_manager(user)
-    own_tenant_code = _normalize_tenant_code(user.get("tenant_code"))
-    requested_tenant_code = _normalize_tenant_code(tenant_code)
-
-    if actor_role != "dev":
-        if requested_tenant_code and requested_tenant_code != own_tenant_code:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="tenant mismatch")
-        target = _resolve_tenant_by_code(conn, own_tenant_code)
-        if not target:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="tenant not found")
-        return target
-
-    if requested_tenant_code:
-        target = _resolve_tenant_by_code(conn, requested_tenant_code)
-        if not target:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="tenant not found")
-        return target
-
-    target = _resolve_tenant_by_code(conn, own_tenant_code)
-    if not target:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="tenant not found")
-    return target
+    _require_integration_manager(user)
+    return resolve_scoped_tenant(
+        conn,
+        user,
+        query_tenant_code=tenant_code,
+        header_tenant_id=user.get("active_tenant_id"),
+        require_dev_context=True,
+    )
 
 
 def _resolve_employee(conn, tenant_id, employee_code: str):
