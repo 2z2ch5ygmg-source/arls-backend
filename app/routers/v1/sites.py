@@ -19,6 +19,7 @@ from ...utils.permissions import (
     ROLE_DEV,
     ROLE_EMPLOYEE,
     is_super_admin,
+    normalize_role,
 )
 
 router = APIRouter(prefix="/sites", tags=["sites"], dependencies=[Depends(apply_rate_limit)])
@@ -199,38 +200,74 @@ def _resolve_tenant_row(conn, tenant_ref: str | None):
         return cur.fetchone()
 
 
+def _resolve_tenant_row_any(conn, tenant_ref: str | None):
+    ref = str(tenant_ref or "").strip()
+    if not ref:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, tenant_code,
+                   COALESCE(is_active, TRUE) AS is_active,
+                   COALESCE(is_deleted, FALSE) AS is_deleted
+            FROM tenants
+            WHERE (
+                upper(tenant_code) = upper(%s)
+                OR id::text = %s
+            )
+            LIMIT 1
+            """,
+            (ref, ref),
+        )
+        return cur.fetchone()
+
+
+def _resolve_super_admin_scoped_tenant(conn, tenant_ref: str | None, *, required: bool = False):
+    requested = str(tenant_ref or "").strip().lower()
+    if not requested:
+        if required:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "TENANT_CONTEXT_REQUIRED", "message": "작업회사 선택이 필요합니다."},
+            )
+        return None
+
+    row = _resolve_tenant_row_any(conn, requested)
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "TENANT_NOT_FOUND", "message": "tenant not found"},
+        )
+    if not bool(row.get("is_active", True)) or bool(row.get("is_deleted", False)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "TENANT_DISABLED", "message": "tenant disabled"},
+        )
+    return row
+
+
 def _resolve_target_tenant(conn, user, tenant_code: str | None, tenant_id: str | None = None):
     own_tenant_id = str(user.get("tenant_id") or "").strip()
     own_tenant_code = str(user.get("tenant_code") or "").strip().upper()
-    requested_tenant_code = str(tenant_id or tenant_code or "").strip()
+    requested_tenant_code = str(tenant_id or tenant_code or "").strip().lower()
 
     if not is_super_admin(user["role"]):
         # Non-DEV roles are always scoped to their own tenant.
         # Legacy data may store code/id differently, so resolve by id first then code.
-        row = _resolve_tenant_row(conn, own_tenant_id) or _resolve_tenant_row(conn, own_tenant_code)
+        row = _resolve_tenant_row_any(conn, own_tenant_id) or _resolve_tenant_row_any(conn, own_tenant_code)
         if row:
+            if not bool(row.get("is_active", True)) or bool(row.get("is_deleted", False)):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"error": "TENANT_DISABLED", "message": "tenant disabled"},
+                )
             return row
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"error": "TENANT_SCOPE_INVALID", "message": "권한 테넌트를 확인할 수 없습니다."},
         )
 
-    if requested_tenant_code:
-        row = _resolve_tenant_row(conn, requested_tenant_code)
-        if not row:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"error": "TENANT_NOT_FOUND", "message": "tenant not found"},
-            )
-        return row
-
-    row = _resolve_tenant_row(conn, own_tenant_id) or _resolve_tenant_row(conn, own_tenant_code)
-    if row:
-        return row
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail={"error": "TENANT_NOT_FOUND", "message": "tenant not found"},
-    )
+    return _resolve_super_admin_scoped_tenant(conn, requested_tenant_code, required=True)
 
 
 def _generate_next_site_code(conn, tenant_id: str) -> str:
@@ -548,23 +585,31 @@ def list_sites(
     conn=Depends(get_db_conn),
     user=Depends(get_current_user),
 ):
-    if user["role"] not in SITE_READ_ROLES:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    role_scope = normalize_role(user.get("role"))
+    if role_scope not in SITE_READ_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "FORBIDDEN", "message": "접근 권한이 없습니다."},
+        )
 
     active_filter = _active_filter_to_bool(active)
     clauses = []
     params: list = []
 
-    requested_tenant_code = str(tenant_code or "").strip().upper()
-    if not is_super_admin(user["role"]):
-        own_tenant_code = str(user.get("tenant_code") or "").strip().upper()
+    requested_tenant_code = str(tenant_code or "").strip().lower()
+    if role_scope == ROLE_DEV:
+        scoped_tenant = _resolve_super_admin_scoped_tenant(conn, requested_tenant_code, required=True)
+        clauses.append("s.tenant_id = %s")
+        params.append(scoped_tenant["id"])
+    else:
+        own_tenant_code = str(user.get("tenant_code") or "").strip().lower()
         if requested_tenant_code and requested_tenant_code != own_tenant_code:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": "FORBIDDEN", "message": "접근 권한이 없습니다."},
+            )
         clauses.append("s.tenant_id = %s")
         params.append(user["tenant_id"])
-    elif requested_tenant_code:
-        clauses.append("lower(trim(t.tenant_code)) = lower(trim(%s))")
-        params.append(requested_tenant_code)
 
     if company_code:
         clauses.append("c.company_code = %s")
@@ -613,8 +658,11 @@ def geocode_site_address(
     limit: int = Query(default=5, ge=1, le=10),
     user=Depends(get_current_user),
 ):
-    if user["role"] not in SITE_WRITE_ROLES:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    if normalize_role(user.get("role")) not in SITE_WRITE_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "FORBIDDEN", "message": "접근 권한이 없습니다."},
+        )
 
     query = q.strip()
     google_results, google_error = _search_geocode_google_places(query, limit)
