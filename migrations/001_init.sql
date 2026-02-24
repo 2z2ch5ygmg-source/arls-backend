@@ -298,12 +298,48 @@ BEGIN
       ALTER TABLE employees ADD COLUMN linked_employee_id text;
     END IF;
 
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'sequence_no'
+    ) THEN
+      ALTER TABLE employees ADD COLUMN sequence_no int;
+    END IF;
+
+    -- 1) 이미 <SITE_CODE>-NNN 형식인 코드는 sequence_no를 복원한다.
+    UPDATE employees e
+    SET sequence_no = CAST(SUBSTRING(UPPER(e.employee_code) FROM '.*-([0-9]{3})$') AS int)
+    FROM sites s
+    WHERE e.site_id = s.id
+      AND e.sequence_no IS NULL
+      AND UPPER(e.employee_code) ~ '^[A-Z0-9_]+-[0-9]{3}$'
+      AND UPPER(e.employee_code) LIKE UPPER(s.site_code) || '-%';
+
+    -- 2) 남은 legacy 코드(E001 등)는 site별 순번으로 채운다.
+    WITH numbered AS (
+      SELECT e.id,
+             ROW_NUMBER() OVER (
+               PARTITION BY e.tenant_id, e.site_id
+               ORDER BY e.created_at NULLS LAST, e.id
+             ) AS seq
+      FROM employees e
+      WHERE e.sequence_no IS NULL
+    )
+    UPDATE employees e
+    SET sequence_no = n.seq
+    FROM numbered n
+    WHERE e.id = n.id
+      AND e.sequence_no IS NULL;
+
     CREATE INDEX IF NOT EXISTS idx_employees_tenant_site_linked
       ON employees (tenant_id, site_id, linked_employee_id);
     CREATE INDEX IF NOT EXISTS idx_employees_tenant_site_external
       ON employees (tenant_id, site_id, external_employee_key);
     CREATE INDEX IF NOT EXISTS idx_employees_tenant_site_duty_role
       ON employees (tenant_id, site_id, duty_role);
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_employees_tenant_site_sequence
+      ON employees (tenant_id, site_id, sequence_no)
+      WHERE sequence_no IS NOT NULL;
   END IF;
 END $$;
 

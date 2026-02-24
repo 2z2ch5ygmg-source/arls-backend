@@ -260,7 +260,8 @@ class EmployeeCreate(BaseModel):
     site_id: Optional[UUID] = None
     company_code: Optional[str] = Field(default=None, min_length=1)
     site_code: Optional[str] = Field(default=None, min_length=1)
-    employee_code: str = Field(min_length=1)
+    # 직원 코드는 서버에서 <site_code>-NNN 형식으로 자동 생성한다.
+    employee_code: Optional[str] = Field(default=None, min_length=1)
     full_name: str = Field(min_length=1)
     phone: Optional[str] = None
     duty_role: Optional[str] = Field(default="GUARD", max_length=32)
@@ -305,12 +306,26 @@ class EmployeeCreate(BaseModel):
 class EmployeeOut(BaseModel):
     id: UUID
     employee_code: str
+    sequence_no: Optional[int] = None
     full_name: str
     phone: Optional[str]
     site_code: str
     company_code: str
     duty_role: Optional[str] = None
     user_id: Optional[UUID] = None
+
+
+class EmployeeUpdate(BaseModel):
+    full_name: str = Field(min_length=1)
+    phone: Optional[str] = None
+
+    @field_validator("full_name", "phone")
+    @classmethod
+    def _trimmed(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        return trimmed or None
 
 
 class EmployeeDutyRoleUpdate(BaseModel):
