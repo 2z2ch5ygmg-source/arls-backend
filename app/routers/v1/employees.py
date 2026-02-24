@@ -5,7 +5,9 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from psycopg.errors import ForeignKeyViolation
+import requests
 
+from ...config import settings
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
 from ...schemas import EmployeeCreate, EmployeeDutyRoleUpdate, EmployeeOut, EmployeeUpdate
 from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, normalize_role
@@ -152,6 +154,64 @@ def _reset_site_sequence_if_empty(conn, tenant_id, site_id):
 
 def _format_employee_code(site_code: str, sequence_no: int) -> str:
     return f"{str(site_code or '').strip().upper()}-{int(sequence_no):03d}"
+
+
+def _to_soc_employee_role(duty_role: str | None) -> str:
+    normalized = str(duty_role or "").strip().upper()
+    if normalized in {"VICE_SUPERVISOR", "TEAM_MANAGER", "L2"}:
+        return "L2"
+    return "L1"
+
+
+def _post_employee_sync_to_soc(
+    *,
+    tenant_code: str,
+    site_code: str,
+    employee_uuid: str,
+    employee_code: str,
+    full_name: str,
+    phone: str | None,
+    duty_role: str | None,
+):
+    url = str(settings.soc_employee_sync_url or "").strip()
+    if not url:
+        logger.info("employees.soc_sync skipped: SOC_EMPLOYEE_SYNC_URL is empty")
+        return
+
+    payload = {
+        "event_type": "EMPLOYEE_CREATED",
+        "tenant_id": _normalize_tenant_code(tenant_code),
+        "site_code": str(site_code or "").strip(),
+        "employee": {
+            "employee_uuid": str(employee_uuid or "").strip(),
+            "employee_code": str(employee_code or "").strip(),
+            "name": str(full_name or "").strip(),
+            "phone": phone,
+            "role": _to_soc_employee_role(duty_role),
+        },
+    }
+    try:
+        response = requests.post(url, json=payload, timeout=5)
+        if response.status_code >= 400:
+            logger.warning(
+                "employees.soc_sync failed status=%s body=%s payload=%s",
+                response.status_code,
+                (response.text or "")[:400],
+                payload,
+            )
+        else:
+            logger.info(
+                "employees.soc_sync success status=%s employee_uuid=%s employee_code=%s",
+                response.status_code,
+                payload["employee"]["employee_uuid"],
+                payload["employee"]["employee_code"],
+            )
+    except Exception:
+        logger.exception(
+            "employees.soc_sync exception employee_uuid=%s employee_code=%s",
+            payload["employee"]["employee_uuid"],
+            payload["employee"]["employee_code"],
+        )
 
 
 def _resolve_target_tenant(conn, user, tenant_code: str | None, tenant_id: str | None = None):
@@ -310,6 +370,7 @@ def create_employee(
             )
 
     employee_id = uuid.uuid4()
+    employee_uuid = str(uuid.uuid4())
     created = None
     for _ in range(8):
         next_seq = _reserve_next_employee_sequence(conn, tenant_id, site_id)
@@ -318,14 +379,15 @@ def create_employee(
             cur.execute(
                 """
                 INSERT INTO employees
-                    (id, tenant_id, company_id, site_id, sequence_no, employee_code, full_name, phone, duty_role)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    (id, employee_uuid, tenant_id, company_id, site_id, sequence_no, employee_code, full_name, phone, duty_role)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT DO NOTHING
                 RETURNING id, employee_code, sequence_no, full_name, phone, %s AS site_code, %s AS company_code,
                           UPPER(COALESCE(duty_role, 'GUARD')) AS duty_role, NULL::uuid AS user_id
                 """,
                 (
                     employee_id,
+                    employee_uuid,
                     tenant_id,
                     company_id,
                     site_id,
@@ -349,6 +411,15 @@ def create_employee(
             "EMPLOYEE_CODE_CONFLICT",
             "failed to allocate employee_code",
         )
+    _post_employee_sync_to_soc(
+        tenant_code=str(tenant.get("tenant_code") or ""),
+        site_code=resolved_site_code,
+        employee_uuid=employee_uuid,
+        employee_code=str(created.get("employee_code") or ""),
+        full_name=str(created.get("full_name") or payload.full_name or ""),
+        phone=created.get("phone"),
+        duty_role=created.get("duty_role"),
+    )
     return EmployeeOut(**created)
 
 
