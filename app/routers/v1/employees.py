@@ -107,11 +107,29 @@ def _assert_branch_manager_site_scope(user: dict, target_site_id: str | None):
         _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "forbidden")
 
 
-def _next_employee_sequence(conn, tenant_id, site_id) -> int:
+def _reserve_next_employee_sequence(conn, tenant_id, site_id) -> int:
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT COALESCE(MAX(sequence_no), 0) + 1 AS next_seq
+            UPDATE sites
+            SET employee_sequence_seed = COALESCE(employee_sequence_seed, 0) + 1
+            WHERE id = %s
+              AND tenant_id = %s
+            RETURNING employee_sequence_seed
+            """,
+            (site_id, tenant_id),
+        )
+        row = cur.fetchone()
+    if not row:
+        _raise_api_error(status.HTTP_404_NOT_FOUND, "SITE_NOT_FOUND", "site not found")
+    return max(1, int((row or {}).get("employee_sequence_seed") or 1))
+
+
+def _reset_site_sequence_if_empty(conn, tenant_id, site_id):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT COUNT(*) AS cnt
             FROM employees
             WHERE tenant_id = %s
               AND site_id = %s
@@ -119,7 +137,17 @@ def _next_employee_sequence(conn, tenant_id, site_id) -> int:
             (tenant_id, site_id),
         )
         row = cur.fetchone()
-    return max(1, int((row or {}).get("next_seq") or 1))
+        remaining = int((row or {}).get("cnt") or 0)
+        if remaining == 0:
+            cur.execute(
+                """
+                UPDATE sites
+                SET employee_sequence_seed = 0
+                WHERE id = %s
+                  AND tenant_id = %s
+                """,
+                (site_id, tenant_id),
+            )
 
 
 def _format_employee_code(site_code: str, sequence_no: int) -> str:
@@ -280,7 +308,7 @@ def create_employee(
     employee_id = uuid.uuid4()
     created = None
     for _ in range(8):
-        next_seq = _next_employee_sequence(conn, tenant_id, site_id)
+        next_seq = _reserve_next_employee_sequence(conn, tenant_id, site_id)
         generated_employee_code = _format_employee_code(resolved_site_code, next_seq)
         with conn.cursor() as cur:
             cur.execute(
@@ -459,6 +487,7 @@ def delete_employee(
                 "EMPLOYEE_HAS_REFERENCES",
                 "employee has references",
             )
+        _reset_site_sequence_if_empty(conn, tenant_id, target["site_id"])
 
     return {"success": True, "employee_code": target["employee_code"]}
 

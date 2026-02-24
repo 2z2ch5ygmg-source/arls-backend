@@ -348,6 +348,36 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'sites'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'sites' AND column_name = 'employee_sequence_seed'
+    ) THEN
+      ALTER TABLE sites ADD COLUMN employee_sequence_seed int NOT NULL DEFAULT 0;
+    END IF;
+
+    -- 기존 직원 데이터가 있으면 site 시드값을 최대 순번으로 보정한다.
+    UPDATE sites s
+    SET employee_sequence_seed = GREATEST(
+      COALESCE(s.employee_sequence_seed, 0),
+      COALESCE(seq.max_seq, 0)
+    )
+    FROM (
+      SELECT site_id, MAX(COALESCE(sequence_no, 0)) AS max_seq
+      FROM employees
+      GROUP BY site_id
+    ) AS seq
+    WHERE s.id = seq.site_id;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
     WHERE table_schema = 'public' AND table_name = 'monthly_schedules'
   ) THEN
     IF NOT EXISTS (
