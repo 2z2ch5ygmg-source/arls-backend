@@ -63,7 +63,7 @@ def get_current_user(
         cur.execute(
             """
             SELECT au.id, au.tenant_id, au.username, au.full_name, au.role, au.is_active,
-                   au.employee_id, au.site_id, e.employee_code, t.tenant_code, t.tenant_name,
+                   au.employee_id, COALESCE(au.site_id, e.site_id) AS site_id, e.employee_code, t.tenant_code, t.tenant_name,
                    COALESCE(t.is_active, TRUE) AS tenant_is_active,
                    COALESCE(t.is_deleted, FALSE) AS tenant_is_deleted
             FROM arls_users au
