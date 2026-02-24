@@ -74,11 +74,65 @@ def _resolve_default_company_code(conn, tenant_id) -> str:
         )
         row = cur.fetchone()
     company_code = str(row.get("company_code") or "").strip().upper() if row else ""
+    if company_code:
+        return company_code
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT tenant_code, tenant_name
+            FROM tenants
+            WHERE id = %s
+              AND COALESCE(is_active, TRUE) = TRUE
+              AND COALESCE(is_deleted, FALSE) = FALSE
+            LIMIT 1
+            """,
+            (tenant_id,),
+        )
+        tenant_row = cur.fetchone()
+    if not tenant_row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "TENANT_NOT_FOUND", "message": "tenant not found"},
+        )
+
+    default_company_code = "C001"
+    tenant_name = str(tenant_row.get("tenant_name") or "").strip()
+    default_company_name = f"{tenant_name} 기본회사" if tenant_name else "기본회사"
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO companies (id, tenant_id, company_code, company_name)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (tenant_id, company_code) DO NOTHING
+            """,
+            (uuid.uuid4(), tenant_id, default_company_code, default_company_name),
+        )
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT company_code
+            FROM companies
+            WHERE tenant_id = %s
+            ORDER BY company_code
+            LIMIT 1
+            """,
+            (tenant_id,),
+        )
+        row = cur.fetchone()
+    company_code = str(row.get("company_code") or "").strip().upper() if row else ""
     if not company_code:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "COMPANY_REQUIRED", "message": "등록된 회사 코드가 없습니다. 먼저 회사를 생성해 주세요."},
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error": "INTERNAL", "message": "기본 회사 코드 생성에 실패했습니다."},
         )
+    logger.info(
+        "auto-created default company for tenant=%s company_code=%s",
+        tenant_row.get("tenant_code"),
+        company_code,
+    )
     return company_code
 
 
@@ -123,42 +177,64 @@ def _site_validation_error(fields: dict[str, str], *, message: str = "입력값�
     )
 
 
-def _resolve_target_tenant(conn, user, tenant_code: str | None, tenant_id: str | None = None):
-    own_tenant_id = user["tenant_id"]
-    own_tenant_code = str(user.get("tenant_code") or "").strip().upper()
-    requested_tenant_code = str(tenant_id or tenant_code or "").strip().upper()
-
-    if not is_super_admin(user["role"]):
-        # Non-DEV roles are always scoped to their own tenant.
-        # Ignore requested tenant query for safer UX (no accidental mismatch failures).
-        return {"id": own_tenant_id, "tenant_code": own_tenant_code}
-
-    if not requested_tenant_code:
-        return {"id": own_tenant_id, "tenant_code": own_tenant_code}
-
+def _resolve_tenant_row(conn, tenant_ref: str | None):
+    ref = str(tenant_ref or "").strip()
+    if not ref:
+        return None
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT id, tenant_code
             FROM tenants
-            WHERE tenant_code = %s
+            WHERE (
+                upper(tenant_code) = upper(%s)
+                OR id::text = %s
+            )
               AND COALESCE(is_active, TRUE) = TRUE
               AND COALESCE(is_deleted, FALSE) = FALSE
             LIMIT 1
             """,
-            (requested_tenant_code,),
+            (ref, ref),
         )
-        row = cur.fetchone()
-    if not row:
+        return cur.fetchone()
+
+
+def _resolve_target_tenant(conn, user, tenant_code: str | None, tenant_id: str | None = None):
+    own_tenant_id = str(user.get("tenant_id") or "").strip()
+    own_tenant_code = str(user.get("tenant_code") or "").strip().upper()
+    requested_tenant_code = str(tenant_id or tenant_code or "").strip()
+
+    if not is_super_admin(user["role"]):
+        # Non-DEV roles are always scoped to their own tenant.
+        # Legacy data may store code/id differently, so resolve by id first then code.
+        row = _resolve_tenant_row(conn, own_tenant_id) or _resolve_tenant_row(conn, own_tenant_code)
+        if row:
+            return row
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error": "TENANT_NOT_FOUND", "message": "tenant not found"},
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "TENANT_SCOPE_INVALID", "message": "권한 테넌트를 확인할 수 없습니다."},
         )
-    return row
+
+    if requested_tenant_code:
+        row = _resolve_tenant_row(conn, requested_tenant_code)
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error": "TENANT_NOT_FOUND", "message": "tenant not found"},
+            )
+        return row
+
+    row = _resolve_tenant_row(conn, own_tenant_id) or _resolve_tenant_row(conn, own_tenant_code)
+    if row:
+        return row
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail={"error": "TENANT_NOT_FOUND", "message": "tenant not found"},
+    )
 
 
 def _normalize_site_payload(payload: SiteCreate | SiteUpdate) -> dict:
-    tenant_id = str(getattr(payload, "tenant_id", "") or "").strip().upper()
+    tenant_id = str(getattr(payload, "tenant_id", "") or "").strip()
     company_code = str(getattr(payload, "company_code", "") or "").strip().upper()
     site_code = str(getattr(payload, "site_code", "") or "").strip().lower()
     site_name = str(getattr(payload, "site_name", "") or "").strip()
@@ -544,7 +620,7 @@ def create_site(
     user=Depends(require_roles(*SITE_WRITE_ROLES)),
 ):
     normalized = _normalize_site_payload(payload)
-    requested_tenant_id = str(tenant_id or normalized.get("tenant_id") or "").strip().upper()
+    requested_tenant_id = str(tenant_id or normalized.get("tenant_id") or "").strip()
     tenant = _resolve_target_tenant(conn, user, tenant_code, requested_tenant_id)
     if not tenant or not tenant.get("id"):
         _site_validation_error({"tenant_id": "required"})
@@ -559,13 +635,7 @@ def create_site(
         except HTTPException:
             resolved_company_code = ""
     if not resolved_company_code:
-        try:
-            resolved_company_code = _resolve_default_company_code(conn, tenant_id)
-        except HTTPException as exc:
-            detail = exc.detail if isinstance(exc.detail, dict) else {}
-            if detail.get("error") == "COMPANY_REQUIRED":
-                _site_validation_error({"tenant_id": "not_found"})
-            raise
+        resolved_company_code = _resolve_default_company_code(conn, tenant_id)
     normalized["company_code"] = resolved_company_code
 
     logger.info(
@@ -699,13 +769,7 @@ def update_site(
         except HTTPException:
             resolved_company_code = ""
     if not resolved_company_code:
-        try:
-            resolved_company_code = _resolve_default_company_code(conn, tenant_id)
-        except HTTPException as exc:
-            detail = exc.detail if isinstance(exc.detail, dict) else {}
-            if detail.get("error") == "COMPANY_REQUIRED":
-                _site_validation_error({"tenant_id": "not_found"})
-            raise
+        resolved_company_code = _resolve_default_company_code(conn, tenant_id)
     normalized["company_code"] = resolved_company_code
 
     try:

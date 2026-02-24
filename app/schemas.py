@@ -154,9 +154,18 @@ class SiteCreate(BaseModel):
     )
     address: Optional[str] = None
     place_id: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    radius_meters: Optional[float] = None
+    latitude: Optional[float] = Field(
+        default=None,
+        validation_alias=AliasChoices("latitude", "lat"),
+    )
+    longitude: Optional[float] = Field(
+        default=None,
+        validation_alias=AliasChoices("longitude", "lng"),
+    )
+    radius_meters: Optional[float] = Field(
+        default=None,
+        validation_alias=AliasChoices("radius_meters", "radius_m", "radius"),
+    )
     is_active: bool = True
 
     @field_validator("tenant_id", "company_code", "site_code", "site_name", "address", "place_id", mode="before")
@@ -186,9 +195,18 @@ class SiteUpdate(BaseModel):
     )
     address: Optional[str] = None
     place_id: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    radius_meters: Optional[float] = None
+    latitude: Optional[float] = Field(
+        default=None,
+        validation_alias=AliasChoices("latitude", "lat"),
+    )
+    longitude: Optional[float] = Field(
+        default=None,
+        validation_alias=AliasChoices("longitude", "lng"),
+    )
+    radius_meters: Optional[float] = Field(
+        default=None,
+        validation_alias=AliasChoices("radius_meters", "radius_m", "radius"),
+    )
     is_active: bool = True
 
     @field_validator("tenant_id", "company_code", "site_code", "site_name", "address", "place_id", mode="before")

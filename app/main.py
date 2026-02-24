@@ -286,7 +286,7 @@ app.include_router(reports_router, prefix="/api/v1")
 
 @app.get("/health")
 def health() -> dict:
-    return {"ok": True, "app": settings.app_name}
+    return {"status": "ok"}
 
 
 @app.get("/")
