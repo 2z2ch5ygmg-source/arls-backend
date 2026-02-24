@@ -163,6 +163,56 @@ def _to_soc_employee_role(duty_role: str | None) -> str:
     return "L1"
 
 
+def _normalize_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _normalize_worker_role(value: str | None) -> str | None:
+    normalized = _normalize_optional_text(value)
+    if not normalized:
+        return None
+    return normalized.upper()
+
+
+def _derive_duty_role_from_worker_role(worker_role: str | None) -> str:
+    normalized = _normalize_worker_role(worker_role)
+    if not normalized:
+        return "GUARD"
+    if normalized in {"TEAM_MANAGER", "MANAGER", "팀장"}:
+        return "TEAM_MANAGER"
+    if normalized in {"L2", "VICE_SUPERVISOR", "VICE", "VICE_MANAGER", "SUB_MANAGER", "부팀장"}:
+        return "VICE_SUPERVISOR"
+    return "GUARD"
+
+
+def _resolve_employee_duty_role(payload: EmployeeCreate) -> str:
+    if "duty_role" in payload.model_fields_set:
+        return str(payload.duty_role or "GUARD").strip().upper() or "GUARD"
+    return _derive_duty_role_from_worker_role(payload.worker_role)
+
+
+def _derive_worker_role_from_duty_role(duty_role: str | None) -> str:
+    normalized = str(duty_role or "").strip().upper()
+    if normalized == "TEAM_MANAGER":
+        return "TEAM_MANAGER"
+    if normalized == "VICE_SUPERVISOR":
+        return "L2"
+    return "L1"
+
+
+def _to_iso_date(value) -> str | None:
+    if value is None:
+        return None
+    iso = getattr(value, "isoformat", None)
+    if callable(iso):
+        return iso()
+    text = str(value).strip()
+    return text or None
+
+
 def _post_employee_sync_to_soc(
     *,
     tenant_code: str,
@@ -172,12 +222,21 @@ def _post_employee_sync_to_soc(
     full_name: str,
     phone: str | None,
     duty_role: str | None,
+    birth_date=None,
+    hire_date=None,
+    guard_training_cert_no: str | None = None,
+    note: str | None = None,
+    worker_role: str | None = None,
+    soc_login_id: str | None = None,
+    soc_temp_password: str | None = None,
+    soc_role: str | None = None,
 ):
     url = str(settings.soc_employee_sync_url or "").strip()
     if not url:
         logger.info("employees.soc_sync skipped: SOC_EMPLOYEE_SYNC_URL is empty")
         return
 
+    resolved_worker_role = _normalize_worker_role(worker_role) or _derive_worker_role_from_duty_role(duty_role)
     payload = {
         "event_type": "EMPLOYEE_CREATED",
         "tenant_id": _normalize_tenant_code(tenant_code),
@@ -188,16 +247,25 @@ def _post_employee_sync_to_soc(
             "name": str(full_name or "").strip(),
             "phone": phone,
             "role": _to_soc_employee_role(duty_role),
+            "birth_date": _to_iso_date(birth_date),
+            "hire_date": _to_iso_date(hire_date),
+            "guard_training_cert_no": _normalize_optional_text(guard_training_cert_no),
+            "note": _normalize_optional_text(note),
+            "worker_role": resolved_worker_role,
+            "soc_login_id": _normalize_optional_text(soc_login_id),
+            "soc_temp_password": _normalize_optional_text(soc_temp_password),
+            "soc_role": _normalize_optional_text(soc_role),
         },
     }
     try:
         response = requests.post(url, json=payload, timeout=5)
         if response.status_code >= 400:
             logger.warning(
-                "employees.soc_sync failed status=%s body=%s payload=%s",
+                "employees.soc_sync failed status=%s employee_uuid=%s employee_code=%s body=%s",
                 response.status_code,
+                payload["employee"]["employee_uuid"],
+                payload["employee"]["employee_code"],
                 (response.text or "")[:400],
-                payload,
             )
         else:
             logger.info(
@@ -313,6 +381,7 @@ def list_employees(
             f"""
             SELECT e.id, e.employee_code, e.sequence_no, e.full_name, e.phone,
                    s.site_code, c.company_code, UPPER(COALESCE(e.duty_role, 'GUARD')) AS duty_role,
+                   e.birth_date, e.hire_date, e.guard_training_cert_no, e.note, e.worker_role, e.soc_login_id, e.soc_role,
                    u.id AS user_id
             FROM employees e
             JOIN sites s ON s.id = e.site_id
@@ -371,6 +440,8 @@ def create_employee(
 
     employee_id = uuid.uuid4()
     employee_uuid = str(uuid.uuid4())
+    duty_role_value = _resolve_employee_duty_role(payload)
+    worker_role_value = _normalize_worker_role(payload.worker_role) or _derive_worker_role_from_duty_role(duty_role_value)
     created = None
     for _ in range(8):
         next_seq = _reserve_next_employee_sequence(conn, tenant_id, site_id)
@@ -379,11 +450,15 @@ def create_employee(
             cur.execute(
                 """
                 INSERT INTO employees
-                    (id, employee_uuid, tenant_id, company_id, site_id, sequence_no, employee_code, full_name, phone, duty_role)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    (
+                      id, employee_uuid, tenant_id, company_id, site_id, sequence_no, employee_code, full_name, phone,
+                      duty_role, birth_date, hire_date, guard_training_cert_no, note, worker_role, soc_login_id, soc_role
+                    )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT DO NOTHING
                 RETURNING id, employee_code, sequence_no, full_name, phone, %s AS site_code, %s AS company_code,
-                          UPPER(COALESCE(duty_role, 'GUARD')) AS duty_role, NULL::uuid AS user_id
+                          UPPER(COALESCE(duty_role, 'GUARD')) AS duty_role, NULL::uuid AS user_id,
+                          birth_date, hire_date, guard_training_cert_no, note, worker_role, soc_login_id, soc_role
                 """,
                 (
                     employee_id,
@@ -395,7 +470,14 @@ def create_employee(
                     generated_employee_code,
                     payload.full_name,
                     payload.phone,
-                    payload.duty_role or "GUARD",
+                    duty_role_value,
+                    payload.birth_date,
+                    payload.hire_date,
+                    _normalize_optional_text(payload.guard_training_cert_no),
+                    _normalize_optional_text(payload.note),
+                    worker_role_value,
+                    _normalize_optional_text(payload.soc_login_id),
+                    _normalize_optional_text(payload.soc_role),
                     resolved_site_code,
                     resolved_company_code,
                 ),
@@ -419,6 +501,14 @@ def create_employee(
         full_name=str(created.get("full_name") or payload.full_name or ""),
         phone=created.get("phone"),
         duty_role=created.get("duty_role"),
+        birth_date=created.get("birth_date"),
+        hire_date=created.get("hire_date"),
+        guard_training_cert_no=created.get("guard_training_cert_no"),
+        note=created.get("note"),
+        worker_role=created.get("worker_role"),
+        soc_login_id=created.get("soc_login_id"),
+        soc_temp_password=_normalize_optional_text(payload.soc_temp_password),
+        soc_role=created.get("soc_role"),
     )
     return EmployeeOut(**created)
 
@@ -440,7 +530,8 @@ def update_employee(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, employee_code, sequence_no, full_name, phone, duty_role, site_id
+            SELECT id, employee_code, sequence_no, full_name, phone, duty_role, site_id,
+                   birth_date, hire_date, guard_training_cert_no, note, worker_role, soc_login_id, soc_role
             FROM employees
             WHERE id = %s
               AND tenant_id = %s
@@ -458,12 +549,32 @@ def update_employee(
             """
             UPDATE employees
             SET full_name = %s,
-                phone = %s
+                phone = %s,
+                birth_date = %s,
+                hire_date = %s,
+                guard_training_cert_no = %s,
+                note = %s,
+                worker_role = %s,
+                soc_login_id = %s,
+                soc_role = %s
             WHERE id = %s
               AND tenant_id = %s
-            RETURNING id, employee_code, sequence_no, full_name, phone, duty_role, site_id
+            RETURNING id, employee_code, sequence_no, full_name, phone, duty_role, site_id,
+                      birth_date, hire_date, guard_training_cert_no, note, worker_role, soc_login_id, soc_role
             """,
-            (payload.full_name, payload.phone, str(employee_id), tenant_id),
+            (
+                payload.full_name,
+                payload.phone,
+                payload.birth_date,
+                payload.hire_date,
+                _normalize_optional_text(payload.guard_training_cert_no),
+                _normalize_optional_text(payload.note),
+                _normalize_worker_role(payload.worker_role),
+                _normalize_optional_text(payload.soc_login_id),
+                _normalize_optional_text(payload.soc_role),
+                str(employee_id),
+                tenant_id,
+            ),
         )
         updated = cur.fetchone()
 
@@ -505,6 +616,13 @@ def update_employee(
         company_code=site_company["company_code"],
         duty_role=str(updated.get("duty_role") or "GUARD").upper(),
         user_id=user_row["id"] if user_row else None,
+        birth_date=updated.get("birth_date"),
+        hire_date=updated.get("hire_date"),
+        guard_training_cert_no=updated.get("guard_training_cert_no"),
+        note=updated.get("note"),
+        worker_role=updated.get("worker_role"),
+        soc_login_id=updated.get("soc_login_id"),
+        soc_role=updated.get("soc_role"),
     )
 
 
@@ -584,7 +702,8 @@ def update_employee_duty_role(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, employee_code, sequence_no, full_name, phone, duty_role, site_id
+            SELECT id, employee_code, sequence_no, full_name, phone, duty_role, site_id,
+                   birth_date, hire_date, guard_training_cert_no, note, worker_role, soc_login_id, soc_role
             FROM employees
             WHERE id = %s
               AND tenant_id = %s
@@ -603,7 +722,8 @@ def update_employee_duty_role(
             SET duty_role = %s
             WHERE id = %s
               AND tenant_id = %s
-            RETURNING id, employee_code, sequence_no, full_name, phone, duty_role, site_id
+            RETURNING id, employee_code, sequence_no, full_name, phone, duty_role, site_id,
+                      birth_date, hire_date, guard_training_cert_no, note, worker_role, soc_login_id, soc_role
             """,
             (payload.duty_role, str(employee_id), tenant_id),
         )
@@ -647,4 +767,11 @@ def update_employee_duty_role(
         company_code=site_company["company_code"],
         duty_role=str(updated.get("duty_role") or "GUARD").upper(),
         user_id=user_row["id"] if user_row else None,
+        birth_date=updated.get("birth_date"),
+        hire_date=updated.get("hire_date"),
+        guard_training_cert_no=updated.get("guard_training_cert_no"),
+        note=updated.get("note"),
+        worker_role=updated.get("worker_role"),
+        soc_login_id=updated.get("soc_login_id"),
+        soc_role=updated.get("soc_role"),
     )

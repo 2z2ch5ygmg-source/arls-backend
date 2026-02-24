@@ -265,8 +265,28 @@ class EmployeeCreate(BaseModel):
     full_name: str = Field(min_length=1)
     phone: Optional[str] = None
     duty_role: Optional[str] = Field(default="GUARD", max_length=32)
+    birth_date: Optional[date] = None
+    hire_date: Optional[date] = None
+    guard_training_cert_no: Optional[str] = Field(default=None, max_length=120)
+    note: Optional[str] = Field(default=None, max_length=1000)
+    worker_role: Optional[str] = Field(default=None, max_length=64)
+    soc_login_id: Optional[str] = Field(default=None, max_length=120)
+    soc_temp_password: Optional[str] = Field(default=None, max_length=120)
+    soc_role: Optional[str] = Field(default=None, max_length=64)
 
-    @field_validator("company_code", "site_code", "employee_code", "full_name", "phone")
+    @field_validator(
+        "company_code",
+        "site_code",
+        "employee_code",
+        "full_name",
+        "phone",
+        "guard_training_cert_no",
+        "note",
+        "worker_role",
+        "soc_login_id",
+        "soc_temp_password",
+        "soc_role",
+    )
     @classmethod
     def _trimmed(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
@@ -312,13 +332,27 @@ class EmployeeOut(BaseModel):
     company_code: str
     duty_role: Optional[str] = None
     user_id: Optional[UUID] = None
+    birth_date: Optional[date] = None
+    hire_date: Optional[date] = None
+    guard_training_cert_no: Optional[str] = None
+    note: Optional[str] = None
+    worker_role: Optional[str] = None
+    soc_login_id: Optional[str] = None
+    soc_role: Optional[str] = None
 
 
 class EmployeeUpdate(BaseModel):
     full_name: str = Field(min_length=1)
     phone: Optional[str] = None
+    birth_date: Optional[date] = None
+    hire_date: Optional[date] = None
+    guard_training_cert_no: Optional[str] = Field(default=None, max_length=120)
+    note: Optional[str] = Field(default=None, max_length=1000)
+    worker_role: Optional[str] = Field(default=None, max_length=64)
+    soc_login_id: Optional[str] = Field(default=None, max_length=120)
+    soc_role: Optional[str] = Field(default=None, max_length=64)
 
-    @field_validator("full_name", "phone")
+    @field_validator("full_name", "phone", "guard_training_cert_no", "note", "worker_role", "soc_login_id", "soc_role")
     @classmethod
     def _trimmed(cls, value: Optional[str]) -> Optional[str]:
         if value is None:

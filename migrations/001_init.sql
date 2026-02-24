@@ -314,6 +314,62 @@ BEGIN
       ALTER TABLE employees ADD COLUMN employee_uuid text;
     END IF;
 
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'birth_date'
+    ) THEN
+      ALTER TABLE employees ADD COLUMN birth_date date;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'hire_date'
+    ) THEN
+      ALTER TABLE employees ADD COLUMN hire_date date;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'guard_training_cert_no'
+    ) THEN
+      ALTER TABLE employees ADD COLUMN guard_training_cert_no text;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'note'
+    ) THEN
+      ALTER TABLE employees ADD COLUMN note text;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'worker_role'
+    ) THEN
+      ALTER TABLE employees ADD COLUMN worker_role text;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'soc_login_id'
+    ) THEN
+      ALTER TABLE employees ADD COLUMN soc_login_id text;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'soc_role'
+    ) THEN
+      ALTER TABLE employees ADD COLUMN soc_role text;
+    END IF;
+
     -- 1) 이미 <SITE_CODE>-NNN 형식인 코드는 sequence_no를 복원한다.
     UPDATE employees e
     SET sequence_no = CAST(SUBSTRING(UPPER(e.employee_code) FROM '.*-([0-9]{3})$') AS int)
