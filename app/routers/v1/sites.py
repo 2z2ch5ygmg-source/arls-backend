@@ -653,7 +653,7 @@ def create_site(
     conn=Depends(get_db_conn),
     user=Depends(require_roles(*SITE_WRITE_ROLES)),
 ):
-    normalized = _normalize_site_payload(payload, require_site_code=False)
+    normalized = _normalize_site_payload(payload, require_site_code=True)
     requested_tenant_id = str(tenant_id or normalized.get("tenant_id") or "").strip()
     tenant = _resolve_target_tenant(conn, user, tenant_code, requested_tenant_id)
     if not tenant or not tenant.get("id"):
@@ -671,9 +671,6 @@ def create_site(
     if not resolved_company_code:
         resolved_company_code = _resolve_default_company_code(conn, tenant_id)
     normalized["company_code"] = resolved_company_code
-    if not normalized.get("site_code"):
-        normalized["site_code"] = _generate_next_site_code(conn, tenant_id)
-
     logger.info(
         "create_site requested: tenant=%s company=%s site=%s actor=%s",
         tenant.get("tenant_code"),
