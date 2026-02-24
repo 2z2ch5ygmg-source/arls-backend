@@ -275,11 +275,10 @@ class EmployeeCreate(BaseModel):
         return trimmed or None
 
     @model_validator(mode="after")
-    def _site_ref_required(self) -> "EmployeeCreate":
-        if self.site_id is not None:
-            return self
-        if not (self.company_code and self.site_code):
-            raise ValueError("site_id or (company_code and site_code) is required")
+    def _site_ref_optional(self) -> "EmployeeCreate":
+        # 지점관리자는 서버 세션(site scope)으로 site/company를 강제 주입하므로
+        # 스키마 단계에서 site/company 필수로 막지 않는다.
+        # DEV의 상세 검증은 employees 라우터에서 처리한다.
         return self
 
     @field_validator("duty_role")
