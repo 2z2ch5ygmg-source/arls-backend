@@ -1,0 +1,62 @@
+name: Deploy ARLS Backend (Docker -> ACR -> WebApp)
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ACR_LOGIN_SERVER: acrsecurityopsprod001-eneccucxdcfedqhm.azurecr.io
+  IMAGE_REPO: hr-backend
+
+  AZURE_WEBAPP_NAME: rg-arls-backend
+  AZURE_RESOURCE_GROUP: rg-arls-dev   # RG 다르면 여기만 수정
+
+  WEBSITES_PORT: "8080"
+
+jobs:
+  build-push-restart:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR Login (push)
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ env.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_PUSH_USERNAME }}
+          password: ${{ secrets.ACR_PUSH_PASSWORD }}
+
+      - name: Build & Push (latest + sha)
+        run: |
+          IMAGE_SHA=${{ github.sha }}
+          IMAGE_LATEST=${ACR_LOGIN_SERVER}/${IMAGE_REPO}:latest
+          IMAGE_COMMIT=${ACR_LOGIN_SERVER}/${IMAGE_REPO}:${IMAGE_SHA}
+
+          docker build -t "${IMAGE_LATEST}" -t "${IMAGE_COMMIT}" .
+          docker push "${IMAGE_LATEST}"
+          docker push "${IMAGE_COMMIT}"
+
+      - name: Configure App Settings (port)
+        run: |
+          az webapp config appsettings set \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --settings WEBSITES_PORT="${WEBSITES_PORT}" PORT="${WEBSITES_PORT}"
+
+      - name: Restart WebApp
+        run: |
+          az webapp restart --name "${AZURE_WEBAPP_NAME}" --resource-group "${AZURE_RESOURCE_GROUP}"
