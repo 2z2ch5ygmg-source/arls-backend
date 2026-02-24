@@ -290,11 +290,20 @@ def create_employee(
     tenant_id = tenant["id"]
 
     if actor_role == ROLE_BRANCH_MANAGER:
+        scoped_site_id = _branch_manager_site_id(user)
+        if payload.site_id and str(payload.site_id) != scoped_site_id:
+            _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "forbidden")
         company_id, site_id, resolved_company_code, resolved_site_code = _lookup_relation_ids_by_site(
             conn,
             tenant_id,
-            _branch_manager_site_id(user),
+            scoped_site_id,
         )
+        requested_site_code = str(payload.site_code or "").strip().upper()
+        if requested_site_code and requested_site_code != resolved_site_code:
+            _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "forbidden")
+        requested_company_code = str(payload.company_code or "").strip().upper()
+        if requested_company_code and requested_company_code != resolved_company_code:
+            _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "forbidden")
     else:
         if payload.site_id:
             company_id, site_id, resolved_company_code, resolved_site_code = _lookup_relation_ids_by_site(
