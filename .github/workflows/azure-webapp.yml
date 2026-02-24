@@ -1,0 +1,41 @@
+name: Build and deploy arls-backend
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: arls-backend-main-deploy
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Zip artifact
+        run: |
+          rm -f release.zip
+          zip -r release.zip . \
+            -x ".git/*" ".github/*" ".venv/*" "__pycache__/*" "*.pyc"
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: rg-arls-backend
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: release.zip
