@@ -233,7 +233,38 @@ def _resolve_target_tenant(conn, user, tenant_code: str | None, tenant_id: str |
     )
 
 
-def _normalize_site_payload(payload: SiteCreate | SiteUpdate) -> dict:
+def _generate_next_site_code(conn, tenant_id: str) -> str:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT site_code
+            FROM sites
+            WHERE tenant_id = %s
+              AND site_code ~ '^R[0-9]{3,4}$'
+            """,
+            (tenant_id,),
+        )
+        rows = cur.fetchall() or []
+    max_number = 0
+    for row in rows:
+        code = str(row.get("site_code") or "").strip().upper()
+        if not code.startswith("R"):
+            continue
+        tail = code[1:]
+        if not tail.isdigit():
+            continue
+        max_number = max(max_number, int(tail))
+    next_number = max_number + 1
+    if next_number > 9999:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "SITE_ID_EXHAUSTED", "message": "현장 번호 생성 한도(9999)를 초과했습니다."},
+        )
+    width = 4 if next_number >= 1000 else 3
+    return f"R{next_number:0{width}d}"
+
+
+def _normalize_site_payload(payload: SiteCreate | SiteUpdate, *, require_site_code: bool = True) -> dict:
     tenant_id = str(getattr(payload, "tenant_id", "") or "").strip()
     company_code = str(getattr(payload, "company_code", "") or "").strip().upper()
     site_code = str(getattr(payload, "site_code", "") or "").strip().upper()
@@ -275,9 +306,12 @@ def _normalize_site_payload(payload: SiteCreate | SiteUpdate) -> dict:
 
     is_active = bool(getattr(payload, "is_active", True))
 
-    if not site_code:
-        fields["site_id"] = "required"
-    elif not SITE_ID_PATTERN.fullmatch(site_code):
+    if require_site_code:
+        if not site_code:
+            fields["site_id"] = "required"
+        elif not SITE_ID_PATTERN.fullmatch(site_code):
+            fields["site_id"] = "invalid"
+    elif site_code and (not SITE_ID_PATTERN.fullmatch(site_code)):
         fields["site_id"] = "invalid"
 
     if not site_name:
@@ -619,7 +653,7 @@ def create_site(
     conn=Depends(get_db_conn),
     user=Depends(require_roles(*SITE_WRITE_ROLES)),
 ):
-    normalized = _normalize_site_payload(payload)
+    normalized = _normalize_site_payload(payload, require_site_code=False)
     requested_tenant_id = str(tenant_id or normalized.get("tenant_id") or "").strip()
     tenant = _resolve_target_tenant(conn, user, tenant_code, requested_tenant_id)
     if not tenant or not tenant.get("id"):
@@ -637,6 +671,8 @@ def create_site(
     if not resolved_company_code:
         resolved_company_code = _resolve_default_company_code(conn, tenant_id)
     normalized["company_code"] = resolved_company_code
+    if not normalized.get("site_code"):
+        normalized["site_code"] = _generate_next_site_code(conn, tenant_id)
 
     logger.info(
         "create_site requested: tenant=%s company=%s site=%s actor=%s",
@@ -662,7 +698,7 @@ def create_site(
             if cur.fetchone():
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail={"error": "SITE_EXISTS", "message": "이미 존재하는 사이트 코드입니다."},
+                    detail={"error": "SITE_EXISTS", "message": "이미 존재하는 현장 번호입니다."},
                 )
 
             if has_place_id:
@@ -723,7 +759,7 @@ def create_site(
     except pg_errors.UniqueViolation as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"error": "SITE_EXISTS", "message": "이미 존재하는 사이트 코드입니다."},
+            detail={"error": "SITE_EXISTS", "message": "이미 존재하는 현장 번호입니다."},
         ) from exc
     except Exception as exc:
         logger.exception(
