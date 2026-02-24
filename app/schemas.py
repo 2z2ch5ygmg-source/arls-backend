@@ -40,9 +40,16 @@ class RefreshTokenRequest(BaseModel):
 
 
 class TenantCreate(BaseModel):
-    tenant_code: str = Field(min_length=1)
+    tenant_code: Optional[str] = Field(default=None, min_length=1)
     tenant_name: str = Field(min_length=1)
     is_active: bool = True
+
+    @field_validator("tenant_code", "tenant_name", mode="before")
+    @classmethod
+    def _trim_tenant_create_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return str(value).strip()
 
 
 class TenantOut(BaseModel):

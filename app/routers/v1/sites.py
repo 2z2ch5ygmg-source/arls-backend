@@ -27,7 +27,7 @@ SITE_WRITE_ROLES = (ROLE_DEV, ROLE_BRANCH_MANAGER)
 SITE_READ_ROLES = SITE_WRITE_ROLES + (ROLE_EMPLOYEE,)
 GOOGLE_PLACES_TEXTSEARCH_NEW_URL = "https://places.googleapis.com/v1/places:searchText"
 logger = logging.getLogger(__name__)
-SITE_ID_PATTERN = re.compile(r"^[a-z0-9_]+$")
+SITE_ID_PATTERN = re.compile(r"^R[0-9]{3,4}$")
 
 
 def _active_filter_to_bool(raw: str | None) -> bool | None:
@@ -236,7 +236,7 @@ def _resolve_target_tenant(conn, user, tenant_code: str | None, tenant_id: str |
 def _normalize_site_payload(payload: SiteCreate | SiteUpdate) -> dict:
     tenant_id = str(getattr(payload, "tenant_id", "") or "").strip()
     company_code = str(getattr(payload, "company_code", "") or "").strip().upper()
-    site_code = str(getattr(payload, "site_code", "") or "").strip().lower()
+    site_code = str(getattr(payload, "site_code", "") or "").strip().upper()
     site_name = str(getattr(payload, "site_name", "") or "").strip()
     address = str(getattr(payload, "address", "") or "").strip()
     place_id = str(getattr(payload, "place_id", "") or "").strip()
