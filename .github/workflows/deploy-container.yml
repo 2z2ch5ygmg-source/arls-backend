@@ -17,11 +17,12 @@ env:
   WEBSITES_PORT: "8080"
 
 jobs:
-  build_push_and_set_container:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      # Azure 로그인 (너 리포에 있는 긴 secret 이름 그대로 사용)
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
@@ -29,20 +30,22 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_6AFAB1BB33A243268F5F062CEB3B4BDB }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_5430C5FDF1CF4649BA67C8ACAD76CE82 }}
 
-      - name: ACR Login
+      # ACR push 로그인
+      - name: ACR Login (push)
         uses: azure/docker-login@v2
         with:
           login-server: ${{ env.ACR_LOGIN_SERVER }}
           username: ${{ secrets.ACR_PUSH_USERNAME }}
           password: ${{ secrets.ACR_PUSH_PASSWORD }}
 
-      - name: Build & Push image
+      - name: Build & Push image (latest)
         run: |
           IMAGE_LATEST=${ACR_LOGIN_SERVER}/${IMAGE_REPO}:latest
           docker build -t "${IMAGE_LATEST}" .
           docker push "${IMAGE_LATEST}"
 
-      - name: Configure WebApp container
+      # WebApp에 컨테이너 이미지 설정 + 포트 설정
+      - name: Configure WebApp container (az cli)
         run: |
           az webapp config appsettings set \
             --name "${AZURE_WEBAPP_NAME}" \
@@ -58,3 +61,16 @@ jobs:
       - name: Restart WebApp
         run: |
           az webapp restart --name "${AZURE_WEBAPP_NAME}" --resource-group "${AZURE_RESOURCE_GROUP}"
+
+      # (선택) 헬스체크 - 5분 대기
+      - name: Health Check
+        run: |
+          URL="https://${AZURE_WEBAPP_NAME}.azurewebsites.net/health"
+          echo "Health: $URL"
+          for i in {1..30}; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || true)
+            echo "Attempt $i: $code"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 10
+          done
+          exit 1
