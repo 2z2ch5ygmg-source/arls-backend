@@ -66,7 +66,11 @@ class TenantUpdate(BaseModel):
 
 
 class UserAdminCreate(BaseModel):
-    tenant_code: str = Field(min_length=1)
+    tenant_id: Optional[UUID] = Field(
+        default=None,
+        validation_alias=AliasChoices("tenant_id", "tenantId"),
+    )
+    tenant_code: Optional[str] = Field(default=None, min_length=1, max_length=64)
     username: str = Field(min_length=1, max_length=120)
     full_name: str = Field(min_length=1, max_length=120)
     password: str = Field(min_length=8, max_length=120)
@@ -80,6 +84,14 @@ class UserAdminCreate(BaseModel):
         if value is None:
             return None
         return value.strip()
+
+    @model_validator(mode="after")
+    def _tenant_ref_required(self) -> "UserAdminCreate":
+        if self.tenant_id is not None:
+            return self
+        if str(self.tenant_code or "").strip():
+            return self
+        raise ValueError("tenant_id or tenant_code is required")
 
     @field_validator("role")
     @classmethod

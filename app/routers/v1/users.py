@@ -52,21 +52,45 @@ def _validate_target_role(user: dict, next_role: str, tenant_code: str, actor_ro
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
 
-def _resolve_tenant(conn, tenant_code: str):
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT id, tenant_code
-            FROM tenants
-            WHERE tenant_code = %s
-              AND COALESCE(is_active, TRUE) = TRUE
-              AND COALESCE(is_deleted, FALSE) = FALSE
-            """,
-            (tenant_code,),
+def _resolve_tenant(conn, *, tenant_id: uuid.UUID | None = None, tenant_code: str | None = None):
+    normalized_code = str(tenant_code or "").strip().lower()
+    if tenant_id is None and not normalized_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "VALIDATION_ERROR", "message": "tenant_id 또는 tenant_code가 필요합니다."},
         )
+
+    with conn.cursor() as cur:
+        if tenant_id is not None:
+            cur.execute(
+                """
+                SELECT id, tenant_code
+                FROM tenants
+                WHERE id = %s
+                  AND COALESCE(is_active, TRUE) = TRUE
+                  AND COALESCE(is_deleted, FALSE) = FALSE
+                LIMIT 1
+                """,
+                (tenant_id,),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT id, tenant_code
+                FROM tenants
+                WHERE lower(trim(tenant_code)) = %s
+                  AND COALESCE(is_active, TRUE) = TRUE
+                  AND COALESCE(is_deleted, FALSE) = FALSE
+                LIMIT 1
+                """,
+                (normalized_code,),
+            )
         tenant = cur.fetchone()
     if not tenant:
-        raise HTTPException(status_code=404, detail="tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "TENANT_NOT_FOUND", "message": "tenant not found"},
+        )
     return tenant
 
 
@@ -178,8 +202,8 @@ def list_users(
         target_tenant = own_tenant_code
 
     if target_tenant:
-        clauses.append("t.tenant_code = %s")
-        params.append(target_tenant)
+        clauses.append("lower(trim(t.tenant_code)) = %s")
+        params.append(target_tenant.strip().lower())
 
     keyword = str(q or "").strip()
     if keyword:
@@ -218,7 +242,11 @@ def create_user(
     user=Depends(get_current_user),
 ):
     actor_role = _require_account_manager(user)
-    tenant = _resolve_tenant(conn, payload.tenant_code.strip())
+    tenant = _resolve_tenant(
+        conn,
+        tenant_id=payload.tenant_id,
+        tenant_code=payload.tenant_code,
+    )
     _require_same_tenant_for_branch_manager(user, tenant["tenant_code"], actor_role)
 
     normalized_role = normalize_role(payload.role)
