@@ -26,6 +26,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ✅ 디버그(임시): secrets가 실제로 주입되는지 확인
+      # 값 자체는 마스킹되므로 노출되지 않음. EMPTY 여부만 출력.
+      - name: Debug - check secrets exist (masked)
+        env:
+          CID: ${{ secrets.AZURE_CLIENT_ID }}
+          TID: ${{ secrets.AZURE_TENANT_ID }}
+          SID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ACRU: ${{ secrets.ACR_PUSH_USERNAME }}
+          ACRP: ${{ secrets.ACR_PUSH_PASSWORD }}
+        run: |
+          if [ -z "$CID" ]; then echo "AZURE_CLIENT_ID is EMPTY"; else echo "AZURE_CLIENT_ID OK"; fi
+          if [ -z "$TID" ]; then echo "AZURE_TENANT_ID is EMPTY"; else echo "AZURE_TENANT_ID OK"; fi
+          if [ -z "$SID" ]; then echo "AZURE_SUBSCRIPTION_ID is EMPTY"; else echo "AZURE_SUBSCRIPTION_ID OK"; fi
+          if [ -z "$ACRU" ]; then echo "ACR_PUSH_USERNAME is EMPTY"; else echo "ACR_PUSH_USERNAME OK"; fi
+          if [ -z "$ACRP" ]; then echo "ACR_PUSH_PASSWORD is EMPTY"; else echo "ACR_PUSH_PASSWORD OK"; fi
+
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
@@ -56,6 +72,14 @@ jobs:
             --name "${AZURE_WEBAPP_NAME}" \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --settings WEBSITES_PORT="${WEBSITES_PORT}" PORT="${WEBSITES_PORT}"
+
+      - name: Configure WebApp Container (ACR image)
+        run: |
+          az webapp config container set \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --docker-custom-image-name "${ACR_LOGIN_SERVER}/${IMAGE_REPO}:latest" \
+            --docker-registry-server-url "https://${ACR_LOGIN_SERVER}"
 
       - name: Restart WebApp
         run: |
