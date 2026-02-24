@@ -5,7 +5,7 @@ import uuid
 from .config import settings
 from .db import get_connection
 from .security import hash_password
-from .utils.permissions import ROLE_DEV
+from .utils.permissions import ROLE_DEVELOPER
 
 
 def ensure_seed_admin() -> None:
@@ -53,6 +53,6 @@ def ensure_seed_admin() -> None:
                     settings.init_admin_username,
                     hash_password(settings.init_admin_password),
                     "Master DEV",
-                    ROLE_DEV,
+                    ROLE_DEVELOPER,
                 ),
             )

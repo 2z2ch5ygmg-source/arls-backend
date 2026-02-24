@@ -563,7 +563,7 @@ def list_sites(
         clauses.append("s.tenant_id = %s")
         params.append(user["tenant_id"])
     elif requested_tenant_code:
-        clauses.append("t.tenant_code = %s")
+        clauses.append("lower(trim(t.tenant_code)) = lower(trim(%s))")
         params.append(requested_tenant_code)
 
     if company_code:

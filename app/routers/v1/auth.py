@@ -8,7 +8,7 @@ from ...db import fetch_one
 from ...deps import get_db_conn, get_current_user, apply_rate_limit
 from ...schemas import AuthUser, LoginRequest, RefreshTokenRequest, TokenResponse
 from ...security import decode_refresh_token, encode_refresh_token, encode_token, verify_password
-from ...utils.permissions import normalize_role
+from ...utils.permissions import normalize_role, normalize_user_role
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 MASTER_TENANT_CODE = "MASTER"
@@ -109,7 +109,7 @@ def handle_master_login(payload: LoginRequest, conn):
     return _build_token_response(
         user,
         tenant_code=MASTER_TENANT_CODE,
-        role="dev",
+        role=normalize_user_role(user.get("role")),
         is_master=True,
     )
 
@@ -160,7 +160,7 @@ def login(payload: LoginRequest, conn=Depends(get_db_conn)):
             (user["id"],),
         )
 
-    user_role = normalize_role(user["role"])
+    user_role = normalize_user_role(user["role"])
 
     return _build_token_response(
         user,
@@ -202,9 +202,10 @@ def refresh(payload: RefreshTokenRequest, conn=Depends(get_db_conn)):
     if not user or not bool(user.get("tenant_is_active", True)) or bool(user.get("tenant_is_deleted", False)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid refresh token")
 
-    role = normalize_role(user["role"])
+    role = normalize_user_role(user["role"])
+    role_scope = normalize_role(role)
     refresh_tenant_code = _normalize_tenant_code(token_payload.get("tenant_code"))
-    is_master = role == "dev" and refresh_tenant_code == MASTER_TENANT_CODE
+    is_master = role_scope == "dev" and refresh_tenant_code == MASTER_TENANT_CODE
     tenant_code = MASTER_TENANT_CODE if is_master else user["tenant_code"]
     if refresh_tenant_code and refresh_tenant_code not in {tenant_code, MASTER_TENANT_CODE}:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid refresh token")
@@ -256,7 +257,7 @@ def me(user=Depends(get_current_user)):
         full_name=user["full_name"],
         tenant_id=user["tenant_id"],
         tenant_code=user["tenant_code"],
-        role=normalize_role(user["role"]),
+        role=normalize_user_role(user["role"]),
         employee_id=user.get("employee_id"),
         employee_code=user.get("employee_code"),
         is_master=is_master,

@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .utils.permissions import ALL_USER_ROLES, normalize_user_role
+
 
 class LoginRequest(BaseModel):
     tenant_code: str
@@ -96,9 +98,9 @@ class UserAdminCreate(BaseModel):
     @field_validator("role")
     @classmethod
     def _role(cls, value: str) -> str:
-        normalized = (value or "").strip().lower()
-        if normalized not in {"dev", "branch_manager", "employee"}:
-            raise ValueError("role must be dev/branch_manager/employee")
+        normalized = normalize_user_role(value)
+        if normalized not in ALL_USER_ROLES:
+            raise ValueError("role must be officer/vice_supervisor/supervisor/hq_admin/developer")
         return normalized
 
 
@@ -108,9 +110,9 @@ class UserAdminRoleUpdate(BaseModel):
     @field_validator("role")
     @classmethod
     def _role(cls, value: str) -> str:
-        normalized = (value or "").strip().lower()
-        if normalized not in {"dev", "branch_manager", "employee"}:
-            raise ValueError("role must be dev/branch_manager/employee")
+        normalized = normalize_user_role(value)
+        if normalized not in ALL_USER_ROLES:
+            raise ValueError("role must be officer/vice_supervisor/supervisor/hq_admin/developer")
         return normalized
 
 
@@ -264,12 +266,10 @@ class EmployeeCreate(BaseModel):
     employee_code: Optional[str] = Field(default=None, min_length=1)
     full_name: str = Field(min_length=1)
     phone: Optional[str] = None
-    duty_role: Optional[str] = Field(default="GUARD", max_length=32)
     birth_date: Optional[date] = None
     hire_date: Optional[date] = None
     guard_training_cert_no: Optional[str] = Field(default=None, max_length=120)
     note: Optional[str] = Field(default=None, max_length=1000)
-    worker_role: Optional[str] = Field(default=None, max_length=64)
     soc_login_id: Optional[str] = Field(default=None, max_length=120)
     soc_temp_password: Optional[str] = Field(default=None, max_length=120)
     soc_role: Optional[str] = Field(default=None, max_length=64)
@@ -282,7 +282,6 @@ class EmployeeCreate(BaseModel):
         "phone",
         "guard_training_cert_no",
         "note",
-        "worker_role",
         "soc_login_id",
         "soc_temp_password",
         "soc_role",
@@ -301,27 +300,6 @@ class EmployeeCreate(BaseModel):
         # DEV의 상세 검증은 employees 라우터에서 처리한다.
         return self
 
-    @field_validator("duty_role")
-    @classmethod
-    def _duty_role(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        normalized = str(value).strip().upper()
-        aliases = {
-            "VICE": "VICE_SUPERVISOR",
-            "VICE_MANAGER": "VICE_SUPERVISOR",
-            "SUB_MANAGER": "VICE_SUPERVISOR",
-            "GUARD": "GUARD",
-            "STAFF": "GUARD",
-            "TEAM_MANAGER": "TEAM_MANAGER",
-            "MANAGER": "TEAM_MANAGER",
-        }
-        resolved = aliases.get(normalized, normalized)
-        if resolved not in {"VICE_SUPERVISOR", "GUARD", "TEAM_MANAGER"}:
-            raise ValueError("duty_role must be VICE_SUPERVISOR/GUARD/TEAM_MANAGER")
-        return resolved
-
-
 class EmployeeOut(BaseModel):
     id: UUID
     employee_code: str
@@ -330,13 +308,12 @@ class EmployeeOut(BaseModel):
     phone: Optional[str]
     site_code: str
     company_code: str
-    duty_role: Optional[str] = None
     user_id: Optional[UUID] = None
+    user_role: Optional[str] = None
     birth_date: Optional[date] = None
     hire_date: Optional[date] = None
     guard_training_cert_no: Optional[str] = None
     note: Optional[str] = None
-    worker_role: Optional[str] = None
     soc_login_id: Optional[str] = None
     soc_role: Optional[str] = None
 
@@ -348,39 +325,16 @@ class EmployeeUpdate(BaseModel):
     hire_date: Optional[date] = None
     guard_training_cert_no: Optional[str] = Field(default=None, max_length=120)
     note: Optional[str] = Field(default=None, max_length=1000)
-    worker_role: Optional[str] = Field(default=None, max_length=64)
     soc_login_id: Optional[str] = Field(default=None, max_length=120)
     soc_role: Optional[str] = Field(default=None, max_length=64)
 
-    @field_validator("full_name", "phone", "guard_training_cert_no", "note", "worker_role", "soc_login_id", "soc_role")
+    @field_validator("full_name", "phone", "guard_training_cert_no", "note", "soc_login_id", "soc_role")
     @classmethod
     def _trimmed(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return None
         trimmed = value.strip()
         return trimmed or None
-
-
-class EmployeeDutyRoleUpdate(BaseModel):
-    duty_role: str = Field(min_length=1, max_length=32)
-
-    @field_validator("duty_role")
-    @classmethod
-    def _duty_role(cls, value: str) -> str:
-        normalized = str(value or "").strip().upper()
-        aliases = {
-            "VICE": "VICE_SUPERVISOR",
-            "VICE_MANAGER": "VICE_SUPERVISOR",
-            "SUB_MANAGER": "VICE_SUPERVISOR",
-            "GUARD": "GUARD",
-            "STAFF": "GUARD",
-            "TEAM_MANAGER": "TEAM_MANAGER",
-            "MANAGER": "TEAM_MANAGER",
-        }
-        resolved = aliases.get(normalized, normalized)
-        if resolved not in {"VICE_SUPERVISOR", "GUARD", "TEAM_MANAGER"}:
-            raise ValueError("duty_role must be VICE_SUPERVISOR/GUARD/TEAM_MANAGER")
-        return resolved
 
 
 class AttendanceCreate(BaseModel):

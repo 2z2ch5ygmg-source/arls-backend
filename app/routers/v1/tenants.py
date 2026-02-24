@@ -12,9 +12,12 @@ from ...deps import get_db_conn, get_current_user, apply_rate_limit
 from ...schemas import TenantCreate, TenantOut, TenantUpdate
 from ...utils.permissions import (
     ROLE_BRANCH_MANAGER,
+    ROLE_DEVELOPER,
     ROLE_DEV,
+    ROLE_HQ_ADMIN,
     can_manage_tenant,
     normalize_role,
+    user_role_sql_variants,
 )
 
 router = APIRouter(prefix="/tenants", tags=["tenants"], dependencies=[Depends(apply_rate_limit)])
@@ -267,17 +270,18 @@ def _ensure_can_delete_account(actor: dict) -> str:
 
 
 def _count_remaining_same_role_users(conn, *, tenant_id: uuid.UUID | None, role: str, exclude_user_id: uuid.UUID) -> int:
+    variants = list(user_role_sql_variants(role))
     with conn.cursor() as cur:
         if tenant_id is None:
             cur.execute(
                 """
                 SELECT COUNT(*) AS total
                 FROM arls_users
-                WHERE role = %s
+                WHERE lower(trim(role)) = ANY(%s)
                   AND id <> %s
                   AND COALESCE(is_deleted, FALSE) = FALSE
                 """,
-                (role, exclude_user_id),
+                (variants, exclude_user_id),
             )
         else:
             cur.execute(
@@ -285,11 +289,11 @@ def _count_remaining_same_role_users(conn, *, tenant_id: uuid.UUID | None, role:
                 SELECT COUNT(*) AS total
                 FROM arls_users
                 WHERE tenant_id = %s
-                  AND role = %s
+                  AND lower(trim(role)) = ANY(%s)
                   AND id <> %s
                   AND COALESCE(is_deleted, FALSE) = FALSE
                 """,
-                (tenant_id, role, exclude_user_id),
+                (tenant_id, variants, exclude_user_id),
             )
         row = cur.fetchone() or {}
     return int(row.get("total") or 0)
@@ -366,7 +370,7 @@ def delete_tenant_user(
         remain = _count_remaining_same_role_users(
             conn,
             tenant_id=tenant_id,
-            role=ROLE_BRANCH_MANAGER,
+            role=ROLE_HQ_ADMIN,
             exclude_user_id=user_id,
         )
         if remain <= 0:
@@ -379,7 +383,7 @@ def delete_tenant_user(
         remain = _count_remaining_same_role_users(
             conn,
             tenant_id=None,
-            role=ROLE_DEV,
+            role=ROLE_DEVELOPER,
             exclude_user_id=user_id,
         )
         if remain <= 0:

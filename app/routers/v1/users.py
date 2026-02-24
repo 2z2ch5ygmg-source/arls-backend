@@ -16,11 +16,13 @@ from ...schemas import (
 )
 from ...security import hash_password, verify_password
 from ...utils.permissions import (
+    ALL_USER_ROLES,
     ROLE_BRANCH_MANAGER,
+    ROLE_DEVELOPER,
     ROLE_DEV,
-    ROLE_EMPLOYEE,
     can_manage_user_accounts,
     normalize_role,
+    normalize_user_role,
 )
 
 router = APIRouter(prefix="/users", tags=["users"], dependencies=[Depends(apply_rate_limit)])
@@ -46,9 +48,9 @@ def _require_same_tenant_for_branch_manager(user: dict, tenant_code: str, actor_
 
 
 def _validate_target_role(user: dict, next_role: str, tenant_code: str, actor_role: str) -> None:
-    if next_role not in {ROLE_DEV, ROLE_BRANCH_MANAGER, ROLE_EMPLOYEE}:
+    if next_role not in ALL_USER_ROLES:
         raise HTTPException(status_code=400, detail="invalid role")
-    if next_role == ROLE_DEV and actor_role != ROLE_DEV:
+    if next_role == ROLE_DEVELOPER and actor_role != ROLE_DEV:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
 
@@ -164,7 +166,7 @@ def _row_to_out(row) -> UserAdminOut:
         tenant_code=row["tenant_code"],
         username=row["username"],
         full_name=row["full_name"],
-        role=normalize_role(row["role"]),
+        role=normalize_user_role(row["role"]),
         is_active=bool(row["is_active"]),
         employee_id=row.get("employee_id"),
         employee_code=row.get("employee_code"),
@@ -249,7 +251,7 @@ def create_user(
     )
     _require_same_tenant_for_branch_manager(user, tenant["tenant_code"], actor_role)
 
-    normalized_role = normalize_role(payload.role)
+    normalized_role = normalize_user_role(payload.role)
     _validate_target_role(user, normalized_role, tenant["tenant_code"], actor_role)
 
     employee_id = _resolve_employee_id(conn, tenant["id"], payload.employee_code)
@@ -320,13 +322,13 @@ def update_user_role(
     user=Depends(get_current_user),
 ):
     actor_role = _require_account_manager(user)
-    next_role = normalize_role(payload.role)
+    next_role = normalize_user_role(payload.role)
 
     row = _fetch_user_row(conn, user_id)
     _assert_manageable_target(user, row, actor_role)
     _validate_target_role(user, next_role, row["tenant_code"], actor_role)
 
-    current_actor_role = normalize_role(user.get("role"))
+    current_actor_role = normalize_user_role(user.get("role"))
     if str(row["id"]) == str(user["id"]) and next_role != current_actor_role:
         raise HTTPException(status_code=400, detail="cannot change current account role")
 

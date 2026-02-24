@@ -7,7 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from .db import get_connection
 from .security import decode_token
-from .utils.permissions import normalize_role
+from .utils.permissions import normalize_role, normalize_user_role
 from .utils.guards import IDEMPOTENCY, RATE_LIMITER
 
 security_scheme = HTTPBearer(auto_error=False)
@@ -81,7 +81,7 @@ def get_current_user(
         raise _unauthorized("계정을 찾을 수 없습니다.")
 
     result = dict(row)
-    result["role"] = normalize_role(result.get("role"))
+    result["role"] = normalize_user_role(result.get("role"))
     return result
 
 
