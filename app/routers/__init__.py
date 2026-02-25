@@ -6,6 +6,7 @@ from .v1.sites import router as sites_router
 from .v1.tenants import router as tenants_router
 from .v1.attendance import router as attendance_router
 from .v1.attendance_requests import router as attendance_requests_router
+from .v1.debug import router as debug_router
 from .v1.leaves import router as leaves_router
 from .v1.schedules import router as schedules_router
 from .v1.users import router as users_router
@@ -23,6 +24,7 @@ __all__ = [
     "tenants_router",
     "attendance_router",
     "attendance_requests_router",
+    "debug_router",
     "leaves_router",
     "schedules_router",
     "users_router",

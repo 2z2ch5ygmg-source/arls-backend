@@ -217,8 +217,14 @@ def _post_employee_sync_to_soc(
     soc_temp_password: str | None = None,
     soc_role: str | None = None,
 ):
+    if not bool(settings.soc_integration_enabled):
+        print("[HR->SOC] employee-sync SKIP: soc_integration_enabled=false")
+        logger.info("employees.soc_sync skipped: soc_integration_enabled=false")
+        return
+
     url = str(settings.soc_employee_sync_url or "").strip()
     if not url:
+        print("[HR->SOC] employee-sync SKIP: empty url")
         logger.info("employees.soc_sync skipped: SOC_EMPLOYEE_SYNC_URL is empty")
         return
 
@@ -245,6 +251,7 @@ def _post_employee_sync_to_soc(
     print(
         f"[HR->SOC] POST {url} "
         f"employee_uuid={payload['employee']['employee_uuid']} "
+        f"employee_code={payload['employee']['employee_code']} "
         f"tenant={payload['tenant_id']} site={payload['site_code']}"
     )
     try:
