@@ -720,13 +720,15 @@ async def import_guard_roster_docx(
 
         match_result = match_site_candidates(
             placement_text=str(parsed.get("placement_text") or ""),
+            address_text=str(parsed.get("address") or ""),
             sites=tenant_sites,
             threshold=GUARD_ROSTER_IMPORT_SITE_MATCH_THRESHOLD,
             top_n=3,
         )
+        management_no_str = str(parsed.get("management_no_str") or parsed.get("management_no") or "")
         generated_code = build_employee_code_from_management_no(
             str(match_result.get("site_code") or ""),
-            str(parsed.get("management_no") or ""),
+            management_no_str,
         )
 
         photo_bytes, photo_mime, photo_filename = extract_primary_docx_photo(file_bytes)
@@ -744,7 +746,8 @@ async def import_guard_roster_docx(
             {
                 "filename": filename,
                 "parsed": {
-                    "management_no": str(parsed.get("management_no") or ""),
+                    "management_no": management_no_str,
+                    "management_no_str": management_no_str,
                     "name": str(parsed.get("name") or ""),
                     "birthdate": str(parsed.get("birthdate") or ""),
                     "phone": str(parsed.get("phone") or ""),

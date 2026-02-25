@@ -11,17 +11,19 @@ DATE_PATTERN = re.compile(r"(?P<year>\d{2,4})\s*[./-]\s*(?P<month>\d{1,2})\s*[./
 PHONE_PATTERN = re.compile(r"(01[016789])[-\s]?(\d{3,4})[-\s]?(\d{4})")
 TOKEN_PATTERN = re.compile(r"[A-Za-z0-9가-힣]+")
 MGMT_NO_PATTERN = re.compile(r"[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)?")
+SITE_HINT_SPLIT_PATTERN = re.compile(r"[\r\n/|,;]+")
 
 FIELD_ALIASES: dict[str, tuple[str, ...]] = {
-    "management_no": ("관리번호", "관리 번호", "관리NO", "관리 no", "번호"),
-    "name": ("성명", "이름", "성 명"),
-    "birthdate": ("생년월일", "생년 월일", "주민번호", "주민등록번호"),
-    "phone": ("전화번호", "전화 번호", "연락처", "핸드폰", "휴대폰"),
-    "address": ("주소", "거주지"),
-    "placement_text": ("배치지", "근무지", "현장", "배치 지점"),
-    "training_cert_no": ("교부번호", "교부 번호", "신임교육", "신임교육이수증", "신임교육 이수증"),
-    "hire_date": ("채용일", "입사일", "채용 일자", "입사 일자"),
-    "leave_date": ("퇴직일", "퇴사일", "퇴직 일자", "퇴사 일자"),
+    # 경비원명부 라벨 고정 파서 (요구사항 기준 9개)
+    "management_no": ("관리번호", "관리 번호"),
+    "name": ("성명", "성 명"),
+    "address": ("주소",),
+    "placement_text": ("배치지", "배치 지"),
+    "birthdate": ("생년월일", "생년 월일"),
+    "phone": ("전화번호", "전화 번호"),
+    "training_cert_no": ("경비원 신임교육 이수증 교부번호", "교부번호", "교부 번호"),
+    "hire_date": ("채용일", "채용 일"),
+    "leave_date": ("퇴직일", "퇴직 일"),
 }
 
 IMAGE_EXT_TO_MIME = {
@@ -171,6 +173,8 @@ def parse_guard_roster_docx(docx_bytes: bytes) -> dict[str, str]:
         extracted[field_name] = _pick_field_value(pairs, lines, aliases)
 
     extracted["management_no"] = _normalize_management_no(extracted.get("management_no"))
+    # management_no 문자열을 그대로 보존(leading zero 유지)하기 위한 명시 필드
+    extracted["management_no_str"] = extracted["management_no"]
     extracted["name"] = _clean_text(extracted.get("name"))
     extracted["birthdate"] = _normalize_date(extracted.get("birthdate"))
     extracted["hire_date"] = _normalize_date(extracted.get("hire_date"))
@@ -211,28 +215,58 @@ def _tokenize(value: str | None) -> list[str]:
     return [token.lower() for token in TOKEN_PATTERN.findall(str(value or "")) if len(token) >= 2]
 
 
-def _site_match_score(*, placement_text: str, site_code: str, site_name: str, site_address: str) -> float:
-    placement = _clean_text(placement_text)
-    if not placement:
+def _build_site_hint_text(*, placement_text: str, address_text: str) -> str:
+    fragments: list[str] = []
+    for raw in (_clean_text(placement_text), _clean_text(address_text)):
+        if not raw:
+            continue
+        for chunk in SITE_HINT_SPLIT_PATTERN.split(raw):
+            normalized = _clean_text(chunk)
+            if normalized:
+                fragments.append(normalized)
+    if not fragments:
+        return ""
+    # 순서를 유지한 중복 제거
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for fragment in fragments:
+        key = fragment.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(fragment)
+    return " ".join(deduped)
+
+
+def _site_match_score(
+    *,
+    placement_text: str,
+    address_text: str,
+    site_code: str,
+    site_name: str,
+    site_address: str,
+) -> float:
+    source_text = _build_site_hint_text(placement_text=placement_text, address_text=address_text)
+    if not source_text:
         return 0.0
 
-    placement_upper = placement.upper()
+    source_upper = source_text.upper()
+    source_lower = source_text.lower()
     score = 0.0
 
     normalized_site_code = _clean_text(site_code).upper()
     normalized_site_name = _clean_text(site_name)
     normalized_site_address = _clean_text(site_address)
 
-    if normalized_site_code and normalized_site_code in placement_upper:
+    if normalized_site_code and normalized_site_code in source_upper:
         score += 0.72
 
     if normalized_site_name:
         lower_name = normalized_site_name.lower()
-        lower_placement = placement.lower()
-        if lower_name and (lower_name in lower_placement or lower_placement in lower_name):
+        if lower_name and (lower_name in source_lower or source_lower in lower_name):
             score += 0.36
 
-    placement_tokens = set(_tokenize(placement))
+    placement_tokens = set(_tokenize(source_text))
     site_tokens = set(_tokenize(f"{normalized_site_name} {normalized_site_address}"))
     if placement_tokens and site_tokens:
         intersection = len(placement_tokens & site_tokens)
@@ -242,8 +276,7 @@ def _site_match_score(*, placement_text: str, site_code: str, site_name: str, si
 
     if normalized_site_address:
         lower_address = normalized_site_address.lower()
-        lower_placement = placement.lower()
-        if lower_address and (lower_address in lower_placement or lower_placement in lower_address):
+        if lower_address and (lower_address in source_lower or source_lower in lower_address):
             score += 0.2
 
     return min(1.0, round(score, 4))
@@ -252,6 +285,7 @@ def _site_match_score(*, placement_text: str, site_code: str, site_name: str, si
 def match_site_candidates(
     *,
     placement_text: str,
+    address_text: str = "",
     sites: list[dict],
     threshold: float = 0.74,
     top_n: int = 3,
@@ -263,6 +297,7 @@ def match_site_candidates(
         site_address = _clean_text(site.get("address"))
         score = _site_match_score(
             placement_text=placement_text,
+            address_text=address_text,
             site_code=site_code,
             site_name=site_name,
             site_address=site_address,
