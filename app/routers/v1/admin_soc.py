@@ -108,10 +108,7 @@ def reset_soc_master_data(
 
     hr_reset_token = str(getattr(settings, "hr_reset_token", "") or "").strip()
     if not hr_reset_token:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": "HR_RESET_TOKEN_MISSING", "message": "HR_RESET_TOKEN 설정이 필요합니다."},
-        )
+        print("[HR->SOC] reset-master-data WARN: HR_RESET_TOKEN is empty")
 
     reset_url = f"{soc_base_url}/api/admin/hr/reset-master-data"
     print(f"[HR->SOC] reset-master-data POST url={reset_url}")
