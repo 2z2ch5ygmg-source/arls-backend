@@ -104,6 +104,23 @@ CREATE TABLE IF NOT EXISTS guard_roster_import_files (
 CREATE INDEX IF NOT EXISTS idx_guard_roster_import_files_tenant_created
     ON guard_roster_import_files (tenant_id, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS sites_match_index (
+    id uuid PRIMARY KEY,
+    tenant_id text NOT NULL,
+    site_id text NOT NULL,
+    site_name text NOT NULL,
+    address_text text NOT NULL,
+    address_norm text NOT NULL,
+    updated_at text NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_sites_match_index_tenant_site
+    ON sites_match_index (tenant_id, site_id);
+CREATE INDEX IF NOT EXISTS idx_sites_match_index_tenant
+    ON sites_match_index (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_sites_match_index_tenant_address_norm
+    ON sites_match_index (tenant_id, address_norm);
+
 
 -- [AUTOMATION TRACK v1] Apple 보고 자동화 전용 정책/기록 테이블
 CREATE TABLE IF NOT EXISTS site_apple_daytime_policy (

@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+from difflib import SequenceMatcher
 import re
 from io import BytesIO
 from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
 from docx import Document
+from ..utils.address_norm import normalize_address_text
 
 DATE_PATTERN = re.compile(r"(?P<year>\d{2,4})\s*[./-]\s*(?P<month>\d{1,2})\s*[./-]\s*(?P<day>\d{1,2})")
 PHONE_PATTERN = re.compile(r"(01[016789])[-\s]?(\d{3,4})[-\s]?(\d{4})")
-TOKEN_PATTERN = re.compile(r"[A-Za-z0-9가-힣]+")
 MGMT_NO_PATTERN = re.compile(r"[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)?")
 SITE_HINT_SPLIT_PATTERN = re.compile(r"[\r\n/|,;]+")
 
@@ -211,10 +212,6 @@ def extract_primary_docx_photo(docx_bytes: bytes) -> tuple[bytes | None, str | N
     return payload, mime, filename
 
 
-def _tokenize(value: str | None) -> list[str]:
-    return [token.lower() for token in TOKEN_PATTERN.findall(str(value or "")) if len(token) >= 2]
-
-
 def _build_site_hint_text(*, placement_text: str, address_text: str) -> str:
     fragments: list[str] = []
     for raw in (_clean_text(placement_text), _clean_text(address_text)):
@@ -238,48 +235,21 @@ def _build_site_hint_text(*, placement_text: str, address_text: str) -> str:
     return " ".join(deduped)
 
 
-def _site_match_score(
-    *,
-    placement_text: str,
-    address_text: str,
-    site_code: str,
-    site_name: str,
-    site_address: str,
-) -> float:
-    source_text = _build_site_hint_text(placement_text=placement_text, address_text=address_text)
-    if not source_text:
+def _sequence_similarity(a: str, b: str) -> float:
+    left = str(a or "").strip()
+    right = str(b or "").strip()
+    if not left or not right:
         return 0.0
+    return float(SequenceMatcher(None, left, right).ratio())
 
-    source_upper = source_text.upper()
-    source_lower = source_text.lower()
-    score = 0.0
 
-    normalized_site_code = _clean_text(site_code).upper()
-    normalized_site_name = _clean_text(site_name)
-    normalized_site_address = _clean_text(site_address)
-
-    if normalized_site_code and normalized_site_code in source_upper:
-        score += 0.72
-
-    if normalized_site_name:
-        lower_name = normalized_site_name.lower()
-        if lower_name and (lower_name in source_lower or source_lower in lower_name):
-            score += 0.36
-
-    placement_tokens = set(_tokenize(source_text))
-    site_tokens = set(_tokenize(f"{normalized_site_name} {normalized_site_address}"))
-    if placement_tokens and site_tokens:
-        intersection = len(placement_tokens & site_tokens)
-        union = len(placement_tokens | site_tokens)
-        if union:
-            score += (intersection / union) * 0.55
-
-    if normalized_site_address:
-        lower_address = normalized_site_address.lower()
-        if lower_address and (lower_address in source_lower or source_lower in lower_address):
-            score += 0.2
-
-    return min(1.0, round(score, 4))
+def _site_match_score(*, query_norm: str, site_name: str, address_norm: str) -> float:
+    if not query_norm:
+        return 0.0
+    addr_score = _sequence_similarity(query_norm, address_norm)
+    name_score = _sequence_similarity(query_norm, normalize_address_text(site_name))
+    # 주소 기반을 우선하고, 현장명 힌트를 보조 점수로 반영
+    return round(min(1.0, (addr_score * 0.85) + (name_score * 0.15)), 4)
 
 
 def match_site_candidates(
@@ -287,23 +257,26 @@ def match_site_candidates(
     placement_text: str,
     address_text: str = "",
     sites: list[dict],
-    threshold: float = 0.74,
+    threshold: float = 0.86,
     top_n: int = 3,
 ) -> dict[str, object]:
+    query_norm = normalize_address_text(
+        _build_site_hint_text(placement_text=placement_text, address_text=address_text)
+    )
     ranked: list[dict[str, object]] = []
     for site in sites:
-        site_code = _clean_text(site.get("site_code"))
+        site_code = _clean_text(site.get("site_id") or site.get("site_code"))
         site_name = _clean_text(site.get("site_name"))
-        site_address = _clean_text(site.get("address"))
+        site_address = _clean_text(site.get("address_text") or site.get("address"))
+        site_address_norm = _clean_text(site.get("address_norm")) or normalize_address_text(site_address)
         score = _site_match_score(
-            placement_text=placement_text,
-            address_text=address_text,
-            site_code=site_code,
+            query_norm=query_norm,
             site_name=site_name,
-            site_address=site_address,
+            address_norm=site_address_norm,
         )
         ranked.append(
             {
+                "site_id": site_code,
                 "site_code": site_code,
                 "site_name": site_name or site_code,
                 "score": round(float(score), 3),

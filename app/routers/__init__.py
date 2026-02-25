@@ -1,5 +1,6 @@
 from .v1.auth import router as auth_router
 from .v1.me import router as me_router
+from .v1.admin_sites import router as admin_sites_router
 from .v1.admin_soc import router as admin_soc_router
 from .v1.admin_reset import router as admin_reset_router
 from .v1.companies import router as companies_router
@@ -20,6 +21,7 @@ from .v1.reports import router as reports_router
 __all__ = [
     "auth_router",
     "me_router",
+    "admin_sites_router",
     "admin_soc_router",
     "admin_reset_router",
     "companies_router",

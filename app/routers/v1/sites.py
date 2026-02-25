@@ -13,6 +13,10 @@ import requests
 
 from ...config import settings
 from ...deps import apply_rate_limit, get_current_user, get_db_conn, require_roles
+from ...services.sites_match_index import (
+    delete_site_match_index_entry,
+    upsert_site_match_index_entry,
+)
 from ...schemas import SiteActiveUpdate, SiteCreate, SiteOut, SiteUpdate
 from ...utils.permissions import (
     ROLE_BRANCH_MANAGER,
@@ -234,6 +238,31 @@ def _post_site_sync_to_soc(
             site_code_norm,
         )
         return False, None, str(exc)
+
+
+def _sync_site_match_index(
+    conn,
+    *,
+    tenant_id: str,
+    site_code: str,
+    site_name: str,
+    address_text: str | None,
+    previous_site_code: str | None = None,
+) -> None:
+    normalized_site_code = str(site_code or "").strip()
+    if previous_site_code:
+        previous_code = str(previous_site_code or "").strip()
+        if previous_code and previous_code != normalized_site_code:
+            delete_site_match_index_entry(conn, tenant_id=tenant_id, site_id=previous_code)
+    if not normalized_site_code:
+        return
+    upsert_site_match_index_entry(
+        conn,
+        tenant_id=tenant_id,
+        site_id=normalized_site_code,
+        site_name=str(site_name or "").strip(),
+        address_text=str(address_text or "").strip(),
+    )
 
 
 def _resolve_tenant_row(conn, tenant_ref: str | None):
@@ -857,6 +886,13 @@ def create_site(
     row["tenant_id"] = tenant["id"]
     row["tenant_code"] = tenant.get("tenant_code")
     row["company_code"] = normalized["company_code"]
+    _sync_site_match_index(
+        conn,
+        tenant_id=str(row["tenant_id"]),
+        site_code=str(row.get("site_code") or ""),
+        site_name=str(row.get("site_name") or ""),
+        address_text=str(row.get("address") or ""),
+    )
     _post_site_sync_to_soc(
         tenant_code=row.get("tenant_code"),
         site_code=row.get("site_code"),
@@ -1002,6 +1038,14 @@ def update_site(
     row["tenant_id"] = tenant_id
     row["tenant_code"] = current.get("tenant_code")
     row["company_code"] = resolved_company_code
+    _sync_site_match_index(
+        conn,
+        tenant_id=str(tenant_id),
+        site_code=str(row.get("site_code") or ""),
+        site_name=str(row.get("site_name") or ""),
+        address_text=str(row.get("address") or ""),
+        previous_site_code=str(current.get("site_code") or ""),
+    )
     _post_site_sync_to_soc(
         tenant_code=row.get("tenant_code"),
         site_code=row.get("site_code"),
@@ -1088,4 +1132,9 @@ def delete_site(
             detail={"error": "INTERNAL", "message": "서버 오류입니다. 잠시 후 다시 시도해주세요."},
         ) from exc
 
+    delete_site_match_index_entry(
+        conn,
+        tenant_id=str(current.get("tenant_id") or ""),
+        site_id=str(current.get("site_code") or ""),
+    )
     return {"deleted": True, "site_id": str(site_id)}

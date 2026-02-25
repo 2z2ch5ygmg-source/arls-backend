@@ -15,6 +15,7 @@ from .bootstrap import ensure_seed_admin
 from .config import settings
 from .db import get_pool
 from .routers import (
+    admin_sites_router,
     admin_soc_router,
     admin_reset_router,
     attendance_router,
@@ -288,6 +289,7 @@ app.include_router(master_tenants_router, prefix="/api/v1")
 app.include_router(master_reset_router, prefix="/api/v1")
 app.include_router(integrations_router, prefix="/api/v1")
 app.include_router(reports_router, prefix="/api/v1")
+app.include_router(admin_sites_router, prefix="/api/v1")
 app.include_router(admin_soc_router, prefix="/api/v1")
 app.include_router(admin_reset_router, prefix="/api/v1")
 

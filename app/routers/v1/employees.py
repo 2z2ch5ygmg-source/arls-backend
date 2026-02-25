@@ -20,6 +20,8 @@ from ...services.guard_roster_docx import (
     match_site_candidates,
     parse_guard_roster_docx,
 )
+from ...services.sites_match_index import list_site_match_index_rows
+from ...utils.address_norm import normalize_address_text
 from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, ROLE_EMPLOYEE, normalize_role, normalize_user_role
 from ...utils.tenant_context import canonical_tenant_identifier, enforce_staff_site_scope, resolve_scoped_tenant
 
@@ -42,7 +44,7 @@ SOC_SYNC_ALLOWED_ROLES = {
 }
 
 GUARD_ROSTER_IMPORT_MAX_FILES = 30
-GUARD_ROSTER_IMPORT_SITE_MATCH_THRESHOLD = 0.74
+GUARD_ROSTER_IMPORT_SITE_MATCH_THRESHOLD = 0.86
 
 
 class GuardRosterCommitItem(BaseModel):
@@ -120,6 +122,32 @@ def _build_guard_roster_file_name(file_uuid: str, source_filename: str) -> str:
 
 
 def _fetch_tenant_sites_for_roster_match(conn, tenant_id: str) -> list[dict[str, Any]]:
+    # 우선: 주소 매칭 인덱스 테이블 사용
+    try:
+        indexed_rows = list_site_match_index_rows(conn, tenant_id=tenant_id)
+    except Exception:
+        indexed_rows = []
+
+    if indexed_rows:
+        normalized_rows: list[dict[str, Any]] = []
+        for row in indexed_rows:
+            site_id = str(row.get("site_id") or "").strip()
+            if not site_id:
+                continue
+            address_text = str(row.get("address_text") or "").strip()
+            normalized_rows.append(
+                {
+                    "site_id": site_id,
+                    "site_code": site_id,
+                    "site_name": str(row.get("site_name") or "").strip(),
+                    "address_text": address_text,
+                    "address_norm": str(row.get("address_norm") or "").strip() or normalize_address_text(address_text),
+                }
+            )
+        if normalized_rows:
+            return normalized_rows
+
+    # fallback: 인덱스가 아직 없으면 기존 sites를 기반으로 즉시 매칭
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -130,7 +158,23 @@ def _fetch_tenant_sites_for_roster_match(conn, tenant_id: str) -> list[dict[str,
             """,
             (tenant_id,),
         )
-        return list(cur.fetchall() or [])
+        rows = list(cur.fetchall() or [])
+    normalized_rows: list[dict[str, Any]] = []
+    for row in rows:
+        site_code = str(row.get("site_code") or "").strip()
+        if not site_code:
+            continue
+        address_text = str(row.get("address") or "").strip()
+        normalized_rows.append(
+            {
+                "site_id": site_code,
+                "site_code": site_code,
+                "site_name": str(row.get("site_name") or "").strip(),
+                "address_text": address_text,
+                "address_norm": normalize_address_text(address_text),
+            }
+        )
+    return normalized_rows
 
 
 def _find_site_relation_by_code(conn, tenant_id: str, site_code: str) -> dict[str, Any] | None:
