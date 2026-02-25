@@ -88,9 +88,22 @@ BEGIN
   END IF;
 END $$;
 
+CREATE TABLE IF NOT EXISTS guard_roster_import_sessions (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    uploaded_by uuid NOT NULL,
+    status text NOT NULL DEFAULT 'OPEN',
+    created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    updated_at timestamptz NOT NULL DEFAULT timezone('utc', now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_guard_roster_import_sessions_tenant_status
+    ON guard_roster_import_sessions (tenant_id, status, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS guard_roster_import_files (
     id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL,
+    upload_session_id uuid,
     uploaded_by uuid NOT NULL,
     filename text NOT NULL,
     mime_type text NOT NULL DEFAULT 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -98,11 +111,22 @@ CREATE TABLE IF NOT EXISTS guard_roster_import_files (
     photo_bytes bytea,
     photo_mime_type text,
     photo_filename text,
+    import_status text NOT NULL DEFAULT 'STAGED',
+    updated_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
     created_at timestamptz NOT NULL DEFAULT timezone('utc', now())
 );
 
+ALTER TABLE guard_roster_import_files
+    ADD COLUMN IF NOT EXISTS upload_session_id uuid;
+ALTER TABLE guard_roster_import_files
+    ADD COLUMN IF NOT EXISTS import_status text NOT NULL DEFAULT 'STAGED';
+ALTER TABLE guard_roster_import_files
+    ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT timezone('utc', now());
+
 CREATE INDEX IF NOT EXISTS idx_guard_roster_import_files_tenant_created
     ON guard_roster_import_files (tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_guard_roster_import_files_tenant_session
+    ON guard_roster_import_files (tenant_id, upload_session_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS sites_match_index (
     id uuid PRIMARY KEY,

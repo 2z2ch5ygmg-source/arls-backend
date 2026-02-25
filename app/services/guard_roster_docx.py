@@ -43,8 +43,19 @@ def _clean_text(value: str | None) -> str:
 
 
 def _normalize_label(value: str | None) -> str:
-    text = _clean_text(value).lower()
-    return re.sub(r"[\s:：\-\[\]\(\)<>]+", "", text)
+    text = _clean_text(value)
+    # DOCX 고정 라벨 매칭용: 한글은 그대로 유지하고 공백/줄바꿈/구분 문장부호만 제거
+    return re.sub(r"[\s\r\n\t:：()\[\]{}<>·]+", "", text)
+
+
+def _field_alias_keys() -> set[str]:
+    keys: set[str] = set()
+    for aliases in FIELD_ALIASES.values():
+        for alias in aliases:
+            normalized = _normalize_label(alias)
+            if normalized:
+                keys.add(normalized)
+    return keys
 
 
 def _collect_docx_lines(document: Document) -> list[str]:
@@ -74,27 +85,48 @@ def _collect_docx_lines(document: Document) -> list[str]:
 
 
 def _collect_docx_pairs(document: Document) -> dict[str, str]:
+    alias_keys = _field_alias_keys()
     pairs: dict[str, str] = {}
+
+    # "라벨: 값" 형태가 문단/셀 한 줄에 있는 경우 우선 수집
+    for line in _collect_docx_lines(document):
+        cleaned_line = _clean_text(line)
+        if not cleaned_line:
+            continue
+        for delimiter in (":", "："):
+            if delimiter not in cleaned_line:
+                continue
+            left, right = cleaned_line.split(delimiter, 1)
+            key = _normalize_label(left)
+            val = _clean_text(right)
+            if key in alias_keys and val and key not in pairs:
+                pairs[key] = val
 
     for table in document.tables:
         for row in table.rows:
             cells = [_clean_text(cell.text) for cell in row.cells]
-            cells = [cell for cell in cells if cell]
-            if not cells:
+            if not any(cells):
                 continue
 
-            if len(cells) >= 2:
-                key = _normalize_label(cells[0])
-                val = _clean_text(cells[1])
-                if key and val and key not in pairs:
-                    pairs[key] = val
+            for idx, raw_label in enumerate(cells):
+                key = _normalize_label(raw_label)
+                if key not in alias_keys:
+                    continue
+                if key in pairs and _clean_text(pairs.get(key)):
+                    continue
 
-            if len(cells) >= 4:
-                for idx in range(0, len(cells) - 1, 2):
-                    key = _normalize_label(cells[idx])
-                    val = _clean_text(cells[idx + 1])
-                    if key and val and key not in pairs:
-                        pairs[key] = val
+                candidate = ""
+                if idx + 1 < len(cells):
+                    candidate = _clean_text(cells[idx + 1])
+                # 다음 셀이 또 라벨이면 다다음 셀 fallback
+                if candidate and _normalize_label(candidate) in alias_keys:
+                    candidate = ""
+                if not candidate and idx + 2 < len(cells):
+                    fallback = _clean_text(cells[idx + 2])
+                    if fallback and _normalize_label(fallback) not in alias_keys:
+                        candidate = fallback
+                if candidate:
+                    pairs[key] = candidate
 
     return pairs
 
@@ -301,7 +333,7 @@ def match_site_candidates(
 
 
 def build_employee_code_from_management_no(site_code: str, management_no: str) -> str:
-    left = _clean_text(site_code).upper()
+    left = _clean_text(site_code)
     right = _clean_text(management_no)
     if not left or not right:
         return ""

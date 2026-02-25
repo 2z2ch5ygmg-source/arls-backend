@@ -93,7 +93,28 @@ class GuardRosterCommitItem(BaseModel):
 
 
 class GuardRosterCommitRequest(BaseModel):
+    upload_session_id: str = Field(min_length=1, max_length=64)
     items: list[GuardRosterCommitItem] = Field(default_factory=list)
+
+    @field_validator("upload_session_id", mode="before")
+    @classmethod
+    def _trim_upload_session_id(cls, value: str | None) -> str:
+        normalized = str(value or "").strip()
+        if not normalized:
+            raise ValueError("upload_session_id is required")
+        return normalized
+
+
+class GuardRosterCancelRequest(BaseModel):
+    upload_session_id: str = Field(min_length=1, max_length=64)
+
+    @field_validator("upload_session_id", mode="before")
+    @classmethod
+    def _trim_upload_session_id(cls, value: str | None) -> str:
+        normalized = str(value or "").strip()
+        if not normalized:
+            raise ValueError("upload_session_id is required")
+        return normalized
 
 
 def _normalize_roster_text(value: str | None) -> str:
@@ -497,10 +518,140 @@ def _resolve_target_tenant(conn, user, tenant_code: str | None, tenant_id: str |
     return row
 
 
+def _create_guard_roster_upload_session(
+    conn,
+    *,
+    tenant_id: str,
+    uploaded_by: str,
+) -> str:
+    session_id = str(uuid.uuid4())
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO guard_roster_import_sessions (
+                id, tenant_id, uploaded_by, status
+            )
+            VALUES (%s, %s, %s, 'OPEN')
+            """,
+            (session_id, tenant_id, uploaded_by),
+        )
+    return session_id
+
+
+def _fetch_guard_roster_upload_session(
+    conn,
+    *,
+    tenant_id: str,
+    session_id: str,
+) -> dict[str, Any] | None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, tenant_id, uploaded_by, status
+            FROM guard_roster_import_sessions
+            WHERE id = %s
+              AND tenant_id = %s
+            LIMIT 1
+            """,
+            (session_id, tenant_id),
+        )
+        return cur.fetchone()
+
+
+def _require_guard_roster_open_session(
+    conn,
+    *,
+    tenant_id: str,
+    session_id: str,
+    actor_id: str,
+    actor_role: str,
+) -> dict[str, Any]:
+    row = _fetch_guard_roster_upload_session(conn, tenant_id=tenant_id, session_id=session_id)
+    if not row:
+        _raise_api_error(status.HTTP_404_NOT_FOUND, "UPLOAD_SESSION_NOT_FOUND", "upload session not found")
+
+    if actor_role != ROLE_DEV and str(row.get("uploaded_by") or "") != actor_id:
+        _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "forbidden")
+
+    current_status = str(row.get("status") or "").strip().upper()
+    if current_status != "OPEN":
+        _raise_api_error(status.HTTP_409_CONFLICT, "UPLOAD_SESSION_CLOSED", "upload session is not open")
+    return row
+
+
+def _close_guard_roster_upload_session(
+    conn,
+    *,
+    tenant_id: str,
+    session_id: str,
+    status_value: str,
+) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE guard_roster_import_sessions
+            SET status = %s,
+                updated_at = timezone('utc', now())
+            WHERE id = %s
+              AND tenant_id = %s
+            """,
+            (str(status_value or "OPEN").upper(), session_id, tenant_id),
+        )
+
+
+def _delete_guard_roster_upload_session(
+    conn,
+    *,
+    tenant_id: str,
+    session_id: str,
+) -> tuple[int, int]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM guard_roster_import_files
+            WHERE tenant_id = %s
+              AND upload_session_id = %s
+              AND upper(import_status) = 'STAGED'
+            """,
+            (tenant_id, session_id),
+        )
+        deleted_files = int(cur.rowcount or 0)
+        cur.execute(
+            """
+            DELETE FROM guard_roster_import_sessions
+            WHERE id = %s
+              AND tenant_id = %s
+            """,
+            (session_id, tenant_id),
+        )
+        deleted_sessions = int(cur.rowcount or 0)
+    return deleted_files, deleted_sessions
+
+
+def _mark_guard_roster_files_committed(
+    conn,
+    *,
+    tenant_id: str,
+    session_id: str,
+) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE guard_roster_import_files
+            SET import_status = 'COMMITTED',
+                updated_at = timezone('utc', now())
+            WHERE tenant_id = %s
+              AND upload_session_id = %s
+            """,
+            (tenant_id, session_id),
+        )
+
+
 def _persist_guard_roster_source_file(
     conn,
     *,
     tenant_id: str,
+    upload_session_id: str,
     uploaded_by: str,
     filename: str,
     docx_bytes: bytes,
@@ -513,14 +664,15 @@ def _persist_guard_roster_source_file(
         cur.execute(
             """
             INSERT INTO guard_roster_import_files (
-                id, tenant_id, uploaded_by, filename, mime_type, file_bytes,
-                photo_bytes, photo_mime_type, photo_filename
+                id, tenant_id, upload_session_id, uploaded_by, filename, mime_type, file_bytes,
+                photo_bytes, photo_mime_type, photo_filename, import_status
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'STAGED')
             """,
             (
                 import_id,
                 tenant_id,
+                upload_session_id,
                 uploaded_by,
                 filename,
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -538,7 +690,8 @@ def _fetch_guard_roster_file(conn, *, file_id: str, tenant_id: str) -> dict[str,
         cur.execute(
             """
             SELECT id, tenant_id, filename, mime_type, file_bytes,
-                   photo_bytes, photo_mime_type, photo_filename
+                   photo_bytes, photo_mime_type, photo_filename,
+                   upload_session_id, import_status
             FROM guard_roster_import_files
             WHERE id = %s
               AND tenant_id = %s
@@ -547,6 +700,29 @@ def _fetch_guard_roster_file(conn, *, file_id: str, tenant_id: str) -> dict[str,
             (file_id, tenant_id),
         )
         return cur.fetchone()
+
+
+def _is_guard_roster_file_in_session(
+    conn,
+    *,
+    tenant_id: str,
+    upload_session_id: str,
+    file_id: str,
+) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM guard_roster_import_files
+            WHERE id = %s
+              AND tenant_id = %s
+              AND upload_session_id = %s
+              AND upper(import_status) = 'STAGED'
+            LIMIT 1
+            """,
+            (file_id, tenant_id, upload_session_id),
+        )
+        return cur.fetchone() is not None
 
 
 def _upsert_guard_roster_employee(
@@ -712,6 +888,11 @@ async def import_guard_roster_docx(
             f"최대 {GUARD_ROSTER_IMPORT_MAX_FILES}개의 파일만 업로드할 수 있습니다.",
         )
 
+    upload_session_id = _create_guard_roster_upload_session(
+        conn,
+        tenant_id=tenant_id,
+        uploaded_by=uploaded_by,
+    )
     tenant_sites = _fetch_tenant_sites_for_roster_match(conn, tenant_id)
     response_items: list[dict[str, Any]] = []
 
@@ -779,6 +960,7 @@ async def import_guard_roster_docx(
         attachment_id = _persist_guard_roster_source_file(
             conn,
             tenant_id=tenant_id,
+            upload_session_id=upload_session_id,
             uploaded_by=uploaded_by,
             filename=filename,
             docx_bytes=file_bytes,
@@ -817,7 +999,7 @@ async def import_guard_roster_docx(
             }
         )
 
-    return {"success": True, "items": response_items}
+    return {"success": True, "upload_session_id": upload_session_id, "items": response_items}
 
 
 @router.get("/import/guard-roster-docx/files/{file_id}")
@@ -868,12 +1050,23 @@ def commit_guard_roster_docx_import(
     if actor_role not in (ROLE_DEV, ROLE_BRANCH_MANAGER):
         _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "forbidden")
 
+    upload_session_id = _normalize_roster_text(payload.upload_session_id)
+    if not upload_session_id:
+        _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "upload_session_id is required")
     if not payload.items:
         _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "items is required")
 
     tenant = _resolve_target_tenant(conn, user, tenant_code)
     tenant_id = str(tenant.get("id") or "")
     tenant_code_value = str(tenant.get("tenant_code") or "").strip()
+    actor_id = str(user.get("id") or "")
+    _require_guard_roster_open_session(
+        conn,
+        tenant_id=tenant_id,
+        session_id=upload_session_id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+    )
 
     created = 0
     updated = 0
@@ -885,6 +1078,18 @@ def commit_guard_roster_docx_import(
         with conn.cursor() as cur:
             cur.execute(f"SAVEPOINT {savepoint}")
         try:
+            roster_docx_id = _normalize_roster_text(item.roster_docx_id)
+            if roster_docx_id and not _is_guard_roster_file_in_session(
+                conn,
+                tenant_id=tenant_id,
+                upload_session_id=upload_session_id,
+                file_id=roster_docx_id,
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"error": "INVALID_UPLOAD_SESSION_ITEM", "message": "upload session item mismatch"},
+                )
+
             site_relation = _find_site_relation_by_code(conn, tenant_id, item.site_code)
             if not site_relation:
                 raise HTTPException(
@@ -925,12 +1130,60 @@ def commit_guard_roster_docx_import(
                 }
             )
 
+    _mark_guard_roster_files_committed(
+        conn,
+        tenant_id=tenant_id,
+        session_id=upload_session_id,
+    )
+    _close_guard_roster_upload_session(
+        conn,
+        tenant_id=tenant_id,
+        session_id=upload_session_id,
+        status_value="COMMITTED",
+    )
+
     return {
         "success": True,
+        "upload_session_id": upload_session_id,
         "created": created,
         "updated": updated,
         "failed": failed,
         "items": committed_items,
+    }
+
+
+@router.post("/import/guard-roster-docx/cancel")
+def cancel_guard_roster_docx_import(
+    payload: GuardRosterCancelRequest,
+    tenant_code: str | None = Query(default=None, max_length=64),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    actor_role = normalize_role(user["role"])
+    if actor_role not in (ROLE_DEV, ROLE_BRANCH_MANAGER):
+        _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "forbidden")
+
+    tenant = _resolve_target_tenant(conn, user, tenant_code)
+    tenant_id = str(tenant.get("id") or "")
+    actor_id = str(user.get("id") or "")
+    upload_session_id = _normalize_roster_text(payload.upload_session_id)
+    _require_guard_roster_open_session(
+        conn,
+        tenant_id=tenant_id,
+        session_id=upload_session_id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+    )
+    deleted_files, deleted_sessions = _delete_guard_roster_upload_session(
+        conn,
+        tenant_id=tenant_id,
+        session_id=upload_session_id,
+    )
+    return {
+        "success": True,
+        "upload_session_id": upload_session_id,
+        "deleted_files": deleted_files,
+        "deleted_sessions": deleted_sessions,
     }
 
 
