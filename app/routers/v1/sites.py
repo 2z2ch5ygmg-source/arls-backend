@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import math
-import re
 import uuid
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -30,7 +29,6 @@ SITE_WRITE_ROLES = (ROLE_DEV, ROLE_BRANCH_MANAGER)
 SITE_READ_ROLES = SITE_WRITE_ROLES + (ROLE_EMPLOYEE,)
 GOOGLE_PLACES_TEXTSEARCH_NEW_URL = "https://places.googleapis.com/v1/places:searchText"
 logger = logging.getLogger(__name__)
-SITE_ID_PATTERN = re.compile(r"^R[0-9]{3,4}$")
 
 
 def _active_filter_to_bool(raw: str | None) -> bool | None:
@@ -351,7 +349,7 @@ def _generate_next_site_code(conn, tenant_id: str) -> str:
 def _normalize_site_payload(payload: SiteCreate | SiteUpdate, *, require_site_code: bool = True) -> dict:
     tenant_id = str(getattr(payload, "tenant_id", "") or "").strip()
     company_code = str(getattr(payload, "company_code", "") or "").strip().upper()
-    site_code = str(getattr(payload, "site_code", "") or "").strip().upper()
+    site_code = str(getattr(payload, "site_code", "") or "").strip()
     site_name = str(getattr(payload, "site_name", "") or "").strip()
     address = str(getattr(payload, "address", "") or "").strip()
     place_id = str(getattr(payload, "place_id", "") or "").strip()
@@ -390,13 +388,8 @@ def _normalize_site_payload(payload: SiteCreate | SiteUpdate, *, require_site_co
 
     is_active = bool(getattr(payload, "is_active", True))
 
-    if require_site_code:
-        if not site_code:
-            fields["site_id"] = "required"
-        elif not SITE_ID_PATTERN.fullmatch(site_code):
-            fields["site_id"] = "invalid"
-    elif site_code and (not SITE_ID_PATTERN.fullmatch(site_code)):
-        fields["site_id"] = "invalid"
+    if require_site_code and not site_code:
+        fields["site_id"] = "required"
 
     if not site_name:
         fields["name"] = "required"
