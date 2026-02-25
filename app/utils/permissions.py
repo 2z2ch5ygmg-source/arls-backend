@@ -6,6 +6,16 @@ ROLE_SUPERVISOR = "supervisor"
 ROLE_HQ_ADMIN = "hq_admin"
 ROLE_DEVELOPER = "developer"
 
+ROLE_ENUM_OFFICER = "OFFICER"
+ROLE_ENUM_VICE_SUPERVISOR = "VICE_SUPERVISOR"
+ROLE_ENUM_SUPERVISOR = "SUPERVISOR"
+ROLE_ENUM_HQ_ADMIN = "HQ_ADMIN"
+ROLE_ENUM_DEVELOPER = "DEVELOPER"
+
+PERMISSION_GROUP_STAFF = "STAFF"
+PERMISSION_GROUP_ADMIN = "ADMIN"
+PERMISSION_GROUP_DEV = "DEV"
+
 ALL_USER_ROLES = {
     ROLE_OFFICER,
     ROLE_VICE_SUPERVISOR,
@@ -45,6 +55,14 @@ USER_ROLE_ALIASES = {
     "l2": ROLE_VICE_SUPERVISOR,
 }
 
+ROLE_ENUM_BY_USER_ROLE = {
+    ROLE_OFFICER: ROLE_ENUM_OFFICER,
+    ROLE_VICE_SUPERVISOR: ROLE_ENUM_VICE_SUPERVISOR,
+    ROLE_SUPERVISOR: ROLE_ENUM_SUPERVISOR,
+    ROLE_HQ_ADMIN: ROLE_ENUM_HQ_ADMIN,
+    ROLE_DEVELOPER: ROLE_ENUM_DEVELOPER,
+}
+
 ALL_ROLES = {ROLE_DEV, ROLE_BRANCH_MANAGER, ROLE_EMPLOYEE}
 SUPER_ADMIN_ROLES = {ROLE_DEV}
 TENANT_MANAGERS = {ROLE_DEV}
@@ -79,6 +97,20 @@ def normalize_role(user_role: str | None) -> str:
     if normalized_user_role == ROLE_HQ_ADMIN:
         return ROLE_BRANCH_MANAGER
     return ROLE_EMPLOYEE
+
+
+def to_role_enum(user_role: str | None) -> str:
+    normalized = normalize_user_role(user_role)
+    return ROLE_ENUM_BY_USER_ROLE.get(normalized, ROLE_ENUM_OFFICER)
+
+
+def resolve_permission_group(user_role: str | None) -> str:
+    normalized = normalize_user_role(user_role)
+    if normalized == ROLE_DEVELOPER:
+        return PERMISSION_GROUP_DEV
+    if normalized == ROLE_HQ_ADMIN:
+        return PERMISSION_GROUP_ADMIN
+    return PERMISSION_GROUP_STAFF
 
 
 def is_super_admin(user_role: str | None) -> bool:

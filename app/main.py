@@ -22,6 +22,7 @@ from .routers import (
     employees_router,
     integrations_router,
     leaves_router,
+    me_router,
     master_reset_router,
     master_tenants_router,
     reports_router,
@@ -269,6 +270,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "internal server error"})
 
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(me_router, prefix="/api/v1")
 app.include_router(tenants_router, prefix="/api/v1")
 app.include_router(companies_router, prefix="/api/v1")
 app.include_router(sites_router, prefix="/api/v1")

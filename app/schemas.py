@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -28,6 +28,14 @@ class AuthUser(BaseModel):
     employee_code: Optional[str] = None
     is_master: Optional[bool] = Field(default=None, serialization_alias="isMaster")
     tenant_scope: Optional[str] = Field(default=None, serialization_alias="tenantScope")
+
+
+class MeResponse(BaseModel):
+    user_id: UUID
+    tenant_id: UUID
+    site_code: Optional[str] = None
+    role: Literal["OFFICER", "VICE_SUPERVISOR", "SUPERVISOR", "HQ_ADMIN", "DEVELOPER"]
+    group: Literal["STAFF", "ADMIN", "DEV"]
 
 
 class TokenResponse(BaseModel):
