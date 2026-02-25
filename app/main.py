@@ -16,6 +16,7 @@ from .config import settings
 from .db import get_pool
 from .routers import (
     admin_soc_router,
+    admin_reset_router,
     attendance_router,
     attendance_requests_router,
     auth_router,
@@ -288,6 +289,7 @@ app.include_router(master_reset_router, prefix="/api/v1")
 app.include_router(integrations_router, prefix="/api/v1")
 app.include_router(reports_router, prefix="/api/v1")
 app.include_router(admin_soc_router, prefix="/api/v1")
+app.include_router(admin_reset_router, prefix="/api/v1")
 
 
 @app.get("/health")
