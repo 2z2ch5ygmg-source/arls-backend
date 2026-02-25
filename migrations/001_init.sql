@@ -88,6 +88,23 @@ BEGIN
   END IF;
 END $$;
 
+CREATE TABLE IF NOT EXISTS guard_roster_import_files (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    uploaded_by uuid NOT NULL,
+    filename text NOT NULL,
+    mime_type text NOT NULL DEFAULT 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    file_bytes bytea NOT NULL,
+    photo_bytes bytea,
+    photo_mime_type text,
+    photo_filename text,
+    created_at timestamptz NOT NULL DEFAULT timezone('utc', now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_guard_roster_import_files_tenant_created
+    ON guard_roster_import_files (tenant_id, created_at DESC);
+
+
 -- [AUTOMATION TRACK v1] Apple 보고 자동화 전용 정책/기록 테이블
 CREATE TABLE IF NOT EXISTS site_apple_daytime_policy (
     id uuid PRIMARY KEY,
