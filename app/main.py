@@ -47,6 +47,7 @@ ALLOWED_CORS_HEADERS = [
     "X-Tenant-Id",
     "X-HR-RESET-TOKEN",
     "X-Requested-With",
+    "idempotency-key",
 ]
 EXPOSED_CORS_HEADERS = ["Content-Disposition"]
 ACCESS_CONTROL_ALLOW_METHODS = ", ".join(ALLOWED_CORS_METHODS)
