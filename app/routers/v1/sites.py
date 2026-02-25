@@ -974,3 +974,50 @@ def update_site_active(
     row["tenant_code"] = current.get("tenant_code")
     row["company_code"] = current["company_code"]
     return _row_to_out(row)
+
+
+@router.delete("/{site_id}")
+def delete_site(
+    site_id: uuid.UUID,
+    conn=Depends(get_db_conn),
+    user=Depends(require_roles(*SITE_WRITE_ROLES)),
+):
+    current = _fetch_site_row(conn, site_id, user)
+    if not current:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "SITE_NOT_FOUND", "message": "현장 정보를 찾을 수 없습니다."},
+        )
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM sites
+                WHERE id = %s
+                """,
+                (site_id,),
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail={"error": "SITE_NOT_FOUND", "message": "현장 정보를 찾을 수 없습니다."},
+                )
+    except HTTPException:
+        raise
+    except pg_errors.ForeignKeyViolation as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "SITE_DELETE_CONFLICT",
+                "message": "연결된 직원/근무 데이터가 있어 현장을 삭제할 수 없습니다. 비활성화를 사용해 주세요.",
+            },
+        ) from exc
+    except Exception as exc:
+        logger.exception("delete_site failed: site_id=%s", site_id, exc_info=exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error": "INTERNAL", "message": "서버 오류입니다. 잠시 후 다시 시도해주세요."},
+        ) from exc
+
+    return {"deleted": True, "site_id": str(site_id)}
