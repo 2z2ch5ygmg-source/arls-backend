@@ -289,12 +289,14 @@ def match_site_candidates(
     placement_text: str,
     address_text: str = "",
     sites: list[dict],
-    threshold: float = 0.86,
+    threshold: float = 0.75,
     top_n: int = 3,
 ) -> dict[str, object]:
-    query_norm = normalize_address_text(
-        _build_site_hint_text(placement_text=placement_text, address_text=address_text)
-    )
+    # 주소를 우선 사용하고, 주소가 없을 때만 배치지 텍스트를 사용한다.
+    query_norm = normalize_address_text(address_text)
+    if not query_norm:
+        query_norm = normalize_address_text(placement_text)
+
     ranked: list[dict[str, object]] = []
     for site in sites:
         site_code = _clean_text(site.get("site_id") or site.get("site_code"))
@@ -321,6 +323,8 @@ def match_site_candidates(
     best_score = float(best.get("score") or 0) if best else 0.0
     auto_site_code = str(best.get("site_code") or "").strip() if best else ""
     auto_site_name = str(best.get("site_name") or "").strip() if best else ""
+    best_candidate = f"{auto_site_code}/{auto_site_name}".strip("/") if (auto_site_code or auto_site_name) else ""
+    print("AUTO_MATCH:", query_norm, best_candidate, round(best_score, 3))
 
     status = "READY" if auto_site_code and best_score >= float(threshold) else "NEEDS_SITE_PICK"
     return {
