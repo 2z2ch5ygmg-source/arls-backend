@@ -667,8 +667,6 @@ def list_sites(
     staff_scope = enforce_staff_site_scope(user)
 
     active_filter = _active_filter_to_bool(active)
-    active_raw = str(active or "").strip().lower()
-    active_explicit_all = active is not None and active_raw in ("", "all")
     has_site_active = _site_column_exists(conn, "is_active")
     has_site_deleted = _site_column_exists(conn, "is_deleted")
     clauses = ["s.tenant_id = %s"]
@@ -687,7 +685,7 @@ def list_sites(
     if has_site_active and active_filter is not None:
         clauses.append("COALESCE(s.is_active, TRUE) = %s")
         params.append(active_filter)
-    elif has_site_active and not include_inactive and not active_explicit_all:
+    elif has_site_active and not include_inactive:
         clauses.append("COALESCE(s.is_active, TRUE) = TRUE")
 
     keyword = (q or "").strip()
