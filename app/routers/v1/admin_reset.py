@@ -74,9 +74,14 @@ def _call_soc_tenant_reset(*, tenant_context: str) -> dict[str, Any]:
 
     hr_reset_token = str(getattr(settings, "hr_reset_token", "") or "").strip()
     if not hr_reset_token:
-        print("[HR->SOC] reset-master-data WARN: HR_RESET_TOKEN is empty")
+        print("[HR->SOC] reset-tenant WARN: HR_RESET_TOKEN is empty")
 
-    reset_url = f"{soc_base_url}/api/admin/hr/reset-master-data"
+    reset_url = str(getattr(settings, "soc_reset_url", "") or "").strip()
+    if not reset_url:
+        reset_url = f"{soc_base_url}/api/admin/hr/reset-tenant"
+    if reset_url.startswith("/"):
+        reset_url = f"{soc_base_url}{reset_url}"
+    reset_url = reset_url.rstrip("/")
     print(f"[HR->SOC] full-reset POST url={reset_url} tenant={tenant_context}")
 
     try:

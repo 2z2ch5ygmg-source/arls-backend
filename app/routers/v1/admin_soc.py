@@ -120,7 +120,12 @@ def reset_soc_master_data(
             detail={"code": "HR_RESET_TOKEN_MISSING", "message": "HR_RESET_TOKEN 미설정"},
         )
 
-    reset_url = f"{soc_base_url}/api/admin/hr/reset-master-data"
+    reset_url = str(getattr(settings, "soc_reset_url", "") or "").strip()
+    if not reset_url:
+        reset_url = f"{soc_base_url}/api/admin/hr/reset-tenant"
+    if reset_url.startswith("/"):
+        reset_url = f"{soc_base_url}{reset_url}"
+    reset_url = reset_url.rstrip("/")
     print(
         f"[HR->SOC] reset call url={reset_url} tenant={tenant} token_len={len(hr_reset_token)}"
     )
