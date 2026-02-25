@@ -211,17 +211,18 @@ def _post_site_sync_to_soc(
     }
 
     print(
-        f"[HR->SOC] POST {url} event_type={normalized_event_type} "
-        f"tenant={tenant_id_norm} site={site_code_norm}"
+        f"[HR->SOC] site-sync POST url={url} "
+        f"event_type={normalized_event_type} tenant={tenant_id_norm} site={site_code_norm}"
     )
     try:
         response = requests.post(url, json=payload, timeout=5)
-        print(f"[HR->SOC] site-sync status={response.status_code} body={(response.text or '')[:200]}")
+        print(f"[HR->SOC] site-sync status={response.status_code} body={(response.text or '')[:120]}")
         logger.info(
-            "[HR->SOC] site-sync status=%s tenant=%s site=%s",
+            "[HR->SOC] site-sync status=%s tenant=%s site=%s body=%s",
             response.status_code,
             tenant_id_norm,
             site_code_norm,
+            (response.text or "")[:120],
         )
         if int(response.status_code) >= 400:
             return False, int(response.status_code), (response.text or "").strip()[:200]

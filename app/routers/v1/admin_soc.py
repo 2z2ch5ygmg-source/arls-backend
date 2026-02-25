@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
+from ...config import settings
 from ...deps import apply_rate_limit, get_db_conn, require_roles
 from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV
 from ...utils.tenant_context import resolve_scoped_tenant
@@ -46,12 +47,17 @@ def backfill_sites_to_soc(
     failed: list[dict] = []
     for row in rows:
         site_code_value = str(row.get("site_code") or "").strip()
+        print(
+            f"[HR->SOC] site-sync POST url={settings.soc_site_sync_url} "
+            f"tenant={tenant_code_value} site={site_code_value}"
+        )
         ok, status_code, reason = _post_site_sync_to_soc(
             tenant_code=tenant_code_value,
             site_code=site_code_value,
             site_name=row.get("site_name"),
             event_type="SITE_UPDATED",
         )
+        print(f"[HR->SOC] site-sync status={status_code} body={(reason or '')[:120]}")
         if ok:
             sent += 1
             continue

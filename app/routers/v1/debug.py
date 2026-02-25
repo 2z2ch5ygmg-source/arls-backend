@@ -18,5 +18,5 @@ def debug_integrations(_user=Depends(require_roles("DEVELOPER"))):
         "soc_integration_enabled": bool(settings.soc_integration_enabled),
         "soc_base_url": str(settings.soc_base_url or ""),
         "soc_employee_sync_url": str(settings.soc_employee_sync_url or ""),
+        "soc_site_sync_url": str(settings.soc_site_sync_url or ""),
     }
-
