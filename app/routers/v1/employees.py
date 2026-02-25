@@ -16,6 +16,14 @@ from ...utils.tenant_context import canonical_tenant_identifier, resolve_scoped_
 router = APIRouter(prefix="/employees", tags=["employees"], dependencies=[Depends(apply_rate_limit)])
 logger = logging.getLogger(__name__)
 
+SOC_EMPLOYEE_ROLE_MAP: dict[str, str] = {
+    "OFFICER": "Officer",
+    "VICE_SUPERVISOR": "Vice_Supervisor",
+    "SUPERVISOR": "Supervisor",
+    "HQ_ADMIN": "HQ_Admin",
+    "DEVELOPER": "Developer",
+}
+
 
 def _raise_api_error(status_code: int, code: str, message: str):
     raise HTTPException(status_code=status_code, detail={"error": code, "message": message})
@@ -162,6 +170,24 @@ def _normalize_optional_text(value: str | None) -> str | None:
         return None
     normalized = str(value).strip()
     return normalized or None
+
+
+def _normalize_soc_role(value: str | None, *, required: bool) -> str | None:
+    normalized = _normalize_optional_text(value)
+    if not normalized:
+        if required:
+            _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "soc_role is required")
+        return None
+
+    key = normalized.replace("-", "_").replace(" ", "_").upper()
+    mapped = SOC_EMPLOYEE_ROLE_MAP.get(key)
+    if not mapped:
+        _raise_api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            "soc_role must be one of: Officer, Vice_Supervisor, Supervisor, HQ_Admin, Developer",
+        )
+    return mapped
 
 
 def _to_iso_date(value) -> str | None:
@@ -351,6 +377,8 @@ def create_employee(
                 conn, tenant_id, payload.company_code, payload.site_code
             )
 
+    normalized_soc_role = _normalize_soc_role(payload.soc_role, required=True)
+
     employee_id = uuid.uuid4()
     employee_uuid = str(uuid.uuid4())
     duty_role_value = "GUARD"
@@ -388,7 +416,7 @@ def create_employee(
                     _normalize_optional_text(payload.guard_training_cert_no),
                     _normalize_optional_text(payload.note),
                     _normalize_optional_text(payload.soc_login_id),
-                    _normalize_optional_text(payload.soc_role),
+                    normalized_soc_role,
                     resolved_site_code,
                     resolved_company_code,
                 ),
@@ -418,7 +446,7 @@ def create_employee(
         note=created.get("note"),
         soc_login_id=created.get("soc_login_id"),
         soc_temp_password=_normalize_optional_text(payload.soc_temp_password),
-        soc_role=created.get("soc_role"),
+        soc_role=normalized_soc_role,
     )
     return EmployeeOut(**created)
 
@@ -436,6 +464,8 @@ def update_employee(
 
     tenant = _resolve_target_tenant(conn, user, tenant_code)
     tenant_id = tenant["id"]
+
+    normalized_soc_role = _normalize_soc_role(payload.soc_role, required=False)
 
     with conn.cursor() as cur:
         cur.execute(
@@ -479,7 +509,7 @@ def update_employee(
                 _normalize_optional_text(payload.guard_training_cert_no),
                 _normalize_optional_text(payload.note),
                 _normalize_optional_text(payload.soc_login_id),
-                _normalize_optional_text(payload.soc_role),
+                normalized_soc_role,
                 str(employee_id),
                 tenant_id,
             ),
