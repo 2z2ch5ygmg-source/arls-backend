@@ -10,6 +10,7 @@ from urllib.request import Request, urlopen
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from psycopg import errors as pg_errors
+import requests
 
 from ...config import settings
 from ...deps import apply_rate_limit, get_current_user, get_db_conn, require_roles
@@ -177,6 +178,50 @@ def _site_validation_error(fields: dict[str, str], *, message: str = "입력값�
             "detail": {"fields": cleaned},
         },
     )
+
+
+def _post_site_sync_to_soc(*, tenant_code: str | None, site_code: str | None, site_name: str | None) -> None:
+    if not bool(settings.soc_integration_enabled):
+        print("[HR->SOC] site-sync SKIP: soc_integration_enabled=false")
+        return
+
+    url = str(getattr(settings, "soc_site_sync_url", "") or "").strip()
+    if not url:
+        print("[HR->SOC] site-sync SKIP: empty url")
+        return
+
+    tenant_id_norm = str(tenant_code or "").strip().lower()
+    site_code_norm = str(site_code or "").strip()
+    site_name_norm = str(site_name or "").strip()
+
+    payload = {
+        "event_type": "SITE_CREATED",
+        "tenant_id": tenant_id_norm,
+        "site_code": site_code_norm,
+        "site_name": site_name_norm,
+    }
+
+    print(
+        f"[HR->SOC] POST {url} event_type=SITE_CREATED "
+        f"tenant={tenant_id_norm} site={site_code_norm}"
+    )
+    try:
+        response = requests.post(url, json=payload, timeout=5)
+        print(f"[HR->SOC] site-sync status={response.status_code} body={(response.text or '')[:200]}")
+        logger.info(
+            "[HR->SOC] site-sync status=%s tenant=%s site=%s",
+            response.status_code,
+            tenant_id_norm,
+            site_code_norm,
+        )
+    except Exception as exc:
+        print(f"[HR->SOC] site-sync failed: {repr(exc)} url={url} tenant={tenant_id_norm} site={site_code_norm}")
+        logger.warning(
+            "[HR->SOC] site-sync failed: %s tenant=%s site=%s",
+            str(exc),
+            tenant_id_norm,
+            site_code_norm,
+        )
 
 
 def _resolve_tenant_row(conn, tenant_ref: str | None):
@@ -805,6 +850,11 @@ def create_site(
     row["tenant_id"] = tenant["id"]
     row["tenant_code"] = tenant.get("tenant_code")
     row["company_code"] = normalized["company_code"]
+    _post_site_sync_to_soc(
+        tenant_code=row.get("tenant_code"),
+        site_code=row.get("site_code"),
+        site_name=row.get("site_name"),
+    )
     return _row_to_out(row)
 
 
@@ -944,6 +994,11 @@ def update_site(
     row["tenant_id"] = tenant_id
     row["tenant_code"] = current.get("tenant_code")
     row["company_code"] = resolved_company_code
+    _post_site_sync_to_soc(
+        tenant_code=row.get("tenant_code"),
+        site_code=row.get("site_code"),
+        site_name=row.get("site_name"),
+    )
     return _row_to_out(row)
 
 

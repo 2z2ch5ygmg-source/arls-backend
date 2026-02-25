@@ -94,6 +94,7 @@ class Settings:
         soc_base_url = "https://security-ops-center-prod-001-ftgcbkdwggf5hhh9.koreacentral-01.azurewebsites.net"
     soc_base_url = soc_base_url.rstrip("/")
     soc_employee_sync_url = f"{soc_base_url}/api/integrations/hr/employee-sync"
+    soc_site_sync_url = f"{soc_base_url}/api/integrations/hr/site-sync"
 
     # Google Sheets profile-based sync (P0)
     google_sheets_sync_enabled = sheets_sync_enabled
