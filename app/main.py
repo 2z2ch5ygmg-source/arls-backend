@@ -38,8 +38,8 @@ app = FastAPI(title="RG ARLS API", version="0.1.0")
 logger = logging.getLogger(__name__)
 
 PRIMARY_FRONTEND_ORIGIN = "https://rgarlsfront50018.z12.web.core.windows.net"
-ACCESS_CONTROL_ALLOW_METHODS = "GET, POST, PUT, DELETE, OPTIONS"
-ACCESS_CONTROL_ALLOW_HEADERS = "Authorization, Content-Type, Idempotency-Key, X-Tenant-Id"
+ACCESS_CONTROL_ALLOW_METHODS = "*"
+ACCESS_CONTROL_ALLOW_HEADERS = "*"
 
 origins = settings.cors_origins
 origin_regex = settings.cors_origin_regex
@@ -65,10 +65,10 @@ except re.error:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=origin_regex,
+    allow_origin_regex=origin_regex or None,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Tenant-Id"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
