@@ -40,8 +40,17 @@ app = FastAPI(title="RG ARLS API", version="0.1.0")
 logger = logging.getLogger(__name__)
 
 PRIMARY_FRONTEND_ORIGIN = "https://rgarlsfront50018.z12.web.core.windows.net"
-ACCESS_CONTROL_ALLOW_METHODS = "*"
-ACCESS_CONTROL_ALLOW_HEADERS = "*"
+ALLOWED_CORS_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+ALLOWED_CORS_HEADERS = [
+    "Authorization",
+    "Content-Type",
+    "X-Tenant-Id",
+    "X-HR-RESET-TOKEN",
+    "X-Requested-With",
+]
+EXPOSED_CORS_HEADERS = ["Content-Disposition"]
+ACCESS_CONTROL_ALLOW_METHODS = ", ".join(ALLOWED_CORS_METHODS)
+ACCESS_CONTROL_ALLOW_HEADERS = ", ".join(ALLOWED_CORS_HEADERS)
 
 origins = settings.cors_origins
 origin_regex = settings.cors_origin_regex
@@ -69,8 +78,9 @@ app.add_middleware(
     allow_origins=origins,
     allow_origin_regex=origin_regex or None,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=ALLOWED_CORS_METHODS,
+    allow_headers=ALLOWED_CORS_HEADERS,
+    expose_headers=EXPOSED_CORS_HEADERS,
 )
 
 
@@ -224,8 +234,8 @@ async def _wrap_json_response(response: Response) -> Response:
 
 @app.middleware("http")
 async def api_response_middleware(request: Request, call_next):
-    if _is_api_path(request.url.path) and request.method == "OPTIONS":
-        return _apply_cors_headers(request, Response(status_code=200))
+    if request.method == "OPTIONS":
+        return _apply_cors_headers(request, Response(status_code=204))
 
     response = await call_next(request)
     if not _is_api_path(request.url.path):
@@ -233,6 +243,12 @@ async def api_response_middleware(request: Request, call_next):
 
     response = await _wrap_json_response(response)
     return _apply_cors_headers(request, response)
+
+
+@app.options("/{full_path:path}")
+def preflight(full_path: str, request: Request):
+    # Preflight requests should succeed globally; CORS headers are applied by middleware.
+    return Response(status_code=204)
 
 
 @app.exception_handler(StarletteHTTPException)
