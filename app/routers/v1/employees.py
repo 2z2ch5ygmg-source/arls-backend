@@ -23,6 +23,13 @@ SOC_EMPLOYEE_ROLE_MAP: dict[str, str] = {
     "HQ_ADMIN": "HQ_Admin",
     "DEVELOPER": "Developer",
 }
+SOC_SYNC_ALLOWED_ROLES = {
+    "OFFICER",
+    "VICE_SUPERVISOR",
+    "SUPERVISOR",
+    "HQ_ADMIN",
+    "DEVELOPER",
+}
 
 
 def _raise_api_error(status_code: int, code: str, message: str):
@@ -158,11 +165,22 @@ def _format_employee_code(site_code: str, sequence_no: int) -> str:
     return f"{str(site_code or '').strip().upper()}-{int(sequence_no):03d}"
 
 
-def _to_soc_employee_role(user_role: str | None) -> str:
-    normalized = normalize_user_role(user_role)
-    if normalized in {"vice_supervisor", "supervisor", "hq_admin", "developer"}:
-        return "L2"
-    return "L1"
+def _to_soc_sync_role(user_role: str | None, soc_role: str | None = None) -> str:
+    candidates: list[str] = []
+    if soc_role:
+        candidates.append(str(soc_role))
+    if user_role:
+        candidates.append(str(user_role))
+
+    for candidate in candidates:
+        normalized = candidate.strip().replace("-", "_").replace(" ", "_").upper()
+        if normalized in SOC_SYNC_ALLOWED_ROLES:
+            return normalized
+
+    normalized_user_role = normalize_user_role(user_role)
+    if normalized_user_role in SOC_SYNC_ALLOWED_ROLES:
+        return normalized_user_role.upper()
+    return "OFFICER"
 
 
 def _normalize_optional_text(value: str | None) -> str | None:
@@ -228,35 +246,49 @@ def _post_employee_sync_to_soc(
         logger.info("employees.soc_sync skipped: SOC_EMPLOYEE_SYNC_URL is empty")
         return
 
+    tenant_id_norm = str(tenant_code or "").strip().lower()
+    site_code_norm = str(site_code or "").strip()
+    employee_uuid_norm = str(employee_uuid or "").strip() or str(uuid.uuid4())
+    employee_code_norm = str(employee_code or "").strip()
+    role_norm = _to_soc_sync_role(user_role, soc_role)
+
     payload = {
         "event_type": "EMPLOYEE_CREATED",
-        "tenant_id": _normalize_tenant_code(tenant_code),
-        "site_code": str(site_code or "").strip(),
+        "tenant_id": tenant_id_norm,
+        "site_code": site_code_norm,
         "employee": {
-            "employee_uuid": str(employee_uuid or "").strip(),
-            "employee_code": str(employee_code or "").strip(),
+            "employee_uuid": employee_uuid_norm,
+            "employee_code": employee_code_norm,
             "name": str(full_name or "").strip(),
             "phone": phone,
-            "role": _to_soc_employee_role(user_role),
-            "user_role": normalize_user_role(user_role) if user_role else None,
-            "birth_date": _to_iso_date(birth_date),
-            "hire_date": _to_iso_date(hire_date),
-            "guard_training_cert_no": _normalize_optional_text(guard_training_cert_no),
-            "note": _normalize_optional_text(note),
-            "soc_login_id": _normalize_optional_text(soc_login_id),
-            "soc_temp_password": _normalize_optional_text(soc_temp_password),
-            "soc_role": _normalize_optional_text(soc_role),
+            "role": role_norm,
         },
     }
     print(
         f"[HR->SOC] POST {url} "
-        f"employee_uuid={payload['employee']['employee_uuid']} "
-        f"employee_code={payload['employee']['employee_code']} "
-        f"tenant={payload['tenant_id']} site={payload['site_code']}"
+        f"event_type={payload['event_type']} "
+        f"tenant={tenant_id_norm} site={site_code_norm} "
+        f"uuid={employee_uuid_norm} role={role_norm}"
     )
     try:
         response = requests.post(url, json=payload, timeout=5)
         print(f"[HR->SOC] status={response.status_code} body={(response.text or '')[:200]}")
+        if response.status_code >= 400:
+            print(
+                "[HR->SOC] payload="
+                + str(
+                    {
+                        "event_type": payload["event_type"],
+                        "tenant_id": tenant_id_norm,
+                        "site_code": site_code_norm,
+                        "employee": {
+                            "employee_uuid": employee_uuid_norm,
+                            "employee_code": employee_code_norm,
+                            "role": role_norm,
+                        },
+                    }
+                )
+            )
         logger.info(
             "[HR->SOC] employee-sync status=%s body=%s url=%s employee_uuid=%s employee_code=%s",
             response.status_code,
@@ -266,7 +298,7 @@ def _post_employee_sync_to_soc(
             payload["employee"]["employee_code"],
         )
     except Exception as exc:
-        print(f"[HR->SOC] failed: {repr(exc)}")
+        print(f"[HR->SOC] failed: {repr(exc)} url={url} uuid={employee_uuid_norm}")
         logger.warning(
             "[HR->SOC] employee-sync failed: %s url=%s employee_uuid=%s employee_code=%s",
             str(exc),
