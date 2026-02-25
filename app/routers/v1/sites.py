@@ -648,7 +648,9 @@ def _fetch_site_row(conn, site_id: uuid.UUID, user):
 @router.get("", response_model=list[SiteOut])
 def list_sites(
     q: str | None = Query(default=None, min_length=1, max_length=120),
-    active: str | None = Query(default="all"),
+    active: str | None = Query(default=None),
+    include_inactive: bool = Query(default=False),
+    include_deleted: bool = Query(default=False),
     company_code: str | None = Query(default=None, max_length=64),
     tenant_code: str | None = Query(default=None, max_length=64),
     conn=Depends(get_db_conn),
@@ -665,6 +667,10 @@ def list_sites(
     staff_scope = enforce_staff_site_scope(user)
 
     active_filter = _active_filter_to_bool(active)
+    active_raw = str(active or "").strip().lower()
+    active_explicit_all = active is not None and active_raw in ("", "all")
+    has_site_active = _site_column_exists(conn, "is_active")
+    has_site_deleted = _site_column_exists(conn, "is_deleted")
     clauses = ["s.tenant_id = %s"]
     params: list = [tenant["id"]]
     if staff_scope:
@@ -675,9 +681,14 @@ def list_sites(
         clauses.append("c.company_code = %s")
         params.append(company_code.strip())
 
-    if active_filter is not None:
+    if has_site_deleted and not include_deleted:
+        clauses.append("COALESCE(s.is_deleted, FALSE) = FALSE")
+
+    if has_site_active and active_filter is not None:
         clauses.append("COALESCE(s.is_active, TRUE) = %s")
         params.append(active_filter)
+    elif has_site_active and not include_inactive and not active_explicit_all:
+        clauses.append("COALESCE(s.is_active, TRUE) = TRUE")
 
     keyword = (q or "").strip()
     if keyword:

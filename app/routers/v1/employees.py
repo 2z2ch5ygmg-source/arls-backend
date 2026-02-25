@@ -47,6 +47,28 @@ GUARD_ROSTER_IMPORT_MAX_FILES = 30
 GUARD_ROSTER_IMPORT_SITE_MATCH_THRESHOLD = 0.86
 
 
+def _table_column_exists(conn, table_name: str, column_name: str) -> bool:
+    normalized_table = str(table_name or "").strip().lower()
+    normalized_column = str(column_name or "").strip().lower()
+    if not normalized_table or not normalized_column:
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = %s
+                  AND column_name = %s
+            ) AS present
+            """,
+            (normalized_table, normalized_column),
+        )
+        row = cur.fetchone()
+    return bool(row and row.get("present"))
+
+
 class GuardRosterCommitItem(BaseModel):
     filename: str | None = Field(default=None, max_length=255)
     management_no: str = Field(min_length=1, max_length=64)
@@ -1191,6 +1213,8 @@ def cancel_guard_roster_docx_import(
 def list_employees(
     site_id: str | None = Query(default=None, max_length=64),
     site_code: str | None = Query(default=None, max_length=64),
+    include_inactive: bool = Query(default=False),
+    include_deleted: bool = Query(default=False),
     tenant_code: str | None = Query(default=None, max_length=64),
     conn=Depends(get_db_conn),
     user=Depends(get_current_user),
@@ -1227,14 +1251,31 @@ def list_employees(
     if not effective_site_id:
         effective_site_code = (normalized_site_code or scoped_site_code or "").strip()
 
+    clauses: list[str] = ["e.tenant_id = %s"]
     params = [tenant["id"]]
-    site_filter = ""
     if effective_site_id:
-        site_filter = "AND s.id = %s"
+        clauses.append("s.id = %s")
         params.append(effective_site_id)
     elif effective_site_code:
-        site_filter = "AND upper(s.site_code) = upper(%s)"
+        clauses.append("upper(s.site_code) = upper(%s)")
         params.append(effective_site_code)
+
+    has_employee_active = _table_column_exists(conn, "employees", "is_active")
+    has_employee_deleted = _table_column_exists(conn, "employees", "is_deleted")
+    has_site_active = _table_column_exists(conn, "sites", "is_active")
+    has_site_deleted = _table_column_exists(conn, "sites", "is_deleted")
+
+    if has_employee_deleted and not include_deleted:
+        clauses.append("COALESCE(e.is_deleted, FALSE) = FALSE")
+    if has_site_deleted and not include_deleted:
+        clauses.append("COALESCE(s.is_deleted, FALSE) = FALSE")
+    if has_employee_active and not include_inactive:
+        clauses.append("COALESCE(e.is_active, TRUE) = TRUE")
+    if has_site_active and not include_inactive:
+        clauses.append("COALESCE(s.is_active, TRUE) = TRUE")
+
+    where_sql = f"WHERE {' AND '.join(clauses)}"
+
     with conn.cursor() as cur:
         cur.execute(
             f"""
@@ -1256,8 +1297,7 @@ def list_employees(
                 ORDER BY au.updated_at DESC NULLS LAST, au.created_at DESC NULLS LAST
                 LIMIT 1
             ) u ON TRUE
-            WHERE e.tenant_id = %s
-              {site_filter}
+            {where_sql}
             ORDER BY e.employee_code
             """,
             tuple(params),
