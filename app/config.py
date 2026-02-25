@@ -86,6 +86,7 @@ class Settings:
 
     # 지점 동기화 URL (← 핵심 추가)
     soc_site_sync_url = f"{soc_base_url}/api/integrations/hr/site-sync"
+    hr_reset_token = os.getenv("HR_RESET_TOKEN", "").strip()
 
     request_timeout_seconds = 5
 
