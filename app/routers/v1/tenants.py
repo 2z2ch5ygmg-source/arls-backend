@@ -50,6 +50,7 @@ def _resolve_unique_tenant_code(conn, base_code: str) -> str:
                 SELECT 1
                 FROM tenants
                 WHERE lower(trim(tenant_code)) = ANY(%s::text[])
+                  AND COALESCE(is_deleted, FALSE) = FALSE
                 LIMIT 1
                 """,
                 (candidate_aliases,),
@@ -61,6 +62,31 @@ def _resolve_unique_tenant_code(conn, base_code: str) -> str:
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail={"error": "TENANT_CODE_GENERATION_FAILED", "message": "회사 코드 자동 생성에 실패했습니다."},
     )
+
+
+def _release_deleted_tenant_code(conn, tenant_code: str) -> int:
+    normalized_code = _normalize_tenant_code(tenant_code)
+    if not normalized_code:
+        return 0
+    candidate_aliases = list(build_tenant_identifier_candidates(normalized_code)) or [normalized_code]
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE tenants
+            SET tenant_code = CONCAT(
+                    COALESCE(NULLIF(trim(tenant_code), ''), 'tenant'),
+                    '__deleted__',
+                    substring(replace(id::text, '-', '') from 1 for 8)
+                ),
+                updated_at = timezone('utc', now())
+            WHERE lower(trim(tenant_code)) = ANY(%s::text[])
+              AND COALESCE(is_deleted, FALSE) = TRUE
+            RETURNING id
+            """,
+            (candidate_aliases,),
+        )
+        rows = cur.fetchall()
+    return len(rows)
 
 
 @router.get("", response_model=list[TenantOut])
@@ -113,6 +139,7 @@ def create_tenant(payload: TenantCreate, conn=Depends(get_db_conn), user=Depends
 
     tenant_code_input_raw = str(payload.tenant_code or "").strip().lower()
     tenant_code_auto = _slugify_tenant_name(tenant_name)
+    released_count = 0
     if tenant_code_input_raw:
         if not TENANT_ID_PATTERN.fullmatch(tenant_code_input_raw):
             raise HTTPException(
@@ -124,8 +151,17 @@ def create_tenant(payload: TenantCreate, conn=Depends(get_db_conn), user=Depends
                 },
             )
         tenant_code_normalized = tenant_code_input_raw
+        released_count = _release_deleted_tenant_code(conn, tenant_code_normalized)
     else:
+        released_count = _release_deleted_tenant_code(conn, tenant_code_auto)
         tenant_code_normalized = _resolve_unique_tenant_code(conn, tenant_code_auto)
+
+    if released_count > 0:
+        logger.info(
+            "create_tenant released deleted tenant_code aliases: candidate=%s released=%s",
+            tenant_code_normalized,
+            released_count,
+        )
 
     tenant_id = uuid.uuid4()
     try:
@@ -140,6 +176,7 @@ def create_tenant(payload: TenantCreate, conn=Depends(get_db_conn), user=Depends
                            COALESCE(is_deleted, FALSE) AS is_deleted
                     FROM tenants
                     WHERE lower(trim(tenant_code)) = ANY(%s::text[])
+                      AND COALESCE(is_deleted, FALSE) = FALSE
                     LIMIT 1
                     """,
                     (candidate_aliases,),
