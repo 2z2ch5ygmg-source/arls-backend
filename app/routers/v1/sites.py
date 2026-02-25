@@ -180,29 +180,38 @@ def _site_validation_error(fields: dict[str, str], *, message: str = "입력값�
     )
 
 
-def _post_site_sync_to_soc(*, tenant_code: str | None, site_code: str | None, site_name: str | None) -> None:
+def _post_site_sync_to_soc(
+    *,
+    tenant_code: str | None,
+    site_code: str | None,
+    site_name: str | None,
+    event_type: str = "SITE_CREATED",
+) -> tuple[bool, int | None, str | None]:
     if not bool(settings.soc_integration_enabled):
         print("[HR->SOC] site-sync SKIP: soc_integration_enabled=false")
-        return
+        return False, None, "soc_integration_enabled=false"
 
     url = str(getattr(settings, "soc_site_sync_url", "") or "").strip()
     if not url:
         print("[HR->SOC] site-sync SKIP: empty url")
-        return
+        return False, None, "empty url"
 
     tenant_id_norm = str(tenant_code or "").strip().lower()
     site_code_norm = str(site_code or "").strip()
     site_name_norm = str(site_name or "").strip()
+    normalized_event_type = str(event_type or "").strip().upper() or "SITE_CREATED"
+    if normalized_event_type not in {"SITE_CREATED", "SITE_UPDATED"}:
+        normalized_event_type = "SITE_CREATED"
 
     payload = {
-        "event_type": "SITE_CREATED",
+        "event_type": normalized_event_type,
         "tenant_id": tenant_id_norm,
         "site_code": site_code_norm,
         "site_name": site_name_norm,
     }
 
     print(
-        f"[HR->SOC] POST {url} event_type=SITE_CREATED "
+        f"[HR->SOC] POST {url} event_type={normalized_event_type} "
         f"tenant={tenant_id_norm} site={site_code_norm}"
     )
     try:
@@ -214,6 +223,9 @@ def _post_site_sync_to_soc(*, tenant_code: str | None, site_code: str | None, si
             tenant_id_norm,
             site_code_norm,
         )
+        if int(response.status_code) >= 400:
+            return False, int(response.status_code), (response.text or "").strip()[:200]
+        return True, int(response.status_code), None
     except Exception as exc:
         print(f"[HR->SOC] site-sync failed: {repr(exc)} url={url} tenant={tenant_id_norm} site={site_code_norm}")
         logger.warning(
@@ -222,6 +234,7 @@ def _post_site_sync_to_soc(*, tenant_code: str | None, site_code: str | None, si
             tenant_id_norm,
             site_code_norm,
         )
+        return False, None, str(exc)
 
 
 def _resolve_tenant_row(conn, tenant_ref: str | None):
@@ -854,6 +867,7 @@ def create_site(
         tenant_code=row.get("tenant_code"),
         site_code=row.get("site_code"),
         site_name=row.get("site_name"),
+        event_type="SITE_CREATED",
     )
     return _row_to_out(row)
 
@@ -998,6 +1012,7 @@ def update_site(
         tenant_code=row.get("tenant_code"),
         site_code=row.get("site_code"),
         site_name=row.get("site_name"),
+        event_type="SITE_UPDATED",
     )
     return _row_to_out(row)
 
