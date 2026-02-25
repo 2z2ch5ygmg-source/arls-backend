@@ -310,11 +310,14 @@ class EmployeeCreate(BaseModel):
 
 class EmployeeOut(BaseModel):
     id: UUID
+    tenant_id: Optional[UUID] = None
+    tenant_code: Optional[str] = None
     employee_code: str
     sequence_no: Optional[int] = None
     full_name: str
     phone: Optional[str]
     site_code: str
+    site_name: Optional[str] = None
     company_code: str
     user_id: Optional[UUID] = None
     user_role: Optional[str] = None

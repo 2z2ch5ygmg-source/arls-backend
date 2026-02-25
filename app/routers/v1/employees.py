@@ -936,38 +936,64 @@ def commit_guard_roster_docx_import(
 
 @router.get("", response_model=list[EmployeeOut])
 def list_employees(
-    site_id: str | None = None,
+    site_id: str | None = Query(default=None, max_length=64),
+    site_code: str | None = Query(default=None, max_length=64),
     tenant_code: str | None = Query(default=None, max_length=64),
     conn=Depends(get_db_conn),
     user=Depends(get_current_user),
 ):
     actor_role = normalize_role(user["role"])
     tenant = _resolve_target_tenant(conn, user, tenant_code)
+
+    normalized_site_id = str(site_id or "").strip()
+    if normalized_site_id.lower() == "all":
+        normalized_site_id = ""
+    normalized_site_code = str(site_code or "").strip()
+    if normalized_site_code.lower() == "all":
+        normalized_site_code = ""
+
     scoped_site_id = None
+    scoped_site_code = None
     if actor_role == ROLE_BRANCH_MANAGER:
         scoped_site_id = _branch_manager_site_id(user)
-        if site_id and str(site_id) != scoped_site_id:
+        scoped_site_code = str(user.get("site_code") or "").strip()
+        if normalized_site_id and normalized_site_id != scoped_site_id:
+            _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "forbidden")
+        if (
+            normalized_site_code
+            and scoped_site_code
+            and normalized_site_code.upper() != scoped_site_code.upper()
+        ):
             _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "forbidden")
     elif actor_role == ROLE_EMPLOYEE:
-        staff_scope = enforce_staff_site_scope(user, request_site_id=site_id)
+        staff_scope = enforce_staff_site_scope(user, request_site_id=normalized_site_id, request_site_code=normalized_site_code)
         scoped_site_id = str((staff_scope or {}).get("site_id") or "").strip() or None
-    effective_site_id = site_id or scoped_site_id
+        scoped_site_code = str((staff_scope or {}).get("site_code") or "").strip() or None
+    effective_site_id = normalized_site_id or scoped_site_id
+    effective_site_code = ""
+    if not effective_site_id:
+        effective_site_code = (normalized_site_code or scoped_site_code or "").strip()
 
     params = [tenant["id"]]
     site_filter = ""
     if effective_site_id:
         site_filter = "AND s.id = %s"
         params.append(effective_site_id)
+    elif effective_site_code:
+        site_filter = "AND upper(s.site_code) = upper(%s)"
+        params.append(effective_site_code)
     with conn.cursor() as cur:
         cur.execute(
             f"""
-            SELECT e.id, e.employee_code, e.sequence_no, e.full_name, e.phone,
-                   s.site_code, c.company_code,
+            SELECT e.id, e.tenant_id, t.tenant_code,
+                   e.employee_code, e.sequence_no, e.full_name, e.phone,
+                   s.site_code, s.site_name, c.company_code,
                    e.birth_date, e.hire_date, e.guard_training_cert_no, e.note, e.soc_login_id, e.soc_role,
                    u.id AS user_id, u.role AS user_role
             FROM employees e
             JOIN sites s ON s.id = e.site_id
             JOIN companies c ON c.id = s.company_id
+            JOIN tenants t ON t.id = e.tenant_id
             LEFT JOIN LATERAL (
                 SELECT au.id, au.role
                 FROM arls_users au
