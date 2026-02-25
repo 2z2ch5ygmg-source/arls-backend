@@ -39,29 +39,18 @@ def _slugify_tenant_name(value: str) -> str:
     return normalized or "company"
 
 
-def _resolve_unique_tenant_code(conn, base_code: str) -> str:
-    normalized_base = _normalize_tenant_code(base_code) or "company"
-    for idx in range(1, 10000):
-        candidate = normalized_base if idx == 1 else f"{normalized_base}_{idx}"
-        candidate_aliases = list(build_tenant_identifier_candidates(candidate)) or [candidate]
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT 1
-                FROM tenants
-                WHERE lower(trim(tenant_code)) = ANY(%s::text[])
-                  AND COALESCE(is_deleted, FALSE) = FALSE
-                LIMIT 1
-                """,
-                (candidate_aliases,),
-            )
-            exists = cur.fetchone()
-        if not exists:
-            return candidate
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail={"error": "TENANT_CODE_GENERATION_FAILED", "message": "회사 코드 자동 생성에 실패했습니다."},
-    )
+def _resolve_default_tenant_code(base_code: str) -> str:
+    normalized = _normalize_tenant_code(base_code) or "company"
+    if not TENANT_ID_PATTERN.fullmatch(normalized):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "INVALID_INPUT",
+                "message": "입력값을 확인해주세요.",
+                "fields": {"tenant_name": "invalid"},
+            },
+        )
+    return normalized
 
 
 def _release_deleted_tenant_code(conn, tenant_code: str) -> int:
@@ -138,7 +127,7 @@ def create_tenant(payload: TenantCreate, conn=Depends(get_db_conn), user=Depends
         )
 
     tenant_code_input_raw = str(payload.tenant_code or "").strip().lower()
-    tenant_code_auto = _slugify_tenant_name(tenant_name)
+    tenant_code_auto = _resolve_default_tenant_code(_slugify_tenant_name(tenant_name))
     released_count = 0
     if tenant_code_input_raw:
         if not TENANT_ID_PATTERN.fullmatch(tenant_code_input_raw):
@@ -154,7 +143,7 @@ def create_tenant(payload: TenantCreate, conn=Depends(get_db_conn), user=Depends
         released_count = _release_deleted_tenant_code(conn, tenant_code_normalized)
     else:
         released_count = _release_deleted_tenant_code(conn, tenant_code_auto)
-        tenant_code_normalized = _resolve_unique_tenant_code(conn, tenant_code_auto)
+        tenant_code_normalized = tenant_code_auto
 
     if released_count > 0:
         logger.info(
@@ -166,45 +155,44 @@ def create_tenant(payload: TenantCreate, conn=Depends(get_db_conn), user=Depends
     tenant_id = uuid.uuid4()
     try:
         with conn.cursor() as cur:
-            if tenant_code_input_raw:
-                candidate_aliases = list(build_tenant_identifier_candidates(tenant_code_normalized)) or [tenant_code_normalized]
-                cur.execute(
-                    """
-                    SELECT id,
-                           tenant_code,
-                           COALESCE(is_active, TRUE) AS is_active,
-                           COALESCE(is_deleted, FALSE) AS is_deleted
-                    FROM tenants
-                    WHERE lower(trim(tenant_code)) = ANY(%s::text[])
-                      AND COALESCE(is_deleted, FALSE) = FALSE
-                    LIMIT 1
-                    """,
-                    (candidate_aliases,),
+            candidate_aliases = list(build_tenant_identifier_candidates(tenant_code_normalized)) or [tenant_code_normalized]
+            cur.execute(
+                """
+                SELECT id,
+                       tenant_code,
+                       COALESCE(is_active, TRUE) AS is_active,
+                       COALESCE(is_deleted, FALSE) AS is_deleted
+                FROM tenants
+                WHERE lower(trim(tenant_code)) = ANY(%s::text[])
+                  AND COALESCE(is_deleted, FALSE) = FALSE
+                LIMIT 1
+                """,
+                (candidate_aliases,),
+            )
+            existing = cur.fetchone()
+            if existing:
+                logger.warning(
+                    "create_tenant conflict: requested=%s normalized=%s existing_id=%s existing_code=%s existing_active=%s existing_deleted=%s",
+                    payload.tenant_code,
+                    tenant_code_normalized,
+                    existing.get("id"),
+                    existing.get("tenant_code"),
+                    existing.get("is_active"),
+                    existing.get("is_deleted"),
                 )
-                existing = cur.fetchone()
-                if existing:
-                    logger.warning(
-                        "create_tenant conflict: requested=%s normalized=%s existing_id=%s existing_code=%s existing_active=%s existing_deleted=%s",
-                        payload.tenant_code,
-                        tenant_code_normalized,
-                        existing.get("id"),
-                        existing.get("tenant_code"),
-                        existing.get("is_active"),
-                        existing.get("is_deleted"),
-                    )
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail={
-                            "error": "TENANT_EXISTS",
-                            "message": "이미 존재하는 회사 코드입니다.",
-                            "detail": {
-                                "tenant_id": str(existing.get("id") or ""),
-                                "tenant_code": str(existing.get("tenant_code") or ""),
-                                "is_active": bool(existing.get("is_active", True)),
-                                "is_deleted": bool(existing.get("is_deleted", False)),
-                            },
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "error": "TENANT_EXISTS",
+                        "message": "이미 존재하는 회사명입니다.",
+                        "detail": {
+                            "tenant_id": str(existing.get("id") or ""),
+                            "tenant_code": str(existing.get("tenant_code") or ""),
+                            "is_active": bool(existing.get("is_active", True)),
+                            "is_deleted": bool(existing.get("is_deleted", False)),
                         },
-                    )
+                    },
+                )
 
             cur.execute(
                 """
@@ -222,7 +210,7 @@ def create_tenant(payload: TenantCreate, conn=Depends(get_db_conn), user=Depends
     except pg_errors.UniqueViolation as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"error": "TENANT_EXISTS", "message": "이미 존재하는 회사 코드입니다."},
+            detail={"error": "TENANT_EXISTS", "message": "이미 존재하는 회사명입니다."},
         ) from exc
     except Exception as exc:
         logger.exception("create_tenant failed: tenant_code=%s", tenant_code_normalized, exc_info=exc)
