@@ -242,8 +242,14 @@ def _post_employee_sync_to_soc(
             "soc_role": _normalize_optional_text(soc_role),
         },
     }
+    print(
+        f"[HR->SOC] POST {url} "
+        f"employee_uuid={payload['employee']['employee_uuid']} "
+        f"tenant={payload['tenant_id']} site={payload['site_code']}"
+    )
     try:
         response = requests.post(url, json=payload, timeout=5)
+        print(f"[HR->SOC] status={response.status_code} body={(response.text or '')[:200]}")
         logger.info(
             "[HR->SOC] employee-sync status=%s body=%s url=%s employee_uuid=%s employee_code=%s",
             response.status_code,
@@ -253,6 +259,7 @@ def _post_employee_sync_to_soc(
             payload["employee"]["employee_code"],
         )
     except Exception as exc:
+        print(f"[HR->SOC] failed: {repr(exc)}")
         logger.warning(
             "[HR->SOC] employee-sync failed: %s url=%s employee_uuid=%s employee_code=%s",
             str(exc),
