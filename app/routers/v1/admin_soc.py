@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 
 from ...config import settings
 from ...deps import apply_rate_limit, get_db_conn, require_roles
 from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV
-from ...utils.tenant_context import resolve_scoped_tenant
+from ...utils.tenant_context import normalize_tenant_identifier, resolve_scoped_tenant
 from .sites import _post_site_sync_to_soc
 
 router = APIRouter(
@@ -95,68 +95,91 @@ def backfill_sites_to_soc(
 
 @router.post("/reset-master-data")
 def reset_soc_master_data(
-    tenant_code: str | None = Query(default=None, max_length=64),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
     conn=Depends(get_db_conn),
     user=Depends(require_roles(ROLE_DEV, ROLE_BRANCH_MANAGER)),
 ):
+    tenant = normalize_tenant_identifier(x_tenant_id)
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "TENANT_CONTEXT_REQUIRED", "message": "작업회사 선택이 필요합니다."},
+        )
+
     soc_base_url = str(getattr(settings, "soc_base_url", "") or "").strip().rstrip("/")
     if not soc_base_url:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": "SOC_BASE_URL_MISSING", "message": "SOC_BASE_URL 설정이 필요합니다."},
+            detail={"code": "SOC_BASE_URL_MISSING", "message": "SOC_BASE_URL 설정이 필요합니다."},
         )
 
     hr_reset_token = str(getattr(settings, "hr_reset_token", "") or "").strip()
     if not hr_reset_token:
-        print("[HR->SOC] reset-master-data WARN: HR_RESET_TOKEN is empty")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "HR_RESET_TOKEN_MISSING", "message": "HR_RESET_TOKEN 미설정"},
+        )
 
     reset_url = f"{soc_base_url}/api/admin/hr/reset-master-data"
-    print(f"[HR->SOC] reset-master-data POST url={reset_url}")
+    print(
+        f"[HR->SOC] reset call url={reset_url} tenant={tenant} token_len={len(hr_reset_token)}"
+    )
     try:
         reset_response = requests.post(
             reset_url,
             headers={
                 "X-HR-RESET-TOKEN": hr_reset_token,
+                "X-Tenant-Id": tenant,
                 "Content-Type": "application/json",
             },
             timeout=10,
         )
     except Exception as exc:
-        print(f"[HR->SOC] reset-master-data failed: {repr(exc)}")
+        print(f"[HR->SOC] reset failed: {repr(exc)} url={reset_url} tenant={tenant}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail={
-                "error": "SOC_RESET_FAILED",
-                "message": "SOC 초기화 호출에 실패했습니다.",
-                "detail": str(exc),
+                "code": "SOC_RESET_FAILED",
+                "message": "SOC reset failed",
+                "soc_status": None,
+                "soc_body": str(exc),
             },
         ) from exc
 
     reset_body = (reset_response.text or "").strip()
-    print(f"[HR->SOC] reset-master-data status={reset_response.status_code} body={reset_body[:200]}")
-    if int(reset_response.status_code) >= 400:
+    print(
+        f"[HR->SOC] reset resp status={reset_response.status_code} body={reset_body[:300]}"
+    )
+    if int(reset_response.status_code) != 200:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail={
-                "error": "SOC_RESET_FAILED",
-                "message": "SOC 초기화 응답이 실패했습니다.",
-                "detail": {
-                    "status_code": int(reset_response.status_code),
-                    "body": reset_body[:200],
-                },
+                "code": "SOC_RESET_FAILED",
+                "message": "SOC reset failed",
+                "soc_status": int(reset_response.status_code),
+                "soc_body": reset_body[:300],
             },
         )
 
+    reset_payload = None
+    try:
+        reset_payload = reset_response.json()
+    except Exception:
+        reset_payload = {"raw": reset_body[:300]}
+
     backfill_result = _run_backfill_sites_to_soc(
-        tenant_code=tenant_code,
+        tenant_code=tenant,
         conn=conn,
         user=user,
     )
     return {
+        "success": True,
+        "tenant_id": tenant,
         "reset": {
             "ok": True,
             "status_code": int(reset_response.status_code),
-            "body": reset_body[:200],
+            "body": reset_body[:300],
+            "payload": reset_payload,
         },
         "backfill": {
             "sent": backfill_result["sent"],
