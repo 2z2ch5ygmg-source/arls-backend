@@ -4,7 +4,7 @@ import re
 
 from fastapi import HTTPException, status
 
-from .permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, normalize_role
+from .permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, ROLE_EMPLOYEE, normalize_role
 
 TENANT_ID_PATTERN = re.compile(r"^[a-z0-9_]{3,32}$")
 TENANT_ID_INPUT_PATTERN = re.compile(r"^[a-z0-9_-]{3,32}$")
@@ -128,5 +128,47 @@ def resolve_scoped_tenant(
                 )
         return own_row
 
-    # Employee scope is fixed to own tenant. Ignore mismatched tenant headers/params.
+    if actor_role == ROLE_EMPLOYEE and requested_ref:
+        target_row = fetch_tenant_row_any(conn, requested_ref)
+        if not target_row or str(target_row.get("id") or "") != str(own_row.get("id") or ""):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": "FORBIDDEN", "message": "접근 권한이 없습니다."},
+            )
+
+    # Employee scope is fixed to own tenant.
     return own_row
+
+
+def enforce_staff_site_scope(
+    user: dict,
+    *,
+    request_site_id: str | None = None,
+    request_site_code: str | None = None,
+) -> dict[str, str] | None:
+    actor_role = normalize_role(user.get("role"))
+    if actor_role != ROLE_EMPLOYEE:
+        return None
+
+    own_site_id = str(user.get("site_id") or "").strip()
+    own_site_code = str(user.get("site_code") or "").strip().upper()
+    if not own_site_id or not own_site_code:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "SITE_SCOPE_REQUIRED", "message": "현장 권한이 설정되지 않았습니다."},
+        )
+
+    requested_site_id = str(request_site_id or "").strip()
+    requested_site_code = str(request_site_code or "").strip().upper()
+    if requested_site_id and requested_site_id != own_site_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "FORBIDDEN", "message": "접근 권한이 없습니다."},
+        )
+    if requested_site_code and requested_site_code != own_site_code:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "FORBIDDEN", "message": "접근 권한이 없습니다."},
+        )
+
+    return {"site_id": own_site_id, "site_code": own_site_code}

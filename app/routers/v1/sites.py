@@ -21,7 +21,7 @@ from ...utils.permissions import (
     is_super_admin,
     normalize_role,
 )
-from ...utils.tenant_context import resolve_scoped_tenant
+from ...utils.tenant_context import enforce_staff_site_scope, resolve_scoped_tenant
 
 router = APIRouter(prefix="/sites", tags=["sites"], dependencies=[Depends(apply_rate_limit)])
 
@@ -581,10 +581,14 @@ def list_sites(
         )
 
     tenant = _resolve_target_tenant(conn, user, tenant_code)
+    staff_scope = enforce_staff_site_scope(user)
 
     active_filter = _active_filter_to_bool(active)
     clauses = ["s.tenant_id = %s"]
     params: list = [tenant["id"]]
+    if staff_scope:
+        clauses.append("s.id = %s")
+        params.append(staff_scope["site_id"])
 
     if company_code:
         clauses.append("c.company_code = %s")

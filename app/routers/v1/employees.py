@@ -10,8 +10,8 @@ import requests
 from ...config import settings
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
 from ...schemas import EmployeeCreate, EmployeeOut, EmployeeUpdate
-from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, normalize_role, normalize_user_role
-from ...utils.tenant_context import canonical_tenant_identifier, resolve_scoped_tenant
+from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, ROLE_EMPLOYEE, normalize_role, normalize_user_role
+from ...utils.tenant_context import canonical_tenant_identifier, enforce_staff_site_scope, resolve_scoped_tenant
 
 router = APIRouter(prefix="/employees", tags=["employees"], dependencies=[Depends(apply_rate_limit)])
 logger = logging.getLogger(__name__)
@@ -299,6 +299,9 @@ def list_employees(
         scoped_site_id = _branch_manager_site_id(user)
         if site_id and str(site_id) != scoped_site_id:
             _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "forbidden")
+    elif actor_role == ROLE_EMPLOYEE:
+        staff_scope = enforce_staff_site_scope(user, request_site_id=site_id)
+        scoped_site_id = str((staff_scope or {}).get("site_id") or "").strip() or None
     effective_site_id = site_id or scoped_site_id
 
     params = [tenant["id"]]

@@ -58,7 +58,7 @@ from ...services.p1_schedule import (
     upsert_support_assignment,
 )
 from ...utils.permissions import can_manage_schedule, is_super_admin, normalize_role
-from ...utils.tenant_context import resolve_scoped_tenant
+from ...utils.tenant_context import enforce_staff_site_scope, resolve_scoped_tenant
 
 router = APIRouter(prefix="/schedules", tags=["schedules"], dependencies=[Depends(apply_rate_limit)])
 
@@ -562,6 +562,8 @@ def monthly_view(
 ):
     start, end = _month_bounds(month)
     target_tenant = _resolve_target_tenant(conn, user, tenant_code)
+    staff_scope = enforce_staff_site_scope(user)
+    staff_site_id = str((staff_scope or {}).get("site_id") or "").strip()
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -608,9 +610,10 @@ def monthly_view(
             WHERE ms.tenant_id = %s
               AND ms.schedule_date >= %s
               AND ms.schedule_date < %s
+              AND (%s = '' OR ms.site_id::text = %s)
             ORDER BY e.employee_code, ms.schedule_date
             """,
-            (target_tenant["id"], start, end),
+            (target_tenant["id"], start, end, staff_site_id, staff_site_id),
         )
         return [dict(r) for r in cur.fetchall()]
 
@@ -625,6 +628,8 @@ def list_soc_leave_logs(
     user=Depends(get_current_user),
 ):
     target_tenant = _resolve_target_tenant(conn, user, tenant_code)
+    staff_scope = enforce_staff_site_scope(user)
+    staff_site_id = str((staff_scope or {}).get("site_id") or "").strip()
 
     if start_date and end_date:
         try:
@@ -658,13 +663,14 @@ def list_soc_leave_logs(
             JOIN employees e ON e.id = ms.employee_id
             JOIN sites s ON s.id = ms.site_id
             WHERE ms.tenant_id = %s
+              AND (%s = '' OR ms.site_id::text = %s)
               AND ms.schedule_date BETWEEN %s AND %s
               AND lower(COALESCE(ms.source, '')) = 'soc'
               AND lower(ms.shift_type) IN ('off', 'holiday')
             ORDER BY ms.schedule_date DESC, e.employee_code ASC
             LIMIT %s
             """,
-            (target_tenant["id"], period_start, period_end, limit),
+            (target_tenant["id"], staff_site_id, staff_site_id, period_start, period_end, limit),
         )
         return [dict(row) for row in cur.fetchall()]
 
@@ -875,6 +881,9 @@ def export_monthly_csv(
     target_tenant = (tenant_code or user["tenant_code"]).strip()
     company_filter = (company_code or "").strip()
     site_filter = (site_code or "").strip()
+    staff_scope = enforce_staff_site_scope(user, request_site_code=site_filter)
+    if staff_scope:
+        site_filter = str(staff_scope.get("site_code") or "").strip()
     normalized_format = (file_format or "xlsx").strip().lower()
     if normalized_format not in IMPORT_FORMATS:
         raise HTTPException(status_code=400, detail="format must be csv or xlsx")
@@ -2040,8 +2049,12 @@ def get_schedule_date_details(
 ):
     work_date = _parse_ymd_or_400(date)
     target_tenant = _resolve_target_tenant(conn, user, tenant_code)
+    staff_scope = enforce_staff_site_scope(user, request_site_code=site_code)
+    effective_site_code = str(site_code or "").strip()
+    if staff_scope:
+        effective_site_code = str(staff_scope.get("site_code") or "").strip()
 
-    site = _resolve_site_or_404(conn, tenant_id=target_tenant["id"], site_code=site_code) if site_code else None
+    site = _resolve_site_or_404(conn, tenant_id=target_tenant["id"], site_code=effective_site_code) if effective_site_code else None
     site_id = site["id"] if site else None
 
     apple_ot_rows = list_apple_overtime_logs(
