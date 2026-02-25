@@ -60,12 +60,21 @@ class Settings:
     cors_origins = [x.strip() for x in os.getenv("CORS_ORIGINS", "").split(",") if x.strip()]
     cors_origin_regex = os.getenv("CORS_ORIGIN_REGEX", "").strip()
     rate_limit_per_minute = int(os.getenv("RATE_LIMIT_PER_MINUTE", "240"))
+    idempotency_ttl_minutes = int(os.getenv("API_IDEMPOTENCY_TTL_MINUTES", "120"))
+    allow_branch_manager_user_manage = _env_bool("ALLOW_BRANCH_MANAGER_USER_MANAGE", "false")
+    init_admin_username = os.getenv("INIT_SUPER_ADMIN_USERNAME", "platform_admin").strip()
+    init_admin_password = os.getenv("INIT_SUPER_ADMIN_PASSWORD", "Admin1234!!").strip()
+    init_admin_tenant_code = os.getenv("INIT_SUPER_ADMIN_TENANT_CODE", "MASTER").strip()
 
     # ==========================================
     # SOC 연동 설정
     # ==========================================
 
     soc_integration_enabled = _env_bool_any(["SOC_INTEGRATION_ENABLED", "SOC_INGEST_ENABLED"], "true")
+    soc_ingest_require_hmac = _env_bool("SOC_INGEST_REQUIRE_HMAC", "true")
+    soc_ingest_hmac_secret = os.getenv("SOC_INGEST_HMAC_SECRET", os.getenv("HR_WEBHOOK_SECRET", "")).strip()
+    soc_ingest_require_token = _env_bool("SOC_INGEST_REQUIRE_TOKEN", "false")
+    soc_ingest_token = os.getenv("SOC_INGEST_TOKEN", "").strip()
 
     soc_base_url = os.getenv(
         "SOC_BASE_URL",
@@ -80,7 +89,10 @@ class Settings:
 
     request_timeout_seconds = 5
 
+    google_sheets_default_webhook = os.getenv("GOOGLE_SHEETS_DEFAULT_WEBHOOK", "").strip()
+    google_sheets_ingest_token = os.getenv("GOOGLE_SHEETS_INGEST_TOKEN", "").strip()
     google_sheets_service_account_json = _load_service_account_json()
+    google_places_api_key = os.getenv("GOOGLE_PLACES_API_KEY", "").strip()
 
 
 settings = Settings()
