@@ -89,10 +89,15 @@ class Settings:
     soc_overnight_enabled = apple_report_overnight_enabled
     soc_overtime_enabled = _env_bool("SOC_OVERTIME_ENABLED", "true")
     soc_closing_ot_enabled = _env_bool("SOC_CLOSING_OT_ENABLED", "true")
-    soc_employee_sync_url = os.getenv(
-        "SOC_EMPLOYEE_SYNC_URL",
-        "https://security-ops-center-prod-001-ftgcbkdwggf5hhh9.koreacentral-01.azurewebsites.net/api/integrations/hr/employee-sync",
-    ).strip()
+    soc_base_url = os.getenv(
+        "SOC_BASE_URL",
+        "https://security-ops-center-prod-001-ftgcbkdwggf5hhh9.koreacentral-01.azurewebsites.net",
+    ).strip().rstrip("/")
+    _soc_employee_sync_url_raw = os.getenv("SOC_EMPLOYEE_SYNC_URL", "").strip()
+    if _soc_employee_sync_url_raw:
+        soc_employee_sync_url = _soc_employee_sync_url_raw
+    else:
+        soc_employee_sync_url = f"{soc_base_url}/api/integrations/hr/employee-sync"
 
     # Google Sheets profile-based sync (P0)
     google_sheets_sync_enabled = sheets_sync_enabled

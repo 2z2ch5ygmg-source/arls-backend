@@ -244,24 +244,19 @@ def _post_employee_sync_to_soc(
     }
     try:
         response = requests.post(url, json=payload, timeout=5)
-        if response.status_code >= 400:
-            logger.warning(
-                "employees.soc_sync failed status=%s employee_uuid=%s employee_code=%s body=%s",
-                response.status_code,
-                payload["employee"]["employee_uuid"],
-                payload["employee"]["employee_code"],
-                (response.text or "")[:400],
-            )
-        else:
-            logger.info(
-                "employees.soc_sync success status=%s employee_uuid=%s employee_code=%s",
-                response.status_code,
-                payload["employee"]["employee_uuid"],
-                payload["employee"]["employee_code"],
-            )
-    except Exception:
-        logger.exception(
-            "employees.soc_sync exception employee_uuid=%s employee_code=%s",
+        logger.info(
+            "[HR->SOC] employee-sync status=%s body=%s url=%s employee_uuid=%s employee_code=%s",
+            response.status_code,
+            (response.text or "")[:200],
+            url,
+            payload["employee"]["employee_uuid"],
+            payload["employee"]["employee_code"],
+        )
+    except Exception as exc:
+        logger.warning(
+            "[HR->SOC] employee-sync failed: %s url=%s employee_uuid=%s employee_code=%s",
+            str(exc),
+            url,
             payload["employee"]["employee_uuid"],
             payload["employee"]["employee_code"],
         )

@@ -39,20 +39,37 @@ def ensure_seed_admin() -> None:
                 (tenant["id"], settings.init_admin_username),
             )
             existing = cur.fetchone()
+            password_hash = hash_password(settings.init_admin_password)
             if existing:
-                return
-
-            cur.execute(
-                """
-                INSERT INTO arls_users (id, tenant_id, username, password_hash, full_name, role, is_active)
-                VALUES (%s, %s, %s, %s, %s, %s, true)
-                """,
-                (
-                    uuid.uuid4(),
-                    tenant["id"],
-                    settings.init_admin_username,
-                    hash_password(settings.init_admin_password),
-                    "Master DEV",
-                    ROLE_DEVELOPER,
-                ),
-            )
+                cur.execute(
+                    """
+                    UPDATE arls_users
+                    SET password_hash = %s,
+                        full_name = %s,
+                        role = %s,
+                        is_active = TRUE,
+                        updated_at = timezone('utc', now())
+                    WHERE id = %s
+                    """,
+                    (
+                        password_hash,
+                        "Master DEV",
+                        ROLE_DEVELOPER,
+                        existing["id"],
+                    ),
+                )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO arls_users (id, tenant_id, username, password_hash, full_name, role, is_active)
+                    VALUES (%s, %s, %s, %s, %s, %s, true)
+                    """,
+                    (
+                        uuid.uuid4(),
+                        tenant["id"],
+                        settings.init_admin_username,
+                        password_hash,
+                        "Master DEV",
+                        ROLE_DEVELOPER,
+                    ),
+                )

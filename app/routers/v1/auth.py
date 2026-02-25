@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from ...db import fetch_one
+from ...db import fetch_all, fetch_one
 from ...deps import get_db_conn, get_current_user, apply_rate_limit
 from ...schemas import AuthUser, LoginRequest, RefreshTokenRequest, TokenResponse
 from ...security import decode_refresh_token, encode_refresh_token, encode_token, verify_password
@@ -70,11 +70,11 @@ def _build_token_response(
 
 
 def handle_master_login(payload: LoginRequest, conn):
-    user = fetch_one(
+    master_candidates = fetch_all(
         conn,
         """
         SELECT au.id, au.tenant_id, au.username, au.full_name, au.role, au.password_hash,
-               au.employee_id, e.employee_code,
+               au.employee_id, e.employee_code, t.tenant_code,
                COALESCE((to_jsonb(au)->>'is_super_admin')::boolean, FALSE) AS is_super_admin
         FROM arls_users au
         JOIN tenants t ON t.id = au.tenant_id
@@ -84,14 +84,80 @@ def handle_master_login(payload: LoginRequest, conn):
           AND COALESCE(au.is_deleted, FALSE) = FALSE
           AND COALESCE(t.is_active, TRUE) = TRUE
           AND COALESCE(t.is_deleted, FALSE) = FALSE
-        LIMIT 1
+          AND upper(t.tenant_code) = %s
+        ORDER BY COALESCE(au.last_login_at, au.updated_at, au.created_at) DESC
+        LIMIT 10
         """,
-        (payload.username,),
+        (payload.username, MASTER_TENANT_CODE),
     )
-    if not user or not verify_password(payload.password, user["password_hash"]):
+
+    matched_users = [row for row in master_candidates if verify_password(payload.password, row["password_hash"])]
+    if not matched_users:
+        privileged_candidates = fetch_all(
+            conn,
+            """
+            SELECT au.id, au.tenant_id, au.username, au.full_name, au.role, au.password_hash,
+                   au.employee_id, e.employee_code, t.tenant_code,
+                   COALESCE((to_jsonb(au)->>'is_super_admin')::boolean, FALSE) AS is_super_admin
+            FROM arls_users au
+            JOIN tenants t ON t.id = au.tenant_id
+            LEFT JOIN employees e ON e.id = au.employee_id
+            WHERE lower(au.username) = lower(%s)
+              AND au.is_active = TRUE
+              AND COALESCE(au.is_deleted, FALSE) = FALSE
+              AND COALESCE(t.is_active, TRUE) = TRUE
+              AND COALESCE(t.is_deleted, FALSE) = FALSE
+              AND (
+                    lower(au.role) IN ('developer', 'dev', 'platform_admin')
+                    OR COALESCE((to_jsonb(au)->>'is_super_admin')::boolean, FALSE) = TRUE
+              )
+            ORDER BY COALESCE(au.last_login_at, au.updated_at, au.created_at) DESC
+            LIMIT 20
+            """,
+            (payload.username,),
+        )
+        matched_users = [row for row in privileged_candidates if verify_password(payload.password, row["password_hash"])]
+
+    if not matched_users:
+        fallback_candidates = fetch_all(
+            conn,
+            """
+            SELECT au.id, au.tenant_id, au.username, au.full_name, au.role, au.password_hash,
+                   au.employee_id, e.employee_code, t.tenant_code,
+                   COALESCE((to_jsonb(au)->>'is_super_admin')::boolean, FALSE) AS is_super_admin
+            FROM arls_users au
+            JOIN tenants t ON t.id = au.tenant_id
+            LEFT JOIN employees e ON e.id = au.employee_id
+            WHERE lower(au.username) = lower(%s)
+              AND au.is_active = TRUE
+              AND COALESCE(au.is_deleted, FALSE) = FALSE
+              AND COALESCE(t.is_active, TRUE) = TRUE
+              AND COALESCE(t.is_deleted, FALSE) = FALSE
+            ORDER BY COALESCE(au.last_login_at, au.updated_at, au.created_at) DESC
+            LIMIT 10
+            """,
+            (payload.username,),
+        )
+        matched_fallback = [
+            row for row in fallback_candidates if verify_password(payload.password, row["password_hash"])
+        ]
+        if matched_fallback:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=MASTER_LOGIN_FORBIDDEN_MESSAGE)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials")
 
-    is_dev_role = normalize_role(user["role"]) == "dev"
+    def _priority(row: dict) -> tuple[int, int]:
+        is_master_tenant = _normalize_tenant_code(row.get("tenant_code")) == MASTER_TENANT_CODE
+        is_dev_role = normalize_role(row.get("role")) == "dev"
+        is_super_admin = bool(row.get("is_super_admin"))
+        can_master_login = is_dev_role or is_super_admin
+        return (
+            0 if is_master_tenant else 1,
+            0 if can_master_login else 1,
+        )
+
+    user = sorted(matched_users, key=_priority)[0]
+
+    is_dev_role = normalize_role(user.get("role")) == "dev"
     is_super_admin = bool(user.get("is_super_admin"))
     if not is_dev_role and not is_super_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=MASTER_LOGIN_FORBIDDEN_MESSAGE)
