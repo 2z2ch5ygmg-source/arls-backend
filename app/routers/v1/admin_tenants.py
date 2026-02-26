@@ -5,12 +5,13 @@ import logging
 import uuid
 from typing import Any
 
+import requests
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, status
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from psycopg import errors as pg_errors
 from psycopg import sql
 
+from ...config import settings
 from ...deps import apply_rate_limit, get_db_conn, require_roles
 from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV
 from ...utils.tenant_context import (
@@ -32,6 +33,14 @@ RESET_CONFIRM_PHRASE = "RESET"
 
 class TenantResetRequest(BaseModel):
     confirm: str | None = Field(default=None)
+
+
+class TenantResetFullRequest(BaseModel):
+    confirm: str | None = Field(default=None)
+    mode: str = Field(default="HARD")
+    reset_soc: bool = Field(default=True)
+    reset_hr: bool = Field(default=True)
+    rebuild_after: bool = Field(default=False)
 
 
 def _table_exists(conn, table_name: str) -> bool:
@@ -252,52 +261,59 @@ def _insert_reset_audit_log(
         )
 
 
-@router.post("/reset")
-def reset_tenant_hr_data(
-    payload: TenantResetRequest | None = Body(default=None),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
-    conn=Depends(get_db_conn),
-    user=Depends(require_roles(ROLE_DEV, ROLE_BRANCH_MANAGER)),
-):
-    tenant_header = normalize_tenant_identifier(x_tenant_id)
-    if not tenant_header:
+def _resolve_reset_target(conn, user: dict, tenant_header: str) -> tuple[str, str]:
+    scoped_tenant = resolve_scoped_tenant(
+        conn,
+        user,
+        header_tenant_id=tenant_header,
+        require_dev_context=True,
+    )
+    tenant_id = str(scoped_tenant.get("id") or "").strip()
+    tenant_code = normalize_tenant_identifier(scoped_tenant.get("tenant_code")) or tenant_header
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "TENANT_NOT_FOUND", "message": "tenant not found"},
+        )
+    if tenant_code in PROTECTED_TENANT_CODES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "TENANT_RESET_FORBIDDEN", "message": "보호 테넌트는 초기화할 수 없습니다."},
+        )
+    return tenant_id, tenant_code
+
+
+def _validate_reset_confirm(confirm_value: str | None, *, required: bool) -> None:
+    normalized = str(confirm_value or "").strip().upper()
+    if required and normalized != RESET_CONFIRM_PHRASE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "TENANT_CONTEXT_REQUIRED", "message": "작업회사 선택이 필요합니다."},
+            detail={"error": "CONFIRM_MISMATCH", "message": "확인 문구가 일치하지 않습니다."},
         )
+    if not required and normalized and normalized != RESET_CONFIRM_PHRASE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "CONFIRM_MISMATCH", "message": "확인 문구가 일치하지 않습니다."},
+        )
+
+
+def _run_hr_tenant_hard_reset(
+    conn,
+    user: dict,
+    *,
+    tenant_header: str,
+    confirm_value: str | None = None,
+    require_confirm: bool = False,
+) -> dict[str, Any]:
+    _validate_reset_confirm(confirm_value, required=require_confirm)
 
     stage = "resolve_tenant_scope"
     tenant_id = ""
     tenant_code = tenant_header
     try:
-        stage = "validate_confirm"
-        confirm_value = str((payload.confirm if payload else "") or "").strip()
-        if confirm_value and confirm_value.upper() != RESET_CONFIRM_PHRASE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"error": "CONFIRM_MISMATCH", "message": "확인 문구가 일치하지 않습니다."},
-            )
+        stage = "resolve_target"
+        tenant_id, tenant_code = _resolve_reset_target(conn, user, tenant_header)
 
-        scoped_tenant = resolve_scoped_tenant(
-            conn,
-            user,
-            header_tenant_id=tenant_header,
-            require_dev_context=True,
-        )
-        tenant_id = str(scoped_tenant.get("id") or "").strip()
-        tenant_code = normalize_tenant_identifier(scoped_tenant.get("tenant_code")) or tenant_header
-        if not tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"error": "TENANT_NOT_FOUND", "message": "tenant not found"},
-            )
-
-        stage = "protect_tenant_guard"
-        if tenant_code in PROTECTED_TENANT_CODES:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={"error": "TENANT_RESET_FORBIDDEN", "message": "보호 테넌트는 초기화할 수 없습니다."},
-            )
         stage = "collect_tenant_tables"
         scoped_tables = _list_tenant_scoped_tables(conn)
         ordered_tables = _ordered_tenant_purge_tables(scoped_tables)
@@ -356,19 +372,8 @@ def reset_tenant_hr_data(
                     raise
 
             if unresolved_tables and not progressed:
-                raise RuntimeError(
-                    "fk_constraint_blocked: " + ", ".join(unresolved_tables[:8])
-                )
+                raise RuntimeError("fk_constraint_blocked: " + ", ".join(unresolved_tables[:8]))
             pending_tables = unresolved_tables
-            stage = f"delete:{table_name}"
-            deleted[table_name] = _delete_tenant_rows(
-                conn,
-                table_name,
-                has_tenant_id=has_tenant_id,
-                has_tenant_code=has_tenant_code,
-                tenant_id=tenant_id,
-                tenant_code_candidates=tenant_code_candidates,
-            )
 
         stage = "write_audit_log"
         _insert_reset_audit_log(
@@ -399,6 +404,7 @@ def reset_tenant_hr_data(
             },
         }
     except HTTPException:
+        conn.rollback()
         raise
     except Exception as exc:
         conn.rollback()
@@ -409,16 +415,172 @@ def reset_tenant_hr_data(
             stage,
             exc_info=exc,
         )
-        return JSONResponse(
+        raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "success": False,
-                "data": None,
-                "error": {
-                    "code": "TENANT_RESET_FAILED",
-                    "stage": stage,
-                    "message": "테넌트 데이터 초기화 중 오류가 발생했습니다.",
-                    "detail": str(exc),
-                },
+            detail={
+                "error": "TENANT_RESET_FAILED",
+                "stage": stage,
+                "message": "테넌트 데이터 초기화 중 오류가 발생했습니다.",
+                "detail": str(exc),
             },
         )
+
+
+def _call_soc_tenant_full_reset(tenant_code: str) -> dict[str, Any]:
+    soc_base_url = str(getattr(settings, "soc_base_url", "") or "").strip().rstrip("/")
+    if not soc_base_url:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error": "SOC_BASE_URL_MISSING", "message": "SOC_BASE_URL 설정이 필요합니다."},
+        )
+
+    hr_reset_token = str(getattr(settings, "hr_reset_token", "") or "").strip()
+    if not hr_reset_token:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error": "HR_RESET_TOKEN_MISSING", "message": "HR_RESET_TOKEN 미설정"},
+        )
+
+    reset_url = str(getattr(settings, "soc_reset_url", "") or "").strip()
+    if not reset_url:
+        reset_url = f"{soc_base_url}/api/admin/hr/reset-tenant"
+    if reset_url.startswith("/"):
+        reset_url = f"{soc_base_url}{reset_url}"
+    reset_url = reset_url.rstrip("/")
+
+    print(
+        f"[HR->SOC] reset-full call url={reset_url} tenant={tenant_code} token_len={len(hr_reset_token)}"
+    )
+    try:
+        response = requests.post(
+            reset_url,
+            headers={
+                "X-HR-RESET-TOKEN": hr_reset_token,
+                "X-Tenant-Id": tenant_code,
+                "Content-Type": "application/json",
+            },
+            timeout=10,
+        )
+    except Exception as exc:
+        print(f"[HR->SOC] reset-full failed tenant={tenant_code} error={repr(exc)}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "error": "SOC_RESET_FAILED",
+                "message": "SOC reset failed",
+                "soc_status": None,
+                "soc_body": str(exc),
+            },
+        ) from exc
+
+    body_text = (response.text or "").strip()
+    print(f"[HR->SOC] reset-full status={response.status_code} tenant={tenant_code} body={body_text[:300]}")
+    if int(response.status_code) != 200:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "error": "SOC_RESET_FAILED",
+                "message": "SOC reset failed",
+                "soc_status": int(response.status_code),
+                "soc_body": body_text[:300],
+            },
+        )
+
+    try:
+        payload = response.json()
+    except Exception:
+        payload = {"raw": body_text[:300]}
+    return {
+        "ok": True,
+        "status_code": int(response.status_code),
+        "payload": payload,
+    }
+
+
+@router.post("/reset")
+def reset_tenant_hr_data(
+    payload: TenantResetRequest | None = Body(default=None),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    conn=Depends(get_db_conn),
+    user=Depends(require_roles(ROLE_DEV, ROLE_BRANCH_MANAGER)),
+):
+    tenant_header = normalize_tenant_identifier(x_tenant_id)
+    if not tenant_header:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "TENANT_CONTEXT_REQUIRED", "message": "작업회사 선택이 필요합니다."},
+        )
+    confirm_value = str((payload.confirm if payload else "") or "").strip()
+    return _run_hr_tenant_hard_reset(
+        conn,
+        user,
+        tenant_header=tenant_header,
+        confirm_value=confirm_value,
+        require_confirm=False,
+    )
+
+
+@router.post("/reset-full")
+def reset_tenant_full(
+    payload: TenantResetFullRequest | None = Body(default=None),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    conn=Depends(get_db_conn),
+    user=Depends(require_roles(ROLE_DEV, ROLE_BRANCH_MANAGER)),
+):
+    request_payload = payload or TenantResetFullRequest()
+    tenant_header = normalize_tenant_identifier(x_tenant_id)
+    if not tenant_header:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "TENANT_CONTEXT_REQUIRED", "message": "작업회사 선택이 필요합니다."},
+        )
+
+    mode = str(request_payload.mode or "HARD").strip().upper()
+    if mode != "HARD":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "INVALID_MODE", "message": "mode는 HARD만 허용됩니다."},
+        )
+
+    _validate_reset_confirm(request_payload.confirm, required=True)
+
+    _, tenant_code = _resolve_reset_target(conn, user, tenant_header)
+
+    soc_reset_result: dict[str, Any] = {"skipped": True}
+    if bool(request_payload.reset_soc):
+        soc_reset_result = _call_soc_tenant_full_reset(tenant_code)
+
+    hr_deleted_result: dict[str, Any] = {"skipped": True}
+    if bool(request_payload.reset_hr):
+        hr_deleted_result = _run_hr_tenant_hard_reset(
+            conn,
+            user,
+            tenant_header=tenant_header,
+            confirm_value=RESET_CONFIRM_PHRASE,
+            require_confirm=True,
+        )
+
+    backfill_result: dict[str, Any] = {"skipped": True}
+    if bool(request_payload.rebuild_after):
+        if bool(request_payload.reset_hr):
+            backfill_result = {
+                "skipped": True,
+                "reason": "HR_HARD_DELETE_EXECUTED",
+                "message": "HR 데이터가 삭제되어 backfill을 실행하지 않았습니다.",
+            }
+        else:
+            # Optional flow: keep disabled by default; can be enabled by setting rebuild_after=true with reset_hr=false.
+            backfill_result = {
+                "skipped": True,
+                "reason": "NOT_IMPLEMENTED",
+                "message": "rebuild_after는 현재 별도 backfill 버튼으로 실행하세요.",
+            }
+
+    return {
+        "success": True,
+        "tenant_code": tenant_code,
+        "mode": mode,
+        "soc_reset": soc_reset_result,
+        "hr_deleted": hr_deleted_result,
+        "backfill": backfill_result,
+    }
