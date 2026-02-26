@@ -501,16 +501,12 @@ BEGIN
       ALTER TABLE employees ADD COLUMN photo_attachment_id text;
     END IF;
 
-    -- 1) 이미 <SITE_CODE>-NNN 형식인 코드는 sequence_no를 복원한다.
-    UPDATE employees e
-    SET sequence_no = CAST(SUBSTRING(UPPER(e.employee_code) FROM '.*-([0-9]{3})$') AS int)
-    FROM sites s
-    WHERE e.site_id = s.id
-      AND e.sequence_no IS NULL
-      AND UPPER(e.employee_code) ~ '^[A-Z0-9_]+-[0-9]{3}$'
-      AND UPPER(e.employee_code) LIKE UPPER(s.site_code) || '-%';
+    -- sequence_no 재정렬(충돌 방지):
+    -- 기존 값이 일부 남아있으면 uq_employees_tenant_site_sequence와 충돌할 수 있으므로
+    -- 전체를 NULL로 비운 뒤 tenant/site 단위 ROW_NUMBER로 일괄 재부여한다.
+    UPDATE employees
+    SET sequence_no = NULL;
 
-    -- 2) 남은 legacy 코드(E001 등)는 site별 순번으로 채운다.
     WITH numbered AS (
       SELECT e.id,
              ROW_NUMBER() OVER (
@@ -518,13 +514,11 @@ BEGIN
                ORDER BY e.created_at NULLS LAST, e.id
              ) AS seq
       FROM employees e
-      WHERE e.sequence_no IS NULL
     )
     UPDATE employees e
     SET sequence_no = n.seq
     FROM numbered n
-    WHERE e.id = n.id
-      AND e.sequence_no IS NULL;
+    WHERE e.id = n.id;
 
     CREATE INDEX IF NOT EXISTS idx_employees_tenant_site_linked
       ON employees (tenant_id, site_id, linked_employee_id);
