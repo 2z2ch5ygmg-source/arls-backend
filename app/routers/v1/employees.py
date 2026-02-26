@@ -1651,7 +1651,7 @@ def list_employees(
     with conn.cursor() as cur:
         cur.execute(
             f"""
-            SELECT e.id, e.tenant_id, t.tenant_code,
+            SELECT e.id, e.tenant_id, t.tenant_code, t.tenant_name,
                    e.employee_code, e.sequence_no, e.full_name, e.phone,
                    s.site_code, s.site_name, c.company_code,
                    e.management_no_str, e.birth_date, e.address, e.hire_date, e.leave_date,
@@ -1876,7 +1876,14 @@ def create_employee(
         soc_temp_password=_normalize_optional_text(payload.soc_temp_password),
         soc_role=normalized_soc_role,
     )
-    return EmployeeOut(**created)
+    return EmployeeOut(
+        **{
+            **created,
+            "tenant_id": tenant.get("id"),
+            "tenant_code": str(tenant.get("tenant_code") or ""),
+            "tenant_name": str(tenant.get("tenant_name") or ""),
+        }
+    )
 
 
 @router.patch("/{employee_id}", response_model=EmployeeOut)
@@ -2038,6 +2045,9 @@ def update_employee(
 
     return EmployeeOut(
         id=updated["id"],
+        tenant_id=tenant.get("id"),
+        tenant_code=str(tenant.get("tenant_code") or ""),
+        tenant_name=str(tenant.get("tenant_name") or ""),
         employee_code=updated["employee_code"],
         sequence_no=updated.get("sequence_no"),
         full_name=updated["full_name"],

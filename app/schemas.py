@@ -337,6 +337,7 @@ class EmployeeOut(BaseModel):
     id: UUID
     tenant_id: Optional[UUID] = None
     tenant_code: Optional[str] = None
+    tenant_name: Optional[str] = None
     employee_code: str
     management_no_str: Optional[str] = None
     sequence_no: Optional[int] = None
