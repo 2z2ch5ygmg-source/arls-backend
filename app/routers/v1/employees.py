@@ -817,28 +817,34 @@ def _upsert_guard_roster_employee(
         training_cert_no = _normalize_optional_roster_text(item.training_cert_no)
 
         if existing:
+            update_fields = {
+                "company_id": site_relation["company_id"],
+                "site_id": site_relation["site_id"],
+                "employee_code": employee_code,
+                "full_name": full_name,
+                "phone": phone,
+                "birth_date": birth_date,
+                "hire_date": hire_date,
+                "leave_date": leave_date,
+                "address": address,
+                "management_no_str": management_no,
+                "roster_docx_attachment_id": roster_docx_attachment_id or existing.get("roster_docx_attachment_id"),
+                "photo_attachment_id": photo_attachment_id or existing.get("photo_attachment_id"),
+                "guard_training_cert_no": training_cert_no,
+                "note": note,
+                "username": account_username,
+                "password_hash": account_password_hash,
+                "must_change_password": account_must_change_password,
+                "role": account_user_role,
+                "soc_role": normalized_soc_role or existing.get("soc_role"),
+            }
+            update_set_clause = ",\n                    ".join(f"{column} = %s" for column in update_fields)
+            update_values = list(update_fields.values())
+            update_values.append(existing["id"])
             cur.execute(
-                """
+                f"""
                 UPDATE employees
-                SET company_id = %s,
-                    site_id = %s,
-                    employee_code = %s,
-                    full_name = %s,
-                    phone = %s,
-                    birth_date = %s,
-                    hire_date = %s,
-                    leave_date = %s,
-                    address = %s,
-                    management_no_str = %s,
-                    roster_docx_attachment_id = %s,
-                    photo_attachment_id = %s,
-                    guard_training_cert_no = %s,
-                    note = %s,
-                    username = %s,
-                    password_hash = %s,
-                    must_change_password = %s,
-                    role = %s,
-                    soc_role = %s,
+                SET {update_set_clause},
                     updated_at = timezone('utc', now())
                 WHERE id = %s
                 RETURNING id, employee_uuid, employee_code, full_name, phone,
@@ -847,78 +853,53 @@ def _upsert_guard_roster_employee(
                           guard_training_cert_no, note, soc_login_id, soc_role,
                           username, password_hash, must_change_password, role
                 """,
-                (
-                    site_relation["company_id"],
-                    site_relation["site_id"],
-                    employee_code,
-                    full_name,
-                    phone,
-                    birth_date,
-                    hire_date,
-                    leave_date,
-                    address,
-                    management_no,
-                    roster_docx_attachment_id or existing.get("roster_docx_attachment_id"),
-                    photo_attachment_id or existing.get("photo_attachment_id"),
-                    training_cert_no,
-                    note,
-                    account_username,
-                    account_password_hash,
-                    account_must_change_password,
-                    account_user_role,
-                    normalized_soc_role or existing.get("soc_role"),
-                    existing["id"],
-                ),
+                tuple(update_values),
             )
             row = cur.fetchone()
             action = "UPDATED"
         else:
             employee_id = str(uuid.uuid4())
             employee_uuid = str(uuid.uuid4())
+            insert_fields = {
+                "id": employee_id,
+                "employee_uuid": employee_uuid,
+                "tenant_id": tenant_id,
+                "company_id": site_relation["company_id"],
+                "site_id": site_relation["site_id"],
+                "sequence_no": None,
+                "employee_code": employee_code,
+                "full_name": full_name,
+                "phone": phone,
+                "duty_role": "GUARD",
+                "birth_date": birth_date,
+                "hire_date": hire_date,
+                "guard_training_cert_no": training_cert_no,
+                "leave_date": leave_date,
+                "address": address,
+                "management_no_str": management_no,
+                "roster_docx_attachment_id": roster_docx_attachment_id,
+                "photo_attachment_id": photo_attachment_id,
+                "note": note,
+                "soc_login_id": None,
+                "soc_role": normalized_soc_role or "Officer",
+                "username": account_username,
+                "password_hash": account_password_hash,
+                "must_change_password": account_must_change_password,
+                "role": account_user_role,
+            }
+            insert_columns = ", ".join(insert_fields.keys())
+            insert_placeholders = ", ".join(["%s"] * len(insert_fields))
             cur.execute(
-                """
-                INSERT INTO employees (
-                    id, employee_uuid, tenant_id, company_id, site_id, sequence_no, employee_code,
-                    full_name, phone, duty_role, birth_date, hire_date, guard_training_cert_no,
-                    leave_date, address, management_no_str, roster_docx_attachment_id, photo_attachment_id,
-                    note, soc_login_id, soc_role, username, password_hash, must_change_password, role
-                )
-                VALUES (
-                    %s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s
-                )
+                f"""
+                INSERT INTO employees ({insert_columns})
+                VALUES ({insert_placeholders})
                 RETURNING id, employee_uuid, employee_code, full_name, phone,
                           birth_date, hire_date, leave_date, address, management_no_str,
                           roster_docx_attachment_id, photo_attachment_id,
                           guard_training_cert_no, note, soc_login_id, soc_role,
                           username, password_hash, must_change_password, role
                 """,
-                (
-                    employee_id,
-                    employee_uuid,
-                    tenant_id,
-                    site_relation["company_id"],
-                    site_relation["site_id"],
-                    employee_code,
-                    full_name,
-                    phone,
-                    "GUARD",
-                    birth_date,
-                    hire_date,
-                    training_cert_no,
-                    leave_date,
-                    address,
-                    management_no,
-                    roster_docx_attachment_id,
-                    photo_attachment_id,
-                    note,
-                    None,
-                    normalized_soc_role or "Officer",
-                    account_username,
-                    account_password_hash,
-                    account_must_change_password,
-                    account_user_role,
-                ),
+                tuple(insert_fields.values()),
             )
             row = cur.fetchone()
             action = "CREATED"
