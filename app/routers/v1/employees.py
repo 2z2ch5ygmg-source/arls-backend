@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import mimetypes
 import uuid
 from datetime import date
 from typing import Any
@@ -413,9 +414,14 @@ def _post_employee_sync_to_soc(
     phone: str | None,
     user_role: str | None,
     birth_date=None,
+    leave_date=None,
     hire_date=None,
+    address: str | None = None,
     guard_training_cert_no: str | None = None,
+    management_no_str: str | None = None,
     note: str | None = None,
+    roster_docx_attachment_id: str | None = None,
+    photo_attachment_id: str | None = None,
     soc_login_id: str | None = None,
     soc_temp_password: str | None = None,
     soc_role: str | None = None,
@@ -447,6 +453,15 @@ def _post_employee_sync_to_soc(
             "name": str(full_name or "").strip(),
             "phone": phone,
             "role": role_norm,
+            "birthdate": _to_iso_date(birth_date),
+            "address": _normalize_optional_text(address),
+            "training_cert_no": _normalize_optional_text(guard_training_cert_no),
+            "hire_date": _to_iso_date(hire_date),
+            "leave_date": _to_iso_date(leave_date),
+            "management_no_str": _normalize_optional_text(management_no_str),
+            "roster_docx_attachment_id": _normalize_optional_text(roster_docx_attachment_id),
+            "photo_attachment_id": _normalize_optional_text(photo_attachment_id),
+            "note": _normalize_optional_text(note),
         },
     }
     print(
@@ -741,11 +756,14 @@ def _upsert_guard_roster_employee(
     phone = _normalize_optional_roster_text(item.phone)
     address = _normalize_optional_roster_text(item.address)
     note = _normalize_optional_text(address)
+    roster_docx_attachment_id = _normalize_optional_roster_text(item.roster_docx_id)
+    photo_attachment_id = _normalize_optional_roster_text(item.photo_id)
 
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT id, employee_uuid, employee_code, full_name, phone, birth_date, hire_date,
+                   leave_date, address, management_no_str, roster_docx_attachment_id, photo_attachment_id,
                    guard_training_cert_no, note, soc_login_id, soc_role
             FROM employees
             WHERE tenant_id = %s
@@ -758,6 +776,7 @@ def _upsert_guard_roster_employee(
 
         birth_date = _parse_roster_date(item.birthdate)
         hire_date = _parse_roster_date(item.hire_date)
+        leave_date = _parse_roster_date(item.leave_date)
         training_cert_no = _normalize_optional_roster_text(item.training_cert_no)
 
         if existing:
@@ -771,13 +790,20 @@ def _upsert_guard_roster_employee(
                     phone = %s,
                     birth_date = %s,
                     hire_date = %s,
+                    leave_date = %s,
+                    address = %s,
+                    management_no_str = %s,
+                    roster_docx_attachment_id = %s,
+                    photo_attachment_id = %s,
                     guard_training_cert_no = %s,
                     note = %s,
                     soc_role = %s,
                     updated_at = timezone('utc', now())
                 WHERE id = %s
                 RETURNING id, employee_uuid, employee_code, full_name, phone,
-                          birth_date, hire_date, guard_training_cert_no, note, soc_login_id, soc_role
+                          birth_date, hire_date, leave_date, address, management_no_str,
+                          roster_docx_attachment_id, photo_attachment_id,
+                          guard_training_cert_no, note, soc_login_id, soc_role
                 """,
                 (
                     site_relation["company_id"],
@@ -787,6 +813,11 @@ def _upsert_guard_roster_employee(
                     phone,
                     birth_date,
                     hire_date,
+                    leave_date,
+                    address,
+                    management_no,
+                    roster_docx_attachment_id or existing.get("roster_docx_attachment_id"),
+                    photo_attachment_id or existing.get("photo_attachment_id"),
                     training_cert_no,
                     note,
                     normalized_soc_role or existing.get("soc_role"),
@@ -803,11 +834,14 @@ def _upsert_guard_roster_employee(
                 INSERT INTO employees (
                     id, employee_uuid, tenant_id, company_id, site_id, sequence_no, employee_code,
                     full_name, phone, duty_role, birth_date, hire_date, guard_training_cert_no,
+                    leave_date, address, management_no_str, roster_docx_attachment_id, photo_attachment_id,
                     note, soc_login_id, soc_role
                 )
-                VALUES (%s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id, employee_uuid, employee_code, full_name, phone,
-                          birth_date, hire_date, guard_training_cert_no, note, soc_login_id, soc_role
+                          birth_date, hire_date, leave_date, address, management_no_str,
+                          roster_docx_attachment_id, photo_attachment_id,
+                          guard_training_cert_no, note, soc_login_id, soc_role
                 """,
                 (
                     employee_id,
@@ -822,6 +856,11 @@ def _upsert_guard_roster_employee(
                     birth_date,
                     hire_date,
                     training_cert_no,
+                    leave_date,
+                    address,
+                    management_no,
+                    roster_docx_attachment_id,
+                    photo_attachment_id,
                     note,
                     None,
                     normalized_soc_role or "Officer",
@@ -839,9 +878,14 @@ def _upsert_guard_roster_employee(
         phone=row.get("phone"),
         user_role=row.get("soc_role"),
         birth_date=row.get("birth_date"),
+        leave_date=row.get("leave_date"),
         hire_date=row.get("hire_date"),
+        address=row.get("address"),
         guard_training_cert_no=row.get("guard_training_cert_no"),
+        management_no_str=row.get("management_no_str"),
         note=row.get("note"),
+        roster_docx_attachment_id=row.get("roster_docx_attachment_id"),
+        photo_attachment_id=row.get("photo_attachment_id"),
         soc_login_id=row.get("soc_login_id"),
         soc_role=row.get("soc_role"),
     )
@@ -1276,6 +1320,82 @@ def cancel_guard_roster_docx_import(
     }
 
 
+@router.post("/attachments")
+async def upload_employee_attachments(
+    roster_docx: UploadFile | None = File(default=None),
+    photo: UploadFile | None = File(default=None),
+    tenant_code: str | None = Query(default=None, max_length=64),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    actor_role = normalize_role(user["role"])
+    if actor_role not in (ROLE_DEV, ROLE_BRANCH_MANAGER):
+        _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "forbidden")
+
+    tenant = _resolve_target_tenant(conn, user, tenant_code)
+    tenant_id = str(tenant.get("id") or "")
+    uploaded_by = str(user.get("id") or "")
+
+    if roster_docx is None and photo is None:
+        _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "at least one file is required")
+
+    roster_bytes: bytes | None = None
+    roster_filename = ""
+    roster_mime = ""
+    if roster_docx is not None:
+        roster_filename = str(roster_docx.filename or "employee-roster.docx").strip() or "employee-roster.docx"
+        if not roster_filename.lower().endswith(".docx"):
+            _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "roster_docx must be .docx")
+        roster_bytes = await roster_docx.read()
+        if not roster_bytes:
+            _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "roster_docx is empty")
+        roster_mime = str(roster_docx.content_type or "").strip() or "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+    photo_bytes: bytes | None = None
+    photo_filename = ""
+    photo_mime = ""
+    if photo is not None:
+        photo_filename = str(photo.filename or "employee-photo.jpg").strip() or "employee-photo.jpg"
+        photo_bytes = await photo.read()
+        if not photo_bytes:
+            _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "photo is empty")
+        guessed_photo_mime, _ = mimetypes.guess_type(photo_filename)
+        photo_mime = str(photo.content_type or guessed_photo_mime or "image/jpeg").strip() or "image/jpeg"
+
+    file_id = str(uuid.uuid4())
+    file_bytes = roster_bytes or photo_bytes or b""
+    file_name = roster_filename or photo_filename or f"employee-attachment-{file_id}"
+    file_mime = roster_mime or photo_mime or "application/octet-stream"
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO guard_roster_import_files (
+                id, tenant_id, upload_session_id, uploaded_by, filename, mime_type, file_bytes,
+                photo_bytes, photo_mime_type, photo_filename, import_status
+            )
+            VALUES (%s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, 'COMMITTED')
+            """,
+            (
+                file_id,
+                tenant_id,
+                uploaded_by,
+                file_name,
+                file_mime,
+                file_bytes,
+                photo_bytes,
+                photo_mime or None,
+                photo_filename or None,
+            ),
+        )
+
+    return {
+        "success": True,
+        "roster_docx_attachment_id": file_id if roster_bytes else "",
+        "photo_attachment_id": file_id if photo_bytes else "",
+    }
+
+
 @router.get("", response_model=list[EmployeeOut])
 def list_employees(
     site_id: str | None = Query(default=None, max_length=64),
@@ -1349,7 +1469,9 @@ def list_employees(
             SELECT e.id, e.tenant_id, t.tenant_code,
                    e.employee_code, e.sequence_no, e.full_name, e.phone,
                    s.site_code, s.site_name, c.company_code,
-                   e.birth_date, e.hire_date, e.guard_training_cert_no, e.note, e.soc_login_id, e.soc_role,
+                   e.management_no_str, e.birth_date, e.address, e.hire_date, e.leave_date,
+                   e.guard_training_cert_no, e.note, e.roster_docx_attachment_id, e.photo_attachment_id,
+                   e.soc_login_id, e.soc_role,
                    u.id AS user_id, u.role AS user_role
             FROM employees e
             JOIN sites s ON s.id = e.site_id
@@ -1416,27 +1538,51 @@ def create_employee(
             )
 
     normalized_soc_role = _normalize_soc_role(payload.soc_role, required=True)
+    management_no_str = _normalize_optional_text(payload.management_no_str)
+    address_text = _normalize_optional_text(payload.address)
+    training_cert_no = _normalize_optional_text(payload.guard_training_cert_no)
+    note_text = _normalize_optional_text(payload.note)
+    roster_docx_attachment_id = _normalize_optional_text(payload.roster_docx_attachment_id)
+    photo_attachment_id = _normalize_optional_text(payload.photo_attachment_id)
 
     employee_id = uuid.uuid4()
     employee_uuid = str(uuid.uuid4())
     duty_role_value = "GUARD"
     created = None
-    for _ in range(8):
-        next_seq = _reserve_next_employee_sequence(conn, tenant_id, site_id)
-        generated_employee_code = _format_employee_code(resolved_site_code, next_seq)
+    if management_no_str:
+        generated_employee_code = build_employee_code_from_management_no(resolved_site_code, management_no_str)
+        if not generated_employee_code:
+            _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "management_no_str is invalid")
         with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM employees
+                WHERE tenant_id = %s
+                  AND upper(employee_code) = upper(%s)
+                LIMIT 1
+                """,
+                (tenant_id, generated_employee_code),
+            )
+            if cur.fetchone():
+                _raise_api_error(status.HTTP_409_CONFLICT, "EMPLOYEE_CODE_CONFLICT", "employee_code already exists")
+
             cur.execute(
                 """
                 INSERT INTO employees
                     (
-                      id, employee_uuid, tenant_id, company_id, site_id, sequence_no, employee_code, full_name, phone,
-                      duty_role, birth_date, hire_date, guard_training_cert_no, note, soc_login_id, soc_role
+                      id, employee_uuid, tenant_id, company_id, site_id, sequence_no, employee_code, management_no_str,
+                      full_name, phone, duty_role, birth_date, address, hire_date, leave_date,
+                      guard_training_cert_no, note, roster_docx_attachment_id, photo_attachment_id,
+                      soc_login_id, soc_role
                     )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT DO NOTHING
                 RETURNING id, employee_code, sequence_no, full_name, phone, %s AS site_code, %s AS company_code,
                           NULL::uuid AS user_id, NULL::text AS user_role,
-                          birth_date, hire_date, guard_training_cert_no, note, soc_login_id, soc_role
+                          management_no_str, birth_date, address, hire_date, leave_date,
+                          guard_training_cert_no, note, roster_docx_attachment_id, photo_attachment_id,
+                          soc_login_id, soc_role
                 """,
                 (
                     employee_id,
@@ -1444,15 +1590,19 @@ def create_employee(
                     tenant_id,
                     company_id,
                     site_id,
-                    next_seq,
                     generated_employee_code,
+                    management_no_str,
                     payload.full_name,
                     payload.phone,
                     duty_role_value,
                     payload.birth_date,
+                    address_text,
                     payload.hire_date,
-                    _normalize_optional_text(payload.guard_training_cert_no),
-                    _normalize_optional_text(payload.note),
+                    payload.leave_date,
+                    training_cert_no,
+                    note_text,
+                    roster_docx_attachment_id,
+                    photo_attachment_id,
                     _normalize_optional_text(payload.soc_login_id),
                     normalized_soc_role,
                     resolved_site_code,
@@ -1460,9 +1610,58 @@ def create_employee(
                 ),
             )
             created = cur.fetchone()
-        if created:
-            break
-        employee_id = uuid.uuid4()
+    else:
+        for _ in range(8):
+            next_seq = _reserve_next_employee_sequence(conn, tenant_id, site_id)
+            generated_employee_code = _format_employee_code(resolved_site_code, next_seq)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO employees
+                        (
+                          id, employee_uuid, tenant_id, company_id, site_id, sequence_no, employee_code, management_no_str,
+                          full_name, phone, duty_role, birth_date, address, hire_date, leave_date,
+                          guard_training_cert_no, note, roster_docx_attachment_id, photo_attachment_id,
+                          soc_login_id, soc_role
+                        )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                    RETURNING id, employee_code, sequence_no, full_name, phone, %s AS site_code, %s AS company_code,
+                              NULL::uuid AS user_id, NULL::text AS user_role,
+                              management_no_str, birth_date, address, hire_date, leave_date,
+                              guard_training_cert_no, note, roster_docx_attachment_id, photo_attachment_id,
+                              soc_login_id, soc_role
+                    """,
+                    (
+                        employee_id,
+                        employee_uuid,
+                        tenant_id,
+                        company_id,
+                        site_id,
+                        next_seq,
+                        generated_employee_code,
+                        None,
+                        payload.full_name,
+                        payload.phone,
+                        duty_role_value,
+                        payload.birth_date,
+                        address_text,
+                        payload.hire_date,
+                        payload.leave_date,
+                        training_cert_no,
+                        note_text,
+                        roster_docx_attachment_id,
+                        photo_attachment_id,
+                        _normalize_optional_text(payload.soc_login_id),
+                        normalized_soc_role,
+                        resolved_site_code,
+                        resolved_company_code,
+                    ),
+                )
+                created = cur.fetchone()
+            if created:
+                break
+            employee_id = uuid.uuid4()
 
     if not created:
         _raise_api_error(
@@ -1479,9 +1678,14 @@ def create_employee(
         phone=created.get("phone"),
         user_role=created.get("user_role"),
         birth_date=created.get("birth_date"),
+        leave_date=created.get("leave_date"),
         hire_date=created.get("hire_date"),
+        address=created.get("address"),
         guard_training_cert_no=created.get("guard_training_cert_no"),
+        management_no_str=created.get("management_no_str"),
         note=created.get("note"),
+        roster_docx_attachment_id=created.get("roster_docx_attachment_id"),
+        photo_attachment_id=created.get("photo_attachment_id"),
         soc_login_id=created.get("soc_login_id"),
         soc_temp_password=_normalize_optional_text(payload.soc_temp_password),
         soc_role=normalized_soc_role,
@@ -1509,7 +1713,9 @@ def update_employee(
         cur.execute(
             """
             SELECT id, employee_code, sequence_no, full_name, phone, site_id,
-                   birth_date, hire_date, guard_training_cert_no, note, soc_login_id, soc_role
+                   management_no_str, birth_date, address, hire_date, leave_date,
+                   guard_training_cert_no, note, roster_docx_attachment_id, photo_attachment_id,
+                   soc_login_id, soc_role
             FROM employees
             WHERE id = %s
               AND tenant_id = %s
@@ -1525,48 +1731,110 @@ def update_employee(
 
         cur.execute(
             """
-            UPDATE employees
-            SET full_name = %s,
-                phone = %s,
-                birth_date = %s,
-                hire_date = %s,
-                guard_training_cert_no = %s,
-                note = %s,
-                soc_login_id = %s,
-                soc_role = %s
-            WHERE id = %s
-              AND tenant_id = %s
-            RETURNING id, employee_code, sequence_no, full_name, phone, site_id,
-                      birth_date, hire_date, guard_training_cert_no, note, soc_login_id, soc_role
-            """,
-            (
-                payload.full_name,
-                payload.phone,
-                payload.birth_date,
-                payload.hire_date,
-                _normalize_optional_text(payload.guard_training_cert_no),
-                _normalize_optional_text(payload.note),
-                _normalize_optional_text(payload.soc_login_id),
-                normalized_soc_role,
-                str(employee_id),
-                tenant_id,
-            ),
-        )
-        updated = cur.fetchone()
-
-        cur.execute(
-            """
             SELECT s.site_code, c.company_code
             FROM sites s
             JOIN companies c ON c.id = s.company_id
             WHERE s.id = %s
             LIMIT 1
             """,
-            (updated["site_id"],),
+            (current["site_id"],),
         )
         site_company = cur.fetchone()
         if not site_company:
             _raise_api_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "INTERNAL", "site/company not found")
+
+        management_no_value = _normalize_optional_text(payload.management_no_str)
+        resolved_management_no = management_no_value or _normalize_optional_text(current.get("management_no_str"))
+        next_employee_code = str(current.get("employee_code") or "").strip()
+        if management_no_value:
+            next_employee_code = build_employee_code_from_management_no(site_company["site_code"], management_no_value)
+            if not next_employee_code:
+                _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "management_no_str is invalid")
+            cur.execute(
+                """
+                SELECT 1
+                FROM employees
+                WHERE tenant_id = %s
+                  AND id <> %s
+                  AND upper(employee_code) = upper(%s)
+                LIMIT 1
+                """,
+                (tenant_id, str(employee_id), next_employee_code),
+            )
+            if cur.fetchone():
+                _raise_api_error(status.HTTP_409_CONFLICT, "EMPLOYEE_CODE_CONFLICT", "employee_code already exists")
+
+        resolved_address = (
+            _normalize_optional_text(payload.address)
+            if payload.address is not None
+            else _normalize_optional_text(current.get("address"))
+        )
+        resolved_leave_date = payload.leave_date if payload.leave_date is not None else current.get("leave_date")
+        resolved_training_cert_no = (
+            _normalize_optional_text(payload.guard_training_cert_no)
+            if payload.guard_training_cert_no is not None
+            else _normalize_optional_text(current.get("guard_training_cert_no"))
+        )
+        resolved_note = _normalize_optional_text(payload.note) if payload.note is not None else _normalize_optional_text(current.get("note"))
+        resolved_soc_login_id = (
+            _normalize_optional_text(payload.soc_login_id)
+            if payload.soc_login_id is not None
+            else _normalize_optional_text(current.get("soc_login_id"))
+        )
+        resolved_roster_docx_attachment_id = (
+            _normalize_optional_text(payload.roster_docx_attachment_id)
+            if payload.roster_docx_attachment_id is not None
+            else _normalize_optional_text(current.get("roster_docx_attachment_id"))
+        )
+        resolved_photo_attachment_id = (
+            _normalize_optional_text(payload.photo_attachment_id)
+            if payload.photo_attachment_id is not None
+            else _normalize_optional_text(current.get("photo_attachment_id"))
+        )
+
+        cur.execute(
+            """
+            UPDATE employees
+            SET employee_code = %s,
+                management_no_str = %s,
+                full_name = %s,
+                phone = %s,
+                birth_date = %s,
+                address = %s,
+                hire_date = %s,
+                leave_date = %s,
+                guard_training_cert_no = %s,
+                note = %s,
+                roster_docx_attachment_id = %s,
+                photo_attachment_id = %s,
+                soc_login_id = %s,
+                soc_role = %s
+            WHERE id = %s
+              AND tenant_id = %s
+            RETURNING id, employee_code, sequence_no, full_name, phone, site_id, management_no_str,
+                      birth_date, address, hire_date, leave_date, guard_training_cert_no, note,
+                      roster_docx_attachment_id, photo_attachment_id, soc_login_id, soc_role
+            """,
+            (
+                next_employee_code,
+                resolved_management_no,
+                payload.full_name,
+                payload.phone,
+                payload.birth_date,
+                resolved_address,
+                payload.hire_date,
+                resolved_leave_date,
+                resolved_training_cert_no,
+                resolved_note,
+                resolved_roster_docx_attachment_id,
+                resolved_photo_attachment_id,
+                resolved_soc_login_id,
+                normalized_soc_role,
+                str(employee_id),
+                tenant_id,
+            ),
+        )
+        updated = cur.fetchone()
 
         cur.execute(
             """
@@ -1592,10 +1860,15 @@ def update_employee(
         company_code=site_company["company_code"],
         user_id=user_row["id"] if user_row else None,
         user_role=normalize_user_role(user_row["role"]) if user_row and user_row.get("role") else None,
+        management_no_str=updated.get("management_no_str"),
         birth_date=updated.get("birth_date"),
+        address=updated.get("address"),
         hire_date=updated.get("hire_date"),
+        leave_date=updated.get("leave_date"),
         guard_training_cert_no=updated.get("guard_training_cert_no"),
         note=updated.get("note"),
+        roster_docx_attachment_id=updated.get("roster_docx_attachment_id"),
+        photo_attachment_id=updated.get("photo_attachment_id"),
         soc_login_id=updated.get("soc_login_id"),
         soc_role=updated.get("soc_role"),
     )

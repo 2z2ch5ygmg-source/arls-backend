@@ -272,12 +272,29 @@ class EmployeeCreate(BaseModel):
     site_code: Optional[str] = Field(default=None, min_length=1)
     # 직원 코드는 서버에서 <site_code>-NNN 형식으로 자동 생성한다.
     employee_code: Optional[str] = Field(default=None, min_length=1)
+    management_no_str: Optional[str] = Field(default=None, max_length=64)
     full_name: str = Field(min_length=1)
     phone: Optional[str] = None
-    birth_date: Optional[date] = None
+    birth_date: Optional[date] = Field(default=None, validation_alias=AliasChoices("birth_date", "birthdate"))
+    address: Optional[str] = Field(default=None, max_length=255)
     hire_date: Optional[date] = None
-    guard_training_cert_no: Optional[str] = Field(default=None, max_length=120)
+    leave_date: Optional[date] = Field(default=None, validation_alias=AliasChoices("leave_date", "leaveDate"))
+    guard_training_cert_no: Optional[str] = Field(
+        default=None,
+        max_length=120,
+        validation_alias=AliasChoices("guard_training_cert_no", "training_cert_no"),
+    )
     note: Optional[str] = Field(default=None, max_length=1000)
+    roster_docx_attachment_id: Optional[str] = Field(
+        default=None,
+        max_length=64,
+        validation_alias=AliasChoices("roster_docx_attachment_id", "roster_docx_id"),
+    )
+    photo_attachment_id: Optional[str] = Field(
+        default=None,
+        max_length=64,
+        validation_alias=AliasChoices("photo_attachment_id", "photo_id"),
+    )
     soc_login_id: Optional[str] = Field(default=None, max_length=120)
     soc_temp_password: Optional[str] = Field(default=None, max_length=120)
     soc_role: Optional[str] = Field(default=None, max_length=64)
@@ -286,10 +303,14 @@ class EmployeeCreate(BaseModel):
         "company_code",
         "site_code",
         "employee_code",
+        "management_no_str",
         "full_name",
         "phone",
+        "address",
         "guard_training_cert_no",
         "note",
+        "roster_docx_attachment_id",
+        "photo_attachment_id",
         "soc_login_id",
         "soc_temp_password",
         "soc_role",
@@ -313,6 +334,7 @@ class EmployeeOut(BaseModel):
     tenant_id: Optional[UUID] = None
     tenant_code: Optional[str] = None
     employee_code: str
+    management_no_str: Optional[str] = None
     sequence_no: Optional[int] = None
     full_name: str
     phone: Optional[str]
@@ -322,24 +344,56 @@ class EmployeeOut(BaseModel):
     user_id: Optional[UUID] = None
     user_role: Optional[str] = None
     birth_date: Optional[date] = None
+    address: Optional[str] = None
     hire_date: Optional[date] = None
+    leave_date: Optional[date] = None
     guard_training_cert_no: Optional[str] = None
     note: Optional[str] = None
+    roster_docx_attachment_id: Optional[str] = None
+    photo_attachment_id: Optional[str] = None
     soc_login_id: Optional[str] = None
     soc_role: Optional[str] = None
 
 
 class EmployeeUpdate(BaseModel):
     full_name: str = Field(min_length=1)
+    management_no_str: Optional[str] = Field(default=None, max_length=64)
     phone: Optional[str] = None
-    birth_date: Optional[date] = None
+    birth_date: Optional[date] = Field(default=None, validation_alias=AliasChoices("birth_date", "birthdate"))
+    address: Optional[str] = Field(default=None, max_length=255)
     hire_date: Optional[date] = None
-    guard_training_cert_no: Optional[str] = Field(default=None, max_length=120)
+    leave_date: Optional[date] = Field(default=None, validation_alias=AliasChoices("leave_date", "leaveDate"))
+    guard_training_cert_no: Optional[str] = Field(
+        default=None,
+        max_length=120,
+        validation_alias=AliasChoices("guard_training_cert_no", "training_cert_no"),
+    )
     note: Optional[str] = Field(default=None, max_length=1000)
+    roster_docx_attachment_id: Optional[str] = Field(
+        default=None,
+        max_length=64,
+        validation_alias=AliasChoices("roster_docx_attachment_id", "roster_docx_id"),
+    )
+    photo_attachment_id: Optional[str] = Field(
+        default=None,
+        max_length=64,
+        validation_alias=AliasChoices("photo_attachment_id", "photo_id"),
+    )
     soc_login_id: Optional[str] = Field(default=None, max_length=120)
     soc_role: Optional[str] = Field(default=None, max_length=64)
 
-    @field_validator("full_name", "phone", "guard_training_cert_no", "note", "soc_login_id", "soc_role")
+    @field_validator(
+        "full_name",
+        "management_no_str",
+        "phone",
+        "address",
+        "guard_training_cert_no",
+        "note",
+        "roster_docx_attachment_id",
+        "photo_attachment_id",
+        "soc_login_id",
+        "soc_role",
+    )
     @classmethod
     def _trimmed(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
