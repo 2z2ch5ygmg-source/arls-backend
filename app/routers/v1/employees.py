@@ -172,50 +172,19 @@ def _fetch_tenant_sites_for_roster_match(conn, tenant_id: str) -> tuple[list[dic
         indexed_rows = []
     index_total_sites = len(indexed_rows)
 
-    if indexed_rows:
-        normalized_rows: list[dict[str, Any]] = []
-        for row in indexed_rows:
-            site_id = str(row.get("site_id") or "").strip()
-            if not site_id:
-                continue
-            address_text = str(row.get("address_text") or "").strip()
-            normalized_rows.append(
-                {
-                    "site_id": site_id,
-                    "site_code": site_id,
-                    "site_name": str(row.get("site_name") or "").strip(),
-                    "address_text": address_text,
-                    "address_norm": str(row.get("address_norm") or "").strip() or normalize_address_text(address_text),
-                }
-            )
-        if normalized_rows:
-            return normalized_rows, index_total_sites
-
-    # fallback: 인덱스가 아직 없으면 기존 sites를 기반으로 즉시 매칭
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT s.id, s.site_code, s.site_name, COALESCE(s.address, '') AS address
-            FROM sites s
-            WHERE s.tenant_id = %s
-            ORDER BY s.site_code
-            """,
-            (tenant_id,),
-        )
-        rows = list(cur.fetchall() or [])
     normalized_rows: list[dict[str, Any]] = []
-    for row in rows:
-        site_code = str(row.get("site_code") or "").strip()
-        if not site_code:
+    for row in indexed_rows:
+        site_id = str(row.get("site_id") or "").strip()
+        if not site_id:
             continue
-        address_text = str(row.get("address") or "").strip()
+        address_text = str(row.get("address_text") or "").strip()
         normalized_rows.append(
             {
-                "site_id": site_code,
-                "site_code": site_code,
+                "site_id": site_id,
+                "site_code": site_id,
                 "site_name": str(row.get("site_name") or "").strip(),
                 "address_text": address_text,
-                "address_norm": normalize_address_text(address_text),
+                "address_norm": str(row.get("address_norm") or "").strip() or normalize_address_text(address_text),
             }
         )
     return normalized_rows, index_total_sites
@@ -926,12 +895,17 @@ async def import_guard_roster_docx(
                 {
                     "filename": filename,
                     "parsed": {},
-                    "match": {"site_code": "", "site_name": "", "confidence": 0, "candidates": []},
+                    "match": {"site_code": "", "site_name": "", "confidence": 0, "candidates": [], "status": "INVALID_FILE"},
                     "generated": {"employee_code": ""},
                     "attachments": {"roster_docx_id": "", "photo_id": ""},
                     "status": "INVALID_FILE",
                     "message": "docx 파일만 업로드할 수 있습니다.",
-                    "debug": {"query_norm": "", "index_total_sites": index_total_sites, "match_reason": "INVALID_FILE"},
+                    "debug": {
+                        "query_text_raw": "",
+                        "query_norm": "",
+                        "index_total_sites": index_total_sites,
+                        "match_reason": "INVALID_FILE",
+                    },
                 }
             )
             continue
@@ -942,12 +916,17 @@ async def import_guard_roster_docx(
                 {
                     "filename": filename,
                     "parsed": {},
-                    "match": {"site_code": "", "site_name": "", "confidence": 0, "candidates": []},
+                    "match": {"site_code": "", "site_name": "", "confidence": 0, "candidates": [], "status": "INVALID_FILE"},
                     "generated": {"employee_code": ""},
                     "attachments": {"roster_docx_id": "", "photo_id": ""},
                     "status": "INVALID_FILE",
                     "message": "빈 파일입니다.",
-                    "debug": {"query_norm": "", "index_total_sites": index_total_sites, "match_reason": "INVALID_FILE"},
+                    "debug": {
+                        "query_text_raw": "",
+                        "query_norm": "",
+                        "index_total_sites": index_total_sites,
+                        "match_reason": "INVALID_FILE",
+                    },
                 }
             )
             continue
@@ -959,12 +938,13 @@ async def import_guard_roster_docx(
                 {
                     "filename": filename,
                     "parsed": {},
-                    "match": {"site_code": "", "site_name": "", "confidence": 0, "candidates": []},
+                    "match": {"site_code": "", "site_name": "", "confidence": 0, "candidates": [], "status": "PARSE_FAILED"},
                     "generated": {"employee_code": ""},
                     "attachments": {"roster_docx_id": "", "photo_id": ""},
                     "status": "PARSE_FAILED",
                     "message": f"문서 파싱 실패: {str(exc)}",
                     "debug": {
+                        "query_text_raw": "",
                         "query_norm": "",
                         "index_total_sites": index_total_sites,
                         "match_reason": "PARSER_EXCEPTION",
@@ -973,10 +953,11 @@ async def import_guard_roster_docx(
             )
             continue
 
-        parsed_address = str(parsed.get("address") or "").strip()
-        parsed_placement = str(parsed.get("placement_text") or "").strip()
-        query_norm = normalize_address_text(parsed_address) or normalize_address_text(parsed_placement)
-        parse_failed = not parsed_address and not parsed_placement
+        parsed_address_raw = str(parsed.get("address") or "").strip()
+        parsed_placement_raw = str(parsed.get("placement_text") or "").strip()
+        query_text_raw = " ".join([part for part in [parsed_placement_raw, parsed_address_raw] if part]).strip()
+        query_norm = normalize_address_text(parsed_address_raw) or normalize_address_text(parsed_placement_raw)
+        parse_failed = not parsed_address_raw and not parsed_placement_raw
         if parse_failed:
             match_result = {
                 "site_code": "",
@@ -987,14 +968,38 @@ async def import_guard_roster_docx(
                 "query_norm": "",
                 "match_reason": "PARSE_FAILED",
             }
+        elif index_total_sites <= 0:
+            match_result = {
+                "site_code": "",
+                "site_name": "",
+                "confidence": 0.0,
+                "candidates": [],
+                "status": "INDEX_EMPTY",
+                "query_norm": query_norm,
+                "match_reason": "INDEX_EMPTY",
+            }
         else:
             match_result = match_site_candidates(
-                placement_text=parsed_placement,
-                address_text=parsed_address,
+                placement_text=parsed_placement_raw,
+                address_text=parsed_address_raw,
                 sites=tenant_sites,
                 threshold=GUARD_ROSTER_IMPORT_SITE_MATCH_THRESHOLD,
                 top_n=3,
             )
+        match_reason = str(match_result.get("match_reason") or "").strip().upper()
+        if parse_failed:
+            item_status = "PARSE_FAILED"
+            item_message = "DOCX에서 주소/배치지 추출 실패"
+        elif match_reason == "INDEX_EMPTY" or str(match_result.get("status") or "").strip().upper() == "INDEX_EMPTY":
+            item_status = "INDEX_EMPTY"
+            item_message = "지점 인덱스가 비어있음(지점 등록/인덱스 재생성 필요)"
+        elif str(match_result.get("status") or "").strip().upper() == "READY":
+            item_status = "READY"
+            item_message = "자동 매칭 성공"
+        else:
+            item_status = "NEEDS_SITE_PICK"
+            item_message = "자동매칭 점수 부족(수동 선택 필요)"
+
         management_no_str = str(parsed.get("management_no_str") or parsed.get("management_no") or "")
         generated_code = build_employee_code_from_management_no(
             str(match_result.get("site_code") or ""),
@@ -1022,8 +1027,10 @@ async def import_guard_roster_docx(
                     "name": str(parsed.get("name") or ""),
                     "birthdate": str(parsed.get("birthdate") or ""),
                     "phone": str(parsed.get("phone") or ""),
-                    "address": str(parsed.get("address") or ""),
-                    "placement_text": str(parsed.get("placement_text") or ""),
+                    "address": parsed_address_raw,
+                    "address_raw": parsed_address_raw,
+                    "placement_text": parsed_placement_raw,
+                    "placement_text_raw": parsed_placement_raw,
                     "training_cert_no": str(parsed.get("training_cert_no") or ""),
                     "hire_date": str(parsed.get("hire_date") or ""),
                     "leave_date": str(parsed.get("leave_date") or ""),
@@ -1031,6 +1038,8 @@ async def import_guard_roster_docx(
                 "match": {
                     "site_code": str(match_result.get("site_code") or ""),
                     "site_name": str(match_result.get("site_name") or ""),
+                    "status": item_status,
+                    "reason": match_reason or ("PARSE_FAILED" if parse_failed else "UNKNOWN"),
                     "confidence": float(match_result.get("confidence") or 0),
                     "candidates": list(match_result.get("candidates") or []),
                 },
@@ -1039,24 +1048,13 @@ async def import_guard_roster_docx(
                     "roster_docx_id": attachment_id,
                     "photo_id": attachment_id if photo_bytes else "",
                 },
-                "status": "PARSE_FAILED" if parse_failed else str(match_result.get("status") or "NEEDS_SITE_PICK"),
+                "status": item_status,
                 "debug": {
+                    "query_text_raw": query_text_raw,
                     "query_norm": str(match_result.get("query_norm") or query_norm or ""),
                     "index_total_sites": index_total_sites,
-                    "match_reason": str(
-                        match_result.get("match_reason")
-                        or ("PARSE_FAILED" if parse_failed else "")
-                        or "UNKNOWN"
-                    ),
-                    "message": (
-                        "문서에서 주소/배치지 추출 실패"
-                        if parse_failed
-                        else (
-                            "지점 인덱스 없음(지점 먼저 등록/인덱스 재생성)"
-                            if index_total_sites <= 0
-                            else ""
-                        )
-                    ),
+                    "match_reason": match_reason or ("PARSE_FAILED" if parse_failed else "UNKNOWN"),
+                    "message": item_message,
                 },
                 "tenant_id": tenant_code_norm,
             }
