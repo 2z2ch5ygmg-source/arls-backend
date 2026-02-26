@@ -3,6 +3,7 @@ uvicorn[standard]==0.30.*
 psycopg[binary]==3.2.13
 psycopg-pool==3.2.8
 python-jose[cryptography]==3.3.0
+# Keep passlib+bcrypt pinned for stable password hash verification in production.
 passlib[bcrypt]==1.7.4
 pydantic==2.8.2
 python-multipart==0.0.9
