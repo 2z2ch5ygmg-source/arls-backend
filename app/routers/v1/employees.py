@@ -1844,6 +1844,7 @@ def create_employee(
                 conn, tenant_id, payload.company_code, payload.site_code
             )
 
+    full_name_text = str(payload.full_name or "").strip()
     normalized_soc_role = _normalize_soc_role(payload.soc_role, required=True)
     management_no_str = _normalize_optional_text(payload.management_no_str)
     address_text = _normalize_optional_text(payload.address)
@@ -1851,6 +1852,41 @@ def create_employee(
     note_text = _normalize_optional_text(payload.note)
     roster_docx_attachment_id = _normalize_optional_text(payload.roster_docx_attachment_id)
     photo_attachment_id = _normalize_optional_text(payload.photo_attachment_id)
+    normalized_phone_credential = normalize_auth_identifier(payload.phone)
+
+    validation_fields: dict[str, str] = {}
+    if not full_name_text:
+        validation_fields["full_name"] = "required"
+    if not management_no_str:
+        validation_fields["management_no_str"] = "required"
+    if not payload.phone or not normalized_phone_credential:
+        validation_fields["phone"] = "required"
+    if payload.birth_date is None:
+        validation_fields["birth_date"] = "required"
+    if payload.hire_date is None:
+        validation_fields["hire_date"] = "required"
+    if not address_text:
+        validation_fields["address"] = "required"
+    if not training_cert_no:
+        validation_fields["guard_training_cert_no"] = "required"
+    if not normalized_soc_role:
+        validation_fields["soc_role"] = "required"
+    if validation_fields:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error": "VALIDATION_ERROR",
+                "message": "입력값을 확인해주세요.",
+                "fields": validation_fields,
+            },
+        )
+
+    account_username = normalized_phone_credential
+    account_initial_password = normalized_phone_credential
+    account_password_hash = hash_password(account_initial_password)
+    account_user_role = normalize_user_role(normalized_soc_role)
+    account_must_change_password = True
+    resolved_soc_login_id = account_username
 
     employee_id = uuid.uuid4()
     employee_uuid = str(uuid.uuid4())
@@ -1899,7 +1935,7 @@ def create_employee(
                     site_id,
                     generated_employee_code,
                     management_no_str,
-                    payload.full_name,
+                    full_name_text,
                     payload.phone,
                     duty_role_value,
                     payload.birth_date,
@@ -1910,7 +1946,7 @@ def create_employee(
                     note_text,
                     roster_docx_attachment_id,
                     photo_attachment_id,
-                    _normalize_optional_text(payload.soc_login_id),
+                    resolved_soc_login_id,
                     normalized_soc_role,
                     resolved_site_code,
                     resolved_company_code,
@@ -1947,8 +1983,8 @@ def create_employee(
                         site_id,
                         next_seq,
                         generated_employee_code,
-                        None,
-                        payload.full_name,
+                        management_no_str,
+                        full_name_text,
                         payload.phone,
                         duty_role_value,
                         payload.birth_date,
@@ -1959,7 +1995,7 @@ def create_employee(
                         note_text,
                         roster_docx_attachment_id,
                         photo_attachment_id,
-                        _normalize_optional_text(payload.soc_login_id),
+                        resolved_soc_login_id,
                         normalized_soc_role,
                         resolved_site_code,
                         resolved_company_code,
@@ -1976,31 +2012,180 @@ def create_employee(
             "EMPLOYEE_CODE_CONFLICT",
             "failed to allocate employee_code",
         )
+
+    user_has_must_change_password = _table_column_exists(conn, "arls_users", "must_change_password")
+    created_employee_id = str(created.get("id") or "")
+    target_user_id = ""
+    with conn.cursor() as cur:
+        exec_checked(
+            cur,
+            """
+            SELECT id, employee_id
+            FROM arls_users
+            WHERE tenant_id = %s
+              AND lower(username) = lower(%s)
+              AND COALESCE(is_deleted, FALSE) = FALSE
+            LIMIT 1
+            """,
+            (tenant_id, account_username),
+            stage="employees.create.users_lookup_by_username",
+        )
+        username_owner = cur.fetchone()
+        if username_owner and str(username_owner.get("employee_id") or "") not in {"", created_employee_id}:
+            _raise_api_error(status.HTTP_409_CONFLICT, "USERNAME_EXISTS", "username already exists in tenant")
+
+        exec_checked(
+            cur,
+            """
+            SELECT id
+            FROM arls_users
+            WHERE tenant_id = %s
+              AND employee_id = %s
+              AND COALESCE(is_deleted, FALSE) = FALSE
+            LIMIT 1
+            """,
+            (tenant_id, created_employee_id),
+            stage="employees.create.users_lookup_by_employee",
+        )
+        existing_user = cur.fetchone()
+        if existing_user:
+            target_user_id = str(existing_user.get("id") or "")
+        elif username_owner and str(username_owner.get("employee_id") or "") == created_employee_id:
+            target_user_id = str(username_owner.get("id") or "")
+
+        if target_user_id:
+            if user_has_must_change_password:
+                exec_checked(
+                    cur,
+                    """
+                    UPDATE arls_users
+                    SET username = %s,
+                        password_hash = %s,
+                        full_name = %s,
+                        role = %s,
+                        employee_id = %s,
+                        site_id = %s,
+                        is_active = TRUE,
+                        must_change_password = %s,
+                        updated_at = timezone('utc', now())
+                    WHERE id = %s
+                    """,
+                    (
+                        account_username,
+                        account_password_hash,
+                        full_name_text,
+                        account_user_role,
+                        created_employee_id,
+                        site_id,
+                        account_must_change_password,
+                        target_user_id,
+                    ),
+                    stage="employees.create.users_update_with_must_change",
+                )
+            else:
+                exec_checked(
+                    cur,
+                    """
+                    UPDATE arls_users
+                    SET username = %s,
+                        password_hash = %s,
+                        full_name = %s,
+                        role = %s,
+                        employee_id = %s,
+                        site_id = %s,
+                        is_active = TRUE,
+                        updated_at = timezone('utc', now())
+                    WHERE id = %s
+                    """,
+                    (
+                        account_username,
+                        account_password_hash,
+                        full_name_text,
+                        account_user_role,
+                        created_employee_id,
+                        site_id,
+                        target_user_id,
+                    ),
+                    stage="employees.create.users_update_without_must_change",
+                )
+        else:
+            new_user_id = str(uuid.uuid4())
+            if user_has_must_change_password:
+                exec_checked(
+                    cur,
+                    """
+                    INSERT INTO arls_users (
+                        id, tenant_id, username, password_hash, full_name, role, is_active,
+                        employee_id, site_id, must_change_password, created_at, updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s, %s, %s, timezone('utc', now()), timezone('utc', now()))
+                    """,
+                    (
+                        new_user_id,
+                        tenant_id,
+                        account_username,
+                        account_password_hash,
+                        full_name_text,
+                        account_user_role,
+                        created_employee_id,
+                        site_id,
+                        account_must_change_password,
+                    ),
+                    stage="employees.create.users_insert_with_must_change",
+                )
+            else:
+                exec_checked(
+                    cur,
+                    """
+                    INSERT INTO arls_users (
+                        id, tenant_id, username, password_hash, full_name, role, is_active,
+                        employee_id, site_id, created_at, updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s, %s, timezone('utc', now()), timezone('utc', now()))
+                    """,
+                    (
+                        new_user_id,
+                        tenant_id,
+                        account_username,
+                        account_password_hash,
+                        full_name_text,
+                        account_user_role,
+                        created_employee_id,
+                        site_id,
+                    ),
+                    stage="employees.create.users_insert_without_must_change",
+                )
+
+    created_payload = {
+        **created,
+        "user_role": account_user_role,
+        "soc_login_id": resolved_soc_login_id,
+    }
     _post_employee_sync_to_soc(
         tenant_code=str(tenant.get("tenant_code") or ""),
         site_code=resolved_site_code,
         employee_uuid=employee_uuid,
-        employee_code=str(created.get("employee_code") or ""),
-        full_name=str(created.get("full_name") or payload.full_name or ""),
-        phone=created.get("phone"),
-        username=created.get("soc_login_id") or _normalize_optional_text(payload.soc_login_id),
-        user_role=created.get("user_role"),
-        birth_date=created.get("birth_date"),
-        leave_date=created.get("leave_date"),
-        hire_date=created.get("hire_date"),
-        address=created.get("address"),
-        guard_training_cert_no=created.get("guard_training_cert_no"),
-        management_no_str=created.get("management_no_str"),
-        note=created.get("note"),
-        roster_docx_attachment_id=created.get("roster_docx_attachment_id"),
-        photo_attachment_id=created.get("photo_attachment_id"),
-        soc_login_id=created.get("soc_login_id"),
-        soc_temp_password=_normalize_optional_text(payload.soc_temp_password),
+        employee_code=str(created_payload.get("employee_code") or ""),
+        full_name=str(created_payload.get("full_name") or full_name_text or ""),
+        phone=created_payload.get("phone"),
+        username=account_username,
+        user_role=created_payload.get("user_role"),
+        birth_date=created_payload.get("birth_date"),
+        leave_date=created_payload.get("leave_date"),
+        hire_date=created_payload.get("hire_date"),
+        address=created_payload.get("address"),
+        guard_training_cert_no=created_payload.get("guard_training_cert_no"),
+        management_no_str=created_payload.get("management_no_str"),
+        note=created_payload.get("note"),
+        roster_docx_attachment_id=created_payload.get("roster_docx_attachment_id"),
+        photo_attachment_id=created_payload.get("photo_attachment_id"),
+        soc_login_id=resolved_soc_login_id,
+        soc_temp_password=account_initial_password,
         soc_role=normalized_soc_role,
     )
     return EmployeeOut(
         **{
-            **created,
+            **created_payload,
             "tenant_id": tenant.get("id"),
             "tenant_code": str(tenant.get("tenant_code") or ""),
             "tenant_name": str(tenant.get("tenant_name") or ""),
