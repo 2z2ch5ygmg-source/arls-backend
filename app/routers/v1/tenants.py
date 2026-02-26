@@ -5,11 +5,12 @@ import logging
 import re
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
 from psycopg import errors as pg_errors
 
 from ...deps import get_db_conn, get_current_user, apply_rate_limit
-from ...schemas import TenantCreate, TenantOut, TenantUpdate
+from ...schemas import TenantCreate, TenantOut, TenantProfileOut, TenantProfileUpdate, TenantUpdate
 from ...utils.permissions import (
     ROLE_BRANCH_MANAGER,
     ROLE_DEVELOPER,
@@ -27,6 +28,9 @@ from ...utils.tenant_context import (
 
 router = APIRouter(prefix="/tenants", tags=["tenants"], dependencies=[Depends(apply_rate_limit)])
 logger = logging.getLogger(__name__)
+_ALLOWED_SEAL_IMAGE_MIME_TYPES = {"image/png", "image/jpeg", "image/jpg"}
+_ALLOWED_SEAL_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
+_MAX_SEAL_IMAGE_BYTES = 2 * 1024 * 1024
 
 
 def _normalize_tenant_code(value: str | None) -> str:
@@ -76,6 +80,67 @@ def _release_deleted_tenant_code(conn, tenant_code: str) -> int:
         )
         rows = cur.fetchall()
     return len(rows)
+
+
+def _normalize_profile_text(value: str | None, *, max_length: int = 255) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    if not normalized:
+        return None
+    return normalized[:max_length]
+
+
+def _get_tenant_or_404(conn, tenant_id: uuid.UUID):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, tenant_code, tenant_name,
+                   COALESCE(is_active, TRUE) AS is_active,
+                   COALESCE(is_deleted, FALSE) AS is_deleted
+            FROM tenants
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (tenant_id,),
+        )
+        row = cur.fetchone()
+    if not row or bool(row.get("is_deleted")):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "TENANT_NOT_FOUND", "message": "회사를 찾을 수 없습니다."},
+        )
+    return row
+
+
+def _assert_tenant_profile_access(user: dict, tenant_row: dict) -> None:
+    actor_role = normalize_role(user.get("role"))
+    if actor_role == ROLE_DEV:
+        return
+    if actor_role != ROLE_BRANCH_MANAGER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "FORBIDDEN", "message": "접근 권한이 없습니다."},
+        )
+    if str(user.get("tenant_id") or "") != str(tenant_row.get("id") or ""):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "FORBIDDEN", "message": "본인 회사 정보만 수정할 수 있습니다."},
+        )
+
+
+def _build_tenant_profile_out(tenant_id: uuid.UUID, row: dict | None = None) -> TenantProfileOut:
+    profile_row = row or {}
+    seal_attachment_id = _normalize_profile_text(str(profile_row.get("seal_attachment_id") or ""), max_length=128)
+    return TenantProfileOut(
+        tenant_id=tenant_id,
+        ceo_name=_normalize_profile_text(profile_row.get("ceo_name"), max_length=120),
+        biz_reg_no=_normalize_profile_text(profile_row.get("biz_reg_no"), max_length=64),
+        address=_normalize_profile_text(profile_row.get("address"), max_length=255),
+        phone=_normalize_profile_text(profile_row.get("phone"), max_length=64),
+        seal_attachment_id=seal_attachment_id,
+        updated_at=profile_row.get("updated_at"),
+    )
 
 
 @router.get("", response_model=list[TenantOut])
@@ -250,6 +315,227 @@ def update_tenant(
     if not row:
         raise HTTPException(status_code=404, detail="tenant not found")
     return TenantOut(**row)
+
+
+@router.get("/{tenant_id}/profile", response_model=TenantProfileOut)
+def get_tenant_profile(
+    tenant_id: uuid.UUID,
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    tenant_row = _get_tenant_or_404(conn, tenant_id)
+    _assert_tenant_profile_access(user, tenant_row)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT tenant_id, ceo_name, biz_reg_no, address, phone, seal_attachment_id, updated_at
+            FROM tenant_profiles
+            WHERE tenant_id = %s
+            LIMIT 1
+            """,
+            (tenant_id,),
+        )
+        row = cur.fetchone()
+    return _build_tenant_profile_out(tenant_id, row)
+
+
+@router.put("/{tenant_id}/profile", response_model=TenantProfileOut)
+def upsert_tenant_profile(
+    tenant_id: uuid.UUID,
+    payload: TenantProfileUpdate,
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    tenant_row = _get_tenant_or_404(conn, tenant_id)
+    _assert_tenant_profile_access(user, tenant_row)
+
+    resolved_ceo_name = _normalize_profile_text(payload.ceo_name, max_length=120)
+    resolved_biz_reg_no = _normalize_profile_text(payload.biz_reg_no, max_length=64)
+    resolved_address = _normalize_profile_text(payload.address, max_length=255)
+    resolved_phone = _normalize_profile_text(payload.phone, max_length=64)
+    resolved_seal_attachment_id = _normalize_profile_text(payload.seal_attachment_id, max_length=128)
+
+    with conn.cursor() as cur:
+        if resolved_seal_attachment_id:
+            cur.execute(
+                """
+                SELECT id
+                FROM tenant_profile_attachments
+                WHERE tenant_id = %s
+                  AND id::text = %s
+                LIMIT 1
+                """,
+                (tenant_id, resolved_seal_attachment_id),
+            )
+            if not cur.fetchone():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "error": "VALIDATION_ERROR",
+                        "message": "입력값을 확인해주세요.",
+                        "fields": {"seal_attachment_id": "not_found"},
+                    },
+                )
+
+        cur.execute(
+            """
+            INSERT INTO tenant_profiles (
+                tenant_id, ceo_name, biz_reg_no, address, phone, seal_attachment_id, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, timezone('utc', now()))
+            ON CONFLICT (tenant_id)
+            DO UPDATE SET
+                ceo_name = EXCLUDED.ceo_name,
+                biz_reg_no = EXCLUDED.biz_reg_no,
+                address = EXCLUDED.address,
+                phone = EXCLUDED.phone,
+                seal_attachment_id = EXCLUDED.seal_attachment_id,
+                updated_at = timezone('utc', now())
+            RETURNING tenant_id, ceo_name, biz_reg_no, address, phone, seal_attachment_id, updated_at
+            """,
+            (
+                tenant_id,
+                resolved_ceo_name,
+                resolved_biz_reg_no,
+                resolved_address,
+                resolved_phone,
+                resolved_seal_attachment_id,
+            ),
+        )
+        row = cur.fetchone()
+    return _build_tenant_profile_out(tenant_id, row)
+
+
+@router.post("/{tenant_id}/profile/seal")
+async def upload_tenant_profile_seal(
+    tenant_id: uuid.UUID,
+    file: UploadFile = File(...),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    tenant_row = _get_tenant_or_404(conn, tenant_id)
+    _assert_tenant_profile_access(user, tenant_row)
+
+    file_name = _normalize_profile_text(file.filename or "tenant-seal.png", max_length=255) or "tenant-seal.png"
+    lower_name = file_name.lower()
+    ext = ""
+    if "." in lower_name:
+        ext = f".{lower_name.rsplit('.', 1)[-1]}"
+    mime_type = _normalize_profile_text(file.content_type or "", max_length=64) or "application/octet-stream"
+
+    if ext not in _ALLOWED_SEAL_IMAGE_EXTENSIONS and mime_type not in _ALLOWED_SEAL_IMAGE_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "VALIDATION_ERROR",
+                "message": "입력값을 확인해주세요.",
+                "fields": {"seal_image": "invalid_format"},
+            },
+        )
+
+    raw_bytes = await file.read()
+    if not raw_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "VALIDATION_ERROR",
+                "message": "입력값을 확인해주세요.",
+                "fields": {"seal_image": "empty"},
+            },
+        )
+    if len(raw_bytes) > _MAX_SEAL_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "VALIDATION_ERROR",
+                "message": "입력값을 확인해주세요.",
+                "fields": {"seal_image": "max_2mb"},
+            },
+        )
+
+    normalized_mime = mime_type.lower()
+    if normalized_mime == "image/jpg":
+        normalized_mime = "image/jpeg"
+    if normalized_mime not in {"image/png", "image/jpeg"}:
+        normalized_mime = "image/png" if ext == ".png" else "image/jpeg"
+
+    attachment_id = uuid.uuid4()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO tenant_profile_attachments (
+                id, tenant_id, file_name, mime_type, file_bytes, created_at
+            )
+            VALUES (%s, %s, %s, %s, %s, timezone('utc', now()))
+            """,
+            (attachment_id, tenant_id, file_name, normalized_mime, raw_bytes),
+        )
+        cur.execute(
+            """
+            INSERT INTO tenant_profiles (tenant_id, seal_attachment_id, updated_at)
+            VALUES (%s, %s, timezone('utc', now()))
+            ON CONFLICT (tenant_id)
+            DO UPDATE SET
+                seal_attachment_id = EXCLUDED.seal_attachment_id,
+                updated_at = timezone('utc', now())
+            """,
+            (tenant_id, str(attachment_id)),
+        )
+
+    return {
+        "success": True,
+        "tenant_id": str(tenant_id),
+        "seal_attachment_id": str(attachment_id),
+        "file_name": file_name,
+        "mime_type": normalized_mime,
+    }
+
+
+@router.get("/{tenant_id}/profile/seal/{attachment_id}")
+def download_tenant_profile_seal(
+    tenant_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    tenant_row = _get_tenant_or_404(conn, tenant_id)
+    _assert_tenant_profile_access(user, tenant_row)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, file_name, mime_type, file_bytes
+            FROM tenant_profile_attachments
+            WHERE tenant_id = %s
+              AND id = %s
+            LIMIT 1
+            """,
+            (tenant_id, attachment_id),
+        )
+        row = cur.fetchone()
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "NOT_FOUND", "message": "도장 이미지를 찾을 수 없습니다."},
+        )
+
+    file_name = _normalize_profile_text(row.get("file_name"), max_length=255) or "tenant-seal.png"
+    mime_type = _normalize_profile_text(row.get("mime_type"), max_length=64) or "application/octet-stream"
+    file_bytes = row.get("file_bytes")
+    if isinstance(file_bytes, memoryview):
+        payload = file_bytes.tobytes()
+    elif isinstance(file_bytes, bytes):
+        payload = file_bytes
+    else:
+        payload = bytes(file_bytes or b"")
+
+    return Response(
+        content=payload,
+        media_type=mime_type,
+        headers={"Content-Disposition": f'inline; filename="{file_name}"'},
+    )
 
 
 def _append_integration_audit_log(

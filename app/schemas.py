@@ -79,6 +79,32 @@ class TenantUpdate(BaseModel):
     is_active: bool = True
 
 
+class TenantProfileUpdate(BaseModel):
+    ceo_name: Optional[str] = None
+    biz_reg_no: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    seal_attachment_id: Optional[str] = None
+
+    @field_validator("ceo_name", "biz_reg_no", "address", "phone", "seal_attachment_id", mode="before")
+    @classmethod
+    def _trim_tenant_profile_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+
+class TenantProfileOut(BaseModel):
+    tenant_id: UUID
+    ceo_name: Optional[str] = None
+    biz_reg_no: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    seal_attachment_id: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+
 class UserAdminCreate(BaseModel):
     tenant_id: Optional[UUID] = Field(
         default=None,

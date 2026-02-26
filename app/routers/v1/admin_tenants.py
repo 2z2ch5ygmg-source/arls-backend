@@ -177,6 +177,7 @@ def _ordered_tenant_purge_tables(scoped_tables: dict[str, dict[str, bool]]) -> l
         "guard_roster_import_files",
         "guard_roster_import_sessions",
         # 2) 첨부/파일
+        "tenant_profile_attachments",
         "employee_attachments",
         "attachments",
         "file_metadata",
@@ -197,6 +198,7 @@ def _ordered_tenant_purge_tables(scoped_tables: dict[str, dict[str, bool]]) -> l
         "arls_users",
         # 6) 지점/회사 관련
         "sites_match_index",
+        "tenant_profiles",
         "sites",
         "companies",
         # 7) 테넌트 연동/설정

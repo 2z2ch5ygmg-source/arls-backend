@@ -57,6 +57,80 @@ BEGIN
   END IF;
 END $$;
 
+CREATE TABLE IF NOT EXISTS tenant_profile_attachments (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    file_name text NOT NULL,
+    mime_type text NOT NULL,
+    file_bytes bytea NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT timezone('utc', now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_tenant_profile_attachments_tenant_created
+    ON tenant_profile_attachments (tenant_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS tenant_profiles (
+    tenant_id uuid PRIMARY KEY,
+    ceo_name text,
+    biz_reg_no text,
+    address text,
+    phone text,
+    seal_attachment_id text,
+    updated_at timestamptz NOT NULL DEFAULT timezone('utc', now())
+);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'tenant_profiles'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'tenant_profiles' AND column_name = 'ceo_name'
+    ) THEN
+      ALTER TABLE tenant_profiles ADD COLUMN ceo_name text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'tenant_profiles' AND column_name = 'biz_reg_no'
+    ) THEN
+      ALTER TABLE tenant_profiles ADD COLUMN biz_reg_no text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'tenant_profiles' AND column_name = 'address'
+    ) THEN
+      ALTER TABLE tenant_profiles ADD COLUMN address text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'tenant_profiles' AND column_name = 'phone'
+    ) THEN
+      ALTER TABLE tenant_profiles ADD COLUMN phone text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'tenant_profiles' AND column_name = 'seal_attachment_id'
+    ) THEN
+      ALTER TABLE tenant_profiles ADD COLUMN seal_attachment_id text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'tenant_profiles' AND column_name = 'updated_at'
+    ) THEN
+      ALTER TABLE tenant_profiles ADD COLUMN updated_at timestamptz NOT NULL DEFAULT timezone('utc', now());
+    END IF;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS api_idempotency_keys (
     tenant_id uuid NOT NULL,
     user_id uuid NOT NULL,
