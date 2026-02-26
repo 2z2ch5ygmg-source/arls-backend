@@ -1772,7 +1772,7 @@ def list_employees(
                    NULL::text AS roster_docx_attachment_id,
                    NULL::text AS photo_attachment_id,
                    NULL::text AS soc_login_id,
-                   NULL::text AS soc_role,
+                   e.soc_role,
                    {account_select_sql}
             FROM employees e
             JOIN sites s ON s.id = e.site_id
@@ -1799,11 +1799,12 @@ def list_employees(
     tenant_name_value = str(tenant.get("tenant_name") or "").strip() or None
     result: list[EmployeeOut] = []
     for row in rows:
+        resolved_user_role = row.get("user_role") or row.get("soc_role")
         payload = {
             **row,
             "tenant_code": tenant_code_value,
             "tenant_name": tenant_name_value,
-            "user_role": normalize_user_role(row.get("user_role")) if row.get("user_role") else None,
+            "user_role": normalize_user_role(resolved_user_role) if resolved_user_role else None,
         }
         result.append(EmployeeOut(**payload))
     return result
