@@ -14,7 +14,7 @@ PHONE_PATTERN = re.compile(r"(01[016789])[-\s]?(\d{3,4})[-\s]?(\d{4})")
 MGMT_NO_PATTERN = re.compile(r"[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)?")
 SITE_HINT_SPLIT_PATTERN = re.compile(r"[\r\n/|,;]+")
 NUMBER_TOKEN_RE = re.compile(r"^\d+[a-z가-힣]?$", flags=re.IGNORECASE)
-ROAD_TOKEN_RE = re.compile(r".*(로|길)$")
+ROAD_TOKEN_RE = re.compile(r".*(대로|로|길)$")
 
 FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     # 경비원명부 라벨 고정 파서 (요구사항 기준 9개)
@@ -327,10 +327,9 @@ def _site_match_score(*, query_norm: str, site_name: str, address_norm: str) -> 
         return 0.0
     token_overlap = _token_overlap_score(query_norm, address_norm)
     string_similarity = _sequence_similarity(query_norm, address_norm)
-    name_similarity = _sequence_similarity(query_norm, normalize_address_text(site_name))
     boost, _, _ = _road_number_boost(query_norm, address_norm)
-    # 주소 토큰(도로명/번지) 중심으로 점수를 산정하고, 문자열 유사도/현장명을 보조 반영
-    score = (token_overlap * 0.5) + (string_similarity * 0.2) + (name_similarity * 0.1) + boost
+    # 요청 기준: token overlap + fallback string similarity + 도로명/번지 가중치
+    score = (token_overlap * 0.5) + (string_similarity * 0.2) + boost
     return round(min(1.0, score), 4)
 
 

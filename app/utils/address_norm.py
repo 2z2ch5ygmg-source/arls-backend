@@ -6,6 +6,7 @@ _MULTI_SPACE_RE = re.compile(r"\s+")
 _NON_WORD_RE = re.compile(r"[^0-9a-zA-Z가-힣\s]")
 _FLOOR_ROOM_PATTERNS = (
     re.compile(r"\b(?:b?\d{1,3}\s*f)\b", flags=re.IGNORECASE),
+    re.compile(r"\bl\s*\d{1,2}\b", flags=re.IGNORECASE),
     re.compile(r"지하\s*\d{1,2}\s*층"),
     re.compile(r"\d{1,3}\s*층"),
     re.compile(r"\d{1,4}\s*호"),
@@ -23,8 +24,17 @@ _ADDRESS_REGION_REPLACEMENTS = (
     ("제주특별자치도", "제주"),
 )
 
-# 과도한 제거를 피하기 위해 stopword는 최소(층/호 토큰만) 적용
+_ADDRESS_REMOVE_PATTERNS = (
+    re.compile(r"\b(republic\s*of\s*korea)\b", flags=re.IGNORECASE),
+    re.compile(r"\b(republic)\b", flags=re.IGNORECASE),
+    re.compile(r"\b(korea)\b", flags=re.IGNORECASE),
+    re.compile(r"대한민국"),
+)
+
+# 과도한 제거를 피하기 위해 stopword는 최소 적용 (행정 접두/층정보만)
 _ADDRESS_STOPWORDS = (
+    "특별시",
+    "광역시",
     "층",
     "호",
 )
@@ -38,6 +48,10 @@ def normalize_address_text(value: str | None) -> str:
     # 행정구역 표기를 최소한으로 정규화
     for source, target in _ADDRESS_REGION_REPLACEMENTS:
         text = text.replace(source.lower(), target.lower())
+
+    # 국가명/영문 국가 표기 제거
+    for pattern in _ADDRESS_REMOVE_PATTERNS:
+        text = pattern.sub(" ", text)
 
     # 구분자 정리
     text = text.replace("-", " ")
