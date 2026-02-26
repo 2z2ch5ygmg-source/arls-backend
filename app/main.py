@@ -18,6 +18,7 @@ from .routers import (
     admin_sites_router,
     admin_soc_router,
     admin_reset_router,
+    admin_tenants_router,
     attendance_router,
     attendance_requests_router,
     auth_router,
@@ -309,6 +310,7 @@ app.include_router(reports_router, prefix="/api/v1")
 app.include_router(admin_sites_router, prefix="/api/v1")
 app.include_router(admin_soc_router, prefix="/api/v1")
 app.include_router(admin_reset_router, prefix="/api/v1")
+app.include_router(admin_tenants_router, prefix="/api/v1")
 
 
 @app.get("/health")

@@ -99,12 +99,19 @@ def reset_soc_master_data(
     conn=Depends(get_db_conn),
     user=Depends(require_roles(ROLE_DEV, ROLE_BRANCH_MANAGER)),
 ):
-    tenant = normalize_tenant_identifier(x_tenant_id)
-    if not tenant:
+    tenant_ref = normalize_tenant_identifier(x_tenant_id)
+    if not tenant_ref:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "TENANT_CONTEXT_REQUIRED", "message": "작업회사 선택이 필요합니다."},
         )
+    scoped_tenant = resolve_scoped_tenant(
+        conn,
+        user,
+        header_tenant_id=tenant_ref,
+        require_dev_context=True,
+    )
+    tenant = normalize_tenant_identifier(scoped_tenant.get("tenant_code")) or tenant_ref
 
     soc_base_url = str(getattr(settings, "soc_base_url", "") or "").strip().rstrip("/")
     if not soc_base_url:
@@ -172,11 +179,6 @@ def reset_soc_master_data(
     except Exception:
         reset_payload = {"raw": reset_body[:300]}
 
-    backfill_result = _run_backfill_sites_to_soc(
-        tenant_code=tenant,
-        conn=conn,
-        user=user,
-    )
     return {
         "success": True,
         "tenant_id": tenant,
@@ -186,10 +188,4 @@ def reset_soc_master_data(
             "body": reset_body[:300],
             "payload": reset_payload,
         },
-        "backfill": {
-            "sent": backfill_result["sent"],
-            "failed": backfill_result["failed"],
-        },
-        "sent": backfill_result["sent"],
-        "failed": backfill_result["failed"],
     }
