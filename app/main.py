@@ -24,6 +24,7 @@ from .routers import (
     auth_router,
     companies_router,
     debug_router,
+    dev_scope_router,
     employees_router,
     integrations_router,
     leaves_router,
@@ -300,6 +301,7 @@ app.include_router(employees_router, prefix="/api/v1")
 app.include_router(attendance_router, prefix="/api/v1")
 app.include_router(attendance_requests_router, prefix="/api/v1")
 app.include_router(debug_router, prefix="/api/v1")
+app.include_router(dev_scope_router, prefix="/api/v1")
 app.include_router(leaves_router, prefix="/api/v1")
 app.include_router(schedules_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
