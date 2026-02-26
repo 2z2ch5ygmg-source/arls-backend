@@ -26,6 +26,7 @@ from ...services.guard_roster_docx import (
 from ...services.sites_match_index import list_site_match_index_rows
 from ...utils.address_norm import normalize_address_text
 from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, ROLE_EMPLOYEE, normalize_role, normalize_user_role
+from ...utils.sql_debug import SQLPlaceholderMismatchError, exec_checked
 from ...utils.tenant_context import canonical_tenant_identifier, enforce_staff_site_scope, resolve_scoped_tenant
 
 router = APIRouter(prefix="/employees", tags=["employees"], dependencies=[Depends(apply_rate_limit)])
@@ -56,7 +57,8 @@ def _table_column_exists(conn, table_name: str, column_name: str) -> bool:
     if not normalized_table or not normalized_column:
         return False
     with conn.cursor() as cur:
-        cur.execute(
+        exec_checked(
+            cur,
             """
             SELECT EXISTS (
                 SELECT 1
@@ -67,6 +69,7 @@ def _table_column_exists(conn, table_name: str, column_name: str) -> bool:
             ) AS present
             """,
             (normalized_table, normalized_column),
+            stage="guard_roster.table_column_exists",
         )
         row = cur.fetchone()
     return bool(row and row.get("present"))
@@ -205,7 +208,8 @@ def _find_site_relation_by_code(conn, tenant_id: str, site_code: str) -> dict[st
     if not normalized_code:
         return None
     with conn.cursor() as cur:
-        cur.execute(
+        exec_checked(
+            cur,
             """
             SELECT s.id AS site_id, s.site_code, s.site_name, c.id AS company_id, c.company_code
             FROM sites s
@@ -215,6 +219,7 @@ def _find_site_relation_by_code(conn, tenant_id: str, site_code: str) -> dict[st
             LIMIT 1
             """,
             (tenant_id, normalized_code),
+            stage="guard_roster.find_site_relation",
         )
         return cur.fetchone()
 
@@ -574,7 +579,8 @@ def _fetch_guard_roster_upload_session(
     session_id: str,
 ) -> dict[str, Any] | None:
     with conn.cursor() as cur:
-        cur.execute(
+        exec_checked(
+            cur,
             """
             SELECT id, tenant_id, uploaded_by, status
             FROM guard_roster_import_sessions
@@ -583,6 +589,7 @@ def _fetch_guard_roster_upload_session(
             LIMIT 1
             """,
             (session_id, tenant_id),
+            stage="guard_roster.fetch_session",
         )
         return cur.fetchone()
 
@@ -616,7 +623,8 @@ def _close_guard_roster_upload_session(
     status_value: str,
 ) -> None:
     with conn.cursor() as cur:
-        cur.execute(
+        exec_checked(
+            cur,
             """
             UPDATE guard_roster_import_sessions
             SET status = %s,
@@ -625,6 +633,7 @@ def _close_guard_roster_upload_session(
               AND tenant_id = %s
             """,
             (str(status_value or "OPEN").upper(), session_id, tenant_id),
+            stage="guard_roster.close_session",
         )
 
 
@@ -635,7 +644,8 @@ def _delete_guard_roster_upload_session(
     session_id: str,
 ) -> tuple[int, int]:
     with conn.cursor() as cur:
-        cur.execute(
+        exec_checked(
+            cur,
             """
             DELETE FROM guard_roster_import_files
             WHERE tenant_id = %s
@@ -643,15 +653,18 @@ def _delete_guard_roster_upload_session(
               AND upper(import_status) = 'STAGED'
             """,
             (tenant_id, session_id),
+            stage="guard_roster.delete_session_files",
         )
         deleted_files = int(cur.rowcount or 0)
-        cur.execute(
+        exec_checked(
+            cur,
             """
             DELETE FROM guard_roster_import_sessions
             WHERE id = %s
               AND tenant_id = %s
             """,
             (session_id, tenant_id),
+            stage="guard_roster.delete_session",
         )
         deleted_sessions = int(cur.rowcount or 0)
     return deleted_files, deleted_sessions
@@ -664,7 +677,8 @@ def _mark_guard_roster_files_committed(
     session_id: str,
 ) -> None:
     with conn.cursor() as cur:
-        cur.execute(
+        exec_checked(
+            cur,
             """
             UPDATE guard_roster_import_files
             SET import_status = 'COMMITTED',
@@ -673,6 +687,7 @@ def _mark_guard_roster_files_committed(
               AND upload_session_id = %s
             """,
             (tenant_id, session_id),
+            stage="guard_roster.mark_files_committed",
         )
 
 
@@ -690,7 +705,8 @@ def _persist_guard_roster_source_file(
 ) -> str:
     import_id = str(uuid.uuid4())
     with conn.cursor() as cur:
-        cur.execute(
+        exec_checked(
+            cur,
             """
             INSERT INTO guard_roster_import_files (
                 id, tenant_id, upload_session_id, uploaded_by, filename, mime_type, file_bytes,
@@ -710,13 +726,15 @@ def _persist_guard_roster_source_file(
                 photo_mime_type,
                 photo_filename,
             ),
+            stage="guard_roster.persist_source_file",
         )
     return import_id
 
 
 def _fetch_guard_roster_file(conn, *, file_id: str, tenant_id: str) -> dict[str, Any] | None:
     with conn.cursor() as cur:
-        cur.execute(
+        exec_checked(
+            cur,
             """
             SELECT id, tenant_id, filename, mime_type, file_bytes,
                    photo_bytes, photo_mime_type, photo_filename,
@@ -727,6 +745,7 @@ def _fetch_guard_roster_file(conn, *, file_id: str, tenant_id: str) -> dict[str,
             LIMIT 1
             """,
             (file_id, tenant_id),
+            stage="guard_roster.fetch_file",
         )
         return cur.fetchone()
 
@@ -739,7 +758,8 @@ def _is_guard_roster_file_in_session(
     file_id: str,
 ) -> bool:
     with conn.cursor() as cur:
-        cur.execute(
+        exec_checked(
+            cur,
             """
             SELECT 1
             FROM guard_roster_import_files
@@ -750,6 +770,7 @@ def _is_guard_roster_file_in_session(
             LIMIT 1
             """,
             (file_id, tenant_id, upload_session_id),
+            stage="guard_roster.file_in_session",
         )
         return cur.fetchone() is not None
 
@@ -796,7 +817,8 @@ def _upsert_guard_roster_employee(
     user_has_must_change_password = _table_column_exists(conn, "arls_users", "must_change_password")
 
     with conn.cursor() as cur:
-        cur.execute(
+        exec_checked(
+            cur,
             """
             SELECT id, employee_uuid, employee_code, full_name, phone, birth_date, hire_date,
                    leave_date, address, management_no_str, roster_docx_attachment_id, photo_attachment_id,
@@ -808,6 +830,7 @@ def _upsert_guard_roster_employee(
             LIMIT 1
             """,
             (tenant_id, employee_code),
+            stage="guard_roster.employees_lookup",
         )
         existing = cur.fetchone()
 
@@ -841,7 +864,8 @@ def _upsert_guard_roster_employee(
             update_set_clause = ",\n                    ".join(f"{column} = %s" for column in update_fields)
             update_values = list(update_fields.values())
             update_values.append(existing["id"])
-            cur.execute(
+            exec_checked(
+                cur,
                 f"""
                 UPDATE employees
                 SET {update_set_clause},
@@ -854,6 +878,7 @@ def _upsert_guard_roster_employee(
                           username, password_hash, must_change_password, role
                 """,
                 tuple(update_values),
+                stage="guard_roster.employees_update",
             )
             row = cur.fetchone()
             action = "UPDATED"
@@ -889,7 +914,8 @@ def _upsert_guard_roster_employee(
             }
             insert_columns = ", ".join(insert_fields.keys())
             insert_placeholders = ", ".join(["%s"] * len(insert_fields))
-            cur.execute(
+            exec_checked(
+                cur,
                 f"""
                 INSERT INTO employees ({insert_columns})
                 VALUES ({insert_placeholders})
@@ -900,13 +926,15 @@ def _upsert_guard_roster_employee(
                           username, password_hash, must_change_password, role
                 """,
                 tuple(insert_fields.values()),
+                stage="guard_roster.employees_insert",
             )
             row = cur.fetchone()
             action = "CREATED"
 
     employee_id_value = str(row.get("id") or "")
     with conn.cursor() as cur:
-        cur.execute(
+        exec_checked(
+            cur,
             """
             SELECT id, employee_id
             FROM arls_users
@@ -916,12 +944,14 @@ def _upsert_guard_roster_employee(
             LIMIT 1
             """,
             (tenant_id, account_username),
+            stage="guard_roster.users_lookup_by_username",
         )
         username_owner = cur.fetchone()
         if username_owner and str(username_owner.get("employee_id") or "") not in {"", employee_id_value}:
             _raise_api_error(status.HTTP_409_CONFLICT, "USERNAME_EXISTS", "username already exists in tenant")
 
-        cur.execute(
+        exec_checked(
+            cur,
             """
             SELECT id
             FROM arls_users
@@ -931,6 +961,7 @@ def _upsert_guard_roster_employee(
             LIMIT 1
             """,
             (tenant_id, employee_id_value),
+            stage="guard_roster.users_lookup_by_employee",
         )
         existing_user = cur.fetchone()
         target_user_id = str(existing_user.get("id") or "") if existing_user else ""
@@ -939,7 +970,8 @@ def _upsert_guard_roster_employee(
 
         if target_user_id:
             if user_has_must_change_password:
-                cur.execute(
+                exec_checked(
+                    cur,
                     """
                     UPDATE arls_users
                     SET username = %s,
@@ -963,9 +995,11 @@ def _upsert_guard_roster_employee(
                         account_must_change_password,
                         target_user_id,
                     ),
+                    stage="guard_roster.users_update_with_must_change",
                 )
             else:
-                cur.execute(
+                exec_checked(
+                    cur,
                     """
                     UPDATE arls_users
                     SET username = %s,
@@ -987,11 +1021,13 @@ def _upsert_guard_roster_employee(
                         site_relation["site_id"],
                         target_user_id,
                     ),
+                    stage="guard_roster.users_update_without_must_change",
                 )
         else:
             new_user_id = str(uuid.uuid4())
             if user_has_must_change_password:
-                cur.execute(
+                exec_checked(
+                    cur,
                     """
                     INSERT INTO arls_users (
                         id, tenant_id, username, password_hash, full_name, role, is_active,
@@ -1010,9 +1046,11 @@ def _upsert_guard_roster_employee(
                         site_relation["site_id"],
                         account_must_change_password,
                     ),
+                    stage="guard_roster.users_insert_with_must_change",
                 )
             else:
-                cur.execute(
+                exec_checked(
+                    cur,
                     """
                     INSERT INTO arls_users (
                         id, tenant_id, username, password_hash, full_name, role, is_active,
@@ -1030,6 +1068,7 @@ def _upsert_guard_roster_employee(
                         employee_id_value,
                         site_relation["site_id"],
                     ),
+                    stage="guard_roster.users_insert_without_must_change",
                 )
 
     _post_employee_sync_to_soc(
@@ -1375,7 +1414,7 @@ def commit_guard_roster_docx_import(
     for index, item in enumerate(payload.items):
         savepoint = f"guard_roster_import_{index}"
         with conn.cursor() as cur:
-            cur.execute(f"SAVEPOINT {savepoint}")
+            exec_checked(cur, f"SAVEPOINT {savepoint}", stage="guard_roster.commit.savepoint")
         try:
             roster_docx_id = _normalize_roster_text(item.roster_docx_id)
             if roster_docx_id and not _is_guard_roster_file_in_session(
@@ -1416,15 +1455,29 @@ def commit_guard_roster_docx_import(
             else:
                 updated += 1
             with conn.cursor() as cur:
-                cur.execute(f"RELEASE SAVEPOINT {savepoint}")
-        except Exception as exc:
+                exec_checked(cur, f"RELEASE SAVEPOINT {savepoint}", stage="guard_roster.commit.release_savepoint")
+        except SQLPlaceholderMismatchError as exc:
             with conn.cursor() as cur:
-                cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
-                cur.execute(f"RELEASE SAVEPOINT {savepoint}")
+                exec_checked(cur, f"ROLLBACK TO SAVEPOINT {savepoint}", stage="guard_roster.commit.rollback_savepoint")
+                exec_checked(cur, f"RELEASE SAVEPOINT {savepoint}", stage="guard_roster.commit.release_after_rollback")
             failed.append(
                 {
                     "filename": _normalize_roster_text(item.filename) or "-",
                     "management_no": _normalize_roster_text(item.management_no),
+                    "code": "SQL_MISMATCH",
+                    "stage": exc.stage,
+                    "reason": str(exc),
+                }
+            )
+        except Exception as exc:
+            with conn.cursor() as cur:
+                exec_checked(cur, f"ROLLBACK TO SAVEPOINT {savepoint}", stage="guard_roster.commit.rollback_savepoint")
+                exec_checked(cur, f"RELEASE SAVEPOINT {savepoint}", stage="guard_roster.commit.release_after_rollback")
+            failed.append(
+                {
+                    "filename": _normalize_roster_text(item.filename) or "-",
+                    "management_no": _normalize_roster_text(item.management_no),
+                    "stage": "guard_roster.commit.item",
                     "reason": str(getattr(exc, "detail", exc)),
                 }
             )
