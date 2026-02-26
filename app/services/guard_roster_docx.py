@@ -284,6 +284,13 @@ def _site_match_score(*, query_norm: str, site_name: str, address_norm: str) -> 
     return round(min(1.0, (addr_score * 0.85) + (name_score * 0.15)), 4)
 
 
+def select_site_match_query_text(*, placement_text: str, address_text: str) -> str:
+    placement_clean = _clean_text(placement_text)
+    if len(placement_clean) >= 6:
+        return placement_clean
+    return _clean_text(address_text)
+
+
 def match_site_candidates(
     *,
     placement_text: str,
@@ -292,10 +299,12 @@ def match_site_candidates(
     threshold: float = 0.75,
     top_n: int = 3,
 ) -> dict[str, object]:
-    # 주소를 우선 사용하고, 주소가 없을 때만 배치지 텍스트를 사용한다.
-    query_norm = normalize_address_text(address_text)
-    if not query_norm:
-        query_norm = normalize_address_text(placement_text)
+    # 근무현장(배치지)을 우선 사용하고, 배치지가 충분하지 않을 때만 주소를 fallback으로 사용한다.
+    query_text = select_site_match_query_text(
+        placement_text=placement_text,
+        address_text=address_text,
+    )
+    query_norm = normalize_address_text(query_text)
 
     ranked: list[dict[str, object]] = []
     for site in sites:

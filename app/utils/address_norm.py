@@ -23,12 +23,8 @@ _ADDRESS_REGION_REPLACEMENTS = (
     ("제주특별자치도", "제주"),
 )
 
-# 과도한 제거를 피하면서 주소 매칭 품질을 해치지 않는 최소 stopword만 적용
+# 과도한 제거를 피하기 위해 stopword는 최소(층/호 토큰만) 적용
 _ADDRESS_STOPWORDS = (
-    "지점",
-    "빌딩",
-    "타워",
-    "센터",
     "층",
     "호",
 )

@@ -19,6 +19,7 @@ from ...services.guard_roster_docx import (
     extract_primary_docx_photo,
     match_site_candidates,
     parse_guard_roster_docx,
+    select_site_match_query_text,
 )
 from ...services.sites_match_index import list_site_match_index_rows
 from ...utils.address_norm import normalize_address_text
@@ -44,7 +45,7 @@ SOC_SYNC_ALLOWED_ROLES = {
 }
 
 GUARD_ROSTER_IMPORT_MAX_FILES = 30
-GUARD_ROSTER_IMPORT_SITE_MATCH_THRESHOLD = 0.75
+GUARD_ROSTER_IMPORT_SITE_MATCH_THRESHOLD = 0.86
 
 
 def _table_column_exists(conn, table_name: str, column_name: str) -> bool:
@@ -955,8 +956,11 @@ async def import_guard_roster_docx(
 
         parsed_address_raw = str(parsed.get("address") or "").strip()
         parsed_placement_raw = str(parsed.get("placement_text") or "").strip()
-        query_text_raw = " ".join([part for part in [parsed_placement_raw, parsed_address_raw] if part]).strip()
-        query_norm = normalize_address_text(parsed_address_raw) or normalize_address_text(parsed_placement_raw)
+        query_text_raw = select_site_match_query_text(
+            placement_text=parsed_placement_raw,
+            address_text=parsed_address_raw,
+        )
+        query_norm = normalize_address_text(query_text_raw)
         parse_failed = not parsed_address_raw and not parsed_placement_raw
         if parse_failed:
             match_result = {
@@ -1001,6 +1005,25 @@ async def import_guard_roster_docx(
             item_message = "자동매칭 점수 부족(수동 선택 필요)"
 
         management_no_str = str(parsed.get("management_no_str") or parsed.get("management_no") or "")
+        candidate_items = []
+        for candidate in list(match_result.get("candidates") or []):
+            candidate_site_code = str(candidate.get("site_code") or candidate.get("site_id") or "").strip()
+            candidate_site_name = str(candidate.get("site_name") or candidate_site_code).strip()
+            candidate_score = float(candidate.get("score") or 0)
+            candidate_items.append(
+                {
+                    "site_id": candidate_site_code,
+                    "site_code": candidate_site_code,
+                    "site_name": candidate_site_name,
+                    "score": round(candidate_score, 3),
+                    "employee_code_preview": (
+                        build_employee_code_from_management_no(candidate_site_code, management_no_str)
+                        if candidate_site_code and management_no_str
+                        else ""
+                    ),
+                }
+            )
+
         generated_code = build_employee_code_from_management_no(
             str(match_result.get("site_code") or ""),
             management_no_str,
@@ -1041,7 +1064,7 @@ async def import_guard_roster_docx(
                     "status": item_status,
                     "reason": match_reason or ("PARSE_FAILED" if parse_failed else "UNKNOWN"),
                     "confidence": float(match_result.get("confidence") or 0),
-                    "candidates": list(match_result.get("candidates") or []),
+                    "candidates": candidate_items,
                 },
                 "generated": {"employee_code": generated_code},
                 "attachments": {
@@ -1055,6 +1078,7 @@ async def import_guard_roster_docx(
                     "index_total_sites": index_total_sites,
                     "match_reason": match_reason or ("PARSE_FAILED" if parse_failed else "UNKNOWN"),
                     "message": item_message,
+                    "address_raw": parsed_address_raw,
                 },
                 "tenant_id": tenant_code_norm,
             }
