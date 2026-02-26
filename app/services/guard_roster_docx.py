@@ -15,6 +15,9 @@ MGMT_NO_PATTERN = re.compile(r"[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)?")
 SITE_HINT_SPLIT_PATTERN = re.compile(r"[\r\n/|,;]+")
 NUMBER_TOKEN_RE = re.compile(r"^\d+[a-z가-힣]?$", flags=re.IGNORECASE)
 ROAD_TOKEN_RE = re.compile(r".*(대로|로|길)$")
+DISTRICT_TOKEN_RE = re.compile(r".*(시|군|구)$")
+KOREAN_KEYWORD_RE = re.compile(r"[가-힣]{2,}")
+SITE_NAME_NOISE_TOKENS = {"애플", "스토어", "현장", "매장", "센터", "점"}
 
 FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     # 경비원명부 라벨 고정 파서 (요구사항 기준 9개)
@@ -289,22 +292,11 @@ def _tokenize_address(value: str) -> list[str]:
     return tokens
 
 
-def _token_overlap_score(query_norm: str, address_norm: str) -> float:
+def _road_number_city_score(query_norm: str, address_norm: str) -> tuple[float, bool, bool, bool]:
     query_tokens = set(_tokenize_address(query_norm))
     address_tokens = set(_tokenize_address(address_norm))
     if not query_tokens or not address_tokens:
-        return 0.0
-    union = query_tokens | address_tokens
-    if not union:
-        return 0.0
-    return float(len(query_tokens & address_tokens) / len(union))
-
-
-def _road_number_boost(query_norm: str, address_norm: str) -> tuple[float, bool, bool]:
-    query_tokens = set(_tokenize_address(query_norm))
-    address_tokens = set(_tokenize_address(address_norm))
-    if not query_tokens or not address_tokens:
-        return 0.0, False, False
+        return 0.0, False, False, False
 
     query_road = {token for token in query_tokens if ROAD_TOKEN_RE.match(token)}
     addr_road = {token for token in address_tokens if ROAD_TOKEN_RE.match(token)}
@@ -314,23 +306,100 @@ def _road_number_boost(query_norm: str, address_norm: str) -> tuple[float, bool,
     addr_num = {token for token in address_tokens if NUMBER_TOKEN_RE.match(token)}
     number_matched = bool(query_num & addr_num)
 
+    query_district = {token for token in query_tokens if DISTRICT_TOKEN_RE.match(token)}
+    addr_district = {token for token in address_tokens if DISTRICT_TOKEN_RE.match(token)}
+    district_matched = bool(query_district & addr_district)
+
     boost = 0.0
     if road_matched:
-        boost += 0.15
+        boost += 0.2
     if number_matched:
-        boost += 0.25
-    return boost, road_matched, number_matched
+        boost += 0.35
+    if district_matched:
+        boost += 0.1
+    return boost, road_matched, number_matched, district_matched
+
+
+def _extract_site_name_keywords(site_name: str) -> set[str]:
+    raw_tokens = KOREAN_KEYWORD_RE.findall(str(site_name or ""))
+    keywords: set[str] = set()
+    for token in raw_tokens:
+        normalized = _clean_text(token)
+        if len(normalized) < 2:
+            continue
+        if normalized in SITE_NAME_NOISE_TOKENS:
+            continue
+        keywords.add(normalized)
+    return keywords
+
+
+def _extract_query_keywords(query_text: str) -> set[str]:
+    raw_tokens = KOREAN_KEYWORD_RE.findall(str(query_text or ""))
+    keywords: set[str] = set()
+    for token in raw_tokens:
+        normalized = _clean_text(token)
+        if len(normalized) < 2:
+            continue
+        keywords.add(normalized)
+    return keywords
+
+
+def _keyword_match_bonus(query_text: str, site_name: str) -> tuple[float, list[str]]:
+    query_keywords = _extract_query_keywords(query_text)
+    site_keywords = _extract_site_name_keywords(site_name)
+    if not query_keywords or not site_keywords:
+        return 0.0, []
+
+    matched: list[str] = []
+    for keyword in site_keywords:
+        if keyword in query_keywords:
+            matched.append(keyword)
+            continue
+        if keyword and keyword in query_text:
+            matched.append(keyword)
+            continue
+        if any(keyword in token or token in keyword for token in query_keywords):
+            matched.append(keyword)
+
+    matched = sorted(set(matched))
+    if len(matched) >= 2:
+        return 0.45, matched
+    if len(matched) >= 1:
+        return 0.35, matched
+    return 0.0, []
+
+
+def _query_contamination_penalty(query_text: str, strong_keyword_match: bool) -> tuple[float, list[str]]:
+    if strong_keyword_match:
+        return 0.0, []
+
+    penalty = 0.0
+    reasons: list[str] = []
+    clean = _clean_text(query_text)
+    district_tokens = set(re.findall(r"[가-힣]{2,}구", clean))
+    if len(district_tokens) >= 2:
+        penalty += 0.15
+        reasons.append("MULTI_DISTRICT")
+
+    lowered = clean.lower()
+    if "서울" in clean and "경기도" in clean:
+        penalty += 0.15
+        reasons.append("MIXED_REGION")
+    elif "seoul" in lowered and "gyeonggi" in lowered:
+        penalty += 0.15
+        reasons.append("MIXED_REGION")
+
+    return penalty, reasons
 
 
 def _site_match_score(*, query_norm: str, site_name: str, address_norm: str) -> float:
     if not query_norm:
         return 0.0
-    token_overlap = _token_overlap_score(query_norm, address_norm)
+    _ = site_name  # signature compatibility (site_name is used by caller in keyword stage)
     string_similarity = _sequence_similarity(query_norm, address_norm)
-    boost, _, _ = _road_number_boost(query_norm, address_norm)
-    # 요청 기준: token overlap + fallback string similarity + 도로명/번지 가중치
-    score = (token_overlap * 0.5) + (string_similarity * 0.2) + boost
-    return round(min(1.0, score), 4)
+    address_component, _, _, _ = _road_number_city_score(query_norm, address_norm)
+    # 문자열 유사도는 최대 0.15까지만 반영
+    return round(min(1.0, address_component + (string_similarity * 0.15)), 4)
 
 
 def select_site_match_query_text(*, placement_text: str, address_text: str) -> str:
@@ -361,24 +430,33 @@ def match_site_candidates(
         site_name = _clean_text(site.get("site_name"))
         site_address = _clean_text(site.get("address_text") or site.get("address"))
         site_address_norm = _clean_text(site.get("address_norm")) or normalize_address_text(site_address)
-        token_overlap = _token_overlap_score(query_norm, site_address_norm)
         string_similarity = _sequence_similarity(query_norm, site_address_norm)
-        boost, road_matched, number_matched = _road_number_boost(query_norm, site_address_norm)
-        score = _site_match_score(
+        keyword_bonus, matched_keywords = _keyword_match_bonus(query_text, site_name)
+        address_score = _site_match_score(
             query_norm=query_norm,
             site_name=site_name,
             address_norm=site_address_norm,
         )
+        address_boost, road_matched, number_matched, district_matched = _road_number_city_score(query_norm, site_address_norm)
+        strong_keyword = keyword_bonus >= 0.45
+        contamination_penalty, penalty_reasons = _query_contamination_penalty(query_text, strong_keyword)
+        score = max(0.0, min(1.0, keyword_bonus + address_score - contamination_penalty))
         ranked.append(
             {
                 "site_id": site_code,
                 "site_code": site_code,
                 "site_name": site_name or site_code,
                 "score": round(float(score), 3),
-                "token_overlap": round(float(token_overlap), 3),
+                "keyword_bonus": round(float(keyword_bonus), 3),
+                "matched_keywords": matched_keywords,
+                "address_score": round(float(address_score), 3),
                 "string_similarity": round(float(string_similarity), 3),
-                "road_boost": 0.15 if road_matched else 0.0,
-                "number_boost": 0.25 if number_matched else 0.0,
+                "road_boost": 0.2 if road_matched else 0.0,
+                "number_boost": 0.35 if number_matched else 0.0,
+                "district_boost": 0.1 if district_matched else 0.0,
+                "address_boost_total": round(float(address_boost), 3),
+                "contamination_penalty": round(float(contamination_penalty), 3),
+                "penalty_reasons": penalty_reasons,
             }
         )
 
@@ -391,8 +469,8 @@ def match_site_candidates(
     auto_site_code = str(best.get("site_code") or "").strip() if best else ""
     auto_site_name = str(best.get("site_name") or "").strip() if best else ""
     best_candidate = f"{auto_site_code}/{auto_site_name}".strip("/") if (auto_site_code or auto_site_name) else ""
-    threshold_score = float(threshold)
-    gap_auto = best_score >= 0.52 and score_gap >= 0.12
+    threshold_score = max(0.65, float(threshold))
+    gap_auto = best_score >= 0.55 and score_gap >= 0.15
     threshold_auto = best_score >= threshold_score
     should_auto = bool(auto_site_code) and (threshold_auto or gap_auto)
 
@@ -418,7 +496,7 @@ def match_site_candidates(
         match_reason = "AUTO_MATCHED_BY_GAP"
     elif status == "READY":
         match_reason = "AUTO_MATCHED"
-    elif best_score < 0.52 or score_gap < 0.12:
+    elif best_score < 0.55 or score_gap < 0.15:
         match_reason = "LOW_CONFIDENCE"
     else:
         match_reason = "NEEDS_REVIEW"

@@ -45,7 +45,7 @@ SOC_SYNC_ALLOWED_ROLES = {
 }
 
 GUARD_ROSTER_IMPORT_MAX_FILES = 30
-GUARD_ROSTER_IMPORT_SITE_MATCH_THRESHOLD = 0.60
+GUARD_ROSTER_IMPORT_SITE_MATCH_THRESHOLD = 0.65
 
 
 def _table_column_exists(conn, table_name: str, column_name: str) -> bool:
