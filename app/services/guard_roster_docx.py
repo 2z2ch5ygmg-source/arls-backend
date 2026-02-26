@@ -391,10 +391,9 @@ def match_site_candidates(
     auto_site_code = str(best.get("site_code") or "").strip() if best else ""
     auto_site_name = str(best.get("site_name") or "").strip() if best else ""
     best_candidate = f"{auto_site_code}/{auto_site_name}".strip("/") if (auto_site_code or auto_site_name) else ""
-    threshold_score = float(threshold)
-    gap_auto = best_score >= 0.52 and score_gap >= 0.12
-    threshold_auto = best_score >= threshold_score
-    should_auto = bool(auto_site_code) and (threshold_auto or gap_auto)
+    confirm_threshold = max(0.75, float(threshold or 0))
+    has_best_candidate = bool(auto_site_code)
+    auto_confirmed = has_best_candidate and best_score >= confirm_threshold
 
     print(
         "AUTO_MATCH:",
@@ -403,28 +402,29 @@ def match_site_candidates(
         f"best={round(best_score, 3)}",
         f"second={round(second_score, 3)}",
         f"gap={score_gap}",
-        f"threshold_auto={threshold_auto}",
-        f"gap_auto={gap_auto}",
+        f"confirm_threshold={round(confirm_threshold, 3)}",
+        f"auto_confirmed={auto_confirmed}",
     )
 
-    status = "READY" if should_auto else "NEEDS_SITE_PICK"
-    if not query_norm:
+    if not sites or not candidates or not has_best_candidate:
+        status = "INDEX_EMPTY"
+        match_reason = "INDEX_EMPTY"
+        auto_site_code = ""
+        auto_site_name = ""
+    elif auto_confirmed:
+        status = "AUTO_CONFIRMED"
+        match_reason = "AUTO_CONFIRMED_BY_SCORE"
+    else:
+        # threshold 미달이어도 최고 점수 후보를 기본값으로 선택한다.
+        status = "AUTO_SELECTED"
+        match_reason = "BEST_CANDIDATE_DEFAULT"
+    if not query_norm and status not in {"INDEX_EMPTY"}:
         match_reason = "QUERY_EMPTY"
     elif not sites:
         match_reason = "INDEX_EMPTY"
-    elif not candidates:
-        match_reason = "NO_CANDIDATE"
-    elif status == "READY" and gap_auto and not threshold_auto:
-        match_reason = "AUTO_MATCHED_BY_GAP"
-    elif status == "READY":
-        match_reason = "AUTO_MATCHED"
-    elif best_score < 0.52 or score_gap < 0.12:
-        match_reason = "LOW_CONFIDENCE"
-    else:
-        match_reason = "NEEDS_REVIEW"
     return {
-        "site_code": auto_site_code if status == "READY" else "",
-        "site_name": auto_site_name if status == "READY" else "",
+        "site_code": auto_site_code,
+        "site_name": auto_site_name,
         "confidence": round(best_score, 3),
         "second_score": round(second_score, 3),
         "score_gap": score_gap,

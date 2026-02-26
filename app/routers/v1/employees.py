@@ -991,15 +991,19 @@ async def import_guard_roster_docx(
                 top_n=3,
             )
         match_reason = str(match_result.get("match_reason") or "").strip().upper()
+        match_status = str(match_result.get("status") or "").strip().upper()
         if parse_failed:
             item_status = "PARSE_FAILED"
             item_message = "DOCX에서 주소/배치지 추출 실패"
-        elif match_reason == "INDEX_EMPTY" or str(match_result.get("status") or "").strip().upper() == "INDEX_EMPTY":
+        elif match_reason == "INDEX_EMPTY" or match_status == "INDEX_EMPTY":
             item_status = "INDEX_EMPTY"
             item_message = "지점 인덱스가 비어있음(지점 등록/인덱스 재생성 필요)"
-        elif str(match_result.get("status") or "").strip().upper() == "READY":
-            item_status = "READY"
-            item_message = "자동 매칭 성공"
+        elif match_status == "AUTO_CONFIRMED":
+            item_status = "AUTO_CONFIRMED"
+            item_message = "자동 확정"
+        elif match_status == "AUTO_SELECTED":
+            item_status = "AUTO_SELECTED"
+            item_message = "자동선택(검토필요)"
         else:
             item_status = "NEEDS_SITE_PICK"
             item_message = "자동매칭 점수 부족(수동 선택 필요)"
