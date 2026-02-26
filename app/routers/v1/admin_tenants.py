@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from psycopg import errors as pg_errors
 from psycopg import sql
 
 from ...deps import apply_rate_limit, get_db_conn, require_roles
@@ -304,7 +305,6 @@ def reset_tenant_hr_data(
         if tenant_code and tenant_code not in tenant_code_candidates:
             tenant_code_candidates.append(tenant_code)
 
-        deleted: dict[str, int] = {}
         before_counts: dict[str, int] = {}
         for table_name in ordered_tables:
             table_scope = scoped_tables.get(table_name) or {}
@@ -319,6 +319,47 @@ def reset_tenant_hr_data(
                 tenant_id=tenant_id,
                 tenant_code_candidates=tenant_code_candidates,
             )
+
+        deleted: dict[str, int] = {}
+        pending_tables = ordered_tables[:]
+        while pending_tables:
+            unresolved_tables: list[str] = []
+            progressed = False
+            for table_name in pending_tables:
+                table_scope = scoped_tables.get(table_name) or {}
+                has_tenant_id = bool(table_scope.get("has_tenant_id"))
+                has_tenant_code = bool(table_scope.get("has_tenant_code"))
+                stage = f"delete:{table_name}"
+                with conn.cursor() as cur:
+                    cur.execute("SAVEPOINT tenant_reset_table_sp")
+                try:
+                    deleted[table_name] = _delete_tenant_rows(
+                        conn,
+                        table_name,
+                        has_tenant_id=has_tenant_id,
+                        has_tenant_code=has_tenant_code,
+                        tenant_id=tenant_id,
+                        tenant_code_candidates=tenant_code_candidates,
+                    )
+                    with conn.cursor() as cur:
+                        cur.execute("RELEASE SAVEPOINT tenant_reset_table_sp")
+                    progressed = True
+                except pg_errors.ForeignKeyViolation:
+                    with conn.cursor() as cur:
+                        cur.execute("ROLLBACK TO SAVEPOINT tenant_reset_table_sp")
+                        cur.execute("RELEASE SAVEPOINT tenant_reset_table_sp")
+                    unresolved_tables.append(table_name)
+                except Exception:
+                    with conn.cursor() as cur:
+                        cur.execute("ROLLBACK TO SAVEPOINT tenant_reset_table_sp")
+                        cur.execute("RELEASE SAVEPOINT tenant_reset_table_sp")
+                    raise
+
+            if unresolved_tables and not progressed:
+                raise RuntimeError(
+                    "fk_constraint_blocked: " + ", ".join(unresolved_tables[:8])
+                )
+            pending_tables = unresolved_tables
             stage = f"delete:{table_name}"
             deleted[table_name] = _delete_tenant_rows(
                 conn,
