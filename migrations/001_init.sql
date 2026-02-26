@@ -17,6 +17,46 @@ CREATE TABLE IF NOT EXISTS arls_users (
     CONSTRAINT arls_users_username_tenant_uniq UNIQUE (tenant_id, username)
 );
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'arls_users'
+  ) THEN
+    WITH normalized AS (
+      SELECT
+        au.id,
+        au.tenant_id,
+        btrim(COALESCE(au.username, '')) AS current_username,
+        regexp_replace(btrim(COALESCE(au.username, '')), '[-[:space:]]+', '', 'g') AS normalized_username
+      FROM arls_users au
+    ),
+    duplicate_targets AS (
+      SELECT tenant_id, normalized_username
+      FROM normalized
+      WHERE normalized_username <> ''
+      GROUP BY tenant_id, normalized_username
+      HAVING COUNT(*) > 1
+    ),
+    updatable AS (
+      SELECT n.id, n.normalized_username
+      FROM normalized n
+      LEFT JOIN duplicate_targets d
+        ON d.tenant_id = n.tenant_id
+       AND d.normalized_username = n.normalized_username
+      WHERE d.tenant_id IS NULL
+        AND n.normalized_username <> ''
+        AND n.current_username <> n.normalized_username
+    )
+    UPDATE arls_users au
+    SET username = u.normalized_username,
+        updated_at = timezone('utc', now())
+    FROM updatable u
+    WHERE au.id = u.id;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS api_idempotency_keys (
     tenant_id uuid NOT NULL,
     user_id uuid NOT NULL,

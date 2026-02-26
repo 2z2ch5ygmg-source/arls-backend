@@ -9,6 +9,7 @@ from ...config import settings
 from ...db import fetch_one
 from ...deps import get_db_conn
 from ...security import verify_password
+from ...utils.credential_norm import normalize_auth_identifier
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -30,7 +31,13 @@ def validate_credentials(
     conn=Depends(get_db_conn),
 ):
     tenant_code = _normalize_tenant_code(payload.tenant_code)
+    normalized_username = normalize_auth_identifier(payload.username)
     if not tenant_code:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "INVALID_CREDENTIALS", "message": "invalid credentials"},
+        )
+    if not normalized_username:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "INVALID_CREDENTIALS", "message": "invalid credentials"},
@@ -67,12 +74,12 @@ def validate_credentials(
         SELECT password_hash
         FROM arls_users
         WHERE tenant_id = %s
-          AND lower(username) = lower(%s)
+          AND lower(regexp_replace(COALESCE(username, ''), '[-\\s]+', '', 'g')) = lower(%s)
           AND is_active = TRUE
           AND COALESCE(is_deleted, FALSE) = FALSE
         LIMIT 1
         """,
-        (tenant["id"], payload.username),
+        (tenant["id"], normalized_username),
     )
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(

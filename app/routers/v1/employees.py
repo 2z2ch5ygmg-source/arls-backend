@@ -25,6 +25,7 @@ from ...services.guard_roster_docx import (
 )
 from ...services.sites_match_index import list_site_match_index_rows
 from ...utils.address_norm import normalize_address_text
+from ...utils.credential_norm import normalize_auth_identifier
 from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, ROLE_EMPLOYEE, normalize_role, normalize_user_role
 from ...utils.sql_debug import SQLPlaceholderMismatchError, exec_checked
 from ...utils.tenant_context import canonical_tenant_identifier, enforce_staff_site_scope, resolve_scoped_tenant
@@ -805,14 +806,15 @@ def _upsert_guard_roster_employee(
     )
     normalized_soc_role = _normalize_soc_role(item.soc_role or item.role, required=False) or account_soc_role
 
-    account_username = _normalize_optional_roster_text(item.username) or phone
-    if not account_username:
-        _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "username is required")
-    account_initial_password = _normalize_optional_roster_text(item.initial_password) or phone
-    if not account_initial_password:
-        _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "initial_password is required")
+    normalized_phone_credential = normalize_auth_identifier(phone)
+    if not normalized_phone_credential:
+        _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "phone is required")
+
+    # AUTH HOTFIX: account credentials are always normalized from phone.
+    account_username = normalized_phone_credential
+    account_initial_password = normalized_phone_credential
     account_password_hash = hash_password(account_initial_password)
-    account_must_change_password = bool(item.must_change_password)
+    account_must_change_password = True
 
     user_has_must_change_password = _table_column_exists(conn, "arls_users", "must_change_password")
 

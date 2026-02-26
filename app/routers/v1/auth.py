@@ -9,6 +9,7 @@ from ...db import fetch_all, fetch_one
 from ...deps import get_db_conn, get_current_user, apply_rate_limit
 from ...schemas import AuthUser, LoginRequest, RefreshTokenRequest, TokenResponse
 from ...security import decode_refresh_token, encode_refresh_token, encode_token, verify_password
+from ...utils.credential_norm import normalize_auth_identifier
 from ...utils.permissions import normalize_role, normalize_user_role
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -72,6 +73,10 @@ def _build_token_response(
 
 
 def handle_master_login(payload: LoginRequest, conn):
+    normalized_username = normalize_auth_identifier(payload.username)
+    if not normalized_username:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials")
+
     master_candidates = fetch_all(
         conn,
         """
@@ -82,7 +87,7 @@ def handle_master_login(payload: LoginRequest, conn):
         FROM arls_users au
         JOIN tenants t ON t.id = au.tenant_id
         LEFT JOIN employees e ON e.id = au.employee_id
-        WHERE lower(au.username) = lower(%s)
+        WHERE lower(regexp_replace(COALESCE(au.username, ''), '[-\\s]+', '', 'g')) = lower(%s)
           AND au.is_active = TRUE
           AND COALESCE(au.is_deleted, FALSE) = FALSE
           AND COALESCE(t.is_active, TRUE) = TRUE
@@ -91,7 +96,7 @@ def handle_master_login(payload: LoginRequest, conn):
         ORDER BY COALESCE(au.last_login_at, au.updated_at, au.created_at) DESC
         LIMIT 10
         """,
-        (payload.username, MASTER_TENANT_CODE),
+        (normalized_username, MASTER_TENANT_CODE),
     )
 
     matched_users = [row for row in master_candidates if verify_password(payload.password, row["password_hash"])]
@@ -106,7 +111,7 @@ def handle_master_login(payload: LoginRequest, conn):
             FROM arls_users au
             JOIN tenants t ON t.id = au.tenant_id
             LEFT JOIN employees e ON e.id = au.employee_id
-            WHERE lower(au.username) = lower(%s)
+            WHERE lower(regexp_replace(COALESCE(au.username, ''), '[-\\s]+', '', 'g')) = lower(%s)
               AND au.is_active = TRUE
               AND COALESCE(au.is_deleted, FALSE) = FALSE
               AND COALESCE(t.is_active, TRUE) = TRUE
@@ -118,7 +123,7 @@ def handle_master_login(payload: LoginRequest, conn):
             ORDER BY COALESCE(au.last_login_at, au.updated_at, au.created_at) DESC
             LIMIT 20
             """,
-            (payload.username,),
+            (normalized_username,),
         )
         matched_users = [row for row in privileged_candidates if verify_password(payload.password, row["password_hash"])]
 
@@ -133,7 +138,7 @@ def handle_master_login(payload: LoginRequest, conn):
             FROM arls_users au
             JOIN tenants t ON t.id = au.tenant_id
             LEFT JOIN employees e ON e.id = au.employee_id
-            WHERE lower(au.username) = lower(%s)
+            WHERE lower(regexp_replace(COALESCE(au.username, ''), '[-\\s]+', '', 'g')) = lower(%s)
               AND au.is_active = TRUE
               AND COALESCE(au.is_deleted, FALSE) = FALSE
               AND COALESCE(t.is_active, TRUE) = TRUE
@@ -141,7 +146,7 @@ def handle_master_login(payload: LoginRequest, conn):
             ORDER BY COALESCE(au.last_login_at, au.updated_at, au.created_at) DESC
             LIMIT 10
             """,
-            (payload.username,),
+            (normalized_username,),
         )
         matched_fallback = [
             row for row in fallback_candidates if verify_password(payload.password, row["password_hash"])
@@ -188,6 +193,9 @@ def handle_master_login(payload: LoginRequest, conn):
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, conn=Depends(get_db_conn)):
     tenant_input = _normalize_tenant_code(payload.tenant_code)
+    normalized_username = normalize_auth_identifier(payload.username)
+    if not normalized_username:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials")
     if tenant_input == MASTER_TENANT_CODE:
         return handle_master_login(payload, conn)
 
@@ -213,11 +221,11 @@ def login(payload: LoginRequest, conn=Depends(get_db_conn)):
         FROM arls_users au
         LEFT JOIN employees e ON e.id = au.employee_id
         WHERE au.tenant_id = %s
-          AND lower(au.username) = lower(%s)
+          AND lower(regexp_replace(COALESCE(au.username, ''), '[-\\s]+', '', 'g')) = lower(%s)
           AND au.is_active = TRUE
           AND COALESCE(au.is_deleted, FALSE) = FALSE
         """,
-        (tenant["id"], payload.username),
+        (tenant["id"], normalized_username),
     )
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials")
