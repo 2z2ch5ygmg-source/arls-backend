@@ -22,6 +22,7 @@ from .routers import (
     attendance_router,
     attendance_requests_router,
     auth_router,
+    auth_public_router,
     companies_router,
     debug_router,
     dev_scope_router,
@@ -294,6 +295,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         return _apply_cors_headers(request, response)
     return JSONResponse(status_code=500, content={"detail": "internal server error"})
 
+app.include_router(auth_public_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(me_router, prefix="/api/v1")
 app.include_router(tenants_router, prefix="/api/v1")
