@@ -42,14 +42,17 @@ app = FastAPI(title="RG ARLS API", version="0.1.0")
 logger = logging.getLogger(__name__)
 
 PRIMARY_FRONTEND_ORIGIN = "https://rgarlsfront50018.z12.web.core.windows.net"
-ALLOWED_CORS_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+BACKEND_APP_ORIGIN = "https://rg-arls-backend.azurewebsites.net"
+DEFAULT_CORS_ORIGINS = [PRIMARY_FRONTEND_ORIGIN, BACKEND_APP_ORIGIN]
+ALLOWED_CORS_METHODS = ["*"]
 ALLOWED_CORS_HEADERS = [
+    "*",
     "Authorization",
     "Content-Type",
     "X-Tenant-Id",
     "X-HR-RESET-TOKEN",
-    "Idempotency-Key",
     "HR_AUTH_VALIDATE_TOKEN",
+    "Idempotency-Key",
     "hr_auth_validate_token",
     "Hr-Auth-Validate-Token",
     "X-Requested-With",
@@ -59,20 +62,15 @@ EXPOSED_CORS_HEADERS = ["Content-Disposition"]
 ACCESS_CONTROL_ALLOW_METHODS = ", ".join(ALLOWED_CORS_METHODS)
 ACCESS_CONTROL_ALLOW_HEADERS = ", ".join(ALLOWED_CORS_HEADERS)
 
-origins = settings.cors_origins
-origin_regex = settings.cors_origin_regex
-if not origin_regex:
-    origin_regex = (
-        r"^https://[a-zA-Z0-9-]+\\.z12\\.web\\.core\\.windows\\.net$"
-        r"|^https://rg-arls-backend\\.azurewebsites\\.net$"
-        r"|^https?://localhost(:\\d+)?$"
-        r"|^https?://127\\.0\\.0\\.1(:\\d+)?$"
-        r"|^(capacitor|ionic|app)://localhost$"
-    )
+origins = [x.strip() for x in settings.cors_origins if str(x).strip()]
 if not origins:
-    origins = [PRIMARY_FRONTEND_ORIGIN]
-elif PRIMARY_FRONTEND_ORIGIN not in origins:
-    origins = [*origins, PRIMARY_FRONTEND_ORIGIN]
+    origins = list(DEFAULT_CORS_ORIGINS)
+else:
+    if PRIMARY_FRONTEND_ORIGIN not in origins:
+        origins.append(PRIMARY_FRONTEND_ORIGIN)
+    if BACKEND_APP_ORIGIN not in origins:
+        origins.append(BACKEND_APP_ORIGIN)
+origin_regex = settings.cors_origin_regex or None
 
 _allowed_origins = set(origins)
 try:
