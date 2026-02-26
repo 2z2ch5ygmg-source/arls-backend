@@ -135,13 +135,46 @@ class FeatureFlagService:
         return canonical
 
     def list_effective(self, tenant_id) -> list[dict[str, Any]]:
+        latest_overrides = self._get_latest_overrides(tenant_id)
         result: list[dict[str, Any]] = []
         for key, default_enabled in sorted(self.defaults.items()):
-            override = self.get_override(tenant_id, key)
+            override = latest_overrides.get(key)
             result.append(
                 {
                     "flag_key": key,
-                    "enabled": bool(default_enabled if override is None else override),
+                    "enabled": bool(default_enabled if override is None else override["enabled"]),
+                    "updated_at": None if override is None else override["updated_at"],
                 },
             )
         return result
+
+    def _get_latest_overrides(self, tenant_id) -> dict[str, dict[str, Any]]:
+        aliases: set[str] = set()
+        for key in self.defaults.keys():
+            aliases.update(self._aliases(key))
+        if not aliases:
+            return {}
+
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT flag_key, enabled, updated_at
+                FROM integration_feature_flags
+                WHERE tenant_id = %s
+                  AND flag_key = ANY(%s::text[])
+                ORDER BY updated_at DESC
+                """,
+                (tenant_id, sorted(aliases)),
+            )
+            rows = cur.fetchall()
+
+        latest: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            canonical = normalize_flag_key(row["flag_key"])
+            if canonical in latest:
+                continue
+            latest[canonical] = {
+                "enabled": bool(row["enabled"]),
+                "updated_at": row["updated_at"],
+            }
+        return latest

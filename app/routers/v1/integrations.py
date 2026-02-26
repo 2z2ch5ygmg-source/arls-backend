@@ -866,11 +866,6 @@ def _write_sheets_sync_log(
         )
 
 
-def _get_feature_flag(conn, tenant_id, flag_key: str) -> bool | None:
-    feature_flags = FeatureFlagService(conn, FEATURE_FLAG_DEFAULTS)
-    return feature_flags.get_override(tenant_id, flag_key)
-
-
 def _is_feature_enabled(conn, tenant_id, flag_key: str) -> bool:
     feature_flags = FeatureFlagService(conn, FEATURE_FLAG_DEFAULTS)
     return feature_flags.is_enabled(tenant_id, flag_key)
@@ -3282,38 +3277,12 @@ def list_integration_feature_flags(
     results: list[IntegrationFeatureFlagOut] = []
     for item in feature_flags.list_effective(tenant["id"]):
         flag_key = str(item["flag_key"])
-        override = _get_feature_flag(conn, tenant["id"], flag_key)
-        updated_at = None
-        if override is not None:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT updated_at
-                    FROM integration_feature_flags
-                    WHERE tenant_id = %s
-                      AND flag_key = ANY(%s::text[])
-                    ORDER BY updated_at DESC
-                    LIMIT 1
-                    """,
-                    (
-                        tenant["id"],
-                        [
-                            flag_key,
-                            "soc_ingest_enabled" if flag_key == SOC_INTEGRATION_ENABLED else flag_key,
-                            "google_sheets_sync_enabled" if flag_key == SHEETS_SYNC_ENABLED else flag_key,
-                            "soc_overnight_enabled" if flag_key == APPLE_REPORT_OVERNIGHT_ENABLED else flag_key,
-                        ],
-                    ),
-                )
-                row = cur.fetchone()
-            updated_at = row["updated_at"] if row else None
-
         results.append(
             IntegrationFeatureFlagOut(
                 tenant_code=tenant["tenant_code"],
                 flag_key=flag_key,
                 enabled=bool(item["enabled"]),
-                updated_at=updated_at,
+                updated_at=item.get("updated_at"),
             ),
         )
     return sorted(results, key=lambda x: x.flag_key)
