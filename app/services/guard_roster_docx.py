@@ -13,6 +13,8 @@ DATE_PATTERN = re.compile(r"(?P<year>\d{2,4})\s*[./-]\s*(?P<month>\d{1,2})\s*[./
 PHONE_PATTERN = re.compile(r"(01[016789])[-\s]?(\d{3,4})[-\s]?(\d{4})")
 MGMT_NO_PATTERN = re.compile(r"[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)?")
 SITE_HINT_SPLIT_PATTERN = re.compile(r"[\r\n/|,;]+")
+NUMBER_TOKEN_RE = re.compile(r"^\d+[a-z가-힣]?$", flags=re.IGNORECASE)
+ROAD_TOKEN_RE = re.compile(r".*(로|길)$")
 
 FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     # 경비원명부 라벨 고정 파서 (요구사항 기준 9개)
@@ -275,13 +277,61 @@ def _sequence_similarity(a: str, b: str) -> float:
     return float(SequenceMatcher(None, left, right).ratio())
 
 
+def _tokenize_address(value: str) -> list[str]:
+    text = str(value or "").strip()
+    if not text:
+        return []
+    tokens: list[str] = []
+    for token in text.split():
+        normalized = token.strip()
+        if normalized:
+            tokens.append(normalized)
+    return tokens
+
+
+def _token_overlap_score(query_norm: str, address_norm: str) -> float:
+    query_tokens = set(_tokenize_address(query_norm))
+    address_tokens = set(_tokenize_address(address_norm))
+    if not query_tokens or not address_tokens:
+        return 0.0
+    union = query_tokens | address_tokens
+    if not union:
+        return 0.0
+    return float(len(query_tokens & address_tokens) / len(union))
+
+
+def _road_number_boost(query_norm: str, address_norm: str) -> tuple[float, bool, bool]:
+    query_tokens = set(_tokenize_address(query_norm))
+    address_tokens = set(_tokenize_address(address_norm))
+    if not query_tokens or not address_tokens:
+        return 0.0, False, False
+
+    query_road = {token for token in query_tokens if ROAD_TOKEN_RE.match(token)}
+    addr_road = {token for token in address_tokens if ROAD_TOKEN_RE.match(token)}
+    road_matched = bool(query_road & addr_road)
+
+    query_num = {token for token in query_tokens if NUMBER_TOKEN_RE.match(token)}
+    addr_num = {token for token in address_tokens if NUMBER_TOKEN_RE.match(token)}
+    number_matched = bool(query_num & addr_num)
+
+    boost = 0.0
+    if road_matched:
+        boost += 0.15
+    if number_matched:
+        boost += 0.25
+    return boost, road_matched, number_matched
+
+
 def _site_match_score(*, query_norm: str, site_name: str, address_norm: str) -> float:
     if not query_norm:
         return 0.0
-    addr_score = _sequence_similarity(query_norm, address_norm)
-    name_score = _sequence_similarity(query_norm, normalize_address_text(site_name))
-    # 주소 기반을 우선하고, 현장명 힌트를 보조 점수로 반영
-    return round(min(1.0, (addr_score * 0.85) + (name_score * 0.15)), 4)
+    token_overlap = _token_overlap_score(query_norm, address_norm)
+    string_similarity = _sequence_similarity(query_norm, address_norm)
+    name_similarity = _sequence_similarity(query_norm, normalize_address_text(site_name))
+    boost, _, _ = _road_number_boost(query_norm, address_norm)
+    # 주소 토큰(도로명/번지) 중심으로 점수를 산정하고, 문자열 유사도/현장명을 보조 반영
+    score = (token_overlap * 0.5) + (string_similarity * 0.2) + (name_similarity * 0.1) + boost
+    return round(min(1.0, score), 4)
 
 
 def select_site_match_query_text(*, placement_text: str, address_text: str) -> str:
@@ -296,7 +346,7 @@ def match_site_candidates(
     placement_text: str,
     address_text: str = "",
     sites: list[dict],
-    threshold: float = 0.75,
+    threshold: float = 0.60,
     top_n: int = 3,
 ) -> dict[str, object]:
     # 근무현장(배치지)을 우선 사용하고, 배치지가 충분하지 않을 때만 주소를 fallback으로 사용한다.
@@ -312,6 +362,9 @@ def match_site_candidates(
         site_name = _clean_text(site.get("site_name"))
         site_address = _clean_text(site.get("address_text") or site.get("address"))
         site_address_norm = _clean_text(site.get("address_norm")) or normalize_address_text(site_address)
+        token_overlap = _token_overlap_score(query_norm, site_address_norm)
+        string_similarity = _sequence_similarity(query_norm, site_address_norm)
+        boost, road_matched, number_matched = _road_number_boost(query_norm, site_address_norm)
         score = _site_match_score(
             query_norm=query_norm,
             site_name=site_name,
@@ -323,6 +376,10 @@ def match_site_candidates(
                 "site_code": site_code,
                 "site_name": site_name or site_code,
                 "score": round(float(score), 3),
+                "token_overlap": round(float(token_overlap), 3),
+                "string_similarity": round(float(string_similarity), 3),
+                "road_boost": 0.15 if road_matched else 0.0,
+                "number_boost": 0.25 if number_matched else 0.0,
             }
         )
 
@@ -330,26 +387,48 @@ def match_site_candidates(
     candidates = ranked[: max(1, int(top_n or 3))]
     best = candidates[0] if candidates else None
     best_score = float(best.get("score") or 0) if best else 0.0
+    second_score = float(candidates[1].get("score") or 0) if len(candidates) > 1 else 0.0
+    score_gap = round(max(0.0, best_score - second_score), 3)
     auto_site_code = str(best.get("site_code") or "").strip() if best else ""
     auto_site_name = str(best.get("site_name") or "").strip() if best else ""
     best_candidate = f"{auto_site_code}/{auto_site_name}".strip("/") if (auto_site_code or auto_site_name) else ""
-    print("AUTO_MATCH:", query_norm, best_candidate, round(best_score, 3))
+    threshold_score = float(threshold)
+    gap_auto = best_score >= 0.52 and score_gap >= 0.12
+    threshold_auto = best_score >= threshold_score
+    should_auto = bool(auto_site_code) and (threshold_auto or gap_auto)
 
-    status = "READY" if auto_site_code and best_score >= float(threshold) else "NEEDS_SITE_PICK"
+    print(
+        "AUTO_MATCH:",
+        query_norm,
+        best_candidate,
+        f"best={round(best_score, 3)}",
+        f"second={round(second_score, 3)}",
+        f"gap={score_gap}",
+        f"threshold_auto={threshold_auto}",
+        f"gap_auto={gap_auto}",
+    )
+
+    status = "READY" if should_auto else "NEEDS_SITE_PICK"
     if not query_norm:
         match_reason = "QUERY_EMPTY"
     elif not sites:
         match_reason = "INDEX_EMPTY"
     elif not candidates:
         match_reason = "NO_CANDIDATE"
-    elif status != "READY":
+    elif status == "READY" and gap_auto and not threshold_auto:
+        match_reason = "AUTO_MATCHED_BY_GAP"
+    elif status == "READY":
+        match_reason = "AUTO_MATCHED"
+    elif best_score < 0.52 or score_gap < 0.12:
         match_reason = "LOW_CONFIDENCE"
     else:
-        match_reason = "AUTO_MATCHED"
+        match_reason = "NEEDS_REVIEW"
     return {
         "site_code": auto_site_code if status == "READY" else "",
         "site_name": auto_site_name if status == "READY" else "",
         "confidence": round(best_score, 3),
+        "second_score": round(second_score, 3),
+        "score_gap": score_gap,
         "candidates": candidates,
         "status": status,
         "query_norm": query_norm,
