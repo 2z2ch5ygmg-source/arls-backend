@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import threading
+import time
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -12,6 +14,46 @@ from .utils.tenant_context import normalize_tenant_identifier
 from .utils.guards import IDEMPOTENCY, RATE_LIMITER
 
 security_scheme = HTTPBearer(auto_error=False)
+_USER_CACHE_TTL_SECONDS = 8.0
+_USER_CACHE_MAX_SIZE = 2048
+_USER_CACHE_LOCK = threading.Lock()
+_USER_CACHE: dict[str, tuple[float, dict]] = {}
+
+
+def _clone_user_payload(payload: dict) -> dict:
+    return {key: value for key, value in payload.items()}
+
+
+def _get_cached_user(token: str) -> dict | None:
+    now = time.monotonic()
+    with _USER_CACHE_LOCK:
+        cached = _USER_CACHE.get(token)
+        if not cached:
+            return None
+        expires_at, payload = cached
+        if expires_at <= now:
+            _USER_CACHE.pop(token, None)
+            return None
+        return _clone_user_payload(payload)
+
+
+def _set_cached_user(token: str, payload: dict) -> None:
+    now = time.monotonic()
+    cached_payload = _clone_user_payload(payload)
+    cached_payload.pop("active_tenant_id", None)
+
+    with _USER_CACHE_LOCK:
+        _USER_CACHE[token] = (now + _USER_CACHE_TTL_SECONDS, cached_payload)
+        if len(_USER_CACHE) <= _USER_CACHE_MAX_SIZE:
+            return
+        expired_keys = [key for key, (expires_at, _) in _USER_CACHE.items() if expires_at <= now]
+        for key in expired_keys:
+            _USER_CACHE.pop(key, None)
+        if len(_USER_CACHE) <= _USER_CACHE_MAX_SIZE:
+            return
+        # Fallback: 가장 먼저 만료되는 항목부터 제거
+        for key, _ in sorted(_USER_CACHE.items(), key=lambda item: item[1][0])[: len(_USER_CACHE) - _USER_CACHE_MAX_SIZE]:
+            _USER_CACHE.pop(key, None)
 
 
 def _unauthorized(message: str = "로그인이 필요합니다.") -> HTTPException:
@@ -61,6 +103,16 @@ def get_current_user(
     if not user_id or not tenant_id or not role:
         raise _unauthorized("유효하지 않은 인증 토큰입니다.")
 
+    cached_user = _get_cached_user(token)
+    if cached_user:
+        if (
+            str(cached_user.get("id") or "") == str(user_id)
+            and str(cached_user.get("tenant_id") or "") == str(tenant_id)
+            and normalize_role(cached_user.get("role")) == role
+        ):
+            cached_user["active_tenant_id"] = normalize_tenant_identifier(x_tenant_id)
+            return cached_user
+
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -87,6 +139,7 @@ def get_current_user(
 
     result = dict(row)
     result["role"] = normalize_user_role(result.get("role"))
+    _set_cached_user(token, result)
     result["active_tenant_id"] = normalize_tenant_identifier(x_tenant_id)
     return result
 
