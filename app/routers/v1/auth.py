@@ -12,12 +12,12 @@ from ...security import decode_refresh_token, encode_refresh_token, encode_token
 from ...utils.permissions import normalize_role, normalize_user_role
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-MASTER_TENANT_CODE = "MASTER"
+MASTER_TENANT_CODE = "master"
 MASTER_LOGIN_FORBIDDEN_MESSAGE = "슈퍼 관리자 계정만 MASTER로 로그인할 수 있습니다."
 
 
 def _normalize_tenant_code(value: Optional[str]) -> str:
-    return str(value or "").strip().upper()
+    return str(value or "").strip().lower()
 
 
 def _build_auth_user(
@@ -87,7 +87,7 @@ def handle_master_login(payload: LoginRequest, conn):
           AND COALESCE(au.is_deleted, FALSE) = FALSE
           AND COALESCE(t.is_active, TRUE) = TRUE
           AND COALESCE(t.is_deleted, FALSE) = FALSE
-          AND upper(t.tenant_code) = %s
+          AND lower(t.tenant_code) = %s
         ORDER BY COALESCE(au.last_login_at, au.updated_at, au.created_at) DESC
         LIMIT 10
         """,
@@ -196,11 +196,11 @@ def login(payload: LoginRequest, conn=Depends(get_db_conn)):
         """
         SELECT id, tenant_code, tenant_name
         FROM tenants
-        WHERE upper(tenant_code) = upper(%s)
+        WHERE lower(tenant_code) = %s
           AND COALESCE(is_active, TRUE) = TRUE
           AND COALESCE(is_deleted, FALSE) = FALSE
         """,
-        (payload.tenant_code,),
+        (tenant_input,),
     )
     if not tenant:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials")
@@ -236,7 +236,7 @@ def login(payload: LoginRequest, conn=Depends(get_db_conn)):
 
     return _build_token_response(
         user,
-        tenant_code=tenant["tenant_code"],
+        tenant_code=_normalize_tenant_code(tenant["tenant_code"]),
         role=user_role,
         is_master=False,
     )
@@ -279,7 +279,7 @@ def refresh(payload: RefreshTokenRequest, conn=Depends(get_db_conn)):
     role_scope = normalize_role(role)
     refresh_tenant_code = _normalize_tenant_code(token_payload.get("tenant_code"))
     is_master = role_scope == "dev" and refresh_tenant_code == MASTER_TENANT_CODE
-    tenant_code = MASTER_TENANT_CODE if is_master else user["tenant_code"]
+    tenant_code = MASTER_TENANT_CODE if is_master else _normalize_tenant_code(user["tenant_code"])
     if refresh_tenant_code and refresh_tenant_code not in {tenant_code, MASTER_TENANT_CODE}:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid refresh token")
 
@@ -306,11 +306,11 @@ def tenant_check(tenant_code: str = Query(..., min_length=1, max_length=64), con
         """
         SELECT tenant_code, tenant_name
         FROM tenants
-        WHERE upper(tenant_code) = upper(%s)
+        WHERE lower(tenant_code) = %s
           AND COALESCE(is_active, TRUE) = TRUE
           AND COALESCE(is_deleted, FALSE) = FALSE
         """,
-        (tenant_code.strip(),),
+        (_normalize_tenant_code(tenant_code),),
     )
     if not tenant:
         return {"exists": False}
@@ -329,7 +329,7 @@ def me(user=Depends(get_current_user)):
         username=user["username"],
         full_name=user["full_name"],
         tenant_id=user["tenant_id"],
-        tenant_code=user["tenant_code"],
+        tenant_code=_normalize_tenant_code(user["tenant_code"]),
         role=normalize_user_role(user["role"]),
         employee_id=user.get("employee_id"),
         employee_code=user.get("employee_code"),

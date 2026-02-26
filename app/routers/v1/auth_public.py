@@ -19,12 +19,23 @@ class ValidateAuthRequest(BaseModel):
     password: str = Field(min_length=1, max_length=255)
 
 
+def _normalize_tenant_code(value: Optional[str]) -> str:
+    return str(value or "").strip().lower()
+
+
 @router.post("/validate")
 def validate_credentials(
     payload: ValidateAuthRequest,
     hr_auth_validate_token: Optional[str] = Header(default=None, alias="HR_AUTH_VALIDATE_TOKEN"),
     conn=Depends(get_db_conn),
 ):
+    tenant_code = _normalize_tenant_code(payload.tenant_code)
+    if not tenant_code:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "INVALID_CREDENTIALS", "message": "invalid credentials"},
+        )
+
     required_token = str(settings.hr_auth_validate_token or "").strip()
     if required_token and str(hr_auth_validate_token or "").strip() != required_token:
         raise HTTPException(
@@ -37,12 +48,12 @@ def validate_credentials(
         """
         SELECT id
         FROM tenants
-        WHERE upper(tenant_code) = upper(%s)
+        WHERE lower(tenant_code) = %s
           AND COALESCE(is_active, TRUE) = TRUE
           AND COALESCE(is_deleted, FALSE) = FALSE
         LIMIT 1
         """,
-        (payload.tenant_code,),
+        (tenant_code,),
     )
     if not tenant:
         raise HTTPException(
