@@ -2060,6 +2060,80 @@ def update_employee(
     )
 
 
+@router.delete("/bulk-delete")
+def bulk_delete_employees_by_site(
+    site_code: str = Query(..., min_length=1, max_length=64),
+    tenant_code: str | None = Query(default=None, max_length=64),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    actor_role = normalize_role(user["role"])
+    if actor_role not in (ROLE_DEV, ROLE_BRANCH_MANAGER):
+        _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "forbidden")
+
+    normalized_site_code = str(site_code or "").strip()
+    if not normalized_site_code or normalized_site_code.lower() == "all":
+        _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "site_code is required")
+
+    tenant = _resolve_target_tenant(conn, user, tenant_code)
+    tenant_id = tenant["id"]
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, site_code
+            FROM sites
+            WHERE tenant_id = %s
+              AND upper(site_code) = upper(%s)
+            LIMIT 1
+            """,
+            (tenant_id, normalized_site_code),
+        )
+        site_row = cur.fetchone()
+        if not site_row:
+            _raise_api_error(status.HTTP_404_NOT_FOUND, "SITE_NOT_FOUND", "site not found")
+        _assert_branch_manager_site_scope(user, site_row["id"])
+
+        cur.execute(
+            """
+            UPDATE arls_users
+            SET employee_id = NULL,
+                updated_at = timezone('utc', now())
+            WHERE tenant_id = %s
+              AND employee_id IN (
+                  SELECT id
+                  FROM employees
+                  WHERE tenant_id = %s
+                    AND site_id = %s
+              )
+            """,
+            (tenant_id, tenant_id, site_row["id"]),
+        )
+        try:
+            cur.execute(
+                """
+                DELETE FROM employees
+                WHERE tenant_id = %s
+                  AND site_id = %s
+                """,
+                (tenant_id, site_row["id"]),
+            )
+            deleted_count = int(cur.rowcount or 0)
+        except ForeignKeyViolation:
+            _raise_api_error(
+                status.HTTP_409_CONFLICT,
+                "EMPLOYEE_HAS_REFERENCES",
+                "employee has references",
+            )
+        _reset_site_sequence_if_empty(conn, tenant_id, site_row["id"])
+
+    return {
+        "success": True,
+        "site_code": str(site_row.get("site_code") or "").strip(),
+        "deleted": deleted_count,
+    }
+
+
 @router.delete("/{employee_id}")
 def delete_employee(
     employee_id: uuid.UUID,
