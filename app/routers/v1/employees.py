@@ -27,6 +27,7 @@ from ...services.sites_match_index import list_site_match_index_rows
 from ...utils.address_norm import normalize_address_text
 from ...utils.credential_norm import normalize_auth_identifier
 from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, ROLE_EMPLOYEE, normalize_role, normalize_user_role
+from ...utils.schema_introspection import table_column_exists
 from ...utils.sql_debug import SQLPlaceholderMismatchError, exec_checked
 from ...utils.tenant_context import canonical_tenant_identifier, enforce_staff_site_scope, resolve_scoped_tenant
 
@@ -53,27 +54,7 @@ GUARD_ROSTER_IMPORT_SITE_MATCH_THRESHOLD = 0.60
 
 
 def _table_column_exists(conn, table_name: str, column_name: str) -> bool:
-    normalized_table = str(table_name or "").strip().lower()
-    normalized_column = str(column_name or "").strip().lower()
-    if not normalized_table or not normalized_column:
-        return False
-    with conn.cursor() as cur:
-        exec_checked(
-            cur,
-            """
-            SELECT EXISTS (
-                SELECT 1
-                FROM information_schema.columns
-                WHERE table_schema = 'public'
-                  AND table_name = %s
-                  AND column_name = %s
-            ) AS present
-            """,
-            (normalized_table, normalized_column),
-            stage="guard_roster.table_column_exists",
-        )
-        row = cur.fetchone()
-    return bool(row and row.get("present"))
+    return table_column_exists(conn, table_name, column_name)
 
 
 class GuardRosterCommitItem(BaseModel):

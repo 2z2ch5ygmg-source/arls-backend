@@ -25,6 +25,7 @@ from ...utils.permissions import (
     is_super_admin,
     normalize_role,
 )
+from ...utils.schema_introspection import table_column_exists
 from ...utils.tenant_context import enforce_staff_site_scope, resolve_scoped_tenant
 
 router = APIRouter(prefix="/sites", tags=["sites"], dependencies=[Depends(apply_rate_limit)])
@@ -142,21 +143,7 @@ def _resolve_default_company_code(conn, tenant_id) -> str:
 
 
 def _site_column_exists(conn, column_name: str) -> bool:
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT EXISTS (
-                SELECT 1
-                FROM information_schema.columns
-                WHERE table_schema = 'public'
-                  AND table_name = 'sites'
-                  AND column_name = %s
-            ) AS present
-            """,
-            (column_name,),
-        )
-        row = cur.fetchone()
-    return bool(row and row.get("present"))
+    return table_column_exists(conn, "sites", column_name)
 
 
 def _site_place_id_select_sql(conn, table_alias: str = "s") -> str:

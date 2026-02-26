@@ -4,24 +4,31 @@ from fastapi import APIRouter, Depends, Query
 
 from ...deps import apply_rate_limit, get_db_conn, require_roles
 from ...utils.permissions import ROLE_DEV, normalize_user_role
+from ...utils.schema_introspection import table_column_exists
 
 router = APIRouter(prefix="/dev", tags=["dev-scope"], dependencies=[Depends(apply_rate_limit)])
 
 
 def _table_column_exists(conn, table_name: str, column_name: str) -> bool:
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT 1
-            FROM information_schema.columns
-            WHERE table_schema = 'public'
-              AND table_name = %s
-              AND column_name = %s
-            LIMIT 1
-            """,
-            (table_name, column_name),
-        )
-        return bool(cur.fetchone())
+    return table_column_exists(conn, table_name, column_name)
+
+
+def _build_exact_match_clause(column_sql: str, value: str, params: list) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return ""
+    variants = [normalized]
+    upper_variant = normalized.upper()
+    if upper_variant not in variants:
+        variants.append(upper_variant)
+    lower_variant = normalized.lower()
+    if lower_variant not in variants:
+        variants.append(lower_variant)
+    if len(variants) == 1:
+        params.append(variants[0])
+        return f"{column_sql} = %s"
+    params.extend(variants)
+    return f"{column_sql} IN ({', '.join(['%s'] * len(variants))})"
 
 
 @router.get("/sites")
@@ -43,10 +50,10 @@ def list_dev_sites(
     clauses: list[str] = []
     params: list = []
 
-    normalized_tenant_code = str(tenant_code or "").strip().lower()
-    if normalized_tenant_code:
-        clauses.append("lower(trim(t.tenant_code)) = %s")
-        params.append(normalized_tenant_code)
+    normalized_tenant_code = str(tenant_code or "").strip()
+    tenant_clause = _build_exact_match_clause("t.tenant_code", normalized_tenant_code, params)
+    if tenant_clause:
+        clauses.append(tenant_clause)
 
     if has_site_deleted and not include_deleted:
         clauses.append("COALESCE(s.is_deleted, FALSE) = FALSE")
@@ -92,7 +99,7 @@ def list_dev_sites(
             JOIN tenants t ON t.id = s.tenant_id
             LEFT JOIN companies c ON c.id = s.company_id
             {where_sql}
-            ORDER BY lower(trim(t.tenant_code)), lower(trim(s.site_code))
+            ORDER BY t.tenant_code, s.site_code
             LIMIT %s
             """,
             tuple(params + [int(limit)]),
@@ -123,15 +130,16 @@ def list_dev_employees(
     clauses: list[str] = []
     params: list = []
 
-    normalized_tenant_code = str(tenant_code or "").strip().lower()
-    if normalized_tenant_code:
-        clauses.append("lower(trim(t.tenant_code)) = %s")
-        params.append(normalized_tenant_code)
+    normalized_tenant_code = str(tenant_code or "").strip()
+    tenant_clause = _build_exact_match_clause("t.tenant_code", normalized_tenant_code, params)
+    if tenant_clause:
+        clauses.append(tenant_clause)
 
     normalized_site_code = str(site_code or "").strip()
     if normalized_site_code and normalized_site_code.lower() != "all":
-        clauses.append("upper(s.site_code) = upper(%s)")
-        params.append(normalized_site_code)
+        site_clause = _build_exact_match_clause("s.site_code", normalized_site_code, params)
+        if site_clause:
+            clauses.append(site_clause)
 
     if has_employee_deleted and not include_deleted:
         clauses.append("COALESCE(e.is_deleted, FALSE) = FALSE")
@@ -203,7 +211,7 @@ def list_dev_employees(
             JOIN tenants t ON t.id = e.tenant_id
             {account_join_sql}
             {where_sql}
-            ORDER BY lower(trim(t.tenant_code)), lower(trim(e.employee_code))
+            ORDER BY t.tenant_code, e.employee_code
             LIMIT %s
             """,
             tuple(params + [int(limit)]),
