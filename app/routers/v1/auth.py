@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -23,7 +24,7 @@ class ValidateAuthRequest(BaseModel):
     password: str = Field(min_length=1, max_length=255)
 
 
-def _normalize_tenant_code(value: str | None) -> str:
+def _normalize_tenant_code(value: Optional[str]) -> str:
     return str(value or "").strip().upper()
 
 
@@ -301,7 +302,7 @@ def refresh(payload: RefreshTokenRequest, conn=Depends(get_db_conn)):
 @router.post("/validate", dependencies=[Depends(apply_rate_limit)])
 def validate_credentials(
     payload: ValidateAuthRequest,
-    hr_auth_validate_token: str | None = Header(default=None, alias="HR_AUTH_VALIDATE_TOKEN"),
+    hr_auth_validate_token: Optional[str] = Header(default=None, alias="HR_AUTH_VALIDATE_TOKEN"),
     conn=Depends(get_db_conn),
 ):
     required_token = str(settings.hr_auth_validate_token or "").strip()
