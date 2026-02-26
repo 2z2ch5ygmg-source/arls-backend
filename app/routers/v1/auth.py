@@ -299,7 +299,7 @@ def refresh(payload: RefreshTokenRequest, conn=Depends(get_db_conn)):
     )
 
 
-@router.post("/validate", dependencies=[Depends(apply_rate_limit)])
+@router.post("/validate")
 def validate_credentials(
     payload: ValidateAuthRequest,
     hr_auth_validate_token: Optional[str] = Header(default=None, alias="HR_AUTH_VALIDATE_TOKEN"),
