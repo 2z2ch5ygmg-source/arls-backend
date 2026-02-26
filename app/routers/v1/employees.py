@@ -15,6 +15,7 @@ import requests
 from ...config import settings
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
 from ...schemas import EmployeeCreate, EmployeeOut, EmployeeUpdate
+from ...security import hash_password
 from ...services.guard_roster_docx import (
     build_employee_code_from_management_no,
     extract_primary_docx_photo,
@@ -87,6 +88,10 @@ class GuardRosterCommitItem(BaseModel):
     employee_code: str | None = Field(default=None, max_length=120)
     roster_docx_id: str | None = Field(default=None, max_length=64)
     photo_id: str | None = Field(default=None, max_length=64)
+    username: str | None = Field(default=None, max_length=120)
+    initial_password: str | None = Field(default=None, max_length=120)
+    role: str | None = Field(default=None, max_length=64)
+    must_change_password: bool = True
     soc_role: str | None = Field(default=None, max_length=64)
 
     @field_validator(
@@ -105,6 +110,9 @@ class GuardRosterCommitItem(BaseModel):
         "employee_code",
         "roster_docx_id",
         "photo_id",
+        "username",
+        "initial_password",
+        "role",
         "soc_role",
         mode="before",
     )
@@ -394,6 +402,17 @@ def _normalize_soc_role(value: str | None, *, required: bool) -> str | None:
     return mapped
 
 
+def _resolve_import_account_role(
+    *,
+    role_value: str | None = None,
+    soc_role_value: str | None = None,
+) -> tuple[str, str]:
+    normalized_user_role = normalize_user_role(role_value or soc_role_value or "Officer")
+    user_role_key = str(normalized_user_role or "").strip().replace("-", "_").replace(" ", "_").upper()
+    soc_role = SOC_EMPLOYEE_ROLE_MAP.get(user_role_key, "Officer")
+    return normalized_user_role, soc_role
+
+
 def _to_iso_date(value) -> str | None:
     if value is None:
         return None
@@ -412,6 +431,7 @@ def _post_employee_sync_to_soc(
     employee_code: str,
     full_name: str,
     phone: str | None,
+    username: str | None = None,
     user_role: str | None,
     birth_date=None,
     leave_date=None,
@@ -452,6 +472,7 @@ def _post_employee_sync_to_soc(
             "employee_code": employee_code_norm,
             "name": str(full_name or "").strip(),
             "phone": phone,
+            "username": _normalize_optional_text(username),
             "role": role_norm,
             "birthdate": _to_iso_date(birth_date),
             "address": _normalize_optional_text(address),
@@ -752,19 +773,35 @@ def _upsert_guard_roster_employee(
     if not employee_code:
         _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "employee_code generation failed")
 
-    normalized_soc_role = _normalize_soc_role(item.soc_role, required=False)
     phone = _normalize_optional_roster_text(item.phone)
     address = _normalize_optional_roster_text(item.address)
     note = _normalize_optional_text(address)
     roster_docx_attachment_id = _normalize_optional_roster_text(item.roster_docx_id)
     photo_attachment_id = _normalize_optional_roster_text(item.photo_id)
+    account_user_role, account_soc_role = _resolve_import_account_role(
+        role_value=item.role,
+        soc_role_value=item.soc_role,
+    )
+    normalized_soc_role = _normalize_soc_role(item.soc_role or item.role, required=False) or account_soc_role
+
+    account_username = _normalize_optional_roster_text(item.username) or phone
+    if not account_username:
+        _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "username is required")
+    account_initial_password = _normalize_optional_roster_text(item.initial_password) or phone
+    if not account_initial_password:
+        _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "initial_password is required")
+    account_password_hash = hash_password(account_initial_password)
+    account_must_change_password = bool(item.must_change_password)
+
+    user_has_must_change_password = _table_column_exists(conn, "arls_users", "must_change_password")
 
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT id, employee_uuid, employee_code, full_name, phone, birth_date, hire_date,
                    leave_date, address, management_no_str, roster_docx_attachment_id, photo_attachment_id,
-                   guard_training_cert_no, note, soc_login_id, soc_role
+                   guard_training_cert_no, note, soc_login_id, soc_role,
+                   username, password_hash, must_change_password, role
             FROM employees
             WHERE tenant_id = %s
               AND upper(employee_code) = upper(%s)
@@ -797,13 +834,18 @@ def _upsert_guard_roster_employee(
                     photo_attachment_id = %s,
                     guard_training_cert_no = %s,
                     note = %s,
+                    username = %s,
+                    password_hash = %s,
+                    must_change_password = %s,
+                    role = %s,
                     soc_role = %s,
                     updated_at = timezone('utc', now())
                 WHERE id = %s
                 RETURNING id, employee_uuid, employee_code, full_name, phone,
                           birth_date, hire_date, leave_date, address, management_no_str,
                           roster_docx_attachment_id, photo_attachment_id,
-                          guard_training_cert_no, note, soc_login_id, soc_role
+                          guard_training_cert_no, note, soc_login_id, soc_role,
+                          username, password_hash, must_change_password, role
                 """,
                 (
                     site_relation["company_id"],
@@ -820,6 +862,10 @@ def _upsert_guard_roster_employee(
                     photo_attachment_id or existing.get("photo_attachment_id"),
                     training_cert_no,
                     note,
+                    account_username,
+                    account_password_hash,
+                    account_must_change_password,
+                    account_user_role,
                     normalized_soc_role or existing.get("soc_role"),
                     existing["id"],
                 ),
@@ -835,13 +881,17 @@ def _upsert_guard_roster_employee(
                     id, employee_uuid, tenant_id, company_id, site_id, sequence_no, employee_code,
                     full_name, phone, duty_role, birth_date, hire_date, guard_training_cert_no,
                     leave_date, address, management_no_str, roster_docx_attachment_id, photo_attachment_id,
-                    note, soc_login_id, soc_role
+                    note, soc_login_id, soc_role, username, password_hash, must_change_password, role
                 )
-                VALUES (%s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (
+                    %s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s
+                )
                 RETURNING id, employee_uuid, employee_code, full_name, phone,
                           birth_date, hire_date, leave_date, address, management_no_str,
                           roster_docx_attachment_id, photo_attachment_id,
-                          guard_training_cert_no, note, soc_login_id, soc_role
+                          guard_training_cert_no, note, soc_login_id, soc_role,
+                          username, password_hash, must_change_password, role
                 """,
                 (
                     employee_id,
@@ -864,10 +914,142 @@ def _upsert_guard_roster_employee(
                     note,
                     None,
                     normalized_soc_role or "Officer",
+                    account_username,
+                    account_password_hash,
+                    account_must_change_password,
+                    account_user_role,
                 ),
             )
             row = cur.fetchone()
             action = "CREATED"
+
+    employee_id_value = str(row.get("id") or "")
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, employee_id
+            FROM arls_users
+            WHERE tenant_id = %s
+              AND lower(username) = lower(%s)
+              AND COALESCE(is_deleted, FALSE) = FALSE
+            LIMIT 1
+            """,
+            (tenant_id, account_username),
+        )
+        username_owner = cur.fetchone()
+        if username_owner and str(username_owner.get("employee_id") or "") not in {"", employee_id_value}:
+            _raise_api_error(status.HTTP_409_CONFLICT, "USERNAME_EXISTS", "username already exists in tenant")
+
+        cur.execute(
+            """
+            SELECT id
+            FROM arls_users
+            WHERE tenant_id = %s
+              AND employee_id = %s
+              AND COALESCE(is_deleted, FALSE) = FALSE
+            LIMIT 1
+            """,
+            (tenant_id, employee_id_value),
+        )
+        existing_user = cur.fetchone()
+        target_user_id = str(existing_user.get("id") or "") if existing_user else ""
+        if not target_user_id and username_owner and str(username_owner.get("employee_id") or "") == employee_id_value:
+            target_user_id = str(username_owner.get("id") or "")
+
+        if target_user_id:
+            if user_has_must_change_password:
+                cur.execute(
+                    """
+                    UPDATE arls_users
+                    SET username = %s,
+                        password_hash = %s,
+                        full_name = %s,
+                        role = %s,
+                        employee_id = %s,
+                        site_id = %s,
+                        is_active = TRUE,
+                        must_change_password = %s,
+                        updated_at = timezone('utc', now())
+                    WHERE id = %s
+                    """,
+                    (
+                        account_username,
+                        account_password_hash,
+                        full_name,
+                        account_user_role,
+                        employee_id_value,
+                        site_relation["site_id"],
+                        account_must_change_password,
+                        target_user_id,
+                    ),
+                )
+            else:
+                cur.execute(
+                    """
+                    UPDATE arls_users
+                    SET username = %s,
+                        password_hash = %s,
+                        full_name = %s,
+                        role = %s,
+                        employee_id = %s,
+                        site_id = %s,
+                        is_active = TRUE,
+                        updated_at = timezone('utc', now())
+                    WHERE id = %s
+                    """,
+                    (
+                        account_username,
+                        account_password_hash,
+                        full_name,
+                        account_user_role,
+                        employee_id_value,
+                        site_relation["site_id"],
+                        target_user_id,
+                    ),
+                )
+        else:
+            new_user_id = str(uuid.uuid4())
+            if user_has_must_change_password:
+                cur.execute(
+                    """
+                    INSERT INTO arls_users (
+                        id, tenant_id, username, password_hash, full_name, role, is_active,
+                        employee_id, site_id, must_change_password, created_at, updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s, %s, %s, timezone('utc', now()), timezone('utc', now()))
+                    """,
+                    (
+                        new_user_id,
+                        tenant_id,
+                        account_username,
+                        account_password_hash,
+                        full_name,
+                        account_user_role,
+                        employee_id_value,
+                        site_relation["site_id"],
+                        account_must_change_password,
+                    ),
+                )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO arls_users (
+                        id, tenant_id, username, password_hash, full_name, role, is_active,
+                        employee_id, site_id, created_at, updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s, %s, timezone('utc', now()), timezone('utc', now()))
+                    """,
+                    (
+                        new_user_id,
+                        tenant_id,
+                        account_username,
+                        account_password_hash,
+                        full_name,
+                        account_user_role,
+                        employee_id_value,
+                        site_relation["site_id"],
+                    ),
+                )
 
     _post_employee_sync_to_soc(
         tenant_code=tenant_code,
@@ -876,6 +1058,7 @@ def _upsert_guard_roster_employee(
         employee_code=str(row.get("employee_code") or employee_code),
         full_name=str(row.get("full_name") or full_name),
         phone=row.get("phone"),
+        username=account_username,
         user_role=row.get("soc_role"),
         birth_date=row.get("birth_date"),
         leave_date=row.get("leave_date"),
@@ -895,6 +1078,8 @@ def _upsert_guard_roster_employee(
         "employee_code": str(row.get("employee_code") or employee_code),
         "full_name": str(row.get("full_name") or full_name),
         "phone": str(row.get("phone") or ""),
+        "username": account_username,
+        "role": account_user_role,
         "company_code": company_code,
         "site_code": site_code,
     }
@@ -1676,6 +1861,7 @@ def create_employee(
         employee_code=str(created.get("employee_code") or ""),
         full_name=str(created.get("full_name") or payload.full_name or ""),
         phone=created.get("phone"),
+        username=created.get("soc_login_id") or _normalize_optional_text(payload.soc_login_id),
         user_role=created.get("user_role"),
         birth_date=created.get("birth_date"),
         leave_date=created.get("leave_date"),

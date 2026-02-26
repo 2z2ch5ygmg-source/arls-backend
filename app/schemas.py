@@ -26,6 +26,10 @@ class AuthUser(BaseModel):
     role: str
     employee_id: Optional[UUID] = None
     employee_code: Optional[str] = None
+    must_change_password: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("must_change_password", "mustChangePassword"),
+    )
     is_master: Optional[bool] = Field(default=None, serialization_alias="isMaster")
     tenant_scope: Optional[str] = Field(default=None, serialization_alias="tenantScope")
 

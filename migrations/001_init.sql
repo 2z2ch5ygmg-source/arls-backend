@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS arls_users (
     tenant_id uuid NOT NULL,
     username text NOT NULL,
     password_hash text NOT NULL,
+    must_change_password boolean NOT NULL DEFAULT false,
     full_name text NOT NULL DEFAULT '',
     role text NOT NULL,
     is_active boolean NOT NULL DEFAULT true,
@@ -434,6 +435,38 @@ BEGIN
       WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'management_no_str'
     ) THEN
       ALTER TABLE employees ADD COLUMN management_no_str text;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'username'
+    ) THEN
+      ALTER TABLE employees ADD COLUMN username text;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'password_hash'
+    ) THEN
+      ALTER TABLE employees ADD COLUMN password_hash text;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'must_change_password'
+    ) THEN
+      ALTER TABLE employees ADD COLUMN must_change_password boolean NOT NULL DEFAULT true;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'role'
+    ) THEN
+      ALTER TABLE employees ADD COLUMN role text;
     END IF;
 
     IF NOT EXISTS (
@@ -991,6 +1024,14 @@ BEGIN
       WHERE table_schema = 'public' AND table_name = 'arls_users' AND column_name = 'is_deleted'
     ) THEN
       ALTER TABLE arls_users ADD COLUMN is_deleted boolean NOT NULL DEFAULT false;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'arls_users' AND column_name = 'must_change_password'
+    ) THEN
+      ALTER TABLE arls_users ADD COLUMN must_change_password boolean NOT NULL DEFAULT false;
     END IF;
 
     IF NOT EXISTS (

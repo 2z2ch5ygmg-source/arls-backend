@@ -306,6 +306,7 @@ def change_own_password(
             """
             UPDATE arls_users
             SET password_hash = %s,
+                must_change_password = FALSE,
                 updated_at = timezone('utc', now())
             WHERE id = %s
             """,
