@@ -48,6 +48,10 @@ ALLOWED_CORS_HEADERS = [
     "Content-Type",
     "X-Tenant-Id",
     "X-HR-RESET-TOKEN",
+    "Idempotency-Key",
+    "HR_AUTH_VALIDATE_TOKEN",
+    "hr_auth_validate_token",
+    "Hr-Auth-Validate-Token",
     "X-Requested-With",
     "idempotency-key",
 ]
