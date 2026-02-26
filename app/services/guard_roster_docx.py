@@ -327,12 +327,24 @@ def match_site_candidates(
     print("AUTO_MATCH:", query_norm, best_candidate, round(best_score, 3))
 
     status = "READY" if auto_site_code and best_score >= float(threshold) else "NEEDS_SITE_PICK"
+    if not query_norm:
+        match_reason = "QUERY_EMPTY"
+    elif not sites:
+        match_reason = "INDEX_EMPTY"
+    elif not candidates:
+        match_reason = "NO_CANDIDATE"
+    elif status != "READY":
+        match_reason = "LOW_CONFIDENCE"
+    else:
+        match_reason = "AUTO_MATCHED"
     return {
         "site_code": auto_site_code if status == "READY" else "",
         "site_name": auto_site_name if status == "READY" else "",
         "confidence": round(best_score, 3),
         "candidates": candidates,
         "status": status,
+        "query_norm": query_norm,
+        "match_reason": match_reason,
     }
 
 

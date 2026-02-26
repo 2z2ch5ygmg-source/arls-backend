@@ -164,12 +164,13 @@ def _build_guard_roster_file_name(file_uuid: str, source_filename: str) -> str:
     return f"{file_uuid}.{safe_ext}"
 
 
-def _fetch_tenant_sites_for_roster_match(conn, tenant_id: str) -> list[dict[str, Any]]:
+def _fetch_tenant_sites_for_roster_match(conn, tenant_id: str) -> tuple[list[dict[str, Any]], int]:
     # 우선: 주소 매칭 인덱스 테이블 사용
     try:
         indexed_rows = list_site_match_index_rows(conn, tenant_id=tenant_id)
     except Exception:
         indexed_rows = []
+    index_total_sites = len(indexed_rows)
 
     if indexed_rows:
         normalized_rows: list[dict[str, Any]] = []
@@ -188,7 +189,7 @@ def _fetch_tenant_sites_for_roster_match(conn, tenant_id: str) -> list[dict[str,
                 }
             )
         if normalized_rows:
-            return normalized_rows
+            return normalized_rows, index_total_sites
 
     # fallback: 인덱스가 아직 없으면 기존 sites를 기반으로 즉시 매칭
     with conn.cursor() as cur:
@@ -217,7 +218,7 @@ def _fetch_tenant_sites_for_roster_match(conn, tenant_id: str) -> list[dict[str,
                 "address_norm": normalize_address_text(address_text),
             }
         )
-    return normalized_rows
+    return normalized_rows, index_total_sites
 
 
 def _find_site_relation_by_code(conn, tenant_id: str, site_code: str) -> dict[str, Any] | None:
@@ -915,7 +916,7 @@ async def import_guard_roster_docx(
         tenant_id=tenant_id,
         uploaded_by=uploaded_by,
     )
-    tenant_sites = _fetch_tenant_sites_for_roster_match(conn, tenant_id)
+    tenant_sites, index_total_sites = _fetch_tenant_sites_for_roster_match(conn, tenant_id)
     response_items: list[dict[str, Any]] = []
 
     for upload in files:
@@ -930,6 +931,7 @@ async def import_guard_roster_docx(
                     "attachments": {"roster_docx_id": "", "photo_id": ""},
                     "status": "INVALID_FILE",
                     "message": "docx 파일만 업로드할 수 있습니다.",
+                    "debug": {"query_norm": "", "index_total_sites": index_total_sites, "match_reason": "INVALID_FILE"},
                 }
             )
             continue
@@ -945,6 +947,7 @@ async def import_guard_roster_docx(
                     "attachments": {"roster_docx_id": "", "photo_id": ""},
                     "status": "INVALID_FILE",
                     "message": "빈 파일입니다.",
+                    "debug": {"query_norm": "", "index_total_sites": index_total_sites, "match_reason": "INVALID_FILE"},
                 }
             )
             continue
@@ -959,19 +962,39 @@ async def import_guard_roster_docx(
                     "match": {"site_code": "", "site_name": "", "confidence": 0, "candidates": []},
                     "generated": {"employee_code": ""},
                     "attachments": {"roster_docx_id": "", "photo_id": ""},
-                    "status": "PARSE_ERROR",
+                    "status": "PARSE_FAILED",
                     "message": f"문서 파싱 실패: {str(exc)}",
+                    "debug": {
+                        "query_norm": "",
+                        "index_total_sites": index_total_sites,
+                        "match_reason": "PARSER_EXCEPTION",
+                    },
                 }
             )
             continue
 
-        match_result = match_site_candidates(
-            placement_text=str(parsed.get("placement_text") or ""),
-            address_text=str(parsed.get("address") or ""),
-            sites=tenant_sites,
-            threshold=GUARD_ROSTER_IMPORT_SITE_MATCH_THRESHOLD,
-            top_n=3,
-        )
+        parsed_address = str(parsed.get("address") or "").strip()
+        parsed_placement = str(parsed.get("placement_text") or "").strip()
+        query_norm = normalize_address_text(parsed_address) or normalize_address_text(parsed_placement)
+        parse_failed = not parsed_address and not parsed_placement
+        if parse_failed:
+            match_result = {
+                "site_code": "",
+                "site_name": "",
+                "confidence": 0.0,
+                "candidates": [],
+                "status": "PARSE_FAILED",
+                "query_norm": "",
+                "match_reason": "PARSE_FAILED",
+            }
+        else:
+            match_result = match_site_candidates(
+                placement_text=parsed_placement,
+                address_text=parsed_address,
+                sites=tenant_sites,
+                threshold=GUARD_ROSTER_IMPORT_SITE_MATCH_THRESHOLD,
+                top_n=3,
+            )
         management_no_str = str(parsed.get("management_no_str") or parsed.get("management_no") or "")
         generated_code = build_employee_code_from_management_no(
             str(match_result.get("site_code") or ""),
@@ -1016,7 +1039,25 @@ async def import_guard_roster_docx(
                     "roster_docx_id": attachment_id,
                     "photo_id": attachment_id if photo_bytes else "",
                 },
-                "status": str(match_result.get("status") or "NEEDS_SITE_PICK"),
+                "status": "PARSE_FAILED" if parse_failed else str(match_result.get("status") or "NEEDS_SITE_PICK"),
+                "debug": {
+                    "query_norm": str(match_result.get("query_norm") or query_norm or ""),
+                    "index_total_sites": index_total_sites,
+                    "match_reason": str(
+                        match_result.get("match_reason")
+                        or ("PARSE_FAILED" if parse_failed else "")
+                        or "UNKNOWN"
+                    ),
+                    "message": (
+                        "문서에서 주소/배치지 추출 실패"
+                        if parse_failed
+                        else (
+                            "지점 인덱스 없음(지점 먼저 등록/인덱스 재생성)"
+                            if index_total_sites <= 0
+                            else ""
+                        )
+                    ),
+                },
                 "tenant_id": tenant_code_norm,
             }
         )
