@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import threading
+import time
 
 from fastapi import HTTPException, status
 
@@ -8,6 +10,10 @@ from .permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, ROLE_EMPLOYEE, normalize
 
 TENANT_ID_PATTERN = re.compile(r"^[a-z0-9_]{3,32}$")
 TENANT_ID_INPUT_PATTERN = re.compile(r"^[a-z0-9_-]{3,32}$")
+_TENANT_ROW_CACHE_TTL_SECONDS = 12.0
+_TENANT_ROW_CACHE_MAX_SIZE = 1024
+_TENANT_ROW_CACHE_LOCK = threading.Lock()
+_TENANT_ROW_CACHE: dict[tuple[str, ...], tuple[float, dict | None]] = {}
 
 
 def normalize_tenant_identifier(value: str | None) -> str:
@@ -53,6 +59,15 @@ def fetch_tenant_row_any(conn, tenant_ref: str | None):
     candidates = list(build_tenant_identifier_candidates(tenant_ref))
     if not candidates:
         return None
+
+    cache_key = tuple(sorted(candidates))
+    now = time.monotonic()
+    with _TENANT_ROW_CACHE_LOCK:
+        cached = _TENANT_ROW_CACHE.get(cache_key)
+        if cached and cached[0] > now:
+            payload = cached[1]
+            return dict(payload) if isinstance(payload, dict) else None
+
     primary = candidates[0]
     fallback = candidates[1] if len(candidates) > 1 else primary
     with conn.cursor() as cur:
@@ -73,7 +88,35 @@ def fetch_tenant_row_any(conn, tenant_ref: str | None):
             """,
             (candidates, candidates, primary, fallback),
         )
-        return cur.fetchone()
+        row = cur.fetchone()
+
+    row_payload = dict(row) if row else None
+    with _TENANT_ROW_CACHE_LOCK:
+        _TENANT_ROW_CACHE[cache_key] = (now + _TENANT_ROW_CACHE_TTL_SECONDS, row_payload)
+        if len(_TENANT_ROW_CACHE) > _TENANT_ROW_CACHE_MAX_SIZE:
+            expired = [key for key, (expires_at, _) in _TENANT_ROW_CACHE.items() if expires_at <= now]
+            for key in expired:
+                _TENANT_ROW_CACHE.pop(key, None)
+            if len(_TENANT_ROW_CACHE) > _TENANT_ROW_CACHE_MAX_SIZE:
+                for key, _ in sorted(_TENANT_ROW_CACHE.items(), key=lambda item: item[1][0])[
+                    : len(_TENANT_ROW_CACHE) - _TENANT_ROW_CACHE_MAX_SIZE
+                ]:
+                    _TENANT_ROW_CACHE.pop(key, None)
+    return row_payload
+
+
+def _build_own_tenant_row_from_user(user: dict) -> dict | None:
+    tenant_id = str(user.get("tenant_id") or "").strip()
+    tenant_code = str(user.get("tenant_code") or "").strip()
+    if not tenant_id:
+        return None
+    return {
+        "id": tenant_id,
+        "tenant_code": tenant_code,
+        "tenant_name": str(user.get("tenant_name") or "").strip(),
+        "is_active": bool(user.get("tenant_is_active", True)),
+        "is_deleted": bool(user.get("tenant_is_deleted", False)),
+    }
 
 
 def ensure_tenant_active(row: dict | None):
@@ -106,7 +149,14 @@ def resolve_scoped_tenant(
     requested_ref = resolve_tenant_context_ref(header_ref, body_ref, query_ref)
 
     own_ref = resolve_tenant_context_ref(str(user.get("tenant_id") or ""), user.get("tenant_code"))
-    own_row = ensure_tenant_active(fetch_tenant_row_any(conn, own_ref))
+    own_row = _build_own_tenant_row_from_user(user)
+    if own_row:
+        ensure_tenant_active(own_row)
+    else:
+        own_row = ensure_tenant_active(fetch_tenant_row_any(conn, own_ref))
+    own_candidates = set(build_tenant_identifier_candidates(own_ref))
+    if str(own_row.get("id") or ""):
+        own_candidates.add(str(own_row["id"]))
 
     if actor_role == ROLE_DEV:
         if not requested_ref:
@@ -116,12 +166,15 @@ def resolve_scoped_tenant(
                     detail={"error": "TENANT_CONTEXT_REQUIRED", "message": "작업회사 선택이 필요합니다."},
                 )
             return own_row
+        requested_candidates = set(build_tenant_identifier_candidates(requested_ref))
+        if requested_candidates & own_candidates:
+            return own_row
         return ensure_tenant_active(fetch_tenant_row_any(conn, requested_ref))
 
     if actor_role == ROLE_BRANCH_MANAGER:
         if requested_ref:
-            target_row = fetch_tenant_row_any(conn, requested_ref)
-            if not target_row or str(target_row.get("id") or "") != str(own_row.get("id") or ""):
+            requested_candidates = set(build_tenant_identifier_candidates(requested_ref))
+            if not (requested_candidates & own_candidates):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail={"error": "FORBIDDEN", "message": "접근 권한이 없습니다."},
@@ -129,8 +182,8 @@ def resolve_scoped_tenant(
         return own_row
 
     if actor_role == ROLE_EMPLOYEE and requested_ref:
-        target_row = fetch_tenant_row_any(conn, requested_ref)
-        if not target_row or str(target_row.get("id") or "") != str(own_row.get("id") or ""):
+        requested_candidates = set(build_tenant_identifier_candidates(requested_ref))
+        if not (requested_candidates & own_candidates):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"error": "FORBIDDEN", "message": "접근 권한이 없습니다."},
