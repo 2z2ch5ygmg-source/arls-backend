@@ -566,6 +566,10 @@ BEGIN
       ON employees (tenant_id, site_id, external_employee_key);
     CREATE INDEX IF NOT EXISTS idx_employees_tenant_site_duty_role
       ON employees (tenant_id, site_id, duty_role);
+    CREATE INDEX IF NOT EXISTS idx_employees_tenant_site
+      ON employees (tenant_id, site_id);
+    CREATE INDEX IF NOT EXISTS idx_employees_tenant_employee_code
+      ON employees (tenant_id, employee_code);
     CREATE UNIQUE INDEX IF NOT EXISTS uq_employees_tenant_site_sequence
       ON employees (tenant_id, site_id, sequence_no)
       WHERE sequence_no IS NOT NULL;
@@ -1086,6 +1090,8 @@ BEGIN
 
     CREATE INDEX IF NOT EXISTS idx_arls_users_tenant_active_deleted
       ON arls_users (tenant_id, is_active, is_deleted, role);
+    CREATE INDEX IF NOT EXISTS idx_arls_users_tenant_employee_active_recent
+      ON arls_users (tenant_id, employee_id, is_active, updated_at DESC, created_at DESC);
   END IF;
 END $$;
 
@@ -1288,6 +1294,8 @@ BEGIN
 
     CREATE INDEX IF NOT EXISTS idx_sites_tenant_active
       ON sites (tenant_id, is_active, site_code);
+    CREATE INDEX IF NOT EXISTS idx_sites_tenant_site_code
+      ON sites (tenant_id, site_code);
     CREATE INDEX IF NOT EXISTS idx_sites_tenant_company
       ON sites (tenant_id, company_id, site_code);
   END IF;

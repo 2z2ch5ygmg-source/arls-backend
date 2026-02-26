@@ -30,6 +30,7 @@ def list_dev_sites(
     include_deleted: bool = Query(default=False),
     tenant_code: str | None = Query(default=None, max_length=64),
     q: str | None = Query(default=None, min_length=1, max_length=120),
+    limit: int = Query(default=1000, ge=1, le=10000),
     conn=Depends(get_db_conn),
     _user=Depends(require_roles(ROLE_DEV)),
 ):
@@ -92,8 +93,9 @@ def list_dev_sites(
             LEFT JOIN companies c ON c.id = s.company_id
             {where_sql}
             ORDER BY lower(trim(t.tenant_code)), lower(trim(s.site_code))
+            LIMIT %s
             """,
-            tuple(params),
+            tuple(params + [int(limit)]),
         )
         rows = cur.fetchall() or []
     return rows
@@ -106,6 +108,8 @@ def list_dev_employees(
     tenant_code: str | None = Query(default=None, max_length=64),
     site_code: str | None = Query(default=None, max_length=64),
     q: str | None = Query(default=None, min_length=1, max_length=120),
+    limit: int = Query(default=1000, ge=1, le=10000),
+    include_account: bool = Query(default=False),
     conn=Depends(get_db_conn),
     _user=Depends(require_roles(ROLE_DEV)),
 ):
@@ -163,6 +167,23 @@ def list_dev_employees(
 
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
+    account_join_sql = ""
+    account_select_sql = "NULL::uuid AS user_id, NULL::text AS user_role"
+    if include_account:
+        account_select_sql = "u.id AS user_id, u.role AS user_role"
+        account_join_sql = """
+            LEFT JOIN (
+                SELECT DISTINCT ON (au.tenant_id, au.employee_id)
+                       au.tenant_id, au.employee_id, au.id, au.role
+                FROM arls_users au
+                WHERE COALESCE(au.is_active, TRUE) = TRUE
+                  AND COALESCE(au.is_deleted, FALSE) = FALSE
+                ORDER BY au.tenant_id, au.employee_id, au.updated_at DESC NULLS LAST, au.created_at DESC NULLS LAST
+            ) u
+              ON u.tenant_id = e.tenant_id
+             AND u.employee_id = e.id
+        """
+
     with conn.cursor() as cur:
         cur.execute(
             f"""
@@ -175,24 +196,17 @@ def list_dev_employees(
                    e.guard_training_cert_no, e.note,
                    e.roster_docx_attachment_id, e.photo_attachment_id,
                    e.soc_login_id, e.soc_role,
-                   u.id AS user_id, u.role AS user_role
+                   {account_select_sql}
             FROM employees e
             JOIN sites s ON s.id = e.site_id
             LEFT JOIN companies c ON c.id = s.company_id
             JOIN tenants t ON t.id = e.tenant_id
-            LEFT JOIN LATERAL (
-                SELECT au.id, au.role
-                FROM arls_users au
-                WHERE au.tenant_id = e.tenant_id
-                  AND au.employee_id = e.id
-                  AND au.is_active = TRUE
-                ORDER BY au.updated_at DESC NULLS LAST, au.created_at DESC NULLS LAST
-                LIMIT 1
-            ) u ON TRUE
+            {account_join_sql}
             {where_sql}
             ORDER BY lower(trim(t.tenant_code)), lower(trim(e.employee_code))
+            LIMIT %s
             """,
-            tuple(params),
+            tuple(params + [int(limit)]),
         )
         rows = cur.fetchall() or []
 

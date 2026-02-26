@@ -1621,8 +1621,12 @@ async def upload_employee_attachments(
 def list_employees(
     site_id: str | None = Query(default=None, max_length=64),
     site_code: str | None = Query(default=None, max_length=64),
+    q: str | None = Query(default=None, min_length=1, max_length=120),
+    limit: int = Query(default=500, ge=1, le=5000),
     include_inactive: bool = Query(default=False),
     include_deleted: bool = Query(default=False),
+    detail: bool = Query(default=False),
+    include_account: bool = Query(default=False),
     tenant_code: str | None = Query(default=None, max_length=64),
     conn=Depends(get_db_conn),
     user=Depends(get_current_user),
@@ -1658,6 +1662,22 @@ def list_employees(
     effective_site_code = ""
     if not effective_site_id:
         effective_site_code = (normalized_site_code or scoped_site_code or "").strip()
+        if effective_site_code:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT s.id
+                    FROM sites s
+                    WHERE s.tenant_id = %s
+                      AND upper(s.site_code) = upper(%s)
+                    LIMIT 1
+                    """,
+                    (tenant["id"], effective_site_code),
+                )
+                site_row = cur.fetchone()
+            if site_row:
+                effective_site_id = str(site_row.get("id") or "").strip()
+                effective_site_code = ""
 
     clauses: list[str] = ["e.tenant_id = %s"]
     params = [tenant["id"]]
@@ -1682,46 +1702,111 @@ def list_employees(
     if has_site_active and not include_inactive:
         clauses.append("COALESCE(s.is_active, TRUE) = TRUE")
 
-    where_sql = f"WHERE {' AND '.join(clauses)}"
+    keyword = str(q or "").strip()
+    if keyword:
+        like = f"%{keyword}%"
+        clauses.append(
+            """
+            (
+                e.employee_code ILIKE %s
+                OR COALESCE(e.full_name, '') ILIKE %s
+                OR COALESCE(e.phone, '') ILIKE %s
+                OR COALESCE(s.site_code, '') ILIKE %s
+                OR COALESCE(s.site_name, '') ILIKE %s
+            )
+            """
+        )
+        params.extend([like, like, like, like, like])
 
-    with conn.cursor() as cur:
-        cur.execute(
-            f"""
-            SELECT e.id, e.tenant_id, t.tenant_code, t.tenant_name,
+    where_sql = f"WHERE {' AND '.join(clauses)}"
+    order_sql = "ORDER BY e.employee_code"
+    limit_sql = "LIMIT %s"
+    params.append(int(limit))
+
+    account_join_sql = ""
+    account_select_sql = "NULL::uuid AS user_id, NULL::text AS user_role"
+    if include_account:
+        account_select_sql = "u.id AS user_id, u.role AS user_role"
+        account_join_sql = """
+            LEFT JOIN (
+                SELECT DISTINCT ON (au.tenant_id, au.employee_id)
+                       au.tenant_id, au.employee_id, au.id, au.role
+                FROM arls_users au
+                WHERE COALESCE(au.is_active, TRUE) = TRUE
+                  AND COALESCE(au.is_deleted, FALSE) = FALSE
+                ORDER BY au.tenant_id, au.employee_id, au.updated_at DESC NULLS LAST, au.created_at DESC NULLS LAST
+            ) u
+              ON u.tenant_id = e.tenant_id
+             AND u.employee_id = e.id
+        """
+
+    if detail:
+        select_sql = """
+            SELECT e.id, e.tenant_id,
                    e.employee_code, e.sequence_no, e.full_name, e.phone,
-                   s.site_code, s.site_name, c.company_code,
+                   s.site_code, s.site_name, COALESCE(c.company_code, '') AS company_code,
                    e.management_no_str, e.birth_date, e.address, e.hire_date, e.leave_date,
                    e.guard_training_cert_no, e.note, e.roster_docx_attachment_id, e.photo_attachment_id,
                    e.soc_login_id, e.soc_role,
-                   u.id AS user_id, u.role AS user_role
+                   {account_select_sql}
             FROM employees e
             JOIN sites s ON s.id = e.site_id
             JOIN companies c ON c.id = s.company_id
-            JOIN tenants t ON t.id = e.tenant_id
-            LEFT JOIN LATERAL (
-                SELECT au.id, au.role
-                FROM arls_users au
-                WHERE au.tenant_id = e.tenant_id
-                  AND au.employee_id = e.id
-                  AND au.is_active = TRUE
-                ORDER BY au.updated_at DESC NULLS LAST, au.created_at DESC NULLS LAST
-                LIMIT 1
-            ) u ON TRUE
+            {account_join_sql}
             {where_sql}
-            ORDER BY e.employee_code
-            """,
+            {order_sql}
+            {limit_sql}
+        """
+    else:
+        select_sql = """
+            SELECT e.id, e.tenant_id,
+                   e.employee_code, e.sequence_no, e.full_name, e.phone,
+                   s.site_code, s.site_name, COALESCE(c.company_code, '') AS company_code,
+                   e.management_no_str,
+                   NULL::date AS birth_date,
+                   NULL::text AS address,
+                   NULL::date AS hire_date,
+                   NULL::date AS leave_date,
+                   NULL::text AS guard_training_cert_no,
+                   NULL::text AS note,
+                   NULL::text AS roster_docx_attachment_id,
+                   NULL::text AS photo_attachment_id,
+                   NULL::text AS soc_login_id,
+                   NULL::text AS soc_role,
+                   {account_select_sql}
+            FROM employees e
+            JOIN sites s ON s.id = e.site_id
+            JOIN companies c ON c.id = s.company_id
+            {account_join_sql}
+            {where_sql}
+            {order_sql}
+            {limit_sql}
+        """
+
+    with conn.cursor() as cur:
+        cur.execute(
+            select_sql.format(
+                account_select_sql=account_select_sql,
+                account_join_sql=account_join_sql,
+                where_sql=where_sql,
+                order_sql=order_sql,
+                limit_sql=limit_sql,
+            ),
             tuple(params),
         )
         rows = cur.fetchall()
-    return [
-        EmployeeOut(
-            **{
-                **row,
-                "user_role": normalize_user_role(row.get("user_role")) if row.get("user_role") else None,
-            }
-        )
-        for row in rows
-    ]
+    tenant_code_value = str(tenant.get("tenant_code") or "").strip().upper() or None
+    tenant_name_value = str(tenant.get("tenant_name") or "").strip() or None
+    result: list[EmployeeOut] = []
+    for row in rows:
+        payload = {
+            **row,
+            "tenant_code": tenant_code_value,
+            "tenant_name": tenant_name_value,
+            "user_role": normalize_user_role(row.get("user_role")) if row.get("user_role") else None,
+        }
+        result.append(EmployeeOut(**payload))
+    return result
 
 
 @router.post("", response_model=EmployeeOut)

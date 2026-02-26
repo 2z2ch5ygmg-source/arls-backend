@@ -648,6 +648,7 @@ def _fetch_site_row(conn, site_id: uuid.UUID, user):
 @router.get("", response_model=list[SiteOut])
 def list_sites(
     q: str | None = Query(default=None, min_length=1, max_length=120),
+    limit: int = Query(default=500, ge=1, le=5000),
     active: str | None = Query(default=None),
     include_inactive: bool = Query(default=False),
     include_deleted: bool = Query(default=False),
@@ -676,8 +677,23 @@ def list_sites(
         params.append(staff_scope["site_id"])
 
     if company_code:
-        clauses.append("c.company_code = %s")
-        params.append(company_code.strip())
+        company_code_value = company_code.strip().upper()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id
+                FROM companies
+                WHERE tenant_id = %s
+                  AND company_code = %s
+                LIMIT 1
+                """,
+                (tenant["id"], company_code_value),
+            )
+            company_row = cur.fetchone()
+        if not company_row:
+            return []
+        clauses.append("s.company_id = %s")
+        params.append(company_row["id"])
 
     if has_site_deleted and not include_deleted:
         clauses.append("COALESCE(s.is_deleted, FALSE) = FALSE")
@@ -697,27 +713,30 @@ def list_sites(
                 s.site_code ILIKE %s
                 OR s.site_name ILIKE %s
                 OR COALESCE(s.address, '') ILIKE %s
-                OR c.company_code ILIKE %s
             )
             """
         )
-        params.extend([like, like, like, like])
+        params.extend([like, like, like])
 
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     place_id_select_sql = _site_place_id_select_sql(conn, "s")
     sql = f"""
-        SELECT s.id, s.tenant_id, t.tenant_code, s.site_code, s.site_name, COALESCE(s.address, '') AS address, {place_id_select_sql},
+        SELECT s.id, s.tenant_id, NULL::text AS tenant_code, s.site_code, s.site_name, COALESCE(s.address, '') AS address, {place_id_select_sql},
                s.latitude, s.longitude, s.radius_meters, COALESCE(s.is_active, TRUE) AS is_active,
-               c.company_code
+               COALESCE(c.company_code, '') AS company_code
         FROM sites s
-        JOIN tenants t ON t.id = s.tenant_id
-        JOIN companies c ON c.id = s.company_id
+        LEFT JOIN companies c ON c.id = s.company_id
         {where_sql}
-        ORDER BY COALESCE(s.is_active, TRUE) DESC, c.company_code, s.site_code
+        ORDER BY s.site_code
+        LIMIT %s
     """
+    params.append(int(limit))
     with conn.cursor() as cur:
         cur.execute(sql, tuple(params))
         rows = cur.fetchall()
+    tenant_code_value = str(tenant.get("tenant_code") or "").strip().upper() or None
+    for row in rows:
+        row["tenant_code"] = tenant_code_value
     return [_row_to_out(row) for row in rows]
 
 
