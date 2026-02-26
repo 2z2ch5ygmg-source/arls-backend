@@ -35,6 +35,7 @@ def list_dev_sites(
 ):
     has_site_active = _table_column_exists(conn, "sites", "is_active")
     has_site_deleted = _table_column_exists(conn, "sites", "is_deleted")
+    has_site_place_id = _table_column_exists(conn, "sites", "place_id")
     has_tenant_active = _table_column_exists(conn, "tenants", "is_active")
     has_tenant_deleted = _table_column_exists(conn, "tenants", "is_deleted")
 
@@ -74,6 +75,7 @@ def list_dev_sites(
         params.extend([like, like, like, like, like, like])
 
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    place_id_sql = "COALESCE(s.place_id, '') AS place_id" if has_site_place_id else "''::text AS place_id"
 
     with conn.cursor() as cur:
         cur.execute(
@@ -81,7 +83,7 @@ def list_dev_sites(
             SELECT s.id, s.tenant_id, t.tenant_code, t.tenant_name,
                    s.site_code, s.site_name,
                    COALESCE(s.address, '') AS address,
-                   COALESCE(s.place_id, '') AS place_id,
+                   {place_id_sql},
                    s.latitude, s.longitude, s.radius_meters,
                    COALESCE(s.is_active, TRUE) AS is_active,
                    COALESCE(c.company_code, '') AS company_code
