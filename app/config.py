@@ -91,6 +91,7 @@ class Settings:
         f"{soc_base_url}/api/admin/hr/reset-tenant",
     ).strip()
     hr_reset_token = os.getenv("HR_RESET_TOKEN", "").strip()
+    hr_auth_validate_token = os.getenv("HR_AUTH_VALIDATE_TOKEN", "").strip()
 
     request_timeout_seconds = 5
 

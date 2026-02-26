@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from pydantic import BaseModel, Field
 
+from ...config import settings
 from ...db import fetch_all, fetch_one
 from ...deps import get_db_conn, get_current_user, apply_rate_limit
 from ...schemas import AuthUser, LoginRequest, RefreshTokenRequest, TokenResponse
@@ -13,6 +15,12 @@ from ...utils.permissions import normalize_role, normalize_user_role
 router = APIRouter(prefix="/auth", tags=["auth"])
 MASTER_TENANT_CODE = "MASTER"
 MASTER_LOGIN_FORBIDDEN_MESSAGE = "슈퍼 관리자 계정만 MASTER로 로그인할 수 있습니다."
+
+
+class ValidateAuthRequest(BaseModel):
+    tenant_code: str = Field(min_length=1, max_length=64)
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=255)
 
 
 def _normalize_tenant_code(value: str | None) -> str:
@@ -288,6 +296,60 @@ def refresh(payload: RefreshTokenRequest, conn=Depends(get_db_conn)):
         role=role,
         is_master=is_master,
     )
+
+
+@router.post("/validate", dependencies=[Depends(apply_rate_limit)])
+def validate_credentials(
+    payload: ValidateAuthRequest,
+    hr_auth_validate_token: str | None = Header(default=None, alias="HR_AUTH_VALIDATE_TOKEN"),
+    conn=Depends(get_db_conn),
+):
+    required_token = str(settings.hr_auth_validate_token or "").strip()
+    if required_token:
+        if str(hr_auth_validate_token or "").strip() != required_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"error": "INVALID_VALIDATE_TOKEN", "message": "invalid validate token"},
+            )
+
+    tenant = fetch_one(
+        conn,
+        """
+        SELECT id, tenant_code
+        FROM tenants
+        WHERE upper(tenant_code) = upper(%s)
+          AND COALESCE(is_active, TRUE) = TRUE
+          AND COALESCE(is_deleted, FALSE) = FALSE
+        LIMIT 1
+        """,
+        (payload.tenant_code,),
+    )
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "INVALID_CREDENTIALS", "message": "invalid credentials"},
+        )
+
+    user = fetch_one(
+        conn,
+        """
+        SELECT au.id, au.password_hash
+        FROM arls_users au
+        WHERE au.tenant_id = %s
+          AND lower(au.username) = lower(%s)
+          AND au.is_active = TRUE
+          AND COALESCE(au.is_deleted, FALSE) = FALSE
+        LIMIT 1
+        """,
+        (tenant["id"], payload.username),
+    )
+    if not user or not verify_password(payload.password, user["password_hash"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "INVALID_CREDENTIALS", "message": "invalid credentials"},
+        )
+
+    return {"success": True}
 
 
 @router.get("/tenant-check")
