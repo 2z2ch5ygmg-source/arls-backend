@@ -78,7 +78,7 @@ class Settings:
 
     soc_base_url = os.getenv(
         "SOC_BASE_URL",
-        "https://security-ops-center-prod-001-ftgcbkdwggf5hhh9.koreacentral-01.azurewebsites.net"
+        "https://security-ops-center-prod-002-260227135557.azurewebsites.net"
     ).strip().rstrip("/")
 
     # 직원 동기화 URL
