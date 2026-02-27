@@ -2321,9 +2321,23 @@ def update_employee(
         )
         updated = cur.fetchone()
 
+        if normalized_soc_role:
+            account_user_role = normalize_user_role(normalized_soc_role)
+            cur.execute(
+                """
+                UPDATE arls_users
+                SET role = %s,
+                    updated_at = timezone('utc', now())
+                WHERE tenant_id = %s
+                  AND employee_id = %s
+                  AND is_active = TRUE
+                """,
+                (account_user_role, tenant_id, str(employee_id)),
+            )
+
         cur.execute(
             """
-            SELECT id, role
+            SELECT id, role, username
             FROM arls_users
             WHERE tenant_id = %s
               AND employee_id = %s
@@ -2334,6 +2348,29 @@ def update_employee(
             (tenant_id, employee_id),
         )
         user_row = cur.fetchone()
+
+    resolved_user_role = normalize_user_role(user_row["role"]) if user_row and user_row.get("role") else None
+    _post_employee_sync_to_soc(
+        tenant_code=str(tenant.get("tenant_code") or ""),
+        site_code=site_company["site_code"],
+        employee_uuid=str(updated.get("id") or employee_id),
+        employee_code=str(updated.get("employee_code") or ""),
+        full_name=str(updated.get("full_name") or ""),
+        phone=updated.get("phone"),
+        username=_normalize_optional_text((user_row or {}).get("username")) or updated.get("soc_login_id"),
+        user_role=resolved_user_role,
+        birth_date=updated.get("birth_date"),
+        leave_date=updated.get("leave_date"),
+        hire_date=updated.get("hire_date"),
+        address=updated.get("address"),
+        guard_training_cert_no=updated.get("guard_training_cert_no"),
+        management_no_str=updated.get("management_no_str"),
+        note=updated.get("note"),
+        roster_docx_attachment_id=updated.get("roster_docx_attachment_id"),
+        photo_attachment_id=updated.get("photo_attachment_id"),
+        soc_login_id=updated.get("soc_login_id"),
+        soc_role=updated.get("soc_role"),
+    )
 
     return EmployeeOut(
         id=updated["id"],
@@ -2347,7 +2384,7 @@ def update_employee(
         site_code=site_company["site_code"],
         company_code=site_company["company_code"],
         user_id=user_row["id"] if user_row else None,
-        user_role=normalize_user_role(user_row["role"]) if user_row and user_row.get("role") else None,
+        user_role=resolved_user_role,
         management_no_str=updated.get("management_no_str"),
         birth_date=updated.get("birth_date"),
         address=updated.get("address"),
