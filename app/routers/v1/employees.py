@@ -175,31 +175,6 @@ def _fetch_tenant_sites_for_roster_match(conn, tenant_id: str) -> tuple[list[dic
             indexed_rows = list_site_match_index_rows(conn, tenant_id=tenant_id)
         except Exception as exc:
             logger.warning("[HR] site match index rebuild failed tenant=%s error=%r", tenant_id, exc)
-
-    # 인덱스가 계속 비어있거나 테이블 접근이 실패한 경우, sites 테이블에서 직접 fallback
-    if not indexed_rows:
-        try:
-            with conn.cursor() as cur:
-                exec_checked(
-                    cur,
-                    """
-                    SELECT site_code AS site_id, site_name, COALESCE(address, '') AS address_text
-                    FROM sites
-                    WHERE tenant_id = %s
-                    ORDER BY site_name, site_code
-                    """,
-                    (tenant_id,),
-                    stage="guard_roster.match_sites_fallback",
-                )
-                indexed_rows = cur.fetchall() or []
-            logger.info(
-                "[HR] site match index fallback tenant=%s site_count=%s",
-                tenant_id,
-                len(indexed_rows),
-            )
-        except Exception as exc:
-            logger.warning("[HR] site match fallback failed tenant=%s error=%r", tenant_id, exc)
-
     index_total_sites = len(indexed_rows)
 
     normalized_rows: list[dict[str, Any]] = []
