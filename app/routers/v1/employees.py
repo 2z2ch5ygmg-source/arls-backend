@@ -159,11 +159,7 @@ def _build_guard_roster_file_name(file_uuid: str, source_filename: str) -> str:
     return f"{file_uuid}.{safe_ext}"
 
 
-def _fetch_tenant_sites_for_roster_match(
-    conn,
-    tenant_id: str,
-    tenant_code: str | None = None,
-) -> tuple[list[dict[str, Any]], int]:
+def _fetch_tenant_sites_for_roster_match(conn, tenant_id: str) -> tuple[list[dict[str, Any]], int]:
     # 우선: 주소 매칭 인덱스 테이블 사용
     indexed_rows: list[dict[str, Any]] = []
     try:
@@ -184,17 +180,15 @@ def _fetch_tenant_sites_for_roster_match(
     if not indexed_rows:
         try:
             with conn.cursor() as cur:
-                tenant_id_key = str(tenant_id or "").strip().lower()
-                tenant_code_key = str(tenant_code or "").strip().lower()
                 exec_checked(
                     cur,
                     """
                     SELECT site_code AS site_id, site_name, COALESCE(address, '') AS address_text
                     FROM sites
-                    WHERE lower(COALESCE(tenant_id::text, '')) IN (%s, %s)
+                    WHERE tenant_id = %s
                     ORDER BY site_name, site_code
                     """,
-                    (tenant_id_key, tenant_code_key),
+                    (tenant_id,),
                     stage="guard_roster.match_sites_fallback",
                 )
                 indexed_rows = cur.fetchall() or []
@@ -1163,15 +1157,7 @@ async def import_guard_roster_docx(
         tenant_id=tenant_id,
         uploaded_by=uploaded_by,
     )
-    tenant_sites, index_total_sites = _fetch_tenant_sites_for_roster_match(
-        conn,
-        tenant_id,
-        tenant_code=tenant_code_norm,
-    )
-    print(
-        f"[HR][ROSTER] import tenant_id={tenant_id} tenant_code={tenant_code_norm} "
-        f"site_match_pool={index_total_sites}"
-    )
+    tenant_sites, index_total_sites = _fetch_tenant_sites_for_roster_match(conn, tenant_id)
     response_items: list[dict[str, Any]] = []
 
     for upload in files:
