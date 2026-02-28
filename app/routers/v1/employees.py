@@ -23,7 +23,7 @@ from ...services.guard_roster_docx import (
     parse_guard_roster_docx,
     select_site_match_query_text,
 )
-from ...services.sites_match_index import list_site_match_index_rows, rebuild_site_match_index_for_tenant
+from ...services.sites_match_index import list_site_match_index_rows
 from ...utils.address_norm import normalize_address_text
 from ...utils.credential_norm import normalize_auth_identifier
 from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, ROLE_EMPLOYEE, normalize_role, normalize_user_role
@@ -161,20 +161,10 @@ def _build_guard_roster_file_name(file_uuid: str, source_filename: str) -> str:
 
 def _fetch_tenant_sites_for_roster_match(conn, tenant_id: str) -> tuple[list[dict[str, Any]], int]:
     # 우선: 주소 매칭 인덱스 테이블 사용
-    indexed_rows: list[dict[str, Any]] = []
     try:
         indexed_rows = list_site_match_index_rows(conn, tenant_id=tenant_id)
-    except Exception as exc:
-        logger.warning("[HR->SOC] sites_match_index list failed tenant=%s error=%r", tenant_id, exc)
-
-    # 인덱스가 비어 있으면 1회 자동 재생성(backfill) 후 재조회
-    if not indexed_rows:
-        try:
-            rebuilt_count = rebuild_site_match_index_for_tenant(conn, tenant_id=tenant_id)
-            logger.info("[HR] site match index rebuilt tenant=%s rebuilt=%s", tenant_id, rebuilt_count)
-            indexed_rows = list_site_match_index_rows(conn, tenant_id=tenant_id)
-        except Exception as exc:
-            logger.warning("[HR] site match index rebuild failed tenant=%s error=%r", tenant_id, exc)
+    except Exception:
+        indexed_rows = []
     index_total_sites = len(indexed_rows)
 
     normalized_rows: list[dict[str, Any]] = []
