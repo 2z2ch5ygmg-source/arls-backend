@@ -206,33 +206,6 @@ def _fetch_tenant_sites_for_roster_match(
         except Exception as exc:
             logger.warning("[HR] site match fallback failed tenant=%s error=%r", tenant_id, exc)
 
-    # tenant_id 정합성이 어긋난 legacy 데이터 대비:
-    # companies.tenant_id -> tenants.tenant_code 조인으로 1회 더 fallback
-    if not indexed_rows and str(tenant_code or "").strip():
-        try:
-            with conn.cursor() as cur:
-                exec_checked(
-                    cur,
-                    """
-                    SELECT s.site_code AS site_id, s.site_name, COALESCE(s.address, '') AS address_text
-                    FROM sites s
-                    JOIN companies c ON c.id = s.company_id
-                    JOIN tenants t ON c.tenant_id::text = t.id::text
-                    WHERE lower(COALESCE(t.tenant_code, '')) = %s
-                    ORDER BY s.site_name, s.site_code
-                    """,
-                    (str(tenant_code).strip().lower(),),
-                    stage="guard_roster.match_sites_company_fallback",
-                )
-                indexed_rows = cur.fetchall() or []
-            logger.info(
-                "[HR] site match company fallback tenant_code=%s site_count=%s",
-                tenant_code,
-                len(indexed_rows),
-            )
-        except Exception as exc:
-            logger.warning("[HR] site match company fallback failed tenant_code=%s error=%r", tenant_code, exc)
-
     index_total_sites = len(indexed_rows)
 
     normalized_rows: list[dict[str, Any]] = []
@@ -251,64 +224,6 @@ def _fetch_tenant_sites_for_roster_match(
             }
         )
     return normalized_rows, index_total_sites
-
-
-def _collect_roster_site_scope_counts(conn, *, tenant_id: str, tenant_code: str) -> dict[str, int]:
-    counts = {
-        "by_sites_tenant_field": 0,
-        "by_company_tenant_code": 0,
-        "index_rows": 0,
-    }
-    tenant_id_key = str(tenant_id or "").strip().lower()
-    tenant_code_key = str(tenant_code or "").strip().lower()
-    with conn.cursor() as cur:
-        try:
-            exec_checked(
-                cur,
-                """
-                SELECT COUNT(*) AS total
-                FROM sites
-                WHERE lower(COALESCE(tenant_id::text, '')) IN (%s, %s)
-                """,
-                (tenant_id_key, tenant_code_key),
-                stage="guard_roster.scope_count_sites",
-            )
-            counts["by_sites_tenant_field"] = int((cur.fetchone() or {}).get("total") or 0)
-        except Exception:
-            pass
-
-        try:
-            exec_checked(
-                cur,
-                """
-                SELECT COUNT(*) AS total
-                FROM sites s
-                JOIN companies c ON c.id = s.company_id
-                JOIN tenants t ON c.tenant_id::text = t.id::text
-                WHERE lower(COALESCE(t.tenant_code, '')) = %s
-                """,
-                (tenant_code_key,),
-                stage="guard_roster.scope_count_company",
-            )
-            counts["by_company_tenant_code"] = int((cur.fetchone() or {}).get("total") or 0)
-        except Exception:
-            pass
-
-        try:
-            exec_checked(
-                cur,
-                """
-                SELECT COUNT(*) AS total
-                FROM sites_match_index
-                WHERE lower(COALESCE(tenant_id, '')) IN (%s, %s)
-                """,
-                (tenant_id_key, tenant_code_key),
-                stage="guard_roster.scope_count_index",
-            )
-            counts["index_rows"] = int((cur.fetchone() or {}).get("total") or 0)
-        except Exception:
-            pass
-    return counts
 
 
 def _find_site_relation_by_code(conn, tenant_id: str, site_code: str) -> dict[str, Any] | None:
@@ -1258,16 +1173,10 @@ async def import_guard_roster_docx(
         f"site_match_pool={index_total_sites}",
         flush=True,
     )
-    scope_counts = _collect_roster_site_scope_counts(
-        conn,
-        tenant_id=tenant_id,
-        tenant_code=tenant_code_norm,
-    )
     import_debug_scope = {
         "tenant_uuid": tenant_id,
         "tenant_code": tenant_code_norm,
         "site_match_pool": index_total_sites,
-        **scope_counts,
     }
     response_items: list[dict[str, Any]] = []
 
@@ -1382,12 +1291,7 @@ async def import_guard_roster_docx(
             item_message = "DOCX에서 주소/배치지 추출 실패"
         elif match_reason == "INDEX_EMPTY" or match_status == "INDEX_EMPTY":
             item_status = "INDEX_EMPTY"
-            item_message = (
-                "지점 인덱스가 비어있음"
-                f"(sites={scope_counts.get('by_sites_tenant_field', 0)}, "
-                f"company_sites={scope_counts.get('by_company_tenant_code', 0)}, "
-                f"index={scope_counts.get('index_rows', 0)})"
-            )
+            item_message = "지점 인덱스가 비어있음(지점 등록/인덱스 재생성 필요)"
         elif match_status == "AUTO_CONFIRMED":
             item_status = "AUTO_CONFIRMED"
             item_message = "자동 확정"
