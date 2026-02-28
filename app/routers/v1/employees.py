@@ -1170,14 +1170,8 @@ async def import_guard_roster_docx(
     )
     print(
         f"[HR][ROSTER] import tenant_id={tenant_id} tenant_code={tenant_code_norm} "
-        f"site_match_pool={index_total_sites}",
-        flush=True,
+        f"site_match_pool={index_total_sites}"
     )
-    import_debug_scope = {
-        "tenant_uuid": tenant_id,
-        "tenant_code": tenant_code_norm,
-        "site_match_pool": index_total_sites,
-    }
     response_items: list[dict[str, Any]] = []
 
     for upload in files:
@@ -1193,7 +1187,6 @@ async def import_guard_roster_docx(
                     "status": "INVALID_FILE",
                     "message": "docx 파일만 업로드할 수 있습니다.",
                     "debug": {
-                        **import_debug_scope,
                         "query_text_raw": "",
                         "query_norm": "",
                         "index_total_sites": index_total_sites,
@@ -1215,7 +1208,6 @@ async def import_guard_roster_docx(
                     "status": "INVALID_FILE",
                     "message": "빈 파일입니다.",
                     "debug": {
-                        **import_debug_scope,
                         "query_text_raw": "",
                         "query_norm": "",
                         "index_total_sites": index_total_sites,
@@ -1238,7 +1230,6 @@ async def import_guard_roster_docx(
                     "status": "PARSE_FAILED",
                     "message": f"문서 파싱 실패: {str(exc)}",
                     "debug": {
-                        **import_debug_scope,
                         "query_text_raw": "",
                         "query_norm": "",
                         "index_total_sites": index_total_sites,
@@ -1371,7 +1362,6 @@ async def import_guard_roster_docx(
                 },
                 "status": item_status,
                 "debug": {
-                    **import_debug_scope,
                     "query_text_raw": query_text_raw,
                     "query_norm": str(match_result.get("query_norm") or query_norm or ""),
                     "index_total_sites": index_total_sites,
@@ -1380,16 +1370,10 @@ async def import_guard_roster_docx(
                     "address_raw": parsed_address_raw,
                 },
                 "tenant_id": tenant_code_norm,
-                "tenant_uuid": tenant_id,
             }
         )
 
-    return {
-        "success": True,
-        "upload_session_id": upload_session_id,
-        "debug": import_debug_scope,
-        "items": response_items,
-    }
+    return {"success": True, "upload_session_id": upload_session_id, "items": response_items}
 
 
 @router.get("/import/guard-roster-docx/files/{file_id}")
