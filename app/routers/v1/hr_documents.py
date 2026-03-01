@@ -38,6 +38,15 @@ PURPOSE_CODES = {"BANK", "GOV", "CARD", "OTHER"}
 ALLOWED_TEMPLATE_DOCUMENT_TYPES = {DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE}
 ALLOWED_TEMPLATE_EXTENSIONS = {".html", ".docx"}
 MAX_TEMPLATE_UPLOAD_BYTES = 2 * 1024 * 1024
+TEMPLATE_VARIABLE_LABELS = {
+    "company_name": "회사명",
+    "employee_name": "성명",
+    "org_name": "소속",
+    "hire_date": "입사일",
+    "issue_number": "발급번호",
+    "issue_date": "발급일",
+    "purpose_label": "발급용도",
+}
 
 
 class EmploymentCertificateRequestCreate(BaseModel):
@@ -299,6 +308,22 @@ def _validate_template_html(template_html: str) -> list[str]:
         if not _has_template_variable(template_html, name)
     ]
     return missing
+
+
+def _inject_missing_template_variables(template_html: str, missing_variables: list[str]) -> str:
+    if not missing_variables:
+        return template_html
+    rows: list[str] = []
+    for variable_name in missing_variables:
+        label = TEMPLATE_VARIABLE_LABELS.get(variable_name, variable_name)
+        rows.append(f"<p>{label}: {{{{{variable_name}}}}}</p>")
+    auto_section = (
+        '\n<section class="hr-template-auto-fields">'
+        "<h3>증명서 자동 입력 필드</h3>"
+        f"{''.join(rows)}"
+        "</section>\n"
+    )
+    return f"{template_html.rstrip()}{auto_section}"
 
 
 def _fetch_active_document_template(
@@ -1066,6 +1091,9 @@ async def upload_document_template(
 
     template_html = normalize_template_placeholders(template_html)
     missing_variables = _validate_template_html(template_html)
+    if missing_variables:
+        template_html = _inject_missing_template_variables(template_html, missing_variables)
+        missing_variables = _validate_template_html(template_html)
     if missing_variables:
         _raise_api_error(
             status.HTTP_400_BAD_REQUEST,
