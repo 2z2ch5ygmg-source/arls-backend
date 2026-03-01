@@ -49,6 +49,34 @@ EMPLOYMENT_CERTIFICATE_TEMPLATE_VARIABLES = (
     "purpose_label",
 )
 
+EMPLOYMENT_CERTIFICATE_TEMPLATE_REQUIRED_VARIABLES = (
+    "company_name",
+    "employee_name",
+    "org_name",
+    "hire_date",
+    "issue_number",
+    "issue_date",
+    "purpose_label",
+)
+
+_TEMPLATE_PLACEHOLDER_ALIASES: dict[str, tuple[str, ...]] = {
+    "company_name": ("company_name", "companyname", "회사명", "회사이름"),
+    "biz_reg_no": ("biz_reg_no", "bizregno", "business_number", "사업자등록번호", "사업자등록번호"),
+    "ceo_name": ("ceo_name", "대표자", "대표자명"),
+    "company_phone": ("company_phone", "company_tel", "전화번호", "회사전화번호", "회사연락처"),
+    "company_email": ("company_email", "email", "회사이메일", "이메일"),
+    "company_address": ("company_address", "주소", "회사주소"),
+    "employee_name": ("employee_name", "name", "성명", "이름", "직원명"),
+    "birth_date": ("birth_date", "birthdate", "생년월일"),
+    "org_name": ("org_name", "소속", "부서", "현장", "현장명"),
+    "position_name": ("position_name", "position", "직급", "직위", "권한"),
+    "hire_date": ("hire_date", "hiredate", "입사일", "채용일"),
+    "issue_number": ("issue_number", "issue_no", "발급번호", "문서번호"),
+    "issue_date": ("issue_date", "issued_at", "발급일"),
+    "issue_date_long": ("issue_date_long", "발급일한글", "발급일자"),
+    "purpose_label": ("purpose_label", "purpose", "용도", "제출용도", "발급용도"),
+}
+
 
 PURPOSE_LABEL_MAP = {
     "BANK": "은행 제출",
@@ -124,6 +152,25 @@ def convert_docx_template_to_html(docx_bytes: bytes) -> str:
     if not has_content:
         raise ValueError("template docx is empty")
     return "\n".join(parts).strip()
+
+
+def normalize_template_placeholders(template_html: str) -> str:
+    normalized = str(template_html or "")
+    if not normalized.strip():
+        return normalized
+
+    for canonical, aliases in _TEMPLATE_PLACEHOLDER_ALIASES.items():
+        for alias in aliases:
+            escaped = re.escape(alias)
+            patterns = (
+                re.compile(r"\{\{\s*" + escaped + r"\s*\}\}", flags=re.IGNORECASE),
+                re.compile(r"\$\{\s*" + escaped + r"\s*\}", flags=re.IGNORECASE),
+                re.compile(r"\[\[\s*" + escaped + r"\s*\]\]", flags=re.IGNORECASE),
+                re.compile(r"<<\s*" + escaped + r"\s*>>", flags=re.IGNORECASE),
+            )
+            for pattern in patterns:
+                normalized = pattern.sub(f"{{{{{canonical}}}}}", normalized)
+    return normalized
 
 
 def load_default_template_html() -> str:

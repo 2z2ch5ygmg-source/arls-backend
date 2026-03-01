@@ -14,11 +14,13 @@ from pydantic import BaseModel, Field, field_validator
 from ...db import get_connection
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
 from ...services.employment_certificate import (
+    EMPLOYMENT_CERTIFICATE_TEMPLATE_REQUIRED_VARIABLES,
     EMPLOYMENT_CERTIFICATE_TEMPLATE_VARIABLES,
     build_issue_number,
     build_purpose_label,
     convert_docx_template_to_html,
     generate_employment_certificate_pdf,
+    normalize_template_placeholders,
     render_employment_certificate_html,
     send_certificate_mail,
 )
@@ -291,7 +293,11 @@ def _has_template_variable(template_html: str, variable_name: str) -> bool:
 
 
 def _validate_template_html(template_html: str) -> list[str]:
-    missing = [name for name in EMPLOYMENT_CERTIFICATE_TEMPLATE_VARIABLES if not _has_template_variable(template_html, name)]
+    missing = [
+        name
+        for name in EMPLOYMENT_CERTIFICATE_TEMPLATE_REQUIRED_VARIABLES
+        if not _has_template_variable(template_html, name)
+    ]
     return missing
 
 
@@ -1058,13 +1064,14 @@ async def upload_document_template(
             )
             return None
 
+    template_html = normalize_template_placeholders(template_html)
     missing_variables = _validate_template_html(template_html)
     if missing_variables:
         _raise_api_error(
             status.HTTP_400_BAD_REQUEST,
             "VALIDATION_ERROR",
-            "템플릿 필수 변수가 누락되었습니다.",
-            fields={"template_variables": ", ".join(missing_variables)},
+            f"템플릿 필수 변수가 누락되었습니다: {', '.join(missing_variables)}",
+            fields={"template_variables": missing_variables},
         )
 
     template_id = uuid.uuid4()
