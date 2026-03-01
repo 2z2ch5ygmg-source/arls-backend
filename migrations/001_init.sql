@@ -57,6 +57,307 @@ BEGIN
   END IF;
 END $$;
 
+CREATE TABLE IF NOT EXISTS document_requests (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid,
+    employee_id uuid NOT NULL,
+    document_type text NOT NULL,
+    status text NOT NULL DEFAULT 'requested',
+    purpose_code text NOT NULL,
+    purpose_text text,
+    requested_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    approved_at timestamptz,
+    approved_by uuid,
+    rejection_reason text,
+    issue_number text,
+    file_path text,
+    file_url text,
+    file_name text,
+    file_mime_type text,
+    file_bytes bytea,
+    generated_at timestamptz,
+    generation_error text,
+    mail_error text,
+    mail_company_sent_at timestamptz,
+    mail_employee_sent_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    updated_at timestamptz NOT NULL DEFAULT timezone('utc', now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_document_requests_employee_doc_requested
+    ON document_requests (employee_id, document_type, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_document_requests_status_doc_requested
+    ON document_requests (status, document_type, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_document_requests_tenant_doc_requested
+    ON document_requests (tenant_id, document_type, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_document_requests_tenant_status_requested
+    ON document_requests (tenant_id, status, requested_at DESC);
+
+CREATE TABLE IF NOT EXISTS document_templates (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    document_type text NOT NULL,
+    version int NOT NULL,
+    file_path text NOT NULL,
+    template_html text NOT NULL,
+    is_active boolean NOT NULL DEFAULT false,
+    created_by uuid,
+    created_at timestamptz NOT NULL DEFAULT timezone('utc', now())
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_document_templates_tenant_doc_version
+    ON document_templates (tenant_id, document_type, version);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_document_templates_tenant_doc_active
+    ON document_templates (tenant_id, document_type)
+    WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_document_templates_tenant_doc_created
+    ON document_templates (tenant_id, document_type, created_at DESC);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'document_templates'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_templates' AND column_name = 'tenant_id'
+    ) THEN
+      ALTER TABLE document_templates ADD COLUMN tenant_id uuid;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_templates' AND column_name = 'document_type'
+    ) THEN
+      ALTER TABLE document_templates ADD COLUMN document_type text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_templates' AND column_name = 'version'
+    ) THEN
+      ALTER TABLE document_templates ADD COLUMN version int;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_templates' AND column_name = 'file_path'
+    ) THEN
+      ALTER TABLE document_templates ADD COLUMN file_path text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_templates' AND column_name = 'template_html'
+    ) THEN
+      ALTER TABLE document_templates ADD COLUMN template_html text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_templates' AND column_name = 'is_active'
+    ) THEN
+      ALTER TABLE document_templates ADD COLUMN is_active boolean NOT NULL DEFAULT false;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_templates' AND column_name = 'created_by'
+    ) THEN
+      ALTER TABLE document_templates ADD COLUMN created_by uuid;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_templates' AND column_name = 'created_at'
+    ) THEN
+      ALTER TABLE document_templates ADD COLUMN created_at timestamptz NOT NULL DEFAULT timezone('utc', now());
+    END IF;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'document_requests'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'tenant_id'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN tenant_id uuid;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'company_id'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN company_id uuid;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'employee_id'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN employee_id uuid;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'document_type'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN document_type text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'status'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN status text NOT NULL DEFAULT 'requested';
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'purpose_code'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN purpose_code text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'purpose_text'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN purpose_text text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'requested_at'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN requested_at timestamptz NOT NULL DEFAULT timezone('utc', now());
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'approved_at'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN approved_at timestamptz;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'approved_by'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN approved_by uuid;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'rejection_reason'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN rejection_reason text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'issue_number'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN issue_number text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'file_path'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN file_path text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'file_url'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN file_url text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'file_name'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN file_name text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'file_mime_type'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN file_mime_type text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'file_bytes'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN file_bytes bytea;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'generated_at'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN generated_at timestamptz;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'generation_error'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN generation_error text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'mail_error'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN mail_error text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'mail_company_sent_at'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN mail_company_sent_at timestamptz;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'mail_employee_sent_at'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN mail_employee_sent_at timestamptz;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'created_at'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN created_at timestamptz NOT NULL DEFAULT timezone('utc', now());
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'updated_at'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN updated_at timestamptz NOT NULL DEFAULT timezone('utc', now());
+    END IF;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS tenant_profile_attachments (
     id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL,
@@ -75,6 +376,7 @@ CREATE TABLE IF NOT EXISTS tenant_profiles (
     biz_reg_no text,
     address text,
     phone text,
+    email text,
     seal_attachment_id text,
     updated_at timestamptz NOT NULL DEFAULT timezone('utc', now())
 );
@@ -113,6 +415,13 @@ BEGIN
       WHERE table_schema = 'public' AND table_name = 'tenant_profiles' AND column_name = 'phone'
     ) THEN
       ALTER TABLE tenant_profiles ADD COLUMN phone text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'tenant_profiles' AND column_name = 'email'
+    ) THEN
+      ALTER TABLE tenant_profiles ADD COLUMN email text;
     END IF;
     IF NOT EXISTS (
       SELECT 1

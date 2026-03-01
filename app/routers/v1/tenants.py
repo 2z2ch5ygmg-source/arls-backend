@@ -138,6 +138,7 @@ def _build_tenant_profile_out(tenant_id: uuid.UUID, row: dict | None = None) -> 
         biz_reg_no=_normalize_profile_text(profile_row.get("biz_reg_no"), max_length=64),
         address=_normalize_profile_text(profile_row.get("address"), max_length=255),
         phone=_normalize_profile_text(profile_row.get("phone"), max_length=64),
+        email=_normalize_profile_text(profile_row.get("email"), max_length=120),
         seal_attachment_id=seal_attachment_id,
         updated_at=profile_row.get("updated_at"),
     )
@@ -329,7 +330,7 @@ def get_tenant_profile(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT tenant_id, ceo_name, biz_reg_no, address, phone, seal_attachment_id, updated_at
+            SELECT tenant_id, ceo_name, biz_reg_no, address, phone, email, seal_attachment_id, updated_at
             FROM tenant_profiles
             WHERE tenant_id = %s
             LIMIT 1
@@ -354,6 +355,7 @@ def upsert_tenant_profile(
     resolved_biz_reg_no = _normalize_profile_text(payload.biz_reg_no, max_length=64)
     resolved_address = _normalize_profile_text(payload.address, max_length=255)
     resolved_phone = _normalize_profile_text(payload.phone, max_length=64)
+    resolved_email = _normalize_profile_text(payload.email, max_length=120)
     resolved_seal_attachment_id = _normalize_profile_text(payload.seal_attachment_id, max_length=128)
 
     with conn.cursor() as cur:
@@ -381,18 +383,19 @@ def upsert_tenant_profile(
         cur.execute(
             """
             INSERT INTO tenant_profiles (
-                tenant_id, ceo_name, biz_reg_no, address, phone, seal_attachment_id, updated_at
+                tenant_id, ceo_name, biz_reg_no, address, phone, email, seal_attachment_id, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, timezone('utc', now()))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, timezone('utc', now()))
             ON CONFLICT (tenant_id)
             DO UPDATE SET
                 ceo_name = EXCLUDED.ceo_name,
                 biz_reg_no = EXCLUDED.biz_reg_no,
                 address = EXCLUDED.address,
                 phone = EXCLUDED.phone,
+                email = EXCLUDED.email,
                 seal_attachment_id = EXCLUDED.seal_attachment_id,
                 updated_at = timezone('utc', now())
-            RETURNING tenant_id, ceo_name, biz_reg_no, address, phone, seal_attachment_id, updated_at
+            RETURNING tenant_id, ceo_name, biz_reg_no, address, phone, email, seal_attachment_id, updated_at
             """,
             (
                 tenant_id,
@@ -400,6 +403,7 @@ def upsert_tenant_profile(
                 resolved_biz_reg_no,
                 resolved_address,
                 resolved_phone,
+                resolved_email,
                 resolved_seal_attachment_id,
             ),
         )

@@ -100,5 +100,16 @@ class Settings:
     google_sheets_service_account_json = _load_service_account_json()
     google_places_api_key = os.getenv("GOOGLE_PLACES_API_KEY", "").strip()
 
+    mail_enabled = _env_bool("MAIL_ENABLED", "false")
+    smtp_host = os.getenv("SMTP_HOST", "").strip()
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_username = os.getenv("SMTP_USERNAME", "").strip()
+    smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
+    smtp_starttls = _env_bool("SMTP_STARTTLS", "true")
+    smtp_ssl = _env_bool("SMTP_SSL", "false")
+    smtp_timeout_seconds = int(os.getenv("SMTP_TIMEOUT_SECONDS", "20"))
+    mail_from = os.getenv("MAIL_FROM", "no-reply@rg-arls.local").strip()
+    mail_subject_prefix = os.getenv("MAIL_SUBJECT_PREFIX", "[RG ARLS]").strip()
+
 
 settings = Settings()

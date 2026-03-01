@@ -27,6 +27,7 @@ from .routers import (
     debug_router,
     dev_scope_router,
     employees_router,
+    hr_documents_router,
     integrations_router,
     leaves_router,
     me_router,
@@ -317,6 +318,7 @@ app.include_router(admin_sites_router, prefix="/api/v1")
 app.include_router(admin_soc_router, prefix="/api/v1")
 app.include_router(admin_reset_router, prefix="/api/v1")
 app.include_router(admin_tenants_router, prefix="/api/v1")
+app.include_router(hr_documents_router, prefix="/api/v1")
 
 
 @app.get("/health")
