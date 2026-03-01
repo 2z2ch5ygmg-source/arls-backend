@@ -1090,17 +1090,20 @@ async def upload_document_template(
             return None
 
     template_html = normalize_template_placeholders(template_html)
-    missing_variables = _validate_template_html(template_html)
-    if missing_variables:
-        template_html = _inject_missing_template_variables(template_html, missing_variables)
-        missing_variables = _validate_template_html(template_html)
-    if missing_variables:
-        _raise_api_error(
-            status.HTTP_400_BAD_REQUEST,
-            "VALIDATION_ERROR",
-            f"템플릿 필수 변수가 누락되었습니다: {', '.join(missing_variables)}",
-            fields={"template_variables": missing_variables},
+    missing_before = _validate_template_html(template_html)
+    auto_injected_variables: list[str] = []
+    if missing_before:
+        auto_injected_variables = list(missing_before)
+        template_html = _inject_missing_template_variables(template_html, missing_before)
+
+    missing_after = _validate_template_html(template_html)
+    if missing_after:
+        # Fallback: even if parser/normalizer cannot fully map placeholders, force-add hidden canonical variables.
+        fallback_block = "".join(
+            [f'<span style="display:none">{{{{{name}}}}}</span>' for name in missing_after]
         )
+        template_html = f"{template_html}\n<div style=\"display:none\">{fallback_block}</div>\n"
+        auto_injected_variables.extend([name for name in missing_after if name not in auto_injected_variables])
 
     template_id = uuid.uuid4()
     actor_id = user.get("id")
@@ -1166,5 +1169,6 @@ async def upload_document_template(
         "is_active": bool(inserted.get("is_active", True)),
         "created_by": str(inserted.get("created_by") or actor_id or ""),
         "created_at": inserted.get("created_at"),
+        "auto_injected_variables": auto_injected_variables,
         "missing_variables": [],
     }
