@@ -17,6 +17,7 @@ from ...services.employment_certificate import (
     EMPLOYMENT_CERTIFICATE_TEMPLATE_VARIABLES,
     build_issue_number,
     build_purpose_label,
+    convert_docx_template_to_html,
     generate_employment_certificate_pdf,
     render_employment_certificate_html,
     send_certificate_mail,
@@ -33,7 +34,7 @@ DAILY_REQUEST_LIMIT = 3
 TZ_KST = timezone(timedelta(hours=9))
 PURPOSE_CODES = {"BANK", "GOV", "CARD", "OTHER"}
 ALLOWED_TEMPLATE_DOCUMENT_TYPES = {DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE}
-ALLOWED_TEMPLATE_EXTENSIONS = {".html"}
+ALLOWED_TEMPLATE_EXTENSIONS = {".html", ".docx"}
 MAX_TEMPLATE_UPLOAD_BYTES = 2 * 1024 * 1024
 
 
@@ -1015,7 +1016,7 @@ async def upload_document_template(
             status.HTTP_400_BAD_REQUEST,
             "VALIDATION_ERROR",
             "입력값을 확인해주세요.",
-            fields={"file": "html_only"},
+            fields={"file": "html_or_docx_only"},
         )
 
     raw_bytes = await file.read()
@@ -1034,16 +1035,28 @@ async def upload_document_template(
             fields={"file": "max_2mb"},
         )
 
-    try:
-        template_html = raw_bytes.decode("utf-8")
-    except UnicodeDecodeError:
-        _raise_api_error(
-            status.HTTP_400_BAD_REQUEST,
-            "VALIDATION_ERROR",
-            "입력값을 확인해주세요.",
-            fields={"file": "utf8_required"},
-        )
-        return None
+    if extension == ".html":
+        try:
+            template_html = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            _raise_api_error(
+                status.HTTP_400_BAD_REQUEST,
+                "VALIDATION_ERROR",
+                "입력값을 확인해주세요.",
+                fields={"file": "utf8_required"},
+            )
+            return None
+    else:
+        try:
+            template_html = convert_docx_template_to_html(raw_bytes)
+        except Exception:
+            _raise_api_error(
+                status.HTTP_400_BAD_REQUEST,
+                "VALIDATION_ERROR",
+                "입력값을 확인해주세요.",
+                fields={"file": "docx_parse_failed"},
+            )
+            return None
 
     missing_variables = _validate_template_html(template_html)
     if missing_variables:
@@ -1069,7 +1082,7 @@ async def upload_document_template(
         )
         row = cur.fetchone() or {}
         next_version = int(row.get("next_version") or 1)
-        next_file_path = f"templates/{normalized_document_type}/v{next_version}.html"
+        next_file_path = f"templates/{normalized_document_type}/v{next_version}{extension}"
 
         cur.execute(
             """

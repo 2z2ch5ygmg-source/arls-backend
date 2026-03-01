@@ -10,6 +10,12 @@ import re
 import smtplib
 from typing import Any
 
+from docx import Document
+from docx.document import Document as DocumentObject
+from docx.oxml.table import CT_Tbl
+from docx.oxml.text.paragraph import CT_P
+from docx.table import Table
+from docx.text.paragraph import Paragraph
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
@@ -61,6 +67,63 @@ class MailResult:
 def _safe_text(value: Any, fallback: str = "-") -> str:
     text = str(value or "").strip()
     return text if text else fallback
+
+
+def _resolve_paragraph_tag(style_name: str) -> str:
+    normalized = str(style_name or "").strip().lower()
+    if normalized.startswith("heading"):
+        match = re.search(r"(\d+)", normalized)
+        if match:
+            level = max(1, min(6, int(match.group(1))))
+            return f"h{level}"
+        return "h2"
+    return "p"
+
+
+def _collect_docx_cell_text(cell) -> str:
+    lines = []
+    for paragraph in getattr(cell, "paragraphs", []) or []:
+        text = str(paragraph.text or "").strip()
+        if text:
+            lines.append(text)
+    merged = " ".join(lines).strip()
+    return merged
+
+
+def convert_docx_template_to_html(docx_bytes: bytes) -> str:
+    document: DocumentObject = Document(BytesIO(docx_bytes))
+    parts: list[str] = ['<div class="employment-certificate-template">']
+    has_content = False
+
+    for child in document.element.body.iterchildren():
+        if isinstance(child, CT_P):
+            paragraph = Paragraph(child, document)
+            raw_text = str(paragraph.text or "").strip()
+            if not raw_text:
+                continue
+            has_content = True
+            tag = _resolve_paragraph_tag(getattr(getattr(paragraph, "style", None), "name", ""))
+            safe_text = html.escape(raw_text).replace("\n", "<br/>")
+            parts.append(f"<{tag}>{safe_text}</{tag}>")
+            continue
+
+        if isinstance(child, CT_Tbl):
+            table = Table(child, document)
+            has_content = True
+            parts.append("<table>")
+            for row in table.rows:
+                parts.append("<tr>")
+                for cell in row.cells:
+                    cell_text = _collect_docx_cell_text(cell)
+                    safe_text = html.escape(cell_text).replace("\n", "<br/>") if cell_text else "&nbsp;"
+                    parts.append(f"<td>{safe_text}</td>")
+                parts.append("</tr>")
+            parts.append("</table>")
+
+    parts.append("</div>")
+    if not has_content:
+        raise ValueError("template docx is empty")
+    return "\n".join(parts).strip()
 
 
 def load_default_template_html() -> str:
