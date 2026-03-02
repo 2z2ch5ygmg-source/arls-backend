@@ -127,8 +127,46 @@ def _format_date(value: Any) -> str:
         try:
             return value.isoformat()
         except Exception:
-            return "-"
-    return "-"
+            return ""
+    return ""
+
+
+def _mask_resident_registration(value: str | None) -> str:
+    raw = re.sub(r"[^0-9]", "", str(value or ""))
+    if len(raw) < 7:
+        return ""
+    front = raw[:6]
+    back_first = raw[6:7]
+    return f"{front}-{back_first}******"
+
+
+def _resolve_masked_resident_no(conn, *, tenant_id: str, employee_id: str) -> str:
+    candidate_columns = (
+        "resident_no",
+        "resident_number",
+        "resident_registration_no",
+        "rrn",
+        "ssn",
+    )
+    for column in candidate_columns:
+        if not table_column_exists(conn, "employees", column):
+            continue
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT {column} AS resident_value
+                FROM employees
+                WHERE tenant_id = %s
+                  AND id = %s
+                LIMIT 1
+                """,
+                (tenant_id, employee_id),
+            )
+            row = cur.fetchone()
+        masked = _mask_resident_registration((row or {}).get("resident_value"))
+        if masked:
+            return masked
+    return ""
 
 
 def _validate_purpose(purpose_code: str, purpose_text: str | None) -> str | None:
@@ -462,16 +500,21 @@ def _process_employment_certificate_issue_job(request_id: str) -> None:
             issue_date_local = issued_at.astimezone(TZ_KST)
 
             context = {
-                "company_name": str(row.get("company_name") or row.get("tenant_name") or "-").strip() or "-",
-                "biz_reg_no": str(row.get("biz_reg_no") or "-").strip() or "-",
-                "ceo_name": str(row.get("ceo_name") or "-").strip() or "-",
-                "company_phone": str(row.get("company_phone") or "-").strip() or "-",
-                "company_email": str(row.get("company_email") or "-").strip() or "-",
-                "company_address": str(row.get("company_address") or "-").strip() or "-",
-                "employee_name": str(row.get("employee_name") or "-").strip() or "-",
+                "company_name": str(row.get("company_name") or row.get("tenant_name") or "").strip(),
+                "biz_reg_no": str(row.get("biz_reg_no") or "").strip(),
+                "ceo_name": str(row.get("ceo_name") or "").strip(),
+                "company_phone": str(row.get("company_phone") or "").strip(),
+                "company_email": str(row.get("company_email") or "").strip(),
+                "company_address": str(row.get("company_address") or "").strip(),
+                "employee_name": str(row.get("employee_name") or "").strip(),
                 "birth_date": _format_date(row.get("birth_date")),
-                "org_name": str(row.get("org_name") or "본사").strip() or "본사",
-                "position_name": str(row.get("employee_role") or "사원").strip() or "사원",
+                "resident_no_masked": _resolve_masked_resident_no(
+                    conn,
+                    tenant_id=str(row.get("tenant_id") or "").strip(),
+                    employee_id=str(row.get("employee_id") or "").strip(),
+                ),
+                "org_name": str(row.get("org_name") or "본사").strip(),
+                "position_name": str(row.get("employee_role") or "").strip(),
                 "hire_date": _format_date(row.get("hire_date")),
                 "issue_number": issue_number,
                 "issue_date": issue_date_local.strftime("%Y-%m-%d"),

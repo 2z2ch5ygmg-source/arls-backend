@@ -49,6 +49,7 @@ EMPLOYMENT_CERTIFICATE_TEMPLATE_VARIABLES = (
     "company_address",
     "employee_name",
     "birth_date",
+    "resident_no_masked",
     "org_name",
     "position_name",
     "hire_date",
@@ -255,11 +256,30 @@ def build_issue_number(request_id: str, issued_at: datetime | None = None) -> st
 
 def render_employment_certificate_html(context: dict[str, Any], template_html: str | None = None) -> str:
     template = str(template_html or "").strip() or load_default_template_html()
+    template = normalize_template_placeholders(template)
+    # Never expose auto-injected debug helpers in final output PDF/HTML.
+    template = re.sub(
+        r"(?is)<section[^>]*class=\"[^\"]*hr-template-auto-fields[^\"]*\"[^>]*>.*?</section>",
+        "",
+        template,
+    )
+    template = re.sub(
+        r"(?is)<div[^>]*class=\"[^\"]*hr-template-auto-fields[^\"]*\"[^>]*>.*?</div>",
+        "",
+        template,
+    )
+
     rendered = template
     for key, raw in context.items():
-        value = html.escape(_safe_text(raw, "-"))
-        rendered = rendered.replace(f"{{{{{key}}}}}", value)
-    rendered = re.sub(r"\{\{\s*[a-zA-Z0-9_]+\s*\}\}", "-", rendered)
+        value = html.escape(str(raw or "").strip())
+        rendered = re.sub(
+            r"\{\{\s*" + re.escape(str(key)) + r"\s*\}\}",
+            value,
+            rendered,
+            flags=re.IGNORECASE,
+        )
+    # Keep unresolved placeholders blank (not '-') to avoid polluted final certificate.
+    rendered = re.sub(r"\{\{\s*[a-zA-Z0-9_]+\s*\}\}", "", rendered)
     return rendered
 
 
