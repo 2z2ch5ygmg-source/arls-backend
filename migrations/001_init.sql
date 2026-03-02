@@ -81,6 +81,9 @@ CREATE TABLE IF NOT EXISTS document_requests (
     mail_error text,
     mail_company_sent_at timestamptz,
     mail_employee_sent_at timestamptz,
+    template_id uuid,
+    template_version int,
+    template_file_path text,
     created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
     updated_at timestamptz NOT NULL DEFAULT timezone('utc', now())
 );
@@ -340,6 +343,27 @@ BEGIN
       WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'mail_employee_sent_at'
     ) THEN
       ALTER TABLE document_requests ADD COLUMN mail_employee_sent_at timestamptz;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'template_id'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN template_id uuid;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'template_version'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN template_version int;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_requests' AND column_name = 'template_file_path'
+    ) THEN
+      ALTER TABLE document_requests ADD COLUMN template_file_path text;
     END IF;
     IF NOT EXISTS (
       SELECT 1

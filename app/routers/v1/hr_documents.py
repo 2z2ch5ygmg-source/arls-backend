@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import logging
 from pathlib import Path
 import re
@@ -10,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
+import requests
 
 from ...db import get_connection
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
@@ -262,6 +264,25 @@ def _load_seal_image_bytes(conn, *, tenant_id: str, seal_attachment_id: str | No
     attachment_id = str(seal_attachment_id or "").strip()
     if not attachment_id:
         return None
+
+    if attachment_id.startswith("data:image/"):
+        try:
+            _, payload = attachment_id.split(",", 1)
+            return base64.b64decode(payload)
+        except Exception:
+            return None
+
+    if re.match(r"^https?://", attachment_id, flags=re.IGNORECASE):
+        try:
+            response = requests.get(attachment_id, timeout=8)
+            if response.status_code == 200:
+                content_type = str(response.headers.get("content-type") or "").lower()
+                if content_type.startswith("image/"):
+                    return bytes(response.content or b"")
+        except Exception:
+            return None
+        return None
+
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -313,25 +334,26 @@ def _validate_template_html(template_html: str) -> list[str]:
 def _inject_missing_template_variables(template_html: str, missing_variables: list[str]) -> str:
     if not missing_variables:
         return template_html
-    rows: list[str] = []
+    hidden_spans = []
     for variable_name in missing_variables:
         label = TEMPLATE_VARIABLE_LABELS.get(variable_name, variable_name)
-        rows.append(f"<p>{label}: {{{{{variable_name}}}}}</p>")
-    auto_section = (
-        '\n<section class="hr-template-auto-fields">'
-        "<h3>증명서 자동 입력 필드</h3>"
-        f"{''.join(rows)}"
-        "</section>\n"
+        hidden_spans.append(
+            f'<span data-auto-var="{label}" style="display:none">{{{{{variable_name}}}}}</span>'
+        )
+    auto_hidden_block = (
+        '\n<div class="hr-template-auto-fields" style="display:none" aria-hidden="true">'
+        f"{''.join(hidden_spans)}"
+        "</div>\n"
     )
-    return f"{template_html.rstrip()}{auto_section}"
+    return f"{template_html.rstrip()}{auto_hidden_block}"
 
 
-def _fetch_active_document_template(
+def _fetch_document_template_for_issue(
     conn,
     *,
     tenant_id: str,
     document_type: str,
-) -> dict[str, Any] | None:
+) -> tuple[dict[str, Any] | None, str]:
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -345,7 +367,25 @@ def _fetch_active_document_template(
             """,
             (tenant_id, document_type),
         )
-        return cur.fetchone()
+        active = cur.fetchone()
+        if active:
+            return active, "active"
+
+        cur.execute(
+            """
+            SELECT id, document_type, version, file_path, template_html
+            FROM document_templates
+            WHERE tenant_id = %s
+              AND document_type = %s
+            ORDER BY version DESC
+            LIMIT 1
+            """,
+            (tenant_id, document_type),
+        )
+        latest = cur.fetchone()
+        if latest:
+            return latest, "latest_fallback"
+    return None, "default_fallback"
 
 
 def _fetch_document_request_for_issue(conn, *, request_id: str) -> dict[str, Any] | None:
@@ -444,10 +484,18 @@ def _process_employment_certificate_issue_job(request_id: str) -> None:
                 tenant_id=str(row.get("tenant_id") or "").strip(),
                 seal_attachment_id=str(row.get("seal_attachment_id") or "").strip(),
             )
-            active_template = _fetch_active_document_template(
+            active_template, template_source = _fetch_document_template_for_issue(
                 conn,
                 tenant_id=str(row.get("tenant_id") or "").strip(),
                 document_type=DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE,
+            )
+            logger.info(
+                "[HR][DOC] issue template selection request_id=%s tenant_id=%s source=%s template_id=%s template_version=%s",
+                request_id,
+                str(row.get("tenant_id") or "").strip(),
+                template_source,
+                str((active_template or {}).get("id") or ""),
+                str((active_template or {}).get("version") or ""),
             )
             active_template_html = str((active_template or {}).get("template_html") or "")
             html_body = render_employment_certificate_html(context, template_html=active_template_html)
@@ -511,6 +559,9 @@ def _process_employment_certificate_issue_job(request_id: str) -> None:
                         mail_error = %s,
                         mail_company_sent_at = %s,
                         mail_employee_sent_at = %s,
+                        template_id = %s,
+                        template_version = %s,
+                        template_file_path = %s,
                         updated_at = timezone('utc', now())
                     WHERE id = %s
                     """,
@@ -522,6 +573,9 @@ def _process_employment_certificate_issue_job(request_id: str) -> None:
                         "; ".join(mail_errors) if mail_errors else None,
                         mail_company_sent_at,
                         mail_employee_sent_at,
+                        (active_template or {}).get("id"),
+                        (active_template or {}).get("version"),
+                        (active_template or {}).get("file_path"),
                         request_id,
                     ),
                 )
@@ -659,6 +713,9 @@ def list_my_employment_certificate_requests(
                    approved_at,
                    rejection_reason,
                    issue_number,
+                   template_id,
+                   template_version,
+                   template_file_path,
                    COALESCE(file_path, '') AS file_path,
                    COALESCE(file_url, '') AS file_url,
                    (file_bytes IS NOT NULL OR COALESCE(file_path, '') <> '' OR COALESCE(file_url, '') <> '') AS file_ready,
@@ -691,6 +748,9 @@ def list_my_employment_certificate_requests(
             "status": row.get("status"),
             "rejection_reason": row.get("rejection_reason"),
             "issue_number": row.get("issue_number"),
+            "template_id": str(row.get("template_id") or ""),
+            "template_version": row.get("template_version"),
+            "template_file_path": row.get("template_file_path"),
             "file_ready": bool(row.get("file_ready")),
             "mail_company_sent_at": row.get("mail_company_sent_at"),
             "mail_employee_sent_at": row.get("mail_employee_sent_at"),
@@ -817,6 +877,9 @@ def list_admin_employment_certificate_requests(
                    dr.purpose_code,
                    dr.purpose_text,
                    dr.issue_number,
+                   dr.template_id,
+                   dr.template_version,
+                   dr.template_file_path,
                    dr.mail_company_sent_at,
                    dr.mail_employee_sent_at,
                    e.employee_code,
@@ -850,6 +913,9 @@ def list_admin_employment_certificate_requests(
             "approved_at": row.get("approved_at"),
             "rejection_reason": row.get("rejection_reason"),
             "issue_number": row.get("issue_number"),
+            "template_id": str(row.get("template_id") or ""),
+            "template_version": row.get("template_version"),
+            "template_file_path": row.get("template_file_path"),
             "mail_company_sent_at": row.get("mail_company_sent_at"),
             "mail_employee_sent_at": row.get("mail_employee_sent_at"),
         }

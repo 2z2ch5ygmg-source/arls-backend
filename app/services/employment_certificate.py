@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.message import EmailMessage
+from html.parser import HTMLParser
 import html
 from io import BytesIO
 from pathlib import Path
@@ -16,11 +17,19 @@ from docx.oxml.table import CT_Tbl
 from docx.oxml.text.paragraph import CT_P
 from docx.table import Table
 from docx.text.paragraph import Paragraph
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
+from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfgen import canvas
+from reportlab.platypus import Image as RLImage
+from reportlab.platypus import Paragraph as RLParagraph
+from reportlab.platypus import SimpleDocTemplate, Spacer
+from reportlab.platypus import Table as RLTable
+from reportlab.platypus import TableStyle
+from reportlab.lib.styles import ParagraphStyle
 
 from ..config import settings
 
@@ -92,6 +101,20 @@ class MailResult:
     error: str | None = None
 
 
+@dataclass
+class TemplateCell:
+    text: str
+    is_label: bool = False
+
+
+@dataclass
+class TemplateBlock:
+    kind: str
+    tag: str = "p"
+    text: str = ""
+    rows: list[list[TemplateCell]] | None = None
+
+
 def _safe_text(value: Any, fallback: str = "-") -> str:
     text = str(value or "").strip()
     return text if text else fallback
@@ -138,7 +161,7 @@ def convert_docx_template_to_html(docx_bytes: bytes) -> str:
         if isinstance(child, CT_Tbl):
             table = Table(child, document)
             has_content = True
-            parts.append("<table>")
+            parts.append('<table class="certificate-table">')
             for row in table.rows:
                 parts.append("<tr>")
                 for cell in row.cells:
@@ -240,18 +263,373 @@ def render_employment_certificate_html(context: dict[str, Any], template_html: s
     return rendered
 
 
-def generate_employment_certificate_pdf(
+class _TemplateHtmlParser(HTMLParser):
+    _PARA_TAGS = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "li"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+        self.blocks: list[TemplateBlock] = []
+        self._hidden_stack: list[bool] = []
+        self._table_rows: list[list[TemplateCell]] | None = None
+        self._current_row: list[TemplateCell] | None = None
+        self._current_cell_text: list[str] | None = None
+        self._current_cell_is_label = False
+        self._current_para_tag: str | None = None
+        self._current_para_text: list[str] = []
+
+    def _is_hidden(self) -> bool:
+        return bool(self._hidden_stack and self._hidden_stack[-1])
+
+    def _append_text(self, value: str) -> None:
+        if self._current_cell_text is not None:
+            self._current_cell_text.append(value)
+        elif self._current_para_tag is not None:
+            self._current_para_text.append(value)
+
+    def _flush_paragraph(self) -> None:
+        if self._current_para_tag is None:
+            return
+        text = html.unescape("".join(self._current_para_text)).replace("\xa0", " ")
+        text = re.sub(r"[ \t\r\f\v]+", " ", text)
+        text = re.sub(r"\s*\n\s*", "\n", text).strip()
+        if text:
+            self.blocks.append(TemplateBlock(kind="paragraph", tag=self._current_para_tag, text=text))
+        self._current_para_tag = None
+        self._current_para_text = []
+
+    def _start_paragraph(self, tag: str) -> None:
+        self._flush_paragraph()
+        self._current_para_tag = tag
+        self._current_para_text = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attrs_dict = {str(k or "").lower(): str(v or "") for k, v in attrs}
+        parent_hidden = self._is_hidden()
+        style_text = attrs_dict.get("style", "").lower()
+        class_text = attrs_dict.get("class", "").lower()
+        is_hidden = parent_hidden or ("display:none" in style_text) or ("visibility:hidden" in style_text) or ("hidden" in attrs_dict)
+        self._hidden_stack.append(is_hidden)
+
+        if is_hidden:
+            return
+
+        tag = tag.lower()
+        if tag in {"script", "style"}:
+            self._hidden_stack[-1] = True
+            return
+
+        if tag == "br":
+            self._append_text("\n")
+            return
+
+        if tag == "table":
+            self._flush_paragraph()
+            self._table_rows = []
+            self._current_row = None
+            return
+
+        if self._table_rows is not None:
+            if tag == "tr":
+                self._current_row = []
+                return
+            if tag in {"td", "th"}:
+                self._current_cell_text = []
+                self._current_cell_is_label = "label" in class_text
+                return
+            return
+
+        if tag in self._PARA_TAGS:
+            self._start_paragraph(tag)
+            return
+
+        if tag == "div":
+            if "title" in class_text:
+                self._start_paragraph("h1")
+            elif "section-title" in class_text:
+                self._start_paragraph("h3")
+            elif "issued-at" in class_text:
+                self._start_paragraph("issued-at")
+            elif "content" in class_text:
+                self._start_paragraph("p")
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        is_hidden = self._is_hidden()
+
+        if not is_hidden:
+            if self._table_rows is not None:
+                if tag in {"td", "th"} and self._current_cell_text is not None:
+                    text = html.unescape("".join(self._current_cell_text)).replace("\xa0", " ")
+                    text = re.sub(r"[ \t\r\f\v]+", " ", text)
+                    text = re.sub(r"\s*\n\s*", "\n", text).strip()
+                    if self._current_row is not None:
+                        self._current_row.append(TemplateCell(text=text, is_label=self._current_cell_is_label))
+                    self._current_cell_text = None
+                    self._current_cell_is_label = False
+                elif tag == "tr":
+                    if self._current_row:
+                        self._table_rows.append(self._current_row)
+                    self._current_row = None
+                elif tag == "table":
+                    if self._table_rows:
+                        self.blocks.append(TemplateBlock(kind="table", tag="table", rows=self._table_rows))
+                    self._table_rows = None
+                    self._current_row = None
+                    self._current_cell_text = None
+                    self._current_cell_is_label = False
+            else:
+                if self._current_para_tag is not None:
+                    if tag == self._current_para_tag:
+                        self._flush_paragraph()
+                    elif self._current_para_tag == "issued-at" and tag == "div":
+                        self._flush_paragraph()
+
+        if self._hidden_stack:
+            self._hidden_stack.pop()
+
+    def handle_data(self, data: str) -> None:
+        if self._is_hidden():
+            return
+        if not data:
+            return
+        self._append_text(data)
+
+    def close(self) -> None:
+        super().close()
+        self._flush_paragraph()
+
+
+def _parse_template_blocks(rendered_html: str) -> list[TemplateBlock]:
+    parser = _TemplateHtmlParser()
+    parser.feed(str(rendered_html or ""))
+    parser.close()
+    return parser.blocks
+
+
+def _build_paragraph_styles(font_name: str) -> dict[str, ParagraphStyle]:
+    base = ParagraphStyle(
+        "certificate-base",
+        fontName=font_name,
+        fontSize=10.5,
+        leading=14,
+        textColor=colors.HexColor("#111827"),
+        spaceAfter=2,
+    )
+    return {
+        "p": base,
+        "li": ParagraphStyle("certificate-li", parent=base, leftIndent=12),
+        "h1": ParagraphStyle("certificate-h1", parent=base, fontSize=24, leading=30, alignment=1, spaceAfter=10),
+        "h2": ParagraphStyle("certificate-h2", parent=base, fontSize=18, leading=24, spaceBefore=4, spaceAfter=6),
+        "h3": ParagraphStyle("certificate-h3", parent=base, fontSize=13, leading=18, spaceBefore=6, spaceAfter=4),
+        "h4": ParagraphStyle("certificate-h4", parent=base, fontSize=12, leading=16, spaceBefore=4, spaceAfter=3),
+        "h5": ParagraphStyle("certificate-h5", parent=base, fontSize=11, leading=15),
+        "h6": ParagraphStyle("certificate-h6", parent=base, fontSize=10, leading=14),
+        "issued-at": ParagraphStyle("certificate-issued-at", parent=base, alignment=2, spaceBefore=10, spaceAfter=4),
+    }
+
+
+def _to_paragraph_html(text: str) -> str:
+    safe = html.escape(str(text or "").strip() or "-")
+    safe = safe.replace("\n", "<br/>")
+    return safe
+
+
+def _contains_seal_marker(text: str) -> bool:
+    normalized = str(text or "")
+    if not normalized:
+        return False
+    if re.search(r"\(\s*인\s*\)", normalized):
+        return True
+    if re.search(r"\{\{\s*seal_image\s*\}\}", normalized, flags=re.IGNORECASE):
+        return True
+    if re.search(r"\[\s*seal\s*\]", normalized, flags=re.IGNORECASE):
+        return True
+    return False
+
+
+def _make_seal_image_flowable(seal_image_bytes: bytes) -> RLImage | None:
+    if not seal_image_bytes:
+        return None
+    try:
+        stream = BytesIO(seal_image_bytes)
+        image = RLImage(stream)
+        image.drawWidth = 18 * mm
+        image.drawHeight = 18 * mm
+        image.hAlign = "RIGHT"
+        return image
+    except Exception:
+        return None
+
+
+def _build_table_flowable(
+    rows: list[list[TemplateCell]],
+    *,
+    page_width: float,
+    styles: dict[str, ParagraphStyle],
+    seal_image_bytes: bytes | None,
+) -> tuple[RLTable, bool]:
+    col_count = max((len(row) for row in rows), default=1)
+    if col_count <= 0:
+        col_count = 1
+
+    available = page_width
+    if col_count == 4:
+        col_widths = [available * 0.18, available * 0.32, available * 0.18, available * 0.32]
+    elif col_count == 2:
+        col_widths = [available * 0.26, available * 0.74]
+    elif col_count == 3:
+        col_widths = [available * 0.24, available * 0.38, available * 0.38]
+    else:
+        col_widths = [available / col_count for _ in range(col_count)]
+
+    seal_inserted = False
+    table_data: list[list[Any]] = []
+    label_cells: list[tuple[int, int]] = []
+
+    for r_idx, row in enumerate(rows):
+        output_row: list[Any] = []
+        normalized_row = row + [TemplateCell(text="", is_label=False)] * max(0, col_count - len(row))
+        for c_idx, cell in enumerate(normalized_row[:col_count]):
+            cell_text = str(cell.text or "").strip()
+            if cell.is_label:
+                label_cells.append((r_idx, c_idx))
+
+            if seal_image_bytes and _contains_seal_marker(cell_text):
+                seal_inserted = True
+                clean_text = re.sub(r"\{\{\s*seal_image\s*\}\}", "", cell_text, flags=re.IGNORECASE)
+                clean_text = re.sub(r"\[\s*seal\s*\]", "", clean_text, flags=re.IGNORECASE)
+                content: list[Any] = []
+                if clean_text.strip():
+                    content.append(RLParagraph(_to_paragraph_html(clean_text), styles["p"]))
+                    content.append(Spacer(1, 2))
+                seal_image = _make_seal_image_flowable(seal_image_bytes)
+                if seal_image is not None:
+                    content.append(seal_image)
+                output_row.append(content if content else RLParagraph("&nbsp;", styles["p"]))
+                continue
+
+            paragraph = RLParagraph(_to_paragraph_html(cell_text or "-"), styles["p"])
+            output_row.append(paragraph)
+        table_data.append(output_row)
+
+    table = RLTable(table_data, colWidths=col_widths, repeatRows=0)
+    style_commands: list[tuple] = [
+        ("GRID", (0, 0), (-1, -1), 0.6, colors.HexColor("#D0D5DD")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]
+
+    if label_cells:
+        for r_idx, c_idx in label_cells:
+            style_commands.append(("BACKGROUND", (c_idx, r_idx), (c_idx, r_idx), colors.HexColor("#F2F4F7")))
+    elif col_count == 4:
+        for r_idx in range(len(table_data)):
+            style_commands.append(("BACKGROUND", (0, r_idx), (0, r_idx), colors.HexColor("#F2F4F7")))
+            style_commands.append(("BACKGROUND", (2, r_idx), (2, r_idx), colors.HexColor("#F2F4F7")))
+
+    table.setStyle(TableStyle(style_commands))
+    return table, seal_inserted
+
+
+def _generate_pdf_from_html_layout(
+    rendered_html: str,
+    *,
+    seal_image_bytes: bytes | None = None,
+) -> bytes:
+    font_name = _register_pdf_font_once()
+    paragraph_styles = _build_paragraph_styles(font_name)
+
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+        topMargin=16 * mm,
+        bottomMargin=14 * mm,
+    )
+
+    blocks = _parse_template_blocks(rendered_html)
+    story: list[Any] = []
+    page_inner_width = A4[0] - document.leftMargin - document.rightMargin
+    seal_inserted = False
+
+    for block in blocks:
+        if block.kind == "table" and block.rows:
+            table, inserted = _build_table_flowable(
+                block.rows,
+                page_width=page_inner_width,
+                styles=paragraph_styles,
+                seal_image_bytes=seal_image_bytes,
+            )
+            seal_inserted = seal_inserted or inserted
+            story.append(table)
+            story.append(Spacer(1, 6))
+            continue
+
+        if block.kind == "paragraph":
+            text = str(block.text or "").strip()
+            if not text:
+                continue
+
+            style_key = block.tag if block.tag in paragraph_styles else "p"
+            if seal_image_bytes and _contains_seal_marker(text):
+                clean_text = re.sub(r"\{\{\s*seal_image\s*\}\}", "", text, flags=re.IGNORECASE)
+                clean_text = re.sub(r"\[\s*seal\s*\]", "", clean_text, flags=re.IGNORECASE)
+                if clean_text.strip():
+                    story.append(RLParagraph(_to_paragraph_html(clean_text), paragraph_styles.get(style_key, paragraph_styles["p"])))
+                seal_image = _make_seal_image_flowable(seal_image_bytes)
+                if seal_image is not None:
+                    seal_inserted = True
+                    story.append(seal_image)
+                    story.append(Spacer(1, 4))
+                continue
+
+            story.append(RLParagraph(_to_paragraph_html(text), paragraph_styles.get(style_key, paragraph_styles["p"])))
+            if style_key in {"h1", "h2", "h3", "h4", "h5", "h6", "issued-at"}:
+                story.append(Spacer(1, 4))
+            continue
+
+    if seal_image_bytes and not seal_inserted:
+        seal_image = _make_seal_image_flowable(seal_image_bytes)
+        if seal_image is not None:
+            signature = RLTable(
+                [[RLParagraph("(인)", paragraph_styles["p"]), seal_image]],
+                colWidths=[12 * mm, 24 * mm],
+                hAlign="RIGHT",
+            )
+            signature.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                        ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ("TOPPADDING", (0, 0), (-1, -1), 0),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                    ]
+                )
+            )
+            story.append(Spacer(1, 8))
+            story.append(signature)
+
+    if not story:
+        story.append(RLParagraph("재직증명서", paragraph_styles["h2"]))
+
+    document.build(story)
+    return buffer.getvalue()
+
+
+def _generate_plain_text_fallback_pdf(
     context: dict[str, Any],
     *,
     seal_image_bytes: bytes | None = None,
-    rendered_html: str | None = None,
-    template_html: str | None = None,
+    rendered_html: str,
 ) -> bytes:
-    resolved_html = str(rendered_html or "").strip()
-    if not resolved_html:
-        resolved_html = render_employment_certificate_html(context, template_html=template_html)
-
-    plain_text = resolved_html
+    plain_text = rendered_html
     plain_text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", plain_text)
     plain_text = re.sub(r"(?i)<br\s*/?>", "\n", plain_text)
     plain_text = re.sub(r"(?i)</(p|div|tr|h1|h2|h3|h4|h5|h6|li|table|section|article)>", "\n", plain_text)
@@ -310,6 +688,30 @@ def generate_employment_certificate_pdf(
     pdf.showPage()
     pdf.save()
     return buffer.getvalue()
+
+
+def generate_employment_certificate_pdf(
+    context: dict[str, Any],
+    *,
+    seal_image_bytes: bytes | None = None,
+    rendered_html: str | None = None,
+    template_html: str | None = None,
+) -> bytes:
+    resolved_html = str(rendered_html or "").strip()
+    if not resolved_html:
+        resolved_html = render_employment_certificate_html(context, template_html=template_html)
+
+    try:
+        return _generate_pdf_from_html_layout(
+            resolved_html,
+            seal_image_bytes=seal_image_bytes,
+        )
+    except Exception:
+        return _generate_plain_text_fallback_pdf(
+            context,
+            seal_image_bytes=seal_image_bytes,
+            rendered_html=resolved_html,
+        )
 
 
 def _smtp_client():
