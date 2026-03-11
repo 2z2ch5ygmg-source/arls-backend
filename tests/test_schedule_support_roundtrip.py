@@ -4,7 +4,7 @@ from datetime import date
 import unittest
 from pathlib import Path
 
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 
 from app.routers.v1.schedules import (
     ARLS_EXPORT_TEMPLATE_VERSION,
@@ -18,6 +18,7 @@ from app.routers.v1.schedules import (
     _build_arls_month_sheet,
     _build_employee_name_index,
     _build_sentrix_hq_snapshot_signature,
+    _clone_support_hq_sheet_to_workbook,
     _build_support_only_workbook,
     _build_support_roundtrip_employee_row_index,
     _extract_sentrix_ticket_hq_roster_status,
@@ -167,6 +168,28 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
 
         self.assertGreaterEqual(len(rows_meta["weekly_rows"]), 7)
         self.assertEqual(sheet.cell(row=rows_meta["weekly_rows"][0], column=day_col).value, "Apple_가로수길 박준연")
+
+    def test_clone_support_hq_sheet_to_workbook_copies_dimension_style_without_error(self):
+        source_workbook = Workbook()
+        source_sheet = source_workbook.active
+        source_sheet.title = "Apple_가로수길"
+        source_sheet["A1"] = "지원근무"
+        source_sheet.column_dimensions["A"].width = 24
+        source_sheet.row_dimensions[1].height = 28
+
+        target_workbook = Workbook()
+        target_workbook.remove(target_workbook.active)
+
+        _clone_support_hq_sheet_to_workbook(
+            source_sheet,
+            target_workbook=target_workbook,
+            title="Apple_가로수길",
+        )
+
+        cloned_sheet = target_workbook["Apple_가로수길"]
+        self.assertEqual(cloned_sheet["A1"].value, "지원근무")
+        self.assertEqual(cloned_sheet.column_dimensions["A"].width, 24)
+        self.assertEqual(cloned_sheet.row_dimensions[1].height, 28)
 
     def test_parse_sentrix_hq_worker_cell_normalizes_external_and_internal(self):
         employee_index = _build_employee_name_index(

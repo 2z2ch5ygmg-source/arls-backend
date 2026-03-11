@@ -5227,13 +5227,16 @@ def _clone_support_hq_sheet_to_workbook(source_sheet, *, target_workbook: Workbo
         target_dimension.bestFit = source_dimension.bestFit
         target_dimension.outlineLevel = source_dimension.outlineLevel
         target_dimension.collapsed = source_dimension.collapsed
-        target_dimension.style = source_dimension.style
+        if getattr(source_dimension, "has_style", False):
+            target_dimension._style = copy(source_dimension._style)
     for row_key, source_dimension in source_sheet.row_dimensions.items():
         target_dimension = target_sheet.row_dimensions[row_key]
         target_dimension.height = source_dimension.height
         target_dimension.hidden = source_dimension.hidden
         target_dimension.outlineLevel = source_dimension.outlineLevel
         target_dimension.collapsed = source_dimension.collapsed
+        if getattr(source_dimension, "has_style", False):
+            target_dimension._style = copy(source_dimension._style)
     for row in source_sheet.iter_rows():
         for source_cell in row:
             if isinstance(source_cell, MergedCell):
