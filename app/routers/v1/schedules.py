@@ -151,12 +151,14 @@ SCHEDULE_DISPLAY_TIME_LABELS = {
     "half_leave": "반차",
 }
 LEADER_ROLE_DISPLAY_LABELS = {
+    "DEVELOPER": "Development",
     "HQ_ADMIN": "HQ Admin",
     "SUPERVISOR": "Supervisor",
     VICE_SUPERVISOR_DUTY_ROLE: "Vice Supervisor",
     GUARD_DUTY_ROLE: "GUARD",
 }
 LEADER_ROLE_PRIORITY = {
+    "DEVELOPER": 0,
     "HQ_ADMIN": 0,
     "SUPERVISOR": 1,
     VICE_SUPERVISOR_DUTY_ROLE: 2,
@@ -12222,9 +12224,11 @@ def create_bulk_schedule(
 def _resolve_leader_candidate_role_key(value: str | None, user_role: str | None = None) -> str:
     normalized_user_role = normalize_user_role(user_role)
     raw = str(value or "").strip().upper()
+    if normalized_user_role == "developer":
+        return "DEVELOPER"
     if normalized_user_role == "hq_admin":
         return "HQ_ADMIN"
-    if normalized_user_role in {"supervisor", "developer"}:
+    if normalized_user_role == "supervisor":
         return "SUPERVISOR"
     if normalized_user_role == "vice_supervisor" or str(user_role or "").strip().lower() == "branch_manager":
         return VICE_SUPERVISOR_DUTY_ROLE

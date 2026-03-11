@@ -17,12 +17,16 @@ from app.routers.v1.schedules import (
     _format_schedule_import_mapping_requirement_label,
     _build_schedule_import_mapping_lookup,
     _collect_monthly_export_context,
+    _leader_candidate_role_label,
+    _leader_candidate_role_priority,
     _locate_support_section_rows,
     _parse_arls_canonical_import_sheet,
     _parse_daytime_need_value,
     _parse_support_worker_cell,
     _read_arls_export_metadata,
+    _resolve_leader_candidate_role_key,
     _resolve_import_body_value,
+    _resolve_schedule_display_meta,
     _resolve_shift_type_from_duty_type,
     _validate_mapping_profile_requirements,
     _validate_arls_import_metadata,
@@ -284,6 +288,35 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
 
     def test_resolve_shift_type_from_duty_type_keeps_overtime_distinct(self):
         self.assertEqual(_resolve_shift_type_from_duty_type("overtime"), "overtime")
+
+    def test_schedule_display_meta_distinguishes_off_holiday_and_annual_leave(self):
+        self.assertEqual(
+            _resolve_schedule_display_meta({"shift_type": "off", "schedule_note": "연차"})["type"],
+            "annual_leave",
+        )
+        self.assertEqual(
+            _resolve_schedule_display_meta({"shift_type": "off", "schedule_note": "반차"})["type"],
+            "half_leave",
+        )
+        self.assertEqual(
+            _resolve_schedule_display_meta({"shift_type": "off", "schedule_note": ""})["label"],
+            "휴무",
+        )
+        self.assertEqual(
+            _resolve_schedule_display_meta({"shift_type": "holiday", "schedule_note": None})["label"],
+            "공휴일",
+        )
+
+    def test_leader_role_resolution_preserves_admin_labels(self):
+        self.assertEqual(_resolve_leader_candidate_role_key("GUARD", "hq_admin"), "HQ_ADMIN")
+        self.assertEqual(_resolve_leader_candidate_role_key("TEAM_MANAGER", "supervisor"), "SUPERVISOR")
+        self.assertEqual(_resolve_leader_candidate_role_key("GUARD", "vice_supervisor"), "VICE_SUPERVISOR")
+        self.assertEqual(_resolve_leader_candidate_role_key("GUARD", "officer"), "GUARD")
+        self.assertEqual(_leader_candidate_role_label("HQ_ADMIN"), "HQ Admin")
+        self.assertEqual(_leader_candidate_role_label("SUPERVISOR"), "Supervisor")
+        self.assertEqual(_leader_candidate_role_label("VICE_SUPERVISOR"), "Vice Supervisor")
+        self.assertEqual(_leader_candidate_role_priority("HQ_ADMIN"), 0)
+        self.assertEqual(_leader_candidate_role_priority("GUARD"), 3)
 
     def test_parse_canonical_sheet_ignores_placeholder_zero_employee_rows(self):
         workbook = self._build_sample_workbook()

@@ -9599,6 +9599,8 @@ function renderScheduleUploadWorkspace() {
   const analysisWorkspace = $('#scheduleImportAnalysisWorkspace');
   const previewBtn = $('#schedulePreviewBtn');
   const latestBaseBtn = $('#scheduleLatestBaseBtn');
+  const blankTemplateBtn = $('#scheduleBlankTemplateBtn');
+  const mappingEditBtn = document.querySelector('[data-action="schedule-import-mapping-edit"]');
   const siteSelect = $('#scheduleImportSite');
   const fileInput = $('#scheduleImportFile');
   const monthInput = $('#scheduleImportMonth');
@@ -9634,6 +9636,12 @@ function renderScheduleUploadWorkspace() {
   }
   if (latestBaseBtn) {
     latestBaseBtn.disabled = uploadUi.analysisInFlight || !(selectedSite && monthValue);
+  }
+  if (blankTemplateBtn) {
+    blankTemplateBtn.disabled = uploadUi.analysisInFlight;
+  }
+  if (mappingEditBtn instanceof HTMLButtonElement) {
+    mappingEditBtn.disabled = uploadUi.analysisInFlight;
   }
 
   renderScheduleUploadProgress();
