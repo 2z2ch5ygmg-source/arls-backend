@@ -1,0 +1,17 @@
+.git
+.github
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.DS_Store
+.env
+node_modules
+ios
+app_logs.zip
+webapp_logs.zip
+rg-arls-dev-source-backup-20260311-105907.tar.gz.sha256
+*.log
