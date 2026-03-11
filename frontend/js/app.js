@@ -9896,10 +9896,10 @@ function parseContentDispositionFilename(disposition = '', fallbackName = '') {
 
 function getScheduleSupportRoundtripStateLabel(sourceState = '') {
   const value = String(sourceState || '').trim().toLowerCase();
-  if (value === 'hq_merge_available') return '병합 완료';
-  if (value === 'hq_merge_stale') return 'HQ 재검토 필요';
-  if (value === 'conflict_manual_review_required') return '수동 검토 필요';
-  if (value === 'waiting_for_hq_merge') return 'HQ 제출 대기';
+  if (value === 'hq_merge_available') return 'Sentrix 전달됨';
+  if (value === 'hq_merge_stale') return '재전달 필요';
+  if (value === 'conflict_manual_review_required') return 'Sentrix 검토 필요';
+  if (value === 'waiting_for_hq_merge') return 'Sentrix 제출 대기';
   if (value === 'source_missing') return '원본 대기';
   return value || '상태 미확인';
 }
@@ -10087,6 +10087,38 @@ function getScheduleSupportSelectedSiteCode() {
   return '';
 }
 
+function buildScheduleSupportArtifactContext(status = null, siteCode = '') {
+  const tenantCode = String(getTenantCodeForScopedAdminApi() || getScheduleTenantValue() || '').trim();
+  const resolvedSiteCode = String(siteCode || status?.site_code || getScheduleSupportSelectedSiteCode() || '').trim().toUpperCase();
+  const month = normalizeMonthKey(String(status?.month || getScheduleMonthValue() || '').trim());
+  const revision = String(status?.artifact_revision || status?.source_revision || '').trim();
+  const artifactId = String(status?.artifact_id || '').trim() || (
+    tenantCode && resolvedSiteCode && month && revision
+      ? `sentrix-hq:${tenantCode}:${month}:${resolvedSiteCode}:${revision}`
+      : ''
+  );
+  return {
+    artifact_id: artifactId,
+    site_code: resolvedSiteCode,
+    month,
+    revision,
+    generated_at: String(status?.artifact_generated_at || status?.source_uploaded_at || '').trim(),
+  };
+}
+
+function renderScheduleSupportArtifactMeta(context = null) {
+  const artifact = context && typeof context === 'object' ? context : {};
+  setTextContentIfPresent('#scheduleSupportArtifactId', String(artifact.artifact_id || '').trim() || '-');
+  setTextContentIfPresent('#scheduleSupportArtifactSite', String(artifact.site_code || '').trim() || '-');
+  setTextContentIfPresent('#scheduleSupportArtifactMonth', String(artifact.month || '').trim() || '-');
+  setTextContentIfPresent('#scheduleSupportArtifactRevision', String(artifact.revision || '').trim() || '-');
+  setTextContentIfPresent(
+    '#scheduleSupportArtifactGeneratedAt',
+    artifact.generated_at ? formatOpsDateTime(artifact.generated_at) : '-',
+    '-',
+  );
+}
+
 function normalizeScheduleReportsTab(value = '') {
   const tab = String(value || '').trim().toLowerCase();
   return tab === SCHEDULE_REPORTS_TAB_FINANCE ? SCHEDULE_REPORTS_TAB_FINANCE : SCHEDULE_REPORTS_TAB_SUPPORT;
@@ -10148,7 +10180,7 @@ function renderScheduleSupportRoundtripStatus() {
 
   toggleVisibility('#scheduleSupportHqDownloadSection', canUseScheduleSupportRoundtripHq());
   toggleVisibility('#scheduleSupportUploadSection', canUseScheduleSupportRoundtripHq());
-  toggleVisibility('#scheduleSupportFinalDownloadSection', canUseScheduleSupportRoundtripFinalDownload());
+  toggleVisibility('#scheduleSupportFinalDownloadSection', false);
 
   const status = state.schedule.supportStatus && typeof state.schedule.supportStatus === 'object'
     ? state.schedule.supportStatus
@@ -10166,26 +10198,35 @@ function renderScheduleSupportRoundtripStatus() {
   const finalState = $('#scheduleSupportFinalState');
   const finalMeta = $('#scheduleSupportFinalMeta');
   const hqDownloadBtn = $('#scheduleSupportHqDownloadBtn');
-  const finalDownloadBtn = $('#scheduleSupportFinalDownloadBtn');
-  const supportPreviewBtn = $('#scheduleSupportPreviewBtn');
+  const openSentrixBtn = $('#scheduleSupportOpenSentrixBtn');
+  const copyArtifactBtn = $('#scheduleSupportCopyArtifactBtn');
 
   if (!selectedSite) {
     if (statePill) {
       statePill.className = 'status-pill status-pill-neutral';
       statePill.textContent = '지점 선택 필요';
     }
-    if (statusText) statusText.textContent = '업로드 지점을 선택하면 원본/HQ 병합 상태를 불러옵니다.';
+    if (statusText) statusText.textContent = '업로드 지점을 선택하면 source artifact와 Sentrix handoff 상태를 불러옵니다.';
     if (sourceRevision) sourceRevision.textContent = '없음';
     if (sourceMeta) sourceMeta.textContent = '지점 선택 후 확인';
     if (mergeState) mergeState.textContent = '대기';
-    if (mergeMeta) mergeMeta.textContent = '지점 선택 후 확인';
-    if (assignmentCount) assignmentCount.textContent = '0건';
-    if (conflictMeta) conflictMeta.textContent = '충돌 없음';
-    if (finalState) finalState.textContent = '비활성';
-    if (finalMeta) finalMeta.textContent = '원본 업로드 후 확인';
+    if (mergeMeta) mergeMeta.textContent = 'Sentrix 제출 전';
+    if (assignmentCount) assignmentCount.textContent = '미생성';
+    if (conflictMeta) conflictMeta.textContent = 'site/month 선택 후 확인';
+    if (finalState) finalState.textContent = 'Sentrix';
+    if (finalMeta) finalMeta.textContent = 'HQ roster 제출/적용은 Sentrix 소유';
     if (hqDownloadBtn) hqDownloadBtn.disabled = true;
-    if (finalDownloadBtn) finalDownloadBtn.disabled = true;
-    if (supportPreviewBtn) supportPreviewBtn.disabled = true;
+    if (openSentrixBtn) openSentrixBtn.disabled = true;
+    if (copyArtifactBtn) copyArtifactBtn.disabled = true;
+    renderScheduleSupportArtifactMeta(null);
+    setScheduleSupportRoundtripUI({
+      batchInfo: '현재 artifact contract를 보려면 지점을 선택해 주세요.',
+      issues: [],
+      clearPreviewRows: true,
+      clearApplyDetails: true,
+      canApply: false,
+      applyResult: 'ARLS는 source export만 담당하고, Sentrix가 HQ roster 제출/적용을 소유합니다.',
+    });
     if (blockedList) {
       blockedList.innerHTML = '';
       blockedList.classList.add('hidden');
@@ -10198,10 +10239,11 @@ function renderScheduleSupportRoundtripStatus() {
       statePill.className = 'status-pill status-pill-neutral';
       statePill.textContent = '조회 중';
     }
-    if (statusText) statusText.textContent = '원본/HQ 병합 상태를 조회하는 중입니다.';
+    if (statusText) statusText.textContent = 'source artifact와 Sentrix handoff 상태를 조회하는 중입니다.';
     if (hqDownloadBtn) hqDownloadBtn.disabled = true;
-    if (finalDownloadBtn) finalDownloadBtn.disabled = true;
-    if (supportPreviewBtn) supportPreviewBtn.disabled = true;
+    if (openSentrixBtn) openSentrixBtn.disabled = true;
+    if (copyArtifactBtn) copyArtifactBtn.disabled = true;
+    renderScheduleSupportArtifactMeta(null);
     return;
   }
 
@@ -10210,8 +10252,8 @@ function renderScheduleSupportRoundtripStatus() {
   const sourceMissing = sourceState === 'source_missing';
   const mergeAvailable = Boolean(status.hq_merge_available);
   const mergeStale = Boolean(status.hq_merge_stale);
-  const finalEnabled = Boolean(status.final_download_enabled) && mergeAvailable && !mergeStale;
   const blockedReasons = Array.isArray(status.blocked_reasons) ? status.blocked_reasons.filter(Boolean) : [];
+  const artifactContext = buildScheduleSupportArtifactContext(status, selectedSite);
 
   if (statePill) {
     statePill.className = getScheduleSupportRoundtripStateClass(sourceState, status);
@@ -10222,8 +10264,8 @@ function renderScheduleSupportRoundtripStatus() {
       ? '현재 month/site 기준 Supervisor 원본 업로드가 아직 없습니다.'
       : [
         `${selectedSite} · ${status.month || getScheduleMonthValue()}`,
-        mergeAvailable ? 'HQ 병합 있음' : 'HQ 병합 없음',
-        mergeStale ? '현재 원본보다 오래된 HQ 병합' : '',
+        artifactContext.revision ? `artifact ${artifactContext.revision.slice(0, 12)}` : 'artifact 준비',
+        mergeStale ? 'Sentrix 재전달 필요' : (mergeAvailable ? 'Sentrix 최근 제출 이력 있음' : 'Sentrix 제출 대기'),
       ].filter(Boolean).join(' · ');
   }
   if (sourceRevision) {
@@ -10237,31 +10279,34 @@ function renderScheduleSupportRoundtripStatus() {
     sourceMeta.textContent = metaBits.filter(Boolean).join(' · ') || '원본 업로드 대기';
   }
   if (mergeState) {
-    mergeState.textContent = mergeAvailable ? (mergeStale ? 'stale' : 'ready') : '대기';
+    mergeState.textContent = mergeStale ? '재전달 필요' : (mergeAvailable ? '전달됨' : '대기');
   }
   if (mergeMeta) {
     const bits = [];
-    if (status.latest_hq_revision) bits.push(`HQ ${String(status.latest_hq_revision).slice(0, 12)}`);
+    if (status.latest_hq_revision) bits.push(`Sentrix ${String(status.latest_hq_revision).slice(0, 12)}`);
     if (status.latest_hq_uploaded_by) bits.push(String(status.latest_hq_uploaded_by).trim());
     if (status.latest_hq_uploaded_at) bits.push(formatOpsDateTime(status.latest_hq_uploaded_at));
-    mergeMeta.textContent = bits.filter(Boolean).join(' · ') || (mergeAvailable ? 'HQ 병합 완료' : 'HQ 제출 대기');
+    mergeMeta.textContent = bits.filter(Boolean).join(' · ') || (mergeAvailable ? 'Sentrix 제출 이력 확인됨' : 'Sentrix 제출 전');
   }
   if (assignmentCount) {
-    assignmentCount.textContent = `${Number(status.support_assignment_count || 0)}건`;
+    assignmentCount.textContent = artifactContext.artifact_id ? '준비됨' : '미생성';
   }
   if (conflictMeta) {
-    const count = Number(status.conflict_count || 0);
-    conflictMeta.textContent = count > 0 ? `충돌 ${count}건` : '충돌 없음';
+    conflictMeta.textContent = artifactContext.artifact_id
+      ? [artifactContext.revision ? `revision ${artifactContext.revision.slice(0, 12)}` : '', artifactContext.generated_at ? formatOpsDateTime(artifactContext.generated_at) : '']
+        .filter(Boolean)
+        .join(' · ') || '현재 source artifact 준비됨'
+      : '현재 source artifact 없음';
   }
   if (finalState) {
-    finalState.textContent = finalEnabled ? '다운로드 가능' : '비활성';
+    finalState.textContent = 'Sentrix';
   }
   if (finalMeta) {
-    if (mergeStale) finalMeta.textContent = '원본이 갱신되어 HQ 재병합이 필요합니다.';
-    else if (finalEnabled) finalMeta.textContent = `병합 리비전 ${String(status.latest_merged_revision || '').slice(0, 12) || '-'}`;
-    else if (sourceMissing) finalMeta.textContent = '원본 업로드 후 활성화';
-    else finalMeta.textContent = 'HQ 병합 완료 후 활성화';
+    if (mergeStale) finalMeta.textContent = '최신 source artifact로 Sentrix에 다시 전달해야 합니다.';
+    else if (sourceMissing) finalMeta.textContent = '원본 업로드 후 source artifact가 생성됩니다.';
+    else finalMeta.textContent = 'HQ roster 제출/적용과 reconciliation은 Sentrix에서 진행합니다.';
   }
+  renderScheduleSupportArtifactMeta(artifactContext);
 
   if (blockedList) {
     blockedList.innerHTML = '';
@@ -10278,8 +10323,20 @@ function renderScheduleSupportRoundtripStatus() {
   }
 
   if (hqDownloadBtn) hqDownloadBtn.disabled = sourceMissing;
-  if (finalDownloadBtn) finalDownloadBtn.disabled = !finalEnabled;
-  if (supportPreviewBtn) supportPreviewBtn.disabled = sourceMissing;
+  if (openSentrixBtn) openSentrixBtn.disabled = sourceMissing || !artifactContext.artifact_id;
+  if (copyArtifactBtn) copyArtifactBtn.disabled = !artifactContext.artifact_id;
+  setScheduleSupportRoundtripUI({
+    batchInfo: artifactContext.artifact_id
+      ? `artifact_id ${artifactContext.artifact_id} · ${artifactContext.site_code || selectedSite} · ${artifactContext.month || getScheduleMonthValue()}`
+      : '현재 source revision 기준 artifact_id를 준비하지 못했습니다.',
+    issues: blockedReasons,
+    clearPreviewRows: true,
+    clearApplyDetails: true,
+    canApply: false,
+    applyResult: sourceMissing
+      ? 'Supervisor 원본 업로드가 완료되면 ARLS가 Sentrix 제출용 source workbook을 추출할 수 있습니다.'
+      : 'ARLS는 export-only 계약을 유지합니다. HQ roster 제출/적용은 Sentrix에서 진행하세요.',
+  });
 }
 
 async function loadScheduleSupportRoundtripStatus() {
@@ -10388,145 +10445,54 @@ async function onScheduleSupportHqDownload() {
 }
 
 async function onScheduleSupportPreview() {
-  if (!canUseScheduleSupportRoundtripHq()) {
-    showToast('HQ 지원근무 업로드 권한이 없습니다.', 'error');
-    return;
-  }
-  const fileInput = $('#scheduleSupportUploadFile');
-  const siteCode = getScheduleSupportSelectedSiteCode();
-  if (!(fileInput instanceof HTMLInputElement) || !fileInput.files?.length) {
-    setScheduleSupportRoundtripUI({
-      batchInfo: '지원근무자용 workbook 파일을 먼저 선택해 주세요.',
-      clearPreviewRows: true,
-      clearApplyDetails: true,
-    });
-    return;
-  }
-  if (!siteCode) {
-    setScheduleSupportRoundtripUI({
-      batchInfo: '업로드 지점을 먼저 선택해 주세요.',
-      clearPreviewRows: true,
-      clearApplyDetails: true,
-    });
-    return;
-  }
-  const body = new FormData();
-  body.append('file', fileInput.files[0]);
-  body.append('site_code', siteCode);
-  body.append('month', getScheduleMonthValue());
-  body.append('tenant_code', getScheduleTenantValue());
-  setScheduleSupportRoundtripUI({
-    batchInfo: '지원근무 병합 diff를 계산하는 중입니다...',
-    clearApplyDetails: true,
-  });
-  try {
-    const result = await apiRequest('/schedules/support-roundtrip/hq-upload/preview', {
-      method: 'POST',
-      body,
-    });
-    state.schedule.supportPreviewBatchId = String(result?.batch_id || '').trim();
-    state.schedule.supportPreview = result;
-    const diffCounts = result?.diff_counts && typeof result.diff_counts === 'object'
-      ? Object.entries(result.diff_counts)
-        .filter(([, count]) => Number(count || 0) > 0)
-        .map(([code, count]) => `${code}:${count}`)
-        .join(', ')
-      : '';
-    const metadata = result?.metadata && typeof result.metadata === 'object' ? result.metadata : {};
-    const blockedReasons = Array.isArray(result?.blocked_reasons) ? result.blocked_reasons.filter(Boolean) : [];
-    setScheduleSupportRoundtripUI({
-      batchInfo: [
-        `요약: 전체 ${Number(result?.total_rows || 0)}건, 적용 가능 ${Number(result?.valid_rows || 0)}건, 차단 ${Number(result?.invalid_rows || 0)}건`,
-        diffCounts ? `변경(${diffCounts})` : '',
-        metadata.source_revision ? `원본 ${String(metadata.source_revision).slice(0, 12)}` : '',
-        metadata.is_stale ? '구버전 HQ 파일' : '',
-      ].filter(Boolean).join(' · '),
-      issues: blockedReasons,
-      canApply: Boolean(result?.can_apply) && Boolean(result?.batch_id),
-      previewRows: result?.preview_rows || [],
-      applyResult: blockedReasons.length
-        ? '차단 사유를 먼저 해결해야 병합 반영할 수 있습니다.'
-        : '지원근무 diff를 확인한 뒤 "병합 반영"을 실행하세요.',
-      clearApplyDetails: true,
-    });
-    if (blockedReasons.length) {
-      showToast(`지원근무 검증 완료: ${blockedReasons.length}건 차단 사유`, 'error', 3200);
-    } else {
-      showToast('지원근무 검증 완료', 'success', 2200);
-    }
-  } catch (error) {
-    resetScheduleSupportRoundtripPreview();
-    setScheduleSupportRoundtripUI({
-      batchInfo: normalizeActionError(error, '지원근무 검증 실패'),
-      clearPreviewRows: true,
-      clearApplyDetails: true,
-      canApply: false,
-    });
-    throw error;
-  }
+  showToast('지원근무자 제출 미리보기와 reconciliation은 Sentrix에서 진행합니다.', 'info', 2600);
+  await onScheduleSupportOpenSentrix();
 }
 
 async function onScheduleSupportApply() {
+  showToast('HQ 지원근무 roster 제출/적용은 Sentrix 소유입니다.', 'info', 2600);
+  await onScheduleSupportOpenSentrix();
+}
+
+async function onScheduleSupportOpenSentrix() {
   if (!canUseScheduleSupportRoundtripHq()) {
-    showToast('HQ 지원근무 병합 권한이 없습니다.', 'error');
+    showToast('Sentrix handoff 열기 권한이 없습니다.', 'error');
     return;
   }
-  if (!state.schedule.supportPreviewBatchId) {
-    showToast('먼저 지원근무 미리보기를 진행해 주세요.', 'error');
+  const siteCode = getScheduleSupportSelectedSiteCode();
+  if (!siteCode) {
+    showToast('업로드 지점을 먼저 선택해 주세요.', 'error');
     return;
   }
-  setScheduleSupportRoundtripUI({
-    batchInfo: safeText('#scheduleSupportBatchInfo'),
-    issues: state.schedule.supportPreview?.blocked_reasons || [],
-    previewRows: state.schedule.supportPreview?.preview_rows || [],
-    canApply: false,
-    applyResult: '지원근무 병합 반영 중입니다...',
-    clearApplyDetails: true,
+  const status = (state.schedule.supportStatus && typeof state.schedule.supportStatus === 'object')
+    ? state.schedule.supportStatus
+    : await loadScheduleSupportRoundtripStatus();
+  const artifactContext = buildScheduleSupportArtifactContext(status, siteCode);
+  if (!artifactContext.artifact_id) {
+    showToast('현재 month/site 기준 source artifact가 아직 없습니다.', 'error');
+    return;
+  }
+  const url = buildSentrixHqSupportSubmissionUrl({
+    tenant_code: String(getTenantCodeForScopedAdminApi() || getScheduleTenantValue() || '').trim(),
+    month: artifactContext.month || getScheduleMonthValue(),
+    site_code: artifactContext.site_code || siteCode,
+    artifact_id: artifactContext.artifact_id,
+    revision: artifactContext.revision,
   });
-  try {
-    const tenantCode = getScheduleTenantValue();
-    const result = await apiRequest(
-      `/schedules/support-roundtrip/hq-upload/${encodeURIComponent(state.schedule.supportPreviewBatchId)}`
-      + `/apply?tenant_code=${encodeURIComponent(tenantCode)}`,
-      { method: 'POST' },
-    );
-    if (result?.blocked) {
-      setScheduleSupportRoundtripUI({
-        batchInfo: safeText('#scheduleSupportBatchInfo'),
-        issues: Array.isArray(result?.blocked_reasons) ? result.blocked_reasons : [],
-        previewRows: state.schedule.supportPreview?.preview_rows || [],
-        canApply: false,
-        applyResult: '지원근무 병합이 차단되었습니다. 차단 사유를 먼저 해결해 주세요.',
-        clearApplyDetails: true,
-      });
-      showToast('지원근무 병합이 차단되었습니다.', 'error', 3200);
-      return;
-    }
-    setScheduleSupportRoundtripUI({
-      batchInfo: safeText('#scheduleSupportBatchInfo'),
-      issues: [],
-      previewRows: state.schedule.supportPreview?.preview_rows || [],
-      applyRows: result?.applied_rows || [],
-      skippedRows: result?.skipped_rows || [],
-      canApply: false,
-      applyResult: `병합 완료: 적용 ${Number(result?.applied || 0)}건, 건너뜀 ${Number(result?.skipped || 0)}건`,
-    });
-    resetScheduleSupportRoundtripPreview();
-    await Promise.allSettled([
-      loadScheduleSupportRoundtripStatus(),
-    ]);
-    showToast(`지원근무 병합 완료: 적용 ${Number(result?.applied || 0)}건`, 'success', 2600);
-  } catch (error) {
-    setScheduleSupportRoundtripUI({
-      batchInfo: safeText('#scheduleSupportBatchInfo'),
-      issues: [],
-      previewRows: state.schedule.supportPreview?.preview_rows || [],
-      canApply: false,
-      applyResult: normalizeActionError(error, '지원근무 병합 실패'),
-      clearApplyDetails: true,
-    });
-    throw error;
+  window.open(url, '_blank', 'noopener,noreferrer');
+  showToast('Sentrix HQ submission workspace로 이동했습니다.', 'success', 2400);
+}
+
+async function onScheduleSupportCopyArtifact() {
+  const siteCode = getScheduleSupportSelectedSiteCode();
+  const status = state.schedule.supportStatus && typeof state.schedule.supportStatus === 'object'
+    ? state.schedule.supportStatus
+    : null;
+  const artifactContext = buildScheduleSupportArtifactContext(status, siteCode);
+  if (!artifactContext.artifact_id) {
+    throw new Error('복사할 artifact_id가 없습니다.');
   }
+  await copyTextToClipboard(artifactContext.artifact_id, 'artifact_id를 복사했습니다.');
 }
 
 async function onScheduleSupportFinalDownload() {
@@ -23123,7 +23089,7 @@ function applyWriteAccessUI(perms) {
   toggleVisibility('#scheduleSupportRoundtripPanel', scheduleSupportVisible);
   toggleVisibility('#scheduleSupportHqDownloadSection', canUseScheduleSupportRoundtripHq());
   toggleVisibility('#scheduleSupportUploadSection', canUseScheduleSupportRoundtripHq());
-  toggleVisibility('#scheduleSupportFinalDownloadSection', canUseScheduleSupportRoundtripFinalDownload());
+  toggleVisibility('#scheduleSupportFinalDownloadSection', false);
   toggleVisibility('#scheduleFinanceSubmissionPanel', scheduleFinanceVisible);
   setPermissionHint(
     '#schedulePermissionHint',
@@ -48245,12 +48211,22 @@ function bindUiEvents() {
     }
 
     if (action === 'schedule-support-preview') {
-      runWithBusy(() => onScheduleSupportPreview(), '지원근무 diff 계산 중...');
+      runWithBusy(() => onScheduleSupportOpenSentrix(), 'Sentrix 이동 중...');
       return;
     }
 
     if (action === 'schedule-support-apply') {
-      runWithBusy(() => onScheduleSupportApply(), '지원근무 병합 중...');
+      runWithBusy(() => onScheduleSupportOpenSentrix(), 'Sentrix 이동 중...');
+      return;
+    }
+
+    if (action === 'schedule-support-open-sentrix') {
+      runWithBusy(() => onScheduleSupportOpenSentrix(), 'Sentrix 이동 중...');
+      return;
+    }
+
+    if (action === 'schedule-support-copy-artifact') {
+      runActionSafely(onScheduleSupportCopyArtifact(), 'artifact_id를 복사하지 못했습니다.');
       return;
     }
 
@@ -48840,16 +48816,6 @@ function bindUiEvents() {
     if (target instanceof HTMLInputElement && target.id === 'scheduleImportFile') {
       if (getScheduleUploadUiState().analysisInFlight) return;
       invalidateScheduleImportAnalysis(['file']);
-      return;
-    }
-
-    if (target instanceof HTMLInputElement && target.id === 'scheduleSupportUploadFile') {
-      resetScheduleSupportRoundtripPreview();
-      setScheduleSupportRoundtripUI({
-        clearPreviewRows: true,
-        clearApplyDetails: true,
-        canApply: false,
-      });
       return;
     }
 

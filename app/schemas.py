@@ -1249,6 +1249,9 @@ class SupportRoundtripStatusOut(BaseModel):
     month: str
     source_state: str
     source_revision: Optional[str] = None
+    artifact_id: Optional[str] = None
+    artifact_revision: Optional[str] = None
+    artifact_generated_at: Optional[datetime] = None
     source_uploaded_at: Optional[datetime] = None
     source_uploaded_by: Optional[str] = None
     source_filename: Optional[str] = None

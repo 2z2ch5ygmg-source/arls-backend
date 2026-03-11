@@ -5031,6 +5031,38 @@ button:disabled,
   flex-wrap: wrap;
 }
 
+.schedule-support-artifact-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.schedule-support-artifact-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.schedule-support-artifact-row:first-child {
+  border-top: 0;
+}
+
+.schedule-support-artifact-row dt {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+
+.schedule-support-artifact-row dd {
+  margin: 0;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
 .schedule-finance-tabs {
   display: flex;
   gap: 8px;

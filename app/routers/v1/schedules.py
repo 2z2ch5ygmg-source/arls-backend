@@ -8929,6 +8929,7 @@ def _build_support_roundtrip_status_payload(
     conn,
     *,
     source_row: dict | None,
+    tenant_code: str,
     tenant_id: str,
     site_id: str,
     site_code: str,
@@ -8983,15 +8984,28 @@ def _build_support_roundtrip_status_payload(
         )
         conflict_row = cur.fetchone()
     blocked_reasons: list[str] = []
-    if not bool(source_row.get("hq_merge_available")):
-        blocked_reasons.append("HQ 지원근무 병합이 아직 없어 최종본 다운로드가 비활성화됩니다.")
     if bool(source_row.get("hq_merge_stale")):
-        blocked_reasons.append("현재 HQ 병합본은 최신 Supervisor 소스 리비전에 대해 stale 상태입니다.")
+        blocked_reasons.append("현재 Sentrix 제출 기준이 최신 Supervisor source보다 오래되었습니다. 최신 artifact를 다시 Sentrix로 넘겨 주세요.")
+    artifact_revision = str(source_row.get("source_revision") or "").strip() or None
+    artifact_generated_at = source_row.get("source_uploaded_at")
+    artifact_id = (
+        _build_sentrix_hq_artifact_id(
+            tenant_code=tenant_code,
+            month_key=month_key,
+            site_code=site_code,
+            revision=artifact_revision or "latest",
+        )
+        if tenant_code and artifact_revision
+        else None
+    )
     return SupportRoundtripStatusOut(
         site_code=site_code,
         month=month_key,
         source_state=str(source_row.get("state") or "waiting_for_hq_merge"),
         source_revision=str(source_row.get("source_revision") or "").strip() or None,
+        artifact_id=artifact_id,
+        artifact_revision=artifact_revision,
+        artifact_generated_at=artifact_generated_at,
         source_uploaded_at=source_row.get("source_uploaded_at"),
         source_uploaded_by=str(source_row.get("source_uploaded_by_username") or source_row.get("source_uploaded_by") or "").strip() or None,
         source_filename=str(source_row.get("source_filename") or "").strip() or None,
@@ -10319,6 +10333,7 @@ def get_support_roundtrip_status(
     return _build_support_roundtrip_status_payload(
         conn,
         source_row=source_row,
+        tenant_code=str(target_tenant.get("tenant_code") or tenant_code or "").strip(),
         tenant_id=str(target_tenant["id"]),
         site_id=str(site_row["id"]),
         site_code=str(site_row.get("site_code") or "").strip(),
@@ -13333,6 +13348,7 @@ def export_monthly_board_excel(
             blocked_support_status = _build_support_roundtrip_status_payload(
                 conn,
                 source_row=support_source_row,
+                tenant_code=str(target_tenant.get("tenant_code") or tenant_code or "").strip(),
                 tenant_id=str(target_tenant["id"]),
                 site_id=str(site_row["id"]),
                 site_code=str(site_row.get("site_code") or "").strip(),
