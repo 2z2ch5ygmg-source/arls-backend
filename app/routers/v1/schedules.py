@@ -24,6 +24,7 @@ from openpyxl.cell.cell import MergedCell
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+import requests
 
 from ...deps import get_db_conn, get_current_user, apply_rate_limit
 from ...config import settings
@@ -2005,6 +2006,317 @@ def _build_sentrix_hq_artifact_id(
 ) -> str:
     normalized_scope_site = str(site_code or "ALL").strip().upper() or "ALL"
     return f"sentrix-hq:{str(tenant_code or '').strip().upper()}:{month_key}:{normalized_scope_site}:{str(revision or '').strip() or 'latest'}"
+
+
+def _build_sentrix_support_roster_handoff_worker_entries(
+    worker_payloads: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for payload in sorted(
+        list(worker_payloads or []),
+        key=lambda item: max(int((item or {}).get("slot_index") or 0), 0),
+    ):
+        row_payload = dict(payload or {})
+        entries.append(
+            {
+                "slot_index": max(int(row_payload.get("slot_index") or 0), 0),
+                "raw_cell_text": str(row_payload.get("raw_cell_text") or "").strip() or None,
+                "parsed_display_value": str(row_payload.get("parsed_display_value") or "").strip() or None,
+                "normalized_affiliation": str(row_payload.get("affiliation") or "").strip() or None,
+                "normalized_name": str(
+                    row_payload.get("worker_name")
+                    or row_payload.get("employee_name")
+                    or row_payload.get("name")
+                    or ""
+                ).strip() or None,
+                "worker_type": str(row_payload.get("worker_type") or "").strip() or None,
+                "self_staff": bool(row_payload.get("self_staff")),
+                "countable": bool(row_payload.get("countable")),
+                "parse_valid": not bool(str(row_payload.get("issue_code") or "").strip()),
+                "issue_code": str(row_payload.get("issue_code") or "").strip() or None,
+                "issue_message": str(row_payload.get("issue_message") or "").strip() or None,
+                "canonical_employee_hint": {
+                    "employee_id": str(row_payload.get("employee_id") or "").strip() or None,
+                    "employee_code": str(row_payload.get("employee_code") or "").strip() or None,
+                    "employee_name": str(row_payload.get("employee_name") or "").strip() or None,
+                },
+                "row_provenance": {
+                    "sheet_name": str(row_payload.get("sheet_name") or "").strip() or None,
+                    "source_row": int(row_payload.get("source_row")) if row_payload.get("source_row") is not None else None,
+                    "source_col": int(row_payload.get("source_col")) if row_payload.get("source_col") is not None else None,
+                    "source_cell_ref": str(row_payload.get("source_cell_ref") or "").strip() or None,
+                },
+            }
+        )
+    return entries
+
+
+def _build_sentrix_support_roster_handoff_payload(
+    *,
+    batch_id: uuid.UUID,
+    batch: dict[str, Any],
+    target_tenant: dict[str, Any],
+    scope_apply_specs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    upload_meta_json = batch.get("upload_meta_json") if isinstance(batch.get("upload_meta_json"), dict) else {}
+    tenant_code = str(target_tenant.get("tenant_code") or "").strip()
+    month_key = str(batch.get("month_key") or "").strip()
+    selected_site_code = str(
+        batch.get("selected_site_code")
+        or upload_meta_json.get("selected_site_code")
+        or ""
+    ).strip().upper()
+    revision = str(
+        batch.get("bundle_revision")
+        or upload_meta_json.get("revision")
+        or upload_meta_json.get("bundle_revision")
+        or ""
+    ).strip()
+    artifact_id = _build_sentrix_hq_artifact_id(
+        tenant_code=tenant_code,
+        month_key=month_key,
+        site_code=selected_site_code or ("ALL" if str(batch.get("download_scope") or "all").strip().lower() != "site" else selected_site_code),
+        revision=revision or "latest",
+    )
+    affected_site_codes = sorted(
+        {
+            str(spec.get("site_code") or "").strip().upper()
+            for spec in scope_apply_specs
+            if str(spec.get("site_code") or "").strip()
+        }
+    )
+    affected_dates = sorted(
+        {
+            spec["work_date"].isoformat()
+            for spec in scope_apply_specs
+            if isinstance(spec.get("work_date"), date)
+        }
+    )
+    scopes: list[dict[str, Any]] = []
+    for spec in scope_apply_specs:
+        scope_payload = dict(spec.get("scope_payload") or {})
+        scopes.append(
+            {
+                "scope_key": str(spec.get("scope_key") or "").strip(),
+                "sheet_name": str(spec.get("sheet_name") or "").strip() or "-",
+                "site_id": str(spec.get("ticket", {}).get("site_id") or scope_payload.get("site_id") or "").strip() or None,
+                "site_code": str(spec.get("site_code") or "").strip().upper() or None,
+                "site_name": str(spec.get("site_name") or "").strip() or None,
+                "month": month_key,
+                "work_date": spec["work_date"].isoformat() if isinstance(spec.get("work_date"), date) else None,
+                "shift_kind": "night" if str(spec.get("shift_kind") or "").strip().lower() == "night" else "day",
+                "request_count": max(int(spec.get("request_count") or 0), 0),
+                "valid_filled_count": max(int(spec.get("valid_filled_count") or 0), 0),
+                "invalid_filled_count": max(int(spec.get("invalid_filled_count") or 0), 0),
+                "target_status": str(spec.get("target_status") or "").strip() or None,
+                "current_status": _extract_sentrix_ticket_hq_roster_status(spec.get("ticket")),
+                "current_ticket_hint": {
+                    "local_ticket_id": str(spec.get("ticket_id") or "").strip() or None,
+                    "request_count": max(int(spec.get("request_count") or 0), 0),
+                    "status": _extract_sentrix_ticket_hq_roster_status(spec.get("ticket")),
+                },
+                "workbook_required_count": scope_payload.get("workbook_required_count"),
+                "workbook_required_raw": str(scope_payload.get("workbook_required_raw") or "").strip() or None,
+                "external_count_raw": str(scope_payload.get("external_count_raw") or "").strip() or None,
+                "purpose_text": str(scope_payload.get("purpose_text") or "").strip() or None,
+                "matched_ticket": bool(scope_payload.get("matched_ticket")),
+                "worker_entries": _build_sentrix_support_roster_handoff_worker_entries(spec.get("worker_payloads") or []),
+            }
+        )
+    return {
+        "tenant_code": tenant_code,
+        "tenant_id": str(target_tenant.get("id") or "").strip() or None,
+        "artifact_id": artifact_id,
+        "source_upload_batch_id": str(batch_id),
+        "month": month_key,
+        "download_scope": str(batch.get("download_scope") or upload_meta_json.get("download_scope") or "all").strip().lower() or "all",
+        "selected_site_code": selected_site_code or None,
+        "workbook_family": str(batch.get("workbook_family") or upload_meta_json.get("workbook_family") or "").strip() or None,
+        "template_version": str(batch.get("template_version") or upload_meta_json.get("template_version") or "").strip() or None,
+        "revision": revision or None,
+        "affected_site_codes": affected_site_codes,
+        "affected_dates": affected_dates,
+        "affected_scope_count": len(scopes),
+        "scopes": scopes,
+    }
+
+
+def _post_sentrix_support_roster_handoff(payload: dict[str, Any]) -> dict[str, Any]:
+    url = str(getattr(settings, "soc_support_roster_handoff_url", "") or "").strip()
+    if not url:
+        raise RuntimeError("SOC support roster handoff URL is not configured")
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    bridge_token = str(getattr(settings, "sentrix_support_bridge_token", "") or "").strip()
+    if bridge_token:
+        headers["X-Sentrix-Bridge-Token"] = bridge_token
+    response = requests.post(
+        url,
+        json=payload,
+        headers=headers,
+        timeout=max(int(getattr(settings, "request_timeout_seconds", 5) or 5), 5),
+    )
+    response_payload: dict[str, Any] | None = None
+    raw_text = str(response.text or "").strip()
+    if raw_text:
+        try:
+            parsed = response.json()
+            response_payload = parsed if isinstance(parsed, dict) else {"result": parsed}
+        except Exception:
+            response_payload = {"message": raw_text[:500]}
+    if int(response.status_code) >= 400:
+        error_message = str(
+            (response_payload or {}).get("error")
+            or (response_payload or {}).get("message")
+            or raw_text
+            or f"Sentrix support roster handoff failed ({response.status_code})"
+        ).strip()
+        raise RuntimeError(error_message or f"Sentrix support roster handoff failed ({response.status_code})")
+    if not isinstance(response_payload, dict):
+        raise RuntimeError("Sentrix support roster handoff returned an invalid response")
+    return response_payload
+
+
+def _build_sentrix_support_roster_handoff_failure_result(
+    *,
+    batch_id: uuid.UUID,
+    batch: dict[str, Any],
+    issue_count: int,
+    artifact_id: str | None,
+    scope_apply_specs: list[dict[str, Any]],
+    error_message: str,
+) -> SupportRosterHqApplyOut:
+    scope_results = [
+        SupportRosterHqApplyScopeOut(
+            scope_key=str(spec.get("scope_key") or "").strip(),
+            sheet_name=str(spec.get("sheet_name") or "").strip() or "-",
+            site_name=str(spec.get("site_name") or "").strip() or None,
+            site_code=str(spec.get("site_code") or "").strip() or None,
+            work_date=spec.get("work_date"),
+            shift_kind=str(spec.get("shift_kind") or "").strip() or None,
+            request_count=max(int(spec.get("request_count") or 0), 0),
+            valid_filled_count=max(int(spec.get("valid_filled_count") or 0), 0),
+            previous_status=_extract_sentrix_ticket_hq_roster_status(spec.get("ticket")),
+            target_status=str(spec.get("target_status") or "").strip() or None,
+            assignment_count=len(spec.get("valid_worker_payloads") or []),
+            handoff_status="failed",
+            handoff_message=error_message,
+        )
+        for spec in scope_apply_specs
+    ]
+    return SupportRosterHqApplyOut(
+        batch_id=batch_id,
+        applied=False,
+        partial_success=True,
+        blocked=False,
+        blocked_reasons=[],
+        issue_count=issue_count,
+        artifact_id=artifact_id,
+        retry_token=str(batch_id),
+        handoff_status="failed",
+        handoff_message=error_message,
+        handoff_success_count=0,
+        handoff_failed_count=len(scope_apply_specs),
+        created_scope_count=0,
+        updated_scope_count=0,
+        affected_scope_count=len(scope_apply_specs),
+        affected_site_codes=sorted({str(spec.get("site_code") or "").strip() for spec in scope_apply_specs if str(spec.get("site_code") or "").strip()}),
+        affected_dates=sorted({spec["work_date"].isoformat() for spec in scope_apply_specs if isinstance(spec.get("work_date"), date)}),
+        applied_scope_count=0,
+        failed_scope_count=len(scope_apply_specs),
+        audit_timestamp=datetime.now(timezone.utc),
+        scope_results=scope_results,
+    )
+
+
+def _build_sentrix_support_roster_apply_result_from_handoff(
+    *,
+    batch_id: uuid.UUID,
+    batch: dict[str, Any],
+    issue_count: int,
+    handoff_payload: dict[str, Any],
+    handoff_response: dict[str, Any],
+    scope_apply_specs: list[dict[str, Any]],
+) -> SupportRosterHqApplyOut:
+    response_scope_results = handoff_response.get("scope_results") if isinstance(handoff_response.get("scope_results"), list) else []
+    scope_results: list[SupportRosterHqApplyScopeOut] = []
+    scope_result_map = {
+        str(item.get("scope_key") or "").strip(): item
+        for item in response_scope_results
+        if isinstance(item, dict) and str(item.get("scope_key") or "").strip()
+    }
+    for spec in scope_apply_specs:
+        scope_key = str(spec.get("scope_key") or "").strip()
+        handoff_scope = dict(scope_result_map.get(scope_key) or {})
+        scope_results.append(
+            SupportRosterHqApplyScopeOut(
+                scope_key=scope_key,
+                sheet_name=str(spec.get("sheet_name") or "").strip() or "-",
+                site_name=str(spec.get("site_name") or "").strip() or None,
+                site_code=str(spec.get("site_code") or "").strip() or None,
+                work_date=spec.get("work_date"),
+                shift_kind=str(spec.get("shift_kind") or "").strip() or None,
+                request_count=max(int(spec.get("request_count") or 0), 0),
+                valid_filled_count=max(int(spec.get("valid_filled_count") or 0), 0),
+                previous_status=_extract_sentrix_ticket_hq_roster_status(spec.get("ticket")),
+                target_status=str(spec.get("target_status") or "").strip() or None,
+                assignment_count=len(spec.get("valid_worker_payloads") or []),
+                handoff_status=str(handoff_scope.get("handoff_status") or handoff_scope.get("status") or "").strip() or None,
+                handoff_message=str(handoff_scope.get("handoff_message") or handoff_scope.get("message") or "").strip() or None,
+                sentrix_ticket_id=str(handoff_scope.get("sentrix_ticket_id") or handoff_scope.get("ticket_id") or "").strip() or None,
+            )
+        )
+    applied_scope_count = max(int(handoff_response.get("applied_scope_count") or 0), 0)
+    failed_scope_count = max(int(handoff_response.get("failed_scope_count") or 0), 0)
+    partial_success = bool(handoff_response.get("partial_success")) or (applied_scope_count > 0 and failed_scope_count > 0)
+    applied = bool(handoff_response.get("applied")) and not partial_success and failed_scope_count == 0
+    handoff_message = str(
+        handoff_response.get("handoff_message")
+        or handoff_response.get("message")
+        or ""
+    ).strip() or None
+    return SupportRosterHqApplyOut(
+        batch_id=batch_id,
+        applied=applied,
+        partial_success=partial_success,
+        blocked=False,
+        blocked_reasons=[],
+        issue_count=issue_count,
+        artifact_id=str(handoff_response.get("artifact_id") or handoff_payload.get("artifact_id") or "").strip() or None,
+        retry_token=str(handoff_response.get("retry_token") or batch_id),
+        handoff_status=str(handoff_response.get("handoff_status") or ("partial" if partial_success else "success")).strip() or ("partial" if partial_success else "success"),
+        handoff_message=handoff_message,
+        handoff_success_count=max(int(handoff_response.get("handoff_success_count") or applied_scope_count), 0),
+        handoff_failed_count=max(int(handoff_response.get("handoff_failed_count") or failed_scope_count), 0),
+        created_scope_count=max(int(handoff_response.get("created_scope_count") or 0), 0),
+        updated_scope_count=max(int(handoff_response.get("updated_scope_count") or 0), 0),
+        affected_scope_count=max(int(handoff_response.get("affected_scope_count") or handoff_payload.get("affected_scope_count") or len(scope_apply_specs)), 0),
+        affected_site_codes=list(handoff_response.get("affected_site_codes") or handoff_payload.get("affected_site_codes") or []),
+        affected_dates=list(handoff_response.get("affected_dates") or handoff_payload.get("affected_dates") or []),
+        tickets_updated=max(int(handoff_response.get("tickets_updated") or 0), 0),
+        tickets_auto_approved=max(int(handoff_response.get("tickets_auto_approved") or 0), 0),
+        tickets_pending=max(int(handoff_response.get("tickets_pending") or 0), 0),
+        notifications_created=max(int(handoff_response.get("notifications_created") or 0), 0),
+        notification_sites=max(int(handoff_response.get("notification_sites") or 0), 0),
+        push_sent=max(int(handoff_response.get("push_sent") or 0), 0),
+        push_failed=max(int(handoff_response.get("push_failed") or 0), 0),
+        bridge_actions_created=max(int(handoff_response.get("bridge_actions_created") or 0), 0),
+        bridge_upserts=max(int(handoff_response.get("bridge_upserts") or 0), 0),
+        bridge_retracts=max(int(handoff_response.get("bridge_retracts") or 0), 0),
+        bridge_processed=max(int(handoff_response.get("bridge_processed") or 0), 0),
+        bridge_failed=max(int(handoff_response.get("bridge_failed") or 0), 0),
+        arls_materialized_created=max(int(handoff_response.get("arls_materialized_created") or 0), 0),
+        arls_materialized_updated=max(int(handoff_response.get("arls_materialized_updated") or 0), 0),
+        arls_materialized_linked=max(int(handoff_response.get("arls_materialized_linked") or 0), 0),
+        arls_materialized_retracted=max(int(handoff_response.get("arls_materialized_retracted") or 0), 0),
+        arls_materialized_noop=max(int(handoff_response.get("arls_materialized_noop") or 0), 0),
+        applied_scope_count=applied_scope_count,
+        failed_scope_count=failed_scope_count,
+        audit_timestamp=datetime.now(timezone.utc),
+        scope_results=scope_results,
+    )
 
 
 def _format_time_for_response(value: object) -> str | None:
@@ -6210,15 +6522,19 @@ def _build_support_roster_hq_upload_inspect_result(
                                     "work_date": schedule_date.isoformat(),
                                     "shift_kind": shift_kind,
                                     "slot_index": slot_index,
-                                    "ticket_id": str(ticket.get("id") or "").strip() if ticket else None,
-                                    "request_count": request_count,
-                                    "raw_cell_text": str(parsed_worker.get("raw_text") or "").strip() or None,
-                                    "parsed_display_value": str(parsed_worker.get("display_value") or "").strip() or None,
-                                    "self_staff": bool(parsed_worker.get("self_staff")),
-                                    "affiliation": str(parsed_worker.get("affiliation") or "").strip() or None,
-                                    "worker_name": str(parsed_worker.get("name") or "").strip() or None,
-                                    "worker_type": str(parsed_worker.get("worker_type") or "").strip() or None,
-                                    "employee_id": str(parsed_worker.get("employee_id") or "").strip() or None,
+                                "ticket_id": str(ticket.get("id") or "").strip() if ticket else None,
+                                "request_count": request_count,
+                                "raw_cell_text": str(parsed_worker.get("raw_text") or "").strip() or None,
+                                "parsed_display_value": str(parsed_worker.get("display_value") or "").strip() or None,
+                                "sheet_name": sheet_name,
+                                "source_row": row_no,
+                                "source_col": col_idx,
+                                "source_cell_ref": f"{get_column_letter(col_idx)}{row_no}",
+                                "self_staff": bool(parsed_worker.get("self_staff")),
+                                "affiliation": str(parsed_worker.get("affiliation") or "").strip() or None,
+                                "worker_name": str(parsed_worker.get("name") or "").strip() or None,
+                                "worker_type": str(parsed_worker.get("worker_type") or "").strip() or None,
+                                "employee_id": str(parsed_worker.get("employee_id") or "").strip() or None,
                                     "employee_code": str(parsed_worker.get("employee_code") or "").strip() or None,
                                     "employee_name": str(parsed_worker.get("employee_name") or "").strip() or None,
                                     "countable": bool(parsed_worker.get("countable")),
@@ -8314,412 +8630,48 @@ def _apply_sentrix_hq_roster_batch(
                 error_text="; ".join(blocked_reasons[:5]) or None,
             )
         return result
-
-    assignments_removed = 0
-    assignments_created = 0
-    tickets_updated = 0
-    tickets_auto_approved = 0
-    tickets_pending = 0
-    snapshots_created = 0
-    notifications_created = 0
-    notification_sites = 0
-    push_sent = 0
-    push_failed = 0
-    bridge_actions_created = 0
-    bridge_upserts = 0
-    bridge_retracts = 0
-    bridge_processed = 0
-    bridge_failed = 0
-    arls_materialized_created = 0
-    arls_materialized_updated = 0
-    arls_materialized_linked = 0
-    arls_materialized_retracted = 0
-    arls_materialized_noop = 0
-    scope_results: list[SupportRosterHqApplyScopeOut] = []
-    start_date, end_date = _month_bounds(month_key)
-    tenant_id = str(target_tenant["id"])
-    current_snapshot_map = _load_current_sentrix_hq_snapshot_map(
-        conn,
-        tenant_id=tenant_id,
-        ticket_ids=[str(spec["ticket_id"]) for spec in scope_apply_specs],
+    issue_count = max(int(batch.get("issue_count") or 0), 0)
+    handoff_payload = _build_sentrix_support_roster_handoff_payload(
+        batch_id=batch_id,
+        batch=batch,
+        target_tenant=target_tenant,
+        scope_apply_specs=scope_apply_specs,
     )
-    notification_jobs: list[dict[str, Any]] = []
-    partial_failures: list[str] = []
+    artifact_id = str(handoff_payload.get("artifact_id") or "").strip() or None
 
     try:
+        handoff_response = _post_sentrix_support_roster_handoff(handoff_payload)
+        result = _build_sentrix_support_roster_apply_result_from_handoff(
+            batch_id=batch_id,
+            batch=batch,
+            issue_count=issue_count,
+            handoff_payload=handoff_payload,
+            handoff_response=handoff_response,
+            scope_apply_specs=scope_apply_specs,
+        )
+        audit_status = "applied" if result.applied and not result.partial_success else "failed"
+        audit_error_text = None if result.applied and not result.partial_success else str(result.handoff_message or "").strip() or None
         with conn.cursor() as cur:
-            if site_ids:
-                cur.execute(
-                    """
-                    DELETE FROM support_assignment
-                    WHERE tenant_id = %s
-                      AND source = %s
-                      AND work_date >= %s
-                      AND work_date < %s
-                      AND site_id::text = ANY(%s)
-                    """,
-                    (
-                        target_tenant["id"],
-                        SENTRIX_HQ_ROSTER_ASSIGNMENT_SOURCE,
-                        start_date,
-                        end_date,
-                        sorted(site_ids),
-                    ),
-                )
-                assignments_removed = max(int(cur.rowcount or 0), 0)
-
-            for spec in scope_apply_specs:
-                for worker_payload in spec["valid_worker_payloads"]:
-                    worker_name = str(
-                        worker_payload.get("employee_name")
-                        or worker_payload.get("worker_name")
-                        or worker_payload.get("name")
-                        or ""
-                    ).strip()
-                    if not worker_name:
-                        raise RuntimeError(f"{spec['scope_key']} scope worker_name missing")
-                    upsert_support_assignment(
-                        conn,
-                        tenant_id=tenant_id,
-                        site_id=uuid.UUID(str(spec["ticket"].get("site_id"))),
-                        work_date=spec["work_date"],
-                        worker_type=str(worker_payload.get("worker_type") or "F").strip().upper() or "F",
-                        name=worker_name,
-                        support_period=spec["shift_kind"],
-                        slot_index=max(int(worker_payload.get("slot_index") or 0), 1),
-                        source=SENTRIX_HQ_ROSTER_ASSIGNMENT_SOURCE,
-                        employee_id=(uuid.UUID(str(worker_payload["employee_id"])) if str(worker_payload.get("employee_id") or "").strip() else None),
-                        affiliation=str(worker_payload.get("affiliation") or "").strip() or None,
-                        source_event_uid=(
-                            f"sentrix:hq-roster:{batch_id}:{spec['site_code']}:{spec['work_date'].isoformat()}:{spec['shift_kind']}:{max(int(worker_payload.get('slot_index') or 0), 1)}"
-                        ),
-                    )
-                    assignments_created += 1
-
-            site_notification_specs: dict[str, dict[str, Any]] = {}
-            for spec in scope_apply_specs:
-                target_status = spec["target_status"]
-                final_ticket_state = _normalize_sentrix_hq_roster_final_state(target_status) or SENTRIX_HQ_ROSTER_PENDING_STATUS
-                previous_bundle = current_snapshot_map.get(str(spec["ticket_id"]))
-                previous_snapshot = dict((previous_bundle or {}).get("snapshot") or {})
-                previous_entries = list((previous_bundle or {}).get("entries") or [])
-                previous_ticket_state = (
-                    _normalize_sentrix_hq_roster_final_state(previous_snapshot.get("ticket_state"))
-                    or _extract_sentrix_hq_roster_final_state(spec["ticket"])
-                )
-                snapshot_id, snapshot_changed, snapshot_entries, persisted_previous_ticket_state = _persist_sentrix_hq_roster_snapshot(
-                    cur,
-                    tenant_id=tenant_id,
-                    batch_id=batch_id,
-                    spec=spec,
-                    ticket_state=final_ticket_state,
-                    previous_bundle=previous_bundle,
-                )
-                snapshots_created += 1
-                bridge_counts = _queue_sentrix_hq_arls_bridge_actions(
-                    cur,
-                    batch_id=batch_id,
-                    snapshot_id=snapshot_id,
-                    tenant_id=tenant_id,
-                    spec=spec,
-                    ticket_state=final_ticket_state,
-                    previous_ticket_state=persisted_previous_ticket_state or previous_ticket_state,
-                    previous_entries=previous_entries,
-                    current_entries=snapshot_entries,
-                )
-                bridge_actions_created += bridge_counts["created"]
-                bridge_upserts += bridge_counts["upserts"]
-                bridge_retracts += bridge_counts["retracts"]
-                detail_json = _build_sentrix_hq_roster_ticket_detail_json(
-                    spec["ticket"],
-                    batch_id=batch_id,
-                    batch=batch,
-                    user=user,
-                    scope_payload={
-                        **dict(spec["scope_payload"] or {}),
-                        "valid_filled_count": spec["valid_filled_count"],
-                        "invalid_filled_count": spec["invalid_filled_count"],
-                    },
-                    valid_worker_payloads=spec["valid_worker_payloads"],
-                    target_status=target_status,
-                )
-                cur.execute(
-                    """
-                    UPDATE sentrix_support_request_tickets
-                    SET detail_json = %s::jsonb,
-                        updated_at = timezone('utc', now())
-                    WHERE id = %s
-                      AND tenant_id = %s
-                    """,
-                    (
-                        json.dumps(detail_json, ensure_ascii=False, default=str),
-                        spec["ticket_id"],
-                        tenant_id,
-                    ),
-                )
-                if int(cur.rowcount or 0) != 1:
-                    raise RuntimeError(f"{spec['scope_key']} ticket update failed")
-                tickets_updated += 1
-                if target_status == SENTRIX_HQ_ROSTER_AUTO_APPROVED_STATUS:
-                    tickets_auto_approved += 1
-                else:
-                    tickets_pending += 1
-                scope_results.append(
-                    SupportRosterHqApplyScopeOut(
-                        scope_key=spec["scope_key"],
-                        sheet_name=spec["sheet_name"],
-                        site_name=spec["site_name"],
-                        site_code=spec["site_code"] or None,
-                        work_date=spec["work_date"],
-                        shift_kind=spec["shift_kind"],
-                        ticket_id=spec["ticket_id"],
-                        request_count=spec["request_count"],
-                        valid_filled_count=spec["valid_filled_count"],
-                        previous_status=persisted_previous_ticket_state or previous_ticket_state,
-                        target_status=target_status,
-                        assignment_count=len(spec["valid_worker_payloads"]),
-                        bridge_action_count=bridge_counts["created"],
-                        snapshot_changed=snapshot_changed,
-                    )
-                )
-                site_id = str(spec["ticket"].get("site_id") or "").strip()
-                if site_id:
-                    site_entry = site_notification_specs.setdefault(
-                        site_id,
-                        {
-                            "site_id": site_id,
-                            "site_code": str(spec.get("site_code") or "").strip() or None,
-                            "site_name": str(spec.get("site_name") or "").strip() or None,
-                            "changed": False,
-                            "scope_keys": [],
-                            "ticket_ids": [],
-                            "scope_count": 0,
-                        },
-                    )
-                    site_entry["scope_count"] += 1
-                    site_entry["scope_keys"].append(str(spec["scope_key"]))
-                    site_entry["ticket_ids"].append(str(spec["ticket_id"]))
-                    site_entry["changed"] = bool(site_entry["changed"]) or bool(
-                        snapshot_changed
-                        or bridge_counts["created"] > 0
-                        or (persisted_previous_ticket_state or previous_ticket_state) != final_ticket_state
-                    )
-
-            for site_entry in site_notification_specs.values():
-                if not bool(site_entry.get("changed")):
-                    continue
-                recipient_user_ids = _resolve_sentrix_hq_notification_user_ids(
-                    conn,
-                    tenant_id=tenant_id,
-                    site_id=str(site_entry.get("site_id") or "").strip(),
-                )
-                payload = {
-                    "type": "SENTRIX_SUPPORT_ROSTER_UPDATED",
-                    "upload_batch_id": str(batch_id),
-                    "month": month_key,
-                    "site_id": str(site_entry.get("site_id") or "").strip() or None,
-                    "site_code": str(site_entry.get("site_code") or "").strip() or None,
-                    "site_name": str(site_entry.get("site_name") or "").strip() or None,
-                    "scope_count": max(int(site_entry.get("scope_count") or 0), 0),
-                    "ticket_ids": sorted(set(site_entry.get("ticket_ids") or [])),
-                    "scope_keys": sorted(set(site_entry.get("scope_keys") or [])),
-                }
-                dedupe_key = (
-                    f"sentrix-support-roster:{batch_id}:"
-                    f"{str(site_entry.get('site_code') or site_entry.get('site_id') or '').strip()}"
-                )
-                notification_audit_id = _insert_sentrix_hq_notification_audit(
-                    cur,
-                    tenant_id=tenant_id,
-                    batch_id=batch_id,
-                    site_id=str(site_entry.get("site_id") or "").strip(),
-                    site_code=str(site_entry.get("site_code") or "").strip(),
-                    message=SENTRIX_HQ_ROSTER_NOTIFICATION_MESSAGE,
-                    dedupe_key=dedupe_key,
-                    recipient_user_ids=recipient_user_ids,
-                    payload=payload,
-                )
-                inserted_count = 0
-                for recipient_user_id in recipient_user_ids:
-                    cur.execute(
-                        """
-                        INSERT INTO in_app_notifications (
-                            id, tenant_id, user_id, site_id, category, message, dedupe_key,
-                            payload_json, created_at
-                        )
-                        VALUES (
-                            arls_random_uuid(), %s, %s, %s, %s, %s, %s,
-                            %s::jsonb, timezone('utc', now())
-                        )
-                        ON CONFLICT DO NOTHING
-                        """,
-                        (
-                            tenant_id,
-                            recipient_user_id,
-                            str(site_entry.get("site_id") or "").strip() or None,
-                            "info",
-                            SENTRIX_HQ_ROSTER_NOTIFICATION_MESSAGE,
-                            f"{dedupe_key}:{recipient_user_id}",
-                            json.dumps(payload, ensure_ascii=False, default=str),
-                        ),
-                    )
-                    inserted_count += max(int(cur.rowcount or 0), 0)
-                notifications_created += inserted_count
-                notification_sites += 1
-                notification_jobs.append(
-                    {
-                        "audit_id": notification_audit_id,
-                        "site_code": str(site_entry.get("site_code") or "").strip() or None,
-                        "recipient_user_ids": recipient_user_ids,
-                        "payload": payload,
-                    }
-                )
-
-            result = SupportRosterHqApplyOut(
-                batch_id=batch_id,
-                applied=True,
-                blocked=False,
-                blocked_reasons=[],
-                issue_count=max(int(batch.get("issue_count") or 0), 0),
-                assignments_created=assignments_created,
-                assignments_removed=assignments_removed,
-                tickets_updated=tickets_updated,
-                tickets_auto_approved=tickets_auto_approved,
-                tickets_pending=tickets_pending,
-                snapshots_created=snapshots_created,
-                notifications_created=notifications_created,
-                notification_sites=notification_sites,
-                push_sent=0,
-                push_failed=0,
-                bridge_actions_created=bridge_actions_created,
-                bridge_upserts=bridge_upserts,
-                bridge_retracts=bridge_retracts,
-                bridge_processed=0,
-                bridge_failed=0,
-                arls_materialized_created=0,
-                arls_materialized_updated=0,
-                arls_materialized_linked=0,
-                arls_materialized_retracted=0,
-                arls_materialized_noop=0,
-                applied_scope_count=len(scope_apply_specs),
-                failed_scope_count=0,
-                audit_timestamp=datetime.now(timezone.utc),
-                scope_results=scope_results,
-            )
             _write_sentrix_hq_roster_batch_apply_audit(
                 cur,
                 batch=batch,
                 batch_id=batch_id,
-                status="applied",
+                status=audit_status,
                 user=user,
                 result_json=result.model_dump(mode="json"),
+                error_text=audit_error_text,
             )
         conn.commit()
-
-        if bridge_actions_created > 0:
-            bridge_process_result = _process_sentrix_support_arls_bridge_actions(
-                conn,
-                tenant_id=tenant_id,
-                batch_id=str(batch_id),
-            )
-            bridge_processed = max(int(bridge_process_result.get("processed") or 0), 0)
-            bridge_failed = max(int(bridge_process_result.get("failed") or 0), 0)
-            arls_materialized_created = max(int(bridge_process_result.get("materialized_created") or 0), 0)
-            arls_materialized_updated = max(int(bridge_process_result.get("materialized_updated") or 0), 0)
-            arls_materialized_linked = max(int(bridge_process_result.get("materialized_linked") or 0), 0)
-            arls_materialized_retracted = max(int(bridge_process_result.get("materialized_retracted") or 0), 0)
-            arls_materialized_noop = max(int(bridge_process_result.get("materialized_noop") or 0), 0)
-            if bridge_failed > 0:
-                partial_failures.append(f"ARLS bridge {bridge_failed}건 실패")
-            elif list(bridge_process_result.get("failures") or []):
-                partial_failures.append("ARLS bridge 후처리 일부 실패")
-            result = result.model_copy(
-                update={
-                    "bridge_processed": bridge_processed,
-                    "bridge_failed": bridge_failed,
-                    "arls_materialized_created": arls_materialized_created,
-                    "arls_materialized_updated": arls_materialized_updated,
-                    "arls_materialized_linked": arls_materialized_linked,
-                    "arls_materialized_retracted": arls_materialized_retracted,
-                    "arls_materialized_noop": arls_materialized_noop,
-                }
-            )
-
-        for job in notification_jobs:
-            audit_id = job["audit_id"]
-            recipient_user_ids = list(job.get("recipient_user_ids") or [])
-            try:
-                push_result = send_push_notification_to_users(
-                    conn,
-                    tenant_id=tenant_id,
-                    user_ids=recipient_user_ids,
-                    title=SENTRIX_HQ_ROSTER_NOTIFICATION_MESSAGE,
-                    body=SENTRIX_HQ_ROSTER_NOTIFICATION_MESSAGE,
-                    data=dict(job.get("payload") or {}),
-                )
-                push_sent += max(int(push_result.get("sent_count") or 0), 0)
-                push_failed += max(int(push_result.get("failed_count") or 0), 0)
-                if max(int(push_result.get("failed_count") or 0), 0) > 0:
-                    partial_failures.append(
-                        f"{str(job.get('site_code') or '').strip() or 'site'} push 일부 실패"
-                    )
-                _update_sentrix_hq_notification_audit_after_push(
-                    conn,
-                    audit_id=audit_id,
-                    push_result=push_result,
-                )
-            except Exception as exc:
-                push_failed += len(recipient_user_ids)
-                partial_failures.append(
-                    f"{str(job.get('site_code') or '').strip() or 'site'} push 전송 실패"
-                )
-                _update_sentrix_hq_notification_audit_after_push(
-                    conn,
-                    audit_id=audit_id,
-                    push_result={
-                        "target_count": len(recipient_user_ids),
-                        "sent_count": 0,
-                        "failed_count": len(recipient_user_ids),
-                    },
-                    error_text=str(exc),
-                )
-
-        if notification_jobs or bridge_actions_created > 0 or partial_failures:
-            result = result.model_copy(
-                update={
-                    "push_sent": push_sent,
-                    "push_failed": push_failed,
-                }
-            )
-            with conn.cursor() as cur:
-                _write_sentrix_hq_roster_batch_apply_audit(
-                    cur,
-                    batch=batch,
-                    batch_id=batch_id,
-                    status="applied",
-                    user=user,
-                    result_json=result.model_dump(mode="json"),
-                    error_text="; ".join(dict.fromkeys(partial_failures))[:500] or None,
-                )
-            conn.commit()
         return result
     except Exception as exc:
         conn.rollback()
-        failed_result = SupportRosterHqApplyOut(
+        failed_result = _build_sentrix_support_roster_handoff_failure_result(
             batch_id=batch_id,
-            applied=False,
-            blocked=False,
-            blocked_reasons=[],
-            issue_count=max(int(batch.get("issue_count") or 0), 0),
-            assignments_created=0,
-            assignments_removed=0,
-            tickets_updated=0,
-            tickets_auto_approved=0,
-            tickets_pending=0,
-            applied_scope_count=0,
-            failed_scope_count=len(scope_payloads),
-            audit_timestamp=datetime.now(timezone.utc),
-            scope_results=[],
+            batch=batch,
+            issue_count=issue_count,
+            artifact_id=artifact_id,
+            scope_apply_specs=scope_apply_specs,
+            error_message=str(exc).strip() or "Sentrix handoff failed",
         )
         with conn.cursor() as cur:
             _write_sentrix_hq_roster_batch_apply_audit(
@@ -8729,10 +8681,10 @@ def _apply_sentrix_hq_roster_batch(
                 status="failed",
                 user=user,
                 result_json=failed_result.model_dump(mode="json"),
-                error_text=str(exc),
+                error_text=failed_result.handoff_message,
             )
         conn.commit()
-        raise HTTPException(status_code=500, detail="support roster apply failed") from exc
+        return failed_result
 
 
 def _get_support_roundtrip_source(conn, *, tenant_id: str, site_id: str, month_key: str) -> dict[str, Any] | None:

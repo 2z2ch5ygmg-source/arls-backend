@@ -4,6 +4,7 @@ from io import BytesIO
 from datetime import date
 import unittest
 from pathlib import Path
+import uuid
 
 from openpyxl import Workbook, load_workbook
 
@@ -19,6 +20,9 @@ from app.routers.v1.schedules import (
     _build_arls_month_sheet,
     _build_employee_name_index,
     _build_sentrix_hq_snapshot_signature,
+    _build_sentrix_support_roster_apply_result_from_handoff,
+    _build_sentrix_support_roster_handoff_failure_result,
+    _build_sentrix_support_roster_handoff_payload,
     _clone_support_hq_sheet_to_workbook,
     _build_support_only_workbook,
     _build_support_roundtrip_employee_row_index,
@@ -297,6 +301,190 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         )
         self.assertFalse(ambiguous_self["is_valid"])
         self.assertEqual(ambiguous_self["issue_code"], "SELF_STAFF_EMPLOYEE_AMBIGUOUS")
+
+    def test_build_sentrix_support_roster_handoff_payload_preserves_scope_lineage(self):
+        batch_id = uuid.uuid4()
+        scope_apply_specs = [
+            {
+                "scope_key": "R692:2026-03-01:day",
+                "sheet_name": "Apple_가로수길",
+                "site_code": "R692",
+                "site_name": "Apple_가로수길",
+                "work_date": date(2026, 3, 1),
+                "shift_kind": "day",
+                "ticket": {"status": "pending", "payload_json": {}},
+                "ticket_id": uuid.uuid4(),
+                "request_count": 2,
+                "valid_filled_count": 2,
+                "invalid_filled_count": 0,
+                "target_status": "approved",
+                "scope_payload": {
+                    "site_id": "site-r692",
+                    "workbook_required_count": 2,
+                    "workbook_required_raw": "섭외 2인 요청",
+                    "external_count_raw": "0",
+                    "purpose_text": "셀 값 Project",
+                    "matched_ticket": True,
+                },
+                "worker_payloads": [
+                    {
+                        "slot_index": 1,
+                        "raw_cell_text": "BK 박준연",
+                        "parsed_display_value": "BK 박준연",
+                        "affiliation": "BK",
+                        "worker_name": "박준연",
+                        "worker_type": "BK",
+                        "self_staff": False,
+                        "countable": True,
+                        "issue_code": "",
+                        "sheet_name": "Apple_가로수길",
+                        "source_row": 55,
+                        "source_col": 4,
+                        "source_cell_ref": "D55",
+                    },
+                    {
+                        "slot_index": 2,
+                        "raw_cell_text": "자체 조태환",
+                        "parsed_display_value": "자체 조태환",
+                        "affiliation": "",
+                        "worker_name": "조태환",
+                        "worker_type": "INTERNAL",
+                        "self_staff": True,
+                        "countable": True,
+                        "issue_code": "",
+                        "employee_id": "emp-1",
+                        "employee_code": "R692-1",
+                        "employee_name": "조태환",
+                        "sheet_name": "Apple_가로수길",
+                        "source_row": 56,
+                        "source_col": 4,
+                        "source_cell_ref": "D56",
+                    },
+                ],
+            }
+        ]
+
+        payload = _build_sentrix_support_roster_handoff_payload(
+            batch_id=batch_id,
+            batch={
+                "month_key": "2026-03",
+                "selected_site_code": "R692",
+                "bundle_revision": "rev-001",
+                "download_scope": "site",
+                "upload_meta_json": {
+                    "workbook_family": "support_hq_assignment",
+                    "template_version": "2026.03",
+                },
+            },
+            target_tenant={"id": "tenant-1", "tenant_code": "srs_korea"},
+            scope_apply_specs=scope_apply_specs,
+        )
+
+        self.assertEqual(payload["artifact_id"], "sentrix-hq:SRS_KOREA:2026-03:R692:rev-001")
+        self.assertEqual(payload["source_upload_batch_id"], str(batch_id))
+        self.assertEqual(payload["affected_scope_count"], 1)
+        self.assertEqual(payload["affected_site_codes"], ["R692"])
+        self.assertEqual(payload["affected_dates"], ["2026-03-01"])
+        self.assertEqual(payload["scopes"][0]["worker_entries"][0]["row_provenance"]["source_cell_ref"], "D55")
+        self.assertEqual(payload["scopes"][0]["worker_entries"][1]["canonical_employee_hint"]["employee_id"], "emp-1")
+
+    def test_build_sentrix_support_roster_handoff_failure_result_is_retryable(self):
+        batch_id = uuid.uuid4()
+        result = _build_sentrix_support_roster_handoff_failure_result(
+            batch_id=batch_id,
+            batch={"month_key": "2026-03"},
+            issue_count=0,
+            artifact_id="sentrix-hq:SRS_KOREA:2026-03:R692:rev-001",
+            scope_apply_specs=[
+                {
+                    "scope_key": "R692:2026-03-01:day",
+                    "sheet_name": "Apple_가로수길",
+                    "site_code": "R692",
+                    "site_name": "Apple_가로수길",
+                    "work_date": date(2026, 3, 1),
+                    "shift_kind": "day",
+                    "request_count": 2,
+                    "valid_filled_count": 2,
+                    "target_status": "approved",
+                    "ticket": {"status": "pending"},
+                    "valid_worker_payloads": [{"slot_index": 1}, {"slot_index": 2}],
+                }
+            ],
+            error_message="Sentrix handoff timeout",
+        )
+
+        self.assertFalse(result.applied)
+        self.assertTrue(result.partial_success)
+        self.assertEqual(result.handoff_status, "failed")
+        self.assertEqual(result.retry_token, str(batch_id))
+        self.assertEqual(result.handoff_failed_count, 1)
+        self.assertEqual(result.scope_results[0].handoff_message, "Sentrix handoff timeout")
+
+    def test_build_sentrix_support_roster_apply_result_from_handoff_maps_scope_statuses(self):
+        batch_id = uuid.uuid4()
+        ticket_id = uuid.uuid4()
+        scope_specs = [
+            {
+                "scope_key": "R692:2026-03-01:day",
+                "sheet_name": "Apple_가로수길",
+                "site_code": "R692",
+                "site_name": "Apple_가로수길",
+                "work_date": date(2026, 3, 1),
+                "shift_kind": "day",
+                "request_count": 2,
+                "valid_filled_count": 2,
+                "target_status": "approved",
+                "ticket": {"status": "pending"},
+                "valid_worker_payloads": [{"slot_index": 1}, {"slot_index": 2}],
+            }
+        ]
+        result = _build_sentrix_support_roster_apply_result_from_handoff(
+            batch_id=batch_id,
+            batch={"month_key": "2026-03"},
+            issue_count=0,
+            handoff_payload={
+                "artifact_id": "sentrix-hq:SRS_KOREA:2026-03:R692:rev-001",
+                "affected_scope_count": 1,
+                "affected_site_codes": ["R692"],
+                "affected_dates": ["2026-03-01"],
+            },
+            handoff_response={
+                "applied": False,
+                "partial_success": True,
+                "handoff_status": "partial",
+                "handoff_message": "일부 scope만 Sentrix에 반영되었습니다.",
+                "artifact_id": "sentrix-hq:SRS_KOREA:2026-03:R692:rev-001",
+                "retry_token": str(batch_id),
+                "handoff_success_count": 1,
+                "handoff_failed_count": 1,
+                "affected_scope_count": 1,
+                "affected_site_codes": ["R692"],
+                "affected_dates": ["2026-03-01"],
+                "applied_scope_count": 1,
+                "failed_scope_count": 1,
+                "updated_scope_count": 1,
+                "tickets_updated": 1,
+                "tickets_auto_approved": 1,
+                "tickets_pending": 0,
+                "scope_results": [
+                    {
+                        "scope_key": "R692:2026-03-01:day",
+                        "handoff_status": "success",
+                        "handoff_message": "Sentrix ticket updated",
+                        "sentrix_ticket_id": str(ticket_id),
+                    }
+                ],
+            },
+            scope_apply_specs=scope_specs,
+        )
+
+        self.assertFalse(result.applied)
+        self.assertTrue(result.partial_success)
+        self.assertEqual(result.handoff_status, "partial")
+        self.assertEqual(result.handoff_success_count, 1)
+        self.assertEqual(result.handoff_failed_count, 1)
+        self.assertEqual(result.scope_results[0].handoff_status, "success")
+        self.assertEqual(result.scope_results[0].sentrix_ticket_id, str(ticket_id))
 
     def test_extract_sentrix_ticket_hq_roster_status_prefers_detail_json(self):
         self.assertEqual(

@@ -1463,14 +1463,29 @@ class SupportRosterHqApplyScopeOut(BaseModel):
     assignment_count: int = 0
     bridge_action_count: int = 0
     snapshot_changed: bool = False
+    handoff_status: Optional[str] = None
+    handoff_message: Optional[str] = None
+    sentrix_ticket_id: Optional[str] = None
 
 
 class SupportRosterHqApplyOut(BaseModel):
     batch_id: UUID
     applied: bool = False
+    partial_success: bool = False
     blocked: bool = False
     blocked_reasons: list[str] = Field(default_factory=list)
     issue_count: int = 0
+    artifact_id: Optional[str] = None
+    retry_token: Optional[str] = None
+    handoff_status: str = "not_started"
+    handoff_message: Optional[str] = None
+    handoff_success_count: int = 0
+    handoff_failed_count: int = 0
+    created_scope_count: int = 0
+    updated_scope_count: int = 0
+    affected_scope_count: int = 0
+    affected_site_codes: list[str] = Field(default_factory=list)
+    affected_dates: list[str] = Field(default_factory=list)
     assignments_created: int = 0
     assignments_removed: int = 0
     tickets_updated: int = 0

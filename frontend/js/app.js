@@ -10378,6 +10378,20 @@ function renderScheduleSupportHqApplyDetails(scopeResults = []) {
     list.classList.add('hidden');
     return;
   }
+  const getHandoffStatusLabel = (status = '') => {
+    const value = String(status || '').trim().toLowerCase();
+    if (value === 'success') return 'Sentrix 전달 완료';
+    if (value === 'partial') return '부분 전달';
+    if (value === 'failed') return 'Sentrix 전달 실패';
+    return '검토 필요';
+  };
+  const getHandoffStatusClass = (status = '') => {
+    const value = String(status || '').trim().toLowerCase();
+    if (value === 'success') return 'status-pill status-pill-success';
+    if (value === 'partial') return 'status-pill status-pill-warn';
+    if (value === 'failed') return 'status-pill status-pill-error';
+    return 'status-pill status-pill-neutral';
+  };
   rows.forEach((scope) => {
     const li = document.createElement('li');
     li.classList.add('content-fade-in');
@@ -10396,17 +10410,22 @@ function renderScheduleSupportHqApplyDetails(scopeResults = []) {
     sub.className = 'list-row-sub';
     const targetStatus = String(scope?.target_status || '').trim();
     const previousStatus = String(scope?.previous_status || '').trim();
+    const handoffStatus = String(scope?.handoff_status || '').trim();
+    const sentrixTicketId = String(scope?.sentrix_ticket_id || '').trim();
+    const handoffMessage = String(scope?.handoff_message || '').trim();
     sub.textContent = [
       `${Number(scope?.valid_filled_count || 0)} / ${Number(scope?.request_count || 0)}명`,
       previousStatus ? `이전 ${getSupportStatusRequestStatusLabel(previousStatus)}` : '',
       targetStatus ? `적용 ${getSupportStatusRequestStatusLabel(targetStatus)}` : '',
-      `bridge ${Number(scope?.bridge_action_count || 0)}건`,
+      handoffStatus ? getHandoffStatusLabel(handoffStatus) : '',
+      sentrixTicketId ? `ticket ${sentrixTicketId}` : '',
+      handoffMessage || '',
     ].filter(Boolean).join(' · ');
     main.appendChild(title);
     main.appendChild(sub);
     const pill = document.createElement('span');
-    pill.className = targetStatus ? getSupportStatusRequestStatusClass(targetStatus) : 'status-pill status-pill-neutral';
-    pill.textContent = targetStatus ? getSupportStatusRequestStatusLabel(targetStatus) : '적용';
+    pill.className = getHandoffStatusClass(handoffStatus);
+    pill.textContent = getHandoffStatusLabel(handoffStatus);
     container.appendChild(main);
     container.appendChild(pill);
     li.appendChild(container);
@@ -10559,7 +10578,9 @@ function renderScheduleSupportHqWorkspace() {
 
   if (reviewTitle) {
     if (applyResult?.applied) reviewTitle.textContent = '적용 완료';
+    else if (applyResult?.partial_success) reviewTitle.textContent = '부분 적용';
     else if (applyResult?.blocked) reviewTitle.textContent = '적용 차단';
+    else if (applyResult?.handoff_status === 'failed') reviewTitle.textContent = '전달 실패';
     else if (workspace.stale) reviewTitle.textContent = '재검토 필요';
     else if (inspectResult) reviewTitle.textContent = inspectResult.can_apply ? '적용 가능' : '검토 보완 필요';
     else reviewTitle.textContent = '적용 전 검토 영역';
@@ -10567,8 +10588,20 @@ function renderScheduleSupportHqWorkspace() {
   if (reviewText) {
     if (applyResult?.applied) {
       reviewText.textContent = `scope ${Number(applyResult.applied_scope_count || 0)}건 handoff 완료 · ticket ${Number(applyResult.tickets_updated || 0)}건 갱신 · 자동승인 ${Number(applyResult.tickets_auto_approved || 0)}건 · 승인대기 ${Number(applyResult.tickets_pending || 0)}건`;
+    } else if (applyResult?.partial_success) {
+      reviewText.textContent = [
+        `scope ${Number(applyResult.handoff_success_count || 0)}건 전달`,
+        `실패 ${Number(applyResult.handoff_failed_count || 0)}건`,
+        applyResult?.handoff_message ? String(applyResult.handoff_message).trim() : '',
+        applyResult?.retry_token ? `retry ${String(applyResult.retry_token).slice(0, 12)}` : '',
+      ].filter(Boolean).join(' · ');
     } else if (applyResult?.blocked && Array.isArray(applyResult.blocked_reasons) && applyResult.blocked_reasons.length) {
       reviewText.textContent = String(applyResult.blocked_reasons[0] || '').trim() || '차단 사유를 해결한 뒤 다시 검토하세요.';
+    } else if (applyResult?.handoff_status === 'failed') {
+      reviewText.textContent = [
+        String(applyResult.handoff_message || 'Sentrix handoff에 실패했습니다.').trim(),
+        applyResult?.retry_token ? `retry ${String(applyResult.retry_token).slice(0, 12)}` : '',
+      ].filter(Boolean).join(' · ');
     } else if (workspace.applyError) {
       reviewText.textContent = String(workspace.applyError || '').trim();
     } else if (workspace.inspectError) {
@@ -10591,6 +10624,19 @@ function renderScheduleSupportHqWorkspace() {
         partialBits.push(`후처리 실패 push ${Number(applyResult.push_failed || 0)}건 / bridge ${Number(applyResult.bridge_failed || 0)}건`);
       }
       applyResultEl.textContent = `ARLS apply가 완료되었습니다. Sentrix state engine handoff 기준 batch ${String(applyResult.batch_id || '').slice(0, 12)} · ${partialBits.join(' · ') || '후처리 완료'}`;
+    } else if (applyResult?.partial_success) {
+      applyResultEl.textContent = [
+        'ARLS 검토 결과는 유지됐지만 Sentrix handoff가 일부만 완료되었습니다.',
+        `성공 ${Number(applyResult.handoff_success_count || 0)}건`,
+        `실패 ${Number(applyResult.handoff_failed_count || 0)}건`,
+        applyResult?.retry_token ? `retry ${String(applyResult.retry_token).slice(0, 12)}` : '',
+      ].filter(Boolean).join(' · ');
+    } else if (applyResult?.handoff_status === 'failed') {
+      applyResultEl.textContent = [
+        'ARLS local apply는 완료됐지만 Sentrix handoff에 실패했습니다.',
+        String(applyResult.handoff_message || '').trim(),
+        applyResult?.retry_token ? `retry ${String(applyResult.retry_token).slice(0, 12)}` : '',
+      ].filter(Boolean).join(' · ');
     } else if (workspace.applyError) {
       applyResultEl.textContent = String(workspace.applyError || '').trim();
     } else if (workspace.stale) {
@@ -10730,8 +10776,20 @@ async function onScheduleSupportHqApply() {
     renderScheduleUploadWorkspace();
     if (result?.applied) {
       showToast('HQ 지원근무자 반영 apply를 완료했습니다.', 'success', 2600);
+    } else if (result?.partial_success) {
+      showToast(
+        [
+          'Sentrix handoff가 일부만 완료되었습니다.',
+          `성공 ${Number(result.handoff_success_count || 0)}건`,
+          `실패 ${Number(result.handoff_failed_count || 0)}건`,
+        ].join(' · '),
+        'error',
+        3600,
+      );
     } else if (result?.blocked && Array.isArray(result.blocked_reasons) && result.blocked_reasons.length) {
       showToast(String(result.blocked_reasons[0] || '').trim() || '차단 이슈가 남아 있습니다.', 'error', 3200);
+    } else if (String(result?.handoff_status || '').trim().toLowerCase() === 'failed') {
+      showToast(String(result?.handoff_message || 'Sentrix handoff에 실패했습니다.').trim(), 'error', 3600);
     } else {
       showToast('HQ 지원근무자 반영 apply 결과를 확인해 주세요.', 'info', 2400);
     }

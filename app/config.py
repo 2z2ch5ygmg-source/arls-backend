@@ -91,6 +91,10 @@ class Settings:
 
     # 지점 동기화 URL (← 핵심 추가)
     soc_site_sync_url = f"{soc_base_url}/api/integrations/hr/site-sync"
+    soc_support_roster_handoff_url = os.getenv(
+        "SOC_SUPPORT_ROSTER_HANDOFF_URL",
+        f"{soc_base_url}/api/integrations/arls/support-roster-snapshot",
+    ).strip()
     soc_reset_url = os.getenv(
         "SOC_RESET_URL",
         f"{soc_base_url}/api/admin/hr/reset-tenant",
