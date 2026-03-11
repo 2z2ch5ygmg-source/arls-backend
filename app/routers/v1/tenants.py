@@ -221,6 +221,42 @@ def create_tenant(payload: TenantCreate, conn=Depends(get_db_conn), user=Depends
     tenant_id = uuid.uuid4()
     try:
         with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, tenant_code,
+                       COALESCE(is_active, TRUE) AS is_active,
+                       COALESCE(is_deleted, FALSE) AS is_deleted
+                FROM tenants
+                WHERE lower(trim(tenant_name)) = lower(trim(%s))
+                  AND COALESCE(is_deleted, FALSE) = FALSE
+                LIMIT 1
+                """,
+                (tenant_name,),
+            )
+            existing_by_name = cur.fetchone()
+            if existing_by_name:
+                logger.warning(
+                    "create_tenant name conflict: tenant_name=%s existing_id=%s existing_code=%s existing_active=%s existing_deleted=%s",
+                    tenant_name,
+                    existing_by_name.get("id"),
+                    existing_by_name.get("tenant_code"),
+                    existing_by_name.get("is_active"),
+                    existing_by_name.get("is_deleted"),
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "error": "TENANT_NAME_EXISTS",
+                        "message": "이미 존재하는 테넌트명입니다.",
+                        "detail": {
+                            "tenant_id": str(existing_by_name.get("id") or ""),
+                            "tenant_code": str(existing_by_name.get("tenant_code") or ""),
+                            "is_active": bool(existing_by_name.get("is_active", True)),
+                            "is_deleted": bool(existing_by_name.get("is_deleted", False)),
+                        },
+                    },
+                )
+
             candidate_aliases = list(build_tenant_identifier_candidates(tenant_code_normalized)) or [tenant_code_normalized]
             cur.execute(
                 """
@@ -276,7 +312,7 @@ def create_tenant(payload: TenantCreate, conn=Depends(get_db_conn), user=Depends
     except pg_errors.UniqueViolation as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"error": "TENANT_EXISTS", "message": "이미 존재하는 회사명입니다."},
+            detail={"error": "TENANT_EXISTS", "message": "이미 존재하는 테넌트 정보입니다."},
         ) from exc
     except Exception as exc:
         logger.exception("create_tenant failed: tenant_code=%s", tenant_code_normalized, exc_info=exc)

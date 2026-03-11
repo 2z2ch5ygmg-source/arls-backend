@@ -39,6 +39,7 @@ def _resolve_target_tenant(conn, user, tenant_code: str | None):
             FROM tenants
             WHERE tenant_code = %s
               AND COALESCE(is_active, TRUE) = TRUE
+              AND COALESCE(is_deleted, FALSE) = FALSE
             LIMIT 1
             """,
             (requested_tenant_code,),
@@ -56,18 +57,15 @@ def list_companies(
     user=Depends(get_current_user),
 ):
     actor_role = normalize_role(user["role"])
-    where = ""
     args: tuple = ()
     requested_tenant_code = str(tenant_code or "").strip().upper()
 
     if actor_role == ROLE_DEV and requested_tenant_code:
-        where = "WHERE t.tenant_code = %s"
         args = (requested_tenant_code,)
     elif actor_role != ROLE_DEV:
         own_tenant_code = str(user.get("tenant_code") or "").strip().upper()
         if requested_tenant_code and requested_tenant_code != own_tenant_code:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-        where = "WHERE c.tenant_id = %s"
         args = (user["tenant_id"],)
 
     with conn.cursor() as cur:
@@ -76,7 +74,10 @@ def list_companies(
             SELECT c.id, c.company_code, c.company_name, t.tenant_code
             FROM companies c
             JOIN tenants t ON t.id = c.tenant_id
-            {where}
+            WHERE COALESCE(t.is_active, TRUE) = TRUE
+              AND COALESCE(t.is_deleted, FALSE) = FALSE
+              {"AND t.tenant_code = %s" if actor_role == ROLE_DEV and requested_tenant_code else ""}
+              {"AND c.tenant_id = %s" if actor_role != ROLE_DEV else ""}
             ORDER BY c.company_code
             """,
             args,

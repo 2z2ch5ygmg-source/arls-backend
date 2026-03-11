@@ -37,7 +37,9 @@ def list_dev_sites(
     include_deleted: bool = Query(default=False),
     tenant_code: str | None = Query(default=None, max_length=64),
     q: str | None = Query(default=None, min_length=1, max_length=120),
-    limit: int = Query(default=1000, ge=1, le=10000),
+    detail: bool = Query(default=False),
+    limit: int = Query(default=300, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0, le=200000),
     conn=Depends(get_db_conn),
     _user=Depends(require_roles(ROLE_DEV)),
 ):
@@ -83,7 +85,12 @@ def list_dev_sites(
         params.extend([like, like, like, like, like, like])
 
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    place_id_sql = "COALESCE(s.place_id, '') AS place_id" if has_site_place_id else "''::text AS place_id"
+    if detail:
+        place_id_sql = "COALESCE(s.place_id, '') AS place_id" if has_site_place_id else "''::text AS place_id"
+        location_sql = "s.latitude, s.longitude, s.radius_meters"
+    else:
+        place_id_sql = "''::text AS place_id"
+        location_sql = "NULL::float8 AS latitude, NULL::float8 AS longitude, NULL::float8 AS radius_meters"
 
     with conn.cursor() as cur:
         cur.execute(
@@ -92,7 +99,7 @@ def list_dev_sites(
                    s.site_code, s.site_name,
                    COALESCE(s.address, '') AS address,
                    {place_id_sql},
-                   s.latitude, s.longitude, s.radius_meters,
+                   {location_sql},
                    COALESCE(s.is_active, TRUE) AS is_active,
                    COALESCE(c.company_code, '') AS company_code
             FROM sites s
@@ -101,8 +108,9 @@ def list_dev_sites(
             {where_sql}
             ORDER BY t.tenant_code, s.site_code
             LIMIT %s
+            OFFSET %s
             """,
-            tuple(params + [int(limit)]),
+            tuple(params + [int(limit), int(offset)]),
         )
         rows = cur.fetchall() or []
     return rows
@@ -115,7 +123,8 @@ def list_dev_employees(
     tenant_code: str | None = Query(default=None, max_length=64),
     site_code: str | None = Query(default=None, max_length=64),
     q: str | None = Query(default=None, min_length=1, max_length=120),
-    limit: int = Query(default=1000, ge=1, le=10000),
+    limit: int = Query(default=300, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0, le=200000),
     include_account: bool = Query(default=False),
     conn=Depends(get_db_conn),
     _user=Depends(require_roles(ROLE_DEV)),
@@ -213,8 +222,9 @@ def list_dev_employees(
             {where_sql}
             ORDER BY t.tenant_code, e.employee_code
             LIMIT %s
+            OFFSET %s
             """,
-            tuple(params + [int(limit)]),
+            tuple(params + [int(limit), int(offset)]),
         )
         rows = cur.fetchall() or []
 

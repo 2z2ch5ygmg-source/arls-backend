@@ -25,6 +25,11 @@ def _env_bool_any(names: list[str], default: str = "false") -> bool:
     return str(default).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_csv(name: str, default: str = "") -> list[str]:
+    raw = os.getenv(name, default)
+    return [item.strip() for item in str(raw).split(",") if item.strip()]
+
+
 def _load_service_account_json() -> str:
     direct = os.getenv("GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON", os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")).strip()
     if direct:
@@ -110,6 +115,15 @@ class Settings:
     smtp_timeout_seconds = int(os.getenv("SMTP_TIMEOUT_SECONDS", "20"))
     mail_from = os.getenv("MAIL_FROM", "no-reply@rg-arls.local").strip()
     mail_subject_prefix = os.getenv("MAIL_SUBJECT_PREFIX", "[RG ARLS]").strip()
+    push_notifications_enabled = _env_bool("PUSH_NOTIFICATIONS_ENABLED", "true")
+    push_attendance_auto_checkout_enabled = _env_bool("PUSH_ATTENDANCE_AUTO_CHECKOUT_ENABLED", "true")
+    push_fcm_server_key = os.getenv("PUSH_FCM_SERVER_KEY", "").strip()
+    push_attendance_title = os.getenv("PUSH_ATTENDANCE_TITLE", "출퇴근 알림").strip()
+    push_request_timeout_seconds = int(os.getenv("PUSH_REQUEST_TIMEOUT_SECONDS", "5"))
+    apple_weekly_truth_enabled = _env_bool("APPLE_WEEKLY_TRUTH_ENABLED", "true")
+    apple_weekly_truth_debug_enabled = _env_bool("APPLE_WEEKLY_TRUTH_DEBUG_ENABLED", "true")
+    apple_weekly_truth_site_allowlist = [item.upper() for item in _env_csv("APPLE_WEEKLY_TRUTH_SITE_ALLOWLIST", "")]
+    apple_weekly_truth_slow_ms = int(os.getenv("APPLE_WEEKLY_TRUTH_SLOW_MS", "1500"))
 
 
 settings = Settings()

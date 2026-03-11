@@ -146,17 +146,29 @@ def resolve_scoped_tenant(
     header_ref = normalize_tenant_identifier(header_tenant_id or user.get("active_tenant_id"))
     body_ref = normalize_tenant_identifier(body_tenant_id)
     query_ref = normalize_tenant_identifier(query_tenant_code)
-    requested_ref = resolve_tenant_context_ref(header_ref, body_ref, query_ref)
+    # Explicit request scope should win over ambient header context.
+    requested_ref = resolve_tenant_context_ref(body_ref, query_ref, header_ref)
 
-    own_ref = resolve_tenant_context_ref(str(user.get("tenant_id") or ""), user.get("tenant_code"))
+    own_tenant_id_ref = str(user.get("tenant_id") or "")
+    own_tenant_code_ref = str(user.get("tenant_code") or "")
+    own_ref = resolve_tenant_context_ref(own_tenant_id_ref, own_tenant_code_ref)
     own_row = _build_own_tenant_row_from_user(user)
     if own_row:
         ensure_tenant_active(own_row)
     else:
         own_row = ensure_tenant_active(fetch_tenant_row_any(conn, own_ref))
-    own_candidates = set(build_tenant_identifier_candidates(own_ref))
-    if str(own_row.get("id") or ""):
-        own_candidates.add(str(own_row["id"]))
+    own_candidates: set[str] = set()
+    for ref in (
+        own_ref,
+        own_tenant_id_ref,
+        own_tenant_code_ref,
+        str(own_row.get("id") or ""),
+        str(own_row.get("tenant_code") or ""),
+    ):
+        normalized_ref = normalize_tenant_identifier(ref)
+        if normalized_ref:
+            own_candidates.add(normalized_ref)
+        own_candidates.update(build_tenant_identifier_candidates(ref))
 
     if actor_role == ROLE_DEV:
         if not requested_ref:

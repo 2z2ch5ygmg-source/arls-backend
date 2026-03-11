@@ -739,11 +739,13 @@ def disable_tenant(
 @router.delete("/{tenant_ref}")
 def delete_tenant(
     tenant_ref: str,
-    hard_delete: bool = Query(default=False),
+    hard_delete: bool = Query(default=True),
     conn=Depends(get_db_conn),
     user=Depends(get_current_user),
 ):
     actor_role = _require_dev(user)
+    from .admin_tenants import _call_soc_tenant_full_reset
+
     tenant = _resolve_tenant_by_ref(conn, tenant_ref)
     if not tenant:
         raise HTTPException(
@@ -780,8 +782,10 @@ def delete_tenant(
     effective_hard_delete = bool(hard_delete) or (not ref_is_uuid)
 
     if effective_hard_delete:
+        soc_reset_result: dict[str, object] = {"skipped": False}
         try:
             per_table_counts = _hard_delete_tenant_rows(conn, tenant_uuid)
+            soc_reset_result = _call_soc_tenant_full_reset(tenant_code_raw)
         except Exception as exc:
             logger.exception(
                 "master_tenants.force_hard_delete.failed actor=%s tenant_ref=%s tenant_id=%s tenant_code=%s",
@@ -821,6 +825,7 @@ def delete_tenant(
                 "tenant_name": tenant.get("tenant_name"),
                 "mode": "hard_delete",
                 "deleted_table_counts": per_table_counts,
+                "soc_reset": soc_reset_result,
             },
         )
         return {

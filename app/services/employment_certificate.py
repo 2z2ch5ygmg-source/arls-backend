@@ -6,9 +6,13 @@ from email.message import EmailMessage
 from html.parser import HTMLParser
 import html
 from io import BytesIO
+import os
 from pathlib import Path
 import re
+import shutil
 import smtplib
+import subprocess
+import tempfile
 from typing import Any
 
 from docx import Document
@@ -17,6 +21,7 @@ from docx.oxml.table import CT_Tbl
 from docx.oxml.text.paragraph import CT_P
 from docx.table import Table
 from docx.text.paragraph import Paragraph
+from docx.shared import Mm
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
@@ -95,6 +100,25 @@ PURPOSE_LABEL_MAP = {
     "OTHER": "기타",
 }
 
+DOCX_LABEL_PATTERNS: dict[str, tuple[str, ...]] = {
+    "employee_name": ("성명",),
+    "resident_no_masked": ("주민번호", "주민등록번호"),
+    "employee_address": ("주소",),
+    "employee_phone": ("연락처", "전화번호", "연락처전화번호"),
+    "company_name": ("회사명", "회사명소속"),
+    "biz_reg_no": ("사업자", "사업자번호", "사업자등록번호"),
+    "ceo_name": ("대표자", "대표자명"),
+    "company_phone": ("대표전화", "대표연락처", "회사전화번호", "대표번호", "대표전화번호"),
+    "company_address": ("소재지", "회사주소"),
+    "employment_period": ("재직기간",),
+    "purpose_label": ("발급용도",),
+}
+
+DOCX_PERSONAL_SECTION_TOKENS = ("인적사항",)
+DOCX_EMPLOYMENT_SECTION_TOKENS = ("재직사항",)
+DOCX_SECTION_HEADER_TOKENS = DOCX_PERSONAL_SECTION_TOKENS + DOCX_EMPLOYMENT_SECTION_TOKENS
+DOCX_MARKER_FILLER_PATTERN = re.compile(r"^[-_~.=()\[\]\s□■▢▣▪▫◻◼◽◾]+$")
+
 
 @dataclass
 class MailResult:
@@ -140,6 +164,223 @@ def _collect_docx_cell_text(cell) -> str:
             lines.append(text)
     merged = " ".join(lines).strip()
     return merged
+
+
+def normalize_docx_label(text: str | None) -> str:
+    value = str(text or "")
+    value = value.replace("\xa0", " ")
+    value = re.sub(r"\s+", "", value)
+    value = re.sub(r"[:()\[\]{}<>\-–—·.,/\\\\]", "", value)
+    return value.strip()
+
+
+def _is_docx_value_placeholder(text: str | None) -> bool:
+    raw = str(text or "").strip()
+    if not raw:
+        return True
+    normalized = raw.replace("\xa0", " ").strip()
+    if not normalized:
+        return True
+    if DOCX_MARKER_FILLER_PATTERN.fullmatch(normalized):
+        return True
+    return False
+
+
+def _is_docx_section_header(text: str | None) -> bool:
+    normalized = normalize_docx_label(text)
+    if not normalized:
+        return False
+    return any(token in normalized for token in DOCX_SECTION_HEADER_TOKENS)
+
+
+def _detect_docx_label_key(text: str | None) -> str | None:
+    normalized = normalize_docx_label(text)
+    if not normalized:
+        return None
+    for key, patterns in DOCX_LABEL_PATTERNS.items():
+        for pattern in patterns:
+            normalized_pattern = normalize_docx_label(pattern)
+            if normalized == normalized_pattern or normalized.startswith(normalized_pattern):
+                return key
+    return None
+
+
+def _resolve_docx_label_value(label_key: str, context: dict[str, Any], section: str | None) -> str:
+    if label_key == "employee_address" and str(section or "").strip().lower() == "employment":
+        return str(context.get("company_address") or "").strip()
+    if label_key == "company_name":
+        return str(context.get("company_name") or "").strip()
+    if label_key == "employment_period":
+        return str(context.get("employment_period") or "").strip()
+    if label_key == "purpose_label":
+        return str(context.get("purpose_label") or "").strip()
+    return str(context.get(label_key) or "").strip()
+
+
+def _set_docx_cell_text(cell, value: str) -> None:
+    normalized_value = str(value or "").strip()
+    lines = [line.strip() for line in normalized_value.splitlines()] if normalized_value else []
+    if not lines:
+        lines = [""]
+    cell.text = lines[0]
+    for line in lines[1:]:
+        paragraph = cell.add_paragraph()
+        paragraph.add_run(line)
+
+
+def _iter_docx_paragraphs(document: DocumentObject) -> list[Paragraph]:
+    paragraphs: list[Paragraph] = list(document.paragraphs)
+    for table in document.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                paragraphs.extend(cell.paragraphs)
+    return paragraphs
+
+
+def fill_employment_certificate_docx_by_labels(
+    template_docx_bytes: bytes,
+    context: dict[str, Any],
+    *,
+    seal_image_bytes: bytes | None = None,
+) -> bytes:
+    document: DocumentObject = Document(BytesIO(template_docx_bytes))
+
+    for table in document.tables:
+        section: str | None = "personal"
+        for row in table.rows:
+            row_cells = list(row.cells)
+            if not row_cells:
+                continue
+
+            for scan_cell in row_cells:
+                scan_normalized = normalize_docx_label(_collect_docx_cell_text(scan_cell))
+                if not scan_normalized:
+                    continue
+                if any(token in scan_normalized for token in DOCX_PERSONAL_SECTION_TOKENS):
+                    section = "personal"
+                if any(token in scan_normalized for token in DOCX_EMPLOYMENT_SECTION_TOKENS):
+                    section = "employment"
+
+            for idx, label_cell in enumerate(row_cells):
+                label_key = _detect_docx_label_key(_collect_docx_cell_text(label_cell))
+                if not label_key:
+                    continue
+                value_text = _resolve_docx_label_value(label_key, context, section)
+                if value_text is None:
+                    continue
+
+                candidate_index: int | None = None
+                for value_idx in range(idx + 1, len(row_cells)):
+                    value_cell = row_cells[value_idx]
+                    value_cell_text = _collect_docx_cell_text(value_cell)
+                    if _detect_docx_label_key(value_cell_text):
+                        continue
+                    if _is_docx_section_header(value_cell_text):
+                        continue
+                    if _is_docx_value_placeholder(value_cell_text):
+                        candidate_index = value_idx
+                        break
+                    if candidate_index is None:
+                        candidate_index = value_idx
+                if candidate_index is None:
+                    continue
+                _set_docx_cell_text(row_cells[candidate_index], value_text)
+
+    if seal_image_bytes:
+        inserted = False
+        paragraphs = _iter_docx_paragraphs(document)
+        for paragraph in paragraphs:
+            if not re.search(r"\(\s*인\s*\)", str(paragraph.text or "")):
+                continue
+            run = paragraph.add_run(" ")
+            run.add_picture(BytesIO(seal_image_bytes), width=Mm(12))
+            inserted = True
+            break
+        if not inserted:
+            for paragraph in paragraphs:
+                text = str(paragraph.text or "")
+                if "대표이사" not in text and "대표자" not in text:
+                    continue
+                run = paragraph.add_run(" ")
+                run.add_picture(BytesIO(seal_image_bytes), width=Mm(12))
+                inserted = True
+                break
+
+    output = BytesIO()
+    document.save(output)
+    return output.getvalue()
+
+
+def fill_employment_certificate_docx_template(
+    template_docx_bytes: bytes,
+    context: dict[str, Any],
+    *,
+    seal_image_bytes: bytes | None = None,
+) -> bytes:
+    # Backward-compat alias: 기존 호출부는 이 함수를 사용해도 레이블 기반 채움 로직을 사용한다.
+    return fill_employment_certificate_docx_by_labels(
+        template_docx_bytes,
+        context,
+        seal_image_bytes=seal_image_bytes,
+    )
+
+
+def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes:
+    binary = shutil.which("libreoffice") or shutil.which("soffice")
+    if not binary:
+        raise RuntimeError("DOCX_PDF_CONVERTER_NOT_AVAILABLE")
+
+    with tempfile.TemporaryDirectory(prefix="employment-certificate-") as temp_dir:
+        temp_path = Path(temp_dir)
+        source_path = temp_path / "employment_certificate.docx"
+        source_path.write_bytes(docx_bytes)
+        command = [
+            binary,
+            "--headless",
+            "--nologo",
+            "--nofirststartwizard",
+            "--convert-to",
+            "pdf:writer_pdf_Export",
+            "--outdir",
+            str(temp_path),
+            str(source_path),
+        ]
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=90,
+            env={
+                **os.environ,
+                **{"HOME": str(temp_path)},
+            },
+            check=False,
+        )
+        pdf_path = temp_path / "employment_certificate.pdf"
+        if result.returncode != 0 or not pdf_path.exists():
+            stderr = str(result.stderr or "").strip()
+            stdout = str(result.stdout or "").strip()
+            raise RuntimeError(f"DOCX_PDF_CONVERT_FAILED: {stderr or stdout or 'unknown'}")
+        return pdf_path.read_bytes()
+
+
+def convert_filled_docx_to_pdf(docx_bytes: bytes) -> bytes:
+    # Backward-compat alias
+    return convert_docx_to_pdf_bytes(docx_bytes)
+
+
+def issue_employment_certificate_pdf_from_docx(
+    template_docx_bytes: bytes,
+    context: dict[str, Any],
+    *,
+    seal_image_bytes: bytes | None = None,
+) -> bytes:
+    filled_docx_bytes = fill_employment_certificate_docx_by_labels(
+        template_docx_bytes,
+        context,
+        seal_image_bytes=seal_image_bytes,
+    )
+    return convert_docx_to_pdf_bytes(filled_docx_bytes)
 
 
 def convert_docx_template_to_html(docx_bytes: bytes) -> str:

@@ -1,0 +1,50 @@
+{
+  "contract_version": "2026-03-07.phase4",
+  "contract_state": "warning",
+  "service_state": "supported_with_warnings",
+  "service_signals": [
+    "unsupported_field_present"
+  ],
+  "scope": {
+    "site_count": 1,
+    "site_code": null
+  },
+  "rollout": {
+    "mode": "all_sites",
+    "gate_status": "open",
+    "fully_supported_site_codes": [
+      "R692"
+    ]
+  },
+  "observability": {
+    "unsupported_fields": [
+      "employee_day_rows.event_additional_note_summary",
+      "overtime_summary.net_extension_minutes_vs_baseline",
+      "overtime_summary.normal_scheduled_minutes"
+    ],
+    "source_coverage": {
+      "sites": 1,
+      "schedule_rows": 3,
+      "attendance_rows": 6,
+      "leave_rows": 2,
+      "late_rows": 1,
+      "soc_overtime_rows": 1,
+      "apple_daytime_rows": 0,
+      "overnight_rows": 1,
+      "support_rows": 1,
+      "event_rows": 2
+    }
+  },
+  "employee_row_sample": {
+    "employee_code": "E001",
+    "business_date": "2026-03-09",
+    "late_minutes": 17,
+    "attendance_extension_minutes": 120,
+    "support_assignment": true
+  },
+  "site_day_sample": {
+    "business_date": "2026-03-09",
+    "event_count": 1,
+    "additional_count": 1
+  }
+}

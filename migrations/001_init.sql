@@ -1,4 +1,61 @@
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS tenants (
+    id uuid PRIMARY KEY,
+    tenant_code text NOT NULL UNIQUE,
+    tenant_name text NOT NULL,
+    is_active boolean NOT NULL DEFAULT true,
+    is_deleted boolean NOT NULL DEFAULT false,
+    created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    updated_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    deleted_at timestamptz,
+    deleted_by uuid
+);
+
+CREATE TABLE IF NOT EXISTS companies (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    company_code text NOT NULL,
+    company_name text NOT NULL,
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    updated_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    UNIQUE (tenant_id, company_code)
+);
+
+CREATE TABLE IF NOT EXISTS sites (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    company_id uuid REFERENCES companies(id) ON DELETE SET NULL,
+    site_code text NOT NULL,
+    site_name text NOT NULL,
+    address text,
+    place_id text,
+    latitude double precision,
+    longitude double precision,
+    radius_meters double precision NOT NULL DEFAULT 100,
+    is_active boolean NOT NULL DEFAULT true,
+    employee_sequence_seed int NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    updated_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    UNIQUE (tenant_id, site_code)
+);
+
+CREATE TABLE IF NOT EXISTS employees (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    company_id uuid REFERENCES companies(id) ON DELETE SET NULL,
+    site_id uuid REFERENCES sites(id) ON DELETE SET NULL,
+    employee_code text NOT NULL,
+    full_name text NOT NULL,
+    duty_role text NOT NULL DEFAULT 'GUARD',
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    updated_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    UNIQUE (tenant_id, employee_code)
+);
+
 CREATE TABLE IF NOT EXISTS arls_users (
     id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL,
@@ -15,6 +72,51 @@ CREATE TABLE IF NOT EXISTS arls_users (
     updated_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
     last_login_at timestamptz,
     CONSTRAINT arls_users_username_tenant_uniq UNIQUE (tenant_id, username)
+);
+
+CREATE TABLE IF NOT EXISTS attendance_records (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    employee_id uuid NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    site_id uuid REFERENCES sites(id) ON DELETE SET NULL,
+    event_type text NOT NULL,
+    event_at timestamptz NOT NULL,
+    latitude double precision NOT NULL DEFAULT 0,
+    longitude double precision NOT NULL DEFAULT 0,
+    distance_meters double precision NOT NULL DEFAULT 0,
+    is_within_radius boolean NOT NULL DEFAULT true,
+    auto_checkout boolean NOT NULL DEFAULT false,
+    auto_checkout_reason text,
+    created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    updated_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    CONSTRAINT attendance_records_event_type_check CHECK (event_type IN ('check_in', 'check_out')),
+    CONSTRAINT attendance_records_unique_event UNIQUE (tenant_id, employee_id, event_type, event_at)
+);
+
+CREATE TABLE IF NOT EXISTS monthly_schedules (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    company_id uuid REFERENCES companies(id) ON DELETE SET NULL,
+    site_id uuid REFERENCES sites(id) ON DELETE SET NULL,
+    employee_id uuid NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    schedule_date date NOT NULL,
+    shift_type text NOT NULL DEFAULT 'day',
+    template_id uuid,
+    shift_start_time time,
+    shift_end_time time,
+    paid_hours numeric(5,2),
+    source text,
+    source_ticket_id bigint,
+    schedule_note text,
+    leader_user_id uuid,
+    source_batch_id uuid,
+    source_revision text,
+    source_ticket_uuid uuid,
+    source_ticket_state text,
+    source_action text,
+    source_self_staff boolean NOT NULL DEFAULT false,
+    created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    updated_at timestamptz NOT NULL DEFAULT timezone('utc', now())
 );
 
 DO $$
@@ -56,6 +158,43 @@ BEGIN
     WHERE au.id = u.id;
   END IF;
 END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'attendance_records'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'attendance_records' AND column_name = 'auto_checkout'
+    ) THEN
+      ALTER TABLE attendance_records ADD COLUMN auto_checkout boolean NOT NULL DEFAULT FALSE;
+    END IF;
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS push_devices (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES arls_users(id) ON DELETE CASCADE,
+  platform text NOT NULL DEFAULT 'web',
+  device_token text NOT NULL,
+  device_id text,
+  is_active boolean NOT NULL DEFAULT TRUE,
+  created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+  updated_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+  last_seen_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+  UNIQUE (tenant_id, user_id, device_token)
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_devices_tenant_active
+  ON push_devices (tenant_id, is_active, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_push_devices_user_active
+  ON push_devices (user_id, is_active, updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS document_requests (
     id uuid PRIMARY KEY,
@@ -100,10 +239,14 @@ CREATE INDEX IF NOT EXISTS idx_document_requests_tenant_status_requested
 CREATE TABLE IF NOT EXISTS document_templates (
     id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL,
+    company_id uuid,
     document_type text NOT NULL,
     version int NOT NULL,
     file_path text NOT NULL,
-    template_html text NOT NULL,
+    template_html text NOT NULL DEFAULT '',
+    file_bytes bytea,
+    file_mime_type text,
+    file_ext text,
     is_active boolean NOT NULL DEFAULT false,
     created_by uuid,
     created_at timestamptz NOT NULL DEFAULT timezone('utc', now())
@@ -111,9 +254,6 @@ CREATE TABLE IF NOT EXISTS document_templates (
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_document_templates_tenant_doc_version
     ON document_templates (tenant_id, document_type, version);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_document_templates_tenant_doc_active
-    ON document_templates (tenant_id, document_type)
-    WHERE is_active = TRUE;
 CREATE INDEX IF NOT EXISTS idx_document_templates_tenant_doc_created
     ON document_templates (tenant_id, document_type, created_at DESC);
 
@@ -141,6 +281,13 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_templates' AND column_name = 'company_id'
+    ) THEN
+      ALTER TABLE document_templates ADD COLUMN company_id uuid;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'document_templates' AND column_name = 'version'
     ) THEN
       ALTER TABLE document_templates ADD COLUMN version int;
@@ -158,6 +305,27 @@ BEGIN
       WHERE table_schema = 'public' AND table_name = 'document_templates' AND column_name = 'template_html'
     ) THEN
       ALTER TABLE document_templates ADD COLUMN template_html text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_templates' AND column_name = 'file_bytes'
+    ) THEN
+      ALTER TABLE document_templates ADD COLUMN file_bytes bytea;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_templates' AND column_name = 'file_mime_type'
+    ) THEN
+      ALTER TABLE document_templates ADD COLUMN file_mime_type text;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'document_templates' AND column_name = 'file_ext'
+    ) THEN
+      ALTER TABLE document_templates ADD COLUMN file_ext text;
     END IF;
     IF NOT EXISTS (
       SELECT 1
@@ -180,6 +348,29 @@ BEGIN
     ) THEN
       ALTER TABLE document_templates ADD COLUMN created_at timestamptz NOT NULL DEFAULT timezone('utc', now());
     END IF;
+  END IF;
+END $$;
+
+DROP INDEX IF EXISTS uq_document_templates_tenant_doc_active;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_document_templates_tenant_doc_scope_active
+    ON document_templates (
+      tenant_id,
+      document_type,
+      COALESCE(company_id, '00000000-0000-0000-0000-000000000000'::uuid)
+    )
+    WHERE is_active = TRUE;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'document_templates' AND column_name = 'company_id'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_document_templates_tenant_doc_company_created
+      ON document_templates (tenant_id, document_type, company_id, created_at DESC);
+  ELSE
+    DROP INDEX IF EXISTS idx_document_templates_tenant_doc_company_created;
   END IF;
 END $$;
 
@@ -728,7 +919,7 @@ CREATE TABLE IF NOT EXISTS external_support_workers (
     worker_name text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
     CONSTRAINT chk_external_support_worker_type
-      CHECK (worker_type IN ('F', 'BK', 'INTERNAL'))
+      CHECK (worker_type IN ('F', 'BK', 'INTERNAL', 'UNAVAILABLE'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_external_support_workers_tenant_name
@@ -745,7 +936,7 @@ CREATE TABLE IF NOT EXISTS support_assignment (
     source text NOT NULL DEFAULT 'SHEET',
     created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
     CONSTRAINT chk_support_assignment_worker_type
-      CHECK (worker_type IN ('F', 'BK', 'INTERNAL'))
+      CHECK (worker_type IN ('F', 'BK', 'INTERNAL', 'UNAVAILABLE'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_support_assignment_tenant_date
@@ -922,6 +1113,22 @@ BEGIN
       WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'address'
     ) THEN
       ALTER TABLE employees ADD COLUMN address text;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'gender'
+    ) THEN
+      ALTER TABLE employees ADD COLUMN gender text;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'employees' AND column_name = 'resident_no'
+    ) THEN
+      ALTER TABLE employees ADD COLUMN resident_no text;
     END IF;
 
     IF NOT EXISTS (
@@ -1703,7 +1910,15 @@ BEGIN
       ON sites (tenant_id, is_active, site_code);
     CREATE INDEX IF NOT EXISTS idx_sites_tenant_site_code
       ON sites (tenant_id, site_code);
-    CREATE INDEX IF NOT EXISTS idx_sites_tenant_company
-      ON sites (tenant_id, company_id, site_code);
+    IF EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'sites' AND column_name = 'company_id'
+    ) THEN
+      CREATE INDEX IF NOT EXISTS idx_sites_tenant_company
+        ON sites (tenant_id, company_id, site_code);
+    ELSE
+      DROP INDEX IF EXISTS idx_sites_tenant_company;
+    END IF;
   END IF;
 END $$;

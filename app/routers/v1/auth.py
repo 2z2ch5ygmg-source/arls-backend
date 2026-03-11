@@ -1,24 +1,56 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from ...config import settings
 from ...db import fetch_all, fetch_one
 from ...deps import get_db_conn, get_current_user, apply_rate_limit
 from ...schemas import AuthUser, LoginRequest, RefreshTokenRequest, TokenResponse
 from ...security import decode_refresh_token, encode_refresh_token, encode_token, verify_password
-from ...utils.credential_norm import normalize_auth_identifier
+from ...utils.credential_norm import build_auth_identifier_candidates
 from ...utils.permissions import normalize_role, normalize_user_role
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 MASTER_TENANT_CODE = "master"
 MASTER_LOGIN_FORBIDDEN_MESSAGE = "슈퍼 관리자 계정만 MASTER로 로그인할 수 있습니다."
+logger = logging.getLogger(__name__)
 
 
 def _normalize_tenant_code(value: Optional[str]) -> str:
     return str(value or "").strip().lower()
+
+
+def _mask_identifier(value: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return "-"
+    if len(normalized) <= 4:
+        return "*" * len(normalized)
+    return f"{normalized[:3]}***{normalized[-2:]}"
+
+
+def _debug_auth_lookup(
+    *,
+    tenant_id,
+    identifier_candidates: tuple[str, ...],
+    matched_user: Optional[dict],
+    candidate_count: int,
+) -> None:
+    if str(settings.environment or "").strip().lower() == "production":
+        return
+    masked_candidates = [_mask_identifier(value) for value in identifier_candidates]
+    logger.info(
+        "auth.lookup tenant_id=%s identifiers=%s candidate_count=%s matched_user_id=%s matched_deleted=%s",
+        tenant_id,
+        ",".join(masked_candidates) if masked_candidates else "-",
+        int(candidate_count),
+        (matched_user or {}).get("id"),
+        bool((matched_user or {}).get("is_deleted")),
+    )
 
 
 def _build_auth_user(
@@ -72,9 +104,58 @@ def _build_token_response(
     )
 
 
+def _find_tenant_user_by_password(
+    conn,
+    *,
+    tenant_id,
+    identifier_candidates: tuple[str, ...],
+    password: str,
+) -> Optional[dict]:
+    if not identifier_candidates:
+        _debug_auth_lookup(
+            tenant_id=tenant_id,
+            identifier_candidates=identifier_candidates,
+            matched_user=None,
+            candidate_count=0,
+        )
+        return None
+
+    candidates = fetch_all(
+        conn,
+        """
+        SELECT au.id, au.tenant_id, au.username, au.full_name, au.role, au.password_hash,
+               au.employee_id, e.employee_code,
+               COALESCE(au.must_change_password, FALSE) AS must_change_password,
+               COALESCE(au.is_deleted, FALSE) AS is_deleted
+        FROM arls_users au
+        LEFT JOIN employees e ON e.id = au.employee_id
+        WHERE au.tenant_id = %s
+          AND lower(regexp_replace(COALESCE(au.username, ''), '[-\\s]+', '', 'g')) = ANY(%s::text[])
+          AND au.is_active = TRUE
+          AND COALESCE(au.is_deleted, FALSE) = FALSE
+        ORDER BY COALESCE(au.last_login_at, au.updated_at, au.created_at) DESC
+        LIMIT 20
+        """,
+        (tenant_id, list(identifier_candidates)),
+    )
+    matched_user = None
+    for row in candidates:
+        if verify_password(password, row.get("password_hash") or ""):
+            matched_user = row
+            break
+
+    _debug_auth_lookup(
+        tenant_id=tenant_id,
+        identifier_candidates=identifier_candidates,
+        matched_user=matched_user,
+        candidate_count=len(candidates),
+    )
+    return matched_user
+
+
 def handle_master_login(payload: LoginRequest, conn):
-    normalized_username = normalize_auth_identifier(payload.username)
-    if not normalized_username:
+    identifier_candidates = build_auth_identifier_candidates(payload.username)
+    if not identifier_candidates:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials")
 
     master_candidates = fetch_all(
@@ -87,7 +168,7 @@ def handle_master_login(payload: LoginRequest, conn):
         FROM arls_users au
         JOIN tenants t ON t.id = au.tenant_id
         LEFT JOIN employees e ON e.id = au.employee_id
-        WHERE lower(regexp_replace(COALESCE(au.username, ''), '[-\\s]+', '', 'g')) = lower(%s)
+        WHERE lower(regexp_replace(COALESCE(au.username, ''), '[-\\s]+', '', 'g')) = ANY(%s::text[])
           AND au.is_active = TRUE
           AND COALESCE(au.is_deleted, FALSE) = FALSE
           AND COALESCE(t.is_active, TRUE) = TRUE
@@ -96,7 +177,7 @@ def handle_master_login(payload: LoginRequest, conn):
         ORDER BY COALESCE(au.last_login_at, au.updated_at, au.created_at) DESC
         LIMIT 10
         """,
-        (normalized_username, MASTER_TENANT_CODE),
+        (list(identifier_candidates), MASTER_TENANT_CODE),
     )
 
     matched_users = [row for row in master_candidates if verify_password(payload.password, row["password_hash"])]
@@ -111,7 +192,7 @@ def handle_master_login(payload: LoginRequest, conn):
             FROM arls_users au
             JOIN tenants t ON t.id = au.tenant_id
             LEFT JOIN employees e ON e.id = au.employee_id
-            WHERE lower(regexp_replace(COALESCE(au.username, ''), '[-\\s]+', '', 'g')) = lower(%s)
+            WHERE lower(regexp_replace(COALESCE(au.username, ''), '[-\\s]+', '', 'g')) = ANY(%s::text[])
               AND au.is_active = TRUE
               AND COALESCE(au.is_deleted, FALSE) = FALSE
               AND COALESCE(t.is_active, TRUE) = TRUE
@@ -123,7 +204,7 @@ def handle_master_login(payload: LoginRequest, conn):
             ORDER BY COALESCE(au.last_login_at, au.updated_at, au.created_at) DESC
             LIMIT 20
             """,
-            (normalized_username,),
+            (list(identifier_candidates),),
         )
         matched_users = [row for row in privileged_candidates if verify_password(payload.password, row["password_hash"])]
 
@@ -138,7 +219,7 @@ def handle_master_login(payload: LoginRequest, conn):
             FROM arls_users au
             JOIN tenants t ON t.id = au.tenant_id
             LEFT JOIN employees e ON e.id = au.employee_id
-            WHERE lower(regexp_replace(COALESCE(au.username, ''), '[-\\s]+', '', 'g')) = lower(%s)
+            WHERE lower(regexp_replace(COALESCE(au.username, ''), '[-\\s]+', '', 'g')) = ANY(%s::text[])
               AND au.is_active = TRUE
               AND COALESCE(au.is_deleted, FALSE) = FALSE
               AND COALESCE(t.is_active, TRUE) = TRUE
@@ -146,7 +227,7 @@ def handle_master_login(payload: LoginRequest, conn):
             ORDER BY COALESCE(au.last_login_at, au.updated_at, au.created_at) DESC
             LIMIT 10
             """,
-            (normalized_username,),
+            (list(identifier_candidates),),
         )
         matched_fallback = [
             row for row in fallback_candidates if verify_password(payload.password, row["password_hash"])
@@ -193,8 +274,8 @@ def handle_master_login(payload: LoginRequest, conn):
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, conn=Depends(get_db_conn)):
     tenant_input = _normalize_tenant_code(payload.tenant_code)
-    normalized_username = normalize_auth_identifier(payload.username)
-    if not normalized_username:
+    identifier_candidates = build_auth_identifier_candidates(payload.username)
+    if not identifier_candidates:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials")
     if tenant_input == MASTER_TENANT_CODE:
         return handle_master_login(payload, conn)
@@ -213,21 +294,13 @@ def login(payload: LoginRequest, conn=Depends(get_db_conn)):
     if not tenant:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials")
 
-    user = fetch_one(
+    user = _find_tenant_user_by_password(
         conn,
-        """
-        SELECT au.id, au.tenant_id, au.username, au.full_name, au.role, au.password_hash,
-               au.employee_id, e.employee_code, COALESCE(au.must_change_password, FALSE) AS must_change_password
-        FROM arls_users au
-        LEFT JOIN employees e ON e.id = au.employee_id
-        WHERE au.tenant_id = %s
-          AND lower(regexp_replace(COALESCE(au.username, ''), '[-\\s]+', '', 'g')) = lower(%s)
-          AND au.is_active = TRUE
-          AND COALESCE(au.is_deleted, FALSE) = FALSE
-        """,
-        (tenant["id"], normalized_username),
+        tenant_id=tenant["id"],
+        identifier_candidates=identifier_candidates,
+        password=payload.password,
     )
-    if not user or not verify_password(payload.password, user["password_hash"]):
+    if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials")
 
     with conn.cursor() as cur:

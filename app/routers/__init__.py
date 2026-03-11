@@ -19,8 +19,11 @@ from .v1.users import router as users_router
 from .v1.master_tenants import router as master_tenants_router
 from .v1.master_reset import router as master_reset_router
 from .v1.integrations import router as integrations_router
+from .v1.apple_weekly_truth import router as apple_weekly_truth_router
 from .v1.reports import router as reports_router
 from .v1.hr_documents import router as hr_documents_router
+from .v1.notifications import router as notifications_router
+from .v1.push import router as push_router
 
 __all__ = [
     "auth_router",
@@ -44,6 +47,9 @@ __all__ = [
     "master_tenants_router",
     "master_reset_router",
     "integrations_router",
+    "apple_weekly_truth_router",
     "reports_router",
     "hr_documents_router",
+    "notifications_router",
+    "push_router",
 ]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 ROLE_OFFICER = "officer"
 ROLE_VICE_SUPERVISOR = "vice_supervisor"
 ROLE_SUPERVISOR = "supervisor"
@@ -39,10 +41,19 @@ USER_ROLE_ALIASES = {
     "developer": ROLE_DEVELOPER,
     "dev": ROLE_DEVELOPER,
     "platform_admin": ROLE_DEVELOPER,
+    "super_admin": ROLE_DEVELOPER,
     "hq_admin": ROLE_HQ_ADMIN,
+    "hq": ROLE_HQ_ADMIN,
+    "hqadmin": ROLE_HQ_ADMIN,
+    "hq_manager": ROLE_HQ_ADMIN,
+    "headquarters_admin": ROLE_HQ_ADMIN,
+    "headquarters_manager": ROLE_HQ_ADMIN,
     "branch_manager": ROLE_HQ_ADMIN,
+    "branchmanager": ROLE_HQ_ADMIN,
     "tenant_admin": ROLE_HQ_ADMIN,
     "site_manager": ROLE_HQ_ADMIN,
+    "admin": ROLE_HQ_ADMIN,
+    "manager": ROLE_HQ_ADMIN,
     "supervisor": ROLE_SUPERVISOR,
     "vice_supervisor": ROLE_VICE_SUPERVISOR,
     "vice": ROLE_VICE_SUPERVISOR,
@@ -74,6 +85,8 @@ def normalize_user_role(user_role: str | None) -> str:
     normalized = str(user_role or "").strip().lower()
     if not normalized:
         return ROLE_OFFICER
+    normalized = normalized.replace("-", "_").replace(" ", "_")
+    normalized = re.sub(r"_+", "_", normalized)
     return USER_ROLE_ALIASES.get(normalized, normalized)
 
 

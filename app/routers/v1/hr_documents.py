@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import logging
+from io import BytesIO
 from pathlib import Path
 import re
 import uuid
@@ -16,14 +17,10 @@ import requests
 from ...db import get_connection
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
 from ...services.employment_certificate import (
-    EMPLOYMENT_CERTIFICATE_TEMPLATE_REQUIRED_VARIABLES,
-    EMPLOYMENT_CERTIFICATE_TEMPLATE_VARIABLES,
     build_issue_number,
     build_purpose_label,
-    convert_docx_template_to_html,
     generate_employment_certificate_pdf,
-    normalize_template_placeholders,
-    render_employment_certificate_html,
+    issue_employment_certificate_pdf_from_docx,
     send_certificate_mail,
 )
 from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, ROLE_EMPLOYEE, normalize_role
@@ -38,17 +35,8 @@ DAILY_REQUEST_LIMIT = 3
 TZ_KST = timezone(timedelta(hours=9))
 PURPOSE_CODES = {"BANK", "GOV", "CARD", "OTHER"}
 ALLOWED_TEMPLATE_DOCUMENT_TYPES = {DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE}
-ALLOWED_TEMPLATE_EXTENSIONS = {".html", ".docx"}
+ALLOWED_TEMPLATE_EXTENSIONS = {".docx"}
 MAX_TEMPLATE_UPLOAD_BYTES = 2 * 1024 * 1024
-TEMPLATE_VARIABLE_LABELS = {
-    "company_name": "회사명",
-    "employee_name": "성명",
-    "org_name": "소속",
-    "hire_date": "입사일",
-    "issue_number": "발급번호",
-    "issue_date": "발급일",
-    "purpose_label": "발급용도",
-}
 
 
 class EmploymentCertificateRequestCreate(BaseModel):
@@ -95,6 +83,12 @@ def _ensure_admin_role(user: dict) -> None:
     actor_role = normalize_role(user.get("role"))
     if actor_role not in (ROLE_DEV, ROLE_BRANCH_MANAGER):
         _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "접근 권한이 없습니다.")
+
+
+def _ensure_template_manager_role(user: dict) -> None:
+    actor_role = normalize_role(user.get("role"))
+    if actor_role != ROLE_DEV:
+        _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "템플릿 관리 권한이 없습니다.")
 
 
 def _ensure_employee_role(user: dict) -> str:
@@ -167,6 +161,43 @@ def _resolve_masked_resident_no(conn, *, tenant_id: str, employee_id: str) -> st
         if masked:
             return masked
     return ""
+
+
+def _resolve_termination_date(
+    conn,
+    *,
+    tenant_id: str,
+    employee_id: str,
+    fallback_value: Any = None,
+) -> str:
+    fallback = _format_date(fallback_value)
+    candidate_columns = (
+        "leave_date",
+        "termination_date",
+        "employment_end_date",
+        "retire_date",
+        "retired_at",
+        "end_date",
+    )
+    for column in candidate_columns:
+        if not table_column_exists(conn, "employees", column):
+            continue
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT {column} AS termination_value
+                FROM employees
+                WHERE tenant_id = %s
+                  AND id = %s
+                LIMIT 1
+                """,
+                (tenant_id, employee_id),
+            )
+            row = cur.fetchone()
+        resolved = _format_date((row or {}).get("termination_value"))
+        if resolved:
+            return resolved
+    return fallback
 
 
 def _validate_purpose(purpose_code: str, purpose_text: str | None) -> str | None:
@@ -355,75 +386,186 @@ def _normalize_document_type(value: str | None) -> str:
     return normalized
 
 
-def _has_template_variable(template_html: str, variable_name: str) -> bool:
-    pattern = re.compile(r"\{\{\s*" + re.escape(variable_name) + r"\s*\}\}")
-    return bool(pattern.search(template_html))
-
-
-def _validate_template_html(template_html: str) -> list[str]:
-    missing = [
-        name
-        for name in EMPLOYMENT_CERTIFICATE_TEMPLATE_REQUIRED_VARIABLES
-        if not _has_template_variable(template_html, name)
-    ]
-    return missing
-
-
-def _inject_missing_template_variables(template_html: str, missing_variables: list[str]) -> str:
-    if not missing_variables:
-        return template_html
-    hidden_spans = []
-    for variable_name in missing_variables:
-        label = TEMPLATE_VARIABLE_LABELS.get(variable_name, variable_name)
-        hidden_spans.append(
-            f'<span data-auto-var="{label}" style="display:none">{{{{{variable_name}}}}}</span>'
+def _normalize_company_scope_id(raw_value: str | None) -> str | None:
+    value = str(raw_value or "").strip()
+    if not value:
+        return None
+    try:
+        return str(uuid.UUID(value))
+    except Exception:
+        _raise_api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            "입력값을 확인해주세요.",
+            fields={"company_id": "invalid_uuid"},
         )
-    auto_hidden_block = (
-        '\n<div class="hr-template-auto-fields" style="display:none" aria-hidden="true">'
-        f"{''.join(hidden_spans)}"
-        "</div>\n"
-    )
-    return f"{template_html.rstrip()}{auto_hidden_block}"
+    return None
+
+
+def _validate_company_scope(
+    conn,
+    *,
+    tenant_id: str,
+    company_id: str | None,
+) -> str | None:
+    normalized_company_id = _normalize_company_scope_id(company_id)
+    if not normalized_company_id:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id
+            FROM companies
+            WHERE id = %s
+              AND tenant_id = %s
+            LIMIT 1
+            """,
+            (normalized_company_id, tenant_id),
+        )
+        row = cur.fetchone()
+    if not row:
+        _raise_api_error(
+            status.HTTP_404_NOT_FOUND,
+            "COMPANY_NOT_FOUND",
+            "회사 정보를 찾을 수 없습니다.",
+        )
+    return normalized_company_id
 
 
 def _fetch_document_template_for_issue(
     conn,
     *,
     tenant_id: str,
+    company_id: str | None,
     document_type: str,
 ) -> tuple[dict[str, Any] | None, str]:
+    normalized_company_id = _normalize_company_scope_id(company_id)
     with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT id, document_type, version, file_path, template_html
-            FROM document_templates
-            WHERE tenant_id = %s
-              AND document_type = %s
-              AND is_active = TRUE
-            ORDER BY version DESC
-            LIMIT 1
-            """,
-            (tenant_id, document_type),
-        )
-        active = cur.fetchone()
-        if active:
-            return active, "active"
+        if normalized_company_id:
+            cur.execute(
+                """
+                SELECT id, document_type, version, file_path, template_html, file_bytes, file_mime_type, file_ext, company_id
+                FROM document_templates
+                WHERE tenant_id = %s
+                  AND document_type = %s
+                  AND company_id = %s
+                  AND is_active = TRUE
+                  AND lower(COALESCE(file_ext, '')) = '.docx'
+                  AND file_bytes IS NOT NULL
+                ORDER BY version DESC
+                LIMIT 1
+                """,
+                (tenant_id, document_type, normalized_company_id),
+            )
+            company_scoped = cur.fetchone()
+            if company_scoped:
+                return company_scoped, "company_active"
 
         cur.execute(
             """
-            SELECT id, document_type, version, file_path, template_html
+            SELECT id, document_type, version, file_path, template_html, file_bytes, file_mime_type, file_ext, company_id
             FROM document_templates
             WHERE tenant_id = %s
               AND document_type = %s
+              AND company_id IS NULL
+              AND is_active = TRUE
+              AND lower(COALESCE(file_ext, '')) = '.docx'
+              AND file_bytes IS NOT NULL
             ORDER BY version DESC
             LIMIT 1
             """,
             (tenant_id, document_type),
         )
-        latest = cur.fetchone()
-        if latest:
-            return latest, "latest_fallback"
-    return None, "default_fallback"
+        global_active = cur.fetchone()
+        if global_active:
+            return global_active, "global_active"
+
+        # Fallback: use latest globally active DOCX template across tenants.
+        # This keeps issuance working when developer uploaded a single shared template
+        # under a different tenant scope.
+        cur.execute(
+            """
+            SELECT id, document_type, version, file_path, template_html, file_bytes, file_mime_type, file_ext, company_id
+            FROM document_templates
+            WHERE document_type = %s
+              AND company_id IS NULL
+              AND is_active = TRUE
+              AND lower(COALESCE(file_ext, '')) = '.docx'
+              AND file_bytes IS NOT NULL
+            ORDER BY created_at DESC, version DESC
+            LIMIT 1
+            """,
+            (document_type,),
+        )
+        cross_tenant_global = cur.fetchone()
+        if cross_tenant_global:
+            return cross_tenant_global, "cross_tenant_global_active"
+    return None, "not_found"
+
+
+def _fetch_legacy_html_template_for_issue(
+    conn,
+    *,
+    tenant_id: str,
+    company_id: str | None,
+    document_type: str,
+) -> tuple[dict[str, Any] | None, str]:
+    normalized_company_id = _normalize_company_scope_id(company_id)
+    with conn.cursor() as cur:
+        if normalized_company_id:
+            cur.execute(
+                """
+                SELECT id, document_type, version, file_path, template_html, file_bytes, file_mime_type, file_ext, company_id
+                FROM document_templates
+                WHERE tenant_id = %s
+                  AND document_type = %s
+                  AND company_id = %s
+                  AND is_active = TRUE
+                  AND COALESCE(trim(template_html), '') <> ''
+                ORDER BY version DESC
+                LIMIT 1
+                """,
+                (tenant_id, document_type, normalized_company_id),
+            )
+            company_scoped = cur.fetchone()
+            if company_scoped:
+                return company_scoped, "company_active_html_fallback"
+
+        cur.execute(
+            """
+            SELECT id, document_type, version, file_path, template_html, file_bytes, file_mime_type, file_ext, company_id
+            FROM document_templates
+            WHERE tenant_id = %s
+              AND document_type = %s
+              AND company_id IS NULL
+              AND is_active = TRUE
+              AND COALESCE(trim(template_html), '') <> ''
+            ORDER BY version DESC
+            LIMIT 1
+            """,
+            (tenant_id, document_type),
+        )
+        global_scoped = cur.fetchone()
+        if global_scoped:
+            return global_scoped, "global_active_html_fallback"
+
+        cur.execute(
+            """
+            SELECT id, document_type, version, file_path, template_html, file_bytes, file_mime_type, file_ext, company_id
+            FROM document_templates
+            WHERE document_type = %s
+              AND company_id IS NULL
+              AND is_active = TRUE
+              AND COALESCE(trim(template_html), '') <> ''
+            ORDER BY created_at DESC, version DESC
+            LIMIT 1
+            """,
+            (document_type,),
+        )
+        cross_tenant_global = cur.fetchone()
+        if cross_tenant_global:
+            return cross_tenant_global, "cross_tenant_global_html_fallback"
+    return None, "not_found"
 
 
 def _fetch_document_request_for_issue(conn, *, request_id: str) -> dict[str, Any] | None:
@@ -444,6 +586,7 @@ def _fetch_document_request_for_issue(conn, *, request_id: str) -> dict[str, Any
                    e.full_name AS employee_name,
                    e.birth_date,
                    e.hire_date,
+                   e.leave_date,
                    e.address AS employee_address,
                    e.phone AS employee_phone,
                    COALESCE(e.soc_role, '') AS employee_role,
@@ -483,6 +626,24 @@ def _update_request_failed(conn, *, request_id: str, error_message: str) -> None
         )
 
 
+def _build_employment_certificate_mail_html(context: dict[str, Any]) -> str:
+    employee_name = str(context.get("employee_name") or "직원").strip() or "직원"
+    company_name = str(context.get("company_name") or "회사").strip() or "회사"
+    issue_number = str(context.get("issue_number") or "-").strip() or "-"
+    issue_date = str(context.get("issue_date") or "-").strip() or "-"
+    purpose_label = str(context.get("purpose_label") or "-").strip() or "-"
+    return (
+        "<div style=\"font-family:Arial,'Noto Sans KR',sans-serif;font-size:14px;line-height:1.6;color:#111;\">"
+        f"<p>{employee_name}님의 재직증명서가 발급되었습니다.</p>"
+        f"<p>회사: {company_name}<br/>"
+        f"발급번호: {issue_number}<br/>"
+        f"발급일: {issue_date}<br/>"
+        f"발급용도: {purpose_label}</p>"
+        "<p>첨부된 PDF를 확인해 주세요.</p>"
+        "</div>"
+    )
+
+
 def _process_employment_certificate_issue_job(request_id: str) -> None:
     try:
         with get_connection() as conn:
@@ -498,6 +659,19 @@ def _process_employment_certificate_issue_job(request_id: str) -> None:
             issue_number = build_issue_number(request_id, issued_at=issued_at)
             purpose_label = build_purpose_label(str(row.get("purpose_code") or ""), row.get("purpose_text"))
             issue_date_local = issued_at.astimezone(TZ_KST)
+            hire_date = _format_date(row.get("hire_date"))
+            leave_date = _resolve_termination_date(
+                conn,
+                tenant_id=str(row.get("tenant_id") or "").strip(),
+                employee_id=str(row.get("employee_id") or "").strip(),
+                fallback_value=row.get("leave_date"),
+            )
+            if hire_date and leave_date:
+                employment_period = f"{hire_date} ~ {leave_date}"
+            elif hire_date:
+                employment_period = f"{hire_date} ~"
+            else:
+                employment_period = ""
 
             context = {
                 "company_name": str(row.get("company_name") or row.get("tenant_name") or "").strip(),
@@ -513,9 +687,13 @@ def _process_employment_certificate_issue_job(request_id: str) -> None:
                     tenant_id=str(row.get("tenant_id") or "").strip(),
                     employee_id=str(row.get("employee_id") or "").strip(),
                 ),
+                "employee_address": str(row.get("employee_address") or "").strip(),
+                "employee_phone": str(row.get("employee_phone") or "").strip(),
                 "org_name": str(row.get("org_name") or "본사").strip(),
                 "position_name": str(row.get("employee_role") or "").strip(),
-                "hire_date": _format_date(row.get("hire_date")),
+                "hire_date": hire_date,
+                "leave_date": leave_date,
+                "employment_period": employment_period,
                 "issue_number": issue_number,
                 "issue_date": issue_date_local.strftime("%Y-%m-%d"),
                 "issue_date_long": issue_date_local.strftime("%Y년 %m월 %d일"),
@@ -530,8 +708,40 @@ def _process_employment_certificate_issue_job(request_id: str) -> None:
             active_template, template_source = _fetch_document_template_for_issue(
                 conn,
                 tenant_id=str(row.get("tenant_id") or "").strip(),
+                company_id=str(row.get("company_id") or "").strip(),
                 document_type=DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE,
             )
+            template_docx_bytes: bytes = b""
+            use_html_fallback = False
+            fallback_html = ""
+            if active_template:
+                template_bytes = (active_template or {}).get("file_bytes")
+                if isinstance(template_bytes, memoryview):
+                    template_docx_bytes = template_bytes.tobytes()
+                elif isinstance(template_bytes, bytes):
+                    template_docx_bytes = template_bytes
+                else:
+                    template_docx_bytes = bytes(template_bytes or b"")
+                template_ext = str((active_template or {}).get("file_ext") or "").strip().lower()
+                if template_ext != ".docx" or not template_docx_bytes:
+                    active_template = None
+                    template_source = "not_found"
+
+            if not active_template:
+                legacy_template, legacy_source = _fetch_legacy_html_template_for_issue(
+                    conn,
+                    tenant_id=str(row.get("tenant_id") or "").strip(),
+                    company_id=str(row.get("company_id") or "").strip(),
+                    document_type=DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE,
+                )
+                fallback_html = str((legacy_template or {}).get("template_html") or "").strip()
+                if legacy_template and fallback_html:
+                    active_template = legacy_template
+                    template_source = legacy_source
+                    use_html_fallback = True
+                else:
+                    raise RuntimeError("ACTIVE_DOCX_TEMPLATE_NOT_FOUND")
+
             logger.info(
                 "[HR][DOC] issue template selection request_id=%s tenant_id=%s source=%s template_id=%s template_version=%s",
                 request_id,
@@ -540,14 +750,16 @@ def _process_employment_certificate_issue_job(request_id: str) -> None:
                 str((active_template or {}).get("id") or ""),
                 str((active_template or {}).get("version") or ""),
             )
-            active_template_html = str((active_template or {}).get("template_html") or "")
-            html_body = render_employment_certificate_html(context, template_html=active_template_html)
-            pdf_bytes = generate_employment_certificate_pdf(
-                context,
-                seal_image_bytes=seal_image_bytes,
-                rendered_html=html_body,
-                template_html=active_template_html,
-            )
+
+            if use_html_fallback:
+                pdf_bytes = generate_employment_certificate_pdf(context, template_html=fallback_html)
+            else:
+                pdf_bytes = issue_employment_certificate_pdf_from_docx(
+                    template_docx_bytes,
+                    context,
+                    seal_image_bytes=seal_image_bytes,
+                )
+            html_body = _build_employment_certificate_mail_html(context)
 
             tenant_code = str(row.get("tenant_code") or "").strip().lower() or "tenant"
             file_name = f"employment_certificate_{issue_number}.pdf"
@@ -659,7 +871,8 @@ def create_employment_certificate_request(
 
     request_id = uuid.uuid4()
     now_utc = datetime.now(timezone.utc)
-    company_id = employee_row.get("company_id") or tenant_id
+    # company_id가 없으면 NULL로 유지해 글로벌 템플릿(company_id IS NULL) fallback이 정확히 동작하도록 한다.
+    company_id = employee_row.get("company_id")
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -1084,11 +1297,12 @@ def reject_employment_certificate_request(
 @router.get("/admin/hr/documents/templates")
 def list_document_templates(
     document_type: str = Query(default=DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE),
+    company_id: str | None = Query(default=None),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
     conn=Depends(get_db_conn),
     user=Depends(get_current_user),
 ):
-    _ensure_admin_role(user)
+    _ensure_template_manager_role(user)
     tenant = resolve_scoped_tenant(
         conn,
         user,
@@ -1097,32 +1311,58 @@ def list_document_templates(
     )
     tenant_id = str(tenant.get("id") or "").strip()
     normalized_document_type = _normalize_document_type(document_type)
+    scoped_company_id = _normalize_company_scope_id(company_id)
 
     with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT id,
-                   document_type,
-                   version,
-                   file_path,
-                   is_active,
-                   created_by,
-                   created_at
-            FROM document_templates
-            WHERE tenant_id = %s
-              AND document_type = %s
-            ORDER BY version DESC
-            """,
-            (tenant_id, normalized_document_type),
-        )
+        if scoped_company_id:
+            cur.execute(
+                """
+                SELECT id,
+                       company_id,
+                       document_type,
+                       version,
+                       file_path,
+                       file_ext,
+                       is_active,
+                       created_by,
+                       created_at
+                FROM document_templates
+                WHERE tenant_id = %s
+                  AND document_type = %s
+                  AND company_id = %s
+                ORDER BY version DESC
+                """,
+                (tenant_id, normalized_document_type, scoped_company_id),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT id,
+                       company_id,
+                       document_type,
+                       version,
+                       file_path,
+                       file_ext,
+                       is_active,
+                       created_by,
+                       created_at
+                FROM document_templates
+                WHERE tenant_id = %s
+                  AND document_type = %s
+                ORDER BY version DESC
+                """,
+                (tenant_id, normalized_document_type),
+            )
         rows = cur.fetchall() or []
 
     return [
         {
             "id": str(row.get("id")),
+            "company_id": str(row.get("company_id") or ""),
             "document_type": row.get("document_type"),
             "version": int(row.get("version") or 0),
             "file_path": row.get("file_path"),
+            "file_ext": row.get("file_ext"),
             "is_active": bool(row.get("is_active")),
             "created_by": str(row.get("created_by") or ""),
             "created_at": row.get("created_at"),
@@ -1134,12 +1374,13 @@ def list_document_templates(
 @router.post("/admin/hr/documents/templates/upload")
 async def upload_document_template(
     document_type: str = Form(default=DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE),
+    company_id: str | None = Form(default=None),
     file: UploadFile = File(...),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
     conn=Depends(get_db_conn),
     user=Depends(get_current_user),
 ):
-    _ensure_admin_role(user)
+    _ensure_template_manager_role(user)
     tenant = resolve_scoped_tenant(
         conn,
         user,
@@ -1148,15 +1389,20 @@ async def upload_document_template(
     )
     tenant_id = str(tenant.get("id") or "").strip()
     normalized_document_type = _normalize_document_type(document_type)
+    scoped_company_id = _validate_company_scope(
+        conn,
+        tenant_id=tenant_id,
+        company_id=company_id,
+    )
 
-    original_name = str(file.filename or "").strip() or "template.html"
+    original_name = str(file.filename or "").strip() or "template.docx"
     extension = Path(original_name).suffix.lower()
     if extension not in ALLOWED_TEMPLATE_EXTENSIONS:
         _raise_api_error(
             status.HTTP_400_BAD_REQUEST,
             "VALIDATION_ERROR",
             "입력값을 확인해주세요.",
-            fields={"file": "html_or_docx_only"},
+            fields={"file": "docx_only"},
         )
 
     raw_bytes = await file.read()
@@ -1175,44 +1421,18 @@ async def upload_document_template(
             fields={"file": "max_2mb"},
         )
 
-    if extension == ".html":
-        try:
-            template_html = raw_bytes.decode("utf-8")
-        except UnicodeDecodeError:
-            _raise_api_error(
-                status.HTTP_400_BAD_REQUEST,
-                "VALIDATION_ERROR",
-                "입력값을 확인해주세요.",
-                fields={"file": "utf8_required"},
-            )
-            return None
-    else:
-        try:
-            template_html = convert_docx_template_to_html(raw_bytes)
-        except Exception:
-            _raise_api_error(
-                status.HTTP_400_BAD_REQUEST,
-                "VALIDATION_ERROR",
-                "입력값을 확인해주세요.",
-                fields={"file": "docx_parse_failed"},
-            )
-            return None
+    try:
+        from docx import Document as _DocxDocument
 
-    template_html = normalize_template_placeholders(template_html)
-    missing_before = _validate_template_html(template_html)
-    auto_injected_variables: list[str] = []
-    if missing_before:
-        auto_injected_variables = list(missing_before)
-        template_html = _inject_missing_template_variables(template_html, missing_before)
-
-    missing_after = _validate_template_html(template_html)
-    if missing_after:
-        # Fallback: even if parser/normalizer cannot fully map placeholders, force-add hidden canonical variables.
-        fallback_block = "".join(
-            [f'<span style="display:none">{{{{{name}}}}}</span>' for name in missing_after]
+        _DocxDocument(BytesIO(raw_bytes))
+    except Exception:
+        _raise_api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            "입력값을 확인해주세요.",
+            fields={"file": "docx_parse_failed"},
         )
-        template_html = f"{template_html}\n<div style=\"display:none\">{fallback_block}</div>\n"
-        auto_injected_variables.extend([name for name in missing_after if name not in auto_injected_variables])
+        return None
 
     template_id = uuid.uuid4()
     actor_id = user.get("id")
@@ -1237,9 +1457,13 @@ async def upload_document_template(
             SET is_active = FALSE
             WHERE tenant_id = %s
               AND document_type = %s
+              AND (
+                    (%s::uuid IS NULL AND company_id IS NULL)
+                 OR (company_id = %s::uuid)
+              )
               AND is_active = TRUE
             """,
-            (tenant_id, normalized_document_type),
+            (tenant_id, normalized_document_type, scoped_company_id, scoped_company_id),
         )
 
         cur.execute(
@@ -1247,24 +1471,32 @@ async def upload_document_template(
             INSERT INTO document_templates (
                 id,
                 tenant_id,
+                company_id,
                 document_type,
                 version,
                 file_path,
                 template_html,
+                file_bytes,
+                file_mime_type,
+                file_ext,
                 is_active,
                 created_by,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s, timezone('utc', now()))
-            RETURNING id, document_type, version, file_path, is_active, created_by, created_at
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, %s, timezone('utc', now()))
+            RETURNING id, company_id, document_type, version, file_path, file_ext, is_active, created_by, created_at
             """,
             (
                 template_id,
                 tenant_id,
+                scoped_company_id,
                 normalized_document_type,
                 next_version,
                 next_file_path,
-                template_html,
+                "",
+                raw_bytes,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                extension,
                 actor_id,
             ),
         )
@@ -1272,12 +1504,12 @@ async def upload_document_template(
 
     return {
         "id": str(inserted.get("id") or template_id),
+        "company_id": str(inserted.get("company_id") or scoped_company_id or ""),
         "document_type": inserted.get("document_type") or normalized_document_type,
         "version": int(inserted.get("version") or next_version),
         "file_path": inserted.get("file_path") or next_file_path,
+        "file_ext": inserted.get("file_ext") or extension,
         "is_active": bool(inserted.get("is_active", True)),
         "created_by": str(inserted.get("created_by") or actor_id or ""),
         "created_at": inserted.get("created_at"),
-        "auto_injected_variables": auto_injected_variables,
-        "missing_variables": [],
     }

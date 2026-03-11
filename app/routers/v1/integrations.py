@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import math
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
@@ -46,12 +47,19 @@ from ...schemas import (
     SocEventEnvelopeIn,
     SocEventIn,
     SocEventIngestOut,
+    SocEmployeeBackfillIn,
+    SocWorkTemplateOut,
+    SocWorkTemplateQueryIn,
     SupportSheetWebhookIn,
 )
+from .employees import _post_employee_sync_to_soc
+from .schedules import _fetch_schedule_templates, _format_schedule_template_row, _resolve_site_context_by_code
 from ...services.closing_overtime import apply_closing_overtime_from_checkout
 from ...services.p1_schedule import (
     build_apple_total_shift_rows,
+    delete_apple_report_overnight_records_by_source_ticket,
     build_duty_log,
+    delete_support_assignments_by_source_ticket,
     generate_apple_daytime_shift,
     list_apple_late_shift_logs,
     list_apple_report_overnight_records,
@@ -59,15 +67,27 @@ from ...services.p1_schedule import (
     list_support_assignments,
     resolve_support_entries_to_assignments,
     upsert_apple_report_overnight_record,
+    upsert_support_assignment,
     upsert_pending_apple_daytime_ot_from_checkout,
 )
+from ...utils.schema_introspection import table_column_exists
 from ...utils.permissions import normalize_role
 from ...utils.tenant_context import canonical_tenant_identifier, fetch_tenant_row_any, resolve_scoped_tenant
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
+logger = logging.getLogger(__name__)
 
 KST = timezone(timedelta(hours=9))
 KST_CLOSING_CUTOFF = time(hour=22, minute=10)
+SUPERVISOR_DAY_SHIFT_START = "08:00:00"
+SUPERVISOR_DAY_SHIFT_END = "18:00:00"
+SUPERVISOR_DAY_SHIFT_HOURS = 10.0
+GUARD_DAY_SHIFT_START = "10:00:00"
+GUARD_DAY_SHIFT_END = "22:00:00"
+GUARD_DAY_SHIFT_HOURS = 12.0
+DEFAULT_NIGHT_SHIFT_START = "22:00:00"
+DEFAULT_NIGHT_SHIFT_END = "08:00:00"
+DEFAULT_NIGHT_SHIFT_HOURS = 10.0
 
 SOC_LEAVE_EVENT_TYPES = {
     "leave_approved",
@@ -82,10 +102,35 @@ SOC_OVERNIGHT_EVENT_TYPES = {
     "night_work_approved",
     "apple_overnight_approved",
 }
+SOC_OVERNIGHT_RETRACT_EVENT_TYPES = {
+    "overnight_retracted",
+}
 SOC_OVERTIME_EVENT_TYPES = {
     "overtime_approved",
     "ot_approved",
     "extra_work_approved",
+}
+SOC_SUPPORT_ASSIGNMENT_EVENT_TYPES = {
+    "support_assignment_approved",
+    "day_support_assignment_approved",
+}
+SOC_SUPPORT_ASSIGNMENT_RETRACT_EVENT_TYPES = {
+    "support_assignment_retracted",
+    "support_assignment_cancelled",
+    "support_assignment_canceled",
+    "support_assignment_rejected",
+    "support_assignment_deleted",
+    "support_assignment_unavailable",
+    "support_assignment_pending",
+    "support_assignment_waiting",
+    "day_support_assignment_retracted",
+    "day_support_assignment_cancelled",
+    "day_support_assignment_canceled",
+    "day_support_assignment_rejected",
+    "day_support_assignment_deleted",
+    "day_support_assignment_unavailable",
+    "day_support_assignment_pending",
+    "day_support_assignment_waiting",
 }
 SOC_ATTENDANCE_CHECKIN_EVENT_TYPES = {"attendance_check_in", "check_in"}
 SOC_ATTENDANCE_CHECKOUT_EVENT_TYPES = {"attendance_check_out", "check_out", "checkout"}
@@ -93,7 +138,34 @@ SOC_CLOSING_EVENT_TYPES = SOC_ATTENDANCE_CHECKOUT_EVENT_TYPES | {"closing_checko
 SOC_WEBHOOK_EVENT_TYPE_MAP = {
     "OVERTIME_APPROVED": "overtime_approved",
     "OVERNIGHT_APPROVED": "overnight_approved",
+    "OVERNIGHT_RETRACTED": "overnight_retracted",
     "LEAVE_APPROVED": "leave_approved",
+    "SUPPORT_ASSIGNMENT_APPROVED": "support_assignment_approved",
+    "SUPPORT_ASSIGNMENT_RETRACTED": "support_assignment_retracted",
+    "SUPPORT_ASSIGNMENT_CANCELLED": "support_assignment_cancelled",
+    "SUPPORT_ASSIGNMENT_CANCELED": "support_assignment_canceled",
+    "SUPPORT_ASSIGNMENT_REJECTED": "support_assignment_rejected",
+    "SUPPORT_ASSIGNMENT_DELETED": "support_assignment_deleted",
+    "SUPPORT_ASSIGNMENT_UNAVAILABLE": "support_assignment_unavailable",
+    "SUPPORT_ASSIGNMENT_PENDING": "support_assignment_pending",
+}
+SENTRIX_SUPPORT_TICKET_SOURCE = "sentrix_support_ticket"
+LEGACY_SOC_SOURCE = "SOC"
+SENTRIX_SUPPORT_SOURCE_VALUES = (SENTRIX_SUPPORT_TICKET_SOURCE, LEGACY_SOC_SOURCE)
+SOC_SUPPORT_ASSIGNMENT_RETRACT_STATE_KEYS = {
+    "작업취소",
+    "반려",
+    "삭제",
+    "지원불가",
+    "승인대기",
+    "cancelled",
+    "canceled",
+    "rejected",
+    "deleted",
+    "unavailable",
+    "pending",
+    "waiting",
+    "revoked",
 }
 
 FEATURE_FLAG_DEFAULTS = build_feature_flag_defaults(settings)
@@ -304,6 +376,39 @@ def _pick_from_mapping(data: dict[str, Any] | None, *keys: str) -> Any | None:
     return None
 
 
+def _is_support_assignment_retract_state(value: Any) -> bool:
+    normalized = _canonical_key(str(value or ""))
+    if not normalized:
+        return False
+    return normalized in {_canonical_key(item) for item in SOC_SUPPORT_ASSIGNMENT_RETRACT_STATE_KEYS}
+
+
+def _resolve_support_assignment_materialization_action(payload: SocEventIn, event_type: str | None = None) -> str:
+    normalized_event_type = _normalize_event_type(event_type or payload.event_type)
+    if normalized_event_type in SOC_SUPPORT_ASSIGNMENT_RETRACT_EVENT_TYPES:
+        return "RETRACT"
+    for container in (payload.payload, payload.metadata):
+        candidate = _pick_from_mapping(
+            container if isinstance(container, dict) else None,
+            "status",
+            "state",
+            "approval_status",
+            "approvalStatus",
+            "ticket_status",
+            "ticketStatus",
+            "support_status",
+            "supportStatus",
+            "request_status",
+            "requestStatus",
+            "decision",
+            "result",
+            "action",
+        )
+        if _is_support_assignment_retract_state(candidate):
+            return "RETRACT"
+    return "UPSERT"
+
+
 def _as_text(value: Any) -> str | None:
     if value is None:
         return None
@@ -353,6 +458,95 @@ def _extract_id_list_from_fields(template_fields: dict[str, Any], *keys: str) ->
         if ids:
             return ids
     return []
+
+
+def _split_support_text_list(value: Any) -> list[str]:
+    raw = _as_text(value)
+    if not raw:
+        return []
+    return [part.strip() for part in re.split(r"[,;\n|]", raw) if part and part.strip()]
+
+
+def _extract_soc_confirmed_workers(payload: SocEventIn) -> list[dict[str, str]]:
+    template_fields = payload.payload if isinstance(payload.payload, dict) else {}
+    raw_rows = _pick_from_mapping(template_fields, "confirmed_workers", "confirmedWorkers")
+    confirmed_rows: list[dict[str, str]] = []
+    if isinstance(raw_rows, list):
+        for item in raw_rows:
+            if not isinstance(item, dict):
+                continue
+            affiliation = _as_text(
+                _pick_from_mapping(
+                    item,
+                    "affiliation",
+                    "confirmed_worker_affiliation",
+                    "confirmedWorkerAffiliation",
+                )
+            )
+            worker_name = _as_text(
+                _pick_from_mapping(
+                    item,
+                    "worker_name",
+                    "workerName",
+                    "confirmed_worker_name",
+                    "confirmedWorkerName",
+                )
+            )
+            if not worker_name:
+                continue
+            confirmed_rows.append(
+                {
+                    "affiliation": affiliation,
+                    "worker_name": worker_name,
+                }
+            )
+    if confirmed_rows:
+        return confirmed_rows
+
+    names = _split_support_text_list(
+        _pick_from_mapping(
+            template_fields,
+            "confirmed_worker_name",
+            "confirmedWorkerName",
+        )
+    )
+    affiliations = _split_support_text_list(
+        _pick_from_mapping(
+            template_fields,
+            "confirmed_worker_affiliation",
+            "confirmedWorkerAffiliation",
+        )
+    )
+    if not names:
+        return []
+
+    normalized: list[dict[str, str]] = []
+    for index, worker_name in enumerate(names):
+        affiliation = affiliations[index] if index < len(affiliations) else (affiliations[-1] if affiliations else "")
+        normalized.append(
+            {
+                "affiliation": affiliation,
+                "worker_name": worker_name,
+            }
+        )
+    return normalized
+
+
+def _has_support_roundtrip_source(conn, *, tenant_id, site_id, work_date: date) -> bool:
+    month_key = f"{work_date.year:04d}-{work_date.month:02d}"
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM schedule_support_roundtrip_sources
+            WHERE tenant_id = %s
+              AND site_id = %s
+              AND month_key = %s
+            LIMIT 1
+            """,
+            (tenant_id, site_id, month_key),
+        )
+        return cur.fetchone() is not None
 
 
 def _as_date(value: Any) -> date | None:
@@ -428,7 +622,11 @@ def _to_internal_soc_event(payload: SocEventEnvelopeIn) -> SocEventIn:
         )
     )
     if not employee_code:
-        if canonical_event_type in SOC_LEAVE_EVENT_TYPES or canonical_event_type in SOC_OVERTIME_EVENT_TYPES:
+        if (
+            canonical_event_type in SOC_LEAVE_EVENT_TYPES
+            or canonical_event_type in SOC_OVERTIME_EVENT_TYPES
+            or canonical_event_type in SOC_SUPPORT_ASSIGNMENT_EVENT_TYPES
+        ):
             employee_code = "__SOC_MULTI__"
         elif canonical_event_type in SOC_OVERNIGHT_EVENT_TYPES:
             employee_code = "__SOC_OVERNIGHT__"
@@ -659,7 +857,9 @@ def _resolve_employee_by_external_key(conn, *, tenant_id, site_id, external_key:
             cur.execute(
                 """
                 SELECT id, tenant_id, company_id, site_id, employee_code, full_name,
-                       external_employee_key, linked_employee_id
+                       external_employee_key, linked_employee_id,
+                       COALESCE(duty_role, '') AS duty_role,
+                       COALESCE(soc_role, '') AS soc_role
                 FROM employees
                 WHERE tenant_id = %s
                   AND site_id = %s
@@ -694,7 +894,9 @@ def _resolve_employee_by_external_key(conn, *, tenant_id, site_id, external_key:
         cur.execute(
             """
             SELECT id, tenant_id, company_id, site_id, employee_code, full_name,
-                   external_employee_key, linked_employee_id
+                   external_employee_key, linked_employee_id,
+                   COALESCE(duty_role, '') AS duty_role,
+                   COALESCE(soc_role, '') AS soc_role
             FROM employees
             WHERE tenant_id = %s
               AND (
@@ -728,6 +930,10 @@ def _extract_soc_employee_keys(payload: SocEventIn, event_type: str) -> list[str
     if event_type in SOC_LEAVE_EVENT_TYPES:
         return _extract_id_list_from_fields(
             template_fields,
+            "internal_staff_employee_codes",
+            "internalStaffEmployeeCodes",
+            "internal_staff_employee_code",
+            "internalStaffEmployeeCode",
             "internal_staff_employee_ids",
             "internalStaffEmployeeIds",
             "internal_staff_employee_id",
@@ -744,10 +950,38 @@ def _extract_soc_employee_keys(payload: SocEventIn, event_type: str) -> list[str
     if event_type in SOC_OVERNIGHT_EVENT_TYPES:
         return _extract_id_list_from_fields(
             template_fields,
+            "internal_staff_employee_codes",
+            "internalStaffEmployeeCodes",
+            "internal_staff_employee_code",
+            "internalStaffEmployeeCode",
             "internal_staff_employee_ids",
             "internalStaffEmployeeIds",
             "internal_staff_employee_id",
             "internalStaffEmployeeId",
+            "target_employee_codes",
+            "targetEmployeeCodes",
+            "target_employee_code",
+            "targetEmployeeCode",
+            "target_employee_ids",
+            "targetEmployeeIds",
+            "target_employee_id",
+            "targetEmployeeId",
+        )
+    if event_type in SOC_SUPPORT_ASSIGNMENT_EVENT_TYPES:
+        return _extract_id_list_from_fields(
+            template_fields,
+            "internal_staff_employee_codes",
+            "internalStaffEmployeeCodes",
+            "internal_staff_employee_code",
+            "internalStaffEmployeeCode",
+            "internal_staff_employee_ids",
+            "internalStaffEmployeeIds",
+            "internal_staff_employee_id",
+            "internalStaffEmployeeId",
+            "target_employee_codes",
+            "targetEmployeeCodes",
+            "target_employee_code",
+            "targetEmployeeCode",
             "target_employee_ids",
             "targetEmployeeIds",
             "target_employee_id",
@@ -891,6 +1125,7 @@ def _upsert_monthly_schedule(
 ) -> dict[str, Any]:
     if not company_id or not site_id:
         raise ValueError("employee company/site mapping is missing")
+    normalized_shift_type = str(shift_type or "").strip().lower() or "day"
 
     with conn.cursor() as cur:
         cur.execute(
@@ -900,9 +1135,10 @@ def _upsert_monthly_schedule(
             WHERE tenant_id = %s
               AND employee_id = %s
               AND schedule_date = %s
+              AND lower(COALESCE(shift_type, 'day')) = %s
             LIMIT 1
             """,
-            (tenant_id, employee_id, work_date),
+            (tenant_id, employee_id, work_date, normalized_shift_type),
         )
         existing = cur.fetchone()
 
@@ -919,7 +1155,7 @@ def _upsert_monthly_schedule(
                 WHERE id = %s
                 """,
                 (
-                    shift_type,
+                    normalized_shift_type,
                     company_id,
                     site_id,
                     source,
@@ -931,7 +1167,7 @@ def _upsert_monthly_schedule(
             return {
                 "action": "updated",
                 "schedule_id": str(existing["id"]),
-                "shift_type": shift_type,
+                "shift_type": normalized_shift_type,
                 "schedule_date": work_date.isoformat(),
                 "source": source,
                 "source_ticket_id": source_ticket_id,
@@ -952,7 +1188,7 @@ def _upsert_monthly_schedule(
                 site_id,
                 employee_id,
                 work_date,
-                shift_type,
+                normalized_shift_type,
                 source,
                 source_ticket_id,
                 schedule_note,
@@ -962,12 +1198,234 @@ def _upsert_monthly_schedule(
         return {
             "action": "inserted",
             "schedule_id": str(inserted["id"]) if inserted else "",
-            "shift_type": shift_type,
+            "shift_type": normalized_shift_type,
             "schedule_date": work_date.isoformat(),
             "source": source,
             "source_ticket_id": source_ticket_id,
             "schedule_note": schedule_note,
         }
+
+
+def _resolve_materialized_shift_defaults(employee: dict[str, Any], shift_type: str) -> tuple[str, str, float]:
+    normalized_shift_type = str(shift_type or "").strip().lower()
+    if normalized_shift_type == "night":
+        return DEFAULT_NIGHT_SHIFT_START, DEFAULT_NIGHT_SHIFT_END, DEFAULT_NIGHT_SHIFT_HOURS
+    soc_role = str(employee.get("soc_role") or "").strip().lower()
+    duty_role = str(employee.get("duty_role") or "").strip().upper()
+    if soc_role in {"supervisor", "vice_supervisor", "hq_admin"} or duty_role in {"TEAM_MANAGER", "VICE_SUPERVISOR"}:
+        return SUPERVISOR_DAY_SHIFT_START, SUPERVISOR_DAY_SHIFT_END, SUPERVISOR_DAY_SHIFT_HOURS
+    return GUARD_DAY_SHIFT_START, GUARD_DAY_SHIFT_END, GUARD_DAY_SHIFT_HOURS
+
+
+def _upsert_materialized_schedule_row(
+    conn,
+    tenant_id,
+    company_id,
+    site_id,
+    employee: dict[str, Any],
+    work_date: date,
+    shift_type: str,
+    *,
+    source: str | None = None,
+    source_ticket_id: int | None = None,
+    schedule_note: str | None = None,
+) -> dict[str, Any]:
+    if not company_id or not site_id:
+        raise ValueError("employee company/site mapping is missing")
+
+    normalized_shift_type = str(shift_type or "").strip().lower()
+    shift_start_time, shift_end_time, paid_hours = _resolve_materialized_shift_defaults(employee, normalized_shift_type)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id
+            FROM monthly_schedules
+            WHERE tenant_id = %s
+              AND employee_id = %s
+              AND schedule_date = %s
+              AND lower(shift_type) = %s
+              AND (
+                source_ticket_id = %s
+                OR %s IS NULL
+                OR COALESCE(source, '') IN ('SOC', 'sentrix_support_ticket')
+              )
+            ORDER BY id
+            LIMIT 1
+            """,
+            (
+                tenant_id,
+                employee["id"],
+                work_date,
+                normalized_shift_type,
+                source_ticket_id,
+                source_ticket_id,
+            ),
+        )
+        existing = cur.fetchone()
+
+        if existing:
+            cur.execute(
+                """
+                UPDATE monthly_schedules
+                SET shift_type = %s,
+                    company_id = %s,
+                    site_id = %s,
+                    shift_start_time = %s,
+                    shift_end_time = %s,
+                    paid_hours = %s,
+                    source = COALESCE(%s, source),
+                    source_ticket_id = COALESCE(%s, source_ticket_id),
+                    schedule_note = COALESCE(%s, schedule_note)
+                WHERE id = %s
+                """,
+                (
+                    normalized_shift_type,
+                    company_id,
+                    site_id,
+                    shift_start_time,
+                    shift_end_time,
+                    paid_hours,
+                    source,
+                    source_ticket_id,
+                    schedule_note,
+                    existing["id"],
+                ),
+            )
+            return {
+                "action": "updated",
+                "schedule_id": str(existing["id"]),
+                "shift_type": normalized_shift_type,
+                "schedule_date": work_date.isoformat(),
+                "source": source,
+                "source_ticket_id": source_ticket_id,
+                "schedule_note": schedule_note,
+                "shift_start_time": shift_start_time,
+                "shift_end_time": shift_end_time,
+                "paid_hours": paid_hours,
+            }
+
+        cur.execute(
+            """
+            INSERT INTO monthly_schedules (
+                tenant_id, company_id, site_id, employee_id, schedule_date, shift_type,
+                shift_start_time, shift_end_time, paid_hours, source, source_ticket_id, schedule_note
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                tenant_id,
+                company_id,
+                site_id,
+                employee["id"],
+                work_date,
+                normalized_shift_type,
+                shift_start_time,
+                shift_end_time,
+                paid_hours,
+                source,
+                source_ticket_id,
+                schedule_note,
+            ),
+        )
+        inserted = cur.fetchone()
+        return {
+            "action": "inserted",
+            "schedule_id": str(inserted["id"]) if inserted else "",
+            "shift_type": normalized_shift_type,
+            "schedule_date": work_date.isoformat(),
+            "source": source,
+            "source_ticket_id": source_ticket_id,
+            "schedule_note": schedule_note,
+            "shift_start_time": shift_start_time,
+            "shift_end_time": shift_end_time,
+            "paid_hours": paid_hours,
+        }
+
+
+def _retract_materialized_schedule_rows_for_ticket(
+    conn,
+    *,
+    tenant_id,
+    site_id,
+    work_date: date,
+    shift_type: str,
+    source_ticket_id: int,
+) -> dict[str, Any]:
+    normalized_shift_type = str(shift_type or "day").strip().lower() or "day"
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM monthly_schedules ms
+            USING employees e, sites s
+            WHERE ms.employee_id = e.id
+              AND ms.site_id = s.id
+              AND ms.tenant_id = %s
+              AND ms.schedule_date = %s
+              AND lower(COALESCE(ms.shift_type, 'day')) = %s
+              AND ms.source_ticket_id = %s
+              AND COALESCE(ms.source, '') IN ('SOC', 'sentrix_support_ticket')
+              AND (%s IS NULL OR ms.site_id = %s)
+            RETURNING
+                ms.id,
+                ms.schedule_date,
+                lower(COALESCE(ms.shift_type, 'day')) AS shift_type,
+                ms.source,
+                ms.source_ticket_id,
+                e.id AS employee_id,
+                e.employee_code,
+                e.full_name AS employee_name,
+                s.id AS site_id,
+                s.site_code,
+                s.site_name
+            """,
+            (
+                tenant_id,
+                work_date,
+                normalized_shift_type,
+                source_ticket_id,
+                site_id,
+                site_id,
+            ),
+        )
+        rows = [_serialize_value(dict(row)) for row in cur.fetchall()]
+    return {
+        "retracted_count": len(rows),
+        "rows": rows,
+        "shift_type": normalized_shift_type,
+        "work_date": work_date.isoformat(),
+        "source_ticket_id": source_ticket_id,
+    }
+
+
+def _delete_overnight_assignments_by_source_ticket(
+    conn,
+    *,
+    tenant_id,
+    site_id,
+    work_date: date,
+    source_ticket_id: int,
+) -> list[dict[str, Any]]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM overnight_assignments oa
+            WHERE oa.tenant_id = %s
+              AND oa.work_date = %s
+              AND oa.ticket_id = %s
+              AND COALESCE(oa.source, '') IN ('SOC', 'sentrix_support_ticket')
+              AND (%s IS NULL OR oa.site_id = %s)
+            RETURNING oa.id, oa.site_id, oa.work_date, oa.ticket_id, oa.requested_count
+            """,
+            (
+                tenant_id,
+                work_date,
+                source_ticket_id,
+                site_id,
+                site_id,
+            ),
+        )
+        return [_serialize_value(dict(row)) for row in cur.fetchall()]
 
 
 def _extract_ticket_id_from_payload(payload: SocEventIn) -> int | None:
@@ -987,6 +1445,31 @@ def _extract_request_date_from_payload(payload: SocEventIn) -> date:
     if extracted:
         return extracted
     return _derive_work_date(payload)
+
+
+def _extract_support_period_from_payload(payload: SocEventIn, event_type: str | None = None) -> str:
+    canonical_event_type = _normalize_event_type(event_type or payload.event_type)
+    if canonical_event_type in SOC_OVERNIGHT_EVENT_TYPES:
+        return "night"
+
+    template_fields = payload.payload if isinstance(payload.payload, dict) else {}
+    raw_value = _pick_from_mapping(
+        template_fields,
+        "support_period",
+        "supportPeriod",
+        "work_type",
+        "workType",
+    )
+    normalized = _as_text(raw_value).lower()
+    if normalized in {"night", "n", "overnight", "야간", "야간지원", "야간 지원"}:
+        return "night"
+    if normalized in {"day", "d", "daytime", "주간", "주간지원", "주간 지원"}:
+        return "day"
+
+    template_type = _as_text(payload.metadata.get("template_type") if isinstance(payload.metadata, dict) else "")
+    if "야간" in template_type:
+        return "night"
+    return "day"
 
 
 def _extract_leave_reason_text(payload: SocEventIn) -> str:
@@ -1264,12 +1747,12 @@ def _apply_overnight(
     event_uid: str,
     ticket_id: int | None = None,
 ) -> dict[str, Any]:
-    schedule_result = _upsert_monthly_schedule(
+    schedule_result = _upsert_materialized_schedule_row(
         conn,
         tenant["id"],
         employee.get("company_id") or (site["company_id"] if site else None),
         employee.get("site_id") or (site["id"] if site else None),
-        employee["id"],
+        employee,
         work_date,
         "night",
         source="SOC",
@@ -1494,13 +1977,24 @@ def _apply_overnight_for_ticket(
     target_keys = _extract_soc_employee_keys(payload, "overnight_approved")
     employees: list[dict[str, Any]] = []
     if target_keys:
-        employees = _resolve_soc_target_employees(
-            conn,
-            tenant_id=tenant["id"],
-            site=site,
-            payload=payload,
-            event_type="overnight_approved",
-        )
+        try:
+            employees = _resolve_soc_target_employees(
+                conn,
+                tenant_id=tenant["id"],
+                site=site,
+                payload=payload,
+                event_type="overnight_approved",
+            )
+        except ValueError as exc:
+            logger.warning(
+                "[SOC_OVERNIGHT][TARGET_RESOLVE_FAILED] tenant=%s site=%s work_date=%s ticket=%s reason=%s",
+                str(tenant.get("tenant_code") or tenant.get("id") or "").strip(),
+                str((site or {}).get("site_code") or "").strip(),
+                work_date.isoformat(),
+                ticket_id,
+                str(exc),
+            )
+            raise
         if not site and employees and employees[0].get("site_id"):
             site = _resolve_site_by_id(conn, tenant["id"], employees[0]["site_id"])
 
@@ -1558,6 +2052,56 @@ def _apply_overnight_for_ticket(
             row["employee_code"] = employee["employee_code"]
             overnight_targets.append(row)
 
+    external_confirmed_workers = []
+    seen_external_support_keys: set[tuple[str, str]] = set()
+    for worker in _extract_soc_confirmed_workers(payload):
+        affiliation = _as_text(worker.get("affiliation"))
+        worker_name = _as_text(worker.get("worker_name"))
+        if not worker_name:
+            continue
+        dedupe_key = (affiliation.lower(), worker_name.lower())
+        if dedupe_key in seen_external_support_keys:
+            continue
+        seen_external_support_keys.add(dedupe_key)
+        external_confirmed_workers.append(
+            {
+                "affiliation": affiliation,
+                "worker_name": worker_name,
+            }
+        )
+
+    external_support_rows: list[dict[str, Any]] = []
+    if site and ticket_id is not None:
+        delete_support_assignments_by_source_ticket(
+            conn,
+            tenant_id=tenant["id"],
+            site_id=site["id"],
+            work_date=work_date,
+            support_period="night",
+            source_ticket_id=ticket_id,
+            source="SOC",
+        )
+        for slot_index, worker in enumerate(external_confirmed_workers, start=1):
+            row, created = upsert_support_assignment(
+                conn,
+                tenant_id=tenant["id"],
+                site_id=site["id"],
+                work_date=work_date,
+                support_period="night",
+                slot_index=slot_index,
+                worker_type="F",
+                name=worker["worker_name"],
+                affiliation=worker["affiliation"] or None,
+                source="SOC",
+                source_ticket_id=ticket_id,
+                source_event_uid=event_uid,
+            )
+            if not row:
+                continue
+            row_payload = _serialize_value(dict(row))
+            row_payload["created"] = bool(created)
+            external_support_rows.append(row_payload)
+
     return {
         "overnight": True,
         "ticket_id": ticket_id,
@@ -1566,6 +2110,442 @@ def _apply_overnight_for_ticket(
         "apple_report_record": apple_report_record,
         "target_count": len(overnight_targets),
         "targets": overnight_targets,
+        "external_support_count": len(external_support_rows),
+        "external_support_rows": external_support_rows,
+    }
+
+
+def _retract_overnight_for_ticket(
+    conn,
+    *,
+    tenant,
+    site,
+    payload: SocEventIn,
+    work_date: date,
+    ticket_id: int | None,
+) -> dict[str, Any]:
+    if ticket_id is None:
+        return {
+            "overnight": True,
+            "ticket_id": None,
+            "work_date": work_date.isoformat(),
+            "skipped": True,
+            "reason": "missing_ticket_id",
+            "action": "RETRACT",
+        }
+
+    site_id = site["id"] if site else None
+    schedule_retract = _retract_materialized_schedule_rows_for_ticket(
+        conn,
+        tenant_id=tenant["id"],
+        site_id=site_id,
+        work_date=work_date,
+        shift_type="night",
+        source_ticket_id=ticket_id,
+    )
+
+    overnight_assignment_rows = _delete_overnight_assignments_by_source_ticket(
+        conn,
+        tenant_id=tenant["id"],
+        site_id=site_id,
+        work_date=work_date,
+        source_ticket_id=ticket_id,
+    )
+
+    overnight_report_rows = [
+        _serialize_value(dict(row))
+        for row in delete_apple_report_overnight_records_by_source_ticket(
+            conn,
+            tenant_id=tenant["id"],
+            site_id=site_id,
+            work_date=work_date,
+            source_ticket_id=ticket_id,
+        )
+    ]
+    external_retract = delete_support_assignments_by_source_ticket(
+        conn,
+        tenant_id=tenant["id"],
+        site_id=site_id,
+        work_date=work_date,
+        support_period="night",
+        source_ticket_id=ticket_id,
+        source=None,
+    )
+    logger.info(
+        "[SOC_OVERNIGHT][RETRACT] tenant=%s site=%s work_date=%s ticket=%s schedule=%s overnight=%s external=%s",
+        str(tenant.get("tenant_code") or tenant.get("id") or "").strip(),
+        str((site or {}).get("site_code") or "").strip(),
+        work_date.isoformat(),
+        ticket_id,
+        schedule_retract["retracted_count"],
+        len(overnight_assignment_rows),
+        external_retract["deleted_count"],
+    )
+    return {
+        "overnight": True,
+        "ticket_id": ticket_id,
+        "work_date": work_date.isoformat(),
+        "action": "RETRACT",
+        "schedule_retract": schedule_retract,
+        "overnight_assignment_count": len(overnight_assignment_rows),
+        "overnight_assignment_rows": overnight_assignment_rows,
+        "apple_report_record_count": len(overnight_report_rows),
+        "apple_report_record_rows": overnight_report_rows,
+        "external_support_count": int(external_retract["deleted_count"]),
+        "external_support_rows": external_retract["rows"],
+        "changed": bool(
+            schedule_retract["retracted_count"]
+            or overnight_assignment_rows
+            or overnight_report_rows
+            or external_retract["deleted_count"]
+        ),
+    }
+
+
+def _apply_internal_support_schedule_targets(
+    conn,
+    *,
+    tenant,
+    site,
+    payload: SocEventIn,
+    work_date: date,
+    ticket_id: int | None,
+    event_type: str,
+    employees: list[dict[str, Any]] | None = None,
+    support_period: str | None = None,
+) -> dict[str, Any]:
+    target_keys = _extract_soc_employee_keys(payload, event_type)
+    if not target_keys:
+        return {
+            "schedule_sync": False,
+            "ticket_id": ticket_id,
+            "work_date": work_date.isoformat(),
+            "target_count": 0,
+            "targets": [],
+            "source_keys": [],
+            "skipped": True,
+            "reason": "no_internal_targets",
+        }
+
+    resolved_employees = list(employees or [])
+    if not resolved_employees:
+        try:
+            resolved_employees = _resolve_soc_target_employees(
+                conn,
+                tenant_id=tenant["id"],
+                site=site,
+                payload=payload,
+                event_type=event_type,
+            )
+        except ValueError as exc:
+            logger.warning(
+                "[SOC_SUPPORT][MATERIALIZE_FAILED] tenant=%s site=%s work_date=%s ticket=%s event=%s reason=%s",
+                str(tenant.get("tenant_code") or tenant.get("id") or "").strip(),
+                str((site or {}).get("site_code") or "").strip(),
+                work_date.isoformat(),
+                ticket_id,
+                event_type,
+                str(exc),
+            )
+            raise
+
+    resolved_site = site
+    if not resolved_site and resolved_employees and resolved_employees[0].get("site_id"):
+        resolved_site = _resolve_site_by_id(conn, tenant["id"], resolved_employees[0]["site_id"])
+    if not resolved_site:
+        logger.warning(
+            "[SOC_SUPPORT][MATERIALIZE_FAILED] tenant=%s site=%s work_date=%s ticket=%s event=%s reason=SITE_NOT_FOUND",
+            str(tenant.get("tenant_code") or tenant.get("id") or "").strip(),
+            str((site or {}).get("site_code") or "").strip(),
+            work_date.isoformat(),
+            ticket_id,
+            event_type,
+        )
+        raise ValueError("site is required for support schedule sync")
+
+    normalized_period = "night" if str(support_period or _extract_support_period_from_payload(payload, event_type)).strip().lower() == "night" else "day"
+    shift_type = "night" if normalized_period == "night" else "day"
+    applied_rows: list[dict[str, Any]] = []
+    for employee in resolved_employees:
+        schedule_result = _upsert_materialized_schedule_row(
+            conn,
+            tenant["id"],
+            employee.get("company_id") or resolved_site.get("company_id"),
+            employee.get("site_id") or resolved_site.get("id"),
+            employee,
+            work_date,
+            shift_type,
+            source=SENTRIX_SUPPORT_TICKET_SOURCE,
+            source_ticket_id=ticket_id,
+            schedule_note=f"SOC self-staff support assignment ({normalized_period})",
+        )
+        applied_rows.append(
+            {
+                "employee_id": str(employee["id"]),
+                "employee_code": str(employee.get("employee_code") or "").strip(),
+                "employee_name": str(employee.get("full_name") or "").strip(),
+                "work_date": work_date.isoformat(),
+                "support_period": normalized_period,
+                "shift_type": shift_type,
+                "source_ticket_id": ticket_id,
+                "idempotency_key": ":".join(
+                    [
+                        "soc-support-schedule",
+                        str(ticket_id or payload.event_uid or "").strip(),
+                        str(employee["id"]),
+                        work_date.isoformat(),
+                        shift_type,
+                    ]
+                ).strip(":"),
+                "schedule": schedule_result,
+            }
+        )
+
+    return {
+        "schedule_sync": True,
+        "ticket_id": ticket_id,
+        "work_date": work_date.isoformat(),
+        "support_period": normalized_period,
+        "target_count": len(applied_rows),
+        "targets": applied_rows,
+        "source_keys": target_keys,
+    }
+
+
+def _retract_internal_support_schedule_targets(
+    conn,
+    *,
+    tenant,
+    site,
+    payload: SocEventIn,
+    work_date: date,
+    ticket_id: int | None,
+    event_type: str,
+    support_period: str | None = None,
+) -> dict[str, Any]:
+    target_keys = _extract_soc_employee_keys(payload, event_type)
+    normalized_period = "night" if str(support_period or _extract_support_period_from_payload(payload, event_type)).strip().lower() == "night" else "day"
+    shift_type = "night" if normalized_period == "night" else "day"
+    if ticket_id is None:
+        logger.warning(
+            "[SOC_SUPPORT][RETRACT_SKIPPED] tenant=%s site=%s work_date=%s event=%s reason=MISSING_TICKET_ID",
+            str(tenant.get("tenant_code") or tenant.get("id") or "").strip(),
+            str((site or {}).get("site_code") or "").strip(),
+            work_date.isoformat(),
+            event_type,
+        )
+        return {
+            "schedule_sync": False,
+            "ticket_id": None,
+            "work_date": work_date.isoformat(),
+            "support_period": normalized_period,
+            "target_count": 0,
+            "targets": [],
+            "source_keys": target_keys,
+            "skipped": True,
+            "reason": "missing_ticket_id",
+        }
+    retract_result = _retract_materialized_schedule_rows_for_ticket(
+        conn,
+        tenant_id=tenant["id"],
+        site_id=site["id"] if site else None,
+        work_date=work_date,
+        shift_type=shift_type,
+        source_ticket_id=ticket_id,
+    )
+    logger.info(
+        "[SOC_SUPPORT][RETRACT] tenant=%s site=%s work_date=%s ticket=%s shift=%s changed=%s",
+        str(tenant.get("tenant_code") or tenant.get("id") or "").strip(),
+        str((site or {}).get("site_code") or "").strip(),
+        work_date.isoformat(),
+        ticket_id,
+        shift_type,
+        retract_result["retracted_count"],
+    )
+    return {
+        "schedule_sync": True,
+        "ticket_id": ticket_id,
+        "work_date": work_date.isoformat(),
+        "support_period": normalized_period,
+        "target_count": int(retract_result["retracted_count"]),
+        "targets": retract_result["rows"],
+        "source_keys": target_keys,
+        "action": "RETRACT",
+        "changed": bool(retract_result["retracted_count"]),
+    }
+
+
+def _apply_support_assignment_for_ticket(
+    conn,
+    *,
+    tenant,
+    site,
+    payload: SocEventIn,
+    work_date: date,
+    ticket_id: int | None,
+) -> dict[str, Any]:
+    support_event_type = _normalize_event_type(payload.event_type)
+    action = _resolve_support_assignment_materialization_action(payload, support_event_type)
+    target_keys = _extract_soc_employee_keys(payload, support_event_type)
+    normalized_period = _extract_support_period_from_payload(payload, support_event_type)
+    external_confirmed_workers = []
+    seen_external_support_keys: set[tuple[str, str]] = set()
+    for worker in _extract_soc_confirmed_workers(payload):
+        affiliation = _as_text(worker.get("affiliation"))
+        worker_name = _as_text(worker.get("worker_name"))
+        if not worker_name:
+            continue
+        dedupe_key = (affiliation.lower(), worker_name.lower())
+        if dedupe_key in seen_external_support_keys:
+            continue
+        seen_external_support_keys.add(dedupe_key)
+        external_confirmed_workers.append(
+            {
+                "affiliation": affiliation,
+                "worker_name": worker_name,
+            }
+        )
+    if action != "RETRACT" and not target_keys and not external_confirmed_workers:
+        return {
+            "support_assignment": False,
+            "ticket_id": ticket_id,
+            "work_date": work_date.isoformat(),
+            "target_count": 0,
+            "targets": [],
+            "source_keys": [],
+            "skipped": True,
+            "reason": "no_assignments",
+        }
+
+    if not site:
+        raise ValueError("site is required for support assignment")
+
+    employees: list[dict[str, Any]] = []
+    if action != "RETRACT" and target_keys:
+        try:
+            employees = _resolve_soc_target_employees(
+                conn,
+                tenant_id=tenant["id"],
+                site=site,
+                payload=payload,
+                event_type=support_event_type,
+            )
+        except ValueError as exc:
+            logger.warning(
+                "[SOC_SUPPORT][TARGET_RESOLVE_FAILED] tenant=%s site=%s work_date=%s ticket=%s reason=%s",
+                str(tenant.get("tenant_code") or tenant.get("id") or "").strip(),
+                str((site or {}).get("site_code") or "").strip(),
+                work_date.isoformat(),
+                ticket_id,
+                str(exc),
+            )
+            raise
+    if action == "RETRACT":
+        internal_schedule_sync = _retract_internal_support_schedule_targets(
+            conn,
+            tenant=tenant,
+            site=site,
+            payload=payload,
+            work_date=work_date,
+            ticket_id=ticket_id,
+            event_type=support_event_type,
+            support_period=normalized_period,
+        )
+    else:
+        internal_schedule_sync = _apply_internal_support_schedule_targets(
+            conn,
+            tenant=tenant,
+            site=site,
+            payload=payload,
+            work_date=work_date,
+            ticket_id=ticket_id,
+            event_type=support_event_type,
+            employees=employees,
+            support_period=normalized_period,
+        )
+
+    if ticket_id is not None:
+        for source_value in SENTRIX_SUPPORT_SOURCE_VALUES:
+            delete_support_assignments_by_source_ticket(
+                conn,
+                tenant_id=tenant["id"],
+                site_id=site["id"],
+                work_date=work_date,
+                support_period=normalized_period,
+                source_ticket_id=ticket_id,
+                source=source_value,
+            )
+
+    if action == "RETRACT":
+        return {
+            "support_assignment": True,
+            "ticket_id": ticket_id,
+            "work_date": work_date.isoformat(),
+            "support_period": normalized_period,
+            "target_count": int(internal_schedule_sync.get("target_count") or 0),
+            "targets": [],
+            "source_keys": target_keys,
+            "external_support_count": 0,
+            "internal_support_count": 0,
+            "internal_schedule_sync": internal_schedule_sync,
+            "action": "RETRACT",
+        }
+
+    applied_rows: list[dict[str, Any]] = []
+    slot_index = 1
+    for worker in external_confirmed_workers:
+        row, created = upsert_support_assignment(
+            conn,
+            tenant_id=tenant["id"],
+            site_id=site["id"],
+            work_date=work_date,
+            support_period=normalized_period,
+            slot_index=slot_index,
+            worker_type="F",
+            name=worker["worker_name"],
+            affiliation=worker["affiliation"] or None,
+            source=SENTRIX_SUPPORT_TICKET_SOURCE,
+            source_ticket_id=ticket_id,
+            source_event_uid=payload.event_uid,
+        )
+        slot_index += 1
+        if row:
+            row_payload = _serialize_value(dict(row))
+            row_payload["created"] = bool(created)
+            applied_rows.append(row_payload)
+    for employee in employees:
+        row, created = upsert_support_assignment(
+            conn,
+            tenant_id=tenant["id"],
+            site_id=site["id"],
+            work_date=work_date,
+            support_period=normalized_period,
+            slot_index=slot_index,
+            worker_type="INTERNAL",
+            name=str(employee.get("full_name") or employee.get("employee_code") or "").strip(),
+            source=SENTRIX_SUPPORT_TICKET_SOURCE,
+            employee_id=employee["id"],
+            source_ticket_id=ticket_id,
+            source_event_uid=payload.event_uid,
+        )
+        slot_index += 1
+        if row:
+            row_payload = _serialize_value(dict(row))
+            row_payload["created"] = bool(created)
+            applied_rows.append(row_payload)
+
+    return {
+        "support_assignment": True,
+        "ticket_id": ticket_id,
+        "work_date": work_date.isoformat(),
+        "support_period": normalized_period,
+        "target_count": len(applied_rows),
+        "targets": applied_rows,
+        "source_keys": target_keys,
+        "external_support_count": len(external_confirmed_workers),
+        "internal_support_count": len(employees),
+        "internal_schedule_sync": internal_schedule_sync,
+        "action": "UPSERT",
     }
 
 
@@ -1700,7 +2680,14 @@ def _apply_soc_event(conn, *, tenant, payload: SocEventIn, event_type: str) -> d
     )
     site = _resolve_site_by_code(conn, tenant["id"], site_code_hint) if site_code_hint else None
 
-    if event_type in SOC_LEAVE_EVENT_TYPES or event_type in SOC_OVERNIGHT_EVENT_TYPES or event_type in SOC_OVERTIME_EVENT_TYPES:
+    if (
+        event_type in SOC_LEAVE_EVENT_TYPES
+        or event_type in SOC_OVERNIGHT_EVENT_TYPES
+        or event_type in SOC_OVERNIGHT_RETRACT_EVENT_TYPES
+        or event_type in SOC_OVERTIME_EVENT_TYPES
+        or event_type in SOC_SUPPORT_ASSIGNMENT_EVENT_TYPES
+        or event_type in SOC_SUPPORT_ASSIGNMENT_RETRACT_EVENT_TYPES
+    ):
         work_date = _extract_request_date_from_payload(payload)
     else:
         work_date = _derive_work_date(payload)
@@ -1758,7 +2745,32 @@ def _apply_soc_event(conn, *, tenant, payload: SocEventIn, event_type: str) -> d
                 ticket_id=ticket_id,
             )
         else:
-            applied_changes["overnight"] = {"skipped": True, "reason": "feature_disabled"}
+            support_schedule_sync = _apply_internal_support_schedule_targets(
+                conn,
+                tenant=tenant,
+                site=site,
+                payload=payload,
+                work_date=work_date,
+                ticket_id=ticket_id,
+                event_type=event_type,
+                support_period="night",
+            )
+            applied_changes["overnight"] = {
+                "skipped": True,
+                "reason": "feature_disabled",
+                "support_schedule_sync": support_schedule_sync,
+            }
+
+    if event_type in SOC_OVERNIGHT_RETRACT_EVENT_TYPES:
+        handlers_run.append("overnight")
+        applied_changes["overnight"] = _retract_overnight_for_ticket(
+            conn,
+            tenant=tenant,
+            site=site,
+            payload=payload,
+            work_date=work_date,
+            ticket_id=ticket_id,
+        )
 
     if event_type in SOC_OVERTIME_EVENT_TYPES:
         handlers_run.append("overtime")
@@ -1775,6 +2787,20 @@ def _apply_soc_event(conn, *, tenant, payload: SocEventIn, event_type: str) -> d
             )
         else:
             applied_changes["overtime"] = {"skipped": True, "reason": "feature_disabled"}
+
+    if event_type not in SOC_OVERNIGHT_RETRACT_EVENT_TYPES and (
+        event_type in (SOC_SUPPORT_ASSIGNMENT_EVENT_TYPES | SOC_SUPPORT_ASSIGNMENT_RETRACT_EVENT_TYPES)
+        or _resolve_support_assignment_materialization_action(payload, event_type) == "RETRACT"
+    ):
+        handlers_run.append("support_assignment")
+        applied_changes["support_assignment"] = _apply_support_assignment_for_ticket(
+            conn,
+            tenant=tenant,
+            site=site,
+            payload=payload,
+            work_date=work_date,
+            ticket_id=ticket_id,
+        )
 
     attendance_or_closing_event = (
         event_type in SOC_ATTENDANCE_CHECKIN_EVENT_TYPES
@@ -2044,7 +3070,7 @@ def _fetch_active_google_profiles(conn, tenant_id) -> list[dict[str, Any]]:
 def _event_type_to_sync_intents(event_type: str | None) -> set[str]:
     normalized = _normalize_event_type(event_type)
     intents: set[str] = set()
-    if normalized in SOC_OVERNIGHT_EVENT_TYPES:
+    if normalized in SOC_OVERNIGHT_EVENT_TYPES or normalized in SOC_OVERNIGHT_RETRACT_EVENT_TYPES:
         intents.add(SYNC_INTENT_APPLE_OVERNIGHT)
     if normalized in SOC_LEAVE_EVENT_TYPES or normalized in SOC_OVERTIME_EVENT_TYPES:
         intents.add(SYNC_INTENT_PAYROLL)
@@ -3084,6 +4110,174 @@ async def ingest_soc_event(
     return _row_to_soc_out(row, duplicate=bool(result.get("duplicate")))
 
 
+@router.post("/soc/backfill-employees")
+async def backfill_soc_employees(
+    request: Request,
+    x_source: str | None = Header(default=None, alias="X-Source"),
+    x_event_id: str | None = Header(default=None, alias="X-Event-Id"),
+    x_signature: str | None = Header(default=None, alias="X-Signature"),
+    conn=Depends(get_db_conn),
+):
+    raw_body = await request.body()
+    if not raw_body.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="request body is required")
+    try:
+        payload_obj = json.loads(raw_body.decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid json body") from exc
+    if not isinstance(payload_obj, dict):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="json object body is required")
+
+    payload = SocEmployeeBackfillIn.model_validate(payload_obj)
+    _assert_soc_ingest_hmac_authorized(
+        raw_body=raw_body,
+        x_source=x_source,
+        x_event_id=x_event_id,
+        x_signature=x_signature,
+        body_event_id=str(payload.event_id),
+    )
+
+    tenant = fetch_tenant_row_any(conn, payload.tenant_code)
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="tenant not found")
+
+    site_row = None
+    if str(payload.site_code or "").strip():
+        site_row = _resolve_site_context_by_code(
+            conn,
+            tenant_id=str(tenant["id"]),
+            site_code=str(payload.site_code).strip(),
+        )
+        if not site_row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="site not found")
+
+    rows = _list_soc_backfill_employee_rows(
+        conn,
+        tenant_id=str(tenant["id"]),
+        site_id=str(site_row["id"]) if site_row else None,
+        include_inactive=bool(payload.include_inactive),
+    )
+
+    sent = 0
+    failed: list[dict[str, str | int | None]] = []
+    tenant_code = str(tenant.get("tenant_code") or payload.tenant_code).strip()
+    for row in rows:
+        employee_uuid = str(row.get("employee_uuid") or "").strip()
+        employee_code = str(row.get("employee_code") or "").strip()
+        site_code = str(row.get("site_code") or "").strip()
+        ok, status_code, reason = _post_employee_sync_to_soc(
+            tenant_code=tenant_code,
+            site_code=site_code,
+            employee_uuid=employee_uuid,
+            employee_code=employee_code,
+            full_name=str(row.get("full_name") or "").strip(),
+            phone=str(row.get("phone") or "").strip() or None,
+            username=str(row.get("soc_login_id") or "").strip() or None,
+            user_role=str(row.get("soc_role") or "").strip() or None,
+            birth_date=row.get("birth_date"),
+            leave_date=row.get("leave_date"),
+            hire_date=row.get("hire_date"),
+            address=str(row.get("address") or "").strip() or None,
+            guard_training_cert_no=str(row.get("guard_training_cert_no") or "").strip() or None,
+            management_no_str=str(row.get("management_no_str") or "").strip() or None,
+            note=str(row.get("note") or "").strip() or None,
+            soc_role=str(row.get("soc_role") or "").strip() or None,
+            event_type="EMPLOYEE_UPDATED",
+        )
+        if ok:
+            sent += 1
+            continue
+        failed.append(
+            {
+                "employee_uuid": employee_uuid,
+                "employee_code": employee_code,
+                "site_code": site_code,
+                "status_code": status_code,
+                "reason": reason or "employee sync failed",
+            }
+        )
+
+    return {
+        "tenant_code": tenant_code,
+        "site_code": str(site_row.get("site_code") or "") if site_row else None,
+        "sent": sent,
+        "failed": failed,
+        "count": len(rows),
+    }
+
+
+@router.post("/soc/work-templates", response_model=list[SocWorkTemplateOut])
+async def list_soc_work_templates(
+    request: Request,
+    x_source: str | None = Header(default=None, alias="X-Source"),
+    x_event_id: str | None = Header(default=None, alias="X-Event-Id"),
+    x_signature: str | None = Header(default=None, alias="X-Signature"),
+    conn=Depends(get_db_conn),
+):
+    raw_body = await request.body()
+    if not raw_body.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="request body is required")
+    try:
+        payload_obj = json.loads(raw_body.decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid json body") from exc
+    if not isinstance(payload_obj, dict):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="json object body is required")
+
+    payload = SocWorkTemplateQueryIn.model_validate(payload_obj)
+    _assert_soc_ingest_hmac_authorized(
+        raw_body=raw_body,
+        x_source=x_source,
+        x_event_id=x_event_id,
+        x_signature=x_signature,
+        body_event_id=str(payload.event_id),
+    )
+
+    tenant = fetch_tenant_row_any(conn, payload.tenant_code)
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="tenant not found")
+    site_row = _resolve_site_context_by_code(
+        conn,
+        tenant_id=str(tenant["id"]),
+        site_code=str(payload.site_code).strip(),
+    )
+    if not site_row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="site not found")
+
+    duty_type = str(payload.duty_type or "").strip().lower()
+    rows = _fetch_schedule_templates(
+        conn,
+        tenant_id=str(tenant["id"]),
+        site_id=str(site_row["id"]),
+        include_inactive=False,
+    )
+    templates: list[SocWorkTemplateOut] = []
+    for row in rows:
+        template = _format_schedule_template_row(row)
+        if str(template.duty_type or "").strip().lower() != duty_type:
+            continue
+        time_range = ""
+        if template.start_time and template.end_time:
+            time_range = f"({template.start_time}-{template.end_time})"
+        templates.append(
+            SocWorkTemplateOut(
+                id=template.id,
+                tenant_id=template.tenant_id,
+                template_name=template.template_name,
+                duty_type=template.duty_type,
+                start_time=template.start_time,
+                end_time=template.end_time,
+                site_id=template.site_id,
+                site_code=template.site_code,
+                site_name=template.site_name,
+                is_default=template.is_default,
+                is_active=template.is_active,
+                option_label=f"{template.template_name}{time_range}",
+            )
+        )
+    return templates
+
+
 @router.post("/google-sheets/support-assignments/webhook", dependencies=[Depends(apply_rate_limit)])
 def ingest_support_assignments_from_sheet(
     payload: SupportSheetWebhookIn,
@@ -3104,6 +4298,16 @@ def ingest_support_assignments_from_sheet(
     site = _resolve_site_by_code(conn, tenant["id"], site_code)
     if not site:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="site not found")
+    if _has_support_roundtrip_source(
+        conn,
+        tenant_id=tenant["id"],
+        site_id=site["id"],
+        work_date=payload.work_date,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="support roundtrip source is active for this site/month; legacy sheet webhook is gated",
+        )
 
     entries = [str(item.text or "").strip() for item in (payload.entries or []) if str(item.text or "").strip()]
     if not entries:
@@ -3444,6 +4648,69 @@ def create_google_sheet_profile(
     if not row:
         raise HTTPException(status_code=500, detail="profile create failed")
     return _row_to_google_profile_out(row)
+
+
+def _list_soc_backfill_employee_rows(
+    conn,
+    *,
+    tenant_id: str,
+    site_id: str | None = None,
+    include_inactive: bool = False,
+):
+    has_employee_active = table_column_exists(conn, "employees", "is_active")
+    has_employee_deleted = table_column_exists(conn, "employees", "is_deleted")
+    has_site_active = table_column_exists(conn, "sites", "is_active")
+    has_site_deleted = table_column_exists(conn, "sites", "is_deleted")
+    has_tenant_active = table_column_exists(conn, "tenants", "is_active")
+    has_tenant_deleted = table_column_exists(conn, "tenants", "is_deleted")
+
+    where_clauses = ["e.tenant_id = %s"]
+    params: list[Any] = [tenant_id]
+    if has_employee_deleted:
+        where_clauses.append("COALESCE(e.is_deleted, FALSE) = FALSE")
+    if has_site_deleted:
+        where_clauses.append("COALESCE(s.is_deleted, FALSE) = FALSE")
+    if has_tenant_deleted:
+        where_clauses.append("COALESCE(t.is_deleted, FALSE) = FALSE")
+    if not include_inactive:
+        if has_employee_active:
+            where_clauses.append("COALESCE(e.is_active, TRUE) = TRUE")
+        if has_site_active:
+            where_clauses.append("COALESCE(s.is_active, TRUE) = TRUE")
+        if has_tenant_active:
+            where_clauses.append("COALESCE(t.is_active, TRUE) = TRUE")
+    if site_id:
+        where_clauses.append("e.site_id = %s")
+        params.append(site_id)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                e.employee_uuid,
+                e.employee_code,
+                COALESCE(e.full_name, '') AS full_name,
+                COALESCE(e.phone, '') AS phone,
+                COALESCE(NULLIF(e.soc_login_id, ''), NULLIF(e.username, ''), '') AS soc_login_id,
+                COALESCE(NULLIF(e.soc_role, ''), NULLIF(e.role, ''), 'Officer') AS soc_role,
+                e.birth_date,
+                e.hire_date,
+                e.leave_date,
+                COALESCE(e.address, '') AS address,
+                COALESCE(e.guard_training_cert_no, '') AS guard_training_cert_no,
+                COALESCE(e.management_no_str, '') AS management_no_str,
+                COALESCE(e.note, '') AS note,
+                COALESCE(s.site_code, '') AS site_code,
+                COALESCE(s.site_name, '') AS site_name
+            FROM employees e
+            JOIN sites s ON s.id = e.site_id
+            JOIN tenants t ON t.id = e.tenant_id
+            WHERE {' AND '.join(where_clauses)}
+            ORDER BY s.site_code, COALESCE(e.employee_code, ''), COALESCE(e.full_name, '')
+            """,
+            tuple(params),
+        )
+        return cur.fetchall() or []
 
 
 @router.patch("/google-sheets/profiles/{profile_id}", response_model=GoogleSheetProfileOut, dependencies=[Depends(apply_rate_limit)])

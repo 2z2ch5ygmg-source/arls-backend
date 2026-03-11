@@ -13,12 +13,14 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .bootstrap import ensure_seed_admin
 from .config import settings
-from .db import get_pool
+from .db import get_connection, get_pool
+from .services.attendance_runtime import ensure_attendance_runtime_schema, start_attendance_auto_checkout_scheduler
 from .routers import (
     admin_sites_router,
     admin_soc_router,
     admin_reset_router,
     admin_tenants_router,
+    apple_weekly_truth_router,
     attendance_router,
     attendance_requests_router,
     auth_router,
@@ -33,6 +35,8 @@ from .routers import (
     me_router,
     master_reset_router,
     master_tenants_router,
+    notifications_router,
+    push_router,
     reports_router,
     schedules_router,
     sites_router,
@@ -313,12 +317,15 @@ app.include_router(users_router, prefix="/api/v1")
 app.include_router(master_tenants_router, prefix="/api/v1")
 app.include_router(master_reset_router, prefix="/api/v1")
 app.include_router(integrations_router, prefix="/api/v1")
+app.include_router(apple_weekly_truth_router, prefix="/api/v1")
 app.include_router(reports_router, prefix="/api/v1")
 app.include_router(admin_sites_router, prefix="/api/v1")
 app.include_router(admin_soc_router, prefix="/api/v1")
 app.include_router(admin_reset_router, prefix="/api/v1")
 app.include_router(admin_tenants_router, prefix="/api/v1")
 app.include_router(hr_documents_router, prefix="/api/v1")
+app.include_router(notifications_router, prefix="/api/v1")
+app.include_router(push_router, prefix="/api/v1")
 
 
 @app.get("/health")
@@ -335,3 +342,6 @@ def root() -> dict:
 def startup() -> None:
     get_pool()
     ensure_seed_admin()
+    with get_connection() as conn:
+        ensure_attendance_runtime_schema(conn)
+    start_attendance_auto_checkout_scheduler()

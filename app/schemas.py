@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+import re
 from typing import Literal, Optional
 from uuid import UUID
 
@@ -291,10 +292,58 @@ class SiteOut(BaseModel):
     site_name: str
     address: Optional[str] = None
     place_id: Optional[str] = None
-    latitude: float
-    longitude: float
-    radius_meters: float
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    radius_meters: Optional[float] = None
     is_active: bool = True
+
+
+class SiteGeofenceOut(BaseModel):
+    site_id: UUID
+    site_code: str
+    site_name: str
+    lat: float
+    lng: float
+    radius_m: float
+
+
+_GENDER_VALUE_MAP = {
+    "M": "M",
+    "MALE": "M",
+    "남": "M",
+    "남자": "M",
+    "F": "F",
+    "FEMALE": "F",
+    "여": "F",
+    "여자": "F",
+}
+
+
+def _normalize_gender_value(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    if not normalized:
+        return None
+    mapped = _GENDER_VALUE_MAP.get(normalized.upper()) or _GENDER_VALUE_MAP.get(normalized)
+    if mapped:
+        return mapped
+    raise ValueError("gender must be one of M/F/male/female/남자/여자")
+
+
+def _normalize_resident_no_value(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    if not normalized:
+        return None
+    digits = re.sub(r"\D+", "", normalized)
+    if not digits:
+        return None
+    if len(digits) == 13:
+        return f"{digits[:6]}-{digits[6:]}"
+    # 형식이 완전하지 않은 경우도 값 자체는 보존하되 공백만 정리
+    return normalized
 
 
 class EmployeeCreate(BaseModel):
@@ -306,6 +355,12 @@ class EmployeeCreate(BaseModel):
     employee_code: Optional[str] = Field(default=None, min_length=1)
     management_no_str: Optional[str] = Field(default=None, max_length=64)
     full_name: str = Field(min_length=1)
+    gender: Optional[str] = Field(default=None, max_length=16, validation_alias=AliasChoices("gender", "sex"))
+    resident_no: Optional[str] = Field(
+        default=None,
+        max_length=32,
+        validation_alias=AliasChoices("resident_no", "residentNo", "resident_number"),
+    )
     phone: Optional[str] = None
     birth_date: Optional[date] = Field(default=None, validation_alias=AliasChoices("birth_date", "birthdate"))
     address: Optional[str] = Field(default=None, max_length=255)
@@ -337,6 +392,8 @@ class EmployeeCreate(BaseModel):
         "employee_code",
         "management_no_str",
         "full_name",
+        "gender",
+        "resident_no",
         "phone",
         "address",
         "guard_training_cert_no",
@@ -354,6 +411,16 @@ class EmployeeCreate(BaseModel):
         trimmed = value.strip()
         return trimmed or None
 
+    @field_validator("gender", mode="before")
+    @classmethod
+    def _normalize_gender(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_gender_value(value)
+
+    @field_validator("resident_no", mode="before")
+    @classmethod
+    def _normalize_resident_no(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_resident_no_value(value)
+
     @model_validator(mode="after")
     def _site_ref_optional(self) -> "EmployeeCreate":
         # 지점관리자는 서버 세션(site scope)으로 site/company를 강제 주입하므로
@@ -370,6 +437,8 @@ class EmployeeOut(BaseModel):
     management_no_str: Optional[str] = None
     sequence_no: Optional[int] = None
     full_name: str
+    gender: Optional[str] = None
+    resident_no: Optional[str] = None
     phone: Optional[str]
     site_code: str
     site_name: Optional[str] = None
@@ -391,6 +460,12 @@ class EmployeeOut(BaseModel):
 class EmployeeUpdate(BaseModel):
     full_name: str = Field(min_length=1)
     management_no_str: Optional[str] = Field(default=None, max_length=64)
+    gender: Optional[str] = Field(default=None, max_length=16, validation_alias=AliasChoices("gender", "sex"))
+    resident_no: Optional[str] = Field(
+        default=None,
+        max_length=32,
+        validation_alias=AliasChoices("resident_no", "residentNo", "resident_number"),
+    )
     phone: Optional[str] = None
     birth_date: Optional[date] = Field(default=None, validation_alias=AliasChoices("birth_date", "birthdate"))
     address: Optional[str] = Field(default=None, max_length=255)
@@ -418,6 +493,8 @@ class EmployeeUpdate(BaseModel):
     @field_validator(
         "full_name",
         "management_no_str",
+        "gender",
+        "resident_no",
         "phone",
         "address",
         "guard_training_cert_no",
@@ -433,6 +510,16 @@ class EmployeeUpdate(BaseModel):
             return None
         trimmed = value.strip()
         return trimmed or None
+
+    @field_validator("gender", mode="before")
+    @classmethod
+    def _normalize_gender(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_gender_value(value)
+
+    @field_validator("resident_no", mode="before")
+    @classmethod
+    def _normalize_resident_no(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_resident_no_value(value)
 
 
 class AttendanceCreate(BaseModel):
@@ -460,6 +547,59 @@ class AttendanceOut(BaseModel):
     site_name: str
     distance_meters: float
     is_within_radius: bool
+    auto_checkout: bool = False
+
+
+class AttendanceRecordUpsertOut(BaseModel):
+    record: AttendanceOut
+    already_exists: bool = False
+
+
+class AttendanceTodayStatusOut(BaseModel):
+    status: str
+    check_in_at: Optional[datetime] = None
+    check_out_at: Optional[datetime] = None
+    today_record_id: Optional[UUID] = None
+    button_mode: Optional[str] = None
+    auto_checkout: Optional[bool] = None
+    site_id: Optional[UUID] = None
+    site_code: Optional[str] = None
+    site_name: Optional[str] = None
+    employee_id: Optional[UUID] = None
+    employee_name: Optional[str] = None
+
+
+class PushDeviceRegisterIn(BaseModel):
+    token: str
+    platform: str
+    device_id: Optional[str] = None
+
+    @field_validator("token")
+    @classmethod
+    def _token_required(cls, value: str) -> str:
+        normalized = str(value or "").strip()
+        if not normalized:
+            raise ValueError("token is required")
+        if len(normalized) > 4096:
+            raise ValueError("token is too long")
+        return normalized
+
+    @field_validator("platform")
+    @classmethod
+    def _platform_required(cls, value: str) -> str:
+        normalized = str(value or "").strip().lower()
+        if not normalized:
+            raise ValueError("platform is required")
+        if normalized not in {"ios", "android", "web"}:
+            raise ValueError("platform must be ios/android/web")
+        return normalized
+
+
+class PushDeviceRegisterOut(BaseModel):
+    id: UUID
+    platform: str
+    is_active: bool
+    last_seen_at: datetime
 
 
 class AttendanceRequestCreate(BaseModel):
@@ -699,17 +839,312 @@ class ScheduleLeaderCandidatesOut(BaseModel):
     candidates: list[ScheduleLeaderCandidateOut] = Field(default_factory=list)
 
 
+class ScheduleTemplateBase(BaseModel):
+    template_name: str = Field(min_length=1, max_length=120)
+    duty_type: str = Field(min_length=1, max_length=32)
+    start_time: Optional[str] = Field(default=None, max_length=8)
+    end_time: Optional[str] = Field(default=None, max_length=8)
+    paid_hours: Optional[float] = Field(default=None, ge=0, le=24)
+    break_minutes: Optional[int] = Field(default=None, ge=0, le=1440)
+    site_id: Optional[UUID] = None
+    is_default: bool = False
+    is_active: bool = True
+
+    @field_validator("template_name")
+    @classmethod
+    def _template_name(cls, value: str) -> str:
+        return str(value or "").strip()
+
+    @field_validator("duty_type")
+    @classmethod
+    def _duty_type(cls, value: str) -> str:
+        normalized = str(value or "").strip().lower()
+        aliases = {
+            "주간근무": "day",
+            "초과근무": "overtime",
+            "야간근무": "night",
+            "daytime": "day",
+            "nighttime": "night",
+            "ot": "overtime",
+        }
+        mapped = aliases.get(normalized, normalized)
+        if mapped not in {"day", "overtime", "night"}:
+            raise ValueError("duty_type must be one of day/overtime/night")
+        return mapped
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def _time_text(cls, value: Optional[str]) -> Optional[str]:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        if re.fullmatch(r"\d{1,2}:\d{2}", text):
+            hour, minute = text.split(":")
+            hh = int(hour)
+            mm = int(minute)
+            if 0 <= hh <= 23 and 0 <= mm <= 59:
+                return f"{hh:02d}:{mm:02d}:00"
+        if re.fullmatch(r"\d{2}:\d{2}:\d{2}", text):
+            hh, mm, ss = [int(part) for part in text.split(":")]
+            if 0 <= hh <= 23 and 0 <= mm <= 59 and 0 <= ss <= 59:
+                return f"{hh:02d}:{mm:02d}:{ss:02d}"
+        raise ValueError("time must be HH:MM or HH:MM:SS")
+
+
+class ScheduleTemplateCreate(ScheduleTemplateBase):
+    pass
+
+
+class ScheduleTemplateUpdate(BaseModel):
+    template_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    duty_type: Optional[str] = Field(default=None, min_length=1, max_length=32)
+    start_time: Optional[str] = Field(default=None, max_length=8)
+    end_time: Optional[str] = Field(default=None, max_length=8)
+    paid_hours: Optional[float] = Field(default=None, ge=0, le=24)
+    break_minutes: Optional[int] = Field(default=None, ge=0, le=1440)
+    site_id: Optional[UUID] = None
+    is_default: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+    @field_validator("template_name")
+    @classmethod
+    def _template_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return str(value).strip()
+
+    @field_validator("duty_type")
+    @classmethod
+    def _duty_type(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip().lower()
+        aliases = {
+            "주간근무": "day",
+            "초과근무": "overtime",
+            "야간근무": "night",
+            "daytime": "day",
+            "nighttime": "night",
+            "ot": "overtime",
+        }
+        mapped = aliases.get(normalized, normalized)
+        if mapped not in {"day", "overtime", "night"}:
+            raise ValueError("duty_type must be one of day/overtime/night")
+        return mapped
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def _time_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        if re.fullmatch(r"\d{1,2}:\d{2}", text):
+            hour, minute = text.split(":")
+            hh = int(hour)
+            mm = int(minute)
+            if 0 <= hh <= 23 and 0 <= mm <= 59:
+                return f"{hh:02d}:{mm:02d}:00"
+        if re.fullmatch(r"\d{2}:\d{2}:\d{2}", text):
+            hh, mm, ss = [int(part) for part in text.split(":")]
+            if 0 <= hh <= 23 and 0 <= mm <= 59 and 0 <= ss <= 59:
+                return f"{hh:02d}:{mm:02d}:{ss:02d}"
+        raise ValueError("time must be HH:MM or HH:MM:SS")
+
+
+class ScheduleTemplateOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    template_name: str
+    duty_type: str
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    paid_hours: Optional[float] = None
+    break_minutes: Optional[int] = None
+    site_id: Optional[UUID] = None
+    site_code: Optional[str] = None
+    site_name: Optional[str] = None
+    is_default: bool = False
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class ScheduleTemplateSingleCreateIn(BaseModel):
+    site_code: str = Field(min_length=1, max_length=64)
+    employee_code: str = Field(min_length=1, max_length=64)
+    template_id: UUID
+    schedule_date: date
+    tenant_code: Optional[str] = Field(default=None, max_length=64)
+
+    @field_validator("site_code", "employee_code", "tenant_code")
+    @classmethod
+    def _trim_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return str(value).strip()
+
+
+class ScheduleTemplateBulkCreateIn(BaseModel):
+    site_code: str = Field(min_length=1, max_length=64)
+    employee_code: str = Field(min_length=1, max_length=64)
+    template_id: UUID
+    schedule_dates: list[date] = Field(min_length=1, max_length=93)
+    tenant_code: Optional[str] = Field(default=None, max_length=64)
+
+    @field_validator("site_code", "employee_code", "tenant_code")
+    @classmethod
+    def _trim_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return str(value).strip()
+
+
+class ScheduleBulkCreateIn(BaseModel):
+    site_id: Optional[UUID] = None
+    employee_id: Optional[UUID] = None
+    site_code: Optional[str] = Field(default=None, max_length=64)
+    employee_code: Optional[str] = Field(default=None, max_length=64)
+    template_id: Optional[UUID] = None
+    shift_type: Optional[str] = Field(default=None, max_length=32)
+    shift_start_time: Optional[str] = Field(default=None, max_length=8)
+    shift_end_time: Optional[str] = Field(default=None, max_length=8)
+    schedule_note: Optional[str] = Field(default=None, max_length=500)
+    dates: list[date] = Field(min_length=1, max_length=93)
+    tenant_code: Optional[str] = Field(default=None, max_length=64)
+
+    @field_validator(
+        "site_code",
+        "employee_code",
+        "tenant_code",
+        "shift_type",
+        "shift_start_time",
+        "shift_end_time",
+        "schedule_note",
+    )
+    @classmethod
+    def _trim_bulk_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+    @field_validator("shift_type")
+    @classmethod
+    def _normalize_bulk_shift_type(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip().lower()
+        aliases = {"leave": "off"}
+        normalized = aliases.get(normalized, normalized)
+        if normalized not in {"day", "night", "off", "holiday"}:
+            raise ValueError("shift_type invalid")
+        return normalized
+
+    @model_validator(mode="after")
+    def _validate_scope_fields(self):
+        if not self.site_id and not self.site_code:
+            raise ValueError("site_id or site_code is required")
+        if not self.employee_id and not self.employee_code:
+            raise ValueError("employee_id or employee_code is required")
+        if not self.template_id and not self.shift_type:
+            raise ValueError("template_id or shift_type is required")
+        return self
+
+
+class ScheduleBulkCreateOut(BaseModel):
+    created_count: int = 0
+    skipped_duplicates: int = 0
+    errors: list[str] = Field(default_factory=list)
+    created_rows: list[dict] = Field(default_factory=list)
+
+
+class ImportPreviewIssueLocationOut(BaseModel):
+    sheet: Optional[str] = None
+    row: Optional[int] = None
+    col: Optional[int] = None
+    col_label: Optional[str] = None
+    section: Optional[str] = None
+
+
+class ImportPreviewIssueOut(BaseModel):
+    code: str
+    severity: str
+    message: str
+    guidance: Optional[str] = None
+    count: int = 1
+    example_rows: list[int] = Field(default_factory=list)
+    location: Optional[ImportPreviewIssueLocationOut] = None
+
+
+class ScheduleImportMappingEntryOut(BaseModel):
+    row_type: str
+    numeric_hours: Optional[float] = None
+    template_id: Optional[str] = None
+    template_name: Optional[str] = None
+    template_site_code: Optional[str] = None
+    status: str = "ready"
+    issue_code: Optional[str] = None
+    issue_message: Optional[str] = None
+
+
+class ScheduleImportMappingProfileOut(BaseModel):
+    profile_id: Optional[str] = None
+    profile_name: Optional[str] = None
+    is_active: bool = False
+    entry_count: int = 0
+    updated_at: Optional[datetime] = None
+    missing_required_entries: list[str] = Field(default_factory=list)
+    entries: list[ScheduleImportMappingEntryOut] = Field(default_factory=list)
+
+
 class ImportPreviewRowOut(BaseModel):
     row_no: int
     tenant_code: str
     company_code: str
     site_code: str
     employee_code: str
+    employee_name: Optional[str] = None
     schedule_date: Optional[str] = None
     shift_type: str
+    duty_type: Optional[str] = None
+    source_sheet: Optional[str] = None
+    source_col: Optional[str] = None
+    source_block: Optional[str] = None
+    section_label: Optional[str] = None
+    template_id: Optional[str] = None
+    template_name: Optional[str] = None
+    work_value: Optional[str] = None
+    current_work_value: Optional[str] = None
+    parsed_semantic_type: Optional[str] = None
+    mapped_hours: Optional[float] = None
+    mapping_key: Optional[str] = None
+    status_label: Optional[str] = None
     is_valid: bool
+    is_blocking: bool = False
+    diff_category: Optional[str] = None
+    apply_action: Optional[str] = None
+    is_protected: bool = False
+    protected_reason: Optional[str] = None
     validation_code: Optional[str] = None
     validation_error: Optional[str] = None
+
+
+class ImportPreviewMetadataOut(BaseModel):
+    tenant_code: Optional[str] = None
+    site_code: Optional[str] = None
+    month: Optional[str] = None
+    template_family: Optional[str] = None
+    export_revision: Optional[str] = None
+    template_version: Optional[str] = None
+    export_source_version: Optional[str] = None
+    current_revision: Optional[str] = None
+    workbook_kind: Optional[str] = None
+    workbook_valid: bool = False
+    revision_status: Optional[str] = None
+    is_stale: bool = False
+    mapping_profile: Optional[ScheduleImportMappingProfileOut] = None
 
 
 class ImportPreviewOut(BaseModel):
@@ -717,9 +1152,18 @@ class ImportPreviewOut(BaseModel):
     total_rows: int
     valid_rows: int
     invalid_rows: int
+    applicable_rows: int = 0
+    unchanged_rows: int = 0
+    blocked_rows: int = 0
+    warning_rows: int = 0
     invalid_samples: list[str]
     preview_rows: list[ImportPreviewRowOut] = Field(default_factory=list)
     error_counts: dict[str, int] = Field(default_factory=dict)
+    diff_counts: dict[str, int] = Field(default_factory=dict)
+    issues: list[ImportPreviewIssueOut] = Field(default_factory=list)
+    blocked_reasons: list[str] = Field(default_factory=list)
+    metadata: Optional[ImportPreviewMetadataOut] = None
+    can_apply: bool = False
 
 
 class ImportApplyRowOut(BaseModel):
@@ -728,6 +1172,7 @@ class ImportApplyRowOut(BaseModel):
     site_code: str
     schedule_date: Optional[str] = None
     shift_type: str
+    section_label: Optional[str] = None
     status: str
     reason: str
 
@@ -738,6 +1183,322 @@ class ImportApplyOut(BaseModel):
     skipped: int
     applied_rows: list[ImportApplyRowOut] = Field(default_factory=list)
     skipped_rows: list[ImportApplyRowOut] = Field(default_factory=list)
+    blocked: bool = False
+    blocked_reasons: list[str] = Field(default_factory=list)
+    apply_status: str = "blocked"
+    upload_batch_id: Optional[UUID] = None
+    audit_timestamp: Optional[datetime] = None
+    base_schedule_created: int = 0
+    base_schedule_updated: int = 0
+    base_schedule_removed: int = 0
+    sentrix_tickets_created: int = 0
+    sentrix_tickets_updated: int = 0
+    sentrix_tickets_retracted: int = 0
+    failed_items: int = 0
+    blocking_failures: list[str] = Field(default_factory=list)
+    partial_failures: list[str] = Field(default_factory=list)
+
+
+class SupportRoundtripStatusOut(BaseModel):
+    site_code: str
+    month: str
+    source_state: str
+    source_revision: Optional[str] = None
+    source_uploaded_at: Optional[datetime] = None
+    source_uploaded_by: Optional[str] = None
+    source_filename: Optional[str] = None
+    hq_merge_available: bool = False
+    hq_merge_stale: bool = False
+    final_download_enabled: bool = False
+    latest_hq_uploaded_at: Optional[datetime] = None
+    latest_hq_uploaded_by: Optional[str] = None
+    latest_hq_filename: Optional[str] = None
+    latest_hq_revision: Optional[str] = None
+    latest_merged_revision: Optional[str] = None
+    support_assignment_count: int = 0
+    conflict_count: int = 0
+    blocked_reasons: list[str] = Field(default_factory=list)
+
+
+class SupportRoundtripPreviewRowOut(BaseModel):
+    row_no: int
+    site_code: str
+    schedule_date: str
+    support_period: str
+    slot_index: int
+    section_label: Optional[str] = None
+    workbook_value: Optional[str] = None
+    current_value: Optional[str] = None
+    resolved_worker_type: Optional[str] = None
+    resolved_worker_name: Optional[str] = None
+    employee_code: Optional[str] = None
+    employee_name: Optional[str] = None
+    diff_category: str
+    apply_action: str
+    validation_code: Optional[str] = None
+    validation_error: Optional[str] = None
+    is_blocking: bool = False
+    is_protected: bool = False
+    protected_reason: Optional[str] = None
+
+
+class SupportRoundtripPreviewMetadataOut(BaseModel):
+    tenant_code: Optional[str] = None
+    site_code: Optional[str] = None
+    site_name: Optional[str] = None
+    month: Optional[str] = None
+    source_revision: Optional[str] = None
+    current_source_revision: Optional[str] = None
+    template_version: Optional[str] = None
+    support_form_version: Optional[str] = None
+    extracted_at_kst: Optional[str] = None
+    is_stale: bool = False
+
+
+class SupportRoundtripPreviewOut(BaseModel):
+    batch_id: UUID
+    total_rows: int
+    valid_rows: int
+    invalid_rows: int
+    preview_rows: list[SupportRoundtripPreviewRowOut] = Field(default_factory=list)
+    diff_counts: dict[str, int] = Field(default_factory=dict)
+    blocked_reasons: list[str] = Field(default_factory=list)
+    metadata: Optional[SupportRoundtripPreviewMetadataOut] = None
+    can_apply: bool = False
+
+
+class SupportRoundtripApplyRowOut(BaseModel):
+    row_no: int
+    site_code: str
+    schedule_date: str
+    support_period: str
+    slot_index: int
+    status: str
+    reason: str
+    worker_name: Optional[str] = None
+    employee_name: Optional[str] = None
+
+
+class SupportRoundtripApplyOut(BaseModel):
+    batch_id: UUID
+    applied: int
+    skipped: int
+    applied_rows: list[SupportRoundtripApplyRowOut] = Field(default_factory=list)
+    skipped_rows: list[SupportRoundtripApplyRowOut] = Field(default_factory=list)
+    blocked: bool = False
+    blocked_reasons: list[str] = Field(default_factory=list)
+
+
+class SupportRosterHqWorkspaceSiteOut(BaseModel):
+    site_code: str
+    site_name: str
+    sheet_name: str
+    download_ready: bool = False
+    source_state: str = "source_missing"
+    source_revision: Optional[str] = None
+    latest_hq_revision: Optional[str] = None
+    latest_status: str = "source_missing"
+
+
+class SupportRosterHqWorkspaceOut(BaseModel):
+    tenant_code: str
+    month: str
+    default_scope: str = "all"
+    workbook_family: str
+    template_version: str
+    latest_status: str = "latest"
+    total_site_count: int = 0
+    ready_site_count: int = 0
+    sites: list[SupportRosterHqWorkspaceSiteOut] = Field(default_factory=list)
+
+
+class SupportRosterHqUploadMetaOut(BaseModel):
+    file_name: str
+    month: Optional[str] = None
+    download_scope: str = "all"
+    workbook_family: Optional[str] = None
+    template_version: Optional[str] = None
+    revision: Optional[str] = None
+    latest_status: str = "unknown"
+    latest: bool = False
+    site_count: int = 0
+    site_names: list[str] = Field(default_factory=list)
+    site_codes: list[str] = Field(default_factory=list)
+    selected_site_code: Optional[str] = None
+    selected_site_name: Optional[str] = None
+
+
+class SupportRosterHqReviewIssueOut(BaseModel):
+    code: str
+    severity: str
+    title: str
+    message: str
+    guidance: Optional[str] = None
+    count: int = 1
+    sheet_name: Optional[str] = None
+    site_code: Optional[str] = None
+    site_name: Optional[str] = None
+    work_date: Optional[date] = None
+    shift_kind: Optional[str] = None
+
+
+class SupportRosterHqReviewRowOut(BaseModel):
+    row_kind: str = "worker"
+    sheet_name: str
+    site_name: Optional[str] = None
+    site_code: Optional[str] = None
+    work_date: Optional[date] = None
+    shift_kind: Optional[str] = None
+    slot_index: int = 0
+    raw_cell_text: Optional[str] = None
+    parsed_display_value: Optional[str] = None
+    ticket_id: Optional[UUID] = None
+    request_count: int = 0
+    valid_filled_count: int = 0
+    target_status: Optional[str] = None
+    status: str = "pending"
+    reason: Optional[str] = None
+    issue_code: Optional[str] = None
+
+
+class SupportRosterHqScopeSummaryOut(BaseModel):
+    scope_key: str
+    sheet_name: str
+    site_name: Optional[str] = None
+    site_code: Optional[str] = None
+    work_date: Optional[date] = None
+    shift_kind: Optional[str] = None
+    ticket_id: Optional[UUID] = None
+    request_count: int = 0
+    valid_filled_count: int = 0
+    invalid_filled_count: int = 0
+    target_status: Optional[str] = None
+    current_status: Optional[str] = None
+    workbook_required_count: Optional[int] = None
+    workbook_required_raw: Optional[str] = None
+    external_count_raw: Optional[str] = None
+    purpose_text: Optional[str] = None
+    matched_ticket: bool = False
+    blocking_issue_count: int = 0
+    warning_issue_count: int = 0
+
+
+class SupportRosterHqUploadInspectOut(BaseModel):
+    batch_id: Optional[UUID] = None
+    workbook_valid: bool = False
+    can_apply: bool = False
+    upload_meta: SupportRosterHqUploadMetaOut
+    total_sheet_count: int = 0
+    valid_sheet_count: int = 0
+    total_scope_count: int = 0
+    valid_scope_count: int = 0
+    issue_count: int = 0
+    summary: dict[str, int] = Field(default_factory=dict)
+    issues: list[SupportRosterHqReviewIssueOut] = Field(default_factory=list)
+    scope_summaries: list[SupportRosterHqScopeSummaryOut] = Field(default_factory=list)
+    review_rows: list[SupportRosterHqReviewRowOut] = Field(default_factory=list)
+    next_step_message: Optional[str] = None
+
+
+class SupportRosterHqApplyScopeOut(BaseModel):
+    scope_key: str
+    sheet_name: str
+    site_name: Optional[str] = None
+    site_code: Optional[str] = None
+    work_date: Optional[date] = None
+    shift_kind: Optional[str] = None
+    ticket_id: Optional[UUID] = None
+    request_count: int = 0
+    valid_filled_count: int = 0
+    previous_status: Optional[str] = None
+    target_status: Optional[str] = None
+    assignment_count: int = 0
+    bridge_action_count: int = 0
+    snapshot_changed: bool = False
+
+
+class SupportRosterHqApplyOut(BaseModel):
+    batch_id: UUID
+    applied: bool = False
+    blocked: bool = False
+    blocked_reasons: list[str] = Field(default_factory=list)
+    issue_count: int = 0
+    assignments_created: int = 0
+    assignments_removed: int = 0
+    tickets_updated: int = 0
+    tickets_auto_approved: int = 0
+    tickets_pending: int = 0
+    snapshots_created: int = 0
+    notifications_created: int = 0
+    notification_sites: int = 0
+    push_sent: int = 0
+    push_failed: int = 0
+    bridge_actions_created: int = 0
+    bridge_upserts: int = 0
+    bridge_retracts: int = 0
+    bridge_processed: int = 0
+    bridge_failed: int = 0
+    arls_materialized_created: int = 0
+    arls_materialized_updated: int = 0
+    arls_materialized_linked: int = 0
+    arls_materialized_retracted: int = 0
+    arls_materialized_noop: int = 0
+    applied_scope_count: int = 0
+    failed_scope_count: int = 0
+    audit_timestamp: datetime
+    scope_results: list[SupportRosterHqApplyScopeOut] = Field(default_factory=list)
+
+
+class InAppNotificationOut(BaseModel):
+    id: UUID
+    message: str
+    type: str = "info"
+    read: bool = False
+    created_at: datetime
+    read_at: Optional[datetime] = None
+    payload: dict = Field(default_factory=dict)
+    dedupe_key: Optional[str] = None
+
+
+class InAppNotificationListOut(BaseModel):
+    items: list[InAppNotificationOut] = Field(default_factory=list)
+    unread_count: int = 0
+
+
+class FinanceSubmissionStatusOut(BaseModel):
+    site_code: str
+    month: str
+    state: str
+    current_revision: Optional[str] = None
+    review_download_ready: bool = False
+    review_download_revision: Optional[str] = None
+    review_downloaded_at: Optional[datetime] = None
+    review_downloaded_by: Optional[str] = None
+    review_download_filename: Optional[str] = None
+    final_download_enabled: bool = False
+    final_upload_stale: bool = False
+    active_final_revision: Optional[str] = None
+    active_final_source_revision: Optional[str] = None
+    active_final_filename: Optional[str] = None
+    final_uploaded_at: Optional[datetime] = None
+    final_uploaded_by: Optional[str] = None
+    last_event: Optional[str] = None
+    blocked_reasons: list[str] = Field(default_factory=list)
+
+
+class FinanceSubmissionPreviewOut(BaseModel):
+    finance_batch_id: UUID
+    import_batch_id: UUID
+    total_rows: int
+    valid_rows: int
+    invalid_rows: int
+    invalid_samples: list[str] = Field(default_factory=list)
+    preview_rows: list[ImportPreviewRowOut] = Field(default_factory=list)
+    error_counts: dict[str, int] = Field(default_factory=dict)
+    diff_counts: dict[str, int] = Field(default_factory=dict)
+    blocked_reasons: list[str] = Field(default_factory=list)
+    metadata: Optional[ImportPreviewMetadataOut] = None
+    can_apply: bool = False
 
 
 class SiteShiftPolicyUpdate(BaseModel):
@@ -877,12 +1638,15 @@ class SupportAssignmentCreate(BaseModel):
     tenant_code: Optional[str] = Field(default=None, max_length=64)
     site_code: str = Field(min_length=1, max_length=64)
     work_date: date
+    support_period: str = Field(default="day", min_length=1, max_length=16)
+    slot_index: Optional[int] = Field(default=None, ge=1, le=32)
     worker_type: str = Field(min_length=1, max_length=32)
     name: str = Field(min_length=1, max_length=120)
+    affiliation: Optional[str] = Field(default=None, max_length=120)
     employee_code: Optional[str] = Field(default=None, max_length=64)
     source: str = Field(default="MANUAL", max_length=32)
 
-    @field_validator("tenant_code", "site_code", "name", "employee_code", "source")
+    @field_validator("tenant_code", "site_code", "name", "affiliation", "employee_code", "source")
     @classmethod
     def _trimmed_text(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
@@ -901,11 +1665,22 @@ class SupportAssignmentCreate(BaseModel):
             "INTERNAL": "INTERNAL",
             "SELF": "INTERNAL",
             "자체": "INTERNAL",
+            "UNAVAILABLE": "UNAVAILABLE",
+            "NOT_AVAILABLE": "UNAVAILABLE",
+            "지원불가": "UNAVAILABLE",
         }
         resolved = aliases.get(normalized, normalized)
-        if resolved not in {"F", "BK", "INTERNAL"}:
-            raise ValueError("worker_type must be F/BK/INTERNAL")
+        if resolved not in {"F", "BK", "INTERNAL", "UNAVAILABLE"}:
+            raise ValueError("worker_type must be F/BK/INTERNAL/UNAVAILABLE")
         return resolved
+
+    @field_validator("support_period")
+    @classmethod
+    def _normalize_support_period(cls, value: str) -> str:
+        normalized = str(value or "").strip().lower()
+        if normalized not in {"day", "night"}:
+            raise ValueError("support_period must be day/night")
+        return normalized
 
 
 class SupportAssignmentOut(BaseModel):
@@ -913,13 +1688,68 @@ class SupportAssignmentOut(BaseModel):
     tenant_code: str
     site_code: str
     work_date: date
+    support_period: str = "day"
+    slot_index: int = 1
     worker_type: str
     employee_id: Optional[UUID] = None
     employee_code: Optional[str] = None
     employee_name: Optional[str] = None
     name: str
+    affiliation: Optional[str] = None
     source: str
+    source_ticket_id: Optional[int] = None
+    source_event_uid: Optional[str] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+class SupportStatusAssignmentOut(BaseModel):
+    id: UUID
+    slot_index: int = 1
+    worker_type: str
+    employee_id: Optional[UUID] = None
+    employee_code: Optional[str] = None
+    employee_name: Optional[str] = None
+    worker_name: str
+    display_value: str
+    affiliation: Optional[str] = None
+    source: str
+    source_ticket_id: Optional[int] = None
+    source_event_uid: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+class SupportStatusWorkspaceRowOut(BaseModel):
+    row_key: str
+    tenant_code: str
+    site_code: str
+    site_name: Optional[str] = None
+    work_date: date
+    shift_kind: str
+    request_count: int = 0
+    assigned_count: int = 0
+    filled_count: int = 0
+    request_status: Optional[str] = None
+    work_purpose: Optional[str] = None
+    source_workflow: Optional[str] = None
+    source_batch_id: Optional[UUID] = None
+    source_revision: Optional[str] = None
+    source_labels: list[str] = Field(default_factory=list)
+    worker_display_values: list[str] = Field(default_factory=list)
+    assignments: list[SupportStatusAssignmentOut] = Field(default_factory=list)
+    has_request_ticket: bool = False
+    updated_at: Optional[datetime] = None
+
+
+class SupportStatusWorkspaceOut(BaseModel):
+    tenant_code: str
+    month: str
+    total_count: int = 0
+    day_count: int = 0
+    night_count: int = 0
+    rows: list[SupportStatusWorkspaceRowOut] = Field(default_factory=list)
+    generated_at: datetime
 
 
 class DutyLogRowOut(BaseModel):
@@ -1077,6 +1907,50 @@ class SocEventIngestOut(BaseModel):
     processed_at: Optional[datetime] = None
     error_text: Optional[str] = None
     applied_changes: dict[str, object] = Field(default_factory=dict)
+
+
+class SocWorkTemplateQueryIn(BaseModel):
+    event_id: UUID
+    tenant_code: str = Field(min_length=1, max_length=64)
+    site_code: str = Field(min_length=1, max_length=64)
+    duty_type: str = Field(min_length=1, max_length=32)
+
+    @field_validator("tenant_code", "site_code", "duty_type")
+    @classmethod
+    def _trim_soc_template_query_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return str(value).strip()
+
+
+class SocWorkTemplateOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    template_name: str
+    duty_type: str
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    site_id: Optional[UUID] = None
+    site_code: Optional[str] = None
+    site_name: Optional[str] = None
+    is_default: bool = False
+    is_active: bool = True
+    option_label: str
+
+
+class SocEmployeeBackfillIn(BaseModel):
+    event_id: UUID
+    tenant_code: str = Field(min_length=1, max_length=64)
+    site_code: Optional[str] = Field(default=None, max_length=64)
+    include_inactive: bool = False
+
+    @field_validator("tenant_code", "site_code")
+    @classmethod
+    def _trim_soc_employee_backfill_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
 
 
 class GoogleSheetProfileCreate(BaseModel):

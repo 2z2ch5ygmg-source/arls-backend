@@ -20,6 +20,7 @@ FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     # 경비원명부 라벨 고정 파서 (요구사항 기준 9개)
     "management_no": ("관리번호", "관리 번호"),
     "name": ("성명", "성 명"),
+    "resident_no": ("주민번호", "주민등록번호", "주민 등록 번호"),
     "address": ("주소",),
     "placement_text": ("배치지", "배치 지"),
     "birthdate": ("생년월일", "생년 월일"),
@@ -198,6 +199,16 @@ def _normalize_management_no(value: str | None) -> str:
     return text.replace(" ", "")
 
 
+def _normalize_resident_no(value: str | None) -> str:
+    text = _clean_text(value)
+    if not text:
+        return ""
+    digits = re.sub(r"\D+", "", text)
+    if len(digits) == 13:
+        return f"{digits[:6]}-{digits[6:]}"
+    return text
+
+
 def parse_guard_roster_docx(docx_bytes: bytes) -> dict[str, str]:
     document = Document(BytesIO(docx_bytes))
     lines = _collect_docx_lines(document)
@@ -211,6 +222,7 @@ def parse_guard_roster_docx(docx_bytes: bytes) -> dict[str, str]:
     # management_no 문자열을 그대로 보존(leading zero 유지)하기 위한 명시 필드
     extracted["management_no_str"] = extracted["management_no"]
     extracted["name"] = _clean_text(extracted.get("name"))
+    extracted["resident_no"] = _normalize_resident_no(extracted.get("resident_no"))
     extracted["birthdate"] = _normalize_date(extracted.get("birthdate"))
     extracted["hire_date"] = _normalize_date(extracted.get("hire_date"))
     extracted["leave_date"] = _normalize_date(extracted.get("leave_date"))

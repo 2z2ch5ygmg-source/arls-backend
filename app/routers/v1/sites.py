@@ -17,7 +17,7 @@ from ...services.sites_match_index import (
     delete_site_match_index_entry,
     upsert_site_match_index_entry,
 )
-from ...schemas import SiteActiveUpdate, SiteCreate, SiteOut, SiteUpdate
+from ...schemas import SiteActiveUpdate, SiteCreate, SiteGeofenceOut, SiteOut, SiteUpdate
 from ...utils.permissions import (
     ROLE_BRANCH_MANAGER,
     ROLE_DEV,
@@ -189,7 +189,7 @@ def _post_site_sync_to_soc(
     site_code_norm = str(site_code or "").strip()
     site_name_norm = str(site_name or "").strip()
     normalized_event_type = str(event_type or "").strip().upper() or "SITE_CREATED"
-    if normalized_event_type not in {"SITE_CREATED", "SITE_UPDATED"}:
+    if normalized_event_type not in {"SITE_CREATED", "SITE_UPDATED", "SITE_DELETED"}:
         normalized_event_type = "SITE_CREATED"
 
     payload = {
@@ -593,6 +593,9 @@ def _search_geocode_google_places(query: str, limit: int) -> tuple[list[dict], d
 
 
 def _row_to_out(row) -> SiteOut:
+    latitude_value = row.get("latitude")
+    longitude_value = row.get("longitude")
+    radius_value = row.get("radius_meters")
     return SiteOut(
         id=row["id"],
         tenant_id=row.get("tenant_id"),
@@ -602,9 +605,9 @@ def _row_to_out(row) -> SiteOut:
         site_name=row["site_name"],
         address=row.get("address"),
         place_id=row.get("place_id") or None,
-        latitude=float(row["latitude"]),
-        longitude=float(row["longitude"]),
-        radius_meters=float(row["radius_meters"]),
+        latitude=float(latitude_value) if latitude_value is not None else None,
+        longitude=float(longitude_value) if longitude_value is not None else None,
+        radius_meters=float(radius_value) if radius_value is not None else None,
         is_active=bool(row.get("is_active", True)),
     )
 
@@ -635,10 +638,12 @@ def _fetch_site_row(conn, site_id: uuid.UUID, user):
 @router.get("", response_model=list[SiteOut])
 def list_sites(
     q: str | None = Query(default=None, min_length=1, max_length=120),
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0, le=100000),
     active: str | None = Query(default=None),
     include_inactive: bool = Query(default=False),
     include_deleted: bool = Query(default=False),
+    detail: bool = Query(default=False),
     company_code: str | None = Query(default=None, max_length=64),
     tenant_code: str | None = Query(default=None, max_length=64),
     conn=Depends(get_db_conn),
@@ -706,18 +711,24 @@ def list_sites(
         params.extend([like, like, like])
 
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    place_id_select_sql = _site_place_id_select_sql(conn, "s")
+    if detail:
+        place_id_select_sql = _site_place_id_select_sql(conn, "s")
+        location_select_sql = "s.latitude, s.longitude, s.radius_meters"
+    else:
+        place_id_select_sql = "''::text AS place_id"
+        location_select_sql = "NULL::float8 AS latitude, NULL::float8 AS longitude, NULL::float8 AS radius_meters"
     sql = f"""
         SELECT s.id, s.tenant_id, NULL::text AS tenant_code, s.site_code, s.site_name, COALESCE(s.address, '') AS address, {place_id_select_sql},
-               s.latitude, s.longitude, s.radius_meters, COALESCE(s.is_active, TRUE) AS is_active,
+               {location_select_sql}, COALESCE(s.is_active, TRUE) AS is_active,
                COALESCE(c.company_code, '') AS company_code
         FROM sites s
         LEFT JOIN companies c ON c.id = s.company_id
         {where_sql}
         ORDER BY s.site_code
         LIMIT %s
+        OFFSET %s
     """
-    params.append(int(limit))
+    params.extend([int(limit), int(offset)])
     with conn.cursor() as cur:
         cur.execute(sql, tuple(params))
         rows = cur.fetchall()
@@ -725,6 +736,76 @@ def list_sites(
     for row in rows:
         row["tenant_code"] = tenant_code_value
     return [_row_to_out(row) for row in rows]
+
+
+@router.get("/{site_id}/geofence", response_model=SiteGeofenceOut)
+def get_site_geofence(
+    site_id: str,
+    tenant_code: str | None = Query(default=None, max_length=64),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    role_scope = normalize_role(user.get("role"))
+    if role_scope not in SITE_READ_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "FORBIDDEN", "message": "접근 권한이 없습니다."},
+        )
+
+    tenant = _resolve_target_tenant(conn, user, tenant_code)
+    staff_scope = enforce_staff_site_scope(user)
+    site_ref = str(site_id or "").strip()
+    if not site_ref:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "INVALID_SITE_ID", "message": "site_id가 필요합니다."},
+        )
+
+    where_clauses = ["s.tenant_id = %s"]
+    params: list = [tenant["id"]]
+    if staff_scope:
+        where_clauses.append("s.id = %s")
+        params.append(staff_scope["site_id"])
+
+    parsed_site_uuid: uuid.UUID | None = None
+    try:
+        parsed_site_uuid = uuid.UUID(site_ref)
+    except Exception:
+        parsed_site_uuid = None
+
+    if parsed_site_uuid is not None:
+        where_clauses.append("s.id = %s")
+        params.append(parsed_site_uuid)
+    else:
+        where_clauses.append("upper(s.site_code) = upper(%s)")
+        params.append(site_ref)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT s.id, s.site_code, s.site_name, s.latitude, s.longitude, s.radius_meters
+            FROM sites s
+            WHERE {' AND '.join(where_clauses)}
+            LIMIT 1
+            """,
+            tuple(params),
+        )
+        row = cur.fetchone()
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "SITE_NOT_FOUND", "message": "현장을 찾을 수 없습니다."},
+        )
+
+    return SiteGeofenceOut(
+        site_id=row["id"],
+        site_code=str(row.get("site_code") or ""),
+        site_name=str(row.get("site_name") or ""),
+        lat=float(row["latitude"]),
+        lng=float(row["longitude"]),
+        radius_m=float(row["radius_meters"]),
+    )
 
 
 @router.get("/geocode")
@@ -819,6 +900,31 @@ def create_site(
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail={"error": "SITE_EXISTS", "message": "이미 존재하는 현장 번호입니다."},
+                )
+
+            cur.execute(
+                """
+                SELECT id, site_code, site_name
+                FROM sites
+                WHERE tenant_id = %s
+                  AND lower(trim(site_name)) = lower(trim(%s))
+                LIMIT 1
+                """,
+                (tenant_id, normalized["site_name"]),
+            )
+            existing_by_name = cur.fetchone()
+            if existing_by_name:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "error": "SITE_NAME_EXISTS",
+                        "message": "이미 존재하는 현장명입니다.",
+                        "detail": {
+                            "site_id": str(existing_by_name.get("id") or ""),
+                            "site_code": str(existing_by_name.get("site_code") or ""),
+                            "site_name": str(existing_by_name.get("site_name") or ""),
+                        },
+                    },
                 )
 
             if has_place_id:
@@ -928,8 +1034,41 @@ def update_site(
     if not current:
         raise HTTPException(status_code=404, detail="site not found")
 
+    actor_role = normalize_role(user.get("role"))
     normalized = _normalize_site_payload(payload)
-    tenant_id = current["tenant_id"]
+    current_tenant_id = str(current.get("tenant_id") or "").strip()
+    requested_tenant_id = str(normalized.get("tenant_id") or "").strip() or current_tenant_id
+    tenant = _resolve_target_tenant(conn, user, tenant_code=None, tenant_id=requested_tenant_id)
+    tenant_id = tenant["id"]
+    tenant_code = tenant.get("tenant_code")
+    tenant_changed = str(tenant_id) != current_tenant_id
+
+    if tenant_changed and actor_role != ROLE_DEV:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "FORBIDDEN", "message": "접근 권한이 없습니다."},
+        )
+    if tenant_changed:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM employees
+                WHERE tenant_id = %s
+                  AND site_id = %s
+                LIMIT 1
+                """,
+                (current_tenant_id, site_id),
+            )
+            if cur.fetchone():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "error": "SITE_TENANT_CHANGE_CONFLICT",
+                        "message": "직원이 연결된 현장은 회사 변경이 불가합니다.",
+                    },
+                )
+
     resolved_company_code = str(normalized.get("company_code") or "").strip().upper() or str(current.get("company_code") or "").strip().upper()
 
     if resolved_company_code:
@@ -966,7 +1105,8 @@ def update_site(
                 cur.execute(
                     """
                     UPDATE sites
-                    SET company_id = %s,
+                    SET tenant_id = %s,
+                        company_id = %s,
                         site_code = %s,
                         site_name = %s,
                         address = %s,
@@ -981,6 +1121,7 @@ def update_site(
                               latitude, longitude, radius_meters, COALESCE(is_active, TRUE) AS is_active
                     """,
                     (
+                        tenant_id,
                         company_id,
                         normalized["site_code"],
                         normalized["site_name"],
@@ -998,7 +1139,8 @@ def update_site(
                 cur.execute(
                     """
                     UPDATE sites
-                    SET company_id = %s,
+                    SET tenant_id = %s,
+                        company_id = %s,
                         site_code = %s,
                         site_name = %s,
                         address = %s,
@@ -1012,6 +1154,7 @@ def update_site(
                               latitude, longitude, radius_meters, COALESCE(is_active, TRUE) AS is_active
                     """,
                     (
+                        tenant_id,
                         company_id,
                         normalized["site_code"],
                         normalized["site_name"],
@@ -1051,15 +1194,21 @@ def update_site(
             detail={"error": "INTERNAL", "message": "서버 오류입니다. 잠시 후 다시 시도해주세요."},
         )
     row["tenant_id"] = tenant_id
-    row["tenant_code"] = current.get("tenant_code")
+    row["tenant_code"] = tenant_code
     row["company_code"] = resolved_company_code
+    if tenant_changed:
+        delete_site_match_index_entry(
+            conn,
+            tenant_id=current_tenant_id,
+            site_id=str(current.get("site_code") or ""),
+        )
     _sync_site_match_index(
         conn,
         tenant_id=str(tenant_id),
         site_code=str(row.get("site_code") or ""),
         site_name=str(row.get("site_name") or ""),
         address_text=str(row.get("address") or ""),
-        previous_site_code=str(current.get("site_code") or ""),
+        previous_site_code=None if tenant_changed else str(current.get("site_code") or ""),
     )
     _post_site_sync_to_soc(
         tenant_code=row.get("tenant_code"),
@@ -1152,4 +1301,20 @@ def delete_site(
         tenant_id=str(current.get("tenant_id") or ""),
         site_id=str(current.get("site_code") or ""),
     )
+    sync_ok, sync_status, sync_reason = _post_site_sync_to_soc(
+        tenant_code=str(current.get("tenant_code") or current.get("company_code") or ""),
+        site_code=str(current.get("site_code") or ""),
+        site_name=str(current.get("site_name") or ""),
+        event_type="SITE_DELETED",
+    )
+    if not sync_ok:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "error": "SOC_SITE_DELETE_SYNC_FAILED",
+                "message": "SOC 현장 삭제 동기화에 실패했습니다. 삭제가 롤백되었습니다.",
+                "soc_status": sync_status,
+                "soc_reason": sync_reason,
+            },
+        )
     return {"deleted": True, "site_id": str(site_id)}

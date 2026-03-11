@@ -48,6 +48,9 @@ SUPPORT_TYPE_ALIASES = {
     "INTERNAL": "INTERNAL",
     "SELF": "INTERNAL",
     "자체": "INTERNAL",
+    "UNAVAILABLE": "UNAVAILABLE",
+    "NOT_AVAILABLE": "UNAVAILABLE",
+    "지원불가": "UNAVAILABLE",
 }
 
 
@@ -851,6 +854,47 @@ def _remember_external_support_worker(conn, *, tenant_id, site_id, worker_type: 
         )
 
 
+def _hydrate_support_assignment_row(conn, *, row_id) -> dict[str, Any] | None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT sa.id,
+                   t.tenant_code,
+                   s.site_code,
+                   sa.work_date,
+                   sa.support_period,
+                   sa.slot_index,
+                   sa.worker_type,
+                   sa.employee_id,
+                   e.employee_code,
+                   e.full_name AS employee_name,
+                   COALESCE(e.soc_role, '') AS soc_role,
+                   COALESCE(e.duty_role, '') AS duty_role,
+                   sa.name,
+                   sa.affiliation,
+                   sa.source,
+                   sa.source_ticket_id,
+                   sa.source_event_uid,
+                   sa.created_at,
+                   sa.updated_at
+            FROM support_assignment sa
+            JOIN tenants t ON t.id = sa.tenant_id
+            JOIN sites s ON s.id = sa.site_id
+            LEFT JOIN employees e ON e.id = sa.employee_id
+            WHERE sa.id = %s
+            LIMIT 1
+            """,
+            (row_id,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    payload = dict(row)
+    payload["is_internal"] = str(payload.get("worker_type") or "").strip().upper() == "INTERNAL"
+    payload["worker_name"] = str(payload.get("employee_name") or payload.get("name") or "").strip()
+    return payload
+
+
 def upsert_support_assignment(
     conn,
     *,
@@ -859,8 +903,13 @@ def upsert_support_assignment(
     work_date: date,
     worker_type: str,
     name: str,
+    support_period: str = "day",
+    slot_index: int | None = None,
     source: str = "SHEET",
     employee_id=None,
+    affiliation: str | None = None,
+    source_ticket_id=None,
+    source_event_uid: str | None = None,
 ) -> tuple[dict[str, Any] | None, bool]:
     normalized_name = _to_text(name)
     if not normalized_name:
@@ -868,39 +917,103 @@ def upsert_support_assignment(
 
     normalized_type = SUPPORT_TYPE_ALIASES.get(_to_upper(worker_type))
     if not normalized_type:
-        raise HTTPException(status_code=400, detail="worker_type must be F/BK/INTERNAL")
+        raise HTTPException(status_code=400, detail="worker_type must be F/BK/INTERNAL/UNAVAILABLE")
+    normalized_period = str(support_period or "day").strip().lower() or "day"
+    if normalized_period not in {"day", "night"}:
+        raise HTTPException(status_code=400, detail="support_period must be day/night")
+    normalized_slot_index = int(slot_index or 0)
+    if normalized_slot_index <= 0:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COALESCE(MAX(slot_index), 0) AS max_slot_index
+                FROM support_assignment
+                WHERE tenant_id = %s
+                  AND site_id = %s
+                  AND work_date = %s
+                  AND support_period = %s
+                """,
+                (tenant_id, site_id, work_date, normalized_period),
+            )
+            max_slot_row = cur.fetchone()
+        normalized_slot_index = int((max_slot_row or {}).get("max_slot_index") or 0) + 1
+    normalized_affiliation = _to_text(affiliation)
+    normalized_source = _to_text(source) or "SHEET"
+    normalized_event_uid = _to_text(source_event_uid)
 
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT sa.id, t.tenant_code, s.site_code, sa.work_date, sa.worker_type, sa.employee_id,
-                   e.employee_code, e.full_name AS employee_name, sa.name, sa.source, sa.created_at
+            SELECT sa.id
             FROM support_assignment sa
-            JOIN tenants t ON t.id = sa.tenant_id
-            JOIN sites s ON s.id = sa.site_id
-            LEFT JOIN employees e ON e.id = sa.employee_id
             WHERE sa.tenant_id = %s
               AND sa.site_id = %s
               AND sa.work_date = %s
-              AND lower(sa.name) = lower(%s)
+              AND sa.support_period = %s
+              AND sa.slot_index = %s
             LIMIT 1
             """,
-            (tenant_id, site_id, work_date, normalized_name),
+            (tenant_id, site_id, work_date, normalized_period, normalized_slot_index),
         )
         existing = cur.fetchone()
         if existing:
-            return existing, False
+            cur.execute(
+                """
+                UPDATE support_assignment
+                SET worker_type = %s,
+                    employee_id = %s,
+                    name = %s,
+                    affiliation = %s,
+                    source = %s,
+                    source_ticket_id = COALESCE(%s, source_ticket_id),
+                    source_event_uid = COALESCE(%s, source_event_uid),
+                    updated_at = timezone('utc', now())
+                WHERE id = %s
+                """,
+                (
+                    normalized_type,
+                    employee_id,
+                    normalized_name,
+                    normalized_affiliation,
+                    normalized_source,
+                    source_ticket_id,
+                    normalized_event_uid,
+                    existing["id"],
+                ),
+            )
+            hydrated = _hydrate_support_assignment_row(conn, row_id=existing["id"])
+            return hydrated, False
 
         row_id = uuid.uuid4()
         cur.execute(
             """
             INSERT INTO support_assignment (
-                id, tenant_id, site_id, work_date, worker_type, employee_id, name, source, created_at
+                id, tenant_id, site_id, work_date, support_period,
+                slot_index, worker_type, employee_id, name, affiliation, source,
+                source_ticket_id, source_event_uid, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, timezone('utc', now()))
-            RETURNING id, tenant_id, site_id, work_date, worker_type, employee_id, name, source, created_at
+            VALUES (
+                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s,
+                %s, %s, timezone('utc', now()), timezone('utc', now())
+            )
+            RETURNING id
             """,
-            (row_id, tenant_id, site_id, work_date, normalized_type, employee_id, normalized_name, _to_text(source) or "SHEET"),
+            (
+                row_id,
+                tenant_id,
+                site_id,
+                work_date,
+                normalized_period,
+                normalized_slot_index,
+                normalized_type,
+                employee_id,
+                normalized_name,
+                normalized_affiliation,
+                normalized_source,
+                source_ticket_id,
+                normalized_event_uid,
+            ),
         )
         created = cur.fetchone()
 
@@ -913,25 +1026,19 @@ def upsert_support_assignment(
             worker_name=normalized_name,
         )
 
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT sa.id, t.tenant_code, s.site_code, sa.work_date, sa.worker_type, sa.employee_id,
-                   e.employee_code, e.full_name AS employee_name, sa.name, sa.source, sa.created_at
-            FROM support_assignment sa
-            JOIN tenants t ON t.id = sa.tenant_id
-            JOIN sites s ON s.id = sa.site_id
-            LEFT JOIN employees e ON e.id = sa.employee_id
-            WHERE sa.id = %s
-            LIMIT 1
-            """,
-            (created["id"],),
-        )
-        hydrated = cur.fetchone()
+    hydrated = _hydrate_support_assignment_row(conn, row_id=created["id"])
     return hydrated, True
 
 
-def list_support_assignments(conn, *, tenant_id, work_date: date | None = None, site_id=None) -> list[dict[str, Any]]:
+def list_support_assignments(
+    conn,
+    *,
+    tenant_id,
+    work_date: date | None = None,
+    site_id=None,
+    support_period: str | None = None,
+    source: str | None = None,
+) -> list[dict[str, Any]]:
     clauses = ["sa.tenant_id = %s"]
     params: list[Any] = [tenant_id]
     if work_date:
@@ -940,21 +1047,80 @@ def list_support_assignments(conn, *, tenant_id, work_date: date | None = None, 
     if site_id:
         clauses.append("sa.site_id = %s")
         params.append(site_id)
+    if support_period:
+        clauses.append("sa.support_period = %s")
+        params.append(str(support_period).strip().lower())
+    if source:
+        clauses.append("sa.source = %s")
+        params.append(str(source).strip())
     with conn.cursor() as cur:
         cur.execute(
             f"""
-            SELECT sa.id, t.tenant_code, s.site_code, sa.work_date, sa.worker_type, sa.employee_id,
-                   e.employee_code, e.full_name AS employee_name, sa.name, sa.source, sa.created_at
+            SELECT sa.id,
+                   t.tenant_code,
+                   s.site_code,
+                   sa.work_date,
+                   sa.support_period,
+                   sa.slot_index,
+                   sa.worker_type,
+                   sa.employee_id,
+                   e.employee_code,
+                   e.full_name AS employee_name,
+                   COALESCE(e.soc_role, '') AS soc_role,
+                   COALESCE(e.duty_role, '') AS duty_role,
+                   sa.name,
+                   sa.affiliation,
+                   sa.source,
+                   sa.source_ticket_id,
+                   sa.source_event_uid,
+                   sa.created_at,
+                   sa.updated_at
             FROM support_assignment sa
             JOIN tenants t ON t.id = sa.tenant_id
             JOIN sites s ON s.id = sa.site_id
             LEFT JOIN employees e ON e.id = sa.employee_id
             WHERE {' AND '.join(clauses)}
-            ORDER BY sa.work_date DESC, sa.worker_type, sa.name
+            ORDER BY sa.work_date DESC, sa.support_period, sa.slot_index, sa.worker_type, sa.name
             """,
             tuple(params),
         )
-        return cur.fetchall()
+        rows = [dict(row) for row in cur.fetchall()]
+    for row in rows:
+        row["is_internal"] = str(row.get("worker_type") or "").strip().upper() == "INTERNAL"
+        row["worker_name"] = str(row.get("employee_name") or row.get("name") or "").strip()
+    return rows
+
+
+def delete_support_assignments_by_source_ticket(
+    conn,
+    *,
+    tenant_id,
+    site_id,
+    work_date: date,
+    support_period: str,
+    source_ticket_id,
+    source: str | None = None,
+) -> int:
+    clauses = [
+        "tenant_id = %s",
+        "site_id = %s",
+        "work_date = %s",
+        "support_period = %s",
+        "source_ticket_id = %s",
+    ]
+    params: list[Any] = [tenant_id, site_id, work_date, str(support_period or "day").strip().lower(), source_ticket_id]
+    if source:
+        clauses.append("source = %s")
+        params.append(str(source).strip())
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            DELETE FROM support_assignment
+            WHERE {' AND '.join(clauses)}
+            """,
+            tuple(params),
+        )
+        return int(cur.rowcount or 0)
 
 
 def delete_support_assignment(conn, *, tenant_id, row_id) -> bool:
@@ -1047,6 +1213,36 @@ def upsert_apple_report_overnight_record(
             ),
         )
         return cur.fetchone()
+
+
+def delete_apple_report_overnight_records_by_source_ticket(
+    conn,
+    *,
+    tenant_id,
+    site_id,
+    work_date: date,
+    source_ticket_id: int,
+) -> list[dict[str, Any]]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM apple_report_overnight_records ao
+            WHERE ao.tenant_id = %s
+              AND ao.work_date = %s
+              AND ao.source_ticket_id = %s
+              AND (%s IS NULL OR ao.site_id = %s)
+            RETURNING ao.id, ao.tenant_id, ao.site_id, ao.work_date, ao.headcount,
+                      ao.time_range, ao.hours, ao.source_ticket_id, ao.source_event_uid
+            """,
+            (
+                tenant_id,
+                work_date,
+                source_ticket_id,
+                site_id,
+                site_id,
+            ),
+        )
+        return cur.fetchall()
 
 
 def list_apple_late_shift_logs(conn, *, tenant_id, work_date: date | None = None, site_id=None) -> list[dict[str, Any]]:

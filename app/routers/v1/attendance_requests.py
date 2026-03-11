@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -183,9 +184,6 @@ def create_attendance_request(
     if not can_post_attendance(user["role"]):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
-    if payload.request_type != "check_in":
-        raise HTTPException(status_code=400, detail="only check_in request is supported")
-
     tenant = _resolve_target_tenant(conn, user, payload.tenant_code)
     tenant_id = tenant["id"]
 
@@ -200,8 +198,17 @@ def create_attendance_request(
     if not site:
         raise HTTPException(status_code=404, detail="site not found")
 
-    if payload.distance_meters <= payload.radius_meters and payload.accuracy_meters <= payload.radius_meters:
-        raise HTTPException(status_code=400, detail="within radius, use regular check-in")
+    requested_at = payload.requested_at
+    if requested_at.tzinfo is None:
+        requested_at = requested_at.replace(tzinfo=timezone.utc)
+    else:
+        requested_at = requested_at.astimezone(timezone.utc)
+    now_utc = datetime.now(timezone.utc)
+    min_utc = now_utc - timedelta(hours=24)
+    if requested_at > now_utc:
+        raise HTTPException(status_code=400, detail="requested_at must be before now")
+    if requested_at < min_utc:
+        raise HTTPException(status_code=400, detail="requested_at is too old")
 
     photo_names = [name.strip() for name in payload.photo_names if str(name or "").strip()][:3]
     request_id = uuid.uuid4()
@@ -224,7 +231,7 @@ def create_attendance_request(
                 payload.request_type,
                 payload.reason_code,
                 payload.reason_detail,
-                payload.requested_at,
+                requested_at,
                 payload.latitude,
                 payload.longitude,
                 payload.accuracy_meters,
