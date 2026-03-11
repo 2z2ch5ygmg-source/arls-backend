@@ -10200,6 +10200,7 @@ function renderScheduleSupportRoundtripStatus() {
   const hqDownloadBtn = $('#scheduleSupportHqDownloadBtn');
   const openSentrixBtn = $('#scheduleSupportOpenSentrixBtn');
   const copyArtifactBtn = $('#scheduleSupportCopyArtifactBtn');
+  const overallScope = selectedSite === 'ALL' || Boolean(status?.overall_scope);
 
   if (!selectedSite) {
     if (statePill) {
@@ -10244,6 +10245,54 @@ function renderScheduleSupportRoundtripStatus() {
     if (openSentrixBtn) openSentrixBtn.disabled = true;
     if (copyArtifactBtn) copyArtifactBtn.disabled = true;
     renderScheduleSupportArtifactMeta(null);
+    return;
+  }
+
+  if (overallScope) {
+    const totalSiteCount = Number(status?.total_site_count || 0);
+    const readySiteCount = Number(status?.ready_site_count || 0);
+    const blockedReasons = Array.isArray(status?.blocked_reasons) ? status.blocked_reasons.filter(Boolean) : [];
+    const artifactContext = buildScheduleSupportArtifactContext(status, 'ALL');
+    if (statePill) {
+      statePill.className = readySiteCount > 0 ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral';
+      statePill.textContent = '전체';
+    }
+    if (statusText) statusText.textContent = `${getScheduleMonthValue()} · 전체 ${readySiteCount}/${totalSiteCount || 0}개 지점 source workbook 준비`;
+    if (sourceRevision) sourceRevision.textContent = `${readySiteCount}/${totalSiteCount || 0} ready`;
+    if (sourceMeta) sourceMeta.textContent = 'Sentrix 제출용 전체 지점 source 준비 현황';
+    if (mergeState) mergeState.textContent = readySiteCount > 0 ? '전체 handoff' : '대기';
+    if (mergeMeta) mergeMeta.textContent = readySiteCount > 0 ? 'Sentrix에서 지점별 시트로 제출' : '준비된 지점 없음';
+    if (assignmentCount) assignmentCount.textContent = artifactContext.artifact_id ? `${readySiteCount}개 ready` : '미생성';
+    if (conflictMeta) conflictMeta.textContent = totalSiteCount > 0 ? `총 ${totalSiteCount}개 지점` : '지점 정보 없음';
+    if (finalState) finalState.textContent = 'Sentrix';
+    if (finalMeta) finalMeta.textContent = '전체 제출은 Sentrix에서 site sheet 기준으로 진행합니다.';
+    renderScheduleSupportArtifactMeta(artifactContext);
+
+    if (blockedList) {
+      blockedList.innerHTML = '';
+      if (!blockedReasons.length) {
+        blockedList.classList.add('hidden');
+      } else {
+        blockedList.classList.remove('hidden');
+        blockedReasons.forEach((reason) => {
+          const li = document.createElement('li');
+          li.textContent = String(reason || '').trim();
+          blockedList.appendChild(li);
+        });
+      }
+    }
+
+    if (hqDownloadBtn) hqDownloadBtn.disabled = readySiteCount <= 0;
+    if (openSentrixBtn) openSentrixBtn.disabled = !artifactContext.artifact_id || readySiteCount <= 0;
+    if (copyArtifactBtn) copyArtifactBtn.disabled = !artifactContext.artifact_id || readySiteCount <= 0;
+    setScheduleSupportRoundtripUI({
+      batchInfo: `전체 ${readySiteCount}/${totalSiteCount || 0}개 지점 기준 workbook artifact를 Sentrix로 넘길 수 있습니다.`,
+      issues: blockedReasons,
+      clearPreviewRows: true,
+      clearApplyDetails: true,
+      canApply: false,
+      applyResult: '전체 선택 시 multi-sheet workbook을 Sentrix로 넘기고, 이후 지점별 roster 제출/적용은 Sentrix에서 진행합니다.',
+    });
     return;
   }
 
@@ -10351,6 +10400,46 @@ async function loadScheduleSupportRoundtripStatus() {
     renderScheduleSupportRoundtripStatus();
     return null;
   }
+  if (siteCode === 'ALL') {
+    if (!canUseScheduleSupportRoundtripHq()) {
+      state.schedule.supportStatus = {
+        overall_scope: true,
+        site_code: 'ALL',
+        month: getScheduleMonthValue(),
+        total_site_count: Array.isArray(state.siteCatalog) ? state.siteCatalog.length : 0,
+        ready_site_count: 0,
+        artifact_revision: 'latest',
+        blocked_reasons: [],
+      };
+      renderScheduleSupportRoundtripStatus();
+      return state.schedule.supportStatus;
+    }
+    state.schedule.supportStatus = null;
+    renderScheduleSupportRoundtripStatus();
+    const params = new URLSearchParams();
+    params.set('month', getScheduleMonthValue());
+    params.set('tenant_code', getScheduleTenantValue());
+    const workspace = await apiRequest(`/schedules/support-roundtrip/hq-workspace?${params.toString()}`);
+    const sites = Array.isArray(workspace?.sites) ? workspace.sites : [];
+    const totalSiteCount = Number(workspace?.total_site_count || sites.length || 0);
+    const readySiteCount = Number(
+      workspace?.ready_site_count
+      || sites.filter((site) => Boolean(site?.download_ready)).length
+      || 0
+    );
+    state.schedule.supportStatus = {
+      overall_scope: true,
+      site_code: 'ALL',
+      month: getScheduleMonthValue(),
+      total_site_count: totalSiteCount,
+      ready_site_count: readySiteCount,
+      latest_status: String(workspace?.latest_status || 'latest').trim() || 'latest',
+      artifact_revision: String(workspace?.latest_status || 'latest').trim() || 'latest',
+      blocked_reasons: readySiteCount > 0 ? [] : ['선택한 월에 Sentrix로 넘길 수 있는 지원수요 source가 아직 없습니다.'],
+    };
+    renderScheduleSupportRoundtripStatus();
+    return state.schedule.supportStatus;
+  }
   state.schedule.supportStatus = null;
   renderScheduleSupportRoundtripStatus();
   const params = new URLSearchParams();
@@ -10425,8 +10514,13 @@ async function onScheduleSupportHqDownload() {
   const month = getScheduleMonthValue();
   const params = new URLSearchParams();
   params.set('month', month);
-  params.set('site_code', siteCode);
   params.set('tenant_code', getScheduleTenantValue());
+  const isAllSites = siteCode === 'ALL';
+  if (isAllSites) {
+    params.set('scope', 'all');
+  } else {
+    params.set('site_code', siteCode);
+  }
   const fallbackGeneratedOn = (() => {
     const formatter = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Seoul',
@@ -10438,10 +10532,16 @@ async function onScheduleSupportHqDownload() {
     return `${parts.year || ''}${parts.month || ''}${parts.day || ''}`;
   })();
   await downloadScheduleWorkbookWithAuth(
-    `${state.activeApiBase}/schedules/support-roundtrip/hq-workbook?${params.toString()}`,
+    isAllSites
+      ? `${state.activeApiBase}/schedules/support-roundtrip/hq-roster-workbook?${params.toString()}`
+      : `${state.activeApiBase}/schedules/support-roundtrip/hq-workbook?${params.toString()}`,
     `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 지원근무자용 스케쥴 제출_${siteCode}_${fallbackGeneratedOn}.xlsx`,
   );
-  showToast('HQ 지원근무자용 시트를 다운로드했습니다.', 'success', 2200);
+  showToast(
+    isAllSites ? '전체 지점 지원근무자용 workbook을 다운로드했습니다.' : 'HQ 지원근무자용 시트를 다운로드했습니다.',
+    'success',
+    2200,
+  );
 }
 
 async function onScheduleSupportPreview() {
@@ -10472,10 +10572,14 @@ async function onScheduleSupportOpenSentrix() {
     showToast('현재 month/site 기준 source artifact가 아직 없습니다.', 'error');
     return;
   }
+  if (siteCode === 'ALL' && Number(status?.ready_site_count || 0) <= 0) {
+    showToast('전체 범위에서 Sentrix로 넘길 준비가 된 지점이 아직 없습니다.', 'error');
+    return;
+  }
   const url = buildSentrixHqSupportSubmissionUrl({
     tenant_code: String(getTenantCodeForScopedAdminApi() || getScheduleTenantValue() || '').trim(),
     month: artifactContext.month || getScheduleMonthValue(),
-    site_code: artifactContext.site_code || siteCode,
+    site_code: artifactContext.site_code === 'ALL' ? '' : (artifactContext.site_code || siteCode),
     artifact_id: artifactContext.artifact_id,
     revision: artifactContext.revision,
   });
@@ -10746,6 +10850,7 @@ function renderScheduleFinanceSubmissionStatus() {
   const reviewBtn = $('#scheduleFinanceReviewDownloadBtn');
   const finalDownloadBtn = $('#scheduleFinanceFinalDownloadBtn');
   const previewBtn = $('#scheduleFinancePreviewBtn');
+  const overallScope = selectedSite === 'ALL' || Boolean(status?.overall_scope);
 
   if (!selectedSite) {
     if (statePill) {
@@ -10780,6 +10885,33 @@ function renderScheduleFinanceSubmissionStatus() {
     if (reviewBtn) reviewBtn.disabled = true;
     if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
+    return;
+  }
+
+  if (overallScope) {
+    if (statePill) {
+      statePill.className = 'status-pill status-pill-neutral';
+      statePill.textContent = '전체';
+    }
+    if (statusText) statusText.textContent = 'Finance 제출/최종 업로드는 지점별 워크플로우입니다. 전체 선택 시 상태만 안내하고 실행은 잠급니다.';
+    if (phaseLabel) phaseLabel.textContent = '지점별 진행';
+    if (phaseMeta) phaseMeta.textContent = 'Finance 보고는 전체 범위를 한 번에 처리하지 않습니다.';
+    if (reviewRevision) reviewRevision.textContent = '-';
+    if (reviewMeta) reviewMeta.textContent = '전체 선택에서는 지점별 다운로드만 지원';
+    if (finalUploadState) finalUploadState.textContent = '잠금';
+    if (finalUploadMeta) finalUploadMeta.textContent = '단일 지점을 선택해야 업로드할 수 있습니다.';
+    if (finalDownloadState) finalDownloadState.textContent = '잠금';
+    if (finalDownloadMeta) finalDownloadMeta.textContent = '단일 지점을 선택해야 최종본을 다운로드할 수 있습니다.';
+    if (reviewBtn) reviewBtn.disabled = true;
+    if (finalDownloadBtn) finalDownloadBtn.disabled = true;
+    if (previewBtn) previewBtn.disabled = true;
+    if (blockedList) {
+      blockedList.innerHTML = '';
+      blockedList.classList.remove('hidden');
+      const li = document.createElement('li');
+      li.textContent = 'Finance 보고 탭은 전체 범위가 아니라 지점별 제출/업로드 흐름입니다.';
+      blockedList.appendChild(li);
+    }
     return;
   }
 
@@ -10871,6 +11003,14 @@ async function loadScheduleFinanceSubmissionStatus() {
     renderScheduleFinanceSubmissionStatus();
     return null;
   }
+  if (siteCode === 'ALL') {
+    state.schedule.financeStatus = {
+      overall_scope: true,
+      month: getScheduleMonthValue(),
+    };
+    renderScheduleFinanceSubmissionStatus();
+    return state.schedule.financeStatus;
+  }
   state.schedule.financeStatus = null;
   renderScheduleFinanceSubmissionStatus();
   const params = new URLSearchParams();
@@ -10891,6 +11031,10 @@ async function onScheduleFinanceReviewDownload() {
   const siteCode = getScheduleSupportSelectedSiteCode();
   if (!siteCode) {
     showToast('업로드 지점을 먼저 선택해 주세요.', 'error');
+    return;
+  }
+  if (siteCode === 'ALL') {
+    showToast('Finance 보고는 전체가 아니라 단일 지점 기준으로만 다운로드할 수 있습니다.', 'error');
     return;
   }
   const month = getScheduleMonthValue();
@@ -10937,6 +11081,10 @@ async function onScheduleFinancePreview() {
       clearPreviewRows: true,
       clearApplyDetails: true,
     });
+    return;
+  }
+  if (siteCode === 'ALL') {
+    showToast('Finance 최종 업로드는 단일 지점을 선택한 뒤 진행해 주세요.', 'error');
     return;
   }
   const body = new FormData();
@@ -11067,6 +11215,10 @@ async function onScheduleFinanceFinalDownload() {
   const siteCode = getScheduleSupportSelectedSiteCode();
   if (!siteCode) {
     showToast('업로드 지점을 먼저 선택해 주세요.', 'error');
+    return;
+  }
+  if (siteCode === 'ALL') {
+    showToast('Finance 최종 다운로드는 단일 지점 기준으로만 지원합니다.', 'error');
     return;
   }
   const month = getScheduleMonthValue();
@@ -37639,8 +37791,15 @@ async function refreshScheduleImportSiteOptions({ force = false } = {}) {
   const boardSite = String($('#scheduleSiteFilter')?.value || '').trim().toUpperCase();
 
   selects.forEach((select) => {
+    const isReportsSelect = select.id === 'scheduleReportsSite';
     const current = String(select.value || '').trim().toUpperCase();
     select.innerHTML = '<option value="">지점 선택</option>';
+    if (isReportsSelect && isScheduleUploadTenantWideUser()) {
+      const allOption = document.createElement('option');
+      allOption.value = 'ALL';
+      allOption.textContent = '전체';
+      select.appendChild(allOption);
+    }
     normalizedOptions.forEach((item) => {
       const option = document.createElement('option');
       option.value = item.site_code;
