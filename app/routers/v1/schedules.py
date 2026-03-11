@@ -4465,6 +4465,41 @@ def _build_support_value_index(rows: list[dict]) -> dict[tuple[str, str, int, in
     return index
 
 
+def _build_import_current_body_index_from_existing_schedule_rows(
+    rows: list[dict],
+) -> dict[tuple[Any, ...], dict[str, Any]]:
+    index: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for row in rows:
+        if not _is_monthly_base_schedule_source(row.get("source")):
+            continue
+        schedule_date = row.get("schedule_date")
+        employee_name = str(row.get("employee_name") or row.get("employee_code") or "").strip()
+        if not employee_name or not isinstance(schedule_date, date):
+            continue
+        duty_type = _resolve_import_slot_from_schedule_row(row)
+        shift_type = _normalize_shift_type(row.get("shift_type"))
+        work_value = (
+            _get_export_non_working_marker(row)
+            if shift_type in NON_WORKING_SHIFT_TYPES
+            else _format_export_hours_value(_resolve_export_row_hours(row))
+        )
+        key = (
+            _normalize_name_token(employee_name),
+            duty_type,
+            schedule_date.isoformat(),
+        )
+        current_row = index.get(key) or {}
+        index[key] = {
+            **current_row,
+            "employee_name": employee_name,
+            "employee_code": str(row.get("employee_code") or "").strip(),
+            "schedule_date": schedule_date,
+            "duty_type": duty_type,
+            "work_value": _merge_export_cell_value(current_row.get("work_value"), work_value),
+        }
+    return index
+
+
 def _collect_monthly_export_context(
     conn,
     *,
@@ -4473,6 +4508,7 @@ def _collect_monthly_export_context(
     month_key: str,
     user: dict,
     build_workbook: bool = True,
+    allow_empty_employee_blocks: bool = False,
 ) -> dict[str, Any]:
     rows = [
         row
@@ -4536,7 +4572,7 @@ def _collect_monthly_export_context(
         overnight_rows=overnight_rows,
         employee_overnight_rows=employee_overnight_rows,
     )
-    if not employee_blocks:
+    if not employee_blocks and not allow_empty_employee_blocks:
         raise HTTPException(status_code=409, detail="employee mapping unavailable for monthly export")
     workbook = None
     template_path = _resolve_arls_template_path()
@@ -13125,6 +13161,7 @@ def _build_schedule_import_preview_result(
         site_row=scope_site,
         month_key=selected_month,
         user=user,
+        allow_empty_employee_blocks=True,
     )
     timings_ms["current_export_context"] = _rounded_timing_ms(export_ctx_started_at)
     current_revision = str(export_ctx.get("export_revision") or "").strip()
@@ -13191,6 +13228,8 @@ def _build_schedule_import_preview_result(
         overnight_rows=export_ctx["overnight_rows"],
         employee_overnight_rows=export_ctx["employee_overnight_rows"],
     )
+    if not current_body_index and existing_schedule_rows:
+        current_body_index = _build_import_current_body_index_from_existing_schedule_rows(existing_schedule_rows)
     timings_ms["existing_state_preload"] = _rounded_timing_ms(existing_preload_started_at)
 
     resolved_rows: list[dict[str, Any]] = []

@@ -11035,7 +11035,13 @@ function normalizeAuthError(err) {
   if (status === 403 || code === 'FORBIDDEN' || lowered.includes('forbidden')) {
     return '권한이 없습니다.';
   }
-  if (status === 409 || code === 'COMPANY_EXISTS' || code === 'TENANT_EXISTS' || code === 'CONFLICT') {
+  if (
+    code === 'COMPANY_EXISTS'
+    || code === 'TENANT_EXISTS'
+    || lowered.includes('already exists')
+    || lowered.includes('duplicate')
+    || lowered.includes('이미 존재')
+  ) {
     return '이미 존재하는 회사 번호입니다.';
   }
   if (status >= 500 || code === 'SERVER_ERROR' || code === 'INTERNAL' || code === 'INTERNAL_SERVER_ERROR') {
@@ -11097,12 +11103,24 @@ function normalizeActionError(err, fallbackMessage = '요청 처리 중 오류�
   }
   if (
     status === 409
-    || code === 'COMPANY_EXISTS'
+    && (
+      lowered.includes('employee mapping unavailable for monthly export')
+      || lowered.includes('selected site workbook is not ready')
+      || lowered.includes('support workbook source missing')
+      || lowered.includes('support workbook generation failed')
+      || lowered.includes('no support workbook source is ready')
+      || lowered.includes('finance final workbook not available')
+    )
+  ) {
+    return raw || fallbackMessage;
+  }
+  if (
+    code === 'COMPANY_EXISTS'
     || code === 'TENANT_EXISTS'
     || code === 'SITE_EXISTS'
-    || code === 'CONFLICT'
     || lowered.includes('already exists')
     || lowered.includes('duplicate')
+    || lowered.includes('이미 존재')
   ) {
     if (code === 'SITE_EXISTS') return '이미 존재하는 현장 번호입니다.';
     if (code === 'TENANT_HAS_REFERENCES') return '참조 데이터가 남아 있어 하드 삭제할 수 없습니다.';
@@ -11110,6 +11128,9 @@ function normalizeActionError(err, fallbackMessage = '요청 처리 중 오류�
     if (code === 'CURRENT_TENANT_PROTECTED') return '현재 로그인한 회사는 삭제/비활성화할 수 없습니다.';
     if (code === 'EMPLOYEE_HAS_REFERENCES') return '근태/스케줄 참조 데이터가 있어 직원을 삭제할 수 없습니다.';
     return '이미 존재하는 회사 번호입니다.';
+  }
+  if (status === 409) {
+    return raw || fallbackMessage;
   }
   if (status >= 500 || code === 'SERVER_ERROR' || code === 'INTERNAL' || code === 'INTERNAL_SERVER_ERROR') {
     return '서버 오류입니다. 잠시 후 다시 시도해주세요.';

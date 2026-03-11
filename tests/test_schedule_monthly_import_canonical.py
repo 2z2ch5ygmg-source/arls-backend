@@ -3,15 +3,19 @@ from __future__ import annotations
 from datetime import date
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from openpyxl import load_workbook
 
 from app.routers.v1.schedules import (
+    ARLS_MONTHLY_BASE_UPLOAD_SOURCE,
     ARLS_EXPORT_SOURCE_VERSION,
     ARLS_EXPORT_TEMPLATE_VERSION,
     ARLS_SHEET_NAME,
     _build_arls_month_sheet,
+    _build_import_current_body_index_from_existing_schedule_rows,
     _build_schedule_import_mapping_lookup,
+    _collect_monthly_export_context,
     _locate_support_section_rows,
     _parse_arls_canonical_import_sheet,
     _parse_daytime_need_value,
@@ -352,6 +356,86 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
         self.assertIsNone(block["required_count_numeric"])
         self.assertEqual(need_cell["issue_code"], "SUPPORT_BLOCK_REQUIRED_COUNT_INVALID")
         self.assertIn("SUPPORT_BLOCK_REQUIRED_COUNT_INVALID", block["issues"])
+
+    def test_build_import_current_body_index_uses_base_rows_only(self):
+        index = _build_import_current_body_index_from_existing_schedule_rows(
+            [
+                {
+                    "employee_id": "emp-1",
+                    "employee_code": "R692-1",
+                    "employee_name": "이보한",
+                    "schedule_date": date(2026, 3, 1),
+                    "shift_type": "day",
+                    "duty_type": "day",
+                    "shift_start_time": "08:00:00",
+                    "shift_end_time": "18:00:00",
+                    "paid_hours": 10,
+                    "source": ARLS_MONTHLY_BASE_UPLOAD_SOURCE,
+                },
+                {
+                    "employee_id": "emp-1",
+                    "employee_code": "R692-1",
+                    "employee_name": "이보한",
+                    "schedule_date": date(2026, 3, 1),
+                    "shift_type": "day",
+                    "duty_type": "day",
+                    "shift_start_time": "10:00:00",
+                    "shift_end_time": "22:00:00",
+                    "paid_hours": 12,
+                    "source": "manual_override",
+                },
+            ]
+        )
+
+        current_row = index[("이보한", "day", "2026-03-01")]
+        self.assertEqual(current_row["work_value"], "10")
+
+    @patch("app.routers.v1.schedules._build_schedule_export_revision", return_value="rev-preview")
+    @patch("app.routers.v1.schedules._read_monthly_support_request_rows_for_export", return_value=[])
+    @patch("app.routers.v1.schedules._read_monthly_daytime_need_rows_for_export")
+    @patch("app.routers.v1.schedules._read_monthly_employee_overnight_rows_for_export", return_value=[])
+    @patch("app.routers.v1.schedules._read_monthly_overnight_rows_for_export", return_value=[])
+    @patch("app.routers.v1.schedules._read_monthly_support_assignment_rows_for_export", return_value=[])
+    @patch("app.routers.v1.schedules._build_export_rows_from_board_payload", return_value=[])
+    @patch("app.routers.v1.schedules.monthly_board_lite", return_value={})
+    @patch("app.routers.v1.schedules._read_monthly_board_rows_for_export", return_value=[])
+    def test_collect_monthly_export_context_allows_empty_employee_blocks_for_preview(
+        self,
+        _mock_board_rows,
+        _mock_board_payload,
+        _mock_export_rows,
+        _mock_support_rows,
+        _mock_overnight_rows,
+        _mock_employee_overnight_rows,
+        mock_daytime_need_rows,
+        _mock_support_request_rows,
+        _mock_export_revision,
+    ):
+        mock_daytime_need_rows.return_value = [
+            {
+                "work_date": date(2026, 3, 1),
+                "required_count": 2,
+                "raw_text": "2",
+            }
+        ]
+
+        export_ctx = _collect_monthly_export_context(
+            None,
+            target_tenant={"id": "tenant-1", "tenant_code": "TENANT"},
+            site_row={"id": "site-1", "site_code": "R692", "site_name": "Apple_가로수길", "address": "서울시 강남구"},
+            month_key="2026-03",
+            user={},
+            allow_empty_employee_blocks=True,
+        )
+
+        self.assertEqual(export_ctx["employee_blocks"], [])
+        self.assertEqual(export_ctx["export_revision"], "rev-preview")
+        need_cell = next(
+            row for row in export_ctx["parsed_sheet"]["need_cells"]
+            if row["source_block"] == "day_support_required_count"
+            and row["schedule_date"].isoformat() == "2026-03-01"
+        )
+        self.assertEqual(need_cell["work_value"], "2")
 
 
 if __name__ == "__main__":
