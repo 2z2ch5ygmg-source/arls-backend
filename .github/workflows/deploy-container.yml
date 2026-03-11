@@ -11,7 +11,7 @@ permissions:
 
 env:
   ACR_LOGIN_SERVER: acrsecurityopsprod001-eneccucxdcfedqhm.azurecr.io
-  IMAGE_REPO: hr-backend
+  IMAGE_REPO: rg-arls-backend
   AZURE_WEBAPP_NAME: rg-arls-backend
   AZURE_RESOURCE_GROUP: rg-shifty-dev
   WEBSITES_PORT: "8080"
