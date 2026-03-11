@@ -1,5 +1,16 @@
-
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE OR REPLACE FUNCTION arls_random_uuid()
+RETURNS uuid
+LANGUAGE sql
+VOLATILE
+AS $$
+  SELECT (
+    substr(md5(random()::text || clock_timestamp()::text), 1, 8) || '-' ||
+    substr(md5(random()::text || clock_timestamp()::text), 1, 4) || '-' ||
+    '4' || substr(md5(random()::text || clock_timestamp()::text), 1, 3) || '-' ||
+    substr('89ab', (floor(random() * 4)::int + 1), 1) || substr(md5(random()::text || clock_timestamp()::text), 1, 3) || '-' ||
+    substr(md5(random()::text || clock_timestamp()::text), 1, 12)
+  )::uuid;
+$$;
 
 CREATE TABLE IF NOT EXISTS tenants (
     id uuid PRIMARY KEY,
@@ -75,7 +86,7 @@ CREATE TABLE IF NOT EXISTS arls_users (
 );
 
 CREATE TABLE IF NOT EXISTS attendance_records (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id uuid PRIMARY KEY DEFAULT arls_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     employee_id uuid NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
     site_id uuid REFERENCES sites(id) ON DELETE SET NULL,
@@ -177,7 +188,7 @@ BEGIN
 END $$;
 
 CREATE TABLE IF NOT EXISTS push_devices (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  id uuid PRIMARY KEY DEFAULT arls_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   user_id uuid NOT NULL REFERENCES arls_users(id) ON DELETE CASCADE,
   platform text NOT NULL DEFAULT 'web',
@@ -348,6 +359,27 @@ BEGIN
     ) THEN
       ALTER TABLE document_templates ADD COLUMN created_at timestamptz NOT NULL DEFAULT timezone('utc', now());
     END IF;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'attendance_records' AND column_name = 'id'
+  ) THEN
+    ALTER TABLE attendance_records
+      ALTER COLUMN id SET DEFAULT arls_random_uuid();
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'push_devices' AND column_name = 'id'
+  ) THEN
+    ALTER TABLE push_devices
+      ALTER COLUMN id SET DEFAULT arls_random_uuid();
   END IF;
 END $$;
 

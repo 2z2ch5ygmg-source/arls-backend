@@ -6644,7 +6644,7 @@ def _persist_sentrix_hq_roster_snapshot(
                 created_at, updated_at
             )
             VALUES (
-                gen_random_uuid(), %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                arls_random_uuid(), %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s::jsonb,
@@ -6769,7 +6769,7 @@ def _queue_sentrix_hq_arls_bridge_actions(
                 source, idempotency_key, status, payload_json, created_at, updated_at
             )
             VALUES (
-                gen_random_uuid(), %s, %s, %s, %s, %s, %s, %s, %s,
+                arls_random_uuid(), %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, TRUE,
                 %s, %s, 'pending', %s::jsonb, timezone('utc', now()), timezone('utc', now())
             )
@@ -6833,7 +6833,7 @@ def _queue_sentrix_hq_arls_bridge_actions(
                 source, idempotency_key, status, payload_json, created_at, updated_at
             )
             VALUES (
-                gen_random_uuid(), %s, %s, %s, %s, %s, %s, %s, %s,
+                arls_random_uuid(), %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, TRUE,
                 %s, %s, 'pending', %s::jsonb, timezone('utc', now()), timezone('utc', now())
             )
@@ -8104,7 +8104,7 @@ def _apply_sentrix_hq_roster_batch(
                             payload_json, created_at
                         )
                         VALUES (
-                            gen_random_uuid(), %s, %s, %s, %s, %s, %s,
+                            arls_random_uuid(), %s, %s, %s, %s, %s, %s,
                             %s::jsonb, timezone('utc', now())
                         )
                         ON CONFLICT DO NOTHING

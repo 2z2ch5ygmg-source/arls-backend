@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -46,6 +47,8 @@ from .routers import (
 
 app = FastAPI(title="RG ARLS API", version="0.1.0")
 logger = logging.getLogger(__name__)
+_startup_warmup_started = False
+_startup_warmup_lock = threading.Lock()
 
 PRIMARY_FRONTEND_ORIGIN = "https://rgarlsfront50018.z12.web.core.windows.net"
 BACKEND_APP_ORIGIN = "https://rg-arls-backend.azurewebsites.net"
@@ -340,8 +343,30 @@ def root() -> dict:
 
 @app.on_event("startup")
 def startup() -> None:
-    get_pool()
-    ensure_seed_admin()
-    with get_connection() as conn:
-        ensure_attendance_runtime_schema(conn)
-    start_attendance_auto_checkout_scheduler()
+    global _startup_warmup_started
+    with _startup_warmup_lock:
+        if _startup_warmup_started:
+            return
+        _startup_warmup_started = True
+
+    def _warmup_runtime() -> None:
+        try:
+            get_pool()
+            ensure_seed_admin()
+            with get_connection() as conn:
+                ensure_attendance_runtime_schema(conn)
+        except Exception:
+            logger.exception("startup warmup failed")
+            return
+
+        try:
+            start_attendance_auto_checkout_scheduler()
+        except Exception:
+            logger.exception("attendance scheduler startup failed")
+
+    thread = threading.Thread(
+        target=_warmup_runtime,
+        name="arls-startup-warmup",
+        daemon=True,
+    )
+    thread.start()

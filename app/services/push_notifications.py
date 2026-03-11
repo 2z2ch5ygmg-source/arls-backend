@@ -31,7 +31,7 @@ def ensure_push_schema(conn) -> None:
             cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS push_devices (
-                    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                    id uuid PRIMARY KEY DEFAULT arls_random_uuid(),
                     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
                     user_id uuid NOT NULL REFERENCES arls_users(id) ON DELETE CASCADE,
                     platform text NOT NULL DEFAULT 'web',
@@ -43,6 +43,12 @@ def ensure_push_schema(conn) -> None:
                     last_seen_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
                     UNIQUE (tenant_id, user_id, device_token)
                 );
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE push_devices
+                  ALTER COLUMN id SET DEFAULT arls_random_uuid();
                 """
             )
             cur.execute(
