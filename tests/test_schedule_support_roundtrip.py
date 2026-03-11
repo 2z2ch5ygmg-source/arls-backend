@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from io import BytesIO
 from datetime import date
 import unittest
 from pathlib import Path
@@ -31,7 +32,7 @@ from app.routers.v1.schedules import (
 )
 
 
-TEMPLATE_PATH = Path("/Users/seoseong-won/Documents/rg-arls-dev/backend/app/templates/monthly_schedule_template.xlsx")
+TEMPLATE_PATH = Path("/Users/mark/Desktop/rg-arls-dev/app/templates/monthly_schedule_template.xlsx")
 
 
 class ScheduleSupportRoundtripTests(unittest.TestCase):
@@ -169,6 +170,27 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertGreaterEqual(len(rows_meta["weekly_rows"]), 7)
         self.assertEqual(sheet.cell(row=rows_meta["weekly_rows"][0], column=day_col).value, "Apple_가로수길 박준연")
 
+    def test_support_only_workbook_can_export_blank_worker_slots_without_prefill(self):
+        export_ctx = self._build_export_ctx()
+        workbook = _build_support_only_workbook(
+            export_ctx=export_ctx,
+            target_tenant={"tenant_code": "srs_korea"},
+            site_row={"site_code": "R692", "site_name": "Apple_가로수길"},
+            month_key="2026-03",
+            source_revision="src-rev-blank",
+            active_assignments=[],
+            include_existing_assignments=False,
+        )
+
+        sheet = workbook["Apple_가로수길"]
+        date_columns, _ = _extract_arls_date_columns(sheet)
+        day_col = next(col for col, value in date_columns.items() if value.isoformat() == "2026-03-01")
+        rows_meta = _locate_support_section_rows(sheet)
+
+        self.assertIsNone(sheet.cell(row=rows_meta["weekly_rows"][0], column=day_col).value)
+        self.assertIsNone(sheet.cell(row=rows_meta["night_rows"][0], column=day_col).value)
+        self.assertEqual(sheet.cell(row=rows_meta["weekly_count_row"], column=day_col).value, 0)
+
     def test_clone_support_hq_sheet_to_workbook_copies_dimension_style_without_error(self):
         source_workbook = Workbook()
         source_sheet = source_workbook.active
@@ -176,6 +198,7 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         source_sheet["A1"] = "지원근무"
         source_sheet.column_dimensions["A"].width = 24
         source_sheet.row_dimensions[1].height = 28
+        source_sheet["A1"].number_format = "@"
 
         target_workbook = Workbook()
         target_workbook.remove(target_workbook.active)
@@ -190,6 +213,12 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertEqual(cloned_sheet["A1"].value, "지원근무")
         self.assertEqual(cloned_sheet.column_dimensions["A"].width, 24)
         self.assertEqual(cloned_sheet.row_dimensions[1].height, 28)
+
+        out = BytesIO()
+        target_workbook.save(out)
+        out.seek(0)
+        reloaded = load_workbook(out)
+        self.assertEqual(reloaded["Apple_가로수길"]["A1"].value, "지원근무")
 
     def test_parse_sentrix_hq_worker_cell_normalizes_external_and_internal(self):
         employee_index = _build_employee_name_index(

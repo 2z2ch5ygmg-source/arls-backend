@@ -5227,23 +5227,17 @@ def _clone_support_hq_sheet_to_workbook(source_sheet, *, target_workbook: Workbo
         target_dimension.bestFit = source_dimension.bestFit
         target_dimension.outlineLevel = source_dimension.outlineLevel
         target_dimension.collapsed = source_dimension.collapsed
-        if getattr(source_dimension, "has_style", False):
-            target_dimension._style = copy(source_dimension._style)
     for row_key, source_dimension in source_sheet.row_dimensions.items():
         target_dimension = target_sheet.row_dimensions[row_key]
         target_dimension.height = source_dimension.height
         target_dimension.hidden = source_dimension.hidden
         target_dimension.outlineLevel = source_dimension.outlineLevel
         target_dimension.collapsed = source_dimension.collapsed
-        if getattr(source_dimension, "has_style", False):
-            target_dimension._style = copy(source_dimension._style)
     for row in source_sheet.iter_rows():
         for source_cell in row:
             if isinstance(source_cell, MergedCell):
                 continue
             target_cell = target_sheet.cell(row=source_cell.row, column=source_cell.column, value=source_cell.value)
-            if source_cell.has_style:
-                target_cell._style = copy(source_cell._style)
             if source_cell.number_format:
                 target_cell.number_format = source_cell.number_format
             if source_cell.font:
@@ -5750,8 +5744,11 @@ def _build_support_roster_hq_download_workbook(
         scope=scope,
         site_code=selected_site_code,
     )
-    workbook = Workbook()
-    workbook.remove(workbook.active)
+    single_site_bundle = len(selected_sites) == 1
+    workbook = None
+    if not single_site_bundle:
+        workbook = Workbook()
+        workbook.remove(workbook.active)
     written_sites: list[dict[str, Any]] = []
     template_version = ARLS_EXPORT_TEMPLATE_VERSION
     for site_entry in selected_sites:
@@ -5781,21 +5778,14 @@ def _build_support_roster_hq_download_workbook(
             user=user,
         )
         template_version = str(export_ctx.get("template_version") or template_version)
-        active_assignments = _list_sentrix_hq_assignment_rows_for_download(
-            conn,
-            tenant_id=str(target_tenant["id"]),
-            site_code=str(site_row.get("site_code") or "").strip(),
-            month_key=month_key,
-            source_id=str(source_row["id"]),
-            source_revision=str(source_row.get("source_revision") or "").strip(),
-        )
         site_workbook = _build_support_only_workbook(
             export_ctx=export_ctx,
             target_tenant=target_tenant,
             site_row=site_row,
             month_key=month_key,
             source_revision=str(source_row.get("source_revision") or "").strip(),
-            active_assignments=active_assignments,
+            active_assignments=[],
+            include_existing_assignments=False,
         )
         visible_sheet_name = next(
             (
@@ -5807,11 +5797,14 @@ def _build_support_roster_hq_download_workbook(
         )
         if not visible_sheet_name:
             raise HTTPException(status_code=409, detail="support workbook sheet missing")
-        _clone_support_hq_sheet_to_workbook(
-            site_workbook[visible_sheet_name],
-            target_workbook=workbook,
-            title=exact_sheet_name,
-        )
+        if single_site_bundle:
+            workbook = site_workbook
+        else:
+            _clone_support_hq_sheet_to_workbook(
+                site_workbook[visible_sheet_name],
+                target_workbook=workbook,
+                title=exact_sheet_name,
+            )
         written_sites.append(
             {
                 "site_code": str(site_row.get("site_code") or "").strip(),
@@ -5819,7 +5812,7 @@ def _build_support_roster_hq_download_workbook(
                 "source_revision": str(source_row.get("source_revision") or "").strip(),
             }
         )
-    if not workbook.worksheets:
+    if workbook is None or not workbook.worksheets:
         raise HTTPException(status_code=409, detail="support workbook generation failed")
     workbook.active = 0
     _write_sentrix_support_hq_metadata_sheet(
@@ -9279,7 +9272,7 @@ def _populate_support_assignment_sections(
     for row_idx in [*weekly_rows, *night_rows]:
         for idx, _date_key in enumerate(day_keys):
             col_idx = ARLS_DATE_START_COL + idx
-            sheet.cell(row=row_idx, column=col_idx, value=None)
+            sheet.cell(row=row_idx, column=col_idx).value = None
     for idx, date_key in enumerate(day_keys):
         col_idx = ARLS_DATE_START_COL + idx
         weekly_group = sorted(
@@ -9320,6 +9313,7 @@ def _build_support_only_workbook(
     month_key: str,
     source_revision: str,
     active_assignments: list[dict[str, Any]],
+    include_existing_assignments: bool = True,
 ) -> Workbook:
     workbook = export_ctx["workbook"]
     visible_sheet = workbook[ARLS_SHEET_NAME]
@@ -9340,8 +9334,10 @@ def _build_support_only_workbook(
     day_keys = _month_day_keys(*_month_bounds(month_key))
     if active_assignments:
         support_rows = active_assignments
-    else:
+    elif include_existing_assignments:
         support_rows = _fallback_support_assignments_from_export_ctx(export_ctx, include_internal=True)
+    else:
+        support_rows = []
     _populate_support_assignment_sections(
         visible_sheet,
         day_keys=day_keys,
@@ -10747,18 +10743,14 @@ def download_support_roundtrip_hq_workbook(
         month_key=month,
         user=user,
     )
-    active_assignments = _list_support_roundtrip_assignments(
-        conn,
-        source_id=str(source_row["id"]),
-        source_revision=str(source_row.get("source_revision") or "").strip(),
-    )
     workbook = _build_support_only_workbook(
         export_ctx=export_ctx,
         target_tenant=target_tenant,
         site_row=site_row,
         month_key=month,
         source_revision=str(source_row.get("source_revision") or "").strip(),
-        active_assignments=active_assignments,
+        active_assignments=[],
+        include_existing_assignments=False,
     )
     out = BytesIO()
     workbook.save(out)
