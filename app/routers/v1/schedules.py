@@ -13941,7 +13941,7 @@ def _persist_schedule_import_preview_batch(
             validation_error = str(row.get("validation_error") or "").strip() or None
             if (
                 str(row.get("source_block") or "").strip() != "sentrix_support_ticket"
-                and (validation_code or row.get("is_protected"))
+                and bool(row.get("is_blocking"))
                 and len(invalid_samples) < 20
             ):
                 invalid_samples.append(

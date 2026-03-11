@@ -1,4 +1,4 @@
-const SW_VERSION = 'rg-arls-sw-v20260311-monthly-import-preview-fix-v1';
+const SW_VERSION = 'rg-arls-sw-v20260311-monthly-import-preview-ux-fix-v1';
 const SHELL_CACHE = `${SW_VERSION}-shell`;
 const STATIC_CACHE = `${SW_VERSION}-static`;
 const ACTIVE_CACHES = new Set([SHELL_CACHE, STATIC_CACHE]);

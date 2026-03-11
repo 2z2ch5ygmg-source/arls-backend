@@ -9090,6 +9090,10 @@ function formatScheduleImportDutyLabel(value = '') {
 function getScheduleImportRowActionLabel(row = {}) {
   const applyAction = String(row?.apply_action || '').trim();
   const diffCategory = String(row?.diff_category || '').trim();
+  const isProtected = Boolean(row?.is_protected) || diffCategory === 'ignored_protected';
+  const isBlocking = Boolean(row?.is_blocking);
+  if (isBlocking) return '반영 불가';
+  if (isProtected) return '검토 전용';
   if (applyAction === 'create') return '생성';
   if (applyAction === 'update') return '수정';
   if (applyAction === 'delete') return '삭제';
@@ -9102,11 +9106,13 @@ function getScheduleImportRowActionLabel(row = {}) {
 
 function getScheduleImportRowState(row = {}) {
   const diffCategory = String(row?.diff_category || '').trim().toLowerCase();
-  if (row?.is_blocking || row?.validation_code || row?.is_valid === false) {
-    return { key: 'blocked', chipLabel: '차단', chipClass: 'schedule-upload-result-chip schedule-upload-result-chip-error' };
-  }
-  if (row?.is_protected || diffCategory === 'ignored_protected') {
+  const isProtected = Boolean(row?.is_protected) || diffCategory === 'ignored_protected';
+  const isBlocking = Boolean(row?.is_blocking) || (!isProtected && row?.is_valid === false);
+  if (isProtected) {
     return { key: 'protected', chipLabel: '보호영역 무시', chipClass: 'schedule-upload-result-chip schedule-upload-result-chip-warn' };
+  }
+  if (isBlocking) {
+    return { key: 'blocked', chipLabel: '차단', chipClass: 'schedule-upload-result-chip schedule-upload-result-chip-error' };
   }
   if (diffCategory === 'review') {
     return { key: 'review', chipLabel: '검토 필요', chipClass: 'schedule-upload-result-chip schedule-upload-result-chip-warn' };
