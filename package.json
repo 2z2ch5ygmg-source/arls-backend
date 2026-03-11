@@ -1,0 +1,23 @@
+{
+  "name": "rg-arls-dev",
+  "version": "1.0.0",
+  "description": "Multi-tenant 인력관리 MVP 백엔드 + 웹 프론트(PWA) 초기 뼈대.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@capacitor/cli": "^7.5.0",
+    "@capacitor/core": "^8.1.0"
+  },
+  "dependencies": {
+    "@capacitor/geolocation": "^8.1.0",
+    "@capacitor/ios": "^8.1.0",
+    "@capacitor/local-notifications": "^8.0.1",
+    "@capacitor/push-notifications": "^8.0.1",
+    "capacitor-secure-storage-plugin": "^0.13.0"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "appId": "com.rg.arls.app.dev.woonseo",
+  "appName": "XC com rg arls app dev woonseo",
+  "webDir": "frontend",
+  "server": {
+    "url": "https://rgarlsfront50018.z12.web.core.windows.net",
+    "cleartext": false,
+    "allowNavigation": [
+      "rgarlsfront50018.z12.web.core.windows.net",
+      "rg-arls-backend.azurewebsites.net"
+    ]
+  }
+}

@@ -3,6 +3,9 @@
 ## Files changed
 - `app/routers/v1/schedules.py`
 - `app/schemas.py`
+- `frontend/index.html`
+- `frontend/js/app.js`
+- `frontend/css/styles.css`
 - `tests/test_schedule_monthly_import_canonical.py`
 
 ## Exact parser bugs fixed
@@ -66,21 +69,34 @@
   - `analysis_stage`
   - `analysis_timings_ms`
 - The deterministic context key is derived from tenant/site/month/current revision/file hash.
-- This makes stale-result invalidation deterministic for the existing UI contract:
-  - file change
-  - site change
-  - month change
-  - mapping-profile/context change
+- Frontend monthly upload workspace now uses those values together with a local file/site/month signature to lock the active analysis run and detect stale results.
+- While analysis is running, the following controls are disabled in the actual upload UI:
+  - upload file
+  - target site
+  - target month
+  - preview/apply/reset actions that would invalidate the active run
+- The UI now shows a visible progress block with staged analysis messaging:
+  - workbook loading
+  - section parsing
+  - employee matching
+  - template mapping
+  - preview building
+- When file/site/month changes after a completed analysis:
+  - the previous preview is preserved for reference
+  - `previewBatchId` is cleared
+  - the result is marked stale
+  - apply is disabled until a fresh analysis completes
 
 ## Performance changes
 - Empty unchanged body/support rows are skipped early instead of fully resolving and persisting them.
 - Employee matching is skipped for blank/no-op rows.
 - Template lookup is now O(1) by template id instead of repeated list scans.
 - Analysis timings are logged and returned in preview metadata.
+- The frontend now presents a deterministic analyzing state instead of leaving mutating controls editable during the request.
 
 ## What was intentionally not changed
 - Final ARLS write/apply workflow was not redesigned.
 - Sentrix apply logic was not expanded or redesigned in this pass.
 - HQ support roster parsing was not broadened.
 - Existing Phase 1/2 workspace structure was preserved.
-- No tracked frontend source existed in this workspace, so the lock/stale behavior was added at the backend preview metadata contract layer rather than a UI redesign.
+- No new Sentrix ticket/apply behavior was introduced.

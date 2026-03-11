@@ -18,6 +18,7 @@
 - Skip employee matching for no-op blank body rows.
 - Keep issue grouping as a grouped post-step instead of repeated duplicate issue payload construction for profile-level failures.
 - Return and log analysis timing metadata for every major phase.
+- Surface a real frontend analyzing/progress state so the request no longer looks frozen while server work is running.
 
 ## Analysis timing instrumentation now emitted
 - `workbook_load`
@@ -49,3 +50,4 @@
 - Re-run the original real workbook on the patched build.
 - Capture `analysis_timings_ms` from the preview response.
 - Compare `request_total` and `preview_persist` directly against the prior observed 2-3 minute behavior.
+- Confirm the frontend now locks file/site/month until the preview request returns.

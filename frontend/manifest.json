@@ -1,0 +1,11 @@
+{
+  "name": "RG ARLS",
+  "short_name": "RG ARLS",
+  "start_url": "/?api=https://rg-arls-backend.azurewebsites.net",
+  "display": "standalone",
+  "background_color": "#eef2ff",
+  "theme_color": "#0055ff",
+  "description": "출퇴근/휴가/스케줄 관리 PWA",
+  "lang": "ko-KR",
+  "icons": []
+}
