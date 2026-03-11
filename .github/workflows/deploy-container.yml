@@ -25,9 +25,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
+        id: buildx
         uses: docker/setup-buildx-action@v3
         with:
           driver: docker-container
+          install: true
 
       # Azure 로그인 (OIDC)
       - name: Azure Login (OIDC)
@@ -49,6 +51,7 @@ jobs:
       - name: Build & Push Docker Image
         uses: docker/build-push-action@v6
         with:
+          builder: ${{ steps.buildx.outputs.name }}
           context: .
           push: true
           tags: |
