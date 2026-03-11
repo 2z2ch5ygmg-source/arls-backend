@@ -14,6 +14,7 @@ from app.routers.v1.schedules import (
     ARLS_SHEET_NAME,
     _build_arls_month_sheet,
     _build_import_current_body_index_from_existing_schedule_rows,
+    _format_schedule_import_mapping_requirement_label,
     _build_schedule_import_mapping_lookup,
     _collect_monthly_export_context,
     _locate_support_section_rows,
@@ -255,6 +256,17 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
         self.assertTrue(issues)
         self.assertTrue(blocked_reasons)
         self.assertTrue(missing_entries)
+        self.assertIn("주간근무 10시간", " ".join(blocked_reasons))
+
+    def test_format_schedule_import_mapping_requirement_label_is_operator_friendly(self):
+        self.assertEqual(
+            _format_schedule_import_mapping_requirement_label("day", 10),
+            "주간근무 10시간",
+        )
+        self.assertEqual(
+            _format_schedule_import_mapping_requirement_label("night", "10.00"),
+            "야간근무 10시간",
+        )
 
     def test_parse_support_worker_cell_rejects_multi_person_input(self):
         parsed = _parse_support_worker_cell("BK 박준연 / BK 김민수")

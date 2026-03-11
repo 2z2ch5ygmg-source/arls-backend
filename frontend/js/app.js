@@ -798,6 +798,8 @@ function createInitialScheduleState() {
     employees: [],
     templateRows: [],
     templatesFetchedAt: 0,
+    importMappingProfile: null,
+    importMappingProfileFetchedAt: 0,
     selectedEmployeeCode: '',
     selectedDateKey: '',
     lastInteractedDateKey: '',
@@ -8656,7 +8658,7 @@ const SCHEDULE_IMPORT_ISSUE_GROUPS = Object.freeze({
   TEMPLATE_MAPPING_MISSING: {
     title: '근무 템플릿 매칭 실패',
     description: '셀 값을 근무 템플릿으로 해석할 수 없습니다.',
-    guidance: '근무 템플릿 준비 상태를 확인하고 셀 값을 현재 템플릿 규칙에 맞게 수정하세요.',
+    guidance: '엑셀 숫자값(행 유형 + 시간)을 ARLS 근무 템플릿 시간 범위와 연결한 mapping profile을 확인하세요.',
   },
   CANNOT_RESOLVE_TEMPLATE: {
     title: '템플릿 연결 오류',
@@ -8711,7 +8713,7 @@ const SCHEDULE_IMPORT_ISSUE_GROUPS = Object.freeze({
   TEMPLATE_PROFILE_NOT_PREPARED: {
     title: '매핑 프로필 미준비',
     description: 'tenant import mapping profile이 준비되지 않았습니다.',
-    guidance: 'row type + hours 기준 mapping profile을 먼저 준비하세요.',
+    guidance: '엑셀 숫자값(예: 주간 10, 주간 12)을 ARLS 근무 템플릿 시간 범위와 먼저 연결하세요.',
   },
   blocked_reason: {
     title: '적용 차단',
@@ -9142,16 +9144,29 @@ function buildScheduleImportIssueGroups(preview = state.preview) {
   if (!preview) return [];
   const groupedIssues = Array.isArray(preview?.issues) ? preview.issues : [];
   const blockedReasons = Array.isArray(preview?.blocked_reasons) ? preview.blocked_reasons.filter(Boolean) : [];
+  const mappingProfile = preview?.metadata?.mapping_profile && typeof preview.metadata.mapping_profile === 'object'
+    ? preview.metadata.mapping_profile
+    : null;
+  const missingMappingLabels = Array.isArray(mappingProfile?.missing_required_entry_labels) && mappingProfile.missing_required_entry_labels.length
+    ? mappingProfile.missing_required_entry_labels
+    : formatScheduleImportMappingRequirementLabels(mappingProfile?.missing_required_entries || []);
   const groups = groupedIssues.map((item) => {
     const code = normalizeScheduleImportIssueCode(item?.code || '');
     const meta = SCHEDULE_IMPORT_ISSUE_GROUPS[code] || SCHEDULE_IMPORT_ISSUE_GROUPS.blocked_reason;
     const exampleRows = Array.isArray(item?.example_rows) ? item.example_rows.filter((value) => Number(value) > 0).slice(0, 3) : [];
+    const description = String(item?.message || meta.description || '').trim();
+    const guidance = String(item?.guidance || meta.guidance || '').trim();
+    const needsMappingHelp = (
+      code === 'TEMPLATE_PROFILE_NOT_PREPARED'
+      || code === 'TEMPLATE_MAPPING_MISSING'
+      || code === 'CANNOT_RESOLVE_TEMPLATE'
+    ) && missingMappingLabels.length;
     return {
       key: code || 'blocked_reason',
       count: Number(item?.count || 0),
       title: meta.title,
-      description: String(item?.message || meta.description || '').trim(),
-      guidance: String(item?.guidance || meta.guidance || '').trim(),
+      description: needsMappingHelp ? `${description} 필요한 매핑: ${missingMappingLabels.join(', ')}.` : description,
+      guidance: needsMappingHelp ? `${guidance} 근무 템플릿 탭에서 매핑 프로필을 설정한 뒤 다시 분석하세요.` : guidance,
       examples: exampleRows.map((rowNo) => `행 ${rowNo}`),
     };
   }).filter((item) => item.count > 0);
@@ -9302,6 +9317,9 @@ function renderScheduleImportTechnicalDetails(preview = state.preview) {
     ? preview.metadata.mapping_profile
     : null;
   const metadata = preview?.metadata && typeof preview.metadata === 'object' ? preview.metadata : {};
+  const missingMappingLabels = Array.isArray(mappingProfile?.missing_required_entry_labels) && mappingProfile.missing_required_entry_labels.length
+    ? mappingProfile.missing_required_entry_labels
+    : formatScheduleImportMappingRequirementLabels(mappingProfile?.missing_required_entries || []);
   const groups = [
     {
       label: 'diff_counts',
@@ -9327,8 +9345,8 @@ function renderScheduleImportTechnicalDetails(preview = state.preview) {
         ? [
           String(mappingProfile.profile_name || 'active profile').trim(),
           `${Number(mappingProfile.entry_count || 0)} entries`,
-          Array.isArray(mappingProfile.missing_required_entries) && mappingProfile.missing_required_entries.length
-            ? `missing ${mappingProfile.missing_required_entries.join(', ')}`
+          missingMappingLabels.length
+            ? `missing ${missingMappingLabels.join(', ')}`
             : '',
         ].filter(Boolean).join(' · ')
         : '없음',
@@ -37037,7 +37055,10 @@ function onScheduleHqTabChange(tab = SCHEDULE_TAB_CALENDAR) {
   syncScheduleRouteTabQuery(state.schedule.hqTab);
   if (state.schedule.hqTab === SCHEDULE_TAB_TEMPLATES) {
     runActionSafely(
-      loadScheduleTemplateRows({ force: false }),
+      Promise.allSettled([
+        loadScheduleTemplateRows({ force: false }),
+        loadScheduleImportMappingProfile({ force: false }),
+      ]),
       '근무 템플릿 목록을 불러오지 못했습니다.',
     );
     renderScheduleDesktopDrawer();
@@ -37088,11 +37109,97 @@ function formatScheduleTemplateTimeRange(row = {}) {
   return `${start.slice(0, 5)}-${end.slice(0, 5)}`;
 }
 
+function formatScheduleImportMappingRequirementLabel(value = '') {
+  const [rowTypeRaw, hoursRaw] = String(value || '').trim().split(':');
+  const dutyLabel = formatScheduleTemplateDutyTypeLabel(rowTypeRaw || '').trim() || '-';
+  const hoursNumber = Number(hoursRaw || '');
+  if (Number.isFinite(hoursNumber)) {
+    return `${dutyLabel} ${Number.isInteger(hoursNumber) ? hoursNumber : hoursNumber}시간`.trim();
+  }
+  return [dutyLabel, String(hoursRaw || '').trim()].filter(Boolean).join(' ').trim() || String(value || '').trim() || '-';
+}
+
+function formatScheduleImportMappingRequirementLabels(values = []) {
+  return (Array.isArray(values) ? values : [])
+    .map((item) => formatScheduleImportMappingRequirementLabel(item))
+    .filter(Boolean);
+}
+
+function buildScheduleImportMappingTemplateOptions() {
+  return (Array.isArray(state.schedule?.templateRows) ? state.schedule.templateRows : [])
+    .filter((row) => String(row?.id || '').trim() && row?.is_active !== false)
+    .slice()
+    .sort((left, right) => {
+      const dutyCompare = getScheduleCreateTemplateDutyOrder(left?.duty_type) - getScheduleCreateTemplateDutyOrder(right?.duty_type);
+      if (dutyCompare !== 0) return dutyCompare;
+      return String(left?.template_name || '').localeCompare(String(right?.template_name || ''));
+    });
+}
+
+function buildScheduleImportMappingTemplateOptionLabel(row = {}) {
+  const dutyLabel = formatScheduleTemplateDutyTypeLabel(row?.duty_type);
+  const timeRange = formatScheduleTemplateTimeRange(row);
+  const paidHours = row?.paid_hours == null ? '' : `${row.paid_hours}h`;
+  const siteLabel = String(row?.site_name || row?.site_code || '공통').trim() || '공통';
+  const templateName = String(row?.template_name || '').trim() || '템플릿';
+  return [templateName, dutyLabel, timeRange !== '-' ? timeRange : '', paidHours, siteLabel]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function renderScheduleImportMappingProfileSummary() {
+  const badgeEl = $('#scheduleTemplateMappingBadge');
+  const textEl = $('#scheduleTemplateMappingText');
+  const missingEl = $('#scheduleTemplateMappingMissing');
+  if (!(badgeEl instanceof HTMLElement) || !(textEl instanceof HTMLElement) || !(missingEl instanceof HTMLElement)) return;
+
+  const profile = state.schedule?.importMappingProfile && typeof state.schedule.importMappingProfile === 'object'
+    ? state.schedule.importMappingProfile
+    : null;
+  const previewMapping = state.preview?.metadata?.mapping_profile && typeof state.preview.metadata.mapping_profile === 'object'
+    ? state.preview.metadata.mapping_profile
+    : null;
+  const missingLabels = Array.isArray(previewMapping?.missing_required_entry_labels) && previewMapping.missing_required_entry_labels.length
+    ? previewMapping.missing_required_entry_labels
+    : formatScheduleImportMappingRequirementLabels(previewMapping?.missing_required_entries || []);
+
+  badgeEl.className = 'status-pill status-pill-warn';
+  badgeEl.textContent = '미설정';
+  textEl.textContent = '엑셀 숫자값을 ARLS 근무 템플릿 시간 범위와 연결해야 업로드 분석이 가능합니다.';
+
+  if (profile && Number(profile.entry_count || 0) > 0) {
+    badgeEl.className = missingLabels.length ? 'status-pill status-pill-warn' : 'status-pill status-pill-success';
+    badgeEl.textContent = missingLabels.length
+      ? `${Number(profile.entry_count || 0)}개 매핑 · 추가 필요`
+      : `${Number(profile.entry_count || 0)}개 매핑`;
+    const entryLines = (Array.isArray(profile.entries) ? profile.entries : [])
+      .slice(0, 3)
+      .map((entry) => {
+        const requirement = formatScheduleImportMappingRequirementLabel(`${entry?.row_type || ''}:${entry?.numeric_hours ?? ''}`);
+        const templateName = String(entry?.template_name || '').trim() || '템플릿 미지정';
+        return `${requirement} -> ${templateName}`;
+      })
+      .filter(Boolean);
+    textEl.textContent = entryLines.length
+      ? `${String(profile.profile_name || '기본 월간 업로드 매핑').trim() || '기본 월간 업로드 매핑'} · ${entryLines.join(' / ')}`
+      : `${String(profile.profile_name || '기본 월간 업로드 매핑').trim() || '기본 월간 업로드 매핑'} · 매핑 항목을 확인하세요.`;
+  }
+
+  if (missingLabels.length) {
+    missingEl.classList.remove('hidden');
+    missingEl.textContent = `현재 업로드 기준 필요한 매핑: ${missingLabels.join(', ')}`;
+  } else {
+    missingEl.classList.add('hidden');
+    missingEl.textContent = '';
+  }
+}
+
 function renderScheduleTemplateTable() {
   const tableBody = $('#scheduleTemplateTableBody');
   const statusEl = $('#scheduleTemplateStatus');
   if (!(tableBody instanceof HTMLElement)) return;
   tableBody.innerHTML = '';
+  renderScheduleImportMappingProfileSummary();
 
   const rows = Array.isArray(state.schedule?.templateRows) ? state.schedule.templateRows : [];
   if (!rows.length) {
@@ -37183,6 +37290,252 @@ async function loadScheduleTemplateRows({ force = false } = {}) {
   state.schedule.templatesFetchedAt = Date.now();
   renderScheduleTemplateTable();
   return state.schedule.templateRows;
+}
+
+async function loadScheduleImportMappingProfile({ force = false } = {}) {
+  if (!canMutateScheduleData()) return null;
+  const now = Date.now();
+  const cached = state.schedule?.importMappingProfile;
+  const fetchedAt = Number(state.schedule?.importMappingProfileFetchedAt || 0);
+  const isFresh = cached && fetchedAt > 0 && (now - fetchedAt) < SCHEDULE_TEMPLATE_ROWS_CACHE_TTL_MS;
+  if (!force && isFresh) {
+    renderScheduleImportMappingProfileSummary();
+    return cached;
+  }
+  const profile = await apiRequest(`/schedules/import-mapping-profile?tenant_code=${encodeURIComponent(getScheduleTenantValue())}`);
+  state.schedule.importMappingProfile = profile && typeof profile === 'object' ? profile : null;
+  state.schedule.importMappingProfileFetchedAt = Date.now();
+  renderScheduleImportMappingProfileSummary();
+  return state.schedule.importMappingProfile;
+}
+
+function createScheduleImportMappingEntryEditorRow(entry = {}, templateOptions = []) {
+  const row = document.createElement('div');
+  row.className = 'schedule-mapping-entry-row';
+
+  const rowTypeField = document.createElement('label');
+  rowTypeField.className = 'input-field';
+  rowTypeField.textContent = '행 유형';
+  const rowTypeSelect = document.createElement('select');
+  rowTypeSelect.dataset.mappingField = 'row_type';
+  [
+    { value: 'day', label: '주간근무' },
+    { value: 'overtime', label: '초과근무' },
+    { value: 'night', label: '야간근무' },
+  ].forEach((item) => {
+    const option = document.createElement('option');
+    option.value = item.value;
+    option.textContent = item.label;
+    rowTypeSelect.appendChild(option);
+  });
+  rowTypeSelect.value = String(entry?.row_type || 'day').trim().toLowerCase() || 'day';
+  rowTypeField.appendChild(rowTypeSelect);
+
+  const hoursField = document.createElement('label');
+  hoursField.className = 'input-field';
+  hoursField.textContent = '시간';
+  const hoursInput = document.createElement('input');
+  hoursInput.type = 'number';
+  hoursInput.step = '0.5';
+  hoursInput.min = '0.5';
+  hoursInput.max = '24';
+  hoursInput.dataset.mappingField = 'numeric_hours';
+  hoursInput.value = entry?.numeric_hours == null ? '' : String(entry.numeric_hours);
+  hoursField.appendChild(hoursInput);
+
+  const templateField = document.createElement('label');
+  templateField.className = 'input-field';
+  templateField.textContent = '연결 템플릿';
+  const templateSelect = document.createElement('select');
+  templateSelect.dataset.mappingField = 'template_id';
+  const syncTemplateOptions = () => {
+    const selectedTemplateId = String(templateSelect.value || entry?.template_id || '').trim();
+    const dutyType = String(rowTypeSelect.value || '').trim().toLowerCase();
+    templateSelect.innerHTML = '<option value="">템플릿 선택</option>';
+    templateOptions
+      .filter((item) => String(item?.duty_type || '').trim().toLowerCase() === dutyType)
+      .forEach((item) => {
+        const option = document.createElement('option');
+        option.value = String(item?.id || '').trim();
+        option.textContent = buildScheduleImportMappingTemplateOptionLabel(item);
+        templateSelect.appendChild(option);
+      });
+    if (selectedTemplateId && Array.from(templateSelect.options).some((item) => String(item.value || '').trim() === selectedTemplateId)) {
+      templateSelect.value = selectedTemplateId;
+    }
+  };
+  rowTypeSelect.addEventListener('change', syncTemplateOptions);
+  syncTemplateOptions();
+  templateField.appendChild(templateSelect);
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'btn btn-secondary';
+  removeBtn.textContent = '삭제';
+  removeBtn.addEventListener('click', () => row.remove());
+
+  row.appendChild(rowTypeField);
+  row.appendChild(hoursField);
+  row.appendChild(templateField);
+  row.appendChild(removeBtn);
+  return row;
+}
+
+async function openScheduleImportMappingEditor() {
+  if (!canMutateScheduleData()) {
+    showToast('매핑 프로필 권한이 없습니다.', 'error');
+    return;
+  }
+  await Promise.allSettled([
+    loadScheduleTemplateRows({ force: false }),
+    loadScheduleImportMappingProfile({ force: false }),
+  ]);
+  const templateOptions = buildScheduleImportMappingTemplateOptions();
+  if (!templateOptions.length) {
+    showToast('먼저 활성 근무 템플릿을 준비해 주세요.', 'error');
+    return;
+  }
+
+  const profile = state.schedule?.importMappingProfile && typeof state.schedule.importMappingProfile === 'object'
+    ? state.schedule.importMappingProfile
+    : null;
+  const previewMapping = state.preview?.metadata?.mapping_profile && typeof state.preview.metadata.mapping_profile === 'object'
+    ? state.preview.metadata.mapping_profile
+    : null;
+  const missingEntries = Array.isArray(previewMapping?.missing_required_entries) ? previewMapping.missing_required_entries : [];
+
+  const content = document.createElement('div');
+  content.className = 'stack';
+
+  const intro = document.createElement('p');
+  intro.className = 'muted';
+  intro.textContent = '엑셀 숫자값(예: 주간 10, 주간 12)을 ARLS 근무 템플릿 시간 범위와 연결합니다.';
+  content.appendChild(intro);
+
+  if (missingEntries.length) {
+    const required = document.createElement('p');
+    required.className = 'muted';
+    required.textContent = `현재 업로드 기준 필요한 매핑: ${formatScheduleImportMappingRequirementLabels(missingEntries).join(', ')}`;
+    content.appendChild(required);
+  }
+
+  const profileNameField = document.createElement('label');
+  profileNameField.className = 'input-field';
+  profileNameField.textContent = '프로필명';
+  const profileNameInput = document.createElement('input');
+  profileNameInput.id = 'scheduleImportMappingProfileName';
+  profileNameInput.value = String(profile?.profile_name || '기본 월간 업로드 매핑').trim() || '기본 월간 업로드 매핑';
+  profileNameField.appendChild(profileNameInput);
+  content.appendChild(profileNameField);
+
+  const rowList = document.createElement('div');
+  rowList.id = 'scheduleImportMappingEntryList';
+  rowList.className = 'schedule-mapping-entry-list';
+  content.appendChild(rowList);
+
+  const currentEntries = Array.isArray(profile?.entries) ? profile.entries : [];
+  const existingKeys = new Set(
+    currentEntries.map((entry) => {
+      const rowType = String(entry?.row_type || '').trim().toLowerCase();
+      const hours = Number(entry?.numeric_hours ?? '');
+      return rowType && Number.isFinite(hours) ? `${rowType}:${hours.toFixed(2)}` : '';
+    }).filter(Boolean),
+  );
+  const seedEntries = [
+    ...currentEntries,
+    ...missingEntries
+      .map((item) => {
+        const [rowType, hoursText] = String(item || '').split(':');
+        const hours = Number(hoursText || '');
+        const key = rowType && Number.isFinite(hours) ? `${rowType}:${hours.toFixed(2)}` : '';
+        if (!key || existingKeys.has(key)) return null;
+        existingKeys.add(key);
+        return {
+          row_type: rowType,
+          numeric_hours: hours,
+          template_id: '',
+        };
+      })
+      .filter(Boolean),
+  ];
+
+  const appendRow = (entry = {}) => {
+    rowList.appendChild(createScheduleImportMappingEntryEditorRow(entry, templateOptions));
+  };
+
+  if (seedEntries.length) {
+    seedEntries.forEach((entry) => appendRow(entry));
+  } else {
+    appendRow({});
+  }
+
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'btn btn-secondary';
+  addBtn.textContent = '매핑 행 추가';
+  addBtn.addEventListener('click', () => appendRow({}));
+  content.appendChild(addBtn);
+
+  openSheet({
+    title: '월간 업로드 매핑 프로필',
+    contentNode: content,
+    actions: [
+      { label: '취소', variant: 'btn-secondary', action: 'sheet-close' },
+      { label: '저장', variant: 'btn-primary', action: 'schedule-import-mapping-save' },
+    ],
+  });
+  state.sheetContext = { type: 'schedule-import-mapping-editor' };
+}
+
+async function onScheduleImportMappingSave() {
+  if (!canMutateScheduleData()) {
+    showToast('매핑 프로필 권한이 없습니다.', 'error');
+    return;
+  }
+  const profileName = String($('#scheduleImportMappingProfileName')?.value || '').trim() || '기본 월간 업로드 매핑';
+  const rows = Array.from(document.querySelectorAll('#scheduleImportMappingEntryList .schedule-mapping-entry-row'));
+  const entries = [];
+  const seen = new Set();
+  for (const row of rows) {
+    const rowType = String(row.querySelector('[data-mapping-field="row_type"]')?.value || '').trim().toLowerCase();
+    const hoursRaw = String(row.querySelector('[data-mapping-field="numeric_hours"]')?.value || '').trim();
+    const templateId = String(row.querySelector('[data-mapping-field="template_id"]')?.value || '').trim();
+    if (!rowType && !hoursRaw && !templateId) continue;
+    const hours = Number(hoursRaw);
+    if (!rowType || !Number.isFinite(hours) || hours <= 0 || !templateId) {
+      showToast('행 유형, 시간, 연결 템플릿을 모두 입력해 주세요.', 'error');
+      return;
+    }
+    const key = `${rowType}:${hours.toFixed(2)}`;
+    if (seen.has(key)) {
+      showToast(`중복 매핑이 있습니다: ${formatScheduleImportMappingRequirementLabel(key)}`, 'error');
+      return;
+    }
+    seen.add(key);
+    entries.push({
+      row_type: rowType,
+      numeric_hours: hours,
+      template_id: templateId,
+    });
+  }
+  if (!entries.length) {
+    showToast('최소 한 개 이상의 매핑 항목을 입력해 주세요.', 'error');
+    return;
+  }
+
+  const profile = await apiRequest(`/schedules/import-mapping-profile?tenant_code=${encodeURIComponent(getScheduleTenantValue())}`, {
+    method: 'PUT',
+    body: {
+      profile_name: profileName,
+      entries,
+    },
+  });
+  state.schedule.importMappingProfile = profile && typeof profile === 'object' ? profile : null;
+  state.schedule.importMappingProfileFetchedAt = Date.now();
+  renderScheduleImportMappingProfileSummary();
+  invalidateScheduleImportAnalysis(['mapping_profile']);
+  closeSheet();
+  showToast('월간 업로드 매핑 프로필을 저장했습니다.', 'success', 2600);
 }
 
 async function refreshScheduleImportSiteOptions({ force = false } = {}) {
@@ -39218,6 +39571,7 @@ async function onScheduleTemplateSave() {
   closeSheet();
   showToast(templateId ? '근무 템플릿을 수정했습니다.' : '근무 템플릿을 생성했습니다.', 'success', 2200);
   await loadScheduleTemplateRows({ force: true });
+  await loadScheduleImportMappingProfile({ force: true });
 }
 
 async function onScheduleTemplateToggleActive(templateId = '', nextActive = true) {
@@ -39246,6 +39600,7 @@ async function onScheduleTemplateToggleActive(templateId = '', nextActive = true
   });
   showToast(nextActive ? '템플릿을 활성화했습니다.' : '템플릿을 비활성화했습니다.', 'success', 1800);
   await loadScheduleTemplateRows({ force: true });
+  await loadScheduleImportMappingProfile({ force: true });
 }
 
 function normalizeScheduleViewMode(value = '') {
@@ -47542,12 +47897,23 @@ function bindUiEvents() {
     }
 
     if (action === 'schedule-template-refresh') {
-      runWithBusy(() => loadScheduleTemplateRows({ force: true }), '템플릿 동기화 중...');
+      runWithBusy(
+        () => Promise.allSettled([
+          loadScheduleTemplateRows({ force: true }),
+          loadScheduleImportMappingProfile({ force: true }),
+        ]),
+        '템플릿 동기화 중...',
+      );
       return;
     }
 
     if (action === 'schedule-template-create') {
       runActionSafely(openScheduleTemplateEditor(''), '템플릿 생성 화면을 열지 못했습니다.');
+      return;
+    }
+
+    if (action === 'schedule-import-mapping-edit') {
+      runActionSafely(openScheduleImportMappingEditor(), '매핑 프로필 화면을 열지 못했습니다.');
       return;
     }
 
@@ -47558,6 +47924,11 @@ function bindUiEvents() {
 
     if (action === 'schedule-template-save') {
       runWithBusy(() => onScheduleTemplateSave(), '저장 중...');
+      return;
+    }
+
+    if (action === 'schedule-import-mapping-save') {
+      runWithBusy(() => onScheduleImportMappingSave(), '매핑 저장 중...');
       return;
     }
 

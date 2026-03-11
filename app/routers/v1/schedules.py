@@ -44,7 +44,9 @@ from ...schemas import (
     ImportPreviewOut,
     ImportPreviewRowOut,
     ScheduleImportMappingEntryOut,
+    ScheduleImportMappingEntryUpsert,
     ScheduleImportMappingProfileOut,
+    ScheduleImportMappingProfileUpsert,
     LateShiftCreate,
     LateShiftOut,
     ScheduleCloserUpdate,
@@ -304,7 +306,7 @@ SCHEDULE_IMPORT_ISSUE_CATALOG: dict[str, dict[str, str]] = {
     "TEMPLATE_MAPPING_MISSING": {
         "severity": "blocking",
         "message": "시간값에 대응하는 근무 템플릿 매핑이 없습니다.",
-        "guidance": "테넌트 import mapping profile에 (행 유형, 시간) 매핑을 준비하세요.",
+        "guidance": "엑셀 숫자값(행 유형 + 시간)을 ARLS 근무 템플릿 시간 범위와 연결하는 import mapping profile을 준비하세요.",
     },
     "MULTI_PERSON_CELL": {
         "severity": "blocking",
@@ -354,7 +356,7 @@ SCHEDULE_IMPORT_ISSUE_CATALOG: dict[str, dict[str, str]] = {
     "TEMPLATE_PROFILE_NOT_PREPARED": {
         "severity": "blocking",
         "message": "테넌트 import mapping profile이 준비되지 않았습니다.",
-        "guidance": "매핑 프로필과 필수 entry를 먼저 준비하세요.",
+        "guidance": "엑셀 숫자값(예: 주간 10, 주간 12)을 ARLS 근무 템플릿 시간 범위와 먼저 연결하세요.",
     },
 }
 
@@ -2018,6 +2020,7 @@ def _build_schedule_import_mapping_summary(profile: dict[str, Any] | None) -> di
             "is_active": False,
             "entry_count": 0,
             "missing_required_entries": [],
+            "missing_required_entry_labels": [],
             "entries": [],
         }
     entries_out: list[dict[str, Any]] = []
@@ -2054,8 +2057,36 @@ def _build_schedule_import_mapping_summary(profile: dict[str, Any] | None) -> di
         "entry_count": len(entries_out),
         "updated_at": profile.get("updated_at"),
         "missing_required_entries": [],
+        "missing_required_entry_labels": [],
         "entries": entries_out,
     }
+
+
+def _format_schedule_import_mapping_requirement_label(
+    row_type: str | None,
+    numeric_hours: float | int | str | None,
+) -> str:
+    normalized_row_type = _normalize_schedule_template_duty_type(row_type)
+    row_label = _schedule_template_duty_label(normalized_row_type)
+    hours_key = _normalize_hours_key(numeric_hours)
+    if not row_label and not hours_key:
+        return ""
+    try:
+        hours_value = float(hours_key)
+        hours_label = f"{int(hours_value)}시간" if abs(hours_value - int(hours_value)) < 0.001 else f"{hours_value:g}시간"
+    except (TypeError, ValueError):
+        hours_label = f"{hours_key}시간" if hours_key else ""
+    return " ".join(part for part in [row_label, hours_label] if part).strip()
+
+
+def _format_schedule_import_mapping_requirement_labels(entries: list[str] | set[str] | tuple[str, ...]) -> list[str]:
+    labels: list[str] = []
+    for item in entries:
+        row_type, _, hours_key = str(item or "").partition(":")
+        label = _format_schedule_import_mapping_requirement_label(row_type, hours_key)
+        if label and label not in labels:
+            labels.append(label)
+    return labels
 
 
 def _build_schedule_import_mapping_lookup(profile: dict[str, Any] | None) -> dict[tuple[str, str], dict[str, Any]]:
@@ -2068,6 +2099,151 @@ def _build_schedule_import_mapping_lookup(profile: dict[str, Any] | None) -> dic
             continue
         lookup[key] = dict(entry)
     return lookup
+
+
+def _serialize_schedule_import_mapping_profile(profile: dict[str, Any] | None) -> ScheduleImportMappingProfileOut:
+    return ScheduleImportMappingProfileOut(**_build_schedule_import_mapping_summary(profile))
+
+
+def _resolve_schedule_import_mapping_templates(
+    conn,
+    *,
+    tenant_id: str,
+    entries: list[ScheduleImportMappingEntryUpsert],
+) -> list[dict[str, Any]]:
+    resolved_entries: list[dict[str, Any]] = []
+    seen_keys: set[tuple[str, str]] = set()
+    for item in entries:
+        row_type = _normalize_schedule_template_duty_type(item.row_type)
+        hours_key = _normalize_hours_key(item.numeric_hours)
+        if not row_type or not hours_key:
+            raise HTTPException(status_code=400, detail="invalid mapping entry")
+        mapping_key = (row_type, hours_key)
+        if mapping_key in seen_keys:
+            raise HTTPException(
+                status_code=400,
+                detail=f"duplicate mapping entry: {_format_schedule_import_mapping_requirement_label(row_type, hours_key)}",
+            )
+        template_row = _fetch_template_by_id_for_scope(
+            conn,
+            tenant_id=tenant_id,
+            template_id=str(item.template_id),
+        )
+        if not template_row:
+            raise HTTPException(status_code=404, detail="mapping template not found")
+        if not bool(template_row.get("is_active")):
+            raise HTTPException(status_code=400, detail="mapping template must be active")
+        seen_keys.add(mapping_key)
+        resolved_entries.append(
+            {
+                "id": uuid.uuid4(),
+                "row_type": row_type,
+                "numeric_hours": float(hours_key),
+                "template_id": str(template_row.get("id") or "").strip(),
+            }
+        )
+    return resolved_entries
+
+
+@router.get("/import-mapping-profile", response_model=ScheduleImportMappingProfileOut)
+def get_schedule_import_mapping_profile(
+    tenant_code: str | None = Query(default=None, max_length=64),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    if not can_manage_schedule(user["role"]):
+        raise HTTPException(status_code=403, detail="forbidden")
+    target_tenant = _resolve_target_tenant(conn, user, tenant_code)
+    profile = _fetch_active_schedule_import_mapping_profile(conn, tenant_id=str(target_tenant["id"]))
+    return _serialize_schedule_import_mapping_profile(profile)
+
+
+@router.put("/import-mapping-profile", response_model=ScheduleImportMappingProfileOut)
+def upsert_schedule_import_mapping_profile(
+    payload: ScheduleImportMappingProfileUpsert,
+    tenant_code: str | None = Query(default=None, max_length=64),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    if not can_manage_schedule(user["role"]):
+        raise HTTPException(status_code=403, detail="forbidden")
+    target_tenant = _resolve_target_tenant(conn, user, tenant_code)
+    target_tenant_id = str(target_tenant["id"])
+    profile_name = str(payload.profile_name or "").strip() or "기본 월간 업로드 매핑"
+    resolved_entries = _resolve_schedule_import_mapping_templates(
+        conn,
+        tenant_id=target_tenant_id,
+        entries=list(payload.entries or []),
+    )
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id
+            FROM schedule_import_mapping_profiles
+            WHERE tenant_id = %s
+              AND is_active = TRUE
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT 1
+            """,
+            (target_tenant_id,),
+        )
+        current_row = cur.fetchone()
+        profile_id = str((current_row or {}).get("id") or "").strip()
+        if not profile_id:
+            profile_id = str(uuid.uuid4())
+            cur.execute(
+                """
+                INSERT INTO schedule_import_mapping_profiles (
+                    id, tenant_id, profile_name, is_active, created_by, created_at, updated_at
+                )
+                VALUES (
+                    %s, %s, %s, TRUE, %s, timezone('utc', now()), timezone('utc', now())
+                )
+                """,
+                (profile_id, target_tenant_id, profile_name, user.get("id")),
+            )
+        else:
+            cur.execute(
+                """
+                UPDATE schedule_import_mapping_profiles
+                SET profile_name = %s,
+                    is_active = TRUE,
+                    updated_at = timezone('utc', now())
+                WHERE id = %s
+                  AND tenant_id = %s
+                """,
+                (profile_name, profile_id, target_tenant_id),
+            )
+
+        cur.execute(
+            """
+            DELETE FROM schedule_import_mapping_entries
+            WHERE profile_id = %s
+            """,
+            (profile_id,),
+        )
+        for entry in resolved_entries:
+            cur.execute(
+                """
+                INSERT INTO schedule_import_mapping_entries (
+                    id, profile_id, row_type, numeric_hours, template_id, created_at, updated_at
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, timezone('utc', now()), timezone('utc', now())
+                )
+                """,
+                (
+                    entry["id"],
+                    profile_id,
+                    entry["row_type"],
+                    entry["numeric_hours"],
+                    entry["template_id"],
+                ),
+            )
+
+    profile = _fetch_active_schedule_import_mapping_profile(conn, tenant_id=target_tenant_id)
+    return _serialize_schedule_import_mapping_profile(profile)
 
 
 def _build_template_id_index(templates: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -13031,9 +13207,15 @@ def _validate_mapping_profile_requirements(
     blocked_reasons: list[str] = []
     missing_entries: list[str] = []
     required_keys = sorted(_collect_required_mapping_keys(body_cells))
+    required_entry_labels = _format_schedule_import_mapping_requirement_labels(
+        f"{row_type}:{hours_key}" for row_type, hours_key in required_keys
+    )
     if required_keys and not mapping_profile:
         issues.append(_build_import_issue("TEMPLATE_PROFILE_NOT_PREPARED", section="mapping_profile"))
-        blocked_reasons.append("근무 템플릿 매핑 프로필이 준비되지 않아 업로드를 진행할 수 없습니다.")
+        blocked_reasons.append(
+            "근무 템플릿 매핑 프로필이 준비되지 않아 업로드를 진행할 수 없습니다."
+            + (f" 필요한 매핑: {', '.join(required_entry_labels)}" if required_entry_labels else "")
+        )
         missing_entries.extend(f"{row_type}:{hours}" for row_type, hours in required_keys)
         return issues, blocked_reasons, missing_entries
     invalid_mapping_entries = [
@@ -13049,7 +13231,11 @@ def _validate_mapping_profile_requirements(
         if (row_type, hours_key) not in mapping_lookup:
             missing_entries.append(f"{row_type}:{hours_key}")
     if missing_entries:
-        blocked_reasons.append(f"필수 근무 템플릿 매핑 {len(missing_entries)}건이 누락되어 적용할 수 없습니다.")
+        missing_labels = _format_schedule_import_mapping_requirement_labels(missing_entries)
+        blocked_reasons.append(
+            f"필수 근무 템플릿 매핑 {len(missing_entries)}건이 누락되어 적용할 수 없습니다."
+            + (f" 누락: {', '.join(missing_labels)}" if missing_labels else "")
+        )
     return issues, blocked_reasons, missing_entries
 
 
@@ -13246,6 +13432,7 @@ def _build_schedule_import_preview_result(
     for reason in mapping_blocked_reasons:
         _append_blocked_reason(blocked_reasons, reason)
     mapping_summary["missing_required_entries"] = list(missing_mapping_entries)
+    mapping_summary["missing_required_entry_labels"] = _format_schedule_import_mapping_requirement_labels(missing_mapping_entries)
     requires_mapping_profile = bool(_collect_required_mapping_keys(list(parsed_uploaded.get("body_cells") or [])))
     missing_mapping_key_set = set(missing_mapping_entries)
     analysis_context_key, analysis_run_id = _build_schedule_import_analysis_context(
@@ -13320,7 +13507,7 @@ def _build_schedule_import_preview_result(
         ):
             if not mapping_profile and requires_mapping_profile:
                 validation_code = "TEMPLATE_PROFILE_NOT_PREPARED"
-                validation_error = "근무 템플릿 매핑 프로필이 없어 이 시간값을 해석할 수 없습니다."
+                validation_error = "엑셀 숫자값을 ARLS 근무 템플릿 시간 범위로 연결한 매핑 프로필이 없어 이 시간값을 해석할 수 없습니다."
             else:
                 validation_code = "TEMPLATE_MAPPING_MISSING"
                 validation_error = "매핑 가능한 근무 템플릿이 없습니다."

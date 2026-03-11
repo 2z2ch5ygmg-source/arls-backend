@@ -1096,7 +1096,35 @@ class ScheduleImportMappingProfileOut(BaseModel):
     entry_count: int = 0
     updated_at: Optional[datetime] = None
     missing_required_entries: list[str] = Field(default_factory=list)
+    missing_required_entry_labels: list[str] = Field(default_factory=list)
     entries: list[ScheduleImportMappingEntryOut] = Field(default_factory=list)
+
+
+class ScheduleImportMappingEntryUpsert(BaseModel):
+    row_type: Literal["day", "overtime", "night"]
+    numeric_hours: float = Field(gt=0, le=24)
+    template_id: UUID
+
+    @field_validator("row_type", mode="before")
+    @classmethod
+    def _normalize_mapping_row_type(cls, value: str) -> str:
+        normalized = str(value or "").strip().lower()
+        if normalized not in {"day", "overtime", "night"}:
+            raise ValueError("row_type must be day/overtime/night")
+        return normalized
+
+
+class ScheduleImportMappingProfileUpsert(BaseModel):
+    profile_name: Optional[str] = Field(default=None, max_length=120)
+    entries: list[ScheduleImportMappingEntryUpsert] = Field(default_factory=list)
+
+    @field_validator("profile_name", mode="before")
+    @classmethod
+    def _trim_profile_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
 
 
 class ImportPreviewRowOut(BaseModel):

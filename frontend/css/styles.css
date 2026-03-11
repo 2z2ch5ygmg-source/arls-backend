@@ -4947,6 +4947,43 @@ button:disabled,
   display: none !important;
 }
 
+.schedule-template-mapping-summary {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-12);
+  background: var(--bg-surface-elevated);
+}
+
+.schedule-template-mapping-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.schedule-template-mapping-summary-head strong {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.schedule-template-mapping-summary p {
+  margin: 0;
+}
+
+.schedule-mapping-entry-list {
+  display: grid;
+  gap: 12px;
+}
+
+.schedule-mapping-entry-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.9fr) minmax(96px, 0.6fr) minmax(0, 1.5fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
 .schedule-support-status-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
