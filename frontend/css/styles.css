@@ -4601,6 +4601,32 @@ button:disabled,
   gap: 4px;
 }
 
+.schedule-excel-context-strip {
+  margin-top: -2px;
+}
+
+.schedule-excel-workflow-tabs {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.schedule-excel-workflow-tabs .workspace-tab {
+  min-height: 40px;
+}
+
+.schedule-excel-workflow-section {
+  scroll-margin-top: 92px;
+}
+
+.schedule-excel-workflow-section-active {
+  border-color: rgba(249, 115, 22, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.12);
+}
+
+.schedule-upload-stage-shell {
+  gap: 14px;
+}
+
 .schedule-upload-step {
   display: grid;
   gap: 14px;
@@ -5025,10 +5051,18 @@ button:disabled,
   padding: 12px;
 }
 
+.schedule-support-action-section.is-disabled {
+  opacity: 0.7;
+}
+
 .schedule-support-upload-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.schedule-support-shortcut-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .schedule-support-artifact-list {
@@ -5087,6 +5121,10 @@ button:disabled,
 .schedule-finance-tab-panel {
   display: grid;
   gap: 10px;
+}
+
+.schedule-template-mapping-summary-secondary {
+  background: var(--bg-surface-muted);
 }
 
 .schedule-preview-head {
@@ -7532,6 +7570,10 @@ a:hover {
     gap: 14px;
   }
 
+  #view-schedule .schedule-excel-workflow-tabs {
+    margin-top: -2px;
+  }
+
   #view-schedule #scheduleReportsPanel {
     gap: 14px;
   }
@@ -7557,6 +7599,10 @@ a:hover {
 
   #view-schedule .schedule-support-actions-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  #view-schedule .schedule-support-shortcut-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   #view-schedule .schedule-support-status-grid {
@@ -7682,6 +7728,10 @@ a:hover {
   }
 
   #view-schedule .schedule-support-actions-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #view-schedule .schedule-support-shortcut-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
