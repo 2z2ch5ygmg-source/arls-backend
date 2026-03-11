@@ -1107,6 +1107,7 @@ const state = {
   siteEditorLookupLoading: false,
   siteTenantFilterValue: '',
   submitSiteBusy: false,
+  submitEmployeeBusy: false,
   submitLoginBusy: false,
   uiBindingsController: null,
   sheetContext: null,
@@ -30348,7 +30349,13 @@ function refreshEmployeeFormSubmitAvailability() {
   const isEditMode = String($('#empId')?.value || '').trim().length > 0;
   const missing = collectEmployeeFormMissingFields({ isEditMode });
   const lookupLoading = Boolean(state.employeeAdmin.formLookupLoading);
-  submitBtn.disabled = lookupLoading || missing.length > 0;
+  const submitBusy = Boolean(state.submitEmployeeBusy);
+  if (submitBusy) {
+    setButtonsBusy(submitBtn, true, isEditMode ? '저장 중...' : '등록 중...');
+  } else {
+    setButtonsBusy(submitBtn, false);
+    submitBtn.disabled = lookupLoading || missing.length > 0;
+  }
 
   if (helper instanceof HTMLElement) {
     if (lookupLoading) {
@@ -30360,7 +30367,11 @@ function refreshEmployeeFormSubmitAvailability() {
     }
   }
   if (validationHint instanceof HTMLElement) {
-    if (lookupLoading) {
+    if (submitBusy) {
+      validationHint.textContent = isEditMode
+        ? '직원 정보를 저장하는 중입니다. 완료될 때까지 잠시 기다려 주세요.'
+        : '직원을 등록하는 중입니다. 완료될 때까지 잠시 기다려 주세요.';
+    } else if (lookupLoading) {
       validationHint.textContent = '필수 선택 데이터를 불러오는 중입니다. 잠시 후 저장할 수 있습니다.';
     } else {
       validationHint.textContent = missing.length ? `필수 항목: ${missing.join(', ')}` : '';
@@ -42731,6 +42742,9 @@ if (typeof window !== 'undefined') {
 
 async function onEmployeeSubmit(event) {
   event.preventDefault();
+  if (state.submitEmployeeBusy) {
+    return;
+  }
   if (!can('employeeWrite')) {
     showToast('직원 등록은 개발자 또는 지점관리자 권한이 필요합니다.', 'error');
     return;
@@ -42739,6 +42753,11 @@ async function onEmployeeSubmit(event) {
     showToast('회사/현장 참고 데이터를 불러오는 중입니다. 잠시 후 다시 저장해 주세요.', 'info', 2600);
     return;
   }
+  const submitBtn = $('#employeeSubmitBtn');
+  const isEditMode = String($('#empId')?.value || '').trim().length > 0;
+  state.submitEmployeeBusy = true;
+  setButtonsBusy(submitBtn, true, isEditMode ? '저장 중...' : '등록 중...');
+  refreshEmployeeFormSubmitAvailability();
   try {
     const editEmployeeId = String($('#empId')?.value || '').trim();
     const navRole = getNavigationRole();
@@ -42888,6 +42907,10 @@ async function onEmployeeSubmit(event) {
     }
   } catch (err) {
     showToast(normalizeActionError(err, '직원 등록에 실패했습니다.'), 'error', 4500);
+  } finally {
+    state.submitEmployeeBusy = false;
+    setButtonsBusy(submitBtn, false);
+    refreshEmployeeFormSubmitAvailability();
   }
 }
 
