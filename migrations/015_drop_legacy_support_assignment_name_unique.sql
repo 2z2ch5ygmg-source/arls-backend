@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS uq_support_assignment_tenant_site_date_name;
