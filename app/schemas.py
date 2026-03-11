@@ -1144,6 +1144,13 @@ class ImportPreviewMetadataOut(BaseModel):
     workbook_valid: bool = False
     revision_status: Optional[str] = None
     is_stale: bool = False
+    analysis_run_id: Optional[str] = None
+    analysis_context_key: Optional[str] = None
+    analysis_file_sha256: Optional[str] = None
+    analysis_stage: Optional[str] = None
+    analysis_locked_fields: list[str] = Field(default_factory=list)
+    stale_context_fields: list[str] = Field(default_factory=list)
+    analysis_timings_ms: dict[str, float] = Field(default_factory=dict)
     mapping_profile: Optional[ScheduleImportMappingProfileOut] = None
 
 

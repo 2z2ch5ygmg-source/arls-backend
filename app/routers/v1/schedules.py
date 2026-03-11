@@ -228,6 +228,8 @@ ARLS_ADDITIONAL_DAY_KEYWORDS = {
     "주간지원근무자",
 }
 ARLS_ADDITIONAL_NIGHT_KEYWORDS = {
+    "야간 추가 근무자",
+    "야간추가근무자",
     "야간 근무자",
     "야간근무자",
     "야간 지원 근무자",
@@ -241,6 +243,9 @@ ARLS_VENDOR_COUNT_KEYWORDS = {
 }
 ARLS_NEED_COUNT_KEYWORDS = {"필요인원 수"}
 ARLS_WORK_NOTE_KEYWORDS = {"작업 내용", "작업 목적"}
+ARLS_WEEKLY_COUNT_KEYWORDS = {"주간 추가 근무자 수"}
+ARLS_NIGHT_COUNT_KEYWORDS = {"야간 근무자 총 수"}
+ARLS_ANALYSIS_LOCKED_FIELDS = ["file", "site_code", "month", "mapping_profile"]
 ARLS_DAY_SUPPORT_BLOCK_ALIASES = {
     "주간 추가 근무자",
     "주간 지원 근무자",
@@ -387,9 +392,18 @@ def _normalize_template_label_token(value: object) -> str:
     return re.sub(r"\s+", "", str(value or "").strip())
 
 
+def _normalize_workbook_label_text(value: object) -> str:
+    return re.sub(r"\s+", " ", str(value or "").replace("\n", " ").strip())
+
+
 def _label_contains_any(value: object, keywords: set[str]) -> bool:
     token = _normalize_template_label_token(value)
     return any(_normalize_template_label_token(keyword) in token for keyword in keywords)
+
+
+def _label_equals_any(value: object, keywords: set[str]) -> bool:
+    token = _normalize_template_label_token(value)
+    return any(token == _normalize_template_label_token(keyword) for keyword in keywords)
 
 
 def _normalize_import_issue_code(value: str | None) -> str:
@@ -531,6 +545,48 @@ def _parse_support_count_value(value: object) -> tuple[int | None, str]:
     if text in {"-", "없음", "0건", "0", "없음(0)"}:
         return 0, text
     return None, text
+
+
+def _parse_support_required_count_value(value: object) -> tuple[int | None, str, bool]:
+    text = _normalize_workbook_display_value(value)
+    if not text:
+        return None, "", True
+    numeric = _parse_numeric_hours(text)
+    if numeric is not None:
+        return max(0, int(numeric)), text, False
+    match = re.search(r"(\d+)", text)
+    if match and match.group(1):
+        return max(0, int(match.group(1))), text, False
+    if text in {"-", "없음", "0건", "0", "없음(0)"}:
+        return 0, text, False
+    return None, text, False
+
+
+def _is_placeholder_employee_name(value: object) -> bool:
+    text = _normalize_workbook_display_value(value)
+    if not text:
+        return True
+    if text in {"-", "0"}:
+        return True
+    numeric = _parse_numeric_hours(text)
+    return numeric == 0
+
+
+def _support_block_has_meaningful_demand(
+    *,
+    valid_filled_count: int,
+    invalid_filled_count: int,
+    external_count_numeric: int | None,
+    external_count_raw: str,
+    purpose_text: str | None,
+) -> bool:
+    if valid_filled_count > 0 or invalid_filled_count > 0:
+        return True
+    if external_count_numeric not in (None, 0):
+        return True
+    if str(external_count_raw or "").strip():
+        return True
+    return bool(str(purpose_text or "").strip())
 
 
 def _classify_import_body_semantic_type(value: object) -> tuple[str, float | None]:
@@ -1046,6 +1102,31 @@ def _normalize_name_token(value: object) -> str:
     return re.sub(r"\s+", "", text)
 
 
+def _rounded_timing_ms(started_at: float) -> float:
+    return round((time.perf_counter() - started_at) * 1000, 3)
+
+
+def _build_schedule_import_analysis_context(
+    *,
+    tenant_code: str,
+    site_code: str,
+    month_key: str,
+    current_revision: str,
+    file_sha256: str,
+) -> tuple[str, str]:
+    base = "|".join(
+        [
+            str(tenant_code or "").strip(),
+            str(site_code or "").strip(),
+            str(month_key or "").strip(),
+            str(current_revision or "").strip(),
+            str(file_sha256 or "").strip(),
+        ]
+    )
+    context_key = hashlib.sha256(base.encode("utf-8")).hexdigest()
+    return context_key, context_key[:24]
+
+
 def _parse_month_text(value: object) -> tuple[int, int] | None:
     text = str(value or "").strip()
     if not text:
@@ -1074,6 +1155,8 @@ def _import_status_label(validation_code: str | None) -> str:
         return "직원 미존재"
     if code in {"TEMPLATE_MAPPING_MISSING", "CANNOT_RESOLVE_TEMPLATE"}:
         return "템플릿 없음"
+    if code == "TEMPLATE_PROFILE_NOT_PREPARED":
+        return "매핑 프로필 없음"
     if code == "TIME_CONFLICT":
         return "중복 일정"
     if code in {"UNSUPPORTED_CELL_FORMAT", "WORKER_CELL_INVALID", "SUPPORT_BLOCK_REQUIRED_COUNT_INVALID"}:
@@ -1106,6 +1189,8 @@ def _import_diff_status_label(*, diff_category: str | None, validation_code: str
         return "삭제"
     if category == "ignored_protected":
         return "보호영역 무시"
+    if category == "ignored_no_demand":
+        return "요청 없음"
     if category == "unchanged":
         return "변경 없음"
     if is_blocking:
@@ -1372,7 +1457,7 @@ def _parse_daytime_need_value(value: object) -> tuple[int | None, str]:
     numeric = _parse_numeric_hours(text)
     if numeric is not None:
         return max(0, int(numeric)), text
-    match = re.search(r"(\d+)\s*인", text)
+    match = re.search(r"(\d+)", text)
     if match:
         return max(0, int(match.group(1))), text
     if text in {"-", "없음", "0건", "0"}:
@@ -1983,6 +2068,16 @@ def _build_schedule_import_mapping_lookup(profile: dict[str, Any] | None) -> dic
             continue
         lookup[key] = dict(entry)
     return lookup
+
+
+def _build_template_id_index(templates: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    index: dict[str, dict[str, Any]] = {}
+    for row in templates:
+        template_id = str(row.get("id") or "").strip()
+        if not template_id:
+            continue
+        index[template_id] = dict(row)
+    return index
 
 
 def _resolve_shift_type_from_duty_type(duty_type: str | None) -> str:
@@ -3947,21 +4042,21 @@ def _build_arls_month_sheet(
 
 
 def _classify_arls_summary_row(label_col_b: object, label_col_c: object) -> tuple[str | None, str | None]:
-    left = str(label_col_b or "").strip().replace("\n", " ")
-    right = str(label_col_c or "").strip().replace("\n", " ")
+    left = _normalize_workbook_label_text(label_col_b)
+    right = _normalize_workbook_label_text(label_col_c)
     if _label_contains_any(label_col_c, ARLS_NEED_COUNT_KEYWORDS):
         return "daytime_need", "필요인원 수"
-    if left == "주간 근무자(직원) 수":
+    if _label_equals_any(left, {"주간 근무자(직원) 수"}):
         return "protected_summary", "주간 근무자(직원) 수"
-    if left == "주간 추가 근무자 수":
+    if _label_equals_any(left, ARLS_WEEKLY_COUNT_KEYWORDS):
         return "protected_summary", "주간 추가 근무자 수"
-    if left == "주간 출근자 총 수":
+    if _label_equals_any(left, {"주간 출근자 총 수"}):
         return "protected_summary", "주간 출근자 총 수"
     if _label_contains_any(label_col_b, ARLS_ADDITIONAL_DAY_KEYWORDS):
         return "protected_support_names", "주간 지원 근무자"
     if _label_contains_any(label_col_b, ARLS_ADDITIONAL_NIGHT_KEYWORDS):
         return "protected_night_names", "야간 지원 근무자"
-    if left == "야간 근무자 총 수":
+    if _label_equals_any(left, ARLS_NIGHT_COUNT_KEYWORDS):
         return "protected_summary", "야간 근무자 총 수"
     if _label_contains_any(label_col_c, ARLS_VENDOR_COUNT_KEYWORDS):
         return "protected_vendor_count", "외부인원 투입 수"
@@ -3971,6 +4066,7 @@ def _classify_arls_summary_row(label_col_b: object, label_col_c: object) -> tupl
 
 
 def _parse_arls_canonical_import_sheet(sheet) -> dict[str, Any]:
+    parse_started_at = time.perf_counter()
     date_columns, month_ctx = _extract_arls_date_columns(sheet)
     data_start_row = _find_template_data_start_row(sheet)
     rows_meta = _locate_support_section_rows(sheet)
@@ -4019,10 +4115,15 @@ def _parse_arls_canonical_import_sheet(sheet) -> dict[str, Any]:
             row_idx += 1
             continue
         expected = ("day", "overtime", "night")
+        employee_name_value = sheet.cell(row=row_idx, column=2).value
+        employee_name = _normalize_workbook_display_value(employee_name_value)
         labels = tuple(
             _normalize_schedule_template_duty_type(sheet.cell(row=row_idx + offset, column=3).value)
             for offset in range(0, min(3, max(body_end_row - row_idx + 1, 0)))
         )
+        if _is_placeholder_employee_name(employee_name_value) and row_idx + 2 <= body_end_row:
+            row_idx += 3
+            continue
         if row_idx + 2 > body_end_row or labels != expected:
             issues.append(
                 _build_import_issue(
@@ -4035,11 +4136,7 @@ def _parse_arls_canonical_import_sheet(sheet) -> dict[str, Any]:
             )
             row_idx += 1
             continue
-        employee_name = _normalize_workbook_display_value(sheet.cell(row=row_idx, column=2).value)
         employee_sequence = sheet.cell(row=row_idx, column=1).value
-        if not employee_name or employee_name in {"0", "-"}:
-            row_idx += 3
-            continue
         for duty_offset, duty_type in enumerate(expected):
             duty_row = row_idx + duty_offset
             for col_idx, schedule_date in date_columns.items():
@@ -4163,41 +4260,9 @@ def _parse_arls_canonical_import_sheet(sheet) -> dict[str, Any]:
 
             required_count_raw = None
             required_count_numeric = None
+            required_count_state = "provided"
             required_row_key = "day_need_row" if block_type == "day_support" else "night_need_row"
             required_row = rows_meta.get(required_row_key)
-            if required_row:
-                required_row = int(required_row)
-                raw_value = sheet.cell(row=required_row, column=col_idx).value
-                required_count_numeric, required_count_raw = _parse_daytime_need_value(raw_value)
-                issue_code = None
-                issue_message = None
-                if required_count_numeric is None:
-                    issue_code = "SUPPORT_BLOCK_REQUIRED_COUNT_INVALID"
-                    issue_message = "필요 인원 수를 해석할 수 없습니다."
-                    block_issues.append(issue_code)
-                    issues.append(
-                        _build_import_issue(
-                            issue_code,
-                            message=issue_message,
-                            sheet_name=sheet.title,
-                            row_no=required_row,
-                            col_no=col_idx,
-                            section=block_type,
-                        )
-                    )
-                row_payload = append_support_value_row(
-                    row_no=required_row,
-                    col_no=col_idx,
-                    schedule_date=schedule_date,
-                    source_block=f"{block_type}_required_count",
-                    section_label="필요인원 수",
-                    raw_value=raw_value,
-                    parsed_semantic_type="numeric_count" if required_count_numeric is not None else "invalid",
-                    issue_code=issue_code,
-                    issue_message=issue_message,
-                )
-                need_cells.append({**row_payload, "required_count_numeric": required_count_numeric})
-
             external_count_raw = None
             external_count_numeric = None
             vendor_row_key = "day_vendor_count_row" if block_type == "day_support" else "night_vendor_count_row"
@@ -4269,6 +4334,65 @@ def _parse_arls_canonical_import_sheet(sheet) -> dict[str, Any]:
                     )
                 )
 
+            if required_row:
+                required_row = int(required_row)
+                raw_value = sheet.cell(row=required_row, column=col_idx).value
+                required_count_numeric, required_count_raw, required_blank = _parse_support_required_count_value(raw_value)
+                issue_code = None
+                issue_message = None
+                if required_blank:
+                    if _support_block_has_meaningful_demand(
+                        valid_filled_count=valid_filled_count,
+                        invalid_filled_count=invalid_filled_count,
+                        external_count_numeric=external_count_numeric,
+                        external_count_raw=external_count_raw or "",
+                        purpose_text=purpose_text,
+                    ):
+                        issue_code = "SUPPORT_BLOCK_REQUIRED_COUNT_INVALID"
+                        issue_message = "필요 인원 수가 비어 있어 지원 요청 규모를 확정할 수 없습니다."
+                        required_count_state = "invalid_blank"
+                    else:
+                        required_count_numeric = 0
+                        required_count_state = "no_demand"
+                elif required_count_numeric is None:
+                    issue_code = "SUPPORT_BLOCK_REQUIRED_COUNT_INVALID"
+                    issue_message = "필요 인원 수를 해석할 수 없습니다."
+                    required_count_state = "invalid"
+                if issue_code:
+                    block_issues.append(issue_code)
+                    issues.append(
+                        _build_import_issue(
+                            issue_code,
+                            message=issue_message,
+                            sheet_name=sheet.title,
+                            row_no=required_row,
+                            col_no=col_idx,
+                            section=block_type,
+                        )
+                    )
+                row_payload = append_support_value_row(
+                    row_no=required_row,
+                    col_no=col_idx,
+                    schedule_date=schedule_date,
+                    source_block=f"{block_type}_required_count",
+                    section_label="필요인원 수",
+                    raw_value=raw_value,
+                    parsed_semantic_type=(
+                        "no_demand"
+                        if required_count_state == "no_demand"
+                        else ("numeric_count" if required_count_numeric is not None else "invalid")
+                    ),
+                    issue_code=issue_code,
+                    issue_message=issue_message,
+                )
+                need_cells.append(
+                    {
+                        **row_payload,
+                        "required_count_numeric": required_count_numeric,
+                        "required_count_state": required_count_state,
+                    }
+                )
+
             support_blocks.append(
                 {
                     "site": None,
@@ -4277,6 +4401,7 @@ def _parse_arls_canonical_import_sheet(sheet) -> dict[str, Any]:
                     "block_type": block_type,
                     "required_count_raw": required_count_raw,
                     "required_count_numeric": required_count_numeric,
+                    "required_count_state": required_count_state,
                     "external_count_raw": external_count_raw,
                     "external_count_numeric": external_count_numeric,
                     "purpose_text": purpose_text,
@@ -4302,6 +4427,9 @@ def _parse_arls_canonical_import_sheet(sheet) -> dict[str, Any]:
         "issues": issues,
         "section_rows": rows_meta,
         "summary_start_row": summary_start_row,
+        "timings_ms": {
+            "section_parse": _rounded_timing_ms(parse_started_at),
+        },
     }
 
 
@@ -8675,16 +8803,16 @@ def _locate_support_section_rows(sheet) -> dict[str, Any]:
     for row_idx in range(start_scan_row, min(sheet.max_row, 320) + 1):
         left = sheet.cell(row=row_idx, column=2).value
         right = sheet.cell(row=row_idx, column=3).value
-        right_text = str(right or "").strip().replace("\n", " ")
+        right_text = _normalize_workbook_label_text(right)
         if _label_contains_any(left, ARLS_ADDITIONAL_DAY_KEYWORDS) and right_text.startswith("근무자"):
             weekly_start = row_idx
         if _label_contains_any(left, ARLS_ADDITIONAL_NIGHT_KEYWORDS) and right_text.startswith("근무자"):
             night_start = row_idx
         if _label_contains_any(right, ARLS_NEED_COUNT_KEYWORDS):
             need_rows.append(row_idx)
-        if _normalize_template_label_token(left) == _normalize_template_label_token("주간 추가 근무자 수"):
+        if _label_equals_any(left, ARLS_WEEKLY_COUNT_KEYWORDS):
             weekly_count_row = row_idx
-        if _normalize_template_label_token(left) == _normalize_template_label_token("야간 근무자 총 수"):
+        if _label_equals_any(left, ARLS_NIGHT_COUNT_KEYWORDS):
             night_count_row = row_idx
         if _label_contains_any(right, ARLS_VENDOR_COUNT_KEYWORDS):
             vendor_rows.append(row_idx)
@@ -8693,7 +8821,7 @@ def _locate_support_section_rows(sheet) -> dict[str, Any]:
     if weekly_start:
         row_idx = weekly_start
         while row_idx <= sheet.max_row:
-            right = str(sheet.cell(row=row_idx, column=3).value or "").strip().replace("\n", " ")
+            right = _normalize_workbook_label_text(sheet.cell(row=row_idx, column=3).value)
             if not _is_worker_slot_label(right):
                 break
             weekly_rows.append(row_idx)
@@ -8701,7 +8829,7 @@ def _locate_support_section_rows(sheet) -> dict[str, Any]:
     if night_start:
         row_idx = night_start
         while row_idx <= sheet.max_row:
-            right = str(sheet.cell(row=row_idx, column=3).value or "").strip().replace("\n", " ")
+            right = _normalize_workbook_label_text(sheet.cell(row=row_idx, column=3).value)
             if not _is_worker_slot_label(right):
                 break
             night_rows.append(row_idx)
@@ -12892,6 +13020,7 @@ def _validate_mapping_profile_requirements(
 def _resolve_import_body_value(
     *,
     templates: list[dict],
+    template_index: dict[str, dict[str, Any]] | None = None,
     mapping_lookup: dict[tuple[str, str], dict[str, Any]] | None = None,
     duty_type: str,
     workbook_value: str,
@@ -12923,12 +13052,14 @@ def _resolve_import_body_value(
         return {}, "UNSUPPORTED_CELL_FORMAT", "잘못된 값"
     normalized_duty_type = _normalize_schedule_template_duty_type(duty_type)
     template_row = None
-    if mapping_lookup:
+    if mapping_lookup is not None:
         mapping_entry = mapping_lookup.get(_row_type_hours_mapping_key(normalized_duty_type, float(paid_hours)))
         if not mapping_entry:
             return {}, "TEMPLATE_MAPPING_MISSING", "매핑 가능한 근무 템플릿이 없습니다."
         target_template_id = str(mapping_entry.get("template_id") or "").strip()
-        template_row = next((row for row in templates if str(row.get("id") or "").strip() == target_template_id), None)
+        if template_index is None:
+            template_index = _build_template_id_index(templates)
+        template_row = template_index.get(target_template_id)
         if not template_row:
             return {}, "CANNOT_RESOLVE_TEMPLATE", "매핑된 근무 템플릿을 찾을 수 없습니다."
     else:
@@ -12982,7 +13113,12 @@ def _build_schedule_import_preview_result(
     selected_month: str,
     user: dict,
     filename: str,
+    file_sha256: str,
 ) -> dict[str, Any]:
+    preview_started_at = time.perf_counter()
+    timings_ms: dict[str, float] = {}
+
+    export_ctx_started_at = time.perf_counter()
     export_ctx = _collect_monthly_export_context(
         conn,
         target_tenant=target_tenant,
@@ -12990,7 +13126,9 @@ def _build_schedule_import_preview_result(
         month_key=selected_month,
         user=user,
     )
+    timings_ms["current_export_context"] = _rounded_timing_ms(export_ctx_started_at)
     current_revision = str(export_ctx.get("export_revision") or "").strip()
+    workbook_ctx_started_at = time.perf_counter()
     workbook_ctx = _detect_arls_import_workbook_context(
         workbook,
         selected_month=selected_month,
@@ -12998,14 +13136,21 @@ def _build_schedule_import_preview_result(
         expected_site_code=str(scope_site.get("site_code") or "").strip(),
         current_revision=current_revision,
     )
+    timings_ms["section_parse"] = _rounded_timing_ms(workbook_ctx_started_at)
     metadata = dict(workbook_ctx.get("metadata") or {})
     parsed_uploaded = dict(workbook_ctx.get("parsed_sheet") or {})
+    parse_timings = dict(parsed_uploaded.get("timings_ms") or {})
+    if parse_timings.get("section_parse") is not None:
+        timings_ms["section_parse"] = float(parse_timings["section_parse"])
 
     current_parsed = export_ctx["parsed_sheet"]
+    current_index_started_at = time.perf_counter()
     current_body_index = _build_visible_value_index(current_parsed.get("body_cells") or [])
     current_need_index = _build_visible_value_index(current_parsed.get("need_cells") or [], include_employee=False)
     current_support_index = _build_support_value_index(current_parsed.get("support_cells") or [])
+    timings_ms["current_value_index_build"] = _rounded_timing_ms(current_index_started_at)
 
+    template_preload_started_at = time.perf_counter()
     templates = _fetch_schedule_templates(
         conn,
         tenant_id=str(target_tenant["id"]),
@@ -13018,8 +13163,15 @@ def _build_schedule_import_preview_result(
     )
     mapping_lookup = _build_schedule_import_mapping_lookup(mapping_profile)
     mapping_summary = _build_schedule_import_mapping_summary(mapping_profile)
+    template_index = _build_template_id_index(templates)
+    timings_ms["template_mapping_preload"] = _rounded_timing_ms(template_preload_started_at)
+
+    employee_preload_started_at = time.perf_counter()
     employees = _load_site_employees(conn, tenant_id=str(target_tenant["id"]), site_id=str(scope_site["id"]))
     employee_index = _build_employee_name_index(employees)
+    timings_ms["employee_match_preload"] = _rounded_timing_ms(employee_preload_started_at)
+
+    existing_preload_started_at = time.perf_counter()
     existing_schedule_rows = _load_existing_schedule_rows_for_import(
         conn,
         tenant_id=str(target_tenant["id"]),
@@ -13039,6 +13191,7 @@ def _build_schedule_import_preview_result(
         overnight_rows=export_ctx["overnight_rows"],
         employee_overnight_rows=export_ctx["employee_overnight_rows"],
     )
+    timings_ms["existing_state_preload"] = _rounded_timing_ms(existing_preload_started_at)
 
     resolved_rows: list[dict[str, Any]] = []
     support_ticket_rows: list[dict[str, Any]] = []
@@ -13054,6 +13207,15 @@ def _build_schedule_import_preview_result(
     for reason in mapping_blocked_reasons:
         _append_blocked_reason(blocked_reasons, reason)
     mapping_summary["missing_required_entries"] = list(missing_mapping_entries)
+    requires_mapping_profile = bool(_collect_required_mapping_keys(list(parsed_uploaded.get("body_cells") or [])))
+    missing_mapping_key_set = set(missing_mapping_entries)
+    analysis_context_key, analysis_run_id = _build_schedule_import_analysis_context(
+        tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
+        site_code=str(scope_site.get("site_code") or "").strip(),
+        month_key=selected_month,
+        current_revision=current_revision,
+        file_sha256=file_sha256,
+    )
 
     def append_row_issue(
         code: str,
@@ -13074,6 +13236,7 @@ def _build_schedule_import_preview_result(
             )
         )
 
+    row_normalization_started_at = time.perf_counter()
     for row in parsed_uploaded.get("body_cells") or []:
         employee_name = str(row.get("employee_name") or "").strip()
         duty_type = _normalize_schedule_template_duty_type(row.get("duty_type"))
@@ -13081,9 +13244,15 @@ def _build_schedule_import_preview_result(
         workbook_value = str(row.get("work_value") or "").strip()
         if not isinstance(schedule_date, date):
             continue
+        parsed_semantic_type = str(row.get("parsed_semantic_type") or "").strip()
+        row_mapping_key = _row_type_hours_mapping_key(duty_type, row.get("numeric_hours"))
+        row_mapping_key_text = f"{row_mapping_key[0]}:{row_mapping_key[1]}" if row_mapping_key[0] and row_mapping_key[1] else None
         current_key = (_normalize_name_token(employee_name), duty_type, schedule_date.isoformat())
         current_row = current_body_index.get(current_key) or {}
         current_value = str(current_row.get("work_value") or "").strip()
+        if not workbook_value and not current_value:
+            diff_counts["unchanged"] += 1
+            continue
         employee_row = None
         validation_code = _normalize_import_issue_code(row.get("issue_code")) or None
         validation_error = str(row.get("issue_message") or "").strip() or None
@@ -13104,7 +13273,28 @@ def _build_schedule_import_preview_result(
             "mapping_key": None,
         }
 
-        if not validation_code:
+        if (
+            not validation_code
+            and parsed_semantic_type == "numeric_hours"
+            and row_mapping_key_text
+            and row_mapping_key_text in missing_mapping_key_set
+        ):
+            if not mapping_profile and requires_mapping_profile:
+                validation_code = "TEMPLATE_PROFILE_NOT_PREPARED"
+                validation_error = "근무 템플릿 매핑 프로필이 없어 이 시간값을 해석할 수 없습니다."
+            else:
+                validation_code = "TEMPLATE_MAPPING_MISSING"
+                validation_error = "매핑 가능한 근무 템플릿이 없습니다."
+                append_row_issue(
+                    validation_code,
+                    row_no=int(row.get("row_no") or 0),
+                    col_no=int(row.get("col_no") or 0),
+                    section="base_schedule",
+                    message=validation_error,
+                )
+            is_blocking = True
+
+        if not validation_code and (workbook_value or current_value):
             employee_row, employee_issue_code, employee_issue_message = _resolve_import_employee_match(
                 employee_index,
                 employee_name=employee_name,
@@ -13125,6 +13315,7 @@ def _build_schedule_import_preview_result(
         else:
             parsed_value_meta, value_error_code, value_error_message = _resolve_import_body_value(
                 templates=templates,
+                template_index=template_index,
                 mapping_lookup=mapping_lookup,
                 duty_type=duty_type,
                 workbook_value=workbook_value,
@@ -13218,6 +13409,9 @@ def _build_schedule_import_preview_result(
         else:
             diff_counts[diff_category] += 1
 
+        if not validation_code and diff_category == "unchanged" and not is_protected:
+            continue
+
         resolved_rows.append(
             {
                 "row_no": int(row.get("row_no") or 0),
@@ -13239,9 +13433,9 @@ def _build_schedule_import_preview_result(
                 "template_name": template_meta.get("template_name"),
                 "work_value": workbook_value or None,
                 "current_work_value": current_value or None,
-                "parsed_semantic_type": str(row.get("parsed_semantic_type") or ""),
+                "parsed_semantic_type": parsed_semantic_type,
                 "mapped_hours": row.get("numeric_hours"),
-                "mapping_key": template_meta.get("mapping_key"),
+                "mapping_key": template_meta.get("mapping_key") or row_mapping_key_text,
                 "shift_start_time": template_meta.get("shift_start_time"),
                 "shift_end_time": template_meta.get("shift_end_time"),
                 "paid_hours": template_meta.get("paid_hours"),
@@ -13275,14 +13469,21 @@ def _build_schedule_import_preview_result(
         diff_category = "unchanged"
         apply_action = "none"
         is_blocking = _issue_is_blocking(validation_code) if validation_code else False
+        required_count_state = str(row.get("required_count_state") or "").strip()
         if not validation_code:
-            if workbook_value == current_value:
+            if required_count_state == "no_demand" and not current_value:
+                diff_category = "ignored_no_demand"
+            elif workbook_value == current_value:
                 diff_category = "unchanged"
             elif workbook_value or current_value:
                 diff_category = "review"
         else:
             diff_category = "conflict"
         diff_counts[diff_category] += 1
+
+        if diff_category in {"unchanged", "ignored_no_demand"} and not validation_code and not current_value:
+            continue
+
         resolved_rows.append(
             {
                 "row_no": int(row.get("row_no") or 0),
@@ -13322,6 +13523,7 @@ def _build_schedule_import_preview_result(
                 "protected_reason": None,
                 "current_schedule_id": None,
                 "schedule_note": parsed_raw_text or None,
+                "required_count_state": required_count_state or None,
             }
         )
 
@@ -13351,7 +13553,11 @@ def _build_schedule_import_preview_result(
             is_protected = True
             protected_reason = "요약/관리 영역은 이번 단계에서 직접 반영되지 않습니다."
         elif source_block in {"day_support_external_count", "night_support_purpose", "day_support_worker", "night_support_worker"}:
+            is_protected = True
             protected_reason = "지원 수요/배정 영역은 이번 단계에서 분석 결과로만 제공합니다."
+        if not workbook_value and not current_value and not validation_code:
+            diff_counts["unchanged"] += 1
+            continue
         if workbook_value != current_value:
             if validation_code and is_blocking:
                 diff_category = "conflict"
@@ -13364,12 +13570,16 @@ def _build_schedule_import_preview_result(
                         col_no=int(row.get("col_no") or 0),
                         section=source_block,
                         message=validation_error,
-                    )
+                )
             else:
                 diff_category = "review"
         elif validation_code and is_blocking and workbook_value:
             diff_category = "conflict"
         diff_counts[diff_category] += 1
+
+        if diff_category == "unchanged" and not validation_code and not is_protected:
+            continue
+
         resolved_rows.append(
             {
                 "row_no": int(row.get("row_no") or 0),
@@ -13418,6 +13628,7 @@ def _build_schedule_import_preview_result(
         block_type = str(block.get("block_type") or "").strip()
         shift_kind = "night" if block_type == "night_support" else "day"
         request_count_numeric = block.get("required_count_numeric")
+        required_count_state = str(block.get("required_count_state") or "").strip()
         current_ticket = current_support_request_index.get((target_date.isoformat(), shift_kind)) or {}
         current_request_count = int(current_ticket.get("request_count") or 0) if current_ticket else 0
         current_work_purpose = str(current_ticket.get("work_purpose") or "").strip()
@@ -13426,14 +13637,18 @@ def _build_schedule_import_preview_result(
         is_blocking = False
         diff_category = "unchanged"
         apply_action = "none"
-        if request_count_numeric is None:
+        current_is_active = str(current_ticket.get("status") or SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS).strip() == SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS
+        if required_count_state == "no_demand":
+            if current_ticket and current_is_active:
+                diff_category = "delete"
+                apply_action = "retract_sentrix_ticket"
+        elif request_count_numeric is None:
             validation_code = "SUPPORT_BLOCK_REQUIRED_COUNT_INVALID"
             validation_error = "필요 인원 수를 해석할 수 없습니다."
             is_blocking = True
         else:
             desired_request_count = max(0, int(request_count_numeric))
             desired_work_purpose = str(block.get("purpose_text") or "").strip()
-            current_is_active = str(current_ticket.get("status") or SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS).strip() == SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS
             if desired_request_count > 0:
                 if not current_ticket:
                     diff_category = "create"
@@ -13459,6 +13674,8 @@ def _build_schedule_import_preview_result(
             diff_counts["conflict"] += 1
         elif apply_action != "none":
             diff_counts[f"sentrix_{diff_category}"] += 1
+        elif diff_category == "unchanged":
+            continue
         support_ticket_rows.append(
             {
                 "row_no": int(block.get("required_row_no") or block.get("required_row") or 0),
@@ -13501,6 +13718,7 @@ def _build_schedule_import_preview_result(
                 "current_request_count": current_request_count if current_ticket and current_is_active else 0,
                 "purpose_text": str(block.get("purpose_text") or "").strip() or None,
                 "current_purpose_text": current_work_purpose or None,
+                "required_count_state": required_count_state or None,
                 "worker_slot_count": int(block.get("worker_slot_count") or 0),
                 "valid_filled_count": int(block.get("valid_filled_count") or 0),
                 "invalid_filled_count": int(block.get("invalid_filled_count") or 0),
@@ -13524,6 +13742,7 @@ def _build_schedule_import_preview_result(
                 },
             }
         )
+    timings_ms["row_normalization_pass"] = _rounded_timing_ms(row_normalization_started_at)
 
     total_rows = (
         len(parsed_uploaded.get("body_cells") or [])
@@ -13552,7 +13771,9 @@ def _build_schedule_import_preview_result(
     if not preview_rows:
         preview_rows = resolved_rows[: min(len(resolved_rows), 20)]
 
+    issue_grouping_started_at = time.perf_counter()
     error_counts, grouped_issues = _summarize_import_issues(issue_records)
+    timings_ms["issue_grouping"] = _rounded_timing_ms(issue_grouping_started_at)
     base_applicable_rows = sum(
         1
         for row in resolved_rows
@@ -13568,15 +13789,14 @@ def _build_schedule_import_preview_result(
     )
     applicable_rows = base_applicable_rows + ticket_applicable_rows
     blocked_rows = sum(1 for row in resolved_rows if bool(row.get("is_blocking"))) + sum(1 for row in support_ticket_rows if bool(row.get("is_blocking")))
-    unchanged_rows = sum(1 for row in resolved_rows if str(row.get("diff_category") or "") == "unchanged")
+    unchanged_rows = int(diff_counts.get("unchanged") or 0)
     warning_rows = sum(
-        1
-        for row in resolved_rows
-        if not bool(row.get("is_blocking"))
-        and str(row.get("diff_category") or "") in {"review", "ignored_protected"}
+        int(diff_counts.get(key) or 0)
+        for key in {"review", "ignored_protected", "ignored_no_demand"}
     )
 
     can_apply = bool(workbook_ctx.get("workbook_valid")) and not blocked_reasons and blocked_rows == 0
+    timings_ms["preview_build"] = _rounded_timing_ms(preview_started_at)
 
     return {
         "resolved_rows": resolved_rows,
@@ -13606,6 +13826,13 @@ def _build_schedule_import_preview_result(
             "workbook_valid": bool(workbook_ctx.get("workbook_valid")),
             "revision_status": workbook_ctx.get("revision_status"),
             "is_stale": bool(workbook_ctx.get("is_stale")),
+            "analysis_run_id": analysis_run_id,
+            "analysis_context_key": analysis_context_key,
+            "analysis_file_sha256": file_sha256,
+            "analysis_stage": "completed",
+            "analysis_locked_fields": list(ARLS_ANALYSIS_LOCKED_FIELDS),
+            "stale_context_fields": list(ARLS_ANALYSIS_LOCKED_FIELDS),
+            "analysis_timings_ms": timings_ms,
             "mapping_profile": mapping_summary,
         },
         "can_apply": can_apply,
@@ -13746,15 +13973,19 @@ def preview_import(
     if not (can_manage_schedule(user["role"]) or _can_use_support_roundtrip_source(user)):
         raise HTTPException(status_code=403, detail="forbidden")
 
+    request_started_at = time.perf_counter()
     raw_bytes = file.file.read()
+    file_sha256 = hashlib.sha256(raw_bytes).hexdigest()
     detected_filename = str(file.filename or "").lower()
     is_xlsx = detected_filename.endswith(".xlsx")
 
     if is_xlsx:
+        workbook_load_started_at = time.perf_counter()
         try:
             workbook = load_workbook(filename=BytesIO(raw_bytes), read_only=False, data_only=False)
         except Exception as exc:
             raise HTTPException(status_code=400, detail="invalid import file") from exc
+        workbook_load_ms = _rounded_timing_ms(workbook_load_started_at)
         try:
             if ARLS_SHEET_NAME in workbook.sheetnames:
                 effective_site_code = _resolve_scoped_schedule_site_code(user, request_site_code=site_code)
@@ -13779,7 +14010,9 @@ def preview_import(
                     selected_month=str(month).strip(),
                     user=user,
                     filename=file.filename or "schedule_import.xlsx",
+                    file_sha256=file_sha256,
                 )
+                persist_started_at = time.perf_counter()
                 batch_id, errors = _persist_schedule_import_preview_batch(
                     conn,
                     preview=preview,
@@ -13788,6 +14021,23 @@ def preview_import(
                     month_key=str(month).strip(),
                     filename=file.filename or "schedule_import.xlsx",
                     user=user,
+                )
+                metadata_payload = dict(preview.get("metadata") or {})
+                metadata_payload["analysis_timings_ms"] = {
+                    **dict(metadata_payload.get("analysis_timings_ms") or {}),
+                    "workbook_load": workbook_load_ms,
+                    "preview_persist": _rounded_timing_ms(persist_started_at),
+                    "request_total": _rounded_timing_ms(request_started_at),
+                }
+                preview["metadata"] = metadata_payload
+                logger.info(
+                    "[schedule][import-preview] tenant=%s site=%s month=%s batch=%s timings_ms=%s rows=%s",
+                    str(target_tenant.get("tenant_code") or "").strip(),
+                    str(scope_site.get("site_code") or "").strip(),
+                    str(month or "").strip(),
+                    str(batch_id),
+                    json.dumps(metadata_payload.get("analysis_timings_ms") or {}, ensure_ascii=False, sort_keys=True),
+                    int(preview.get("total_rows") or 0),
                 )
                 total = int(preview["total_rows"])
                 valid = int(preview["valid_rows"])

@@ -24,7 +24,7 @@ from app.routers.v1.schedules import (
 )
 
 
-TEMPLATE_PATH = Path("/Users/seoseong-won/Documents/rg-arls-dev/backend/app/templates/monthly_schedule_template.xlsx")
+TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "app" / "templates" / "monthly_schedule_template.xlsx"
 
 
 class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
@@ -163,6 +163,7 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
     def test_parse_daytime_need_value_supports_numeric_and_text(self):
         self.assertEqual(_parse_daytime_need_value("4"), (4, "4"))
         self.assertEqual(_parse_daytime_need_value("5인"), (5, "5인"))
+        self.assertEqual(_parse_daytime_need_value("섭외 2인 요청"), (2, "섭외 2인 요청"))
         self.assertEqual(_parse_daytime_need_value("-"), (0, "-"))
         self.assertEqual(_parse_daytime_need_value("미정"), (None, "미정"))
 
@@ -218,6 +219,27 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
         self.assertEqual(resolved["template_id"], "tpl-night-10")
         self.assertEqual(resolved["shift_type"], "night")
 
+    def test_resolve_import_body_value_requires_mapping_when_lookup_is_supplied(self):
+        templates = [
+            {
+                "id": "tpl-day-12",
+                "template_name": "주간 12시간",
+                "duty_type": "day",
+                "start_time": "10:00:00",
+                "end_time": "22:00:00",
+                "paid_hours": 12,
+            }
+        ]
+        resolved, code, message = _resolve_import_body_value(
+            templates=templates,
+            mapping_lookup={},
+            duty_type="day",
+            workbook_value="12",
+        )
+        self.assertEqual(resolved, {})
+        self.assertEqual(code, "TEMPLATE_MAPPING_MISSING")
+        self.assertEqual(message, "매핑 가능한 근무 템플릿이 없습니다.")
+
     def test_validate_mapping_profile_requirements_requires_active_profile_for_numeric_hours(self):
         workbook = self._build_sample_workbook()
         parsed = _parse_arls_canonical_import_sheet(workbook[ARLS_SHEET_NAME])
@@ -246,6 +268,90 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
 
     def test_resolve_shift_type_from_duty_type_keeps_overtime_distinct(self):
         self.assertEqual(_resolve_shift_type_from_duty_type("overtime"), "overtime")
+
+    def test_parse_canonical_sheet_ignores_placeholder_zero_employee_rows(self):
+        workbook = self._build_sample_workbook()
+        sheet = workbook[ARLS_SHEET_NAME]
+        sheet["B5"] = "0"
+        sheet["B8"] = 0
+
+        parsed = _parse_arls_canonical_import_sheet(sheet)
+
+        self.assertEqual(parsed["body_cells"], [])
+        self.assertFalse(any(row.get("employee_name") in {"0", 0} for row in parsed["body_cells"]))
+
+    def test_support_section_label_normalization_accepts_newlines_and_spacing(self):
+        workbook = self._build_sample_workbook()
+        sheet = workbook[ARLS_SHEET_NAME]
+        rows_meta = _locate_support_section_rows(sheet)
+        sheet.cell(row=rows_meta["weekly_rows"][0], column=2, value="주간\n추가 근무자")
+        sheet.cell(row=rows_meta["night_rows"][0], column=2, value="야간\n추가 근무자")
+        sheet.cell(row=rows_meta["day_vendor_count_row"], column=3, value="외부인원 \n투입 수")
+        sheet.cell(row=rows_meta["work_note_row"], column=3, value="작업 내용")
+        sheet.cell(row=rows_meta["work_note_row"], column=4, value="정기 점검")
+
+        relocated = _locate_support_section_rows(sheet)
+        parsed = _parse_arls_canonical_import_sheet(sheet)
+        night_block = next(
+            row for row in parsed["support_blocks"]
+            if row["target_date"].isoformat() == "2026-03-01"
+            and row["block_type"] == "night_support"
+        )
+
+        self.assertEqual(relocated["weekly_rows"], rows_meta["weekly_rows"])
+        self.assertEqual(relocated["night_rows"], rows_meta["night_rows"])
+        self.assertEqual(relocated["day_vendor_count_row"], rows_meta["day_vendor_count_row"])
+        self.assertEqual(relocated["work_note_row"], rows_meta["work_note_row"])
+        self.assertEqual(night_block["purpose_text"], "정기 점검")
+
+    def test_blank_support_required_count_with_no_demand_is_non_blocking(self):
+        workbook = self._build_sample_workbook()
+        sheet = workbook[ARLS_SHEET_NAME]
+        rows_meta = _locate_support_section_rows(sheet)
+        sheet.cell(row=rows_meta["day_need_row"], column=4).value = None
+        sheet.cell(row=rows_meta["day_vendor_count_row"], column=4).value = None
+
+        parsed = _parse_arls_canonical_import_sheet(sheet)
+        block = next(
+            row for row in parsed["support_blocks"]
+            if row["target_date"].isoformat() == "2026-03-01"
+            and row["block_type"] == "day_support"
+        )
+        need_cell = next(
+            row for row in parsed["need_cells"]
+            if row["schedule_date"].isoformat() == "2026-03-01"
+            and row["source_block"] == "day_support_required_count"
+        )
+
+        self.assertEqual(block["required_count_state"], "no_demand")
+        self.assertEqual(block["required_count_numeric"], 0)
+        self.assertEqual(need_cell["parsed_semantic_type"], "no_demand")
+        self.assertIsNone(need_cell["issue_code"])
+        self.assertNotIn("SUPPORT_BLOCK_REQUIRED_COUNT_INVALID", block["issues"])
+
+    def test_blank_support_required_count_with_meaningful_payload_is_blocking(self):
+        workbook = self._build_sample_workbook()
+        sheet = workbook[ARLS_SHEET_NAME]
+        rows_meta = _locate_support_section_rows(sheet)
+        sheet.cell(row=rows_meta["day_need_row"], column=4).value = None
+        sheet.cell(row=rows_meta["weekly_rows"][0], column=4, value="홍길동")
+
+        parsed = _parse_arls_canonical_import_sheet(sheet)
+        block = next(
+            row for row in parsed["support_blocks"]
+            if row["target_date"].isoformat() == "2026-03-01"
+            and row["block_type"] == "day_support"
+        )
+        need_cell = next(
+            row for row in parsed["need_cells"]
+            if row["schedule_date"].isoformat() == "2026-03-01"
+            and row["source_block"] == "day_support_required_count"
+        )
+
+        self.assertEqual(block["required_count_state"], "invalid_blank")
+        self.assertIsNone(block["required_count_numeric"])
+        self.assertEqual(need_cell["issue_code"], "SUPPORT_BLOCK_REQUIRED_COUNT_INVALID")
+        self.assertIn("SUPPORT_BLOCK_REQUIRED_COUNT_INVALID", block["issues"])
 
 
 if __name__ == "__main__":
