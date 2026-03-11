@@ -104,6 +104,9 @@ class Settings:
     sentrix_support_bridge_token = os.getenv("SENTRIX_SUPPORT_BRIDGE_TOKEN", "").strip()
 
     request_timeout_seconds = 5
+    support_roster_handoff_timeout_seconds = int(
+        os.getenv("SUPPORT_ROSTER_HANDOFF_TIMEOUT_SECONDS", "90") or "90"
+    )
 
     google_sheets_default_webhook = os.getenv("GOOGLE_SHEETS_DEFAULT_WEBHOOK", "").strip()
     google_sheets_ingest_token = os.getenv("GOOGLE_SHEETS_INGEST_TOKEN", "").strip()

@@ -2156,7 +2156,7 @@ def _post_sentrix_support_roster_handoff(payload: dict[str, Any]) -> dict[str, A
         url,
         json=payload,
         headers=headers,
-        timeout=max(int(getattr(settings, "request_timeout_seconds", 5) or 5), 5),
+        timeout=max(int(getattr(settings, "support_roster_handoff_timeout_seconds", 90) or 90), 15),
     )
     response_payload: dict[str, Any] | None = None
     raw_text = str(response.text or "").strip()
