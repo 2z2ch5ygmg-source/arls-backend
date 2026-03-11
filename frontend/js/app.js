@@ -860,6 +860,7 @@ function createInitialScheduleState() {
     expandedDays: new Set(),
     desktopDrawerOpen: false,
     supportStatus: null,
+    supportHqWorkspace: createInitialScheduleSupportHqWorkspaceState(),
     supportPreviewBatchId: '',
     supportPreview: null,
     financeStatus: null,
@@ -1059,6 +1060,24 @@ function createInitialSupportStatusHqWorkspaceState() {
     applyLoading: false,
     applyError: '',
     applyResult: null,
+  };
+}
+
+function createInitialScheduleSupportHqWorkspaceState() {
+  return {
+    month: toMonthKey(new Date()),
+    loading: false,
+    error: '',
+    contract: null,
+    uploadFileName: '',
+    inspectLoading: false,
+    inspectError: '',
+    inspectResult: null,
+    applyLoading: false,
+    applyError: '',
+    applyResult: null,
+    stale: false,
+    staleFields: [],
   };
 }
 
@@ -5771,6 +5790,13 @@ function ensureSupportStatusHqWorkspaceState() {
   return workspace.hqWorkspace;
 }
 
+function ensureScheduleSupportHqWorkspaceState() {
+  if (!state.schedule?.supportHqWorkspace || typeof state.schedule.supportHqWorkspace !== 'object') {
+    state.schedule.supportHqWorkspace = createInitialScheduleSupportHqWorkspaceState();
+  }
+  return state.schedule.supportHqWorkspace;
+}
+
 function normalizeSupportStatusMode(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'day') return 'day';
@@ -9744,6 +9770,12 @@ function renderScheduleUploadWorkspace() {
   const selectedSite = String(siteSelect?.value || '').trim().toUpperCase();
   const hasFile = Boolean(fileInput?.files?.length);
   const uploadUi = getScheduleUploadUiState();
+  const supportHqWorkspace = ensureScheduleSupportHqWorkspaceState();
+  const supportHqBusy = Boolean(
+    supportHqWorkspace.loading
+    || supportHqWorkspace.inspectLoading
+    || supportHqWorkspace.applyLoading
+  );
 
   syncScheduleImportStaleState();
   renderScheduleImportMappingProfileSummary();
@@ -9760,26 +9792,26 @@ function renderScheduleUploadWorkspace() {
       : `지점 범위가 ${getScheduleImportSiteLabel(state.user?.site_code || selectedSite)}로 고정됩니다.`;
   }
   if (siteSelect instanceof HTMLSelectElement) {
-    siteSelect.disabled = uploadUi.analysisInFlight || !isScheduleUploadTenantWideUser();
+    siteSelect.disabled = uploadUi.analysisInFlight || supportHqBusy || !isScheduleUploadTenantWideUser();
   }
   if (monthInput instanceof HTMLInputElement) {
-    monthInput.disabled = uploadUi.analysisInFlight;
+    monthInput.disabled = uploadUi.analysisInFlight || supportHqBusy;
   }
   if (fileInput instanceof HTMLInputElement) {
-    fileInput.disabled = uploadUi.analysisInFlight;
+    fileInput.disabled = uploadUi.analysisInFlight || supportHqBusy;
   }
   if (previewBtn) {
-    previewBtn.disabled = uploadUi.analysisInFlight || !(hasFile && selectedSite && monthValue);
+    previewBtn.disabled = uploadUi.analysisInFlight || supportHqBusy || !(hasFile && selectedSite && monthValue);
     previewBtn.textContent = uploadUi.analysisInFlight ? '분석 중...' : '분석 시작';
   }
   if (latestBaseBtn) {
-    latestBaseBtn.disabled = uploadUi.analysisInFlight || !(selectedSite && monthValue);
+    latestBaseBtn.disabled = uploadUi.analysisInFlight || supportHqBusy || !(selectedSite && monthValue);
   }
   if (blankTemplateBtn) {
-    blankTemplateBtn.disabled = uploadUi.analysisInFlight;
+    blankTemplateBtn.disabled = uploadUi.analysisInFlight || supportHqBusy;
   }
   if (mappingEditBtn instanceof HTMLButtonElement) {
-    mappingEditBtn.disabled = uploadUi.analysisInFlight || !canMutateScheduleData();
+    mappingEditBtn.disabled = uploadUi.analysisInFlight || supportHqBusy || !canMutateScheduleData();
   }
 
   renderScheduleUploadProgress();
@@ -9801,6 +9833,7 @@ function renderScheduleUploadWorkspace() {
   }
 
   renderScheduleUploadApplyBar();
+  renderScheduleSupportHqWorkspace();
 }
 
 function renderSchedulePreviewTable(previewRows = []) {
@@ -10030,6 +10063,685 @@ function parseContentDispositionFilename(disposition = '', fallbackName = '') {
   }
   if (basicMatch?.[1]) return String(basicMatch[1]).trim() || fallback;
   return fallback;
+}
+
+function formatScheduleSupportHqContextFields(fields = []) {
+  const labels = {
+    site: '업로드 지점',
+    month: '대상 월',
+    file: '업로드 파일',
+  };
+  return Array.from(new Set((Array.isArray(fields) ? fields : []).filter(Boolean)))
+    .map((field) => labels[String(field || '').trim()] || String(field || '').trim())
+    .filter(Boolean)
+    .join(', ');
+}
+
+function buildScheduleSupportHqContext() {
+  const month = normalizeMonthKey($('#scheduleImportMonth')?.value || getScheduleMonthValue()) || getScheduleMonthValue();
+  const siteCode = getScheduleSupportSelectedSiteCode();
+  return {
+    month,
+    siteCode,
+    contextKey: `${month}::${siteCode || 'NONE'}`,
+  };
+}
+
+function getScheduleSupportHqWorkspaceSites() {
+  const workspace = ensureScheduleSupportHqWorkspaceState();
+  const sites = Array.isArray(workspace.contract?.sites) ? workspace.contract.sites : [];
+  return sites.map((site) => ({
+    siteCode: String(site?.site_code || '').trim().toUpperCase(),
+    siteName: String(site?.site_name || '').trim() || String(site?.site_code || '').trim().toUpperCase() || '-',
+    sheetName: String(site?.sheet_name || site?.site_name || site?.site_code || '').trim() || '-',
+    downloadReady: Boolean(site?.download_ready),
+    sourceState: String(site?.source_state || '').trim() || 'source_missing',
+    sourceRevision: String(site?.source_revision || '').trim(),
+    latestHqRevision: String(site?.latest_hq_revision || '').trim(),
+    latestStatus: String(site?.latest_status || '').trim() || 'source_missing',
+  })).filter((site) => site.siteCode);
+}
+
+function getScheduleSupportHqSelectedSiteContext() {
+  const currentSiteCode = String(buildScheduleSupportHqContext().siteCode || '').trim().toUpperCase();
+  if (!currentSiteCode || currentSiteCode === 'ALL') {
+    return currentSiteCode === 'ALL'
+      ? {
+        siteCode: 'ALL',
+        siteName: '전체 지점',
+        sheetName: 'ALL',
+        downloadReady: getScheduleSupportHqWorkspaceSites().some((site) => site.downloadReady),
+      }
+      : null;
+  }
+  return getScheduleSupportHqWorkspaceSites().find((site) => site.siteCode === currentSiteCode) || null;
+}
+
+function resetScheduleSupportHqWorkspace({
+  preserveFile = true,
+  preserveContract = true,
+  staleFields = [],
+} = {}) {
+  const workspace = ensureScheduleSupportHqWorkspaceState();
+  const fileInput = $('#scheduleSupportHqUploadFile');
+  const fileName = preserveFile
+    ? (
+      workspace.uploadFileName
+      || (
+        fileInput instanceof HTMLInputElement && fileInput.files?.length
+          ? String(fileInput.files[0]?.name || '').trim()
+          : ''
+      )
+    )
+    : '';
+  if (!preserveFile && fileInput instanceof HTMLInputElement) {
+    fileInput.value = '';
+  }
+  const nextContract = preserveContract ? workspace.contract : null;
+  const nextError = preserveContract ? workspace.error : '';
+  const nextLoading = preserveContract ? workspace.loading : false;
+  const nextMonth = buildScheduleSupportHqContext().month || toMonthKey(new Date());
+  const staleFieldList = Array.from(new Set((Array.isArray(staleFields) ? staleFields : []).filter(Boolean)));
+  workspace.month = nextMonth;
+  workspace.loading = nextLoading;
+  workspace.error = nextError;
+  workspace.contract = nextContract;
+  workspace.uploadFileName = fileName;
+  workspace.inspectLoading = false;
+  workspace.inspectError = '';
+  workspace.inspectResult = null;
+  workspace.applyLoading = false;
+  workspace.applyError = '';
+  workspace.applyResult = null;
+  workspace.stale = Boolean(staleFieldList.length && fileName);
+  workspace.staleFields = staleFieldList;
+}
+
+function renderScheduleSupportHqReviewSummary() {
+  const workspace = ensureScheduleSupportHqWorkspaceState();
+  const container = $('#scheduleSupportHqReviewSummary');
+  if (!(container instanceof HTMLElement)) return;
+  container.innerHTML = '';
+  const inspectResult = workspace.inspectResult && typeof workspace.inspectResult === 'object'
+    ? workspace.inspectResult
+    : null;
+  const summaryItems = inspectResult
+    ? [
+      { label: 'workbook 유효성', value: inspectResult.workbook_valid ? '검토 가능' : '검토 필요' },
+      { label: 'ticket scope', value: `${Number(inspectResult.total_scope_count || 0)}건` },
+      { label: '적용 가능', value: `${Number(inspectResult.valid_scope_count || 0)}건` },
+      { label: '자동승인 예상', value: `${Number(inspectResult.summary?.auto_approved || 0)}건` },
+      { label: '승인대기 예상', value: `${Number(inspectResult.summary?.approval_pending || 0)}건` },
+      { label: '차단', value: `${Number(inspectResult.summary?.blocking || 0)}건` },
+      { label: 'worker row', value: `${Number(inspectResult.summary?.worker_rows || 0)}건` },
+    ]
+    : [
+      { label: 'workbook 유효성', value: workspace.stale ? '재검토 필요' : '파일 선택 대기' },
+      { label: 'ticket scope', value: '-' },
+      { label: '적용 가능', value: '-' },
+      { label: '자동승인 예상', value: '-' },
+      { label: '승인대기 예상', value: '-' },
+      { label: '차단', value: '-' },
+      { label: 'worker row', value: '-' },
+    ];
+  summaryItems.forEach((item) => {
+    const card = document.createElement('div');
+    card.className = 'schedule-upload-summary-card';
+    const labelEl = document.createElement('span');
+    labelEl.textContent = item.label;
+    const valueEl = document.createElement('strong');
+    valueEl.textContent = item.value;
+    card.appendChild(labelEl);
+    card.appendChild(valueEl);
+    container.appendChild(card);
+  });
+}
+
+function renderScheduleSupportHqIssueGroups() {
+  const workspace = ensureScheduleSupportHqWorkspaceState();
+  const container = $('#scheduleSupportHqIssueGroups');
+  if (!(container instanceof HTMLElement)) return;
+  container.innerHTML = '';
+  const inspectResult = workspace.inspectResult && typeof workspace.inspectResult === 'object'
+    ? workspace.inspectResult
+    : null;
+  const issues = Array.isArray(inspectResult?.issues) ? inspectResult.issues : [];
+  if (!issues.length) {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'schedule-upload-placeholder support-status-hq-placeholder';
+    const strong = document.createElement('strong');
+    if (workspace.inspectError) {
+      strong.textContent = '검토 중 오류가 발생했습니다.';
+    } else if (workspace.stale) {
+      strong.textContent = '현재 검토 결과가 stale 상태입니다.';
+    } else {
+      strong.textContent = inspectResult ? '현재 검토 이슈가 없습니다.' : '검토를 시작하면 workbook validity와 revision 상태가 여기에 표시됩니다.';
+    }
+    placeholder.appendChild(strong);
+    const meta = document.createElement('p');
+    if (workspace.inspectError) {
+      meta.textContent = String(workspace.inspectError || '').trim();
+    } else if (workspace.stale) {
+      meta.textContent = `${formatScheduleSupportHqContextFields(workspace.staleFields)} 변경으로 다시 검토해야 합니다.`;
+    } else {
+      meta.textContent = String(inspectResult?.next_step_message || 'scope별 요청 수, 유효 입력 수, 근무자 셀 파싱 결과가 여기에 묶여 표시됩니다.').trim();
+    }
+    placeholder.appendChild(meta);
+    container.appendChild(placeholder);
+    return;
+  }
+  issues.forEach((issue) => {
+    const card = document.createElement('article');
+    card.className = 'schedule-upload-issue-card';
+    const head = document.createElement('div');
+    head.className = 'schedule-upload-issue-card-head';
+    const copy = document.createElement('strong');
+    copy.textContent = String(issue?.title || issue?.code || '검토 이슈').trim();
+    const count = document.createElement('span');
+    count.className = issue?.severity === 'blocking' ? 'status-pill status-pill-error' : 'status-pill status-pill-neutral';
+    count.textContent = `${Number(issue?.count || 0)}건`;
+    head.appendChild(copy);
+    head.appendChild(count);
+    card.appendChild(head);
+    const message = document.createElement('p');
+    message.textContent = String(issue?.message || '').trim();
+    card.appendChild(message);
+    if (String(issue?.guidance || '').trim()) {
+      const guidance = document.createElement('span');
+      guidance.textContent = String(issue?.guidance || '').trim();
+      card.appendChild(guidance);
+    }
+    container.appendChild(card);
+  });
+}
+
+function renderScheduleSupportHqReviewTable() {
+  const workspace = ensureScheduleSupportHqWorkspaceState();
+  const tableWrap = $('#scheduleSupportHqReviewTableWrap');
+  const tableBody = $('#scheduleSupportHqReviewTableBody');
+  const placeholder = $('#scheduleSupportHqReviewPlaceholder');
+  if (!(tableWrap instanceof HTMLElement) || !(tableBody instanceof HTMLElement) || !(placeholder instanceof HTMLElement)) return;
+  tableBody.innerHTML = '';
+  const inspectResult = workspace.inspectResult && typeof workspace.inspectResult === 'object'
+    ? workspace.inspectResult
+    : null;
+  const reviewRows = Array.isArray(inspectResult?.review_rows) ? inspectResult.review_rows : [];
+  if (!reviewRows.length) {
+    tableWrap.classList.add('hidden');
+    placeholder.classList.remove('hidden');
+    const strong = placeholder.querySelector('strong');
+    const meta = placeholder.querySelector('p');
+    if (strong) {
+      if (workspace.stale) {
+        strong.textContent = '현재 검토 결과는 stale 상태입니다.';
+      } else if (workspace.uploadFileName) {
+        strong.textContent = '업로드 파일 검토를 실행하면 scope별 상태와 근무자 셀 결과가 표시됩니다.';
+      } else {
+        strong.textContent = '업로드할 HQ 작성본 workbook 파일을 선택하세요.';
+      }
+    }
+    if (meta) {
+      if (workspace.stale) {
+        meta.textContent = `${formatScheduleSupportHqContextFields(workspace.staleFields)} 변경으로 다시 검토해야 합니다.`;
+      } else if (workspace.inspectError) {
+        meta.textContent = String(workspace.inspectError || '').trim();
+      } else {
+        meta.textContent = inspectResult?.next_step_message
+          ? String(inspectResult.next_step_message || '').trim()
+          : '지원요청 scope, 유효 입력 수, 근무자 셀 파싱 결과를 이 구역에서 검토합니다.';
+      }
+    }
+    return;
+  }
+  tableWrap.classList.remove('hidden');
+  placeholder.classList.add('hidden');
+  reviewRows.forEach((row) => {
+    const tr = document.createElement('tr');
+    const sheetCell = document.createElement('td');
+    sheetCell.textContent = String(row?.sheet_name || '-').trim() || '-';
+    tr.appendChild(sheetCell);
+
+    const siteCell = document.createElement('td');
+    siteCell.textContent = getSupportStatusSiteLabel(row?.site_code || '', row?.site_name || '');
+    tr.appendChild(siteCell);
+
+    const dateCell = document.createElement('td');
+    dateCell.textContent = formatDateLabel(row?.work_date || '', '-');
+    tr.appendChild(dateCell);
+
+    const shiftCell = document.createElement('td');
+    if (String(row?.shift_kind || '').trim()) {
+      const shiftPill = document.createElement('span');
+      shiftPill.className = getSupportStatusShiftClass(row?.shift_kind || '');
+      shiftPill.textContent = getSupportStatusShiftLabel(row?.shift_kind || '');
+      shiftCell.appendChild(shiftPill);
+    } else {
+      shiftCell.textContent = '-';
+    }
+    tr.appendChild(shiftCell);
+
+    const slotCell = document.createElement('td');
+    slotCell.textContent = row?.row_kind === 'scope_summary'
+      ? 'scope'
+      : `근무자 ${Math.max(Number(row?.slot_index || 0), 1)}`;
+    tr.appendChild(slotCell);
+
+    const workerCell = document.createElement('td');
+    workerCell.textContent = String(
+      row?.parsed_display_value
+      || row?.raw_cell_text
+      || (row?.row_kind === 'scope_summary' ? 'scope summary' : '-')
+      || '-'
+    ).trim() || '-';
+    tr.appendChild(workerCell);
+
+    const countCell = document.createElement('td');
+    if (row?.row_kind === 'scope_summary') {
+      countCell.textContent = `${Number(row?.valid_filled_count || 0)} / ${Number(row?.request_count || 0)}`;
+    } else {
+      countCell.textContent = `${Number(row?.request_count || 0)}명 요청`;
+    }
+    tr.appendChild(countCell);
+
+    const targetCell = document.createElement('td');
+    const targetStatus = String(row?.target_status || '').trim();
+    if (targetStatus) {
+      const targetPill = document.createElement('span');
+      targetPill.className = getSupportStatusRequestStatusClass(targetStatus);
+      targetPill.textContent = getSupportStatusRequestStatusLabel(targetStatus);
+      targetCell.appendChild(targetPill);
+    } else {
+      targetCell.textContent = '-';
+    }
+    tr.appendChild(targetCell);
+
+    const statusCell = document.createElement('td');
+    const statusPill = document.createElement('span');
+    statusPill.className = getSupportStatusHqReviewRowStatusClass(row?.status || '');
+    statusPill.textContent = getSupportStatusHqReviewRowStatusLabel(row?.status || '');
+    statusCell.appendChild(statusPill);
+    tr.appendChild(statusCell);
+
+    const reasonCell = document.createElement('td');
+    reasonCell.textContent = String(row?.reason || '-').trim() || '-';
+    tr.appendChild(reasonCell);
+    tableBody.appendChild(tr);
+  });
+}
+
+function renderScheduleSupportHqApplyDetails(scopeResults = []) {
+  const list = $('#scheduleSupportHqApplyDetails');
+  if (!(list instanceof HTMLElement)) return;
+  list.innerHTML = '';
+  const rows = Array.isArray(scopeResults) ? scopeResults : [];
+  if (!rows.length) {
+    list.classList.add('hidden');
+    return;
+  }
+  rows.forEach((scope) => {
+    const li = document.createElement('li');
+    li.classList.add('content-fade-in');
+    const container = document.createElement('div');
+    container.className = 'list-row';
+    const main = document.createElement('div');
+    main.className = 'list-row-main';
+    const title = document.createElement('div');
+    title.className = 'list-row-title';
+    title.textContent = [
+      formatDateLabel(scope?.work_date || '', '-'),
+      getSupportStatusShiftLabel(scope?.shift_kind || ''),
+      getSupportStatusSiteLabel(scope?.site_code || '', scope?.site_name || ''),
+    ].filter(Boolean).join(' · ');
+    const sub = document.createElement('div');
+    sub.className = 'list-row-sub';
+    const targetStatus = String(scope?.target_status || '').trim();
+    const previousStatus = String(scope?.previous_status || '').trim();
+    sub.textContent = [
+      `${Number(scope?.valid_filled_count || 0)} / ${Number(scope?.request_count || 0)}명`,
+      previousStatus ? `이전 ${getSupportStatusRequestStatusLabel(previousStatus)}` : '',
+      targetStatus ? `적용 ${getSupportStatusRequestStatusLabel(targetStatus)}` : '',
+      `bridge ${Number(scope?.bridge_action_count || 0)}건`,
+    ].filter(Boolean).join(' · ');
+    main.appendChild(title);
+    main.appendChild(sub);
+    const pill = document.createElement('span');
+    pill.className = targetStatus ? getSupportStatusRequestStatusClass(targetStatus) : 'status-pill status-pill-neutral';
+    pill.textContent = targetStatus ? getSupportStatusRequestStatusLabel(targetStatus) : '적용';
+    container.appendChild(main);
+    container.appendChild(pill);
+    li.appendChild(container);
+    list.appendChild(li);
+  });
+  list.classList.remove('hidden');
+}
+
+function renderScheduleSupportHqWorkspace() {
+  const workspace = ensureScheduleSupportHqWorkspaceState();
+  const contractHint = $('#scheduleSupportHqContractHint');
+  const uploadMetaGrid = $('#scheduleSupportHqUploadMeta');
+  const fileInput = $('#scheduleSupportHqUploadFile');
+  const inspectBtn = $('#scheduleSupportHqInspectBtn');
+  const reinspectBtn = $('#scheduleSupportHqReinspectBtn');
+  const applyBtn = $('#scheduleSupportHqApplyBtn');
+  const batchInfoEl = $('#scheduleSupportHqBatchInfo');
+  const batchIssuesEl = $('#scheduleSupportHqBatchIssues');
+  const applyResultEl = $('#scheduleSupportHqApplyResult');
+  const reviewTitle = $('#scheduleSupportHqReviewStateTitle');
+  const reviewText = $('#scheduleSupportHqReviewStateText');
+  const openSentrixBtn = $('#scheduleSupportOpenSentrixBtn');
+  const copyArtifactBtn = $('#scheduleSupportCopyArtifactBtn');
+  if (
+    !(uploadMetaGrid instanceof HTMLElement)
+    || !(batchInfoEl instanceof HTMLElement)
+    || !(applyResultEl instanceof HTMLElement)
+    || !(reviewTitle instanceof HTMLElement)
+    || !(reviewText instanceof HTMLElement)
+  ) {
+    return;
+  }
+
+  const allowed = canUseScheduleSupportRoundtripHq();
+  const context = buildScheduleSupportHqContext();
+  workspace.month = context.month;
+  const selectedSite = getScheduleSupportHqSelectedSiteContext();
+  const status = state.schedule.supportStatus && typeof state.schedule.supportStatus === 'object'
+    ? state.schedule.supportStatus
+    : null;
+  const artifactContext = buildScheduleSupportArtifactContext(status, context.siteCode);
+  const inspectResult = workspace.inspectResult && typeof workspace.inspectResult === 'object'
+    ? workspace.inspectResult
+    : null;
+  const applyResult = workspace.applyResult && typeof workspace.applyResult === 'object'
+    ? workspace.applyResult
+    : null;
+  const uploadMeta = inspectResult?.upload_meta && typeof inspectResult.upload_meta === 'object'
+    ? inspectResult.upload_meta
+    : null;
+  const hasFile = fileInput instanceof HTMLInputElement && Boolean(fileInput.files?.length);
+  const readyForUpload = allowed
+    && Boolean(context.siteCode)
+    && Boolean(artifactContext.artifact_id)
+    && (
+      context.siteCode === 'ALL'
+        ? Number(status?.ready_site_count || 0) > 0
+        : String(status?.source_state || '').trim() !== 'source_missing'
+    );
+
+  if (fileInput instanceof HTMLInputElement) {
+    fileInput.disabled = !readyForUpload || workspace.inspectLoading || workspace.applyLoading;
+  }
+  if (inspectBtn instanceof HTMLButtonElement) {
+    inspectBtn.disabled = !readyForUpload || !hasFile || workspace.inspectLoading || workspace.applyLoading;
+    inspectBtn.textContent = workspace.inspectLoading ? '검토 중...' : '검토 시작';
+  }
+  if (reinspectBtn instanceof HTMLButtonElement) {
+    reinspectBtn.disabled = !readyForUpload || !hasFile || workspace.inspectLoading || workspace.applyLoading;
+  }
+  if (applyBtn instanceof HTMLButtonElement) {
+    applyBtn.disabled = !Boolean(inspectResult?.can_apply) || !inspectResult?.batch_id || workspace.inspectLoading || workspace.applyLoading || workspace.stale;
+    applyBtn.textContent = workspace.applyLoading ? '적용 중...' : 'ARLS에서 적용';
+  }
+  if (openSentrixBtn instanceof HTMLButtonElement) {
+    openSentrixBtn.disabled = !allowed || !artifactContext.artifact_id;
+    openSentrixBtn.textContent = 'Sentrix 상태 보기';
+  }
+  if (copyArtifactBtn instanceof HTMLButtonElement) {
+    copyArtifactBtn.disabled = !allowed || !artifactContext.artifact_id;
+  }
+
+  if (contractHint) {
+    if (!allowed) {
+      contractHint.textContent = 'HQ/Admin 권한이 있어야 HQ 작성본 workbook 검토와 적용을 시작할 수 있습니다.';
+    } else if (!context.siteCode) {
+      contractHint.textContent = '업로드 지점과 대상 월을 먼저 고정하면 HQ 작성본 workbook의 검토/적용을 여기서 시작할 수 있습니다.';
+    } else if (workspace.loading) {
+      contractHint.textContent = 'HQ 작성본 workbook 계약 정보를 불러오는 중입니다.';
+    } else if (workspace.error) {
+      contractHint.textContent = String(workspace.error || '').trim();
+    } else if (!artifactContext.artifact_id) {
+      contractHint.textContent = '현재 source artifact가 아직 없어 HQ 작성본 업로드를 시작할 수 없습니다. STEP 3에서 source export 상태를 먼저 확인하세요.';
+    } else if (context.siteCode === 'ALL') {
+      contractHint.textContent = '전체 지점 multi-sheet HQ 작성본을 업로드하면 ARLS가 검토/적용을 시작하고, 내부 state 엔진은 Sentrix가 이어받습니다.';
+    } else {
+      contractHint.textContent = `${getSupportStatusSiteLabel(context.siteCode, selectedSite?.siteName || '')} 기준 HQ 작성본을 ARLS에서 검토한 뒤 적용하면 Sentrix로 normalized snapshot을 handoff합니다.`;
+    }
+  }
+
+  renderScheduleSupportArtifactMeta(artifactContext);
+  const uploadMetaItems = [
+    { label: '파일명', value: String(uploadMeta?.file_name || workspace.uploadFileName || '선택 전').trim() || '선택 전' },
+    { label: '대상월', value: formatScheduleMonthTitle(String(uploadMeta?.month || context.month || '')) },
+    { label: '업로드 범위', value: context.siteCode === 'ALL' ? '전체 지점 workbook' : getSupportStatusSiteLabel(context.siteCode || '', selectedSite?.siteName || '') },
+    { label: 'workbook family', value: String(uploadMeta?.workbook_family || workspace.contract?.workbook_family || SUPPORT_STATUS_HQ_WORKBOOK_FAMILY).trim() || SUPPORT_STATUS_HQ_WORKBOOK_FAMILY },
+    { label: 'revision', value: String(uploadMeta?.revision || artifactContext.revision || workspace.contract?.template_version || SUPPORT_STATUS_HQ_TEMPLATE_VERSION).trim() || SUPPORT_STATUS_HQ_TEMPLATE_VERSION },
+    { label: 'latest 상태', value: uploadMeta ? getSupportStatusHqLatestStatusLabel(uploadMeta.latest_status || '') : (artifactContext.artifact_id ? 'latest source 기준' : 'source 대기') },
+    { label: 'artifact_id', value: String(artifactContext.artifact_id || '-').trim() || '-' },
+  ];
+  renderSupportStatusHqMetaGrid(uploadMetaGrid, uploadMetaItems);
+
+  if (batchInfoEl) {
+    if (!allowed) {
+      batchInfoEl.textContent = '권한이 없어서 HQ 작성본 upload/apply 워크플로우를 시작할 수 없습니다.';
+    } else if (workspace.stale) {
+      batchInfoEl.textContent = `${formatScheduleSupportHqContextFields(workspace.staleFields)} 변경으로 이전 검토 결과가 stale 상태가 되었습니다. 다시 검토를 실행하세요.`;
+    } else if (!context.siteCode) {
+      batchInfoEl.textContent = '업로드 지점과 대상 월을 먼저 선택하세요.';
+    } else if (!artifactContext.artifact_id) {
+      batchInfoEl.textContent = '현재 source revision 기준 artifact lineage를 아직 만들지 못했습니다.';
+    } else if (inspectResult?.batch_id) {
+      batchInfoEl.textContent = `artifact_id ${artifactContext.artifact_id} · batch ${String(inspectResult.batch_id).slice(0, 12)} · ${context.month}`;
+    } else {
+      batchInfoEl.textContent = `artifact_id ${artifactContext.artifact_id} 기준으로 HQ 작성본 workbook을 검토합니다. apply 시 Sentrix state engine으로 handoff됩니다.`;
+    }
+  }
+
+  if (batchIssuesEl instanceof HTMLElement) {
+    const blockedReasons = applyResult?.blocked && Array.isArray(applyResult.blocked_reasons)
+      ? applyResult.blocked_reasons.filter(Boolean)
+      : [];
+    batchIssuesEl.innerHTML = '';
+    if (!blockedReasons.length) {
+      batchIssuesEl.classList.add('hidden');
+    } else {
+      batchIssuesEl.classList.remove('hidden');
+      blockedReasons.forEach((reason) => {
+        const li = document.createElement('li');
+        li.textContent = String(reason || '').trim();
+        batchIssuesEl.appendChild(li);
+      });
+    }
+  }
+
+  renderScheduleSupportHqReviewSummary();
+  renderScheduleSupportHqIssueGroups();
+  renderScheduleSupportHqReviewTable();
+  renderScheduleSupportHqApplyDetails(applyResult?.scope_results || []);
+
+  if (reviewTitle) {
+    if (applyResult?.applied) reviewTitle.textContent = '적용 완료';
+    else if (applyResult?.blocked) reviewTitle.textContent = '적용 차단';
+    else if (workspace.stale) reviewTitle.textContent = '재검토 필요';
+    else if (inspectResult) reviewTitle.textContent = inspectResult.can_apply ? '적용 가능' : '검토 보완 필요';
+    else reviewTitle.textContent = '적용 전 검토 영역';
+  }
+  if (reviewText) {
+    if (applyResult?.applied) {
+      reviewText.textContent = `scope ${Number(applyResult.applied_scope_count || 0)}건 handoff 완료 · ticket ${Number(applyResult.tickets_updated || 0)}건 갱신 · 자동승인 ${Number(applyResult.tickets_auto_approved || 0)}건 · 승인대기 ${Number(applyResult.tickets_pending || 0)}건`;
+    } else if (applyResult?.blocked && Array.isArray(applyResult.blocked_reasons) && applyResult.blocked_reasons.length) {
+      reviewText.textContent = String(applyResult.blocked_reasons[0] || '').trim() || '차단 사유를 해결한 뒤 다시 검토하세요.';
+    } else if (workspace.applyError) {
+      reviewText.textContent = String(workspace.applyError || '').trim();
+    } else if (workspace.inspectError) {
+      reviewText.textContent = String(workspace.inspectError || '').trim();
+    } else if (workspace.stale) {
+      reviewText.textContent = `${formatScheduleSupportHqContextFields(workspace.staleFields)} 변경으로 다시 검토해야 합니다.`;
+    } else if (inspectResult) {
+      reviewText.textContent = String(inspectResult.next_step_message || '검토 결과를 확인한 뒤 적용 여부를 결정하세요.').trim();
+    } else {
+      reviewText.textContent = 'HQ 작성본 workbook을 검토한 뒤 적용하면 ARLS가 Sentrix state engine으로 normalized snapshot을 handoff합니다.';
+    }
+  }
+
+  if (applyResultEl) {
+    if (applyResult?.applied) {
+      const partialBits = [];
+      if (Number(applyResult.notifications_created || 0) > 0) partialBits.push(`알림 ${Number(applyResult.notifications_created || 0)}건`);
+      if (Number(applyResult.bridge_actions_created || 0) > 0) partialBits.push(`ARLS bridge ${Number(applyResult.bridge_actions_created || 0)}건`);
+      if (Number(applyResult.push_failed || 0) > 0 || Number(applyResult.bridge_failed || 0) > 0) {
+        partialBits.push(`후처리 실패 push ${Number(applyResult.push_failed || 0)}건 / bridge ${Number(applyResult.bridge_failed || 0)}건`);
+      }
+      applyResultEl.textContent = `ARLS apply가 완료되었습니다. Sentrix state engine handoff 기준 batch ${String(applyResult.batch_id || '').slice(0, 12)} · ${partialBits.join(' · ') || '후처리 완료'}`;
+    } else if (workspace.applyError) {
+      applyResultEl.textContent = String(workspace.applyError || '').trim();
+    } else if (workspace.stale) {
+      applyResultEl.textContent = '현재 검토 결과는 더 이상 apply할 수 없습니다. 다시 검토한 뒤 적용하세요.';
+    } else {
+      applyResultEl.textContent = 'ARLS apply는 normalized roster snapshot을 Sentrix에 handoff하고, ticket 상태/알림/bridge 판단은 Sentrix가 이어받습니다.';
+    }
+  }
+}
+
+async function loadScheduleSupportHqWorkspaceContract({ force = false } = {}) {
+  const workspace = ensureScheduleSupportHqWorkspaceState();
+  if (!canUseScheduleSupportRoundtripHq()) {
+    workspace.loading = false;
+    workspace.error = '';
+    workspace.contract = null;
+    renderScheduleSupportHqWorkspace();
+    return null;
+  }
+  workspace.loading = true;
+  workspace.error = '';
+  workspace.month = buildScheduleSupportHqContext().month;
+  renderScheduleSupportHqWorkspace();
+  const params = new URLSearchParams();
+  params.set('month', workspace.month);
+  params.set('tenant_code', getScheduleTenantValue());
+  try {
+    const payload = await apiRequest(`/schedules/support-roundtrip/hq-workspace?${params.toString()}`, { force });
+    workspace.contract = payload && typeof payload === 'object' ? payload : null;
+    workspace.loading = false;
+    renderScheduleSupportHqWorkspace();
+    return workspace.contract;
+  } catch (error) {
+    workspace.loading = false;
+    workspace.error = normalizeActionError(error, 'HQ 작성본 workbook 계약 정보를 불러오지 못했습니다.');
+    renderScheduleSupportHqWorkspace();
+    throw error;
+  }
+}
+
+async function onScheduleSupportHqInspect() {
+  const workspace = ensureScheduleSupportHqWorkspaceState();
+  const context = buildScheduleSupportHqContext();
+  if (!canUseScheduleSupportRoundtripHq()) {
+    showToast('HQ 작성본 upload 권한이 없습니다.', 'error');
+    return;
+  }
+  if (!context.siteCode) {
+    showToast('업로드 지점을 먼저 선택해 주세요.', 'error');
+    return;
+  }
+  const status = state.schedule.supportStatus && typeof state.schedule.supportStatus === 'object'
+    ? state.schedule.supportStatus
+    : await loadScheduleSupportRoundtripStatus();
+  const artifactContext = buildScheduleSupportArtifactContext(status, context.siteCode);
+  if (!artifactContext.artifact_id) {
+    showToast('현재 month/site 기준 source artifact가 아직 없습니다.', 'error');
+    return;
+  }
+  const fileInput = $('#scheduleSupportHqUploadFile');
+  if (!(fileInput instanceof HTMLInputElement) || !fileInput.files?.length) {
+    showToast('검토할 HQ 작성본 workbook 파일을 먼저 선택해 주세요.', 'error');
+    return;
+  }
+  const file = fileInput.files[0];
+  workspace.inspectLoading = true;
+  workspace.inspectError = '';
+  workspace.applyError = '';
+  workspace.applyResult = null;
+  workspace.inspectResult = null;
+  workspace.stale = false;
+  workspace.staleFields = [];
+  workspace.uploadFileName = String(file?.name || '').trim();
+  renderScheduleUploadWorkspace();
+  const body = new FormData();
+  body.append('file', file);
+  body.append('month', context.month);
+  body.append('tenant_code', getScheduleTenantValue());
+  try {
+    const result = await apiRequest('/schedules/support-roundtrip/hq-roster-upload/inspect', {
+      method: 'POST',
+      body,
+    });
+    workspace.inspectResult = result && typeof result === 'object' ? result : null;
+    workspace.inspectLoading = false;
+    renderScheduleUploadWorkspace();
+    const issueCount = Number(result?.issue_count || 0);
+    if (issueCount > 0) {
+      showToast(`HQ 작성본 검토 완료: ${issueCount}건 확인 필요`, 'error', 2800);
+    } else {
+      showToast('HQ 작성본 검토 완료', 'success', 2200);
+    }
+  } catch (error) {
+    workspace.inspectLoading = false;
+    workspace.inspectError = normalizeActionError(error, 'HQ 작성본 workbook 검토에 실패했습니다.');
+    workspace.inspectResult = null;
+    renderScheduleUploadWorkspace();
+    throw error;
+  }
+}
+
+async function onScheduleSupportHqApply() {
+  const workspace = ensureScheduleSupportHqWorkspaceState();
+  const batchId = String(workspace.inspectResult?.batch_id || '').trim();
+  if (!canUseScheduleSupportRoundtripHq()) {
+    showToast('HQ 작성본 적용 권한이 없습니다.', 'error');
+    return;
+  }
+  if (!batchId) {
+    showToast('먼저 HQ 작성본 workbook 검토를 완료해 주세요.', 'error');
+    return;
+  }
+  if (workspace.stale) {
+    showToast('지점/월/파일 변경으로 검토 결과가 stale 상태입니다. 다시 검토해 주세요.', 'error');
+    return;
+  }
+  if (!workspace.inspectResult?.can_apply) {
+    showToast('차단 이슈를 해결한 뒤 다시 검토해 주세요.', 'error');
+    return;
+  }
+  workspace.applyLoading = true;
+  workspace.applyError = '';
+  workspace.applyResult = null;
+  renderScheduleUploadWorkspace();
+  const params = new URLSearchParams();
+  params.set('tenant_code', getScheduleTenantValue());
+  try {
+    const result = await apiRequest(`/schedules/support-roundtrip/hq-roster-upload/${batchId}/apply?${params.toString()}`, {
+      method: 'POST',
+    });
+    workspace.applyLoading = false;
+    workspace.applyResult = result && typeof result === 'object' ? result : null;
+    await Promise.allSettled([
+      loadScheduleSupportRoundtripStatus(),
+      loadScheduleSupportHqWorkspaceContract({ force: true }),
+    ]);
+    renderScheduleUploadWorkspace();
+    if (result?.applied) {
+      showToast('HQ 지원근무자 반영 apply를 완료했습니다.', 'success', 2600);
+    } else if (result?.blocked && Array.isArray(result.blocked_reasons) && result.blocked_reasons.length) {
+      showToast(String(result.blocked_reasons[0] || '').trim() || '차단 이슈가 남아 있습니다.', 'error', 3200);
+    } else {
+      showToast('HQ 지원근무자 반영 apply 결과를 확인해 주세요.', 'info', 2400);
+    }
+  } catch (error) {
+    workspace.applyLoading = false;
+    workspace.applyError = normalizeActionError(error, 'HQ 작성본 apply에 실패했습니다.');
+    workspace.applyResult = null;
+    renderScheduleUploadWorkspace();
+    throw error;
+  }
 }
 
 function getScheduleSupportRoundtripStateLabel(sourceState = '') {
@@ -10426,27 +11138,20 @@ function renderScheduleSupportRoundtripStatus() {
     if (sourceRevision) sourceRevision.textContent = '없음';
     if (sourceMeta) sourceMeta.textContent = '지점 선택 후 확인';
     if (mergeState) mergeState.textContent = '대기';
-    if (mergeMeta) mergeMeta.textContent = 'Sentrix 제출 전';
+    if (mergeMeta) mergeMeta.textContent = 'ARLS STEP 4 대기';
     if (assignmentCount) assignmentCount.textContent = '미생성';
     if (conflictMeta) conflictMeta.textContent = 'site/month 선택 후 확인';
-    if (finalState) finalState.textContent = 'Sentrix';
-    if (finalMeta) finalMeta.textContent = 'HQ roster 제출/적용은 Sentrix 소유';
+    if (finalState) finalState.textContent = 'ARLS STEP 4';
+    if (finalMeta) finalMeta.textContent = 'HQ 작성본 업로드와 검토/적용 시작은 ARLS에서 진행됩니다.';
     if (hqDownloadBtn) hqDownloadBtn.disabled = true;
     if (openSentrixBtn) openSentrixBtn.disabled = true;
     if (copyArtifactBtn) copyArtifactBtn.disabled = true;
     renderScheduleSupportArtifactMeta(null);
-    setScheduleSupportRoundtripUI({
-      batchInfo: '현재 artifact contract를 보려면 지점과 대상 월을 먼저 맞춰 주세요.',
-      issues: [],
-      clearPreviewRows: true,
-      clearApplyDetails: true,
-      canApply: false,
-      applyResult: 'ARLS는 source export와 handoff만 담당하고, Sentrix가 HQ roster 제출/적용을 소유합니다.',
-    });
     if (blockedList) {
       blockedList.innerHTML = '';
       blockedList.classList.add('hidden');
     }
+    renderScheduleSupportHqWorkspace();
     return;
   }
 
@@ -10460,6 +11165,7 @@ function renderScheduleSupportRoundtripStatus() {
     if (openSentrixBtn) openSentrixBtn.disabled = true;
     if (copyArtifactBtn) copyArtifactBtn.disabled = true;
     renderScheduleSupportArtifactMeta(null);
+    renderScheduleSupportHqWorkspace();
     return;
   }
 
@@ -10474,13 +11180,13 @@ function renderScheduleSupportRoundtripStatus() {
     }
     if (statusText) statusText.textContent = `${getScheduleMonthValue()} · 전체 ${readySiteCount}/${totalSiteCount || 0}개 지점 source workbook 준비`;
     if (sourceRevision) sourceRevision.textContent = `${readySiteCount}/${totalSiteCount || 0} ready`;
-    if (sourceMeta) sourceMeta.textContent = 'Sentrix 제출용 전체 지점 source 준비 현황';
-    if (mergeState) mergeState.textContent = readySiteCount > 0 ? '전체 handoff' : '대기';
-    if (mergeMeta) mergeMeta.textContent = readySiteCount > 0 ? 'Sentrix에서 지점별 시트로 제출' : '준비된 지점 없음';
+    if (sourceMeta) sourceMeta.textContent = '전체 지점 HQ 작성본 업로드를 위한 source 준비 현황';
+    if (mergeState) mergeState.textContent = readySiteCount > 0 ? 'ARLS 검토 가능' : '대기';
+    if (mergeMeta) mergeMeta.textContent = readySiteCount > 0 ? 'Excel workflow STEP 4에서 multi-sheet upload' : '준비된 지점 없음';
     if (assignmentCount) assignmentCount.textContent = artifactContext.artifact_id ? `${readySiteCount}개 ready` : '미생성';
     if (conflictMeta) conflictMeta.textContent = totalSiteCount > 0 ? `총 ${totalSiteCount}개 지점` : '지점 정보 없음';
-    if (finalState) finalState.textContent = 'Sentrix';
-    if (finalMeta) finalMeta.textContent = '전체 제출은 Sentrix에서 site sheet 기준으로 진행합니다.';
+    if (finalState) finalState.textContent = 'ARLS STEP 4';
+    if (finalMeta) finalMeta.textContent = '전체 범위 HQ 작성본 업로드/검토는 ARLS에서 진행되고, 내부 state 엔진은 Sentrix가 처리합니다.';
     renderScheduleSupportArtifactMeta(artifactContext);
 
     if (blockedList) {
@@ -10500,14 +11206,7 @@ function renderScheduleSupportRoundtripStatus() {
     if (hqDownloadBtn) hqDownloadBtn.disabled = !canUseScheduleSupportRoundtripHq() || readySiteCount <= 0;
     if (openSentrixBtn) openSentrixBtn.disabled = !canUseScheduleSupportRoundtripHq() || !artifactContext.artifact_id || readySiteCount <= 0;
     if (copyArtifactBtn) copyArtifactBtn.disabled = !canUseScheduleSupportRoundtripHq() || !artifactContext.artifact_id || readySiteCount <= 0;
-    setScheduleSupportRoundtripUI({
-      batchInfo: `전체 ${readySiteCount}/${totalSiteCount || 0}개 지점 기준 workbook artifact를 Sentrix로 넘길 수 있습니다.`,
-      issues: blockedReasons,
-      clearPreviewRows: true,
-      clearApplyDetails: true,
-      canApply: false,
-      applyResult: '전체 선택 시 multi-sheet workbook을 Sentrix로 넘기고, 이후 지점별 roster 제출/적용은 Sentrix에서 진행합니다.',
-    });
+    renderScheduleSupportHqWorkspace();
     return;
   }
 
@@ -10529,7 +11228,7 @@ function renderScheduleSupportRoundtripStatus() {
       : [
         `${selectedSite} · ${status.month || getScheduleMonthValue()}`,
         artifactContext.revision ? `artifact ${artifactContext.revision.slice(0, 12)}` : 'artifact 준비',
-        mergeStale ? 'Sentrix 재전달 필요' : (mergeAvailable ? 'Sentrix 최근 제출 이력 있음' : 'Sentrix 제출 대기'),
+        mergeStale ? 'ARLS STEP 4 재업로드 필요' : (mergeAvailable ? '최근 HQ 제출 이력 있음' : 'HQ 작성본 업로드 대기'),
       ].filter(Boolean).join(' · ');
   }
   if (sourceRevision) {
@@ -10543,14 +11242,14 @@ function renderScheduleSupportRoundtripStatus() {
     sourceMeta.textContent = metaBits.filter(Boolean).join(' · ') || '원본 업로드 대기';
   }
   if (mergeState) {
-    mergeState.textContent = mergeStale ? '재전달 필요' : (mergeAvailable ? '전달됨' : '대기');
+    mergeState.textContent = mergeStale ? '재검토 필요' : (mergeAvailable ? '제출 이력 있음' : '대기');
   }
   if (mergeMeta) {
     const bits = [];
     if (status.latest_hq_revision) bits.push(`Sentrix ${String(status.latest_hq_revision).slice(0, 12)}`);
     if (status.latest_hq_uploaded_by) bits.push(String(status.latest_hq_uploaded_by).trim());
     if (status.latest_hq_uploaded_at) bits.push(formatOpsDateTime(status.latest_hq_uploaded_at));
-    mergeMeta.textContent = bits.filter(Boolean).join(' · ') || (mergeAvailable ? 'Sentrix 제출 이력 확인됨' : 'Sentrix 제출 전');
+    mergeMeta.textContent = bits.filter(Boolean).join(' · ') || (mergeAvailable ? '최근 HQ 작성본 제출 이력 확인됨' : 'HQ 작성본 제출 전');
   }
   if (assignmentCount) {
     assignmentCount.textContent = artifactContext.artifact_id ? '준비됨' : '미생성';
@@ -10563,12 +11262,12 @@ function renderScheduleSupportRoundtripStatus() {
       : '현재 source artifact 없음';
   }
   if (finalState) {
-    finalState.textContent = 'Sentrix';
+    finalState.textContent = 'ARLS STEP 4';
   }
   if (finalMeta) {
-    if (mergeStale) finalMeta.textContent = '최신 source artifact로 Sentrix에 다시 전달해야 합니다.';
+    if (mergeStale) finalMeta.textContent = '최신 source artifact 기준으로 STEP 4에서 HQ 작성본을 다시 검토/적용해야 합니다.';
     else if (sourceMissing) finalMeta.textContent = '원본 업로드 후 source artifact가 생성됩니다.';
-    else finalMeta.textContent = 'HQ roster 제출/적용과 reconciliation은 Sentrix에서 진행합니다.';
+    else finalMeta.textContent = 'HQ 작성본 업로드/검토/적용 시작은 ARLS, 내부 roster/ticket state 엔진은 Sentrix가 처리합니다.';
   }
   renderScheduleSupportArtifactMeta(artifactContext);
 
@@ -10589,18 +11288,7 @@ function renderScheduleSupportRoundtripStatus() {
   if (hqDownloadBtn) hqDownloadBtn.disabled = !canUseScheduleSupportRoundtripHq() || sourceMissing;
   if (openSentrixBtn) openSentrixBtn.disabled = !canUseScheduleSupportRoundtripHq() || sourceMissing || !artifactContext.artifact_id;
   if (copyArtifactBtn) copyArtifactBtn.disabled = !canUseScheduleSupportRoundtripHq() || !artifactContext.artifact_id;
-  setScheduleSupportRoundtripUI({
-    batchInfo: artifactContext.artifact_id
-      ? `artifact_id ${artifactContext.artifact_id} · ${artifactContext.site_code || selectedSite} · ${artifactContext.month || getScheduleMonthValue()}`
-      : '현재 source revision 기준 artifact_id를 준비하지 못했습니다.',
-    issues: blockedReasons,
-    clearPreviewRows: true,
-    clearApplyDetails: true,
-    canApply: false,
-    applyResult: sourceMissing
-      ? 'Supervisor 원본 업로드가 완료되면 ARLS가 Sentrix 제출용 source workbook을 추출할 수 있습니다.'
-      : 'ARLS는 export-only 계약을 유지합니다. HQ roster 제출/적용은 Sentrix에서 진행하세요.',
-  });
+  renderScheduleSupportHqWorkspace();
 }
 
 async function loadScheduleSupportRoundtripStatus() {
@@ -10738,9 +11426,8 @@ async function onScheduleSupportHqDownload() {
   params.set('month', month);
   params.set('tenant_code', getScheduleTenantValue());
   const isAllSites = siteCode === 'ALL';
-  if (isAllSites) {
-    params.set('scope', 'all');
-  } else {
+  params.set('scope', isAllSites ? 'all' : 'site');
+  if (!isAllSites) {
     params.set('site_code', siteCode);
   }
   const fallbackGeneratedOn = (() => {
@@ -10754,9 +11441,7 @@ async function onScheduleSupportHqDownload() {
     return `${parts.year || ''}${parts.month || ''}${parts.day || ''}`;
   })();
   await downloadScheduleWorkbookWithAuth(
-    isAllSites
-      ? `${state.activeApiBase}/schedules/support-roundtrip/hq-roster-workbook?${params.toString()}`
-      : `${state.activeApiBase}/schedules/support-roundtrip/hq-workbook?${params.toString()}`,
+    `${state.activeApiBase}/schedules/support-roundtrip/hq-roster-workbook?${params.toString()}`,
     `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 지원근무자용 스케쥴 제출_${siteCode}_${fallbackGeneratedOn}.xlsx`,
   );
   showToast(
@@ -10767,13 +11452,11 @@ async function onScheduleSupportHqDownload() {
 }
 
 async function onScheduleSupportPreview() {
-  showToast('지원근무자 제출 미리보기와 reconciliation은 Sentrix에서 진행합니다.', 'info', 2600);
-  await onScheduleSupportOpenSentrix();
+  await onScheduleSupportHqInspect();
 }
 
 async function onScheduleSupportApply() {
-  showToast('HQ 지원근무 roster 제출/적용은 Sentrix 소유입니다.', 'info', 2600);
-  await onScheduleSupportOpenSentrix();
+  await onScheduleSupportHqApply();
 }
 
 async function onScheduleSupportOpenSentrix() {
@@ -23480,8 +24163,11 @@ function applyWriteAccessUI(perms) {
   }
   if (!scheduleSupportVisible) {
     state.schedule.supportStatus = null;
+    state.schedule.supportHqWorkspace = createInitialScheduleSupportHqWorkspaceState();
     resetScheduleSupportRoundtripPreview();
     setScheduleSupportRoundtripUI({ canApply: false, clearPreviewRows: true, clearApplyDetails: true });
+  } else {
+    renderScheduleSupportHqWorkspace();
   }
   if (!scheduleFinanceVisible) {
     state.schedule.financeStatus = null;
@@ -37532,6 +38218,7 @@ function onScheduleHqTabChange(tab = SCHEDULE_TAB_CALENDAR) {
         await Promise.allSettled([
           loadScheduleImportMappingProfile({ force: false }),
           loadScheduleSupportRoundtripStatus(),
+          loadScheduleSupportHqWorkspaceContract({ force: false }),
         ]);
         renderScheduleUploadWorkspace();
       })(),
@@ -48613,17 +49300,22 @@ function bindUiEvents() {
     }
 
     if (action === 'schedule-support-preview') {
-      runWithBusy(() => onScheduleSupportOpenSentrix(), 'Sentrix 이동 중...');
+      runWithBusy(() => onScheduleSupportHqInspect(), 'HQ 작성본 검토 중...');
       return;
     }
 
     if (action === 'schedule-support-apply') {
-      runWithBusy(() => onScheduleSupportOpenSentrix(), 'Sentrix 이동 중...');
+      runWithBusy(() => onScheduleSupportHqApply(), 'HQ 작성본 적용 중...');
+      return;
+    }
+
+    if (action === 'schedule-support-hq-inspect') {
+      runWithBusy(() => onScheduleSupportHqInspect(), 'HQ 작성본 검토 중...');
       return;
     }
 
     if (action === 'schedule-support-open-sentrix') {
-      runWithBusy(() => onScheduleSupportOpenSentrix(), 'Sentrix 이동 중...');
+      runWithBusy(() => onScheduleSupportOpenSentrix(), 'Sentrix 상태 열기 중...');
       return;
     }
 
@@ -49227,19 +49919,16 @@ function bindUiEvents() {
         if (!getScheduleUploadUiState().analysisInFlight) {
           invalidateScheduleImportAnalysis(['site']);
         }
+        resetScheduleSupportHqWorkspace({ preserveFile: true, preserveContract: true, staleFields: ['site'] });
       }
       resetScheduleSupportRoundtripPreview();
       resetScheduleFinancePreview();
-      setScheduleSupportRoundtripUI({
-        clearPreviewRows: true,
-        clearApplyDetails: true,
-        canApply: false,
-      });
       setScheduleFinanceUI({
         clearPreviewRows: true,
         clearApplyDetails: true,
         canApply: false,
       });
+      renderScheduleUploadWorkspace();
       runActionSafely(
         Promise.allSettled([
           loadScheduleSupportRoundtripStatus(),
@@ -49265,9 +49954,12 @@ function bindUiEvents() {
       if (!getScheduleUploadUiState().analysisInFlight) {
         invalidateScheduleImportAnalysis(['month']);
       }
+      resetScheduleSupportHqWorkspace({ preserveFile: true, preserveContract: false, staleFields: ['month'] });
+      renderScheduleUploadWorkspace();
       runActionSafely(
         Promise.allSettled([
           loadScheduleSupportRoundtripStatus(),
+          loadScheduleSupportHqWorkspaceContract({ force: true }),
           loadScheduleFinanceSubmissionStatus(),
         ]).then(() => {
           renderScheduleUploadWorkspace();
@@ -49275,6 +49967,14 @@ function bindUiEvents() {
         }),
         '제출 상태를 갱신하지 못했습니다.',
       );
+      return;
+    }
+
+    if (target instanceof HTMLInputElement && target.id === 'scheduleSupportHqUploadFile') {
+      resetScheduleSupportHqWorkspace({ preserveFile: true, preserveContract: true, staleFields: [] });
+      const workspace = ensureScheduleSupportHqWorkspaceState();
+      workspace.uploadFileName = target.files?.length ? String(target.files[0]?.name || '').trim() : '';
+      renderScheduleUploadWorkspace();
       return;
     }
 

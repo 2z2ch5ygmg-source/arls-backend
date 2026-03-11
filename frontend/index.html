@@ -2425,7 +2425,7 @@
                   <span id="scheduleSupportSourceMeta" class="muted">원본 업로드 대기</span>
                 </article>
                 <article class="schedule-support-meta-card">
-                  <span class="schedule-support-meta-label">Sentrix handoff</span>
+                  <span class="schedule-support-meta-label">HQ 제출 이력</span>
                   <strong id="scheduleSupportMergeState">대기</strong>
                   <span id="scheduleSupportMergeMeta" class="muted">Sentrix 제출 전</span>
                 </article>
@@ -2435,9 +2435,9 @@
                   <span id="scheduleSupportConflictMeta" class="muted">site/month 선택 후 확인</span>
                 </article>
                 <article class="schedule-support-meta-card">
-                  <span class="schedule-support-meta-label">다음 소유자</span>
-                  <strong id="scheduleSupportFinalState">Sentrix</strong>
-                  <span id="scheduleSupportFinalMeta" class="muted">HQ roster 제출/적용은 Sentrix 소유</span>
+                  <span class="schedule-support-meta-label">다음 단계</span>
+                  <strong id="scheduleSupportFinalState">ARLS STEP 4</strong>
+                  <span id="scheduleSupportFinalMeta" class="muted">HQ 작성본 업로드와 검토/적용 시작은 ARLS에서 진행됩니다.</span>
                 </article>
               </div>
               <ul id="scheduleSupportBlockedReasons" class="list hidden"></ul>
@@ -2458,15 +2458,28 @@
                 <div>
                   <span class="schedule-upload-step-kicker">STEP 4</span>
                   <h4>HQ 지원근무자 반영 업로드</h4>
-                  <p class="muted">ARLS에서 artifact handoff를 시작하고, 실제 roster 제출/검토/적용은 Sentrix가 처리한 뒤 다시 ARLS truth로 반영됩니다.</p>
+                  <p class="muted">ARLS가 HQ 작성본 workbook의 업로드, 검토, 적용 시작을 소유합니다. 내부 ticket/state 재계산과 알림/bridge는 Sentrix 엔진이 이어받습니다.</p>
+                </div>
+              </div>
+              <div class="schedule-upload-policy-strip">
+                <div class="schedule-upload-policy-item">
+                  <span>ARLS 소유</span>
+                  <strong>업로드 / 검토 / 적용 시작</strong>
+                </div>
+                <div class="schedule-upload-policy-item">
+                  <span>Sentrix 소유</span>
+                  <strong>ticket 상태 / 알림 / bridge</strong>
+                </div>
+                <div class="schedule-upload-policy-item">
+                  <span>적용 범위</span>
+                  <strong>normalized roster snapshot handoff</strong>
                 </div>
               </div>
               <section id="scheduleSupportUploadSection" class="schedule-support-action-section stack">
                 <div class="approval-head">
-                  <h3>Sentrix 제출 handoff</h3>
+                  <h3>HQ 작성본 업로드</h3>
                 </div>
-                <p class="muted">현재 source artifact를 기준으로 Sentrix 제출 워크스페이스를 열어 HQ 지원근무자 roster 업로드를 이어갑니다.</p>
-                <button class="btn btn-primary" type="button" id="scheduleSupportOpenSentrixBtn" data-action="schedule-support-open-sentrix">Sentrix에서 지원근무자 제출 열기</button>
+                <p id="scheduleSupportHqContractHint" class="muted">업로드 지점과 대상 월, source artifact를 먼저 고정하면 HQ 작성본 workbook의 검토/적용을 여기서 시작할 수 있습니다.</p>
                 <dl id="scheduleSupportArtifactMetaList" class="schedule-support-artifact-list">
                   <div class="schedule-support-artifact-row">
                     <dt>artifact_id</dt>
@@ -2489,16 +2502,64 @@
                     <dd id="scheduleSupportArtifactGeneratedAt">-</dd>
                   </div>
                 </dl>
+                <div class="schedule-upload-file-row">
+                  <label class="input-field schedule-upload-file-field" for="scheduleSupportHqUploadFile">
+                    <span>HQ 작성본 업로드 파일</span>
+                    <input id="scheduleSupportHqUploadFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+                  </label>
+                  <button class="btn btn-secondary" type="button" id="scheduleSupportHqInspectBtn" data-action="schedule-support-hq-inspect">검토 시작</button>
+                </div>
+                <div class="support-status-hq-replace-note">
+                  <strong>REPLACE 정책</strong>
+                  <p>업로드한 파일의 최신 내용으로 기존 지원근무자 roster snapshot을 교체합니다. 재업로드 시 병합하지 않고 최신 파일 기준으로 Sentrix state engine에 handoff합니다.</p>
+                </div>
+                <div id="scheduleSupportHqUploadMeta" class="schedule-upload-file-meta"></div>
                 <div class="schedule-support-upload-actions">
+                  <button class="btn btn-primary" type="button" id="scheduleSupportHqApplyBtn" data-action="schedule-support-apply">ARLS에서 적용</button>
+                  <button class="btn btn-secondary" type="button" id="scheduleSupportHqReinspectBtn" data-action="schedule-support-hq-inspect">다시 검토</button>
+                  <button class="btn btn-secondary" type="button" id="scheduleSupportOpenSentrixBtn" data-action="schedule-support-open-sentrix">Sentrix 상태 보기</button>
                   <button class="btn btn-secondary" type="button" id="scheduleSupportCopyArtifactBtn" data-action="schedule-support-copy-artifact">artifact_id 복사</button>
                   <button class="btn btn-secondary" type="button" data-action="schedule-open-upload-section" data-section="export">HQ 제출용 추출 다시 보기</button>
                 </div>
               </section>
-              <p id="scheduleSupportBatchInfo" class="muted">현재 artifact contract를 확인한 뒤 Sentrix 제출 워크스페이스로 이동하세요.</p>
-              <ul id="scheduleSupportBatchIssues" class="list hidden"></ul>
-              <div id="scheduleSupportPreviewTableWrap" class="schedule-preview-wrap hidden" aria-hidden="true"></div>
-              <p id="scheduleSupportApplyResult" class="muted">ARLS는 artifact handoff만 유지하고, HQ roster 제출/적용 및 ticket state 변경은 Sentrix가 소유합니다.</p>
-              <ul id="scheduleSupportApplyDetails" class="list hidden"></ul>
+              <p id="scheduleSupportHqBatchInfo" class="muted">source artifact lineage와 workbook 계약을 확인한 뒤 검토를 시작하세요.</p>
+              <div id="scheduleSupportHqReviewSummary" class="schedule-upload-summary-strip"></div>
+              <div id="scheduleSupportHqIssueGroups" class="schedule-upload-issue-groups"></div>
+              <div id="scheduleSupportHqReviewPlaceholder" class="schedule-upload-placeholder">
+                <strong>HQ 작성본 workbook 검토 대기 중</strong>
+                <p>업로드 파일을 선택한 뒤 <code>검토 시작</code>을 실행하면 scope별 상태와 근무자 셀 파싱 결과가 여기에 표시됩니다.</p>
+              </div>
+              <div id="scheduleSupportHqReviewTableWrap" class="schedule-preview-wrap hidden">
+                <table class="schedule-preview-table schedule-upload-preview-table support-status-hq-review-table">
+                  <thead>
+                    <tr>
+                      <th>시트명</th>
+                      <th>지점</th>
+                      <th>날짜</th>
+                      <th>구분</th>
+                      <th>항목</th>
+                      <th>입력값</th>
+                      <th>유효/요청</th>
+                      <th>target 상태</th>
+                      <th>검토 상태</th>
+                      <th>사유</th>
+                    </tr>
+                  </thead>
+                  <tbody id="scheduleSupportHqReviewTableBody"></tbody>
+                </table>
+              </div>
+              <ul id="scheduleSupportHqBatchIssues" class="list hidden"></ul>
+              <div class="schedule-upload-apply-bar support-status-hq-apply-bar">
+                <div class="schedule-upload-apply-state">
+                  <strong id="scheduleSupportHqReviewStateTitle">적용 전 검토 영역</strong>
+                  <span id="scheduleSupportHqReviewStateText">HQ 작성본 workbook을 검토한 뒤 적용하면 ARLS가 Sentrix state engine으로 normalized snapshot을 handoff합니다.</span>
+                </div>
+                <div class="schedule-upload-apply-actions">
+                  <button class="btn btn-secondary" type="button" data-action="schedule-open-upload-section" data-section="export">source artifact 다시 보기</button>
+                </div>
+              </div>
+              <p id="scheduleSupportHqApplyResult" class="muted">적용 결과와 handoff 상태가 여기에 표시됩니다.</p>
+              <ul id="scheduleSupportHqApplyDetails" class="list hidden"></ul>
             </section>
             </div>
 
