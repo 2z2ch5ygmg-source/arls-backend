@@ -4166,12 +4166,17 @@ async def backfill_soc_employees(
         employee_code = str(row.get("employee_code") or "").strip()
         site_code = str(row.get("site_code") or "").strip()
         ok, status_code, reason = _post_employee_sync_to_soc(
+            tenant_id=str(tenant.get("id") or ""),
             tenant_code=tenant_code,
+            tenant_name=str(tenant.get("tenant_name") or ""),
+            site_id=str(row.get("site_id") or "") or None,
             site_code=site_code,
+            site_name=str(row.get("site_name") or "") or None,
             employee_uuid=employee_uuid,
             employee_code=employee_code,
             full_name=str(row.get("full_name") or "").strip(),
             phone=str(row.get("phone") or "").strip() or None,
+            linked_user_id=str(row.get("user_id") or "").strip() or None,
             username=str(row.get("soc_login_id") or "").strip() or None,
             user_role=str(row.get("soc_role") or "").strip() or None,
             birth_date=row.get("birth_date"),
@@ -4182,6 +4187,8 @@ async def backfill_soc_employees(
             management_no_str=str(row.get("management_no_str") or "").strip() or None,
             note=str(row.get("note") or "").strip() or None,
             soc_role=str(row.get("soc_role") or "").strip() or None,
+            old_display_name=None,
+            new_display_name=str(row.get("full_name") or "").strip() or None,
             event_type="EMPLOYEE_UPDATED",
         )
         if ok:

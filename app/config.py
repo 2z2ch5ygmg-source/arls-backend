@@ -97,6 +97,7 @@ class Settings:
     ).strip()
     hr_reset_token = os.getenv("HR_RESET_TOKEN", "").strip()
     hr_auth_validate_token = os.getenv("HR_AUTH_VALIDATE_TOKEN", "").strip()
+    sentrix_support_bridge_token = os.getenv("SENTRIX_SUPPORT_BRIDGE_TOKEN", "").strip()
 
     request_timeout_seconds = 5
 

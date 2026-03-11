@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from collections import Counter
 from copy import copy
 import csv
@@ -17,7 +18,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, Form, Header, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from openpyxl.cell.cell import MergedCell
 from openpyxl import Workbook, load_workbook
@@ -25,6 +26,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from ...deps import get_db_conn, get_current_user, apply_rate_limit
+from ...config import settings
 from ...schemas import (
     AppleDaytimeShiftOut,
     ImportPreviewIssueLocationOut,
@@ -107,9 +109,10 @@ from ...services.p1_schedule import (
 )
 from ...services.push_notifications import send_push_notification_to_users
 from ...utils.permissions import can_manage_schedule, is_super_admin, normalize_role, normalize_user_role
-from ...utils.tenant_context import enforce_staff_site_scope, resolve_scoped_tenant
+from ...utils.tenant_context import enforce_staff_site_scope, resolve_scoped_tenant, fetch_tenant_row_any, ensure_tenant_active
 
 router = APIRouter(prefix="/schedules", tags=["schedules"], dependencies=[Depends(apply_rate_limit)])
+bridge_router = APIRouter(prefix="/schedules/bridge/sentrix-hq", tags=["schedules-bridge"])
 logger = logging.getLogger(__name__)
 
 
@@ -118,6 +121,7 @@ SHIFT_TYPE_ALIASES = {
 }
 ALLOWED_SHIFT_TYPES = {"day", "overtime", "night", "off", "holiday"}
 NON_WORKING_SHIFT_TYPES = {"off", "holiday"}
+SENTRIX_BRIDGE_ACTOR_ID = "00000000-0000-0000-0000-00000000a115"
 TEAM_MANAGER_DUTY_ROLE = "TEAM_MANAGER"
 VICE_SUPERVISOR_DUTY_ROLE = "VICE_SUPERVISOR"
 GUARD_DUTY_ROLE = "GUARD"
@@ -130,6 +134,33 @@ SHIFT_TYPE_LABELS = {
     "night": "18:00-09:00",
     "off": "휴무",
     "holiday": "공휴일",
+}
+SCHEDULE_DISPLAY_LABELS = {
+    "day": "주간근무",
+    "overtime": "초과근무",
+    "night": "야간근무",
+    "off": "휴무",
+    "holiday": "공휴일",
+    "annual_leave": "연차",
+    "half_leave": "반차",
+}
+SCHEDULE_DISPLAY_TIME_LABELS = {
+    "off": "휴무",
+    "holiday": "공휴일",
+    "annual_leave": "연차",
+    "half_leave": "반차",
+}
+LEADER_ROLE_DISPLAY_LABELS = {
+    "HQ_ADMIN": "HQ Admin",
+    "SUPERVISOR": "Supervisor",
+    VICE_SUPERVISOR_DUTY_ROLE: "Vice Supervisor",
+    GUARD_DUTY_ROLE: "GUARD",
+}
+LEADER_ROLE_PRIORITY = {
+    "HQ_ADMIN": 0,
+    "SUPERVISOR": 1,
+    VICE_SUPERVISOR_DUTY_ROLE: 2,
+    GUARD_DUTY_ROLE: 3,
 }
 SUPERVISOR_DAY_SHIFT_START = "08:00:00"
 SUPERVISOR_DAY_SHIFT_END = "18:00:00"
@@ -1555,6 +1586,54 @@ def _shift_label(shift_type: str | None) -> str:
     return SHIFT_TYPE_LABELS.get(normalized, normalized or "-")
 
 
+def _normalize_schedule_note_text(value: object) -> str:
+    return str(value or "").strip().lower()
+
+
+def _resolve_schedule_display_type(row: dict | None) -> str:
+    data = row or {}
+    shift_type = _normalize_shift_type(data.get("shift_type"))
+    if shift_type == "holiday":
+        return "holiday"
+    if shift_type != "off":
+        return shift_type or "day"
+
+    note_text = _normalize_schedule_note_text(data.get("schedule_note"))
+    source_text = str(data.get("source") or "").strip().lower()
+    if "반차" in note_text or "half" in note_text:
+        return "half_leave"
+    if (
+        any(token in note_text for token in ("연차", "휴가", "leave", "vacation"))
+        or source_text in {"leave", "annual_leave"}
+    ):
+        return "annual_leave"
+    return "off"
+
+
+def _resolve_schedule_display_meta(row: dict | None) -> dict[str, str]:
+    data = row or {}
+    display_type = _resolve_schedule_display_type(data)
+    label = SCHEDULE_DISPLAY_LABELS.get(display_type, SCHEDULE_DISPLAY_LABELS.get(_normalize_shift_type(data.get("shift_type")), "근무"))
+    if display_type in {"off", "holiday", "annual_leave", "half_leave"}:
+        time_label = SCHEDULE_DISPLAY_TIME_LABELS.get(display_type, label)
+    else:
+        canonical = _resolve_canonical_schedule_time(data)
+        time_label = str(canonical.get("label") or _shift_label(str(data.get("shift_type") or ""))).strip() or "-"
+    return {
+        "type": display_type,
+        "label": label,
+        "time": time_label,
+    }
+
+
+def _attach_schedule_display_fields(row: dict[str, Any]) -> dict[str, Any]:
+    meta = _resolve_schedule_display_meta(row)
+    row["schedule_display_type"] = meta["type"]
+    row["schedule_display_label"] = meta["label"]
+    row["schedule_display_time"] = meta["time"]
+    return row
+
+
 def _row_shift_label(row: dict) -> str:
     canonical = _resolve_canonical_schedule_time(row)
     custom_label = str(canonical.get("label") or "").strip()
@@ -1887,6 +1966,43 @@ def _resolve_target_tenant(conn, user, tenant_code: str | None):
         header_tenant_id=user.get("active_tenant_id"),
         require_dev_context=True,
     )
+
+
+def _require_sentrix_support_bridge_token(x_sentrix_bridge_token: str | None) -> None:
+    expected = str(getattr(settings, "sentrix_support_bridge_token", "") or "").strip()
+    received = str(x_sentrix_bridge_token or "").strip()
+    if not expected:
+        raise HTTPException(status_code=503, detail="sentrix support bridge token is not configured")
+    if not received or received != expected:
+        raise HTTPException(status_code=401, detail="invalid sentrix support bridge token")
+
+
+def _resolve_sentrix_bridge_tenant(conn, tenant_code: str | None) -> dict[str, Any]:
+    tenant_ref = str(tenant_code or "").strip()
+    if not tenant_ref:
+        raise HTTPException(status_code=400, detail="tenant_code is required")
+    row = fetch_tenant_row_any(conn, tenant_ref)
+    return ensure_tenant_active(row)
+
+
+def _build_sentrix_bridge_actor() -> dict[str, Any]:
+    return {
+        "id": SENTRIX_BRIDGE_ACTOR_ID,
+        "role": "developer",
+        "username": "sentrix_bridge",
+        "full_name": "Sentrix HQ Submission Bridge",
+    }
+
+
+def _build_sentrix_hq_artifact_id(
+    *,
+    tenant_code: str,
+    month_key: str,
+    site_code: str,
+    revision: str,
+) -> str:
+    normalized_scope_site = str(site_code or "ALL").strip().upper() or "ALL"
+    return f"sentrix-hq:{str(tenant_code or '').strip().upper()}:{month_key}:{normalized_scope_site}:{str(revision or '').strip() or 'latest'}"
 
 
 def _format_time_for_response(value: object) -> str | None:
@@ -3493,17 +3609,7 @@ def _merge_export_cell_value(existing: object, incoming: object) -> str:
 
 
 def _get_export_non_working_marker(row: dict) -> str:
-    shift_type = _normalize_shift_type(row.get("shift_type"))
-    if shift_type == "holiday":
-        return "공휴일"
-    note_text = str(row.get("schedule_note") or "").strip()
-    source_text = str(row.get("source") or "").strip().lower()
-    note_lower = note_text.lower()
-    if any(token in note_lower for token in ("연차", "leave", "vacation")) or source_text in {"leave", "annual_leave"}:
-        return "연차"
-    if any(token in note_lower for token in ("반차", "half")):
-        return "반차"
-    return "휴무"
+    return _resolve_schedule_display_meta(row)["label"]
 
 
 def _find_template_data_start_row(sheet) -> int:
@@ -10364,6 +10470,229 @@ def process_sentrix_support_arls_bridge_actions(
     }
 
 
+@bridge_router.get("/workspace")
+def get_sentrix_hq_submission_workspace_bridge(
+    month: str = Query(..., description="YYYY-MM"),
+    tenant_code: str = Query(..., max_length=64),
+    site_code: str | None = Query(default=None, max_length=64),
+    artifact_id: str | None = Query(default=None, max_length=128),
+    revision: str | None = Query(default=None, max_length=128),
+    source_upload_batch_id: str | None = Query(default=None, max_length=128),
+    x_sentrix_bridge_token: str | None = Header(default=None, alias="X-Sentrix-Bridge-Token"),
+    conn=Depends(get_db_conn),
+):
+    _require_sentrix_support_bridge_token(x_sentrix_bridge_token)
+    _month_bounds(month)
+    target_tenant = _resolve_sentrix_bridge_tenant(conn, tenant_code)
+    tenant_code_value = str(target_tenant.get("tenant_code") or tenant_code or "").strip()
+    workspace = _build_support_roster_hq_workspace_payload(
+        conn,
+        tenant_id=str(target_tenant["id"]),
+        tenant_code=tenant_code_value,
+        month_key=month,
+    )
+    selected_site = None
+    normalized_site_code = str(site_code or "").strip().upper()
+    if normalized_site_code:
+        selected_site = next(
+            (
+                site
+                for site in workspace.sites
+                if str(site.site_code or "").strip().upper() == normalized_site_code
+            ),
+            None,
+        )
+    selected_revision = str(
+        revision
+        or (selected_site.source_revision if selected_site else "")
+        or ""
+    ).strip()
+    resolved_artifact_id = str(
+        artifact_id
+        or _build_sentrix_hq_artifact_id(
+            tenant_code=tenant_code_value,
+            month_key=month,
+            site_code=normalized_site_code or "ALL",
+            revision=selected_revision or workspace.latest_status,
+        )
+    ).strip()
+    return {
+        **workspace.model_dump(mode="json"),
+        "workspace_owner": "sentrix_hq_support_submission",
+        "bridge_source": "arls_support_roundtrip",
+        "artifact_context": {
+            "artifact_id": resolved_artifact_id,
+            "month": month,
+            "site": normalized_site_code or None,
+            "site_code": normalized_site_code or None,
+            "revision": selected_revision or None,
+            "source_upload_batch_id": str(source_upload_batch_id or "").strip() or None,
+        },
+        "selected_site": selected_site.model_dump(mode="json") if selected_site else None,
+    }
+
+
+@bridge_router.get("/artifact/download")
+def download_sentrix_hq_submission_artifact_bridge(
+    month: str = Query(..., description="YYYY-MM"),
+    tenant_code: str = Query(..., max_length=64),
+    scope: str = Query(default="all", max_length=16),
+    site_code: str | None = Query(default=None, max_length=64),
+    x_sentrix_bridge_token: str | None = Header(default=None, alias="X-Sentrix-Bridge-Token"),
+    conn=Depends(get_db_conn),
+):
+    _require_sentrix_support_bridge_token(x_sentrix_bridge_token)
+    _month_bounds(month)
+    target_tenant = _resolve_sentrix_bridge_tenant(conn, tenant_code)
+    workbook, written_sites = _build_support_roster_hq_download_workbook(
+        conn,
+        target_tenant=target_tenant,
+        month_key=month,
+        scope=scope,
+        selected_site_code=site_code,
+        user=_build_sentrix_bridge_actor(),
+    )
+    out = BytesIO()
+    workbook.save(out)
+    out.seek(0)
+    now_kst = datetime.now(timezone(timedelta(hours=9)))
+    normalized_scope = "site" if str(scope or "").strip().lower() == "site" else "all"
+    filename = (
+        f"{month[:4]}년 {int(month[5:7])}월 지원근무자 배정 workbook_"
+        f"{str(site_code or 'ALL').strip() if normalized_scope == 'site' else 'ALL'}_"
+        f"{now_kst.strftime('%y%m%d')}.xlsx"
+    )
+    return StreamingResponse(
+        out,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+            "X-Sheet-Count": str(len(written_sites)),
+        },
+    )
+
+
+@bridge_router.post("/upload/inspect")
+def inspect_sentrix_hq_submission_upload_bridge(
+    payload: dict[str, Any] = Body(default_factory=dict),
+    x_sentrix_bridge_token: str | None = Header(default=None, alias="X-Sentrix-Bridge-Token"),
+    conn=Depends(get_db_conn),
+):
+    _require_sentrix_support_bridge_token(x_sentrix_bridge_token)
+    tenant_code = str(payload.get("tenant_code") or "").strip()
+    month = str(payload.get("month") or "").strip()
+    if not month:
+        raise HTTPException(status_code=400, detail="month is required")
+    _month_bounds(month)
+    file_name = str(payload.get("file_name") or "support_roster.xlsx").strip() or "support_roster.xlsx"
+    file_b64 = str(payload.get("file_base64") or "").strip()
+    if not file_b64:
+        raise HTTPException(status_code=400, detail="file_base64 is required")
+    try:
+        raw_bytes = base64.b64decode(file_b64, validate=True)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="invalid file_base64") from exc
+    try:
+        workbook = load_workbook(filename=BytesIO(raw_bytes), read_only=False, data_only=False)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="invalid support workbook") from exc
+    try:
+        target_tenant = _resolve_sentrix_bridge_tenant(conn, tenant_code)
+        result = _build_support_roster_hq_upload_inspect_result(
+            conn,
+            workbook=workbook,
+            target_tenant=target_tenant,
+            selected_month=month,
+            filename=file_name,
+            user=_build_sentrix_bridge_actor(),
+        )
+    finally:
+        workbook.close()
+    upload_meta = result.upload_meta
+    site_context = str(payload.get("site_code") or upload_meta.selected_site_code or "").strip().upper()
+    revision_value = str(payload.get("revision") or upload_meta.revision or "").strip()
+    artifact_id = str(
+        payload.get("artifact_id")
+        or _build_sentrix_hq_artifact_id(
+            tenant_code=str(target_tenant.get("tenant_code") or tenant_code or "").strip(),
+            month_key=month,
+            site_code=site_context or "ALL",
+            revision=revision_value or "latest",
+        )
+    ).strip()
+    return {
+        **result.model_dump(mode="json"),
+        "workspace_owner": "sentrix_hq_support_submission",
+        "artifact_context": {
+            "artifact_id": artifact_id,
+            "month": month,
+            "site": site_context or None,
+            "site_code": site_context or None,
+            "revision": revision_value or None,
+            "source_upload_batch_id": str(result.batch_id),
+        },
+    }
+
+
+@bridge_router.post("/upload/{batch_id}/apply")
+def apply_sentrix_hq_submission_upload_bridge(
+    batch_id: uuid.UUID,
+    payload: dict[str, Any] = Body(default_factory=dict),
+    x_sentrix_bridge_token: str | None = Header(default=None, alias="X-Sentrix-Bridge-Token"),
+    conn=Depends(get_db_conn),
+):
+    _require_sentrix_support_bridge_token(x_sentrix_bridge_token)
+    target_tenant = _resolve_sentrix_bridge_tenant(conn, str(payload.get("tenant_code") or "").strip())
+    batch = _get_sentrix_hq_roster_batch(
+        conn,
+        batch_id=batch_id,
+        tenant_id=str(target_tenant["id"]),
+    )
+    if not batch:
+        raise HTTPException(status_code=404, detail="support hq roster batch not found")
+    restored_result = _restore_sentrix_hq_roster_apply_result(batch)
+    result = restored_result if restored_result and str(batch.get("status") or "").strip() in {"applied", "blocked"} else _apply_sentrix_hq_roster_batch(
+        conn,
+        batch_id=batch_id,
+        batch=batch,
+        target_tenant=target_tenant,
+        user=_build_sentrix_bridge_actor(),
+    )
+    upload_meta_json = batch.get("upload_meta_json") if isinstance(batch.get("upload_meta_json"), dict) else {}
+    site_context = str(
+        payload.get("site_code")
+        or upload_meta_json.get("selected_site_code")
+        or ""
+    ).strip().upper()
+    revision_value = str(
+        payload.get("revision")
+        or batch.get("bundle_revision")
+        or upload_meta_json.get("revision")
+        or ""
+    ).strip()
+    artifact_id = str(
+        payload.get("artifact_id")
+        or _build_sentrix_hq_artifact_id(
+            tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
+            month_key=str(batch.get("month_key") or "").strip(),
+            site_code=site_context or "ALL",
+            revision=revision_value or "latest",
+        )
+    ).strip()
+    return {
+        **result.model_dump(mode="json"),
+        "workspace_owner": "sentrix_hq_support_submission",
+        "artifact_context": {
+            "artifact_id": artifact_id,
+            "month": str(batch.get("month_key") or "").strip() or None,
+            "site": site_context or None,
+            "site_code": site_context or None,
+            "revision": revision_value or None,
+            "source_upload_batch_id": str(batch_id),
+        },
+    }
+
+
 @router.get("/support-roundtrip/hq-workbook")
 def download_support_roundtrip_hq_workbook(
     month: str = Query(..., description="YYYY-MM"),
@@ -11890,13 +12219,29 @@ def create_bulk_schedule(
     }
 
 
-def _normalize_duty_role(value: str | None, user_role: str | None = None) -> str:
+def _resolve_leader_candidate_role_key(value: str | None, user_role: str | None = None) -> str:
+    normalized_user_role = normalize_user_role(user_role)
     raw = str(value or "").strip().upper()
-    if raw in {VICE_SUPERVISOR_DUTY_ROLE, GUARD_DUTY_ROLE, TEAM_MANAGER_DUTY_ROLE}:
-        return raw
-    if str(user_role or "").strip().lower() == "branch_manager":
+    if normalized_user_role == "hq_admin":
+        return "HQ_ADMIN"
+    if normalized_user_role in {"supervisor", "developer"}:
+        return "SUPERVISOR"
+    if normalized_user_role == "vice_supervisor" or str(user_role or "").strip().lower() == "branch_manager":
+        return VICE_SUPERVISOR_DUTY_ROLE
+    if raw == TEAM_MANAGER_DUTY_ROLE:
+        return "SUPERVISOR"
+    if raw == VICE_SUPERVISOR_DUTY_ROLE:
         return VICE_SUPERVISOR_DUTY_ROLE
     return GUARD_DUTY_ROLE
+
+
+def _leader_candidate_role_priority(role_key: str | None) -> int:
+    return LEADER_ROLE_PRIORITY.get(str(role_key or "").strip().upper(), 9)
+
+
+def _leader_candidate_role_label(role_key: str | None) -> str:
+    normalized = str(role_key or "").strip().upper()
+    return LEADER_ROLE_DISPLAY_LABELS.get(normalized, normalized or "GUARD")
 
 
 def _fetch_schedule_context(conn, schedule_id: uuid.UUID | str, tenant_id):
@@ -11904,7 +12249,7 @@ def _fetch_schedule_context(conn, schedule_id: uuid.UUID | str, tenant_id):
         cur.execute(
             """
             SELECT ms.id, ms.tenant_id, ms.company_id, ms.site_id, ms.employee_id, ms.schedule_date, ms.shift_type,
-                   ms.leader_user_id, s.site_code, e.employee_code, e.full_name AS employee_name
+                   ms.schedule_note, ms.source, ms.leader_user_id, s.site_code, e.employee_code, e.full_name AS employee_name
             FROM monthly_schedules ms
             JOIN sites s ON s.id = ms.site_id
             JOIN employees e ON e.id = ms.employee_id
@@ -12028,9 +12373,7 @@ def _fetch_leader_candidates_for_site_day(conn, *, tenant_id, site_id, schedule_
 
     candidates: list[dict] = []
     for row in rows:
-        duty_role = _normalize_duty_role(row.get("duty_role_raw"), row.get("user_role"))
-        if duty_role == TEAM_MANAGER_DUTY_ROLE:
-            continue
+        duty_role = _resolve_leader_candidate_role_key(row.get("duty_role_raw"), row.get("user_role"))
         candidates.append(
             {
                 "user_id": row["user_id"],
@@ -12038,16 +12381,16 @@ def _fetch_leader_candidates_for_site_day(conn, *, tenant_id, site_id, schedule_
                 "full_name": row["full_name"],
                 "employee_code": row["employee_code"],
                 "duty_role": duty_role,
+                "display_role_label": _leader_candidate_role_label(duty_role),
+                "leader_priority": _leader_candidate_role_priority(duty_role),
             }
         )
 
     def _priority(item: dict) -> tuple[int, str]:
-        duty_role = item.get("duty_role")
-        if duty_role == VICE_SUPERVISOR_DUTY_ROLE:
-            return (1, str(item.get("employee_code") or ""))
-        if duty_role == GUARD_DUTY_ROLE:
-            return (2, str(item.get("employee_code") or ""))
-        return (9, str(item.get("employee_code") or ""))
+        return (
+            int(item.get("leader_priority") or 9),
+            str(item.get("employee_code") or ""),
+        )
 
     candidates.sort(key=_priority)
     return candidates
@@ -12095,9 +12438,7 @@ def _fetch_leader_candidates_for_site_dates(
         schedule_date_key = schedule_date_raw.isoformat() if isinstance(schedule_date_raw, date) else str(schedule_date_raw or "").strip()
         if not schedule_date_key:
             continue
-        duty_role = _normalize_duty_role(row.get("duty_role_raw"), row.get("user_role"))
-        if duty_role == TEAM_MANAGER_DUTY_ROLE:
-            continue
+        duty_role = _resolve_leader_candidate_role_key(row.get("duty_role_raw"), row.get("user_role"))
         grouped.setdefault(schedule_date_key, []).append(
             {
                 "user_id": row["user_id"],
@@ -12105,16 +12446,16 @@ def _fetch_leader_candidates_for_site_dates(
                 "full_name": row["full_name"],
                 "employee_code": row["employee_code"],
                 "duty_role": duty_role,
+                "display_role_label": _leader_candidate_role_label(duty_role),
+                "leader_priority": _leader_candidate_role_priority(duty_role),
             }
         )
 
     def _priority(item: dict) -> tuple[int, str]:
-        duty_role = item.get("duty_role")
-        if duty_role == VICE_SUPERVISOR_DUTY_ROLE:
-            return (1, str(item.get("employee_code") or ""))
-        if duty_role == GUARD_DUTY_ROLE:
-            return (2, str(item.get("employee_code") or ""))
-        return (9, str(item.get("employee_code") or ""))
+        return (
+            int(item.get("leader_priority") or 9),
+            str(item.get("employee_code") or ""),
+        )
 
     for schedule_date_key, candidates in grouped.items():
         candidates.sort(key=_priority)
@@ -12124,11 +12465,15 @@ def _fetch_leader_candidates_for_site_dates(
 def _recommended_leader_user_id(candidates: list[dict]) -> str | None:
     if not candidates:
         return None
-    for duty_role in (VICE_SUPERVISOR_DUTY_ROLE, GUARD_DUTY_ROLE):
-        for candidate in candidates:
-            if str(candidate.get("duty_role") or "") == duty_role:
-                return str(candidate["user_id"])
-    return str(candidates[0]["user_id"])
+    sorted_candidates = sorted(
+        candidates,
+        key=lambda item: (
+            int(item.get("leader_priority") or 9),
+            str(item.get("employee_code") or ""),
+            str(item.get("user_id") or ""),
+        ),
+    )
+    return str(sorted_candidates[0]["user_id"])
 
 
 def _refresh_daily_leader_defaults(conn, *, tenant_id, site_id, schedule_date: date) -> str | None:
@@ -12320,6 +12665,7 @@ def monthly_view(
         row["paid_hours"] = canonical.get("hours")
         row["shift_label"] = canonical.get("label")
         row["duty_type"] = canonical.get("duty_type")
+        _attach_schedule_display_fields(row)
     return rows
 
 
@@ -12344,6 +12690,8 @@ def monthly_view_lite(
                 e.full_name AS employee_name,
                 ms.schedule_date,
                 ms.shift_type,
+                ms.schedule_note,
+                ms.source,
                 s.site_code,
                 s.site_name,
                 (lower(COALESCE(ms.schedule_note, '')) LIKE '%%closer%%') AS is_closer
@@ -12359,6 +12707,9 @@ def monthly_view_lite(
             (target_tenant["id"], start, end, staff_site_id, staff_site_id),
         )
         rows = [dict(r) for r in cur.fetchall()]
+
+    for row in rows:
+        _attach_schedule_display_fields(row)
 
     employee_map: dict[str, dict] = {}
     for row in rows:
@@ -12406,6 +12757,11 @@ def monthly_board_lite(
                 COALESCE(e.duty_role, '') AS duty_role,
                 ms.schedule_date,
                 ms.shift_type,
+                ms.schedule_note,
+                ms.source,
+                ms.leader_user_id,
+                lu.username AS leader_username,
+                lu.full_name AS leader_full_name,
                 ms.template_id,
                 ms.shift_start_time,
                 ms.shift_end_time,
@@ -12420,6 +12776,7 @@ def monthly_board_lite(
             FROM monthly_schedules ms
             JOIN employees e ON e.id = ms.employee_id
             JOIN sites s ON s.id = ms.site_id
+            LEFT JOIN arls_users lu ON lu.id = ms.leader_user_id
             LEFT JOIN schedule_templates st ON st.id = ms.template_id
             WHERE ms.tenant_id = %s
               AND ms.schedule_date >= %s
@@ -12441,6 +12798,8 @@ def monthly_board_lite(
                 COALESCE(e.duty_role, '') AS duty_role,
                 ms.schedule_date,
                 ms.shift_type,
+                ms.schedule_note,
+                ms.source,
                 ms.template_id,
                 ms.shift_start_time,
                 ms.shift_end_time,
@@ -12499,8 +12858,13 @@ def monthly_board_lite(
         if not date_key or date_key not in day_map:
             continue
         shift_type = _normalize_shift_type(str(row.get("shift_type") or ""))
-        status = "non_working" if shift_type in NON_WORKING_SHIFT_TYPES else "scheduled"
         canonical = _resolve_canonical_schedule_time(row)
+        display_meta = _resolve_schedule_display_meta(row)
+        status = (
+            "leave"
+            if display_meta["type"] in {"annual_leave", "half_leave"}
+            else ("non_working" if shift_type in NON_WORKING_SHIFT_TYPES else "scheduled")
+        )
         item = {
             "schedule_id": str(row.get("schedule_id") or "").strip(),
             "employee_id": str(row.get("employee_id") or "").strip(),
@@ -12515,13 +12879,18 @@ def monthly_board_lite(
             "start_time": _format_time_for_response(canonical.get("start_time")),
             "end_time": _format_time_for_response(canonical.get("end_time")),
             "status": status,
+            "schedule_note": str(row.get("schedule_note") or "").strip() or None,
+            "source": str(row.get("source") or "").strip() or None,
+            "schedule_display_type": display_meta["type"],
+            "schedule_display_label": display_meta["label"],
+            "schedule_display_time": display_meta["time"],
             "template_id": str(row.get("template_id") or "").strip(),
             "template_name": str(row.get("template_name") or "").strip(),
             "duty_type": _normalize_schedule_template_duty_type(row.get("duty_type")),
             "paid_hours": float(canonical["hours"]) if canonical.get("hours") is not None else None,
         }
         day_map[date_key]["items"].append(item)
-        if not day_map[date_key]["holiday_name"] and shift_type == "holiday":
+        if not day_map[date_key]["holiday_name"] and display_meta["type"] == "holiday":
             day_map[date_key]["holiday_name"] = "공휴일"
 
     for row in support_rows:
@@ -12535,6 +12904,13 @@ def monthly_board_lite(
         day_map[date_key]["items"] = _merge_board_items_for_calendar(day_map[date_key]["items"])
 
     for row in rows:
+        canonical = _resolve_canonical_schedule_time(row)
+        row["shift_start_time"] = canonical.get("start_time")
+        row["shift_end_time"] = canonical.get("end_time")
+        row["paid_hours"] = canonical.get("hours")
+        row["shift_label"] = canonical.get("label")
+        row["duty_type"] = canonical.get("duty_type")
+        _attach_schedule_display_fields(row)
         employee_id = str(row.get("employee_id") or "").strip()
         if employee_id and employee_id not in employee_map:
             employee_map[employee_id] = {
@@ -12736,6 +13112,7 @@ def get_schedule_leader_candidates(
             full_name=item["full_name"],
             employee_code=item["employee_code"],
             duty_role=item["duty_role"],
+            display_role_label=item.get("display_role_label"),
             is_recommended=(recommended is not None and str(item["user_id"]) == str(recommended)),
         )
         for item in candidates
@@ -14084,6 +14461,7 @@ def _persist_schedule_import_preview_batch(
     issues = list(preview.get("issues") or [])
     status = "blocked" if blocked_reasons or int(preview.get("blocked_rows") or 0) > 0 else "previewed"
     invalid_samples: list[str] = []
+    row_insert_params: list[tuple[Any, ...]] = []
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -14136,17 +14514,7 @@ def _persist_schedule_import_preview_batch(
                     f"{validation_error or row.get('protected_reason') or _import_diff_status_label(diff_category=row.get('diff_category'), validation_code=validation_code, is_blocking=bool(row.get('is_blocking')))}"
                 )
             schedule_date = row.get("schedule_date")
-            cur.execute(
-                """
-                INSERT INTO schedule_import_rows
-                (id, batch_id, row_no, tenant_code, company_code, site_code, employee_code,
-                 employee_name, schedule_date, shift_type, duty_type, template_id, template_name,
-                 work_value, shift_start_time, shift_end_time, paid_hours, validation_code,
-                 validation_error, employee_id, company_id, site_id, tenant_id, is_valid,
-                 source_block, section_label, current_work_value, diff_category, apply_action,
-                 is_blocking, is_protected, protected_reason, current_schedule_id, payload_json)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
-                """,
+            row_insert_params.append(
                 (
                     uuid.uuid4(),
                     batch_id,
@@ -14181,8 +14549,22 @@ def _persist_schedule_import_preview_batch(
                     bool(row.get("is_protected")),
                     str(row.get("protected_reason") or "").strip() or None,
                     row.get("current_schedule_id"),
-                    json.dumps(row, ensure_ascii=False, sort_keys=True, default=str),
-                ),
+                    json.dumps(row, ensure_ascii=False, default=str),
+                )
+            )
+        if row_insert_params:
+            cur.executemany(
+                """
+                INSERT INTO schedule_import_rows
+                (id, batch_id, row_no, tenant_code, company_code, site_code, employee_code,
+                 employee_name, schedule_date, shift_type, duty_type, template_id, template_name,
+                 work_value, shift_start_time, shift_end_time, paid_hours, validation_code,
+                 validation_error, employee_id, company_id, site_id, tenant_id, is_valid,
+                 source_block, section_label, current_work_value, diff_category, apply_action,
+                 is_blocking, is_protected, protected_reason, current_schedule_id, payload_json)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                """,
+                row_insert_params,
             )
     return batch_id, invalid_samples
 
@@ -15895,16 +16277,22 @@ def update_monthly_schedule(
         raise HTTPException(status_code=404, detail="schedule not found")
 
     leader_field_provided = "leader_user_id" in payload.model_fields_set
+    schedule_note_field_provided = "schedule_note" in payload.model_fields_set
     next_shift_type = _normalize_shift_type(payload.shift_type)
     if next_shift_type not in ALLOWED_SHIFT_TYPES:
         raise HTTPException(status_code=400, detail="shift_type invalid")
 
     next_leader_user_id = context.get("leader_user_id")
+    next_schedule_note = str(context.get("schedule_note") or "").strip() or None
     if leader_field_provided:
         next_leader_user_id = payload.leader_user_id
+    if schedule_note_field_provided:
+        next_schedule_note = str(payload.schedule_note or "").strip() or None
 
     if next_shift_type in NON_WORKING_SHIFT_TYPES:
         next_leader_user_id = None
+        if next_shift_type == "holiday":
+            next_schedule_note = None
     elif next_leader_user_id:
         _assert_valid_leader_for_site_day(
             conn,
@@ -15913,16 +16301,20 @@ def update_monthly_schedule(
             schedule_date=context["schedule_date"],
             leader_user_id=str(next_leader_user_id),
         )
+        next_schedule_note = None
+    else:
+        next_schedule_note = None
 
     with conn.cursor() as cur:
         cur.execute(
             """
             UPDATE monthly_schedules
             SET shift_type = %s,
-                leader_user_id = %s
+                leader_user_id = %s,
+                schedule_note = %s
             WHERE id = %s AND tenant_id = %s
             """,
-            (next_shift_type, next_leader_user_id, str(schedule_id), target_tenant["id"]),
+            (next_shift_type, next_leader_user_id, next_schedule_note, str(schedule_id), target_tenant["id"]),
         )
 
     recommended_user_id = _refresh_daily_leader_defaults(
@@ -15932,9 +16324,20 @@ def update_monthly_schedule(
         schedule_date=context["schedule_date"],
     )
 
+    display_meta = _resolve_schedule_display_meta(
+        {
+            **context,
+            "shift_type": next_shift_type,
+            "schedule_note": next_schedule_note,
+        }
+    )
     return {
         "id": str(schedule_id),
         "shift_type": next_shift_type,
+        "schedule_note": next_schedule_note,
+        "schedule_display_type": display_meta["type"],
+        "schedule_display_label": display_meta["label"],
+        "schedule_display_time": display_meta["time"],
         "leader_user_id": str(next_leader_user_id) if next_leader_user_id else None,
         "recommended_leader_user_id": recommended_user_id,
     }

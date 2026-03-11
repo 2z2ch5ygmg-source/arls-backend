@@ -373,12 +373,12 @@ def _to_soc_sync_role(user_role: str | None, soc_role: str | None = None) -> str
     for candidate in candidates:
         normalized = candidate.strip().replace("-", "_").replace(" ", "_").upper()
         if normalized in SOC_SYNC_ALLOWED_ROLES:
-            return normalized
+            return SOC_EMPLOYEE_ROLE_MAP.get(normalized, "Officer")
 
     normalized_user_role = normalize_user_role(user_role)
     if normalized_user_role in SOC_SYNC_ALLOWED_ROLES:
-        return normalized_user_role.upper()
-    return "OFFICER"
+        return SOC_EMPLOYEE_ROLE_MAP.get(normalized_user_role.upper(), "Officer")
+    return "Officer"
 
 
 def _normalize_optional_text(value: str | None) -> str | None:
@@ -464,12 +464,17 @@ def _to_iso_date(value) -> str | None:
 
 def _post_employee_sync_to_soc(
     *,
+    tenant_id: str | None = None,
     tenant_code: str,
+    tenant_name: str | None = None,
+    site_id: str | None = None,
     site_code: str,
+    site_name: str | None = None,
     employee_uuid: str,
     employee_code: str,
     full_name: str = "",
     phone: str | None = None,
+    linked_user_id: str | None = None,
     username: str | None = None,
     user_role: str | None = None,
     birth_date=None,
@@ -484,6 +489,8 @@ def _post_employee_sync_to_soc(
     soc_login_id: str | None = None,
     soc_temp_password: str | None = None,
     soc_role: str | None = None,
+    old_display_name: str | None = None,
+    new_display_name: str | None = None,
     event_type: str = "EMPLOYEE_CREATED",
 ) -> tuple[bool, int | None, str | None]:
     if not bool(settings.soc_integration_enabled):
@@ -497,29 +504,88 @@ def _post_employee_sync_to_soc(
         logger.info("employees.soc_sync skipped: SOC_EMPLOYEE_SYNC_URL is empty")
         return False, None, "empty url"
 
-    tenant_id_norm = str(tenant_code or "").strip().lower()
+    tenant_id_norm = str(tenant_id or "").strip()
+    tenant_code_norm = str(tenant_code or "").strip().upper()
+    tenant_name_norm = _normalize_optional_text(tenant_name)
+    tenant_identity_key = tenant_id_norm or tenant_code_norm.lower()
+    site_id_norm = str(site_id or "").strip()
     site_code_norm = str(site_code or "").strip()
+    site_name_norm = _normalize_optional_text(site_name)
     employee_uuid_norm = str(employee_uuid or "").strip() or str(uuid.uuid4())
     employee_code_norm = str(employee_code or "").strip()
     normalized_event_type = str(event_type or "").strip().upper() or "EMPLOYEE_CREATED"
     if normalized_event_type not in {"EMPLOYEE_CREATED", "EMPLOYEE_UPDATED", "EMPLOYEE_DELETED"}:
         normalized_event_type = "EMPLOYEE_CREATED"
+    change_type = normalized_event_type.removeprefix("EMPLOYEE_") or "CREATE"
+    sync_mode = "DELETE" if change_type == "DELETED" else "UPSERT"
+    if change_type == "UPDATED":
+        change_type = "UPDATE"
+    elif change_type == "CREATED":
+        change_type = "CREATE"
+    elif change_type == "DELETED":
+        change_type = "DELETE"
     role_norm = ""
     if normalized_event_type != "EMPLOYEE_DELETED":
         role_norm = _to_soc_sync_role(user_role, soc_role)
+    old_display_name_norm = _normalize_optional_text(old_display_name)
+    new_display_name_norm = _normalize_optional_text(new_display_name) or str(full_name or "").strip()
+    canonical_name_norm = new_display_name_norm or str(full_name or "").strip()
+    linked_username_norm = _normalize_optional_text(username) or _normalize_optional_text(soc_login_id)
+    linked_user_id_norm = _normalize_optional_text(linked_user_id)
+    employee_identity_key = f"{tenant_identity_key}:{employee_uuid_norm}" if tenant_identity_key else employee_uuid_norm
 
     payload = {
         "event_type": normalized_event_type,
-        "tenant_id": tenant_id_norm,
+        "change_type": change_type,
+        "sync_mode": sync_mode,
+        "tenant_id": tenant_id_norm or tenant_code_norm.lower(),
+        "tenant_code": tenant_code_norm,
+        "site_id": site_id_norm or None,
         "site_code": site_code_norm,
+        "employee_id": employee_uuid_norm,
+        "linked_user_id": linked_user_id_norm,
+        "old_display_name": old_display_name_norm,
+        "new_display_name": new_display_name_norm,
         "soc_role": role_norm,
         "user_role": role_norm,
-        "employee": {
+        "tenant": {
+            "tenant_id": tenant_id_norm or None,
+            "tenant_code": tenant_code_norm,
+            "tenant_name": tenant_name_norm,
+        },
+        "site": {
+            "site_id": site_id_norm or None,
+            "site_code": site_code_norm,
+            "site_name": site_name_norm,
+        },
+        "linked_user": {
+            "user_id": linked_user_id_norm,
+            "username": linked_username_norm,
+            "soc_login_id": _normalize_optional_text(soc_login_id),
+            "user_role": role_norm or _normalize_optional_text(user_role),
+            "soc_role": role_norm or _normalize_optional_text(soc_role),
+        },
+        "identity": {
+            "employee_id": employee_uuid_norm,
             "employee_uuid": employee_uuid_norm,
             "employee_code": employee_code_norm,
-            "name": str(full_name or "").strip(),
+            "tenant_id": tenant_id_norm or None,
+            "tenant_code": tenant_code_norm,
+            "site_id": site_id_norm or None,
+            "site_code": site_code_norm,
+            "linked_user_id": linked_user_id_norm,
+            "identity_key": employee_identity_key,
+        },
+        "employee": {
+            "employee_id": employee_uuid_norm,
+            "employee_uuid": employee_uuid_norm,
+            "employee_code": employee_code_norm,
+            "identity_key": employee_identity_key,
+            "name": canonical_name_norm,
+            "old_display_name": old_display_name_norm,
+            "new_display_name": new_display_name_norm,
             "phone": phone,
-            "username": _normalize_optional_text(username),
+            "username": linked_username_norm,
             "user_role": role_norm,
             "soc_role": role_norm,
             "role": role_norm,
@@ -537,7 +603,8 @@ def _post_employee_sync_to_soc(
     print(
         f"[HR->SOC] POST {url} "
         f"event_type={normalized_event_type} "
-        f"tenant={tenant_id_norm} site={site_code_norm} "
+        f"change_type={change_type} "
+        f"tenant={tenant_identity_key} site={site_code_norm} "
         f"uuid={employee_uuid_norm} role={role_norm}"
     )
     try:
@@ -549,9 +616,12 @@ def _post_employee_sync_to_soc(
                 + str(
                     {
                         "event_type": payload["event_type"],
-                        "tenant_id": tenant_id_norm,
+                        "change_type": payload["change_type"],
+                        "tenant_id": payload["tenant_id"],
+                        "tenant_code": tenant_code_norm,
                         "site_code": site_code_norm,
                         "employee": {
+                            "employee_id": employee_uuid_norm,
                             "employee_uuid": employee_uuid_norm,
                             "employee_code": employee_code_norm,
                             "role": role_norm,
@@ -2330,12 +2400,17 @@ def create_employee(
         "soc_login_id": resolved_soc_login_id,
     }
     _post_employee_sync_to_soc(
+        tenant_id=str(tenant.get("id") or ""),
         tenant_code=str(tenant.get("tenant_code") or ""),
+        tenant_name=str(tenant.get("tenant_name") or ""),
+        site_id=str(site_id or ""),
         site_code=resolved_site_code,
+        site_name=None,
         employee_uuid=employee_uuid,
         employee_code=str(created_payload.get("employee_code") or ""),
         full_name=str(created_payload.get("full_name") or full_name_text or ""),
         phone=created_payload.get("phone"),
+        linked_user_id=target_user_id or None,
         username=account_username,
         user_role=created_payload.get("user_role"),
         birth_date=created_payload.get("birth_date"),
@@ -2350,6 +2425,8 @@ def create_employee(
         soc_login_id=resolved_soc_login_id,
         soc_temp_password=account_initial_password,
         soc_role=normalized_soc_role,
+        old_display_name=None,
+        new_display_name=str(created_payload.get("full_name") or full_name_text or ""),
         event_type="EMPLOYEE_CREATED",
     )
     return EmployeeOut(
@@ -2400,7 +2477,7 @@ def update_employee(
 
         cur.execute(
             """
-            SELECT s.site_code, c.company_code
+            SELECT s.site_code, s.site_name, c.company_code
             FROM sites s
             JOIN companies c ON c.id = s.company_id
             WHERE s.id = %s
@@ -2525,12 +2602,25 @@ def update_employee(
                 """
                 UPDATE arls_users
                 SET role = %s,
+                    full_name = %s,
                     updated_at = timezone('utc', now())
                 WHERE tenant_id = %s
                   AND employee_id = %s
                   AND is_active = TRUE
                 """,
-                (account_user_role, tenant_id, str(employee_id)),
+                (account_user_role, updated.get("full_name"), tenant_id, str(employee_id)),
+            )
+        else:
+            cur.execute(
+                """
+                UPDATE arls_users
+                SET full_name = %s,
+                    updated_at = timezone('utc', now())
+                WHERE tenant_id = %s
+                  AND employee_id = %s
+                  AND is_active = TRUE
+                """,
+                (updated.get("full_name"), tenant_id, str(employee_id)),
             )
 
         cur.execute(
@@ -2549,12 +2639,17 @@ def update_employee(
 
     resolved_user_role = normalize_user_role(user_row["role"]) if user_row and user_row.get("role") else None
     _post_employee_sync_to_soc(
+        tenant_id=str(tenant.get("id") or ""),
         tenant_code=str(tenant.get("tenant_code") or ""),
+        tenant_name=str(tenant.get("tenant_name") or ""),
+        site_id=str(current.get("site_id") or ""),
         site_code=site_company["site_code"],
+        site_name=str(site_company.get("site_name") or ""),
         employee_uuid=str(updated.get("id") or employee_id),
         employee_code=str(updated.get("employee_code") or ""),
         full_name=str(updated.get("full_name") or ""),
         phone=updated.get("phone"),
+        linked_user_id=str((user_row or {}).get("id") or "") or None,
         username=_normalize_optional_text((user_row or {}).get("username")) or updated.get("soc_login_id"),
         user_role=resolved_user_role,
         birth_date=updated.get("birth_date"),
@@ -2568,6 +2663,8 @@ def update_employee(
         photo_attachment_id=updated.get("photo_attachment_id"),
         soc_login_id=updated.get("soc_login_id"),
         soc_role=updated.get("soc_role"),
+        old_display_name=str(current.get("full_name") or ""),
+        new_display_name=str(updated.get("full_name") or ""),
         event_type="EMPLOYEE_UPDATED",
     )
 
@@ -2690,14 +2787,21 @@ def bulk_delete_employees_by_site(
     sync_failures: list[dict[str, str | int | None]] = []
     for employee_row in employee_rows:
         sync_ok, sync_status, sync_reason = _post_employee_sync_to_soc(
+            tenant_id=str(tenant.get("id") or ""),
             tenant_code=tenant_code_value,
+            tenant_name=str(tenant.get("tenant_name") or ""),
+            site_id=str(site_row.get("id") or ""),
             site_code=str(site_row.get("site_code") or ""),
+            site_name=str(site_row.get("site_name") or ""),
             employee_uuid=str(employee_row.get("employee_uuid") or ""),
             employee_code=str(employee_row.get("employee_code") or ""),
             full_name=str(employee_row.get("full_name") or ""),
             phone=None,
+            linked_user_id=None,
             username=None,
             user_role=None,
+            old_display_name=str(employee_row.get("full_name") or ""),
+            new_display_name=None,
             event_type="EMPLOYEE_DELETED",
         )
         if not sync_ok:
@@ -2793,14 +2897,21 @@ def delete_employee(
         _reset_site_sequence_if_empty(conn, tenant_id, target["site_id"])
 
     sync_ok, sync_status, sync_reason = _post_employee_sync_to_soc(
+        tenant_id=str(tenant.get("id") or ""),
         tenant_code=tenant_code_value,
+        tenant_name=str(tenant.get("tenant_name") or ""),
+        site_id=str(target.get("site_id") or ""),
         site_code=str(target.get("site_code") or ""),
+        site_name=None,
         employee_uuid=str(target.get("employee_uuid") or ""),
         employee_code=str(target.get("employee_code") or ""),
         full_name=str(target.get("full_name") or ""),
         phone=None,
+        linked_user_id=None,
         username=None,
         user_role=None,
+        old_display_name=str(target.get("full_name") or ""),
+        new_display_name=None,
         event_type="EMPLOYEE_DELETED",
     )
     if not sync_ok:

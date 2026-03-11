@@ -6,6 +6,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
+resolve_bin() {
+  local cmd="$1"
+  shift || true
+
+  if command -v "$cmd" >/dev/null 2>&1; then
+    command -v "$cmd"
+    return 0
+  fi
+
+  local candidate
+  for candidate in "$@"; do
+    if [[ -x "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 AUTO_DEPLOY_BRANCH="${AUTO_DEPLOY_BRANCH:-main}"
 AUTO_DEPLOY_REMOTE="${AUTO_DEPLOY_REMOTE:-}"
 AUTO_DEPLOY_COMMIT_MSG="${AUTO_DEPLOY_COMMIT_MSG:-ui: auto deploy $(date +%Y-%m-%dT%H:%M:%S)}"
@@ -14,6 +34,10 @@ AZ_BACKEND_APP="${AZ_BACKEND_APP:-rg-arls-backend}"
 AZ_PYTHON_DEFAULT="$(ls -1 /opt/homebrew/Cellar/azure-cli/*/libexec/bin/python 2>/dev/null | tail -n 1 || true)"
 AZ_PYTHON_CLI="${AZ_PYTHON_CLI:-$AZ_PYTHON_DEFAULT}"
 AZ_CLI_MODE="az"
+AZ_BIN="$(resolve_bin az \
+  "$HOME/.homebrew/bin/az" \
+  "/opt/homebrew/bin/az" \
+  "/usr/local/bin/az" || true)"
 
 log() {
   printf '[AUTO DEPLOY] %s\n' "$1"
@@ -23,12 +47,12 @@ az_cli() {
   if [[ "$AZ_CLI_MODE" == "python" ]]; then
     "$AZ_PYTHON_CLI" -Im azure.cli "$@"
   else
-    az "$@"
+    "$AZ_BIN" "$@"
   fi
 }
 
 configure_az_cli() {
-  if command -v az >/dev/null 2>&1 && az version >/dev/null 2>&1; then
+  if [[ -n "$AZ_BIN" ]] && "$AZ_BIN" version >/dev/null 2>&1; then
     AZ_CLI_MODE="az"
     return 0
   fi

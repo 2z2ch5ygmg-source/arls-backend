@@ -40,6 +40,7 @@ from .routers import (
     push_router,
     reports_router,
     schedules_router,
+    schedules_bridge_router,
     sites_router,
     tenants_router,
     users_router,
@@ -316,6 +317,7 @@ app.include_router(debug_router, prefix="/api/v1")
 app.include_router(dev_scope_router, prefix="/api/v1")
 app.include_router(leaves_router, prefix="/api/v1")
 app.include_router(schedules_router, prefix="/api/v1")
+app.include_router(schedules_bridge_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(master_tenants_router, prefix="/api/v1")
 app.include_router(master_reset_router, prefix="/api/v1")

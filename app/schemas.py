@@ -804,6 +804,7 @@ class MonthlyScheduleRow(BaseModel):
 class ScheduleUpdate(BaseModel):
     shift_type: str
     leader_user_id: Optional[UUID] = None
+    schedule_note: Optional[str] = Field(default=None, max_length=500)
 
     @field_validator("shift_type")
     @classmethod
@@ -812,9 +813,17 @@ class ScheduleUpdate(BaseModel):
         aliases = {"leave": "off"}
         normalized = aliases.get(normalized, normalized)
 
-        if normalized not in {"day", "night", "off", "holiday"}:
+        if normalized not in {"day", "overtime", "night", "off", "holiday"}:
             raise ValueError("shift_type invalid")
         return normalized
+
+    @field_validator("schedule_note", mode="before")
+    @classmethod
+    def _schedule_note(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
 
 
 class ScheduleCloserUpdate(BaseModel):
@@ -827,6 +836,7 @@ class ScheduleLeaderCandidateOut(BaseModel):
     full_name: str
     employee_code: str
     duty_role: str
+    display_role_label: Optional[str] = None
     is_recommended: bool = False
 
 

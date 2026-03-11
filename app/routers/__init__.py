@@ -14,7 +14,7 @@ from .v1.attendance import router as attendance_router
 from .v1.attendance_requests import router as attendance_requests_router
 from .v1.debug import router as debug_router
 from .v1.leaves import router as leaves_router
-from .v1.schedules import router as schedules_router
+from .v1.schedules import router as schedules_router, bridge_router as schedules_bridge_router
 from .v1.users import router as users_router
 from .v1.master_tenants import router as master_tenants_router
 from .v1.master_reset import router as master_reset_router
@@ -43,6 +43,7 @@ __all__ = [
     "debug_router",
     "leaves_router",
     "schedules_router",
+    "schedules_bridge_router",
     "users_router",
     "master_tenants_router",
     "master_reset_router",

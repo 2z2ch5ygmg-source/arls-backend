@@ -1,6 +1,7 @@
 const query = new URLSearchParams(window.location.search);
 const inlineApiBase = typeof window === 'undefined' ? '' : (window.ENV_API_BASE || '').trim();
 const DEFAULT_DEPLOYED_BACKEND = 'https://rg-arls-backend.azurewebsites.net';
+const DEFAULT_SENTRIX_APP_BASE_URL = 'https://security-ops-center-prod-002-260227135557.azurewebsites.net';
 const DEBUG_LOG_QUERY_KEYS = ['debug_logs', 'debugLogs', 'debug_location', 'debugLocation'];
 
 function isInvalidApiBase(value) {
@@ -29,6 +30,29 @@ function resolveApiBase() {
   return candidate ? normalizeApiBase(candidate) : '/api/v1';
 }
 const API_BASE = resolveApiBase();
+
+function normalizeExternalAppBase(raw) {
+  return String(raw || '').trim().replace(/\/+$/, '');
+}
+
+function buildSentrixHqSupportSubmissionUrl(context = {}) {
+  const baseUrl = normalizeExternalAppBase(DEFAULT_SENTRIX_APP_BASE_URL) || DEFAULT_SENTRIX_APP_BASE_URL;
+  const params = new URLSearchParams();
+  const month = normalizeMonthKey(context.month || '');
+  const siteCode = String(context.site_code || context.site || '').trim().toUpperCase();
+  const artifactId = String(context.artifact_id || '').trim();
+  const revision = String(context.revision || '').trim();
+  const sourceUploadBatchId = String(context.source_upload_batch_id || '').trim();
+  const tenantCode = String(context.tenant_code || getTenantCodeForScopedAdminApi() || '').trim();
+  params.set('mode', 'hq-submission');
+  if (month) params.set('month', month);
+  if (siteCode) params.set('site', siteCode);
+  if (artifactId) params.set('artifact_id', artifactId);
+  if (revision) params.set('revision', revision);
+  if (sourceUploadBatchId) params.set('source_upload_batch_id', sourceUploadBatchId);
+  if (tenantCode) params.set('tenant_code', tenantCode);
+  return `${baseUrl}/#/ops/support?${params.toString()}`;
+}
 
 function formatDateLabel(dateStr, fallback = '-') {
   if (!dateStr) return fallback;
@@ -173,15 +197,26 @@ const SITE_WIFI_SSID_CACHE_KEY = 'rg-arls-site-wifi-ssid-cache';
 const IN_APP_NOTIFICATION_LIMIT = 30;
 const HOME_SHIFT_META = {
   day: { label: '근무', time: '09:00-18:00', pill: 'day' },
+  overtime: { label: '초과근무', time: '초과근무', pill: 'day' },
   night: { label: '야간', time: '18:00-09:00', pill: 'night' },
   off: { label: '휴무', time: '휴무', pill: 'off' },
-  holiday: { label: '연차', time: '연차', pill: 'holiday' },
+  holiday: { label: '공휴일', time: '공휴일', pill: 'holiday' },
 };
 const SCHEDULE_SHIFT_META = {
-  day: { label: '근무', time: '09:00-18:00', pill: 'day' },
+  day: { label: '주간근무', time: '09:00-18:00', pill: 'day' },
+  overtime: { label: '초과근무', time: '초과근무', pill: 'day' },
   night: { label: '야간', time: '18:00-09:00', pill: 'night' },
   off: { label: '휴무', time: '휴무', pill: 'off' },
-  holiday: { label: '연차', time: '연차', pill: 'holiday' },
+  holiday: { label: '공휴일', time: '공휴일', pill: 'holiday' },
+};
+const SCHEDULE_DISPLAY_META = {
+  day: { label: '주간근무', time: '09:00-18:00', pill: 'day' },
+  overtime: { label: '초과근무', time: '초과근무', pill: 'day' },
+  night: { label: '야간근무', time: '18:00-09:00', pill: 'night' },
+  off: { label: '휴무', time: '휴무', pill: 'off' },
+  holiday: { label: '공휴일', time: '공휴일', pill: 'holiday' },
+  annual_leave: { label: '연차', time: '연차', pill: 'holiday' },
+  half_leave: { label: '반차', time: '반차', pill: 'holiday' },
 };
 const SCHEDULE_PROVIDER_QUERY_KEYS = ['schedule_provider', 'scheduleProvider', 'mock_schedule', 'mockSchedule'];
 const ATTENDANCE_REQUEST_REASON_LABELS = {
@@ -2239,10 +2274,42 @@ function renderAdminTableEmptyState(targetBody, colSpan = 1, message = '표시�
 
 function normalizeShiftType(value) {
   const shift = String(value || '').trim().toLowerCase();
-  if (shift === 'day' || shift === 'night' || shift === 'off' || shift === 'holiday') {
+  if (shift === 'day' || shift === 'overtime' || shift === 'night' || shift === 'off' || shift === 'holiday') {
     return shift;
   }
   return '';
+}
+
+function resolveScheduleDisplayType(row = {}) {
+  const explicit = String(row?.schedule_display_type || '').trim().toLowerCase();
+  if (['day', 'overtime', 'night', 'off', 'holiday', 'annual_leave', 'half_leave'].includes(explicit)) {
+    return explicit;
+  }
+  if (isLeaveScheduleRow(row)) {
+    const leaveType = String(row?.leave_type || '').trim().toLowerCase();
+    return leaveType === 'half' ? 'half_leave' : 'annual_leave';
+  }
+  const shiftType = normalizeShiftType(row?.shift_type || '');
+  if (shiftType === 'holiday') return 'holiday';
+  if (shiftType !== 'off') return shiftType || 'day';
+  const note = String(row?.schedule_note || '').trim().toLowerCase();
+  const source = String(row?.source || '').trim().toLowerCase();
+  if (note.includes('반차') || note.includes('half')) return 'half_leave';
+  if (
+    note.includes('연차')
+    || note.includes('휴가')
+    || note.includes('leave')
+    || note.includes('vacation')
+    || source === 'leave'
+    || source === 'annual_leave'
+  ) {
+    return 'annual_leave';
+  }
+  return 'off';
+}
+
+function isScheduleNonWorkingDisplayType(displayType = '') {
+  return ['off', 'holiday', 'annual_leave', 'half_leave'].includes(String(displayType || '').trim().toLowerCase());
 }
 
 function toLocalDateKey(value = new Date()) {
@@ -2329,12 +2396,30 @@ function formatScheduleBoardItemTimeLabel(item = {}) {
   if (start && end) {
     return `${start} - ${end}`;
   }
-  return String(item?.shift_label || formatScheduleShiftLabel(item?.shift_type || '') || '-').trim() || '-';
+  const displayMeta = getScheduleDisplayMeta(item);
+  return String(
+    item?.schedule_display_time
+    || item?.shift_label
+    || displayMeta.time
+    || formatScheduleShiftLabel(item?.shift_type || '')
+    || '-',
+  ).trim() || '-';
 }
 
 function normalizeScheduleBoardItem(item = {}) {
   const shiftType = normalizeShiftType(item?.shift_type || '');
-  const status = String(item?.status || (shiftType === 'off' || shiftType === 'holiday' ? 'non_working' : 'scheduled')).trim().toLowerCase() || 'scheduled';
+  const displayType = resolveScheduleDisplayType(item);
+  const status = String(
+    item?.status
+    || (displayType === 'annual_leave' || displayType === 'half_leave'
+      ? 'leave'
+      : ((shiftType === 'off' || shiftType === 'holiday') ? 'non_working' : 'scheduled'))
+  ).trim().toLowerCase() || 'scheduled';
+  const displayMeta = getScheduleDisplayMeta({
+    ...item,
+    shift_type: shiftType,
+    schedule_display_type: displayType,
+  });
   return {
     schedule_id: String(item?.schedule_id || item?.id || '').trim(),
     employee_id: String(item?.employee_id || '').trim(),
@@ -2343,10 +2428,14 @@ function normalizeScheduleBoardItem(item = {}) {
     site_code: String(item?.site_code || '').trim().toUpperCase(),
     site_name: String(item?.site_name || '').trim(),
     shift_type: shiftType,
-    shift_label: String(item?.shift_label || '').trim() || formatScheduleShiftLabel(shiftType),
+    shift_label: String(item?.shift_label || '').trim() || displayMeta.time || formatScheduleShiftLabel(shiftType),
     start_time: String(item?.start_time || item?.shift_start_time || '').trim(),
     end_time: String(item?.end_time || item?.shift_end_time || '').trim(),
+    schedule_note: String(item?.schedule_note || '').trim(),
     status,
+    schedule_display_type: displayType,
+    schedule_display_label: String(item?.schedule_display_label || displayMeta.label || '').trim(),
+    schedule_display_time: String(item?.schedule_display_time || displayMeta.time || '').trim(),
     source_type: String(item?.source_type || '').trim().toLowerCase(),
     source: String(item?.source || '').trim(),
     display_variant: String(item?.display_variant || '').trim().toLowerCase(),
@@ -2819,6 +2908,11 @@ function buildScheduleRowsFromBoardDays(days = []) {
         site_name: normalized.site_name,
         schedule_date: dateKey,
         shift_type: normalized.shift_type,
+        schedule_note: normalized.schedule_note || '',
+        source: normalized.source || '',
+        schedule_display_type: normalized.schedule_display_type || '',
+        schedule_display_label: normalized.schedule_display_label || '',
+        schedule_display_time: normalized.schedule_display_time || '',
       });
     });
   });
@@ -3063,10 +3157,22 @@ function normalizeScheduleRows(rows = []) {
   return list
     .map((row) => {
       const dateKey = String(row?.schedule_date || '').trim().slice(0, 10);
+      const shiftType = normalizeShiftType(row?.shift_type || '');
+      const displayType = resolveScheduleDisplayType({ ...row, shift_type: shiftType });
+      const displayMeta = getScheduleDisplayMeta({
+        ...row,
+        shift_type: shiftType,
+        schedule_display_type: displayType,
+      });
       return {
         ...row,
         schedule_date: /^\d{4}-\d{2}-\d{2}$/.test(dateKey) ? dateKey : '',
-        shift_type: normalizeShiftType(row?.shift_type || ''),
+        shift_type: shiftType,
+        schedule_note: String(row?.schedule_note || '').trim(),
+        source: String(row?.source || '').trim(),
+        schedule_display_type: displayType,
+        schedule_display_label: String(row?.schedule_display_label || displayMeta.label || '').trim(),
+        schedule_display_time: String(row?.schedule_display_time || displayMeta.time || '').trim(),
       };
     })
     .filter((row) => row.schedule_date)
@@ -6703,7 +6809,7 @@ function renderSupportStatusHqWorkspace() {
   if (reinspectBtn instanceof HTMLButtonElement) reinspectBtn.disabled = !hasFile || hqWorkspace.inspectLoading;
   if (applyBtn instanceof HTMLButtonElement) {
     applyBtn.disabled = !Boolean(inspectResult?.can_apply) || !inspectResult?.batch_id || hqWorkspace.inspectLoading || hqWorkspace.applyLoading;
-    applyBtn.textContent = hqWorkspace.applyLoading ? '적용 중...' : '적용하기';
+    applyBtn.textContent = hqWorkspace.applyLoading ? 'Sentrix 이동 준비 중...' : 'Sentrix에서 적용';
   }
 
   renderSupportStatusHqReviewSummary();
@@ -6866,42 +6972,30 @@ async function onSupportStatusHqApply() {
   hqWorkspace.applyError = '';
   hqWorkspace.applyResult = null;
   renderSupportStatusHqWorkspace();
-  const path = appendTenantCodeQuery(
-    `/schedules/support-roundtrip/hq-roster-upload/${encodeURIComponent(batchId)}/apply`,
-    getTenantCodeForScopedAdminApi(),
-  );
   try {
-    const result = await apiRequest(path, { method: 'POST' });
+    const uploadMeta = hqWorkspace.inspectResult?.upload_meta && typeof hqWorkspace.inspectResult.upload_meta === 'object'
+      ? hqWorkspace.inspectResult.upload_meta
+      : {};
+    const targetUrl = buildSentrixHqSupportSubmissionUrl({
+      tenant_code: getTenantCodeForScopedAdminApi(),
+      month: String(uploadMeta?.month || hqWorkspace.month || '').trim(),
+      site_code: String(uploadMeta?.selected_site_code || '').trim(),
+      artifact_id: String(hqWorkspace.inspectResult?.artifact_context?.artifact_id || '').trim() || `sentrix-hq:${String(getTenantCodeForScopedAdminApi() || '').trim()}:${String(uploadMeta?.month || hqWorkspace.month || '').trim()}:${String(uploadMeta?.selected_site_code || 'ALL').trim()}:${String(uploadMeta?.revision || 'latest').trim()}`,
+      revision: String(uploadMeta?.revision || '').trim(),
+      source_upload_batch_id: batchId,
+    });
     hqWorkspace.applyLoading = false;
-    hqWorkspace.applyResult = result && typeof result === 'object' ? result : null;
+    hqWorkspace.applyResult = {
+      redirected: true,
+      target_url: targetUrl,
+      source_upload_batch_id: batchId,
+    };
     renderSupportStatusHqWorkspace();
-    await Promise.allSettled([
-      loadSupportStatusWorkspace({ force: true }),
-      loadSupportStatusHqWorkspaceContract({ force: true }),
-      syncServerInAppNotifications({ force: true, showToasts: true }),
-    ]);
-    if (result?.blocked) {
-      showToast('HQ roster 적용이 차단되었습니다.', 'error', 2800);
-      return;
-    }
-    const pushFailureCount = Number(result?.push_failed || 0);
-    const bridgeCount = Number(result?.bridge_actions_created || 0);
-    const notificationCount = Number(result?.notifications_created || 0);
-    const summary = [
-      `ticket ${Number(result?.tickets_updated || 0)}건`,
-      `알림 ${notificationCount}건`,
-      `ARLS bridge ${bridgeCount}건`,
-    ].join(' · ');
-    showToast(
-      pushFailureCount > 0
-        ? `HQ roster 적용 완료 (${summary}) · push 실패 ${pushFailureCount}건`
-        : `HQ roster 적용 완료 (${summary})`,
-      pushFailureCount > 0 ? 'info' : 'success',
-      2800,
-    );
+    window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    showToast('HQ roster apply 흐름을 Sentrix 워크스페이스로 넘겼습니다.', 'success', 2600);
   } catch (error) {
     hqWorkspace.applyLoading = false;
-    hqWorkspace.applyError = normalizeActionError(error, 'HQ roster 적용에 실패했습니다.');
+    hqWorkspace.applyError = normalizeActionError(error, 'Sentrix HQ submission workspace 이동에 실패했습니다.');
     hqWorkspace.applyResult = null;
     renderSupportStatusHqWorkspace();
     throw error;
@@ -39914,6 +40008,19 @@ function getScheduleShiftMeta(shiftType = '') {
   };
 }
 
+function getScheduleDisplayMeta(row = {}) {
+  const displayType = resolveScheduleDisplayType(row);
+  const fallback = SCHEDULE_DISPLAY_META[displayType] || getScheduleShiftMeta(row?.shift_type || '');
+  const explicitLabel = String(row?.schedule_display_label || '').trim();
+  const explicitTime = String(row?.schedule_display_time || row?.shift_label || '').trim();
+  return {
+    type: displayType,
+    label: explicitLabel || fallback.label,
+    time: explicitTime || fallback.time,
+    pill: fallback.pill,
+  };
+}
+
 function normalizeScheduleEmployees(rows = []) {
   const list = Array.isArray(rows) ? rows : [];
   const map = new Map();
@@ -39958,7 +40065,7 @@ function getScheduleRowDisplayMeta(row) {
       pill: 'holiday',
     };
   }
-  return getScheduleShiftMeta(row?.shift_type || '');
+  return getScheduleDisplayMeta(row || {});
 }
 
 function buildLeaveDateKeys(startAt, endAt, leaveType = '') {
@@ -40333,7 +40440,13 @@ function buildScheduleDetailSubtitle(row) {
     || row?.support_staff
     || '',
   ).trim();
-  const parts = [`${siteLabel}`, `시간 ${meta.time}`];
+  const displayType = resolveScheduleDisplayType(row);
+  const parts = [`${siteLabel}`];
+  if (isScheduleNonWorkingDisplayType(displayType)) {
+    parts.push(`근무유형 ${meta.label}`);
+  } else {
+    parts.push(`시간 ${meta.time}`);
+  }
   if (memo) parts.push(`메모 ${memo}`);
   if (supportWorker) parts.push(`지원 ${supportWorker}`);
   const leaderName = String(
@@ -40433,9 +40546,10 @@ function createScheduleListSheetRow(row, { interactive = false } = {}) {
 
   const right = document.createElement('div');
   right.className = 'schedule-list-sheet-actions';
+  const displayType = resolveScheduleDisplayType(row);
   const shiftCodeLabel = isLeaveScheduleRow(row)
     ? `leave:${String(row?.leave_type || '-').trim() || '-'}`
-    : (row?.shift_type || '-');
+    : (displayType || row?.shift_type || '-');
   const shiftPill = document.createElement('span');
   shiftPill.className = statusPillClassFromText(shiftMeta.pill);
   shiftPill.textContent = `${shiftMeta.label} (${shiftCodeLabel})`;
@@ -40512,9 +40626,10 @@ function createScheduleDetailRow(row, { interactive = false } = {}) {
   const right = document.createElement('div');
   right.className = 'schedule-actions';
   const shiftMeta = getScheduleRowDisplayMeta(row);
+  const displayType = resolveScheduleDisplayType(row);
   const shiftCodeLabel = isLeaveScheduleRow(row)
     ? `leave:${String(row?.leave_type || '-').trim() || '-'}`
-    : (row?.shift_type || '-');
+    : (displayType || row?.shift_type || '-');
   const shiftPill = document.createElement('span');
   shiftPill.className = statusPillClassFromText(shiftMeta.pill);
   shiftPill.textContent = `${shiftMeta.label} (${shiftCodeLabel})`;
@@ -40937,7 +41052,9 @@ function getScheduleCardVariant(item = {}) {
   if (String(item?.display_variant || '').trim().toLowerCase() === 'combined') return 'combined';
   const shiftType = normalizeShiftType(item?.shift_type || '');
   const status = String(item?.status || '').trim().toLowerCase();
+  const displayType = resolveScheduleDisplayType(item);
   if (status === 'leave') return 'leave';
+  if (displayType === 'annual_leave' || displayType === 'half_leave') return 'leave';
   if (shiftType === 'night') return 'night';
   if (shiftType === 'off' || shiftType === 'holiday') return 'off';
   return 'day';
@@ -41580,7 +41697,13 @@ function createScheduleDetailSheetCard(row, dateDetail = null) {
     ).trim() || '-';
 
     container.appendChild(createScheduleSheetMetaRow('현장', siteLabel));
-    container.appendChild(createScheduleSheetMetaRow('시간', shiftMeta.time));
+    const displayType = resolveScheduleDisplayType(row);
+    container.appendChild(
+      createScheduleSheetMetaRow(
+        isScheduleNonWorkingDisplayType(displayType) ? '근무유형' : '시간',
+        isScheduleNonWorkingDisplayType(displayType) ? shiftMeta.label : shiftMeta.time,
+      ),
+    );
     container.appendChild(createScheduleSheetMetaRow('메모', memo));
     container.appendChild(createScheduleSheetMetaRow('지원근무자', supportWorker));
     container.appendChild(
@@ -41625,9 +41748,12 @@ function createScheduleDetailSheetCard(row, dateDetail = null) {
 
   const shiftPill = document.createElement('span');
   shiftPill.className = statusPillClassFromText(shiftMeta.pill);
+  const shiftCodeLabel = isLeaveScheduleRow(row)
+    ? `leave:${String(row?.leave_type || '-').trim() || '-'}`
+    : (resolveScheduleDisplayType(row) || row?.shift_type || '-');
   shiftPill.textContent = isLeaveScheduleRow(row)
     ? `${shiftMeta.label} (leave:${String(row?.leave_type || '-').trim() || '-'})`
-    : `${shiftMeta.label} (${row?.shift_type || '-'})`;
+    : `${shiftMeta.label} (${shiftCodeLabel})`;
   container.appendChild(shiftPill);
 
   if (isSocScheduleRow(row)) {
@@ -44403,6 +44529,47 @@ async function fetchScheduleLeaderCandidates(scheduleId) {
   return (payload && typeof payload === 'object') ? payload : null;
 }
 
+function resolveScheduleEditTypeValue(row = {}, fallbackShiftType = '') {
+  const displayType = resolveScheduleDisplayType(row);
+  if (['day', 'overtime', 'night', 'off', 'holiday', 'annual_leave', 'half_leave'].includes(displayType)) {
+    return displayType;
+  }
+  const fallback = normalizeShiftType(fallbackShiftType);
+  return fallback || 'day';
+}
+
+function buildScheduleEditUpdatePayload(editType = '') {
+  const normalized = String(editType || '').trim().toLowerCase();
+  if (normalized === 'annual_leave') {
+    return { shift_type: 'off', schedule_note: '연차' };
+  }
+  if (normalized === 'half_leave') {
+    return { shift_type: 'off', schedule_note: '반차' };
+  }
+  if (normalized === 'off') {
+    return { shift_type: 'off', schedule_note: null };
+  }
+  if (normalized === 'holiday') {
+    return { shift_type: 'holiday', schedule_note: null };
+  }
+  if (normalized === 'day' || normalized === 'overtime' || normalized === 'night') {
+    return { shift_type: normalized, schedule_note: null };
+  }
+  return { shift_type: '', schedule_note: null };
+}
+
+function formatLeaderCandidateRoleLabel(candidate = {}) {
+  const explicit = String(candidate?.display_role_label || '').trim();
+  if (explicit) return explicit;
+  const raw = String(candidate?.duty_role || '').trim().toUpperCase();
+  if (raw === 'HQ_ADMIN') return 'HQ Admin';
+  if (raw === 'SUPERVISOR' || raw === 'TEAM_MANAGER') return 'Supervisor';
+  if (raw === 'VICE_SUPERVISOR') return 'Vice Supervisor';
+  if (raw === 'DEVELOPER') return 'Development';
+  if (raw === 'GUARD') return 'GUARD';
+  return raw || 'GUARD';
+}
+
 function openScheduleEditSheet({
   scheduleId,
   currentShift,
@@ -44443,17 +44610,14 @@ function openScheduleEditSheet({
     || siteCode
     || '-',
   ).trim() || '-';
-  const dutyName = String(
-    scheduleRow?.duty_role
-    || scheduleRow?.soc_role
-    || formatScheduleShiftLabel(scheduleRow?.shift_type || safeShift)
-    || '-',
-  ).trim() || '-';
   const canonicalMeta = getScheduleRowDisplayMeta(scheduleRow || {
     shift_type: safeShift,
+    schedule_note: scheduleRow?.schedule_note || '',
+    source: scheduleRow?.source || '',
     shift_start_time: scheduleRow?.shift_start_time || '',
     shift_end_time: scheduleRow?.shift_end_time || '',
   });
+  const currentEditType = resolveScheduleEditTypeValue(scheduleRow || {}, safeShift);
   const [startHour = '', startMinute = ''] = String(scheduleRow?.shift_start_time || '').trim().split(':');
   const [endHour = '', endMinute = ''] = String(scheduleRow?.shift_end_time || '').trim().split(':');
   const createdLabel = formatIsoToLocalLabel(scheduleRow?.created_at || scheduleRow?.inserted_at || '');
@@ -44523,19 +44687,22 @@ function openScheduleEditSheet({
   dutySelect.id = 'sheetShiftType';
   dutySelect.className = 'schedule-single-create-select';
   const shiftLabelMap = {
-    day: '근무(day)',
-    night: '야간(night)',
-    off: '휴무(off)',
-    holiday: '공휴일(holiday)',
+    day: '주간근무',
+    overtime: '초과근무',
+    night: '야간근무',
+    off: '휴무',
+    annual_leave: '연차',
+    half_leave: '반차',
+    holiday: '공휴일',
   };
-  ['day', 'night', 'off', 'holiday'].forEach((value) => {
+  ['day', 'overtime', 'night', 'off', 'annual_leave', 'half_leave', 'holiday'].forEach((value) => {
     const option = document.createElement('option');
     option.value = value;
     option.textContent = shiftLabelMap[value] || value;
-    if (value === safeShift) option.selected = true;
+    if (value === currentEditType) option.selected = true;
     dutySelect.appendChild(option);
   });
-  left.appendChild(createFieldRow('직무', dutySelect));
+  left.appendChild(createFieldRow('근무유형', dutySelect));
 
   const timeControls = document.createElement('div');
   timeControls.className = 'schedule-single-create-time-controls';
@@ -44613,7 +44780,9 @@ function openScheduleEditSheet({
   right.appendChild(breakToggleLabel);
   const breakSummary = document.createElement('p');
   breakSummary.className = 'schedule-single-create-break-summary';
-  breakSummary.textContent = `근무시간 ${canonicalMeta.time || '-'} · ${dutyName}`;
+  breakSummary.textContent = isScheduleNonWorkingDisplayType(currentEditType)
+    ? `근무유형 ${canonicalMeta.label} · 표시값 ${canonicalMeta.time || '-'}`
+    : `근무유형 ${canonicalMeta.label} · ${canonicalMeta.time || '-'}`;
   right.appendChild(breakSummary);
 
   const leaderField = document.createElement('label');
@@ -44633,7 +44802,7 @@ function openScheduleEditSheet({
     const userId = String(candidate?.user_id || '').trim();
     if (!userId || candidateIds.has(userId)) return;
     candidateIds.add(userId);
-    const dutyRole = String(candidate?.duty_role || '').trim();
+    const dutyRole = formatLeaderCandidateRoleLabel(candidate);
     const labelName = String(candidate?.full_name || candidate?.username || '-').trim() || '-';
     const employeeCodeLabel = String(candidate?.employee_code || '').trim();
     const option = document.createElement('option');
@@ -44656,10 +44825,10 @@ function openScheduleEditSheet({
   const currentLeaderText = String(currentLeaderName || '').trim();
   if (leaderCandidates.length) {
     leaderHelper.textContent = currentLeaderText
-      ? `현재 리더: ${currentLeaderText} · 기본값은 부팀장 우선, 없으면 요원 자동 추천`
-      : '기본값: 부팀장 우선, 없으면 요원 자동 추천';
+      ? `현재 리더: ${currentLeaderText} · 기본값은 HQ Admin / Supervisor / Vice Supervisor 우선 추천`
+      : '기본값: HQ Admin / Supervisor / Vice Supervisor 우선 추천';
   } else {
-    leaderHelper.textContent = '해당 날짜/현장에 리더 후보가 없습니다. (근무 중 부팀장/요원 필요)';
+    leaderHelper.textContent = '해당 날짜/현장에 리더 후보가 없습니다. (근무 중 HQ Admin / Supervisor / Vice Supervisor / GUARD 필요)';
   }
 
   leaderField.appendChild(leaderSelect);
@@ -44985,8 +45154,12 @@ async function openScheduleAssignmentFromBoard({
       shift_type: normalizeShiftType(normalizedCardItem.shift_type || shiftType || ''),
       shift_start_time: normalizedCardItem.start_time || startTime || '',
       shift_end_time: normalizedCardItem.end_time || endTime || '',
-      source_type: normalizedCardItem.source_type || '',
+      schedule_note: normalizedCardItem.schedule_note || '',
       source: normalizedCardItem.source || '',
+      schedule_display_type: normalizedCardItem.schedule_display_type || '',
+      schedule_display_label: normalizedCardItem.schedule_display_label || '',
+      schedule_display_time: normalizedCardItem.schedule_display_time || '',
+      source_type: normalizedCardItem.source_type || '',
     };
     await onScheduleEdit(syntheticRow.id, syntheticRow.shift_type, {
       scheduleDate: syntheticRow.schedule_date,
@@ -45025,12 +45198,16 @@ async function onScheduleEditConfirm(scheduleId) {
     showToast('스케줄 식별자를 찾지 못했습니다.', 'error');
     return;
   }
-  const next = normalizeShiftType($('#sheetShiftType')?.value);
-  if (!next) {
-    showToast('근무 유형을 확인해 주세요. (근무/야간/휴무/공휴일)', 'error');
+  const nextSelection = String($('#sheetShiftType')?.value || '').trim();
+  const next = buildScheduleEditUpdatePayload(nextSelection);
+  if (!next.shift_type) {
+    showToast('근무유형을 확인해 주세요. (주간/초과/야간/휴무/연차/반차/공휴일)', 'error');
     return;
   }
-  const payload = { shift_type: next };
+  const payload = {
+    shift_type: next.shift_type,
+    schedule_note: next.schedule_note,
+  };
   const leaderSelect = $('#sheetLeaderUserId');
   if (leaderSelect instanceof HTMLSelectElement) {
     const leaderBundleLoaded = String(leaderSelect.dataset.leaderBundleLoaded || '') === '1';

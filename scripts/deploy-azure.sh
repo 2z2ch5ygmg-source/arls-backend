@@ -7,6 +7,26 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 TMP_DIR="$(mktemp -d)"
 
+resolve_bin() {
+  local cmd="$1"
+  shift || true
+
+  if command -v "$cmd" >/dev/null 2>&1; then
+    command -v "$cmd"
+    return 0
+  fi
+
+  local candidate
+  for candidate in "$@"; do
+    if [[ -x "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 resolve_backend_dir() {
   if [[ -f "$ROOT_DIR/Dockerfile" && -d "$ROOT_DIR/app" ]]; then
     echo "$ROOT_DIR"
@@ -40,17 +60,25 @@ EOF
 AZ_PYTHON_DEFAULT="$(ls -1 /opt/homebrew/Cellar/azure-cli/*/libexec/bin/python 2>/dev/null | tail -n 1 || true)"
 AZ_PYTHON_CLI="${AZ_PYTHON_CLI:-$AZ_PYTHON_DEFAULT}"
 AZ_CLI_MODE="az"
+AZ_BIN="$(resolve_bin az \
+  "$HOME/.homebrew/bin/az" \
+  "/opt/homebrew/bin/az" \
+  "/usr/local/bin/az" || true)"
+DOCKER_BIN="$(resolve_bin docker \
+  "/usr/local/bin/docker" \
+  "/opt/homebrew/bin/docker" \
+  "/Applications/Docker.app/Contents/Resources/bin/docker" || true)"
 
 az_cli() {
   if [[ "$AZ_CLI_MODE" == "python" ]]; then
     "$AZ_PYTHON_CLI" -Im azure.cli "$@"
   else
-    az "$@"
+    "$AZ_BIN" "$@"
   fi
 }
 
 configure_az_cli() {
-  if command -v az >/dev/null 2>&1 && az version >/dev/null 2>&1; then
+  if [[ -n "$AZ_BIN" ]] && "$AZ_BIN" version >/dev/null 2>&1; then
     AZ_CLI_MODE="az"
     return 0
   fi
@@ -423,7 +451,7 @@ deploy_backend() {
     --output none
 
   if [[ "$AZ_BACKEND_DEPLOY_MODE" == "container" ]]; then
-    if ! command -v docker >/dev/null 2>&1; then
+    if [[ -z "$DOCKER_BIN" ]]; then
       echo "docker가 필요합니다. Docker Desktop을 설치 후 다시 실행하세요."
       exit 1
     fi
@@ -444,8 +472,8 @@ deploy_backend() {
     echo "5) 백엔드 컨테이너 빌드/푸시"
     echo "이미지: $BACKEND_IMAGE"
     az_exec acr login --name "$AZ_BACKEND_ACR_NAME"
-    docker build --platform "$AZ_BACKEND_IMAGE_PLATFORM" -t "$BACKEND_IMAGE" "$BACKEND_DIR"
-    docker push "$BACKEND_IMAGE"
+    "$DOCKER_BIN" build --platform "$AZ_BACKEND_IMAGE_PLATFORM" -t "$BACKEND_IMAGE" "$BACKEND_DIR"
+    "$DOCKER_BIN" push "$BACKEND_IMAGE"
 
     local acr_username acr_password
     acr_username="$(az_exec acr credential show --name "$AZ_BACKEND_ACR_NAME" --query username -o tsv 2>/dev/null || true)"
