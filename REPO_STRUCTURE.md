@@ -1,43 +1,35 @@
 # Repo Structure
 
-This workspace is currently centered on the ARLS backend repository root.
+ARLS의 현재 작업 루트는 백엔드와 프런트를 함께 포함합니다.
 
-Primary runtime files live at the root:
+## Primary Paths
 
-- `app/` for the FastAPI application
-- `migrations/` for database bootstrap/migrations
-- `Dockerfile` and `requirements.txt` for container/runtime build
+- `app/`: FastAPI backend
+- `migrations/`: SQL bootstrap/migrations
+- `frontend/`: static PWA frontend
+- `scripts/auto-deploy-hr.sh`: 표준 원클릭 배포 엔트리
+- `scripts/deploy-azure.sh`: Azure backend/frontend 배포 구현
+- `Dockerfile`, `requirements.txt`: backend container/runtime build
 
-Companion local files may also exist here:
+## Deployment Model
 
-- `ios/` for the iOS wrapper workspace
-- local logs, caches, and helper scripts
+- 기본 배포는 GitHub Actions가 아니라 로컬 shell script 기준입니다.
+- `auto-deploy-hr.sh`가 commit/push 시도를 한 뒤 `deploy-azure.sh`를 호출합니다.
+- `deploy-azure.sh`는 현재 저장소 구조를 감지해 루트 backend 또는 `backend/` 하위 구조 둘 다 처리합니다.
 
 ## Remotes
 
 - `backend-origin`: backend-only GitHub repository
   - URL: `https://github.com/2z2ch5ygmg-source/arls-backend`
 
-There is currently no separate remote configured for a larger integrated workspace.
-
-## Sync Rules
-
-- Work from the repository root.
-- Azure deployment is based on the repository root and the root `Dockerfile`.
-- If you need to republish this workspace into the backend-only GitHub repository, run:
-
-```bash
-./scripts/publish-backend-origin.sh
-```
-
-That script:
-
-- clones `backend-origin` `main` to a temp directory
-- replaces its contents with the backend runtime files from the current workspace
-- removes cache files
-- commits and pushes only if there are real changes
+현재 작업본에는 `origin`이 없어도 스크립트가 `backend-origin`으로 fallback 하도록 맞춰져 있습니다.
 
 ## Current State
 
-- Active backend remote: `backend-origin`
-- Azure App Service image currently points to `acrsecurityopsprod001-eneccucxdcfedqhm.azurecr.io/rg-arls-backend`
+- Backend Azure App Service: `rg-arls-backend`
+- Frontend Azure static website: `rgarlsfront50018`
+- Standard deploy entry:
+
+```bash
+bash ./scripts/auto-deploy-hr.sh
+```

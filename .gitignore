@@ -1,3 +1,12 @@
 __pycache__/
 *.py[cod]
 .DS_Store
+.env
+.venv/
+.pytest_cache/
+.pycache_tmp/
+node_modules/
+ios/
+app_logs.zip
+webapp_logs.zip
+*.sha256
