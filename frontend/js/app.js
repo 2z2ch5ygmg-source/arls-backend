@@ -1082,6 +1082,7 @@ function createInitialScheduleSupportHqWorkspaceState() {
     applyLoading: false,
     applyError: '',
     applyResult: null,
+    previewMode: 'actionable',
     stale: false,
     staleFields: [],
   };
@@ -5888,6 +5889,7 @@ function getSupportStatusShiftClass(value = '') {
 
 function getSupportStatusRequestStatusLabel(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'upload_blocked') return '업로드 차단';
   if (normalized === 'approved') return '승인';
   if (normalized === 'auto_approved') return '자동승인';
   if (normalized === 'approval_pending') return '승인대기';
@@ -5898,6 +5900,7 @@ function getSupportStatusRequestStatusLabel(value = '') {
 
 function getSupportStatusRequestStatusClass(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'upload_blocked') return 'status-pill status-pill-error';
   if (normalized === 'approved') return 'status-pill status-pill-success';
   if (normalized === 'auto_approved') return 'status-pill status-pill-success';
   if (normalized === 'approval_pending') return 'status-pill status-pill-warn';
@@ -10247,6 +10250,7 @@ function resetScheduleSupportHqWorkspace({
   workspace.applyLoading = false;
   workspace.applyError = '';
   workspace.applyResult = null;
+  workspace.previewMode = 'actionable';
   workspace.stale = Boolean(staleFieldList.length && fileName);
   workspace.staleFields = staleFieldList;
 }
@@ -10354,13 +10358,24 @@ function renderScheduleSupportHqReviewTable() {
   const tableWrap = $('#scheduleSupportHqReviewTableWrap');
   const tableBody = $('#scheduleSupportHqReviewTableBody');
   const placeholder = $('#scheduleSupportHqReviewPlaceholder');
+  const modeSwitch = $('#scheduleSupportHqPreviewModeSwitch');
   if (!(tableWrap instanceof HTMLElement) || !(tableBody instanceof HTMLElement) || !(placeholder instanceof HTMLElement)) return;
   tableBody.innerHTML = '';
   const inspectResult = workspace.inspectResult && typeof workspace.inspectResult === 'object'
     ? workspace.inspectResult
     : null;
   const aggregatedRows = buildScheduleSupportHqAggregatedPreviewRows(inspectResult);
-  if (!aggregatedRows.length) {
+  const previewMode = normalizeScheduleSupportHqPreviewMode(workspace.previewMode);
+  workspace.previewMode = previewMode;
+  if (modeSwitch instanceof HTMLElement) {
+    modeSwitch.querySelectorAll('[data-action="schedule-support-hq-preview-mode"]').forEach((button) => {
+      const buttonMode = normalizeScheduleSupportHqPreviewMode(button instanceof HTMLElement ? button.dataset.mode || '' : '');
+      button.classList.toggle('active', buttonMode === previewMode);
+      button.setAttribute('aria-pressed', buttonMode === previewMode ? 'true' : 'false');
+    });
+  }
+  const visibleRows = filterScheduleSupportHqAggregatedPreviewRows(aggregatedRows, previewMode);
+  if (!visibleRows.length) {
     tableWrap.classList.add('hidden');
     placeholder.classList.remove('hidden');
     const strong = placeholder.querySelector('strong');
@@ -10369,7 +10384,9 @@ function renderScheduleSupportHqReviewTable() {
       if (workspace.stale) {
         strong.textContent = '현재 검토 결과는 stale 상태입니다.';
       } else if (workspace.uploadFileName) {
-        strong.textContent = '업로드 파일 검토를 실행하면 scope별 상태와 근무자 셀 결과가 표시됩니다.';
+        strong.textContent = previewMode === 'actionable'
+          ? '기본 보기에서는 검토 필요/업로드 차단 scope만 표시됩니다.'
+          : '업로드 파일 검토를 실행하면 scope별 상태와 근무자 셀 결과가 표시됩니다.';
       } else {
         strong.textContent = '업로드할 HQ 작성본 workbook 파일을 선택하세요.';
       }
@@ -10380,16 +10397,20 @@ function renderScheduleSupportHqReviewTable() {
       } else if (workspace.inspectError) {
         meta.textContent = String(workspace.inspectError || '').trim();
       } else {
-        meta.textContent = inspectResult?.next_step_message
-          ? String(inspectResult.next_step_message || '').trim()
-          : '지원요청 scope, 유효 입력 수, 업로드 workbook 근무자 셀 파싱 결과를 이 구역에서 검토합니다. 요청 수는 기존 Sentrix ticket 기준입니다.';
+        meta.textContent = previewMode === 'actionable'
+          ? '전체 보기로 전환하면 승인 scope를 포함한 모든 support scope를 볼 수 있습니다.'
+          : (
+            inspectResult?.next_step_message
+              ? String(inspectResult.next_step_message || '').trim()
+              : '지원요청 scope, 유효 입력 수, 업로드 workbook 근무자 셀 파싱 결과를 이 구역에서 검토합니다. 요청 수는 기존 Sentrix ticket 기준입니다.'
+          );
       }
     }
     return;
   }
   tableWrap.classList.remove('hidden');
   placeholder.classList.add('hidden');
-  aggregatedRows.forEach((row) => {
+  visibleRows.forEach((row) => {
     const tr = document.createElement('tr');
     const sheetCell = document.createElement('td');
     sheetCell.textContent = String(row?.sheet_name || '-').trim() || '-';
@@ -10427,7 +10448,7 @@ function renderScheduleSupportHqReviewTable() {
     tr.appendChild(workerCell);
 
     const targetCell = document.createElement('td');
-    const targetStatus = String(row?.target_status || '').trim();
+    const targetStatus = String(row?.display_status || row?.target_status || '').trim();
     if (targetStatus) {
       const targetPill = document.createElement('span');
       targetPill.className = getSupportStatusRequestStatusClass(targetStatus);
@@ -10443,6 +10464,23 @@ function renderScheduleSupportHqReviewTable() {
     tr.appendChild(reasonCell);
     tableBody.appendChild(tr);
   });
+}
+
+function normalizeScheduleSupportHqPreviewMode(value = '') {
+  return String(value || '').trim().toLowerCase() === 'all' ? 'all' : 'actionable';
+}
+
+function isScheduleSupportHqAggregatedRowActionable(row = {}) {
+  const displayStatus = String(row?.display_status || row?.target_status || '').trim().toLowerCase();
+  if (displayStatus === 'upload_blocked') return true;
+  if (displayStatus === 'approval_pending') return true;
+  return Number(row?.blocking_issue_count || 0) > 0;
+}
+
+function filterScheduleSupportHqAggregatedPreviewRows(rows = [], previewMode = 'actionable') {
+  const normalizedMode = normalizeScheduleSupportHqPreviewMode(previewMode);
+  if (normalizedMode === 'all') return Array.isArray(rows) ? rows : [];
+  return (Array.isArray(rows) ? rows : []).filter((row) => isScheduleSupportHqAggregatedRowActionable(row));
 }
 
 function buildScheduleSupportHqAggregatedPreviewRows(inspectResult) {
@@ -10469,8 +10507,11 @@ function buildScheduleSupportHqAggregatedPreviewRows(inspectResult) {
         entered_count: Number(row?.valid_filled_count || 0),
         worker_names_list: [],
         target_status: String(row?.target_status || '').trim() || null,
+        display_status: String(row?.status || '').trim() || null,
         reason: String(row?.reason || '').trim() || '',
         review_status: String(row?.status || '').trim() || '',
+        blocking_issue_count: 0,
+        warning_issue_count: 0,
       });
     }
     const aggregate = grouped.get(key);
@@ -10479,6 +10520,7 @@ function buildScheduleSupportHqAggregatedPreviewRows(inspectResult) {
       aggregate.request_count = Number(row?.request_count || 0);
       aggregate.entered_count = Number(row?.valid_filled_count || 0);
       aggregate.target_status = String(row?.target_status || '').trim() || aggregate.target_status || null;
+      aggregate.display_status = String(row?.status || '').trim() || aggregate.display_status || null;
       aggregate.reason = String(row?.reason || '').trim() || aggregate.reason || '';
       aggregate.review_status = String(row?.status || '').trim() || aggregate.review_status || '';
       return;
@@ -10494,13 +10536,23 @@ function buildScheduleSupportHqAggregatedPreviewRows(inspectResult) {
       const shiftKind = String(aggregate.shift_kind || '').trim().toLowerCase();
       const nightReason = String(summary?.purpose_text || '').trim();
       const dayReason = String(aggregate.reason || '').trim();
+      const blockingIssueCount = Number(summary?.blocking_issue_count ?? aggregate.blocking_issue_count ?? 0);
+      const warningIssueCount = Number(summary?.warning_issue_count ?? aggregate.warning_issue_count ?? 0);
+      const targetStatus = String(summary?.target_status || aggregate.target_status || '').trim() || null;
+      const reviewStatus = String(aggregate.review_status || '').trim().toLowerCase();
+      const displayStatus = blockingIssueCount > 0 || reviewStatus === 'blocking' || reviewStatus === 'over_capacity'
+        ? 'upload_blocked'
+        : targetStatus;
       return {
         ...aggregate,
         request_count: Number(summary?.request_count ?? aggregate.request_count ?? 0),
         entered_count: Number(summary?.valid_filled_count ?? aggregate.entered_count ?? 0),
-        target_status: String(summary?.target_status || aggregate.target_status || '').trim() || null,
+        target_status: targetStatus,
+        display_status: displayStatus,
         worker_names: aggregate.worker_names_list.join(', '),
         reason: shiftKind === 'night' ? nightReason : dayReason,
+        blocking_issue_count: blockingIssueCount,
+        warning_issue_count: warningIssueCount,
       };
     })
     .sort((left, right) => {
@@ -10895,6 +10947,7 @@ async function onScheduleSupportHqInspect() {
     }
     workspace.inspectResult = result && typeof result === 'object' ? result : null;
     workspace.inspectLoading = false;
+    workspace.previewMode = 'actionable';
     renderScheduleUploadWorkspace();
     const issueCount = Number(result?.issue_count || 0);
     if (issueCount > 0) {
@@ -49635,6 +49688,13 @@ function bindUiEvents() {
       const uploadUi = getScheduleUploadUiState();
       uploadUi.previewMode = normalizeScheduleImportPreviewMode(actionEl.dataset.mode || '');
       renderSchedulePreviewTable(state.preview?.preview_rows || []);
+      return;
+    }
+
+    if (action === 'schedule-support-hq-preview-mode') {
+      const workspace = ensureScheduleSupportHqWorkspaceState();
+      workspace.previewMode = normalizeScheduleSupportHqPreviewMode(actionEl.dataset.mode || '');
+      renderScheduleSupportHqReviewTable();
       return;
     }
 
