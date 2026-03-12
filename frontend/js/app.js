@@ -39630,7 +39630,11 @@ async function onScheduleImportMappingSave() {
   });
   state.schedule.importMappingProfile = profile && typeof profile === 'object' ? profile : null;
   state.schedule.importMappingProfileFetchedAt = Date.now();
+  ensureSelectedScheduleImportMappingProfileId();
   renderScheduleImportMappingProfileSummary();
+  renderScheduleImportMappingProfileManager();
+  renderScheduleTemplateTable();
+  renderScheduleUploadWorkspace();
   invalidateScheduleImportAnalysis(['mapping_profile']);
   closeSheet();
   showToast('월간 업로드 매핑 프로필을 저장했습니다.', 'success', 2600);
