@@ -2357,7 +2357,11 @@
                       <div class="schedule-preview-head">
                         <div>
                           <h3>행 미리보기</h3>
-                          <p class="muted">이 표가 실제 반영 검토의 중심입니다. 각 행의 결과와 차단 사유를 직접 확인합니다.</p>
+                          <p class="muted">기본 보기에서는 실제 조치가 필요한 검토/차단 행만 표시합니다. 보호/요약 지원 메타데이터는 이슈 요약에서만 확인합니다.</p>
+                        </div>
+                        <div id="schedulePreviewModeSwitch" class="workspace-tabs" role="group" aria-label="행 미리보기 보기 방식">
+                          <button class="btn btn-secondary workspace-tab active" type="button" data-action="schedule-preview-mode" data-mode="actionable" aria-pressed="true">기본 보기</button>
+                          <button class="btn btn-secondary workspace-tab" type="button" data-action="schedule-preview-mode" data-mode="all" aria-pressed="false">전체 보기</button>
                         </div>
                       </div>
                       <table class="schedule-preview-table schedule-upload-preview-table">

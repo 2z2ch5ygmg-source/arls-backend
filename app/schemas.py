@@ -1167,6 +1167,9 @@ class ImportPreviewRowOut(BaseModel):
     protected_reason: Optional[str] = None
     validation_code: Optional[str] = None
     validation_error: Optional[str] = None
+    preview_visibility_class: Optional[str] = None
+    actionable: bool = False
+    protected_info_only: bool = False
 
 
 class ImportPreviewMetadataOut(BaseModel):

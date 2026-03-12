@@ -1234,6 +1234,41 @@ def _import_diff_status_label(*, diff_category: str | None, validation_code: str
     return "검토"
 
 
+def _is_import_support_preview_info_only(row: dict[str, Any]) -> bool:
+    source_block = str(row.get("source_block") or "").strip().lower()
+    parsed_semantic_type = str(row.get("parsed_semantic_type") or "").strip().lower()
+    diff_category = str(row.get("diff_category") or "").strip().lower()
+    if source_block == "sentrix_support_ticket":
+        return True
+    if source_block.startswith("day_support") or source_block.startswith("night_support"):
+        return True
+    if parsed_semantic_type.startswith("protected_") or parsed_semantic_type == "support_demand":
+        return True
+    if diff_category in {"ignored_protected", "ignored_no_demand"} and source_block != "body":
+        return True
+    return False
+
+
+def _classify_import_preview_visibility(row: dict[str, Any]) -> tuple[str, bool, bool]:
+    diff_category = str(row.get("diff_category") or "").strip().lower()
+    is_protected = bool(row.get("is_protected")) or diff_category == "ignored_protected"
+    is_blocking = bool(row.get("is_blocking")) or (not is_protected and row.get("is_valid") is False)
+    support_info_only = _is_import_support_preview_info_only(row)
+    if support_info_only:
+        return "protected_info_only", False, True
+    if is_blocking:
+        return "blocked", True, False
+    if diff_category == "review":
+        return "review_actionable", True, False
+    if is_protected or diff_category == "ignored_no_demand":
+        return "protected_info_only", False, True
+    if diff_category == "unchanged":
+        return "unchanged", False, False
+    if str(row.get("apply_action") or "").strip():
+        return "apply", False, False
+    return "hidden_non_actionable", False, False
+
+
 def _normalize_workbook_display_value(value: object) -> str:
     if value is None:
         return ""
@@ -14333,27 +14368,43 @@ def _build_schedule_import_preview_result(
         + len(parsed_uploaded.get("need_cells") or [])
         + len(parsed_uploaded.get("support_cells") or [])
     )
-    preview_rows = [
-        row for row in resolved_rows
-        if row.get("diff_category") != "unchanged"
-        or row.get("validation_code")
-        or row.get("is_protected")
-        or (
-            (
-                str(row.get("source_block") or "").startswith("day_support")
-                or str(row.get("source_block") or "").startswith("night_support")
-            )
-            and (
-                str(row.get("diff_category") or "").strip() != "unchanged"
+    preview_rows: list[dict[str, Any]] = []
+    for row in resolved_rows:
+        include_row = (
+            row.get("diff_category") != "unchanged"
+            or row.get("validation_code")
+            or row.get("is_protected")
+            or (
+                (
+                    str(row.get("source_block") or "").startswith("day_support")
+                    or str(row.get("source_block") or "").startswith("night_support")
+                )
                 and (
-                str(row.get("work_value") or "").strip()
-                or str(row.get("current_work_value") or "").strip()
+                    str(row.get("diff_category") or "").strip() != "unchanged"
+                    and (
+                        str(row.get("work_value") or "").strip()
+                        or str(row.get("current_work_value") or "").strip()
+                    )
                 )
             )
         )
-    ]
+        if not include_row:
+            continue
+        visibility_class, actionable, protected_info_only = _classify_import_preview_visibility(row)
+        preview_row = dict(row)
+        preview_row["preview_visibility_class"] = visibility_class
+        preview_row["actionable"] = actionable
+        preview_row["protected_info_only"] = protected_info_only
+        preview_rows.append(preview_row)
     if not preview_rows:
-        preview_rows = resolved_rows[: min(len(resolved_rows), 20)]
+        preview_rows = []
+        for row in resolved_rows[: min(len(resolved_rows), 20)]:
+            visibility_class, actionable, protected_info_only = _classify_import_preview_visibility(row)
+            preview_row = dict(row)
+            preview_row["preview_visibility_class"] = visibility_class
+            preview_row["actionable"] = actionable
+            preview_row["protected_info_only"] = protected_info_only
+            preview_rows.append(preview_row)
 
     issue_grouping_started_at = time.perf_counter()
     error_counts, grouped_issues = _summarize_import_issues(issue_records)
@@ -14666,6 +14717,9 @@ def preview_import(
                         protected_reason=str(row.get("protected_reason") or "").strip() or None,
                         validation_code=str(row.get("validation_code") or "").strip() or None,
                         validation_error=str(row.get("validation_error") or "").strip() or None,
+                        preview_visibility_class=str(row.get("preview_visibility_class") or "").strip() or None,
+                        actionable=bool(row.get("actionable")),
+                        protected_info_only=bool(row.get("protected_info_only")),
                     )
                     for row in (preview.get("preview_rows") or [])
                 ]
@@ -14836,6 +14890,9 @@ def preview_import(
                     is_valid=validation_code is None,
                     validation_code=validation_code,
                     validation_error=validation_error,
+                    preview_visibility_class="blocked" if validation_code else "apply",
+                    actionable=validation_code is not None,
+                    protected_info_only=False,
                 )
             )
 

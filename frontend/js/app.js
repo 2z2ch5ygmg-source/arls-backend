@@ -815,6 +815,7 @@ function createInitialScheduleUploadUiState() {
     staleFields: [],
     progressTimer: 0,
     progressStageIndex: 0,
+    previewMode: 'actionable',
     lastCompletedAt: '',
   };
 }
@@ -9860,16 +9861,44 @@ function renderScheduleUploadWorkspace() {
 function renderSchedulePreviewTable(previewRows = []) {
   const wrap = $('#schedulePreviewTableWrap');
   const body = $('#schedulePreviewTableBody');
+  const modeSwitch = $('#schedulePreviewModeSwitch');
   if (!wrap || !body) return;
 
   body.innerHTML = '';
   const rows = Array.isArray(previewRows) ? previewRows : [];
+  const previewMode = normalizeScheduleImportPreviewMode(getScheduleUploadUiState().previewMode);
+  const visibleRows = filterScheduleImportPreviewRows(rows, previewMode);
+
+  if (modeSwitch instanceof HTMLElement) {
+    modeSwitch.querySelectorAll('[data-action="schedule-preview-mode"]').forEach((button) => {
+      const buttonMode = normalizeScheduleImportPreviewMode(button?.dataset?.mode || '');
+      button.classList.toggle('active', buttonMode === previewMode);
+      button.setAttribute('aria-pressed', buttonMode === previewMode ? 'true' : 'false');
+    });
+  }
+
   if (!rows.length) {
     wrap.classList.add('hidden');
     return;
   }
 
-  rows.forEach((row) => {
+  wrap.classList.remove('hidden');
+  if (!visibleRows.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 8;
+    td.appendChild(createScheduleUploadStackCell(
+      previewMode === 'actionable' ? '기본 보기에서는 검토/차단 대상만 표시됩니다.' : '표시할 행이 없습니다.',
+      previewMode === 'actionable'
+        ? '전체 보기로 전환하면 반영 예정과 보호/요약 메타데이터를 포함한 전체 분석 행을 볼 수 있습니다.'
+        : '현재 검토 결과에서 표시할 행이 없습니다.',
+    ));
+    tr.appendChild(td);
+    body.appendChild(tr);
+    return;
+  }
+
+  visibleRows.forEach((row) => {
     const tr = document.createElement('tr');
     const rowState = getScheduleImportRowState(row);
     if (rowState.key === 'blocked') tr.classList.add('schedule-preview-row-invalid');
@@ -9927,8 +9956,40 @@ function renderSchedulePreviewTable(previewRows = []) {
     });
     body.appendChild(tr);
   });
+}
 
-  wrap.classList.remove('hidden');
+function normalizeScheduleImportPreviewMode(value = '') {
+  return String(value || '').trim().toLowerCase() === 'all' ? 'all' : 'actionable';
+}
+
+function isScheduleImportPreviewRowActionable(row = {}) {
+  if (typeof row?.actionable === 'boolean') return row.actionable;
+  const diffCategory = String(row?.diff_category || '').trim().toLowerCase();
+  const isProtected = Boolean(row?.is_protected) || diffCategory === 'ignored_protected';
+  const isBlocking = Boolean(row?.is_blocking) || (!isProtected && row?.is_valid === false);
+  return isBlocking || diffCategory === 'review';
+}
+
+function isScheduleImportPreviewRowProtectedInfoOnly(row = {}) {
+  if (typeof row?.protected_info_only === 'boolean') return row.protected_info_only;
+  const diffCategory = String(row?.diff_category || '').trim().toLowerCase();
+  const sourceBlock = String(row?.source_block || '').trim().toLowerCase();
+  const parsedSemanticType = String(row?.parsed_semantic_type || '').trim().toLowerCase();
+  if (sourceBlock === 'sentrix_support_ticket') return true;
+  if (sourceBlock.startsWith('day_support') || sourceBlock.startsWith('night_support')) return true;
+  if (parsedSemanticType.startsWith('protected_') || parsedSemanticType === 'support_demand') return true;
+  if ((diffCategory === 'ignored_protected' || diffCategory === 'ignored_no_demand') && sourceBlock !== 'body') return true;
+  return false;
+}
+
+function filterScheduleImportPreviewRows(rows = [], previewMode = 'actionable') {
+  const normalizedMode = normalizeScheduleImportPreviewMode(previewMode);
+  const normalizedRows = Array.isArray(rows) ? rows : [];
+  if (normalizedMode === 'all') return normalizedRows;
+  return normalizedRows.filter((row) => {
+    if (isScheduleImportPreviewRowProtectedInfoOnly(row)) return false;
+    return isScheduleImportPreviewRowActionable(row);
+  });
 }
 
 function scheduleApplyStatusClass(status = '') {
@@ -49567,6 +49628,13 @@ function bindUiEvents() {
 
     if (action === 'apply-schedule') {
       runWithBusy(() => onScheduleApply(), '반영 중...');
+      return;
+    }
+
+    if (action === 'schedule-preview-mode') {
+      const uploadUi = getScheduleUploadUiState();
+      uploadUi.previewMode = normalizeScheduleImportPreviewMode(actionEl.dataset.mode || '');
+      renderSchedulePreviewTable(state.preview?.preview_rows || []);
       return;
     }
 

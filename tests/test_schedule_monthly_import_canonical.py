@@ -12,6 +12,7 @@ from app.routers.v1.schedules import (
     ARLS_EXPORT_SOURCE_VERSION,
     ARLS_EXPORT_TEMPLATE_VERSION,
     ARLS_SHEET_NAME,
+    _classify_import_preview_visibility,
     _build_arls_month_sheet,
     _build_import_current_body_index_from_existing_schedule_rows,
     _format_schedule_import_mapping_requirement_label,
@@ -227,6 +228,32 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
         self.assertIsNone(message)
         self.assertEqual(resolved["template_id"], "tpl-night-10")
         self.assertEqual(resolved["shift_type"], "night")
+
+    def test_preview_visibility_marks_base_review_rows_as_actionable(self):
+        visibility_class, actionable, protected_info_only = _classify_import_preview_visibility({
+            "source_block": "body",
+            "parsed_semantic_type": "numeric_hours",
+            "diff_category": "review",
+            "is_blocking": False,
+            "is_protected": False,
+            "is_valid": True,
+        })
+        self.assertEqual(visibility_class, "review_actionable")
+        self.assertTrue(actionable)
+        self.assertFalse(protected_info_only)
+
+    def test_preview_visibility_hides_support_metadata_rows_from_default_preview(self):
+        visibility_class, actionable, protected_info_only = _classify_import_preview_visibility({
+            "source_block": "day_support_worker",
+            "parsed_semantic_type": "protected_support_names",
+            "diff_category": "ignored_protected",
+            "is_blocking": False,
+            "is_protected": True,
+            "is_valid": True,
+        })
+        self.assertEqual(visibility_class, "protected_info_only")
+        self.assertFalse(actionable)
+        self.assertTrue(protected_info_only)
 
     def test_resolve_import_body_value_requires_mapping_when_lookup_is_supplied(self):
         templates = [
