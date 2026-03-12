@@ -840,6 +840,7 @@ function createInitialScheduleState() {
     templatesFetchedAt: 0,
     importMappingProfile: null,
     importMappingProfileFetchedAt: 0,
+    importSiteOptionsLoading: false,
     selectedEmployeeCode: '',
     selectedDateKey: '',
     lastInteractedDateKey: '',
@@ -9785,6 +9786,7 @@ function renderScheduleUploadWorkspace() {
     || supportHqWorkspace.inspectLoading
     || supportHqWorkspace.applyLoading
   );
+  const siteOptionsLoading = Boolean(state.schedule.importSiteOptionsLoading);
 
   syncScheduleImportStaleState();
   renderScheduleImportMappingProfileSummary();
@@ -9796,12 +9798,16 @@ function renderScheduleUploadWorkspace() {
       : '현재 계정은 본인 지점만 업로드 가능합니다.';
   }
   if (siteHint) {
-    siteHint.textContent = isScheduleUploadTenantWideUser()
-      ? 'HQ 계정은 같은 tenant의 모든 지점을 선택할 수 있습니다.'
-      : `지점 범위가 ${getScheduleImportSiteLabel(state.user?.site_code || selectedSite)}로 고정됩니다.`;
+    if (siteOptionsLoading) {
+      siteHint.textContent = '지점 목록을 불러오는 중입니다. 로딩이 끝나면 선택할 수 있습니다.';
+    } else {
+      siteHint.textContent = isScheduleUploadTenantWideUser()
+        ? 'HQ 계정은 같은 tenant의 모든 지점을 선택할 수 있습니다.'
+        : `지점 범위가 ${getScheduleImportSiteLabel(state.user?.site_code || selectedSite)}로 고정됩니다.`;
+    }
   }
   if (siteSelect instanceof HTMLSelectElement) {
-    siteSelect.disabled = uploadUi.analysisInFlight || supportHqBusy || !isScheduleUploadTenantWideUser();
+    siteSelect.disabled = siteOptionsLoading || uploadUi.analysisInFlight || supportHqBusy || !isScheduleUploadTenantWideUser();
   }
   if (monthInput instanceof HTMLInputElement) {
     monthInput.disabled = uploadUi.analysisInFlight || supportHqBusy;
@@ -9810,11 +9816,11 @@ function renderScheduleUploadWorkspace() {
     fileInput.disabled = uploadUi.analysisInFlight || supportHqBusy;
   }
   if (previewBtn) {
-    previewBtn.disabled = uploadUi.analysisInFlight || supportHqBusy || !(hasFile && selectedSite && monthValue);
+    previewBtn.disabled = siteOptionsLoading || uploadUi.analysisInFlight || supportHqBusy || !(hasFile && selectedSite && monthValue);
     previewBtn.textContent = uploadUi.analysisInFlight ? '분석 중...' : '분석 시작';
   }
   if (latestBaseBtn) {
-    latestBaseBtn.disabled = uploadUi.analysisInFlight || supportHqBusy || !(selectedSite && monthValue);
+    latestBaseBtn.disabled = siteOptionsLoading || uploadUi.analysisInFlight || supportHqBusy || !(selectedSite && monthValue);
   }
   if (blankTemplateBtn) {
     blankTemplateBtn.disabled = uploadUi.analysisInFlight || supportHqBusy;
@@ -38789,6 +38795,18 @@ async function refreshScheduleImportSiteOptions({ force = false } = {}) {
   const reportsSelect = $('#scheduleReportsSite');
   const selects = [importSelect, reportsSelect].filter((select) => select instanceof HTMLSelectElement);
   if (!selects.length) return;
+  state.schedule.importSiteOptionsLoading = true;
+  selects.forEach((select) => {
+    const current = String(select.value || '').trim().toUpperCase();
+    select.innerHTML = '<option value="">지점 불러오는 중...</option>';
+    if (current) {
+      select.dataset.pendingValue = current;
+    } else {
+      delete select.dataset.pendingValue;
+    }
+    select.disabled = true;
+  });
+  renderScheduleUploadWorkspace();
   let rows = [];
   try {
     rows = await refreshSiteCatalog({ force });
@@ -38807,7 +38825,7 @@ async function refreshScheduleImportSiteOptions({ force = false } = {}) {
 
   selects.forEach((select) => {
     const isReportsSelect = select.id === 'scheduleReportsSite';
-    const current = String(select.value || '').trim().toUpperCase();
+    const current = String(select.dataset.pendingValue || select.value || '').trim().toUpperCase();
     select.innerHTML = '<option value="">지점 선택</option>';
     if (isReportsSelect && isScheduleUploadTenantWideUser()) {
       const allOption = document.createElement('option');
@@ -38829,8 +38847,11 @@ async function refreshScheduleImportSiteOptions({ force = false } = {}) {
     if (fallbackValue && Array.from(select.options).some((item) => String(item.value || '').trim().toUpperCase() === fallbackValue)) {
       select.value = fallbackValue;
     }
+    delete select.dataset.pendingValue;
+    select.disabled = false;
   });
 
+  state.schedule.importSiteOptionsLoading = false;
   renderScheduleUploadWorkspace();
 }
 
