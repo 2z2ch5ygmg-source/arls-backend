@@ -6433,6 +6433,7 @@ def _build_support_roster_hq_upload_inspect_result(
                     workbook_required_count, _raw_text = _parse_daytime_need_value(workbook_required_raw)
                 external_count_raw = _normalize_workbook_display_value(sheet.cell(row=int(vendor_row_no), column=col_idx).value) if vendor_row_no else None
                 purpose_text = _normalize_workbook_display_value(sheet.cell(row=int(purpose_row_no), column=col_idx).value) if purpose_row_no else None
+                workbook_scope_present = bool(workbook_required_raw) or bool(external_count_raw) or bool(purpose_text)
 
                 ticket = ticket_scope_map.get((site_code, schedule_date.isoformat(), shift_kind))
                 request_count = max(0, int((ticket or {}).get("request_count") or 0))
@@ -6529,6 +6530,8 @@ def _build_support_roster_hq_upload_inspect_result(
                             }
                         )
 
+                scope_has_workbook_signal = workbook_scope_present or meaningful_scope
+
                 if purpose_text and ticket and str(ticket.get("work_purpose") or "").strip() and str(ticket.get("work_purpose") or "").strip() != purpose_text:
                     add_issue(
                         "PURPOSE_FIELD_PARSE_WARNING",
@@ -6540,7 +6543,7 @@ def _build_support_roster_hq_upload_inspect_result(
                         shift_kind=shift_kind,
                     )
 
-                if not ticket and meaningful_scope:
+                if not ticket and scope_has_workbook_signal:
                     add_issue(
                         "TICKET_SCOPE_NOT_FOUND",
                         message="입력된 지원근무 범위와 매칭되는 기존 Sentrix ticket을 찾지 못했습니다.",
@@ -6583,7 +6586,7 @@ def _build_support_roster_hq_upload_inspect_result(
                             work_date=schedule_date,
                             shift_kind=shift_kind,
                         )
-                elif meaningful_scope:
+                elif scope_has_workbook_signal:
                     scope_status = "blocking"
                     scope_reason = "매칭되는 Sentrix ticket이 없습니다."
 
@@ -6594,7 +6597,7 @@ def _build_support_roster_hq_upload_inspect_result(
                 warning_issue_count = sum(
                     1 for issue in scope_issues if str(issue.get("severity") or "").strip().lower() == "warning"
                 )
-                if ticket or meaningful_scope:
+                if scope_has_workbook_signal:
                     total_scope_count += 1
                     if ticket and blocking_issue_count == 0:
                         valid_scope_count += 1

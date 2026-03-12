@@ -4,6 +4,7 @@ from io import BytesIO
 from datetime import date
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 import uuid
 
 from openpyxl import Workbook, load_workbook
@@ -19,6 +20,7 @@ from app.routers.v1.schedules import (
     _build_sentrix_hq_bridge_candidates,
     _build_arls_month_sheet,
     _build_employee_name_index,
+    _build_support_roster_hq_upload_inspect_result,
     _build_sentrix_hq_snapshot_signature,
     _build_sentrix_support_roster_apply_result_from_handoff,
     _build_sentrix_support_roster_handoff_failure_result,
@@ -194,6 +196,76 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertIsNone(sheet.cell(row=rows_meta["weekly_rows"][0], column=day_col).value)
         self.assertIsNone(sheet.cell(row=rows_meta["night_rows"][0], column=day_col).value)
         self.assertEqual(sheet.cell(row=rows_meta["weekly_count_row"], column=day_col).value, 0)
+
+    def test_hq_roster_inspect_ignores_ticket_scopes_not_signaled_by_workbook(self):
+        export_ctx = self._build_export_ctx()
+        workbook = _build_support_only_workbook(
+            export_ctx=export_ctx,
+            target_tenant={"tenant_code": "srs_korea"},
+            site_row={"site_code": "R692", "site_name": "Apple_가로수길"},
+            month_key="2026-03",
+            source_revision="src-rev-inspect",
+            active_assignments=[],
+            include_existing_assignments=False,
+        )
+
+        sheet = workbook["Apple_가로수길"]
+        date_columns, _ = _extract_arls_date_columns(sheet)
+        rows_meta = _locate_support_section_rows(sheet)
+        day_col = next(col for col, value in date_columns.items() if value.isoformat() == "2026-03-01")
+        blank_ticket_col = next(col for col, value in date_columns.items() if value.isoformat() == "2026-03-02")
+        night_col = next(col for col, value in date_columns.items() if value.isoformat() == "2026-03-03")
+
+        sheet.cell(row=rows_meta["day_need_row"], column=day_col).value = "섭외 2인 요청"
+        sheet.cell(row=rows_meta["day_need_row"], column=blank_ticket_col).value = None
+        sheet.cell(row=rows_meta["night_need_row"], column=night_col).value = "섭외 1인 요청"
+        sheet.cell(row=rows_meta["work_note_row"], column=night_col).value = "Project"
+
+        ticket_day = uuid.uuid4()
+        ticket_blank = uuid.uuid4()
+        ticket_night = uuid.uuid4()
+
+        with patch("app.routers.v1.schedules._list_support_roundtrip_workspace_sites", return_value=[{
+            "site_id": "site-1",
+            "site_code": "R692",
+            "site_name": "Apple_가로수길",
+        }]), patch("app.routers.v1.schedules._build_support_roster_hq_source_map", return_value={
+            "R692": {"source_revision": "src-rev-inspect"}
+        }), patch("app.routers.v1.schedules._load_sentrix_support_ticket_scope_map", return_value={
+            ("R692", "2026-03-01", "day"): {"id": ticket_day, "request_count": 2},
+            ("R692", "2026-03-02", "day"): {"id": ticket_blank, "request_count": 1},
+            ("R692", "2026-03-03", "night"): {"id": ticket_night, "request_count": 1},
+        }), patch("app.routers.v1.schedules._load_site_employees", return_value=[]), patch(
+            "app.routers.v1.schedules._persist_sentrix_hq_roster_preview_batch",
+            return_value=uuid.uuid4(),
+        ):
+            preview = _build_support_roster_hq_upload_inspect_result(
+                None,
+                workbook=workbook,
+                target_tenant={"id": "tenant-1", "tenant_code": "srs_korea"},
+                selected_month="2026-03",
+                filename="병합T1.xlsx",
+                user={"id": "user-1"},
+            )
+
+        self.assertEqual(preview.total_scope_count, 2)
+        self.assertEqual(preview.summary["scope_total"], 2)
+        self.assertEqual(preview.summary["approval_pending"], 2)
+        self.assertEqual(
+            {item.scope_key for item in preview.scope_summaries},
+            {
+                "R692:2026-03-01:day",
+                "R692:2026-03-03:night",
+            },
+        )
+        self.assertNotIn(
+            "R692:2026-03-02:day",
+            {
+                f"{item.site_code}:{item.work_date.isoformat()}:{item.shift_kind}"
+                for item in preview.review_rows
+                if item.work_date and item.shift_kind and item.site_code
+            },
+        )
 
     def test_clone_support_hq_sheet_to_workbook_copies_dimension_style_without_error(self):
         source_workbook = Workbook()
