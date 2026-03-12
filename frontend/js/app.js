@@ -9626,6 +9626,7 @@ function renderScheduleUploadFileMeta() {
 function renderScheduleUploadApplyBar() {
   const applyBtn = $('#scheduleApplyBtn');
   const resetBtn = $('#scheduleResetBtn');
+  const reviewApplyBtn = $('#scheduleBaseReviewNextBtn');
   const summaryEl = $('#scheduleApplyStateSummary');
   const reasonEl = $('#scheduleApplyStateReason');
   if (!(summaryEl instanceof HTMLElement) || !(reasonEl instanceof HTMLElement)) return;
@@ -9688,6 +9689,10 @@ function renderScheduleUploadApplyBar() {
   summaryEl.textContent = summary;
   reasonEl.textContent = reason;
   if (applyBtn) applyBtn.disabled = !canApply;
+  if (reviewApplyBtn instanceof HTMLButtonElement) {
+    reviewApplyBtn.disabled = uploadUi.analysisInFlight || !Boolean(uploadUi.canApply);
+    reviewApplyBtn.textContent = uploadUi.analysisInFlight ? '적용 중...' : '적용하기';
+  }
   if (resetBtn) resetBtn.disabled = uploadUi.analysisInFlight || !(hasFile || preview || uploadUi.stale);
 }
 
@@ -10029,7 +10034,8 @@ function renderScheduleUploadWorkspace() {
     contextNextBtn.disabled = uploadWorkspaceBooting || siteOptionsLoading || supportHqBusy || !(selectedSite && monthValue);
   }
   if (reviewNextBtn instanceof HTMLButtonElement) {
-    reviewNextBtn.disabled = !Boolean(state.preview);
+    reviewNextBtn.disabled = uploadUi.analysisInFlight || !Boolean(uploadUi.canApply);
+    reviewNextBtn.textContent = uploadUi.analysisInFlight ? '적용 중...' : '적용하기';
   }
   if (hqExportNextBtn instanceof HTMLButtonElement) {
     hqExportNextBtn.disabled = !Boolean(buildScheduleSupportArtifactContext(state.schedule.supportStatus && typeof state.schedule.supportStatus === 'object' ? state.schedule.supportStatus : null, getScheduleSupportSelectedSiteCode()).artifact_id);
