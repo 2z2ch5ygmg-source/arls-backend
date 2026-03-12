@@ -23,6 +23,7 @@ from app.routers.v1.schedules import (
     _leader_candidate_role_label,
     _leader_candidate_role_priority,
     _locate_support_section_rows,
+    _normalize_name_token,
     _parse_arls_canonical_import_sheet,
     _parse_daytime_need_value,
     _parse_support_worker_cell,
@@ -651,6 +652,16 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
         self.assertEqual(export_ctx["parsed_sheet"]["body_cells"], [])
         self.assertEqual(export_ctx["parsed_sheet"]["need_cells"], [])
         self.assertEqual(export_ctx["parsed_sheet"]["support_cells"], [])
+
+    def test_normalize_name_token_handles_unicode_and_zero_width_variants(self):
+        import unicodedata
+
+        base_name = "서성원"
+        nfd_name = unicodedata.normalize("NFD", base_name)
+        hidden_name = "서\u200b성원"
+
+        self.assertEqual(_normalize_name_token(base_name), _normalize_name_token(nfd_name))
+        self.assertEqual(_normalize_name_token(base_name), _normalize_name_token(hidden_name))
 
 
 if __name__ == "__main__":

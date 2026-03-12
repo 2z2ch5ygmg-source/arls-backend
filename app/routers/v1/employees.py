@@ -462,6 +462,30 @@ def _to_iso_date(value) -> str | None:
     return text or None
 
 
+def _require_employee_sync_success(
+    *,
+    sync_ok: bool,
+    status_code: int | None,
+    reason: str | None,
+    action_label: str,
+) -> None:
+    if not bool(settings.soc_integration_enabled):
+        return
+    if not str(settings.soc_employee_sync_url or "").strip():
+        return
+    if sync_ok:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail={
+            "error": "SOC_EMPLOYEE_SYNC_FAILED",
+            "message": f"SOC 직원 {action_label} 동기화에 실패했습니다. 변경이 롤백되었습니다.",
+            "soc_status": status_code,
+            "soc_reason": reason,
+        },
+    )
+
+
 def _post_employee_sync_to_soc(
     *,
     tenant_id: str | None = None,
@@ -1246,9 +1270,13 @@ def _upsert_guard_roster_employee(
                     stage="guard_roster.users_insert_without_must_change",
                 )
 
-    _post_employee_sync_to_soc(
+    sync_ok, sync_status, sync_reason = _post_employee_sync_to_soc(
+        tenant_id=str(tenant_id or ""),
         tenant_code=tenant_code,
+        tenant_name=None,
+        site_id=str(site_relation.get("site_id") or ""),
         site_code=site_code,
+        site_name=str(site_relation.get("site_name") or ""),
         employee_uuid=str(row.get("employee_uuid") or ""),
         employee_code=str(row.get("employee_code") or employee_code),
         full_name=str(row.get("full_name") or full_name),
@@ -1266,6 +1294,12 @@ def _upsert_guard_roster_employee(
         photo_attachment_id=row.get("photo_attachment_id"),
         soc_login_id=row.get("soc_login_id"),
         soc_role=row.get("soc_role"),
+    )
+    _require_employee_sync_success(
+        sync_ok=sync_ok,
+        status_code=sync_status,
+        reason=sync_reason,
+        action_label="등록",
     )
     row_payload = {
         "employee_id": str(row.get("id") or ""),
@@ -2399,7 +2433,7 @@ def create_employee(
         "user_role": account_user_role,
         "soc_login_id": resolved_soc_login_id,
     }
-    _post_employee_sync_to_soc(
+    sync_ok, sync_status, sync_reason = _post_employee_sync_to_soc(
         tenant_id=str(tenant.get("id") or ""),
         tenant_code=str(tenant.get("tenant_code") or ""),
         tenant_name=str(tenant.get("tenant_name") or ""),
@@ -2428,6 +2462,12 @@ def create_employee(
         old_display_name=None,
         new_display_name=str(created_payload.get("full_name") or full_name_text or ""),
         event_type="EMPLOYEE_CREATED",
+    )
+    _require_employee_sync_success(
+        sync_ok=sync_ok,
+        status_code=sync_status,
+        reason=sync_reason,
+        action_label="등록",
     )
     return EmployeeOut(
         **{
@@ -2638,7 +2678,7 @@ def update_employee(
         user_row = cur.fetchone()
 
     resolved_user_role = normalize_user_role(user_row["role"]) if user_row and user_row.get("role") else None
-    _post_employee_sync_to_soc(
+    sync_ok, sync_status, sync_reason = _post_employee_sync_to_soc(
         tenant_id=str(tenant.get("id") or ""),
         tenant_code=str(tenant.get("tenant_code") or ""),
         tenant_name=str(tenant.get("tenant_name") or ""),
@@ -2666,6 +2706,12 @@ def update_employee(
         old_display_name=str(current.get("full_name") or ""),
         new_display_name=str(updated.get("full_name") or ""),
         event_type="EMPLOYEE_UPDATED",
+    )
+    _require_employee_sync_success(
+        sync_ok=sync_ok,
+        status_code=sync_status,
+        reason=sync_reason,
+        action_label="수정",
     )
 
     return EmployeeOut(

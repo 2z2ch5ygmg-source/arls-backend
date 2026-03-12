@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import time
+import unicodedata
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO, StringIO
@@ -1134,7 +1135,8 @@ def _parse_numeric_hours(value: object) -> float | None:
 
 
 def _normalize_name_token(value: object) -> str:
-    text = str(value or "").strip().lower()
+    text = unicodedata.normalize("NFC", str(value or ""))
+    text = re.sub(r"[\u200b-\u200d\ufeff]", "", text).strip().lower()
     if not text:
         return ""
     return re.sub(r"\s+", "", text)
