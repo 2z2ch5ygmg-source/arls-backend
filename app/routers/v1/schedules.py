@@ -2035,17 +2035,13 @@ def _build_sentrix_support_roster_handoff_worker_entries(
                 "parse_valid": not bool(str(row_payload.get("issue_code") or "").strip()),
                 "issue_code": str(row_payload.get("issue_code") or "").strip() or None,
                 "issue_message": str(row_payload.get("issue_message") or "").strip() or None,
-                "canonical_employee_hint": {
-                    "employee_id": str(row_payload.get("employee_id") or "").strip() or None,
-                    "employee_code": str(row_payload.get("employee_code") or "").strip() or None,
-                    "employee_name": str(row_payload.get("employee_name") or "").strip() or None,
-                },
-                "row_provenance": {
-                    "sheet_name": str(row_payload.get("sheet_name") or "").strip() or None,
-                    "source_row": int(row_payload.get("source_row")) if row_payload.get("source_row") is not None else None,
-                    "source_col": int(row_payload.get("source_col")) if row_payload.get("source_col") is not None else None,
-                    "source_cell_ref": str(row_payload.get("source_cell_ref") or "").strip() or None,
-                },
+                "canonical_employee_id_hint": str(row_payload.get("employee_id") or "").strip() or None,
+                "canonical_employee_code_hint": str(row_payload.get("employee_code") or "").strip() or None,
+                "canonical_employee_name_hint": str(row_payload.get("employee_name") or "").strip() or None,
+                "source_sheet_name": str(row_payload.get("sheet_name") or "").strip() or None,
+                "source_row": int(row_payload.get("source_row")) if row_payload.get("source_row") is not None else None,
+                "source_col": int(row_payload.get("source_col")) if row_payload.get("source_col") is not None else None,
+                "source_cell_ref": str(row_payload.get("source_cell_ref") or "").strip() or None,
             }
         )
     return entries
@@ -2099,7 +2095,6 @@ def _build_sentrix_support_roster_handoff_payload(
             {
                 "scope_key": str(spec.get("scope_key") or "").strip(),
                 "sheet_name": str(spec.get("sheet_name") or "").strip() or "-",
-                "site_id": str(spec.get("ticket", {}).get("site_id") or scope_payload.get("site_id") or "").strip() or None,
                 "site_code": str(spec.get("site_code") or "").strip().upper() or None,
                 "site_name": str(spec.get("site_name") or "").strip() or None,
                 "month": month_key,
@@ -2109,17 +2104,7 @@ def _build_sentrix_support_roster_handoff_payload(
                 "valid_filled_count": max(int(spec.get("valid_filled_count") or 0), 0),
                 "invalid_filled_count": max(int(spec.get("invalid_filled_count") or 0), 0),
                 "target_status": str(spec.get("target_status") or "").strip() or None,
-                "current_status": _extract_sentrix_ticket_hq_roster_status(spec.get("ticket")),
-                "current_ticket_hint": {
-                    "local_ticket_id": str(spec.get("ticket_id") or "").strip() or None,
-                    "request_count": max(int(spec.get("request_count") or 0), 0),
-                    "status": _extract_sentrix_ticket_hq_roster_status(spec.get("ticket")),
-                },
-                "workbook_required_count": scope_payload.get("workbook_required_count"),
-                "workbook_required_raw": str(scope_payload.get("workbook_required_raw") or "").strip() or None,
-                "external_count_raw": str(scope_payload.get("external_count_raw") or "").strip() or None,
                 "purpose_text": str(scope_payload.get("purpose_text") or "").strip() or None,
-                "matched_ticket": bool(scope_payload.get("matched_ticket")),
                 "worker_entries": _build_sentrix_support_roster_handoff_worker_entries(spec.get("worker_payloads") or []),
             }
         )

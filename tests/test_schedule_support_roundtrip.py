@@ -385,8 +385,10 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertEqual(payload["affected_scope_count"], 1)
         self.assertEqual(payload["affected_site_codes"], ["R692"])
         self.assertEqual(payload["affected_dates"], ["2026-03-01"])
-        self.assertEqual(payload["scopes"][0]["worker_entries"][0]["row_provenance"]["source_cell_ref"], "D55")
-        self.assertEqual(payload["scopes"][0]["worker_entries"][1]["canonical_employee_hint"]["employee_id"], "emp-1")
+        self.assertNotIn("current_ticket_hint", payload["scopes"][0])
+        self.assertNotIn("site_id", payload["scopes"][0])
+        self.assertEqual(payload["scopes"][0]["worker_entries"][0]["source_cell_ref"], "D55")
+        self.assertEqual(payload["scopes"][0]["worker_entries"][1]["canonical_employee_id_hint"], "emp-1")
 
     def test_build_sentrix_support_roster_handoff_failure_result_is_retryable(self):
         batch_id = uuid.uuid4()
