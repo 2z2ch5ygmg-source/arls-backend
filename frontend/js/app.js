@@ -9974,8 +9974,11 @@ function isScheduleImportPreviewRowActionable(row = {}) {
 }
 
 function isScheduleImportPreviewRowProtectedInfoOnly(row = {}) {
-  if (typeof row?.protected_info_only === 'boolean') return row.protected_info_only;
   const diffCategory = String(row?.diff_category || '').trim().toLowerCase();
+  const isProtected = Boolean(row?.is_protected) || diffCategory === 'ignored_protected';
+  const isBlocking = Boolean(row?.is_blocking) || (!isProtected && row?.is_valid === false);
+  if (isBlocking) return false;
+  if (typeof row?.protected_info_only === 'boolean') return row.protected_info_only;
   const sourceBlock = String(row?.source_block || '').trim().toLowerCase();
   const parsedSemanticType = String(row?.parsed_semantic_type || '').trim().toLowerCase();
   if (sourceBlock === 'sentrix_support_ticket') return true;

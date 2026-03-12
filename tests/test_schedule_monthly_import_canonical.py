@@ -270,6 +270,19 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
         self.assertFalse(actionable)
         self.assertTrue(protected_info_only)
 
+    def test_preview_visibility_keeps_blocked_support_rows_actionable(self):
+        visibility_class, actionable, protected_info_only = _classify_import_preview_visibility({
+            "source_block": "night_support_required_count",
+            "parsed_semantic_type": "support_demand",
+            "diff_category": "invalid",
+            "is_blocking": True,
+            "is_protected": False,
+            "is_valid": False,
+        })
+        self.assertEqual(visibility_class, "blocked")
+        self.assertTrue(actionable)
+        self.assertFalse(protected_info_only)
+
     def test_resolve_import_body_value_requires_mapping_when_lookup_is_supplied(self):
         templates = [
             {

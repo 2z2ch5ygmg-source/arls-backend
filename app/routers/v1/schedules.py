@@ -1254,10 +1254,10 @@ def _classify_import_preview_visibility(row: dict[str, Any]) -> tuple[str, bool,
     is_protected = bool(row.get("is_protected")) or diff_category == "ignored_protected"
     is_blocking = bool(row.get("is_blocking")) or (not is_protected and row.get("is_valid") is False)
     support_info_only = _is_import_support_preview_info_only(row)
-    if support_info_only:
-        return "protected_info_only", False, True
     if is_blocking:
         return "blocked", True, False
+    if support_info_only:
+        return "protected_info_only", False, True
     if diff_category == "review":
         return "review_actionable", True, False
     if is_protected or diff_category == "ignored_no_demand":
