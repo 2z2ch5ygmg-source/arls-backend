@@ -1070,6 +1070,8 @@ function createInitialScheduleSupportHqWorkspaceState() {
     error: '',
     contract: null,
     uploadFileName: '',
+    uploadFileSize: 0,
+    uploadFileLastModified: '',
     inspectLoading: false,
     inspectError: '',
     inspectResult: null,
@@ -10124,12 +10126,22 @@ function resetScheduleSupportHqWorkspace({
 } = {}) {
   const workspace = ensureScheduleSupportHqWorkspaceState();
   const fileInput = $('#scheduleSupportHqUploadFile');
+  const currentFile = fileInput instanceof HTMLInputElement && fileInput.files?.length
+    ? fileInput.files[0]
+    : null;
   const fileName = preserveFile
     ? (
       workspace.uploadFileName
+      || (currentFile ? String(currentFile.name || '').trim() : '')
+    )
+    : '';
+  const fileSize = preserveFile ? (workspace.uploadFileSize || Number(currentFile?.size || 0)) : 0;
+  const fileLastModified = preserveFile
+    ? (
+      workspace.uploadFileLastModified
       || (
-        fileInput instanceof HTMLInputElement && fileInput.files?.length
-          ? String(fileInput.files[0]?.name || '').trim()
+        currentFile?.lastModified
+          ? new Date(currentFile.lastModified).toLocaleString('ko-KR')
           : ''
       )
     )
@@ -10147,6 +10159,8 @@ function resetScheduleSupportHqWorkspace({
   workspace.error = nextError;
   workspace.contract = nextContract;
   workspace.uploadFileName = fileName;
+  workspace.uploadFileSize = fileSize;
+  workspace.uploadFileLastModified = fileLastModified;
   workspace.inspectLoading = false;
   workspace.inspectError = '';
   workspace.inspectResult = null;
@@ -10224,7 +10238,7 @@ function renderScheduleSupportHqIssueGroups() {
     } else if (workspace.stale) {
       meta.textContent = `${formatScheduleSupportHqContextFields(workspace.staleFields)} 변경으로 다시 검토해야 합니다.`;
     } else {
-      meta.textContent = String(inspectResult?.next_step_message || 'scope별 요청 수, 유효 입력 수, 근무자 셀 파싱 결과가 여기에 묶여 표시됩니다.').trim();
+      meta.textContent = String(inspectResult?.next_step_message || 'scope별 요청 수(ticket 기준), 유효 입력 수, 업로드 workbook 근무자 셀 파싱 결과가 여기에 묶여 표시됩니다.').trim();
     }
     placeholder.appendChild(meta);
     container.appendChild(placeholder);
@@ -10288,7 +10302,7 @@ function renderScheduleSupportHqReviewTable() {
       } else {
         meta.textContent = inspectResult?.next_step_message
           ? String(inspectResult.next_step_message || '').trim()
-          : '지원요청 scope, 유효 입력 수, 근무자 셀 파싱 결과를 이 구역에서 검토합니다.';
+          : '지원요청 scope, 유효 입력 수, 업로드 workbook 근무자 셀 파싱 결과를 이 구역에서 검토합니다. 요청 수는 기존 Sentrix ticket 기준입니다.';
       }
     }
     return;
@@ -10522,13 +10536,15 @@ function renderScheduleSupportHqWorkspace() {
     } else if (context.siteCode === 'ALL') {
       contractHint.textContent = '전체 지점 multi-sheet HQ 작성본을 업로드하면 ARLS가 검토/적용을 시작하고, 내부 state 엔진은 Sentrix가 이어받습니다.';
     } else {
-      contractHint.textContent = `${getSupportStatusSiteLabel(context.siteCode, selectedSite?.siteName || '')} 기준 HQ 작성본을 ARLS에서 검토한 뒤 적용하면 Sentrix로 normalized snapshot을 handoff합니다.`;
+      contractHint.textContent = `${getSupportStatusSiteLabel(context.siteCode, selectedSite?.siteName || '')} 기준 HQ 작성본을 ARLS에서 검토한 뒤 적용하면 Sentrix로 normalized snapshot을 handoff합니다. 업로드 workbook의 근무자 입력은 그대로 읽고, 요청 수는 기존 Sentrix ticket 기준으로 계산합니다.`;
     }
   }
 
   renderScheduleSupportArtifactMeta(artifactContext);
   const uploadMetaItems = [
     { label: '파일명', value: String(uploadMeta?.file_name || workspace.uploadFileName || '선택 전').trim() || '선택 전' },
+    { label: '파일 크기', value: workspace.uploadFileSize > 0 ? `${Number(workspace.uploadFileSize).toLocaleString('ko-KR')} bytes` : '선택 전' },
+    { label: '파일 수정시각', value: String(workspace.uploadFileLastModified || '선택 전').trim() || '선택 전' },
     { label: '대상월', value: formatScheduleMonthTitle(String(uploadMeta?.month || context.month || '')) },
     { label: '업로드 범위', value: context.siteCode === 'ALL' ? '전체 지점 workbook' : getSupportStatusSiteLabel(context.siteCode || '', selectedSite?.siteName || '') },
     { label: 'workbook family', value: String(uploadMeta?.workbook_family || workspace.contract?.workbook_family || SUPPORT_STATUS_HQ_WORKBOOK_FAMILY).trim() || SUPPORT_STATUS_HQ_WORKBOOK_FAMILY },
@@ -10548,9 +10564,15 @@ function renderScheduleSupportHqWorkspace() {
     } else if (!artifactContext.artifact_id) {
       batchInfoEl.textContent = '현재 source revision 기준 artifact lineage를 아직 만들지 못했습니다.';
     } else if (inspectResult?.batch_id) {
-      batchInfoEl.textContent = `artifact_id ${artifactContext.artifact_id} · batch ${String(inspectResult.batch_id).slice(0, 12)} · ${context.month}`;
+      batchInfoEl.textContent = [
+        `artifact_id ${artifactContext.artifact_id}`,
+        `batch ${String(inspectResult.batch_id).slice(0, 12)}`,
+        context.month,
+        `worker ${Number(inspectResult.summary?.worker_rows || 0)}건 parsed`,
+        '요청 수는 기존 Sentrix ticket 기준',
+      ].join(' · ');
     } else {
-      batchInfoEl.textContent = `artifact_id ${artifactContext.artifact_id} 기준으로 HQ 작성본 workbook을 검토합니다. apply 시 Sentrix state engine으로 handoff됩니다.`;
+      batchInfoEl.textContent = `artifact_id ${artifactContext.artifact_id} 기준으로 HQ 작성본 workbook을 검토합니다. worker 입력은 업로드 파일에서 읽고, 요청 수는 기존 Sentrix ticket 기준으로 계산합니다.`;
     }
   }
 
@@ -10710,6 +10732,10 @@ async function onScheduleSupportHqInspect() {
   workspace.stale = false;
   workspace.staleFields = [];
   workspace.uploadFileName = String(file?.name || '').trim();
+  workspace.uploadFileSize = Number(file?.size || 0);
+  workspace.uploadFileLastModified = file?.lastModified
+    ? new Date(file.lastModified).toLocaleString('ko-KR')
+    : '';
   renderScheduleUploadWorkspace();
   const body = new FormData();
   body.append('file', file);
@@ -50035,7 +50061,18 @@ function bindUiEvents() {
     if (target instanceof HTMLInputElement && target.id === 'scheduleSupportHqUploadFile') {
       resetScheduleSupportHqWorkspace({ preserveFile: true, preserveContract: true, staleFields: [] });
       const workspace = ensureScheduleSupportHqWorkspaceState();
-      workspace.uploadFileName = target.files?.length ? String(target.files[0]?.name || '').trim() : '';
+      if (target.files?.length) {
+        const nextFile = target.files[0];
+        workspace.uploadFileName = String(nextFile?.name || '').trim();
+        workspace.uploadFileSize = Number(nextFile?.size || 0);
+        workspace.uploadFileLastModified = nextFile?.lastModified
+          ? new Date(nextFile.lastModified).toLocaleString('ko-KR')
+          : '';
+      } else {
+        workspace.uploadFileName = '';
+        workspace.uploadFileSize = 0;
+        workspace.uploadFileLastModified = '';
+      }
       renderScheduleUploadWorkspace();
       return;
     }
