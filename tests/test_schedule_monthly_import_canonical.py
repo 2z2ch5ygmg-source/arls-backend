@@ -12,6 +12,7 @@ from app.routers.v1.schedules import (
     ARLS_EXPORT_SOURCE_VERSION,
     ARLS_EXPORT_TEMPLATE_VERSION,
     ARLS_SHEET_NAME,
+    _build_support_request_rows_from_import_payloads,
     _classify_import_preview_visibility,
     _build_arls_month_sheet,
     _build_import_current_body_index_from_existing_schedule_rows,
@@ -25,6 +26,7 @@ from app.routers.v1.schedules import (
     _parse_arls_canonical_import_sheet,
     _parse_daytime_need_value,
     _parse_support_worker_cell,
+    _read_monthly_support_request_rows_for_export,
     _read_arls_export_metadata,
     _resolve_leader_candidate_role_key,
     _resolve_import_body_value,
@@ -343,6 +345,82 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
 
     def test_resolve_shift_type_from_duty_type_keeps_overtime_distinct(self):
         self.assertEqual(_resolve_shift_type_from_duty_type("overtime"), "overtime")
+
+    def test_build_support_request_rows_from_import_payloads_keeps_meaningful_day_and_night_scopes(self):
+        rows = _build_support_request_rows_from_import_payloads(
+            [
+                {
+                    "source_block": "sentrix_support_ticket",
+                    "schedule_date": date(2026, 3, 2),
+                    "shift_type": "day",
+                    "request_count": 2,
+                    "work_value": "섭외 2인 요청",
+                    "purpose_text": "",
+                    "detail_json": {"external_count_raw": "1"},
+                },
+                {
+                    "source_block": "sentrix_support_ticket",
+                    "schedule_date": date(2026, 3, 2),
+                    "shift_type": "night",
+                    "request_count": 3,
+                    "work_value": "섭외 3인 요청",
+                    "purpose_text": "프로젝트",
+                    "detail_json": {"required_row_no": 65},
+                },
+                {
+                    "source_block": "sentrix_support_ticket",
+                    "schedule_date": date(2026, 3, 3),
+                    "shift_type": "day",
+                    "request_count": 0,
+                    "work_value": "",
+                    "detail_json": {},
+                },
+                {
+                    "source_block": "sentrix_support_ticket",
+                    "schedule_date": date(2026, 3, 4),
+                    "shift_type": "day",
+                    "request_count": 1,
+                    "is_blocking": True,
+                    "work_value": "1",
+                    "detail_json": {},
+                },
+            ]
+        )
+
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["shift_kind"], "day")
+        self.assertEqual(rows[0]["request_count"], 2)
+        self.assertEqual(rows[0]["detail_json"]["required_count_raw"], "섭외 2인 요청")
+        self.assertEqual(rows[1]["shift_kind"], "night")
+        self.assertEqual(rows[1]["work_purpose"], "프로젝트")
+
+    @patch("app.routers.v1.schedules._load_schedule_import_payload_rows")
+    def test_read_monthly_support_request_rows_for_export_prefers_source_batch_payloads(self, mock_load_payload_rows):
+        mock_load_payload_rows.return_value = [
+            {
+                "source_block": "sentrix_support_ticket",
+                "schedule_date": date(2026, 3, 15),
+                "shift_type": "night",
+                "request_count": 2,
+                "work_value": "섭외 2인 요청",
+                "purpose_text": "야간 작업",
+                "detail_json": {"external_count_raw": "0"},
+            }
+        ]
+
+        rows = _read_monthly_support_request_rows_for_export(
+            None,
+            tenant_id="tenant-1",
+            site_id="site-1",
+            month_key="2026-03",
+            source_batch_id="batch-123",
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["work_date"].isoformat(), "2026-03-15")
+        self.assertEqual(rows[0]["shift_kind"], "night")
+        self.assertEqual(rows[0]["request_count"], 2)
+        self.assertEqual(rows[0]["work_purpose"], "야간 작업")
 
     def test_schedule_display_meta_distinguishes_off_holiday_and_annual_leave(self):
         self.assertEqual(

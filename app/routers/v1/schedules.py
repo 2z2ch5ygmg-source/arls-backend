@@ -3532,13 +3532,98 @@ def _read_monthly_daytime_need_rows_for_export(
         return [dict(row) for row in cur.fetchall()]
 
 
+def _build_support_request_rows_from_import_payloads(
+    payload_rows: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    scoped_rows: dict[tuple[str, str], dict[str, Any]] = {}
+    for payload in list(payload_rows or []):
+        if str(payload.get("source_block") or "").strip() != "sentrix_support_ticket":
+            continue
+        if bool(payload.get("is_blocking")):
+            continue
+        work_date = _normalize_schedule_import_payload_date(payload.get("schedule_date"))
+        if not isinstance(work_date, date):
+            continue
+        request_count = _coerce_int_or_none(payload.get("request_count"))
+        if request_count is None:
+            continue
+        normalized_request_count = max(int(request_count or 0), 0)
+        if normalized_request_count <= 0:
+            continue
+        shift_kind = "night" if str(payload.get("shift_type") or "day").strip().lower() == "night" else "day"
+        detail_json = dict(payload.get("detail_json") or {})
+        scope_key = (work_date.isoformat(), shift_kind)
+        scoped_rows[scope_key] = {
+            "work_date": work_date,
+            "shift_kind": shift_kind,
+            "request_count": normalized_request_count,
+            "work_purpose": str(
+                payload.get("purpose_text")
+                or detail_json.get("purpose_text")
+                or ""
+            ).strip() or None,
+            "status": SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS,
+            "detail_json": {
+                **detail_json,
+                "required_count_raw": str(
+                    detail_json.get("required_count_raw")
+                    or payload.get("work_value")
+                    or ""
+                ).strip() or None,
+                "required_count_numeric": normalized_request_count,
+                "source_block": "sentrix_support_ticket",
+                "source_sheet": str(payload.get("source_sheet") or ARLS_SHEET_NAME).strip() or ARLS_SHEET_NAME,
+                "required_row_no": int(detail_json.get("required_row_no") or payload.get("row_no") or 0) or None,
+            },
+        }
+    return [
+        scoped_rows[key]
+        for key in sorted(scoped_rows.keys(), key=lambda item: (item[0], item[1]))
+    ]
+
+
+def _resolve_active_support_roundtrip_source_batch_id(
+    conn,
+    *,
+    tenant_id: str,
+    site_id: str,
+    month_key: str,
+) -> str | None:
+    if conn is None:
+        return None
+    source_row = _get_support_roundtrip_source(
+        conn,
+        tenant_id=tenant_id,
+        site_id=site_id,
+        month_key=month_key,
+    )
+    return str((source_row or {}).get("source_batch_id") or "").strip() or None
+
+
 def _read_monthly_support_request_rows_for_export(
     conn,
     *,
     tenant_id: str,
     site_id: str,
     month_key: str,
+    source_batch_id: str | None = None,
 ) -> list[dict]:
+    artifact_batch_id = str(source_batch_id or "").strip() or _resolve_active_support_roundtrip_source_batch_id(
+        conn,
+        tenant_id=tenant_id,
+        site_id=site_id,
+        month_key=month_key,
+    )
+    if artifact_batch_id:
+        try:
+            return _build_support_request_rows_from_import_payloads(
+                _load_schedule_import_payload_rows(conn, batch_id=artifact_batch_id)
+            )
+        except Exception:
+            logger.exception(
+                "[schedule][export] failed to read support-demand scopes from import batch batch_id=%s",
+                artifact_batch_id,
+            )
     start_date, end_date = _month_bounds(month_key)
     with conn.cursor() as cur:
         cur.execute(
@@ -3588,6 +3673,7 @@ def _build_schedule_export_revision(
     site_id: str,
     site_code: str,
     month_key: str,
+    source_batch_id: str | None = None,
 ) -> str:
     board_rows = [
         row
@@ -3623,6 +3709,7 @@ def _build_schedule_export_revision(
         tenant_id=tenant_id,
         site_id=site_id,
         month_key=month_key,
+        source_batch_id=source_batch_id,
     )
     payload = {
         "month": month_key,
@@ -8871,6 +8958,7 @@ def _register_support_roundtrip_source_after_import(
         site_id=str(site_row["id"]),
         site_code=str(site_row["site_code"]),
         month_key=month_key,
+        source_batch_id=batch_id,
     )
     with conn.cursor() as cur:
         cur.execute(
@@ -15311,16 +15399,9 @@ def _apply_canonical_schedule_import_batch(
         for row in current_need_rows
         if isinstance(row.get("work_date"), date)
     }
-    current_ticket_rows = _read_monthly_support_request_rows_for_export(
-        conn,
-        tenant_id=str(target_tenant["id"]),
-        site_id=str(site_row["id"]),
-        month_key=month_key,
-    )
-    current_ticket_index = _build_support_request_ticket_index(current_ticket_rows)
 
     desired_base_rows: dict[tuple[str, str, str], dict[str, Any]] = {}
-    desired_ticket_rows: dict[tuple[str, str], dict[str, Any]] = {}
+    desired_support_request_rows: dict[tuple[str, str], dict[str, Any]] = {}
     desired_day_need_rows: dict[str, dict[str, Any]] = {}
     blocking_failures: list[str] = []
     skipped_rows: list[ImportApplyRowOut] = []
@@ -15409,24 +15490,35 @@ def _apply_canonical_schedule_import_batch(
         if request_count is None:
             append_blocking_failure("지원 요청 인원 수를 해석할 수 없습니다.", payload=payload, shift_type=shift_kind)
             continue
-        ticket_key = (schedule_date.isoformat(), shift_kind)
-        if ticket_key in desired_ticket_rows:
+        support_scope_key = (schedule_date.isoformat(), shift_kind)
+        if support_scope_key in desired_support_request_rows:
             append_blocking_failure("같은 날짜/주야 지원 요청이 중복되었습니다.", payload=payload, shift_type=shift_kind)
             continue
         detail_json = dict(payload.get("detail_json") or {})
         if request_count > 0:
-            desired_ticket_rows[ticket_key] = {
+            desired_support_request_rows[support_scope_key] = {
                 "row_no": int(payload.get("row_no") or 0),
                 "work_date": schedule_date,
                 "shift_kind": shift_kind,
-                "request_count": request_count,
+                "request_count": max(int(request_count or 0), 0),
                 "work_purpose": str(payload.get("purpose_text") or "").strip() or None,
-                "detail_json": detail_json,
+                "detail_json": {
+                    **detail_json,
+                    "required_count_raw": str(
+                        detail_json.get("required_count_raw")
+                        or payload.get("work_value")
+                        or ""
+                    ).strip() or None,
+                    "required_count_numeric": max(int(request_count or 0), 0),
+                    "source_block": "sentrix_support_ticket",
+                    "source_sheet": str(payload.get("source_sheet") or ARLS_SHEET_NAME).strip() or ARLS_SHEET_NAME,
+                    "required_row_no": int(detail_json.get("required_row_no") or payload.get("row_no") or 0) or None,
+                },
             }
             if shift_kind == "day":
                 desired_day_need_rows[schedule_date.isoformat()] = {
                     "work_date": schedule_date,
-                    "required_count": request_count,
+                    "required_count": max(int(request_count or 0), 0),
                     "raw_text": str(detail_json.get("required_count_raw") or payload.get("work_value") or "").strip() or str(request_count),
                 }
 
@@ -15470,9 +15562,6 @@ def _apply_canonical_schedule_import_batch(
     base_delete_ops: list[dict[str, Any]] = []
     need_upsert_ops: list[dict[str, Any]] = []
     need_delete_ops: list[dict[str, Any]] = []
-    ticket_create_ops: list[dict[str, Any]] = []
-    ticket_update_ops: list[dict[str, Any]] = []
-    ticket_retract_ops: list[dict[str, Any]] = []
 
     for key, desired in desired_base_rows.items():
         current_rows = base_existing_by_key.get(key) or []
@@ -15511,24 +15600,6 @@ def _apply_canonical_schedule_import_batch(
         if _is_daytime_need_base_source(current_row.get("source")):
             need_delete_ops.append(dict(current_row))
 
-    for key, desired in desired_ticket_rows.items():
-        current_ticket = current_ticket_index.get(key) or {}
-        current_is_active = str(current_ticket.get("status") or SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS).strip() == SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS
-        if not current_ticket:
-            ticket_create_ops.append(desired)
-        elif (
-            not current_is_active
-            or _coerce_int_or_none(current_ticket.get("request_count")) != int(desired.get("request_count") or 0)
-            or str(current_ticket.get("work_purpose") or "").strip() != str(desired.get("work_purpose") or "").strip()
-            or dict(current_ticket.get("detail_json") or {}) != dict(desired.get("detail_json") or {})
-        ):
-            ticket_update_ops.append(desired)
-
-    for key, current_ticket in current_ticket_index.items():
-        current_is_active = str(current_ticket.get("status") or SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS).strip() == SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS
-        if current_is_active and key not in desired_ticket_rows:
-            ticket_retract_ops.append(dict(current_ticket))
-
     if blocking_failures:
         result = ImportApplyOut(
             batch_id=batch_id,
@@ -15560,9 +15631,7 @@ def _apply_canonical_schedule_import_batch(
     base_created = 0
     base_updated = 0
     base_removed = 0
-    sentrix_created = 0
-    sentrix_updated = 0
-    sentrix_retracted = 0
+    support_scope_count = len(desired_support_request_rows)
 
     try:
         with conn.cursor() as cur:
@@ -15671,127 +15740,10 @@ def _apply_canonical_schedule_import_batch(
                         work_date=work_date,
                     )
 
-            for op in ticket_create_ops:
-                _upsert_sentrix_support_request_ticket_row(
-                    cur,
-                    tenant_id=str(target_tenant["id"]),
-                    site_id=str(site_row["id"]),
-                    site_code=site_code,
-                    month_key=month_key,
-                    work_date=op["work_date"],
-                    shift_kind=str(op.get("shift_kind") or "day"),
-                    request_count=int(op.get("request_count") or 0),
-                    work_purpose=op.get("work_purpose"),
-                    batch_id=str(batch_id),
-                    source_revision=source_revision,
-                    detail_json=dict(op.get("detail_json") or {}),
-                )
-                sentrix_created += 1
-                _log_schedule_import_integration_event(
-                    cur,
-                    tenant_id=str(target_tenant["id"]),
-                    site_code=site_code,
-                    batch_id=str(batch_id),
-                    work_date=op["work_date"],
-                    shift_kind=str(op.get("shift_kind") or "day"),
-                    event_type="SENTRIX_SUPPORT_REQUEST_CREATED",
-                    payload=op,
-                )
-                if len(applied_rows) < IMPORT_REPORT_LIMIT:
-                    applied_rows.append(
-                        ImportApplyRowOut(
-                            row_no=int(op.get("row_no") or 0),
-                            employee_code="",
-                            site_code=site_code,
-                            schedule_date=op["work_date"].isoformat(),
-                            shift_type=str(op.get("shift_kind") or "day"),
-                            section_label="Sentrix 지원 요청",
-                            status="applied",
-                            reason="Sentrix 지원 요청 생성",
-                        )
-                    )
-            for op in ticket_update_ops:
-                _upsert_sentrix_support_request_ticket_row(
-                    cur,
-                    tenant_id=str(target_tenant["id"]),
-                    site_id=str(site_row["id"]),
-                    site_code=site_code,
-                    month_key=month_key,
-                    work_date=op["work_date"],
-                    shift_kind=str(op.get("shift_kind") or "day"),
-                    request_count=int(op.get("request_count") or 0),
-                    work_purpose=op.get("work_purpose"),
-                    batch_id=str(batch_id),
-                    source_revision=source_revision,
-                    detail_json=dict(op.get("detail_json") or {}),
-                )
-                sentrix_updated += 1
-                _log_schedule_import_integration_event(
-                    cur,
-                    tenant_id=str(target_tenant["id"]),
-                    site_code=site_code,
-                    batch_id=str(batch_id),
-                    work_date=op["work_date"],
-                    shift_kind=str(op.get("shift_kind") or "day"),
-                    event_type="SENTRIX_SUPPORT_REQUEST_UPDATED",
-                    payload=op,
-                )
-                if len(applied_rows) < IMPORT_REPORT_LIMIT:
-                    applied_rows.append(
-                        ImportApplyRowOut(
-                            row_no=int(op.get("row_no") or 0),
-                            employee_code="",
-                            site_code=site_code,
-                            schedule_date=op["work_date"].isoformat(),
-                            shift_type=str(op.get("shift_kind") or "day"),
-                            section_label="Sentrix 지원 요청",
-                            status="applied",
-                            reason="Sentrix 지원 요청 갱신",
-                        )
-                    )
-            for op in ticket_retract_ops:
-                work_date = op.get("work_date")
-                if not isinstance(work_date, date):
-                    continue
-                shift_kind = "night" if str(op.get("shift_kind") or "day").strip().lower() == "night" else "day"
-                _retract_sentrix_support_request_ticket_row(
-                    cur,
-                    tenant_id=str(target_tenant["id"]),
-                    site_id=str(site_row["id"]),
-                    work_date=work_date,
-                    shift_kind=shift_kind,
-                    batch_id=str(batch_id),
-                    source_revision=source_revision,
-                )
-                sentrix_retracted += 1
-                _log_schedule_import_integration_event(
-                    cur,
-                    tenant_id=str(target_tenant["id"]),
-                    site_code=site_code,
-                    batch_id=str(batch_id),
-                    work_date=work_date,
-                    shift_kind=shift_kind,
-                    event_type="SENTRIX_SUPPORT_REQUEST_RETRACTED",
-                    payload=op,
-                )
-                if len(applied_rows) < IMPORT_REPORT_LIMIT:
-                    applied_rows.append(
-                        ImportApplyRowOut(
-                            row_no=0,
-                            employee_code="",
-                            site_code=site_code,
-                            schedule_date=work_date.isoformat(),
-                            shift_type=shift_kind,
-                            section_label="Sentrix 지원 요청",
-                            status="applied",
-                            reason="Sentrix 지원 요청 철회",
-                        )
-                    )
-
             result = ImportApplyOut(
                 batch_id=batch_id,
                 upload_batch_id=batch_id,
-                applied=base_created + base_updated + base_removed + sentrix_created + sentrix_updated + sentrix_retracted + len(need_upsert_ops) + len(need_delete_ops),
+                applied=base_created + base_updated + base_removed + len(need_upsert_ops) + len(need_delete_ops),
                 skipped=0,
                 applied_rows=applied_rows,
                 skipped_rows=[],
@@ -15802,9 +15754,14 @@ def _apply_canonical_schedule_import_batch(
                 base_schedule_created=base_created,
                 base_schedule_updated=base_updated,
                 base_schedule_removed=base_removed,
-                sentrix_tickets_created=sentrix_created,
-                sentrix_tickets_updated=sentrix_updated,
-                sentrix_tickets_retracted=sentrix_retracted,
+                artifact_generated=False,
+                artifact_id=None,
+                artifact_revision=None,
+                artifact_generated_at=None,
+                support_scope_count=support_scope_count,
+                sentrix_tickets_created=0,
+                sentrix_tickets_updated=0,
+                sentrix_tickets_retracted=0,
                 failed_items=0,
                 blocking_failures=[],
                 partial_failures=[],
@@ -15901,7 +15858,7 @@ def apply_import(
                 user=user,
             )
             partial_failures: list[str] = []
-            if not result.blocked and str(batch.get("site_code") or "").strip() and str(batch.get("month_key") or "").strip() and _can_use_support_roundtrip_source(user):
+            if not result.blocked and str(batch.get("site_code") or "").strip() and str(batch.get("month_key") or "").strip():
                 try:
                     site_row = _resolve_site_context_by_code(
                         conn,
@@ -15909,7 +15866,7 @@ def apply_import(
                         site_code=str(batch.get("site_code") or "").strip(),
                     )
                     if site_row:
-                        _register_support_roundtrip_source_after_import(
+                        source_row = _register_support_roundtrip_source_after_import(
                             conn,
                             batch_id=str(batch_id),
                             target_tenant=target_tenant,
@@ -15917,9 +15874,23 @@ def apply_import(
                             month_key=str(batch.get("month_key") or "").strip(),
                             user=user,
                         )
+                        artifact_revision = str((source_row or {}).get("source_revision") or "").strip() or None
+                        result.artifact_generated = True
+                        result.artifact_revision = artifact_revision
+                        result.artifact_generated_at = (source_row or {}).get("source_uploaded_at")
+                        result.artifact_id = (
+                            _build_sentrix_hq_artifact_id(
+                                tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
+                                month_key=str(batch.get("month_key") or "").strip(),
+                                site_code=str(batch.get("site_code") or "").strip(),
+                                revision=artifact_revision or "latest",
+                            )
+                            if artifact_revision
+                            else None
+                        )
                 except Exception:
                     logger.exception("[schedule][import-apply] support roundtrip source registration failed batch=%s", batch_id)
-                    partial_failures.append("support roundtrip source registration failed")
+                    partial_failures.append("support-demand artifact generation failed")
             for tenant_id, site_id, schedule_date_raw in affected_site_days:
                 try:
                     _refresh_daily_leader_defaults(
@@ -15933,6 +15904,10 @@ def apply_import(
                     partial_failures.append(f"leader refresh failed:{schedule_date_raw}")
             if partial_failures and not result.blocked:
                 result.apply_status = "partial_failed"
+                if not result.artifact_generated:
+                    result.artifact_id = None
+                    result.artifact_revision = None
+                    result.artifact_generated_at = None
                 result.partial_failures = list(dict.fromkeys([*result.partial_failures, *partial_failures]))
                 with conn.cursor() as cur:
                     _write_schedule_import_batch_apply_audit(

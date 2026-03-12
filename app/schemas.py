@@ -1239,6 +1239,11 @@ class ImportApplyOut(BaseModel):
     base_schedule_created: int = 0
     base_schedule_updated: int = 0
     base_schedule_removed: int = 0
+    artifact_generated: bool = False
+    artifact_id: Optional[str] = None
+    artifact_revision: Optional[str] = None
+    artifact_generated_at: Optional[datetime] = None
+    support_scope_count: int = 0
     sentrix_tickets_created: int = 0
     sentrix_tickets_updated: int = 0
     sentrix_tickets_retracted: int = 0
