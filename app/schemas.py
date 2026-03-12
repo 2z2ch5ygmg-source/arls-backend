@@ -1349,11 +1349,13 @@ class SupportRosterHqWorkspaceSiteOut(BaseModel):
     site_code: str
     site_name: str
     sheet_name: str
+    sheet_name_valid: bool = True
     download_ready: bool = False
     source_state: str = "source_missing"
     source_revision: Optional[str] = None
     latest_hq_revision: Optional[str] = None
     latest_status: str = "source_missing"
+    hq_merge_stale: bool = False
 
 
 class SupportRosterHqWorkspaceOut(BaseModel):

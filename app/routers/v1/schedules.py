@@ -6266,11 +6266,13 @@ def _build_support_roster_hq_workspace_payload(
                 site_code=str(site.get("site_code") or "").strip(),
                 site_name=str(site.get("site_name") or "").strip(),
                 sheet_name=str(site.get("sheet_name") or "").strip(),
+                sheet_name_valid=bool(site.get("sheet_name_valid", True)),
                 download_ready=bool(site.get("download_ready")),
                 source_state=str(site.get("source_state") or "source_missing").strip() or "source_missing",
                 source_revision=str(site.get("source_revision") or "").strip() or None,
                 latest_hq_revision=str(site.get("latest_hq_revision") or "").strip() or None,
                 latest_status=str(site.get("latest_status") or "source_missing").strip() or "source_missing",
+                hq_merge_stale=bool(site.get("hq_merge_stale")),
             )
             for site in sites
         ],
@@ -6284,8 +6286,35 @@ def _resolve_support_roster_hq_download_sites(
     month_key: str,
     scope: str,
     site_code: str | None = None,
+    site_codes: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     sites = _list_support_roundtrip_workspace_sites(conn, tenant_id=tenant_id, month_key=month_key)
+    normalized_site_codes = [
+        str(code or "").strip().upper()
+        for code in list(site_codes or [])
+        if str(code or "").strip()
+    ]
+    if normalized_site_codes:
+        site_map = {
+            str(site.get("site_code") or "").strip().upper(): dict(site)
+            for site in sites
+            if str(site.get("site_code") or "").strip()
+        }
+        missing_codes = [code for code in normalized_site_codes if code not in site_map]
+        if missing_codes:
+            raise HTTPException(status_code=404, detail=f"selected sites not found: {', '.join(missing_codes)}")
+        selected_sites = [site_map[code] for code in normalized_site_codes]
+        blocked_sites = [
+            str(site.get("site_name") or site.get("site_code") or "").strip()
+            for site in selected_sites
+            if not bool(site.get("download_ready"))
+        ]
+        if blocked_sites:
+            raise HTTPException(
+                status_code=409,
+                detail=f"selected sites are not ready for hq workbook download: {', '.join(blocked_sites)}",
+            )
+        return selected_sites
     normalized_scope = "site" if str(scope or "").strip().lower() == "site" else "all"
     if normalized_scope == "site":
         normalized_site_code = str(site_code or "").strip()
@@ -6487,6 +6516,7 @@ def _build_support_roster_hq_download_workbook(
     month_key: str,
     scope: str,
     selected_site_code: str | None,
+    selected_site_codes: list[str] | None,
     user: dict,
 ) -> tuple[Workbook, list[dict[str, Any]]]:
     selected_sites = _resolve_support_roster_hq_download_sites(
@@ -6495,6 +6525,7 @@ def _build_support_roster_hq_download_workbook(
         month_key=month_key,
         scope=scope,
         site_code=selected_site_code,
+        site_codes=selected_site_codes,
     )
     single_site_bundle = len(selected_sites) == 1
     workbook = None
@@ -6588,6 +6619,7 @@ def _build_support_roster_hq_upload_inspect_result(
     selected_month: str,
     filename: str,
     user: dict,
+    selected_site_codes: list[str] | None = None,
 ) -> SupportRosterHqUploadInspectOut:
     raw_issues: list[dict[str, Any]] = []
     sentrix_metadata = _read_sentrix_support_hq_metadata(workbook)
@@ -6694,13 +6726,25 @@ def _build_support_roster_hq_upload_inspect_result(
         if inferred_codes:
             site_codes = list(dict.fromkeys(inferred_codes))
 
-    selected_site_code_set = {
+    requested_site_code_set = {
+        str(code or "").strip().upper()
+        for code in list(selected_site_codes or [])
+        if str(code or "").strip()
+    }
+    metadata_site_code_set = {
         str(code or "").strip().upper()
         for code in site_codes
         if str(code or "").strip()
     }
+    selected_site_code_set = requested_site_code_set or metadata_site_code_set
     expected_sheet_name_set = set(site_names or [])
-    if not expected_sheet_name_set and selected_site_code_set:
+    if requested_site_code_set:
+        expected_sheet_name_set = {
+            str((workspace_sites_by_code.get(site_code) or {}).get("sheet_name") or "").strip()
+            for site_code in requested_site_code_set
+            if str((workspace_sites_by_code.get(site_code) or {}).get("sheet_name") or "").strip()
+        }
+    elif not expected_sheet_name_set and selected_site_code_set:
         expected_sheet_name_set = {
             str((workspace_sites_by_code.get(site_code) or {}).get("sheet_name") or "").strip()
             for site_code in selected_site_code_set
@@ -6737,7 +6781,7 @@ def _build_support_roster_hq_upload_inspect_result(
             sheet_name=sheet_name,
             sheet=sheet,
             workspace_sites=workspace_sites,
-            selected_site_codes=None,
+            selected_site_codes=selected_site_code_set or None,
         )
         site_entry = dict(resolution.get("site") or {})
         site_code = str(site_entry.get("site_code") or "").strip().upper()
@@ -11068,6 +11112,7 @@ def download_support_roundtrip_hq_roster_workbook(
     month: str = Query(..., description="YYYY-MM"),
     scope: str = Query(default="all", max_length=16),
     site_code: str | None = Query(default=None, max_length=64),
+    site_codes: list[str] | None = Query(default=None),
     tenant_code: str | None = Query(default=None, max_length=64),
     conn=Depends(get_db_conn),
     user=Depends(get_current_user),
@@ -11082,16 +11127,22 @@ def download_support_roundtrip_hq_roster_workbook(
         month_key=month,
         scope=scope,
         selected_site_code=site_code,
+        selected_site_codes=site_codes,
         user=user,
     )
     out = BytesIO()
     workbook.save(out)
     out.seek(0)
     now_kst = datetime.now(timezone(timedelta(hours=9)))
-    normalized_scope = "site" if str(scope or "").strip().lower() == "site" else "all"
+    normalized_scope = "selected" if list(site_codes or []) else ("site" if str(scope or "").strip().lower() == "site" else "all")
+    filename_scope = (
+        "MULTI"
+        if normalized_scope == "selected" and len(written_sites) > 1
+        else (str(site_code or 'ALL').strip() if normalized_scope == 'site' else 'ALL')
+    )
     filename = (
         f"{month[:4]}년 {int(month[5:7])}월 지원근무자 배정 workbook_"
-        f"{str(site_code or 'ALL').strip() if normalized_scope == 'site' else 'ALL'}_"
+        f"{filename_scope}_"
         f"{now_kst.strftime('%y%m%d')}.xlsx"
     )
     return StreamingResponse(
@@ -11108,6 +11159,7 @@ def download_support_roundtrip_hq_roster_workbook(
 def inspect_support_roundtrip_hq_roster_upload(
     file: UploadFile,
     month: str | None = Form(default=None),
+    site_codes: list[str] | None = Form(default=None),
     tenant_code: str | None = Form(default=None),
     conn=Depends(get_db_conn),
     user=Depends(get_current_user),
@@ -11132,6 +11184,7 @@ def inspect_support_roundtrip_hq_roster_upload(
             selected_month=selected_month,
             filename=file.filename or "support_roster.xlsx",
             user=user,
+            selected_site_codes=site_codes,
         )
     finally:
         workbook.close()
