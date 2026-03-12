@@ -202,6 +202,8 @@ const SCHEDULE_HQ_WIZARD_STEP_UPLOAD = 'upload';
 const SCHEDULE_HQ_WIZARD_STEP_PREVIEW = 'preview';
 const SCHEDULE_HQ_WIZARD_STEP_COMPLETE = 'complete';
 const SCHEDULE_HQ_WIZARD_RESUME_KEY = 'rg-arls-schedule-hq-wizard';
+const SCHEDULE_TEMPLATE_OWNER_TAB_TEMPLATES = 'templates';
+const SCHEDULE_TEMPLATE_OWNER_TAB_PROFILES = 'profiles';
 const SCHEDULE_DAY_CARD_MAX = 3;
 const SCHEDULE_TEMPLATE_ROWS_CACHE_TTL_MS = 5 * 60 * 1000;
 const SCHEDULE_CREATE_EMPLOYEE_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -858,6 +860,8 @@ function createInitialScheduleState() {
     templatesFetchedAt: 0,
     importMappingProfile: null,
     importMappingProfileFetchedAt: 0,
+    importMappingSelectedProfileId: '',
+    templateOwnerTab: SCHEDULE_TEMPLATE_OWNER_TAB_TEMPLATES,
     importSiteOptionsLoading: false,
     uploadWorkspaceBooting: false,
     uploadWorkspaceBootPromise: null,
@@ -9934,14 +9938,15 @@ function renderScheduleUploadWorkspace() {
   const hqExportNextBtn = $('#scheduleHqExportNextBtn');
   const latestBaseBtn = $('#scheduleLatestBaseBtn');
   const blankTemplateBtn = $('#scheduleBlankTemplateBtn');
-  const mappingEditBtn = document.querySelector('[data-action="schedule-import-mapping-edit"]');
+  const mappingProfileSelect = $('#scheduleImportMappingProfileSelect');
+  const mappingManageButtons = Array.from(document.querySelectorAll('[data-action="schedule-open-template-profile-manager"]'));
   const siteSelect = $('#scheduleImportSite');
   const fileInput = $('#scheduleImportFile');
   const monthInput = $('#scheduleImportMonth');
   const monthValue = syncScheduleImportMonthInput();
   const selectedSite = String(siteSelect?.value || '').trim().toUpperCase();
   const hasFile = Boolean(fileInput?.files?.length);
-  const mappingEntryCount = Number(state.schedule?.importMappingProfile?.entry_count || 0);
+  const mappingReadiness = getScheduleImportMappingProfileReadiness(getSelectedScheduleImportMappingProfile());
   const uploadUi = getScheduleUploadUiState();
   const supportHqWorkspace = ensureScheduleSupportHqWorkspaceState();
   const uploadWorkspaceBooting = Boolean(state.schedule.uploadWorkspaceBooting);
@@ -9981,12 +9986,15 @@ function renderScheduleUploadWorkspace() {
   if (fileInput instanceof HTMLInputElement) {
     fileInput.disabled = uploadWorkspaceBooting || uploadUi.analysisInFlight || supportHqBusy;
   }
+  if (mappingProfileSelect instanceof HTMLSelectElement) {
+    mappingProfileSelect.disabled = uploadWorkspaceBooting || uploadUi.analysisInFlight || supportHqBusy || !getScheduleImportMappingProfiles().length;
+  }
   if (previewBtn) {
     previewBtn.disabled = uploadWorkspaceBooting || siteOptionsLoading || uploadUi.analysisInFlight || supportHqBusy || !(hasFile && selectedSite && monthValue);
     previewBtn.textContent = uploadUi.analysisInFlight ? '분석 중...' : '분석 시작';
   }
   if (mappingNextBtn instanceof HTMLButtonElement) {
-    mappingNextBtn.disabled = uploadWorkspaceBooting || mappingEntryCount <= 0;
+    mappingNextBtn.disabled = uploadWorkspaceBooting || !mappingReadiness.ready;
   }
   if (contextNextBtn instanceof HTMLButtonElement) {
     contextNextBtn.disabled = uploadWorkspaceBooting || siteOptionsLoading || supportHqBusy || !(selectedSite && monthValue);
@@ -10003,9 +10011,11 @@ function renderScheduleUploadWorkspace() {
   if (blankTemplateBtn) {
     blankTemplateBtn.disabled = uploadWorkspaceBooting || uploadUi.analysisInFlight || supportHqBusy;
   }
-  if (mappingEditBtn instanceof HTMLButtonElement) {
-    mappingEditBtn.disabled = uploadWorkspaceBooting || uploadUi.analysisInFlight || supportHqBusy || !canMutateScheduleData();
-  }
+  mappingManageButtons.forEach((button) => {
+    if (button instanceof HTMLButtonElement) {
+      button.disabled = uploadWorkspaceBooting || uploadUi.analysisInFlight || supportHqBusy || !canMutateScheduleData();
+    }
+  });
 
   renderScheduleUploadProgress();
   renderScheduleUploadFileMeta();
@@ -38808,50 +38818,370 @@ function buildScheduleImportMappingTemplateOptionLabel(row = {}) {
     .join(' · ');
 }
 
-function renderScheduleImportMappingProfileSummary() {
-  const badgeEl = $('#scheduleTemplateMappingBadge');
-  const textEl = $('#scheduleTemplateMappingText');
-  const missingEl = $('#scheduleTemplateMappingMissing');
-  if (!(badgeEl instanceof HTMLElement) || !(textEl instanceof HTMLElement) || !(missingEl instanceof HTMLElement)) return;
+function normalizeScheduleTemplateOwnerTab(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === SCHEDULE_TEMPLATE_OWNER_TAB_PROFILES) return SCHEDULE_TEMPLATE_OWNER_TAB_PROFILES;
+  return SCHEDULE_TEMPLATE_OWNER_TAB_TEMPLATES;
+}
 
+function getScheduleTemplateOwnerTab() {
+  return normalizeScheduleTemplateOwnerTab(state.schedule?.templateOwnerTab || SCHEDULE_TEMPLATE_OWNER_TAB_TEMPLATES);
+}
+
+function setScheduleTemplateOwnerTab(tab = SCHEDULE_TEMPLATE_OWNER_TAB_TEMPLATES) {
+  if (state.schedule) {
+    state.schedule.templateOwnerTab = normalizeScheduleTemplateOwnerTab(tab);
+  }
+  renderScheduleTemplateOwnerSections();
+}
+
+function openScheduleTemplateOwnerWorkspace(tab = SCHEDULE_TEMPLATE_OWNER_TAB_PROFILES) {
+  onScheduleHqTabChange(SCHEDULE_TAB_TEMPLATES);
+  setScheduleTemplateOwnerTab(tab);
+  requestAnimationFrame(() => {
+    const target = document.querySelector('#scheduleTemplatePanel');
+    if (target instanceof HTMLElement) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+function renderScheduleTemplateOwnerSections() {
+  const activeTab = getScheduleTemplateOwnerTab();
+  toggleVisibility('#scheduleTemplateTemplatesSection', activeTab === SCHEDULE_TEMPLATE_OWNER_TAB_TEMPLATES);
+  toggleVisibility('#scheduleTemplateProfilesSection', activeTab === SCHEDULE_TEMPLATE_OWNER_TAB_PROFILES);
+  document.querySelectorAll('[data-action="schedule-template-owner-tab"]').forEach((button) => {
+    const isActive = normalizeScheduleTemplateOwnerTab(button?.dataset?.tab || '') === activeTab;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+}
+
+function getScheduleImportMappingProfiles() {
   const profile = state.schedule?.importMappingProfile && typeof state.schedule.importMappingProfile === 'object'
     ? state.schedule.importMappingProfile
     : null;
+  if (!profile) return [];
+  const profileId = String(profile?.profile_id || 'active-profile').trim() || 'active-profile';
+  return [{ ...profile, profile_id: profileId }];
+}
+
+function ensureSelectedScheduleImportMappingProfileId() {
+  const profiles = getScheduleImportMappingProfiles();
+  const current = String(state.schedule?.importMappingSelectedProfileId || '').trim();
+  if (profiles.some((profile) => String(profile?.profile_id || '').trim() === current)) {
+    return current;
+  }
+  const fallback = String(profiles[0]?.profile_id || '').trim();
+  if (state.schedule) {
+    state.schedule.importMappingSelectedProfileId = fallback;
+  }
+  return fallback;
+}
+
+function getSelectedScheduleImportMappingProfile() {
+  const profiles = getScheduleImportMappingProfiles();
+  const selectedId = ensureSelectedScheduleImportMappingProfileId();
+  return profiles.find((profile) => String(profile?.profile_id || '').trim() === selectedId) || profiles[0] || null;
+}
+
+function buildScheduleImportMappingUsageMap() {
+  const usage = new Map();
+  getScheduleImportMappingProfiles().forEach((profile) => {
+    const templateIds = new Set(
+      (Array.isArray(profile?.entries) ? profile.entries : [])
+        .map((entry) => String(entry?.template_id || '').trim())
+        .filter(Boolean),
+    );
+    templateIds.forEach((templateId) => {
+      usage.set(templateId, Number(usage.get(templateId) || 0) + 1);
+    });
+  });
+  return usage;
+}
+
+function deriveScheduleImportMappingProfileScopeLabel(profile = null) {
+  if (!profile || typeof profile !== 'object') return '-';
+  const siteCodes = Array.from(new Set(
+    (Array.isArray(profile?.entries) ? profile.entries : [])
+      .map((entry) => String(entry?.template_site_code || '').trim().toUpperCase())
+      .filter(Boolean),
+  ));
+  if (!siteCodes.length) return '테넌트 공통';
+  if (siteCodes.length === 1) return `${getScheduleImportSiteLabel(siteCodes[0])} 전용`;
+  return `${siteCodes.length}개 지점 템플릿 혼합`;
+}
+
+function buildScheduleImportMappingRuleSummaries(profile = null) {
+  return (Array.isArray(profile?.entries) ? profile.entries : [])
+    .map((entry) => {
+      const requirement = formatScheduleImportMappingRequirementLabel(`${entry?.row_type || ''}:${entry?.numeric_hours ?? ''}`);
+      const templateName = String(entry?.template_name || '').trim() || '템플릿 미지정';
+      if (!requirement) return null;
+      return {
+        key: `${entry?.row_type || ''}:${entry?.numeric_hours ?? ''}`,
+        requirement,
+        templateName,
+      };
+    })
+    .filter(Boolean);
+}
+
+function getScheduleImportMappingProfileReadiness(profile = null) {
+  if (!profile) {
+    return {
+      key: 'missing',
+      label: '프로필 미선택',
+      badgeClass: 'status-pill status-pill-warn',
+      ready: false,
+      description: '업로드 전에 사용할 매핑 프로필을 선택해 주세요.',
+      missingLabels: [],
+      invalidEntries: [],
+    };
+  }
+  const entries = Array.isArray(profile?.entries) ? profile.entries : [];
   const previewMapping = state.preview?.metadata?.mapping_profile && typeof state.preview.metadata.mapping_profile === 'object'
     ? state.preview.metadata.mapping_profile
     : null;
   const missingLabels = Array.isArray(previewMapping?.missing_required_entry_labels) && previewMapping.missing_required_entry_labels.length
     ? previewMapping.missing_required_entry_labels
     : formatScheduleImportMappingRequirementLabels(previewMapping?.missing_required_entries || []);
+  const invalidEntries = entries.filter((entry) => {
+    const status = String(entry?.status || 'ready').trim().toLowerCase();
+    return status !== 'ready' || !String(entry?.template_id || '').trim() || !String(entry?.template_name || '').trim();
+  });
+  if (profile?.is_active === false) {
+    return {
+      key: 'inactive',
+      label: '비활성 프로필',
+      badgeClass: 'status-pill status-pill-error',
+      ready: false,
+      description: '선택한 프로필이 비활성 상태입니다. 근무 템플릿에서 활성 상태를 확인해 주세요.',
+      missingLabels,
+      invalidEntries,
+    };
+  }
+  if (!entries.length || invalidEntries.length || missingLabels.length) {
+    return {
+      key: 'partial',
+      label: '일부 누락',
+      badgeClass: 'status-pill status-pill-warn',
+      ready: false,
+      description: missingLabels.length
+        ? '현재 업로드 기준 필요한 매핑이 모두 준비되지 않았습니다.'
+        : '선택한 프로필에 누락되거나 비활성 템플릿을 참조하는 규칙이 있습니다.',
+      missingLabels,
+      invalidEntries,
+    };
+  }
+  return {
+    key: 'ready',
+    label: '준비 완료',
+    badgeClass: 'status-pill status-pill-success',
+    ready: true,
+    description: '선택한 매핑 프로필로 업로드를 계속 진행할 수 있습니다.',
+    missingLabels,
+    invalidEntries,
+  };
+}
 
-  badgeEl.className = 'status-pill status-pill-warn';
-  badgeEl.textContent = '미설정';
-  textEl.textContent = '엑셀 숫자값을 ARLS 근무 템플릿 시간 범위와 연결해야 업로드 분석이 가능합니다.';
+function renderScheduleImportMappingProfileSummary() {
+  const badgeEl = $('#scheduleTemplateMappingBadge');
+  const textEl = $('#scheduleTemplateMappingText');
+  const missingEl = $('#scheduleTemplateMappingMissing');
+  const selector = $('#scheduleImportMappingProfileSelect');
+  const nameEl = $('#scheduleTemplateMappingSelectedName');
+  const scopeEl = $('#scheduleTemplateMappingSelectedScope');
+  const statusEl = $('#scheduleTemplateMappingSelectedStatus');
+  const updatedEl = $('#scheduleTemplateMappingSelectedUpdated');
+  const summaryList = $('#scheduleTemplateMappingSummaryList');
+  if (!(badgeEl instanceof HTMLElement) || !(textEl instanceof HTMLElement) || !(missingEl instanceof HTMLElement)) return;
 
-  if (profile && Number(profile.entry_count || 0) > 0) {
-    badgeEl.className = missingLabels.length ? 'status-pill status-pill-warn' : 'status-pill status-pill-success';
-    badgeEl.textContent = missingLabels.length
-      ? `${Number(profile.entry_count || 0)}개 매핑 · 추가 필요`
-      : `${Number(profile.entry_count || 0)}개 매핑`;
-    const entryLines = (Array.isArray(profile.entries) ? profile.entries : [])
-      .slice(0, 3)
-      .map((entry) => {
-        const requirement = formatScheduleImportMappingRequirementLabel(`${entry?.row_type || ''}:${entry?.numeric_hours ?? ''}`);
-        const templateName = String(entry?.template_name || '').trim() || '템플릿 미지정';
-        return `${requirement} -> ${templateName}`;
-      })
-      .filter(Boolean);
-    textEl.textContent = entryLines.length
-      ? `${String(profile.profile_name || '기본 월간 업로드 매핑').trim() || '기본 월간 업로드 매핑'} · ${entryLines.join(' / ')}`
-      : `${String(profile.profile_name || '기본 월간 업로드 매핑').trim() || '기본 월간 업로드 매핑'} · 매핑 항목을 확인하세요.`;
+  const profiles = getScheduleImportMappingProfiles();
+  const selectedProfile = getSelectedScheduleImportMappingProfile();
+  const readiness = getScheduleImportMappingProfileReadiness(selectedProfile);
+
+  if (selector instanceof HTMLSelectElement) {
+    const selectedId = ensureSelectedScheduleImportMappingProfileId();
+    selector.innerHTML = '<option value="">프로필 선택</option>';
+    profiles.forEach((profile) => {
+      const option = document.createElement('option');
+      option.value = String(profile?.profile_id || '').trim();
+      option.textContent = String(profile?.profile_name || '기본 월간 업로드 매핑').trim() || '기본 월간 업로드 매핑';
+      selector.appendChild(option);
+    });
+    selector.value = selectedId;
+    selector.disabled = profiles.length <= 1 && !profiles.length;
   }
 
-  if (missingLabels.length) {
+  badgeEl.className = readiness.badgeClass;
+  badgeEl.textContent = readiness.label;
+  textEl.textContent = readiness.description;
+
+  if (nameEl instanceof HTMLElement) {
+    nameEl.textContent = selectedProfile
+      ? (String(selectedProfile?.profile_name || '기본 월간 업로드 매핑').trim() || '기본 월간 업로드 매핑')
+      : '프로필 미선택';
+  }
+  if (scopeEl instanceof HTMLElement) {
+    scopeEl.textContent = deriveScheduleImportMappingProfileScopeLabel(selectedProfile);
+  }
+  if (statusEl instanceof HTMLElement) {
+    statusEl.textContent = selectedProfile
+      ? (selectedProfile?.is_active === false ? '비활성' : '활성')
+      : '-';
+  }
+  if (updatedEl instanceof HTMLElement) {
+    updatedEl.textContent = selectedProfile ? formatDateLabel(selectedProfile?.updated_at, '-') : '-';
+  }
+
+  if (summaryList instanceof HTMLElement) {
+    summaryList.innerHTML = '';
+    const ruleSummaries = buildScheduleImportMappingRuleSummaries(selectedProfile).slice(0, 6);
+    if (!ruleSummaries.length) {
+      const empty = document.createElement('p');
+      empty.className = 'muted';
+      empty.textContent = '저장된 매핑 규칙이 없습니다. 근무 템플릿에서 프로필을 편집해 주세요.';
+      summaryList.appendChild(empty);
+    } else {
+      ruleSummaries.forEach((item) => {
+        const row = document.createElement('div');
+        row.className = 'schedule-mapping-rule-summary-item';
+        const requirement = document.createElement('strong');
+        requirement.textContent = item.requirement;
+        const template = document.createElement('span');
+        template.textContent = `→ ${item.templateName}`;
+        row.appendChild(requirement);
+        row.appendChild(template);
+        summaryList.appendChild(row);
+      });
+    }
+  }
+
+  if (readiness.missingLabels.length) {
     missingEl.classList.remove('hidden');
-    missingEl.textContent = `현재 업로드 기준 필요한 매핑: ${missingLabels.join(', ')}`;
+    missingEl.textContent = `현재 업로드 기준 필요한 매핑: ${readiness.missingLabels.join(', ')}`;
   } else {
     missingEl.classList.add('hidden');
     missingEl.textContent = '';
+  }
+}
+
+function renderScheduleImportMappingProfileManager() {
+  const tableBody = $('#scheduleTemplateProfileTableBody');
+  const statusEl = $('#scheduleTemplateProfileStatus');
+  const manageBtn = $('#scheduleImportProfileManageBtn');
+  if (!(tableBody instanceof HTMLElement)) return;
+  tableBody.innerHTML = '';
+
+  const profiles = getScheduleImportMappingProfiles();
+  const selectedProfile = getSelectedScheduleImportMappingProfile();
+  const readiness = getScheduleImportMappingProfileReadiness(selectedProfile);
+
+  if (manageBtn instanceof HTMLButtonElement) {
+    manageBtn.textContent = profiles.length ? '프로필 편집' : '프로필 생성';
+    manageBtn.disabled = !canMutateScheduleData();
+  }
+
+  if (!profiles.length) {
+    const tr = document.createElement('tr');
+    tr.className = 'admin-table-empty-row';
+    const td = document.createElement('td');
+    td.colSpan = 8;
+    td.textContent = '등록된 매핑 프로필이 없습니다. 프로필 생성으로 월간 업로드 규칙을 먼저 준비하세요.';
+    tr.appendChild(td);
+    tableBody.appendChild(tr);
+    if (statusEl) statusEl.textContent = '등록된 프로필이 없습니다.';
+    return;
+  }
+
+  profiles.forEach((profile) => {
+    const tr = document.createElement('tr');
+    const profileId = String(profile?.profile_id || '').trim();
+    const ruleCount = Number(profile?.entry_count || 0);
+    const deleteReason = profile?.is_active === false ? '삭제 API 준비 중' : '삭제 전 비활성화 필요';
+
+    const nameTd = document.createElement('td');
+    nameTd.appendChild(createScheduleUploadStackCell(
+      String(profile?.profile_name || '기본 월간 업로드 매핑').trim() || '기본 월간 업로드 매핑',
+      profileId ? `프로필 ID ${profileId}` : '',
+    ));
+    tr.appendChild(nameTd);
+
+    const descriptionTd = document.createElement('td');
+    descriptionTd.textContent = ruleCount > 0
+      ? `엑셀 숫자값과 근무 템플릿을 연결한 ${ruleCount}개 규칙`
+      : '등록된 규칙이 없습니다.';
+    tr.appendChild(descriptionTd);
+
+    const scopeTd = document.createElement('td');
+    scopeTd.textContent = deriveScheduleImportMappingProfileScopeLabel(profile);
+    tr.appendChild(scopeTd);
+
+    const statusTd = document.createElement('td');
+    const statusPill = document.createElement('span');
+    statusPill.className = profile?.is_active === false ? 'status-pill status-pill-error' : 'status-pill status-pill-success';
+    statusPill.textContent = profile?.is_active === false ? '비활성' : '활성';
+    statusTd.appendChild(statusPill);
+    tr.appendChild(statusTd);
+
+    const defaultTd = document.createElement('td');
+    defaultTd.textContent = '기본';
+    tr.appendChild(defaultTd);
+
+    const rulesTd = document.createElement('td');
+    rulesTd.textContent = `${ruleCount}개`;
+    tr.appendChild(rulesTd);
+
+    const updatedTd = document.createElement('td');
+    updatedTd.textContent = formatDateLabel(profile?.updated_at, '-');
+    tr.appendChild(updatedTd);
+
+    const actionTd = document.createElement('td');
+    actionTd.className = 'actions-cell';
+    const actionsWrap = document.createElement('div');
+    actionsWrap.className = 'table-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'btn btn-secondary';
+    editBtn.dataset.action = 'schedule-import-profile-manage';
+    editBtn.textContent = '편집';
+    actionsWrap.appendChild(editBtn);
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn btn-secondary';
+    copyBtn.textContent = '복제';
+    copyBtn.disabled = true;
+    copyBtn.title = '복제는 다음 backend pass에서 지원됩니다.';
+    actionsWrap.appendChild(copyBtn);
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'btn btn-secondary';
+    toggleBtn.textContent = profile?.is_active === false ? '활성화' : '비활성화';
+    toggleBtn.disabled = true;
+    toggleBtn.title = '프로필 활성/비활성 전환은 다음 backend pass에서 지원됩니다.';
+    actionsWrap.appendChild(toggleBtn);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'btn btn-destructive';
+    deleteBtn.textContent = '삭제';
+    deleteBtn.disabled = true;
+    deleteBtn.title = deleteReason;
+    actionsWrap.appendChild(deleteBtn);
+
+    actionTd.appendChild(actionsWrap);
+    const note = document.createElement('p');
+    note.className = 'schedule-template-action-note';
+    note.textContent = deleteReason;
+    actionTd.appendChild(note);
+    tr.appendChild(actionTd);
+    tableBody.appendChild(tr);
+  });
+
+  if (statusEl) {
+    statusEl.textContent = `${profiles.length}개 프로필 · ${readiness.label}`;
   }
 }
 
@@ -38861,8 +39191,11 @@ function renderScheduleTemplateTable() {
   if (!(tableBody instanceof HTMLElement)) return;
   tableBody.innerHTML = '';
   renderScheduleImportMappingProfileSummary();
+  renderScheduleImportMappingProfileManager();
+  renderScheduleTemplateOwnerSections();
 
   const rows = Array.isArray(state.schedule?.templateRows) ? state.schedule.templateRows : [];
+  const usageMap = buildScheduleImportMappingUsageMap();
   if (!rows.length) {
     const tr = document.createElement('tr');
     tr.className = 'admin-table-empty-row';
@@ -38878,20 +39211,42 @@ function renderScheduleTemplateTable() {
   rows.forEach((row) => {
     const tr = document.createElement('tr');
     const isActive = row?.is_active !== false;
-    const rowCells = [
+    const templateId = String(row?.id || '').trim();
+    const usageCount = Number(usageMap.get(templateId) || 0);
+
+    const nameTd = document.createElement('td');
+    nameTd.appendChild(createScheduleUploadStackCell(
       String(row?.template_name || '').trim() || '-',
-      formatScheduleTemplateDutyTypeLabel(row?.duty_type),
-      formatScheduleTemplateTimeRange(row),
-      (row?.paid_hours ?? row?.paidHours ?? '') === '' ? '-' : String(row?.paid_hours ?? row?.paidHours),
       String(row?.site_name || row?.site_code || '공통').trim() || '공통',
-      row?.is_default ? '기본' : '-',
-      isActive ? '활성' : '비활성',
-    ];
-    rowCells.forEach((value) => {
-      const td = document.createElement('td');
-      td.textContent = String(value || '-');
-      tr.appendChild(td);
-    });
+    ));
+    tr.appendChild(nameTd);
+
+    const dutyTd = document.createElement('td');
+    dutyTd.textContent = formatScheduleTemplateDutyTypeLabel(row?.duty_type);
+    tr.appendChild(dutyTd);
+
+    const timeTd = document.createElement('td');
+    timeTd.textContent = formatScheduleTemplateTimeRange(row);
+    tr.appendChild(timeTd);
+
+    const totalTd = document.createElement('td');
+    totalTd.textContent = (row?.paid_hours ?? row?.paidHours ?? '') === '' ? '-' : `${String(row?.paid_hours ?? row?.paidHours)}시간`;
+    tr.appendChild(totalTd);
+
+    const statusTd = document.createElement('td');
+    const templateStatusPill = document.createElement('span');
+    templateStatusPill.className = isActive ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral';
+    templateStatusPill.textContent = isActive ? '활성' : '비활성';
+    statusTd.appendChild(templateStatusPill);
+    tr.appendChild(statusTd);
+
+    const mappingCountTd = document.createElement('td');
+    mappingCountTd.textContent = `${usageCount}개`;
+    tr.appendChild(mappingCountTd);
+
+    const updatedTd = document.createElement('td');
+    updatedTd.textContent = formatDateLabel(row?.updated_at, '-');
+    tr.appendChild(updatedTd);
 
     const actionTd = document.createElement('td');
     actionTd.className = 'actions-cell';
@@ -38902,20 +39257,49 @@ function renderScheduleTemplateTable() {
     editBtn.type = 'button';
     editBtn.className = 'btn btn-secondary';
     editBtn.dataset.action = 'schedule-template-edit';
-    editBtn.dataset.templateId = String(row?.id || '').trim();
+    editBtn.dataset.templateId = templateId;
     editBtn.textContent = '수정';
     actionsWrap.appendChild(editBtn);
+
+    const duplicateBtn = document.createElement('button');
+    duplicateBtn.type = 'button';
+    duplicateBtn.className = 'btn btn-secondary';
+    duplicateBtn.dataset.action = 'schedule-template-duplicate';
+    duplicateBtn.dataset.templateId = templateId;
+    duplicateBtn.textContent = '복제';
+    actionsWrap.appendChild(duplicateBtn);
 
     const toggleBtn = document.createElement('button');
     toggleBtn.type = 'button';
     toggleBtn.className = isActive ? 'btn btn-destructive' : 'btn btn-secondary';
     toggleBtn.dataset.action = 'schedule-template-toggle-active';
-    toggleBtn.dataset.templateId = String(row?.id || '').trim();
+    toggleBtn.dataset.templateId = templateId;
     toggleBtn.dataset.nextActive = isActive ? '0' : '1';
     toggleBtn.textContent = isActive ? '비활성화' : '활성화';
     actionsWrap.appendChild(toggleBtn);
 
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'btn btn-destructive';
+    deleteBtn.dataset.action = 'schedule-template-delete';
+    deleteBtn.dataset.templateId = templateId;
+    deleteBtn.textContent = '삭제';
+    if (usageCount > 0) {
+      deleteBtn.disabled = true;
+      deleteBtn.title = `사용 중인 매핑 프로필 ${usageCount}개`;
+    } else if (isActive) {
+      deleteBtn.disabled = true;
+      deleteBtn.title = '삭제 전 비활성화가 필요합니다.';
+    }
+    actionsWrap.appendChild(deleteBtn);
+
     actionTd.appendChild(actionsWrap);
+    if (usageCount > 0 || isActive) {
+      const note = document.createElement('p');
+      note.className = 'schedule-template-action-note';
+      note.textContent = usageCount > 0 ? `사용 중인 매핑 프로필 ${usageCount}개` : '삭제 전 비활성화가 필요합니다.';
+      actionTd.appendChild(note);
+    }
     tr.appendChild(actionTd);
     tableBody.appendChild(tr);
   });
@@ -38961,12 +39345,15 @@ async function loadScheduleImportMappingProfile({ force = false } = {}) {
   const isFresh = cached && fetchedAt > 0 && (now - fetchedAt) < SCHEDULE_TEMPLATE_ROWS_CACHE_TTL_MS;
   if (!force && isFresh) {
     renderScheduleImportMappingProfileSummary();
+    renderScheduleImportMappingProfileManager();
     return cached;
   }
   const profile = await apiRequest(`/schedules/import-mapping-profile?tenant_code=${encodeURIComponent(getScheduleTenantValue())}`);
   state.schedule.importMappingProfile = profile && typeof profile === 'object' ? profile : null;
   state.schedule.importMappingProfileFetchedAt = Date.now();
+  ensureSelectedScheduleImportMappingProfileId();
   renderScheduleImportMappingProfileSummary();
+  renderScheduleImportMappingProfileManager();
   return state.schedule.importMappingProfile;
 }
 
@@ -41120,7 +41507,7 @@ async function onScheduleCreateByTemplate({ bulk = false } = {}) {
   });
 }
 
-async function openScheduleTemplateEditor(templateId = '') {
+async function openScheduleTemplateEditor(templateId = '', { duplicate = false } = {}) {
   if (!canMutateScheduleData()) {
     showToast('근무 템플릿 권한이 없습니다.', 'error');
     return;
@@ -41131,6 +41518,7 @@ async function openScheduleTemplateEditor(templateId = '') {
   ]);
   const rows = Array.isArray(state.schedule.templateRows) ? state.schedule.templateRows : [];
   const current = rows.find((item) => String(item?.id || '').trim() === String(templateId || '').trim()) || null;
+  const baseTemplate = current && duplicate ? { ...current } : current;
 
   const content = document.createElement('div');
   content.className = 'stack';
@@ -41145,7 +41533,9 @@ async function openScheduleTemplateEditor(templateId = '') {
   const nameInput = document.createElement('input');
   nameInput.type = 'text';
   nameInput.id = 'scheduleTemplateNameInput';
-  nameInput.value = String(current?.template_name || '').trim();
+  nameInput.value = duplicate
+    ? `${String(baseTemplate?.template_name || '').trim() || '새 템플릿'} 사본`
+    : String(baseTemplate?.template_name || '').trim();
   content.appendChild(createField('템플릿명', nameInput));
 
   const dutySelect = document.createElement('select');
@@ -41160,19 +41550,19 @@ async function openScheduleTemplateEditor(templateId = '') {
     option.textContent = item.label;
     dutySelect.appendChild(option);
   });
-  dutySelect.value = String(current?.duty_type || 'day').trim().toLowerCase() || 'day';
+  dutySelect.value = String(baseTemplate?.duty_type || 'day').trim().toLowerCase() || 'day';
   content.appendChild(createField('근무구분', dutySelect));
 
   const startInput = document.createElement('input');
   startInput.type = 'time';
   startInput.id = 'scheduleTemplateStartInput';
-  startInput.value = String(current?.start_time || '').trim().slice(0, 5);
+  startInput.value = String(baseTemplate?.start_time || '').trim().slice(0, 5);
   content.appendChild(createField('시작시간', startInput));
 
   const endInput = document.createElement('input');
   endInput.type = 'time';
   endInput.id = 'scheduleTemplateEndInput';
-  endInput.value = String(current?.end_time || '').trim().slice(0, 5);
+  endInput.value = String(baseTemplate?.end_time || '').trim().slice(0, 5);
   content.appendChild(createField('종료시간', endInput));
 
   const paidInput = document.createElement('input');
@@ -41181,7 +41571,7 @@ async function openScheduleTemplateEditor(templateId = '') {
   paidInput.min = '0';
   paidInput.max = '24';
   paidInput.id = 'scheduleTemplatePaidInput';
-  paidInput.value = current?.paid_hours == null ? '' : String(current.paid_hours);
+  paidInput.value = baseTemplate?.paid_hours == null ? '' : String(baseTemplate.paid_hours);
   content.appendChild(createField('유급시간', paidInput));
 
   const breakInput = document.createElement('input');
@@ -41190,7 +41580,7 @@ async function openScheduleTemplateEditor(templateId = '') {
   breakInput.min = '0';
   breakInput.max = '1440';
   breakInput.id = 'scheduleTemplateBreakInput';
-  breakInput.value = current?.break_minutes == null ? '' : String(current.break_minutes);
+  breakInput.value = baseTemplate?.break_minutes == null ? '' : String(baseTemplate.break_minutes);
   content.appendChild(createField('휴게시간(분)', breakInput));
 
   const siteSelect = document.createElement('select');
@@ -41213,7 +41603,7 @@ async function openScheduleTemplateEditor(templateId = '') {
       option.textContent = `${row.code} · ${row.name || '-'}`;
       siteSelect.appendChild(option);
     });
-  siteSelect.value = String(current?.site_id || '').trim();
+  siteSelect.value = String(baseTemplate?.site_id || '').trim();
   content.appendChild(createField('적용 지점', siteSelect));
 
   const defaultWrap = document.createElement('label');
@@ -41221,7 +41611,7 @@ async function openScheduleTemplateEditor(templateId = '') {
   const defaultInput = document.createElement('input');
   defaultInput.type = 'checkbox';
   defaultInput.id = 'scheduleTemplateDefaultInput';
-  defaultInput.checked = Boolean(current?.is_default);
+  defaultInput.checked = duplicate ? false : Boolean(baseTemplate?.is_default);
   defaultWrap.appendChild(defaultInput);
   defaultWrap.appendChild(document.createTextNode('기본 템플릿'));
   content.appendChild(defaultWrap);
@@ -41231,22 +41621,22 @@ async function openScheduleTemplateEditor(templateId = '') {
   const activeInput = document.createElement('input');
   activeInput.type = 'checkbox';
   activeInput.id = 'scheduleTemplateActiveInput';
-  activeInput.checked = current ? current?.is_active !== false : true;
+  activeInput.checked = baseTemplate ? baseTemplate?.is_active !== false : true;
   activeWrap.appendChild(activeInput);
   activeWrap.appendChild(document.createTextNode('활성'));
   content.appendChild(activeWrap);
 
   openSheet({
-    title: current ? '근무 템플릿 수정' : '근무 템플릿 생성',
+    title: duplicate ? '근무 템플릿 복제' : (current ? '근무 템플릿 수정' : '근무 템플릿 생성'),
     contentNode: content,
     actions: [
       { label: '취소', variant: 'btn-secondary', action: 'sheet-close' },
-      { label: current ? '저장' : '생성', variant: 'btn-primary', action: 'schedule-template-save' },
+      { label: current && !duplicate ? '저장' : '생성', variant: 'btn-primary', action: 'schedule-template-save' },
     ],
   });
   state.sheetContext = {
     type: 'schedule-template-editor',
-    templateId: current ? String(current.id || '').trim() : '',
+    templateId: current && !duplicate ? String(current.id || '').trim() : '',
   };
 }
 
@@ -49783,18 +50173,33 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'schedule-template-owner-tab') {
+      setScheduleTemplateOwnerTab(actionEl.dataset.tab);
+      return;
+    }
+
+    if (action === 'schedule-open-template-profile-manager') {
+      openScheduleTemplateOwnerWorkspace(SCHEDULE_TEMPLATE_OWNER_TAB_PROFILES);
+      return;
+    }
+
     if (action === 'schedule-template-create') {
       runActionSafely(openScheduleTemplateEditor(''), '템플릿 생성 화면을 열지 못했습니다.');
       return;
     }
 
-    if (action === 'schedule-import-mapping-edit') {
+    if (action === 'schedule-import-profile-manage') {
       runActionSafely(openScheduleImportMappingEditor(), '매핑 프로필 화면을 열지 못했습니다.');
       return;
     }
 
     if (action === 'schedule-template-edit') {
       runActionSafely(openScheduleTemplateEditor(actionEl.dataset.templateId), '템플릿 수정 화면을 열지 못했습니다.');
+      return;
+    }
+
+    if (action === 'schedule-template-duplicate') {
+      runActionSafely(openScheduleTemplateEditor(actionEl.dataset.templateId, { duplicate: true }), '템플릿 복제 화면을 열지 못했습니다.');
       return;
     }
 
@@ -49816,6 +50221,23 @@ function bindUiEvents() {
         ),
         '상태 변경 중...',
       );
+      return;
+    }
+
+    if (action === 'schedule-template-delete') {
+      const templateId = String(actionEl.dataset.templateId || '').trim();
+      const rows = Array.isArray(state.schedule?.templateRows) ? state.schedule.templateRows : [];
+      const current = rows.find((row) => String(row?.id || '').trim() === templateId) || null;
+      const usageCount = Number(buildScheduleImportMappingUsageMap().get(templateId) || 0);
+      if (usageCount > 0) {
+        showToast(`사용 중인 매핑 프로필 ${usageCount}개가 있어 삭제할 수 없습니다.`, 'error', 2400);
+        return;
+      }
+      if (current?.is_active !== false) {
+        showToast('삭제 전에 템플릿을 먼저 비활성화해 주세요.', 'error', 2200);
+        return;
+      }
+      showToast('현재 배포에서는 템플릿 삭제 API가 준비되지 않아 비활성화 상태로만 관리할 수 있습니다.', 'info', 2800);
       return;
     }
 
@@ -50537,6 +50959,19 @@ function bindUiEvents() {
     if (target instanceof HTMLInputElement && target.id === 'scheduleImportFile') {
       if (getScheduleUploadUiState().analysisInFlight) return;
       invalidateScheduleImportAnalysis(['file']);
+      return;
+    }
+
+    if (target.id === 'scheduleImportMappingProfileSelect') {
+      if (state.schedule) {
+        state.schedule.importMappingSelectedProfileId = target instanceof HTMLSelectElement
+          ? String(target.value || '').trim()
+          : '';
+      }
+      if (!getScheduleUploadUiState().analysisInFlight) {
+        invalidateScheduleImportAnalysis(['mapping_profile']);
+      }
+      renderScheduleUploadWorkspace();
       return;
     }
 

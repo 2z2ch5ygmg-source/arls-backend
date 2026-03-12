@@ -2214,19 +2214,47 @@
                 <div>
                   <span class="schedule-upload-step-kicker">STEP 1</span>
                   <h4>매핑 프로필 설정</h4>
-                  <p class="muted">월간 workbook 숫자값을 ARLS 근무 템플릿 시간 범위와 연결합니다. 업로드 전에 여기서 준비 상태를 먼저 확인합니다.</p>
+                  <p class="muted">이 단계에서는 업로드에 사용할 기존 매핑 프로필을 선택하고 준비 상태만 확인합니다. 프로필 생성/편집은 근무 템플릿에서 관리합니다.</p>
                 </div>
                 <div class="quick-actions">
-                  <button class="btn btn-secondary" type="button" data-action="schedule-import-mapping-edit">매핑 프로필 설정</button>
+                  <button class="btn btn-secondary" type="button" data-action="schedule-open-template-profile-manager">근무 템플릿에서 관리</button>
                 </div>
               </div>
               <div class="schedule-template-mapping-summary">
                 <div class="schedule-template-mapping-summary-head">
-                  <strong>월간 업로드 매핑 프로필</strong>
+                  <strong>업로드에 사용할 매핑 프로필</strong>
                   <span id="scheduleTemplateMappingBadge" class="status-pill status-pill-warn">미설정</span>
+                </div>
+                <div class="schedule-mapping-profile-selector">
+                  <label class="input-field">
+                    <span>매핑 프로필 선택</span>
+                    <select id="scheduleImportMappingProfileSelect">
+                      <option value="">프로필 선택</option>
+                    </select>
+                  </label>
+                  <button class="btn btn-secondary" type="button" data-action="schedule-open-template-profile-manager">매핑 프로필 관리</button>
+                </div>
+                <div class="schedule-mapping-profile-meta-grid">
+                  <article class="schedule-mapping-profile-meta-card">
+                    <span>프로필명</span>
+                    <strong id="scheduleTemplateMappingSelectedName">프로필 미선택</strong>
+                  </article>
+                  <article class="schedule-mapping-profile-meta-card">
+                    <span>적용 범위</span>
+                    <strong id="scheduleTemplateMappingSelectedScope">-</strong>
+                  </article>
+                  <article class="schedule-mapping-profile-meta-card">
+                    <span>상태</span>
+                    <strong id="scheduleTemplateMappingSelectedStatus">-</strong>
+                  </article>
+                  <article class="schedule-mapping-profile-meta-card">
+                    <span>마지막 수정일</span>
+                    <strong id="scheduleTemplateMappingSelectedUpdated">-</strong>
+                  </article>
                 </div>
                 <p id="scheduleTemplateMappingText" class="muted">엑셀 숫자값을 ARLS 근무 템플릿 시간 범위와 연결해야 업로드 분석이 가능합니다.</p>
                 <p id="scheduleTemplateMappingMissing" class="muted hidden"></p>
+                <div id="scheduleTemplateMappingSummaryList" class="schedule-mapping-rule-summary"></div>
               </div>
               <div class="schedule-wizard-actions">
                 <button class="btn btn-primary" type="button" id="scheduleMappingNextBtn" data-action="schedule-base-wizard-next" data-next-step="context">다음</button>
@@ -2769,39 +2797,74 @@
             <div id="scheduleTemplatePanel" class="module-card stack hidden schedule-tab-panel">
               <div class="approval-head">
                 <h3>근무 템플릿</h3>
-                <div class="quick-actions">
-                  <button class="btn btn-secondary" type="button" data-action="schedule-template-refresh">새로고침</button>
-                  <button class="btn btn-primary" type="button" data-action="schedule-template-create">템플릿 생성</button>
-                </div>
               </div>
-              <p id="scheduleTemplateStatus" class="muted">근무 템플릿 목록을 불러오는 중입니다.</p>
-              <div class="schedule-template-mapping-summary schedule-template-mapping-summary-secondary">
-                <div class="schedule-template-mapping-summary-head">
-                  <strong>월간 업로드 매핑 프로필</strong>
-                  <span class="status-pill status-pill-neutral">Excel workflow로 이동</span>
-                </div>
-                <p class="muted">매핑 프로필의 기본 소유 위치는 <code>Excel로 근무표 간편 제작</code> STEP 1입니다.</p>
-                <div class="schedule-support-upload-actions">
-                  <button class="btn btn-secondary" type="button" data-action="schedule-open-upload-section" data-section="mapping">Excel workflow에서 열기</button>
-                </div>
+              <div id="scheduleTemplateOwnerTabs" class="workspace-tabs schedule-template-owner-tabs">
+                <button class="workspace-tab active" type="button" data-action="schedule-template-owner-tab" data-tab="templates">근무 템플릿</button>
+                <button class="workspace-tab" type="button" data-action="schedule-template-owner-tab" data-tab="profiles">매핑 프로필</button>
               </div>
-              <div class="table-wrap">
-                <table class="admin-table">
-                  <thead>
-                    <tr>
-                      <th>템플릿명</th>
-                      <th>근무구분</th>
-                      <th>시간</th>
-                      <th>유급시간</th>
-                      <th>지점</th>
-                      <th>기본</th>
-                      <th>활성</th>
-                      <th>작업</th>
-                    </tr>
-                  </thead>
-                  <tbody id="scheduleTemplateTableBody"></tbody>
-                </table>
-              </div>
+
+              <section id="scheduleTemplateTemplatesSection" class="schedule-template-owner-panel">
+                <div class="approval-head">
+                  <div>
+                    <h4>근무 템플릿</h4>
+                    <p class="muted">근무 시간대와 총시간을 관리합니다. 업로드에서 사용하는 매핑 프로필과 연결 여부도 함께 확인합니다.</p>
+                  </div>
+                  <div class="quick-actions">
+                    <button class="btn btn-secondary" type="button" data-action="schedule-template-refresh">새로고침</button>
+                    <button class="btn btn-primary" type="button" data-action="schedule-template-create">템플릿 생성</button>
+                  </div>
+                </div>
+                <p id="scheduleTemplateStatus" class="muted">근무 템플릿 목록을 불러오는 중입니다.</p>
+                <div class="table-wrap">
+                  <table class="admin-table">
+                    <thead>
+                      <tr>
+                        <th>템플릿명</th>
+                        <th>구분</th>
+                        <th>시간대</th>
+                        <th>총시간</th>
+                        <th>상태</th>
+                        <th>연결된 매핑 프로필 수</th>
+                        <th>마지막 수정일</th>
+                        <th>작업</th>
+                      </tr>
+                    </thead>
+                    <tbody id="scheduleTemplateTableBody"></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section id="scheduleTemplateProfilesSection" class="schedule-template-owner-panel hidden">
+                <div class="approval-head">
+                  <div>
+                    <h4>매핑 프로필</h4>
+                    <p class="muted">월간 업로드에서 사용할 매핑 규칙을 관리합니다. Step 1에서는 여기서 준비한 프로필을 선택만 합니다.</p>
+                  </div>
+                  <div class="quick-actions">
+                    <button class="btn btn-secondary" type="button" data-action="schedule-template-refresh">새로고침</button>
+                    <button class="btn btn-primary" type="button" id="scheduleImportProfileManageBtn" data-action="schedule-import-profile-manage">프로필 편집</button>
+                  </div>
+                </div>
+                <p id="scheduleTemplateProfileStatus" class="muted">매핑 프로필을 불러오는 중입니다.</p>
+                <div class="table-wrap">
+                  <table class="admin-table">
+                    <thead>
+                      <tr>
+                        <th>프로필명</th>
+                        <th>설명</th>
+                        <th>적용 범위</th>
+                        <th>상태</th>
+                        <th>기본 프로필 여부</th>
+                        <th>규칙 수</th>
+                        <th>마지막 수정일</th>
+                        <th>작업</th>
+                      </tr>
+                    </thead>
+                    <tbody id="scheduleTemplateProfileTableBody"></tbody>
+                  </table>
+                </div>
+                <p class="muted schedule-template-owner-note">업로드용 프로필 선택은 <code>Excel로 근무표 간편 제작</code> STEP 1에서 진행합니다.</p>
+              </section>
             </div>
           </section>
 

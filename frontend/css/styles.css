@@ -5058,6 +5058,63 @@ button:disabled,
   margin: 0;
 }
 
+.schedule-mapping-profile-selector {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.schedule-mapping-profile-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.schedule-mapping-profile-meta-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-12);
+  background: var(--bg-surface-muted);
+}
+
+.schedule-mapping-profile-meta-card span {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+
+.schedule-mapping-profile-meta-card strong {
+  color: var(--text-primary);
+}
+
+.schedule-mapping-rule-summary {
+  display: grid;
+  gap: 8px;
+}
+
+.schedule-mapping-rule-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.schedule-mapping-rule-summary-item strong {
+  color: var(--text-primary);
+  font-size: 0.92rem;
+}
+
+.schedule-mapping-rule-summary-item span {
+  min-width: 0;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .schedule-mapping-entry-list {
   display: grid;
   gap: 12px;
@@ -5185,6 +5242,40 @@ button:disabled,
 
 .schedule-template-mapping-summary-secondary {
   background: var(--bg-surface-muted);
+}
+
+.schedule-template-owner-tabs {
+  margin-top: -8px;
+}
+
+.schedule-template-owner-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.schedule-template-owner-note {
+  margin-top: -4px;
+}
+
+.schedule-table-cell-stack {
+  display: grid;
+  gap: 2px;
+}
+
+.schedule-table-cell-stack strong {
+  color: var(--text-primary);
+}
+
+.schedule-table-cell-stack span {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
+.schedule-template-action-note {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
 }
 
 .schedule-preview-head {
