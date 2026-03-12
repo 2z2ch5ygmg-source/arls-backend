@@ -39098,7 +39098,8 @@ function renderScheduleImportMappingProfileManager() {
   const readiness = getScheduleImportMappingProfileReadiness(selectedProfile);
 
   if (manageBtn instanceof HTMLButtonElement) {
-    manageBtn.textContent = profiles.length ? '프로필 편집' : '프로필 생성';
+    manageBtn.textContent = '매핑 프로필 생성';
+    manageBtn.dataset.profileMode = 'create';
     manageBtn.disabled = !canMutateScheduleData();
   }
 
@@ -39165,6 +39166,7 @@ function renderScheduleImportMappingProfileManager() {
     editBtn.type = 'button';
     editBtn.className = 'btn btn-secondary';
     editBtn.dataset.action = 'schedule-import-profile-manage';
+    editBtn.dataset.profileMode = 'edit';
     editBtn.textContent = '편집';
     actionsWrap.appendChild(editBtn);
 
@@ -39479,7 +39481,7 @@ function createScheduleImportMappingEntryEditorRow(entry = {}, templateOptions =
   return row;
 }
 
-async function openScheduleImportMappingEditor() {
+async function openScheduleImportMappingEditor(options = {}) {
   if (!canMutateScheduleData()) {
     showToast('매핑 프로필 권한이 없습니다.', 'error');
     return;
@@ -39494,9 +39496,12 @@ async function openScheduleImportMappingEditor() {
     return;
   }
 
-  const profile = state.schedule?.importMappingProfile && typeof state.schedule.importMappingProfile === 'object'
-    ? state.schedule.importMappingProfile
-    : null;
+  const mode = String(options?.mode || 'edit').trim().toLowerCase();
+  const profile = mode === 'create'
+    ? null
+    : state.schedule?.importMappingProfile && typeof state.schedule.importMappingProfile === 'object'
+      ? state.schedule.importMappingProfile
+      : null;
   const previewMapping = state.preview?.metadata?.mapping_profile && typeof state.preview.metadata.mapping_profile === 'object'
     ? state.preview.metadata.mapping_profile
     : null;
@@ -39575,7 +39580,7 @@ async function openScheduleImportMappingEditor() {
   content.appendChild(addBtn);
 
   openSheet({
-    title: '월간 업로드 매핑 프로필',
+    title: mode === 'create' ? '월간 업로드 매핑 프로필 생성' : '월간 업로드 매핑 프로필',
     contentNode: content,
     actions: [
       { label: '취소', variant: 'btn-secondary', action: 'sheet-close' },
@@ -50214,7 +50219,10 @@ function bindUiEvents() {
     }
 
     if (action === 'schedule-import-profile-manage') {
-      runActionSafely(openScheduleImportMappingEditor(), '매핑 프로필 화면을 열지 못했습니다.');
+      runActionSafely(
+        openScheduleImportMappingEditor({ mode: actionEl.dataset.profileMode || 'edit' }),
+        '매핑 프로필 화면을 열지 못했습니다.',
+      );
       return;
     }
 
