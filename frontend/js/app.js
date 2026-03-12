@@ -10298,8 +10298,8 @@ function renderScheduleSupportHqReviewTable() {
   const inspectResult = workspace.inspectResult && typeof workspace.inspectResult === 'object'
     ? workspace.inspectResult
     : null;
-  const reviewRows = Array.isArray(inspectResult?.review_rows) ? inspectResult.review_rows : [];
-  if (!reviewRows.length) {
+  const aggregatedRows = buildScheduleSupportHqAggregatedPreviewRows(inspectResult);
+  if (!aggregatedRows.length) {
     tableWrap.classList.add('hidden');
     placeholder.classList.remove('hidden');
     const strong = placeholder.querySelector('strong');
@@ -10328,7 +10328,7 @@ function renderScheduleSupportHqReviewTable() {
   }
   tableWrap.classList.remove('hidden');
   placeholder.classList.add('hidden');
-  reviewRows.forEach((row) => {
+  aggregatedRows.forEach((row) => {
     const tr = document.createElement('tr');
     const sheetCell = document.createElement('td');
     sheetCell.textContent = String(row?.sheet_name || '-').trim() || '-';
@@ -10353,28 +10353,17 @@ function renderScheduleSupportHqReviewTable() {
     }
     tr.appendChild(shiftCell);
 
-    const slotCell = document.createElement('td');
-    slotCell.textContent = row?.row_kind === 'scope_summary'
-      ? 'scope'
-      : `근무자 ${Math.max(Number(row?.slot_index || 0), 1)}`;
-    tr.appendChild(slotCell);
+    const requestCountCell = document.createElement('td');
+    requestCountCell.textContent = `${Number(row?.request_count || 0)}`;
+    tr.appendChild(requestCountCell);
+
+    const enteredCountCell = document.createElement('td');
+    enteredCountCell.textContent = `${Number(row?.entered_count || 0)}`;
+    tr.appendChild(enteredCountCell);
 
     const workerCell = document.createElement('td');
-    workerCell.textContent = String(
-      row?.parsed_display_value
-      || row?.raw_cell_text
-      || (row?.row_kind === 'scope_summary' ? 'scope summary' : '-')
-      || '-'
-    ).trim() || '-';
+    workerCell.textContent = String(row?.worker_names || '').trim() || '-';
     tr.appendChild(workerCell);
-
-    const countCell = document.createElement('td');
-    if (row?.row_kind === 'scope_summary') {
-      countCell.textContent = `${Number(row?.valid_filled_count || 0)} / ${Number(row?.request_count || 0)}`;
-    } else {
-      countCell.textContent = `${Number(row?.request_count || 0)}명 요청`;
-    }
-    tr.appendChild(countCell);
 
     const targetCell = document.createElement('td');
     const targetStatus = String(row?.target_status || '').trim();
@@ -10388,18 +10377,92 @@ function renderScheduleSupportHqReviewTable() {
     }
     tr.appendChild(targetCell);
 
-    const statusCell = document.createElement('td');
-    const statusPill = document.createElement('span');
-    statusPill.className = getSupportStatusHqReviewRowStatusClass(row?.status || '');
-    statusPill.textContent = getSupportStatusHqReviewRowStatusLabel(row?.status || '');
-    statusCell.appendChild(statusPill);
-    tr.appendChild(statusCell);
-
     const reasonCell = document.createElement('td');
     reasonCell.textContent = String(row?.reason || '-').trim() || '-';
     tr.appendChild(reasonCell);
     tableBody.appendChild(tr);
   });
+}
+
+function buildScheduleSupportHqAggregatedPreviewRows(inspectResult) {
+  const reviewRows = Array.isArray(inspectResult?.review_rows) ? inspectResult.review_rows : [];
+  const scopeSummaries = Array.isArray(inspectResult?.scope_summaries) ? inspectResult.scope_summaries : [];
+  const scopeSummaryMap = new Map();
+  scopeSummaries.forEach((summary) => {
+    const key = buildScheduleSupportHqScopeAggregateKey(summary);
+    if (key) scopeSummaryMap.set(key, summary);
+  });
+  const grouped = new Map();
+  reviewRows.forEach((row) => {
+    const key = buildScheduleSupportHqScopeAggregateKey(row);
+    if (!key) return;
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        scope_key: key,
+        sheet_name: String(row?.sheet_name || '').trim() || '-',
+        site_name: String(row?.site_name || '').trim() || null,
+        site_code: String(row?.site_code || '').trim() || null,
+        work_date: row?.work_date || null,
+        shift_kind: String(row?.shift_kind || '').trim() || null,
+        request_count: Number(row?.request_count || 0),
+        entered_count: Number(row?.valid_filled_count || 0),
+        worker_names_list: [],
+        target_status: String(row?.target_status || '').trim() || null,
+        reason: String(row?.reason || '').trim() || '',
+        review_status: String(row?.status || '').trim() || '',
+      });
+    }
+    const aggregate = grouped.get(key);
+    if (!aggregate) return;
+    if (String(row?.row_kind || '').trim() === 'scope_summary') {
+      aggregate.request_count = Number(row?.request_count || 0);
+      aggregate.entered_count = Number(row?.valid_filled_count || 0);
+      aggregate.target_status = String(row?.target_status || '').trim() || aggregate.target_status || null;
+      aggregate.reason = String(row?.reason || '').trim() || aggregate.reason || '';
+      aggregate.review_status = String(row?.status || '').trim() || aggregate.review_status || '';
+      return;
+    }
+    const normalizedStatus = String(row?.status || '').trim().toLowerCase();
+    if (normalizedStatus === 'blocking') return;
+    const workerName = String(row?.parsed_display_value || row?.raw_cell_text || '').trim();
+    if (workerName) aggregate.worker_names_list.push(workerName);
+  });
+  return Array.from(grouped.values())
+    .map((aggregate) => {
+      const summary = scopeSummaryMap.get(aggregate.scope_key);
+      const shiftKind = String(aggregate.shift_kind || '').trim().toLowerCase();
+      const nightReason = String(summary?.purpose_text || '').trim();
+      const dayReason = String(aggregate.reason || '').trim();
+      return {
+        ...aggregate,
+        request_count: Number(summary?.request_count ?? aggregate.request_count ?? 0),
+        entered_count: Number(summary?.valid_filled_count ?? aggregate.entered_count ?? 0),
+        target_status: String(summary?.target_status || aggregate.target_status || '').trim() || null,
+        worker_names: aggregate.worker_names_list.join(', '),
+        reason: shiftKind === 'night' ? nightReason : dayReason,
+      };
+    })
+    .sort((left, right) => {
+      const leftDate = String(left?.work_date || '');
+      const rightDate = String(right?.work_date || '');
+      if (leftDate !== rightDate) return leftDate.localeCompare(rightDate);
+      const leftShift = String(left?.shift_kind || '').trim().toLowerCase() === 'night' ? 1 : 0;
+      const rightShift = String(right?.shift_kind || '').trim().toLowerCase() === 'night' ? 1 : 0;
+      if (leftShift !== rightShift) return leftShift - rightShift;
+      const leftSite = `${String(left?.sheet_name || '')}|${String(left?.site_code || '')}|${String(left?.site_name || '')}`;
+      const rightSite = `${String(right?.sheet_name || '')}|${String(right?.site_code || '')}|${String(right?.site_name || '')}`;
+      return leftSite.localeCompare(rightSite);
+    });
+}
+
+function buildScheduleSupportHqScopeAggregateKey(row) {
+  const sheetName = String(row?.sheet_name || '').trim();
+  const siteCode = String(row?.site_code || '').trim().toUpperCase();
+  const siteName = String(row?.site_name || '').trim();
+  const workDate = String(row?.work_date || '').trim();
+  const shiftKind = String(row?.shift_kind || '').trim().toLowerCase();
+  if (!sheetName || !workDate || !shiftKind) return '';
+  return [sheetName, siteCode || siteName, workDate, shiftKind].join('|');
 }
 
 function renderScheduleSupportHqApplyDetails(scopeResults = []) {
