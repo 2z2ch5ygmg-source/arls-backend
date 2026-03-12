@@ -6424,6 +6424,7 @@ function getSupportStatusHqLatestStatusClass(value = '') {
 function getSupportStatusHqReviewRowStatusLabel(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'blocking') return '차단';
+  if (normalized === 'over_capacity') return '인원 초과';
   if (normalized === 'parsed') return '유효 입력';
   if (normalized === 'auto_approved') return '자동승인';
   if (normalized === 'approval_pending') return '승인대기';
@@ -6434,7 +6435,7 @@ function getSupportStatusHqReviewRowStatusLabel(value = '') {
 
 function getSupportStatusHqReviewRowStatusClass(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'blocking') return 'status-pill status-pill-error';
+  if (normalized === 'blocking' || normalized === 'over_capacity') return 'status-pill status-pill-error';
   if (normalized === 'parsed' || normalized === 'auto_approved' || normalized === 'applied') return 'status-pill status-pill-success';
   if (normalized === 'approval_pending') return 'status-pill status-pill-warn';
   return 'status-pill status-pill-neutral';

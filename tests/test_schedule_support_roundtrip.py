@@ -267,6 +267,70 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
             },
         )
 
+    def test_hq_roster_inspect_marks_overfilled_scope_as_blocking(self):
+        export_ctx = self._build_export_ctx()
+        workbook = _build_support_only_workbook(
+            export_ctx=export_ctx,
+            target_tenant={"tenant_code": "srs_korea"},
+            site_row={"site_code": "R692", "site_name": "Apple_가로수길"},
+            month_key="2026-03",
+            source_revision="src-rev-overfill",
+            active_assignments=[],
+            include_existing_assignments=False,
+        )
+
+        sheet = workbook["Apple_가로수길"]
+        date_columns, _ = _extract_arls_date_columns(sheet)
+        rows_meta = _locate_support_section_rows(sheet)
+        day_col = next(col for col, value in date_columns.items() if value.isoformat() == "2026-03-01")
+
+        sheet.cell(row=rows_meta["day_need_row"], column=day_col).value = "섭외 1인 요청"
+        sheet.cell(row=rows_meta["weekly_rows"][0], column=day_col).value = "BK 홍길동"
+        sheet.cell(row=rows_meta["weekly_rows"][1], column=day_col).value = "BK 몬치치"
+
+        with patch("app.routers.v1.schedules._list_support_roundtrip_workspace_sites", return_value=[{
+            "site_id": "site-1",
+            "site_code": "R692",
+            "site_name": "Apple_가로수길",
+        }]), patch("app.routers.v1.schedules._build_support_roster_hq_source_map", return_value={
+            "R692": {"source_revision": "src-rev-overfill"}
+        }), patch("app.routers.v1.schedules._load_sentrix_support_ticket_scope_map", return_value={
+            ("R692", "2026-03-01", "day"): {"id": uuid.uuid4(), "request_count": 1}
+        }), patch("app.routers.v1.schedules._load_site_employees", return_value=[]), patch(
+            "app.routers.v1.schedules._persist_sentrix_hq_roster_preview_batch",
+            return_value=uuid.uuid4(),
+        ):
+            preview = _build_support_roster_hq_upload_inspect_result(
+                None,
+                workbook=workbook,
+                target_tenant={"id": "tenant-1", "tenant_code": "srs_korea"},
+                selected_month="2026-03",
+                filename="병합T1.xlsx",
+                user={"id": "user-1"},
+            )
+
+        self.assertFalse(preview.can_apply)
+        self.assertEqual(preview.summary["blocking"], 1)
+        issue = next(item for item in preview.issues if item.code == "REQUEST_COUNT_MISMATCH_OVER")
+        self.assertEqual(issue.severity, "blocking")
+
+        scope_row = next(
+            item for item in preview.review_rows
+            if item.row_kind == "scope_summary" and item.site_code == "R692" and item.work_date.isoformat() == "2026-03-01" and item.shift_kind == "day"
+        )
+        self.assertEqual(scope_row.status, "over_capacity")
+        self.assertEqual(scope_row.reason, "유효 1명 / 요청 1명 / 인원초과 1명")
+
+        worker_rows = [
+            item for item in preview.review_rows
+            if item.row_kind == "worker" and item.site_code == "R692" and item.work_date.isoformat() == "2026-03-01" and item.shift_kind == "day"
+        ]
+        self.assertEqual(len(worker_rows), 2)
+        self.assertEqual(sum(1 for item in worker_rows if item.status == "parsed"), 1)
+        overflow_row = next(item for item in worker_rows if item.status == "over_capacity")
+        self.assertEqual(overflow_row.reason, "유효 1명 / 요청 1명 / 인원초과 1명")
+        self.assertEqual(overflow_row.issue_code, "REQUEST_COUNT_MISMATCH_OVER")
+
     def test_clone_support_hq_sheet_to_workbook_copies_dimension_style_without_error(self):
         source_workbook = Workbook()
         source_sheet = source_workbook.active

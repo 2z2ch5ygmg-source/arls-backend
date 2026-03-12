@@ -5633,7 +5633,7 @@ def _sentrix_hq_issue_template(code: str) -> tuple[str, str, str, str | None]:
         "WORKER_CELL_INVALID": ("blocking", "근무자 셀 형식 오류", "근무자 셀 값을 해석할 수 없습니다.", "허용된 지원근무자 표기 형식으로 수정하세요."),
         "REPLACE_SCOPE_CONFLICT": ("blocking", "replace 범위 충돌", "동일 지점/날짜/주야간/슬롯 범위가 workbook 안에서 중복되었습니다.", "중복된 슬롯 입력을 제거하세요."),
         "REQUEST_COUNT_MISMATCH_UNDER": ("warning", "필요 인원 미달", "유효 입력 인원이 기존 ticket 요청 수보다 적습니다.", "현재 업로드를 적용하면 ticket 상태가 승인대기로 계산됩니다."),
-        "REQUEST_COUNT_MISMATCH_OVER": ("warning", "필요 인원 초과", "유효 입력 인원이 기존 ticket 요청 수보다 많습니다.", "현재 업로드를 적용하면 ticket 상태가 승인대기로 계산됩니다."),
+        "REQUEST_COUNT_MISMATCH_OVER": ("blocking", "필요 인원 초과", "유효 입력 인원이 기존 ticket 요청 수보다 많습니다.", "현재 업로드를 적용할 수 없습니다. 초과 입력 인원을 줄인 뒤 다시 검토하세요."),
         "PURPOSE_FIELD_PARSE_WARNING": ("warning", "작업 목적 확인", "야간 작업 목적 셀을 참고 정보로만 유지합니다.", "기존 ticket 작업 목적은 유지되고 workbook 값은 정보성으로만 남습니다."),
     }
     return catalog.get(code, ("warning", code, code, None))
@@ -6557,6 +6557,8 @@ def _build_support_roster_hq_upload_inspect_result(
                 target_status = None
                 scope_status = "empty"
                 scope_reason = "입력 없음"
+                overflow_count = 0
+                effective_valid_count = valid_filled_count
                 if ticket:
                     if valid_filled_count == request_count:
                         target_status = SENTRIX_HQ_ROSTER_AUTO_APPROVED_STATUS
@@ -6575,9 +6577,11 @@ def _build_support_roster_hq_upload_inspect_result(
                             shift_kind=shift_kind,
                         )
                     else:
+                        overflow_count = max(valid_filled_count - request_count, 0)
+                        effective_valid_count = min(valid_filled_count, request_count)
                         target_status = SENTRIX_HQ_ROSTER_PENDING_STATUS
-                        scope_status = SENTRIX_HQ_ROSTER_PENDING_STATUS
-                        scope_reason = f"유효 {valid_filled_count}명 / 요청 {request_count}명"
+                        scope_status = "over_capacity"
+                        scope_reason = f"유효 {effective_valid_count}명 / 요청 {request_count}명 / 인원초과 {overflow_count}명"
                         add_issue(
                             "REQUEST_COUNT_MISMATCH_OVER",
                             sheet_name=sheet_name,
@@ -6589,6 +6593,22 @@ def _build_support_roster_hq_upload_inspect_result(
                 elif scope_has_workbook_signal:
                     scope_status = "blocking"
                     scope_reason = "매칭되는 Sentrix ticket이 없습니다."
+
+                if overflow_count > 0:
+                    valid_row_index = 0
+                    for worker_row in worker_rows:
+                        if str(worker_row.get("status") or "").strip() != "parsed":
+                            continue
+                        valid_row_index += 1
+                        if valid_row_index <= request_count:
+                            continue
+                        worker_row["status"] = "over_capacity"
+                        worker_row["reason"] = scope_reason
+                        worker_row["issue_code"] = "REQUEST_COUNT_MISMATCH_OVER"
+                        payload = worker_row.get("payload")
+                        if isinstance(payload, dict):
+                            payload["issue_code"] = "REQUEST_COUNT_MISMATCH_OVER"
+                            payload["issue_message"] = scope_reason
 
                 scope_issues = raw_issues[scope_issue_start:]
                 blocking_issue_count = sum(
@@ -6633,12 +6653,16 @@ def _build_support_roster_hq_upload_inspect_result(
                             "shift_kind": shift_kind,
                             "slot_index": 0,
                             "raw_cell_text": None,
-                            "parsed_display_value": f"유효 {valid_filled_count}명 / 요청 {request_count}명" if ticket else f"유효 {valid_filled_count}명",
+                            "parsed_display_value": (
+                                f"유효 {effective_valid_count}명 / 요청 {request_count}명 / 인원초과 {overflow_count}명"
+                                if ticket and overflow_count > 0
+                                else (f"유효 {valid_filled_count}명 / 요청 {request_count}명" if ticket else f"유효 {valid_filled_count}명")
+                            ),
                             "ticket_id": ticket.get("id") if ticket else None,
                             "request_count": request_count,
                             "valid_filled_count": valid_filled_count,
                             "target_status": target_status,
-                            "status": "blocking" if blocking_issue_count > 0 else scope_status,
+                            "status": "over_capacity" if overflow_count > 0 else ("blocking" if blocking_issue_count > 0 else scope_status),
                             "reason": scope_reason,
                             "issue_code": None,
                             "payload": {
