@@ -1341,6 +1341,34 @@ function restoreUserFromAccessToken(token = '') {
   };
 }
 
+function normalizeSessionUserObject(user = null) {
+  if (!user || typeof user !== 'object') return null;
+  const normalized = { ...user };
+  normalized.role = normalizeRoleValue(
+    normalized.role
+      || normalized.user_role
+      || normalized.userRole
+      || normalized.soc_role
+      || normalized.socRole
+      || 'officer',
+  );
+  normalized.tenant_code = String(normalized.tenant_code || normalized.tenantCode || '').trim().toUpperCase();
+  if (Object.prototype.hasOwnProperty.call(normalized, 'tenantCode')) {
+    delete normalized.tenantCode;
+  }
+  return normalized;
+}
+
+function resolveSessionUser(token = '', fallbackUser = null) {
+  const normalizedFallback = normalizeSessionUserObject(fallbackUser);
+  const tokenUser = restoreUserFromAccessToken(token);
+  if (!normalizedFallback && !tokenUser) return null;
+  return normalizeSessionUserObject({
+    ...(normalizedFallback || {}),
+    ...(tokenUser || {}),
+  });
+}
+
 function showDebug() {
   const origin = window.location.origin || 'unknown';
   console.info(
@@ -8358,9 +8386,10 @@ async function requestTokenRefresh() {
 
       state.token = nextAccessToken;
       state.refreshToken = nextRefreshToken;
-      if (data?.user && typeof data.user === 'object') {
-        state.user = data.user;
-      }
+      state.user = resolveSessionUser(
+        nextAccessToken,
+        data?.user && typeof data.user === 'object' ? data.user : state.user,
+      );
       persistSession();
       return true;
     } catch (error) {
@@ -17061,8 +17090,8 @@ function isRouteAllowed(routePath, perms = getRolePermissions(), navRole = getNa
   if (route === ROUTE_HR) return true;
   if (route === ROUTE_OPS) return isManagerShellRole(navRole);
   if (route === ROUTE_SUPPORT_STATUS) return isManagerShellRole(navRole);
-  if (route === ROUTE_REPORTS) return true;
-  if (route === ROUTE_REPORTS_APPLE) return isAppleReportPackEnabled();
+  if (route === ROUTE_REPORTS) return isManagerShellRole(navRole);
+  if (route === ROUTE_REPORTS_APPLE) return isManagerShellRole(navRole) && isAppleReportPackEnabled();
   if (route === ROUTE_ATTENDANCE) return Boolean(perms.attendance || perms.attendanceWrite || perms.attendanceReview);
   if (
     route === ROUTE_SCHEDULE
@@ -17468,7 +17497,7 @@ function isViewAllowed(view, perms = getRolePermissions()) {
   if (raw === 'leave') return Boolean(perms.leave || perms.leaveWrite || perms.leaveReview);
   if (raw === 'ops') return isManagerShellRole(getNavigationRole());
   if (raw === 'support-status') return isManagerShellRole(getNavigationRole());
-  if (raw === 'reports') return true;
+  if (raw === 'reports') return isManagerShellRole(getNavigationRole());
   const target = mapLegacyViewName(view);
   if (target === 'dev-console') return Boolean(perms.tenantManage);
   if (target === 'home' || target === 'profile') return true;
@@ -24705,7 +24734,7 @@ function persistSession() {
   const token = String(state.token || '').trim();
   const refreshToken = String(state.refreshToken || '').trim();
   if (!token) return;
-  const payload = { token, refreshToken, user: state.user || null };
+  const payload = { token, refreshToken, user: resolveSessionUser(token, state.user) };
   try {
     localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
   } catch {
@@ -25008,11 +25037,7 @@ function bootstrapSessionFromStorage() {
 
   state.token = String(stored.token || '').trim();
   state.refreshToken = String(stored.refreshToken || '').trim();
-  if (stored.user && typeof stored.user === 'object') {
-    state.user = stored.user;
-  } else {
-    state.user = restoreUserFromAccessToken(state.token);
-  }
+  state.user = resolveSessionUser(state.token, stored.user);
   if (!state.token || !state.user) return false;
 
   showShellPanel();
@@ -25042,11 +25067,7 @@ async function hydrateSession({ background = false } = {}) {
 
   state.token = String(stored.token || '').trim();
   state.refreshToken = String(stored.refreshToken || '').trim();
-  if (stored.user && typeof stored.user === 'object') {
-    state.user = stored.user;
-  } else {
-    state.user = restoreUserFromAccessToken(state.token);
-  }
+  state.user = resolveSessionUser(state.token, stored.user);
   console.info('[RG ARLS][Auth] stored token check', {
     hasAccessToken: Boolean(state.token),
     hasRefreshToken: Boolean(state.refreshToken),
@@ -25068,7 +25089,7 @@ async function hydrateSession({ background = false } = {}) {
   }
   try {
     const me = await apiRequest('/auth/me', { suppressUnauthorizedRedirect: true });
-    state.user = me;
+    state.user = resolveSessionUser(state.token, me);
     persistSession();
     setAuthStatus(AUTH_STATUS_AUTHENTICATED);
     showShellPanel();
@@ -44833,7 +44854,7 @@ async function onLoginSubmit(event) {
 
     state.token = result.access_token;
     state.refreshToken = String(result?.refresh_token || '').trim();
-    state.user = result.user;
+    state.user = resolveSessionUser(result.access_token, result.user);
     persistSession();
     try {
       await saveLoginPreferences();
