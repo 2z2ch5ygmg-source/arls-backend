@@ -21670,6 +21670,34 @@ function getWorkingTenantDisplayCode() {
   return '';
 }
 
+function getCurrentTenantDisplayName() {
+  if (!state.user) return '테넌트 확인';
+  const role = getNavigationRole();
+  if (role !== 'DEV') {
+    const ownName = String(state.user?.tenant_name || '').trim();
+    if (ownName) return ownName;
+    const ownCode = normalizeTenantCode(state.user?.tenant_code || '');
+    return ownCode || '테넌트 확인';
+  }
+
+  ensureUiActiveTenantFilterContextInitialized();
+  const uiName = String(state.uiContext?.activeTenantName || '').trim();
+  if (uiName) return uiName;
+
+  const activeContext = getActiveTenantContext();
+  const activeName = String(activeContext?.name || '').trim();
+  if (activeName && String(activeContext?.code || '').trim().toUpperCase() !== 'MASTER') {
+    return activeName;
+  }
+
+  const tenantCode = getScheduleTenantValue() || getWorkingTenantDisplayCode() || normalizeTenantCode(activeContext?.code || '');
+  if (tenantCode && tenantCode !== 'MASTER') {
+    return resolveTenantNameByCode(tenantCode) || tenantCode;
+  }
+  if (activeName) return activeName;
+  return '테넌트 선택';
+}
+
 function resolveTenantCodeByTenantId(tenantId = '') {
   const normalizedId = String(tenantId || '').trim();
   if (!normalizedId) return '';
