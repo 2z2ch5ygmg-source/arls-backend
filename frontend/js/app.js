@@ -39010,52 +39010,61 @@ async function refreshScheduleImportSiteOptions({ force = false } = {}) {
     select.disabled = true;
   });
   renderScheduleUploadWorkspace();
-  let rows = [];
   try {
-    rows = await refreshSiteCatalog({ force });
-  } catch {
-    rows = Array.isArray(state.siteCatalog) ? state.siteCatalog : [];
-  }
-  const optionRows = Array.isArray(rows) ? rows : [];
-  const normalizedOptions = optionRows
-    .map((item) => ({
-      site_code: String(item?.site_code || '').trim().toUpperCase(),
-      site_name: String(item?.site_name || '').trim(),
-    }))
-    .filter((item) => item.site_code)
-    .sort((a, b) => String(a.site_code).localeCompare(String(b.site_code)));
-  const boardSite = String($('#scheduleSiteFilter')?.value || '').trim().toUpperCase();
-
-  selects.forEach((select) => {
-    const isReportsSelect = select.id === 'scheduleReportsSite';
-    const current = String(select.dataset.pendingValue || select.value || '').trim().toUpperCase();
-    select.innerHTML = '<option value="">지점 선택</option>';
-    if (isReportsSelect && isScheduleUploadTenantWideUser()) {
-      const allOption = document.createElement('option');
-      allOption.value = 'ALL';
-      allOption.textContent = '전체';
-      select.appendChild(allOption);
+    let rows = [];
+    try {
+      rows = await refreshSiteCatalog({ force });
+    } catch {
+      rows = Array.isArray(state.siteCatalog) ? state.siteCatalog : [];
     }
-    normalizedOptions.forEach((item) => {
-      const option = document.createElement('option');
-      option.value = item.site_code;
-      option.textContent = item.site_name ? `${item.site_code} · ${item.site_name}` : item.site_code;
-      select.appendChild(option);
+    const optionRows = Array.isArray(rows) ? rows : [];
+    const normalizedOptions = optionRows
+      .map((item) => ({
+        site_code: String(item?.site_code || '').trim().toUpperCase(),
+        site_name: String(item?.site_name || '').trim(),
+      }))
+      .filter((item) => item.site_code)
+      .sort((a, b) => String(a.site_code).localeCompare(String(b.site_code)));
+    const boardSite = String($('#scheduleSiteFilter')?.value || '').trim().toUpperCase();
+
+    selects.forEach((select) => {
+      const isReportsSelect = select.id === 'scheduleReportsSite';
+      const current = String(select.dataset.pendingValue || select.value || '').trim().toUpperCase();
+      select.innerHTML = '<option value="">지점 선택</option>';
+      if (isReportsSelect && isScheduleUploadTenantWideUser()) {
+        const allOption = document.createElement('option');
+        allOption.value = 'ALL';
+        allOption.textContent = '전체';
+        select.appendChild(allOption);
+      }
+      normalizedOptions.forEach((item) => {
+        const option = document.createElement('option');
+        option.value = item.site_code;
+        option.textContent = item.site_name ? `${item.site_code} · ${item.site_name}` : item.site_code;
+        select.appendChild(option);
+      });
+      const fallbackValue = current
+        || (boardSite && boardSite !== 'ALL' ? boardSite : '')
+        || (!isScheduleUploadTenantWideUser() && select.options.length > 1
+          ? String(select.options[1].value || '').trim().toUpperCase()
+          : '');
+      if (fallbackValue && Array.from(select.options).some((item) => String(item.value || '').trim().toUpperCase() === fallbackValue)) {
+        select.value = fallbackValue;
+      }
+      delete select.dataset.pendingValue;
+      select.disabled = false;
     });
-    const fallbackValue = current
-      || (boardSite && boardSite !== 'ALL' ? boardSite : '')
-      || (!isScheduleUploadTenantWideUser() && select.options.length > 1
-        ? String(select.options[1].value || '').trim().toUpperCase()
-        : '');
-    if (fallbackValue && Array.from(select.options).some((item) => String(item.value || '').trim().toUpperCase() === fallbackValue)) {
-      select.value = fallbackValue;
-    }
-    delete select.dataset.pendingValue;
-    select.disabled = false;
-  });
-
-  state.schedule.importSiteOptionsLoading = false;
-  renderScheduleUploadWorkspace();
+  } finally {
+    selects.forEach((select) => {
+      if (!select.options.length || /지점 불러오는 중/.test(String(select.options[0]?.textContent || ''))) {
+        select.innerHTML = '<option value="">지점 선택</option>';
+        delete select.dataset.pendingValue;
+      }
+      select.disabled = false;
+    });
+    state.schedule.importSiteOptionsLoading = false;
+    renderScheduleUploadWorkspace();
+  }
 }
 
 function openScheduleDownloadSheet() {
