@@ -44872,10 +44872,12 @@ async function onSiteSubmit(event) {
     applyEmployeeFormScopeDefaults();
     const actionLabel = siteId ? '수정' : '등록';
     const successMessage = `현장 ${actionLabel}이 완료되었습니다.${resolvedSiteCode ? ` (${resolvedSiteCode})` : ''}`;
+    renderSiteCards(refreshedRows);
+    closeSiteEditor();
+    await navigateToRoute(ROUTE_ADMIN_SITES, { replace: true, silentDeniedModal: true });
     showToast(`✓ ${successMessage}`, 'success', 2800);
     setInlineStatus('#siteSubmitStatus', `✓ ${successMessage}`, 'success');
     triggerHaptic('success');
-    closeSiteEditor();
   } catch (err) {
     const code = String(err?.code || '').trim().toUpperCase();
     const status = Number(err?.status || 0);
