@@ -509,6 +509,43 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
         )
         self.assertEqual(need_cell["work_value"], "2")
 
+    @patch("app.routers.v1.schedules._build_schedule_export_revision", return_value="rev-empty-preview")
+    @patch("app.routers.v1.schedules._read_monthly_support_request_rows_for_export", return_value=[])
+    @patch("app.routers.v1.schedules._read_monthly_daytime_need_rows_for_export", return_value=[])
+    @patch("app.routers.v1.schedules._read_monthly_employee_overnight_rows_for_export", return_value=[])
+    @patch("app.routers.v1.schedules._read_monthly_overnight_rows_for_export", return_value=[])
+    @patch("app.routers.v1.schedules._read_monthly_support_assignment_rows_for_export", return_value=[])
+    @patch("app.routers.v1.schedules._build_export_rows_from_board_payload", return_value=[])
+    @patch("app.routers.v1.schedules.monthly_board_lite", return_value={})
+    @patch("app.routers.v1.schedules._read_monthly_board_rows_for_export", return_value=[])
+    def test_collect_monthly_export_context_returns_empty_current_context_when_no_export_data_for_preview(
+        self,
+        _mock_board_rows,
+        _mock_board_payload,
+        _mock_export_rows,
+        _mock_support_rows,
+        _mock_overnight_rows,
+        _mock_employee_overnight_rows,
+        _mock_daytime_need_rows,
+        _mock_support_request_rows,
+        _mock_export_revision,
+    ):
+        export_ctx = _collect_monthly_export_context(
+            None,
+            target_tenant={"id": "tenant-1", "tenant_code": "TENANT"},
+            site_row={"id": "site-2", "site_code": "M001", "site_name": "명동", "address": "서울시 중구"},
+            month_key="2026-03",
+            user={},
+            allow_empty_employee_blocks=True,
+        )
+
+        self.assertEqual(export_ctx["rows"], [])
+        self.assertEqual(export_ctx["employee_blocks"], [])
+        self.assertEqual(export_ctx["export_revision"], "rev-empty-preview")
+        self.assertEqual(export_ctx["parsed_sheet"]["body_cells"], [])
+        self.assertEqual(export_ctx["parsed_sheet"]["need_cells"], [])
+        self.assertEqual(export_ctx["parsed_sheet"]["support_cells"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5181,6 +5181,40 @@ def _collect_monthly_export_context(
         month_key=month_key,
     )
     if not rows and not support_rows and not overnight_rows and not employee_overnight_rows and not daytime_need_rows and not support_request_rows:
+        if allow_empty_employee_blocks:
+            export_revision = _build_schedule_export_revision(
+                conn,
+                tenant_id=str(target_tenant["id"]),
+                site_id=str(site_row["id"]),
+                site_code=str(site_row["site_code"]),
+                month_key=month_key,
+            )
+            return {
+                "site_id": str(site_row.get("id") or "").strip(),
+                "site_code": str(site_row.get("site_code") or "").strip(),
+                "site_name": str(site_row.get("site_name") or "").strip(),
+                "site_address": str(site_row.get("address") or "").strip(),
+                "rows": [],
+                "support_rows": [],
+                "support_request_rows": [],
+                "overnight_rows": [],
+                "employee_overnight_rows": [],
+                "daytime_need_rows": [],
+                "employee_blocks": [],
+                "workbook": None,
+                "template_path": _resolve_arls_template_path(),
+                "template_version": ARLS_EXPORT_TEMPLATE_VERSION,
+                "export_revision": export_revision,
+                "parsed_sheet": {
+                    "body_cells": [],
+                    "need_cells": [],
+                    "support_cells": [],
+                    "support_blocks": [],
+                    "metadata": {},
+                    "timings_ms": {},
+                },
+                "metadata": None,
+            }
         raise HTTPException(status_code=404, detail="monthly schedule export data not found")
     employee_blocks = _build_export_employee_blocks(
         rows,
