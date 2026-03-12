@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 import re
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -1419,6 +1419,39 @@ class SupportRosterHqReviewRowOut(BaseModel):
     issue_code: Optional[str] = None
 
 
+class SupportRosterHqAggregatedReviewRowOut(BaseModel):
+    scope_key: str
+    sheet_name: str
+    site_name: Optional[str] = None
+    site_code: Optional[str] = None
+    work_date: Optional[date] = None
+    shift_kind: Optional[str] = None
+    request_count: int = 0
+    entered_count: int = 0
+    worker_names: str = ""
+    ticket_status: Optional[str] = None
+    reason: Optional[str] = None
+    blocking_issue_count: int = 0
+    warning_issue_count: int = 0
+    excluded: bool = False
+    exclusion_reason: Optional[str] = None
+    artifact_source_batch_id: Optional[str] = None
+    artifact_source_revision: Optional[str] = None
+
+
+class SupportRosterHqSiteProcessOut(BaseModel):
+    sheet_name: str
+    site_name: Optional[str] = None
+    site_code: Optional[str] = None
+    resolution_method: Optional[str] = None
+    status: str
+    message: Optional[str] = None
+    expected_revision: Optional[str] = None
+    current_revision: Optional[str] = None
+    source_batch_id: Optional[str] = None
+    fallback_text: Optional[str] = None
+
+
 class SupportRosterHqScopeSummaryOut(BaseModel):
     scope_key: str
     sheet_name: str
@@ -1436,7 +1469,15 @@ class SupportRosterHqScopeSummaryOut(BaseModel):
     workbook_required_raw: Optional[str] = None
     external_count_raw: Optional[str] = None
     purpose_text: Optional[str] = None
+    scope_reason: Optional[str] = None
     matched_ticket: bool = False
+    matched_artifact_scope: bool = False
+    artifact_source_batch_id: Optional[str] = None
+    artifact_source_revision: Optional[str] = None
+    worker_entries: list[dict[str, Any]] = Field(default_factory=list)
+    sheet_resolution_method: Optional[str] = None
+    excluded: bool = False
+    excluded_reason: Optional[str] = None
     blocking_issue_count: int = 0
     warning_issue_count: int = 0
 
@@ -1450,11 +1491,17 @@ class SupportRosterHqUploadInspectOut(BaseModel):
     valid_sheet_count: int = 0
     total_scope_count: int = 0
     valid_scope_count: int = 0
+    processed_site_count: int = 0
+    stale_site_count: int = 0
+    excluded_site_count: int = 0
     issue_count: int = 0
     summary: dict[str, int] = Field(default_factory=dict)
     issues: list[SupportRosterHqReviewIssueOut] = Field(default_factory=list)
+    processed_sites: list[SupportRosterHqSiteProcessOut] = Field(default_factory=list)
+    excluded_sites: list[SupportRosterHqSiteProcessOut] = Field(default_factory=list)
     scope_summaries: list[SupportRosterHqScopeSummaryOut] = Field(default_factory=list)
     review_rows: list[SupportRosterHqReviewRowOut] = Field(default_factory=list)
+    aggregated_review_rows: list[SupportRosterHqAggregatedReviewRowOut] = Field(default_factory=list)
     next_step_message: Optional[str] = None
 
 
@@ -1476,6 +1523,10 @@ class SupportRosterHqApplyScopeOut(BaseModel):
     handoff_status: Optional[str] = None
     handoff_message: Optional[str] = None
     sentrix_ticket_id: Optional[str] = None
+    excluded: bool = False
+    exclusion_reason: Optional[str] = None
+    artifact_source_batch_id: Optional[str] = None
+    artifact_source_revision: Optional[str] = None
 
 
 class SupportRosterHqApplyOut(BaseModel):
@@ -1494,7 +1545,11 @@ class SupportRosterHqApplyOut(BaseModel):
     created_scope_count: int = 0
     updated_scope_count: int = 0
     affected_scope_count: int = 0
+    excluded_scope_count: int = 0
     affected_site_codes: list[str] = Field(default_factory=list)
+    processed_site_codes: list[str] = Field(default_factory=list)
+    excluded_site_codes: list[str] = Field(default_factory=list)
+    stale_site_codes: list[str] = Field(default_factory=list)
     affected_dates: list[str] = Field(default_factory=list)
     assignments_created: int = 0
     assignments_removed: int = 0

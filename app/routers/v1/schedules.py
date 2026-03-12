@@ -63,9 +63,11 @@ from ...schemas import (
     SupportRoundtripPreviewMetadataOut,
     SupportRosterHqReviewIssueOut,
     SupportRosterHqReviewRowOut,
+    SupportRosterHqAggregatedReviewRowOut,
     SupportRosterHqApplyOut,
     SupportRosterHqApplyScopeOut,
     SupportRosterHqScopeSummaryOut,
+    SupportRosterHqSiteProcessOut,
     SupportRosterHqUploadInspectOut,
     SupportRosterHqUploadMetaOut,
     SupportRosterHqWorkspaceOut,
@@ -2144,7 +2146,12 @@ def _build_sentrix_support_roster_handoff_payload(
                 "valid_filled_count": max(int(spec.get("valid_filled_count") or 0), 0),
                 "invalid_filled_count": max(int(spec.get("invalid_filled_count") or 0), 0),
                 "target_status": str(spec.get("target_status") or "").strip() or None,
+                "expected_ticket_status": str(spec.get("target_status") or "").strip() or None,
                 "purpose_text": str(scope_payload.get("purpose_text") or "").strip() or None,
+                "artifact_source_batch_id": str(scope_payload.get("artifact_source_batch_id") or "").strip() or None,
+                "artifact_source_revision": str(scope_payload.get("artifact_source_revision") or "").strip() or None,
+                "sheet_resolution_method": str(scope_payload.get("sheet_resolution_method") or "").strip() or None,
+                "scope_reason": str(scope_payload.get("scope_reason") or "").strip() or None,
                 "worker_entries": _build_sentrix_support_roster_handoff_worker_entries(spec.get("worker_payloads") or []),
             }
         )
@@ -2162,6 +2169,17 @@ def _build_sentrix_support_roster_handoff_payload(
         "affected_site_codes": affected_site_codes,
         "affected_dates": affected_dates,
         "affected_scope_count": len(scopes),
+        "artifact_ids": sorted(
+            {
+                str(
+                    scope.get("artifact_source_batch_id")
+                    or artifact_id
+                    or ""
+                ).strip()
+                for scope in scopes
+                if str(scope.get("artifact_source_batch_id") or artifact_id or "").strip()
+            }
+        ),
         "scopes": scopes,
     }
 
@@ -2211,6 +2229,8 @@ def _build_sentrix_support_roster_handoff_failure_result(
     issue_count: int,
     artifact_id: str | None,
     scope_apply_specs: list[dict[str, Any]],
+    excluded_scope_specs: list[dict[str, Any]] | None = None,
+    stale_site_codes: list[str] | None = None,
     error_message: str,
 ) -> SupportRosterHqApplyOut:
     scope_results = [
@@ -2228,13 +2248,37 @@ def _build_sentrix_support_roster_handoff_failure_result(
             assignment_count=len(spec.get("valid_worker_payloads") or []),
             handoff_status="failed",
             handoff_message=error_message,
+            artifact_source_batch_id=str(dict(spec.get("scope_payload") or {}).get("artifact_source_batch_id") or "").strip() or None,
+            artifact_source_revision=str(dict(spec.get("scope_payload") or {}).get("artifact_source_revision") or "").strip() or None,
         )
         for spec in scope_apply_specs
+    ] + [
+        SupportRosterHqApplyScopeOut(
+            scope_key=str(spec.get("scope_key") or "").strip(),
+            sheet_name=str(spec.get("sheet_name") or "").strip() or "-",
+            site_name=str(spec.get("site_name") or "").strip() or None,
+            site_code=str(spec.get("site_code") or "").strip() or None,
+            work_date=spec.get("work_date"),
+            shift_kind=str(spec.get("shift_kind") or "").strip() or None,
+            request_count=max(int(spec.get("request_count") or 0), 0),
+            valid_filled_count=max(int(spec.get("valid_filled_count") or 0), 0),
+            target_status=str(spec.get("target_status") or "").strip() or None,
+            assignment_count=len(spec.get("valid_worker_payloads") or []),
+            handoff_status="excluded",
+            handoff_message=str(spec.get("exclusion_reason") or "").strip() or "stale excluded",
+            excluded=True,
+            exclusion_reason=str(spec.get("exclusion_reason") or "").strip() or None,
+            artifact_source_batch_id=str(dict(spec.get("scope_payload") or {}).get("artifact_source_batch_id") or "").strip() or None,
+            artifact_source_revision=str(dict(spec.get("scope_payload") or {}).get("artifact_source_revision") or "").strip() or None,
+        )
+        for spec in list(excluded_scope_specs or [])
     ]
+    failed_scope_count = len(scope_apply_specs)
+    excluded_scope_count = len(list(excluded_scope_specs or []))
     return SupportRosterHqApplyOut(
         batch_id=batch_id,
         applied=False,
-        partial_success=True,
+        partial_success=False,
         blocked=False,
         blocked_reasons=[],
         issue_count=issue_count,
@@ -2243,14 +2287,18 @@ def _build_sentrix_support_roster_handoff_failure_result(
         handoff_status="failed",
         handoff_message=error_message,
         handoff_success_count=0,
-        handoff_failed_count=len(scope_apply_specs),
+        handoff_failed_count=failed_scope_count,
         created_scope_count=0,
         updated_scope_count=0,
-        affected_scope_count=len(scope_apply_specs),
-        affected_site_codes=sorted({str(spec.get("site_code") or "").strip() for spec in scope_apply_specs if str(spec.get("site_code") or "").strip()}),
-        affected_dates=sorted({spec["work_date"].isoformat() for spec in scope_apply_specs if isinstance(spec.get("work_date"), date)}),
+        affected_scope_count=failed_scope_count + excluded_scope_count,
+        excluded_scope_count=excluded_scope_count,
+        affected_site_codes=sorted({str(spec.get("site_code") or "").strip() for spec in (list(scope_apply_specs) + list(excluded_scope_specs or [])) if str(spec.get("site_code") or "").strip()}),
+        processed_site_codes=sorted({str(spec.get("site_code") or "").strip() for spec in scope_apply_specs if str(spec.get("site_code") or "").strip()}),
+        excluded_site_codes=sorted({str(spec.get("site_code") or "").strip() for spec in list(excluded_scope_specs or []) if str(spec.get("site_code") or "").strip()}),
+        stale_site_codes=sorted({str(code or "").strip() for code in list(stale_site_codes or []) if str(code or "").strip()}),
+        affected_dates=sorted({spec["work_date"].isoformat() for spec in (list(scope_apply_specs) + list(excluded_scope_specs or [])) if isinstance(spec.get("work_date"), date)}),
         applied_scope_count=0,
-        failed_scope_count=len(scope_apply_specs),
+        failed_scope_count=failed_scope_count,
         audit_timestamp=datetime.now(timezone.utc),
         scope_results=scope_results,
     )
@@ -2264,6 +2312,8 @@ def _build_sentrix_support_roster_apply_result_from_handoff(
     handoff_payload: dict[str, Any],
     handoff_response: dict[str, Any],
     scope_apply_specs: list[dict[str, Any]],
+    excluded_scope_specs: list[dict[str, Any]] | None = None,
+    stale_site_codes: list[str] | None = None,
 ) -> SupportRosterHqApplyOut:
     response_scope_results = handoff_response.get("scope_results") if isinstance(handoff_response.get("scope_results"), list) else []
     scope_results: list[SupportRosterHqApplyScopeOut] = []
@@ -2291,12 +2341,40 @@ def _build_sentrix_support_roster_apply_result_from_handoff(
                 handoff_status=str(handoff_scope.get("handoff_status") or handoff_scope.get("status") or "").strip() or None,
                 handoff_message=str(handoff_scope.get("handoff_message") or handoff_scope.get("message") or "").strip() or None,
                 sentrix_ticket_id=str(handoff_scope.get("sentrix_ticket_id") or handoff_scope.get("ticket_id") or "").strip() or None,
+                artifact_source_batch_id=str(dict(spec.get("scope_payload") or {}).get("artifact_source_batch_id") or "").strip() or None,
+                artifact_source_revision=str(dict(spec.get("scope_payload") or {}).get("artifact_source_revision") or "").strip() or None,
+            )
+        )
+    for spec in list(excluded_scope_specs or []):
+        scope_results.append(
+            SupportRosterHqApplyScopeOut(
+                scope_key=str(spec.get("scope_key") or "").strip(),
+                sheet_name=str(spec.get("sheet_name") or "").strip() or "-",
+                site_name=str(spec.get("site_name") or "").strip() or None,
+                site_code=str(spec.get("site_code") or "").strip() or None,
+                work_date=spec.get("work_date"),
+                shift_kind=str(spec.get("shift_kind") or "").strip() or None,
+                request_count=max(int(spec.get("request_count") or 0), 0),
+                valid_filled_count=max(int(spec.get("valid_filled_count") or 0), 0),
+                target_status=str(spec.get("target_status") or "").strip() or None,
+                assignment_count=len(spec.get("valid_worker_payloads") or []),
+                handoff_status="excluded",
+                handoff_message=str(spec.get("exclusion_reason") or "").strip() or "stale excluded",
+                excluded=True,
+                exclusion_reason=str(spec.get("exclusion_reason") or "").strip() or None,
+                artifact_source_batch_id=str(dict(spec.get("scope_payload") or {}).get("artifact_source_batch_id") or "").strip() or None,
+                artifact_source_revision=str(dict(spec.get("scope_payload") or {}).get("artifact_source_revision") or "").strip() or None,
             )
         )
     applied_scope_count = max(int(handoff_response.get("applied_scope_count") or 0), 0)
     failed_scope_count = max(int(handoff_response.get("failed_scope_count") or 0), 0)
-    partial_success = bool(handoff_response.get("partial_success")) or (applied_scope_count > 0 and failed_scope_count > 0)
-    applied = bool(handoff_response.get("applied")) and not partial_success and failed_scope_count == 0
+    excluded_scope_count = len(list(excluded_scope_specs or []))
+    partial_success = (
+        bool(handoff_response.get("partial_success"))
+        or (applied_scope_count > 0 and failed_scope_count > 0)
+        or excluded_scope_count > 0
+    )
+    applied = bool(handoff_response.get("applied")) and not partial_success and failed_scope_count == 0 and excluded_scope_count == 0
     handoff_message = str(
         handoff_response.get("handoff_message")
         or handoff_response.get("message")
@@ -2317,8 +2395,12 @@ def _build_sentrix_support_roster_apply_result_from_handoff(
         handoff_failed_count=max(int(handoff_response.get("handoff_failed_count") or failed_scope_count), 0),
         created_scope_count=max(int(handoff_response.get("created_scope_count") or 0), 0),
         updated_scope_count=max(int(handoff_response.get("updated_scope_count") or 0), 0),
-        affected_scope_count=max(int(handoff_response.get("affected_scope_count") or handoff_payload.get("affected_scope_count") or len(scope_apply_specs)), 0),
+        affected_scope_count=max(int(handoff_response.get("affected_scope_count") or handoff_payload.get("affected_scope_count") or (len(scope_apply_specs) + excluded_scope_count)), 0),
+        excluded_scope_count=excluded_scope_count,
         affected_site_codes=list(handoff_response.get("affected_site_codes") or handoff_payload.get("affected_site_codes") or []),
+        processed_site_codes=sorted({str(spec.get("site_code") or "").strip() for spec in scope_apply_specs if str(spec.get("site_code") or "").strip()}),
+        excluded_site_codes=sorted({str(spec.get("site_code") or "").strip() for spec in list(excluded_scope_specs or []) if str(spec.get("site_code") or "").strip()}),
+        stale_site_codes=sorted({str(code or "").strip() for code in list(stale_site_codes or []) if str(code or "").strip()}),
         affected_dates=list(handoff_response.get("affected_dates") or handoff_payload.get("affected_dates") or []),
         tickets_updated=max(int(handoff_response.get("tickets_updated") or 0), 0),
         tickets_auto_approved=max(int(handoff_response.get("tickets_auto_approved") or 0), 0),
@@ -5784,9 +5866,11 @@ def _sentrix_hq_issue_template(code: str) -> tuple[str, str, str, str | None]:
         "WORKBOOK_SCOPE_MISMATCH": ("blocking", "다운로드 범위 불일치", "업로드 파일의 다운로드 범위가 현재 검토 컨텍스트와 맞지 않습니다.", "전체/지점별 범위를 다시 확인하세요."),
         "OUTDATED_WORKBOOK": ("blocking", "구버전 workbook", "현재 Supervisor 기준본보다 오래된 workbook 입니다.", "최신 전체/지점별 다운로드본을 다시 사용하세요."),
         "SITE_SHEET_NOT_FOUND": ("blocking", "시트 지점 식별 실패", "시트명으로 지점을 정확히 찾지 못했습니다.", "시트명을 수정하지 말고 최신 workbook을 다시 사용하세요."),
+        "SITE_NOT_SELECTED": ("warning", "선택되지 않은 지점 시트", "현재 HQ 작업 범위에 포함되지 않은 지점 시트입니다.", "선택한 지점만 포함된 workbook인지 확인하세요."),
         "BLOCK_SECTION_NOT_FOUND": ("blocking", "지원 블록 누락", "주간 또는 야간 지원 블록을 찾지 못했습니다.", "다운로드한 workbook 구조를 변경하지 않았는지 확인하세요."),
         "DATE_SCOPE_NOT_RESOLVED": ("blocking", "날짜 범위 해석 실패", "시트의 날짜 헤더 또는 월 범위를 해석하지 못했습니다.", "월 헤더와 날짜 컬럼을 수정하지 않았는지 확인하세요."),
         "TICKET_SCOPE_NOT_FOUND": ("blocking", "지원요청 ticket 없음", "해당 지점/날짜/주야간 범위의 기존 Sentrix ticket을 찾지 못했습니다.", "ARLS 원본 업로드로 생성된 ticket scope를 먼저 확인하세요."),
+        "ARTIFACT_SCOPE_NOT_FOUND": ("blocking", "지원 수요 artifact 없음", "해당 지점/날짜/주야간 범위의 지원 수요 artifact를 찾지 못했습니다.", "원본 월간 업로드를 다시 반영하고 HQ 제출용 추출을 새로 생성하세요."),
         "MULTI_PERSON_CELL": ("blocking", "한 셀 다중 인원", "한 셀에는 1명만 입력할 수 있습니다.", "여러 명을 각각 다른 근무자 셀에 입력하세요."),
         "SELF_STAFF_FORMAT_INVALID": ("blocking", "자체 인원 표기 오류", "자체 인원은 정확히 '자체 {이름}' 형식만 허용됩니다.", "예: '자체 조태환' 형식으로 수정하세요."),
         "SELF_STAFF_EMPLOYEE_NOT_FOUND": ("blocking", "자체 인원 매칭 실패", "자체 인원을 해당 지점 active employee master에서 찾지 못했습니다.", "이름 또는 지점 소속 정보를 다시 확인하세요."),
@@ -5805,17 +5889,19 @@ def _build_sentrix_hq_roster_issue(
     *,
     message: str | None = None,
     guidance: str | None = None,
+    severity: str | None = None,
+    title: str | None = None,
     sheet_name: str | None = None,
     site_code: str | None = None,
     site_name: str | None = None,
     work_date: date | None = None,
     shift_kind: str | None = None,
 ) -> dict[str, Any]:
-    severity, title, default_message, default_guidance = _sentrix_hq_issue_template(code)
+    default_severity, default_title, default_message, default_guidance = _sentrix_hq_issue_template(code)
     return {
         "code": code,
-        "severity": severity,
-        "title": title,
+        "severity": str(severity or "").strip() or default_severity,
+        "title": str(title or "").strip() or default_title,
         "message": message or default_message,
         "guidance": guidance if guidance is not None else default_guidance,
         "sheet_name": sheet_name,
@@ -5882,6 +5968,67 @@ def _extract_sentrix_ticket_hq_roster_status(ticket: dict[str, Any] | None) -> s
     if normalized in {SENTRIX_HQ_ROSTER_AUTO_APPROVED_STATUS, SENTRIX_HQ_ROSTER_PENDING_STATUS}:
         return normalized
     return None
+
+
+def _build_support_roster_hq_aggregated_review_rows(
+    scope_summaries: list[SupportRosterHqScopeSummaryOut],
+) -> list[SupportRosterHqAggregatedReviewRowOut]:
+    rows: list[SupportRosterHqAggregatedReviewRowOut] = []
+    for summary in sorted(
+        list(scope_summaries or []),
+        key=lambda item: (
+            str(item.sheet_name or "").strip(),
+            item.work_date.isoformat() if isinstance(item.work_date, date) else "",
+            1 if str(item.shift_kind or "").strip().lower() == "night" else 0,
+            str(item.site_code or "").strip(),
+        ),
+    ):
+        display_status = "upload_blocked" if int(summary.blocking_issue_count or 0) > 0 else (
+            str(summary.target_status or "").strip() or None
+        )
+        worker_names = ", ".join(
+            str(
+                entry.get("parsed_display_value")
+                or entry.get("display_value")
+                or entry.get("raw_cell_text")
+                or ""
+            ).strip()
+            for entry in list(summary.worker_entries or [])
+            if str(
+                entry.get("parsed_display_value")
+                or entry.get("display_value")
+                or entry.get("raw_cell_text")
+                or ""
+            ).strip()
+            and not str(entry.get("issue_code") or "").strip()
+            and bool(entry.get("countable", True))
+        )
+        rows.append(
+            SupportRosterHqAggregatedReviewRowOut(
+                scope_key=str(summary.scope_key or "").strip(),
+                sheet_name=str(summary.sheet_name or "").strip() or "-",
+                site_name=str(summary.site_name or "").strip() or None,
+                site_code=str(summary.site_code or "").strip() or None,
+                work_date=summary.work_date,
+                shift_kind=str(summary.shift_kind or "").strip() or None,
+                request_count=max(int(summary.request_count or 0), 0),
+                entered_count=max(int(summary.valid_filled_count or 0), 0),
+                worker_names=worker_names,
+                ticket_status=display_status,
+                reason=str(
+                    summary.purpose_text
+                    if str(summary.shift_kind or "").strip().lower() == "night"
+                    else summary.scope_reason
+                ).strip() or None,
+                blocking_issue_count=max(int(summary.blocking_issue_count or 0), 0),
+                warning_issue_count=max(int(summary.warning_issue_count or 0), 0),
+                excluded=bool(summary.excluded),
+                exclusion_reason=str(summary.excluded_reason or "").strip() or None,
+                artifact_source_batch_id=str(summary.artifact_source_batch_id or "").strip() or None,
+                artifact_source_revision=str(summary.artifact_source_revision or "").strip() or None,
+            )
+        )
+    return rows
 
 
 def _load_sentrix_support_ticket_scope_map(
@@ -6160,10 +6307,13 @@ def _build_support_roster_hq_source_map(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT s.site_code,
+            SELECT s.id AS site_id,
+                   s.site_code,
                    s.site_name,
+                   src.source_batch_id,
                    src.source_revision,
-                   COALESCE(src.state, 'source_missing') AS source_state
+                   COALESCE(src.state, 'source_missing') AS source_state,
+                   COALESCE(src.hq_merge_stale, FALSE) AS hq_merge_stale
             FROM sites s
             LEFT JOIN schedule_support_roundtrip_sources src
                    ON src.tenant_id = s.tenant_id
@@ -6177,13 +6327,150 @@ def _build_support_roster_hq_source_map(
         rows = [dict(row) for row in (cur.fetchall() or [])]
     return {
         str(row.get("site_code") or "").strip(): {
+            "site_id": str(row.get("site_id") or "").strip() or None,
             "site_name": str(row.get("site_name") or "").strip(),
+            "source_batch_id": str(row.get("source_batch_id") or "").strip() or None,
             "source_revision": str(row.get("source_revision") or "").strip() or None,
             "source_state": str(row.get("source_state") or "source_missing").strip() or "source_missing",
+            "hq_merge_stale": bool(row.get("hq_merge_stale")),
         }
         for row in rows
         if str(row.get("site_code") or "").strip()
     }
+
+
+def _normalize_support_roster_site_match_text(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return re.sub(r"[\s_\-()]+", "", text).upper()
+
+
+def _read_support_roster_sheet_text(sheet, *, row: int, column: int) -> str | None:
+    cell = sheet.cell(row=row, column=column)
+    if isinstance(cell, MergedCell):
+        for merged_range in sheet.merged_cells.ranges:
+            if (
+                merged_range.min_row <= row <= merged_range.max_row
+                and merged_range.min_col <= column <= merged_range.max_col
+            ):
+                cell = sheet.cell(row=merged_range.min_row, column=merged_range.min_col)
+                break
+    value = _normalize_workbook_display_value(getattr(cell, "value", None))
+    return value or None
+
+
+def _read_support_roster_site_fallback_text(sheet) -> str | None:
+    return _read_support_roster_sheet_text(sheet, row=34, column=55)
+
+
+def _resolve_support_roster_hq_sheet_site(
+    *,
+    sheet_name: str,
+    sheet,
+    workspace_sites: list[dict[str, Any]],
+    selected_site_codes: set[str] | None = None,
+) -> dict[str, Any]:
+    normalized_sheet_name = str(sheet_name or "").strip()
+    allowed_codes = {
+        str(code or "").strip().upper()
+        for code in (selected_site_codes or set())
+        if str(code or "").strip()
+    }
+    candidate_sites = [
+        dict(site)
+        for site in (workspace_sites or [])
+        if not allowed_codes or str(site.get("site_code") or "").strip().upper() in allowed_codes
+    ]
+    for site in candidate_sites:
+        site_sheet_name = str(site.get("sheet_name") or "").strip()
+        site_name = str(site.get("site_name") or "").strip()
+        if normalized_sheet_name and normalized_sheet_name in {site_sheet_name, site_name}:
+            return {
+                "site": site,
+                "resolution_method": "sheet_name",
+                "fallback_text": None,
+            }
+
+    fallback_text = _read_support_roster_site_fallback_text(sheet)
+    normalized_fallback = _normalize_support_roster_site_match_text(fallback_text)
+    if not normalized_fallback:
+        return {
+            "site": None,
+            "resolution_method": None,
+            "fallback_text": fallback_text,
+        }
+
+    matches: list[dict[str, Any]] = []
+    for site in candidate_sites:
+        normalized_name = _normalize_support_roster_site_match_text(site.get("site_name"))
+        normalized_sheet = _normalize_support_roster_site_match_text(site.get("sheet_name"))
+        if normalized_fallback in {normalized_name, normalized_sheet}:
+            matches.append(site)
+            continue
+        if normalized_name and normalized_name in normalized_fallback:
+            matches.append(site)
+            continue
+        if normalized_sheet and normalized_sheet in normalized_fallback:
+            matches.append(site)
+            continue
+
+    if len(matches) == 1:
+        return {
+            "site": dict(matches[0]),
+            "resolution_method": "bc34",
+            "fallback_text": fallback_text,
+        }
+    return {
+        "site": None,
+        "resolution_method": "bc34" if fallback_text else None,
+        "fallback_text": fallback_text,
+    }
+
+
+def _build_support_roster_hq_artifact_scope_map(
+    conn,
+    *,
+    tenant_id: str,
+    month_key: str,
+    site_codes: list[str],
+) -> dict[str, dict[str, Any]]:
+    source_map = _build_support_roster_hq_source_map(
+        conn,
+        tenant_id=tenant_id,
+        month_key=month_key,
+        site_codes=site_codes,
+    )
+    artifact_map: dict[str, dict[str, Any]] = {}
+    for site_code, source_row in source_map.items():
+        source_batch_id = str(source_row.get("source_batch_id") or "").strip()
+        scope_rows: dict[tuple[str, str], dict[str, Any]] = {}
+        if source_batch_id:
+            try:
+                import_payload_rows = _load_schedule_import_payload_rows(conn, batch_id=source_batch_id)
+                for support_row in _build_support_request_rows_from_import_payloads(import_payload_rows):
+                    work_date = support_row.get("work_date")
+                    if not isinstance(work_date, date):
+                        continue
+                    shift_kind = "night" if str(support_row.get("shift_kind") or "").strip().lower() == "night" else "day"
+                    scope_rows[(work_date.isoformat(), shift_kind)] = {
+                        "request_count": max(int(support_row.get("request_count") or 0), 0),
+                        "work_purpose": str(support_row.get("work_purpose") or "").strip() or None,
+                        "raw_requested_count": str(
+                            dict(support_row.get("detail_json") or {}).get("required_count_raw") or ""
+                        ).strip() or None,
+                    }
+            except Exception:
+                logger.exception(
+                    "[support-hq] failed to load artifact scopes site_code=%s source_batch_id=%s",
+                    site_code,
+                    source_batch_id,
+                )
+        artifact_map[site_code] = {
+            **dict(source_row or {}),
+            "scope_map": scope_rows,
+        }
+    return artifact_map
 
 
 def _build_support_roster_hq_download_workbook(
@@ -6310,6 +6597,7 @@ def _build_support_roster_hq_upload_inspect_result(
         month_key=selected_month,
     )
     workspace_sites_by_name = {str(site.get("site_name") or "").strip(): dict(site) for site in workspace_sites}
+    workspace_sites_by_sheet_name = {str(site.get("sheet_name") or "").strip(): dict(site) for site in workspace_sites}
     workspace_sites_by_code = {
         str(site.get("site_code") or "").strip().upper(): dict(site)
         for site in workspace_sites
@@ -6321,6 +6609,8 @@ def _build_support_roster_hq_upload_inspect_result(
         *,
         message: str | None = None,
         guidance: str | None = None,
+        severity: str | None = None,
+        title: str | None = None,
         sheet_name: str | None = None,
         site_code: str | None = None,
         site_name: str | None = None,
@@ -6332,6 +6622,8 @@ def _build_support_roster_hq_upload_inspect_result(
                 code,
                 message=message,
                 guidance=guidance,
+                severity=severity,
+                title=title,
                 sheet_name=sheet_name,
                 site_code=site_code,
                 site_name=site_name,
@@ -6381,64 +6673,135 @@ def _build_support_roster_hq_upload_inspect_result(
         add_issue("WORKBOOK_FAMILY_MISMATCH")
     elif not workbook_family and sentrix_metadata:
         add_issue("WORKBOOK_FAMILY_MISMATCH")
-
     if file_month and file_month != selected_month:
         add_issue("WORKBOOK_MONTH_MISMATCH")
-
     if download_scope not in {"all", "site"}:
         add_issue("WORKBOOK_SCOPE_MISMATCH")
 
+    if not site_codes and site_names:
+        inferred_codes: list[str] = []
+        for site_name in site_names:
+            matched_site = workspace_sites_by_sheet_name.get(site_name) or workspace_sites_by_name.get(site_name)
+            if matched_site and str(matched_site.get("site_code") or "").strip():
+                inferred_codes.append(str(matched_site.get("site_code") or "").strip().upper())
+        if inferred_codes:
+            site_codes = list(dict.fromkeys(inferred_codes))
+
+    selected_site_code_set = {
+        str(code or "").strip().upper()
+        for code in site_codes
+        if str(code or "").strip()
+    }
     expected_sheet_name_set = set(site_names or [])
+    if not expected_sheet_name_set and selected_site_code_set:
+        expected_sheet_name_set = {
+            str((workspace_sites_by_code.get(site_code) or {}).get("sheet_name") or "").strip()
+            for site_code in selected_site_code_set
+            if str((workspace_sites_by_code.get(site_code) or {}).get("sheet_name") or "").strip()
+        }
     actual_sheet_name_set = set(visible_sheet_names)
     if expected_sheet_name_set and expected_sheet_name_set != actual_sheet_name_set:
         for missing_sheet in sorted(expected_sheet_name_set - actual_sheet_name_set):
             add_issue(
-                "SITE_SHEET_NOT_FOUND",
-                message=f"{missing_sheet} 시트가 workbook에서 누락되었습니다.",
+                "WORKBOOK_SCOPE_MISMATCH",
+                severity="warning",
+                message=f"{missing_sheet} 시트가 workbook에서 누락되었습니다. 해당 지점은 이번 적용에서 제외됩니다.",
                 sheet_name=missing_sheet,
                 site_name=missing_sheet,
             )
         for extra_sheet in sorted(actual_sheet_name_set - expected_sheet_name_set):
             add_issue(
-                "SITE_SHEET_NOT_FOUND",
-                message=f"{extra_sheet} 시트가 metadata 범위에 없습니다.",
+                "WORKBOOK_SCOPE_MISMATCH",
+                severity="warning",
+                message=f"{extra_sheet} 시트가 현재 선택된 지점 범위에 없습니다. 해당 지점은 이번 적용에서 제외됩니다.",
                 sheet_name=extra_sheet,
                 site_name=extra_sheet,
             )
 
-    inferred_site_codes: list[str] = []
+    resolved_sheets: list[dict[str, Any]] = []
+    processed_sites: list[SupportRosterHqSiteProcessOut] = []
+    excluded_sites: list[SupportRosterHqSiteProcessOut] = []
+    resolved_site_codes: set[str] = set()
+    stale_site_codes: set[str] = set()
+
     for sheet_name in visible_sheet_names:
-        matched_site = workspace_sites_by_name.get(sheet_name)
-        if not matched_site:
+        sheet = workbook[sheet_name]
+        resolution = _resolve_support_roster_hq_sheet_site(
+            sheet_name=sheet_name,
+            sheet=sheet,
+            workspace_sites=workspace_sites,
+            selected_site_codes=None,
+        )
+        site_entry = dict(resolution.get("site") or {})
+        site_code = str(site_entry.get("site_code") or "").strip().upper()
+        site_name = str(site_entry.get("site_name") or sheet_name).strip() or sheet_name
+        resolution_method = str(resolution.get("resolution_method") or "").strip() or None
+        fallback_text = str(resolution.get("fallback_text") or "").strip() or None
+
+        if not site_entry or not site_code:
             add_issue(
                 "SITE_SHEET_NOT_FOUND",
-                message=f"{sheet_name} 시트와 일치하는 active 지점을 찾지 못했습니다.",
+                message=(
+                    f"{sheet_name} 시트와 일치하는 active 지점을 찾지 못했습니다."
+                    if not fallback_text
+                    else f"{sheet_name} 시트와 BC34 식별값({fallback_text})으로 지점을 찾지 못했습니다."
+                ),
                 sheet_name=sheet_name,
                 site_name=sheet_name,
             )
-            continue
-        inferred_site_codes.append(str(matched_site.get("site_code") or "").strip().upper())
-    if inferred_site_codes:
-        site_codes = list(
-            dict.fromkeys(
-                [
-                    *[str(code or "").strip().upper() for code in site_codes if str(code or "").strip()],
-                    *inferred_site_codes,
-                ]
+            excluded_sites.append(
+                SupportRosterHqSiteProcessOut(
+                    sheet_name=sheet_name,
+                    site_name=sheet_name,
+                    site_code=None,
+                    resolution_method=resolution_method,
+                    status="blocking",
+                    message="시트 지점 식별 실패",
+                    fallback_text=fallback_text,
+                )
             )
+            continue
+
+        if selected_site_code_set and site_code not in selected_site_code_set:
+            add_issue(
+                "SITE_NOT_SELECTED",
+                severity="warning",
+                message=f"{sheet_name} 시트는 현재 HQ 작업 범위에 포함되지 않은 지점입니다.",
+                sheet_name=sheet_name,
+                site_code=site_code,
+                site_name=site_name,
+            )
+            excluded_sites.append(
+                SupportRosterHqSiteProcessOut(
+                    sheet_name=sheet_name,
+                    site_name=site_name,
+                    site_code=site_code,
+                    resolution_method=resolution_method,
+                    status="excluded_unselected",
+                    message="선택되지 않은 지점 시트",
+                    fallback_text=fallback_text,
+                )
+            )
+            continue
+
+        resolved_site_codes.add(site_code)
+        resolved_sheets.append(
+            {
+                "sheet_name": sheet_name,
+                "sheet": sheet,
+                "site_entry": site_entry,
+                "site_code": site_code,
+                "site_name": site_name,
+                "resolution_method": resolution_method or "sheet_name",
+                "fallback_text": fallback_text,
+            }
         )
 
-    current_source_map = _build_support_roster_hq_source_map(
-        conn,
-        tenant_id=str(target_tenant["id"]),
-        month_key=file_month or selected_month,
-        site_codes=site_codes,
-    )
-    ticket_scope_map = _load_sentrix_support_ticket_scope_map(
+    artifact_scope_map = _build_support_roster_hq_artifact_scope_map(
         conn,
         tenant_id=str(target_tenant["id"]),
         month_key=selected_month,
-        site_codes=site_codes,
+        site_codes=sorted(resolved_site_codes),
     )
 
     employee_index_cache: dict[str, dict[str, list[dict[str, Any]]]] = {}
@@ -6448,57 +6811,77 @@ def _build_support_roster_hq_upload_inspect_result(
     total_scope_count = 0
     valid_scope_count = 0
 
-    for sheet_name in visible_sheet_names:
-        sheet = workbook[sheet_name]
-        site_entry = workspace_sites_by_name.get(sheet_name)
-        site_code = str((site_entry or {}).get("site_code") or "").strip().upper()
-        site_name = str((site_entry or {}).get("site_name") or sheet_name).strip() or sheet_name
+    for resolved in resolved_sheets:
+        sheet_name = str(resolved.get("sheet_name") or "").strip() or "-"
+        sheet = resolved["sheet"]
+        site_entry = dict(resolved.get("site_entry") or {})
+        site_code = str(resolved.get("site_code") or "").strip().upper()
+        site_name = str(resolved.get("site_name") or "").strip() or sheet_name
+        resolution_method = str(resolved.get("resolution_method") or "").strip() or "sheet_name"
+        fallback_text = str(resolved.get("fallback_text") or "").strip() or None
         site_blocking_count_before = len(
-            [issue for issue in raw_issues if str(issue.get("sheet_name") or "").strip() == sheet_name and str(issue.get("severity") or "").strip() == "blocking"]
+            [
+                issue
+                for issue in raw_issues
+                if str(issue.get("sheet_name") or "").strip() == sheet_name
+                and str(issue.get("severity") or "").strip().lower() == "blocking"
+            ]
         )
 
-        if not site_entry or not site_code:
-            raw_review_rows.append(
-                {
-                    "row_kind": "scope_summary",
-                    "sheet_name": sheet_name,
-                    "site_name": site_name,
-                    "site_code": None,
-                    "work_date": None,
-                    "shift_kind": None,
-                    "slot_index": 0,
-                    "raw_cell_text": None,
-                    "parsed_display_value": None,
-                    "ticket_id": None,
-                    "request_count": 0,
-                    "valid_filled_count": 0,
-                    "target_status": None,
-                    "status": "blocking",
-                    "reason": "시트명을 기준으로 지점을 정확히 찾지 못했습니다.",
-                    "issue_code": "SITE_SHEET_NOT_FOUND",
-                }
+        expected_revision = str(site_revision_map.get(site_code) or "").strip() or None
+        current_source = artifact_scope_map.get(site_code) or {}
+        current_source_revision = str(current_source.get("source_revision") or "").strip() or None
+        source_batch_id = str(current_source.get("source_batch_id") or "").strip() or None
+        if not source_batch_id:
+            stale_site_codes.add(site_code)
+            add_issue(
+                "OUTDATED_WORKBOOK",
+                severity="warning",
+                message=f"{sheet_name} 시트의 현재 ARLS 지원 수요 artifact를 찾지 못했습니다. 이 지점은 이번 적용에서 제외됩니다.",
+                sheet_name=sheet_name,
+                site_code=site_code,
+                site_name=site_name,
+            )
+            excluded_sites.append(
+                SupportRosterHqSiteProcessOut(
+                    sheet_name=sheet_name,
+                    site_name=site_name,
+                    site_code=site_code,
+                    resolution_method=resolution_method,
+                    status="excluded_stale",
+                    message="현재 ARLS artifact 없음",
+                    expected_revision=expected_revision,
+                    current_revision=current_source_revision,
+                    source_batch_id=None,
+                    fallback_text=fallback_text,
+                )
             )
             continue
-
-        expected_revision = str(site_revision_map.get(site_code) or "").strip() or None
-        current_source = current_source_map.get(site_code) or {}
-        current_source_revision = str(current_source.get("source_revision") or "").strip() or None
         if expected_revision and expected_revision != current_source_revision:
+            stale_site_codes.add(site_code)
             add_issue(
                 "OUTDATED_WORKBOOK",
-                message=f"{sheet_name} 시트의 기준 revision이 현재 source revision과 다릅니다.",
+                severity="warning",
+                message=f"{sheet_name} 시트의 기준 revision이 현재 ARLS source revision과 다릅니다. 이 지점은 이번 적용에서 제외됩니다.",
                 sheet_name=sheet_name,
                 site_code=site_code,
                 site_name=site_name,
             )
-        elif expected_revision and not current_source_revision:
-            add_issue(
-                "OUTDATED_WORKBOOK",
-                message=f"{sheet_name} 시트의 현재 source revision을 찾지 못했습니다.",
-                sheet_name=sheet_name,
-                site_code=site_code,
-                site_name=site_name,
+            excluded_sites.append(
+                SupportRosterHqSiteProcessOut(
+                    sheet_name=sheet_name,
+                    site_name=site_name,
+                    site_code=site_code,
+                    resolution_method=resolution_method,
+                    status="excluded_stale",
+                    message="source revision 불일치",
+                    expected_revision=expected_revision,
+                    current_revision=current_source_revision,
+                    source_batch_id=source_batch_id,
+                    fallback_text=fallback_text,
+                )
             )
+            continue
 
         date_columns, month_ctx = _extract_arls_date_columns(sheet)
         parsed_month = f"{month_ctx[0]:04d}-{month_ctx[1]:02d}" if month_ctx else None
@@ -6528,6 +6911,15 @@ def _build_support_roster_hq_upload_inspect_result(
                     "status": "blocking",
                     "reason": "날짜 범위를 해석하지 못했습니다.",
                     "issue_code": "DATE_SCOPE_NOT_RESOLVED",
+                    "payload": {
+                        "sheet_name": sheet_name,
+                        "site_id": str(site_entry.get("site_id") or "").strip() or None,
+                        "site_code": site_code,
+                        "site_name": site_name,
+                        "sheet_resolution_method": resolution_method,
+                        "artifact_source_batch_id": source_batch_id,
+                        "artifact_source_revision": current_source_revision,
+                    },
                 }
             )
             continue
@@ -6562,16 +6954,33 @@ def _build_support_roster_hq_upload_inspect_result(
             employee_index = _build_employee_name_index(site_employee_rows)
             employee_index_cache[site_code] = employee_index
 
+        processed_sites.append(
+            SupportRosterHqSiteProcessOut(
+                sheet_name=sheet_name,
+                site_name=site_name,
+                site_code=site_code,
+                resolution_method=resolution_method,
+                status="processed",
+                message="검토 가능",
+                expected_revision=expected_revision,
+                current_revision=current_source_revision,
+                source_batch_id=source_batch_id,
+                fallback_text=fallback_text,
+            )
+        )
+        site_artifact_scope_map = dict(current_source.get("scope_map") or {})
         seen_scope_keys: set[str] = set()
-        for shift_kind, block_rows, required_row_key, vendor_row_key, section_label in (
-            ("day", list(rows_meta.get("weekly_rows") or []), "day_need_row", "day_vendor_count_row", "주간 지원"),
-            ("night", list(rows_meta.get("night_rows") or []), "night_need_row", "night_vendor_count_row", "야간 지원"),
+
+        for shift_kind, block_rows, required_row_key, vendor_row_key in (
+            ("day", list(rows_meta.get("weekly_rows") or []), "day_need_row", "day_vendor_count_row"),
+            ("night", list(rows_meta.get("night_rows") or []), "night_need_row", "night_vendor_count_row"),
         ):
             if not block_rows:
                 continue
             required_row_no = rows_meta.get(required_row_key)
             vendor_row_no = rows_meta.get(vendor_row_key)
             purpose_row_no = rows_meta.get("work_note_row") if shift_kind == "night" else None
+
             for col_idx, schedule_date in sorted(date_columns.items(), key=lambda item: item[1]):
                 scope_key = f"{site_code}:{schedule_date.isoformat()}:{shift_kind}"
                 if scope_key in seen_scope_keys:
@@ -6588,21 +6997,28 @@ def _build_support_roster_hq_upload_inspect_result(
                 seen_scope_keys.add(scope_key)
 
                 scope_issue_start = len(raw_issues)
-                workbook_required_raw = _normalize_workbook_display_value(sheet.cell(row=int(required_row_no), column=col_idx).value) if required_row_no else None
+                workbook_required_raw = _normalize_workbook_display_value(
+                    sheet.cell(row=int(required_row_no), column=col_idx).value
+                ) if required_row_no else None
                 workbook_required_count = None
                 if workbook_required_raw:
                     workbook_required_count, _raw_text = _parse_daytime_need_value(workbook_required_raw)
-                external_count_raw = _normalize_workbook_display_value(sheet.cell(row=int(vendor_row_no), column=col_idx).value) if vendor_row_no else None
-                purpose_text = _normalize_workbook_display_value(sheet.cell(row=int(purpose_row_no), column=col_idx).value) if purpose_row_no else None
+                external_count_raw = _normalize_workbook_display_value(
+                    sheet.cell(row=int(vendor_row_no), column=col_idx).value
+                ) if vendor_row_no else None
+                purpose_text = _normalize_workbook_display_value(
+                    sheet.cell(row=int(purpose_row_no), column=col_idx).value
+                ) if purpose_row_no else None
                 workbook_scope_present = bool(workbook_required_raw) or bool(external_count_raw) or bool(purpose_text)
 
-                ticket = ticket_scope_map.get((site_code, schedule_date.isoformat(), shift_kind))
-                request_count = max(0, int((ticket or {}).get("request_count") or 0))
-                current_status = _extract_sentrix_ticket_hq_roster_status(ticket) if ticket else None
+                artifact_scope = site_artifact_scope_map.get((schedule_date.isoformat(), shift_kind))
+                request_count = max(int((artifact_scope or {}).get("request_count") or 0), 0)
+                artifact_purpose_text = str((artifact_scope or {}).get("work_purpose") or "").strip() or None
                 valid_filled_count = 0
                 invalid_filled_count = 0
                 meaningful_scope = False
                 worker_rows: list[dict[str, Any]] = []
+                worker_entries: list[dict[str, Any]] = []
                 seen_slot_indexes: set[int] = set()
 
                 for position, row_no in enumerate(block_rows, start=1):
@@ -6619,6 +7035,7 @@ def _build_support_roster_hq_upload_inspect_result(
                         )
                         continue
                     seen_slot_indexes.add(slot_index)
+
                     parsed_worker = _parse_sentrix_hq_worker_cell(
                         sheet.cell(row=row_no, column=col_idx).value,
                         schedule_date=schedule_date,
@@ -6641,7 +7058,37 @@ def _build_support_roster_hq_upload_inspect_result(
                         )
                     elif parsed_worker.get("is_filled"):
                         valid_filled_count += 1
-                    if issue_code or parsed_worker.get("is_filled"):
+
+                    if parsed_worker.get("is_filled") or issue_code:
+                        worker_payload = {
+                            "scope_key": scope_key,
+                            "sheet_name": sheet_name,
+                            "site_id": str(site_entry.get("site_id") or "").strip() or None,
+                            "site_code": site_code,
+                            "site_name": site_name,
+                            "work_date": schedule_date.isoformat(),
+                            "shift_kind": shift_kind,
+                            "slot_index": slot_index,
+                            "artifact_source_batch_id": source_batch_id,
+                            "artifact_source_revision": current_source_revision,
+                            "request_count": request_count,
+                            "raw_cell_text": str(parsed_worker.get("raw_text") or "").strip() or None,
+                            "parsed_display_value": str(parsed_worker.get("display_value") or "").strip() or None,
+                            "source_row": row_no,
+                            "source_col": col_idx,
+                            "source_cell_ref": f"{get_column_letter(col_idx)}{row_no}",
+                            "self_staff": bool(parsed_worker.get("self_staff")),
+                            "affiliation": str(parsed_worker.get("affiliation") or "").strip() or None,
+                            "worker_name": str(parsed_worker.get("name") or "").strip() or None,
+                            "worker_type": str(parsed_worker.get("worker_type") or "").strip() or None,
+                            "employee_id": str(parsed_worker.get("employee_id") or "").strip() or None,
+                            "employee_code": str(parsed_worker.get("employee_code") or "").strip() or None,
+                            "employee_name": str(parsed_worker.get("employee_name") or "").strip() or None,
+                            "countable": bool(parsed_worker.get("countable")),
+                            "issue_code": issue_code,
+                            "issue_message": issue_message,
+                        }
+                        worker_entries.append(worker_payload)
                         worker_rows.append(
                             {
                                 "row_kind": "worker",
@@ -6651,63 +7098,34 @@ def _build_support_roster_hq_upload_inspect_result(
                                 "work_date": schedule_date,
                                 "shift_kind": shift_kind,
                                 "slot_index": slot_index,
-                                "raw_cell_text": str(parsed_worker.get("raw_text") or "").strip() or None,
-                                "parsed_display_value": str(parsed_worker.get("display_value") or "").strip() or None,
-                                "ticket_id": ticket.get("id") if ticket else None,
+                                "raw_cell_text": worker_payload["raw_cell_text"],
+                                "parsed_display_value": worker_payload["parsed_display_value"],
+                                "ticket_id": None,
                                 "request_count": request_count,
                                 "valid_filled_count": valid_filled_count,
                                 "target_status": None,
                                 "status": "blocking" if issue_code else "parsed",
                                 "reason": issue_message if issue_code else "유효 입력",
                                 "issue_code": issue_code,
-                                "payload": {
-                                    "scope_key": scope_key,
-                                    "sheet_name": sheet_name,
-                                    "site_id": str(site_entry.get("site_id") or "").strip() or None,
-                                    "site_code": site_code,
-                                    "site_name": site_name,
-                                    "work_date": schedule_date.isoformat(),
-                                    "shift_kind": shift_kind,
-                                    "slot_index": slot_index,
-                                "ticket_id": str(ticket.get("id") or "").strip() if ticket else None,
-                                "request_count": request_count,
-                                "raw_cell_text": str(parsed_worker.get("raw_text") or "").strip() or None,
-                                "parsed_display_value": str(parsed_worker.get("display_value") or "").strip() or None,
-                                "sheet_name": sheet_name,
-                                "source_row": row_no,
-                                "source_col": col_idx,
-                                "source_cell_ref": f"{get_column_letter(col_idx)}{row_no}",
-                                "self_staff": bool(parsed_worker.get("self_staff")),
-                                "affiliation": str(parsed_worker.get("affiliation") or "").strip() or None,
-                                "worker_name": str(parsed_worker.get("name") or "").strip() or None,
-                                "worker_type": str(parsed_worker.get("worker_type") or "").strip() or None,
-                                "employee_id": str(parsed_worker.get("employee_id") or "").strip() or None,
-                                    "employee_code": str(parsed_worker.get("employee_code") or "").strip() or None,
-                                    "employee_name": str(parsed_worker.get("employee_name") or "").strip() or None,
-                                    "countable": bool(parsed_worker.get("countable")),
-                                    "issue_code": issue_code,
-                                    "issue_message": issue_message,
-                                },
+                                "payload": worker_payload,
                             }
                         )
 
                 scope_has_workbook_signal = workbook_scope_present or meaningful_scope
-
-                if purpose_text and ticket and str(ticket.get("work_purpose") or "").strip() and str(ticket.get("work_purpose") or "").strip() != purpose_text:
+                if purpose_text and artifact_purpose_text and artifact_purpose_text != purpose_text:
                     add_issue(
                         "PURPOSE_FIELD_PARSE_WARNING",
-                        message="야간 작업 목적은 현재 ticket 값을 유지하고 workbook 값은 참고 정보로만 보존합니다.",
+                        message="야간 작업 목적은 현재 ARLS artifact 값을 유지하고 workbook 값은 참고 정보로만 보존합니다.",
                         sheet_name=sheet_name,
                         site_code=site_code,
                         site_name=site_name,
                         work_date=schedule_date,
                         shift_kind=shift_kind,
                     )
-
-                if not ticket and scope_has_workbook_signal:
+                if not artifact_scope and scope_has_workbook_signal:
                     add_issue(
-                        "TICKET_SCOPE_NOT_FOUND",
-                        message="입력된 지원근무 범위와 매칭되는 기존 Sentrix ticket을 찾지 못했습니다.",
+                        "ARTIFACT_SCOPE_NOT_FOUND",
+                        message="입력된 지원근무 범위와 매칭되는 ARLS 지원 수요 artifact를 찾지 못했습니다.",
                         sheet_name=sheet_name,
                         site_code=site_code,
                         site_name=site_name,
@@ -6720,7 +7138,7 @@ def _build_support_roster_hq_upload_inspect_result(
                 scope_reason = "입력 없음"
                 overflow_count = 0
                 effective_valid_count = valid_filled_count
-                if ticket:
+                if artifact_scope:
                     if valid_filled_count == request_count:
                         target_status = SENTRIX_HQ_ROSTER_AUTO_APPROVED_STATUS
                         scope_status = SENTRIX_HQ_ROSTER_AUTO_APPROVED_STATUS
@@ -6753,7 +7171,7 @@ def _build_support_roster_hq_upload_inspect_result(
                         )
                 elif scope_has_workbook_signal:
                     scope_status = "blocking"
-                    scope_reason = "매칭되는 Sentrix ticket이 없습니다."
+                    scope_reason = "매칭되는 ARLS 지원 수요 artifact가 없습니다."
 
                 if overflow_count > 0:
                     valid_row_index = 0
@@ -6773,14 +7191,18 @@ def _build_support_roster_hq_upload_inspect_result(
 
                 scope_issues = raw_issues[scope_issue_start:]
                 blocking_issue_count = sum(
-                    1 for issue in scope_issues if str(issue.get("severity") or "").strip().lower() == "blocking"
+                    1
+                    for issue in scope_issues
+                    if str(issue.get("severity") or "").strip().lower() == "blocking"
                 )
                 warning_issue_count = sum(
-                    1 for issue in scope_issues if str(issue.get("severity") or "").strip().lower() == "warning"
+                    1
+                    for issue in scope_issues
+                    if str(issue.get("severity") or "").strip().lower() == "warning"
                 )
                 if scope_has_workbook_signal:
                     total_scope_count += 1
-                    if ticket and blocking_issue_count == 0:
+                    if artifact_scope and blocking_issue_count == 0:
                         valid_scope_count += 1
                     scope_summary = SupportRosterHqScopeSummaryOut(
                         scope_key=scope_key,
@@ -6789,17 +7211,23 @@ def _build_support_roster_hq_upload_inspect_result(
                         site_code=site_code,
                         work_date=schedule_date,
                         shift_kind=shift_kind,
-                        ticket_id=ticket.get("id") if ticket else None,
+                        ticket_id=None,
                         request_count=request_count,
                         valid_filled_count=valid_filled_count,
                         invalid_filled_count=invalid_filled_count,
                         target_status=target_status,
-                        current_status=current_status,
+                        current_status=None,
                         workbook_required_count=workbook_required_count,
                         workbook_required_raw=workbook_required_raw,
                         external_count_raw=external_count_raw,
-                        purpose_text=purpose_text,
-                        matched_ticket=bool(ticket),
+                        purpose_text=purpose_text or artifact_purpose_text,
+                        scope_reason=scope_reason,
+                        matched_ticket=False,
+                        matched_artifact_scope=bool(artifact_scope),
+                        artifact_source_batch_id=source_batch_id,
+                        artifact_source_revision=current_source_revision,
+                        worker_entries=worker_entries,
+                        sheet_resolution_method=resolution_method,
                         blocking_issue_count=blocking_issue_count,
                         warning_issue_count=warning_issue_count,
                     )
@@ -6816,10 +7244,10 @@ def _build_support_roster_hq_upload_inspect_result(
                             "raw_cell_text": None,
                             "parsed_display_value": (
                                 f"유효 {effective_valid_count}명 / 요청 {request_count}명 / 인원초과 {overflow_count}명"
-                                if ticket and overflow_count > 0
-                                else (f"유효 {valid_filled_count}명 / 요청 {request_count}명" if ticket else f"유효 {valid_filled_count}명")
+                                if overflow_count > 0
+                                else f"유효 {valid_filled_count}명 / 요청 {request_count}명"
                             ),
-                            "ticket_id": ticket.get("id") if ticket else None,
+                            "ticket_id": None,
                             "request_count": request_count,
                             "valid_filled_count": valid_filled_count,
                             "target_status": target_status,
@@ -6835,17 +7263,23 @@ def _build_support_roster_hq_upload_inspect_result(
                                 "site_name": site_name,
                                 "work_date": schedule_date.isoformat(),
                                 "shift_kind": shift_kind,
-                                "ticket_id": str(ticket.get("id") or "").strip() if ticket else None,
+                                "ticket_id": None,
                                 "request_count": request_count,
                                 "valid_filled_count": valid_filled_count,
                                 "invalid_filled_count": invalid_filled_count,
                                 "target_status": target_status,
-                                "current_status": current_status,
+                                "current_status": None,
                                 "workbook_required_count": workbook_required_count,
                                 "workbook_required_raw": workbook_required_raw,
                                 "external_count_raw": external_count_raw,
-                                "purpose_text": purpose_text,
-                                "matched_ticket": bool(ticket),
+                                "purpose_text": purpose_text or artifact_purpose_text,
+                                "scope_reason": scope_reason,
+                                "matched_ticket": False,
+                                "matched_artifact_scope": bool(artifact_scope),
+                                "artifact_source_batch_id": source_batch_id,
+                                "artifact_source_revision": current_source_revision,
+                                "worker_entries": worker_entries,
+                                "sheet_resolution_method": resolution_method,
                                 "blocking_issue_count": blocking_issue_count,
                                 "warning_issue_count": warning_issue_count,
                             },
@@ -6854,7 +7288,12 @@ def _build_support_roster_hq_upload_inspect_result(
                     raw_review_rows.extend(worker_rows)
 
         site_blocking_count_after = len(
-            [issue for issue in raw_issues if str(issue.get("sheet_name") or "").strip() == sheet_name and str(issue.get("severity") or "").strip() == "blocking"]
+            [
+                issue
+                for issue in raw_issues
+                if str(issue.get("sheet_name") or "").strip() == sheet_name
+                and str(issue.get("severity") or "").strip().lower() == "blocking"
+            ]
         )
         if site_blocking_count_after == site_blocking_count_before:
             valid_sheet_count += 1
@@ -6863,7 +7302,9 @@ def _build_support_roster_hq_upload_inspect_result(
     blocking_issue_count = sum(issue.count for issue in issue_list if issue.severity == "blocking")
     latest_status = "latest"
     if blocking_issue_count > 0:
-        latest_status = "outdated" if any(issue.code == "OUTDATED_WORKBOOK" for issue in issue_list) else "invalid"
+        latest_status = "invalid"
+    elif stale_site_codes:
+        latest_status = "partial_stale" if valid_scope_count > 0 else "outdated"
 
     raw_review_rows.sort(
         key=lambda item: (
@@ -6897,15 +7338,27 @@ def _build_support_roster_hq_upload_inspect_result(
         )
         for item in raw_review_rows
     ]
+    aggregated_review_rows = _build_support_roster_hq_aggregated_review_rows(scope_summaries)
 
     summary = {
         "scope_total": total_scope_count,
         "scope_valid": valid_scope_count,
-        "auto_approved": sum(1 for item in scope_summaries if item.target_status == SENTRIX_HQ_ROSTER_AUTO_APPROVED_STATUS and item.blocking_issue_count == 0),
-        "approval_pending": sum(1 for item in scope_summaries if item.target_status == SENTRIX_HQ_ROSTER_PENDING_STATUS and item.blocking_issue_count == 0),
+        "auto_approved": sum(
+            1
+            for item in scope_summaries
+            if item.target_status == SENTRIX_HQ_ROSTER_AUTO_APPROVED_STATUS and item.blocking_issue_count == 0
+        ),
+        "approval_pending": sum(
+            1
+            for item in scope_summaries
+            if item.target_status == SENTRIX_HQ_ROSTER_PENDING_STATUS and item.blocking_issue_count == 0
+        ),
         "blocking": sum(1 for item in scope_summaries if item.blocking_issue_count > 0),
         "worker_rows": sum(1 for item in review_rows if item.row_kind == "worker"),
         "valid_workers": sum(int(item.valid_filled_count or 0) for item in scope_summaries),
+        "processed_sites": len(processed_sites),
+        "stale_sites": len(stale_site_codes),
+        "excluded_sites": len(excluded_sites),
     }
 
     upload_meta = SupportRosterHqUploadMetaOut(
@@ -6927,8 +7380,13 @@ def _build_support_roster_hq_upload_inspect_result(
     next_step_message = (
         "차단 이슈를 모두 해결한 뒤 다시 검토하세요."
         if blocking_issue_count > 0
-        else ("검토 완료. 적용하면 최신 roster snapshot으로 ticket 상태를 다시 계산합니다." if can_apply else "적용 가능한 ticket scope가 없습니다.")
+        else (
+            "검토 완료. 적용하면 최신 roster snapshot을 Sentrix로 전달합니다."
+            if can_apply
+            else "적용 가능한 최신 지점 scope가 없습니다."
+        )
     )
+
     batch_id = _persist_sentrix_hq_roster_preview_batch(
         conn,
         tenant_id=str(target_tenant["id"]),
@@ -6937,8 +7395,11 @@ def _build_support_roster_hq_upload_inspect_result(
         grouped_issues=issue_list,
         scope_summaries=scope_summaries,
         review_rows=raw_review_rows,
+        aggregated_review_rows=aggregated_review_rows,
         summary=summary,
         site_revision_map=site_revision_map,
+        processed_sites=processed_sites,
+        excluded_sites=excluded_sites,
         user=user,
     )
     return SupportRosterHqUploadInspectOut(
@@ -6950,11 +7411,17 @@ def _build_support_roster_hq_upload_inspect_result(
         valid_sheet_count=valid_sheet_count,
         total_scope_count=total_scope_count,
         valid_scope_count=valid_scope_count,
+        processed_site_count=len(processed_sites),
+        stale_site_count=len(stale_site_codes),
+        excluded_site_count=len(excluded_sites),
         issue_count=sum(issue.count for issue in issue_list),
         summary=summary,
         issues=issue_list,
+        processed_sites=processed_sites,
+        excluded_sites=excluded_sites,
         scope_summaries=scope_summaries,
         review_rows=review_rows,
+        aggregated_review_rows=aggregated_review_rows,
         next_step_message=next_step_message,
     )
 
@@ -6968,8 +7435,11 @@ def _persist_sentrix_hq_roster_preview_batch(
     grouped_issues: list[SupportRosterHqReviewIssueOut],
     scope_summaries: list[SupportRosterHqScopeSummaryOut],
     review_rows: list[dict[str, Any]],
+    aggregated_review_rows: list[SupportRosterHqAggregatedReviewRowOut],
     summary: dict[str, int],
     site_revision_map: dict[str, str],
+    processed_sites: list[SupportRosterHqSiteProcessOut],
+    excluded_sites: list[SupportRosterHqSiteProcessOut],
     user: dict,
 ) -> uuid.UUID:
     batch_id = uuid.uuid4()
@@ -6980,6 +7450,10 @@ def _persist_sentrix_hq_roster_preview_batch(
         "summary": dict(summary or {}),
         "issues": [issue.model_dump(mode="json") for issue in grouped_issues],
         "scope_count": len(scope_summaries),
+        "scope_summaries": [scope.model_dump(mode="json") for scope in scope_summaries],
+        "aggregated_review_rows": [row.model_dump(mode="json") for row in aggregated_review_rows],
+        "processed_sites": [site.model_dump(mode="json") for site in processed_sites],
+        "excluded_sites": [site.model_dump(mode="json") for site in excluded_sites],
     }
     with conn.cursor() as cur:
         cur.execute(
@@ -7102,23 +7576,29 @@ def _load_sentrix_hq_roster_batch_rows(conn, *, batch_id: uuid.UUID) -> list[dic
         return [dict(row) for row in (cur.fetchall() or [])]
 
 
-def _validate_sentrix_hq_roster_batch_freshness(
+def _classify_sentrix_hq_roster_batch_freshness(
     conn,
     *,
     tenant_id: str,
     batch: dict[str, Any],
     month_key: str,
-) -> list[str]:
+) -> dict[str, Any]:
     upload_meta_json = batch.get("upload_meta_json") or {}
     if not isinstance(upload_meta_json, dict):
-        return ["batch upload metadata is invalid"]
+        return {
+            "reasons": ["batch upload metadata is invalid"],
+            "stale_site_codes": [],
+        }
     expected_revision_map = {
         str(key or "").strip().upper(): str(value or "").strip()
         for key, value in dict(upload_meta_json.get("site_revision_map") or {}).items()
         if str(key or "").strip()
     }
     if not expected_revision_map:
-        return []
+        return {
+            "reasons": [],
+            "stale_site_codes": [],
+        }
     current_source_map = _build_support_roster_hq_source_map(
         conn,
         tenant_id=tenant_id,
@@ -7126,11 +7606,34 @@ def _validate_sentrix_hq_roster_batch_freshness(
         site_codes=list(expected_revision_map.keys()),
     )
     blocked_reasons: list[str] = []
+    stale_site_codes: list[str] = []
     for site_code, expected_revision in expected_revision_map.items():
         current_revision = str((current_source_map.get(site_code) or {}).get("source_revision") or "").strip()
         if not current_revision or current_revision != expected_revision:
             blocked_reasons.append(f"{site_code} source revision이 변경되어 현재 upload batch는 stale 상태입니다.")
-    return blocked_reasons
+            stale_site_codes.append(site_code)
+    return {
+        "reasons": blocked_reasons,
+        "stale_site_codes": sorted(set(stale_site_codes)),
+    }
+
+
+def _validate_sentrix_hq_roster_batch_freshness(
+    conn,
+    *,
+    tenant_id: str,
+    batch: dict[str, Any],
+    month_key: str,
+) -> list[str]:
+    return list(
+        _classify_sentrix_hq_roster_batch_freshness(
+            conn,
+            tenant_id=tenant_id,
+            batch=batch,
+            month_key=month_key,
+        ).get("reasons")
+        or []
+    )
 
 
 def _restore_sentrix_hq_roster_apply_result(batch: dict[str, Any] | None) -> SupportRosterHqApplyOut | None:
@@ -8637,15 +9140,18 @@ def _apply_sentrix_hq_roster_batch(
     if max(int(batch.get("blocking_issue_count") or 0), 0) > 0:
         blocked_reasons.append("검토 단계의 차단 이슈가 남아 있어 적용할 수 없습니다.")
     if max(int(batch.get("valid_scope_count") or 0), 0) <= 0:
-        blocked_reasons.append("적용 가능한 ticket scope가 없습니다.")
-    blocked_reasons.extend(
-        _validate_sentrix_hq_roster_batch_freshness(
-            conn,
-            tenant_id=str(target_tenant["id"]),
-            batch=batch,
-            month_key=month_key,
-        )
+        blocked_reasons.append("적용 가능한 support scope가 없습니다.")
+    freshness = _classify_sentrix_hq_roster_batch_freshness(
+        conn,
+        tenant_id=str(target_tenant["id"]),
+        batch=batch,
+        month_key=month_key,
     )
+    stale_site_codes = {
+        str(code or "").strip().upper()
+        for code in list(freshness.get("stale_site_codes") or [])
+        if str(code or "").strip()
+    }
 
     batch_rows = _load_sentrix_hq_roster_batch_rows(conn, batch_id=batch_id)
     if not batch_rows:
@@ -8653,22 +9159,11 @@ def _apply_sentrix_hq_roster_batch(
 
     scope_payloads: dict[str, dict[str, Any]] = {}
     worker_payloads_by_scope: dict[str, list[dict[str, Any]]] = {}
-    site_codes: set[str] = set()
-    site_ids: set[str] = set()
 
     for row in batch_rows:
         payload = dict(row.get("payload_json") or {})
         scope_key = str(payload.get("scope_key") or "").strip()
         row_kind = str(row.get("row_kind") or payload.get("row_kind") or "").strip() or "worker"
-        site_code = str(payload.get("site_code") or row.get("site_code") or "").strip().upper()
-        site_id_raw = str(payload.get("site_id") or row.get("site_id") or "").strip()
-        if site_code:
-            site_codes.add(site_code)
-        if site_id_raw:
-            try:
-                site_ids.add(str(uuid.UUID(site_id_raw)))
-            except Exception:
-                blocked_reasons.append(f"{site_code or site_id_raw} site_id를 해석할 수 없습니다.")
         if row_kind == "scope_summary":
             if not scope_key:
                 blocked_reasons.append("scope summary key가 없어 적용할 수 없습니다.")
@@ -8682,24 +9177,17 @@ def _apply_sentrix_hq_roster_batch(
             if not scope_key:
                 blocked_reasons.append("worker row scope key가 없어 적용할 수 없습니다.")
                 continue
-            if str(row.get("severity") or "").strip().lower() == "blocking" or str(payload.get("issue_code") or "").strip():
-                blocked_reasons.append(f"{scope_key} 범위에 차단 근무자 셀이 남아 있어 적용할 수 없습니다.")
             worker_payloads_by_scope.setdefault(scope_key, []).append(payload)
 
     orphan_scope_keys = sorted(set(worker_payloads_by_scope.keys()) - set(scope_payloads.keys()))
     if orphan_scope_keys:
-        blocked_reasons.append("scope summary 없이 남아 있는 worker row가 있어 다시 검토해야 합니다.")
+        logger.warning("[support-hq] orphan worker rows ignored batch_id=%s scope_keys=%s", batch_id, orphan_scope_keys[:10])
 
     if not scope_payloads:
         blocked_reasons.append("적용할 support roster scope summary가 없습니다.")
 
-    current_ticket_scope_map = _load_sentrix_support_ticket_scope_map(
-        conn,
-        tenant_id=str(target_tenant["id"]),
-        month_key=month_key,
-        site_codes=sorted(site_codes),
-    )
     scope_apply_specs: list[dict[str, Any]] = []
+    excluded_scope_specs: list[dict[str, Any]] = []
 
     for scope_key, payload in sorted(scope_payloads.items(), key=lambda item: item[0]):
         site_code = str(payload.get("site_code") or "").strip().upper()
@@ -8707,12 +9195,12 @@ def _apply_sentrix_hq_roster_batch(
         sheet_name = str(payload.get("sheet_name") or "").strip() or site_name or site_code or "-"
         work_date_raw = str(payload.get("work_date") or "").strip()
         shift_kind = "night" if str(payload.get("shift_kind") or "").strip().lower() == "night" else "day"
-        ticket_id_raw = str(payload.get("ticket_id") or "").strip()
         target_status = str(payload.get("target_status") or "").strip().lower()
         request_count = max(int(payload.get("request_count") or 0), 0)
         valid_filled_count = max(int(payload.get("valid_filled_count") or 0), 0)
         invalid_filled_count = max(int(payload.get("invalid_filled_count") or 0), 0)
-        matched_ticket = bool(payload.get("matched_ticket"))
+        matched_artifact_scope = bool(payload.get("matched_artifact_scope"))
+        blocking_issue_count = max(int(payload.get("blocking_issue_count") or 0), 0)
 
         try:
             work_date = date.fromisoformat(work_date_raw)
@@ -8720,24 +9208,9 @@ def _apply_sentrix_hq_roster_batch(
             blocked_reasons.append(f"{sheet_name} 시트의 날짜 범위를 적용 단계에서 해석하지 못했습니다.")
             continue
 
-        current_ticket = current_ticket_scope_map.get((site_code, work_date.isoformat(), shift_kind))
-        if not current_ticket or not matched_ticket or not ticket_id_raw:
-            blocked_reasons.append(f"{sheet_name} {work_date.isoformat()} {shift_kind} 범위의 기존 ticket을 찾을 수 없습니다.")
-            continue
-        if str(current_ticket.get("id") or "").strip() != ticket_id_raw:
-            blocked_reasons.append(f"{sheet_name} {work_date.isoformat()} {shift_kind} ticket이 검토 이후 변경되었습니다.")
-            continue
-        current_request_count = max(int(current_ticket.get("request_count") or 0), 0)
-        if current_request_count != request_count:
-            blocked_reasons.append(f"{sheet_name} {work_date.isoformat()} {shift_kind} 요청 인원이 검토 이후 변경되었습니다.")
-            continue
-        if target_status not in {SENTRIX_HQ_ROSTER_AUTO_APPROVED_STATUS, SENTRIX_HQ_ROSTER_PENDING_STATUS}:
-            blocked_reasons.append(f"{sheet_name} {work_date.isoformat()} {shift_kind} target status를 확정하지 못했습니다.")
-            continue
-
         worker_payloads = sorted(
-            list(worker_payloads_by_scope.get(scope_key) or []),
-            key=lambda item: max(int(item.get("slot_index") or 0), 0),
+            list(payload.get("worker_entries") or worker_payloads_by_scope.get(scope_key) or []),
+            key=lambda item: max(int((item or {}).get("slot_index") or 0), 0),
         )
         valid_worker_payloads = [
             payload_row
@@ -8745,14 +9218,39 @@ def _apply_sentrix_hq_roster_batch(
             if not str(payload_row.get("issue_code") or "").strip()
             and bool(payload_row.get("countable"))
         ]
-        if len(valid_worker_payloads) != valid_filled_count:
-            blocked_reasons.append(f"{sheet_name} {work_date.isoformat()} {shift_kind} 유효 인원 수가 preview 결과와 다릅니다.")
+
+        if site_code in stale_site_codes:
+            excluded_scope_specs.append(
+                {
+                    "scope_key": scope_key,
+                    "sheet_name": sheet_name,
+                    "site_code": site_code,
+                    "site_name": site_name,
+                    "work_date": work_date,
+                    "shift_kind": shift_kind,
+                    "request_count": request_count,
+                    "valid_filled_count": valid_filled_count,
+                    "invalid_filled_count": invalid_filled_count,
+                    "target_status": target_status,
+                    "scope_payload": payload,
+                    "worker_payloads": worker_payloads,
+                    "valid_worker_payloads": valid_worker_payloads,
+                    "exclusion_reason": "source revision 변경으로 stale excluded",
+                }
+            )
             continue
 
-        try:
-            ticket_uuid = uuid.UUID(ticket_id_raw)
-        except Exception:
-            blocked_reasons.append(f"{sheet_name} {work_date.isoformat()} {shift_kind} ticket id를 해석하지 못했습니다.")
+        if not matched_artifact_scope:
+            blocked_reasons.append(f"{sheet_name} {work_date.isoformat()} {shift_kind} 범위의 ARLS 지원 수요 artifact를 찾을 수 없습니다.")
+            continue
+        if blocking_issue_count > 0:
+            blocked_reasons.append(f"{sheet_name} {work_date.isoformat()} {shift_kind} 범위에 차단 이슈가 남아 있어 적용할 수 없습니다.")
+            continue
+        if target_status not in {SENTRIX_HQ_ROSTER_AUTO_APPROVED_STATUS, SENTRIX_HQ_ROSTER_PENDING_STATUS}:
+            blocked_reasons.append(f"{sheet_name} {work_date.isoformat()} {shift_kind} target status를 확정하지 못했습니다.")
+            continue
+        if len(valid_worker_payloads) != valid_filled_count:
+            blocked_reasons.append(f"{sheet_name} {work_date.isoformat()} {shift_kind} 유효 인원 수가 preview 결과와 다릅니다.")
             continue
 
         scope_apply_specs.append(
@@ -8764,8 +9262,6 @@ def _apply_sentrix_hq_roster_batch(
                 "month_key": month_key,
                 "work_date": work_date,
                 "shift_kind": shift_kind,
-                "ticket": current_ticket,
-                "ticket_id": ticket_uuid,
                 "request_count": request_count,
                 "valid_filled_count": valid_filled_count,
                 "invalid_filled_count": invalid_filled_count,
@@ -8776,6 +9272,9 @@ def _apply_sentrix_hq_roster_batch(
             }
         )
 
+    if not scope_apply_specs and excluded_scope_specs and not blocked_reasons:
+        blocked_reasons.append("현재 upload batch에서 적용 가능한 최신 지점 scope가 없습니다.")
+
     if blocked_reasons:
         blocked_reasons = list(dict.fromkeys(item for item in blocked_reasons if str(item).strip()))
         result = SupportRosterHqApplyOut(
@@ -8784,15 +9283,36 @@ def _apply_sentrix_hq_roster_batch(
             blocked=True,
             blocked_reasons=blocked_reasons,
             issue_count=max(int(batch.get("issue_count") or 0), 0),
-            assignments_created=0,
-            assignments_removed=0,
-            tickets_updated=0,
-            tickets_auto_approved=0,
-            tickets_pending=0,
+            affected_scope_count=len(scope_payloads),
+            excluded_scope_count=len(excluded_scope_specs),
+            affected_site_codes=sorted({str(item.get("site_code") or "").strip() for item in list(scope_apply_specs) + list(excluded_scope_specs) if str(item.get("site_code") or "").strip()}),
+            processed_site_codes=sorted({str(item.get("site_code") or "").strip() for item in scope_apply_specs if str(item.get("site_code") or "").strip()}),
+            excluded_site_codes=sorted({str(item.get("site_code") or "").strip() for item in excluded_scope_specs if str(item.get("site_code") or "").strip()}),
+            stale_site_codes=sorted(stale_site_codes),
             applied_scope_count=0,
             failed_scope_count=len(scope_payloads),
             audit_timestamp=datetime.now(timezone.utc),
-            scope_results=[],
+            scope_results=[
+                SupportRosterHqApplyScopeOut(
+                    scope_key=str(spec.get("scope_key") or "").strip(),
+                    sheet_name=str(spec.get("sheet_name") or "").strip() or "-",
+                    site_name=str(spec.get("site_name") or "").strip() or None,
+                    site_code=str(spec.get("site_code") or "").strip() or None,
+                    work_date=spec.get("work_date"),
+                    shift_kind=str(spec.get("shift_kind") or "").strip() or None,
+                    request_count=max(int(spec.get("request_count") or 0), 0),
+                    valid_filled_count=max(int(spec.get("valid_filled_count") or 0), 0),
+                    target_status=str(spec.get("target_status") or "").strip() or None,
+                    assignment_count=len(spec.get("valid_worker_payloads") or []),
+                    handoff_status="excluded",
+                    handoff_message=str(spec.get("exclusion_reason") or "").strip() or None,
+                    excluded=True,
+                    exclusion_reason=str(spec.get("exclusion_reason") or "").strip() or None,
+                    artifact_source_batch_id=str(dict(spec.get("scope_payload") or {}).get("artifact_source_batch_id") or "").strip() or None,
+                    artifact_source_revision=str(dict(spec.get("scope_payload") or {}).get("artifact_source_revision") or "").strip() or None,
+                )
+                for spec in excluded_scope_specs
+            ],
         )
         with conn.cursor() as cur:
             _write_sentrix_hq_roster_batch_apply_audit(
@@ -8823,6 +9343,8 @@ def _apply_sentrix_hq_roster_batch(
             handoff_payload=handoff_payload,
             handoff_response=handoff_response,
             scope_apply_specs=scope_apply_specs,
+            excluded_scope_specs=excluded_scope_specs,
+            stale_site_codes=sorted(stale_site_codes),
         )
         audit_status = "applied" if result.applied and not result.partial_success else "failed"
         audit_error_text = None if result.applied and not result.partial_success else str(result.handoff_message or "").strip() or None
@@ -8846,6 +9368,8 @@ def _apply_sentrix_hq_roster_batch(
             issue_count=issue_count,
             artifact_id=artifact_id,
             scope_apply_specs=scope_apply_specs,
+            excluded_scope_specs=excluded_scope_specs,
+            stale_site_codes=sorted(stale_site_codes),
             error_message=str(exc).strip() or "Sentrix handoff failed",
         )
         with conn.cursor() as cur:
