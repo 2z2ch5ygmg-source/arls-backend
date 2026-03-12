@@ -38915,6 +38915,29 @@ function getSelectedScheduleImportMappingProfile() {
   return profiles.find((profile) => String(profile?.profile_id || '').trim() === selectedId) || profiles[0] || null;
 }
 
+function syncScheduleImportMappingProfilePreviewMetadata(profile = null) {
+  const preview = state.preview && typeof state.preview === 'object' ? state.preview : null;
+  const metadata = preview?.metadata && typeof preview.metadata === 'object' ? preview.metadata : null;
+  const previewMapping = metadata?.mapping_profile && typeof metadata.mapping_profile === 'object'
+    ? metadata.mapping_profile
+    : null;
+  const normalizedProfile = profile && typeof profile === 'object' ? profile : null;
+  if (!previewMapping || !normalizedProfile) {
+    return;
+  }
+  const previewProfileId = String(previewMapping?.profile_id || '').trim();
+  const nextProfileId = String(normalizedProfile?.profile_id || '').trim();
+  if (previewProfileId && nextProfileId && previewProfileId !== nextProfileId) {
+    return;
+  }
+  metadata.mapping_profile = {
+    ...previewMapping,
+    ...normalizedProfile,
+    profile_id: nextProfileId || previewProfileId || 'active-profile',
+    entries: Array.isArray(normalizedProfile?.entries) ? normalizedProfile.entries.map((entry) => ({ ...entry })) : [],
+  };
+}
+
 function buildScheduleImportMappingUsageMap() {
   const usage = new Map();
   getScheduleImportMappingProfiles().forEach((profile) => {
@@ -39637,16 +39660,23 @@ async function onScheduleImportMappingSave() {
     return;
   }
 
-  const profile = await apiRequest(`/schedules/import-mapping-profile?tenant_code=${encodeURIComponent(getScheduleTenantValue())}`, {
+  const savedProfile = await apiRequest(`/schedules/import-mapping-profile?tenant_code=${encodeURIComponent(getScheduleTenantValue())}`, {
     method: 'PUT',
     body: {
       profile_name: profileName,
       entries,
     },
   });
-  state.schedule.importMappingProfile = profile && typeof profile === 'object' ? profile : null;
+  state.schedule.importMappingProfile = savedProfile && typeof savedProfile === 'object' ? savedProfile : null;
+  state.schedule.importMappingProfileFetchedAt = 0;
+  const refreshedProfile = await loadScheduleImportMappingProfile({ force: true });
+  const nextProfile = refreshedProfile && typeof refreshedProfile === 'object'
+    ? refreshedProfile
+    : state.schedule.importMappingProfile;
+  state.schedule.importMappingProfile = nextProfile && typeof nextProfile === 'object' ? nextProfile : null;
   state.schedule.importMappingProfileFetchedAt = Date.now();
   ensureSelectedScheduleImportMappingProfileId();
+  syncScheduleImportMappingProfilePreviewMetadata(state.schedule.importMappingProfile);
   renderScheduleImportMappingProfileSummary();
   renderScheduleImportMappingProfileManager();
   renderScheduleTemplateTable();
