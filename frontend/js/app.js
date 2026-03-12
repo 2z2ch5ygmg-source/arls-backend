@@ -10720,6 +10720,10 @@ async function onScheduleSupportHqInspect() {
       method: 'POST',
       body,
     });
+    if (fileInput instanceof HTMLInputElement) {
+      // Allow re-selecting the same path/name after the workbook is edited locally.
+      fileInput.value = '';
+    }
     workspace.inspectResult = result && typeof result === 'object' ? result : null;
     workspace.inspectLoading = false;
     renderScheduleUploadWorkspace();
