@@ -841,6 +841,8 @@ function createInitialScheduleState() {
     importMappingProfile: null,
     importMappingProfileFetchedAt: 0,
     importSiteOptionsLoading: false,
+    uploadWorkspaceBooting: false,
+    uploadWorkspaceBootPromise: null,
     selectedEmployeeCode: '',
     selectedDateKey: '',
     lastInteractedDateKey: '',
@@ -9781,6 +9783,7 @@ function renderScheduleUploadWorkspace() {
   const hasFile = Boolean(fileInput?.files?.length);
   const uploadUi = getScheduleUploadUiState();
   const supportHqWorkspace = ensureScheduleSupportHqWorkspaceState();
+  const uploadWorkspaceBooting = Boolean(state.schedule.uploadWorkspaceBooting);
   const supportHqBusy = Boolean(
     supportHqWorkspace.loading
     || supportHqWorkspace.inspectLoading
@@ -9798,7 +9801,9 @@ function renderScheduleUploadWorkspace() {
       : '현재 계정은 본인 지점만 업로드 가능합니다.';
   }
   if (siteHint) {
-    if (siteOptionsLoading) {
+    if (uploadWorkspaceBooting) {
+      siteHint.textContent = 'Excel workflow 초기 상태를 준비하는 중입니다. 준비가 끝나면 지점과 월을 선택할 수 있습니다.';
+    } else if (siteOptionsLoading) {
       siteHint.textContent = '지점 목록을 불러오는 중입니다. 로딩이 끝나면 선택할 수 있습니다.';
     } else {
       siteHint.textContent = isScheduleUploadTenantWideUser()
@@ -9807,26 +9812,26 @@ function renderScheduleUploadWorkspace() {
     }
   }
   if (siteSelect instanceof HTMLSelectElement) {
-    siteSelect.disabled = siteOptionsLoading || uploadUi.analysisInFlight || supportHqBusy || !isScheduleUploadTenantWideUser();
+    siteSelect.disabled = uploadWorkspaceBooting || siteOptionsLoading || uploadUi.analysisInFlight || supportHqBusy || !isScheduleUploadTenantWideUser();
   }
   if (monthInput instanceof HTMLInputElement) {
-    monthInput.disabled = uploadUi.analysisInFlight || supportHqBusy;
+    monthInput.disabled = uploadWorkspaceBooting || uploadUi.analysisInFlight || supportHqBusy;
   }
   if (fileInput instanceof HTMLInputElement) {
-    fileInput.disabled = uploadUi.analysisInFlight || supportHqBusy;
+    fileInput.disabled = uploadWorkspaceBooting || uploadUi.analysisInFlight || supportHqBusy;
   }
   if (previewBtn) {
-    previewBtn.disabled = siteOptionsLoading || uploadUi.analysisInFlight || supportHqBusy || !(hasFile && selectedSite && monthValue);
+    previewBtn.disabled = uploadWorkspaceBooting || siteOptionsLoading || uploadUi.analysisInFlight || supportHqBusy || !(hasFile && selectedSite && monthValue);
     previewBtn.textContent = uploadUi.analysisInFlight ? '분석 중...' : '분석 시작';
   }
   if (latestBaseBtn) {
-    latestBaseBtn.disabled = siteOptionsLoading || uploadUi.analysisInFlight || supportHqBusy || !(selectedSite && monthValue);
+    latestBaseBtn.disabled = uploadWorkspaceBooting || siteOptionsLoading || uploadUi.analysisInFlight || supportHqBusy || !(selectedSite && monthValue);
   }
   if (blankTemplateBtn) {
-    blankTemplateBtn.disabled = uploadUi.analysisInFlight || supportHqBusy;
+    blankTemplateBtn.disabled = uploadWorkspaceBooting || uploadUi.analysisInFlight || supportHqBusy;
   }
   if (mappingEditBtn instanceof HTMLButtonElement) {
-    mappingEditBtn.disabled = uploadUi.analysisInFlight || supportHqBusy || !canMutateScheduleData();
+    mappingEditBtn.disabled = uploadWorkspaceBooting || uploadUi.analysisInFlight || supportHqBusy || !canMutateScheduleData();
   }
 
   renderScheduleUploadProgress();
@@ -26943,7 +26948,7 @@ async function loadScheduleViewPresenter() {
       viewName: 'schedule',
     });
     runActionSafely(
-      refreshScheduleImportSiteOptions({ force: false }),
+      bootstrapScheduleUploadWorkspace({ force: false }),
       '업로드 지점 목록을 동기화하지 못했습니다.',
     );
     return;
@@ -38313,16 +38318,7 @@ function onScheduleHqTabChange(tab = SCHEDULE_TAB_CALENDAR) {
   }
   if (state.schedule.hqTab === SCHEDULE_TAB_UPLOAD) {
     runActionSafely(
-      (async () => {
-        syncScheduleImportMonthInput({ force: true });
-        await refreshScheduleImportSiteOptions({ force: false });
-        await Promise.allSettled([
-          loadScheduleImportMappingProfile({ force: false }),
-          loadScheduleSupportRoundtripStatus(),
-          loadScheduleSupportHqWorkspaceContract({ force: false }),
-        ]);
-        renderScheduleUploadWorkspace();
-      })(),
+      bootstrapScheduleUploadWorkspace({ force: false }),
       '업로드 지점 목록을 동기화하지 못했습니다.',
     );
     renderScheduleDesktopDrawer();
@@ -38559,6 +38555,35 @@ async function loadScheduleImportMappingProfile({ force = false } = {}) {
   state.schedule.importMappingProfileFetchedAt = Date.now();
   renderScheduleImportMappingProfileSummary();
   return state.schedule.importMappingProfile;
+}
+
+async function bootstrapScheduleUploadWorkspace({ force = false } = {}) {
+  if (!canOpenScheduleUploadWorkspace()) return null;
+  const currentPromise = state.schedule?.uploadWorkspaceBootPromise;
+  if (currentPromise && !force) {
+    return currentPromise;
+  }
+  const bootPromise = (async () => {
+    state.schedule.uploadWorkspaceBooting = true;
+    renderScheduleUploadWorkspace();
+    try {
+      syncScheduleImportMonthInput({ force: true });
+      await refreshScheduleImportSiteOptions({ force });
+      await Promise.allSettled([
+        loadScheduleImportMappingProfile({ force }),
+        loadScheduleSupportRoundtripStatus(),
+        loadScheduleSupportHqWorkspaceContract({ force }),
+      ]);
+      renderScheduleUploadWorkspace();
+      return true;
+    } finally {
+      state.schedule.uploadWorkspaceBooting = false;
+      state.schedule.uploadWorkspaceBootPromise = null;
+      renderScheduleUploadWorkspace();
+    }
+  })();
+  state.schedule.uploadWorkspaceBootPromise = bootPromise;
+  return bootPromise;
 }
 
 function createScheduleImportMappingEntryEditorRow(entry = {}, templateOptions = []) {
