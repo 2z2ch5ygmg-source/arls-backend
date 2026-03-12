@@ -6699,6 +6699,8 @@ def _build_support_roster_hq_upload_inspect_result(
             parsed_display_value=str(item.get("parsed_display_value") or "").strip() or None,
             ticket_id=item.get("ticket_id"),
             request_count=max(int(item.get("request_count") or 0), 0),
+            workbook_required_count=_coerce_int_or_none(item.get("payload", {}).get("workbook_required_count")),
+            workbook_required_raw=str(item.get("payload", {}).get("workbook_required_raw") or "").strip() or None,
             valid_filled_count=max(int(item.get("valid_filled_count") or 0), 0),
             target_status=str(item.get("target_status") or "").strip() or None,
             status=str(item.get("status") or "pending").strip() or "pending",

@@ -1402,6 +1402,8 @@ class SupportRosterHqReviewRowOut(BaseModel):
     parsed_display_value: Optional[str] = None
     ticket_id: Optional[UUID] = None
     request_count: int = 0
+    workbook_required_count: Optional[int] = None
+    workbook_required_raw: Optional[str] = None
     valid_filled_count: int = 0
     target_status: Optional[str] = None
     status: str = "pending"

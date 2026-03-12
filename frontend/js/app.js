@@ -6707,7 +6707,14 @@ function renderSupportStatusHqReviewTable() {
 
     const countCell = document.createElement('td');
     if (row?.row_kind === 'scope_summary') {
-      countCell.textContent = `${Number(row?.valid_filled_count || 0)} / ${Number(row?.request_count || 0)}`;
+      const ticketCount = Number(row?.request_count || 0);
+      const workbookCount = row?.workbook_required_count === null || row?.workbook_required_count === undefined
+        ? null
+        : Number(row.workbook_required_count || 0);
+      const workbookLabel = workbookCount === null
+        ? (String(row?.workbook_required_raw || '').trim() || '-')
+        : String(workbookCount);
+      countCell.textContent = `${Number(row?.valid_filled_count || 0)} / ${ticketCount} · 파일 ${workbookLabel}`;
     } else {
       countCell.textContent = `${Number(row?.request_count || 0)}명 요청`;
     }
