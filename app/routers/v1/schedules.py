@@ -3491,6 +3491,11 @@ def _read_monthly_board_rows_for_export(conn, *, tenant_id: str, month_key: str)
                    ms.shift_end_time,
                    ms.template_id,
                    ms.source,
+                   ms.source_ticket_id,
+                   ms.source_ticket_uuid,
+                   ms.source_ticket_state,
+                   ms.source_action,
+                   ms.source_self_staff,
                    ms.schedule_note,
                    st.duty_type,
                    st.start_time AS template_start_time,
@@ -8720,6 +8725,50 @@ def _mark_sentrix_support_bridge_action(
     )
 
 
+def _validate_sentrix_support_bridge_action_payload(
+    action_row: dict[str, Any],
+    *,
+    payload: dict[str, Any],
+    shift_kind: str,
+    bridge_action: str,
+    ticket_state: str,
+    work_date: object,
+) -> None:
+    source = str(action_row.get("source") or payload.get("source") or "").strip()
+    ticket_id = str(action_row.get("ticket_id") or payload.get("source_ticket_id") or "").strip()
+    site_id = str(action_row.get("site_id") or payload.get("site_id") or "").strip()
+    site_code = str(action_row.get("site_code") or payload.get("site_code") or "").strip()
+    employee_id = str(action_row.get("employee_id") or payload.get("employee_id") or "").strip()
+    employee_name = str(
+        action_row.get("employee_name")
+        or payload.get("employee_display_name")
+        or payload.get("employee_name")
+        or ""
+    ).strip()
+    self_staff = payload.get("self_staff")
+
+    if source != SENTRIX_ARLS_BRIDGE_SOURCE:
+        raise RuntimeError("unsupported Sentrix bridge source")
+    if bridge_action not in {SENTRIX_ARLS_BRIDGE_ACTION_UPSERT, SENTRIX_ARLS_BRIDGE_ACTION_RETRACT}:
+        raise RuntimeError("unsupported Sentrix bridge action")
+    if not ticket_id:
+        raise RuntimeError("Sentrix bridge ticket id is missing")
+    if shift_kind not in {"day", "night"}:
+        raise RuntimeError("Sentrix bridge shift kind is invalid")
+    if not isinstance(work_date, date):
+        raise RuntimeError("work date is missing for Sentrix bridge action")
+    if not site_id and not site_code:
+        raise RuntimeError("Sentrix bridge site identity is missing")
+    if not employee_id:
+        raise RuntimeError("Sentrix bridge employee id is missing")
+    if not employee_name:
+        raise RuntimeError("Sentrix bridge employee display name is missing")
+    if self_staff is not True:
+        raise RuntimeError("Sentrix bridge payload must represent valid self-staff")
+    if bridge_action == SENTRIX_ARLS_BRIDGE_ACTION_UPSERT and not _sentrix_hq_final_state_is_approved(ticket_state):
+        raise RuntimeError("non-approved ticket state cannot materialize into ARLS schedule truth")
+
+
 def _apply_sentrix_support_bridge_action(
     cur,
     *,
@@ -8735,10 +8784,14 @@ def _apply_sentrix_support_bridge_action(
     bridge_action = str(action_row.get("action") or payload.get("action") or "").strip().upper()
     ticket_state = _normalize_sentrix_hq_roster_final_state(action_row.get("ticket_state") or payload.get("ticket_state"))
     work_date = action_row.get("work_date")
-    if not bridge_action or bridge_action not in {SENTRIX_ARLS_BRIDGE_ACTION_UPSERT, SENTRIX_ARLS_BRIDGE_ACTION_RETRACT}:
-        raise RuntimeError("unsupported Sentrix bridge action")
-    if not isinstance(work_date, date):
-        raise RuntimeError("work date is missing for Sentrix bridge action")
+    _validate_sentrix_support_bridge_action_payload(
+        action_row,
+        payload=payload,
+        shift_kind=shift_kind,
+        bridge_action=bridge_action,
+        ticket_state=ticket_state,
+        work_date=work_date,
+    )
 
     site = _resolve_sentrix_support_bridge_site(
         cur.connection,
@@ -8778,9 +8831,6 @@ def _apply_sentrix_support_bridge_action(
         work_date=work_date,
         shift_kind=shift_kind,
     )
-
-    if bridge_action == SENTRIX_ARLS_BRIDGE_ACTION_UPSERT and not _sentrix_hq_final_state_is_approved(ticket_state):
-        raise RuntimeError("non-approved ticket state cannot materialize into ARLS schedule truth")
 
     materialization_result: dict[str, Any] = {
         "bridge_action_id": bridge_action_id,
@@ -12915,7 +12965,9 @@ def _fetch_schedule_context(conn, schedule_id: uuid.UUID | str, tenant_id):
         cur.execute(
             """
             SELECT ms.id, ms.tenant_id, ms.company_id, ms.site_id, ms.employee_id, ms.schedule_date, ms.shift_type,
-                   ms.schedule_note, ms.source, ms.leader_user_id, s.site_code, e.employee_code, e.full_name AS employee_name
+                   ms.schedule_note, ms.source, ms.source_ticket_id, ms.source_ticket_uuid,
+                   ms.source_ticket_state, ms.source_action, ms.source_self_staff, ms.leader_user_id,
+                   s.site_code, e.employee_code, e.full_name AS employee_name
             FROM monthly_schedules ms
             JOIN sites s ON s.id = ms.site_id
             JOIN employees e ON e.id = ms.employee_id
@@ -13358,6 +13410,11 @@ def monthly_view_lite(
                 ms.shift_type,
                 ms.schedule_note,
                 ms.source,
+                ms.source_ticket_id,
+                ms.source_ticket_uuid,
+                ms.source_ticket_state,
+                ms.source_action,
+                ms.source_self_staff,
                 s.site_code,
                 s.site_name,
                 (lower(COALESCE(ms.schedule_note, '')) LIKE '%%closer%%') AS is_closer
@@ -13425,6 +13482,11 @@ def monthly_board_lite(
                 ms.shift_type,
                 ms.schedule_note,
                 ms.source,
+                ms.source_ticket_id,
+                ms.source_ticket_uuid,
+                ms.source_ticket_state,
+                ms.source_action,
+                ms.source_self_staff,
                 ms.leader_user_id,
                 lu.username AS leader_username,
                 lu.full_name AS leader_full_name,
@@ -13466,6 +13528,11 @@ def monthly_board_lite(
                 ms.shift_type,
                 ms.schedule_note,
                 ms.source,
+                ms.source_ticket_id,
+                ms.source_ticket_uuid,
+                ms.source_ticket_state,
+                ms.source_action,
+                ms.source_self_staff,
                 ms.template_id,
                 ms.shift_start_time,
                 ms.shift_end_time,
@@ -13547,6 +13614,11 @@ def monthly_board_lite(
             "status": status,
             "schedule_note": str(row.get("schedule_note") or "").strip() or None,
             "source": str(row.get("source") or "").strip() or None,
+            "source_ticket_id": str(row.get("source_ticket_id") or "").strip() or None,
+            "source_ticket_uuid": str(row.get("source_ticket_uuid") or "").strip() or None,
+            "source_ticket_state": str(row.get("source_ticket_state") or "").strip() or None,
+            "source_action_last_seen": str(row.get("source_action") or "").strip() or None,
+            "source_self_staff": bool(row.get("source_self_staff")),
             "schedule_display_type": display_meta["type"],
             "schedule_display_label": display_meta["label"],
             "schedule_display_time": display_meta["time"],
