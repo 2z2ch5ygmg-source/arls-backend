@@ -2162,7 +2162,16 @@
               </div>
             </header>
 
+            <div id="scheduleUploadOwnerTabs" class="workspace-tabs schedule-upload-owner-tabs">
+              <button class="btn btn-secondary workspace-tab active" type="button" data-action="schedule-upload-mode-tab" data-mode="base">Excel로 근무표 간편 제작</button>
+              <button class="btn btn-secondary workspace-tab hidden" type="button" data-action="schedule-upload-mode-tab" data-mode="hq">지점별 스케쥴 업로드 확인</button>
+            </div>
+
             <div id="scheduleExcelWorkflowContext" class="schedule-upload-policy-strip schedule-excel-context-strip">
+              <div class="schedule-upload-policy-item">
+                <span>테넌트</span>
+                <strong id="scheduleExcelWorkflowContextTenant">테넌트 확인</strong>
+              </div>
               <div class="schedule-upload-policy-item">
                 <span>대상 지점</span>
                 <strong id="scheduleExcelWorkflowContextSite">지점 선택</strong>
@@ -2172,16 +2181,32 @@
                 <strong id="scheduleExcelWorkflowContextMonth">월 선택</strong>
               </div>
               <div class="schedule-upload-policy-item">
+                <span>파일명</span>
+                <strong id="scheduleExcelWorkflowContextFile">파일 선택 전</strong>
+              </div>
+              <div class="schedule-upload-policy-item">
+                <span>리비전</span>
+                <strong id="scheduleExcelWorkflowContextRevision">-</strong>
+              </div>
+              <div class="schedule-upload-policy-item">
                 <span>현재 단계</span>
                 <strong id="scheduleExcelWorkflowContextStage">매핑 프로필 설정</strong>
               </div>
             </div>
 
-            <div id="scheduleExcelWorkflowTabs" class="workspace-tabs schedule-excel-workflow-tabs">
-              <button class="btn btn-secondary workspace-tab active" type="button" data-action="schedule-upload-workflow-tab" data-tab="mapping">1. 매핑 프로필 설정</button>
-              <button class="btn btn-secondary workspace-tab" type="button" data-action="schedule-upload-workflow-tab" data-tab="base">2. 기본 월간 근무표 업로드</button>
-              <button class="btn btn-secondary workspace-tab" type="button" data-action="schedule-upload-workflow-tab" data-tab="export">3. HQ 제출용 추출</button>
-              <button class="btn btn-secondary workspace-tab" type="button" data-action="schedule-upload-workflow-tab" data-tab="handoff">4. HQ 지원근무자 반영 업로드</button>
+            <div id="scheduleBaseWizardProgress" class="schedule-wizard-progress" aria-label="기본 월간 업로드 단계">
+              <button class="schedule-wizard-step active" type="button" data-action="schedule-base-wizard-step" data-step="mapping">1. 매핑 프로필</button>
+              <button class="schedule-wizard-step" type="button" data-action="schedule-base-wizard-step" data-step="context">2. 대상 선택</button>
+              <button class="schedule-wizard-step" type="button" data-action="schedule-base-wizard-step" data-step="file">3. 파일 준비</button>
+              <button class="schedule-wizard-step" type="button" data-action="schedule-base-wizard-step" data-step="review">4. 반영 검토</button>
+              <button class="schedule-wizard-step" type="button" data-action="schedule-base-wizard-step" data-step="apply">5. 적용</button>
+            </div>
+
+            <div id="scheduleHqWizardProgress" class="schedule-wizard-progress hidden" aria-label="HQ 지원근무 업로드 단계">
+              <button class="schedule-wizard-step active" type="button" data-action="schedule-hq-wizard-step" data-step="export">3. HQ 제출용 추출</button>
+              <button class="schedule-wizard-step" type="button" data-action="schedule-hq-wizard-step" data-step="upload">4. HQ 작성본 업로드</button>
+              <button class="schedule-wizard-step" type="button" data-action="schedule-hq-wizard-step" data-step="preview">5. 업로드 미리보기</button>
+              <button class="schedule-wizard-step" type="button" data-action="schedule-hq-wizard-step" data-step="complete">6. 업로드 진행 / 완료</button>
             </div>
 
             <section id="scheduleExcelWorkflowMappingSection" class="schedule-upload-step schedule-excel-workflow-section">
@@ -2202,6 +2227,9 @@
                 </div>
                 <p id="scheduleTemplateMappingText" class="muted">엑셀 숫자값을 ARLS 근무 템플릿 시간 범위와 연결해야 업로드 분석이 가능합니다.</p>
                 <p id="scheduleTemplateMappingMissing" class="muted hidden"></p>
+              </div>
+              <div class="schedule-wizard-actions">
+                <button class="btn btn-primary" type="button" id="scheduleMappingNextBtn" data-action="schedule-base-wizard-next" data-next-step="context">다음</button>
               </div>
             </section>
 
@@ -2224,102 +2252,113 @@
                     </div>
                   </div>
 
-                  <div class="schedule-upload-policy-strip">
-                    <div class="schedule-upload-policy-item">
-                      <span>권한</span>
-                      <strong>Supervisor 이상</strong>
-                    </div>
-                    <div class="schedule-upload-policy-item">
-                      <span>업로드 기준</span>
-                      <strong>site / month</strong>
-                    </div>
-                    <div class="schedule-upload-policy-item">
-                      <span>파일 형식</span>
-                      <strong>ARLS 월간 workbook (.xlsx)</strong>
-                    </div>
-                  </div>
-
-                  <p id="scheduleImportPermissionSummary" class="muted schedule-upload-inline-note"></p>
-
-                  <div class="schedule-upload-template-grid">
-                    <article class="schedule-upload-template-card">
-                      <div>
-                        <h5>빈 양식 다운로드</h5>
-                        <p class="muted">처음 작성하는 경우 현재 ARLS 호환 workbook 양식을 내려받아 사용합니다.</p>
+                  <div id="scheduleBaseContextStage" class="stack">
+                    <div class="schedule-upload-policy-strip" id="scheduleBaseContextPolicy">
+                      <div class="schedule-upload-policy-item">
+                        <span>권한</span>
+                        <strong>Supervisor 이상</strong>
                       </div>
-                      <button class="btn btn-secondary" type="button" id="scheduleBlankTemplateBtn" data-action="schedule-download-blank-template">빈 양식 다운로드</button>
-                    </article>
-                    <article class="schedule-upload-template-card">
-                      <div>
-                        <h5>최신 기준본 다운로드</h5>
-                        <p class="muted">현재 site/month canonical 상태를 기준으로 다시 작업할 때 사용합니다.</p>
+                      <div class="schedule-upload-policy-item">
+                        <span>업로드 기준</span>
+                        <strong>tenant / site / month</strong>
                       </div>
-                      <button class="btn btn-secondary" type="button" id="scheduleLatestBaseBtn" data-action="schedule-download-latest-base">최신 기준본 다운로드</button>
-                    </article>
-                  </div>
-
-                  <div class="schedule-upload-context-grid">
-                    <label class="input-field">
-                      <span>업로드 지점</span>
-                      <select id="scheduleImportSite">
-                        <option value="">지점 선택</option>
-                      </select>
-                    </label>
-                    <label class="input-field">
-                      <span>대상 월</span>
-                      <input id="scheduleImportMonth" type="month" />
-                    </label>
-                  </div>
-                  <p id="scheduleImportSiteHint" class="muted schedule-upload-inline-note"></p>
-
-                  <form id="scheduleImportForm" class="stack schedule-upload-file-form">
-                    <div class="schedule-upload-file-row">
-                      <label class="input-field schedule-upload-file-field">
-                        <span>업로드 파일</span>
-                        <input id="scheduleImportFile" type="file" accept=".xlsx" />
+                      <div class="schedule-upload-policy-item">
+                        <span>파일 형식</span>
+                        <strong>ARLS 월간 workbook (.xlsx)</strong>
+                      </div>
+                    </div>
+                    <div class="schedule-upload-context-grid">
+                      <label class="input-field">
+                        <span>업로드 테넌트</span>
+                        <input id="scheduleImportTenantReadonly" type="text" readonly />
                       </label>
-                      <button class="btn btn-secondary" type="button" id="schedulePreviewBtn" data-action="preview-schedule">분석 시작</button>
+                      <label class="input-field">
+                        <span>업로드 지점</span>
+                        <select id="scheduleImportSite">
+                          <option value="">지점 선택</option>
+                        </select>
+                      </label>
+                      <label class="input-field">
+                        <span>대상 월</span>
+                        <input id="scheduleImportMonth" type="month" />
+                      </label>
                     </div>
-                    <p class="muted">실제 ARLS 월간 근무표 workbook만 분석할 수 있습니다. 지원 roster 업로드/승인 상태는 Sentrix가 이어받습니다.</p>
-                  </form>
-
-                  <div id="scheduleImportProgress" class="schedule-upload-progress hidden" role="status" aria-live="polite">
-                    <span id="scheduleImportProgressPill" class="status-pill status-pill-neutral">대기</span>
-                    <div class="schedule-upload-progress-copy">
-                      <strong id="scheduleImportProgressTitle">분석 대기</strong>
-                      <p id="scheduleImportProgressText" class="muted">분석이 시작되면 현재 단계와 잠긴 입력 항목을 여기에 표시합니다.</p>
+                    <p id="scheduleImportPermissionSummary" class="muted schedule-upload-inline-note"></p>
+                    <p id="scheduleImportSiteHint" class="muted schedule-upload-inline-note"></p>
+                    <div class="schedule-wizard-actions">
+                      <button class="btn btn-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="mapping">이전</button>
+                      <button class="btn btn-primary" type="button" id="scheduleBaseContextNextBtn" data-action="schedule-base-wizard-next" data-next-step="file">다음</button>
                     </div>
                   </div>
 
-                  <div id="scheduleImportFileMetaRow" class="schedule-upload-file-meta hidden">
-                    <div class="schedule-upload-meta-item">
-                      <span>파일명</span>
-                      <strong id="scheduleImportMetaFileName">-</strong>
+                  <div id="scheduleBaseFileStage" class="stack hidden">
+                    <div class="schedule-upload-template-grid">
+                      <article class="schedule-upload-template-card">
+                        <div>
+                          <h5>빈 양식 다운로드</h5>
+                          <p class="muted">처음 작성하는 경우 현재 ARLS 호환 workbook 양식을 내려받아 사용합니다.</p>
+                        </div>
+                        <button class="btn btn-secondary" type="button" id="scheduleBlankTemplateBtn" data-action="schedule-download-blank-template">빈 양식 다운로드</button>
+                      </article>
+                      <article class="schedule-upload-template-card">
+                        <div>
+                          <h5>최신 기준본 다운로드</h5>
+                          <p class="muted">현재 site/month canonical 상태를 기준으로 다시 작업할 때 사용합니다.</p>
+                        </div>
+                        <button class="btn btn-secondary" type="button" id="scheduleLatestBaseBtn" data-action="schedule-download-latest-base">최신 기준본 다운로드</button>
+                      </article>
                     </div>
-                    <div class="schedule-upload-meta-item">
-                      <span>대상 월</span>
-                      <strong id="scheduleImportMetaMonth">-</strong>
+
+                    <form id="scheduleImportForm" class="stack schedule-upload-file-form">
+                      <div class="schedule-upload-file-row">
+                        <label class="input-field schedule-upload-file-field">
+                          <span>업로드 파일</span>
+                          <input id="scheduleImportFile" type="file" accept=".xlsx" />
+                        </label>
+                        <button class="btn btn-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="context">이전</button>
+                        <button class="btn btn-primary" type="button" id="schedulePreviewBtn" data-action="preview-schedule">분석 시작</button>
+                      </div>
+                      <p class="muted">실제 ARLS 월간 근무표 workbook만 분석할 수 있습니다. 지원 roster 업로드/승인 상태는 Sentrix가 이어받습니다.</p>
+                    </form>
+
+                    <div id="scheduleImportProgress" class="schedule-upload-progress hidden" role="status" aria-live="polite">
+                      <span id="scheduleImportProgressPill" class="status-pill status-pill-neutral">대기</span>
+                      <div class="schedule-upload-progress-copy">
+                        <strong id="scheduleImportProgressTitle">분석 대기</strong>
+                        <p id="scheduleImportProgressText" class="muted">분석이 시작되면 현재 단계와 잠긴 입력 항목을 여기에 표시합니다.</p>
+                      </div>
                     </div>
-                    <div class="schedule-upload-meta-item">
-                      <span>대상 지점</span>
-                      <strong id="scheduleImportMetaSite">-</strong>
-                    </div>
-                    <div class="schedule-upload-meta-item">
-                      <span>템플릿 계열</span>
-                      <strong id="scheduleImportMetaFamily">-</strong>
-                    </div>
-                    <div class="schedule-upload-meta-item">
-                      <span>리비전</span>
-                      <strong id="scheduleImportMetaRevision">-</strong>
-                    </div>
-                    <div class="schedule-upload-meta-item">
-                      <span>파일 상태</span>
-                      <strong id="scheduleImportMetaStatus">검증 전</strong>
+
+                    <div id="scheduleImportFileMetaRow" class="schedule-upload-file-meta hidden">
+                      <div class="schedule-upload-meta-item">
+                        <span>파일명</span>
+                        <strong id="scheduleImportMetaFileName">-</strong>
+                      </div>
+                      <div class="schedule-upload-meta-item">
+                        <span>대상 월</span>
+                        <strong id="scheduleImportMetaMonth">-</strong>
+                      </div>
+                      <div class="schedule-upload-meta-item">
+                        <span>대상 지점</span>
+                        <strong id="scheduleImportMetaSite">-</strong>
+                      </div>
+                      <div class="schedule-upload-meta-item">
+                        <span>템플릿 계열</span>
+                        <strong id="scheduleImportMetaFamily">-</strong>
+                      </div>
+                      <div class="schedule-upload-meta-item">
+                        <span>리비전</span>
+                        <strong id="scheduleImportMetaRevision">-</strong>
+                      </div>
+                      <div class="schedule-upload-meta-item">
+                        <span>파일 상태</span>
+                        <strong id="scheduleImportMetaStatus">검증 전</strong>
+                      </div>
                     </div>
                   </div>
                 </section>
 
-                <section class="schedule-upload-step">
+                <section id="scheduleBaseReviewStage" class="schedule-upload-step hidden">
                   <div class="schedule-upload-step-head">
                     <div>
                       <span class="schedule-upload-step-kicker">분석 결과</span>
@@ -2380,10 +2419,14 @@
                         <tbody id="schedulePreviewTableBody"></tbody>
                       </table>
                     </div>
+                    <div class="schedule-wizard-actions">
+                      <button class="btn btn-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="file">이전</button>
+                      <button class="btn btn-primary" type="button" id="scheduleBaseReviewNextBtn" data-action="schedule-base-wizard-next" data-next-step="apply">적용 단계로</button>
+                    </div>
                   </div>
                 </section>
 
-                <section class="schedule-upload-step">
+                <section id="scheduleBaseApplyStage" class="schedule-upload-step hidden">
                   <div class="schedule-upload-step-head">
                     <div>
                       <span class="schedule-upload-step-kicker">적용</span>
@@ -2401,7 +2444,7 @@
                     <p id="scheduleApplyStateReason" class="muted">지점, 월, 파일을 준비한 뒤 분석을 시작하세요.</p>
                   </div>
                   <div class="schedule-upload-apply-actions">
-                    <button class="btn btn-secondary" type="button" id="scheduleResetBtn" data-action="schedule-reset-upload">다시 업로드</button>
+                    <button class="btn btn-secondary" type="button" id="scheduleResetBtn" data-action="schedule-base-wizard-prev" data-prev-step="review">이전</button>
                     <button class="btn btn-primary" type="button" id="scheduleApplyBtn" data-action="apply-schedule">적용하기</button>
                   </div>
                 </div>
@@ -2452,7 +2495,7 @@
                 <p class="muted">활성 원본 리비전 기준으로 HQ가 채울 지원근무자용 workbook artifact를 생성합니다.</p>
                 <div class="schedule-support-upload-actions">
                   <button class="btn btn-secondary" type="button" id="scheduleSupportHqDownloadBtn" data-action="schedule-support-hq-download">지원근무자용 시트 다운로드</button>
-                  <button class="btn btn-secondary" type="button" data-action="schedule-open-upload-section" data-section="handoff">다음 단계 보기</button>
+                  <button class="btn btn-primary" type="button" id="scheduleHqExportNextBtn" data-action="schedule-hq-wizard-next" data-next-step="upload">다음</button>
                 </div>
               </section>
             </section>
@@ -2511,7 +2554,7 @@
                     <span>HQ 작성본 업로드 파일</span>
                     <input id="scheduleSupportHqUploadFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
                   </label>
-                  <button class="btn btn-secondary" type="button" id="scheduleSupportHqInspectBtn" data-action="schedule-support-hq-inspect">검토 시작</button>
+                  <button class="btn btn-secondary hidden" type="button" id="scheduleSupportHqInspectInlineBtn">검토 시작</button>
                 </div>
                 <div class="support-status-hq-replace-note">
                   <strong>REPLACE 정책</strong>
@@ -2519,13 +2562,14 @@
                 </div>
                 <div id="scheduleSupportHqUploadMeta" class="schedule-upload-file-meta"></div>
                 <div class="schedule-support-upload-actions">
-                  <button class="btn btn-primary" type="button" id="scheduleSupportHqApplyBtn" data-action="schedule-support-apply">ARLS에서 적용</button>
-                  <button class="btn btn-secondary" type="button" id="scheduleSupportHqReinspectBtn" data-action="schedule-support-hq-inspect">다시 검토</button>
+                  <button class="btn btn-secondary" type="button" data-action="schedule-hq-wizard-prev" data-prev-step="export">이전</button>
+                  <button class="btn btn-primary" type="button" id="scheduleSupportHqInspectBtn" data-action="schedule-support-hq-inspect">업로드 미리보기</button>
+                  <button class="btn btn-secondary hidden" type="button" id="scheduleSupportHqReinspectBtn" data-action="schedule-support-hq-inspect">다시 검토</button>
                   <button class="btn btn-secondary" type="button" id="scheduleSupportOpenSentrixBtn" data-action="schedule-support-open-sentrix">Sentrix 상태 보기</button>
                   <button class="btn btn-secondary" type="button" id="scheduleSupportCopyArtifactBtn" data-action="schedule-support-copy-artifact">artifact_id 복사</button>
-                  <button class="btn btn-secondary" type="button" data-action="schedule-open-upload-section" data-section="export">HQ 제출용 추출 다시 보기</button>
                 </div>
               </section>
+              <div id="scheduleHqWizardPreviewStage" class="stack hidden">
               <p id="scheduleSupportHqBatchInfo" class="muted">source artifact lineage와 workbook 계약을 확인한 뒤 검토를 시작하세요.</p>
               <div id="scheduleSupportHqReviewSummary" class="schedule-upload-summary-strip"></div>
               <div id="scheduleSupportHqIssueGroups" class="schedule-upload-issue-groups"></div>
@@ -2556,17 +2600,25 @@
                 </table>
               </div>
               <ul id="scheduleSupportHqBatchIssues" class="list hidden"></ul>
+              <div class="schedule-wizard-actions">
+                <button class="btn btn-secondary" type="button" data-action="schedule-hq-wizard-prev" data-prev-step="upload">이전</button>
+                <button class="btn btn-primary" type="button" id="scheduleSupportHqApplyBtn" data-action="schedule-support-apply">Arls/Sentrix 업로드</button>
+              </div>
+              </div>
+              <div id="scheduleHqWizardCompleteStage" class="stack hidden">
               <div class="schedule-upload-apply-bar support-status-hq-apply-bar">
                 <div class="schedule-upload-apply-state">
                   <strong id="scheduleSupportHqReviewStateTitle">적용 전 검토 영역</strong>
                   <span id="scheduleSupportHqReviewStateText">HQ 작성본 workbook을 검토한 뒤 적용하면 ARLS가 Sentrix state engine으로 normalized snapshot을 handoff합니다.</span>
                 </div>
                 <div class="schedule-upload-apply-actions">
-                  <button class="btn btn-secondary" type="button" data-action="schedule-open-upload-section" data-section="export">source artifact 다시 보기</button>
+                  <button class="btn btn-secondary" type="button" data-action="schedule-hq-wizard-prev" data-prev-step="preview">이전</button>
+                  <button class="btn btn-primary" type="button" data-action="schedule-hq-wizard-finish">종료</button>
                 </div>
               </div>
               <p id="scheduleSupportHqApplyResult" class="muted">적용 결과와 handoff 상태가 여기에 표시됩니다.</p>
               <ul id="scheduleSupportHqApplyDetails" class="list hidden"></ul>
+              </div>
             </section>
             </div>
 

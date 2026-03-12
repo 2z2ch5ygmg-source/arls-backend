@@ -4605,6 +4605,14 @@ button:disabled,
   margin-top: -2px;
 }
 
+.schedule-upload-owner-tabs {
+  gap: 12px;
+}
+
+.schedule-upload-owner-tabs .workspace-tab {
+  min-height: 40px;
+}
+
 .schedule-excel-workflow-tabs {
   gap: 8px;
   flex-wrap: wrap;
@@ -4625,6 +4633,51 @@ button:disabled,
 
 .schedule-upload-stage-shell {
   gap: 14px;
+}
+
+.schedule-wizard-progress {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  border: 0;
+}
+
+.schedule-wizard-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-12);
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  font-size: var(--ui-type-body-sm-size);
+  font-weight: var(--ui-weight-semibold);
+  box-shadow: var(--shadow-card);
+}
+
+.schedule-wizard-step:hover,
+.schedule-wizard-step:focus-visible {
+  border-color: rgba(249, 115, 22, 0.32);
+  color: var(--text-primary);
+}
+
+.schedule-wizard-step.active {
+  border-color: rgba(249, 115, 22, 0.42);
+  background: rgba(255, 241, 232, 0.92);
+  color: var(--brand-orange-strong);
+}
+
+.schedule-wizard-step.is-complete {
+  border-color: rgba(22, 163, 74, 0.26);
+  background: rgba(236, 253, 243, 0.92);
+  color: var(--state-success-text);
+}
+
+.schedule-wizard-step:disabled {
+  opacity: 1;
+  cursor: default;
 }
 
 .schedule-upload-step {
@@ -4733,7 +4786,7 @@ button:disabled,
 
 .schedule-upload-context-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(180px, 240px);
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 240px) minmax(180px, 220px);
   gap: 12px;
   align-items: start;
 }
@@ -4744,13 +4797,20 @@ button:disabled,
 
 .schedule-upload-file-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 12px;
   align-items: end;
 }
 
 .schedule-upload-file-field {
   margin: 0;
+}
+
+.schedule-wizard-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .schedule-upload-progress {
