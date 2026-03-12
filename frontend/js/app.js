@@ -24934,8 +24934,9 @@ function showAuthPanel() {
   }
 }
 
-function showShellPanel() {
+function showShellPanel(options = {}) {
   if (!state.user) return;
+  const deferSessionSideEffects = options?.deferSessionSideEffects === true;
   setAuthStatus(AUTH_STATUS_AUTHENTICATED);
 
   const authView = $('#authView');
@@ -24948,14 +24949,14 @@ function showShellPanel() {
   if (notifBtn) notifBtn.classList.remove('hidden');
   closeConfirmDialog({ restoreFocus: false });
 
-  if (getNavigationRole() === 'DEV') {
+  if (!deferSessionSideEffects && getNavigationRole() === 'DEV') {
     ensureDevTenantContextInitialized();
     ensureUiActiveTenantFilterContextInitialized();
     ensureDevWorkingTenantContext({ openPickerIfMissing: false, silentToast: true })
       .catch(() => {
         // no-op
       });
-  } else {
+  } else if (!deferSessionSideEffects) {
     state.devAdmin.selectedTenantCode = '';
     state.devAdmin.selectedTenantName = '';
     state.devAdmin.selectedTenantId = '';
@@ -24995,29 +24996,33 @@ function showShellPanel() {
     ? state.schedule.selectedEmployeeCode
     : (state.user.employee_code || '');
 
-  initializeReminderRuntime()
-    .then(() => {
-      flushPendingReminderDeepLink();
-      queueReminderSync({ force: false, reason: 'session-ready', immediate: true });
-      syncPushDeviceRegistration({ force: false }).catch(() => {
-        // no-op
+  if (!deferSessionSideEffects) {
+    initializeReminderRuntime()
+      .then(() => {
+        flushPendingReminderDeepLink();
+        queueReminderSync({ force: false, reason: 'session-ready', immediate: true });
+        syncPushDeviceRegistration({ force: false }).catch(() => {
+          // no-op
+        });
+      })
+      .catch((err) => {
+        console.error('[RG ARLS] reminder runtime init failed', err);
       });
-    })
-    .catch((err) => {
-      console.error('[RG ARLS] reminder runtime init failed', err);
-    });
 
-  hydrateInAppNotificationItems();
-  syncServerInAppNotifications({ force: true, showToasts: false }).catch((err) => {
-    console.error('[RG ARLS] in-app notification bootstrap sync failed', err);
-  });
+    hydrateInAppNotificationItems();
+    syncServerInAppNotifications({ force: true, showToasts: false }).catch((err) => {
+      console.error('[RG ARLS] in-app notification bootstrap sync failed', err);
+    });
+  }
   renderUserBadge();
   renderBrandArea();
   renderProfileSummary();
   renderReminderSettings();
   renderDrawerMenu();
   renderTenantContextBadge();
-  renderDevTenantContextBar();
+  if (!deferSessionSideEffects) {
+    renderDevTenantContextBar();
+  }
   renderMasterConsoleSummary();
   renderNotificationBadge();
   applyRoleUI();
@@ -25046,7 +25051,7 @@ function bootstrapSessionFromStorage() {
   state.user = resolveSessionUser(state.token, stored.user);
   if (!state.token || !state.user) return false;
 
-  showShellPanel();
+  showShellPanel({ deferSessionSideEffects: true });
   const initialRoute = requestedRoute && requestedRoute !== ROUTE_LOGIN
     ? requestedRouteRaw
     : (consumePendingRouteAfterLogin() || resolvePostLoginDefaultRoute());
