@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -18,6 +18,7 @@ from app.routers.v1.schedules import (
     _format_schedule_import_mapping_requirement_label,
     _build_schedule_import_mapping_lookup,
     _collect_monthly_export_context,
+    _extract_arls_date_columns,
     _leader_candidate_role_label,
     _leader_candidate_role_priority,
     _locate_support_section_rows,
@@ -169,6 +170,20 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
         self.assertEqual(support_block["invalid_filled_count"], 0)
         self.assertEqual(support_block["required_count_numeric"], 3)
         self.assertEqual(support_block["purpose_text"], "정기 점검")
+
+    def test_extract_date_columns_prefers_actual_header_dates_over_stale_month_label(self):
+        workbook = self._build_sample_workbook()
+        sheet = workbook[ARLS_SHEET_NAME]
+        sheet.cell(row=2, column=2, value="2026년 3월")
+        start_day = datetime(2026, 2, 1)
+        for offset in range(31):
+            sheet.cell(row=2, column=4 + offset, value=start_day + timedelta(days=offset))
+
+        date_columns, month_ctx = _extract_arls_date_columns(sheet)
+
+        self.assertEqual(month_ctx, (2026, 2))
+        self.assertEqual(date_columns[4].isoformat(), "2026-02-01")
+        self.assertEqual(date_columns[5].isoformat(), "2026-02-02")
 
     def test_parse_daytime_need_value_supports_numeric_and_text(self):
         self.assertEqual(_parse_daytime_need_value("4"), (4, "4"))

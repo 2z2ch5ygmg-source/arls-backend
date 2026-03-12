@@ -1539,6 +1539,7 @@ def _parse_daytime_need_value(value: object) -> tuple[int | None, str]:
 def _extract_arls_date_columns(sheet) -> tuple[dict[int, date], tuple[int, int] | None]:
     month_ctx = _parse_month_text(sheet.cell(row=2, column=2).value)
     date_map: dict[int, date] = {}
+    inferred_month_counts: Counter[tuple[int, int]] = Counter()
     for col in range(ARLS_DATE_START_COL, ARLS_DATE_END_COL + 1):
         header = sheet.cell(row=2, column=col).value
         resolved_date: date | None = None
@@ -1562,6 +1563,10 @@ def _extract_arls_date_columns(sheet) -> tuple[dict[int, date], tuple[int, int] 
                     resolved_date = None
         if resolved_date:
             date_map[col] = resolved_date
+            inferred_month_counts[(resolved_date.year, resolved_date.month)] += 1
+    if inferred_month_counts:
+        inferred_month_ctx, _count = inferred_month_counts.most_common(1)[0]
+        month_ctx = inferred_month_ctx
     return date_map, month_ctx
 
 
