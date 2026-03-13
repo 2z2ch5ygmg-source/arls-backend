@@ -39799,6 +39799,24 @@ function getScheduleImportMappingProfileReadiness(profile = null) {
   };
 }
 
+function pruneLegacyScheduleMappingManagerButtons() {
+  const section = $('#scheduleExcelWorkflowMappingSection');
+  if (!(section instanceof HTMLElement)) return;
+  const preferredManageButton = section.querySelector('[data-action="schedule-open-template-profile-manager"]');
+  const buttons = Array.from(section.querySelectorAll('button'));
+  buttons.forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) return;
+    const label = String(button.textContent || '').trim();
+    const isLegacyDuplicate = label === '근무 템플릿에서 관리';
+    const isDuplicateManageAction =
+      button !== preferredManageButton &&
+      button.dataset.action === 'schedule-open-template-profile-manager';
+    if (isLegacyDuplicate || isDuplicateManageAction) {
+      button.remove();
+    }
+  });
+}
+
 function renderScheduleImportMappingProfileSummary() {
   const badgeEl = $('#scheduleTemplateMappingBadge');
   const textEl = $('#scheduleTemplateMappingText');
@@ -39810,6 +39828,8 @@ function renderScheduleImportMappingProfileSummary() {
   const updatedEl = $('#scheduleTemplateMappingSelectedUpdated');
   const summaryList = $('#scheduleTemplateMappingSummaryList');
   if (!(badgeEl instanceof HTMLElement) || !(textEl instanceof HTMLElement) || !(missingEl instanceof HTMLElement)) return;
+
+  pruneLegacyScheduleMappingManagerButtons();
 
   const profiles = getScheduleImportMappingProfiles();
   const selectedProfile = getSelectedScheduleImportMappingProfile();
