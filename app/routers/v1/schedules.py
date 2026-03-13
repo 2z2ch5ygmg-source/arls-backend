@@ -29,7 +29,7 @@ import requests
 
 from ...deps import get_db_conn, get_current_user, apply_rate_limit
 from ...config import settings
-from ...db import MONTHLY_SCHEDULE_SHIFT_TYPE_CONSTRAINT_SQL
+from ...db import MONTHLY_SCHEDULE_SHIFT_TYPE_CONSTRAINT_SQL, ensure_schedule_import_raw_workbook_columns
 from ...schemas import (
     AppleDaytimeShiftOut,
     ImportPreviewIssueLocationOut,
@@ -6997,6 +6997,7 @@ def _load_schedule_import_batch_raw_workbook(
     tenant_id: str,
     batch_id: str,
 ) -> dict[str, Any] | None:
+    ensure_schedule_import_raw_workbook_columns(conn)
     if not all(
         table_column_exists(conn, "schedule_import_batches", column_name)
         for column_name in ("raw_workbook_bytes", "raw_workbook_mime_type", "raw_workbook_sha256")
@@ -15844,6 +15845,7 @@ def _persist_schedule_import_preview_batch(
     status = "blocked" if blocked_reasons or int(preview.get("blocked_rows") or 0) > 0 else "previewed"
     invalid_samples: list[str] = []
     row_insert_params: list[tuple[Any, ...]] = []
+    ensure_schedule_import_raw_workbook_columns(conn)
     has_raw_workbook_columns = all(
         table_column_exists(conn, "schedule_import_batches", column_name)
         for column_name in ("raw_workbook_bytes", "raw_workbook_mime_type", "raw_workbook_sha256")
