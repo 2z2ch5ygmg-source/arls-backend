@@ -114,6 +114,7 @@ from ...services.p1_schedule import (
 )
 from ...services.push_notifications import send_push_notification_to_users
 from ...utils.permissions import can_manage_schedule, is_super_admin, normalize_role, normalize_user_role
+from ...utils.schema_introspection import table_column_exists
 from ...utils.tenant_context import enforce_staff_site_scope, resolve_scoped_tenant, fetch_tenant_row_any, ensure_tenant_active
 
 router = APIRouter(prefix="/schedules", tags=["schedules"], dependencies=[Depends(apply_rate_limit)])
@@ -7014,6 +7015,11 @@ def _load_schedule_import_batch_raw_workbook(
     tenant_id: str,
     batch_id: str,
 ) -> dict[str, Any] | None:
+    if not all(
+        table_column_exists(conn, "schedule_import_batches", column_name)
+        for column_name in ("raw_workbook_bytes", "raw_workbook_mime_type", "raw_workbook_sha256")
+    ):
+        return None
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -15856,48 +15862,115 @@ def _persist_schedule_import_preview_batch(
     status = "blocked" if blocked_reasons or int(preview.get("blocked_rows") or 0) > 0 else "previewed"
     invalid_samples: list[str] = []
     row_insert_params: list[tuple[Any, ...]] = []
+    has_raw_workbook_columns = all(
+        table_column_exists(conn, "schedule_import_batches", column_name)
+        for column_name in ("raw_workbook_bytes", "raw_workbook_mime_type", "raw_workbook_sha256")
+    )
     with conn.cursor() as cur:
+        columns = [
+            "id",
+            "tenant_id",
+            "created_by",
+            "filename",
+            "status",
+            "total_rows",
+            "valid_rows",
+            "invalid_rows",
+            "import_mode",
+            "site_id",
+            "site_code",
+            "month_key",
+            "template_version",
+            "export_source_version",
+            "export_revision",
+            "current_revision",
+            "metadata_error",
+            "blocked_reasons_json",
+            "diff_counts_json",
+            "is_stale",
+            "metadata_json",
+            "issues_json",
+            "mapping_profile_id",
+            "mapping_profile_name",
+        ]
+        values: list[Any] = [
+            batch_id,
+            target_tenant["id"],
+            user["id"],
+            filename,
+            status,
+            int(preview.get("total_rows") or 0),
+            int(preview.get("applicable_rows") or 0),
+            int(preview.get("blocked_rows") or 0),
+            "canonical_workbook",
+            scope_site["id"],
+            str(scope_site.get("site_code") or "").strip(),
+            month_key,
+            str(metadata.get("template_version") or "").strip() or None,
+            str(metadata.get("export_source_version") or "").strip() or None,
+            str(metadata.get("export_revision") or "").strip() or None,
+            str(metadata.get("current_revision") or "").strip() or None,
+            "; ".join(blocked_reasons) or None,
+            json.dumps(blocked_reasons, ensure_ascii=False),
+            json.dumps(dict(preview.get("diff_counts") or {}), ensure_ascii=False),
+            bool(metadata.get("is_stale")),
+            json.dumps(metadata, ensure_ascii=False, default=str),
+            json.dumps(issues, ensure_ascii=False, default=str),
+            mapping_profile.get("profile_id"),
+            str(mapping_profile.get("profile_name") or "").strip() or None,
+        ]
+        value_expressions = [
+            "%s",
+            "%s",
+            "%s",
+            "%s",
+            "%s",
+            "%s",
+            "%s",
+            "%s",
+            "%s",
+            "%s",
+            "%s",
+            "%s",
+            "%s",
+            "%s",
+            "%s",
+            "%s",
+            "%s",
+            "%s::jsonb",
+            "%s::jsonb",
+            "%s",
+            "%s::jsonb",
+            "%s::jsonb",
+            "%s",
+            "%s",
+        ]
+        if has_raw_workbook_columns:
+            columns.extend(
+                [
+                    "raw_workbook_bytes",
+                    "raw_workbook_mime_type",
+                    "raw_workbook_sha256",
+                ]
+            )
+            values.extend(
+                [
+                    bytes(raw_workbook_bytes) if raw_workbook_bytes else None,
+                    str(raw_workbook_mime_type or "").strip() or None,
+                    str(raw_workbook_sha256 or "").strip() or None,
+                ]
+            )
+            value_expressions.extend(["%s", "%s", "%s"])
+        columns.extend(["mapping_profile_updated_at", "apply_result_json"])
+        values.extend([mapping_profile.get("updated_at")])
+        value_expressions.extend(["%s", "'{}'::jsonb"])
         cur.execute(
-            """
+            f"""
             INSERT INTO schedule_import_batches
-            (id, tenant_id, created_by, filename, status, total_rows, valid_rows, invalid_rows,
-             import_mode, site_id, site_code, month_key, template_version, export_source_version,
-             export_revision, current_revision, metadata_error, blocked_reasons_json, diff_counts_json,
-             is_stale, metadata_json, issues_json, mapping_profile_id, mapping_profile_name,
-             raw_workbook_bytes, raw_workbook_mime_type, raw_workbook_sha256,
-             mapping_profile_updated_at, apply_result_json)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb, %s::jsonb, %s, %s, %s, %s, %s, %s, '{}'::jsonb)
+            ({", ".join(columns)})
+            VALUES ({", ".join(value_expressions)})
             """,
-            (
-                batch_id,
-                target_tenant["id"],
-                user["id"],
-                filename,
-                status,
-                int(preview.get("total_rows") or 0),
-                int(preview.get("applicable_rows") or 0),
-                int(preview.get("blocked_rows") or 0),
-                "canonical_workbook",
-                scope_site["id"],
-                str(scope_site.get("site_code") or "").strip(),
-                month_key,
-                str(metadata.get("template_version") or "").strip() or None,
-                str(metadata.get("export_source_version") or "").strip() or None,
-                str(metadata.get("export_revision") or "").strip() or None,
-                str(metadata.get("current_revision") or "").strip() or None,
-                "; ".join(blocked_reasons) or None,
-                json.dumps(blocked_reasons, ensure_ascii=False),
-                json.dumps(dict(preview.get("diff_counts") or {}), ensure_ascii=False),
-                bool(metadata.get("is_stale")),
-                json.dumps(metadata, ensure_ascii=False, default=str),
-                json.dumps(issues, ensure_ascii=False, default=str),
-                mapping_profile.get("profile_id"),
-                str(mapping_profile.get("profile_name") or "").strip() or None,
-                bytes(raw_workbook_bytes) if raw_workbook_bytes else None,
-                str(raw_workbook_mime_type or "").strip() or None,
-                str(raw_workbook_sha256 or "").strip() or None,
-                mapping_profile.get("updated_at"),
-            ),
+            tuple(values),
         )
         for row in [*resolved_rows, *support_ticket_rows]:
             validation_code = str(row.get("validation_code") or "").strip() or None
