@@ -2174,7 +2174,6 @@
                 <div>
                   <span class="schedule-upload-step-kicker">STEP 1</span>
                   <h4>매핑 프로필 설정</h4>
-                  <p class="muted">이 단계에서는 업로드에 사용할 기존 매핑 프로필을 선택하고 준비 상태만 확인합니다. 프로필 생성/편집은 근무 템플릿에서 관리합니다.</p>
                 </div>
               </div>
               <div class="schedule-template-mapping-summary">
@@ -2233,8 +2232,6 @@
                         <input id="scheduleImportMonth" type="month" />
                       </label>
                     </div>
-                    <p id="scheduleImportPermissionSummary" class="muted schedule-upload-inline-note"></p>
-                    <p id="scheduleImportSiteHint" class="muted schedule-upload-inline-note"></p>
                     <div class="schedule-wizard-actions">
                       <button class="btn btn-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="mapping">이전</button>
                       <button class="btn btn-primary" type="button" id="scheduleBaseContextNextBtn" data-action="schedule-base-wizard-next" data-next-step="file">다음</button>
@@ -2261,7 +2258,6 @@
                         <button class="btn btn-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="context">이전</button>
                         <button class="btn btn-primary" type="button" id="schedulePreviewBtn" data-action="preview-schedule">분석 시작</button>
                       </div>
-                      <p class="muted">실제 ARLS 월간 근무표 workbook만 분석할 수 있습니다. 지원 roster 업로드/승인 상태는 Sentrix가 이어받습니다.</p>
                     </form>
 
                     <div id="scheduleImportProgress" class="schedule-upload-progress hidden" role="status" aria-live="polite">
@@ -2345,7 +2341,6 @@
                   </div>
                   <ul id="scheduleApplyDetails" class="list hidden"></ul>
                   <div class="schedule-wizard-actions">
-                    <button class="btn btn-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="review">이전</button>
                     <button class="btn btn-primary" type="button" data-action="schedule-reset-upload">종료</button>
                   </div>
                 </section>
@@ -2357,9 +2352,9 @@
                   </div>
                 </div>
 
-                <p id="scheduleBatchInfo" class="schedule-upload-hidden-status" aria-hidden="true"></p>
-                <div id="scheduleToast" class="schedule-upload-hidden-status muted" role="status" aria-live="polite"></div>
-                <ul id="scheduleBatchIssues" class="schedule-upload-hidden-status list hidden" aria-hidden="true"></ul>
+                <p id="scheduleBatchInfo" class="hidden" aria-hidden="true"></p>
+                <div id="scheduleToast" class="muted hidden" role="status" aria-live="polite"></div>
+                <ul id="scheduleBatchIssues" class="list hidden" aria-hidden="true"></ul>
               </div>
             </section>
 
