@@ -10082,13 +10082,25 @@ function renderScheduleWizardProgress(containerSelector, steps, activeStep) {
 
 function renderScheduleBaseWizardPages() {
   const step = getScheduleBaseWizardStep();
+  const stageKickerEl = $('#scheduleBaseStageKicker');
+  const stageTitleEl = $('#scheduleBaseStageTitle');
+  const stageMetaByStep = {
+    [SCHEDULE_BASE_WIZARD_STEP_CONTEXT]: { kicker: 'STEP 2', title: '대상 선택' },
+    [SCHEDULE_BASE_WIZARD_STEP_FILE]: { kicker: 'STEP 3', title: '파일 준비' },
+    [SCHEDULE_BASE_WIZARD_STEP_REVIEW]: { kicker: 'STEP 4', title: '반영 검토' },
+    [SCHEDULE_BASE_WIZARD_STEP_APPLY]: { kicker: 'STEP 5', title: '적용 진행 / 완료' },
+  };
+  const stageMeta = stageMetaByStep[step] || stageMetaByStep[SCHEDULE_BASE_WIZARD_STEP_CONTEXT];
+  if (stageKickerEl) stageKickerEl.textContent = stageMeta.kicker;
+  if (stageTitleEl) stageTitleEl.textContent = stageMeta.title;
   toggleVisibility('#scheduleExcelWorkflowMappingSection', step === SCHEDULE_BASE_WIZARD_STEP_MAPPING);
   toggleVisibility('#scheduleExcelWorkflowBaseSection', step !== SCHEDULE_BASE_WIZARD_STEP_MAPPING);
+  toggleVisibility('#scheduleWriteControls', step === SCHEDULE_BASE_WIZARD_STEP_CONTEXT || step === SCHEDULE_BASE_WIZARD_STEP_FILE);
   toggleVisibility('#scheduleBaseContextStage', step === SCHEDULE_BASE_WIZARD_STEP_CONTEXT);
   toggleVisibility('#scheduleBaseFileStage', step === SCHEDULE_BASE_WIZARD_STEP_FILE);
   toggleVisibility('#scheduleBaseReviewStage', step === SCHEDULE_BASE_WIZARD_STEP_REVIEW);
   toggleVisibility('#scheduleBaseApplyStage', step === SCHEDULE_BASE_WIZARD_STEP_APPLY);
-  toggleVisibility('#scheduleUploadApplyBar', step === SCHEDULE_BASE_WIZARD_STEP_REVIEW || step === SCHEDULE_BASE_WIZARD_STEP_APPLY);
+  toggleVisibility('#scheduleUploadApplyBar', step === SCHEDULE_BASE_WIZARD_STEP_REVIEW);
   renderScheduleWizardProgress('#scheduleBaseWizardProgress', getScheduleBaseWizardSteps(), step);
 }
 

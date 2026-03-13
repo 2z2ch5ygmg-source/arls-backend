@@ -2203,22 +2203,13 @@
             <section id="scheduleExcelWorkflowBaseSection" class="schedule-upload-step schedule-excel-workflow-section">
               <div class="schedule-upload-step-head">
                 <div>
-                  <span class="schedule-upload-step-kicker">STEP 2</span>
-                  <h4>기본 월간 근무표 업로드</h4>
-                  <p class="muted">Supervisor/HQ가 원본 workbook을 업로드해 분석, 검토, 반영까지 진행합니다.</p>
+                  <span id="scheduleBaseStageKicker" class="schedule-upload-step-kicker">STEP 2</span>
+                  <h4 id="scheduleBaseStageTitle">대상 선택</h4>
                 </div>
               </div>
 
               <div class="stack schedule-upload-stage-shell">
                 <section id="scheduleWriteControls" class="schedule-upload-step">
-                  <div class="schedule-upload-step-head">
-                    <div>
-                      <span class="schedule-upload-step-kicker">준비</span>
-                      <h4>업로드 준비</h4>
-                      <p class="muted">업로드 대상 지점과 월을 먼저 고정한 뒤, 현재 기준에 맞는 workbook을 선택합니다.</p>
-                    </div>
-                  </div>
-
                   <div id="scheduleBaseContextStage" class="stack">
                     <div class="schedule-upload-context-grid">
                       <label id="scheduleImportTenantReadonlyField" class="input-field">
@@ -2259,13 +2250,6 @@
                         </div>
                         <button class="btn btn-secondary" type="button" id="scheduleBlankTemplateBtn" data-action="schedule-download-blank-template">빈 양식 다운로드</button>
                       </article>
-                      <article class="schedule-upload-template-card">
-                        <div>
-                          <h5>최신 기준본 다운로드</h5>
-                          <p class="muted">현재 site/month canonical 상태를 기준으로 다시 작업할 때 사용합니다.</p>
-                        </div>
-                        <button class="btn btn-secondary" type="button" id="scheduleLatestBaseBtn" data-action="schedule-download-latest-base">최신 기준본 다운로드</button>
-                      </article>
                     </div>
 
                     <form id="scheduleImportForm" class="stack schedule-upload-file-form">
@@ -2292,14 +2276,6 @@
                 </section>
 
                 <section id="scheduleBaseReviewStage" class="schedule-upload-step hidden">
-                  <div class="schedule-upload-step-head">
-                    <div>
-                      <span class="schedule-upload-step-kicker">분석 결과</span>
-                      <h4>반영 검토</h4>
-                      <p class="muted">사람이 읽을 수 있는 요약을 먼저 보고, 그 다음 행 단위로 무엇이 반영되는지 확인합니다.</p>
-                    </div>
-                  </div>
-
                   <div id="scheduleImportAnalysisEmpty" class="schedule-upload-placeholder">
                     <strong>분석 대기 중</strong>
                     <p class="muted">지점, 대상 월, 업로드 파일을 준비한 뒤 <code>분석 시작</code>을 실행하면 결과가 여기에 표시됩니다.</p>
@@ -2360,13 +2336,6 @@
                 </section>
 
                 <section id="scheduleBaseApplyStage" class="schedule-upload-step hidden">
-                  <div class="schedule-upload-step-head">
-                    <div>
-                      <span class="schedule-upload-step-kicker">적용</span>
-                      <h4>적용 진행 / 완료</h4>
-                      <p class="muted">현재 반영 상태를 한 화면에서 확인하고 완료 후 종료합니다.</p>
-                    </div>
-                  </div>
                   <div class="schedule-upload-progress">
                     <span id="scheduleApplyProgressPill" class="status-pill status-pill-neutral">대기</span>
                     <div class="schedule-upload-progress-copy">
