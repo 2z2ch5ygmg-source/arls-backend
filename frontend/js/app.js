@@ -39342,6 +39342,11 @@ function isScheduleBoardTab(tab = '') {
   return normalized === SCHEDULE_TAB_CALENDAR || normalized === SCHEDULE_TAB_LIST;
 }
 
+function isScheduleReportsOwnerTab(tab = '') {
+  const normalized = normalizeScheduleHqTab(tab);
+  return normalized === SCHEDULE_TAB_HQ_UPLOAD || normalized === SCHEDULE_TAB_REPORTS;
+}
+
 function closeScheduleActionDropdowns({ keepMenuId = '' } = {}) {
   const keep = String(keepMenuId || '').trim();
   document.querySelectorAll('[data-schedule-action-dropdown]').forEach((menuEl) => {
@@ -39540,15 +39545,20 @@ function renderScheduleHqTabs() {
   if (tabWrap instanceof HTMLElement) {
     tabWrap.classList.remove('hidden');
     const uiActiveTab = activeTab === SCHEDULE_TAB_LIST ? SCHEDULE_TAB_CALENDAR : activeTab;
+    const reportsOwnerVisible = isScheduleReportsOwnerTab(activeTab);
     tabWrap.querySelectorAll('[data-action="schedule-hq-tab"]').forEach((button) => {
       const tab = normalizeScheduleHqTab(button?.dataset?.tab || '');
       const isTemplateTab = tab === SCHEDULE_TAB_TEMPLATES;
       const isUploadTab = tab === SCHEDULE_TAB_UPLOAD;
       const isHqUploadTab = tab === SCHEDULE_TAB_HQ_UPLOAD;
       const isReportsTab = tab === SCHEDULE_TAB_REPORTS;
+      const isCalendarTab = tab === SCHEDULE_TAB_CALENDAR;
+      const isScheduleOwnerTab = isCalendarTab || isTemplateTab || isUploadTab;
+      const groupHidden = reportsOwnerVisible ? isScheduleOwnerTab : (isHqUploadTab || isReportsTab);
       button.classList.toggle(
         'hidden',
-        (isTemplateTab && !canOpenTemplateTab)
+        groupHidden
+          || (isTemplateTab && !canOpenTemplateTab)
           || (isUploadTab && !canOpenUploadTab)
           || (isHqUploadTab && !canOpenHqUploadTab)
           || (isReportsTab && !canOpenFinanceTab),
