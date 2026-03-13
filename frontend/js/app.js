@@ -10562,10 +10562,19 @@ function setScheduleImportUI({
   clearApplyDetails = false,
 } = {}) {
   const infoEl = $('#scheduleBatchInfo');
+  const toastEl = $('#scheduleToast');
   const issuesEl = $('#scheduleBatchIssues');
   const uploadUi = getScheduleUploadUiState();
 
-  if (infoEl) infoEl.textContent = batchInfo;
+  if (infoEl) {
+    infoEl.textContent = batchInfo;
+    infoEl.classList.toggle('hidden', !String(batchInfo || '').trim());
+    infoEl.setAttribute('aria-hidden', String(batchInfo || '').trim() ? 'false' : 'true');
+  }
+  if (toastEl) {
+    toastEl.textContent = applyResult;
+    toastEl.classList.toggle('hidden', !String(applyResult || '').trim());
+  }
   uploadUi.batchInfo = batchInfo;
   uploadUi.applyResult = applyResult;
   uploadUi.canApply = Boolean(canApply);
@@ -10574,8 +10583,10 @@ function setScheduleImportUI({
     issuesEl.innerHTML = '';
     if (!issues.length) {
       issuesEl.classList.add('hidden');
+      issuesEl.setAttribute('aria-hidden', 'true');
     } else {
       issuesEl.classList.remove('hidden');
+      issuesEl.setAttribute('aria-hidden', 'false');
       issues.forEach((item) => {
         const li = document.createElement('li');
         li.textContent = item;
@@ -46922,15 +46933,19 @@ async function onScheduleApply() {
       { method: 'POST' },
     );
     if (result?.blocked) {
+      const blockedReasons = Array.isArray(result?.blocked_reasons)
+        ? result.blocked_reasons.filter(Boolean)
+        : [];
+      const blockedMessage = String(blockedReasons[0] || '').trim() || '반영이 차단되었습니다. 차단 사유를 먼저 해결해 주세요.';
       setScheduleImportUI({
         batchInfo: uploadUi.batchInfo,
-        issues: Array.isArray(result?.blocked_reasons) ? result.blocked_reasons : [],
+        issues: blockedReasons,
         previewRows: state.preview?.preview_rows || [],
-        applyResult: '반영이 차단되었습니다. 차단 사유를 먼저 해결해 주세요.',
+        applyResult: blockedMessage,
         canApply: false,
         clearApplyDetails: true,
       });
-      showToast('반영이 차단되었습니다. 미리보기의 차단 사유를 확인해 주세요.', 'error', 4200);
+      showToast(blockedMessage, 'error', 4200);
       return;
     }
     state.previewBatchId = '';
