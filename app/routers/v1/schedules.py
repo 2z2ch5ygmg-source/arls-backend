@@ -6947,30 +6947,12 @@ def _build_support_roster_hq_download_workbook(
                     visible_sheet_name = prepared_source["visible_sheet_name"]
                     template_version = str(prepared_source.get("template_version") or template_version)
         if site_workbook is None:
-            export_ctx = _collect_monthly_export_context(
-                conn,
-                target_tenant=target_tenant,
-                site_row=site_row,
-                month_key=month_key,
-                user=user,
-            )
-            template_version = str(export_ctx.get("template_version") or template_version)
-            site_workbook = _build_support_only_workbook(
-                export_ctx=export_ctx,
-                target_tenant=target_tenant,
-                site_row=site_row,
-                month_key=month_key,
-                source_revision=str(source_row.get("source_revision") or "").strip(),
-                active_assignments=[],
-                include_existing_assignments=False,
-            )
-            visible_sheet_name = next(
-                (
-                    name
-                    for name in site_workbook.sheetnames
-                    if name not in {ARLS_SUPPORT_METADATA_SHEET_NAME, SENTRIX_SUPPORT_HQ_METADATA_SHEET_NAME}
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{str(site_row.get('site_name') or '').strip() or str(site_row.get('site_code') or '').strip()} "
+                    "원본 업로드 workbook을 찾지 못했습니다. 최신 월간 근무표를 다시 업로드한 뒤 HQ 시트 다운로드를 진행하세요."
                 ),
-                None,
             )
         if not visible_sheet_name:
             raise HTTPException(status_code=409, detail="support workbook sheet missing")

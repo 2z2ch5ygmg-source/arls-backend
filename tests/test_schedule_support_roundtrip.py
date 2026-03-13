@@ -10,6 +10,7 @@ import uuid
 from openpyxl import Workbook, load_workbook
 from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import PatternFill
+from fastapi import HTTPException
 
 from app.routers.v1.schedules import (
     ARLS_EXPORT_TEMPLATE_VERSION,
@@ -640,6 +641,12 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
 
     def test_hq_download_prefers_raw_source_workbook_for_single_site_bundle(self):
         raw_source_workbook = self._build_export_ctx()["workbook"]
+        source_sheet = raw_source_workbook[ARLS_SHEET_NAME]
+        date_columns, _ = _extract_arls_date_columns(source_sheet)
+        rows_meta = _locate_support_section_rows(source_sheet)
+        day_col = next(col for col, value in date_columns.items() if value.isoformat() == "2026-03-01")
+        source_sheet.cell(row=rows_meta["weekly_rows"][0], column=day_col).value = "BK 홍길동"
+        source_sheet.cell(row=rows_meta["weekly_rows"][1], column=day_col).value = "BK 몬치치"
         hidden_sheet_names = [sheet.title for sheet in raw_source_workbook.worksheets if sheet.sheet_state == "hidden"]
 
         with patch(
@@ -683,6 +690,39 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         visible_sheet = workbook[ARLS_SHEET_NAME]
         data_start_row = _find_template_data_start_row(visible_sheet)
         self.assertTrue(visible_sheet.row_dimensions[data_start_row].hidden)
+        self.assertEqual(visible_sheet.cell(row=rows_meta["weekly_rows"][0], column=day_col).value, "BK 홍길동")
+        self.assertEqual(visible_sheet.cell(row=rows_meta["weekly_rows"][1], column=day_col).value, "BK 몬치치")
+
+    def test_hq_download_blocks_when_raw_source_workbook_missing(self):
+        with patch(
+            "app.routers.v1.schedules._resolve_support_roster_hq_download_sites",
+            return_value=[{"site_code": "R738", "site_name": "Apple_명동"}],
+        ), patch(
+            "app.routers.v1.schedules._resolve_site_context_by_code",
+            return_value={"id": "site-r738", "site_code": "R738", "site_name": "Apple_명동"},
+        ), patch(
+            "app.routers.v1.schedules._get_support_roundtrip_source",
+            return_value={"source_revision": "src-rev-old", "source_batch_id": "batch-old"},
+        ), patch(
+            "app.routers.v1.schedules._load_schedule_import_batch_raw_workbook",
+            return_value=None,
+        ), patch(
+            "app.routers.v1.schedules._collect_monthly_export_context",
+            side_effect=AssertionError("support-only fallback must not run when raw source is missing"),
+        ):
+            with self.assertRaises(HTTPException) as ctx:
+                _build_support_roster_hq_download_workbook(
+                    None,
+                    target_tenant={"id": "tenant-1", "tenant_code": "srs_korea", "tenant_name": "SRS Korea"},
+                    month_key="2026-03",
+                    scope="site",
+                    selected_site_code="R738",
+                    selected_site_codes=None,
+                    user={"id": "user-1", "role": "HQ_ADMIN"},
+                )
+
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertIn("원본 업로드 workbook", str(ctx.exception.detail))
 
     def test_parse_sentrix_hq_worker_cell_normalizes_external_and_internal(self):
         employee_index = _build_employee_name_index(
