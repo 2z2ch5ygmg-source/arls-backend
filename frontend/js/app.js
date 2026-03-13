@@ -29049,6 +29049,11 @@ const VIEW_PRESENTERS = {
   schedule: {
     loadingMessage: '스케줄 데이터를 불러오는 중입니다...',
     errorMessage: '스케줄 데이터를 불러오지 못했습니다.',
+    onCacheHit: () => {
+      loadScheduleViewPresenter().catch((error) => {
+        console.error('[RG ARLS] schedule cache-hit rerender failed', error);
+      });
+    },
     load: loadScheduleViewPresenter,
   },
   profile: {
