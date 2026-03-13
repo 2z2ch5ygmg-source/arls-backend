@@ -12,6 +12,28 @@ from .config import settings
 SCHEMA_SQL_PATH = Path(__file__).resolve().parent.parent / "migrations" / "001_init.sql"
 MIGRATIONS_DIR = SCHEMA_SQL_PATH.parent
 
+MONTHLY_SCHEDULE_SHIFT_TYPE_CONSTRAINT_SQL = """
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'monthly_schedules'
+  ) THEN
+    ALTER TABLE monthly_schedules
+      DROP CONSTRAINT IF EXISTS monthly_schedules_shift_type_check;
+
+    ALTER TABLE monthly_schedules
+      ADD CONSTRAINT monthly_schedules_shift_type_check
+      CHECK (
+        lower(COALESCE(NULLIF(trim(shift_type), ''), 'day')) IN ('day', 'overtime', 'night', 'off', 'holiday')
+      ) NOT VALID;
+  END IF;
+END
+$$;
+"""
+
 _pool: ConnectionPool | None = None
 
 
@@ -37,6 +59,7 @@ def _migrate_and_seed() -> None:
         with conn:
             _apply_base_schema(conn)
             _apply_incremental_migrations(conn)
+            _repair_runtime_constraints(conn)
             conn.commit()
     finally:
         conn.close()
@@ -95,6 +118,11 @@ def _apply_incremental_migrations(conn) -> None:
                 """,
                 (path.name,),
             )
+
+
+def _repair_runtime_constraints(conn) -> None:
+    with conn.cursor() as cur:
+        cur.execute(MONTHLY_SCHEDULE_SHIFT_TYPE_CONSTRAINT_SQL)
 
 
 def get_pool() -> ConnectionPool:

@@ -14,7 +14,7 @@ BEGIN
       ADD CONSTRAINT monthly_schedules_shift_type_check
       CHECK (
         lower(COALESCE(NULLIF(trim(shift_type), ''), 'day')) IN ('day', 'overtime', 'night', 'off', 'holiday')
-      );
+      ) NOT VALID;
   END IF;
 END
 $$;

@@ -127,7 +127,10 @@ CREATE TABLE IF NOT EXISTS monthly_schedules (
     source_action text,
     source_self_staff boolean NOT NULL DEFAULT false,
     created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
-    updated_at timestamptz NOT NULL DEFAULT timezone('utc', now())
+    updated_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    CONSTRAINT monthly_schedules_shift_type_check CHECK (
+        lower(COALESCE(NULLIF(trim(shift_type), ''), 'day')) IN ('day', 'overtime', 'night', 'off', 'holiday')
+    )
 );
 
 DO $$
