@@ -29,6 +29,7 @@ import requests
 
 from ...deps import get_db_conn, get_current_user, apply_rate_limit
 from ...config import settings
+from ...db import MONTHLY_SCHEDULE_SHIFT_TYPE_CONSTRAINT_SQL
 from ...schemas import (
     AppleDaytimeShiftOut,
     ImportPreviewIssueLocationOut,
@@ -3156,6 +3157,10 @@ def _update_monthly_schedule_row(
 
 def _delete_monthly_schedule_row(cur, *, schedule_id: str) -> None:
     cur.execute("DELETE FROM monthly_schedules WHERE id = %s", (schedule_id,))
+
+
+def _ensure_monthly_schedule_shift_type_constraint(cur) -> None:
+    cur.execute(MONTHLY_SCHEDULE_SHIFT_TYPE_CONSTRAINT_SQL)
 
 
 def _upsert_daytime_need_count_row(
@@ -16745,6 +16750,7 @@ def _apply_canonical_schedule_import_batch(
 
     try:
         with conn.cursor() as cur:
+            _ensure_monthly_schedule_shift_type_constraint(cur)
             for op in base_create_ops:
                 _insert_monthly_schedule_row(
                     cur,
@@ -17107,6 +17113,8 @@ def apply_import(
                     reason=row["validation_error"] or "미리보기 검증 실패",
                 )
             )
+
+        _ensure_monthly_schedule_shift_type_constraint(cur)
 
         for row in rows:
             shift_type = _normalize_shift_type(row["shift_type"])
