@@ -826,9 +826,19 @@ def _fetch_employee_drawer_base(
     tenant_id: str,
     employee_id: uuid.UUID,
 ) -> dict[str, Any] | None:
+    has_employee_active = _table_column_exists(conn, "employees", "is_active")
+    has_employee_deleted = _table_column_exists(conn, "employees", "is_deleted")
+    has_user_active = _table_column_exists(conn, "arls_users", "is_active")
+    has_user_deleted = _table_column_exists(conn, "arls_users", "is_deleted")
+
+    employee_active_expr = "COALESCE(e.is_active, TRUE)" if has_employee_active else "TRUE"
+    user_active_filter = "COALESCE(au.is_active, TRUE) = TRUE" if has_user_active else "TRUE"
+    user_deleted_filter = "COALESCE(au.is_deleted, FALSE) = FALSE" if has_user_deleted else "TRUE"
+    employee_deleted_clause = "\n              AND COALESCE(e.is_deleted, FALSE) = FALSE" if has_employee_deleted else ""
+
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT e.id,
                    e.tenant_id,
                    e.employee_code,
@@ -837,7 +847,7 @@ def _fetch_employee_drawer_base(
                    e.phone,
                    e.hire_date,
                    e.leave_date,
-                   COALESCE(e.is_active, TRUE) AS is_active,
+                   {employee_active_expr} AS is_active,
                    COALESCE(t.tenant_code, '') AS tenant_code,
                    COALESCE(t.tenant_name, '') AS tenant_name,
                    COALESCE(c.company_name, c.company_code, t.tenant_name, '') AS company_name,
@@ -858,8 +868,8 @@ def _fetch_employee_drawer_base(
                 SELECT DISTINCT ON (au.tenant_id, au.employee_id)
                        au.tenant_id, au.employee_id, au.id, au.role, au.username
                 FROM arls_users au
-                WHERE COALESCE(au.is_active, TRUE) = TRUE
-                  AND COALESCE(au.is_deleted, FALSE) = FALSE
+                WHERE {user_active_filter}
+                  AND {user_deleted_filter}
                 ORDER BY au.tenant_id,
                          au.employee_id,
                          au.updated_at DESC NULLS LAST,
@@ -869,7 +879,7 @@ def _fetch_employee_drawer_base(
              AND u.employee_id = e.id
             WHERE e.id = %s
               AND e.tenant_id = %s
-              AND COALESCE(e.is_deleted, FALSE) = FALSE
+              {employee_deleted_clause}
             LIMIT 1
             """,
             (str(employee_id), tenant_id),

@@ -6,6 +6,50 @@ from app.routers.v1 import employees
 
 
 class EmployeeDrawerSummaryContractTests(unittest.TestCase):
+    def test_fetch_employee_drawer_base_tolerates_missing_soft_delete_columns(self):
+        employee_id = uuid.uuid4()
+        captured: dict[str, object] = {}
+
+        class FakeCursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def execute(self, sql, params):
+                captured["sql"] = sql
+                captured["params"] = params
+
+            def fetchone(self):
+                return {"id": str(employee_id)}
+
+        class FakeConn:
+            def cursor(self):
+                return FakeCursor()
+
+        original_exists = employees._table_column_exists
+        employees._table_column_exists = lambda conn, table, column: False if (table, column) in {
+            ("employees", "is_deleted"),
+            ("employees", "is_active"),
+            ("arls_users", "is_active"),
+            ("arls_users", "is_deleted"),
+        } else True
+        try:
+            row = employees._fetch_employee_drawer_base(
+                FakeConn(),
+                tenant_id="tenant-1",
+                employee_id=employee_id,
+            )
+        finally:
+            employees._table_column_exists = original_exists
+
+        sql = str(captured["sql"])
+        self.assertEqual(row["id"], str(employee_id))
+        self.assertNotIn("e.is_deleted", sql)
+        self.assertIn("TRUE AS is_active", sql)
+        self.assertIn("WHERE TRUE", sql)
+
     def test_build_summary_payload_exposes_header_actions_and_previews(self):
         employee_id = uuid.uuid4()
         base_row = {
