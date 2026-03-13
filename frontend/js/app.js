@@ -10758,10 +10758,10 @@ function getScheduleSupportHqSelectedSiteContext() {
 }
 
 function getScheduleSupportHqSiteStatusLabel(site = {}) {
-  if (Boolean(site?.downloadReady)) return '업로드 완료';
   if (Boolean(site?.hqMergeStale) || String(site?.latestStatus || '').trim().toLowerCase() === 'partial_stale') {
     return '재업로드 필요';
   }
+  if (Boolean(site?.downloadReady)) return '업로드 완료';
   return '파일 없음';
 }
 
