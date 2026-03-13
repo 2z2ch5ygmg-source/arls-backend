@@ -8256,8 +8256,6 @@ const DRAWER_MENU_BY_ROLE = {
         { id: 'requests-exceptions', title: '출퇴근예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
         { id: 'requests-leave', title: '휴가', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=leave`, sectionMatch: 'leave' },
         { id: 'requests-approvals', title: '승인함', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=approvals`, sectionMatch: 'approvals' },
-        { id: 'requests-correction', title: '정정', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=correction`, sectionMatch: 'correction' },
-        { id: 'requests-documents', title: '문서', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=documents`, sectionMatch: 'documents' },
       ],
     },
     {
@@ -8316,8 +8314,6 @@ const DRAWER_MENU_BY_ROLE = {
         { id: 'requests-exceptions', title: '출퇴근예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
         { id: 'requests-leave', title: '휴가', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=leave`, sectionMatch: 'leave' },
         { id: 'requests-approvals', title: '승인함', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=approvals`, sectionMatch: 'approvals' },
-        { id: 'requests-correction', title: '정정', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=correction`, sectionMatch: 'correction' },
-        { id: 'requests-documents', title: '문서', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=documents`, sectionMatch: 'documents' },
       ],
     },
     {
