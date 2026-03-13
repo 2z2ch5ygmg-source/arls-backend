@@ -10759,7 +10759,7 @@ function getScheduleSupportHqSelectedSiteContext() {
 
 function getScheduleSupportHqSiteStatusLabel(site = {}) {
   if (Boolean(site?.hqMergeStale) || String(site?.latestStatus || '').trim().toLowerCase() === 'partial_stale') {
-    return '재업로드 필요';
+    return '재추출 필요';
   }
   if (Boolean(site?.downloadReady)) return '업로드 완료';
   return '파일 없음';
@@ -10768,14 +10768,14 @@ function getScheduleSupportHqSiteStatusLabel(site = {}) {
 function getScheduleSupportHqSiteStatusClass(site = {}) {
   const label = getScheduleSupportHqSiteStatusLabel(site);
   if (label === '업로드 완료') return 'status-pill status-pill-success';
-  if (label === '재업로드 필요') return 'status-pill status-pill-warn';
+  if (label === '재추출 필요') return 'status-pill status-pill-warn';
   return 'status-pill status-pill-error';
 }
 
 function getScheduleSupportHqSiteMemo(site = {}) {
   if (String(site?.blockedReason || '').trim()) return String(site.blockedReason).trim();
-  if (!site?.downloadReady) return '현재 월 기준 source workbook이 없습니다.';
   if (site?.hqMergeStale) return '기존 HQ 작성본이 stale 상태입니다.';
+  if (!site?.downloadReady) return '현재 월 기준 source workbook이 없습니다.';
   if (String(site?.note || '').trim()) return String(site.note).trim();
   if (!site?.sheetName || site?.sheetName === '-') return '시트명 확인 필요';
   return `시트명 ${site.sheetName}`;

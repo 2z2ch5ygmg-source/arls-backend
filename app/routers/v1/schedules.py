@@ -6378,15 +6378,13 @@ def _build_support_roster_hq_workspace_site_payload(
         upload_state = "파일 없음"
         note = "원본 업로드 workbook을 찾지 못했습니다. 최신 월간 근무표를 다시 업로드하세요."
     if stale:
-        upload_state = "재업로드 필요 / stale"
+        upload_state = "재추출 필요"
         note = "최신 Supervisor 기준본으로 다시 추출해야 합니다."
     if not download_ready and source_state != "source_missing" and not raw_workbook_available:
         blocked_reason = "원본 업로드 workbook 없음"
     elif not download_ready:
         blocked_reason = "파일 없음"
-    elif stale:
-        blocked_reason = "재업로드 필요 / stale"
-    selectable = download_ready and not stale
+    selectable = download_ready
     return SupportRosterHqWorkspaceSiteOut(
         site_code=site_code,
         site_name=site_name,

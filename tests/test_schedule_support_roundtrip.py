@@ -584,6 +584,39 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertFalse(workspace.sites[1].selectable)
         self.assertEqual(workspace.sites[1].blocked_reason, "원본 업로드 workbook 없음")
 
+    def test_workspace_payload_keeps_stale_download_ready_site_selectable(self):
+        with patch("app.routers.v1.schedules._list_support_roundtrip_workspace_sites", return_value=[
+            {
+                "site_id": "site-1",
+                "site_code": "R692",
+                "site_name": "Apple_가로수길",
+                "sheet_name": "Apple_가로수길",
+                "download_ready": True,
+                "raw_workbook_available": True,
+                "source_state": "waiting_for_hq_merge",
+                "source_uploaded_at": None,
+                "source_revision": "rev-stale",
+                "latest_hq_revision": "rev-old",
+                "latest_status": "partial_stale",
+                "hq_merge_stale": True,
+            },
+        ]), patch("app.routers.v1.schedules._load_support_roster_hq_resume_state", return_value={
+            "available": False,
+            "current_step": None,
+            "selected_site_codes": [],
+        }):
+            workspace = _build_support_roster_hq_workspace_payload(
+                None,
+                target_tenant={"id": "tenant-1", "tenant_code": "srs_korea", "tenant_name": "SRS Korea"},
+                user={"role": "HQ_ADMIN"},
+                month_key="2026-03",
+            )
+
+        self.assertEqual(len(workspace.sites), 1)
+        self.assertTrue(workspace.sites[0].selectable)
+        self.assertEqual(workspace.sites[0].upload_state, "재추출 필요")
+        self.assertIsNone(workspace.sites[0].blocked_reason)
+
     def test_clone_support_hq_sheet_to_workbook_copies_dimension_style_without_error(self):
         source_workbook = Workbook()
         source_sheet = source_workbook.active
