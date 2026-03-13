@@ -9712,52 +9712,8 @@ function renderScheduleImportTechnicalDetails(preview = state.preview) {
 
 function renderScheduleUploadFileMeta() {
   const metaRow = $('#scheduleImportFileMetaRow');
-  const fileInput = $('#scheduleImportFile');
-  const monthInput = $('#scheduleImportMonth');
-  const siteSelect = $('#scheduleImportSite');
   if (!(metaRow instanceof HTMLElement)) return;
-
-  const file = fileInput instanceof HTMLInputElement && fileInput.files ? fileInput.files[0] : null;
-  const preview = state.preview;
-  const metadata = preview?.metadata || null;
-  const selectedMonth = normalizeMonthKey(monthInput instanceof HTMLInputElement ? monthInput.value : '') || getScheduleMonthValue();
-  const selectedSite = String(siteSelect?.value || '').trim().toUpperCase();
-  const fileMonth = normalizeMonthKey(metadata?.month || '');
-  const fileSite = String(metadata?.site_code || '').trim().toUpperCase();
-  const shouldShow = Boolean(file || preview);
-
-  metaRow.classList.toggle('hidden', !shouldShow);
-  if (!shouldShow) return;
-
-  const fileNameEl = $('#scheduleImportMetaFileName');
-  const monthEl = $('#scheduleImportMetaMonth');
-  const siteEl = $('#scheduleImportMetaSite');
-  const familyEl = $('#scheduleImportMetaFamily');
-  const revisionEl = $('#scheduleImportMetaRevision');
-  const statusEl = $('#scheduleImportMetaStatus');
-
-  if (fileNameEl) {
-    fileNameEl.textContent = file?.name || String(preview?.metadata?.export_revision || '').trim() || '-';
-  }
-  if (monthEl) {
-    monthEl.textContent = fileMonth && fileMonth !== selectedMonth
-      ? `${formatScheduleMonthTitle(selectedMonth)} / 파일 ${formatScheduleMonthTitle(fileMonth)}`
-      : formatScheduleMonthTitle(fileMonth || selectedMonth);
-  }
-  if (siteEl) {
-    siteEl.textContent = fileSite && fileSite !== selectedSite
-      ? `${getScheduleImportSiteLabel(selectedSite)} / 파일 ${getScheduleImportSiteLabel(fileSite)}`
-      : getScheduleImportSiteLabel(fileSite || selectedSite);
-  }
-  if (familyEl) {
-    familyEl.textContent = getScheduleImportTemplateFamilyLabel(metadata);
-  }
-  if (revisionEl) {
-    revisionEl.textContent = getScheduleImportRevisionLabel(metadata);
-  }
-  if (statusEl) {
-    statusEl.textContent = getScheduleImportFileStatusText(metadata, preview);
-  }
+  metaRow.classList.add('hidden');
 }
 
 function renderScheduleUploadApplyBar() {
