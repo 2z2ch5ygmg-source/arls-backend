@@ -4603,6 +4603,7 @@ button:disabled,
 
 .schedule-excel-context-strip {
   margin-top: -2px;
+  display: none !important;
 }
 
 .schedule-upload-owner-tabs {
