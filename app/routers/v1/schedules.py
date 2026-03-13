@@ -5892,6 +5892,12 @@ def _clone_support_hq_sheet_to_workbook(source_sheet, *, target_workbook: Workbo
     target_sheet.page_setup = copy(source_sheet.page_setup)
     target_sheet.print_options = copy(source_sheet.print_options)
     target_sheet.auto_filter.ref = source_sheet.auto_filter.ref
+    if source_sheet.print_area:
+        target_sheet.print_area = source_sheet.print_area
+    if source_sheet.print_title_rows:
+        target_sheet.print_title_rows = source_sheet.print_title_rows
+    if source_sheet.print_title_cols:
+        target_sheet.print_title_cols = source_sheet.print_title_cols
     for col_key, source_dimension in source_sheet.column_dimensions.items():
         target_dimension = target_sheet.column_dimensions[col_key]
         target_dimension.width = source_dimension.width
@@ -5926,6 +5932,12 @@ def _clone_support_hq_sheet_to_workbook(source_sheet, *, target_workbook: Workbo
                 target_cell._hyperlink = copy(source_cell.hyperlink)
             if source_cell.comment:
                 target_cell.comment = copy(source_cell.comment)
+    for conditional_range, rules in source_sheet.conditional_formatting._cf_rules.items():
+        for rule in rules:
+            target_sheet.conditional_formatting.add(str(conditional_range.sqref), copy(rule))
+    if source_sheet.data_validations and source_sheet.data_validations.dataValidation:
+        for data_validation in source_sheet.data_validations.dataValidation:
+            target_sheet.add_data_validation(copy(data_validation))
     for merged_range in source_sheet.merged_cells.ranges:
         target_sheet.merge_cells(str(merged_range))
 

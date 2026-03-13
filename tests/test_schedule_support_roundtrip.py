@@ -8,6 +8,8 @@ from unittest.mock import patch
 import uuid
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.formatting.rule import CellIsRule
+from openpyxl.styles import PatternFill
 
 from app.routers.v1.schedules import (
     ARLS_EXPORT_TEMPLATE_VERSION,
@@ -579,6 +581,15 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         source_sheet.column_dimensions["A"].width = 24
         source_sheet.row_dimensions[1].height = 28
         source_sheet["A1"].number_format = "@"
+        source_sheet.print_area = "A1:C10"
+        source_sheet.conditional_formatting.add(
+            "A1:A10",
+            CellIsRule(
+                operator="equal",
+                formula=["1"],
+                fill=PatternFill(fill_type="solid", start_color="FFCCCC", end_color="FFCCCC"),
+            ),
+        )
 
         target_workbook = Workbook()
         target_workbook.remove(target_workbook.active)
@@ -593,12 +604,16 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertEqual(cloned_sheet["A1"].value, "지원근무")
         self.assertEqual(cloned_sheet.column_dimensions["A"].width, 24)
         self.assertEqual(cloned_sheet.row_dimensions[1].height, 28)
+        self.assertTrue(cloned_sheet.print_area)
+        self.assertGreater(len(cloned_sheet.conditional_formatting._cf_rules), 0)
 
         out = BytesIO()
         target_workbook.save(out)
         out.seek(0)
         reloaded = load_workbook(out)
         self.assertEqual(reloaded["Apple_가로수길"]["A1"].value, "지원근무")
+        self.assertTrue(reloaded["Apple_가로수길"].print_area)
+        self.assertGreater(len(reloaded["Apple_가로수길"].conditional_formatting._cf_rules), 0)
 
     def test_parse_sentrix_hq_worker_cell_normalizes_external_and_internal(self):
         employee_index = _build_employee_name_index(
