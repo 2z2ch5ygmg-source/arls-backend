@@ -6920,31 +6920,57 @@ def _build_support_roster_hq_download_workbook(
         )
         if not source_row:
             raise HTTPException(status_code=409, detail="support roundtrip source missing")
-        export_ctx = _collect_monthly_export_context(
-            conn,
-            target_tenant=target_tenant,
-            site_row=site_row,
-            month_key=month_key,
-            user=user,
-        )
-        template_version = str(export_ctx.get("template_version") or template_version)
-        site_workbook = _build_support_only_workbook(
-            export_ctx=export_ctx,
-            target_tenant=target_tenant,
-            site_row=site_row,
-            month_key=month_key,
-            source_revision=str(source_row.get("source_revision") or "").strip(),
-            active_assignments=[],
-            include_existing_assignments=False,
-        )
-        visible_sheet_name = next(
-            (
-                name
-                for name in site_workbook.sheetnames
-                if name not in {ARLS_SUPPORT_METADATA_SHEET_NAME, SENTRIX_SUPPORT_HQ_METADATA_SHEET_NAME}
-            ),
-            None,
-        )
+        source_batch_id = str(source_row.get("source_batch_id") or "").strip() or None
+        site_workbook = None
+        visible_sheet_name = None
+        if source_batch_id:
+            try:
+                raw_source = _load_schedule_import_batch_raw_workbook(
+                    conn,
+                    tenant_id=str(target_tenant["id"]),
+                    batch_id=source_batch_id,
+                )
+            except Exception:
+                raw_source = None
+                logger.exception(
+                    "[support-hq] failed to load raw workbook source tenant_id=%s site_code=%s month=%s batch_id=%s",
+                    str(target_tenant.get("id") or "").strip(),
+                    str(site_row.get("site_code") or "").strip(),
+                    month_key,
+                    source_batch_id,
+                )
+            if raw_source:
+                prepared_source = _prepare_support_roster_source_workbook(raw_source["workbook"])
+                if prepared_source:
+                    site_workbook = prepared_source["workbook"]
+                    visible_sheet_name = prepared_source["visible_sheet_name"]
+                    template_version = str(prepared_source.get("template_version") or template_version)
+        if site_workbook is None:
+            export_ctx = _collect_monthly_export_context(
+                conn,
+                target_tenant=target_tenant,
+                site_row=site_row,
+                month_key=month_key,
+                user=user,
+            )
+            template_version = str(export_ctx.get("template_version") or template_version)
+            site_workbook = _build_support_only_workbook(
+                export_ctx=export_ctx,
+                target_tenant=target_tenant,
+                site_row=site_row,
+                month_key=month_key,
+                source_revision=str(source_row.get("source_revision") or "").strip(),
+                active_assignments=[],
+                include_existing_assignments=False,
+            )
+            visible_sheet_name = next(
+                (
+                    name
+                    for name in site_workbook.sheetnames
+                    if name not in {ARLS_SUPPORT_METADATA_SHEET_NAME, SENTRIX_SUPPORT_HQ_METADATA_SHEET_NAME}
+                ),
+                None,
+            )
         if not visible_sheet_name:
             raise HTTPException(status_code=409, detail="support workbook sheet missing")
         if single_site_bundle:
@@ -6980,6 +7006,85 @@ def _build_support_roster_hq_download_workbook(
         selected_site_name=written_sites[0]["site_name"] if len(written_sites) == 1 else None,
     )
     return workbook, written_sites
+
+
+def _load_schedule_import_batch_raw_workbook(
+    conn,
+    *,
+    tenant_id: str,
+    batch_id: str,
+) -> dict[str, Any] | None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id,
+                   filename,
+                   raw_workbook_bytes,
+                   raw_workbook_mime_type,
+                   raw_workbook_sha256
+            FROM schedule_import_batches
+            WHERE id = %s
+              AND tenant_id = %s
+            LIMIT 1
+            """,
+            (batch_id, tenant_id),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    raw_bytes = row.get("raw_workbook_bytes")
+    if raw_bytes is None:
+        return None
+    if isinstance(raw_bytes, memoryview):
+        raw_bytes = raw_bytes.tobytes()
+    elif isinstance(raw_bytes, bytearray):
+        raw_bytes = bytes(raw_bytes)
+    if not isinstance(raw_bytes, (bytes, bytearray)) or not raw_bytes:
+        return None
+    workbook = load_workbook(filename=BytesIO(bytes(raw_bytes)), read_only=False, data_only=False)
+    return {
+        "id": str(row.get("id") or "").strip() or batch_id,
+        "filename": str(row.get("filename") or "").strip() or None,
+        "mime_type": str(row.get("raw_workbook_mime_type") or "").strip() or None,
+        "sha256": str(row.get("raw_workbook_sha256") or "").strip() or None,
+        "workbook": workbook,
+    }
+
+
+def _select_support_roster_source_visible_sheet_name(workbook: Workbook) -> str | None:
+    if ARLS_SHEET_NAME in workbook.sheetnames and workbook[ARLS_SHEET_NAME].sheet_state == "visible":
+        return ARLS_SHEET_NAME
+    metadata_sheet_names = {
+        ARLS_METADATA_SHEET_NAME,
+        ARLS_SUPPORT_METADATA_SHEET_NAME,
+        SENTRIX_SUPPORT_HQ_METADATA_SHEET_NAME,
+    }
+    for sheet_name in workbook.sheetnames:
+        sheet = workbook[sheet_name]
+        if sheet.sheet_state == "visible" and sheet_name not in metadata_sheet_names:
+            return sheet_name
+    return None
+
+
+def _hide_support_store_employee_rows(sheet) -> None:
+    data_start_row = _find_template_data_start_row(sheet)
+    summary_start_row = _find_template_summary_start_row(sheet, fallback=data_start_row + 42)
+    for row_idx in range(data_start_row, summary_start_row):
+        sheet.row_dimensions[row_idx].hidden = True
+
+
+def _prepare_support_roster_source_workbook(workbook: Workbook) -> dict[str, Any] | None:
+    visible_sheet_name = _select_support_roster_source_visible_sheet_name(workbook)
+    if not visible_sheet_name:
+        return None
+    visible_sheet = workbook[visible_sheet_name]
+    _hide_support_store_employee_rows(visible_sheet)
+    metadata = _read_arls_export_metadata(workbook)
+    return {
+        "workbook": workbook,
+        "visible_sheet_name": visible_sheet_name,
+        "template_version": str(metadata.get("template_version") or "").strip() or ARLS_EXPORT_TEMPLATE_VERSION,
+    }
 
 
 def _build_support_roster_hq_upload_inspect_result(
@@ -15737,6 +15842,9 @@ def _persist_schedule_import_preview_batch(
     month_key: str,
     filename: str,
     user: dict,
+    raw_workbook_bytes: bytes | None = None,
+    raw_workbook_mime_type: str | None = None,
+    raw_workbook_sha256: str | None = None,
 ) -> tuple[uuid.UUID, list[str]]:
     batch_id = uuid.uuid4()
     resolved_rows = list(preview.get("resolved_rows") or [])
@@ -15756,8 +15864,9 @@ def _persist_schedule_import_preview_batch(
              import_mode, site_id, site_code, month_key, template_version, export_source_version,
              export_revision, current_revision, metadata_error, blocked_reasons_json, diff_counts_json,
              is_stale, metadata_json, issues_json, mapping_profile_id, mapping_profile_name,
+             raw_workbook_bytes, raw_workbook_mime_type, raw_workbook_sha256,
              mapping_profile_updated_at, apply_result_json)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb, %s::jsonb, %s, %s, %s, '{}'::jsonb)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb, %s::jsonb, %s, %s, %s, %s, %s, %s, '{}'::jsonb)
             """,
             (
                 batch_id,
@@ -15784,6 +15893,9 @@ def _persist_schedule_import_preview_batch(
                 json.dumps(issues, ensure_ascii=False, default=str),
                 mapping_profile.get("profile_id"),
                 str(mapping_profile.get("profile_name") or "").strip() or None,
+                bytes(raw_workbook_bytes) if raw_workbook_bytes else None,
+                str(raw_workbook_mime_type or "").strip() or None,
+                str(raw_workbook_sha256 or "").strip() or None,
                 mapping_profile.get("updated_at"),
             ),
         )
@@ -15915,6 +16027,9 @@ def preview_import(
                     month_key=str(month).strip(),
                     filename=file.filename or "schedule_import.xlsx",
                     user=user,
+                    raw_workbook_bytes=raw_bytes,
+                    raw_workbook_mime_type=str(file.content_type or "").strip() or "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    raw_workbook_sha256=file_sha256,
                 )
                 metadata_payload = dict(preview.get("metadata") or {})
                 metadata_payload["analysis_timings_ms"] = {

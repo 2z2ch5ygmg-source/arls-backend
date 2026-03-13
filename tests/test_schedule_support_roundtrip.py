@@ -22,6 +22,7 @@ from app.routers.v1.schedules import (
     _build_sentrix_hq_bridge_candidates,
     _build_arls_month_sheet,
     _build_employee_name_index,
+    _build_support_roster_hq_download_workbook,
     _build_support_roster_hq_workspace_payload,
     _build_support_roster_hq_upload_inspect_result,
     _build_sentrix_hq_snapshot_signature,
@@ -33,13 +34,17 @@ from app.routers.v1.schedules import (
     _build_support_roundtrip_employee_row_index,
     _extract_sentrix_ticket_hq_roster_status,
     _extract_arls_date_columns,
+    _find_template_data_start_row,
+    _find_template_summary_start_row,
     _locate_support_section_rows,
     _normalize_sentrix_hq_roster_final_state,
     _parse_sentrix_hq_worker_cell,
+    _prepare_support_roster_source_workbook,
     _read_support_roundtrip_metadata,
     _resolve_support_roster_hq_sheet_site,
     _resolve_sentrix_support_materialized_shift_defaults,
     _write_sentrix_support_hq_metadata_sheet,
+    SENTRIX_SUPPORT_HQ_METADATA_SHEET_NAME,
 )
 
 
@@ -614,6 +619,70 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertEqual(reloaded["Apple_가로수길"]["A1"].value, "지원근무")
         self.assertTrue(reloaded["Apple_가로수길"].print_area)
         self.assertGreater(len(reloaded["Apple_가로수길"].conditional_formatting._cf_rules), 0)
+
+    def test_prepare_support_roster_source_workbook_keeps_original_sheet_formatting_and_hides_store_rows(self):
+        export_ctx = self._build_export_ctx()
+        workbook = export_ctx["workbook"]
+
+        prepared = _prepare_support_roster_source_workbook(workbook)
+
+        self.assertIsNotNone(prepared)
+        self.assertEqual(prepared["visible_sheet_name"], ARLS_SHEET_NAME)
+        prepared_workbook = prepared["workbook"]
+        visible_sheet = prepared_workbook[ARLS_SHEET_NAME]
+        self.assertTrue(visible_sheet.print_area)
+        self.assertGreater(len(visible_sheet.conditional_formatting._cf_rules), 0)
+
+        data_start_row = _find_template_data_start_row(visible_sheet)
+        summary_start_row = _find_template_summary_start_row(visible_sheet, fallback=data_start_row + 42)
+        self.assertTrue(visible_sheet.row_dimensions[data_start_row].hidden)
+        self.assertTrue(visible_sheet.row_dimensions[summary_start_row - 1].hidden)
+
+    def test_hq_download_prefers_raw_source_workbook_for_single_site_bundle(self):
+        raw_source_workbook = self._build_export_ctx()["workbook"]
+        hidden_sheet_names = [sheet.title for sheet in raw_source_workbook.worksheets if sheet.sheet_state == "hidden"]
+
+        with patch(
+            "app.routers.v1.schedules._resolve_support_roster_hq_download_sites",
+            return_value=[{"site_code": "R692", "site_name": "Apple_가로수길"}],
+        ), patch(
+            "app.routers.v1.schedules._resolve_site_context_by_code",
+            return_value={"id": "site-r692", "site_code": "R692", "site_name": "Apple_가로수길"},
+        ), patch(
+            "app.routers.v1.schedules._get_support_roundtrip_source",
+            return_value={"source_revision": "src-rev-raw", "source_batch_id": "batch-raw"},
+        ), patch(
+            "app.routers.v1.schedules._load_schedule_import_batch_raw_workbook",
+            return_value={
+                "id": "batch-raw",
+                "filename": "raw-source.xlsx",
+                "mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "sha256": "sha256-raw",
+                "workbook": raw_source_workbook,
+            },
+        ), patch(
+            "app.routers.v1.schedules._collect_monthly_export_context",
+            side_effect=AssertionError("fallback export rebuild must not run when raw source exists"),
+        ):
+            workbook, written_sites = _build_support_roster_hq_download_workbook(
+                None,
+                target_tenant={"id": "tenant-1", "tenant_code": "srs_korea", "tenant_name": "SRS Korea"},
+                month_key="2026-03",
+                scope="site",
+                selected_site_code="R692",
+                selected_site_codes=None,
+                user={"id": "user-1", "role": "HQ_ADMIN"},
+            )
+
+        self.assertEqual(len(written_sites), 1)
+        self.assertIn(ARLS_SHEET_NAME, workbook.sheetnames)
+        for hidden_sheet_name in hidden_sheet_names:
+            self.assertIn(hidden_sheet_name, workbook.sheetnames)
+        self.assertIn(SENTRIX_SUPPORT_HQ_METADATA_SHEET_NAME, workbook.sheetnames)
+
+        visible_sheet = workbook[ARLS_SHEET_NAME]
+        data_start_row = _find_template_data_start_row(visible_sheet)
+        self.assertTrue(visible_sheet.row_dimensions[data_start_row].hidden)
 
     def test_parse_sentrix_hq_worker_cell_normalizes_external_and_internal(self):
         employee_index = _build_employee_name_index(

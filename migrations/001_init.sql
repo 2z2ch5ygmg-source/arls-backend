@@ -715,6 +715,9 @@ CREATE TABLE IF NOT EXISTS schedule_import_batches (
     total_rows int NOT NULL DEFAULT 0,
     valid_rows int NOT NULL DEFAULT 0,
     invalid_rows int NOT NULL DEFAULT 0,
+    raw_workbook_bytes bytea,
+    raw_workbook_mime_type text,
+    raw_workbook_sha256 text,
     created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
     completed_at timestamptz,
     error_text text
