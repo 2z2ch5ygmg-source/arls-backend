@@ -4,7 +4,7 @@ import logging
 import mimetypes
 import re
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
@@ -15,6 +15,22 @@ import requests
 
 from ...config import settings
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
+from ...employee_drawer_schemas import (
+    EmployeeDrawerActionsOut,
+    EmployeeDrawerAttendanceOut,
+    EmployeeDrawerAttendanceRecordOut,
+    EmployeeDrawerHeaderOut,
+    EmployeeDrawerLeaveEntryOut,
+    EmployeeDrawerLeaveRequestsOut,
+    EmployeeDrawerMetaOut,
+    EmployeeDrawerMetricOut,
+    EmployeeDrawerOverviewOut,
+    EmployeeDrawerRequestEntryOut,
+    EmployeeDrawerScheduleItemOut,
+    EmployeeDrawerScheduleOut,
+    EmployeeDrawerSummaryOut,
+    EmployeeDrawerWorkforceInfoOut,
+)
 from ...schemas import EmployeeCreate, EmployeeOut, EmployeeUpdate
 from ...security import hash_password
 from ...services.guard_roster_docx import (
@@ -34,6 +50,25 @@ from ...utils.tenant_context import canonical_tenant_identifier, enforce_staff_s
 
 router = APIRouter(prefix="/employees", tags=["employees"], dependencies=[Depends(apply_rate_limit)])
 logger = logging.getLogger(__name__)
+KST = timezone(timedelta(hours=9))
+
+DRAWER_ROLE_LABELS: dict[str, str] = {
+    "hq_admin": "HQ Admin",
+    "supervisor": "Supervisor",
+    "vice_supervisor": "Vice Supervisor",
+    "officer": "Officer",
+    "developer": "Developer",
+}
+
+DRAWER_SHIFT_LABELS: dict[str, str] = {
+    "day": "주간근무",
+    "overtime": "초과근무",
+    "night": "야간근무",
+    "off": "휴무",
+    "holiday": "공휴일",
+    "annual_leave": "연차",
+    "half_day_leave": "반차",
+}
 
 SOC_EMPLOYEE_ROLE_MAP: dict[str, str] = {
     "OFFICER": "Officer",
@@ -692,6 +727,761 @@ def _resolve_target_tenant(conn, user, tenant_code: str | None, tenant_id: str |
         row.get("tenant_code"),
     )
     return row
+
+
+def _table_exists(conn, table_name: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = %s
+            LIMIT 1
+            """,
+            (table_name,),
+        )
+        return bool(cur.fetchone())
+
+
+def _drawer_metric(
+    value: Any | None,
+    *,
+    state: str = "ok",
+    empty_message: str | None = None,
+) -> EmployeeDrawerMetricOut:
+    return EmployeeDrawerMetricOut(value=value, state=state, empty_message=empty_message)
+
+
+def _drawer_role_display(value: str | None) -> str:
+    normalized = normalize_user_role(value or "")
+    if normalized in DRAWER_ROLE_LABELS:
+        return DRAWER_ROLE_LABELS[normalized]
+    fallback = _normalize_optional_text(value)
+    return fallback or "Officer"
+
+
+def _drawer_employment_status(*, is_active: bool, leave_date: date | None) -> str:
+    today_kst = datetime.now(KST).date()
+    if leave_date and leave_date <= today_kst:
+        return "퇴사"
+    if not is_active:
+        return "비활성"
+    return "재직중"
+
+
+def _drawer_account_link_status(user_id: str | None, username: str | None, soc_login_id: str | None) -> str:
+    if _normalize_optional_text(user_id) or _normalize_optional_text(username) or _normalize_optional_text(soc_login_id):
+        return "연결됨"
+    return "미연결"
+
+
+def _drawer_avatar_initials(full_name: str | None) -> str:
+    normalized = "".join(str(full_name or "").split()).strip()
+    if not normalized:
+        return "?"
+    return normalized[:2]
+
+
+def _drawer_schedule_display_label(shift_kind: str | None, start_time, end_time, schedule_note: str | None) -> str:
+    base_label = DRAWER_SHIFT_LABELS.get(str(shift_kind or "").strip().lower(), str(shift_kind or "").strip() or "스케줄")
+    note_text = _normalize_optional_text(schedule_note)
+    if note_text:
+        return note_text
+    if start_time and end_time:
+        return f"{base_label} {start_time.strftime('%H:%M')}-{end_time.strftime('%H:%M')}"
+    return base_label
+
+
+def _drawer_attendance_status_label(check_in, check_out) -> tuple[str, str | None]:
+    if check_in and check_out:
+        return "정상", None
+    if check_in and not check_out:
+        return "퇴근 누락", "퇴근 기록이 없습니다"
+    if check_out and not check_in:
+        return "출근 누락", "출근 기록이 없습니다"
+    return "기록 없음", "출퇴근 기록이 없습니다"
+
+
+def _drawer_request_status_bucket(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"pending", "requested", "open"}:
+        return "pending"
+    if normalized in {"approved", "issued", "completed"}:
+        return "approved"
+    if normalized in {"rejected", "cancelled", "canceled", "denied"}:
+        return "rejected"
+    return normalized or "unknown"
+
+
+def _drawer_leave_duration_days(start_date: date, end_date: date, half_day_slot: str | None = None) -> float:
+    if half_day_slot:
+        return 0.5
+    return float(max(1, (end_date - start_date).days + 1))
+
+
+def _fetch_employee_drawer_base(
+    conn,
+    *,
+    tenant_id: str,
+    employee_id: uuid.UUID,
+) -> dict[str, Any] | None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT e.id,
+                   e.tenant_id,
+                   e.employee_code,
+                   e.management_no_str,
+                   e.full_name,
+                   e.phone,
+                   e.hire_date,
+                   e.leave_date,
+                   COALESCE(e.is_active, TRUE) AS is_active,
+                   COALESCE(t.tenant_code, '') AS tenant_code,
+                   COALESCE(t.tenant_name, '') AS tenant_name,
+                   COALESCE(c.company_name, c.company_code, t.tenant_name, '') AS company_name,
+                   COALESCE(c.company_code, '') AS company_code,
+                   COALESCE(s.id::text, '') AS site_id,
+                   COALESCE(s.site_name, '') AS site_name,
+                   COALESCE(s.site_code, '') AS site_code,
+                   COALESCE(u.id::text, '') AS linked_user_id,
+                   COALESCE(u.role, '') AS linked_user_role,
+                   COALESCE(u.username, '') AS linked_username,
+                   COALESCE(e.soc_login_id, '') AS soc_login_id,
+                   COALESCE(e.soc_role, '') AS soc_role
+            FROM employees e
+            JOIN tenants t ON t.id = e.tenant_id
+            LEFT JOIN sites s ON s.id = e.site_id
+            LEFT JOIN companies c ON c.id = s.company_id
+            LEFT JOIN (
+                SELECT DISTINCT ON (au.tenant_id, au.employee_id)
+                       au.tenant_id, au.employee_id, au.id, au.role, au.username
+                FROM arls_users au
+                WHERE COALESCE(au.is_active, TRUE) = TRUE
+                  AND COALESCE(au.is_deleted, FALSE) = FALSE
+                ORDER BY au.tenant_id,
+                         au.employee_id,
+                         au.updated_at DESC NULLS LAST,
+                         au.created_at DESC NULLS LAST
+            ) u
+              ON u.tenant_id = e.tenant_id
+             AND u.employee_id = e.id
+            WHERE e.id = %s
+              AND e.tenant_id = %s
+              AND COALESCE(e.is_deleted, FALSE) = FALSE
+            LIMIT 1
+            """,
+            (str(employee_id), tenant_id),
+        )
+        return cur.fetchone()
+
+
+def _fetch_drawer_recent_attendance(
+    conn,
+    *,
+    tenant_id: str,
+    employee_id: str,
+) -> tuple[EmployeeDrawerAttendanceOut, list[EmployeeDrawerAttendanceRecordOut], int]:
+    if not _table_exists(conn, "attendance_records"):
+        empty = "출퇴근 데이터 소스가 연결되지 않았습니다"
+        section = EmployeeDrawerAttendanceOut(
+            state="unavailable",
+            empty_message=empty,
+            last_30d_normal_count=_drawer_metric(None, state="unavailable", empty_message=empty),
+            last_30d_late_count=_drawer_metric(None, state="unavailable", empty_message="지각 데이터가 연결되지 않았습니다"),
+            last_30d_missing_count=_drawer_metric(None, state="unavailable", empty_message=empty),
+            last_30d_leave_or_excused_count=_drawer_metric(None, state="unavailable", empty_message="휴가/사유 데이터가 연결되지 않았습니다"),
+            recent_attendance_records=[],
+        )
+        return section, [], 0
+
+    since_utc = datetime.now(timezone.utc) - timedelta(days=30)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT (ar.event_at AT TIME ZONE 'Asia/Seoul')::date AS work_date,
+                   MIN(CASE WHEN ar.event_type = 'check_in' THEN ar.event_at END) AS check_in,
+                   MAX(CASE WHEN ar.event_type = 'check_out' THEN ar.event_at END) AS check_out,
+                   BOOL_OR(COALESCE(ar.auto_checkout, FALSE)) AS auto_checkout,
+                   string_agg(
+                       DISTINCT NULLIF(ar.auto_checkout_reason, ''),
+                       '; '
+                   ) FILTER (WHERE ar.auto_checkout_reason IS NOT NULL AND ar.auto_checkout_reason <> '') AS auto_checkout_reason
+            FROM attendance_records ar
+            WHERE ar.tenant_id = %s
+              AND ar.employee_id = %s
+              AND ar.event_at >= %s
+            GROUP BY work_date
+            ORDER BY work_date DESC
+            """,
+            (tenant_id, employee_id, since_utc),
+        )
+        day_rows = cur.fetchall() or []
+
+    normal_count = 0
+    missing_count = 0
+    current_month_missing_count = 0
+    today_kst = datetime.now(KST).date()
+    current_month = (today_kst.year, today_kst.month)
+    recent_dates: list[date] = []
+    for row in day_rows:
+        work_date = row.get("work_date")
+        check_in = row.get("check_in")
+        check_out = row.get("check_out")
+        if check_in and check_out:
+            normal_count += 1
+        elif check_in or check_out:
+            missing_count += 1
+            if work_date and (work_date.year, work_date.month) == current_month:
+                current_month_missing_count += 1
+        if isinstance(work_date, date):
+            recent_dates.append(work_date)
+
+    recent_schedule_map: dict[date, dict[str, Any]] = {}
+    if recent_dates:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT ms.schedule_date,
+                       MIN(ms.shift_start_time) AS scheduled_start,
+                       MAX(ms.shift_end_time) AS scheduled_end
+                FROM monthly_schedules ms
+                WHERE ms.tenant_id = %s
+                  AND ms.employee_id = %s
+                  AND ms.schedule_date = ANY(%s)
+                GROUP BY ms.schedule_date
+                """,
+                (tenant_id, employee_id, recent_dates[:7]),
+            )
+            for schedule_row in cur.fetchall() or []:
+                if isinstance(schedule_row.get("schedule_date"), date):
+                    recent_schedule_map[schedule_row["schedule_date"]] = schedule_row
+
+    recent_records: list[EmployeeDrawerAttendanceRecordOut] = []
+    for row in day_rows[:7]:
+        work_date = row.get("work_date")
+        if not isinstance(work_date, date):
+            continue
+        check_in = row.get("check_in")
+        check_out = row.get("check_out")
+        status_label, note_text = _drawer_attendance_status_label(check_in, check_out)
+        schedule_row = recent_schedule_map.get(work_date) or {}
+        auto_checkout_note = _normalize_optional_text(row.get("auto_checkout_reason"))
+        recent_records.append(
+            EmployeeDrawerAttendanceRecordOut(
+                date=work_date,
+                scheduled_start=schedule_row.get("scheduled_start"),
+                scheduled_end=schedule_row.get("scheduled_end"),
+                check_in=check_in,
+                check_out=check_out,
+                status_label=status_label,
+                notes=auto_checkout_note or note_text,
+            )
+        )
+
+    leave_excused_count = 0
+    if _table_exists(conn, "leave_requests"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) AS cnt
+                FROM leave_requests lr
+                WHERE lr.tenant_id = %s
+                  AND lr.employee_id = %s
+                  AND lower(COALESCE(lr.status, '')) = 'approved'
+                  AND lr.end_at::date >= %s
+                  AND lr.start_at::date <= %s
+                """,
+                (tenant_id, employee_id, since_utc.date(), today_kst),
+            )
+            leave_excused_count = int((cur.fetchone() or {}).get("cnt") or 0)
+
+    if recent_records:
+        section_state = "ok"
+        empty_message = None
+    else:
+        section_state = "empty"
+        empty_message = "최근 30일 출퇴근 기록이 없습니다"
+
+    section = EmployeeDrawerAttendanceOut(
+        state=section_state,
+        empty_message=empty_message,
+        last_30d_normal_count=_drawer_metric(normal_count),
+        last_30d_late_count=_drawer_metric(
+            None,
+            state="unavailable",
+            empty_message="지각 데이터가 연결되지 않았습니다",
+        ),
+        last_30d_missing_count=_drawer_metric(missing_count),
+        last_30d_leave_or_excused_count=_drawer_metric(leave_excused_count),
+        recent_attendance_records=recent_records,
+    )
+    return section, recent_records[:3], current_month_missing_count
+
+
+def _fetch_drawer_schedule_section(
+    conn,
+    *,
+    tenant_id: str,
+    employee_id: str,
+) -> tuple[EmployeeDrawerScheduleOut, list[EmployeeDrawerScheduleItemOut], str | None]:
+    if not _table_exists(conn, "monthly_schedules"):
+        empty = "스케줄 데이터 소스가 연결되지 않았습니다"
+        section = EmployeeDrawerScheduleOut(
+            state="unavailable",
+            empty_message=empty,
+            current_week_assignment_count=_drawer_metric(None, state="unavailable", empty_message=empty),
+            next_week_assignment_count=_drawer_metric(None, state="unavailable", empty_message=empty),
+            upcoming_schedule_count=_drawer_metric(None, state="unavailable", empty_message=empty),
+            current_leave_display_count=_drawer_metric(None, state="unavailable", empty_message=empty),
+            upcoming_schedules=[],
+        )
+        return section, [], None
+
+    today_kst = datetime.now(KST).date()
+    week_start = today_kst - timedelta(days=today_kst.weekday())
+    week_end = week_start + timedelta(days=6)
+    next_week_start = week_end + timedelta(days=1)
+    next_week_end = next_week_start + timedelta(days=6)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ms.schedule_date,
+                   ms.shift_type,
+                   ms.shift_start_time,
+                   ms.shift_end_time,
+                   ms.source,
+                   ms.schedule_note,
+                   COALESCE(s.site_name, '') AS site_name
+            FROM monthly_schedules ms
+            LEFT JOIN sites s ON s.id = ms.site_id
+            WHERE ms.tenant_id = %s
+              AND ms.employee_id = %s
+              AND ms.schedule_date >= %s
+            ORDER BY ms.schedule_date ASC,
+                     CASE
+                         WHEN lower(COALESCE(ms.shift_type, '')) = 'day' THEN 1
+                         WHEN lower(COALESCE(ms.shift_type, '')) = 'overtime' THEN 2
+                         WHEN lower(COALESCE(ms.shift_type, '')) = 'night' THEN 3
+                         ELSE 9
+                     END ASC
+            LIMIT 60
+            """,
+            (tenant_id, employee_id, today_kst),
+        )
+        rows = cur.fetchall() or []
+
+    current_week_count = 0
+    next_week_count = 0
+    leave_display_count = 0
+    upcoming_items: list[EmployeeDrawerScheduleItemOut] = []
+    next_schedule_summary: str | None = None
+    for row in rows:
+        schedule_date = row.get("schedule_date")
+        if not isinstance(schedule_date, date):
+            continue
+        if week_start <= schedule_date <= week_end:
+            current_week_count += 1
+        if next_week_start <= schedule_date <= next_week_end:
+            next_week_count += 1
+        if str(row.get("shift_type") or "").strip().lower() in {"annual_leave", "half_day_leave", "off", "holiday"}:
+            if week_start <= schedule_date <= week_end:
+                leave_display_count += 1
+        item = EmployeeDrawerScheduleItemOut(
+            date=schedule_date,
+            shift_kind=DRAWER_SHIFT_LABELS.get(str(row.get("shift_type") or "").strip().lower(), str(row.get("shift_type") or "").strip() or "스케줄"),
+            start_time=row.get("shift_start_time"),
+            end_time=row.get("shift_end_time"),
+            site_name=_normalize_optional_text(row.get("site_name")),
+            source_lineage=_normalize_optional_text(row.get("source")),
+            display_label=_drawer_schedule_display_label(
+                row.get("shift_type"),
+                row.get("shift_start_time"),
+                row.get("shift_end_time"),
+                row.get("schedule_note"),
+            ),
+        )
+        upcoming_items.append(item)
+        if next_schedule_summary is None:
+            next_schedule_summary = f"{schedule_date.isoformat()} · {item.display_label}"
+
+    section = EmployeeDrawerScheduleOut(
+        state="ok" if upcoming_items else "empty",
+        empty_message=None if upcoming_items else "다가오는 일정이 없습니다",
+        current_week_assignment_count=_drawer_metric(current_week_count),
+        next_week_assignment_count=_drawer_metric(next_week_count),
+        upcoming_schedule_count=_drawer_metric(len(upcoming_items)),
+        current_leave_display_count=_drawer_metric(leave_display_count),
+        upcoming_schedules=upcoming_items[:5],
+    )
+    return section, upcoming_items[:3], next_schedule_summary
+
+
+def _fetch_drawer_leave_request_section(
+    conn,
+    *,
+    tenant_id: str,
+    employee_id: str,
+) -> tuple[EmployeeDrawerLeaveRequestsOut, list[EmployeeDrawerRequestEntryOut], int]:
+    today_kst = datetime.now(KST).date()
+    year_start = date(today_kst.year, 1, 1)
+    request_window_start = datetime.now(timezone.utc) - timedelta(days=90)
+
+    recent_leave_entries: list[EmployeeDrawerLeaveEntryOut] = []
+    leave_used_days = 0.0
+    half_day_count = 0
+    leave_pending_count = 0
+    if _table_exists(conn, "leave_requests"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT leave_type,
+                       start_at::date AS start_date,
+                       end_at::date AS end_date,
+                       half_day_slot,
+                       status,
+                       requested_at
+                FROM leave_requests
+                WHERE tenant_id = %s
+                  AND employee_id = %s
+                ORDER BY requested_at DESC
+                LIMIT 20
+                """,
+                (tenant_id, employee_id),
+            )
+            leave_rows = cur.fetchall() or []
+        for row in leave_rows[:5]:
+            start_date = row.get("start_date")
+            end_date = row.get("end_date")
+            if not isinstance(start_date, date) or not isinstance(end_date, date):
+                continue
+            recent_leave_entries.append(
+                EmployeeDrawerLeaveEntryOut(
+                    leave_type=str(row.get("leave_type") or "휴가"),
+                    start_date=start_date,
+                    end_date=end_date,
+                    duration=_drawer_leave_duration_days(start_date, end_date, row.get("half_day_slot")),
+                    status=_normalize_optional_text(row.get("status")),
+                    requested_at=row.get("requested_at"),
+                )
+            )
+        for row in leave_rows:
+            start_date = row.get("start_date")
+            end_date = row.get("end_date")
+            if not isinstance(start_date, date) or not isinstance(end_date, date):
+                continue
+            status_value = str(row.get("status") or "").strip().lower()
+            if status_value == "pending":
+                leave_pending_count += 1
+            if status_value == "approved" and start_date >= year_start:
+                leave_used_days += _drawer_leave_duration_days(start_date, end_date, row.get("half_day_slot"))
+                if row.get("half_day_slot"):
+                    half_day_count += 1
+
+    request_counts = {"total": 0, "pending": 0, "approved": 0, "rejected": 0}
+    recent_request_entries: list[EmployeeDrawerRequestEntryOut] = []
+
+    def _append_recent_request(row_type: str, requested_at_value, status_value: str | None, summary_text: str | None):
+        if not isinstance(requested_at_value, datetime):
+            return
+        recent_request_entries.append(
+            EmployeeDrawerRequestEntryOut(
+                request_type=row_type,
+                requested_at=requested_at_value,
+                status=str(status_value or "").strip() or "unknown",
+                short_summary=_normalize_optional_text(summary_text),
+            )
+        )
+
+    if _table_exists(conn, "attendance_requests"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT request_type, reason_code, reason_detail, requested_at, status
+                FROM attendance_requests
+                WHERE tenant_id = %s
+                  AND employee_id = %s
+                  AND requested_at >= %s
+                ORDER BY requested_at DESC
+                LIMIT 20
+                """,
+                (tenant_id, employee_id, request_window_start),
+            )
+            attendance_request_rows = cur.fetchall() or []
+        for row in attendance_request_rows:
+            bucket = _drawer_request_status_bucket(row.get("status"))
+            request_counts["total"] += 1
+            if bucket in request_counts:
+                request_counts[bucket] += 1
+        for row in attendance_request_rows[:5]:
+            _append_recent_request(
+                str(row.get("request_type") or "출퇴근 요청"),
+                row.get("requested_at"),
+                row.get("status"),
+                row.get("reason_detail") or row.get("reason_code"),
+            )
+
+    if _table_exists(conn, "document_requests"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT document_type, purpose_text, purpose_code, requested_at, status
+                FROM document_requests
+                WHERE tenant_id = %s
+                  AND employee_id = %s
+                  AND requested_at >= %s
+                ORDER BY requested_at DESC
+                LIMIT 20
+                """,
+                (tenant_id, employee_id, request_window_start),
+            )
+            document_request_rows = cur.fetchall() or []
+        for row in document_request_rows:
+            bucket = _drawer_request_status_bucket(row.get("status"))
+            request_counts["total"] += 1
+            if bucket in request_counts:
+                request_counts[bucket] += 1
+        for row in document_request_rows[:5]:
+            _append_recent_request(
+                f"문서 · {str(row.get('document_type') or '요청')}",
+                row.get("requested_at"),
+                row.get("status"),
+                row.get("purpose_text") or row.get("purpose_code"),
+            )
+
+    recent_request_entries.sort(key=lambda item: item.requested_at, reverse=True)
+    recent_request_entries = recent_request_entries[:5]
+
+    has_any_leave_or_request = bool(recent_leave_entries or recent_request_entries or leave_used_days or leave_pending_count or request_counts["total"])
+    section = EmployeeDrawerLeaveRequestsOut(
+        state="ok" if has_any_leave_or_request else "empty",
+        empty_message=None if has_any_leave_or_request else "휴가 또는 요청 이력이 없습니다",
+        leave_used_days=_drawer_metric(round(leave_used_days, 1)),
+        leave_remaining_days=_drawer_metric(
+            None,
+            state="unavailable",
+            empty_message="연차 잔여일 데이터를 불러올 수 없습니다",
+        ),
+        half_day_count=_drawer_metric(half_day_count),
+        leave_pending_count=_drawer_metric(leave_pending_count),
+        total_request_count_recent_window=_drawer_metric(request_counts["total"]),
+        pending_request_count=_drawer_metric(request_counts["pending"]),
+        approved_request_count_recent_window=_drawer_metric(request_counts["approved"]),
+        rejected_request_count_recent_window=_drawer_metric(request_counts["rejected"]),
+        recent_leave_entries=recent_leave_entries,
+        recent_request_entries=recent_request_entries,
+    )
+    return section, recent_request_entries[:3], leave_pending_count + request_counts["pending"]
+
+
+def _build_employee_drawer_actions(actor_role: str, linked_account: bool) -> EmployeeDrawerActionsOut:
+    can_manage = actor_role in {ROLE_DEV, ROLE_BRANCH_MANAGER}
+    disabled_reasons: dict[str, str] = {}
+    if not can_manage:
+        disabled_reasons["can_edit_profile"] = "직원 정보를 수정할 권한이 없습니다"
+        disabled_reasons["can_deactivate_or_archive"] = "직원 상태를 변경할 권한이 없습니다"
+        disabled_reasons["can_manage_account_link"] = "계정 연동을 관리할 권한이 없습니다"
+    elif not linked_account:
+        disabled_reasons["can_manage_account_link"] = "연결된 계정이 없습니다"
+    return EmployeeDrawerActionsOut(
+        can_edit_profile=can_manage,
+        can_view_schedule=True,
+        can_view_attendance=True,
+        can_view_requests=True,
+        can_deactivate_or_archive=can_manage,
+        can_manage_account_link=can_manage,
+        disabled_reasons=disabled_reasons,
+        route_targets={
+            "profile": "#/branch/employees",
+            "attendance": "#/attendance",
+            "schedule": "#/schedules/calendar",
+            "requests": "#/requests",
+        },
+    )
+
+
+def _unavailable_attendance_section(message: str) -> EmployeeDrawerAttendanceOut:
+    return EmployeeDrawerAttendanceOut(
+        state="unavailable",
+        empty_message=message,
+        last_30d_normal_count=_drawer_metric(None, state="unavailable", empty_message=message),
+        last_30d_late_count=_drawer_metric(None, state="unavailable", empty_message=message),
+        last_30d_missing_count=_drawer_metric(None, state="unavailable", empty_message=message),
+        last_30d_leave_or_excused_count=_drawer_metric(None, state="unavailable", empty_message=message),
+        recent_attendance_records=[],
+    )
+
+
+def _unavailable_schedule_section(message: str) -> EmployeeDrawerScheduleOut:
+    return EmployeeDrawerScheduleOut(
+        state="unavailable",
+        empty_message=message,
+        current_week_assignment_count=_drawer_metric(None, state="unavailable", empty_message=message),
+        next_week_assignment_count=_drawer_metric(None, state="unavailable", empty_message=message),
+        upcoming_schedule_count=_drawer_metric(None, state="unavailable", empty_message=message),
+        current_leave_display_count=_drawer_metric(None, state="unavailable", empty_message=message),
+        upcoming_schedules=[],
+    )
+
+
+def _unavailable_leave_requests_section(message: str) -> EmployeeDrawerLeaveRequestsOut:
+    return EmployeeDrawerLeaveRequestsOut(
+        state="unavailable",
+        empty_message=message,
+        leave_used_days=_drawer_metric(None, state="unavailable", empty_message=message),
+        leave_remaining_days=_drawer_metric(None, state="unavailable", empty_message=message),
+        half_day_count=_drawer_metric(None, state="unavailable", empty_message=message),
+        leave_pending_count=_drawer_metric(None, state="unavailable", empty_message=message),
+        total_request_count_recent_window=_drawer_metric(None, state="unavailable", empty_message=message),
+        pending_request_count=_drawer_metric(None, state="unavailable", empty_message=message),
+        approved_request_count_recent_window=_drawer_metric(None, state="unavailable", empty_message=message),
+        rejected_request_count_recent_window=_drawer_metric(None, state="unavailable", empty_message=message),
+        recent_leave_entries=[],
+        recent_request_entries=[],
+    )
+
+
+def _build_employee_drawer_summary_payload(
+    conn,
+    *,
+    employee_row: dict[str, Any],
+    tenant_code: str,
+    actor_role: str,
+) -> EmployeeDrawerSummaryOut:
+    employee_id = str(employee_row.get("id") or "")
+    role_display = _drawer_role_display(employee_row.get("linked_user_role") or employee_row.get("soc_role"))
+    employment_status = _drawer_employment_status(
+        is_active=bool(employee_row.get("is_active")),
+        leave_date=employee_row.get("leave_date"),
+    )
+    account_link_status = _drawer_account_link_status(
+        employee_row.get("linked_user_id"),
+        employee_row.get("linked_username"),
+        employee_row.get("soc_login_id"),
+    )
+    subtitle_parts = [
+        part
+        for part in [
+            f"{employee_row.get('site_name')} ({employee_row.get('site_code')})" if employee_row.get("site_name") and employee_row.get("site_code") else employee_row.get("site_name"),
+            role_display,
+            employment_status,
+        ]
+        if part
+    ]
+
+    try:
+        attendance_section, attendance_preview, monthly_exception_count = _fetch_drawer_recent_attendance(
+            conn,
+            tenant_id=str(employee_row.get("tenant_id") or ""),
+            employee_id=employee_id,
+        )
+    except Exception:
+        logger.exception("employee drawer attendance summary failed employee_id=%s", employee_id)
+        attendance_section = _unavailable_attendance_section("출퇴근 요약을 불러올 수 없습니다")
+        attendance_preview = []
+        monthly_exception_count = 0
+
+    try:
+        schedule_section, schedule_preview, next_schedule_summary = _fetch_drawer_schedule_section(
+            conn,
+            tenant_id=str(employee_row.get("tenant_id") or ""),
+            employee_id=employee_id,
+        )
+    except Exception:
+        logger.exception("employee drawer schedule summary failed employee_id=%s", employee_id)
+        schedule_section = _unavailable_schedule_section("스케줄 요약을 불러올 수 없습니다")
+        schedule_preview = []
+        next_schedule_summary = None
+
+    try:
+        leave_request_section, request_preview, pending_request_total = _fetch_drawer_leave_request_section(
+            conn,
+            tenant_id=str(employee_row.get("tenant_id") or ""),
+            employee_id=employee_id,
+        )
+    except Exception:
+        logger.exception("employee drawer leave/request summary failed employee_id=%s", employee_id)
+        leave_request_section = _unavailable_leave_requests_section("휴가·요청 요약을 불러올 수 없습니다")
+        request_preview = []
+        pending_request_total = 0
+
+    linked_account = account_link_status == "연결됨"
+    header = EmployeeDrawerHeaderOut(
+        employee_id=employee_row["id"],
+        employee_name=str(employee_row.get("full_name") or "").strip(),
+        employee_number=str(employee_row.get("employee_code") or "").strip(),
+        manager_or_admin_number=_normalize_optional_text(employee_row.get("management_no_str")),
+        role_display=role_display,
+        employment_status=employment_status,
+        company_name=_normalize_optional_text(employee_row.get("company_name")),
+        site_name=_normalize_optional_text(employee_row.get("site_name")),
+        site_code=_normalize_optional_text(employee_row.get("site_code")),
+        hire_date=employee_row.get("hire_date"),
+        leave_date=employee_row.get("leave_date"),
+        account_link_status=account_link_status,
+        phone=_normalize_optional_text(employee_row.get("phone")),
+        avatar_initials=_drawer_avatar_initials(employee_row.get("full_name")),
+        subtitle=" · ".join(subtitle_parts) if subtitle_parts else None,
+    )
+
+    overview = EmployeeDrawerOverviewOut(
+        monthly_attendance_exception_count=_drawer_metric(monthly_exception_count),
+        next_schedule_summary=(
+            _drawer_metric(next_schedule_summary)
+            if next_schedule_summary
+            else _drawer_metric(None, state="empty", empty_message="다가오는 일정이 없습니다")
+        ),
+        annual_leave_remaining_days=_drawer_metric(
+            None,
+            state="unavailable",
+            empty_message="연차 잔여일 데이터를 불러올 수 없습니다",
+        ),
+        pending_request_count=_drawer_metric(pending_request_total),
+        workforce_info=EmployeeDrawerWorkforceInfoOut(
+            company_name=_normalize_optional_text(employee_row.get("company_name")),
+            site_name=_normalize_optional_text(employee_row.get("site_name")),
+            site_code=_normalize_optional_text(employee_row.get("site_code")),
+            employee_number=str(employee_row.get("employee_code") or "").strip() or None,
+            manager_or_admin_number=_normalize_optional_text(employee_row.get("management_no_str")),
+            role_display=role_display,
+            employment_status=employment_status,
+            account_link_status=account_link_status,
+            hire_date=employee_row.get("hire_date"),
+            leave_date=employee_row.get("leave_date"),
+            phone=_normalize_optional_text(employee_row.get("phone")),
+        ),
+        recent_attendance_preview=attendance_preview,
+        recent_request_preview=request_preview,
+        upcoming_schedule_preview=schedule_preview,
+    )
+
+    return EmployeeDrawerSummaryOut(
+        header=header,
+        actions=_build_employee_drawer_actions(actor_role, linked_account),
+        overview=overview,
+        attendance=attendance_section,
+        schedule=schedule_section,
+        leave_requests=leave_request_section,
+        meta=EmployeeDrawerMetaOut(
+            loaded_at=datetime.now(timezone.utc),
+            tenant_code=tenant_code,
+            sources={
+                "employees": "employees + sites + companies + arls_users",
+                "attendance": "attendance_records",
+                "schedule": "monthly_schedules",
+                "leave": "leave_requests",
+                "requests": "attendance_requests + document_requests",
+            },
+            compatibility={
+                "basic_info": "header + overview.workforce_info",
+                "attendance_tab": "attendance",
+                "schedule_tab": "schedule",
+                "leave_and_requests_tabs": "leave_requests",
+            },
+        ),
+    )
 
 
 def _create_guard_roster_upload_session(
@@ -2031,6 +2821,35 @@ def list_employees(
         }
         result.append(EmployeeOut(**payload))
     return result
+
+
+@router.get("/{employee_id}/drawer-summary", response_model=EmployeeDrawerSummaryOut)
+def get_employee_drawer_summary(
+    employee_id: uuid.UUID,
+    tenant_code: str | None = Query(default=None, max_length=64),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    actor_role = normalize_role(user["role"])
+    tenant = _resolve_target_tenant(conn, user, tenant_code)
+    employee_row = _fetch_employee_drawer_base(conn, tenant_id=tenant["id"], employee_id=employee_id)
+    if not employee_row:
+        _raise_api_error(status.HTTP_404_NOT_FOUND, "EMPLOYEE_NOT_FOUND", "employee not found")
+
+    _assert_branch_manager_site_scope(user, employee_row.get("site_id"))
+    if actor_role == ROLE_EMPLOYEE:
+        enforce_staff_site_scope(
+            user,
+            request_site_id=str(employee_row.get("site_id") or "").strip() or None,
+            request_site_code=str(employee_row.get("site_code") or "").strip() or None,
+        )
+
+    return _build_employee_drawer_summary_payload(
+        conn,
+        employee_row=employee_row,
+        tenant_code=str(tenant.get("tenant_code") or ""),
+        actor_role=actor_role,
+    )
 
 
 @router.post("", response_model=EmployeeOut)
