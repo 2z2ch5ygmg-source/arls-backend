@@ -6733,11 +6733,14 @@ def _resolve_support_roster_hq_download_sites(
         if missing_codes:
             raise HTTPException(status_code=404, detail=f"selected sites not found: {', '.join(missing_codes)}")
         selected_sites = [site_map[code] for code in normalized_site_codes]
-        blocked_sites = [
-            str(site.get("site_name") or site.get("site_code") or "").strip()
-            for site in selected_sites
-            if not bool(site.get("download_ready"))
-        ]
+        blocked_sites = []
+        for site in selected_sites:
+            selectable = bool(site.get("selectable"))
+            if selectable:
+                continue
+            site_name = str(site.get("site_name") or site.get("sheet_name") or site.get("site_code") or "").strip()
+            blocked_reason = str(site.get("blocked_reason") or site.get("note") or "").strip()
+            blocked_sites.append(f"{site_name} ({blocked_reason})" if blocked_reason else site_name)
         if blocked_sites:
             raise HTTPException(
                 status_code=409,
@@ -6750,10 +6753,14 @@ def _resolve_support_roster_hq_download_sites(
         selected = next((site for site in sites if str(site.get("site_code") or "").strip() == normalized_site_code), None)
         if not selected:
             raise HTTPException(status_code=404, detail="site not found")
-        if not bool(selected.get("download_ready")):
-            raise HTTPException(status_code=409, detail="selected site workbook is not ready")
+        if not bool(selected.get("selectable")):
+            blocked_reason = str(selected.get("blocked_reason") or selected.get("note") or "").strip()
+            detail = "selected site workbook is not ready"
+            if blocked_reason:
+                detail = f"{detail}: {blocked_reason}"
+            raise HTTPException(status_code=409, detail=detail)
         return [selected]
-    ready_sites = [site for site in sites if bool(site.get("download_ready"))]
+    ready_sites = [site for site in sites if bool(site.get("selectable"))]
     if not ready_sites:
         raise HTTPException(status_code=409, detail="no support workbook source is ready for the selected month")
     return ready_sites

@@ -9317,8 +9317,33 @@ function canSelectScheduleWorkflowTenant() {
   return getNavigationRole() === 'DEV';
 }
 
+function getVisibleDevTenantChoice() {
+  const selectors = ['#desktopDevTenantContextSelect', '#drawerDevTenantContextSelect'];
+  for (const selector of selectors) {
+    const select = $(selector);
+    if (!(select instanceof HTMLSelectElement)) continue;
+    const selectedOption = select.options[select.selectedIndex];
+    const code = ensureScheduleTenantCode(
+      selectedOption?.dataset?.tenantCode
+      || select.value
+      || '',
+    );
+    if (!code || code === 'MASTER') continue;
+    const rawName = String(
+      selectedOption?.dataset?.tenantName
+      || selectedOption?.textContent
+      || '',
+    ).trim();
+    const name = rawName.replace(/\s*\([A-Z0-9_ -]+\)\s*$/i, '').trim() || code;
+    return { code, name };
+  }
+  return null;
+}
+
 function getScheduleWorkflowTenantFallbackChoice() {
   if (!canSelectScheduleWorkflowTenant()) return null;
+  const visibleChoice = getVisibleDevTenantChoice();
+  if (visibleChoice?.code) return visibleChoice;
   const code = ensureScheduleTenantCode(
     getWorkingTenantDisplayCode()
     || getScheduleTenantValue()
@@ -9464,6 +9489,12 @@ function getScheduleHqSelectedSiteCodes() {
       .map((code) => String(code || '').trim().toUpperCase())
       .filter(Boolean),
   ));
+}
+
+function getScheduleSupportHqSelectableSiteCodes() {
+  return getScheduleSupportHqWorkspaceSites()
+    .filter((site) => site.selectable)
+    .map((site) => site.siteCode);
 }
 
 function getScheduleImportSiteLabel(siteCode = '') {
@@ -10707,7 +10738,9 @@ function formatScheduleSupportHqContextFields(fields = []) {
 function buildScheduleSupportHqContext() {
   const workspace = ensureScheduleSupportHqWorkspaceDefaults();
   const month = normalizeMonthKey($('#scheduleHqMonth')?.value || workspace.month || getScheduleMonthValue()) || getScheduleMonthValue();
-  const selectedSiteCodes = getScheduleHqSelectedSiteCodes();
+  const selectableCodes = new Set(getScheduleSupportHqSelectableSiteCodes());
+  const selectedSiteCodes = getScheduleHqSelectedSiteCodes().filter((code) => selectableCodes.has(code));
+  workspace.selectedSiteCodes = selectedSiteCodes;
   const siteCode = selectedSiteCodes.length === 1
     ? selectedSiteCodes[0]
     : (selectedSiteCodes.length > 1 ? 'ALL' : '');
@@ -10789,7 +10822,8 @@ function renderScheduleSupportHqSiteSelectionTable() {
   const workspace = ensureScheduleSupportHqWorkspaceDefaults();
   const sites = getScheduleSupportHqWorkspaceSites();
   const readySiteCodes = sites.filter((site) => site.selectable).map((site) => site.siteCode);
-  const selectedSiteCodes = getScheduleHqSelectedSiteCodes();
+  const selectedSiteCodes = getScheduleHqSelectedSiteCodes().filter((code) => readySiteCodes.includes(code));
+  workspace.selectedSiteCodes = selectedSiteCodes;
   const selectedSet = new Set(selectedSiteCodes);
   tableBody.innerHTML = '';
   if (!sites.length) {
@@ -10849,19 +10883,42 @@ function renderScheduleSupportHqSiteSelectionTable() {
   if (downloadBtn instanceof HTMLButtonElement) {
     downloadBtn.disabled = !readySiteCodes.length || !selectedSiteCodes.length;
   }
-  workspace.selectedSiteCodes = selectedSiteCodes.filter((code) => readySiteCodes.includes(code));
 }
 
 function buildScheduleSupportHqWorkbookMismatch(inspectResult = null, selectedSiteCodes = []) {
+  const workspaceSites = getScheduleSupportHqWorkspaceSites();
+  const siteLabelMap = new Map();
+  workspaceSites.forEach((site) => {
+    const code = String(site?.siteCode || '').trim().toUpperCase();
+    if (!code) return;
+    siteLabelMap.set(code, String(site?.sheetName || site?.siteName || code).trim() || code);
+  });
+  const formatSiteProcessLabel = (site = {}) => {
+    const siteName = String(site?.site_name || '').trim();
+    const sheetName = String(site?.sheet_name || '').trim();
+    const siteCode = String(site?.site_code || '').trim().toUpperCase();
+    return sheetName || siteName || siteLabelMap.get(siteCode) || siteCode || '알 수 없는 시트';
+  };
   const normalizedSelected = Array.from(new Set((Array.isArray(selectedSiteCodes) ? selectedSiteCodes : [])
     .map((value) => String(value || '').trim().toUpperCase())
     .filter(Boolean)));
-  const rows = buildScheduleSupportHqAggregatedPreviewRows(inspectResult);
-  const workbookSiteCodes = Array.from(new Set(rows
-    .map((row) => String(row?.site_code || '').trim().toUpperCase())
-    .filter(Boolean)));
-  const missingSites = normalizedSelected.filter((code) => !workbookSiteCodes.includes(code));
-  const extraSites = workbookSiteCodes.filter((code) => !normalizedSelected.includes(code));
+  const aggregatedRows = buildScheduleSupportHqAggregatedPreviewRows(inspectResult);
+  const missingSiteRows = Array.isArray(inspectResult?.missing_selected_sites)
+    ? inspectResult.missing_selected_sites
+    : normalizedSelected
+      .filter((code) => {
+        return !aggregatedRows.some((row) => String(row?.site_code || '').trim().toUpperCase() === code);
+      })
+      .map((code) => ({ site_code: code, site_name: siteLabelMap.get(code) || code }));
+  const extraSiteRows = Array.isArray(inspectResult?.extra_unselected_sites)
+    ? inspectResult.extra_unselected_sites
+    : [];
+  const unresolvedSheets = Array.isArray(inspectResult?.unresolved_sheets)
+    ? inspectResult.unresolved_sheets
+    : [];
+  const missingSites = missingSiteRows.map((site) => formatSiteProcessLabel(site));
+  const extraSites = extraSiteRows.map((site) => formatSiteProcessLabel(site));
+  const unresolvedSiteLabels = unresolvedSheets.map((site) => formatSiteProcessLabel(site));
   const messages = [];
   if (missingSites.length) {
     messages.push(`선택한 지점 시트가 누락되었습니다: ${missingSites.join(', ')}`);
@@ -10869,9 +10926,13 @@ function buildScheduleSupportHqWorkbookMismatch(inspectResult = null, selectedSi
   if (extraSites.length) {
     messages.push(`선택하지 않은 지점 시트가 포함되었습니다: ${extraSites.join(', ')}`);
   }
+  if (unresolvedSiteLabels.length) {
+    messages.push(`현장을 식별하지 못한 시트가 있습니다: ${unresolvedSiteLabels.join(', ')}`);
+  }
   return {
     missingSites,
     extraSites,
+    unresolvedSheets: unresolvedSiteLabels,
     messages,
   };
 }
@@ -51248,9 +51309,7 @@ function bindUiEvents() {
 
     if (action === 'schedule-support-hq-select-ready') {
       const workspace = ensureScheduleSupportHqWorkspaceDefaults();
-      const nextCodes = getScheduleSupportHqWorkspaceSites()
-        .filter((site) => site.downloadReady)
-        .map((site) => site.siteCode);
+      const nextCodes = getScheduleSupportHqSelectableSiteCodes();
       workspace.selectedSiteCodes = nextCodes;
       resetScheduleSupportHqWorkspace({ preserveFile: true, preserveContract: true, staleFields: ['sites'] });
       workspace.selectedSiteCodes = nextCodes;
