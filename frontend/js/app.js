@@ -40336,18 +40336,24 @@ async function bootstrapScheduleUploadWorkspace({ force = false } = {}) {
         await ensureDevTenantCatalog({ force });
       }
       ensureScheduleSupportHqWorkspaceDefaults();
-      if (getScheduleActiveTopTab() === SCHEDULE_TAB_HQ_UPLOAD) {
+      const isHqUploadTab = getScheduleActiveTopTab() === SCHEDULE_TAB_HQ_UPLOAD;
+      if (isHqUploadTab) {
         state.schedule.uploadWorkspaceMode = SCHEDULE_UPLOAD_MODE_HQ;
       } else {
         state.schedule.uploadWorkspaceMode = SCHEDULE_UPLOAD_MODE_BASE;
       }
-      syncScheduleImportMonthInput({ force: true });
-      await refreshScheduleImportSiteOptions({ force });
-      await Promise.allSettled([
-        loadScheduleImportMappingProfile({ force }),
-        loadScheduleSupportRoundtripStatus(),
-        loadScheduleSupportHqWorkspaceContract({ force }),
-      ]);
+      if (isHqUploadTab) {
+        await Promise.allSettled([
+          loadScheduleSupportRoundtripStatus(),
+          loadScheduleSupportHqWorkspaceContract({ force }),
+        ]);
+      } else {
+        syncScheduleImportMonthInput({ force: true });
+        await Promise.allSettled([
+          refreshScheduleImportSiteOptions({ force }),
+          loadScheduleImportMappingProfile({ force }),
+        ]);
+      }
       renderScheduleUploadWorkspace();
       return true;
     } finally {
@@ -40584,13 +40590,8 @@ async function onScheduleImportMappingSave() {
       entries,
     },
   });
-  state.schedule.importMappingProfile = savedProfile && typeof savedProfile === 'object' ? savedProfile : null;
-  state.schedule.importMappingProfileFetchedAt = 0;
-  const refreshedProfile = await loadScheduleImportMappingProfile({ force: true });
-  const nextProfile = refreshedProfile && typeof refreshedProfile === 'object'
-    ? refreshedProfile
-    : state.schedule.importMappingProfile;
-  state.schedule.importMappingProfile = nextProfile && typeof nextProfile === 'object' ? nextProfile : null;
+  const nextProfile = savedProfile && typeof savedProfile === 'object' ? savedProfile : null;
+  state.schedule.importMappingProfile = nextProfile;
   state.schedule.importMappingProfileFetchedAt = Date.now();
   ensureSelectedScheduleImportMappingProfileId();
   syncScheduleImportMappingProfilePreviewMetadata(state.schedule.importMappingProfile);
@@ -40624,7 +40625,6 @@ async function onScheduleImportMappingDelete(profileId, profileName) {
     state.schedule.importMappingProfileFetchedAt = 0;
     state.schedule.importMappingSelectedProfileId = '';
   }
-  await loadScheduleImportMappingProfile({ force: true });
   renderScheduleImportMappingProfileSummary();
   renderScheduleImportMappingProfileManager();
   renderScheduleTemplateTable();
