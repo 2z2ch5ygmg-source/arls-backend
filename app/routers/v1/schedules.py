@@ -2846,6 +2846,41 @@ def upsert_schedule_import_mapping_profile(
     return _serialize_schedule_import_mapping_profile(profile)
 
 
+@router.delete("/import-mapping-profile")
+def delete_schedule_import_mapping_profile(
+    tenant_code: str | None = Query(default=None, max_length=64),
+    profile_id: str | None = Query(default=None, max_length=64),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    if not can_manage_schedule(user["role"]):
+        raise HTTPException(status_code=403, detail="forbidden")
+    target_tenant = _resolve_target_tenant(conn, user, tenant_code)
+    target_tenant_id = str(target_tenant["id"])
+    current_profile = _fetch_active_schedule_import_mapping_profile(conn, tenant_id=target_tenant_id)
+    if not current_profile:
+        raise HTTPException(status_code=404, detail="mapping profile not found")
+    current_profile_id = str(current_profile.get("profile_id") or "").strip()
+    requested_profile_id = str(profile_id or "").strip()
+    if requested_profile_id and requested_profile_id != current_profile_id:
+        raise HTTPException(status_code=404, detail="mapping profile not found")
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM schedule_import_mapping_profiles
+            WHERE id = %s
+              AND tenant_id = %s
+            """,
+            (current_profile_id, target_tenant_id),
+        )
+
+    return {
+        "status": "deleted",
+        "profile_id": current_profile_id,
+    }
+
+
 def _build_template_id_index(templates: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     index: dict[str, dict[str, Any]] = {}
     for row in templates:

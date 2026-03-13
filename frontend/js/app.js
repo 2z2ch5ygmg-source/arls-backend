@@ -39763,7 +39763,8 @@ function getScheduleImportMappingProfiles() {
     ? state.schedule.importMappingProfile
     : null;
   if (!profile) return [];
-  const profileId = String(profile?.profile_id || 'active-profile').trim() || 'active-profile';
+  const profileId = String(profile?.profile_id || '').trim();
+  if (!profileId) return [];
   return [{ ...profile, profile_id: profileId }];
 }
 
@@ -40044,7 +40045,6 @@ function renderScheduleImportMappingProfileManager() {
     const tr = document.createElement('tr');
     const profileId = String(profile?.profile_id || '').trim();
     const ruleCount = Number(profile?.entry_count || 0);
-    const deleteReason = profile?.is_active === false ? '삭제 API 준비 중' : '삭제 전 비활성화 필요';
 
     const nameTd = document.createElement('td');
     nameTd.appendChild(createScheduleUploadStackCell(
@@ -40103,27 +40103,16 @@ function renderScheduleImportMappingProfileManager() {
     copyBtn.title = '복제는 다음 backend pass에서 지원됩니다.';
     actionsWrap.appendChild(copyBtn);
 
-    const toggleBtn = document.createElement('button');
-    toggleBtn.type = 'button';
-    toggleBtn.className = 'btn btn-secondary';
-    toggleBtn.textContent = profile?.is_active === false ? '활성화' : '비활성화';
-    toggleBtn.disabled = true;
-    toggleBtn.title = '프로필 활성/비활성 전환은 다음 backend pass에서 지원됩니다.';
-    actionsWrap.appendChild(toggleBtn);
-
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'btn btn-destructive';
+    deleteBtn.dataset.action = 'schedule-import-profile-delete';
+    deleteBtn.dataset.profileId = profileId;
+    deleteBtn.dataset.profileName = String(profile?.profile_name || '기본 월간 업로드 매핑').trim() || '기본 월간 업로드 매핑';
     deleteBtn.textContent = '삭제';
-    deleteBtn.disabled = true;
-    deleteBtn.title = deleteReason;
     actionsWrap.appendChild(deleteBtn);
 
     actionTd.appendChild(actionsWrap);
-    const note = document.createElement('p');
-    note.className = 'schedule-template-action-note';
-    note.textContent = deleteReason;
-    actionTd.appendChild(note);
     tr.appendChild(actionTd);
     tableBody.appendChild(tr);
   });
@@ -40584,6 +40573,36 @@ async function onScheduleImportMappingSave() {
   invalidateScheduleImportAnalysis(['mapping_profile']);
   closeSheet();
   showToast('월간 업로드 매핑 프로필을 저장했습니다.', 'success', 2600);
+}
+
+async function onScheduleImportMappingDelete(profileId, profileName) {
+  if (!canMutateScheduleData()) {
+    showToast('매핑 프로필 권한이 없습니다.', 'error');
+    return;
+  }
+  const normalizedProfileId = String(profileId || '').trim();
+  if (!normalizedProfileId) {
+    showToast('삭제할 매핑 프로필을 찾을 수 없습니다.', 'error');
+    return;
+  }
+  const query = new URLSearchParams();
+  query.set('tenant_code', getScheduleBaseTenantCode());
+  query.set('profile_id', normalizedProfileId);
+  await apiRequest(`/schedules/import-mapping-profile?${query.toString()}`, {
+    method: 'DELETE',
+  });
+  if (state.schedule) {
+    state.schedule.importMappingProfile = null;
+    state.schedule.importMappingProfileFetchedAt = 0;
+    state.schedule.importMappingSelectedProfileId = '';
+  }
+  await loadScheduleImportMappingProfile({ force: true });
+  renderScheduleImportMappingProfileSummary();
+  renderScheduleImportMappingProfileManager();
+  renderScheduleTemplateTable();
+  renderScheduleUploadWorkspace();
+  invalidateScheduleImportAnalysis(['mapping_profile']);
+  showToast(`${String(profileName || '매핑 프로필').trim() || '매핑 프로필'}을(를) 삭제했습니다.`, 'success', 2400);
 }
 
 async function refreshScheduleImportSiteOptions({ force = false } = {}) {
@@ -51221,6 +51240,26 @@ function bindUiEvents() {
         openScheduleImportMappingEditor({ mode: actionEl.dataset.profileMode || 'edit' }),
         '매핑 프로필 화면을 열지 못했습니다.',
       );
+      return;
+    }
+
+    if (action === 'schedule-import-profile-delete') {
+      const profileId = String(actionEl.dataset.profileId || '').trim();
+      const profileName = String(actionEl.dataset.profileName || '').trim() || '선택한 매핑 프로필';
+      if (!profileId) {
+        showToast('삭제할 매핑 프로필을 찾을 수 없습니다.', 'error');
+        return;
+      }
+      openConfirmDialog({
+        title: '매핑 프로필 삭제',
+        message: `${profileName}을(를) 삭제하시겠습니까? 이미 적용된 스케줄은 유지되지만 이후 업로드에는 다시 프로필을 선택해야 합니다.`,
+        acceptLabel: '삭제',
+        acceptVariant: 'btn-destructive',
+        triggerEl: actionEl,
+        onAccept: async () => {
+          await onScheduleImportMappingDelete(profileId, profileName);
+        },
+      });
       return;
     }
 
