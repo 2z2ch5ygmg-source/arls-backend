@@ -8196,6 +8196,20 @@ function isDrawerRequestsSectionVisible(section = '', perms = getRolePermissions
   return Boolean(perms.attendance || perms.leave);
 }
 
+function isDrawerScheduleSectionActive(section = '', currentRouteRaw = '') {
+  const normalized = String(section || '').trim().toLowerCase();
+  const currentRoute = normalizeRoutePath(parseRouteCandidate(currentRouteRaw).path);
+  if (!currentRoute) return false;
+  if (normalized === 'calendar') {
+    return currentRoute === ROUTE_SCHEDULE_CALENDAR || currentRoute === ROUTE_SCHEDULE_LIST;
+  }
+  if (normalized === 'templates') return currentRoute === ROUTE_SCHEDULE_TEMPLATES;
+  if (normalized === 'upload') return currentRoute === ROUTE_SCHEDULE_UPLOAD;
+  if (normalized === 'hq-upload') return currentRoute === ROUTE_SCHEDULE_HQ_UPLOAD;
+  if (normalized === 'reports') return currentRoute === ROUTE_SCHEDULE_REPORTS;
+  return false;
+}
+
 function isDrawerItemActive(item = null, currentRouteRaw = '') {
   if (!item || typeof item !== 'object') return false;
   const sectionMatch = String(item.sectionMatch || '').trim().toLowerCase();
@@ -8206,6 +8220,10 @@ function isDrawerItemActive(item = null, currentRouteRaw = '') {
     }
     if (sectionMatch === 'approvals' && currentRoute === ROUTE_APPROVALS) return true;
     if (sectionMatch === 'correction' && currentRoute === ROUTE_REQUESTS_CORRECTION) return true;
+  }
+  const scheduleSectionMatch = String(item.scheduleSectionMatch || '').trim().toLowerCase();
+  if (scheduleSectionMatch) {
+    return isDrawerScheduleSectionActive(scheduleSectionMatch, currentRouteRaw);
   }
   return Boolean(item?.route) && isDrawerItemActiveRoute(item.route, currentRouteRaw);
 }
@@ -8242,8 +8260,31 @@ const DRAWER_MENU_BY_ROLE = {
         { id: 'requests-documents', title: '문서', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=documents`, sectionMatch: 'documents' },
       ],
     },
-    { id: 'schedule', title: '스케줄', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, icon: 'calendar-days' },
-    { id: 'schedule-reports', title: '보고', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, icon: 'clipboard-list' },
+    {
+      id: 'schedule',
+      title: '스케쥴',
+      action: 'drawer-open-route',
+      route: ROUTE_SCHEDULE_CALENDAR,
+      icon: 'calendar-days',
+      scheduleSectionMatch: 'calendar',
+      children: [
+        { id: 'schedule-calendar', title: '캘린더', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
+        { id: 'schedule-templates', title: '근무 템플릿 생성', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
+        { id: 'schedule-upload', title: 'Excel로 근무표 간편 제작', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+      ],
+    },
+    {
+      id: 'schedule-reports',
+      title: '보고',
+      action: 'drawer-open-route',
+      route: ROUTE_SCHEDULE_REPORTS,
+      icon: 'clipboard-list',
+      scheduleSectionMatch: 'reports',
+      children: [
+        { id: 'schedule-hq-upload', title: '지점별 스케쥴 업로드 확인', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
+        { id: 'schedule-finance', title: 'Finance용 스케쥴 제출', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, scheduleSectionMatch: 'reports' },
+      ],
+    },
     { type: 'section', title: '조직' },
     {
       id: 'organization',
@@ -8279,8 +8320,31 @@ const DRAWER_MENU_BY_ROLE = {
         { id: 'requests-documents', title: '문서', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=documents`, sectionMatch: 'documents' },
       ],
     },
-    { id: 'schedule', title: '스케줄', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, icon: 'calendar-days' },
-    { id: 'schedule-reports', title: '보고', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, icon: 'clipboard-list' },
+    {
+      id: 'schedule',
+      title: '스케쥴',
+      action: 'drawer-open-route',
+      route: ROUTE_SCHEDULE_CALENDAR,
+      icon: 'calendar-days',
+      scheduleSectionMatch: 'calendar',
+      children: [
+        { id: 'schedule-calendar', title: '캘린더', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
+        { id: 'schedule-templates', title: '근무 템플릿 생성', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
+        { id: 'schedule-upload', title: 'Excel로 근무표 간편 제작', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+      ],
+    },
+    {
+      id: 'schedule-reports',
+      title: '보고',
+      action: 'drawer-open-route',
+      route: ROUTE_SCHEDULE_REPORTS,
+      icon: 'clipboard-list',
+      scheduleSectionMatch: 'reports',
+      children: [
+        { id: 'schedule-hq-upload', title: '지점별 스케쥴 업로드 확인', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
+        { id: 'schedule-finance', title: 'Finance용 스케쥴 제출', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, scheduleSectionMatch: 'reports' },
+      ],
+    },
     { type: 'section', title: '조직' },
     {
       id: 'organization',
