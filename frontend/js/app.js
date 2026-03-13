@@ -9317,14 +9317,38 @@ function canSelectScheduleWorkflowTenant() {
   return getNavigationRole() === 'DEV';
 }
 
+function getScheduleWorkflowTenantFallbackChoice() {
+  if (!canSelectScheduleWorkflowTenant()) return null;
+  const code = ensureScheduleTenantCode(
+    getWorkingTenantDisplayCode()
+    || getScheduleTenantValue()
+    || state.user?.tenant_code
+    || '',
+  );
+  if (!code || code === 'MASTER') return null;
+  const name = String(
+    state.uiContext?.activeTenantName
+    || getActiveTenantContext().name
+    || resolveTenantNameByCode(code)
+    || code,
+  ).trim();
+  return {
+    code,
+    name,
+  };
+}
+
 function getScheduleWorkflowTenantChoices() {
   if (!canSelectScheduleWorkflowTenant()) return [];
-  return getDevActiveWorkingTenants(Array.isArray(state.devAdmin?.tenants) ? state.devAdmin.tenants : [])
+  const rows = getDevActiveWorkingTenants(Array.isArray(state.devAdmin?.tenants) ? state.devAdmin.tenants : [])
     .map((row) => ({
       code: String(row?.tenant_code || '').trim().toUpperCase(),
       name: String(row?.tenant_name || row?.tenant_code || '').trim(),
     }))
     .filter((row) => row.code);
+  if (rows.length) return rows;
+  const fallback = getScheduleWorkflowTenantFallbackChoice();
+  return fallback ? [fallback] : [];
 }
 
 function getScheduleBaseTenantCode() {
@@ -10237,6 +10261,11 @@ function renderScheduleUploadWorkspace() {
     || supportHqWorkspace.inspectLoading
     || supportHqWorkspace.applyLoading
   );
+  const supportHqContextLocked = Boolean(
+    uploadWorkspaceBooting
+    || supportHqWorkspace.inspectLoading
+    || supportHqWorkspace.applyLoading
+  );
   const siteOptionsLoading = Boolean(state.schedule.importSiteOptionsLoading);
 
   syncScheduleImportStaleState();
@@ -10296,10 +10325,10 @@ function renderScheduleUploadWorkspace() {
     monthInput.disabled = uploadWorkspaceBooting || uploadUi.analysisInFlight || supportHqBusy;
   }
   if (hqTenantSelect instanceof HTMLSelectElement) {
-    hqTenantSelect.disabled = uploadWorkspaceBooting || supportHqBusy;
+    hqTenantSelect.disabled = supportHqContextLocked;
   }
   if (hqMonthInput instanceof HTMLInputElement) {
-    hqMonthInput.disabled = uploadWorkspaceBooting || supportHqBusy;
+    hqMonthInput.disabled = supportHqContextLocked;
   }
   if (fileInput instanceof HTMLInputElement) {
     fileInput.disabled = uploadWorkspaceBooting || uploadUi.analysisInFlight || supportHqBusy;
