@@ -2045,9 +2045,10 @@
             </div>
             <div id="scheduleHqTabs" class="workspace-tabs schedule-workspace-tabs">
               <button class="btn btn-secondary workspace-tab active" type="button" data-action="schedule-hq-tab" data-tab="calendar">캘린더</button>
-              <button class="btn btn-secondary workspace-tab shell-manager-only hidden" type="button" data-action="schedule-hq-tab" data-tab="templates">근무 탬플릿 생성</button>
+              <button class="btn btn-secondary workspace-tab shell-manager-only hidden" type="button" data-action="schedule-hq-tab" data-tab="templates">근무 템플릿 생성</button>
               <button class="btn btn-secondary workspace-tab" type="button" data-action="schedule-hq-tab" data-tab="upload">Excel로 근무표 간편 제작</button>
-              <button class="btn btn-secondary workspace-tab" type="button" data-action="schedule-hq-tab" data-tab="reports">보고</button>
+              <button class="btn btn-secondary workspace-tab hidden" type="button" data-action="schedule-hq-tab" data-tab="reports">Finance용 스케쥴 제출</button>
+              <button class="btn btn-secondary workspace-tab hidden" type="button" data-action="schedule-hq-tab" data-tab="hq-upload">지점별 스케쥴 업로드 확인</button>
             </div>
             <section id="scheduleOpsToolbar" class="schedule-ops-toolbar">
               <div class="schedule-ops-toolbar-main">
@@ -2157,15 +2158,10 @@
             <div id="scheduleUploadPanel" class="stack schedule-tab-panel hidden schedule-upload-workspace">
             <header class="schedule-upload-header">
               <div>
-                <h3>Excel로 근무표 간편 제작</h3>
-                <p class="muted">월간 스케줄 원본 업로드와 HQ 지원근무 workbook 흐름을 단계별 wizard로 진행합니다.</p>
+                <h3 id="scheduleUploadHeaderTitle">Excel로 근무표 간편 제작</h3>
+                <p id="scheduleUploadHeaderText" class="muted">월간 스케줄 원본 업로드와 HQ 지원근무 workbook 흐름을 단계별 wizard로 진행합니다.</p>
               </div>
             </header>
-
-            <div id="scheduleUploadOwnerTabs" class="workspace-tabs schedule-upload-owner-tabs">
-              <button class="btn btn-secondary workspace-tab active" type="button" data-action="schedule-upload-mode-tab" data-mode="base">Excel로 근무표 간편 제작</button>
-              <button class="btn btn-secondary workspace-tab hidden schedule-upload-owner-tab-hq" type="button" data-action="schedule-upload-mode-tab" data-mode="hq">지점별 스케쥴 업로드 확인</button>
-            </div>
 
             <div id="scheduleExcelWorkflowContext" class="schedule-upload-policy-strip schedule-excel-context-strip">
               <div class="schedule-upload-policy-item">
@@ -2689,15 +2685,11 @@
             <div id="scheduleReportsPanel" class="stack schedule-tab-panel hidden">
             <div class="schedule-reports-context-row">
               <label class="input-field">
-                <span>보고 지점</span>
+                <span>대상 지점</span>
                 <select id="scheduleReportsSite">
                   <option value="">지점 선택</option>
                 </select>
               </label>
-            </div>
-            <div id="scheduleReportsWorkspaceTabs" class="workspace-tabs schedule-reports-workspace-tabs">
-              <button class="btn btn-secondary workspace-tab" type="button" data-action="schedule-reports-tab" data-tab="finance">Finance 스케쥴 제출(월말)</button>
-            </div>
             </div>
 
             <section id="scheduleFinanceSubmissionPanel" class="module-card stack hidden">

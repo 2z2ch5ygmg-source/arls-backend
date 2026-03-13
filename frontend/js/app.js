@@ -180,6 +180,7 @@ const SCHEDULE_VIEW_MODE_LIST = 'list';
 const SCHEDULE_TAB_CALENDAR = 'calendar';
 const SCHEDULE_TAB_LIST = 'list';
 const SCHEDULE_TAB_UPLOAD = 'upload';
+const SCHEDULE_TAB_HQ_UPLOAD = 'hq-upload';
 const SCHEDULE_TAB_TEMPLATES = 'templates';
 const SCHEDULE_TAB_REPORTS = 'reports';
 const SCHEDULE_REPORTS_TAB_SUPPORT = 'support';
@@ -356,6 +357,7 @@ const ROUTE_SCHEDULE = '/schedule';
 const ROUTE_SCHEDULE_CALENDAR = '/schedules/calendar';
 const ROUTE_SCHEDULE_LIST = '/schedules/list';
 const ROUTE_SCHEDULE_UPLOAD = '/schedules/upload';
+const ROUTE_SCHEDULE_HQ_UPLOAD = '/schedules/hq-upload';
 const ROUTE_SCHEDULE_TEMPLATES = '/schedules/templates';
 const ROUTE_SCHEDULE_REPORTS = '/schedules/reports';
 const ROUTE_REQUESTS = '/requests';
@@ -430,6 +432,7 @@ const LEGACY_ROUTE_ALIASES = {
   '/schedule/calendar': ROUTE_SCHEDULE_CALENDAR,
   '/schedule/list': ROUTE_SCHEDULE_LIST,
   '/schedule/upload': ROUTE_SCHEDULE_UPLOAD,
+  '/schedule/hq-upload': ROUTE_SCHEDULE_HQ_UPLOAD,
   '/schedule/templates': ROUTE_SCHEDULE_TEMPLATES,
   '/schedule/reports': ROUTE_SCHEDULE_REPORTS,
   '/admin/reports-lock': ROUTE_ADMIN_REPORTS_LOCK,
@@ -7884,7 +7887,7 @@ function ensureScheduleDetachedNodeCache() {
 function getScheduleTabPanelRoot(tab = '') {
   bootstrapScheduleTabPanelRefs();
   const normalized = normalizeScheduleHqTab(tab);
-  if (normalized === SCHEDULE_TAB_UPLOAD) return scheduleTabPanelRefs.upload;
+  if (normalized === SCHEDULE_TAB_UPLOAD || normalized === SCHEDULE_TAB_HQ_UPLOAD) return scheduleTabPanelRefs.upload;
   if (normalized === SCHEDULE_TAB_REPORTS) return scheduleTabPanelRefs.reports;
   if (normalized === SCHEDULE_TAB_TEMPLATES) return scheduleTabPanelRefs.templates;
   return scheduleTabPanelRefs.board;
@@ -10071,8 +10074,9 @@ function setScheduleUploadWorkspaceMode(mode = SCHEDULE_UPLOAD_MODE_BASE, { scro
   if (normalizedMode === SCHEDULE_UPLOAD_MODE_HQ) {
     maybeResumeScheduleHqWizard();
   }
-  if (getScheduleActiveTopTab() !== SCHEDULE_TAB_UPLOAD) {
-    onScheduleHqTabChange(SCHEDULE_TAB_UPLOAD);
+  const targetTopTab = normalizedMode === SCHEDULE_UPLOAD_MODE_HQ ? SCHEDULE_TAB_HQ_UPLOAD : SCHEDULE_TAB_UPLOAD;
+  if (getScheduleActiveTopTab() !== targetTopTab) {
+    onScheduleHqTabChange(targetTopTab);
   }
   requestAnimationFrame(() => {
     renderScheduleUploadWorkflowSections();
@@ -10116,6 +10120,16 @@ function openScheduleUploadWorkflowSection(section = SCHEDULE_UPLOAD_WORKFLOW_MA
 }
 
 function renderScheduleUploadWorkspace() {
+  const activeTopTab = getScheduleActiveTopTab();
+  if (state.schedule) {
+    if (activeTopTab === SCHEDULE_TAB_HQ_UPLOAD) {
+      state.schedule.uploadWorkspaceMode = SCHEDULE_UPLOAD_MODE_HQ;
+    } else if (activeTopTab === SCHEDULE_TAB_UPLOAD) {
+      state.schedule.uploadWorkspaceMode = SCHEDULE_UPLOAD_MODE_BASE;
+    }
+  }
+  const uploadHeaderTitle = $('#scheduleUploadHeaderTitle');
+  const uploadHeaderText = $('#scheduleUploadHeaderText');
   const permissionSummary = $('#scheduleImportPermissionSummary');
   const siteHint = $('#scheduleImportSiteHint');
   const analysisEmpty = $('#scheduleImportAnalysisEmpty');
@@ -10157,6 +10171,16 @@ function renderScheduleUploadWorkspace() {
   const siteOptionsLoading = Boolean(state.schedule.importSiteOptionsLoading);
 
   syncScheduleImportStaleState();
+  if (uploadHeaderTitle) {
+    uploadHeaderTitle.textContent = activeTopTab === SCHEDULE_TAB_HQ_UPLOAD
+      ? '지점별 스케쥴 업로드 확인'
+      : 'Excel로 근무표 간편 제작';
+  }
+  if (uploadHeaderText) {
+    uploadHeaderText.textContent = activeTopTab === SCHEDULE_TAB_HQ_UPLOAD
+      ? '선택한 지점의 source artifact를 추출하고 HQ 작성본 workbook 업로드를 단계별로 진행합니다.'
+      : '월간 스케줄 원본 업로드와 HQ 지원근무 workbook 흐름을 단계별 wizard로 진행합니다.';
+  }
   renderScheduleImportMappingProfileSummary();
   renderScheduleUploadWorkflowSections();
   if (canSelectScheduleWorkflowTenant()) {
@@ -11845,7 +11869,7 @@ function getScheduleSupportSelectedSiteCode() {
   const hqContext = buildScheduleSupportHqContext();
   const hqSite = String(hqContext.siteCode || '').trim().toUpperCase();
   const reportsSite = String($('#scheduleReportsSite')?.value || '').trim().toUpperCase();
-  if (getScheduleActiveTopTab() === SCHEDULE_TAB_UPLOAD) {
+  if (isScheduleUploadOwnerTab(getScheduleActiveTopTab())) {
     if (getScheduleUploadWorkspaceMode() === SCHEDULE_UPLOAD_MODE_HQ && hqSite) return hqSite;
     return '';
   } else {
@@ -11858,7 +11882,7 @@ function getScheduleSupportSelectedSiteCode() {
 }
 
 function buildScheduleSupportArtifactContext(status = null, siteCode = '') {
-  const usingHqWizard = getScheduleActiveTopTab() === SCHEDULE_TAB_UPLOAD && getScheduleUploadWorkspaceMode() === SCHEDULE_UPLOAD_MODE_HQ;
+  const usingHqWizard = isScheduleUploadOwnerTab(getScheduleActiveTopTab()) && getScheduleUploadWorkspaceMode() === SCHEDULE_UPLOAD_MODE_HQ;
   const hqContext = usingHqWizard ? buildScheduleSupportHqContext() : null;
   const hqWorkspace = usingHqWizard ? ensureScheduleSupportHqWorkspaceDefaults() : null;
   const tenantCode = String(usingHqWizard ? getScheduleHqTenantCode() : (getTenantCodeForScopedAdminApi() || getScheduleTenantValue() || '')).trim();
@@ -11978,29 +12002,10 @@ function renderScheduleReportsTabs() {
   const panel = $('#scheduleReportsPanel');
   if (!(panel instanceof HTMLElement)) return;
   const financeAllowed = canViewScheduleFinanceSubmission();
-  const tabWrap = $('#scheduleReportsWorkspaceTabs');
-  const supportPanel = $('#scheduleSupportRoundtripPanel');
   const financePanel = $('#scheduleFinanceSubmissionPanel');
-  const activeTab = SCHEDULE_REPORTS_TAB_FINANCE;
-  state.schedule.reportsTab = activeTab;
-
-  if (tabWrap instanceof HTMLElement) {
-    tabWrap.classList.toggle('hidden', !financeAllowed);
-    tabWrap.querySelectorAll('[data-action="schedule-reports-tab"]').forEach((button) => {
-      const tab = normalizeScheduleReportsTab(button?.dataset?.tab || '');
-      const visible = tab === SCHEDULE_REPORTS_TAB_FINANCE && financeAllowed;
-      const active = visible && tab === activeTab;
-      button.classList.toggle('hidden', !visible);
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-pressed', active ? 'true' : 'false');
-    });
-  }
+  state.schedule.reportsTab = SCHEDULE_REPORTS_TAB_FINANCE;
 
   renderScheduleFinanceSubmissionStatus();
-
-  if (supportPanel instanceof HTMLElement) {
-    supportPanel.classList.add('hidden');
-  }
   if (financePanel instanceof HTMLElement) {
     financePanel.classList.toggle('hidden', !financeAllowed);
   }
@@ -12213,7 +12218,7 @@ async function loadScheduleSupportRoundtripStatus() {
     renderScheduleSupportShortcutCard();
     return null;
   }
-  const activeUploadHq = getScheduleActiveTopTab() === SCHEDULE_TAB_UPLOAD && getScheduleUploadWorkspaceMode() === SCHEDULE_UPLOAD_MODE_HQ;
+  const activeUploadHq = isScheduleUploadOwnerTab(getScheduleActiveTopTab()) && getScheduleUploadWorkspaceMode() === SCHEDULE_UPLOAD_MODE_HQ;
   const hqContext = activeUploadHq ? buildScheduleSupportHqContext() : null;
   const siteCode = activeUploadHq ? String(hqContext?.siteCode || '').trim().toUpperCase() : getScheduleSupportSelectedSiteCode();
   if (!siteCode) {
@@ -17304,6 +17309,7 @@ function isScheduleRoutePath(routePath = '') {
     || route === ROUTE_SCHEDULE_CALENDAR
     || route === ROUTE_SCHEDULE_LIST
     || route === ROUTE_SCHEDULE_UPLOAD
+    || route === ROUTE_SCHEDULE_HQ_UPLOAD
     || route === ROUTE_SCHEDULE_REPORTS
     || route === ROUTE_SCHEDULE_TEMPLATES
     || route === ROUTE_ADMIN_SCHEDULE_TOOLS;
@@ -17313,6 +17319,7 @@ function getScheduleTabRoute(tab = '') {
   const normalizedTab = normalizeScheduleHqTab(tab);
   if (normalizedTab === SCHEDULE_TAB_LIST) return ROUTE_SCHEDULE_LIST;
   if (normalizedTab === SCHEDULE_TAB_UPLOAD) return ROUTE_SCHEDULE_UPLOAD;
+  if (normalizedTab === SCHEDULE_TAB_HQ_UPLOAD) return ROUTE_SCHEDULE_HQ_UPLOAD;
   if (normalizedTab === SCHEDULE_TAB_REPORTS) return ROUTE_SCHEDULE_REPORTS;
   if (normalizedTab === SCHEDULE_TAB_TEMPLATES) return ROUTE_SCHEDULE_TEMPLATES;
   return ROUTE_SCHEDULE_CALENDAR;
@@ -17322,6 +17329,7 @@ function resolveScheduleTabFromRoutePath(routePath = '') {
   const route = normalizeRoutePath(routePath);
   if (route === ROUTE_SCHEDULE_LIST) return SCHEDULE_TAB_LIST;
   if (route === ROUTE_SCHEDULE_UPLOAD || route === ROUTE_ADMIN_SCHEDULE_TOOLS) return SCHEDULE_TAB_UPLOAD;
+  if (route === ROUTE_SCHEDULE_HQ_UPLOAD) return SCHEDULE_TAB_HQ_UPLOAD;
   if (route === ROUTE_SCHEDULE_REPORTS) return SCHEDULE_TAB_REPORTS;
   if (route === ROUTE_SCHEDULE_TEMPLATES) return SCHEDULE_TAB_TEMPLATES;
   if (route === ROUTE_SCHEDULE || route === ROUTE_SCHEDULE_CALENDAR) return SCHEDULE_TAB_CALENDAR;
@@ -17472,6 +17480,7 @@ function isKnownRoute(routePath = '') {
     ROUTE_SCHEDULE_CALENDAR,
     ROUTE_SCHEDULE_LIST,
     ROUTE_SCHEDULE_UPLOAD,
+    ROUTE_SCHEDULE_HQ_UPLOAD,
     ROUTE_SCHEDULE_REPORTS,
     ROUTE_SCHEDULE_TEMPLATES,
     ROUTE_REQUESTS,
@@ -17521,6 +17530,7 @@ function isRouteAllowed(routePath, perms = getRolePermissions(), navRole = getNa
     || route === ROUTE_SCHEDULE_UPLOAD
     || route === ROUTE_SCHEDULE_TEMPLATES
   ) return Boolean(perms.schedule);
+  if (route === ROUTE_SCHEDULE_HQ_UPLOAD) return canUseScheduleUploadHqWizard();
   if (route === ROUTE_SCHEDULE_REPORTS) return canViewScheduleReportsWorkspace();
   if (route === ROUTE_REQUESTS) return Boolean(perms.attendance || perms.leave);
   if (route === ROUTE_REQUESTS_CORRECTION) return Boolean(perms.attendance || perms.attendanceWrite);
@@ -17617,6 +17627,9 @@ function applyScheduleRouteStateFromQuery(routePath = '', parsedParams = new URL
     tab = SCHEDULE_TAB_LIST;
   }
   if (tab === SCHEDULE_TAB_UPLOAD && !canOpenScheduleUploadWorkspace()) {
+    tab = SCHEDULE_TAB_CALENDAR;
+  }
+  if (tab === SCHEDULE_TAB_HQ_UPLOAD && !canUseScheduleUploadHqWizard()) {
     tab = SCHEDULE_TAB_CALENDAR;
   }
   if (tab === SCHEDULE_TAB_REPORTS && !canViewScheduleReportsWorkspace()) {
@@ -27777,7 +27790,7 @@ async function loadScheduleViewPresenter() {
     );
     return;
   }
-  if (activeTab === SCHEDULE_TAB_UPLOAD) {
+  if (isScheduleUploadOwnerTab(activeTab)) {
     markViewPerfStage('first_paintable_ui', {
       routePath: schedulePerfRoute,
       viewName: 'schedule',
@@ -27813,13 +27826,10 @@ async function loadScheduleViewPresenter() {
     runActionSafely(
       (async () => {
         await refreshScheduleImportSiteOptions({ force: false });
-        await Promise.allSettled([
-          loadScheduleSupportRoundtripStatus(),
-          loadScheduleFinanceSubmissionStatus(),
-        ]);
+        await loadScheduleFinanceSubmissionStatus();
         renderScheduleReportsTabs();
       })(),
-      '보고 지점 목록/제출 상태를 동기화하지 못했습니다.',
+      'Finance 제출 지점 목록/상태를 동기화하지 못했습니다.',
     );
     return;
   }
@@ -38842,10 +38852,7 @@ function canDownloadScheduleFinanceFinal() {
 }
 
 function canViewScheduleReportsWorkspace() {
-  return canUseScheduleSupportRoundtripSource()
-    || canUseScheduleSupportRoundtripHq()
-    || canUseScheduleSupportRoundtripFinalDownload()
-    || canViewScheduleFinanceSubmission();
+  return canViewScheduleFinanceSubmission();
 }
 
 function canOpenScheduleUploadWorkspace() {
@@ -38853,9 +38860,15 @@ function canOpenScheduleUploadWorkspace() {
     || canUseScheduleSupportRoundtripSource();
 }
 
+function isScheduleUploadOwnerTab(tab = '') {
+  const normalized = normalizeScheduleHqTab(tab);
+  return normalized === SCHEDULE_TAB_UPLOAD || normalized === SCHEDULE_TAB_HQ_UPLOAD;
+}
+
 function normalizeScheduleHqTab(value = '') {
   const tab = String(value || '').trim().toLowerCase();
   if (tab === SCHEDULE_TAB_TEMPLATES) return SCHEDULE_TAB_TEMPLATES;
+  if (tab === SCHEDULE_TAB_HQ_UPLOAD || tab === 'hqupload' || tab === 'hq-upload' || tab === 'hq') return SCHEDULE_TAB_HQ_UPLOAD;
   if (tab === SCHEDULE_TAB_REPORTS || tab === 'report' || tab === 'reports') return SCHEDULE_TAB_REPORTS;
   if (tab === SCHEDULE_TAB_UPLOAD || tab === 'excel') return SCHEDULE_TAB_UPLOAD;
   if (tab === SCHEDULE_TAB_LIST) return SCHEDULE_TAB_LIST;
@@ -38938,6 +38951,9 @@ function toggleScheduleActionDropdown(menuId = '') {
 function getScheduleActiveTopTab() {
   const current = normalizeScheduleHqTab(state.schedule?.hqTab || SCHEDULE_TAB_CALENDAR);
   if (current === SCHEDULE_TAB_UPLOAD && !canOpenScheduleUploadWorkspace()) {
+    return SCHEDULE_TAB_CALENDAR;
+  }
+  if (current === SCHEDULE_TAB_HQ_UPLOAD && !canUseScheduleUploadHqWizard()) {
     return SCHEDULE_TAB_CALENDAR;
   }
   if (current === SCHEDULE_TAB_REPORTS && !canViewScheduleReportsWorkspace()) {
@@ -39089,7 +39105,8 @@ function renderScheduleHqTabs() {
 
   const canOpenTemplateTab = isScheduleTemplateTabVisible();
   const canOpenUploadTab = canOpenScheduleUploadWorkspace();
-  const canOpenReportsTab = canViewScheduleReportsWorkspace();
+  const canOpenFinanceTab = canViewScheduleReportsWorkspace();
+  const canOpenHqUploadTab = canUseScheduleUploadHqWizard();
   const activeTab = getScheduleActiveTopTab();
   state.schedule.hqTab = activeTab;
   if (activeTab === SCHEDULE_TAB_LIST) {
@@ -39105,12 +39122,14 @@ function renderScheduleHqTabs() {
       const tab = normalizeScheduleHqTab(button?.dataset?.tab || '');
       const isTemplateTab = tab === SCHEDULE_TAB_TEMPLATES;
       const isUploadTab = tab === SCHEDULE_TAB_UPLOAD;
+      const isHqUploadTab = tab === SCHEDULE_TAB_HQ_UPLOAD;
       const isReportsTab = tab === SCHEDULE_TAB_REPORTS;
       button.classList.toggle(
         'hidden',
         (isTemplateTab && !canOpenTemplateTab)
           || (isUploadTab && !canOpenUploadTab)
-          || (isReportsTab && !canOpenReportsTab),
+          || (isHqUploadTab && !canOpenHqUploadTab)
+          || (isReportsTab && !canOpenFinanceTab),
       );
       const active = tab === uiActiveTab;
       button.classList.toggle('active', active);
@@ -39162,11 +39181,19 @@ function onScheduleHqTabChange(tab = SCHEDULE_TAB_CALENDAR) {
   if (state.schedule.hqTab === SCHEDULE_TAB_UPLOAD && !canOpenScheduleUploadWorkspace()) {
     state.schedule.hqTab = SCHEDULE_TAB_CALENDAR;
   }
+  if (state.schedule.hqTab === SCHEDULE_TAB_HQ_UPLOAD && !canUseScheduleUploadHqWizard()) {
+    state.schedule.hqTab = SCHEDULE_TAB_CALENDAR;
+  }
   if (state.schedule.hqTab === SCHEDULE_TAB_REPORTS && !canViewScheduleReportsWorkspace()) {
     state.schedule.hqTab = SCHEDULE_TAB_CALENDAR;
   }
   if (state.schedule.hqTab === SCHEDULE_TAB_TEMPLATES && !isScheduleTemplateTabVisible()) {
     state.schedule.hqTab = SCHEDULE_TAB_CALENDAR;
+  }
+  if (state.schedule.hqTab === SCHEDULE_TAB_HQ_UPLOAD) {
+    state.schedule.uploadWorkspaceMode = SCHEDULE_UPLOAD_MODE_HQ;
+  } else if (state.schedule.hqTab === SCHEDULE_TAB_UPLOAD) {
+    state.schedule.uploadWorkspaceMode = SCHEDULE_UPLOAD_MODE_BASE;
   }
   if (state.schedule.hqTab === SCHEDULE_TAB_LIST) {
     state.schedule.viewMode = SCHEDULE_VIEW_MODE_LIST;
@@ -39186,7 +39213,7 @@ function onScheduleHqTabChange(tab = SCHEDULE_TAB_CALENDAR) {
     renderScheduleDesktopDrawer();
     return;
   }
-  if (state.schedule.hqTab === SCHEDULE_TAB_UPLOAD) {
+  if (isScheduleUploadOwnerTab(state.schedule.hqTab)) {
     runActionSafely(
       bootstrapScheduleUploadWorkspace({ force: false }),
       '업로드 지점 목록을 동기화하지 못했습니다.',
@@ -39198,13 +39225,10 @@ function onScheduleHqTabChange(tab = SCHEDULE_TAB_CALENDAR) {
     runActionSafely(
       (async () => {
         await refreshScheduleImportSiteOptions({ force: false });
-        await Promise.allSettled([
-          loadScheduleSupportRoundtripStatus(),
-          loadScheduleFinanceSubmissionStatus(),
-        ]);
+        await loadScheduleFinanceSubmissionStatus();
         renderScheduleReportsTabs();
       })(),
-      '보고 지점 목록/제출 상태를 동기화하지 못했습니다.',
+      'Finance 제출 지점 목록/상태를 동기화하지 못했습니다.',
     );
     renderScheduleDesktopDrawer();
     return;
@@ -39830,7 +39854,7 @@ async function loadScheduleImportMappingProfile({ force = false } = {}) {
 }
 
 async function bootstrapScheduleUploadWorkspace({ force = false } = {}) {
-  if (!canOpenScheduleUploadWorkspace()) return null;
+  if (!(canOpenScheduleUploadWorkspace() || canUseScheduleUploadHqWizard())) return null;
   const currentPromise = state.schedule?.uploadWorkspaceBootPromise;
   if (currentPromise && !force) {
     return currentPromise;
@@ -39843,8 +39867,10 @@ async function bootstrapScheduleUploadWorkspace({ force = false } = {}) {
         await ensureDevTenantCatalog({ force });
       }
       ensureScheduleSupportHqWorkspaceDefaults();
-      if (canUseScheduleSupportRoundtripHq() && normalizeRoleValue(state.user?.role || '') === 'hq_admin') {
+      if (getScheduleActiveTopTab() === SCHEDULE_TAB_HQ_UPLOAD) {
         state.schedule.uploadWorkspaceMode = SCHEDULE_UPLOAD_MODE_HQ;
+      } else {
+        state.schedule.uploadWorkspaceMode = SCHEDULE_UPLOAD_MODE_BASE;
       }
       syncScheduleImportMonthInput({ force: true });
       await refreshScheduleImportSiteOptions({ force });
@@ -51666,13 +51692,10 @@ function bindUiEvents() {
       runActionSafely(loadSchedule(), '스케줄 월 조회 중 오류가 발생했습니다.');
       if (state.schedule.hqTab === SCHEDULE_TAB_REPORTS) {
         runActionSafely(
-          Promise.allSettled([
-            loadScheduleSupportRoundtripStatus(),
-            loadScheduleFinanceSubmissionStatus(),
-          ]).then(() => {
+          loadScheduleFinanceSubmissionStatus().then(() => {
             renderScheduleReportsTabs();
           }),
-          '제출 상태를 갱신하지 못했습니다.',
+          'Finance 제출 상태를 갱신하지 못했습니다.',
         );
       }
       syncScheduleImportMonthInput({ force: true });
