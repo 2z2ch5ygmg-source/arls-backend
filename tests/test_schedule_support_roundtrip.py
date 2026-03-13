@@ -541,6 +541,7 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
                 "site_name": "Apple_가로수길",
                 "sheet_name": "Apple_가로수길",
                 "download_ready": True,
+                "raw_workbook_available": True,
                 "source_state": "waiting_for_hq_merge",
                 "source_uploaded_at": None,
                 "source_revision": "rev-1",
@@ -554,11 +555,12 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
                 "site_name": "Apple_명동",
                 "sheet_name": "Apple_명동",
                 "download_ready": False,
-                "source_state": "source_missing",
+                "raw_workbook_available": False,
+                "source_state": "ready",
                 "source_uploaded_at": None,
                 "source_revision": None,
                 "latest_hq_revision": None,
-                "latest_status": "source_missing",
+                "latest_status": "source_raw_missing",
                 "hq_merge_stale": False,
             },
         ]), patch("app.routers.v1.schedules._load_support_roster_hq_resume_state", return_value={
@@ -576,8 +578,11 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertEqual(workspace.current_step, "step4_upload")
         self.assertEqual(workspace.selected_site_codes, ["R692"])
         self.assertFalse(workspace.can_select_tenant)
+        self.assertTrue(workspace.sites[0].selectable)
         self.assertEqual(workspace.sites[0].upload_state, "업로드 완료")
         self.assertEqual(workspace.sites[1].upload_state, "파일 없음")
+        self.assertFalse(workspace.sites[1].selectable)
+        self.assertEqual(workspace.sites[1].blocked_reason, "원본 업로드 workbook 없음")
 
     def test_clone_support_hq_sheet_to_workbook_copies_dimension_style_without_error(self):
         source_workbook = Workbook()

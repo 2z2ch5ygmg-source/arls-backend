@@ -10736,6 +10736,8 @@ function getScheduleSupportHqWorkspaceSites() {
     latestStatus: String(site?.latest_status || '').trim() || 'source_missing',
     hqMergeStale: Boolean(site?.hq_merge_stale),
     note: String(site?.note || '').trim(),
+    selectable: Boolean(site?.selectable),
+    blockedReason: String(site?.blocked_reason || '').trim(),
   })).filter((site) => site.siteCode);
 }
 
@@ -10771,6 +10773,7 @@ function getScheduleSupportHqSiteStatusClass(site = {}) {
 }
 
 function getScheduleSupportHqSiteMemo(site = {}) {
+  if (String(site?.blockedReason || '').trim()) return String(site.blockedReason).trim();
   if (!site?.downloadReady) return '현재 월 기준 source workbook이 없습니다.';
   if (site?.hqMergeStale) return '기존 HQ 작성본이 stale 상태입니다.';
   if (String(site?.note || '').trim()) return String(site.note).trim();
@@ -10785,7 +10788,7 @@ function renderScheduleSupportHqSiteSelectionTable() {
   if (!(tableBody instanceof HTMLElement)) return;
   const workspace = ensureScheduleSupportHqWorkspaceDefaults();
   const sites = getScheduleSupportHqWorkspaceSites();
-  const readySiteCodes = sites.filter((site) => site.downloadReady).map((site) => site.siteCode);
+  const readySiteCodes = sites.filter((site) => site.selectable).map((site) => site.siteCode);
   const selectedSiteCodes = getScheduleHqSelectedSiteCodes();
   const selectedSet = new Set(selectedSiteCodes);
   tableBody.innerHTML = '';
@@ -10799,13 +10802,13 @@ function renderScheduleSupportHqSiteSelectionTable() {
   } else {
     sites.forEach((site) => {
       const tr = document.createElement('tr');
-      if (!site.downloadReady) tr.classList.add('schedule-hq-site-row-disabled');
+      if (!site.selectable) tr.classList.add('schedule-hq-site-row-disabled');
 
       const selectCell = document.createElement('td');
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.checked = selectedSet.has(site.siteCode);
-      checkbox.disabled = !site.downloadReady;
+      checkbox.disabled = !site.selectable;
       checkbox.dataset.action = 'schedule-support-hq-toggle-site';
       checkbox.dataset.siteCode = site.siteCode;
       selectCell.appendChild(checkbox);
@@ -12424,7 +12427,7 @@ async function downloadScheduleWorkbookWithAuth(requestUrl, fallbackName) {
       const payload = text ? JSON.parse(text) : null;
       detail = String(payload?.detail || payload?.message || '').trim();
     } catch {
-      detail = '';
+      detail = String(text || '').trim();
     }
     throw new Error(detail || `요청 실패 (${response.status})`);
   }
@@ -22707,7 +22710,7 @@ async function ensureDevTenantCatalog({
   includeInactive = true,
   includeDeleted = true,
 } = {}) {
-  if (!can('tenantManage')) return [];
+  if (!(can('tenantManage') || canSelectScheduleWorkflowTenant())) return [];
   const scopeKey = `${includeInactive ? 1 : 0}:${includeDeleted ? 1 : 0}`;
   if (
     !force

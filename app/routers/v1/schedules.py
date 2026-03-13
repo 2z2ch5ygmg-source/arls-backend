@@ -5838,6 +5838,7 @@ def _list_support_roundtrip_workspace_sites(
                    s.site_code,
                    s.site_name,
                    src.id AS source_id,
+                   src.source_batch_id,
                    COALESCE(src.state, 'source_missing') AS source_state,
                    src.source_uploaded_at,
                    src.source_revision,
@@ -5860,7 +5861,24 @@ def _list_support_roundtrip_workspace_sites(
     for row in rows:
         exact_sheet_name = _build_sentrix_support_hq_sheet_name(str(row.get("site_name") or "").strip())
         source_available = bool(row.get("source_id"))
-        latest_status = "latest" if source_available and exact_sheet_name else ("sheet_name_invalid" if not exact_sheet_name else "source_missing")
+        source_batch_id = str(row.get("source_batch_id") or "").strip()
+        raw_workbook_available = bool(
+            source_available
+            and source_batch_id
+            and _has_schedule_import_batch_raw_workbook(
+                conn,
+                tenant_id=tenant_id,
+                batch_id=source_batch_id,
+            )
+        )
+        if source_available and exact_sheet_name and raw_workbook_available:
+            latest_status = "latest"
+        elif not exact_sheet_name:
+            latest_status = "sheet_name_invalid"
+        elif not source_available:
+            latest_status = "source_missing"
+        else:
+            latest_status = "source_raw_missing"
         results.append(
             {
                 "site_id": str(row.get("id") or "").strip(),
@@ -5868,10 +5886,12 @@ def _list_support_roundtrip_workspace_sites(
                 "site_name": str(row.get("site_name") or "").strip(),
                 "sheet_name": exact_sheet_name or str(row.get("site_name") or "").strip() or str(row.get("site_code") or "").strip(),
                 "sheet_name_valid": bool(exact_sheet_name),
-                "download_ready": bool(source_available and exact_sheet_name),
+                "download_ready": bool(source_available and exact_sheet_name and raw_workbook_available),
                 "source_state": str(row.get("source_state") or "source_missing").strip() or "source_missing",
                 "source_uploaded_at": row.get("source_uploaded_at") if isinstance(row.get("source_uploaded_at"), datetime) else None,
                 "source_revision": str(row.get("source_revision") or "").strip() or None,
+                "source_batch_id": source_batch_id or None,
+                "raw_workbook_available": raw_workbook_available,
                 "latest_hq_batch_id": str(row.get("latest_hq_batch_id") or "").strip() or None,
                 "latest_hq_revision": str(row.get("latest_hq_revision") or "").strip() or None,
                 "latest_status": latest_status,
@@ -5879,6 +5899,42 @@ def _list_support_roundtrip_workspace_sites(
             }
         )
     return results
+
+
+def _has_schedule_import_batch_raw_workbook(
+    conn,
+    *,
+    tenant_id: str,
+    batch_id: str,
+) -> bool:
+    ensure_schedule_import_raw_workbook_columns(conn)
+    if not all(
+        table_column_exists(conn, "schedule_import_batches", column_name)
+        for column_name in ("raw_workbook_bytes", "raw_workbook_sha256")
+    ):
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT raw_workbook_sha256,
+                   octet_length(raw_workbook_bytes) AS raw_size
+            FROM schedule_import_batches
+            WHERE id = %s
+              AND tenant_id = %s
+            LIMIT 1
+            """,
+            (batch_id, tenant_id),
+        )
+        row = cur.fetchone()
+    if not row:
+        return False
+    raw_size = row.get("raw_size")
+    if raw_size not in (None, ""):
+        try:
+            return int(raw_size) > 0
+        except (TypeError, ValueError):
+            pass
+    return bool(str(row.get("raw_workbook_sha256") or "").strip())
 
 
 def _clone_support_hq_sheet_to_workbook(source_sheet, *, target_workbook: Workbook, title: str) -> None:
@@ -6311,16 +6367,22 @@ def _build_support_roster_hq_workspace_site_payload(
     source_state = str(site.get("source_state") or "source_missing").strip() or "source_missing"
     stale = bool(site.get("hq_merge_stale"))
     download_ready = bool(site.get("download_ready"))
+    raw_workbook_available = bool(site.get("raw_workbook_available", True))
     blocked_reason = None
     upload_state = "파일 없음"
     note = "Supervisor 기준본이 없습니다."
     if download_ready:
         upload_state = "업로드 완료"
         note = "HQ 제출용 시트를 내려받을 수 있습니다."
+    elif source_state != "source_missing" and not raw_workbook_available:
+        upload_state = "파일 없음"
+        note = "원본 업로드 workbook을 찾지 못했습니다. 최신 월간 근무표를 다시 업로드하세요."
     if stale:
         upload_state = "재업로드 필요 / stale"
         note = "최신 Supervisor 기준본으로 다시 추출해야 합니다."
-    if not download_ready:
+    if not download_ready and source_state != "source_missing" and not raw_workbook_available:
+        blocked_reason = "원본 업로드 workbook 없음"
+    elif not download_ready:
         blocked_reason = "파일 없음"
     elif stale:
         blocked_reason = "재업로드 필요 / stale"
