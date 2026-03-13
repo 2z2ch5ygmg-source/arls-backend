@@ -1,0 +1,46 @@
+# ARLS HQ Tab Backend Manual Checklist
+
+- `GET /schedules/support-roundtrip/hq-workspace?month=YYYY-MM` returns a Tab B-only workspace payload.
+- HQ user sees fixed tenant context in workspace payload.
+- Developer/Master context returns `can_select_tenant=true`.
+- Workspace `sites[]` rows expose:
+  - `upload_state`
+  - `selectable`
+  - `selected`
+  - `last_uploaded_at`
+  - `stale`
+  - `stale_reason`
+  - `blocked_reason`
+- Multi-site selected download writes workbook metadata with `download_scope=selected`.
+- Step 4 inspect blocks:
+  - missing selected site sheets
+  - extra unselected site sheets
+  - unresolved sheets
+  - missing day reason for day scopes
+- Step 4 inspect still allows partial continue for stale-site exclusion.
+- Step 5 aggregated preview returns one row per `(site, date, shift_kind)`.
+- Aggregated preview row includes:
+  - `requested_count`
+  - `entered_count`
+  - `worker_names`
+  - `ticket_status`
+  - `ticket_status_label`
+  - `reason`
+  - `review_level`
+  - `blocking_errors`
+- Overfilled scope returns `approval_pending` plus warning, not blocking.
+- Apply payload to Sentrix includes:
+  - `day_reason`
+  - `night_purpose`
+  - `workbook_lineage`
+  - `artifact_lineage`
+- Apply result returns:
+  - real handoff status
+  - `completion_summary`
+  - `technical_details`
+- Resume payload restores:
+  - month
+  - selected sites
+  - current step
+  - last downloaded revision
+  - uploaded file name if available

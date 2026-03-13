@@ -20,6 +20,7 @@ from app.routers.v1.schedules import (
     _build_sentrix_hq_bridge_candidates,
     _build_arls_month_sheet,
     _build_employee_name_index,
+    _build_support_roster_hq_workspace_payload,
     _build_support_roster_hq_upload_inspect_result,
     _build_sentrix_hq_snapshot_signature,
     _build_sentrix_support_roster_apply_result_from_handoff,
@@ -240,7 +241,7 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
                 "source_batch_id": "batch-inspect",
                 "hq_merge_stale": False,
                 "scope_map": {
-                    ("2026-03-01", "day"): {"request_count": 2, "work_purpose": None, "raw_requested_count": "섭외 2인 요청"},
+                    ("2026-03-01", "day"): {"request_count": 2, "day_reason_text": "인력 공백 보강", "work_purpose": None, "raw_requested_count": "섭외 2인 요청"},
                     ("2026-03-03", "night"): {"request_count": 1, "work_purpose": "Project", "raw_requested_count": "섭외 1인 요청"},
                 },
             }
@@ -276,7 +277,7 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
             },
         )
 
-    def test_hq_roster_inspect_marks_overfilled_scope_as_blocking(self):
+    def test_hq_roster_inspect_marks_overfilled_scope_as_review(self):
         export_ctx = self._build_export_ctx()
         workbook = _build_support_only_workbook(
             export_ctx=export_ctx,
@@ -310,7 +311,7 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
                 "source_batch_id": "batch-overfill",
                 "hq_merge_stale": False,
                 "scope_map": {
-                    ("2026-03-01", "day"): {"request_count": 1, "work_purpose": None, "raw_requested_count": "섭외 1인 요청"},
+                    ("2026-03-01", "day"): {"request_count": 1, "day_reason_text": "인력 공백 보강", "work_purpose": None, "raw_requested_count": "섭외 1인 요청"},
                 },
             }
         }), patch("app.routers.v1.schedules._load_site_employees", return_value=[]), patch(
@@ -326,17 +327,17 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
                 user={"id": "user-1"},
             )
 
-        self.assertFalse(preview.can_apply)
-        self.assertEqual(preview.summary["blocking"], 1)
+        self.assertTrue(preview.can_apply)
+        self.assertEqual(preview.summary["blocking"], 0)
         issue = next(item for item in preview.issues if item.code == "REQUEST_COUNT_MISMATCH_OVER")
-        self.assertEqual(issue.severity, "blocking")
+        self.assertEqual(issue.severity, "warning")
 
         scope_row = next(
             item for item in preview.review_rows
             if item.row_kind == "scope_summary" and item.site_code == "R692" and item.work_date.isoformat() == "2026-03-01" and item.shift_kind == "day"
         )
-        self.assertEqual(scope_row.status, "over_capacity")
-        self.assertEqual(scope_row.reason, "유효 1명 / 요청 1명 / 인원초과 1명")
+        self.assertEqual(scope_row.status, "approval_pending")
+        self.assertEqual(scope_row.reason, "인력 공백 보강")
 
         worker_rows = [
             item for item in preview.review_rows
@@ -345,7 +346,7 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertEqual(len(worker_rows), 2)
         self.assertEqual(sum(1 for item in worker_rows if item.status == "parsed"), 1)
         overflow_row = next(item for item in worker_rows if item.status == "over_capacity")
-        self.assertEqual(overflow_row.reason, "유효 1명 / 요청 1명 / 인원초과 1명")
+        self.assertEqual(overflow_row.reason, "요청 인원을 초과한 입력입니다.")
         self.assertEqual(overflow_row.issue_code, "REQUEST_COUNT_MISMATCH_OVER")
 
     def test_resolve_support_roster_hq_sheet_site_falls_back_to_bc34_text(self):
@@ -443,7 +444,7 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
                 "source_batch_id": "batch-valid",
                 "hq_merge_stale": False,
                 "scope_map": {
-                    ("2026-03-01", "day"): {"request_count": 1, "work_purpose": None, "raw_requested_count": "섭외 1인 요청"},
+                    ("2026-03-01", "day"): {"request_count": 1, "day_reason_text": "인력 공백 보강", "work_purpose": None, "raw_requested_count": "섭외 1인 요청"},
                 },
             },
             "M001": {
@@ -473,6 +474,102 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertEqual({item.site_code for item in preview.processed_sites}, {"R692"})
         self.assertEqual({item.site_code for item in preview.excluded_sites}, {"M001"})
         self.assertEqual(preview.summary["scope_total"], 1)
+
+    def test_hq_roster_inspect_blocks_missing_day_reason(self):
+        export_ctx = self._build_export_ctx()
+        workbook = _build_support_only_workbook(
+            export_ctx=export_ctx,
+            target_tenant={"tenant_code": "srs_korea"},
+            site_row={"site_code": "R692", "site_name": "Apple_가로수길"},
+            month_key="2026-03",
+            source_revision="src-rev-day-reason",
+            active_assignments=[],
+            include_existing_assignments=False,
+        )
+        sheet = workbook["Apple_가로수길"]
+        date_columns, _ = _extract_arls_date_columns(sheet)
+        rows_meta = _locate_support_section_rows(sheet)
+        day_col = next(col for col, value in date_columns.items() if value.isoformat() == "2026-03-01")
+        sheet.cell(row=rows_meta["day_need_row"], column=day_col).value = "섭외 1인 요청"
+        sheet.cell(row=rows_meta["weekly_rows"][0], column=day_col).value = "BK 홍길동"
+
+        with patch("app.routers.v1.schedules._list_support_roundtrip_workspace_sites", return_value=[{
+            "site_id": "site-1",
+            "site_code": "R692",
+            "site_name": "Apple_가로수길",
+            "sheet_name": "Apple_가로수길",
+        }]), patch("app.routers.v1.schedules._build_support_roster_hq_source_map", return_value={
+            "R692": {"source_revision": "src-rev-day-reason", "source_batch_id": "batch-day-reason", "hq_merge_stale": False}
+        }), patch("app.routers.v1.schedules._build_support_roster_hq_artifact_scope_map", return_value={
+            "R692": {
+                "source_revision": "src-rev-day-reason",
+                "source_batch_id": "batch-day-reason",
+                "hq_merge_stale": False,
+                "scope_map": {
+                    ("2026-03-01", "day"): {"request_count": 1, "work_purpose": None, "raw_requested_count": "섭외 1인 요청"},
+                },
+            }
+        }), patch("app.routers.v1.schedules._load_site_employees", return_value=[]), patch(
+            "app.routers.v1.schedules._persist_sentrix_hq_roster_preview_batch",
+            return_value=uuid.uuid4(),
+        ):
+            preview = _build_support_roster_hq_upload_inspect_result(
+                None,
+                workbook=workbook,
+                target_tenant={"id": "tenant-1", "tenant_code": "srs_korea"},
+                selected_month="2026-03",
+                filename="hq-upload.xlsx",
+                user={"id": "user-1"},
+            )
+
+        self.assertFalse(preview.can_apply)
+        self.assertTrue(any(item.code == "DAY_SCOPE_REASON_MISSING" for item in preview.issues))
+
+    def test_workspace_payload_exposes_independent_hq_state(self):
+        with patch("app.routers.v1.schedules._list_support_roundtrip_workspace_sites", return_value=[
+            {
+                "site_id": "site-1",
+                "site_code": "R692",
+                "site_name": "Apple_가로수길",
+                "sheet_name": "Apple_가로수길",
+                "download_ready": True,
+                "source_state": "waiting_for_hq_merge",
+                "source_uploaded_at": None,
+                "source_revision": "rev-1",
+                "latest_hq_revision": None,
+                "latest_status": "latest",
+                "hq_merge_stale": False,
+            },
+            {
+                "site_id": "site-2",
+                "site_code": "R738",
+                "site_name": "Apple_명동",
+                "sheet_name": "Apple_명동",
+                "download_ready": False,
+                "source_state": "source_missing",
+                "source_uploaded_at": None,
+                "source_revision": None,
+                "latest_hq_revision": None,
+                "latest_status": "source_missing",
+                "hq_merge_stale": False,
+            },
+        ]), patch("app.routers.v1.schedules._load_support_roster_hq_resume_state", return_value={
+            "available": True,
+            "current_step": "step4_upload",
+            "selected_site_codes": ["R692"],
+        }):
+            workspace = _build_support_roster_hq_workspace_payload(
+                None,
+                target_tenant={"id": "tenant-1", "tenant_code": "srs_korea", "tenant_name": "SRS Korea"},
+                user={"role": "HQ_ADMIN"},
+                month_key="2026-03",
+            )
+
+        self.assertEqual(workspace.current_step, "step4_upload")
+        self.assertEqual(workspace.selected_site_codes, ["R692"])
+        self.assertFalse(workspace.can_select_tenant)
+        self.assertEqual(workspace.sites[0].upload_state, "업로드 완료")
+        self.assertEqual(workspace.sites[1].upload_state, "파일 없음")
 
     def test_clone_support_hq_sheet_to_workbook_copies_dimension_style_without_error(self):
         source_workbook = Workbook()

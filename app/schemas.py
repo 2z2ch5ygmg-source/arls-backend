@@ -1352,6 +1352,14 @@ class SupportRosterHqWorkspaceSiteOut(BaseModel):
     sheet_name_valid: bool = True
     download_ready: bool = False
     source_state: str = "source_missing"
+    upload_state: str = "파일 없음"
+    selectable: bool = False
+    selected: bool = False
+    last_uploaded_at: Optional[datetime] = None
+    note: Optional[str] = None
+    stale: bool = False
+    stale_reason: Optional[str] = None
+    blocked_reason: Optional[str] = None
     source_revision: Optional[str] = None
     latest_hq_revision: Optional[str] = None
     latest_status: str = "source_missing"
@@ -1361,12 +1369,27 @@ class SupportRosterHqWorkspaceSiteOut(BaseModel):
 class SupportRosterHqWorkspaceOut(BaseModel):
     tenant_code: str
     month: str
+    tenant_name: Optional[str] = None
+    actor_role: Optional[str] = None
     default_scope: str = "all"
     workbook_family: str
     template_version: str
     latest_status: str = "latest"
+    current_step: str = "step3_extract"
     total_site_count: int = 0
     ready_site_count: int = 0
+    available_site_codes: list[str] = Field(default_factory=list)
+    selected_site_codes: list[str] = Field(default_factory=list)
+    can_select_tenant: bool = False
+    can_select_site_set: bool = True
+    selection_capabilities: dict[str, bool] = Field(default_factory=dict)
+    tenant_context: dict[str, Any] = Field(default_factory=dict)
+    ui_summary: dict[str, Any] = Field(default_factory=dict)
+    technical_details: dict[str, Any] = Field(default_factory=dict)
+    resume_state: dict[str, Any] = Field(default_factory=dict)
+    success_banner_summary: dict[str, Any] = Field(default_factory=dict)
+    latest_artifact_id: Optional[str] = None
+    generated_at: Optional[datetime] = None
     sites: list[SupportRosterHqWorkspaceSiteOut] = Field(default_factory=list)
 
 
@@ -1382,8 +1405,11 @@ class SupportRosterHqUploadMetaOut(BaseModel):
     site_count: int = 0
     site_names: list[str] = Field(default_factory=list)
     site_codes: list[str] = Field(default_factory=list)
+    selected_site_codes: list[str] = Field(default_factory=list)
     selected_site_code: Optional[str] = None
     selected_site_name: Optional[str] = None
+    ui_summary: dict[str, Any] = Field(default_factory=dict)
+    technical_details: dict[str, Any] = Field(default_factory=dict)
 
 
 class SupportRosterHqReviewIssueOut(BaseModel):
@@ -1432,7 +1458,10 @@ class SupportRosterHqAggregatedReviewRowOut(BaseModel):
     entered_count: int = 0
     worker_names: str = ""
     ticket_status: Optional[str] = None
+    ticket_status_label: Optional[str] = None
     reason: Optional[str] = None
+    review_level: str = "review"
+    blocking_errors: list[str] = Field(default_factory=list)
     blocking_issue_count: int = 0
     warning_issue_count: int = 0
     excluded: bool = False
@@ -1472,6 +1501,10 @@ class SupportRosterHqScopeSummaryOut(BaseModel):
     external_count_raw: Optional[str] = None
     purpose_text: Optional[str] = None
     scope_reason: Optional[str] = None
+    day_reason_text: Optional[str] = None
+    review_level: Optional[str] = None
+    blocking_errors: list[str] = Field(default_factory=list)
+    warning_messages: list[str] = Field(default_factory=list)
     matched_ticket: bool = False
     matched_artifact_scope: bool = False
     artifact_source_batch_id: Optional[str] = None
@@ -1499,12 +1532,20 @@ class SupportRosterHqUploadInspectOut(BaseModel):
     issue_count: int = 0
     summary: dict[str, int] = Field(default_factory=dict)
     issues: list[SupportRosterHqReviewIssueOut] = Field(default_factory=list)
+    validated_sheets: list[SupportRosterHqSiteProcessOut] = Field(default_factory=list)
+    missing_selected_sites: list[SupportRosterHqSiteProcessOut] = Field(default_factory=list)
+    extra_unselected_sites: list[SupportRosterHqSiteProcessOut] = Field(default_factory=list)
+    unresolved_sheets: list[SupportRosterHqSiteProcessOut] = Field(default_factory=list)
+    stale_sites: list[SupportRosterHqSiteProcessOut] = Field(default_factory=list)
+    blocking_errors: list[SupportRosterHqReviewIssueOut] = Field(default_factory=list)
     processed_sites: list[SupportRosterHqSiteProcessOut] = Field(default_factory=list)
     excluded_sites: list[SupportRosterHqSiteProcessOut] = Field(default_factory=list)
     scope_summaries: list[SupportRosterHqScopeSummaryOut] = Field(default_factory=list)
     review_rows: list[SupportRosterHqReviewRowOut] = Field(default_factory=list)
     aggregated_review_rows: list[SupportRosterHqAggregatedReviewRowOut] = Field(default_factory=list)
     next_step_message: Optional[str] = None
+    ui_summary: dict[str, Any] = Field(default_factory=dict)
+    technical_details: dict[str, Any] = Field(default_factory=dict)
 
 
 class SupportRosterHqApplyScopeOut(BaseModel):
@@ -1576,6 +1617,8 @@ class SupportRosterHqApplyOut(BaseModel):
     applied_scope_count: int = 0
     failed_scope_count: int = 0
     audit_timestamp: datetime
+    completion_summary: dict[str, Any] = Field(default_factory=dict)
+    technical_details: dict[str, Any] = Field(default_factory=dict)
     scope_results: list[SupportRosterHqApplyScopeOut] = Field(default_factory=list)
 
 

@@ -250,6 +250,17 @@ SENTRIX_SUPPORT_MATERIALIZATION_MODE_OWNED = "owned_schedule"
 SENTRIX_SUPPORT_MATERIALIZATION_MODE_LINKED = "linked_existing_schedule"
 SENTRIX_HQ_ROSTER_MULTI_PERSON_PATTERN = re.compile(r"[\r\n,;/|&]|(?:\s+\+\s+)")
 SENTRIX_HQ_ROSTER_SELF_STAFF_PATTERN = re.compile(r"^자체\s+(\S+)$")
+SUPPORT_DAY_REASON_DETAIL_KEYS = (
+    "day_reason_text",
+    "day_reason",
+    "request_reason_text",
+    "request_reason",
+    "reason_text",
+    "reason_label",
+    "reason",
+    "support_reason_text",
+    "support_reason",
+)
 ARLS_SUPPORTED_IMPORT_SOURCE_VERSIONS = {
     "schedule_export.phase2.roundtrip",
 }
@@ -2150,10 +2161,22 @@ def _build_sentrix_support_roster_handoff_payload(
                 "target_status": str(spec.get("target_status") or "").strip() or None,
                 "expected_ticket_status": str(spec.get("target_status") or "").strip() or None,
                 "purpose_text": str(scope_payload.get("purpose_text") or "").strip() or None,
+                "day_reason": str(scope_payload.get("day_reason_text") or "").strip() or None,
+                "night_purpose": str(scope_payload.get("purpose_text") or "").strip() or None,
                 "artifact_source_batch_id": str(scope_payload.get("artifact_source_batch_id") or "").strip() or None,
                 "artifact_source_revision": str(scope_payload.get("artifact_source_revision") or "").strip() or None,
                 "sheet_resolution_method": str(scope_payload.get("sheet_resolution_method") or "").strip() or None,
                 "scope_reason": str(scope_payload.get("scope_reason") or "").strip() or None,
+                "workbook_lineage": {
+                    "source_upload_batch_id": str(batch_id),
+                    "revision": revision or None,
+                    "download_scope": str(batch.get("download_scope") or upload_meta_json.get("download_scope") or "all").strip().lower() or "all",
+                },
+                "artifact_lineage": {
+                    "artifact_id": artifact_id,
+                    "artifact_source_batch_id": str(scope_payload.get("artifact_source_batch_id") or "").strip() or None,
+                    "artifact_source_revision": str(scope_payload.get("artifact_source_revision") or "").strip() or None,
+                },
                 "worker_entries": _build_sentrix_support_roster_handoff_worker_entries(spec.get("worker_payloads") or []),
             }
         )
@@ -2183,6 +2206,11 @@ def _build_sentrix_support_roster_handoff_payload(
             }
         ),
         "scopes": scopes,
+        "technical_details": {
+            "artifact_id": artifact_id,
+            "revision": revision or None,
+            "selected_site_code": selected_site_code or None,
+        },
     }
 
 
@@ -2302,6 +2330,24 @@ def _build_sentrix_support_roster_handoff_failure_result(
         applied_scope_count=0,
         failed_scope_count=failed_scope_count,
         audit_timestamp=datetime.now(timezone.utc),
+        completion_summary={
+            "processed_site_count": len(
+                {
+                    str(spec.get("site_code") or "").strip()
+                    for spec in scope_apply_specs
+                    if str(spec.get("site_code") or "").strip()
+                }
+            ),
+            "approved_count": 0,
+            "pending_count": 0,
+            "excluded_stale_site_count": len(list(stale_site_codes or [])),
+        },
+        technical_details={
+            "artifact_id": artifact_id,
+            "retry_token": str(batch_id),
+            "handoff_status": "failed",
+            "source_upload_batch_id": str(batch_id),
+        },
         scope_results=scope_results,
     )
 
@@ -2424,6 +2470,21 @@ def _build_sentrix_support_roster_apply_result_from_handoff(
         applied_scope_count=applied_scope_count,
         failed_scope_count=failed_scope_count,
         audit_timestamp=datetime.now(timezone.utc),
+        completion_summary={
+            "processed_site_count": len(list(handoff_response.get("processed_site_codes") or [])),
+            "approved_count": max(int(handoff_response.get("tickets_auto_approved") or 0), 0),
+            "pending_count": max(int(handoff_response.get("tickets_pending") or 0), 0),
+            "excluded_stale_site_count": len(list(stale_site_codes or [])),
+        },
+        technical_details={
+            "artifact_id": str(handoff_response.get("artifact_id") or handoff_payload.get("artifact_id") or "").strip() or None,
+            "source_upload_batch_id": str(batch_id),
+            "revision": str(handoff_payload.get("revision") or "").strip() or None,
+            "handoff_response": {
+                "handoff_status": str(handoff_response.get("handoff_status") or "").strip() or None,
+                "handoff_message": str(handoff_response.get("handoff_message") or handoff_response.get("message") or "").strip() or None,
+            },
+        },
         scope_results=scope_results,
     )
 
@@ -3641,11 +3702,13 @@ def _build_support_request_rows_from_import_payloads(
             continue
         shift_kind = "night" if str(payload.get("shift_type") or "day").strip().lower() == "night" else "day"
         detail_json = dict(payload.get("detail_json") or {})
+        day_reason_text = _extract_support_request_day_reason_text(payload, detail_json)
         scope_key = (work_date.isoformat(), shift_kind)
         scoped_rows[scope_key] = {
             "work_date": work_date,
             "shift_kind": shift_kind,
             "request_count": normalized_request_count,
+            "day_reason_text": day_reason_text,
             "work_purpose": str(
                 payload.get("purpose_text")
                 or detail_json.get("purpose_text")
@@ -3663,6 +3726,7 @@ def _build_support_request_rows_from_import_payloads(
                 "source_block": "sentrix_support_ticket",
                 "source_sheet": str(payload.get("source_sheet") or ARLS_SHEET_NAME).strip() or ARLS_SHEET_NAME,
                 "required_row_no": int(detail_json.get("required_row_no") or payload.get("row_no") or 0) or None,
+                "day_reason_text": day_reason_text,
             },
         }
     return [
@@ -5704,6 +5768,22 @@ def _safe_load_metadata_json_dict(value: object) -> dict[str, str]:
     return result
 
 
+def _extract_support_request_day_reason_text(
+    payload: dict[str, Any] | None = None,
+    detail_json: dict[str, Any] | None = None,
+) -> str | None:
+    merged: dict[str, Any] = {}
+    if isinstance(detail_json, dict):
+        merged.update(detail_json)
+    if isinstance(payload, dict):
+        merged.update(payload)
+    for key in SUPPORT_DAY_REASON_DETAIL_KEYS:
+        value = str(merged.get(key) or "").strip()
+        if value:
+            return value
+    return None
+
+
 def _list_support_roundtrip_workspace_sites(
     conn,
     *,
@@ -5718,7 +5798,9 @@ def _list_support_roundtrip_workspace_sites(
                    s.site_name,
                    src.id AS source_id,
                    COALESCE(src.state, 'source_missing') AS source_state,
+                   src.source_uploaded_at,
                    src.source_revision,
+                   src.latest_hq_batch_id,
                    src.latest_hq_revision,
                    COALESCE(src.hq_merge_stale, FALSE) AS hq_merge_stale
             FROM sites s
@@ -5747,9 +5829,12 @@ def _list_support_roundtrip_workspace_sites(
                 "sheet_name_valid": bool(exact_sheet_name),
                 "download_ready": bool(source_available and exact_sheet_name),
                 "source_state": str(row.get("source_state") or "source_missing").strip() or "source_missing",
+                "source_uploaded_at": row.get("source_uploaded_at") if isinstance(row.get("source_uploaded_at"), datetime) else None,
                 "source_revision": str(row.get("source_revision") or "").strip() or None,
+                "latest_hq_batch_id": str(row.get("latest_hq_batch_id") or "").strip() or None,
                 "latest_hq_revision": str(row.get("latest_hq_revision") or "").strip() or None,
                 "latest_status": latest_status,
+                "hq_merge_stale": bool(row.get("hq_merge_stale")),
             }
         )
     return results
@@ -5873,11 +5958,14 @@ def _sentrix_hq_issue_template(code: str) -> tuple[str, str, str, str | None]:
         "WORKBOOK_SCOPE_MISMATCH": ("blocking", "다운로드 범위 불일치", "업로드 파일의 다운로드 범위가 현재 검토 컨텍스트와 맞지 않습니다.", "전체/지점별 범위를 다시 확인하세요."),
         "OUTDATED_WORKBOOK": ("blocking", "구버전 workbook", "현재 Supervisor 기준본보다 오래된 workbook 입니다.", "최신 전체/지점별 다운로드본을 다시 사용하세요."),
         "SITE_SHEET_NOT_FOUND": ("blocking", "시트 지점 식별 실패", "시트명으로 지점을 정확히 찾지 못했습니다.", "시트명을 수정하지 말고 최신 workbook을 다시 사용하세요."),
-        "SITE_NOT_SELECTED": ("warning", "선택되지 않은 지점 시트", "현재 HQ 작업 범위에 포함되지 않은 지점 시트입니다.", "선택한 지점만 포함된 workbook인지 확인하세요."),
+        "WORKBOOK_SELECTED_SITE_MISSING": ("blocking", "선택 지점 시트 누락", "선택한 지점 시트가 workbook에 없습니다.", "누락된 지점을 포함해 다시 저장하거나 지점 선택을 다시 확인하세요."),
+        "WORKBOOK_EXTRA_SITE_SHEET": ("blocking", "선택 외 지점 시트 포함", "선택하지 않은 지점 시트가 workbook에 포함되어 있습니다.", "선택한 지점만 남기고 다시 업로드하세요."),
+        "SITE_NOT_SELECTED": ("blocking", "선택되지 않은 지점 시트", "현재 HQ 작업 범위에 포함되지 않은 지점 시트입니다.", "선택한 지점만 포함된 workbook인지 확인하세요."),
         "BLOCK_SECTION_NOT_FOUND": ("blocking", "지원 블록 누락", "주간 또는 야간 지원 블록을 찾지 못했습니다.", "다운로드한 workbook 구조를 변경하지 않았는지 확인하세요."),
         "DATE_SCOPE_NOT_RESOLVED": ("blocking", "날짜 범위 해석 실패", "시트의 날짜 헤더 또는 월 범위를 해석하지 못했습니다.", "월 헤더와 날짜 컬럼을 수정하지 않았는지 확인하세요."),
         "TICKET_SCOPE_NOT_FOUND": ("blocking", "지원요청 ticket 없음", "해당 지점/날짜/주야간 범위의 기존 Sentrix ticket을 찾지 못했습니다.", "ARLS 원본 업로드로 생성된 ticket scope를 먼저 확인하세요."),
         "ARTIFACT_SCOPE_NOT_FOUND": ("blocking", "지원 수요 artifact 없음", "해당 지점/날짜/주야간 범위의 지원 수요 artifact를 찾지 못했습니다.", "원본 월간 업로드를 다시 반영하고 HQ 제출용 추출을 새로 생성하세요."),
+        "DAY_SCOPE_REASON_MISSING": ("blocking", "주간 지원 사유 누락", "주간 지원 사유를 현재 artifact에서 찾지 못했습니다.", "주간 지원 요청 사유를 포함한 최신 기준본을 다시 생성하세요."),
         "MULTI_PERSON_CELL": ("blocking", "한 셀 다중 인원", "한 셀에는 1명만 입력할 수 있습니다.", "여러 명을 각각 다른 근무자 셀에 입력하세요."),
         "SELF_STAFF_FORMAT_INVALID": ("blocking", "자체 인원 표기 오류", "자체 인원은 정확히 '자체 {이름}' 형식만 허용됩니다.", "예: '자체 조태환' 형식으로 수정하세요."),
         "SELF_STAFF_EMPLOYEE_NOT_FOUND": ("blocking", "자체 인원 매칭 실패", "자체 인원을 해당 지점 active employee master에서 찾지 못했습니다.", "이름 또는 지점 소속 정보를 다시 확인하세요."),
@@ -5885,10 +5973,46 @@ def _sentrix_hq_issue_template(code: str) -> tuple[str, str, str, str | None]:
         "WORKER_CELL_INVALID": ("blocking", "근무자 셀 형식 오류", "근무자 셀 값을 해석할 수 없습니다.", "허용된 지원근무자 표기 형식으로 수정하세요."),
         "REPLACE_SCOPE_CONFLICT": ("blocking", "replace 범위 충돌", "동일 지점/날짜/주야간/슬롯 범위가 workbook 안에서 중복되었습니다.", "중복된 슬롯 입력을 제거하세요."),
         "REQUEST_COUNT_MISMATCH_UNDER": ("warning", "필요 인원 미달", "유효 입력 인원이 기존 ticket 요청 수보다 적습니다.", "현재 업로드를 적용하면 ticket 상태가 승인대기로 계산됩니다."),
-        "REQUEST_COUNT_MISMATCH_OVER": ("blocking", "필요 인원 초과", "유효 입력 인원이 기존 ticket 요청 수보다 많습니다.", "현재 업로드를 적용할 수 없습니다. 초과 입력 인원을 줄인 뒤 다시 검토하세요."),
+        "REQUEST_COUNT_MISMATCH_OVER": ("warning", "필요 인원 초과", "유효 입력 인원이 기존 ticket 요청 수보다 많습니다.", "현재 업로드를 적용하면 ticket 상태가 승인대기로 계산됩니다."),
         "PURPOSE_FIELD_PARSE_WARNING": ("warning", "작업 목적 확인", "야간 작업 목적 셀을 참고 정보로만 유지합니다.", "기존 ticket 작업 목적은 유지되고 workbook 값은 정보성으로만 남습니다."),
     }
     return catalog.get(code, ("warning", code, code, None))
+
+
+def _build_support_roster_hq_review_level(
+    *,
+    blocking_issue_count: int = 0,
+    warning_issue_count: int = 0,
+    excluded: bool = False,
+) -> str:
+    if excluded:
+        return "excluded"
+    if max(int(blocking_issue_count or 0), 0) > 0:
+        return "error"
+    if max(int(warning_issue_count or 0), 0) > 0:
+        return "review"
+    return "applicable"
+
+
+def _get_support_roster_hq_ticket_status_label(value: object) -> str | None:
+    normalized = _normalize_sentrix_hq_roster_final_state(value)
+    if normalized == SENTRIX_HQ_ROSTER_FINAL_APPROVED_STATE:
+        return "승인"
+    if normalized == SENTRIX_HQ_ROSTER_PENDING_STATUS:
+        return "승인대기"
+    if normalized == "cancelled":
+        return "취소"
+    if normalized == "rejected":
+        return "반려"
+    if normalized == "deleted":
+        return "삭제"
+    if normalized == "unavailable":
+        return "지원불가"
+    if normalized == "retracted":
+        return "회수"
+    if str(value or "").strip().lower() == "upload_blocked":
+        return "차단"
+    return str(value or "").strip() or None
 
 
 def _build_sentrix_hq_roster_issue(
@@ -6022,11 +6146,18 @@ def _build_support_roster_hq_aggregated_review_rows(
                 entered_count=max(int(summary.valid_filled_count or 0), 0),
                 worker_names=worker_names,
                 ticket_status=display_status,
+                ticket_status_label=_get_support_roster_hq_ticket_status_label(display_status or summary.target_status),
                 reason=str(
                     summary.purpose_text
                     if str(summary.shift_kind or "").strip().lower() == "night"
                     else summary.scope_reason
                 ).strip() or None,
+                review_level=str(summary.review_level or "").strip() or _build_support_roster_hq_review_level(
+                    blocking_issue_count=summary.blocking_issue_count,
+                    warning_issue_count=summary.warning_issue_count,
+                    excluded=bool(summary.excluded),
+                ),
+                blocking_errors=list(summary.blocking_errors or []),
                 blocking_issue_count=max(int(summary.blocking_issue_count or 0), 0),
                 warning_issue_count=max(int(summary.warning_issue_count or 0), 0),
                 excluded=bool(summary.excluded),
@@ -6036,6 +6167,131 @@ def _build_support_roster_hq_aggregated_review_rows(
             )
         )
     return rows
+
+
+def _load_support_roster_hq_resume_state(
+    conn,
+    *,
+    tenant_id: str,
+    month_key: str,
+) -> dict[str, Any]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, status, selected_site_code, upload_meta_json, summary_json, created_at, completed_at
+            FROM sentrix_support_hq_roster_batches
+            WHERE tenant_id = %s
+              AND month_key = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (tenant_id, month_key),
+        )
+        row = cur.fetchone()
+    if not row:
+        return {}
+    upload_meta_json = dict(row.get("upload_meta_json") or {})
+    summary_json = dict(row.get("summary_json") or {})
+    selected_site_codes = [
+        str(code or "").strip().upper()
+        for code in (
+            upload_meta_json.get("selected_site_codes")
+            or upload_meta_json.get("site_codes")
+            or []
+        )
+        if str(code or "").strip()
+    ]
+    current_step = "step5_preview"
+    status = str(row.get("status") or "").strip().lower()
+    if status in {"applied", "blocked"}:
+        current_step = "step3_extract"
+    elif status in {"previewed"}:
+        current_step = "step5_preview"
+    return {
+        "available": True,
+        "batch_id": str(row.get("id") or "").strip() or None,
+        "month": month_key,
+        "status": status or None,
+        "current_step": current_step,
+        "selected_site_codes": selected_site_codes,
+        "selected_site_code": str(row.get("selected_site_code") or "").strip().upper() or None,
+        "last_downloaded_revision": str(upload_meta_json.get("revision") or "").strip() or None,
+        "uploaded_file_name": str(upload_meta_json.get("file_name") or "").strip() or None,
+        "latest_status": str(upload_meta_json.get("latest_status") or "").strip() or None,
+        "last_batch_created_at": row.get("created_at") if isinstance(row.get("created_at"), datetime) else None,
+        "last_batch_completed_at": row.get("completed_at") if isinstance(row.get("completed_at"), datetime) else None,
+        "summary_json": summary_json,
+        "last_apply_result": dict(summary_json.get("apply_result") or {}),
+    }
+
+
+def _build_support_roster_hq_completion_summary(
+    summary_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(summary_payload or {})
+    apply_result = dict(payload.get("apply_result") or {})
+    if apply_result:
+        return {
+            "processed_site_count": len(list(apply_result.get("processed_site_codes") or [])),
+            "approved_count": max(int(apply_result.get("tickets_auto_approved") or 0), 0),
+            "pending_count": max(int(apply_result.get("tickets_pending") or 0), 0),
+            "excluded_stale_site_count": len(list(apply_result.get("stale_site_codes") or [])),
+            "handoff_status": str(apply_result.get("handoff_status") or "").strip() or None,
+            "handoff_message": str(apply_result.get("handoff_message") or "").strip() or None,
+        }
+    summary = dict(payload.get("summary") or {})
+    return {
+        "processed_site_count": max(int(summary.get("processed_sites") or 0), 0),
+        "approved_count": max(int(summary.get("auto_approved") or 0), 0),
+        "pending_count": max(int(summary.get("approval_pending") or 0), 0),
+        "excluded_stale_site_count": max(int(summary.get("stale_sites") or 0), 0),
+    }
+
+
+def _build_support_roster_hq_workspace_site_payload(
+    site: dict[str, Any],
+    *,
+    selected_site_codes: set[str],
+) -> SupportRosterHqWorkspaceSiteOut:
+    site_code = str(site.get("site_code") or "").strip().upper()
+    site_name = str(site.get("site_name") or "").strip()
+    source_state = str(site.get("source_state") or "source_missing").strip() or "source_missing"
+    stale = bool(site.get("hq_merge_stale"))
+    download_ready = bool(site.get("download_ready"))
+    blocked_reason = None
+    upload_state = "파일 없음"
+    note = "Supervisor 기준본이 없습니다."
+    if download_ready:
+        upload_state = "업로드 완료"
+        note = "HQ 제출용 시트를 내려받을 수 있습니다."
+    if stale:
+        upload_state = "재업로드 필요 / stale"
+        note = "최신 Supervisor 기준본으로 다시 추출해야 합니다."
+    if not download_ready:
+        blocked_reason = "파일 없음"
+    elif stale:
+        blocked_reason = "재업로드 필요 / stale"
+    selectable = download_ready and not stale
+    return SupportRosterHqWorkspaceSiteOut(
+        site_code=site_code,
+        site_name=site_name,
+        sheet_name=str(site.get("sheet_name") or "").strip() or site_name or site_code,
+        sheet_name_valid=bool(site.get("sheet_name_valid", True)),
+        download_ready=download_ready,
+        source_state=source_state,
+        upload_state=upload_state,
+        selectable=selectable,
+        selected=site_code in selected_site_codes if selectable else False,
+        last_uploaded_at=site.get("source_uploaded_at") if isinstance(site.get("source_uploaded_at"), datetime) else None,
+        note=note,
+        stale=stale,
+        stale_reason="최신 source revision과 다릅니다." if stale else None,
+        blocked_reason=None if selectable else blocked_reason,
+        source_revision=str(site.get("source_revision") or "").strip() or None,
+        latest_hq_revision=str(site.get("latest_hq_revision") or "").strip() or None,
+        latest_status=str(site.get("latest_status") or "source_missing").strip() or "source_missing",
+        hq_merge_stale=stale,
+    )
 
 
 def _load_sentrix_support_ticket_scope_map(
@@ -6247,35 +6503,93 @@ def _parse_sentrix_hq_worker_cell(
 def _build_support_roster_hq_workspace_payload(
     conn,
     *,
-    tenant_id: str,
-    tenant_code: str,
+    target_tenant: dict[str, Any],
+    user: dict[str, Any] | None = None,
     month_key: str,
+    selected_site_codes: list[str] | None = None,
 ) -> SupportRosterHqWorkspaceOut:
+    tenant_id = str(target_tenant.get("id") or "").strip()
+    tenant_code = str(target_tenant.get("tenant_code") or "").strip()
     sites = _list_support_roundtrip_workspace_sites(conn, tenant_id=tenant_id, month_key=month_key)
+    resume_state = _load_support_roster_hq_resume_state(conn, tenant_id=tenant_id, month_key=month_key)
+    normalized_selected_site_codes = {
+        str(code or "").strip().upper()
+        for code in (
+            list(selected_site_codes or [])
+            or list(resume_state.get("selected_site_codes") or [])
+        )
+        if str(code or "").strip()
+    }
+    actor_role = _support_roundtrip_normalize_role(user)
+    can_select_tenant = bool(is_super_admin(user) or actor_role == "developer")
+    site_rows = [
+        _build_support_roster_hq_workspace_site_payload(site, selected_site_codes=normalized_selected_site_codes)
+        for site in sites
+    ]
+    latest_artifact_id = None
+    if tenant_code:
+        latest_artifact_id = _build_sentrix_hq_artifact_id(
+            tenant_code=tenant_code,
+            month_key=month_key,
+            site_code="ALL",
+            revision="latest",
+        )
+    success_banner_summary = _build_support_roster_hq_completion_summary(
+        {"apply_result": dict(resume_state.get("last_apply_result") or {})}
+        if resume_state.get("last_apply_result")
+        else dict(resume_state.get("summary_json") or {})
+    )
+    generated_at = datetime.now(timezone.utc)
+    latest_status = "latest"
+    if any(site.stale for site in site_rows):
+        latest_status = "partial_stale" if any(site.selectable for site in site_rows) else "outdated"
+    elif not any(site.download_ready for site in site_rows):
+        latest_status = "source_missing"
     return SupportRosterHqWorkspaceOut(
         tenant_code=tenant_code,
+        tenant_name=str(target_tenant.get("tenant_name") or target_tenant.get("name") or "").strip() or None,
+        actor_role=actor_role or None,
         month=month_key,
         default_scope="all",
         workbook_family=ARLS_SUPPORT_FORM_VERSION,
         template_version=ARLS_EXPORT_TEMPLATE_VERSION,
-        latest_status="latest",
-        total_site_count=len(sites),
-        ready_site_count=sum(1 for site in sites if bool(site.get("download_ready"))),
-        sites=[
-            SupportRosterHqWorkspaceSiteOut(
-                site_code=str(site.get("site_code") or "").strip(),
-                site_name=str(site.get("site_name") or "").strip(),
-                sheet_name=str(site.get("sheet_name") or "").strip(),
-                sheet_name_valid=bool(site.get("sheet_name_valid", True)),
-                download_ready=bool(site.get("download_ready")),
-                source_state=str(site.get("source_state") or "source_missing").strip() or "source_missing",
-                source_revision=str(site.get("source_revision") or "").strip() or None,
-                latest_hq_revision=str(site.get("latest_hq_revision") or "").strip() or None,
-                latest_status=str(site.get("latest_status") or "source_missing").strip() or "source_missing",
-                hq_merge_stale=bool(site.get("hq_merge_stale")),
-            )
-            for site in sites
-        ],
+        latest_status=latest_status,
+        current_step=str(resume_state.get("current_step") or "step3_extract").strip() or "step3_extract",
+        total_site_count=len(site_rows),
+        ready_site_count=sum(1 for site in site_rows if bool(site.selectable)),
+        available_site_codes=[site.site_code for site in site_rows],
+        selected_site_codes=[site.site_code for site in site_rows if site.selected],
+        can_select_tenant=can_select_tenant,
+        can_select_site_set=True,
+        selection_capabilities={
+            "can_select_tenant": can_select_tenant,
+            "can_select_site_set": True,
+            "can_resume": bool(resume_state),
+            "can_download_selected_sites": any(site.selectable for site in site_rows),
+        },
+        tenant_context={
+            "tenant_code": tenant_code,
+            "tenant_name": str(target_tenant.get("tenant_name") or target_tenant.get("name") or "").strip() or None,
+            "tenant_fixed": not can_select_tenant,
+        },
+        ui_summary={
+            "processed_site_count": sum(1 for site in site_rows if site.download_ready),
+            "ready_site_count": sum(1 for site in site_rows if site.selectable),
+            "file_missing_count": sum(1 for site in site_rows if site.upload_state == "파일 없음"),
+            "stale_site_count": sum(1 for site in site_rows if site.stale),
+            "selected_site_count": sum(1 for site in site_rows if site.selected),
+        },
+        technical_details={
+            "workbook_family": ARLS_SUPPORT_FORM_VERSION,
+            "template_version": ARLS_EXPORT_TEMPLATE_VERSION,
+            "latest_artifact_id": latest_artifact_id,
+            "generated_at": generated_at,
+        },
+        resume_state=resume_state,
+        success_banner_summary=success_banner_summary,
+        latest_artifact_id=latest_artifact_id,
+        generated_at=generated_at,
+        sites=site_rows,
     )
 
 
@@ -6491,6 +6805,7 @@ def _build_support_roster_hq_artifact_scope_map(
                     shift_kind = "night" if str(support_row.get("shift_kind") or "").strip().lower() == "night" else "day"
                     scope_rows[(work_date.isoformat(), shift_kind)] = {
                         "request_count": max(int(support_row.get("request_count") or 0), 0),
+                        "day_reason_text": str(support_row.get("day_reason_text") or "").strip() or None,
                         "work_purpose": str(support_row.get("work_purpose") or "").strip() or None,
                         "raw_requested_count": str(
                             dict(support_row.get("detail_json") or {}).get("required_count_raw") or ""
@@ -6602,7 +6917,11 @@ def _build_support_roster_hq_download_workbook(
         workbook,
         tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
         month_key=month_key,
-        download_scope="site" if str(scope or "").strip().lower() == "site" else "all",
+        download_scope=(
+            "selected"
+            if len(selected_sites) > 1 and list(selected_site_codes or [])
+            else ("site" if str(scope or "").strip().lower() == "site" else "all")
+        ),
         template_version=template_version,
         site_entries=written_sites,
         selected_site_code=str(selected_site_code or "").strip() or None,
@@ -6714,7 +7033,7 @@ def _build_support_roster_hq_upload_inspect_result(
         add_issue("WORKBOOK_FAMILY_MISMATCH")
     if file_month and file_month != selected_month:
         add_issue("WORKBOOK_MONTH_MISMATCH")
-    if download_scope not in {"all", "site"}:
+    if download_scope not in {"all", "site", "selected"}:
         add_issue("WORKBOOK_SCOPE_MISMATCH")
 
     if not site_codes and site_names:
@@ -6751,22 +7070,48 @@ def _build_support_roster_hq_upload_inspect_result(
             if str((workspace_sites_by_code.get(site_code) or {}).get("sheet_name") or "").strip()
         }
     actual_sheet_name_set = set(visible_sheet_names)
+    validated_sheets: list[SupportRosterHqSiteProcessOut] = []
+    missing_selected_sites: list[SupportRosterHqSiteProcessOut] = []
+    extra_unselected_sites: list[SupportRosterHqSiteProcessOut] = []
+    unresolved_sheets: list[SupportRosterHqSiteProcessOut] = []
+    stale_sites: list[SupportRosterHqSiteProcessOut] = []
     if expected_sheet_name_set and expected_sheet_name_set != actual_sheet_name_set:
         for missing_sheet in sorted(expected_sheet_name_set - actual_sheet_name_set):
+            matched_site = workspace_sites_by_sheet_name.get(missing_sheet) or workspace_sites_by_name.get(missing_sheet) or {}
+            matched_site_code = str(matched_site.get("site_code") or "").strip().upper() or None
             add_issue(
-                "WORKBOOK_SCOPE_MISMATCH",
-                severity="warning",
-                message=f"{missing_sheet} 시트가 workbook에서 누락되었습니다. 해당 지점은 이번 적용에서 제외됩니다.",
+                "WORKBOOK_SELECTED_SITE_MISSING",
+                message=f"{missing_sheet} 시트가 workbook에서 누락되었습니다.",
                 sheet_name=missing_sheet,
+                site_code=matched_site_code,
                 site_name=missing_sheet,
+            )
+            missing_selected_sites.append(
+                SupportRosterHqSiteProcessOut(
+                    sheet_name=missing_sheet,
+                    site_name=missing_sheet,
+                    site_code=matched_site_code,
+                    resolution_method="selected_scope",
+                    status="missing_selected_site",
+                    message="선택한 지점 시트가 workbook에 없습니다.",
+                )
             )
         for extra_sheet in sorted(actual_sheet_name_set - expected_sheet_name_set):
             add_issue(
-                "WORKBOOK_SCOPE_MISMATCH",
-                severity="warning",
-                message=f"{extra_sheet} 시트가 현재 선택된 지점 범위에 없습니다. 해당 지점은 이번 적용에서 제외됩니다.",
+                "WORKBOOK_EXTRA_SITE_SHEET",
+                message=f"{extra_sheet} 시트가 현재 선택된 지점 범위에 없습니다.",
                 sheet_name=extra_sheet,
                 site_name=extra_sheet,
+            )
+            extra_unselected_sites.append(
+                SupportRosterHqSiteProcessOut(
+                    sheet_name=extra_sheet,
+                    site_name=extra_sheet,
+                    site_code=None,
+                    resolution_method="sheet_name",
+                    status="extra_unselected_site",
+                    message="선택하지 않은 지점 시트가 workbook에 포함되어 있습니다.",
+                )
             )
 
     resolved_sheets: list[dict[str, Any]] = []
@@ -6800,7 +7145,7 @@ def _build_support_roster_hq_upload_inspect_result(
                 sheet_name=sheet_name,
                 site_name=sheet_name,
             )
-            excluded_sites.append(
+            unresolved_sheets.append(
                 SupportRosterHqSiteProcessOut(
                     sheet_name=sheet_name,
                     site_name=sheet_name,
@@ -6815,20 +7160,19 @@ def _build_support_roster_hq_upload_inspect_result(
 
         if selected_site_code_set and site_code not in selected_site_code_set:
             add_issue(
-                "SITE_NOT_SELECTED",
-                severity="warning",
+                "WORKBOOK_EXTRA_SITE_SHEET",
                 message=f"{sheet_name} 시트는 현재 HQ 작업 범위에 포함되지 않은 지점입니다.",
                 sheet_name=sheet_name,
                 site_code=site_code,
                 site_name=site_name,
             )
-            excluded_sites.append(
+            extra_unselected_sites.append(
                 SupportRosterHqSiteProcessOut(
                     sheet_name=sheet_name,
                     site_name=site_name,
                     site_code=site_code,
                     resolution_method=resolution_method,
-                    status="excluded_unselected",
+                    status="extra_unselected_site",
                     message="선택되지 않은 지점 시트",
                     fallback_text=fallback_text,
                 )
@@ -6907,6 +7251,7 @@ def _build_support_roster_hq_upload_inspect_result(
                     fallback_text=fallback_text,
                 )
             )
+            stale_sites.append(excluded_sites[-1])
             continue
         if expected_revision and expected_revision != current_source_revision:
             stale_site_codes.add(site_code)
@@ -6932,6 +7277,7 @@ def _build_support_roster_hq_upload_inspect_result(
                     fallback_text=fallback_text,
                 )
             )
+            stale_sites.append(excluded_sites[-1])
             continue
 
         date_columns, month_ctx = _extract_arls_date_columns(sheet)
@@ -7019,6 +7365,7 @@ def _build_support_roster_hq_upload_inspect_result(
                 fallback_text=fallback_text,
             )
         )
+        validated_sheets.append(processed_sites[-1])
         site_artifact_scope_map = dict(current_source.get("scope_map") or {})
         seen_scope_keys: set[str] = set()
 
@@ -7064,6 +7411,7 @@ def _build_support_roster_hq_upload_inspect_result(
 
                 artifact_scope = site_artifact_scope_map.get((schedule_date.isoformat(), shift_kind))
                 request_count = max(int((artifact_scope or {}).get("request_count") or 0), 0)
+                artifact_day_reason_text = str((artifact_scope or {}).get("day_reason_text") or "").strip() or None
                 artifact_purpose_text = str((artifact_scope or {}).get("work_purpose") or "").strip() or None
                 valid_filled_count = 0
                 invalid_filled_count = 0
@@ -7186,18 +7534,32 @@ def _build_support_roster_hq_upload_inspect_result(
 
                 target_status = None
                 scope_status = "empty"
-                scope_reason = "입력 없음"
+                scope_reason = None
                 overflow_count = 0
-                effective_valid_count = valid_filled_count
+                day_reason_missing = False
                 if artifact_scope:
+                    if shift_kind == "day":
+                        scope_reason = artifact_day_reason_text
+                        day_reason_missing = not bool(scope_reason)
+                        if day_reason_missing and scope_has_workbook_signal:
+                            add_issue(
+                                "DAY_SCOPE_REASON_MISSING",
+                                message="주간 지원 사유를 현재 artifact에서 찾지 못했습니다.",
+                                sheet_name=sheet_name,
+                                site_code=site_code,
+                                site_name=site_name,
+                                work_date=schedule_date,
+                                shift_kind=shift_kind,
+                            )
+                            scope_reason = "주간 지원 사유 누락"
+                    else:
+                        scope_reason = purpose_text or artifact_purpose_text
                     if valid_filled_count == request_count:
                         target_status = SENTRIX_HQ_ROSTER_AUTO_APPROVED_STATUS
                         scope_status = SENTRIX_HQ_ROSTER_AUTO_APPROVED_STATUS
-                        scope_reason = f"유효 {valid_filled_count}명 / 요청 {request_count}명"
                     elif valid_filled_count < request_count:
                         target_status = SENTRIX_HQ_ROSTER_PENDING_STATUS
                         scope_status = SENTRIX_HQ_ROSTER_PENDING_STATUS
-                        scope_reason = f"유효 {valid_filled_count}명 / 요청 {request_count}명"
                         add_issue(
                             "REQUEST_COUNT_MISMATCH_UNDER",
                             sheet_name=sheet_name,
@@ -7208,10 +7570,8 @@ def _build_support_roster_hq_upload_inspect_result(
                         )
                     else:
                         overflow_count = max(valid_filled_count - request_count, 0)
-                        effective_valid_count = min(valid_filled_count, request_count)
                         target_status = SENTRIX_HQ_ROSTER_PENDING_STATUS
-                        scope_status = "over_capacity"
-                        scope_reason = f"유효 {effective_valid_count}명 / 요청 {request_count}명 / 인원초과 {overflow_count}명"
+                        scope_status = SENTRIX_HQ_ROSTER_PENDING_STATUS
                         add_issue(
                             "REQUEST_COUNT_MISMATCH_OVER",
                             sheet_name=sheet_name,
@@ -7233,12 +7593,12 @@ def _build_support_roster_hq_upload_inspect_result(
                         if valid_row_index <= request_count:
                             continue
                         worker_row["status"] = "over_capacity"
-                        worker_row["reason"] = scope_reason
+                        worker_row["reason"] = "요청 인원을 초과한 입력입니다."
                         worker_row["issue_code"] = "REQUEST_COUNT_MISMATCH_OVER"
                         payload = worker_row.get("payload")
                         if isinstance(payload, dict):
                             payload["issue_code"] = "REQUEST_COUNT_MISMATCH_OVER"
-                            payload["issue_message"] = scope_reason
+                            payload["issue_message"] = "요청 인원을 초과한 입력입니다."
 
                 scope_issues = raw_issues[scope_issue_start:]
                 blocking_issue_count = sum(
@@ -7250,6 +7610,22 @@ def _build_support_roster_hq_upload_inspect_result(
                     1
                     for issue in scope_issues
                     if str(issue.get("severity") or "").strip().lower() == "warning"
+                )
+                blocking_errors = [
+                    str(issue.get("message") or issue.get("code") or "").strip()
+                    for issue in scope_issues
+                    if str(issue.get("severity") or "").strip().lower() == "blocking"
+                    and str(issue.get("message") or issue.get("code") or "").strip()
+                ]
+                warning_messages = [
+                    str(issue.get("message") or issue.get("code") or "").strip()
+                    for issue in scope_issues
+                    if str(issue.get("severity") or "").strip().lower() == "warning"
+                    and str(issue.get("message") or issue.get("code") or "").strip()
+                ]
+                review_level = _build_support_roster_hq_review_level(
+                    blocking_issue_count=blocking_issue_count,
+                    warning_issue_count=warning_issue_count,
                 )
                 if scope_has_workbook_signal:
                     total_scope_count += 1
@@ -7273,6 +7649,10 @@ def _build_support_roster_hq_upload_inspect_result(
                         external_count_raw=external_count_raw,
                         purpose_text=purpose_text or artifact_purpose_text,
                         scope_reason=scope_reason,
+                        day_reason_text=artifact_day_reason_text,
+                        review_level=review_level,
+                        blocking_errors=blocking_errors,
+                        warning_messages=warning_messages,
                         matched_ticket=False,
                         matched_artifact_scope=bool(artifact_scope),
                         artifact_source_batch_id=source_batch_id,
@@ -7294,15 +7674,15 @@ def _build_support_roster_hq_upload_inspect_result(
                             "slot_index": 0,
                             "raw_cell_text": None,
                             "parsed_display_value": (
-                                f"유효 {effective_valid_count}명 / 요청 {request_count}명 / 인원초과 {overflow_count}명"
+                                f"입력 {valid_filled_count}명 / 요청 {request_count}명 / 초과 {overflow_count}명"
                                 if overflow_count > 0
-                                else f"유효 {valid_filled_count}명 / 요청 {request_count}명"
+                                else f"입력 {valid_filled_count}명 / 요청 {request_count}명"
                             ),
                             "ticket_id": None,
                             "request_count": request_count,
                             "valid_filled_count": valid_filled_count,
                             "target_status": target_status,
-                            "status": "over_capacity" if overflow_count > 0 else ("blocking" if blocking_issue_count > 0 else scope_status),
+                            "status": "blocking" if blocking_issue_count > 0 else scope_status,
                             "reason": scope_reason,
                             "issue_code": None,
                             "payload": {
@@ -7325,6 +7705,8 @@ def _build_support_roster_hq_upload_inspect_result(
                                 "external_count_raw": external_count_raw,
                                 "purpose_text": purpose_text or artifact_purpose_text,
                                 "scope_reason": scope_reason,
+                                "day_reason_text": artifact_day_reason_text,
+                                "review_level": review_level,
                                 "matched_ticket": False,
                                 "matched_artifact_scope": bool(artifact_scope),
                                 "artifact_source_batch_id": source_batch_id,
@@ -7333,6 +7715,8 @@ def _build_support_roster_hq_upload_inspect_result(
                                 "sheet_resolution_method": resolution_method,
                                 "blocking_issue_count": blocking_issue_count,
                                 "warning_issue_count": warning_issue_count,
+                                "blocking_errors": blocking_errors,
+                                "warning_messages": warning_messages,
                             },
                         }
                     )
@@ -7410,6 +7794,10 @@ def _build_support_roster_hq_upload_inspect_result(
         "processed_sites": len(processed_sites),
         "stale_sites": len(stale_site_codes),
         "excluded_sites": len(excluded_sites),
+        "error_count": sum(1 for item in scope_summaries if str(item.review_level or "").strip() == "error"),
+        "review_count": sum(1 for item in scope_summaries if str(item.review_level or "").strip() == "review"),
+        "applicable_count": sum(1 for item in scope_summaries if str(item.review_level or "").strip() == "applicable"),
+        "hidden_non_actionable_count": max(total_scope_count - valid_scope_count, 0),
     }
 
     upload_meta = SupportRosterHqUploadMetaOut(
@@ -7424,8 +7812,22 @@ def _build_support_roster_hq_upload_inspect_result(
         site_count=len(site_names or visible_sheet_names),
         site_names=list(site_names or visible_sheet_names),
         site_codes=list(site_codes),
+        selected_site_codes=sorted(selected_site_code_set),
         selected_site_code=selected_site_code,
         selected_site_name=selected_site_name,
+        ui_summary={
+            "selected_site_count": len(selected_site_code_set),
+            "processed_site_count": len(processed_sites),
+            "excluded_site_count": len(excluded_sites),
+            "stale_site_count": len(stale_site_codes),
+        },
+        technical_details={
+            "revision": revision,
+            "workbook_family": workbook_family,
+            "template_version": template_version,
+            "site_revision_map": dict(site_revision_map or {}),
+            "download_scope": download_scope,
+        },
     )
     can_apply = blocking_issue_count == 0 and valid_scope_count > 0
     next_step_message = (
@@ -7468,12 +7870,31 @@ def _build_support_roster_hq_upload_inspect_result(
         issue_count=sum(issue.count for issue in issue_list),
         summary=summary,
         issues=issue_list,
+        validated_sheets=validated_sheets,
+        missing_selected_sites=missing_selected_sites,
+        extra_unselected_sites=extra_unselected_sites,
+        unresolved_sheets=unresolved_sheets,
+        stale_sites=stale_sites,
+        blocking_errors=[issue for issue in issue_list if issue.severity == "blocking"],
         processed_sites=processed_sites,
         excluded_sites=excluded_sites,
         scope_summaries=scope_summaries,
         review_rows=review_rows,
         aggregated_review_rows=aggregated_review_rows,
         next_step_message=next_step_message,
+        ui_summary={
+            "default_view": "errors_and_review",
+            "error_count": summary["error_count"],
+            "review_count": summary["review_count"],
+            "applicable_count": summary["applicable_count"],
+            "hidden_non_actionable_count": summary["hidden_non_actionable_count"],
+        },
+        technical_details={
+            "download_scope": download_scope,
+            "revision": revision,
+            "site_revision_map": dict(site_revision_map or {}),
+            "selected_site_codes": sorted(selected_site_code_set),
+        },
     )
 
 
@@ -11092,6 +11513,7 @@ def get_support_roundtrip_status(
 def get_support_roundtrip_hq_workspace(
     month: str = Query(..., description="YYYY-MM"),
     tenant_code: str | None = Query(default=None, max_length=64),
+    selected_site_codes: list[str] | None = Query(default=None),
     conn=Depends(get_db_conn),
     user=Depends(get_current_user),
 ):
@@ -11101,9 +11523,10 @@ def get_support_roundtrip_hq_workspace(
     target_tenant = _resolve_target_tenant(conn, user, tenant_code)
     return _build_support_roster_hq_workspace_payload(
         conn,
-        tenant_id=str(target_tenant["id"]),
-        tenant_code=str(target_tenant["tenant_code"]),
+        target_tenant=target_tenant,
+        user=user,
         month_key=month,
+        selected_site_codes=selected_site_codes,
     )
 
 
@@ -11260,9 +11683,10 @@ def get_sentrix_hq_submission_workspace_bridge(
     tenant_code_value = str(target_tenant.get("tenant_code") or tenant_code or "").strip()
     workspace = _build_support_roster_hq_workspace_payload(
         conn,
-        tenant_id=str(target_tenant["id"]),
-        tenant_code=tenant_code_value,
+        target_tenant=target_tenant,
+        user=_build_sentrix_bridge_actor(),
         month_key=month,
+        selected_site_codes=[site_code] if str(site_code or "").strip() else None,
     )
     selected_site = None
     normalized_site_code = str(site_code or "").strip().upper()
