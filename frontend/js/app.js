@@ -8270,7 +8270,7 @@ const DRAWER_MENU_BY_ROLE = {
       children: [
         { id: 'schedule-calendar', title: '캘린더', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
         { id: 'schedule-templates', title: '근무 템플릿 생성', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
-        { id: 'schedule-upload', title: 'Excel로 근무표 간편 제작', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+        { id: 'schedule-upload', title: '근무표 업로드·자동등록', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
       ],
     },
     {
@@ -8330,7 +8330,7 @@ const DRAWER_MENU_BY_ROLE = {
       children: [
         { id: 'schedule-calendar', title: '캘린더', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
         { id: 'schedule-templates', title: '근무 템플릿 생성', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
-        { id: 'schedule-upload', title: 'Excel로 근무표 간편 제작', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+        { id: 'schedule-upload', title: '근무표 업로드·자동등록', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
       ],
     },
     {
@@ -10231,7 +10231,7 @@ function renderScheduleUploadWorkspace() {
   if (uploadHeaderTitle) {
     uploadHeaderTitle.textContent = activeTopTab === SCHEDULE_TAB_HQ_UPLOAD
       ? '지점별 스케쥴 업로드 확인'
-      : 'Excel로 근무표 간편 제작';
+      : '근무표 업로드·자동등록';
   }
   if (uploadHeaderText) {
     uploadHeaderText.textContent = activeTopTab === SCHEDULE_TAB_HQ_UPLOAD
@@ -12050,7 +12050,7 @@ function renderScheduleSupportShortcutCard() {
     text.textContent = [
       `${selectedSite} · ${status?.month || getScheduleMonthValue()}`,
       artifactContext.revision ? `artifact ${artifactContext.revision.slice(0, 12)}` : 'artifact 준비 전',
-      '실제 workflow는 Excel로 근무표 간편 제작 탭에서 진행',
+      '실제 workflow는 근무표 업로드·자동등록 탭에서 진행',
     ].filter(Boolean).join(' · ');
   }
 }
