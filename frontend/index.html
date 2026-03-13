@@ -2158,13 +2158,13 @@
             <header class="schedule-upload-header">
               <div>
                 <h3>Excel로 근무표 간편 제작</h3>
-                <p class="muted">ARLS가 월간 Excel ingress와 검토 흐름을 소유하고, Sentrix가 지원근무 roster/ticket 운영을 이어받습니다.</p>
+                <p class="muted">월간 스케줄 원본 업로드와 HQ 지원근무 workbook 흐름을 단계별 wizard로 진행합니다.</p>
               </div>
             </header>
 
             <div id="scheduleUploadOwnerTabs" class="workspace-tabs schedule-upload-owner-tabs">
               <button class="btn btn-secondary workspace-tab active" type="button" data-action="schedule-upload-mode-tab" data-mode="base">Excel로 근무표 간편 제작</button>
-              <button class="btn btn-secondary workspace-tab hidden" type="button" data-action="schedule-upload-mode-tab" data-mode="hq">지점별 스케쥴 업로드 확인</button>
+              <button class="btn btn-secondary workspace-tab hidden schedule-upload-owner-tab-hq" type="button" data-action="schedule-upload-mode-tab" data-mode="hq">지점별 스케쥴 업로드 확인</button>
             </div>
 
             <div id="scheduleExcelWorkflowContext" class="schedule-upload-policy-strip schedule-excel-context-strip">
@@ -2296,9 +2296,15 @@
                       </div>
                     </div>
                     <div class="schedule-upload-context-grid">
-                      <label class="input-field">
+                      <label id="scheduleImportTenantReadonlyField" class="input-field">
                         <span>업로드 테넌트</span>
                         <input id="scheduleImportTenantReadonly" type="text" readonly />
+                      </label>
+                      <label id="scheduleImportTenantSelectField" class="input-field hidden">
+                        <span>업로드 테넌트</span>
+                        <select id="scheduleImportTenantSelect">
+                          <option value="">테넌트 선택</option>
+                        </select>
                       </label>
                       <label class="input-field">
                         <span>업로드 지점</span>
@@ -2458,12 +2464,22 @@
                   <div class="schedule-upload-step-head">
                     <div>
                       <span class="schedule-upload-step-kicker">적용</span>
-                      <h4>기본 스케줄 반영</h4>
-                      <p class="muted">분석 결과를 확정 반영하기 전, 현재 적용 가능 상태와 사후 결과를 마지막으로 확인합니다.</p>
+                      <h4>적용 진행 / 완료</h4>
+                      <p class="muted">현재 반영 상태를 한 화면에서 확인하고 완료 후 종료합니다.</p>
                     </div>
                   </div>
-                  <p id="scheduleApplyResult" class="muted">분석이 완료되면 적용 상태가 여기에 표시됩니다.</p>
+                  <div class="schedule-upload-progress">
+                    <span id="scheduleApplyProgressPill" class="status-pill status-pill-neutral">대기</span>
+                    <div class="schedule-upload-progress-copy">
+                      <strong id="scheduleApplyProgressTitle">적용 대기</strong>
+                      <p id="scheduleApplyResult" class="muted">분석이 완료되면 적용 상태가 여기에 표시됩니다.</p>
+                    </div>
+                  </div>
                   <ul id="scheduleApplyDetails" class="list hidden"></ul>
+                  <div class="schedule-wizard-actions">
+                    <button class="btn btn-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="review">이전</button>
+                    <button class="btn btn-primary" type="button" data-action="schedule-reset-upload">종료</button>
+                  </div>
                 </section>
 
                 <div id="scheduleUploadApplyBar" class="schedule-upload-apply-bar">
@@ -2484,41 +2500,70 @@
                 <div>
                   <span class="schedule-upload-step-kicker">STEP 3</span>
                   <h4>HQ 제출용 추출</h4>
-                  <p class="muted">ARLS가 기본 스케줄에서 지원수요 workbook artifact를 생성하고, HQ가 이어서 작성할 수 있는 제출용 시트를 내려줍니다.</p>
+                  <p class="muted">HQ가 채워야 할 지원근무 workbook을 ARLS에서 한 번에 생성합니다. 여러 지점을 선택하면 한 파일에 지점별 시트로 묶습니다.</p>
                 </div>
                 <span id="scheduleSupportStatePill" class="status-pill status-pill-neutral">원본 대기</span>
               </div>
-              <p id="scheduleSupportStatusText" class="muted">업로드 지점과 대상 월을 먼저 고정하면 지원수요 artifact 상태가 여기에 표시됩니다.</p>
-              <div id="scheduleSupportStatusGrid" class="schedule-support-status-grid">
-                <article class="schedule-support-meta-card">
-                  <span class="schedule-support-meta-label">원본 리비전</span>
-                  <strong id="scheduleSupportSourceRevision">없음</strong>
-                  <span id="scheduleSupportSourceMeta" class="muted">원본 업로드 대기</span>
-                </article>
-                <article class="schedule-support-meta-card">
-                  <span class="schedule-support-meta-label">HQ 제출 이력</span>
-                  <strong id="scheduleSupportMergeState">대기</strong>
-                  <span id="scheduleSupportMergeMeta" class="muted">Sentrix 제출 전</span>
-                </article>
-                <article class="schedule-support-meta-card">
-                  <span class="schedule-support-meta-label">artifact</span>
-                  <strong id="scheduleSupportAssignmentCount">미생성</strong>
-                  <span id="scheduleSupportConflictMeta" class="muted">site/month 선택 후 확인</span>
-                </article>
-                <article class="schedule-support-meta-card">
-                  <span class="schedule-support-meta-label">다음 단계</span>
-                  <strong id="scheduleSupportFinalState">ARLS STEP 4</strong>
-                  <span id="scheduleSupportFinalMeta" class="muted">HQ 작성본 업로드와 검토/적용 시작은 ARLS에서 진행됩니다.</span>
-                </article>
+              <div class="schedule-upload-context-grid schedule-hq-context-grid">
+                <label id="scheduleHqTenantReadonlyField" class="input-field">
+                  <span>테넌트</span>
+                  <input id="scheduleHqTenantReadonly" type="text" readonly />
+                </label>
+                <label id="scheduleHqTenantSelectField" class="input-field hidden">
+                  <span>테넌트</span>
+                  <select id="scheduleHqTenantSelect">
+                    <option value="">테넌트 선택</option>
+                  </select>
+                </label>
+                <label class="input-field">
+                  <span>대상 월</span>
+                  <input id="scheduleHqMonth" type="month" />
+                </label>
+              </div>
+              <p id="scheduleSupportStatusText" class="muted">대상 월과 지점을 선택하면 제출용 workbook 준비 상태를 확인할 수 있습니다.</p>
+              <div id="scheduleSupportHqSuccessBanner" class="schedule-upload-success-banner hidden" role="status" aria-live="polite">
+                <div>
+                  <strong id="scheduleSupportHqSuccessTitle">업로드가 완료되었습니다.</strong>
+                  <p id="scheduleSupportHqSuccessText" class="muted">처리 결과가 여기에 표시됩니다.</p>
+                </div>
+                <button class="btn btn-secondary btn-sm" type="button" data-action="schedule-support-hq-dismiss-success">닫기</button>
               </div>
               <ul id="scheduleSupportBlockedReasons" class="list hidden"></ul>
+              <section class="schedule-upload-step schedule-hq-site-selection-shell">
+                <div class="schedule-upload-step-head">
+                  <div>
+                    <span class="schedule-upload-step-kicker">대상 지점 선택</span>
+                    <h4>지점 상태 확인</h4>
+                    <p class="muted">업로드 완료 지점만 선택할 수 있습니다. 여러 지점을 선택하면 한 workbook 안에 지점별 시트로 생성됩니다.</p>
+                  </div>
+                  <div class="quick-actions">
+                    <button class="btn btn-secondary" type="button" data-action="schedule-support-hq-select-ready">완료 지점 전체 선택</button>
+                    <button class="btn btn-secondary" type="button" data-action="schedule-support-hq-clear-selection">선택 해제</button>
+                  </div>
+                </div>
+                <div class="schedule-hq-site-matrix-wrap">
+                  <table class="schedule-preview-table schedule-hq-site-matrix">
+                    <thead>
+                      <tr>
+                        <th>선택</th>
+                        <th>지점명</th>
+                        <th>상태</th>
+                        <th>최근 업로드 시각</th>
+                        <th>메모</th>
+                      </tr>
+                    </thead>
+                    <tbody id="scheduleSupportHqSiteTableBody"></tbody>
+                  </table>
+                </div>
+              </section>
               <section id="scheduleSupportHqDownloadSection" class="schedule-support-action-section stack">
                 <div class="approval-head">
-                  <h3>지원수요 workbook 생성</h3>
+                  <h3>HQ 제출용 추출</h3>
                 </div>
-                <p class="muted">활성 원본 리비전 기준으로 HQ가 채울 지원근무자용 workbook artifact를 생성합니다.</p>
+                <p class="muted">한 workbook 안에 선택한 지점들이 각각 별도 시트로 생성됩니다. 시트명은 지점/현장명 기준입니다.</p>
                 <div class="schedule-support-upload-actions">
-                  <button class="btn btn-secondary" type="button" id="scheduleSupportHqDownloadBtn" data-action="schedule-support-hq-download">지원근무자용 시트 다운로드</button>
+                  <span id="scheduleSupportHqSelectionSummary" class="muted">선택한 지점이 없습니다.</span>
+                  <button class="btn btn-secondary" type="button" id="scheduleSupportHqDownloadBtn" data-action="schedule-support-hq-download">시트 다운로드</button>
                   <button class="btn btn-primary" type="button" id="scheduleHqExportNextBtn" data-action="schedule-hq-wizard-next" data-next-step="upload">다음</button>
                 </div>
               </section>
@@ -2528,51 +2573,49 @@
               <div class="schedule-upload-step-head">
                 <div>
                   <span class="schedule-upload-step-kicker">STEP 4</span>
-                  <h4>HQ 지원근무자 반영 업로드</h4>
-                  <p class="muted">ARLS가 HQ 작성본 workbook의 업로드, 검토, 적용 시작을 소유합니다. 내부 ticket/state 재계산과 알림/bridge는 Sentrix 엔진이 이어받습니다.</p>
-                </div>
-              </div>
-              <div class="schedule-upload-policy-strip">
-                <div class="schedule-upload-policy-item">
-                  <span>ARLS 소유</span>
-                  <strong>업로드 / 검토 / 적용 시작</strong>
-                </div>
-                <div class="schedule-upload-policy-item">
-                  <span>Sentrix 소유</span>
-                  <strong>ticket 상태 / 알림 / bridge</strong>
-                </div>
-                <div class="schedule-upload-policy-item">
-                  <span>적용 범위</span>
-                  <strong>normalized roster snapshot handoff</strong>
+                  <h4>HQ 작성본 업로드</h4>
+                  <p class="muted">다운로드한 workbook을 다시 올려 업로드 미리보기와 반영 시작까지 진행합니다.</p>
                 </div>
               </div>
               <section id="scheduleSupportUploadSection" class="schedule-support-action-section stack">
                 <div class="approval-head">
                   <h3>HQ 작성본 업로드</h3>
                 </div>
-                <p id="scheduleSupportHqContractHint" class="muted">업로드 지점과 대상 월, source artifact를 먼저 고정하면 HQ 작성본 workbook의 검토/적용을 여기서 시작할 수 있습니다.</p>
-                <dl id="scheduleSupportArtifactMetaList" class="schedule-support-artifact-list">
-                  <div class="schedule-support-artifact-row">
-                    <dt>artifact_id</dt>
-                    <dd id="scheduleSupportArtifactId">-</dd>
-                  </div>
-                  <div class="schedule-support-artifact-row">
-                    <dt>site</dt>
-                    <dd id="scheduleSupportArtifactSite">-</dd>
-                  </div>
-                  <div class="schedule-support-artifact-row">
-                    <dt>month</dt>
-                    <dd id="scheduleSupportArtifactMonth">-</dd>
-                  </div>
-                  <div class="schedule-support-artifact-row">
-                    <dt>revision</dt>
-                    <dd id="scheduleSupportArtifactRevision">-</dd>
-                  </div>
-                  <div class="schedule-support-artifact-row">
-                    <dt>generated_at</dt>
-                    <dd id="scheduleSupportArtifactGeneratedAt">-</dd>
-                  </div>
-                </dl>
+                <p id="scheduleSupportHqContractHint" class="muted">선택한 지점과 대상 월 기준으로 HQ 작성본 workbook을 검토합니다.</p>
+                <div class="schedule-upload-guidance-box">
+                  <strong>업로드 전에 확인하세요</strong>
+                  <ol>
+                    <li>시트명은 선택한 지점/현장명과 일치해야 합니다.</li>
+                    <li>시트명이 손상된 경우 병합셀 BC34의 텍스트를 fallback으로 사용합니다.</li>
+                    <li>둘 다 확인할 수 없으면 업로드가 차단됩니다.</li>
+                  </ol>
+                </div>
+                <div id="scheduleSupportArtifactUserMeta" class="schedule-upload-file-meta"></div>
+                <details id="scheduleSupportArtifactTechDetails" class="schedule-upload-tech-details hidden">
+                  <summary>상세 정보</summary>
+                  <dl id="scheduleSupportArtifactMetaList" class="schedule-support-artifact-list">
+                    <div class="schedule-support-artifact-row">
+                      <dt>artifact_id</dt>
+                      <dd id="scheduleSupportArtifactId">-</dd>
+                    </div>
+                    <div class="schedule-support-artifact-row">
+                      <dt>site</dt>
+                      <dd id="scheduleSupportArtifactSite">-</dd>
+                    </div>
+                    <div class="schedule-support-artifact-row">
+                      <dt>month</dt>
+                      <dd id="scheduleSupportArtifactMonth">-</dd>
+                    </div>
+                    <div class="schedule-support-artifact-row">
+                      <dt>revision</dt>
+                      <dd id="scheduleSupportArtifactRevision">-</dd>
+                    </div>
+                    <div class="schedule-support-artifact-row">
+                      <dt>generated_at</dt>
+                      <dd id="scheduleSupportArtifactGeneratedAt">-</dd>
+                    </div>
+                  </dl>
+                </details>
                 <div class="schedule-upload-file-row">
                   <label class="input-field schedule-upload-file-field" for="scheduleSupportHqUploadFile">
                     <span>HQ 작성본 업로드 파일</span>
@@ -2580,17 +2623,12 @@
                   </label>
                   <button class="btn btn-secondary hidden" type="button" id="scheduleSupportHqInspectInlineBtn">검토 시작</button>
                 </div>
-                <div class="support-status-hq-replace-note">
-                  <strong>REPLACE 정책</strong>
-                  <p>업로드한 파일의 최신 내용으로 기존 지원근무자 roster snapshot을 교체합니다. 재업로드 시 병합하지 않고 최신 파일 기준으로 Sentrix state engine에 handoff합니다.</p>
-                </div>
+                <div id="scheduleSupportHqMismatchBox" class="schedule-upload-error-box hidden" role="alert"></div>
                 <div id="scheduleSupportHqUploadMeta" class="schedule-upload-file-meta"></div>
                 <div class="schedule-support-upload-actions">
                   <button class="btn btn-secondary" type="button" data-action="schedule-hq-wizard-prev" data-prev-step="export">이전</button>
                   <button class="btn btn-primary" type="button" id="scheduleSupportHqInspectBtn" data-action="schedule-support-hq-inspect">업로드 미리보기</button>
                   <button class="btn btn-secondary hidden" type="button" id="scheduleSupportHqReinspectBtn" data-action="schedule-support-hq-inspect">다시 검토</button>
-                  <button class="btn btn-secondary" type="button" id="scheduleSupportOpenSentrixBtn" data-action="schedule-support-open-sentrix">Sentrix 상태 보기</button>
-                  <button class="btn btn-secondary" type="button" id="scheduleSupportCopyArtifactBtn" data-action="schedule-support-copy-artifact">artifact_id 복사</button>
                 </div>
               </section>
               <div id="scheduleHqWizardPreviewStage" class="stack hidden">
@@ -2626,17 +2664,19 @@
               <ul id="scheduleSupportHqBatchIssues" class="list hidden"></ul>
               <div class="schedule-wizard-actions">
                 <button class="btn btn-secondary" type="button" data-action="schedule-hq-wizard-prev" data-prev-step="upload">이전</button>
-                <button class="btn btn-primary" type="button" id="scheduleSupportHqApplyBtn" data-action="schedule-support-apply">Arls/Sentrix 업로드</button>
+                <button class="btn btn-primary" type="button" id="scheduleSupportHqApplyBtn" data-action="schedule-support-apply">반영 시작</button>
               </div>
               </div>
               <div id="scheduleHqWizardCompleteStage" class="stack hidden">
+              <div class="schedule-upload-complete-head">
+                <button class="btn btn-secondary btn-sm" type="button" data-action="schedule-hq-wizard-finish">✕</button>
+              </div>
               <div class="schedule-upload-apply-bar support-status-hq-apply-bar">
                 <div class="schedule-upload-apply-state">
-                  <strong id="scheduleSupportHqReviewStateTitle">적용 전 검토 영역</strong>
-                  <span id="scheduleSupportHqReviewStateText">HQ 작성본 workbook을 검토한 뒤 적용하면 ARLS가 Sentrix state engine으로 normalized snapshot을 handoff합니다.</span>
+                  <strong id="scheduleSupportHqReviewStateTitle">업로드 진행중...</strong>
+                  <span id="scheduleSupportHqReviewStateText">HQ 작성본 workbook을 반영하고 있습니다.</span>
                 </div>
                 <div class="schedule-upload-apply-actions">
-                  <button class="btn btn-secondary" type="button" data-action="schedule-hq-wizard-prev" data-prev-step="preview">이전</button>
                   <button class="btn btn-primary" type="button" data-action="schedule-hq-wizard-finish">종료</button>
                 </div>
               </div>
@@ -2656,36 +2696,9 @@
               </label>
             </div>
             <div id="scheduleReportsWorkspaceTabs" class="workspace-tabs schedule-reports-workspace-tabs">
-              <button class="btn btn-secondary workspace-tab active" type="button" data-action="schedule-reports-tab" data-tab="support">지원근무자 제출(바로가기)</button>
               <button class="btn btn-secondary workspace-tab" type="button" data-action="schedule-reports-tab" data-tab="finance">Finance 스케쥴 제출(월말)</button>
             </div>
-
-            <section id="scheduleSupportRoundtripPanel" class="module-card stack hidden">
-              <div class="approval-head">
-                <div>
-                  <h3>지원근무자 제출 워크플로우</h3>
-                  <p class="muted">이 탭은 보고/바로가기 역할만 유지합니다. 실제 Excel workflow owner는 <code>Excel로 근무표 간편 제작</code> 탭입니다.</p>
-                </div>
-                <span id="scheduleReportsSupportShortcutPill" class="status-pill status-pill-neutral">바로가기</span>
-              </div>
-              <p id="scheduleReportsSupportShortcutText" class="muted">보고 지점과 월을 확인한 뒤, Excel workflow에서 지원수요 추출 또는 HQ 지원근무자 반영 업로드를 이어가세요.</p>
-              <div class="schedule-support-actions-grid schedule-support-shortcut-grid">
-                <section class="schedule-support-action-section stack">
-                  <div class="approval-head">
-                    <h3>HQ 제출용 추출 바로가기</h3>
-                  </div>
-                  <p class="muted">월초 지원수요 workbook 생성은 Excel workflow STEP 3에서 진행합니다.</p>
-                  <button class="btn btn-secondary" type="button" data-action="schedule-open-upload-section" data-section="export">Excel workflow에서 열기</button>
-                </section>
-                <section class="schedule-support-action-section stack">
-                  <div class="approval-head">
-                    <h3>HQ 지원근무자 반영 업로드 바로가기</h3>
-                  </div>
-                  <p class="muted">HQ roster 제출 handoff는 Excel workflow STEP 4에서 시작하고, Sentrix가 내부 처리 흐름을 이어받습니다.</p>
-                  <button class="btn btn-primary" type="button" data-action="schedule-open-upload-section" data-section="handoff">Excel workflow에서 열기</button>
-                </section>
-              </div>
-            </section>
+            </div>
 
             <section id="scheduleFinanceSubmissionPanel" class="module-card stack hidden">
               <div class="approval-head">

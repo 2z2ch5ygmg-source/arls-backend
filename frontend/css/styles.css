@@ -4916,6 +4916,97 @@ button:disabled,
   font-weight: 600;
 }
 
+.schedule-upload-owner-tab-hq {
+  border-color: rgba(249, 115, 22, 0.32);
+  background: rgba(255, 247, 237, 0.88);
+  color: var(--brand-orange-strong);
+}
+
+.schedule-upload-owner-tab-hq.active {
+  border-color: rgba(249, 115, 22, 0.46);
+  background: rgba(255, 237, 213, 0.96);
+}
+
+.schedule-hq-context-grid {
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 220px);
+}
+
+.schedule-hq-site-selection-shell {
+  gap: 12px;
+}
+
+.schedule-hq-site-matrix-wrap {
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-12);
+  background: var(--bg-surface-elevated);
+}
+
+.schedule-hq-site-matrix {
+  min-width: 760px;
+}
+
+.schedule-hq-site-matrix tbody tr td:first-child {
+  width: 72px;
+}
+
+.schedule-hq-site-row-disabled {
+  opacity: 0.72;
+  background: rgba(248, 250, 252, 0.88);
+}
+
+.schedule-hq-site-row-disabled input[type='checkbox'] {
+  cursor: not-allowed;
+}
+
+.schedule-upload-guidance-box,
+.schedule-upload-error-box,
+.schedule-upload-success-banner {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--radius-12);
+}
+
+.schedule-upload-guidance-box {
+  border: 1px solid rgba(249, 115, 22, 0.18);
+  background: rgba(255, 247, 237, 0.92);
+}
+
+.schedule-upload-guidance-box strong,
+.schedule-upload-error-box strong,
+.schedule-upload-success-banner strong {
+  color: var(--text-primary);
+}
+
+.schedule-upload-guidance-box ol,
+.schedule-upload-error-box ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+}
+
+.schedule-upload-error-box {
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: rgba(254, 242, 242, 0.96);
+}
+
+.schedule-upload-success-banner {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  background: rgba(240, 253, 244, 0.94);
+}
+
+.schedule-upload-success-banner p {
+  margin: 4px 0 0;
+}
+
+.schedule-upload-complete-head {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .schedule-upload-tech-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
