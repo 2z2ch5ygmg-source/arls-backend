@@ -763,7 +763,7 @@ function createInitialEmployeeAdminState() {
     siteFilterCode: 'all',
     siteRows: [],
     detailEmployeeId: '',
-    detailTab: 'basic',
+    detailTab: 'overview',
     detailDrawerOpen: false,
     detailLoading: false,
     detailError: '',
@@ -29642,10 +29642,12 @@ function getEmployeeAccountLinkageMeta(item = {}) {
     : { key: 'unlinked', label: '미연결', className: 'status-pill status-pill-neutral' };
 }
 
-function normalizeEmployeeDetailTab(rawValue = 'basic') {
+function normalizeEmployeeDetailTab(rawValue = 'overview') {
   const value = String(rawValue || '').trim().toLowerCase();
-  if (['basic', 'attendance', 'schedule', 'leave', 'requests'].includes(value)) return value;
-  return 'basic';
+  if (['overview', 'attendance', 'schedule', 'leave_requests'].includes(value)) return value;
+  if (value === 'basic') return 'overview';
+  if (value === 'leave' || value === 'requests') return 'leave_requests';
+  return 'overview';
 }
 
 function getEmployeeSortControlValue() {
@@ -30311,7 +30313,7 @@ function closeEmployeeDirectoryDetail({ clearSelection = true } = {}) {
   if (clearSelection) {
     state.employeeAdmin.detailEmployeeId = '';
   }
-  state.employeeAdmin.detailTab = 'basic';
+  state.employeeAdmin.detailTab = 'overview';
   state.employeeAdmin.detailError = '';
   setEmployeeDirectoryDrawerOpen(false);
   syncEmployeeDirectorySelection();
@@ -30390,6 +30392,356 @@ function buildEmployeeDirectoryList(items = [], { emptyTitle = '데이터가 없
   return list;
 }
 
+function getEmployeeDirectoryDetailBadges() {
+  const target = $('#employeeDirectoryDetailBadges');
+  return target instanceof HTMLElement ? target : null;
+}
+
+function getEmployeeDirectoryDetailMeta() {
+  const target = $('#employeeDirectoryDetailMeta');
+  return target instanceof HTMLElement ? target : null;
+}
+
+function getEmployeeDirectoryDetailAvatar() {
+  const target = $('#employeeDirectoryDetailAvatar');
+  return target instanceof HTMLElement ? target : null;
+}
+
+function buildEmployeeDirectoryBadge(label = '', className = 'status-pill status-pill-neutral') {
+  const badge = document.createElement('span');
+  badge.className = className;
+  badge.textContent = String(label || '').trim() || '-';
+  return badge;
+}
+
+function buildEmployeeDirectoryFactGrid(items = []) {
+  const grid = document.createElement('div');
+  grid.className = 'employee-directory-fact-grid';
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const label = String(item?.label || '').trim();
+    const value = String(item?.value || '').trim();
+    if (!label || !value) return;
+    const cell = document.createElement('div');
+    cell.className = 'employee-directory-fact-card';
+    const labelEl = document.createElement('span');
+    labelEl.textContent = label;
+    const valueEl = document.createElement('strong');
+    valueEl.textContent = value;
+    cell.append(labelEl, valueEl);
+    grid.appendChild(cell);
+  });
+  return grid;
+}
+
+function buildEmployeeDirectoryKpiGrid(items = []) {
+  const grid = document.createElement('div');
+  grid.className = 'employee-directory-kpi-grid';
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const label = String(item?.label || '').trim();
+    if (!label) return;
+    const value = String(item?.value ?? '').trim();
+    const card = document.createElement('div');
+    card.className = 'employee-directory-kpi-card';
+    if (item?.tone) card.classList.add(`is-${item.tone}`);
+    const labelEl = document.createElement('span');
+    labelEl.textContent = label;
+    const valueEl = document.createElement('strong');
+    valueEl.textContent = value || '-';
+    card.append(labelEl, valueEl);
+    if (item?.meta) {
+      const metaEl = document.createElement('div');
+      metaEl.className = 'employee-directory-kpi-meta';
+      metaEl.textContent = String(item.meta).trim();
+      card.appendChild(metaEl);
+    }
+    grid.appendChild(card);
+  });
+  return grid;
+}
+
+function hasEmployeeDirectoryMeaningfulSummary(items = []) {
+  return (Array.isArray(items) ? items : []).some((item) => {
+    const raw = item?.value;
+    if (typeof raw === 'number') return raw > 0;
+    const text = String(raw ?? '').trim();
+    return Boolean(text && text !== '-' && text !== '0' && text !== '0일' && text !== '0회' && text !== '없음');
+  });
+}
+
+function getEmployeeDirectoryAvatarToken(employee = {}) {
+  const name = String(employee?.full_name || '').trim();
+  if (name) {
+    return Array.from(name).slice(0, 2).join('');
+  }
+  const employeeCode = String(employee?.employee_code || '').trim();
+  return employeeCode ? employeeCode.slice(0, 2).toUpperCase() : '직원';
+}
+
+function getEmployeeDirectoryAttendanceRowsForDisplay(detail = null) {
+  const rows = Array.isArray(detail?.attendance?.rows) ? detail.attendance.rows : [];
+  return rows.filter((row) => {
+    const status = String(row?.statusLabel || '').trim();
+    const checkIn = String(row?.checkInLabel || '').trim();
+    const checkOut = String(row?.checkOutLabel || '').trim();
+    const leave = String(row?.leaveLabel || '').trim();
+    return [status, checkIn, checkOut, leave].some((value) => value && value !== '-');
+  });
+}
+
+function getEmployeeDirectoryHeaderSummary(detail = null) {
+  const employee = detail?.employee || {};
+  const company = resolveEmployeeCompanyDisplayName(employee);
+  const site = getEmployeeSiteDisplayLabel(employee);
+  const hireDate = formatDateLabel(employee?.hire_date, '-');
+  const accountLink = getEmployeeAccountLinkageMeta(employee).label;
+  const managementNo = String(employee?.management_no_str || employee?.management_no || '').trim();
+  const employeeCode = String(employee?.employee_code || '').trim();
+  return {
+    title: String(employee?.full_name || employeeCode || '직원 상세').trim() || '직원 상세',
+    eyebrow: [employeeCode ? `직원번호 ${employeeCode}` : '', managementNo ? `관리번호 ${managementNo}` : ''].filter(Boolean).join(' · ') || '직원 선택',
+    subtitle: [company, site, hireDate !== '-' ? `입사 ${hireDate}` : '', accountLink].filter(Boolean).join(' · '),
+    meta: [String(employee?.phone || '').trim(), formatDateLabel(employee?.birth_date, '')].filter(Boolean).join(' · '),
+  };
+}
+
+function renderEmployeeDirectoryHeader(detail = null) {
+  const titleEl = $('#employeeDirectoryDetailTitle');
+  const subtitleEl = $('#employeeDirectoryDetailSubtitle');
+  const eyebrowEl = $('#employeeDirectoryDetailEyebrow');
+  const badgesEl = getEmployeeDirectoryDetailBadges();
+  const metaEl = getEmployeeDirectoryDetailMeta();
+  const avatarEl = getEmployeeDirectoryDetailAvatar();
+  if (!(titleEl instanceof HTMLElement) || !(subtitleEl instanceof HTMLElement) || !(eyebrowEl instanceof HTMLElement)) return;
+
+  if (!detail) {
+    titleEl.textContent = '직원을 선택해 주세요';
+    subtitleEl.textContent = '목록에서 직원을 클릭하면 직원 개요와 최근 상태를 확인할 수 있습니다.';
+    eyebrowEl.textContent = '직원 선택';
+    if (badgesEl) badgesEl.innerHTML = '';
+    if (metaEl) metaEl.textContent = '';
+    if (avatarEl) avatarEl.textContent = '직';
+    return;
+  }
+
+  const employee = detail.employee || {};
+  const summary = getEmployeeDirectoryHeaderSummary(detail);
+  titleEl.textContent = summary.title;
+  subtitleEl.textContent = summary.subtitle || '기본 인사 정보와 최근 운영 상태를 확인할 수 있습니다.';
+  eyebrowEl.textContent = summary.eyebrow;
+  if (metaEl) metaEl.textContent = summary.meta;
+  if (avatarEl) avatarEl.textContent = getEmployeeDirectoryAvatarToken(employee);
+  if (badgesEl) {
+    badgesEl.innerHTML = '';
+    badgesEl.append(
+      buildEmployeeDirectoryBadge(getEmployeeRoleLabel(employee), 'status-pill status-pill-neutral'),
+      buildEmployeeDirectoryBadge(getEmployeeEmploymentStatusMeta(employee).label, getEmployeeEmploymentStatusMeta(employee).className),
+    );
+  }
+}
+
+function buildEmployeeDirectoryOverviewTab(detail = null) {
+  const employee = detail?.employee || {};
+  const attendanceRows = getEmployeeDirectoryAttendanceRowsForDisplay(detail);
+  const requestRows = Array.isArray(detail?.requests?.rows) ? detail.requests.rows : [];
+  const upcomingRows = Array.isArray(detail?.schedule?.upcoming) ? detail.schedule.upcoming : [];
+  const kpis = [
+    {
+      label: '출퇴근 예외',
+      value: Number(detail?.attendance?.summary?.lateCount || 0) + Number(detail?.attendance?.summary?.anomalyCount || 0),
+      meta: '최근 7일 기준',
+      tone: 'warn',
+    },
+    {
+      label: '다음 일정',
+      value: upcomingRows[0]?.shiftLabel || '없음',
+      meta: upcomingRows[0] ? `${upcomingRows[0].dateLabel} · ${upcomingRows[0].shiftTime}` : '다가오는 일정이 없습니다',
+    },
+    {
+      label: '잔여 연차',
+      value: formatLeaveUnits(detail?.leave?.summary?.annualRemaining || 0),
+      meta: '사용 가능',
+      tone: 'success',
+    },
+    {
+      label: '대기 요청',
+      value: Number(detail?.requests?.summary?.pending || 0),
+      meta: '최근 요청 기준',
+      tone: 'accent',
+    },
+  ];
+
+  const fragment = document.createDocumentFragment();
+  if (hasEmployeeDirectoryMeaningfulSummary(kpis)) {
+    fragment.appendChild(createEmployeeDirectorySection('현재 상태', buildEmployeeDirectoryKpiGrid(kpis)));
+  } else {
+    fragment.appendChild(createEmployeeDirectorySection('현재 상태', buildEmployeeDirectoryCompactEmpty('현재 표시할 요약이 없습니다.', '출퇴근 예외, 예정 일정, 휴가, 요청 데이터가 아직 없습니다.')));
+  }
+
+  fragment.appendChild(createEmployeeDirectorySection('근무 정보', buildEmployeeDirectoryFactGrid([
+    { label: '회사', value: resolveEmployeeCompanyDisplayName(employee) },
+    { label: '지점', value: getEmployeeSiteDisplayLabel(employee) },
+    { label: '직원번호', value: String(employee?.employee_code || '').trim() || '-' },
+    { label: '관리번호', value: String(employee?.management_no_str || employee?.management_no || '').trim() || '-' },
+    { label: '역할', value: getEmployeeRoleLabel(employee) },
+    { label: '재직상태', value: getEmployeeEmploymentStatusMeta(employee).label },
+    { label: '계정 연동', value: getEmployeeAccountLinkageMeta(employee).label },
+    { label: '입사일', value: formatDateLabel(employee?.hire_date, '-') },
+    { label: '연락처', value: String(employee?.phone || '').trim() || '-' },
+    { label: '생년월일', value: formatDateLabel(employee?.birth_date, '-') },
+  ])));
+
+  const activityGrid = document.createElement('div');
+  activityGrid.className = 'employee-directory-activity-grid';
+  const buildActivityCard = (title, listNode) => {
+    const section = document.createElement('section');
+    section.className = 'employee-directory-activity-card';
+    const heading = document.createElement('h5');
+    heading.textContent = title;
+    section.append(heading, listNode);
+    return section;
+  };
+  activityGrid.append(
+    buildActivityCard('최근 출퇴근', buildEmployeeDirectoryList(
+      attendanceRows.slice(0, 3).map((row) => ({
+        title: `${row.dateLabel} · ${row.statusLabel}`,
+        subtitle: `${row.siteLabel} · 출근 ${row.checkInLabel} · 퇴근 ${row.checkOutLabel}`,
+        meta: row.leaveLabel !== '-' ? `휴가 ${row.leaveLabel}` : row.workHours,
+      })),
+      {
+        emptyTitle: '최근 출퇴근 기록이 없습니다.',
+        emptyDescription: '표시할 최근 출퇴근 상태가 없습니다.',
+      },
+    )),
+    buildActivityCard('다가오는 일정', buildEmployeeDirectoryList(
+      upcomingRows.slice(0, 3).map((row) => ({
+        title: `${row.dateLabel} · ${row.shiftLabel}`,
+        subtitle: `${row.siteLabel} · ${row.shiftTime}`,
+        meta: row.shiftNote,
+      })),
+      {
+        emptyTitle: '다가오는 일정이 없습니다.',
+        emptyDescription: '예정된 스케줄이 없습니다.',
+      },
+    )),
+    buildActivityCard('최근 요청', buildEmployeeDirectoryList(
+      requestRows.slice(0, 3).map((item) => ({
+        title: `${item.requestType} · ${item.statusLabel}`,
+        subtitle: `${item.targetDateLabel} · ${item.siteName || '-'}`,
+        meta: `${item.requestedAtLabel}${item.note ? ` · ${item.note}` : ''}`,
+      })),
+      {
+        emptyTitle: '최근 요청이 없습니다.',
+        emptyDescription: '표시할 요청 이력이 없습니다.',
+      },
+    )),
+  );
+  fragment.appendChild(createEmployeeDirectorySection('최근 활동', activityGrid));
+  return fragment;
+}
+
+function buildEmployeeDirectoryAttendanceTab(detail = null) {
+  const rows = getEmployeeDirectoryAttendanceRowsForDisplay(detail);
+  if (!rows.length) {
+    return buildEmployeeDirectoryCompactEmpty('최근 출퇴근 기록이 없습니다.', '최근 7일 기준 출퇴근 또는 휴가 데이터가 없습니다.');
+  }
+  const fragment = document.createDocumentFragment();
+  fragment.appendChild(createEmployeeDirectorySection('출퇴근 요약', buildEmployeeDirectoryKpiGrid([
+    { label: '정상', value: Number(detail?.attendance?.summary?.normalCount || 0), tone: 'success' },
+    { label: '지각', value: Number(detail?.attendance?.summary?.lateCount || 0), tone: 'warn' },
+    { label: '누락/이상', value: Number(detail?.attendance?.summary?.anomalyCount || 0), tone: 'danger' },
+    { label: '연차/반차', value: Number(detail?.attendance?.summary?.leaveCount || 0) },
+  ])));
+  fragment.appendChild(createEmployeeDirectorySection('최근 출퇴근 기록', buildEmployeeDirectoryList(
+    rows.slice(0, 7).map((row) => ({
+      title: `${row.dateLabel} · ${row.statusLabel}`,
+      subtitle: `${row.siteLabel} · 출근 ${row.checkInLabel} · 퇴근 ${row.checkOutLabel}`,
+      meta: `근무 ${row.workHours}${row.leaveLabel !== '-' ? ` · ${row.leaveLabel}` : ''}`,
+    })),
+    {
+      emptyTitle: '출퇴근 기록이 없습니다.',
+      emptyDescription: '최근 7일 기준 출퇴근 또는 휴가 데이터가 없습니다.',
+    },
+  )));
+  return fragment;
+}
+
+function buildEmployeeDirectoryScheduleTab(detail = null) {
+  const upcoming = Array.isArray(detail?.schedule?.upcoming) ? detail.schedule.upcoming : [];
+  const summaryItems = [
+    { label: '이번달 배정', value: Number(detail?.schedule?.summary?.thisMonthAssigned || 0) },
+    { label: '다음달 배정', value: Number(detail?.schedule?.summary?.nextMonthAssigned || 0) },
+    { label: '휴가 표시', value: Number(detail?.schedule?.summary?.leaveMarked || 0) },
+    { label: '다음 일정', value: detail?.schedule?.summary?.nextShiftLabel || '없음', meta: upcoming[0]?.shiftTime || '' },
+  ];
+  if (!upcoming.length && !hasEmployeeDirectoryMeaningfulSummary(summaryItems)) {
+    return buildEmployeeDirectoryCompactEmpty('다가오는 일정이 없습니다.', '현재 표시할 스케줄 요약이 없습니다.');
+  }
+  const fragment = document.createDocumentFragment();
+  fragment.appendChild(createEmployeeDirectorySection('스케줄 요약', buildEmployeeDirectoryKpiGrid(summaryItems)));
+  fragment.appendChild(createEmployeeDirectorySection('다가오는 일정', buildEmployeeDirectoryList(
+    upcoming.map((row) => ({
+      title: `${row.dateLabel} · ${row.shiftLabel}`,
+      subtitle: `${row.siteLabel} · ${row.shiftTime}`,
+      meta: row.shiftNote,
+    })),
+    {
+      emptyTitle: '다가오는 일정이 없습니다.',
+      emptyDescription: '이번달/다음달 기준 배정된 일정이 없습니다.',
+    },
+  )));
+  return fragment;
+}
+
+function buildEmployeeDirectoryLeaveRequestsTab(detail = null) {
+  const leaveRows = Array.isArray(detail?.leave?.rows) ? detail.leave.rows : [];
+  const requestRows = Array.isArray(detail?.requests?.rows) ? detail.requests.rows : [];
+  const leaveKpis = [
+    { label: '사용 연차', value: formatLeaveUnits(detail?.leave?.summary?.annualUsed || 0) },
+    { label: '잔여 연차', value: formatLeaveUnits(detail?.leave?.summary?.annualRemaining || 0), tone: 'success' },
+    { label: '반차', value: formatLeaveUnits(detail?.leave?.summary?.halfUsed || 0, '회') },
+    { label: '대기 요청', value: Number(detail?.leave?.summary?.pendingCount || 0), tone: 'warn' },
+  ];
+  const requestKpis = [
+    { label: '전체 요청', value: Number(detail?.requests?.summary?.total || 0) },
+    { label: '대기', value: Number(detail?.requests?.summary?.pending || 0), tone: 'warn' },
+    { label: '완료', value: Number(detail?.requests?.summary?.completed || 0), tone: 'success' },
+    { label: '반려', value: Number(detail?.requests?.summary?.rejected || 0), tone: 'danger' },
+  ];
+  if (!leaveRows.length && !requestRows.length && !hasEmployeeDirectoryMeaningfulSummary(leaveKpis) && !hasEmployeeDirectoryMeaningfulSummary(requestKpis)) {
+    return buildEmployeeDirectoryCompactEmpty('휴가·요청 이력이 없습니다.', '표시할 휴가나 요청 데이터가 없습니다.');
+  }
+  const fragment = document.createDocumentFragment();
+  fragment.appendChild(createEmployeeDirectorySection('휴가 요약', hasEmployeeDirectoryMeaningfulSummary(leaveKpis) || leaveRows.length
+    ? buildEmployeeDirectoryKpiGrid(leaveKpis)
+    : buildEmployeeDirectoryCompactEmpty('휴가 데이터가 없습니다.', '표시할 휴가 현황이 없습니다.')));
+  fragment.appendChild(createEmployeeDirectorySection('최근 휴가', buildEmployeeDirectoryList(
+    leaveRows.slice(0, 5).map((row) => ({
+      title: `${row.periodLabel} · ${row.typeLabel}`,
+      subtitle: `${row.statusLabel} · 사용 ${row.unitsLabel}`,
+      meta: row.reasonLabel,
+    })),
+    {
+      emptyTitle: '휴가 이력이 없습니다.',
+      emptyDescription: '최근 휴가 요청 또는 승인 이력이 없습니다.',
+    },
+  )));
+  fragment.appendChild(createEmployeeDirectorySection('요청 요약', hasEmployeeDirectoryMeaningfulSummary(requestKpis) || requestRows.length
+    ? buildEmployeeDirectoryKpiGrid(requestKpis)
+    : buildEmployeeDirectoryCompactEmpty('요청 데이터가 없습니다.', '표시할 요청 현황이 없습니다.')));
+  fragment.appendChild(createEmployeeDirectorySection('최근 요청', buildEmployeeDirectoryList(
+    requestRows.slice(0, 5).map((item) => ({
+      title: `${item.requestType} · ${item.statusLabel}`,
+      subtitle: `${item.targetDateLabel} · ${item.siteName || '-'}`,
+      meta: `${item.requestedAtLabel}${item.note ? ` · ${item.note}` : ''}`,
+    })),
+    {
+      emptyTitle: '요청 이력이 없습니다.',
+      emptyDescription: '출퇴근, 휴가, 정정, 문서 요청 이력이 없습니다.',
+    },
+  )));
+  return fragment;
+}
+
 function getEmployeeDirectoryTenantCode(row = {}) {
   return String(row?.tenant_code || getTenantCodeForScopedAdminApi() || state.user?.tenant_code || '').trim().toLowerCase();
 }
@@ -30433,7 +30785,7 @@ function doesRequestItemMatchEmployee(item = {}, employeeRow = {}) {
 }
 
 function renderEmployeeDirectoryDetailTabs() {
-  const activeTab = normalizeEmployeeDetailTab(state.employeeAdmin?.detailTab || 'basic');
+  const activeTab = normalizeEmployeeDetailTab(state.employeeAdmin?.detailTab || 'overview');
   document.querySelectorAll('#employeeDirectoryDetailPanel .employee-directory-detail-tab').forEach((button) => {
     if (!(button instanceof HTMLButtonElement)) return;
     const isActive = String(button.dataset.tab || '').trim() === activeTab;
@@ -30447,8 +30799,12 @@ function renderEmployeeDirectoryDetailActions(detail = null) {
   if (!(actions instanceof HTMLElement)) return;
   actions.innerHTML = '';
   const employeeId = String(detail?.employee?.id || state.employeeAdmin?.detailEmployeeId || '').trim();
-  if (!employeeId) return;
+  if (!employeeId) {
+    actions.classList.add('hidden');
+    return;
+  }
   const fragment = document.createDocumentFragment();
+  let visibleActionCount = 0;
 
   if (can('employeeWrite')) {
     const editBtn = document.createElement('button');
@@ -30458,14 +30814,16 @@ function renderEmployeeDirectoryDetailActions(detail = null) {
     editBtn.dataset.employeeId = employeeId;
     editBtn.textContent = '직원 수정';
     fragment.appendChild(editBtn);
+    visibleActionCount += 1;
   }
 
   [
-    ['employee-directory-open-attendance', '출퇴근 열기'],
-    ['employee-directory-open-schedule', '스케줄 열기'],
-    ['employee-directory-open-leave', '휴가 열기'],
-    ['employee-directory-open-requests', '요청 열기'],
-  ].forEach(([action, label]) => {
+    [can('schedule'), 'employee-directory-open-schedule', '스케줄 보기'],
+    [can('attendance') || can('attendanceReview'), 'employee-directory-open-attendance', '출퇴근 보기'],
+    [can('leave') || can('leaveReview'), 'employee-directory-open-leave', '휴가 보기'],
+    [can('leave') || can('leaveReview') || can('attendanceReview'), 'employee-directory-open-requests', '요청 보기'],
+  ].forEach(([enabled, action, label]) => {
+    if (!enabled) return;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'btn btn-secondary';
@@ -30473,134 +30831,38 @@ function renderEmployeeDirectoryDetailActions(detail = null) {
     button.dataset.employeeId = employeeId;
     button.textContent = label;
     fragment.appendChild(button);
+    visibleActionCount += 1;
   });
-  actions.appendChild(fragment);
+  actions.classList.toggle('hidden', visibleActionCount === 0);
+  if (visibleActionCount > 0) {
+    actions.appendChild(fragment);
+  }
 }
 
 function renderEmployeeDirectoryDrawer(detail = null) {
   const body = getEmployeeDirectoryDetailBody();
-  const titleEl = $('#employeeDirectoryDetailTitle');
-  const subtitleEl = $('#employeeDirectoryDetailSubtitle');
-  const eyebrowEl = $('#employeeDirectoryDetailEyebrow');
   if (!(body instanceof HTMLElement)) return;
 
   renderEmployeeDirectoryDetailTabs();
+  renderEmployeeDirectoryHeader(detail);
   if (!detail) {
     body.innerHTML = '';
-    body.appendChild(buildEmployeeDirectoryCompactEmpty('직원을 선택해 주세요.', '목록에서 직원을 클릭하면 기본정보와 요약 상태를 확인할 수 있습니다.'));
-    if (titleEl) titleEl.textContent = '직원을 선택해 주세요';
-    if (subtitleEl) subtitleEl.textContent = '목록에서 직원을 클릭하면 기본정보와 요약 상태가 표시됩니다.';
-    if (eyebrowEl) eyebrowEl.textContent = '직원 선택';
+    body.appendChild(buildEmployeeDirectoryCompactEmpty('직원을 선택해 주세요.', '목록에서 직원을 클릭하면 직원 개요와 최근 상태를 확인할 수 있습니다.'));
     renderEmployeeDirectoryDetailActions(null);
     return;
   }
 
-  const employee = detail.employee || {};
-  if (titleEl) titleEl.textContent = String(employee.full_name || employee.employee_code || '직원 상세').trim() || '직원 상세';
-  if (subtitleEl) {
-    subtitleEl.textContent = `${getEmployeeSiteDisplayLabel(employee)} · ${getEmployeeRoleLabel(employee)} · ${getEmployeeEmploymentStatusMeta(employee).label}`;
-  }
-  if (eyebrowEl) eyebrowEl.textContent = String(employee.employee_code || employee.management_no_str || '직원').trim() || '직원';
-  const activeTab = normalizeEmployeeDetailTab(state.employeeAdmin?.detailTab || 'basic');
+  const activeTab = normalizeEmployeeDetailTab(state.employeeAdmin?.detailTab || 'overview');
   body.innerHTML = '';
 
-  if (activeTab === 'basic') {
-    const fragment = document.createDocumentFragment();
-    fragment.appendChild(createEmployeeDirectorySection('기본정보', buildEmployeeDirectorySummaryGrid([
-      { label: '회사', value: resolveEmployeeCompanyDisplayName(employee) },
-      { label: '현장', value: getEmployeeSiteDisplayLabel(employee) },
-      { label: '직원번호', value: employee.employee_code || '-' },
-      { label: '관리번호', value: employee.management_no_str || employee.management_no || '-' },
-      { label: '역할', value: getEmployeeRoleLabel(employee) },
-      { label: '재직상태', value: getEmployeeEmploymentStatusMeta(employee).label },
-      { label: '계정 연결', value: getEmployeeAccountLinkageMeta(employee).label },
-      { label: '입사일', value: formatDateLabel(employee.hire_date, '-') },
-      { label: '퇴직일', value: formatDateLabel(employee.leave_date, '-') },
-      { label: '연락처', value: employee.phone || '-' },
-      { label: '생년월일', value: formatDateLabel(employee.birth_date, '-') },
-      { label: '주소', value: employee.address || '-' },
-    ])));
-    body.appendChild(fragment);
+  if (activeTab === 'overview') {
+    body.appendChild(buildEmployeeDirectoryOverviewTab(detail));
   } else if (activeTab === 'attendance') {
-    const fragment = document.createDocumentFragment();
-    fragment.appendChild(createEmployeeDirectorySection('최근 출퇴근 요약', buildEmployeeDirectorySummaryGrid([
-      { label: '정상', value: String(detail.attendance.summary.normalCount || 0) },
-      { label: '지각', value: String(detail.attendance.summary.lateCount || 0) },
-      { label: '누락/이상', value: String(detail.attendance.summary.anomalyCount || 0) },
-      { label: '연차/반차', value: String(detail.attendance.summary.leaveCount || 0) },
-    ])));
-    fragment.appendChild(createEmployeeDirectorySection('최근 7일 기록', buildEmployeeDirectoryList(
-      detail.attendance.rows.map((row) => ({
-        title: `${row.dateLabel} · ${row.statusLabel}`,
-        subtitle: `${row.siteLabel} · 출근 ${row.checkInLabel} · 퇴근 ${row.checkOutLabel}`,
-        meta: `근무 ${row.workHours}${row.leaveLabel !== '-' ? ` · ${row.leaveLabel}` : ''}`,
-      })),
-      {
-        emptyTitle: '출퇴근 기록이 없습니다.',
-        emptyDescription: '최근 7일 기준 출퇴근 또는 휴가 데이터가 없습니다.',
-      },
-    )));
-    body.appendChild(fragment);
+    body.appendChild(buildEmployeeDirectoryAttendanceTab(detail));
   } else if (activeTab === 'schedule') {
-    const fragment = document.createDocumentFragment();
-    fragment.appendChild(createEmployeeDirectorySection('현재 스케줄 요약', buildEmployeeDirectorySummaryGrid([
-      { label: '이번달 배정', value: String(detail.schedule.summary.thisMonthAssigned || 0) },
-      { label: '다음달 배정', value: String(detail.schedule.summary.nextMonthAssigned || 0) },
-      { label: '휴가 표시', value: String(detail.schedule.summary.leaveMarked || 0) },
-      { label: '다음 일정', value: detail.schedule.summary.nextShiftLabel || '-' },
-    ])));
-    fragment.appendChild(createEmployeeDirectorySection('다가오는 일정', buildEmployeeDirectoryList(
-      detail.schedule.upcoming.map((row) => ({
-        title: `${row.dateLabel} · ${row.shiftLabel}`,
-        subtitle: `${row.siteLabel} · ${row.shiftTime}`,
-        meta: row.shiftNote,
-      })),
-      {
-        emptyTitle: '다가오는 일정이 없습니다.',
-        emptyDescription: '이번달/다음달 기준 배정된 일정이 없습니다.',
-      },
-    )));
-    body.appendChild(fragment);
-  } else if (activeTab === 'leave') {
-    const fragment = document.createDocumentFragment();
-    fragment.appendChild(createEmployeeDirectorySection('휴가 요약', buildEmployeeDirectorySummaryGrid([
-      { label: '사용 연차', value: formatLeaveUnits(detail.leave.summary.annualUsed || 0) },
-      { label: '잔여 연차', value: formatLeaveUnits(detail.leave.summary.annualRemaining || 0) },
-      { label: '반차', value: formatLeaveUnits(detail.leave.summary.halfUsed || 0, '회') },
-      { label: '대기 요청', value: String(detail.leave.summary.pendingCount || 0) },
-    ])));
-    fragment.appendChild(createEmployeeDirectorySection('최근 휴가 이력', buildEmployeeDirectoryList(
-      detail.leave.rows.map((row) => ({
-        title: `${row.periodLabel} · ${row.typeLabel}`,
-        subtitle: `${row.statusLabel} · 사용 ${row.unitsLabel}`,
-        meta: row.reasonLabel,
-      })),
-      {
-        emptyTitle: '휴가 이력이 없습니다.',
-        emptyDescription: '최근 휴가 요청 또는 승인 이력이 없습니다.',
-      },
-    )));
-    body.appendChild(fragment);
+    body.appendChild(buildEmployeeDirectoryScheduleTab(detail));
   } else {
-    const fragment = document.createDocumentFragment();
-    fragment.appendChild(createEmployeeDirectorySection('요청 이력', buildEmployeeDirectorySummaryGrid([
-      { label: '전체 요청', value: String(detail.requests.summary.total || 0) },
-      { label: '대기', value: String(detail.requests.summary.pending || 0) },
-      { label: '완료', value: String(detail.requests.summary.completed || 0) },
-      { label: '반려', value: String(detail.requests.summary.rejected || 0) },
-    ])));
-    fragment.appendChild(createEmployeeDirectorySection('최근 요청', buildEmployeeDirectoryList(
-      detail.requests.rows.map((item) => ({
-        title: `${item.requestType} · ${item.statusLabel}`,
-        subtitle: `${item.targetDateLabel} · ${item.siteName || '-'}`,
-        meta: `${item.requestedAtLabel}${item.note ? ` · ${item.note}` : ''}`,
-      })),
-      {
-        emptyTitle: '요청 이력이 없습니다.',
-        emptyDescription: '출퇴근, 휴가, 정정, 문서 요청 이력이 없습니다.',
-      },
-    )));
-    body.appendChild(fragment);
+    body.appendChild(buildEmployeeDirectoryLeaveRequestsTab(detail));
   }
   renderEmployeeDirectoryDetailActions(detail);
 }
@@ -30624,6 +30886,8 @@ async function loadEmployeeDirectoryDetail(employeeId = '', { force = false } = 
   state.employeeAdmin.detailError = '';
   const seq = Number(state.employeeAdmin.detailLoadSeq || 0) + 1;
   state.employeeAdmin.detailLoadSeq = seq;
+  renderEmployeeDirectoryHeader({ employee });
+  renderEmployeeDirectoryDetailActions({ employee });
   const body = getEmployeeDirectoryDetailBody();
   if (body) {
     body.innerHTML = '';
@@ -30766,7 +31030,7 @@ async function openEmployeeDirectoryDetail(employeeId = '', { force = false } = 
   const normalizedId = String(employeeId || '').trim();
   if (!normalizedId) return;
   state.employeeAdmin.detailEmployeeId = normalizedId;
-  state.employeeAdmin.detailTab = normalizeEmployeeDetailTab(state.employeeAdmin.detailTab || 'basic');
+  state.employeeAdmin.detailTab = normalizeEmployeeDetailTab(state.employeeAdmin.detailTab || 'overview');
   setEmployeeDirectoryDrawerOpen(true);
   syncEmployeeDirectorySelection();
   await loadEmployeeDirectoryDetail(normalizedId, { force });
@@ -50226,7 +50490,7 @@ function bindUiEvents() {
     }
 
     if (action === 'employee-directory-switch-tab') {
-      const nextTab = normalizeEmployeeDetailTab(actionEl.dataset.tab || 'basic');
+      const nextTab = normalizeEmployeeDetailTab(actionEl.dataset.tab || 'overview');
       if (nextTab === state.employeeAdmin.detailTab) return;
       state.employeeAdmin.detailTab = nextTab;
       const detailId = String(state.employeeAdmin.detailEmployeeId || '').trim();

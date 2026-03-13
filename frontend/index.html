@@ -4247,24 +4247,30 @@
             <div id="employeeDirectoryDetailBackdrop" class="employee-directory-drawer-backdrop hidden" data-action="employee-directory-close"></div>
             <aside id="employeeDirectoryDetailPanel" class="employee-directory-drawer hidden" aria-hidden="true">
               <div class="employee-directory-drawer-head">
-                <div class="employee-directory-drawer-title">
-                  <span id="employeeDirectoryDetailEyebrow" class="employee-directory-drawer-eyebrow">직원 선택</span>
-                  <h3 id="employeeDirectoryDetailTitle">직원을 선택해 주세요</h3>
-                  <p id="employeeDirectoryDetailSubtitle" class="muted">목록에서 직원을 클릭하면 기본정보와 요약 상태가 표시됩니다.</p>
+                <div class="employee-directory-drawer-head-main">
+                  <div id="employeeDirectoryDetailAvatar" class="employee-directory-drawer-avatar" aria-hidden="true">직</div>
+                  <div class="employee-directory-drawer-title">
+                    <span id="employeeDirectoryDetailEyebrow" class="employee-directory-drawer-eyebrow">직원 선택</span>
+                    <div class="employee-directory-drawer-title-row">
+                      <h3 id="employeeDirectoryDetailTitle">직원을 선택해 주세요</h3>
+                      <div id="employeeDirectoryDetailBadges" class="employee-directory-drawer-badges"></div>
+                    </div>
+                    <p id="employeeDirectoryDetailSubtitle" class="muted">목록에서 직원을 클릭하면 직원 개요와 최근 상태가 표시됩니다.</p>
+                    <div id="employeeDirectoryDetailMeta" class="employee-directory-drawer-meta"></div>
+                  </div>
                 </div>
                 <div class="employee-directory-drawer-head-actions">
                   <button class="btn btn-icon" type="button" aria-label="닫기" data-action="employee-directory-close">✕</button>
                 </div>
+                <div id="employeeDirectoryDetailActions" class="employee-directory-drawer-actions"></div>
               </div>
               <div class="employee-directory-detail-tabs" role="tablist" aria-label="직원 상세 탭">
-                <button class="employee-directory-detail-tab active" type="button" data-action="employee-directory-switch-tab" data-tab="basic" role="tab" aria-selected="true">기본정보</button>
-                <button class="employee-directory-detail-tab" type="button" data-action="employee-directory-switch-tab" data-tab="attendance" role="tab" aria-selected="false">출퇴근 요약</button>
-                <button class="employee-directory-detail-tab" type="button" data-action="employee-directory-switch-tab" data-tab="schedule" role="tab" aria-selected="false">스케줄 요약</button>
-                <button class="employee-directory-detail-tab" type="button" data-action="employee-directory-switch-tab" data-tab="leave" role="tab" aria-selected="false">휴가 요약</button>
-                <button class="employee-directory-detail-tab" type="button" data-action="employee-directory-switch-tab" data-tab="requests" role="tab" aria-selected="false">요청 이력</button>
+                <button class="employee-directory-detail-tab active" type="button" data-action="employee-directory-switch-tab" data-tab="overview" role="tab" aria-selected="true">개요</button>
+                <button class="employee-directory-detail-tab" type="button" data-action="employee-directory-switch-tab" data-tab="attendance" role="tab" aria-selected="false">출퇴근</button>
+                <button class="employee-directory-detail-tab" type="button" data-action="employee-directory-switch-tab" data-tab="schedule" role="tab" aria-selected="false">스케줄</button>
+                <button class="employee-directory-detail-tab" type="button" data-action="employee-directory-switch-tab" data-tab="leave_requests" role="tab" aria-selected="false">휴가·요청</button>
               </div>
               <div id="employeeDirectoryDetailBody" class="employee-directory-drawer-body"></div>
-              <div id="employeeDirectoryDetailActions" class="employee-directory-drawer-actions"></div>
             </aside>
 
             <ul id="employeeList" class="list"></ul>
