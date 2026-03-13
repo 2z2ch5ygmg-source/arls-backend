@@ -43,7 +43,9 @@ from app.routers.v1.schedules import (
     _prepare_support_roster_source_workbook,
     _read_support_roundtrip_metadata,
     _resolve_support_roster_hq_sheet_site,
+    _resolve_support_roundtrip_source_state_after_refresh,
     _resolve_sentrix_support_materialized_shift_defaults,
+    _support_roundtrip_source_changed,
     _write_sentrix_support_hq_metadata_sheet,
     SENTRIX_SUPPORT_HQ_METADATA_SHEET_NAME,
 )
@@ -584,7 +586,7 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertFalse(workspace.sites[1].selectable)
         self.assertEqual(workspace.sites[1].blocked_reason, "원본 업로드 workbook 없음")
 
-    def test_workspace_payload_keeps_stale_download_ready_site_selectable(self):
+    def test_workspace_payload_disables_stale_download_ready_site(self):
         with patch("app.routers.v1.schedules._list_support_roundtrip_workspace_sites", return_value=[
             {
                 "site_id": "site-1",
@@ -613,9 +615,53 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
             )
 
         self.assertEqual(len(workspace.sites), 1)
-        self.assertTrue(workspace.sites[0].selectable)
+        self.assertFalse(workspace.sites[0].selectable)
         self.assertEqual(workspace.sites[0].upload_state, "재추출 필요")
-        self.assertIsNone(workspace.sites[0].blocked_reason)
+        self.assertEqual(workspace.sites[0].blocked_reason, "재추출 필요 / stale")
+
+    def test_support_roundtrip_source_changed_prefers_raw_workbook_sha(self):
+        self.assertFalse(
+            _support_roundtrip_source_changed(
+                current_source_revision="rev-old",
+                current_raw_workbook_sha256="abc123",
+                next_source_revision="rev-new",
+                next_raw_workbook_sha256="abc123",
+            )
+        )
+        self.assertTrue(
+            _support_roundtrip_source_changed(
+                current_source_revision="rev-old",
+                current_raw_workbook_sha256="abc123",
+                next_source_revision="rev-old",
+                next_raw_workbook_sha256="zzz999",
+            )
+        )
+        self.assertFalse(
+            _support_roundtrip_source_changed(
+                current_source_revision="rev-same",
+                current_raw_workbook_sha256=None,
+                next_source_revision="rev-same",
+                next_raw_workbook_sha256=None,
+            )
+        )
+
+    def test_restore_hq_merge_state_when_same_source_reuploaded(self):
+        restored = _resolve_support_roundtrip_source_state_after_refresh(
+            current_row={
+                "state": "hq_merge_stale",
+                "hq_merge_available": False,
+                "conflict_required": False,
+                "final_download_enabled": False,
+            },
+            latest_hq_batch_row={
+                "status": "applied",
+                "conflict_count": 0,
+            },
+        )
+        self.assertEqual(restored["state"], "hq_merge_available")
+        self.assertTrue(restored["hq_merge_available"])
+        self.assertFalse(restored["conflict_required"])
+        self.assertTrue(restored["final_download_enabled"])
 
     def test_clone_support_hq_sheet_to_workbook_copies_dimension_style_without_error(self):
         source_workbook = Workbook()

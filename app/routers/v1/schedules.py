@@ -6384,7 +6384,9 @@ def _build_support_roster_hq_workspace_site_payload(
         blocked_reason = "원본 업로드 workbook 없음"
     elif not download_ready:
         blocked_reason = "파일 없음"
-    selectable = download_ready
+    elif stale:
+        blocked_reason = "재추출 필요 / stale"
+    selectable = download_ready and not stale
     return SupportRosterHqWorkspaceSiteOut(
         site_code=site_code,
         site_name=site_name,
@@ -10147,6 +10149,101 @@ def _get_support_roundtrip_source(conn, *, tenant_id: str, site_id: str, month_k
         return cur.fetchone()
 
 
+def _load_schedule_import_batch_source_meta(
+    conn,
+    *,
+    batch_id: str | None,
+    tenant_id: str,
+) -> dict[str, Any]:
+    if not str(batch_id or "").strip():
+        return {}
+    ensure_schedule_import_raw_workbook_columns(conn)
+    has_raw_sha_column = table_column_exists(conn, "schedule_import_batches", "raw_workbook_sha256")
+    select_columns = [
+        "filename",
+        "raw_workbook_sha256" if has_raw_sha_column else "NULL::text AS raw_workbook_sha256",
+    ]
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT {", ".join(select_columns)}
+            FROM schedule_import_batches
+            WHERE id = %s
+              AND tenant_id = %s
+            LIMIT 1
+            """,
+            (batch_id, tenant_id),
+        )
+        return cur.fetchone() or {}
+
+
+def _load_support_roundtrip_batch_state(conn, *, batch_id: str | None) -> dict[str, Any]:
+    if not str(batch_id or "").strip():
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT status,
+                   conflict_count,
+                   applied_rows,
+                   completed_at
+            FROM schedule_support_roundtrip_batches
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (batch_id,),
+        )
+        return cur.fetchone() or {}
+
+
+def _support_roundtrip_source_changed(
+    *,
+    current_source_revision: str | None,
+    current_raw_workbook_sha256: str | None,
+    next_source_revision: str | None,
+    next_raw_workbook_sha256: str | None,
+) -> bool:
+    current_sha = str(current_raw_workbook_sha256 or "").strip().lower()
+    next_sha = str(next_raw_workbook_sha256 or "").strip().lower()
+    if current_sha and next_sha:
+        return current_sha != next_sha
+    current_revision = str(current_source_revision or "").strip()
+    next_revision = str(next_source_revision or "").strip()
+    if current_revision and next_revision:
+        return current_revision != next_revision
+    return False
+
+
+def _resolve_support_roundtrip_source_state_after_refresh(
+    *,
+    current_row: dict[str, Any],
+    latest_hq_batch_row: dict[str, Any] | None,
+) -> dict[str, Any]:
+    batch = dict(latest_hq_batch_row or {})
+    status = str(batch.get("status") or "").strip()
+    conflict_count = max(int(batch.get("conflict_count") or 0), 0)
+    if status == "applied":
+        return {
+            "state": "hq_merge_available",
+            "hq_merge_available": True,
+            "conflict_required": False,
+            "final_download_enabled": True,
+        }
+    if status == "partial_applied":
+        return {
+            "state": "conflict_manual_review_required" if conflict_count > 0 else "waiting_for_hq_merge",
+            "hq_merge_available": False,
+            "conflict_required": conflict_count > 0,
+            "final_download_enabled": False,
+        }
+    return {
+        "state": str(current_row.get("state") or "waiting_for_hq_merge") or "waiting_for_hq_merge",
+        "hq_merge_available": bool(current_row.get("hq_merge_available")),
+        "conflict_required": bool(current_row.get("conflict_required")),
+        "final_download_enabled": bool(current_row.get("final_download_enabled")),
+    }
+
+
 def _list_support_roundtrip_assignments(
     conn,
     *,
@@ -10207,27 +10304,41 @@ def _register_support_roundtrip_source_after_import(
         month_key=month_key,
         source_batch_id=batch_id,
     )
+    batch = _load_schedule_import_batch_source_meta(
+        conn,
+        batch_id=batch_id,
+        tenant_id=str(target_tenant["id"]),
+    )
+    current = _get_support_roundtrip_source(
+        conn,
+        tenant_id=str(target_tenant["id"]),
+        site_id=str(site_row["id"]),
+        month_key=month_key,
+    )
+    previous_batch = _load_schedule_import_batch_source_meta(
+        conn,
+        batch_id=str(current.get("source_batch_id") or "").strip() or None if current else None,
+        tenant_id=str(target_tenant["id"]),
+    )
+    latest_hq_batch = _load_support_roundtrip_batch_state(
+        conn,
+        batch_id=str(current.get("latest_hq_batch_id") or "").strip() or None if current else None,
+    )
+    has_hq_history = bool(current and (current.get("hq_merge_available") or current.get("latest_hq_batch_id")))
+    source_changed = _support_roundtrip_source_changed(
+        current_source_revision=str(current.get("source_revision") or "").strip() or None if current else None,
+        current_raw_workbook_sha256=str(previous_batch.get("raw_workbook_sha256") or "").strip() or None,
+        next_source_revision=export_revision,
+        next_raw_workbook_sha256=str(batch.get("raw_workbook_sha256") or "").strip() or None,
+    )
+    stale_hq = bool(current and has_hq_history and source_changed)
+    restored_state = _resolve_support_roundtrip_source_state_after_refresh(
+        current_row=current or {},
+        latest_hq_batch_row=latest_hq_batch or None,
+    )
     with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT filename
-            FROM schedule_import_batches
-            WHERE id = %s
-              AND tenant_id = %s
-            LIMIT 1
-            """,
-            (batch_id, target_tenant["id"]),
-        )
-        batch = cur.fetchone() or {}
-        current = _get_support_roundtrip_source(
-            conn,
-            tenant_id=str(target_tenant["id"]),
-            site_id=str(site_row["id"]),
-            month_key=month_key,
-        )
-        stale_hq = bool(current and (current.get("hq_merge_available") or current.get("latest_hq_batch_id")))
         if current:
-            next_state = "hq_merge_stale" if stale_hq else "waiting_for_hq_merge"
+            next_state = "hq_merge_stale" if stale_hq else restored_state["state"]
             cur.execute(
                 """
                 UPDATE schedule_support_roundtrip_sources
@@ -10238,13 +10349,13 @@ def _register_support_roundtrip_source_after_import(
                     source_uploaded_role = %s,
                     source_uploaded_at = timezone('utc', now()),
                     state = %s,
-                    hq_merge_available = FALSE,
+                    hq_merge_available = %s,
                     hq_merge_stale = %s,
-                    conflict_required = FALSE,
-                    final_download_enabled = FALSE,
-                    latest_hq_batch_id = CASE WHEN %s THEN latest_hq_batch_id ELSE NULL END,
-                    latest_hq_revision = CASE WHEN %s THEN latest_hq_revision ELSE NULL END,
-                    latest_merged_revision = CASE WHEN %s THEN latest_merged_revision ELSE NULL END,
+                    conflict_required = %s,
+                    final_download_enabled = %s,
+                    latest_hq_batch_id = latest_hq_batch_id,
+                    latest_hq_revision = latest_hq_revision,
+                    latest_merged_revision = latest_merged_revision,
                     updated_at = timezone('utc', now())
                 WHERE id = %s
                 RETURNING *
@@ -10256,10 +10367,10 @@ def _register_support_roundtrip_source_after_import(
                     user["id"],
                     _support_roundtrip_normalize_role(user),
                     next_state,
+                    False if stale_hq else bool(restored_state["hq_merge_available"]),
                     stale_hq,
-                    stale_hq,
-                    stale_hq,
-                    stale_hq,
+                    False if stale_hq else bool(restored_state["conflict_required"]),
+                    False if stale_hq else bool(restored_state["final_download_enabled"]),
                     current["id"],
                 ),
             )
