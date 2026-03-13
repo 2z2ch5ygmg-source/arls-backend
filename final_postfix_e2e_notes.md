@@ -1,6 +1,6 @@
 # Final Postfix ARLS ↔ Sentrix E2E Verification
 
-검증 일시: 2026-03-13 (re-verified)  
+검증 일시: 2026-03-13 (final re-verification)  
 검증 방식: verification only, no product code changes
 
 ## 범위
@@ -23,14 +23,14 @@
   - `test_soc_support_assignment_bridge.py`
   - `test_arls_support_origin_materialization.py`
   - 합산 결과 `Ran 61 tests ... OK`
-- Sentrix 자동화 회귀
+- Sentrix 자동화 회귀 재실행
   - `/Users/mark/Desktop/security-ops-center/test_sentrix_support_roster_side_effects.py`
   - `/Users/mark/Desktop/security-ops-center/test_sentrix_support_roster_engine_core.py`
   - 합산 결과 `Ran 13 tests ... OK`
 
 ## 최종 결론
 
-이번 postfix QA 기준으로 요구된 8개 시나리오는 모두 통과했습니다. 다만 이 패스는 운영 workbook를 다시 업로드해 실제 운영 데이터를 변경하는 방식이 아니라, 운영 read-only 확인과 현재 브랜치의 회귀 하네스를 합쳐 판정했습니다.
+이번 final re-verification 기준으로 요구된 8개 시나리오는 모두 통과했습니다. 다만 이 패스는 운영 workbook를 다시 업로드해 실제 운영 데이터를 변경하는 방식이 아니라, 운영 read-only 확인과 현재 브랜치의 회귀 하네스를 합쳐 판정했습니다.
 
 핵심 판정:
 
@@ -39,6 +39,9 @@
 - exact-filled / underfilled / overfilled / external-only / mixed / approved->pending reversal이 모두 현재 회귀 하네스에서 통과합니다.
 - Step 3B side-effect band는 더 이상 `get_ticket_status_label` 오류나 좁은 `meaningful_change` gate 때문에 중단되지 않습니다.
 - valid self-staff만 ARLS bridge / support-origin materialization 대상이 되고, external worker는 Sentrix 안에서는 count되지만 ARLS로는 materialize되지 않습니다.
+- live deployed assets에서도 ownership split이 유지됩니다.
+  - Sentrix: legacy `hq-submission` -> ARLS redirect
+  - ARLS: independent HQ wizard state model 유지
 
 ## 시나리오별 요약
 

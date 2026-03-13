@@ -53,6 +53,7 @@
 ## Final unresolved issues
 
 - No blocking workflow issue was found in this postfix QA pass.
+- Both live health checks remained green during re-verification.
 - Residual non-blocking items:
   - shell pass did not capture browser screenshots
   - one ARLS test file has a local template-path portability issue
