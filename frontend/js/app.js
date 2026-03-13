@@ -8179,6 +8179,37 @@ function isDrawerItemActiveRoute(targetRouteRaw = '', currentRouteRaw = '') {
   return false;
 }
 
+function isDrawerRequestsSectionVisible(section = '', perms = getRolePermissions(), navRole = getNavigationRole()) {
+  const normalized = normalizeRequestsTabView(section);
+  if (normalized === 'leave') {
+    return Boolean(perms.leave || perms.leaveWrite || perms.leaveReview);
+  }
+  if (normalized === 'approvals') {
+    return isManagerShellRole(navRole) && Boolean(perms.attendanceReview || perms.leaveReview);
+  }
+  if (normalized === 'correction') {
+    return Boolean(perms.attendance || perms.attendanceWrite || isManagerShellRole(navRole));
+  }
+  if (normalized === 'documents') {
+    return true;
+  }
+  return Boolean(perms.attendance || perms.leave);
+}
+
+function isDrawerItemActive(item = null, currentRouteRaw = '') {
+  if (!item || typeof item !== 'object') return false;
+  const sectionMatch = String(item.sectionMatch || '').trim().toLowerCase();
+  if (sectionMatch) {
+    const currentRoute = normalizeRoutePath(parseRouteCandidate(currentRouteRaw).path);
+    if (currentRoute === ROUTE_REQUESTS) {
+      return normalizeRequestsTabView(state.requestsTabView) === normalizeRequestsTabView(sectionMatch);
+    }
+    if (sectionMatch === 'approvals' && currentRoute === ROUTE_APPROVALS) return true;
+    if (sectionMatch === 'correction' && currentRoute === ROUTE_REQUESTS_CORRECTION) return true;
+  }
+  return Boolean(item?.route) && isDrawerItemActiveRoute(item.route, currentRouteRaw);
+}
+
 const DRAWER_MENU_BY_ROLE = {
   EMPLOYEE: [
     { type: 'section', title: '홈' },
@@ -8204,10 +8235,13 @@ const DRAWER_MENU_BY_ROLE = {
       route: ROUTE_REQUESTS,
       icon: 'clipboard-list',
       children: [
-        { id: 'requests', title: '요청', action: 'drawer-open-route', route: ROUTE_REQUESTS },
+        { id: 'requests-exceptions', title: '출퇴근예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
+        { id: 'requests-leave', title: '휴가', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=leave`, sectionMatch: 'leave' },
+        { id: 'requests-approvals', title: '승인함', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=approvals`, sectionMatch: 'approvals' },
+        { id: 'requests-correction', title: '정정', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=correction`, sectionMatch: 'correction' },
+        { id: 'requests-documents', title: '문서', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=documents`, sectionMatch: 'documents' },
       ],
     },
-    { id: 'hr', title: '문서', action: 'drawer-open-route', route: ROUTE_HR, icon: 'file-text' },
     { id: 'schedule', title: '스케줄', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, icon: 'calendar-days' },
     { id: 'schedule-reports', title: '보고', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, icon: 'clipboard-list' },
     { type: 'section', title: '조직' },
@@ -8238,10 +8272,13 @@ const DRAWER_MENU_BY_ROLE = {
       route: ROUTE_REQUESTS,
       icon: 'clipboard-list',
       children: [
-        { id: 'requests', title: '요청', action: 'drawer-open-route', route: ROUTE_REQUESTS },
+        { id: 'requests-exceptions', title: '출퇴근예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
+        { id: 'requests-leave', title: '휴가', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=leave`, sectionMatch: 'leave' },
+        { id: 'requests-approvals', title: '승인함', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=approvals`, sectionMatch: 'approvals' },
+        { id: 'requests-correction', title: '정정', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=correction`, sectionMatch: 'correction' },
+        { id: 'requests-documents', title: '문서', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=documents`, sectionMatch: 'documents' },
       ],
     },
-    { id: 'hr', title: '문서', action: 'drawer-open-route', route: ROUTE_HR, icon: 'file-text' },
     { id: 'schedule', title: '스케줄', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, icon: 'calendar-days' },
     { id: 'schedule-reports', title: '보고', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, icon: 'clipboard-list' },
     { type: 'section', title: '조직' },
@@ -24646,7 +24683,7 @@ function setDrawerSubmenuExpanded(menuId = '', expanded = false) {
 
 function hasDrawerActiveChild(item, currentRoute = '') {
   const children = Array.isArray(item?.children) ? item.children : [];
-  return children.some((child) => child?.route && isDrawerItemActiveRoute(child.route, currentRoute));
+  return children.some((child) => isDrawerItemActive(child, currentRoute));
 }
 
 function buildDrawerMenuButton(item, currentRoute = '', { subitem = false } = {}) {
@@ -24658,7 +24695,7 @@ function buildDrawerMenuButton(item, currentRoute = '', { subitem = false } = {}
   btn.dataset.menuAction = String(item?.action || '').trim();
   if (item?.route) btn.dataset.route = String(item.route || '').trim();
   if (item?.view) btn.dataset.view = String(item.view || '').trim();
-  const active = Boolean(item?.route) && isDrawerItemActiveRoute(item.route, currentRoute);
+  const active = isDrawerItemActive(item, currentRoute);
   btn.classList.toggle('active', active);
   if (active) btn.setAttribute('aria-current', 'page');
   if (subitem) {
@@ -24732,6 +24769,9 @@ function renderDrawerMenu() {
     }
     const children = Array.isArray(item.children) ? item.children.filter((child) => {
       if (!child?.route) return false;
+      if (String(child?.sectionMatch || '').trim()) {
+        return isDrawerRequestsSectionVisible(child.sectionMatch, perms, role);
+      }
       return isRouteAllowed(child.route, perms, role);
     }) : [];
 
@@ -24744,7 +24784,7 @@ function renderDrawerMenu() {
     }
 
     const menuId = String(item.id || '').trim();
-    const active = Boolean(item.route && isDrawerItemActiveRoute(item.route, currentRoute)) || hasDrawerActiveChild(item, currentRoute);
+    const active = isDrawerItemActive(item, currentRoute) || hasDrawerActiveChild(item, currentRoute);
     const expanded = active || isDrawerSubmenuExpanded(menuId);
     setDrawerSubmenuExpanded(menuId, expanded);
 
