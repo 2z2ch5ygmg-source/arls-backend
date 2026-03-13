@@ -2704,6 +2704,7 @@ function createCombinedScheduleBoardItemFromItems(items = []) {
   const ranges = rows.map((item) => getScheduleBoardItemComparableRange(item)).filter(Boolean);
   if (ranges.length !== rows.length) return rows[0];
   const shiftTypes = Array.from(new Set(rows.flatMap((item) => getScheduleBoardDisplayShiftTypes(item))));
+  const includesNight = shiftTypes.includes('night');
   const startMinutes = Math.min(...ranges.map((range) => range.startMinutes));
   const endMinutes = Math.max(...ranges.map((range) => range.endMinutes));
   const combinedIds = Array.from(new Set(
@@ -2719,10 +2720,13 @@ function createCombinedScheduleBoardItemFromItems(items = []) {
   return {
     ...base,
     schedule_id: '',
+    shift_type: includesNight ? String(base.shift_type || '').trim() : 'day',
     employee_id: String(base.employee_id || '').trim(),
     start_time: formatScheduleComparableMinutesToTimeText(startMinutes),
     end_time: formatScheduleComparableMinutesToTimeText(endMinutes),
-    shift_label: shiftTypes.includes('night') ? '주야' : '복합근무',
+    shift_label: includesNight ? '주야' : '주간+초과',
+    schedule_display_type: includesNight ? '' : 'day',
+    schedule_display_label: includesNight ? '' : '주간근무',
     display_variant: 'combined',
     display_shift_types: shiftTypes,
     combined_schedule_ids: combinedIds,
@@ -44088,7 +44092,13 @@ function getScheduleBoardDayMap(month) {
 }
 
 function getScheduleCardVariant(item = {}) {
-  if (String(item?.display_variant || '').trim().toLowerCase() === 'combined') return 'combined';
+  if (String(item?.display_variant || '').trim().toLowerCase() === 'combined') {
+    const variants = getScheduleBoardDisplayShiftTypes(item);
+    if (variants.length && !variants.includes('night')) {
+      return 'day';
+    }
+    return 'combined';
+  }
   const shiftType = normalizeShiftType(item?.shift_type || '');
   const status = String(item?.status || '').trim().toLowerCase();
   const displayType = resolveScheduleDisplayType(item);
