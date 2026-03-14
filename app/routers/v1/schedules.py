@@ -10203,13 +10203,89 @@ def _load_support_roundtrip_batch_state(conn, *, batch_id: str | None) -> dict[s
         return cur.fetchone() or {}
 
 
+def _build_support_roundtrip_source_signature_from_import_payloads(
+    payload_rows: list[dict[str, Any]] | None,
+) -> str | None:
+    body_entries: list[dict[str, Any]] = []
+    support_entries: list[dict[str, Any]] = []
+    for payload in list(payload_rows or []):
+        source_block = str(payload.get("source_block") or "").strip()
+        if source_block == "body":
+            schedule_date = _normalize_schedule_import_payload_date(payload.get("schedule_date"))
+            duty_type = _normalize_schedule_template_duty_type(payload.get("duty_type"))
+            employee_token = _normalize_name_token(payload.get("employee_name"))
+            if not isinstance(schedule_date, date) or duty_type not in {"day", "overtime", "night"} or not employee_token:
+                continue
+            body_entries.append(
+                {
+                    "employee": employee_token,
+                    "date": schedule_date.isoformat(),
+                    "duty_type": duty_type,
+                    "work_value": str(payload.get("work_value") or "").strip(),
+                    "template_id": str(payload.get("template_id") or "").strip() or None,
+                    "shift_start_time": _normalize_time_text(payload.get("shift_start_time")),
+                    "shift_end_time": _normalize_time_text(payload.get("shift_end_time")),
+                    "paid_hours": _coerce_float_or_none(payload.get("paid_hours")),
+                }
+            )
+            continue
+        if source_block != "sentrix_support_ticket":
+            continue
+        schedule_date = _normalize_schedule_import_payload_date(payload.get("schedule_date"))
+        if not isinstance(schedule_date, date):
+            continue
+        detail_json = dict(payload.get("detail_json") or {})
+        request_count = _coerce_int_or_none(payload.get("request_count"))
+        support_entries.append(
+            {
+                "date": schedule_date.isoformat(),
+                "shift_kind": "night" if str(payload.get("shift_type") or "day").strip().lower() == "night" else "day",
+                "request_count": max(int(request_count or 0), 0),
+                "purpose_text": str(
+                    payload.get("purpose_text")
+                    or detail_json.get("purpose_text")
+                    or ""
+                ).strip() or None,
+                "day_reason_text": _extract_support_request_day_reason_text(payload, detail_json),
+            }
+        )
+    if not body_entries and not support_entries:
+        return None
+    payload = {
+        "body": sorted(
+            body_entries,
+            key=lambda item: (
+                str(item.get("employee") or ""),
+                str(item.get("date") or ""),
+                str(item.get("duty_type") or ""),
+            ),
+        ),
+        "support": sorted(
+            support_entries,
+            key=lambda item: (
+                str(item.get("date") or ""),
+                str(item.get("shift_kind") or ""),
+            ),
+        ),
+    }
+    return hashlib.sha256(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()[:24]
+
+
 def _support_roundtrip_source_changed(
     *,
     current_source_revision: str | None,
     current_raw_workbook_sha256: str | None,
     next_source_revision: str | None,
     next_raw_workbook_sha256: str | None,
+    current_source_signature: str | None = None,
+    next_source_signature: str | None = None,
 ) -> bool:
+    current_signature = str(current_source_signature or "").strip().lower()
+    next_signature = str(next_source_signature or "").strip().lower()
+    if current_signature and next_signature:
+        return current_signature != next_signature
     current_sha = str(current_raw_workbook_sha256 or "").strip().lower()
     next_sha = str(next_raw_workbook_sha256 or "").strip().lower()
     if current_sha and next_sha:
@@ -10243,8 +10319,11 @@ def _resolve_support_roundtrip_source_state_after_refresh(
             "conflict_required": conflict_count > 0,
             "final_download_enabled": False,
         }
+    current_state = str(current_row.get("state") or "waiting_for_hq_merge").strip() or "waiting_for_hq_merge"
+    if current_state == "hq_merge_stale":
+        current_state = "waiting_for_hq_merge"
     return {
-        "state": str(current_row.get("state") or "waiting_for_hq_merge") or "waiting_for_hq_merge",
+        "state": current_state,
         "hq_merge_available": bool(current_row.get("hq_merge_available")),
         "conflict_required": bool(current_row.get("conflict_required")),
         "final_download_enabled": bool(current_row.get("final_download_enabled")),
@@ -10331,12 +10410,19 @@ def _register_support_roundtrip_source_after_import(
         conn,
         batch_id=str(current.get("latest_hq_batch_id") or "").strip() or None if current else None,
     )
+    next_payload_rows = _load_schedule_import_payload_rows(conn, batch_id=batch_id)
+    current_payload_rows = _load_schedule_import_payload_rows(
+        conn,
+        batch_id=str(current.get("source_batch_id") or "").strip() or None if current else None,
+    ) if current else []
     has_hq_history = bool(current and (current.get("hq_merge_available") or current.get("latest_hq_batch_id")))
     source_changed = _support_roundtrip_source_changed(
         current_source_revision=str(current.get("source_revision") or "").strip() or None if current else None,
         current_raw_workbook_sha256=str(previous_batch.get("raw_workbook_sha256") or "").strip() or None,
         next_source_revision=export_revision,
         next_raw_workbook_sha256=str(batch.get("raw_workbook_sha256") or "").strip() or None,
+        current_source_signature=_build_support_roundtrip_source_signature_from_import_payloads(current_payload_rows),
+        next_source_signature=_build_support_roundtrip_source_signature_from_import_payloads(next_payload_rows),
     )
     stale_hq = bool(current and has_hq_history and source_changed)
     restored_state = _resolve_support_roundtrip_source_state_after_refresh(

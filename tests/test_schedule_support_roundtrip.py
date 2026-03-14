@@ -42,6 +42,7 @@ from app.routers.v1.schedules import (
     _parse_sentrix_hq_worker_cell,
     _prepare_support_roster_source_workbook,
     _read_support_roundtrip_metadata,
+    _build_support_roundtrip_source_signature_from_import_payloads,
     _resolve_support_roster_hq_sheet_site,
     _resolve_support_roundtrip_source_state_after_refresh,
     _resolve_sentrix_support_materialized_shift_defaults,
@@ -645,6 +646,117 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
             )
         )
 
+    def test_support_roundtrip_source_signature_ignores_review_only_support_metadata(self):
+        current_signature = _build_support_roundtrip_source_signature_from_import_payloads(
+            [
+                {
+                    "source_block": "body",
+                    "employee_name": "서경원",
+                    "schedule_date": date(2026, 3, 1),
+                    "duty_type": "day",
+                    "work_value": "12",
+                    "template_id": "tpl-day-12",
+                    "shift_start_time": "10:00:00",
+                    "shift_end_time": "22:00:00",
+                    "paid_hours": 12,
+                },
+                {
+                    "source_block": "sentrix_support_ticket",
+                    "schedule_date": date(2026, 3, 1),
+                    "shift_type": "day",
+                    "request_count": 2,
+                    "work_value": "섭외 2인 요청",
+                    "detail_json": {"required_count_raw": "섭외 2인 요청"},
+                },
+                {
+                    "source_block": "day_support_required_count",
+                    "schedule_date": date(2026, 3, 1),
+                    "work_value": "섭외 2인 요청",
+                },
+            ]
+        )
+        next_signature = _build_support_roundtrip_source_signature_from_import_payloads(
+            [
+                {
+                    "source_block": "body",
+                    "employee_name": "서경원",
+                    "schedule_date": date(2026, 3, 1),
+                    "duty_type": "day",
+                    "work_value": "12",
+                    "template_id": "tpl-day-12",
+                    "shift_start_time": "10:00:00",
+                    "shift_end_time": "22:00:00",
+                    "paid_hours": 12,
+                },
+                {
+                    "source_block": "sentrix_support_ticket",
+                    "schedule_date": date(2026, 3, 1),
+                    "shift_type": "day",
+                    "request_count": 2,
+                    "work_value": "셀 값 섭외 2인 요청",
+                    "detail_json": {"required_count_raw": "셀 값 섭외 2인 요청"},
+                },
+                {
+                    "source_block": "day_support_required_count",
+                    "schedule_date": date(2026, 3, 1),
+                    "work_value": "셀 값 섭외 2인 요청",
+                },
+                {
+                    "source_block": "day_support_worker",
+                    "schedule_date": date(2026, 3, 1),
+                    "work_value": "",
+                },
+            ]
+        )
+        self.assertEqual(current_signature, next_signature)
+
+    def test_support_roundtrip_source_signature_changes_when_request_count_changes(self):
+        current_signature = _build_support_roundtrip_source_signature_from_import_payloads(
+            [
+                {
+                    "source_block": "sentrix_support_ticket",
+                    "schedule_date": date(2026, 3, 1),
+                    "shift_type": "day",
+                    "request_count": 2,
+                    "detail_json": {"required_count_raw": "섭외 2인 요청"},
+                }
+            ]
+        )
+        next_signature = _build_support_roundtrip_source_signature_from_import_payloads(
+            [
+                {
+                    "source_block": "sentrix_support_ticket",
+                    "schedule_date": date(2026, 3, 1),
+                    "shift_type": "day",
+                    "request_count": 3,
+                    "detail_json": {"required_count_raw": "섭외 3인 요청"},
+                }
+            ]
+        )
+        self.assertNotEqual(current_signature, next_signature)
+
+    def test_support_roundtrip_source_changed_prefers_semantic_signature(self):
+        self.assertFalse(
+            _support_roundtrip_source_changed(
+                current_source_revision="rev-old",
+                current_raw_workbook_sha256="abc123",
+                next_source_revision="rev-new",
+                next_raw_workbook_sha256="zzz999",
+                current_source_signature="sig-same",
+                next_source_signature="sig-same",
+            )
+        )
+        self.assertTrue(
+            _support_roundtrip_source_changed(
+                current_source_revision="rev-old",
+                current_raw_workbook_sha256="abc123",
+                next_source_revision="rev-old",
+                next_raw_workbook_sha256="abc123",
+                current_source_signature="sig-old",
+                next_source_signature="sig-new",
+            )
+        )
+
     def test_restore_hq_merge_state_when_same_source_reuploaded(self):
         restored = _resolve_support_roundtrip_source_state_after_refresh(
             current_row={
@@ -662,6 +774,21 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertTrue(restored["hq_merge_available"])
         self.assertFalse(restored["conflict_required"])
         self.assertTrue(restored["final_download_enabled"])
+
+    def test_restore_stale_state_to_waiting_when_no_hq_batch_status_exists(self):
+        restored = _resolve_support_roundtrip_source_state_after_refresh(
+            current_row={
+                "state": "hq_merge_stale",
+                "hq_merge_available": False,
+                "conflict_required": False,
+                "final_download_enabled": False,
+            },
+            latest_hq_batch_row=None,
+        )
+        self.assertEqual(restored["state"], "waiting_for_hq_merge")
+        self.assertFalse(restored["hq_merge_available"])
+        self.assertFalse(restored["conflict_required"])
+        self.assertFalse(restored["final_download_enabled"])
 
     def test_clone_support_hq_sheet_to_workbook_copies_dimension_style_without_error(self):
         source_workbook = Workbook()
