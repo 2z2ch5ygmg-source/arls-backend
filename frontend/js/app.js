@@ -24893,6 +24893,9 @@ function renderDrawerMenu() {
   if (!menu && !desktopMenu) return;
 
   const role = getNavigationRole();
+  const actualRoleLabel = state.user
+    ? getRoleDisplayLabel(state.user.role)
+    : getRoleDisplayLabel(role);
   const items = DRAWER_MENU_BY_ROLE[role] || DRAWER_MENU_BY_ROLE.EMPLOYEE;
   const perms = getRolePermissions();
   const currentRoute = state.currentRoute || window.location.hash.replace(/^#/, '') || ROUTE_HOME;
@@ -24919,9 +24922,9 @@ function renderDrawerMenu() {
   if (drawerTenantSelectWrap) drawerTenantSelectWrap.classList.toggle('hidden', role !== 'DEV');
   if (desktopTenantSelectWrap) desktopTenantSelectWrap.classList.toggle('hidden', role !== 'DEV');
   if (roleLabel) {
-    roleLabel.textContent = getRoleDisplayLabel(role);
+    roleLabel.textContent = actualRoleLabel;
   }
-  if (desktopRoleLabel) desktopRoleLabel.textContent = getRoleDisplayLabel(role);
+  if (desktopRoleLabel) desktopRoleLabel.textContent = actualRoleLabel;
   if (desktopSidebar) {
     desktopSidebar.classList.toggle('hidden', !state.user);
   }
