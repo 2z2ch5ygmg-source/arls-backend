@@ -1002,6 +1002,87 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertEqual(visible_sheet.cell(row=rows_meta["weekly_rows"][0], column=day_col).value, "BK 홍길동")
         self.assertEqual(visible_sheet.cell(row=rows_meta["weekly_rows"][1], column=day_col).value, "BK 몬치치")
 
+    def test_hq_download_multi_site_uses_first_raw_workbook_as_bundle_base(self):
+        first_raw_workbook = self._build_export_ctx()["workbook"]
+        second_raw_workbook = self._build_export_ctx()["workbook"]
+        first_raw_workbook[ARLS_SHEET_NAME].freeze_panes = "D5"
+        second_raw_workbook[ARLS_SHEET_NAME].freeze_panes = "D7"
+        first_named_style_count = len(first_raw_workbook._named_styles)
+        first_font_count = len(first_raw_workbook._fonts)
+        first_fill_count = len(first_raw_workbook._fills)
+        first_sheet = first_raw_workbook[ARLS_SHEET_NAME]
+        first_print_area = first_sheet.print_area
+        first_width_d = first_sheet.column_dimensions["D"].width
+        first_height_10 = first_sheet.row_dimensions[10].height
+
+        with patch(
+            "app.routers.v1.schedules._resolve_support_roster_hq_download_sites",
+            return_value=[
+                {"site_code": "R738", "site_name": "Apple_명동"},
+                {"site_code": "R692", "site_name": "Apple_가로수길"},
+            ],
+        ), patch(
+            "app.routers.v1.schedules._resolve_site_context_by_code",
+            side_effect=[
+                {"id": "site-r738", "site_code": "R738", "site_name": "Apple_명동"},
+                {"id": "site-r692", "site_code": "R692", "site_name": "Apple_가로수길"},
+            ],
+        ), patch(
+            "app.routers.v1.schedules._get_support_roundtrip_source",
+            side_effect=[
+                {"source_revision": "src-rev-r738", "source_batch_id": "batch-r738"},
+                {"source_revision": "src-rev-r692", "source_batch_id": "batch-r692"},
+            ],
+        ), patch(
+            "app.routers.v1.schedules._load_schedule_import_batch_raw_workbook",
+            side_effect=[
+                {
+                    "id": "batch-r738",
+                    "filename": "r738-source.xlsx",
+                    "mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "sha256": "sha256-r738",
+                    "workbook": first_raw_workbook,
+                },
+                {
+                    "id": "batch-r692",
+                    "filename": "r692-source.xlsx",
+                    "mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "sha256": "sha256-r692",
+                    "workbook": second_raw_workbook,
+                },
+            ],
+        ), patch(
+            "app.routers.v1.schedules._collect_monthly_export_context",
+            side_effect=AssertionError("fallback export rebuild must not run when raw source exists"),
+        ):
+            workbook, written_sites = _build_support_roster_hq_download_workbook(
+                None,
+                target_tenant={"id": "tenant-1", "tenant_code": "srs_korea", "tenant_name": "SRS Korea"},
+                month_key="2026-03",
+                scope="selected",
+                selected_site_code=None,
+                selected_site_codes=["R738", "R692"],
+                user={"id": "user-1", "role": "HQ_ADMIN"},
+            )
+
+        self.assertEqual(len(written_sites), 2)
+        self.assertIn("Apple_명동", workbook.sheetnames)
+        self.assertIn("Apple_가로수길", workbook.sheetnames)
+        self.assertNotIn("출동.잔업 초과수당(2)", workbook.sheetnames)
+        self.assertIn(SENTRIX_SUPPORT_HQ_METADATA_SHEET_NAME, workbook.sheetnames)
+
+        first_bundle_sheet = workbook["Apple_명동"]
+        second_bundle_sheet = workbook["Apple_가로수길"]
+        self.assertEqual(first_bundle_sheet.freeze_panes, "D5")
+        self.assertEqual(second_bundle_sheet.freeze_panes, "D7")
+        self.assertEqual(first_bundle_sheet.column_dimensions["D"].width, first_width_d)
+        self.assertEqual(first_bundle_sheet.row_dimensions[10].height, first_height_10)
+        self.assertTrue(first_bundle_sheet.print_area)
+        self.assertEqual(len(workbook._named_styles), first_named_style_count)
+        self.assertGreaterEqual(len(workbook._fonts), first_font_count)
+        self.assertGreaterEqual(len(workbook._fills), first_fill_count)
+        self.assertEqual(str(first_bundle_sheet.print_area).split("!")[1], str(first_print_area).split("!")[1])
+
     def test_hq_download_blocks_when_raw_source_workbook_missing(self):
         with patch(
             "app.routers.v1.schedules._resolve_support_roster_hq_download_sites",

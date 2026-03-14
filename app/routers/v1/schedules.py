@@ -7091,9 +7091,6 @@ def _build_support_roster_hq_download_workbook(
     )
     single_site_bundle = len(selected_sites) == 1
     workbook = None
-    if not single_site_bundle:
-        workbook = Workbook()
-        workbook.remove(workbook.active)
     written_sites: list[dict[str, Any]] = []
     template_version = ARLS_EXPORT_TEMPLATE_VERSION
     for site_entry in selected_sites:
@@ -7150,8 +7147,14 @@ def _build_support_roster_hq_download_workbook(
             )
         if not visible_sheet_name:
             raise HTTPException(status_code=409, detail="support workbook sheet missing")
-        if single_site_bundle:
+        if workbook is None and single_site_bundle:
             workbook = site_workbook
+        elif workbook is None:
+            workbook = _prepare_support_roster_bundle_base_workbook(
+                site_workbook,
+                visible_sheet_name=visible_sheet_name,
+                title=exact_sheet_name,
+            )
         else:
             _clone_support_hq_sheet_to_workbook(
                 site_workbook[visible_sheet_name],
@@ -7268,6 +7271,27 @@ def _prepare_support_roster_source_workbook(workbook: Workbook) -> dict[str, Any
         "visible_sheet_name": visible_sheet_name,
         "template_version": str(metadata.get("template_version") or "").strip() or ARLS_EXPORT_TEMPLATE_VERSION,
     }
+
+
+def _prepare_support_roster_bundle_base_workbook(
+    workbook: Workbook,
+    *,
+    visible_sheet_name: str,
+    title: str,
+) -> Workbook:
+    keep_sheet_name = str(visible_sheet_name or "").strip()
+    if not keep_sheet_name or keep_sheet_name not in workbook.sheetnames:
+        raise HTTPException(status_code=409, detail="support workbook sheet missing")
+    for sheet_name in list(workbook.sheetnames):
+        if sheet_name == keep_sheet_name:
+            continue
+        workbook.remove(workbook[sheet_name])
+    visible_sheet = workbook[keep_sheet_name]
+    visible_sheet.sheet_state = "visible"
+    if title and visible_sheet.title != title:
+        visible_sheet.title = title
+    workbook.active = 0
+    return workbook
 
 
 def _build_support_roster_hq_upload_inspect_result(
