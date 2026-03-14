@@ -710,6 +710,103 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         )
         self.assertEqual(current_signature, next_signature)
 
+    def test_support_roundtrip_source_signature_treats_raw_support_demand_as_canonical(self):
+        current_signature = _build_support_roundtrip_source_signature_from_import_payloads(
+            [
+                {
+                    "source_block": "body",
+                    "employee_name": "서경원",
+                    "schedule_date": date(2026, 3, 1),
+                    "duty_type": "day",
+                    "work_value": "12",
+                    "template_id": "tpl-day-12",
+                    "shift_start_time": "10:00:00",
+                    "shift_end_time": "22:00:00",
+                    "paid_hours": 12,
+                },
+                {
+                    "source_block": "day_support_required_count",
+                    "schedule_date": date(2026, 3, 1),
+                    "work_value": "셀 값 섭외 2인 요청",
+                },
+                {
+                    "source_block": "night_support_required_count",
+                    "schedule_date": date(2026, 3, 2),
+                    "work_value": "1명",
+                },
+                {
+                    "source_block": "night_support_purpose",
+                    "schedule_date": date(2026, 3, 2),
+                    "work_value": "야간 행사",
+                },
+            ]
+        )
+        next_signature = _build_support_roundtrip_source_signature_from_import_payloads(
+            [
+                {
+                    "source_block": "body",
+                    "employee_name": "서경원",
+                    "schedule_date": date(2026, 3, 1),
+                    "duty_type": "day",
+                    "work_value": "12",
+                    "template_id": "tpl-day-12",
+                    "shift_start_time": "10:00:00",
+                    "shift_end_time": "22:00:00",
+                    "paid_hours": 12,
+                },
+                {
+                    "source_block": "sentrix_support_ticket",
+                    "schedule_date": date(2026, 3, 1),
+                    "shift_type": "day",
+                    "request_count": 2,
+                    "work_value": "섭외 2인 요청",
+                    "detail_json": {"required_count_raw": "섭외 2인 요청"},
+                },
+                {
+                    "source_block": "sentrix_support_ticket",
+                    "schedule_date": date(2026, 3, 2),
+                    "shift_type": "night",
+                    "request_count": 1,
+                    "purpose_text": "야간 행사",
+                    "detail_json": {"required_count_raw": "1명", "purpose_text": "야간 행사"},
+                },
+            ]
+        )
+        self.assertEqual(current_signature, next_signature)
+
+    def test_support_roundtrip_source_signature_ignores_body_mapping_metadata(self):
+        current_signature = _build_support_roundtrip_source_signature_from_import_payloads(
+            [
+                {
+                    "source_block": "body",
+                    "employee_name": "박동훈",
+                    "schedule_date": date(2026, 3, 1),
+                    "duty_type": "day",
+                    "work_value": "12",
+                    "template_id": "tpl-day-12",
+                    "shift_start_time": "10:00:00",
+                    "shift_end_time": "22:00:00",
+                    "paid_hours": 12,
+                }
+            ]
+        )
+        next_signature = _build_support_roundtrip_source_signature_from_import_payloads(
+            [
+                {
+                    "source_block": "body",
+                    "employee_name": "박동훈",
+                    "schedule_date": date(2026, 3, 1),
+                    "duty_type": "day",
+                    "work_value": "12",
+                    "template_id": None,
+                    "shift_start_time": None,
+                    "shift_end_time": None,
+                    "paid_hours": None,
+                }
+            ]
+        )
+        self.assertEqual(current_signature, next_signature)
+
     def test_support_roundtrip_source_signature_changes_when_request_count_changes(self):
         current_signature = _build_support_roundtrip_source_signature_from_import_payloads(
             [

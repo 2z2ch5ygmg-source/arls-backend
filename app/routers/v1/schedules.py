@@ -3727,47 +3727,137 @@ def _build_support_request_rows_from_import_payloads(
     payload_rows: list[dict[str, Any]] | None,
 ) -> list[dict[str, Any]]:
     scoped_rows: dict[tuple[str, str], dict[str, Any]] = {}
+    raw_scoped_rows: dict[tuple[str, str], dict[str, Any]] = {}
     for payload in list(payload_rows or []):
-        if str(payload.get("source_block") or "").strip() != "sentrix_support_ticket":
-            continue
         if bool(payload.get("is_blocking")):
             continue
+        source_block = str(payload.get("source_block") or "").strip()
         work_date = _normalize_schedule_import_payload_date(payload.get("schedule_date"))
         if not isinstance(work_date, date):
             continue
-        request_count = _coerce_int_or_none(payload.get("request_count"))
-        if request_count is None:
-            continue
-        normalized_request_count = max(int(request_count or 0), 0)
-        if normalized_request_count <= 0:
-            continue
-        shift_kind = "night" if str(payload.get("shift_type") or "day").strip().lower() == "night" else "day"
         detail_json = dict(payload.get("detail_json") or {})
+        shift_kind = "night" if str(payload.get("shift_type") or "day").strip().lower() == "night" else "day"
+        if source_block.startswith("night_support"):
+            shift_kind = "night"
+        elif source_block.startswith("day_support"):
+            shift_kind = "day"
         day_reason_text = _extract_support_request_day_reason_text(payload, detail_json)
         scope_key = (work_date.isoformat(), shift_kind)
-        scoped_rows[scope_key] = {
-            "work_date": work_date,
-            "shift_kind": shift_kind,
-            "request_count": normalized_request_count,
-            "day_reason_text": day_reason_text,
-            "work_purpose": str(
-                payload.get("purpose_text")
+        if source_block == "sentrix_support_ticket":
+            request_count = _coerce_int_or_none(payload.get("request_count"))
+            if request_count is None:
+                continue
+            normalized_request_count = max(int(request_count or 0), 0)
+            if normalized_request_count <= 0:
+                continue
+            existing_raw = raw_scoped_rows.get(scope_key) or {}
+            existing_raw_detail = dict(existing_raw.get("detail_json") or {})
+            merged_detail_json = {
+                **existing_raw_detail,
+                **detail_json,
+            }
+            required_count_raw = str(
+                merged_detail_json.get("required_count_raw")
+                or existing_raw_detail.get("required_count_raw")
+                or payload.get("work_value")
+                or ""
+            ).strip() or None
+            merged_detail_json.update(
+                {
+                    "required_count_raw": required_count_raw,
+                    "required_count_numeric": normalized_request_count,
+                    "source_block": "sentrix_support_ticket",
+                    "source_sheet": str(payload.get("source_sheet") or ARLS_SHEET_NAME).strip() or ARLS_SHEET_NAME,
+                    "required_row_no": int(
+                        merged_detail_json.get("required_row_no")
+                        or existing_raw_detail.get("required_row_no")
+                        or payload.get("row_no")
+                        or 0
+                    )
+                    or None,
+                    "day_reason_text": day_reason_text
+                    or existing_raw.get("day_reason_text"),
+                }
+            )
+            scoped_rows[scope_key] = {
+                "work_date": work_date,
+                "shift_kind": shift_kind,
+                "request_count": normalized_request_count,
+                "day_reason_text": day_reason_text or existing_raw.get("day_reason_text"),
+                "work_purpose": str(
+                    payload.get("purpose_text")
+                    or detail_json.get("purpose_text")
+                    or existing_raw.get("work_purpose")
+                    or ""
+                ).strip()
+                or None,
+                "status": SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS,
+                "detail_json": merged_detail_json,
+            }
+            continue
+        if source_block not in {
+            "day_support_required_count",
+            "night_support_required_count",
+            "night_support_purpose",
+        }:
+            continue
+        raw_scope = dict(raw_scoped_rows.get(scope_key) or {})
+        raw_detail_json = dict(raw_scope.get("detail_json") or {})
+        raw_scope.update(
+            {
+                "work_date": work_date,
+                "shift_kind": shift_kind,
+                "status": SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS,
+            }
+        )
+        if source_block.endswith("_required_count"):
+            request_count, required_count_raw, is_blank = _parse_support_required_count_value(
+                payload.get("work_value")
+            )
+            if is_blank:
+                raw_scoped_rows[scope_key] = raw_scope
+                continue
+            raw_scope["request_count"] = None if request_count is None else max(int(request_count or 0), 0)
+            raw_detail_json.update(
+                {
+                    "required_count_raw": required_count_raw or None,
+                    "required_count_numeric": raw_scope.get("request_count"),
+                    "source_sheet": str(payload.get("source_sheet") or ARLS_SHEET_NAME).strip() or ARLS_SHEET_NAME,
+                    "required_row_no": int(payload.get("row_no") or 0) or None,
+                    "source_block": source_block,
+                }
+            )
+            if day_reason_text:
+                raw_scope["day_reason_text"] = day_reason_text
+                raw_detail_json["day_reason_text"] = day_reason_text
+        elif source_block == "night_support_purpose":
+            work_purpose = str(
+                payload.get("work_value")
                 or detail_json.get("purpose_text")
                 or ""
-            ).strip() or None,
+            ).strip() or None
+            if work_purpose:
+                raw_scope["work_purpose"] = work_purpose
+        raw_scope["detail_json"] = raw_detail_json
+        raw_scoped_rows[scope_key] = raw_scope
+
+    for scope_key, raw_scope in raw_scoped_rows.items():
+        if scope_key in scoped_rows:
+            continue
+        request_count = _coerce_int_or_none(raw_scope.get("request_count"))
+        normalized_request_count = max(int(request_count or 0), 0) if request_count is not None else None
+        if normalized_request_count is None or normalized_request_count <= 0:
+            continue
+        scoped_rows[scope_key] = {
+            "work_date": raw_scope.get("work_date"),
+            "shift_kind": raw_scope.get("shift_kind") or "day",
+            "request_count": normalized_request_count,
+            "day_reason_text": raw_scope.get("day_reason_text"),
+            "work_purpose": raw_scope.get("work_purpose"),
             "status": SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS,
             "detail_json": {
-                **detail_json,
-                "required_count_raw": str(
-                    detail_json.get("required_count_raw")
-                    or payload.get("work_value")
-                    or ""
-                ).strip() or None,
+                **dict(raw_scope.get("detail_json") or {}),
                 "required_count_numeric": normalized_request_count,
-                "source_block": "sentrix_support_ticket",
-                "source_sheet": str(payload.get("source_sheet") or ARLS_SHEET_NAME).strip() or ARLS_SHEET_NAME,
-                "required_row_no": int(detail_json.get("required_row_no") or payload.get("row_no") or 0) or None,
-                "day_reason_text": day_reason_text,
             },
         }
     return [
@@ -5859,9 +5949,29 @@ def _list_support_roundtrip_workspace_sites(
         rows = [dict(row) for row in (cur.fetchall() or [])]
     results: list[dict[str, Any]] = []
     for row in rows:
-        exact_sheet_name = _build_sentrix_support_hq_sheet_name(str(row.get("site_name") or "").strip())
-        source_available = bool(row.get("source_id"))
-        source_batch_id = str(row.get("source_batch_id") or "").strip()
+        effective_row = dict(row)
+        if bool(effective_row.get("source_id")) and bool(effective_row.get("hq_merge_stale")):
+            refreshed_source = _get_support_roundtrip_source(
+                conn,
+                tenant_id=tenant_id,
+                site_id=str(effective_row.get("id") or "").strip(),
+                month_key=month_key,
+            )
+            if refreshed_source:
+                effective_row.update(
+                    {
+                        "source_batch_id": refreshed_source.get("source_batch_id"),
+                        "source_state": refreshed_source.get("state"),
+                        "source_uploaded_at": refreshed_source.get("source_uploaded_at"),
+                        "source_revision": refreshed_source.get("source_revision"),
+                        "latest_hq_batch_id": refreshed_source.get("latest_hq_batch_id"),
+                        "latest_hq_revision": refreshed_source.get("latest_hq_revision"),
+                        "hq_merge_stale": refreshed_source.get("hq_merge_stale"),
+                    }
+                )
+        exact_sheet_name = _build_sentrix_support_hq_sheet_name(str(effective_row.get("site_name") or "").strip())
+        source_available = bool(effective_row.get("source_id"))
+        source_batch_id = str(effective_row.get("source_batch_id") or "").strip()
         raw_workbook_available = bool(
             source_available
             and source_batch_id
@@ -5887,15 +5997,15 @@ def _list_support_roundtrip_workspace_sites(
                 "sheet_name": exact_sheet_name or str(row.get("site_name") or "").strip() or str(row.get("site_code") or "").strip(),
                 "sheet_name_valid": bool(exact_sheet_name),
                 "download_ready": bool(source_available and exact_sheet_name and raw_workbook_available),
-                "source_state": str(row.get("source_state") or "source_missing").strip() or "source_missing",
-                "source_uploaded_at": row.get("source_uploaded_at") if isinstance(row.get("source_uploaded_at"), datetime) else None,
-                "source_revision": str(row.get("source_revision") or "").strip() or None,
+                "source_state": str(effective_row.get("source_state") or "source_missing").strip() or "source_missing",
+                "source_uploaded_at": effective_row.get("source_uploaded_at") if isinstance(effective_row.get("source_uploaded_at"), datetime) else None,
+                "source_revision": str(effective_row.get("source_revision") or "").strip() or None,
                 "source_batch_id": source_batch_id or None,
                 "raw_workbook_available": raw_workbook_available,
-                "latest_hq_batch_id": str(row.get("latest_hq_batch_id") or "").strip() or None,
-                "latest_hq_revision": str(row.get("latest_hq_revision") or "").strip() or None,
+                "latest_hq_batch_id": str(effective_row.get("latest_hq_batch_id") or "").strip() or None,
+                "latest_hq_revision": str(effective_row.get("latest_hq_revision") or "").strip() or None,
                 "latest_status": latest_status,
-                "hq_merge_stale": bool(row.get("hq_merge_stale")),
+                "hq_merge_stale": bool(effective_row.get("hq_merge_stale")),
             }
         )
     return results
@@ -10153,7 +10263,21 @@ def _get_support_roundtrip_source(conn, *, tenant_id: str, site_id: str, month_k
             """,
             (tenant_id, site_id, month_key),
         )
-        return cur.fetchone()
+        row = cur.fetchone()
+    if not row:
+        return None
+    source_row = dict(row)
+    if bool(source_row.get("hq_merge_stale")):
+        latest_hq_batch = _load_support_roundtrip_batch_state(
+            conn,
+            batch_id=str(source_row.get("latest_hq_batch_id") or "").strip() or None,
+        )
+        source_row = _maybe_restore_support_roundtrip_source_state(
+            conn,
+            source_row=source_row,
+            latest_hq_batch_row=latest_hq_batch or None,
+        )
+    return source_row
 
 
 def _load_schedule_import_batch_source_meta(
@@ -10193,7 +10317,9 @@ def _load_support_roundtrip_batch_state(conn, *, batch_id: str | None) -> dict[s
             SELECT status,
                    conflict_count,
                    applied_rows,
-                   completed_at
+                   completed_at,
+                   created_at,
+                   source_revision
             FROM schedule_support_roundtrip_batches
             WHERE id = %s
             LIMIT 1
@@ -10203,11 +10329,158 @@ def _load_support_roundtrip_batch_state(conn, *, batch_id: str | None) -> dict[s
         return cur.fetchone() or {}
 
 
+def _find_schedule_import_batch_id_for_source_revision(
+    conn,
+    *,
+    tenant_id: str,
+    site_code: str,
+    month_key: str,
+    source_revision: str | None,
+) -> str | None:
+    revision = str(source_revision or "").strip()
+    if not revision:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id
+            FROM schedule_import_batches
+            WHERE tenant_id = %s
+              AND site_code = %s
+              AND month_key = %s
+              AND current_revision = %s
+            ORDER BY
+              CASE status
+                WHEN 'applied' THEN 0
+                WHEN 'previewed' THEN 1
+                ELSE 2
+              END,
+              created_at DESC
+            LIMIT 1
+            """,
+            (tenant_id, site_code, month_key, revision),
+        )
+        row = cur.fetchone() or {}
+    return str((dict(row) if not isinstance(row, dict) else row).get("id") or "").strip() or None
+
+
+def _find_schedule_import_batch_id_for_source_signature(
+    conn,
+    *,
+    tenant_id: str,
+    site_code: str,
+    month_key: str,
+    source_signature: str | None,
+    created_before: datetime | None = None,
+) -> str | None:
+    target_signature = str(source_signature or "").strip().lower()
+    if not target_signature:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id
+            FROM schedule_import_batches
+            WHERE tenant_id = %s
+              AND site_code = %s
+              AND month_key = %s
+              AND status IN ('applied', 'previewed')
+              AND (%s::timestamptz IS NULL OR created_at <= %s::timestamptz)
+            ORDER BY created_at DESC
+            LIMIT 20
+            """,
+            (tenant_id, site_code, month_key, created_before, created_before),
+        )
+        candidate_rows = [dict(row) for row in (cur.fetchall() or [])]
+    for candidate in candidate_rows:
+        batch_id = str(candidate.get("id") or "").strip()
+        if not batch_id:
+            continue
+        candidate_signature = _build_support_roundtrip_source_signature_from_import_payloads(
+            _load_schedule_import_payload_rows(conn, batch_id=batch_id)
+        )
+        if str(candidate_signature or "").strip().lower() == target_signature:
+            return batch_id
+    return None
+
+
+def _maybe_restore_support_roundtrip_source_state(
+    conn,
+    *,
+    source_row: dict[str, Any] | None,
+    latest_hq_batch_row: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    current = dict(source_row or {})
+    if not current or not bool(current.get("hq_merge_stale")):
+        return current
+    current_batch_id = str(current.get("source_batch_id") or "").strip()
+    if not current_batch_id:
+        return current
+    latest_batch = dict(latest_hq_batch_row or {})
+    if not latest_batch:
+        latest_batch = _load_support_roundtrip_batch_state(
+            conn,
+            batch_id=str(current.get("latest_hq_batch_id") or "").strip() or None,
+        )
+    current_signature = _build_support_roundtrip_source_signature_from_import_payloads(
+        _load_schedule_import_payload_rows(conn, batch_id=current_batch_id)
+    )
+    previous_batch_id = _find_schedule_import_batch_id_for_source_revision(
+        conn,
+        tenant_id=str(current.get("tenant_id") or "").strip(),
+        site_code=str(current.get("site_code") or "").strip(),
+        month_key=str(current.get("month_key") or "").strip(),
+        source_revision=str(latest_batch.get("source_revision") or "").strip() or None,
+    )
+    if not previous_batch_id:
+        previous_batch_id = _find_schedule_import_batch_id_for_source_signature(
+            conn,
+            tenant_id=str(current.get("tenant_id") or "").strip(),
+            site_code=str(current.get("site_code") or "").strip(),
+            month_key=str(current.get("month_key") or "").strip(),
+            source_signature=current_signature,
+            created_before=latest_batch.get("completed_at") or latest_batch.get("created_at"),
+        )
+    if not previous_batch_id:
+        return current
+    previous_signature = _build_support_roundtrip_source_signature_from_import_payloads(
+        _load_schedule_import_payload_rows(conn, batch_id=previous_batch_id)
+    )
+    if not current_signature or not previous_signature or current_signature != previous_signature:
+        return current
+    restored_state = _resolve_support_roundtrip_source_state_after_refresh(
+        current_row=current,
+        latest_hq_batch_row=latest_batch or None,
+    )
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE schedule_support_roundtrip_sources
+            SET state = %s,
+                hq_merge_available = %s,
+                hq_merge_stale = FALSE,
+                conflict_required = %s,
+                final_download_enabled = %s,
+                updated_at = timezone('utc', now())
+            WHERE id = %s
+            RETURNING *
+            """,
+            (
+                restored_state["state"],
+                bool(restored_state["hq_merge_available"]),
+                bool(restored_state["conflict_required"]),
+                bool(restored_state["final_download_enabled"]),
+                current["id"],
+            ),
+        )
+        row = cur.fetchone()
+    return row or current
+
+
 def _build_support_roundtrip_source_signature_from_import_payloads(
     payload_rows: list[dict[str, Any]] | None,
 ) -> str | None:
     body_entries: list[dict[str, Any]] = []
-    support_entries: list[dict[str, Any]] = []
     for payload in list(payload_rows or []):
         source_block = str(payload.get("source_block") or "").strip()
         if source_block == "body":
@@ -10222,33 +10495,19 @@ def _build_support_roundtrip_source_signature_from_import_payloads(
                     "date": schedule_date.isoformat(),
                     "duty_type": duty_type,
                     "work_value": str(payload.get("work_value") or "").strip(),
-                    "template_id": str(payload.get("template_id") or "").strip() or None,
-                    "shift_start_time": _normalize_time_text(payload.get("shift_start_time")),
-                    "shift_end_time": _normalize_time_text(payload.get("shift_end_time")),
-                    "paid_hours": _coerce_float_or_none(payload.get("paid_hours")),
                 }
             )
-            continue
-        if source_block != "sentrix_support_ticket":
-            continue
-        schedule_date = _normalize_schedule_import_payload_date(payload.get("schedule_date"))
-        if not isinstance(schedule_date, date):
-            continue
-        detail_json = dict(payload.get("detail_json") or {})
-        request_count = _coerce_int_or_none(payload.get("request_count"))
-        support_entries.append(
-            {
-                "date": schedule_date.isoformat(),
-                "shift_kind": "night" if str(payload.get("shift_type") or "day").strip().lower() == "night" else "day",
-                "request_count": max(int(request_count or 0), 0),
-                "purpose_text": str(
-                    payload.get("purpose_text")
-                    or detail_json.get("purpose_text")
-                    or ""
-                ).strip() or None,
-                "day_reason_text": _extract_support_request_day_reason_text(payload, detail_json),
-            }
-        )
+    support_entries = [
+        {
+            "date": row["work_date"].isoformat(),
+            "shift_kind": str(row.get("shift_kind") or "day"),
+            "request_count": max(int(row.get("request_count") or 0), 0),
+            "purpose_text": str(row.get("work_purpose") or "").strip() or None,
+            "day_reason_text": str(row.get("day_reason_text") or "").strip() or None,
+        }
+        for row in _build_support_request_rows_from_import_payloads(payload_rows)
+        if isinstance(row.get("work_date"), date)
+    ]
     if not body_entries and not support_entries:
         return None
     payload = {
