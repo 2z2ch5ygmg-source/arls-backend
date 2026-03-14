@@ -10919,7 +10919,7 @@ function renderScheduleSupportHqSiteSelectionTable() {
   }
 }
 
-function buildScheduleSupportHqWorkbookMismatch(inspectResult = null, selectedSiteCodes = []) {
+function buildScheduleSupportHqWorkbookMismatch(inspectResult = null) {
   const workspaceSites = getScheduleSupportHqWorkspaceSites();
   const siteLabelMap = new Map();
   workspaceSites.forEach((site) => {
@@ -10933,17 +10933,9 @@ function buildScheduleSupportHqWorkbookMismatch(inspectResult = null, selectedSi
     const siteCode = String(site?.site_code || '').trim().toUpperCase();
     return sheetName || siteName || siteLabelMap.get(siteCode) || siteCode || '알 수 없는 시트';
   };
-  const normalizedSelected = Array.from(new Set((Array.isArray(selectedSiteCodes) ? selectedSiteCodes : [])
-    .map((value) => String(value || '').trim().toUpperCase())
-    .filter(Boolean)));
-  const aggregatedRows = buildScheduleSupportHqAggregatedPreviewRows(inspectResult);
   const missingSiteRows = Array.isArray(inspectResult?.missing_selected_sites)
     ? inspectResult.missing_selected_sites
-    : normalizedSelected
-      .filter((code) => {
-        return !aggregatedRows.some((row) => String(row?.site_code || '').trim().toUpperCase() === code);
-      })
-      .map((code) => ({ site_code: code, site_name: siteLabelMap.get(code) || code }));
+    : [];
   const extraSiteRows = Array.isArray(inspectResult?.extra_unselected_sites)
     ? inspectResult.extra_unselected_sites
     : [];
@@ -11479,7 +11471,7 @@ function renderScheduleSupportHqWorkspace() {
     && selectedSiteCodes.length > 0
     && Boolean(artifactContext.artifact_id)
     && readySiteCount > 0;
-  const mismatch = buildScheduleSupportHqWorkbookMismatch(inspectResult, selectedSiteCodes);
+  const mismatch = buildScheduleSupportHqWorkbookMismatch(inspectResult);
   const mismatchMessages = mismatch.messages.length
     ? mismatch.messages
     : (workspace.inspectError ? [String(workspace.inspectError || '').trim()] : []);
@@ -11772,6 +11764,10 @@ async function onScheduleSupportHqInspect() {
   body.append('file', file);
   body.append('month', context.month);
   body.append('tenant_code', getScheduleHqTenantCode());
+  context.selectedSiteCodes.forEach((siteCode) => {
+    const value = String(siteCode || '').trim().toUpperCase();
+    if (value) body.append('site_codes', value);
+  });
   try {
     const result = await apiRequest('/schedules/support-roundtrip/hq-roster-upload/inspect', {
       method: 'POST',
@@ -11784,7 +11780,7 @@ async function onScheduleSupportHqInspect() {
     workspace.inspectResult = result && typeof result === 'object' ? result : null;
     workspace.inspectLoading = false;
     workspace.previewMode = 'actionable';
-    const mismatch = buildScheduleSupportHqWorkbookMismatch(workspace.inspectResult, context.selectedSiteCodes);
+    const mismatch = buildScheduleSupportHqWorkbookMismatch(workspace.inspectResult);
     if (mismatch.messages.length) {
       workspace.inspectError = mismatch.messages.join(' · ');
       setScheduleHqWizardStep(SCHEDULE_HQ_WIZARD_STEP_UPLOAD, { scroll: false });
