@@ -6073,28 +6073,46 @@ def _clone_support_hq_sheet_to_workbook(source_sheet, *, target_workbook: Workbo
         target_dimension.bestFit = source_dimension.bestFit
         target_dimension.outlineLevel = source_dimension.outlineLevel
         target_dimension.collapsed = source_dimension.collapsed
+        target_dimension.min = source_dimension.min
+        target_dimension.max = source_dimension.max
+        target_dimension.font = copy(source_dimension.font)
+        target_dimension.fill = copy(source_dimension.fill)
+        target_dimension.border = copy(source_dimension.border)
+        target_dimension.alignment = copy(source_dimension.alignment)
+        target_dimension.number_format = source_dimension.number_format
+        target_dimension.protection = copy(source_dimension.protection)
     for row_key, source_dimension in source_sheet.row_dimensions.items():
         target_dimension = target_sheet.row_dimensions[row_key]
         target_dimension.height = source_dimension.height
         target_dimension.hidden = source_dimension.hidden
         target_dimension.outlineLevel = source_dimension.outlineLevel
         target_dimension.collapsed = source_dimension.collapsed
+        target_dimension.thickTop = source_dimension.thickTop
+        target_dimension.thickBot = source_dimension.thickBot
+        target_dimension.font = copy(source_dimension.font)
+        target_dimension.fill = copy(source_dimension.fill)
+        target_dimension.border = copy(source_dimension.border)
+        target_dimension.alignment = copy(source_dimension.alignment)
+        target_dimension.number_format = source_dimension.number_format
+        target_dimension.protection = copy(source_dimension.protection)
     for row in source_sheet.iter_rows():
         for source_cell in row:
             if isinstance(source_cell, MergedCell):
                 continue
+            if (
+                source_cell.value is None
+                and not source_cell.has_style
+                and not source_cell.hyperlink
+                and not source_cell.comment
+            ):
+                continue
             target_cell = target_sheet.cell(row=source_cell.row, column=source_cell.column, value=source_cell.value)
-            if source_cell.number_format:
+            if source_cell.has_style:
                 target_cell.number_format = source_cell.number_format
-            if source_cell.font:
                 target_cell.font = copy(source_cell.font)
-            if source_cell.fill:
                 target_cell.fill = copy(source_cell.fill)
-            if source_cell.border:
                 target_cell.border = copy(source_cell.border)
-            if source_cell.alignment:
                 target_cell.alignment = copy(source_cell.alignment)
-            if source_cell.protection:
                 target_cell.protection = copy(source_cell.protection)
             if source_cell.hyperlink:
                 target_cell._hyperlink = copy(source_cell.hyperlink)

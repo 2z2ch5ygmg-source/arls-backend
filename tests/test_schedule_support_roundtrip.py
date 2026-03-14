@@ -1087,6 +1087,28 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertEqual(second_bundle_sheet.sheet_view.zoomScaleNormal, 35)
         self.assertTrue(second_bundle_sheet.sheet_view.tabSelected)
         self.assertEqual(second_bundle_sheet.sheet_format.baseColWidth, 10)
+        self.assertFalse(second_bundle_sheet["A2"].has_style)
+        self.assertEqual(
+            second_bundle_sheet.column_dimensions["A"].alignment.horizontal,
+            second_raw_sheet.column_dimensions["A"].alignment.horizontal,
+        )
+        self.assertEqual(
+            second_bundle_sheet.column_dimensions["A"].alignment.vertical,
+            second_raw_sheet.column_dimensions["A"].alignment.vertical,
+        )
+        self.assertEqual(
+            second_bundle_sheet.column_dimensions["A"].alignment.wrapText,
+            second_raw_sheet.column_dimensions["A"].alignment.wrapText,
+        )
+        self.assertEqual(
+            second_bundle_sheet.column_dimensions["A"].number_format,
+            second_raw_sheet.column_dimensions["A"].number_format,
+        )
+        self.assertEqual(second_bundle_sheet.row_dimensions[2].thickTop, second_raw_sheet.row_dimensions[2].thickTop)
+        self.assertEqual(
+            second_bundle_sheet.row_dimensions[4].customFormat,
+            second_raw_sheet.row_dimensions[4].customFormat,
+        )
         self.assertEqual(first_bundle_sheet.column_dimensions["D"].width, first_width_d)
         self.assertEqual(first_bundle_sheet.row_dimensions[10].height, first_height_10)
         self.assertTrue(first_bundle_sheet.print_area)
