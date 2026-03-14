@@ -1006,7 +1006,14 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         first_raw_workbook = self._build_export_ctx()["workbook"]
         second_raw_workbook = self._build_export_ctx()["workbook"]
         first_raw_workbook[ARLS_SHEET_NAME].freeze_panes = "D5"
-        second_raw_workbook[ARLS_SHEET_NAME].freeze_panes = "D7"
+        second_raw_sheet = second_raw_workbook[ARLS_SHEET_NAME]
+        second_raw_sheet.freeze_panes = "D7"
+        second_raw_sheet.sheet_view.view = "pageBreakPreview"
+        second_raw_sheet.sheet_view.topLeftCell = "A2"
+        second_raw_sheet.sheet_view.zoomScale = 75
+        second_raw_sheet.sheet_view.zoomScaleNormal = 35
+        second_raw_sheet.sheet_view.tabSelected = True
+        second_raw_sheet.sheet_format.baseColWidth = 10
         first_named_style_count = len(first_raw_workbook._named_styles)
         first_font_count = len(first_raw_workbook._fonts)
         first_fill_count = len(first_raw_workbook._fills)
@@ -1075,6 +1082,11 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         second_bundle_sheet = workbook["Apple_가로수길"]
         self.assertEqual(first_bundle_sheet.freeze_panes, "D5")
         self.assertEqual(second_bundle_sheet.freeze_panes, "D7")
+        self.assertEqual(second_bundle_sheet.sheet_view.view, "pageBreakPreview")
+        self.assertEqual(second_bundle_sheet.sheet_view.topLeftCell, "A2")
+        self.assertEqual(second_bundle_sheet.sheet_view.zoomScaleNormal, 35)
+        self.assertTrue(second_bundle_sheet.sheet_view.tabSelected)
+        self.assertEqual(second_bundle_sheet.sheet_format.baseColWidth, 10)
         self.assertEqual(first_bundle_sheet.column_dimensions["D"].width, first_width_d)
         self.assertEqual(first_bundle_sheet.row_dimensions[10].height, first_height_10)
         self.assertTrue(first_bundle_sheet.print_area)

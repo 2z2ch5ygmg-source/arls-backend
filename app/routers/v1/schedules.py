@@ -6049,16 +6049,17 @@ def _has_schedule_import_batch_raw_workbook(
 
 def _clone_support_hq_sheet_to_workbook(source_sheet, *, target_workbook: Workbook, title: str) -> None:
     target_sheet = target_workbook.create_sheet(title=title)
+    target_sheet.sheet_state = source_sheet.sheet_state
     target_sheet.freeze_panes = source_sheet.freeze_panes
-    target_sheet.sheet_format.defaultColWidth = source_sheet.sheet_format.defaultColWidth
-    target_sheet.sheet_format.defaultRowHeight = source_sheet.sheet_format.defaultRowHeight
-    target_sheet.sheet_view.showGridLines = source_sheet.sheet_view.showGridLines
-    target_sheet.sheet_view.zoomScale = source_sheet.sheet_view.zoomScale
+    target_sheet.views = copy(source_sheet.views)
+    target_sheet.sheet_format = copy(source_sheet.sheet_format)
     target_sheet.sheet_properties = copy(source_sheet.sheet_properties)
     target_sheet.page_margins = copy(source_sheet.page_margins)
     target_sheet.page_setup = copy(source_sheet.page_setup)
     target_sheet.print_options = copy(source_sheet.print_options)
     target_sheet.auto_filter.ref = source_sheet.auto_filter.ref
+    target_sheet.row_breaks = copy(source_sheet.row_breaks)
+    target_sheet.col_breaks = copy(source_sheet.col_breaks)
     if source_sheet.print_area:
         target_sheet.print_area = source_sheet.print_area
     if source_sheet.print_title_rows:
