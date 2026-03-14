@@ -6828,6 +6828,9 @@ def _resolve_support_roster_hq_download_sites(
     site_codes: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     sites = _list_support_roundtrip_workspace_sites(conn, tenant_id=tenant_id, month_key=month_key)
+    def _site_is_selectable(site: dict[str, Any]) -> bool:
+        return bool(site.get("download_ready")) and not bool(site.get("hq_merge_stale"))
+
     normalized_site_codes = [
         str(code or "").strip().upper()
         for code in list(site_codes or [])
@@ -6845,11 +6848,17 @@ def _resolve_support_roster_hq_download_sites(
         selected_sites = [site_map[code] for code in normalized_site_codes]
         blocked_sites = []
         for site in selected_sites:
-            selectable = bool(site.get("selectable"))
+            selectable = _site_is_selectable(site)
             if selectable:
                 continue
             site_name = str(site.get("site_name") or site.get("sheet_name") or site.get("site_code") or "").strip()
-            blocked_reason = str(site.get("blocked_reason") or site.get("note") or "").strip()
+            blocked_reason = "재추출 필요 / stale" if bool(site.get("hq_merge_stale")) else ""
+            if not blocked_reason and not bool(site.get("download_ready")):
+                blocked_reason = (
+                    "원본 업로드 workbook 없음"
+                    if not bool(site.get("raw_workbook_available", True))
+                    else "파일 없음"
+                )
             blocked_sites.append(f"{site_name} ({blocked_reason})" if blocked_reason else site_name)
         if blocked_sites:
             raise HTTPException(
@@ -6863,14 +6872,20 @@ def _resolve_support_roster_hq_download_sites(
         selected = next((site for site in sites if str(site.get("site_code") or "").strip() == normalized_site_code), None)
         if not selected:
             raise HTTPException(status_code=404, detail="site not found")
-        if not bool(selected.get("selectable")):
-            blocked_reason = str(selected.get("blocked_reason") or selected.get("note") or "").strip()
+        if not _site_is_selectable(selected):
+            blocked_reason = "재추출 필요 / stale" if bool(selected.get("hq_merge_stale")) else ""
+            if not blocked_reason and not bool(selected.get("download_ready")):
+                blocked_reason = (
+                    "원본 업로드 workbook 없음"
+                    if not bool(selected.get("raw_workbook_available", True))
+                    else "파일 없음"
+                )
             detail = "selected site workbook is not ready"
             if blocked_reason:
                 detail = f"{detail}: {blocked_reason}"
             raise HTTPException(status_code=409, detail=detail)
         return [selected]
-    ready_sites = [site for site in sites if bool(site.get("selectable"))]
+    ready_sites = [site for site in sites if _site_is_selectable(site)]
     if not ready_sites:
         raise HTTPException(status_code=409, detail="no support workbook source is ready for the selected month")
     return ready_sites

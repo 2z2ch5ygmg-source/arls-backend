@@ -43,6 +43,7 @@ from app.routers.v1.schedules import (
     _prepare_support_roster_source_workbook,
     _read_support_roundtrip_metadata,
     _build_support_roundtrip_source_signature_from_import_payloads,
+    _resolve_support_roster_hq_download_sites,
     _resolve_support_roster_hq_sheet_site,
     _resolve_support_roundtrip_source_state_after_refresh,
     _resolve_sentrix_support_materialized_shift_defaults,
@@ -1031,6 +1032,36 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertIn("원본 업로드 workbook", str(ctx.exception.detail))
+
+    def test_resolve_hq_download_sites_uses_download_ready_and_stale_flags(self):
+        with patch(
+            "app.routers.v1.schedules._list_support_roundtrip_workspace_sites",
+            return_value=[
+                {
+                    "site_code": "R738",
+                    "site_name": "Apple_명동",
+                    "download_ready": True,
+                    "hq_merge_stale": False,
+                    "raw_workbook_available": True,
+                },
+                {
+                    "site_code": "R692",
+                    "site_name": "Apple_가로수길",
+                    "download_ready": True,
+                    "hq_merge_stale": False,
+                    "raw_workbook_available": True,
+                },
+            ],
+        ):
+            selected = _resolve_support_roster_hq_download_sites(
+                None,
+                tenant_id="tenant-1",
+                month_key="2026-03",
+                scope="selected",
+                site_codes=["R738", "R692"],
+            )
+
+        self.assertEqual([site["site_code"] for site in selected], ["R738", "R692"])
 
     def test_parse_sentrix_hq_worker_cell_normalizes_external_and_internal(self):
         employee_index = _build_employee_name_index(
