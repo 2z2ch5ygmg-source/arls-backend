@@ -9344,6 +9344,18 @@ function getScheduleWorkflowTenantFallbackChoice() {
   if (!canSelectScheduleWorkflowTenant()) return null;
   const visibleChoice = getVisibleDevTenantChoice();
   if (visibleChoice?.code) return visibleChoice;
+  const selectedTenantCode = ensureScheduleTenantCode(state.devAdmin?.selectedTenantCode || '');
+  if (selectedTenantCode && selectedTenantCode !== 'MASTER') {
+    const selectedTenantName = String(
+      state.devAdmin?.selectedTenantName
+      || resolveTenantNameByCode(selectedTenantCode)
+      || selectedTenantCode,
+    ).trim();
+    return {
+      code: selectedTenantCode,
+      name: selectedTenantName,
+    };
+  }
   const code = ensureScheduleTenantCode(
     getWorkingTenantDisplayCode()
     || getScheduleTenantValue()
@@ -9383,6 +9395,7 @@ function getScheduleBaseTenantCode() {
   return ensureScheduleTenantCode(
     $('#scheduleImportTenantSelect')?.value
     || state.schedule?.tenantCode
+    || state.devAdmin?.selectedTenantCode
     || getWorkingTenantDisplayCode()
     || getScheduleTenantValue()
     || state.user?.tenant_code
@@ -9419,6 +9432,7 @@ function getScheduleHqTenantCode() {
   const nextCode = ensureScheduleTenantCode(
     $('#scheduleHqTenantSelect')?.value
     || workspace.tenantCode
+    || state.devAdmin?.selectedTenantCode
     || getWorkingTenantDisplayCode()
     || getScheduleTenantValue()
     || state.user?.tenant_code
@@ -9467,7 +9481,27 @@ function populateScheduleTenantSelect(select, { selectedCode = '', placeholder =
   const tenantChoices = getScheduleWorkflowTenantChoices();
   select.innerHTML = '';
   if (!tenantChoices.length) {
-    select.innerHTML = `<option value="">${placeholder}</option>`;
+    const fallbackCode = ensureScheduleTenantCode(
+      selectedCode
+      || getScheduleWorkflowTenantFallbackChoice()?.code
+      || state.devAdmin?.selectedTenantCode
+      || '',
+    );
+    const fallbackName = String(
+      getScheduleWorkflowTenantFallbackChoice()?.name
+      || state.devAdmin?.selectedTenantName
+      || resolveTenantNameByCode(fallbackCode)
+      || fallbackCode,
+    ).trim();
+    if (fallbackCode) {
+      const option = document.createElement('option');
+      option.value = fallbackCode;
+      option.textContent = fallbackName ? `${fallbackName} (${fallbackCode})` : fallbackCode;
+      option.selected = true;
+      select.appendChild(option);
+    } else {
+      select.innerHTML = `<option value="">${placeholder}</option>`;
+    }
     select.disabled = true;
     return;
   }
@@ -40434,6 +40468,7 @@ async function bootstrapScheduleUploadWorkspace({ force = false } = {}) {
     try {
       if (canSelectScheduleWorkflowTenant()) {
         await ensureDevTenantCatalog({ force });
+        await ensureDevWorkingTenantContext({ silentToast: true });
       }
       ensureScheduleSupportHqWorkspaceDefaults();
       const isHqUploadTab = getScheduleActiveTopTab() === SCHEDULE_TAB_HQ_UPLOAD;
