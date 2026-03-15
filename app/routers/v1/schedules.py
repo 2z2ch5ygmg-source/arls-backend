@@ -30,7 +30,11 @@ import requests
 
 from ...deps import get_db_conn, get_current_user, apply_rate_limit
 from ...config import settings
-from ...db import MONTHLY_SCHEDULE_SHIFT_TYPE_CONSTRAINT_SQL, ensure_schedule_import_raw_workbook_columns
+from ...db import (
+    MONTHLY_SCHEDULE_SHIFT_TYPE_CONSTRAINT_SQL,
+    SENTRIX_SUPPORT_HQ_BATCH_SCOPE_CONSTRAINT_SQL,
+    ensure_schedule_import_raw_workbook_columns,
+)
 from ...schemas import (
     AppleDaytimeShiftOut,
     ImportPreviewIssueLocationOut,
@@ -3262,6 +3266,10 @@ def _delete_monthly_schedule_row(cur, *, schedule_id: str) -> None:
 
 def _ensure_monthly_schedule_shift_type_constraint(cur) -> None:
     cur.execute(MONTHLY_SCHEDULE_SHIFT_TYPE_CONSTRAINT_SQL)
+
+
+def _ensure_sentrix_support_hq_roster_batch_scope_constraint(cur) -> None:
+    cur.execute(SENTRIX_SUPPORT_HQ_BATCH_SCOPE_CONSTRAINT_SQL)
 
 
 def _upsert_daytime_need_count_row(
@@ -8479,6 +8487,7 @@ def _persist_sentrix_hq_roster_preview_batch(
         "excluded_sites": [site.model_dump(mode="json") for site in excluded_sites],
     }
     with conn.cursor() as cur:
+        _ensure_sentrix_support_hq_roster_batch_scope_constraint(cur)
         cur.execute(
             """
             INSERT INTO sentrix_support_hq_roster_batches (

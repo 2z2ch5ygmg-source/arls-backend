@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS sentrix_support_hq_roster_batches (
     created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
     completed_at timestamptz,
     CONSTRAINT chk_sentrix_support_hq_roster_batches_scope
-      CHECK (download_scope IN ('all', 'site')),
+      CHECK (download_scope IN ('all', 'site', 'selected')),
     CONSTRAINT chk_sentrix_support_hq_roster_batches_status
       CHECK (status IN ('previewed', 'applied', 'blocked', 'failed'))
 );

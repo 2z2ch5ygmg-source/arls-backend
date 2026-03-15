@@ -34,6 +34,26 @@ END
 $$;
 """
 
+SENTRIX_SUPPORT_HQ_BATCH_SCOPE_CONSTRAINT_SQL = """
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'sentrix_support_hq_roster_batches'
+  ) THEN
+    ALTER TABLE sentrix_support_hq_roster_batches
+      DROP CONSTRAINT IF EXISTS chk_sentrix_support_hq_roster_batches_scope;
+
+    ALTER TABLE sentrix_support_hq_roster_batches
+      ADD CONSTRAINT chk_sentrix_support_hq_roster_batches_scope
+      CHECK (download_scope IN ('all', 'site', 'selected')) NOT VALID;
+  END IF;
+END
+$$;
+"""
+
 SCHEDULE_IMPORT_RAW_WORKBOOK_COLUMNS_SQL = """
 DO $$
 BEGIN
@@ -144,6 +164,7 @@ def _repair_runtime_constraints(conn) -> None:
     with conn.cursor() as cur:
         cur.execute(SCHEDULE_IMPORT_RAW_WORKBOOK_COLUMNS_SQL)
         cur.execute(MONTHLY_SCHEDULE_SHIFT_TYPE_CONSTRAINT_SQL)
+        cur.execute(SENTRIX_SUPPORT_HQ_BATCH_SCOPE_CONSTRAINT_SQL)
 
 
 def ensure_schedule_import_raw_workbook_columns(conn) -> None:
