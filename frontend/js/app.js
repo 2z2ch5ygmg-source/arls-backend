@@ -11297,9 +11297,6 @@ function buildScheduleSupportHqAggregatedPreviewRows(inspectResult) {
   return Array.from(grouped.values())
     .map((aggregate) => {
       const summary = scopeSummaryMap.get(aggregate.scope_key);
-      const shiftKind = String(aggregate.shift_kind || '').trim().toLowerCase();
-      const nightReason = String(summary?.purpose_text || '').trim();
-      const dayReason = String(aggregate.reason || '').trim();
       const blockingIssueCount = Number(summary?.blocking_issue_count ?? aggregate.blocking_issue_count ?? 0);
       const warningIssueCount = Number(summary?.warning_issue_count ?? aggregate.warning_issue_count ?? 0);
       const targetStatus = String(summary?.target_status || aggregate.target_status || '').trim() || null;
@@ -11307,6 +11304,18 @@ function buildScheduleSupportHqAggregatedPreviewRows(inspectResult) {
       const displayStatus = blockingIssueCount > 0 || reviewStatus === 'blocking' || reviewStatus === 'over_capacity'
         ? 'upload_blocked'
         : targetStatus;
+      const blockingReason = Array.isArray(summary?.blocking_errors)
+        ? summary.blocking_errors.map((message) => String(message || '').trim()).find(Boolean) || ''
+        : '';
+      const pendingReason = Array.isArray(summary?.warning_messages)
+        ? summary.warning_messages.map((message) => String(message || '').trim()).find(Boolean) || ''
+        : '';
+      const excludedReason = String(summary?.excluded_reason || '').trim();
+      const reviewReason = String(aggregate.reason || '').trim();
+      const displayReason = reviewReason
+        || (displayStatus === 'upload_blocked' ? blockingReason : '')
+        || (displayStatus === 'approval_pending' ? pendingReason : '')
+        || excludedReason;
       return {
         ...aggregate,
         request_count: Number(summary?.request_count ?? aggregate.request_count ?? 0),
@@ -11314,7 +11323,7 @@ function buildScheduleSupportHqAggregatedPreviewRows(inspectResult) {
         target_status: targetStatus,
         display_status: displayStatus,
         worker_names: aggregate.worker_names_list.join(', '),
-        reason: shiftKind === 'night' ? nightReason : dayReason,
+        reason: displayReason,
         blocking_issue_count: blockingIssueCount,
         warning_issue_count: warningIssueCount,
       };
