@@ -14,6 +14,7 @@ import time
 import unicodedata
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
 from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any
@@ -320,6 +321,8 @@ ARLS_IGNORE_VALUE_TOKENS = {
     "critical incidents",
 }
 ARLS_LEAVE_MARKERS = {"연차", "휴가", "반차", "휴무", "공휴일"}
+ARLS_BLANK_WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"]
+ARLS_BLANK_HOLIDAY_FONT_RGB = "FFFF0000"
 ARLS_WORKER_ROW_PATTERN = re.compile(r"^근무자\s*(\d+)$")
 ARLS_MULTI_PERSON_SPLIT_PATTERN = re.compile(r"[\r\n]+|[;,/&]|(?:\s+\+\s+)|(?:\s{2,})")
 ARLS_REQUIRED_SECTION_ROWS = (
@@ -1200,6 +1203,55 @@ def _parse_month_text(value: object) -> tuple[int, int] | None:
     return None
 
 
+@lru_cache(maxsize=8)
+def _fetch_kr_public_holiday_map(year: int) -> dict[str, str]:
+    if year < 1900 or year > 2100:
+        return {}
+    url = f"https://date.nager.at/api/v3/PublicHolidays/{year}/KR"
+    try:
+        response = requests.get(
+            url,
+            timeout=8,
+            headers={"Accept": "application/json"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        logger.warning("blank template holiday lookup failed: year=%s error=%s", year, exc)
+        return {}
+    holiday_map: dict[str, str] = {}
+    for item in payload if isinstance(payload, list) else []:
+        if not isinstance(item, dict):
+            continue
+        date_key = str(item.get("date") or "").strip()
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_key):
+            continue
+        holiday_name = str(item.get("localName") or item.get("name") or "").strip()
+        if not holiday_name:
+            continue
+        existing = holiday_map.get(date_key)
+        if existing and holiday_name not in existing.split(" / "):
+            holiday_map[date_key] = f"{existing} / {holiday_name}"
+        elif not existing:
+            holiday_map[date_key] = holiday_name
+    return holiday_map
+
+
+def _holiday_text_map_for_month(month_key: str) -> dict[str, str]:
+    start_date, end_date = _month_bounds(month_key)
+    holiday_map = _fetch_kr_public_holiday_map(start_date.year)
+    if end_date.year != start_date.year:
+        holiday_map = {
+            **holiday_map,
+            **_fetch_kr_public_holiday_map(end_date.year),
+        }
+    return {
+        date_key: holiday_name
+        for date_key, holiday_name in holiday_map.items()
+        if date_key.startswith(f"{month_key}-")
+    }
+
+
 def _import_status_label(validation_code: str | None) -> str:
     if not validation_code:
         return "정상"
@@ -1918,29 +1970,77 @@ def download_schedule_template(
     month_key = (month or datetime.utcnow().strftime("%Y-%m")).strip()
     _month_bounds(month_key)
 
+    requested_site_code = str(site_code or "").strip().upper()
     effective_site_code = _resolve_scoped_schedule_site_code(user, request_site_code=site_code)
-    resolved_site_name = ""
-    if effective_site_code:
-        site_row = _resolve_site_context_by_code(
-            conn,
-            tenant_id=str(target_tenant["id"]),
-            site_code=effective_site_code,
-        )
-        if site_row:
-            resolved_site_name = str(site_row.get("site_name") or "").strip()
-
+    export_all_sites = requested_site_code == "ALL" and not effective_site_code
     workbook, _template_path = _load_required_arls_month_workbook()
-    _prepare_blank_arls_template_workbook(
-        workbook,
-        month_key=month_key,
-        site_name=resolved_site_name,
-    )
+
+    if export_all_sites:
+        site_contexts = [
+            {
+                "site_code": str(item.get("site_code") or "").strip(),
+                "site_name": str(item.get("site_name") or "").strip(),
+                "site_address": str(item.get("address") or "").strip(),
+            }
+            for item in _list_site_contexts_for_export(conn, tenant_id=str(target_tenant["id"]))
+            if str(item.get("site_code") or "").strip()
+        ]
+        if not site_contexts:
+            raise HTTPException(status_code=404, detail="site not found")
+        template_sheet = workbook[ARLS_SHEET_NAME] if ARLS_SHEET_NAME in workbook.sheetnames else workbook.active
+        target_sheets = [template_sheet]
+        for _ in range(1, len(site_contexts)):
+            target_sheets.append(workbook.copy_worksheet(template_sheet))
+        used_titles: set[str] = set()
+        for index, (site_ctx, target_sheet) in enumerate(zip(site_contexts, target_sheets), start=1):
+            desired_title = _normalize_excel_sheet_title(
+                site_ctx.get("site_name"),
+                fallback=f"{site_ctx.get('site_code') or 'SITE'}_{index}",
+            )
+            sheet_title = desired_title
+            suffix = 2
+            while sheet_title in used_titles:
+                base_title = desired_title[: max(0, 31 - len(f"_{suffix}"))]
+                sheet_title = f"{base_title}_{suffix}"
+                suffix += 1
+            used_titles.add(sheet_title)
+            target_sheet.title = sheet_title
+            _prepare_blank_arls_template_sheet(
+                workbook,
+                sheet=target_sheet,
+                month_key=month_key,
+                site_name=site_ctx["site_name"],
+                site_address=site_ctx["site_address"],
+            )
+        if ARLS_METADATA_SHEET_NAME in workbook.sheetnames:
+            workbook.remove(workbook[ARLS_METADATA_SHEET_NAME])
+    else:
+        resolved_site_name = ""
+        resolved_site_address = ""
+        if effective_site_code:
+            site_row = _resolve_site_context_by_code(
+                conn,
+                tenant_id=str(target_tenant["id"]),
+                site_code=effective_site_code,
+            )
+            if site_row:
+                resolved_site_name = str(site_row.get("site_name") or "").strip()
+                resolved_site_address = str(site_row.get("address") or "").strip()
+        _prepare_blank_arls_template_workbook(
+            workbook,
+            month_key=month_key,
+            site_name=resolved_site_name,
+            site_address=resolved_site_address,
+        )
 
     out = BytesIO()
     workbook.save(out)
     out.seek(0)
-    safe_month = month_key.replace("-", "")
-    filename = f"schedule_monthly_template_{safe_month}.xlsx"
+    if export_all_sites:
+        filename = f"monthly_schedule_ALL_{month_key}.xlsx"
+    else:
+        filename_site_segment = effective_site_code or "blank"
+        filename = f"monthly_schedule_{filename_site_segment}_{month_key}.xlsx"
     return StreamingResponse(
         out,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -4473,27 +4573,95 @@ def _prepare_blank_arls_template_workbook(
     site_name: str = "",
     site_address: str = "",
 ) -> None:
-    sheet, _data_start_row, _summary_start_row = _reset_arls_month_template_workbook(
+    sheet = workbook[ARLS_SHEET_NAME] if ARLS_SHEET_NAME in workbook.sheetnames else workbook.active
+    _prepare_blank_arls_template_sheet(
         workbook,
-        employee_count=1,
+        sheet=sheet,
+        month_key=month_key,
+        site_name=site_name,
+        site_address=site_address,
     )
-    day_keys = _populate_arls_month_template_headers(
+    if ARLS_METADATA_SHEET_NAME in workbook.sheetnames:
+        workbook.remove(workbook[ARLS_METADATA_SHEET_NAME])
+
+
+def _repair_template_hidden_sheet(sheet, *, month_key: str) -> None:
+    _clear_template_hidden_sheet(sheet)
+    start_date, _end_date = _month_bounds(month_key)
+    _set_sheet_cell_value_if_writable(sheet, row=3, column=2, value=start_date)
+
+
+def _apply_blank_header_holiday_style(sheet, *, column: int) -> None:
+    for row in (2, 3, 4):
+        cell = sheet.cell(row=row, column=column)
+        next_font = copy(cell.font)
+        next_font.color = ARLS_BLANK_HOLIDAY_FONT_RGB
+        cell.font = next_font
+
+
+def _populate_blank_arls_month_template_headers(
+    sheet,
+    *,
+    month_key: str,
+    site_name: str,
+    site_address: str,
+) -> list[str]:
+    start_date, end_date = _month_bounds(month_key)
+    holiday_map = _holiday_text_map_for_month(month_key)
+    day_keys = _month_day_keys(start_date, end_date)
+
+    sheet["B1"] = f"{start_date.year}년 {start_date.month}월"
+    sheet["B2"] = f"현장명  {str(site_name or '').strip() or '-'}"
+    address_text = str(site_address or "").strip() or "-"
+    sheet["B3"] = f"현장주소\n{address_text}"
+
+    max_supported_days = ARLS_DATE_END_COL - ARLS_DATE_START_COL + 1
+    for idx, date_key in enumerate(day_keys[:max_supported_days]):
+        current_date = datetime.strptime(date_key, "%Y-%m-%d").date()
+        col_idx = ARLS_DATE_START_COL + idx
+        _set_sheet_cell_value_if_writable(sheet, row=2, column=col_idx, value=current_date)
+        _set_sheet_cell_value_if_writable(
+            sheet,
+            row=3,
+            column=col_idx,
+            value=ARLS_BLANK_WEEKDAY_LABELS[current_date.weekday()],
+        )
+        holiday_name = str(holiday_map.get(date_key) or "").strip()
+        _set_sheet_cell_value_if_writable(
+            sheet,
+            row=4,
+            column=col_idx,
+            value=holiday_name or None,
+        )
+        if holiday_name:
+            _apply_blank_header_holiday_style(sheet, column=col_idx)
+
+    for idx in range(len(day_keys), max_supported_days):
+        col_idx = ARLS_DATE_START_COL + idx
+        _set_sheet_cell_value_if_writable(sheet, row=2, column=col_idx, value=None)
+        _set_sheet_cell_value_if_writable(sheet, row=3, column=col_idx, value=None)
+        _set_sheet_cell_value_if_writable(sheet, row=4, column=col_idx, value=None)
+    return day_keys[:max_supported_days]
+
+
+def _prepare_blank_arls_template_sheet(
+    workbook: Workbook,
+    *,
+    sheet,
+    month_key: str,
+    site_name: str = "",
+    site_address: str = "",
+) -> None:
+    _reset_arls_month_template_sheet(sheet, employee_count=1)
+    _populate_blank_arls_month_template_headers(
         sheet,
         month_key=month_key,
         site_name=site_name,
         site_address=site_address,
     )
-    # Template downloads must not contain sample date/month/site payload.
-    sheet["B1"] = None
-    sheet["B2"] = None
-    sheet["B3"] = None
-    for idx, _date_key in enumerate(day_keys):
-        col_idx = ARLS_DATE_START_COL + idx
-        _set_sheet_cell_value_if_writable(sheet, row=2, column=col_idx, value=None)
-        _set_sheet_cell_value_if_writable(sheet, row=3, column=col_idx, value=None)
-        _set_sheet_cell_value_if_writable(sheet, row=4, column=col_idx, value=None)
-    if ARLS_METADATA_SHEET_NAME in workbook.sheetnames:
-        workbook.remove(workbook[ARLS_METADATA_SHEET_NAME])
+    hidden_sheet_name = "출동.잔업 초과수당(2)"
+    if hidden_sheet_name in workbook.sheetnames:
+        _repair_template_hidden_sheet(workbook[hidden_sheet_name], month_key=month_key)
 
 
 def _build_export_employee_blocks(
