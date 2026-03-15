@@ -11149,7 +11149,7 @@ function renderScheduleSupportHqReviewTable() {
         strong.textContent = '현재 검토 결과는 stale 상태입니다.';
       } else if (workspace.uploadFileName) {
         strong.textContent = previewMode === 'actionable'
-          ? '기본 보기에서는 검토 필요/업로드 차단 scope만 표시됩니다.'
+          ? '기본 보기에서는 업로드 차단 scope만 표시됩니다.'
           : '업로드 파일 검토를 실행하면 scope별 상태와 근무자 셀 결과가 표시됩니다.';
       } else {
         strong.textContent = '업로드할 HQ 작성본 workbook 파일을 선택하세요.';
@@ -11162,7 +11162,7 @@ function renderScheduleSupportHqReviewTable() {
         meta.textContent = String(workspace.inspectError || '').trim();
       } else {
         meta.textContent = previewMode === 'actionable'
-          ? '전체 보기로 전환하면 승인 scope를 포함한 모든 support scope를 볼 수 있습니다.'
+          ? '전체 보기로 전환하면 승인대기와 자동승인 scope를 포함한 모든 support scope를 볼 수 있습니다.'
           : (
             inspectResult?.next_step_message
               ? String(inspectResult.next_step_message || '').trim()
@@ -11237,7 +11237,6 @@ function normalizeScheduleSupportHqPreviewMode(value = '') {
 function isScheduleSupportHqAggregatedRowActionable(row = {}) {
   const displayStatus = String(row?.display_status || row?.target_status || '').trim().toLowerCase();
   if (displayStatus === 'upload_blocked') return true;
-  if (displayStatus === 'approval_pending') return true;
   return Number(row?.blocking_issue_count || 0) > 0;
 }
 
