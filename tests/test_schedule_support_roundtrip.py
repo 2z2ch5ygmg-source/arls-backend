@@ -24,6 +24,7 @@ from app.routers.v1.schedules import (
     _build_arls_month_sheet,
     _build_employee_name_index,
     _build_support_roster_hq_download_workbook,
+    _build_support_roster_hq_aggregated_review_rows,
     _build_support_roster_hq_workspace_payload,
     _build_support_roster_hq_upload_inspect_result,
     _build_sentrix_hq_snapshot_signature,
@@ -51,6 +52,7 @@ from app.routers.v1.schedules import (
     _write_sentrix_support_hq_metadata_sheet,
     SENTRIX_SUPPORT_HQ_METADATA_SHEET_NAME,
 )
+from app.schemas import SupportRosterHqScopeSummaryOut
 
 
 TEMPLATE_PATH = Path("/Users/mark/Desktop/rg-arls-dev/app/templates/monthly_schedule_template.xlsx")
@@ -1255,6 +1257,62 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         )
         self.assertFalse(ambiguous_self["is_valid"])
         self.assertEqual(ambiguous_self["issue_code"], "SELF_STAFF_EMPLOYEE_AMBIGUOUS")
+        self.assertIn("조태환", ambiguous_self["issue_message"])
+
+    def test_parse_sentrix_hq_worker_cell_surfaces_missing_self_staff_name(self):
+        employee_index = _build_employee_name_index([])
+
+        missing_self = _parse_sentrix_hq_worker_cell(
+            "자체 조정현",
+            schedule_date=date(2026, 3, 5),
+            employee_index=employee_index,
+        )
+
+        self.assertFalse(missing_self["is_valid"])
+        self.assertEqual(missing_self["issue_code"], "SELF_STAFF_EMPLOYEE_NOT_FOUND")
+        self.assertIn("조정현", missing_self["issue_message"])
+
+    def test_aggregated_review_row_prefers_blocking_reason_over_scope_reason(self):
+        summary = SupportRosterHqScopeSummaryOut(
+            scope_key="R738:2026-03-05:night",
+            sheet_name="Apple_명동",
+            site_name="Apple_명동",
+            site_code="R738",
+            work_date=date(2026, 3, 5),
+            shift_kind="night",
+            request_count=3,
+            valid_filled_count=2,
+            invalid_filled_count=1,
+            target_status="pending",
+            purpose_text="1. LiDAR 작업",
+            scope_reason="1. LiDAR 작업",
+            review_level="error",
+            blocking_errors=["자체 인원 '조정현'을 해당 지점 active employee master에서 찾지 못했습니다."],
+            worker_entries=[
+                {
+                    "parsed_display_value": "F 안현철",
+                    "countable": True,
+                    "issue_code": "",
+                },
+                {
+                    "parsed_display_value": "BK 김형진",
+                    "countable": True,
+                    "issue_code": "",
+                },
+                {
+                    "parsed_display_value": "자체 조정현",
+                    "countable": False,
+                    "issue_code": "SELF_STAFF_EMPLOYEE_NOT_FOUND",
+                },
+            ],
+            blocking_issue_count=1,
+            warning_issue_count=0,
+        )
+
+        row = _build_support_roster_hq_aggregated_review_rows([summary])[0]
+
+        self.assertEqual(row.reason, "자체 인원 '조정현'을 해당 지점 active employee master에서 찾지 못했습니다.")
+        self.assertEqual(row.worker_names, "F 안현철, BK 김형진")
 
     def test_build_sentrix_support_roster_handoff_payload_preserves_scope_lineage(self):
         batch_id = uuid.uuid4()

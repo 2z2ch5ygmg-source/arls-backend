@@ -3974,6 +3974,86 @@ def _build_support_request_rows_from_import_payloads(
     ]
 
 
+def _normalize_support_request_scope_row(
+    row: dict[str, Any] | None,
+) -> dict[str, Any]:
+    normalized = dict(row or {})
+    detail_json = dict(normalized.get("detail_json") or {})
+    shift_kind = "night" if str(normalized.get("shift_kind") or "day").strip().lower() == "night" else "day"
+    day_reason_text = _extract_support_request_day_reason_text(normalized, detail_json)
+    work_purpose = str(
+        normalized.get("work_purpose")
+        or normalized.get("purpose_text")
+        or detail_json.get("purpose_text")
+        or ""
+    ).strip() or None
+    normalized["shift_kind"] = shift_kind
+    normalized["day_reason_text"] = day_reason_text
+    normalized["work_purpose"] = work_purpose
+    normalized["detail_json"] = detail_json
+    return normalized
+
+
+def _merge_support_request_scope_rows(
+    primary_rows: list[dict[str, Any]] | None,
+    fallback_rows: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    def _scope_key(row: dict[str, Any]) -> tuple[str, str] | None:
+        work_date = row.get("work_date")
+        if not isinstance(work_date, date):
+            return None
+        shift_kind = "night" if str(row.get("shift_kind") or "day").strip().lower() == "night" else "day"
+        return work_date.isoformat(), shift_kind
+
+    fallback_map: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in list(fallback_rows or []):
+        normalized = _normalize_support_request_scope_row(row)
+        key = _scope_key(normalized)
+        if key is None:
+            continue
+        fallback_map[key] = normalized
+
+    merged_rows: list[dict[str, Any]] = []
+    seen_keys: set[tuple[str, str]] = set()
+    for row in list(primary_rows or []):
+        normalized = _normalize_support_request_scope_row(row)
+        key = _scope_key(normalized)
+        if key is None:
+            continue
+        fallback = fallback_map.get(key) or {}
+        fallback_detail_json = dict(fallback.get("detail_json") or {})
+        detail_json = {
+            **fallback_detail_json,
+            **dict(normalized.get("detail_json") or {}),
+        }
+        day_reason_text = str(
+            normalized.get("day_reason_text")
+            or fallback.get("day_reason_text")
+            or ""
+        ).strip() or None
+        work_purpose = str(
+            normalized.get("work_purpose")
+            or fallback.get("work_purpose")
+            or ""
+        ).strip() or None
+        if day_reason_text:
+            detail_json["day_reason_text"] = day_reason_text
+        if work_purpose and not str(detail_json.get("purpose_text") or "").strip():
+            detail_json["purpose_text"] = work_purpose
+        normalized["day_reason_text"] = day_reason_text
+        normalized["work_purpose"] = work_purpose
+        normalized["detail_json"] = detail_json
+        merged_rows.append(normalized)
+        seen_keys.add(key)
+
+    for key in sorted(fallback_map.keys(), key=lambda item: (item[0], item[1])):
+        if key in seen_keys:
+            continue
+        merged_rows.append(fallback_map[key])
+
+    return merged_rows
+
+
 def _resolve_active_support_roundtrip_source_batch_id(
     conn,
     *,
@@ -3992,30 +4072,13 @@ def _resolve_active_support_roundtrip_source_batch_id(
     return str((source_row or {}).get("source_batch_id") or "").strip() or None
 
 
-def _read_monthly_support_request_rows_for_export(
+def _read_live_sentrix_support_request_rows(
     conn,
     *,
     tenant_id: str,
     site_id: str,
     month_key: str,
-    source_batch_id: str | None = None,
-) -> list[dict]:
-    artifact_batch_id = str(source_batch_id or "").strip() or _resolve_active_support_roundtrip_source_batch_id(
-        conn,
-        tenant_id=tenant_id,
-        site_id=site_id,
-        month_key=month_key,
-    )
-    if artifact_batch_id:
-        try:
-            return _build_support_request_rows_from_import_payloads(
-                _load_schedule_import_payload_rows(conn, batch_id=artifact_batch_id)
-            )
-        except Exception:
-            logger.exception(
-                "[schedule][export] failed to read support-demand scopes from import batch batch_id=%s",
-                artifact_batch_id,
-            )
+) -> list[dict[str, Any]]:
     start_date, end_date = _month_bounds(month_key)
     with conn.cursor() as cur:
         cur.execute(
@@ -4045,6 +4108,42 @@ def _read_monthly_support_request_rows_for_export(
             ),
         )
         return [dict(row) for row in cur.fetchall()]
+
+
+def _read_monthly_support_request_rows_for_export(
+    conn,
+    *,
+    tenant_id: str,
+    site_id: str,
+    month_key: str,
+    source_batch_id: str | None = None,
+) -> list[dict]:
+    artifact_batch_id = str(source_batch_id or "").strip() or _resolve_active_support_roundtrip_source_batch_id(
+        conn,
+        tenant_id=tenant_id,
+        site_id=site_id,
+        month_key=month_key,
+    )
+    live_rows = _read_live_sentrix_support_request_rows(
+        conn,
+        tenant_id=tenant_id,
+        site_id=site_id,
+        month_key=month_key,
+    )
+    if artifact_batch_id:
+        try:
+            return _merge_support_request_scope_rows(
+                _build_support_request_rows_from_import_payloads(
+                    _load_schedule_import_payload_rows(conn, batch_id=artifact_batch_id)
+                ),
+                live_rows,
+            )
+        except Exception:
+            logger.exception(
+                "[schedule][export] failed to read support-demand scopes from import batch batch_id=%s",
+                artifact_batch_id,
+            )
+    return _merge_support_request_scope_rows([], live_rows)
 
 
 def _build_support_request_ticket_index(rows: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str, Any]]:
@@ -6531,6 +6630,14 @@ def _build_support_roster_hq_aggregated_review_rows(
         display_status = "upload_blocked" if int(summary.blocking_issue_count or 0) > 0 else (
             str(summary.target_status or "").strip() or None
         )
+        blocking_reason = next(
+            (
+                str(message or "").strip()
+                for message in list(summary.blocking_errors or [])
+                if str(message or "").strip()
+            ),
+            None,
+        )
         worker_names = ", ".join(
             str(
                 entry.get("parsed_display_value")
@@ -6561,11 +6668,15 @@ def _build_support_roster_hq_aggregated_review_rows(
                 worker_names=worker_names,
                 ticket_status=display_status,
                 ticket_status_label=_get_support_roster_hq_ticket_status_label(display_status or summary.target_status),
-                reason=str(
-                    summary.purpose_text
-                    if str(summary.shift_kind or "").strip().lower() == "night"
-                    else summary.scope_reason
-                ).strip() or None,
+                reason=blocking_reason
+                or (
+                    str(
+                        summary.purpose_text
+                        if str(summary.shift_kind or "").strip().lower() == "night"
+                        else summary.scope_reason
+                    ).strip()
+                    or None
+                ),
                 review_level=str(summary.review_level or "").strip() or _build_support_roster_hq_review_level(
                     blocking_issue_count=summary.blocking_issue_count,
                     warning_issue_count=summary.warning_issue_count,
@@ -6834,10 +6945,10 @@ def _parse_sentrix_hq_worker_cell(
         )
         if issue_code == "EMPLOYEE_MATCH_FAILED":
             issue_code = "SELF_STAFF_EMPLOYEE_NOT_FOUND"
-            issue_message = _sentrix_hq_issue_template(issue_code)[2]
+            issue_message = f"자체 인원 '{employee_name}'을 해당 지점 active employee master에서 찾지 못했습니다."
         elif issue_code == "EMPLOYEE_MATCH_AMBIGUOUS":
             issue_code = "SELF_STAFF_EMPLOYEE_AMBIGUOUS"
-            issue_message = _sentrix_hq_issue_template(issue_code)[2]
+            issue_message = f"자체 인원 '{employee_name}'이 active employee master에 중복되어 자동 매칭할 수 없습니다."
         return {
             "raw_text": raw_text,
             "compact_text": compact_text,
@@ -7236,11 +7347,17 @@ def _build_support_roster_hq_artifact_scope_map(
     artifact_map: dict[str, dict[str, Any]] = {}
     for site_code, source_row in source_map.items():
         source_batch_id = str(source_row.get("source_batch_id") or "").strip()
+        site_id = str(source_row.get("site_id") or "").strip()
         scope_rows: dict[tuple[str, str], dict[str, Any]] = {}
-        if source_batch_id:
+        if site_id:
             try:
-                import_payload_rows = _load_schedule_import_payload_rows(conn, batch_id=source_batch_id)
-                for support_row in _build_support_request_rows_from_import_payloads(import_payload_rows):
+                for support_row in _read_monthly_support_request_rows_for_export(
+                    conn,
+                    tenant_id=tenant_id,
+                    site_id=site_id,
+                    month_key=month_key,
+                    source_batch_id=source_batch_id or None,
+                ):
                     work_date = support_row.get("work_date")
                     if not isinstance(work_date, date):
                         continue
