@@ -6638,6 +6638,14 @@ def _build_support_roster_hq_aggregated_review_rows(
             ),
             None,
         )
+        pending_reason = next(
+            (
+                str(message or "").strip()
+                for message in list(summary.warning_messages or [])
+                if str(message or "").strip()
+            ),
+            None,
+        )
         worker_names = ", ".join(
             str(
                 entry.get("parsed_display_value")
@@ -6670,13 +6678,11 @@ def _build_support_roster_hq_aggregated_review_rows(
                 ticket_status_label=_get_support_roster_hq_ticket_status_label(display_status or summary.target_status),
                 reason=blocking_reason
                 or (
-                    str(
-                        summary.purpose_text
-                        if str(summary.shift_kind or "").strip().lower() == "night"
-                        else summary.scope_reason
-                    ).strip()
-                    or None
-                ),
+                    pending_reason
+                    if str(display_status or summary.target_status or "").strip().lower() == SENTRIX_HQ_ROSTER_PENDING_STATUS
+                    else None
+                )
+                or (str(summary.excluded_reason or "").strip() or None),
                 review_level=str(summary.review_level or "").strip() or _build_support_roster_hq_review_level(
                     blocking_issue_count=summary.blocking_issue_count,
                     warning_issue_count=summary.warning_issue_count,
@@ -8286,6 +8292,9 @@ def _build_support_roster_hq_upload_inspect_result(
                     if str(issue.get("severity") or "").strip().lower() == "warning"
                     and str(issue.get("message") or issue.get("code") or "").strip()
                 ]
+                preview_reason = next((message for message in blocking_errors if str(message).strip()), None)
+                if not preview_reason and target_status == SENTRIX_HQ_ROSTER_PENDING_STATUS:
+                    preview_reason = next((message for message in warning_messages if str(message).strip()), None)
                 review_level = _build_support_roster_hq_review_level(
                     blocking_issue_count=blocking_issue_count,
                     warning_issue_count=warning_issue_count,
@@ -8346,7 +8355,7 @@ def _build_support_roster_hq_upload_inspect_result(
                             "valid_filled_count": valid_filled_count,
                             "target_status": target_status,
                             "status": "blocking" if blocking_issue_count > 0 else scope_status,
-                            "reason": scope_reason,
+                            "reason": preview_reason,
                             "issue_code": None,
                             "payload": {
                                 "scope_key": scope_key,

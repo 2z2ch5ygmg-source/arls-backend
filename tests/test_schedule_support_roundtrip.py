@@ -351,7 +351,7 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
             if item.row_kind == "scope_summary" and item.site_code == "R692" and item.work_date.isoformat() == "2026-03-01" and item.shift_kind == "day"
         )
         self.assertEqual(scope_row.status, "approval_pending")
-        self.assertEqual(scope_row.reason, "인력 공백 보강")
+        self.assertEqual(scope_row.reason, "유효 입력 인원이 기존 ticket 요청 수보다 많습니다.")
 
         worker_rows = [
             item for item in preview.review_rows
@@ -1313,6 +1313,37 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
 
         self.assertEqual(row.reason, "자체 인원 '조정현'을 해당 지점 active employee master에서 찾지 못했습니다.")
         self.assertEqual(row.worker_names, "F 안현철, BK 김형진")
+
+    def test_aggregated_review_row_uses_warning_reason_for_pending_status(self):
+        summary = SupportRosterHqScopeSummaryOut(
+            scope_key="R692:2026-03-01:night",
+            sheet_name="Apple_가로수길",
+            site_name="Apple_가로수길",
+            site_code="R692",
+            work_date=date(2026, 3, 1),
+            shift_kind="night",
+            request_count=2,
+            valid_filled_count=1,
+            invalid_filled_count=0,
+            target_status="approval_pending",
+            purpose_text="Project",
+            scope_reason="Project",
+            review_level="review",
+            warning_messages=["유효 입력 인원이 기존 ticket 요청 수보다 적습니다."],
+            worker_entries=[
+                {
+                    "parsed_display_value": "F 홍길동",
+                    "countable": True,
+                    "issue_code": "",
+                }
+            ],
+            blocking_issue_count=0,
+            warning_issue_count=1,
+        )
+
+        row = _build_support_roster_hq_aggregated_review_rows([summary])[0]
+
+        self.assertEqual(row.reason, "유효 입력 인원이 기존 ticket 요청 수보다 적습니다.")
 
     def test_build_sentrix_support_roster_handoff_payload_preserves_scope_lineage(self):
         batch_id = uuid.uuid4()
