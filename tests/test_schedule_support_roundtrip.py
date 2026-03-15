@@ -489,7 +489,7 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertEqual({item.site_code for item in preview.excluded_sites}, {"M001"})
         self.assertEqual(preview.summary["scope_total"], 1)
 
-    def test_hq_roster_inspect_blocks_missing_day_reason(self):
+    def test_hq_roster_inspect_allows_missing_day_reason(self):
         export_ctx = self._build_export_ctx()
         workbook = _build_support_only_workbook(
             export_ctx=export_ctx,
@@ -536,8 +536,8 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
                 user={"id": "user-1"},
             )
 
-        self.assertFalse(preview.can_apply)
-        self.assertTrue(any(item.code == "DAY_SCOPE_REASON_MISSING" for item in preview.issues))
+        self.assertTrue(preview.can_apply)
+        self.assertFalse(any(item.code == "DAY_SCOPE_REASON_MISSING" for item in preview.issues))
 
     def test_workspace_payload_exposes_independent_hq_state(self):
         with patch("app.routers.v1.schedules._list_support_roundtrip_workspace_sites", return_value=[

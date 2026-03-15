@@ -8212,22 +8212,9 @@ def _build_support_roster_hq_upload_inspect_result(
                 scope_status = "empty"
                 scope_reason = None
                 overflow_count = 0
-                day_reason_missing = False
                 if artifact_scope:
                     if shift_kind == "day":
                         scope_reason = artifact_day_reason_text
-                        day_reason_missing = not bool(scope_reason)
-                        if day_reason_missing and scope_has_workbook_signal:
-                            add_issue(
-                                "DAY_SCOPE_REASON_MISSING",
-                                message="주간 지원 사유를 현재 artifact에서 찾지 못했습니다.",
-                                sheet_name=sheet_name,
-                                site_code=site_code,
-                                site_name=site_name,
-                                work_date=schedule_date,
-                                shift_kind=shift_kind,
-                            )
-                            scope_reason = "주간 지원 사유 누락"
                     else:
                         scope_reason = purpose_text or artifact_purpose_text
                     if valid_filled_count == request_count:
@@ -16472,8 +16459,13 @@ def _build_schedule_import_preview_result(
         request_count_numeric = block.get("required_count_numeric")
         required_count_state = str(block.get("required_count_state") or "").strip()
         current_ticket = current_support_request_index.get((target_date.isoformat(), shift_kind)) or {}
+        current_ticket_detail_json = dict(current_ticket.get("detail_json") or {})
         current_request_count = int(current_ticket.get("request_count") or 0) if current_ticket else 0
         current_work_purpose = str(current_ticket.get("work_purpose") or "").strip()
+        current_day_reason_text = _extract_support_request_day_reason_text(
+            current_ticket,
+            current_ticket_detail_json,
+        )
         validation_code = None
         validation_error = None
         is_blocking = False
@@ -16566,7 +16558,9 @@ def _build_schedule_import_preview_result(
                 "invalid_filled_count": int(block.get("invalid_filled_count") or 0),
                 "external_count_raw": str(block.get("external_count_raw") or "").strip() or None,
                 "external_count_numeric": block.get("external_count_numeric"),
+                "day_reason_text": current_day_reason_text or None,
                 "detail_json": {
+                    **current_ticket_detail_json,
                     "required_count_raw": str(block.get("required_count_raw") or "").strip() or None,
                     "required_count_numeric": int(request_count_numeric) if request_count_numeric is not None else None,
                     "external_count_raw": str(block.get("external_count_raw") or "").strip() or None,
@@ -16581,6 +16575,7 @@ def _build_schedule_import_preview_result(
                     "required_row_no": int(block.get("required_row_no") or 0) or None,
                     "vendor_row_no": int(block.get("vendor_row_no") or 0) or None,
                     "purpose_row_no": int(block.get("purpose_row_no") or 0) or None,
+                    "day_reason_text": current_day_reason_text or None,
                 },
             }
         )
@@ -17669,6 +17664,7 @@ def _apply_canonical_schedule_import_batch(
             append_blocking_failure("같은 날짜/주야 지원 요청이 중복되었습니다.", payload=payload, shift_type=shift_kind)
             continue
         detail_json = dict(payload.get("detail_json") or {})
+        day_reason_text = _extract_support_request_day_reason_text(payload, detail_json)
         if request_count > 0:
             desired_support_request_rows[support_scope_key] = {
                 "row_no": int(payload.get("row_no") or 0),
@@ -17676,6 +17672,7 @@ def _apply_canonical_schedule_import_batch(
                 "shift_kind": shift_kind,
                 "request_count": max(int(request_count or 0), 0),
                 "work_purpose": str(payload.get("purpose_text") or "").strip() or None,
+                "day_reason_text": day_reason_text if shift_kind == "day" else None,
                 "detail_json": {
                     **detail_json,
                     "required_count_raw": str(
@@ -17687,6 +17684,7 @@ def _apply_canonical_schedule_import_batch(
                     "source_block": "sentrix_support_ticket",
                     "source_sheet": str(payload.get("source_sheet") or ARLS_SHEET_NAME).strip() or ARLS_SHEET_NAME,
                     "required_row_no": int(detail_json.get("required_row_no") or payload.get("row_no") or 0) or None,
+                    "day_reason_text": day_reason_text if shift_kind == "day" else None,
                 },
             }
             if shift_kind == "day":
