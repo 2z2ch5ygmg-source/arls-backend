@@ -1656,8 +1656,18 @@ class InAppNotificationListOut(BaseModel):
     unread_count: int = 0
 
 
+class FinanceSubmissionPublishHistoryEntryOut(BaseModel):
+    uploaded_at: Optional[datetime] = None
+    actor: Optional[str] = None
+    site_code: str
+    site_name: Optional[str] = None
+    month: str
+    is_current: bool = False
+
+
 class FinanceSubmissionStatusOut(BaseModel):
     site_code: str
+    site_name: Optional[str] = None
     month: str
     state: str
     current_revision: Optional[str] = None
@@ -1675,11 +1685,35 @@ class FinanceSubmissionStatusOut(BaseModel):
     final_uploaded_by: Optional[str] = None
     last_event: Optional[str] = None
     blocked_reasons: list[str] = Field(default_factory=list)
+    publish_history: list[FinanceSubmissionPublishHistoryEntryOut] = Field(default_factory=list)
+
+
+class FinanceSubmissionHqSiteStatusOut(BaseModel):
+    site_code: str
+    site_name: Optional[str] = None
+    month: str
+    has_published_file: bool = False
+    status: str = "파일 없음"
+    selectable: bool = False
+    latest_published_at: Optional[datetime] = None
+    latest_published_by: Optional[str] = None
+    latest_filename: Optional[str] = None
+    note: Optional[str] = None
+    latest_publish_version: Optional[str] = None
+    user_last_seen_version: Optional[str] = None
+    ui_summary: Optional[dict[str, Any]] = None
+    technical_details: Optional[dict[str, Any]] = None
+
+
+class FinanceSubmissionHqWorkspaceOut(BaseModel):
+    tenant_code: str
+    month: str
+    sites: list[FinanceSubmissionHqSiteStatusOut] = Field(default_factory=list)
 
 
 class FinanceSubmissionPreviewOut(BaseModel):
     finance_batch_id: UUID
-    import_batch_id: UUID
+    import_batch_id: Optional[UUID] = None
     total_rows: int
     valid_rows: int
     invalid_rows: int

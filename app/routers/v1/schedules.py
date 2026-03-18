@@ -40,6 +40,8 @@ from ...db import (
 from ...realtime import schedule_event_bus
 from ...schemas import (
     AppleDaytimeShiftOut,
+    FinanceSubmissionHqSiteStatusOut,
+    FinanceSubmissionHqWorkspaceOut,
     ImportPreviewIssueLocationOut,
     ImportPreviewIssueOut,
     ScheduleBulkCreateIn,
@@ -51,6 +53,7 @@ from ...schemas import (
     DutyLogOut,
     DutyLogRowOut,
     FinanceSubmissionPreviewOut,
+    FinanceSubmissionPublishHistoryEntryOut,
     FinanceSubmissionStatusOut,
     ImportApplyOut,
     ImportApplyRowOut,
@@ -248,6 +251,7 @@ SENTRIX_SUPPORT_HQ_METADATA_SHEET_NAME = "_SENTRIX_SUPPORT_HQ_META"
 ARLS_EXPORT_TEMPLATE_VERSION = "monthly_schedule_template.v5"
 ARLS_LEGACY_HIDDEN_TEMPLATE_SHEET_NAME = "출동.잔업 초과수당(2)"
 ARLS_EXPORT_SOURCE_VERSION = "schedule_export.phase2.roundtrip"
+ARLS_FINANCE_REVIEW_SOURCE_VERSION = ARLS_EXPORT_SOURCE_VERSION
 ARLS_SUPPORT_FORM_VERSION = "support_roundtrip.phase3.v1"
 SENTRIX_HQ_ROSTER_ASSIGNMENT_SOURCE = "HQ_ROUNDTRIP"
 SENTRIX_HQ_ROSTER_AUTO_APPROVED_STATUS = "auto_approved"
@@ -1025,20 +1029,52 @@ def _finance_submission_normalize_role(user: dict | None) -> str:
     return normalize_user_role((user or {}).get("role"))
 
 
+FINANCE_SUBMISSION_STATUS_PUBLISHED = "게시 완료"
+FINANCE_SUBMISSION_STATUS_MISSING = "파일 없음"
+FINANCE_SUBMISSION_STATUS_UPDATE_NEEDED = "업데이트 필요"
+
+
 def _can_view_finance_submission(user: dict | None) -> bool:
     return _finance_submission_normalize_role(user) in {"developer", "hq_admin", "supervisor", "vice_supervisor"}
 
 
 def _can_download_finance_review(user: dict | None) -> bool:
-    return _finance_submission_normalize_role(user) in {"developer", "hq_admin"}
+    return _finance_submission_normalize_role(user) in {"developer", "hq_admin", "supervisor", "vice_supervisor"}
 
 
 def _can_upload_finance_final(user: dict | None) -> bool:
-    return _finance_submission_normalize_role(user) in {"developer", "supervisor"}
+    return _finance_submission_normalize_role(user) in {"developer", "hq_admin", "supervisor", "vice_supervisor"}
 
 
 def _can_download_finance_final(user: dict | None) -> bool:
     return _finance_submission_normalize_role(user) in {"developer", "hq_admin"}
+
+
+def _resolve_finance_submission_site_status(
+    *,
+    has_published_file: bool,
+    current_publish_marker: str | None,
+    last_seen_publish_marker: str | None,
+) -> tuple[str, bool, str]:
+    current_marker = str(current_publish_marker or "").strip()
+    last_seen_marker = str(last_seen_publish_marker or "").strip()
+    if not has_published_file or not current_marker:
+        return (
+            FINANCE_SUBMISSION_STATUS_MISSING,
+            False,
+            "게시된 Finance workbook이 없습니다.",
+        )
+    if last_seen_marker and last_seen_marker != current_marker:
+        return (
+            FINANCE_SUBMISSION_STATUS_UPDATE_NEEDED,
+            True,
+            "이전에 확인한 게시본 이후 새 게시본이 있습니다.",
+        )
+    return (
+        FINANCE_SUBMISSION_STATUS_PUBLISHED,
+        True,
+        "최신 게시본을 내려받을 수 있습니다.",
+    )
 
 
 def _build_schedule_overlap_range(start_time: object, end_time: object) -> tuple[int, int] | None:
@@ -3500,6 +3536,30 @@ def _resolve_scoped_schedule_site_code(user: dict, *, request_site_code: str | N
     if staff_scope:
         return str(staff_scope.get("site_code") or "").strip().upper()
     return requested_site_code
+
+
+def _resolve_finance_submission_site_context(
+    conn,
+    *,
+    target_tenant: dict[str, Any],
+    user: dict[str, Any],
+    site_code: str | None,
+) -> dict[str, Any]:
+    requested_site_code = str(site_code or "").strip().upper()
+    if not requested_site_code:
+        raise HTTPException(status_code=400, detail="site_code is required")
+    actor_role = _finance_submission_normalize_role(user)
+    effective_site_code = requested_site_code
+    if actor_role in {"supervisor", "vice_supervisor"}:
+        effective_site_code = _resolve_scoped_schedule_site_code(user, request_site_code=requested_site_code)
+    site_row = _resolve_site_context_by_code(
+        conn,
+        tenant_id=str(target_tenant["id"]),
+        site_code=effective_site_code,
+    )
+    if not site_row:
+        raise HTTPException(status_code=404, detail="site not found")
+    return site_row
 
 
 def _list_site_contexts_for_export(conn, *, tenant_id: str) -> list[dict]:
@@ -13550,6 +13610,500 @@ def _build_finance_final_filename(*, month_key: str, site_code: str, generated_a
     return f"{month_key[:4]}년 {int(month_key[5:7])}월 근무표_{site_code}_2차최종_{generated.strftime('%y%m%d')}.xlsx"
 
 
+def _build_finance_submission_publish_version(*, batch_id: str | uuid.UUID | None) -> str:
+    normalized_batch_id = str(batch_id or "").strip()
+    if not normalized_batch_id:
+        normalized_batch_id = str(uuid.uuid4())
+    return f"publish:{normalized_batch_id}"
+
+
+def _coerce_binary_bytes(value: Any) -> bytes | None:
+    raw_bytes = value
+    if isinstance(raw_bytes, memoryview):
+        raw_bytes = raw_bytes.tobytes()
+    elif isinstance(raw_bytes, bytearray):
+        raw_bytes = bytes(raw_bytes)
+    if not isinstance(raw_bytes, bytes) or not raw_bytes:
+        return None
+    return raw_bytes
+
+
+def _finance_submission_metadata_validation_message(error_code: str) -> str:
+    mapping = {
+        "metadata_missing:tenant_code": "업로드한 파일에서 회사 정보를 확인할 수 없습니다.",
+        "metadata_missing:site_code": "업로드한 파일에서 지점 정보를 확인할 수 없습니다.",
+        "metadata_missing:month": "업로드한 파일에서 대상월 정보를 확인할 수 없습니다.",
+        "metadata_missing:export_revision": "업로드한 파일의 기준 revision 정보가 없습니다. 1차 다운로드 파일을 다시 사용해 주세요.",
+        "metadata_missing:template_version": "업로드한 파일의 양식 버전을 확인할 수 없습니다. 1차 다운로드 파일을 다시 사용해 주세요.",
+        "metadata_missing:export_source_version": "업로드한 파일의 생성 경로 정보를 확인할 수 없습니다. 1차 다운로드 파일을 다시 사용해 주세요.",
+        "metadata_mismatch:tenant_code": "업로드한 파일의 회사 정보가 현재 화면과 맞지 않습니다.",
+        "metadata_mismatch:site_code": "업로드한 파일의 지점 정보가 현재 선택 지점과 맞지 않습니다.",
+        "metadata_mismatch:month": "업로드한 파일의 대상월이 현재 선택한 월과 맞지 않습니다.",
+        "metadata_mismatch:template_version": "현재 사용하는 양식 버전이 아닙니다. 1차 다운로드 파일을 다시 사용해 주세요.",
+        "metadata_mismatch:export_source_version": "현재 게시 업로드에서 사용할 수 없는 파일입니다.",
+    }
+    return mapping.get(
+        str(error_code or "").strip(),
+        "업로드한 파일의 Finance 게시 검증에 실패했습니다. 1차 다운로드 파일을 다시 사용해 주세요.",
+    )
+
+
+def _build_finance_submission_preview_payload(
+    *,
+    raw_bytes: bytes,
+    filename: str,
+    target_tenant: dict[str, Any],
+    site_row: dict[str, Any],
+    month_key: str,
+    current_revision: str,
+) -> dict[str, Any]:
+    file_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+    try:
+        workbook = load_workbook(filename=BytesIO(raw_bytes), read_only=False, data_only=False)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="invalid finance workbook") from exc
+
+    try:
+        workbook_ctx = _detect_arls_import_workbook_context(
+            workbook,
+            selected_month=month_key,
+            expected_tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
+            expected_site_code=str(site_row.get("site_code") or "").strip(),
+            current_revision=current_revision,
+        )
+        metadata = dict(workbook_ctx.get("metadata") or {})
+        metadata_errors = _validate_arls_import_metadata(
+            metadata,
+            expected_tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
+            expected_site_code=str(site_row.get("site_code") or "").strip(),
+            expected_month=month_key,
+        )
+        issue_messages = [
+            str(issue.get("message") or "").strip()
+            for issue in list(workbook_ctx.get("issues") or [])
+            if str(issue.get("severity") or "").strip().lower() == "blocking"
+            and str(issue.get("code") or "").strip() != "TEMPLATE_REVISION_STALE"
+            and str(issue.get("message") or "").strip()
+        ]
+        blocked_reasons = list(
+            dict.fromkeys(
+                [
+                    *issue_messages,
+                    *[
+                        _finance_submission_metadata_validation_message(str(error_code or "").strip())
+                        for error_code in metadata_errors
+                    ],
+                ]
+            )
+        )
+        workbook_valid = not blocked_reasons
+        revision_status = "stale" if bool(workbook_ctx.get("is_stale")) else ("latest" if metadata else "invalid")
+        return {
+            "total_rows": 1,
+            "valid_rows": 1 if workbook_valid else 0,
+            "invalid_rows": 0 if workbook_valid else 1,
+            "invalid_samples": blocked_reasons[:3],
+            "preview_rows": [],
+            "error_counts": {"validation": len(blocked_reasons)} if blocked_reasons else {},
+            "diff_counts": {"publish_ready": 1} if workbook_valid else {"validation": len(blocked_reasons)},
+            "blocked_reasons": blocked_reasons,
+            "metadata": {
+                "tenant_code": metadata.get("tenant_code") or str(target_tenant.get("tenant_code") or "").strip(),
+                "site_code": metadata.get("site_code") or str(site_row.get("site_code") or "").strip(),
+                "month": metadata.get("month") or month_key,
+                "template_family": str(workbook_ctx.get("template_family") or ARLS_TEMPLATE_FAMILY_LABEL),
+                "export_revision": metadata.get("export_revision"),
+                "template_version": metadata.get("template_version"),
+                "export_source_version": metadata.get("export_source_version"),
+                "current_revision": current_revision,
+                "workbook_kind": "finance_publish_upload",
+                "workbook_valid": workbook_valid,
+                "revision_status": revision_status,
+                "is_stale": bool(workbook_ctx.get("is_stale")),
+                "analysis_run_id": str(uuid.uuid4()),
+                "analysis_context_key": (
+                    f"{str(target_tenant.get('tenant_code') or '').strip()}:{str(site_row.get('site_code') or '').strip()}:{month_key}"
+                ),
+                "analysis_file_sha256": file_sha256,
+                "analysis_stage": "finance_publish_validation",
+                "analysis_locked_fields": list(ARLS_ANALYSIS_LOCKED_FIELDS),
+                "stale_context_fields": list(ARLS_ANALYSIS_LOCKED_FIELDS),
+                "analysis_timings_ms": {},
+                "mapping_profile": None,
+            },
+            "source_revision": str(metadata.get("export_revision") or "").strip() or current_revision,
+            "can_apply": workbook_valid,
+            "file_sha256": file_sha256,
+            "visible_sheet_name": str(
+                ((workbook_ctx.get("visible_sheet") or {}).title if workbook_ctx.get("visible_sheet") is not None else "")
+            ).strip()
+            or None,
+            "filename": str(filename or "").strip() or None,
+        }
+    finally:
+        workbook.close()
+
+
+def _list_finance_submission_download_acks_by_site_code(
+    conn,
+    *,
+    tenant_id: str,
+    actor_id: str,
+    month_key: str,
+) -> dict[str, dict[str, Any]]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT site_id,
+                   site_code,
+                   published_batch_id,
+                   published_version,
+                   seen_at
+            FROM schedule_finance_download_acks
+            WHERE tenant_id = %s
+              AND actor_id = %s
+              AND month_key = %s
+            """,
+            (tenant_id, actor_id, month_key),
+        )
+        rows = cur.fetchall() or []
+    result: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        site_code = str(row.get("site_code") or "").strip().upper()
+        if site_code:
+            result[site_code] = dict(row)
+    return result
+
+
+def _record_finance_submission_download_ack(
+    conn,
+    *,
+    tenant_id: str,
+    actor_id: str,
+    actor_role: str,
+    site_id: str,
+    site_code: str,
+    month_key: str,
+    download_scope: str,
+    published_batch_id: str | None,
+    published_version: str | None,
+) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO schedule_finance_download_acks (
+                id, tenant_id, site_id, site_code, month_key,
+                actor_id, actor_role, download_scope,
+                published_batch_id, published_version, seen_at,
+                created_at, updated_at
+            )
+            VALUES (
+                %s, %s, %s, %s, %s,
+                %s, %s, %s,
+                %s, %s, timezone('utc', now()),
+                timezone('utc', now()), timezone('utc', now())
+            )
+            ON CONFLICT (tenant_id, actor_id, site_id, month_key)
+            DO UPDATE
+            SET site_code = EXCLUDED.site_code,
+                actor_role = EXCLUDED.actor_role,
+                download_scope = EXCLUDED.download_scope,
+                published_batch_id = EXCLUDED.published_batch_id,
+                published_version = EXCLUDED.published_version,
+                seen_at = timezone('utc', now()),
+                updated_at = timezone('utc', now())
+            """,
+            (
+                uuid.uuid4(),
+                tenant_id,
+                site_id,
+                site_code,
+                month_key,
+                actor_id,
+                actor_role,
+                str(download_scope or "site").strip().lower() or "site",
+                published_batch_id,
+                str(published_version or "").strip() or None,
+            ),
+        )
+
+
+def _select_finance_submission_visible_sheet_name(workbook: Workbook) -> str | None:
+    if ARLS_SHEET_NAME in workbook.sheetnames and workbook[ARLS_SHEET_NAME].sheet_state == "visible":
+        return ARLS_SHEET_NAME
+    metadata_sheet_names = {
+        ARLS_METADATA_SHEET_NAME,
+        ARLS_SUPPORT_METADATA_SHEET_NAME,
+        SENTRIX_SUPPORT_HQ_METADATA_SHEET_NAME,
+    }
+    for sheet_name in workbook.sheetnames:
+        sheet = workbook[sheet_name]
+        if sheet.sheet_state == "visible" and sheet_name not in metadata_sheet_names:
+            return sheet_name
+    return None
+
+
+def _list_finance_submission_publish_history(
+    conn,
+    *,
+    tenant_id: str,
+    site_id: str,
+    month_key: str,
+    current_batch_id: str | None,
+    limit: int = 3,
+) -> list[FinanceSubmissionPublishHistoryEntryOut]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT b.id,
+                   b.site_code,
+                   s.site_name,
+                   b.month_key,
+                   COALESCE(b.completed_at, b.created_at) AS uploaded_at,
+                   uploader.username AS actor_username
+            FROM schedule_finance_submission_batches b
+            JOIN sites s ON s.id = b.site_id
+            LEFT JOIN arls_users uploader ON uploader.id = b.actor_id
+            WHERE b.tenant_id = %s
+              AND b.site_id = %s
+              AND b.month_key = %s
+              AND b.batch_kind = 'final_upload'
+              AND b.status = 'applied'
+            ORDER BY COALESCE(b.completed_at, b.created_at) DESC, b.created_at DESC
+            LIMIT %s
+            """,
+            (tenant_id, site_id, month_key, max(int(limit or 0), 1)),
+        )
+        rows = cur.fetchall()
+    active_batch_id = str(current_batch_id or "").strip()
+    return [
+        FinanceSubmissionPublishHistoryEntryOut(
+            uploaded_at=row.get("uploaded_at") if isinstance(row.get("uploaded_at"), datetime) else None,
+            actor=str(row.get("actor_username") or "").strip() or None,
+            site_code=str(row.get("site_code") or "").strip(),
+            site_name=str(row.get("site_name") or "").strip() or None,
+            month=str(row.get("month_key") or month_key).strip() or month_key,
+            is_current=str(row.get("id") or "").strip() == active_batch_id,
+        )
+        for row in rows
+    ]
+
+
+def _build_finance_submission_hq_workspace_payload(
+    conn,
+    *,
+    target_tenant: dict,
+    month_key: str,
+    user: dict[str, Any],
+) -> FinanceSubmissionHqWorkspaceOut:
+    site_rows = _list_site_contexts_for_export(conn, tenant_id=str(target_tenant["id"]))
+    state_rows_by_site_code: dict[str, dict[str, Any]] = {}
+    ack_rows_by_site_code = _list_finance_submission_download_acks_by_site_code(
+        conn,
+        tenant_id=str(target_tenant["id"]),
+        actor_id=str(user["id"]),
+        month_key=month_key,
+    )
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT fss.site_code,
+                   fss.site_id,
+                   fss.month_key,
+                   fss.active_final_batch_id,
+                   fss.active_final_revision,
+                   fss.active_final_filename,
+                   fss.final_uploaded_at,
+                   uploader.username AS final_uploaded_by_username
+            FROM schedule_finance_submission_states fss
+            LEFT JOIN arls_users uploader ON uploader.id = fss.final_uploaded_by
+            WHERE fss.tenant_id = %s
+              AND fss.month_key = %s
+            """,
+            (str(target_tenant["id"]), month_key),
+        )
+        for row in cur.fetchall():
+            site_code = str(row.get("site_code") or "").strip().upper()
+            if site_code:
+                state_rows_by_site_code[site_code] = dict(row)
+    site_payloads: list[FinanceSubmissionHqSiteStatusOut] = []
+    for site_row in site_rows:
+        normalized_site_code = str(site_row.get("site_code") or "").strip().upper()
+        state_row = state_rows_by_site_code.get(normalized_site_code) or {}
+        ack_row = ack_rows_by_site_code.get(normalized_site_code) or {}
+        has_published_file = bool(str(state_row.get("active_final_batch_id") or "").strip())
+        current_publish_marker = str(state_row.get("active_final_revision") or state_row.get("active_final_batch_id") or "").strip()
+        last_seen_publish_marker = str(ack_row.get("published_version") or ack_row.get("published_batch_id") or "").strip()
+        status_name, selectable, note = _resolve_finance_submission_site_status(
+            has_published_file=has_published_file,
+            current_publish_marker=str(state_row.get("active_final_batch_id") or "").strip(),
+            last_seen_publish_marker=str(ack_row.get("published_batch_id") or "").strip(),
+        )
+        if status_name == FINANCE_SUBMISSION_STATUS_PUBLISHED:
+            note = (
+                " · ".join(
+                    item
+                    for item in [
+                        str(state_row.get("final_uploaded_by_username") or "").strip(),
+                        str(state_row.get("active_final_filename") or "").strip(),
+                    ]
+                    if item
+                )
+                or note
+            )
+        site_payloads.append(
+            FinanceSubmissionHqSiteStatusOut(
+                site_code=str(site_row.get("site_code") or "").strip(),
+                site_name=str(site_row.get("site_name") or "").strip() or None,
+                month=month_key,
+                has_published_file=has_published_file,
+                status=status_name,
+                selectable=selectable,
+                latest_published_at=state_row.get("final_uploaded_at"),
+                latest_published_by=str(state_row.get("final_uploaded_by_username") or "").strip() or None,
+                latest_filename=str(state_row.get("active_final_filename") or "").strip() or None,
+                note=note,
+                latest_publish_version=current_publish_marker or None,
+                user_last_seen_version=last_seen_publish_marker or None,
+                ui_summary={
+                    "site_code": str(site_row.get("site_code") or "").strip(),
+                    "site_name": str(site_row.get("site_name") or "").strip() or None,
+                    "month": month_key,
+                    "status": status_name,
+                    "selectable": selectable,
+                    "latest_published_at": state_row.get("final_uploaded_at"),
+                    "latest_published_by": str(state_row.get("final_uploaded_by_username") or "").strip() or None,
+                    "latest_filename": str(state_row.get("active_final_filename") or "").strip() or None,
+                    "note": note,
+                },
+                technical_details={
+                    "latest_publish_batch_id": str(state_row.get("active_final_batch_id") or "").strip() or None,
+                    "latest_publish_version": current_publish_marker or None,
+                    "user_last_seen_batch_id": str(ack_row.get("published_batch_id") or "").strip() or None,
+                    "user_last_seen_version": last_seen_publish_marker or None,
+                    "user_last_seen_at": ack_row.get("seen_at"),
+                },
+            )
+        )
+    return FinanceSubmissionHqWorkspaceOut(
+        tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
+        month=month_key,
+        sites=site_payloads,
+    )
+
+
+def _load_finance_submission_final_artifact_for_site(
+    conn,
+    *,
+    target_tenant: dict,
+    site_row: dict,
+    month_key: str,
+) -> tuple[FinanceSubmissionStatusOut, dict[str, Any], dict[str, Any]]:
+    status_payload = _build_finance_submission_status_payload(
+        conn,
+        target_tenant=target_tenant,
+        site_row=site_row,
+        month_key=month_key,
+    )
+    if not status_payload.final_download_enabled:
+        raise HTTPException(status_code=409, detail="finance final workbook not available")
+    submission_row = _get_finance_submission_state(
+        conn,
+        tenant_id=str(target_tenant["id"]),
+        site_id=str(site_row["id"]),
+        month_key=month_key,
+    )
+    active_batch_id = str((submission_row or {}).get("active_final_batch_id") or "").strip()
+    if not active_batch_id:
+        raise HTTPException(status_code=409, detail="finance final artifact missing")
+    finance_batch = _get_finance_submission_batch(
+        conn,
+        batch_id=active_batch_id,
+        tenant_id=str(target_tenant["id"]),
+    )
+    artifact_bytes = _coerce_binary_bytes((finance_batch or {}).get("artifact_bytes"))
+    if not finance_batch or artifact_bytes is None:
+        raise HTTPException(status_code=409, detail="finance final artifact missing")
+    finance_batch["artifact_bytes"] = artifact_bytes
+    return status_payload, submission_row or {}, finance_batch
+
+
+def _build_finance_submission_final_bundle_workbook(
+    conn,
+    *,
+    target_tenant: dict,
+    month_key: str,
+    site_codes: list[str],
+) -> tuple[Workbook, list[dict[str, Any]]]:
+    normalized_site_codes: list[str] = []
+    seen_site_codes: set[str] = set()
+    for raw_code in site_codes:
+        site_code = str(raw_code or "").strip().upper()
+        if not site_code or site_code in seen_site_codes:
+            continue
+        seen_site_codes.add(site_code)
+        normalized_site_codes.append(site_code)
+    if not normalized_site_codes:
+        raise HTTPException(status_code=400, detail="site_code is required")
+    bundle_workbook = None
+    written_sites: list[dict[str, Any]] = []
+    used_sheet_names: set[str] = set()
+    for site_code in normalized_site_codes:
+        site_row = _resolve_site_context_by_code(
+            conn,
+            tenant_id=str(target_tenant["id"]),
+            site_code=site_code,
+        )
+        if not site_row:
+            raise HTTPException(status_code=404, detail="site not found")
+        exact_sheet_name = _build_sentrix_support_hq_sheet_name(str(site_row.get("site_name") or "").strip())
+        if not exact_sheet_name:
+            raise HTTPException(status_code=409, detail=f"site name cannot be used as exact sheet name: {site_row.get('site_name')}")
+        if exact_sheet_name in used_sheet_names:
+            raise HTTPException(status_code=409, detail=f"duplicate exact sheet name: {exact_sheet_name}")
+        used_sheet_names.add(exact_sheet_name)
+        _status_payload, _submission_row, finance_batch = _load_finance_submission_final_artifact_for_site(
+            conn,
+            target_tenant=target_tenant,
+            site_row=site_row,
+            month_key=month_key,
+        )
+        site_workbook = load_workbook(
+            filename=BytesIO(bytes(finance_batch["artifact_bytes"])),
+            read_only=False,
+            data_only=False,
+        )
+        visible_sheet_name = _select_finance_submission_visible_sheet_name(site_workbook)
+        if not visible_sheet_name:
+            raise HTTPException(status_code=409, detail="finance final workbook sheet missing")
+        if bundle_workbook is None:
+            bundle_workbook = _prepare_support_roster_bundle_base_workbook(
+                site_workbook,
+                visible_sheet_name=visible_sheet_name,
+                title=exact_sheet_name,
+            )
+        else:
+            _clone_support_hq_sheet_to_workbook(
+                site_workbook[visible_sheet_name],
+                target_workbook=bundle_workbook,
+                title=exact_sheet_name,
+            )
+        written_sites.append(
+            {
+                "site_id": str(site_row.get("id") or "").strip(),
+                "site_code": str(site_row.get("site_code") or "").strip(),
+                "site_name": str(site_row.get("site_name") or "").strip(),
+                "filename": str(finance_batch.get("filename") or "").strip() or None,
+                "published_batch_id": str(finance_batch.get("id") or "").strip() or None,
+                "published_version": str(finance_batch.get("final_revision") or finance_batch.get("id") or "").strip() or None,
+            }
+        )
+    if bundle_workbook is None or not bundle_workbook.worksheets:
+        raise HTTPException(status_code=409, detail="finance final workbook not available")
+    bundle_workbook.active = 0
+    return bundle_workbook, written_sites
+
+
 def _build_blank_template_filename(*, month_key: str, site_code: str, site_name: str | None = None) -> str:
     normalized_site_code = str(site_code or "").strip().upper()
     if normalized_site_code == "ALL":
@@ -13633,37 +14187,16 @@ def _sync_finance_submission_state(
         site_code=str(site_row["site_code"]),
         month_key=month_key,
     )
-    next_state = str(state_row.get("state") or "review_download_ready").strip() or "review_download_ready"
-    final_upload_stale = bool(state_row.get("final_upload_stale"))
-    final_download_enabled = bool(state_row.get("final_download_enabled"))
+    next_state = "review_download_ready"
+    final_upload_stale = False
+    final_download_enabled = bool(str(state_row.get("active_final_batch_id") or "").strip())
     blocked_reasons: list[str] = []
-
-    active_final_revision = str(state_row.get("active_final_revision") or "").strip()
     review_download_revision = str(state_row.get("review_download_revision") or "").strip()
 
-    if active_final_revision and active_final_revision != current_revision:
-        next_state = "final_upload_stale"
-        final_upload_stale = True
-        final_download_enabled = False
-        blocked_reasons.append("최종 업로드 이후 상위 월간 truth가 변경되어 현재 최종본이 stale 상태입니다.")
-    elif bool(state_row.get("conflict_required")):
-        next_state = "conflict_manual_review_required"
-        final_download_enabled = False
-        blocked_reasons.append("수동 검토가 필요한 충돌이 있어 최종본 다운로드가 차단됩니다.")
-    elif active_final_revision and active_final_revision == current_revision:
+    if final_download_enabled:
         next_state = "hq_final_download_ready"
-        final_upload_stale = False
-        final_download_enabled = True
-    elif review_download_revision and review_download_revision == current_revision:
+    elif review_download_revision:
         next_state = "waiting_final_upload"
-        final_upload_stale = False
-        final_download_enabled = False
-    else:
-        next_state = "review_download_ready"
-        final_upload_stale = False
-        final_download_enabled = False
-        if review_download_revision and review_download_revision != current_revision:
-            blocked_reasons.append("현재 review download는 최신 assembled revision 기준이 아니어서 다시 내려받아야 합니다.")
 
     with conn.cursor() as cur:
         cur.execute(
@@ -13708,8 +14241,18 @@ def _build_finance_submission_status_payload(
         month_key=month_key,
     )
     blocked_reasons = list(dict.fromkeys(str(item).strip() for item in (state_row.get("_derived_blocked_reasons") or []) if str(item).strip()))
+    active_batch_id = str(state_row.get("active_final_batch_id") or "").strip() or None
+    publish_history = _list_finance_submission_publish_history(
+        conn,
+        tenant_id=str(target_tenant["id"]),
+        site_id=str(site_row["id"]),
+        month_key=month_key,
+        current_batch_id=active_batch_id,
+        limit=3,
+    )
     return FinanceSubmissionStatusOut(
         site_code=str(site_row.get("site_code") or "").strip(),
+        site_name=str(site_row.get("site_name") or "").strip() or None,
         month=month_key,
         state=str(state_row.get("state") or "review_download_ready").strip() or "review_download_ready",
         current_revision=current_revision,
@@ -13727,6 +14270,7 @@ def _build_finance_submission_status_payload(
         final_uploaded_by=str(state_row.get("final_uploaded_by_username") or state_row.get("final_uploaded_by") or "").strip() or None,
         last_event=str(state_row.get("last_event") or "").strip() or None,
         blocked_reasons=blocked_reasons,
+        publish_history=publish_history,
     )
 
 
@@ -14716,18 +15260,36 @@ def get_finance_submission_status(
         raise HTTPException(status_code=403, detail="forbidden")
     _month_bounds(month)
     target_tenant = _resolve_target_tenant(conn, user, tenant_code)
-    site_row = _resolve_site_context_by_code(
+    site_row = _resolve_finance_submission_site_context(
         conn,
-        tenant_id=str(target_tenant["id"]),
-        site_code=str(site_code).strip(),
+        target_tenant=target_tenant,
+        user=user,
+        site_code=site_code,
     )
-    if not site_row:
-        raise HTTPException(status_code=404, detail="site not found")
     return _build_finance_submission_status_payload(
         conn,
         target_tenant=target_tenant,
         site_row=site_row,
         month_key=month,
+    )
+
+
+@router.get("/finance-submission/hq-workspace", response_model=FinanceSubmissionHqWorkspaceOut)
+def get_finance_submission_hq_workspace(
+    month: str = Query(..., description="YYYY-MM"),
+    tenant_code: str | None = Query(default=None, max_length=64),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    if not _can_download_finance_final(user):
+        raise HTTPException(status_code=403, detail="forbidden")
+    _month_bounds(month)
+    target_tenant = _resolve_target_tenant(conn, user, tenant_code)
+    return _build_finance_submission_hq_workspace_payload(
+        conn,
+        target_tenant=target_tenant,
+        month_key=month,
+        user=user,
     )
 
 
@@ -14745,125 +15307,95 @@ def download_finance_review_excel(
     target_tenant = _resolve_target_tenant(conn, user, tenant_code)
     normalized_site_code = str(site_code or "").strip()
     export_all_sites = normalized_site_code.lower() == "all"
-
     if export_all_sites:
-        support_status_rows_by_site_code = _load_support_status_rows_by_site_code_for_export(
-            conn,
-            tenant_id=str(target_tenant["id"]),
-            tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
-            month_key=month,
-            site_id=None,
+        raise HTTPException(status_code=400, detail="site_code must target a single site")
+
+    site_row = _resolve_finance_submission_site_context(
+        conn,
+        target_tenant=target_tenant,
+        user=user,
+        site_code=normalized_site_code,
+    )
+    support_status_rows_by_site_code = _load_support_status_rows_by_site_code_for_export(
+        conn,
+        tenant_id=str(target_tenant["id"]),
+        tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
+        month_key=month,
+        site_id=str(site_row["id"]),
+    )
+    export_ctx = _collect_finance_review_export_context(
+        conn,
+        target_tenant=target_tenant,
+        site_row=site_row,
+        month_key=month,
+        user=user,
+    )
+    workbook, _template_path, template_version = _build_monthly_export_workbook_from_contexts(
+        export_contexts=[export_ctx],
+        month_key=month,
+        tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
+        source_version=ARLS_FINANCE_REVIEW_SOURCE_VERSION,
+        include_summary_sections=False,
+        include_support_assignment_sections=False,
+        support_status_rows_by_site_code=support_status_rows_by_site_code,
+    )
+    current_revision = str(export_ctx.get("export_revision") or "").strip()
+    submission_row = _ensure_finance_submission_state(
+        conn,
+        tenant_id=str(target_tenant["id"]),
+        site_id=str(site_row["id"]),
+        site_code=str(site_row["site_code"]),
+        month_key=month,
+    )
+    filename = _build_finance_review_filename(
+        month_key=month,
+        site_code=str(site_row["site_code"]).strip(),
+    )
+    _create_finance_submission_batch(
+        conn,
+        submission_row=submission_row,
+        batch_kind="review_download",
+        source_revision=current_revision,
+        filename=filename,
+        actor_id=str(user["id"]),
+        actor_role=_finance_submission_normalize_role(user),
+        status="downloaded",
+        metadata={
+            "template_version": template_version,
+            "export_source_version": ARLS_FINANCE_REVIEW_SOURCE_VERSION,
+            "export_revision": current_revision,
+            "site_code": str(site_row["site_code"]).strip(),
+            "month": month,
+        },
+    )
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE schedule_finance_submission_states
+            SET state = CASE
+                    WHEN COALESCE(active_final_batch_id::text, '') <> '' THEN 'hq_final_download_ready'
+                    ELSE 'waiting_final_upload'
+                END,
+                current_revision = %s,
+                review_download_revision = %s,
+                review_downloaded_at = timezone('utc', now()),
+                review_downloaded_by = %s,
+                review_downloaded_role = %s,
+                review_download_filename = %s,
+                final_upload_stale = FALSE,
+                last_event = 'review_downloaded',
+                updated_at = timezone('utc', now())
+            WHERE id = %s
+            """,
+            (
+                current_revision,
+                current_revision,
+                user["id"],
+                _finance_submission_normalize_role(user),
+                filename,
+                submission_row["id"],
+            ),
         )
-        export_contexts = _collect_finance_review_all_site_export_contexts(
-            conn,
-            target_tenant=target_tenant,
-            month_key=month,
-            user=user,
-        )
-        workbook, _template_path, template_version = _build_monthly_export_workbook_from_contexts(
-            export_contexts=export_contexts,
-            month_key=month,
-            tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
-            source_version=f"{ARLS_EXPORT_SOURCE_VERSION}:finance-review:all-sites",
-            include_summary_sections=False,
-            include_support_assignment_sections=False,
-            support_status_rows_by_site_code=support_status_rows_by_site_code,
-        )
-        filename = _build_finance_review_filename(
-            month_key=month,
-            site_code="ALL",
-        )
-    else:
-        site_row = _resolve_site_context_by_code(
-            conn,
-            tenant_id=str(target_tenant["id"]),
-            site_code=normalized_site_code,
-        )
-        if not site_row:
-            raise HTTPException(status_code=404, detail="site not found")
-        support_status_rows_by_site_code = _load_support_status_rows_by_site_code_for_export(
-            conn,
-            tenant_id=str(target_tenant["id"]),
-            tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
-            month_key=month,
-            site_id=str(site_row["id"]),
-        )
-        export_ctx = _collect_finance_review_export_context(
-            conn,
-            target_tenant=target_tenant,
-            site_row=site_row,
-            month_key=month,
-            user=user,
-        )
-        workbook, _template_path, template_version = _build_monthly_export_workbook_from_contexts(
-            export_contexts=[export_ctx],
-            month_key=month,
-            tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
-            source_version=f"{ARLS_EXPORT_SOURCE_VERSION}:finance-review",
-            include_summary_sections=False,
-            include_support_assignment_sections=False,
-            support_status_rows_by_site_code=support_status_rows_by_site_code,
-        )
-        current_revision = str(export_ctx.get("export_revision") or "").strip()
-        submission_row = _ensure_finance_submission_state(
-            conn,
-            tenant_id=str(target_tenant["id"]),
-            site_id=str(site_row["id"]),
-            site_code=str(site_row["site_code"]),
-            month_key=month,
-        )
-        filename = _build_finance_review_filename(
-            month_key=month,
-            site_code=str(site_row["site_code"]).strip(),
-        )
-        current_final_is_live = bool(submission_row.get("active_final_revision")) and str(submission_row.get("active_final_revision") or "").strip() == current_revision
-        stale_final = bool(submission_row.get("active_final_revision")) and str(submission_row.get("active_final_revision") or "").strip() != current_revision
-        _create_finance_submission_batch(
-            conn,
-            submission_row=submission_row,
-            batch_kind="review_download",
-            source_revision=current_revision,
-            filename=filename,
-            actor_id=str(user["id"]),
-            actor_role=_finance_submission_normalize_role(user),
-            status="downloaded",
-            metadata={
-                "template_version": template_version,
-                "export_source_version": f"{ARLS_EXPORT_SOURCE_VERSION}:finance-review",
-                "export_revision": current_revision,
-                "site_code": str(site_row["site_code"]).strip(),
-                "month": month,
-            },
-        )
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE schedule_finance_submission_states
-                SET state = %s,
-                    current_revision = %s,
-                    review_download_revision = %s,
-                    review_downloaded_at = timezone('utc', now()),
-                    review_downloaded_by = %s,
-                    review_downloaded_role = %s,
-                    review_download_filename = %s,
-                    final_upload_stale = %s,
-                    final_download_enabled = CASE WHEN %s THEN FALSE ELSE final_download_enabled END,
-                    last_event = 'review_downloaded',
-                    updated_at = timezone('utc', now())
-                WHERE id = %s
-                """,
-                (
-                    "final_upload_stale" if stale_final else ("hq_final_download_ready" if current_final_is_live else "waiting_final_upload"),
-                    current_revision,
-                    current_revision,
-                    user["id"],
-                    _finance_submission_normalize_role(user),
-                    filename,
-                    stale_final,
-                    stale_final,
-                    submission_row["id"],
-                ),
-            )
     out = BytesIO()
     workbook.save(out)
     out.seek(0)
@@ -14889,80 +15421,62 @@ def preview_finance_final_upload(
         raise HTTPException(status_code=400, detail="site_code is required")
     if not month or not str(month).strip():
         raise HTTPException(status_code=400, detail="month is required")
-    _month_bounds(str(month).strip())
+    month_key = str(month).strip()
+    _month_bounds(month_key)
     target_tenant = _resolve_target_tenant(conn, user, tenant_code)
-    site_row = _resolve_site_context_by_code(
+    site_row = _resolve_finance_submission_site_context(
         conn,
-        tenant_id=str(target_tenant["id"]),
-        site_code=str(site_code).strip(),
+        target_tenant=target_tenant,
+        user=user,
+        site_code=site_code,
     )
-    if not site_row:
-        raise HTTPException(status_code=404, detail="site not found")
     submission_row, current_revision = _sync_finance_submission_state(
         conn,
         target_tenant=target_tenant,
         site_row=site_row,
-        month_key=str(month).strip(),
+        month_key=month_key,
     )
-    review_download_revision = str(submission_row.get("review_download_revision") or "").strip()
-    if not review_download_revision:
-        raise HTTPException(status_code=409, detail="finance review download missing")
     raw_bytes = file.file.read()
-    file.file = BytesIO(raw_bytes)
-    preview_result = preview_import(
-        file=file,
-        site_code=str(site_code).strip(),
-        month=str(month).strip(),
-        tenant_code=tenant_code,
-        conn=conn,
-        user=user,
+    preview_payload = _build_finance_submission_preview_payload(
+        raw_bytes=raw_bytes,
+        filename=file.filename or _build_finance_final_filename(month_key=month_key, site_code=str(site_row["site_code"]).strip()),
+        target_tenant=target_tenant,
+        site_row=site_row,
+        month_key=month_key,
+        current_revision=current_revision,
     )
-    blocked_reasons = list(preview_result.blocked_reasons or [])
-    diff_counts = dict(preview_result.diff_counts or {})
-    preview_rows = list(preview_result.preview_rows or [])
-    ignored_protected_count = int(diff_counts.get("ignored_protected") or 0)
-    if ignored_protected_count > 0:
-        blocked_reasons.append(f"보호 영역 변경 {ignored_protected_count}건은 Finance 최종 업로드로 반영할 수 없습니다.")
-    blocking_row_count = sum(1 for row in preview_rows if bool(getattr(row, "is_blocking", False)))
-    if blocking_row_count > 0:
-        blocked_reasons.append(f"충돌/차단 행 {blocking_row_count}건을 먼저 해결해야 합니다.")
-    metadata = preview_result.metadata
-    if metadata and bool(metadata.is_stale):
-        blocked_reasons.append("업로드한 파일이 현재 ARLS 리비전보다 오래되어 최종 업로드를 진행할 수 없습니다.")
-    if review_download_revision != current_revision:
-        blocked_reasons.append("현재 HQ 1차 확인본 기준 리비전이 최신이 아닙니다. HQ에서 다시 다운로드한 뒤 최종 업로드를 진행해야 합니다.")
     finance_batch = _create_finance_submission_batch(
         conn,
         submission_row=submission_row,
         batch_kind="final_upload",
-        source_revision=str((metadata or {}).export_revision or current_revision),
-        filename=file.filename or _build_finance_final_filename(month_key=str(month).strip(), site_code=str(site_row["site_code"]).strip()),
+        source_revision=str(preview_payload.get("source_revision") or current_revision).strip() or current_revision,
+        filename=str(preview_payload.get("filename") or file.filename or "").strip() or _build_finance_final_filename(month_key=month_key, site_code=str(site_row["site_code"]).strip()),
         actor_id=str(user["id"]),
         actor_role=_finance_submission_normalize_role(user),
         artifact_bytes=raw_bytes,
-        import_batch_id=str(preview_result.batch_id),
-        status="blocked" if blocked_reasons else "previewed",
-        is_stale=bool((metadata or {}).is_stale) or review_download_revision != current_revision,
-        total_rows=int(preview_result.total_rows or 0),
-        valid_rows=int(preview_result.valid_rows or 0),
-        invalid_rows=int(preview_result.invalid_rows or 0),
-        blocked_reasons=blocked_reasons,
-        diff_counts=diff_counts,
-        metadata=(metadata.model_dump() if metadata else {}),
+        import_batch_id=None,
+        status="blocked" if list(preview_payload.get("blocked_reasons") or []) else "previewed",
+        is_stale=False,
+        total_rows=int(preview_payload.get("total_rows") or 0),
+        valid_rows=int(preview_payload.get("valid_rows") or 0),
+        invalid_rows=int(preview_payload.get("invalid_rows") or 0),
+        blocked_reasons=list(preview_payload.get("blocked_reasons") or []),
+        diff_counts=dict(preview_payload.get("diff_counts") or {}),
+        metadata=dict(preview_payload.get("metadata") or {}),
     )
     return FinanceSubmissionPreviewOut(
         finance_batch_id=finance_batch["id"],
-        import_batch_id=preview_result.batch_id,
-        total_rows=preview_result.total_rows,
-        valid_rows=preview_result.valid_rows,
-        invalid_rows=preview_result.invalid_rows,
-        invalid_samples=list(preview_result.invalid_samples or []),
-        preview_rows=preview_rows,
-        error_counts=dict(preview_result.error_counts or {}),
-        diff_counts=diff_counts,
-        blocked_reasons=blocked_reasons,
-        metadata=metadata,
-        can_apply=bool(preview_result.can_apply) and not blocked_reasons,
+        import_batch_id=None,
+        total_rows=int(preview_payload.get("total_rows") or 0),
+        valid_rows=int(preview_payload.get("valid_rows") or 0),
+        invalid_rows=int(preview_payload.get("invalid_rows") or 0),
+        invalid_samples=list(preview_payload.get("invalid_samples") or []),
+        preview_rows=list(preview_payload.get("preview_rows") or []),
+        error_counts=dict(preview_payload.get("error_counts") or {}),
+        diff_counts=dict(preview_payload.get("diff_counts") or {}),
+        blocked_reasons=list(preview_payload.get("blocked_reasons") or []),
+        metadata=dict(preview_payload.get("metadata") or {}),
+        can_apply=bool(preview_payload.get("can_apply")),
     )
 
 
@@ -14983,33 +15497,57 @@ def apply_finance_final_upload(
     )
     if not finance_batch:
         raise HTTPException(status_code=404, detail="finance submission batch not found")
-    site_row = _resolve_site_context_by_code(
+    if str(finance_batch.get("status") or "").strip().lower() == "applied":
+        raise HTTPException(status_code=409, detail="finance submission batch already applied")
+    site_row = _resolve_finance_submission_site_context(
         conn,
-        tenant_id=str(target_tenant["id"]),
+        target_tenant=target_tenant,
+        user=user,
         site_code=str(finance_batch.get("site_code") or "").strip(),
     )
-    if not site_row:
-        raise HTTPException(status_code=404, detail="site not found")
     submission_row, current_revision = _sync_finance_submission_state(
         conn,
         target_tenant=target_tenant,
         site_row=site_row,
         month_key=str(finance_batch.get("month_key") or "").strip(),
     )
-    blocked_reasons = list(dict.fromkeys(
-        str(item).strip()
-        for item in (finance_batch.get("blocked_reasons_json") or [])
-        if str(item).strip()
-    ))
-    if str(finance_batch.get("source_revision") or "").strip() != current_revision:
-        blocked_reasons.append("최종 업로드 파일이 최신 assembled revision 기준이 아닙니다.")
+    artifact_bytes = _coerce_binary_bytes(finance_batch.get("artifact_bytes"))
+    if artifact_bytes is None:
+        raise HTTPException(status_code=409, detail="finance publish artifact missing")
+    revalidated_preview = _build_finance_submission_preview_payload(
+        raw_bytes=artifact_bytes,
+        filename=str(finance_batch.get("filename") or "").strip() or _build_finance_final_filename(
+            month_key=str(finance_batch.get("month_key") or "").strip(),
+            site_code=str(site_row["site_code"]).strip(),
+        ),
+        target_tenant=target_tenant,
+        site_row=site_row,
+        month_key=str(finance_batch.get("month_key") or "").strip(),
+        current_revision=current_revision,
+    )
+    blocked_reasons = list(
+        dict.fromkeys(
+            [
+                *[
+                    str(item).strip()
+                    for item in (finance_batch.get("blocked_reasons_json") or [])
+                    if str(item).strip()
+                ],
+                *[
+                    str(item).strip()
+                    for item in list(revalidated_preview.get("blocked_reasons") or [])
+                    if str(item).strip()
+                ],
+            ]
+        )
+    )
     if blocked_reasons:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 UPDATE schedule_finance_submission_batches
                 SET status = 'blocked',
-                    is_stale = TRUE,
+                    is_stale = FALSE,
                     blocked_reasons_json = %s::jsonb,
                     completed_at = timezone('utc', now())
                 WHERE id = %s
@@ -15019,65 +15557,29 @@ def apply_finance_final_upload(
             cur.execute(
                 """
                 UPDATE schedule_finance_submission_states
-                SET state = 'final_upload_stale',
-                    final_upload_stale = TRUE,
-                    final_download_enabled = FALSE,
-                    last_event = 'final_upload_stale',
+                SET state = CASE
+                        WHEN COALESCE(active_final_batch_id::text, '') <> '' THEN 'hq_final_download_ready'
+                        ELSE 'waiting_final_upload'
+                    END,
+                    final_upload_stale = FALSE,
+                    last_event = 'final_upload_blocked',
                     updated_at = timezone('utc', now())
                 WHERE id = %s
                 """,
                 (submission_row["id"],),
             )
         return ImportApplyOut(
-            batch_id=uuid.UUID(str(finance_batch.get("import_batch_id"))),
+            batch_id=finance_batch_id,
             applied=0,
             skipped=0,
             applied_rows=[],
             skipped_rows=[],
             blocked=True,
             blocked_reasons=blocked_reasons,
+            apply_status="blocked",
         )
-    import_batch_id = str(finance_batch.get("import_batch_id") or "").strip()
-    if not import_batch_id:
-        raise HTTPException(status_code=409, detail="finance import batch missing")
-    result = apply_import(
-        batch_id=uuid.UUID(import_batch_id),
-        tenant_code=tenant_code,
-        conn=conn,
-        user=user,
-    )
-    if result.blocked:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE schedule_finance_submission_batches
-                SET status = 'blocked',
-                    blocked_reasons_json = %s::jsonb,
-                    completed_at = timezone('utc', now())
-                WHERE id = %s
-                """,
-                (json.dumps(result.blocked_reasons or [], ensure_ascii=False), finance_batch_id),
-            )
-            cur.execute(
-                """
-                UPDATE schedule_finance_submission_states
-                SET state = 'conflict_manual_review_required',
-                    conflict_required = TRUE,
-                    final_download_enabled = FALSE,
-                    last_event = 'conflict_manual_review_required',
-                    updated_at = timezone('utc', now())
-                WHERE id = %s
-                """,
-                (submission_row["id"],),
-            )
-        return result
-    final_revision = _build_schedule_export_revision(
-        conn,
-        tenant_id=str(target_tenant["id"]),
-        site_id=str(site_row["id"]),
-        site_code=str(site_row["site_code"]),
-        month_key=str(finance_batch.get("month_key") or "").strip(),
-    )
+    published_at = datetime.now(timezone.utc)
+    final_revision = _build_finance_submission_publish_version(batch_id=finance_batch_id)
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -15087,14 +15589,16 @@ def apply_finance_final_upload(
                 applied_rows = %s,
                 skipped_rows = %s,
                 conflict_count = %s,
-                completed_at = timezone('utc', now())
+                blocked_reasons_json = '[]'::jsonb,
+                completed_at = %s
             WHERE id = %s
             """,
             (
                 final_revision,
-                int(result.applied or 0),
-                int(result.skipped or 0),
-                len(result.blocked_reasons or []),
+                1,
+                0,
+                0,
+                published_at,
                 finance_batch_id,
             ),
         )
@@ -15107,7 +15611,7 @@ def apply_finance_final_upload(
                 active_final_revision = %s,
                 active_final_source_revision = %s,
                 active_final_filename = %s,
-                final_uploaded_at = timezone('utc', now()),
+                final_uploaded_at = %s,
                 final_uploaded_by = %s,
                 final_uploaded_role = %s,
                 final_download_enabled = TRUE,
@@ -15118,23 +15622,38 @@ def apply_finance_final_upload(
             WHERE id = %s
             """,
             (
-                final_revision,
+                current_revision,
                 finance_batch_id,
                 final_revision,
                 str(finance_batch.get("source_revision") or "").strip(),
                 str(finance_batch.get("filename") or "").strip() or None,
+                published_at,
                 user["id"],
                 _finance_submission_normalize_role(user),
                 submission_row["id"],
             ),
         )
-    return result
+    return ImportApplyOut(
+        batch_id=finance_batch_id,
+        applied=1,
+        skipped=0,
+        applied_rows=[],
+        skipped_rows=[],
+        blocked=False,
+        blocked_reasons=[],
+        apply_status="applied",
+        artifact_generated=True,
+        artifact_revision=final_revision,
+        artifact_generated_at=published_at,
+    )
 
 
 @router.get("/finance-submission/final-excel")
 def download_finance_final_excel(
     month: str = Query(..., description="YYYY-MM"),
-    site_code: str = Query(..., min_length=1, max_length=64),
+    scope: str = Query(default="site", max_length=16),
+    site_code: str | None = Query(default=None, max_length=64),
+    site_codes: list[str] | None = Query(default=None),
     tenant_code: str | None = Query(default=None, max_length=64),
     conn=Depends(get_db_conn),
     user=Depends(get_current_user),
@@ -15143,37 +15662,76 @@ def download_finance_final_excel(
         raise HTTPException(status_code=403, detail="forbidden")
     _month_bounds(month)
     target_tenant = _resolve_target_tenant(conn, user, tenant_code)
-    site_row = _resolve_site_context_by_code(
+    requested_scope = str(scope or "site").strip().lower()
+    normalized_site_codes: list[str] = []
+    seen_site_codes: set[str] = set()
+    for raw_code in list(site_codes or []):
+        normalized_code = str(raw_code or "").strip().upper()
+        if not normalized_code or normalized_code in seen_site_codes:
+            continue
+        seen_site_codes.add(normalized_code)
+        normalized_site_codes.append(normalized_code)
+    single_site_code = str(site_code or "").strip().upper()
+    if single_site_code and single_site_code not in seen_site_codes:
+        normalized_site_codes.append(single_site_code)
+    if requested_scope == "selected" or len(normalized_site_codes) > 1:
+        workbook, written_sites = _build_finance_submission_final_bundle_workbook(
+            conn,
+            target_tenant=target_tenant,
+            month_key=month,
+            site_codes=normalized_site_codes,
+        )
+        out = BytesIO()
+        workbook.save(out)
+        out.seek(0)
+        for written_site in written_sites:
+            _record_finance_submission_download_ack(
+                conn,
+                tenant_id=str(target_tenant["id"]),
+                actor_id=str(user["id"]),
+                actor_role=_finance_submission_normalize_role(user),
+                site_id=str(written_site.get("site_id") or "").strip(),
+                site_code=str(written_site.get("site_code") or "").strip(),
+                month_key=month,
+                download_scope="selected",
+                published_batch_id=str(written_site.get("published_batch_id") or "").strip() or None,
+                published_version=str(written_site.get("published_version") or "").strip() or None,
+            )
+        generated = datetime.now(timezone(timedelta(hours=9)))
+        filename = (
+            f"{month[:4]}년 {int(month[5:7])}월 근무표_지점별_2차최종_{generated.strftime('%y%m%d')}.xlsx"
+        )
+        return StreamingResponse(
+            out,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+        )
+    if not normalized_site_codes:
+        raise HTTPException(status_code=400, detail="site_code is required")
+    site_row = _resolve_finance_submission_site_context(
         conn,
-        tenant_id=str(target_tenant["id"]),
-        site_code=str(site_code).strip(),
+        target_tenant=target_tenant,
+        user=user,
+        site_code=normalized_site_codes[0],
     )
-    if not site_row:
-        raise HTTPException(status_code=404, detail="site not found")
-    status_payload = _build_finance_submission_status_payload(
+    _status_payload, _submission_row, finance_batch = _load_finance_submission_final_artifact_for_site(
         conn,
         target_tenant=target_tenant,
         site_row=site_row,
         month_key=month,
     )
-    if not status_payload.final_download_enabled:
-        raise HTTPException(status_code=409, detail="finance final workbook not available")
-    submission_row = _get_finance_submission_state(
+    _record_finance_submission_download_ack(
         conn,
         tenant_id=str(target_tenant["id"]),
-        site_id=str(site_row["id"]),
+        actor_id=str(user["id"]),
+        actor_role=_finance_submission_normalize_role(user),
+        site_id=str(site_row.get("id") or "").strip(),
+        site_code=str(site_row.get("site_code") or "").strip(),
         month_key=month,
+        download_scope="site",
+        published_batch_id=str(finance_batch.get("id") or "").strip() or None,
+        published_version=str(finance_batch.get("final_revision") or finance_batch.get("id") or "").strip() or None,
     )
-    active_batch_id = str((submission_row or {}).get("active_final_batch_id") or "").strip()
-    if not active_batch_id:
-        raise HTTPException(status_code=409, detail="finance final artifact missing")
-    finance_batch = _get_finance_submission_batch(
-        conn,
-        batch_id=active_batch_id,
-        tenant_id=str(target_tenant["id"]),
-    )
-    if not finance_batch or finance_batch.get("artifact_bytes") is None:
-        raise HTTPException(status_code=409, detail="finance final artifact missing")
     filename = str(finance_batch.get("filename") or "").strip() or _build_finance_final_filename(
         month_key=month,
         site_code=str(site_row["site_code"]).strip(),
@@ -18508,6 +19066,7 @@ def _build_schedule_import_preview_result(
             "mapping_profile": mapping_summary,
         },
         "can_apply": can_apply,
+        "parsed_uploaded": parsed_uploaded,
     }
 
 
@@ -19096,7 +19655,7 @@ def _load_schedule_import_payload_rows(conn, *, batch_id: uuid.UUID | str) -> li
         return [dict(row.get("payload_json") or {}) for row in (cur.fetchall() or [])]
 
 
-def _load_canonical_schedule_import_apply_payload_rows(
+def _load_canonical_schedule_import_apply_context(
     conn,
     *,
     batch_id: uuid.UUID | str,
@@ -19104,11 +19663,16 @@ def _load_canonical_schedule_import_apply_payload_rows(
     target_tenant: dict[str, Any],
     site_row: dict[str, Any],
     user: dict[str, Any],
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     persisted_payload_rows = _load_schedule_import_payload_rows(conn, batch_id=batch_id)
+    apply_context = {
+        "payload_rows": persisted_payload_rows,
+        "parsed_uploaded": {},
+        "preview": None,
+    }
     month_key = str(batch.get("month_key") or "").strip()
     if not month_key:
-        return persisted_payload_rows
+        return apply_context
 
     raw_source = None
     try:
@@ -19122,9 +19686,9 @@ def _load_canonical_schedule_import_apply_payload_rows(
             "[schedule][import-apply] failed to load raw workbook batch=%s",
             batch_id,
         )
-        return persisted_payload_rows
+        return apply_context
     if not raw_source or not raw_source.get("workbook"):
-        return persisted_payload_rows
+        return apply_context
 
     workbook = raw_source["workbook"]
     try:
@@ -19142,16 +19706,20 @@ def _load_canonical_schedule_import_apply_payload_rows(
                 or ""
             ).strip(),
         )
-        return [
-            *list(preview.get("resolved_rows") or []),
-            *list(preview.get("support_ticket_rows") or []),
-        ]
+        return {
+            "payload_rows": [
+                *list(preview.get("resolved_rows") or []),
+                *list(preview.get("support_ticket_rows") or []),
+            ],
+            "parsed_uploaded": dict(preview.get("parsed_uploaded") or {}),
+            "preview": preview,
+        }
     except Exception:
         logger.exception(
             "[schedule][import-apply] failed to rebuild canonical payload rows batch=%s",
             batch_id,
         )
-        return persisted_payload_rows
+        return apply_context
     finally:
         try:
             workbook.close()
@@ -19160,6 +19728,181 @@ def _load_canonical_schedule_import_apply_payload_rows(
                 "[schedule][import-apply] failed to close raw workbook batch=%s",
                 batch_id,
             )
+
+
+def _load_canonical_schedule_import_apply_payload_rows(
+    conn,
+    *,
+    batch_id: uuid.UUID | str,
+    batch: dict[str, Any],
+    target_tenant: dict[str, Any],
+    site_row: dict[str, Any],
+    user: dict[str, Any],
+) -> list[dict[str, Any]]:
+    apply_context = _load_canonical_schedule_import_apply_context(
+        conn,
+        batch_id=batch_id,
+        batch=batch,
+        target_tenant=target_tenant,
+        site_row=site_row,
+        user=user,
+    )
+    return list(apply_context.get("payload_rows") or [])
+
+
+def _build_canonical_schedule_import_sentrix_scope_apply_specs(
+    *,
+    parsed_uploaded: dict[str, Any],
+    site_row: dict[str, Any],
+    batch_id: uuid.UUID | str,
+    source_revision: str | None,
+) -> list[dict[str, Any]]:
+    site_code = str(site_row.get("site_code") or "").strip().upper()
+    site_name = (
+        str(site_row.get("site_name") or "").strip()
+        or str(site_row.get("name") or "").strip()
+        or site_code
+    )
+    scope_apply_specs: list[dict[str, Any]] = []
+    for block in sorted(
+        list(parsed_uploaded.get("support_blocks") or []),
+        key=lambda item: (
+            item.get("target_date") if isinstance(item.get("target_date"), date) else date.max,
+            str(item.get("block_type") or "").strip(),
+        ),
+    ):
+        target_date = block.get("target_date")
+        if not isinstance(target_date, date):
+            continue
+        block_type = str(block.get("block_type") or "").strip()
+        if block_type not in {"day_support", "night_support"}:
+            continue
+        request_count = max(_coerce_int_or_none(block.get("required_count_numeric")) or 0, 0)
+        if request_count <= 0:
+            continue
+        shift_kind = "night" if block_type == "night_support" else "day"
+        worker_payloads: list[dict[str, Any]] = []
+        valid_worker_payloads: list[dict[str, Any]] = []
+        for slot in sorted(
+            list(block.get("worker_slots") or []),
+            key=lambda item: max(int((item or {}).get("slot_index") or 0), 0),
+        ):
+            row_no = _coerce_int_or_none(slot.get("row_no"))
+            col_no = _coerce_int_or_none(slot.get("col_no"))
+            raw_cell_text = str(slot.get("work_value") or "").strip()
+            issue_code = str(slot.get("issue_code") or "").strip() or None
+            worker_payload = {
+                "slot_index": max(int(slot.get("slot_index") or 0), 0),
+                "raw_cell_text": raw_cell_text or None,
+                "parsed_display_value": raw_cell_text or None,
+                "affiliation": str(slot.get("affiliation") or "").strip() or None,
+                "worker_name": str(slot.get("worker_name") or "").strip() or None,
+                "worker_type": str(slot.get("worker_type") or "").strip() or None,
+                "self_staff": bool(slot.get("self_staff")),
+                "countable": bool(raw_cell_text) and not issue_code,
+                "issue_code": issue_code,
+                "issue_message": str(slot.get("issue_message") or "").strip() or None,
+                "sheet_name": str(slot.get("source_sheet") or "").strip() or None,
+                "source_row": row_no,
+                "source_col": col_no,
+                "source_cell_ref": (
+                    f"{_excel_col_label(col_no)}{row_no}"
+                    if row_no is not None and col_no is not None
+                    else None
+                ),
+                "site_code": site_code,
+                "work_date": target_date.isoformat(),
+                "shift_kind": shift_kind,
+            }
+            worker_payloads.append(worker_payload)
+            if bool(worker_payload.get("countable")):
+                valid_worker_payloads.append(worker_payload)
+        valid_filled_count = max(int(block.get("valid_filled_count") or len(valid_worker_payloads)), 0)
+        invalid_filled_count = max(int(block.get("invalid_filled_count") or 0), 0)
+        target_status = (
+            SENTRIX_HQ_ROSTER_AUTO_APPROVED_STATUS
+            if valid_filled_count >= request_count
+            else SENTRIX_HQ_ROSTER_PENDING_STATUS
+        )
+        scope_apply_specs.append(
+            {
+                "scope_key": f"{site_code}:{target_date.isoformat()}:{shift_kind}",
+                "sheet_name": str(block.get("source_sheet") or "").strip() or site_name or site_code or "-",
+                "site_code": site_code,
+                "site_name": site_name or None,
+                "month_key": str(block.get("target_month") or target_date.strftime("%Y-%m")).strip() or target_date.strftime("%Y-%m"),
+                "work_date": target_date,
+                "shift_kind": shift_kind,
+                "request_count": request_count,
+                "valid_filled_count": valid_filled_count,
+                "invalid_filled_count": invalid_filled_count,
+                "target_status": target_status,
+                "scope_payload": {
+                    "purpose_text": str(block.get("purpose_text") or "").strip() or None,
+                    "artifact_source_batch_id": str(batch_id),
+                    "artifact_source_revision": str(source_revision or "").strip() or None,
+                    "scope_reason": "arls_schedule_import_apply",
+                },
+                "worker_payloads": worker_payloads,
+                "valid_worker_payloads": valid_worker_payloads,
+            }
+        )
+    return scope_apply_specs
+
+
+def _sync_canonical_schedule_import_sentrix_support_requests(
+    conn,
+    *,
+    batch_id: uuid.UUID,
+    batch: dict[str, Any],
+    target_tenant: dict[str, Any],
+    site_row: dict[str, Any],
+    user: dict[str, Any],
+) -> dict[str, Any]:
+    apply_context = _load_canonical_schedule_import_apply_context(
+        conn,
+        batch_id=batch_id,
+        batch=batch,
+        target_tenant=target_tenant,
+        site_row=site_row,
+        user=user,
+    )
+    parsed_uploaded = dict(apply_context.get("parsed_uploaded") or {})
+    if not parsed_uploaded:
+        raise RuntimeError("Sentrix 지원요청 동기화에 필요한 업로드 workbook context를 복원하지 못했습니다.")
+    source_revision = str(batch.get("export_revision") or batch.get("current_revision") or "").strip() or None
+    scope_apply_specs = _build_canonical_schedule_import_sentrix_scope_apply_specs(
+        parsed_uploaded=parsed_uploaded,
+        site_row=site_row,
+        batch_id=batch_id,
+        source_revision=source_revision,
+    )
+    handoff_batch = {
+        "month_key": str(batch.get("month_key") or "").strip(),
+        "selected_site_code": str(site_row.get("site_code") or batch.get("site_code") or "").strip().upper(),
+        "download_scope": "site",
+        "bundle_revision": source_revision,
+        "workbook_family": "canonical_workbook",
+        "template_version": str(
+            batch.get("template_version")
+            or dict(batch.get("metadata_json") or {}).get("template_version")
+            or ""
+        ).strip() or None,
+        "upload_meta_json": {
+            "selected_site_code": str(site_row.get("site_code") or batch.get("site_code") or "").strip().upper(),
+            "selected_site_codes": [str(site_row.get("site_code") or batch.get("site_code") or "").strip().upper()],
+            "download_scope": "site",
+            "revision": source_revision,
+            "workbook_family": "canonical_workbook",
+        },
+    }
+    handoff_payload = _build_sentrix_support_roster_handoff_payload(
+        batch_id=batch_id,
+        batch=handoff_batch,
+        target_tenant=target_tenant,
+        scope_apply_specs=scope_apply_specs,
+    )
+    return _post_sentrix_support_roster_handoff(handoff_payload)
 
 
 def _load_daytime_need_count_rows_for_apply(
@@ -20237,6 +20980,7 @@ def apply_import(
                 user=user,
             )
             partial_failures: list[str] = []
+            site_row = None
             if not result.blocked and str(batch.get("site_code") or "").strip() and str(batch.get("month_key") or "").strip():
                 try:
                     site_row = _resolve_site_context_by_code(
@@ -20244,7 +20988,40 @@ def apply_import(
                         tenant_id=str(target_tenant["id"]),
                         site_code=str(batch.get("site_code") or "").strip(),
                     )
-                    if site_row:
+                except Exception:
+                    logger.exception("[schedule][import-apply] failed to resolve site context batch=%s", batch_id)
+                    partial_failures.append("site context resolution failed")
+                    site_row = None
+                if site_row:
+                    try:
+                        sentrix_sync_result = _sync_canonical_schedule_import_sentrix_support_requests(
+                            conn,
+                            batch_id=batch_id,
+                            batch=batch,
+                            target_tenant=target_tenant,
+                            site_row=site_row,
+                            user=user,
+                        )
+                        result.sentrix_tickets_created = max(int(sentrix_sync_result.get("created_scope_count") or 0), 0)
+                        result.sentrix_tickets_updated = max(
+                            int(sentrix_sync_result.get("updated_existing_scope_count") or 0)
+                            + int(sentrix_sync_result.get("restored_scope_count") or 0),
+                            0,
+                        )
+                        result.sentrix_tickets_retracted = max(int(sentrix_sync_result.get("removed_scope_count") or 0), 0)
+                        if bool(sentrix_sync_result.get("partial_success")) or max(int(sentrix_sync_result.get("failed_scope_count") or 0), 0) > 0:
+                            partial_failures.append(
+                                str(
+                                    sentrix_sync_result.get("handoff_message")
+                                    or sentrix_sync_result.get("message")
+                                    or "sentrix support request sync partially failed"
+                                ).strip()
+                                or "sentrix support request sync partially failed"
+                            )
+                    except Exception:
+                        logger.exception("[schedule][import-apply] sentrix support request sync failed batch=%s", batch_id)
+                        partial_failures.append("sentrix support request sync failed")
+                    try:
                         source_row = _register_support_roundtrip_source_after_import(
                             conn,
                             batch_id=str(batch_id),
@@ -20267,9 +21044,9 @@ def apply_import(
                             if artifact_revision
                             else None
                         )
-                except Exception:
-                    logger.exception("[schedule][import-apply] support roundtrip source registration failed batch=%s", batch_id)
-                    partial_failures.append("support-demand artifact generation failed")
+                    except Exception:
+                        logger.exception("[schedule][import-apply] support roundtrip source registration failed batch=%s", batch_id)
+                        partial_failures.append("support-demand artifact generation failed")
             for tenant_id, site_id, schedule_date_raw in affected_site_days:
                 try:
                     _refresh_daily_leader_defaults(

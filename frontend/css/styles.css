@@ -5306,30 +5306,82 @@ button:disabled,
   word-break: break-all;
 }
 
-.schedule-finance-tabs {
-  display: flex;
-  gap: 8px;
+.schedule-finance-workspace-tabs {
+  gap: 10px;
   flex-wrap: wrap;
 }
 
-.schedule-finance-tab.btn {
-  min-height: 36px;
-  padding: 0 14px;
-  border-color: var(--border-subtle);
+.schedule-finance-flow {
+  gap: 16px;
+}
+
+.schedule-finance-context-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.schedule-finance-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.schedule-finance-file-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.schedule-finance-status-grid {
+  margin-top: 2px;
+}
+
+.schedule-finance-hq-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.schedule-finance-hq-summary-card {
+  gap: 6px;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.schedule-finance-hq-summary-card strong {
+  font-size: 1.3rem;
+}
+
+.schedule-finance-hq-summary-card.is-success {
+  border-color: var(--state-success-border);
+  background: var(--state-success-bg);
+}
+
+.schedule-finance-hq-summary-card.is-danger {
+  border-color: var(--state-danger-border);
+  background: var(--state-danger-bg);
+}
+
+.schedule-finance-hq-summary-card.is-warn {
+  border-color: var(--state-warning-border);
+  background: var(--state-warning-bg);
+}
+
+.schedule-finance-hq-summary-card.is-active {
+  border-color: var(--accent-strong);
+  box-shadow: 0 0 0 1px rgba(194, 65, 12, 0.18);
+}
+
+.schedule-finance-history-table {
+  min-width: 640px;
+}
+
+.schedule-finance-empty {
+  padding: 14px 16px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-12);
   background: var(--bg-surface-muted);
   color: var(--text-secondary);
-}
-
-.schedule-finance-tab.btn.active {
-  border-color: rgba(249, 115, 22, 0.32);
-  background: rgba(249, 115, 22, 0.12);
-  color: var(--brand-orange);
-  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.12);
-}
-
-.schedule-finance-tab-panel {
-  display: grid;
-  gap: 10px;
 }
 
 .schedule-template-mapping-summary-secondary {
@@ -5443,12 +5495,8 @@ button:disabled,
   background: rgba(36, 24, 14, 0.96);
 }
 
-:root[data-ui-theme='dark'] .schedule-finance-tab.btn {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-:root[data-ui-theme='dark'] .schedule-finance-tab.btn.active {
-  background: rgba(249, 115, 22, 0.16);
+:root[data-ui-theme='dark'] .schedule-finance-empty {
+  background: rgba(15, 23, 42, 0.74);
 }
 
 .schedule-detail-head {

@@ -2550,115 +2550,336 @@
             </div>
 
             <div id="scheduleReportsPanel" class="stack schedule-tab-panel hidden">
-            <div class="schedule-reports-context-row">
-              <label class="input-field">
-                <span>대상 지점</span>
-                <select id="scheduleReportsSite">
-                  <option value="">지점 선택</option>
-                </select>
-              </label>
-            </div>
-
             <section id="scheduleFinanceSubmissionPanel" class="module-card stack hidden">
               <div class="approval-head">
                 <div>
-                  <h3>Finance용 스케쥴 제출</h3>
-                  <p class="muted">HQ는 1차 확인본/최종본을 다운로드하고, Supervisor는 최종 정정본을 업로드합니다.</p>
+                  <h3>Finance 스케쥴 워크플로우</h3>
+                  <p class="muted">1차 다운로드, 수정본 게시, HQ 2차 다운로드를 작업 순서대로 분리해 제공합니다.</p>
                 </div>
                 <span id="scheduleFinanceStatePill" class="status-pill status-pill-neutral">상태 확인 대기</span>
               </div>
-              <p id="scheduleFinanceStatusText" class="muted">업로드 지점을 선택하면 Finance 제출 상태를 확인할 수 있습니다.</p>
-              <div id="scheduleFinanceStatusGrid" class="schedule-support-status-grid schedule-finance-status-grid">
-                <article class="schedule-support-meta-card">
-                  <span class="schedule-support-meta-label">현재 단계</span>
-                  <strong id="scheduleFinancePhaseLabel">확인 대기</strong>
-                  <span id="scheduleFinancePhaseMeta" class="muted">지점 선택 후 확인</span>
-                </article>
-                <article class="schedule-support-meta-card">
-                  <span class="schedule-support-meta-label">1차 확인본</span>
-                  <strong id="scheduleFinanceReviewRevision">없음</strong>
-                  <span id="scheduleFinanceReviewMeta" class="muted">HQ 다운로드 전</span>
-                </article>
-                <article class="schedule-support-meta-card">
-                  <span class="schedule-support-meta-label">최종 업로드</span>
-                  <strong id="scheduleFinanceFinalUploadState">대기</strong>
-                  <span id="scheduleFinanceFinalUploadMeta" class="muted">Supervisor 업로드 전</span>
-                </article>
-                <article class="schedule-support-meta-card">
-                  <span class="schedule-support-meta-label">HQ 최종 다운로드</span>
-                  <strong id="scheduleFinanceFinalDownloadState">비활성</strong>
-                  <span id="scheduleFinanceFinalDownloadMeta" class="muted">최종 업로드 후 활성화</span>
-                </article>
-              </div>
-              <ul id="scheduleFinanceBlockedReasons" class="list hidden"></ul>
-              <div id="scheduleFinanceTabs" class="schedule-finance-tabs" role="tablist" aria-label="Finance 스케쥴 제출 단계">
+              <p id="scheduleFinanceStatusText" class="muted">제출 대상과 대상 월을 선택하면 지금 해야 할 작업과 최근 게시 상태를 바로 확인할 수 있습니다.</p>
+              <div id="scheduleFinanceWorkspaceTabs" class="workspace-tabs schedule-finance-workspace-tabs" role="tablist" aria-label="Finance 워크플로우">
                 <button
-                  class="btn btn-secondary schedule-finance-tab active"
+                  class="btn btn-secondary workspace-tab active"
                   type="button"
-                  data-action="schedule-finance-tab"
-                  data-tab="download"
+                  data-action="schedule-finance-workspace-tab"
+                  data-tab="submission"
                   aria-pressed="true"
                 >
-                  Finance 스케쥴 다운로드
+                  Finance용 스케쥴 제출
                 </button>
                 <button
-                  class="btn btn-secondary schedule-finance-tab"
+                  class="btn btn-secondary workspace-tab"
+                  id="scheduleFinanceReviewWorkspaceTab"
                   type="button"
-                  data-action="schedule-finance-tab"
-                  data-tab="upload"
+                  data-action="schedule-finance-workspace-tab"
+                  data-tab="review"
                   aria-pressed="false"
                 >
-                  Finance 스케쥴 업로드
+                  지점별 스케쥴 업로드 확인
                 </button>
               </div>
-              <section id="scheduleFinanceDownloadSection" class="schedule-support-action-section stack">
-                <div class="approval-head">
-                  <h3>HQ 다운로드</h3>
-                </div>
-                <p class="muted">1차 확인본은 현재 assembled truth 기준으로 생성되고, 2차 최종본은 Supervisor가 올린 최종 파일 그대로 제공합니다.</p>
-                <div class="schedule-support-upload-actions">
-                  <button class="btn btn-secondary" type="button" id="scheduleFinanceReviewDownloadBtn" data-action="schedule-finance-review-download">1차 스케쥴 다운로드</button>
-                  <button class="btn btn-primary" type="button" id="scheduleFinanceFinalDownloadBtn" data-action="schedule-finance-final-download">2차 최종 스케쥴 다운로드</button>
-                </div>
+
+              <section id="scheduleFinanceSubmissionFlow" class="stack schedule-finance-flow">
+                <section class="schedule-upload-step">
+                  <div class="schedule-upload-step-head">
+                    <div>
+                      <span class="schedule-upload-step-kicker">STEP 1</span>
+                      <h4>컨텍스트 선택</h4>
+                      <p class="muted">게시할 테넌트, 지점, 대상 월을 먼저 고정합니다.</p>
+                    </div>
+                  </div>
+                  <div class="schedule-finance-context-grid">
+                    <label id="scheduleReportsTenantReadonlyField" class="input-field">
+                      <span>테넌트</span>
+                      <input id="scheduleReportsTenantReadonly" type="text" readonly />
+                    </label>
+                    <label id="scheduleReportsTenantSelectField" class="input-field hidden">
+                      <span>테넌트</span>
+                      <select id="scheduleReportsTenantSelect">
+                        <option value="">테넌트 선택</option>
+                      </select>
+                    </label>
+                    <label class="input-field">
+                      <span>대상 지점</span>
+                      <select id="scheduleReportsSite">
+                        <option value="">지점 선택</option>
+                      </select>
+                    </label>
+                    <label class="input-field">
+                      <span>대상 월</span>
+                      <input id="scheduleFinanceContextMonth" type="month" />
+                    </label>
+                  </div>
+                  <div id="scheduleFinanceStatusGrid" class="schedule-support-status-grid schedule-finance-status-grid">
+                    <article class="schedule-support-meta-card">
+                      <span class="schedule-support-meta-label">현재 상태</span>
+                      <strong id="scheduleFinancePhaseLabel">확인 대기</strong>
+                      <span id="scheduleFinancePhaseMeta" class="muted">지점과 월을 선택하면 최근 게시 상태를 확인할 수 있습니다.</span>
+                    </article>
+                    <article class="schedule-support-meta-card">
+                      <span class="schedule-support-meta-label">최근 1차 다운로드</span>
+                      <strong id="scheduleFinanceReviewRevision">없음</strong>
+                      <span id="scheduleFinanceReviewMeta" class="muted">아직 1차 다운로드 이력이 없습니다.</span>
+                    </article>
+                    <article class="schedule-support-meta-card">
+                      <span class="schedule-support-meta-label">현재 게시본</span>
+                      <strong id="scheduleFinanceFinalUploadState">없음</strong>
+                      <span id="scheduleFinanceFinalUploadMeta" class="muted">게시된 Finance 파일이 아직 없습니다.</span>
+                    </article>
+                    <article class="schedule-support-meta-card">
+                      <span class="schedule-support-meta-label">안내</span>
+                      <strong id="scheduleFinanceFinalDownloadState">게시 전</strong>
+                      <span id="scheduleFinanceFinalDownloadMeta" class="muted">1차 다운로드 후 수정본을 올리면 해당 지점·월 게시본이 교체됩니다.</span>
+                    </article>
+                  </div>
+                  <ul id="scheduleFinanceBlockedReasons" class="list hidden"></ul>
+                </section>
+
+                <section class="schedule-upload-step">
+                  <div class="schedule-upload-step-head">
+                    <div>
+                      <span class="schedule-upload-step-kicker">STEP 2</span>
+                      <h4>1차 스케쥴 다운로드</h4>
+                      <p class="muted">현재 ARLS 근무표와 Sentrix 지원근무 상태를 기준으로 최신 Finance용 시트를 다시 생성합니다.</p>
+                    </div>
+                  </div>
+                  <div class="schedule-support-upload-actions">
+                    <button class="btn btn-secondary" type="button" id="scheduleFinanceReviewDownloadBtn" data-action="schedule-finance-review-download">1차 스케쥴 다운로드</button>
+                  </div>
+                </section>
+
+                <section class="schedule-upload-step">
+                  <div class="schedule-upload-step-head">
+                    <div>
+                      <span class="schedule-upload-step-kicker">STEP 3</span>
+                      <h4>수정본 업로드 / 미리보기</h4>
+                      <p class="muted">수정한 Finance workbook을 올리고 게시 전 미리보기를 확인합니다.</p>
+                    </div>
+                  </div>
+                  <div class="schedule-finance-file-grid">
+                    <label class="input-field schedule-upload-file-field" for="scheduleFinanceUploadFile">
+                      <span>수정본 파일</span>
+                      <input id="scheduleFinanceUploadFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+                    </label>
+                    <div id="scheduleFinanceUploadSummaryGrid" class="schedule-finance-summary-grid">
+                      <article class="schedule-upload-summary-card">
+                        <span>파일명</span>
+                        <strong id="scheduleFinanceUploadFileName">선택 전</strong>
+                      </article>
+                      <article class="schedule-upload-summary-card">
+                        <span>대상 지점</span>
+                        <strong id="scheduleFinanceUploadSiteLabel">지점 선택</strong>
+                      </article>
+                      <article class="schedule-upload-summary-card">
+                        <span>대상 월</span>
+                        <strong id="scheduleFinanceUploadMonthLabel">월 선택</strong>
+                      </article>
+                      <article class="schedule-upload-summary-card">
+                        <span>미리보기 상태</span>
+                        <strong id="scheduleFinanceUploadPreviewSummary">미리보기 전</strong>
+                      </article>
+                    </div>
+                  </div>
+                  <div class="schedule-support-upload-actions">
+                    <button class="btn btn-secondary" type="button" id="scheduleFinancePreviewBtn" data-action="schedule-finance-preview">업로드 미리보기</button>
+                  </div>
+                  <p id="scheduleFinanceBatchInfo" class="muted"></p>
+                  <ul id="scheduleFinanceBatchIssues" class="list hidden"></ul>
+                  <div id="scheduleFinancePreviewTableWrap" class="schedule-preview-wrap hidden">
+                    <div class="schedule-preview-head">
+                      <div>
+                        <h3>업로드 미리보기</h3>
+                        <p class="muted">게시 전에 실제 반영 대상과 차단 사유를 간단히 확인합니다.</p>
+                      </div>
+                    </div>
+                    <table class="schedule-preview-table">
+                      <thead>
+                        <tr>
+                          <th>행</th>
+                          <th>날짜</th>
+                          <th>직원명</th>
+                          <th>근무구분</th>
+                          <th>현재값</th>
+                          <th>업로드값</th>
+                          <th>처리</th>
+                          <th>메모</th>
+                        </tr>
+                      </thead>
+                      <tbody id="scheduleFinancePreviewTableBody"></tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section class="schedule-upload-step">
+                  <div class="schedule-upload-step-head">
+                    <div>
+                      <span class="schedule-upload-step-kicker">STEP 4</span>
+                      <h4>게시</h4>
+                      <p class="muted">미리보기를 확인한 뒤 이 지점·월의 게시본을 새 파일로 교체합니다.</p>
+                    </div>
+                  </div>
+                  <div id="scheduleFinancePublishSummaryGrid" class="schedule-finance-summary-grid">
+                    <article class="schedule-upload-summary-card">
+                      <span>게시 대상</span>
+                      <strong id="scheduleFinancePublishSiteLabel">지점 선택</strong>
+                    </article>
+                    <article class="schedule-upload-summary-card">
+                      <span>대상 월</span>
+                      <strong id="scheduleFinancePublishMonthLabel">월 선택</strong>
+                    </article>
+                    <article class="schedule-upload-summary-card">
+                      <span>미리보기 요약</span>
+                      <strong id="scheduleFinancePublishPreviewLabel">미리보기 전</strong>
+                    </article>
+                    <article class="schedule-upload-summary-card">
+                      <span>게시 상태</span>
+                      <strong id="scheduleFinancePublishStateLabel">대기</strong>
+                    </article>
+                  </div>
+                  <div class="schedule-support-upload-actions">
+                    <button class="btn btn-primary" type="button" id="scheduleFinanceApplyBtn" data-action="schedule-finance-apply">게시</button>
+                  </div>
+                  <div id="scheduleFinancePublishSuccessBanner" class="schedule-upload-success-banner hidden" role="status" aria-live="polite">
+                    <div>
+                      <strong id="scheduleFinancePublishSuccessTitle">게시 완료</strong>
+                      <p id="scheduleFinancePublishSuccessText" class="muted">현재 게시본이 최신 상태입니다.</p>
+                    </div>
+                  </div>
+                  <p id="scheduleFinanceApplyResult" class="muted"></p>
+                  <ul id="scheduleFinanceApplyDetails" class="list hidden"></ul>
+                </section>
+
+                <section class="schedule-upload-step">
+                  <div class="schedule-upload-step-head">
+                    <div>
+                      <span class="schedule-upload-step-kicker">STEP 5</span>
+                      <h4>최근 게시 이력</h4>
+                      <p class="muted">최근 게시 3건만 간단히 표시합니다.</p>
+                    </div>
+                  </div>
+                  <div id="scheduleFinanceHistoryEmpty" class="schedule-finance-empty">최근 게시 이력이 없습니다.</div>
+                  <div id="scheduleFinanceHistoryTableWrap" class="schedule-hq-site-matrix-wrap hidden">
+                    <table class="schedule-preview-table schedule-finance-history-table">
+                      <thead>
+                        <tr>
+                          <th>게시 시각</th>
+                          <th>게시자</th>
+                          <th>지점</th>
+                          <th>대상월</th>
+                          <th>현재 게시본</th>
+                        </tr>
+                      </thead>
+                      <tbody id="scheduleFinanceHistoryTableBody"></tbody>
+                    </table>
+                  </div>
+                  <details id="scheduleFinanceDetails" class="schedule-upload-tech-details hidden">
+                    <summary>상세 정보</summary>
+                    <div id="scheduleFinanceDetailsGrid" class="schedule-upload-tech-grid"></div>
+                  </details>
+                </section>
               </section>
-              <section id="scheduleFinanceUploadSection" class="schedule-support-action-section stack hidden">
-                <div class="approval-head">
-                  <h3>Supervisor 최종 업로드</h3>
+
+              <section id="scheduleFinanceReviewFlow" class="stack schedule-finance-flow hidden">
+                <section class="schedule-upload-step">
+                  <div class="schedule-upload-step-head">
+                    <div>
+                      <span class="schedule-upload-step-kicker">STEP 1</span>
+                      <h4>대상 월 선택</h4>
+                      <p class="muted">HQ가 확인할 대상 월과 테넌트를 고릅니다.</p>
+                    </div>
+                  </div>
+                  <div class="schedule-finance-context-grid">
+                    <label id="scheduleFinanceHqTenantReadonlyField" class="input-field">
+                      <span>테넌트</span>
+                      <input id="scheduleFinanceHqTenantReadonly" type="text" readonly />
+                    </label>
+                    <label id="scheduleFinanceHqTenantSelectField" class="input-field hidden">
+                      <span>테넌트</span>
+                      <select id="scheduleFinanceHqTenantSelect">
+                        <option value="">테넌트 선택</option>
+                      </select>
+                    </label>
+                    <label class="input-field">
+                      <span>대상 월</span>
+                      <input id="scheduleFinanceHqMonth" type="month" />
+                    </label>
+                  </div>
+                </section>
+
+                <div id="scheduleFinanceHqSuccessBanner" class="schedule-upload-success-banner hidden" role="status" aria-live="polite">
+                  <div>
+                    <strong id="scheduleFinanceHqSuccessTitle">다운로드 완료</strong>
+                    <p id="scheduleFinanceHqSuccessText" class="muted">선택한 지점 게시본을 하나의 workbook으로 받았습니다.</p>
+                  </div>
                 </div>
-                <p class="muted">canonical workbook만 허용되며, 최신 1차 확인본보다 오래된 파일이나 보호 영역 수정은 차단됩니다.</p>
-                <input id="scheduleFinanceUploadFile" type="file" accept=".xlsx" />
-                <div class="schedule-support-upload-actions">
-                  <button class="btn btn-secondary" type="button" id="scheduleFinancePreviewBtn" data-action="schedule-finance-preview">최종 업로드 미리보기</button>
-                  <button class="btn btn-primary" type="button" id="scheduleFinanceApplyBtn" data-action="schedule-finance-apply">최종 업로드 반영</button>
-                </div>
+
+                <section class="schedule-finance-hq-summary-grid" aria-label="지점별 게시 현황 요약">
+                  <article id="scheduleFinanceHqCompletedCard" class="schedule-upload-summary-card schedule-finance-hq-summary-card">
+                    <span>게시 완료 수</span>
+                    <strong id="scheduleFinanceHqCompletedCount">0</strong>
+                    <span id="scheduleFinanceHqCompletedMeta" class="muted">최신 게시본을 바로 받을 수 있습니다.</span>
+                  </article>
+                  <article id="scheduleFinanceHqMissingCard" class="schedule-upload-summary-card schedule-finance-hq-summary-card">
+                    <span>파일 없음 수</span>
+                    <strong id="scheduleFinanceHqMissingCount">0</strong>
+                    <span id="scheduleFinanceHqMissingMeta" class="muted">아직 게시되지 않은 지점입니다.</span>
+                  </article>
+                  <article id="scheduleFinanceHqUpdateCard" class="schedule-upload-summary-card schedule-finance-hq-summary-card">
+                    <span>업데이트 필요 수</span>
+                    <strong id="scheduleFinanceHqUpdateCount">0</strong>
+                    <span id="scheduleFinanceHqUpdateMeta" class="muted">이전에 확인한 뒤 새 게시본이 올라온 지점입니다.</span>
+                  </article>
+                  <article id="scheduleFinanceHqSelectedCard" class="schedule-upload-summary-card schedule-finance-hq-summary-card">
+                    <span>현재 선택 수</span>
+                    <strong id="scheduleFinanceHqSelectedCount">0</strong>
+                    <span id="scheduleFinanceHqSelectedMeta" class="muted">선택한 지점을 한 workbook으로 받습니다.</span>
+                  </article>
+                </section>
+
+                <section class="schedule-upload-step schedule-hq-site-selection-shell">
+                  <div class="schedule-upload-step-head">
+                    <div>
+                      <span class="schedule-upload-step-kicker">STEP 2</span>
+                      <h4>지점별 상태 확인 + 선택</h4>
+                      <p class="muted">게시 완료 또는 업데이트 필요 상태의 지점만 선택할 수 있습니다.</p>
+                    </div>
+                    <div class="quick-actions">
+                      <button class="btn btn-secondary" type="button" data-action="schedule-finance-hq-select-ready">완료 지점 전체 선택</button>
+                      <button class="btn btn-secondary" type="button" data-action="schedule-finance-hq-clear-selection">선택 해제</button>
+                    </div>
+                  </div>
+                  <div class="schedule-hq-site-matrix-wrap">
+                    <table class="schedule-preview-table schedule-hq-site-matrix">
+                      <thead>
+                        <tr>
+                          <th>선택</th>
+                          <th>지점명</th>
+                          <th>상태</th>
+                          <th>최근 게시 시각</th>
+                          <th>메모</th>
+                        </tr>
+                      </thead>
+                      <tbody id="scheduleFinanceHqSiteTableBody"></tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section class="schedule-upload-step">
+                  <div class="schedule-upload-step-head">
+                    <div>
+                      <span class="schedule-upload-step-kicker">STEP 3</span>
+                      <h4>2차 스케쥴 다운로드</h4>
+                      <p class="muted">선택한 지점 게시본을 한 workbook으로 받습니다. 각 지점은 별도 시트로 내려가며 시트명은 지점명과 동일합니다.</p>
+                    </div>
+                  </div>
+                  <div class="schedule-support-upload-actions">
+                    <span id="scheduleFinanceHqSelectionSummary" class="muted">선택한 지점이 없습니다.</span>
+                    <button class="btn btn-primary" type="button" id="scheduleFinanceFinalDownloadBtn" data-action="schedule-finance-final-download">2차 스케쥴 다운로드</button>
+                  </div>
+                </section>
               </section>
-              <p id="scheduleFinanceBatchInfo" class="muted"></p>
-              <ul id="scheduleFinanceBatchIssues" class="list hidden"></ul>
-              <div id="scheduleFinancePreviewTableWrap" class="schedule-preview-wrap hidden">
-                <div class="schedule-preview-head">
-                  <h3>Finance 최종 업로드 미리보기</h3>
-                  <span class="muted">protected/conflict/stale 변경은 차단되고, 허용된 diff만 반영됩니다.</span>
-                </div>
-                <table class="schedule-preview-table">
-                  <thead>
-                    <tr>
-                      <th>행</th>
-                      <th>섹션</th>
-                      <th>날짜</th>
-                      <th>직원명</th>
-                      <th>근무구분</th>
-                      <th>현재값</th>
-                      <th>업로드값</th>
-                      <th>처리</th>
-                      <th>상태</th>
-                      <th>사유</th>
-                    </tr>
-                  </thead>
-                  <tbody id="scheduleFinancePreviewTableBody"></tbody>
-                </table>
-              </div>
-              <p id="scheduleFinanceApplyResult" class="muted"></p>
-              <ul id="scheduleFinanceApplyDetails" class="list hidden"></ul>
             </section>
             </div>
 
