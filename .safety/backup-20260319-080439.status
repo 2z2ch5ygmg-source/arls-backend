@@ -1,0 +1,42 @@
+ M app/routers/v1/schedules.py
+ M app/schemas.py
+ M frontend/css/styles.css
+ M frontend/index.html
+ M frontend/js/app.js
+ M scripts/deploy-azure.sh
+ M tests/test_schedule_finance_submission.py
+ M tests/test_schedule_monthly_import_canonical.py
+?? .safety/backup-20260319-080439.meta
+?? .safety/backup-20260319-080439.status
+?? arls_codebase_inventory.md
+?? arls_deploy_packaging_map.md
+?? arls_excel_workflow_map.md
+?? arls_finance_backend_phase2_manual_checklist.md
+?? arls_finance_backend_phase2_notes.md
+?? arls_finance_download_publish_contract.md
+?? arls_finance_frontend_phase3_manual_checklist.md
+?? arls_finance_frontend_phase3_notes.md
+?? arls_finance_frontend_state_contract.md
+?? arls_finance_phase4_final_qa_defects.md
+?? arls_finance_phase4_final_qa_matrix.md
+?? arls_finance_phase4_final_qa_notes.md
+?? arls_finance_phase4_ownership_summary.md
+?? arls_finance_site_status_contract.md
+?? arls_finance_ui_contract.md
+?? arls_finance_workflow_map.md
+?? arls_finance_workflow_phase1_manual_checklist.md
+?? arls_finance_workflow_phase1_notes.md
+?? arls_mapping_profile_map.md
+?? arls_review_bundle_manifest.md
+?? arls_risk_ledger.md
+?? arls_schedule_truth_map.md
+?? arls_sentrix_boundary_map.md
+?? migrations/020_schedule_finance_download_acks.sql
+?? sentrix_arls_integration_map.md
+?? sentrix_codebase_inventory.md
+?? sentrix_deploy_packaging_map.md
+?? sentrix_notifications_map.md
+?? sentrix_review_bundle_manifest.md
+?? sentrix_risk_ledger.md
+?? sentrix_support_domain_map.md
+?? sentrix_ui_ownership_map.md

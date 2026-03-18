@@ -1,0 +1,16 @@
+{
+  "name": "rg-arls-sentrix-qa",
+  "private": true,
+  "scripts": {
+    "install:browsers": "playwright install --with-deps chromium",
+    "smoke": "playwright test --grep @smoke",
+    "arls": "playwright test --grep @arls",
+    "sentrix": "playwright test --grep @sentrix",
+    "arls:auth": "playwright test arls-auth.spec.js",
+    "sentrix:auth": "playwright test sentrix-auth.spec.js",
+    "all": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1"
+  }
+}

@@ -565,6 +565,16 @@ deploy_backend() {
     --generic-configurations '{"healthCheckPath":"/health"}' \
     --output none
 
+  echo "4-2) 클라이언트 인증서 요구 비활성화"
+  az_exec resource update \
+    --resource-group "$AZ_RG" \
+    --namespace Microsoft.Web \
+    --resource-type sites \
+    --name "$AZ_BACKEND_APP" \
+    --api-version 2024-04-01 \
+    --set properties.clientCertEnabled=false properties.clientCertMode=Optional \
+    --output none
+
   if [[ "$AZ_BACKEND_DEPLOY_MODE" == "container" ]]; then
     if [[ -z "$DOCKER_BIN" ]]; then
       echo "docker가 필요합니다. Docker Desktop을 설치 후 다시 실행하세요."

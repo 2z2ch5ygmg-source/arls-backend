@@ -322,7 +322,7 @@ const POLL_MAX_INTERVAL_MS = 300000;
 const POLL_FAILURE_LIMIT = 5;
 const HEAVY_CACHE_TTL_SITES_MS = 120000;
 const HEAVY_CACHE_TTL_MONTHLY_MS = 60000;
-const SCHEDULE_LIVE_STREAM_RETRY_MS = 15000;
+const SCHEDULE_LIVE_STREAM_RETRY_MS = 1000;
 const SCHEDULE_LIVE_FALLBACK_POLL_MS = 2000;
 const HEAVY_CACHE_TTL_RECORDS_MS = 30000;
 const PAGED_FETCH_LIMIT = 500;
@@ -28451,7 +28451,6 @@ async function loadSites({
 
 function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad = false } = {}) {
   stopPolling();
-  stopScheduleLiveRefresh();
   const perms = getRolePermissions();
   const requested = mapLegacyViewName(name);
   const viewAllowed = isViewAllowed(requested, perms);
@@ -28462,6 +28461,9 @@ function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad
   }
   const targetView = viewAllowed ? requested : 'home';
   const previousView = state.currentView;
+  if (!(previousView === 'schedule' && targetView === 'schedule')) {
+    stopScheduleLiveRefresh();
+  }
   state.currentView = targetView;
   if (previousView === 'attendance-check' && targetView !== 'attendance-check') {
     clearHomeAttendanceCheckWatch();
@@ -47111,7 +47113,7 @@ async function runScheduleLiveRefreshCycle() {
         state.scheduleLiveStreamPath = '';
       }
       if (!controller.signal.aborted) {
-        scheduleNextScheduleLiveFallbackPoll(0);
+        scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
         scheduleNextScheduleLiveRefresh(SCHEDULE_LIVE_STREAM_RETRY_MS);
       }
     }
