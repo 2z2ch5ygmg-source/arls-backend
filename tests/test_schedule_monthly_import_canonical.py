@@ -1686,6 +1686,158 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
         )
         workbook.close()
 
+    def test_build_schedule_import_preview_result_matches_existing_support_worker_by_value_not_row_position(self):
+        workbook = self._build_sample_workbook()
+        sheet = workbook[ARLS_SHEET_NAME]
+        rows_meta = _locate_support_section_rows(sheet)
+        target_col = 6  # 2026-03-03
+        sheet.cell(row=rows_meta["night_rows"][0], column=target_col, value="자체 서성원")
+        sheet.cell(row=rows_meta["night_rows"][1], column=target_col, value="BK 김진수")
+
+        export_ctx = {
+            "export_revision": "rev-20260309",
+            "parsed_sheet": {
+                "body_cells": [],
+                "need_cells": [],
+                "support_cells": [
+                    {
+                        "row_no": rows_meta["night_rows"][0],
+                        "col_no": target_col,
+                        "source_sheet": sheet.title,
+                        "schedule_date": date(2026, 3, 3),
+                        "work_value": "BK 김진수",
+                        "source_block": "night_support_worker",
+                        "section_label": "야간 지원 근무자",
+                        "parsed_semantic_type": "worker",
+                    }
+                ],
+            },
+            "support_rows": [],
+            "overnight_rows": [],
+            "employee_overnight_rows": [],
+        }
+
+        with patch("app.routers.v1.schedules._collect_monthly_export_context", return_value=export_ctx), patch(
+            "app.routers.v1.schedules._fetch_schedule_templates",
+            return_value=self._build_preview_template_rows(),
+        ), patch(
+            "app.routers.v1.schedules._fetch_active_schedule_import_mapping_profile",
+            return_value=self._build_preview_mapping_profile(),
+        ), patch(
+            "app.routers.v1.schedules._load_site_employees",
+            return_value=self._build_preview_employee_rows(),
+        ), patch(
+            "app.routers.v1.schedules._load_existing_schedule_rows_for_import",
+            return_value=[],
+        ), patch(
+            "app.routers.v1.schedules._read_monthly_support_request_rows_for_export",
+            return_value=[],
+        ):
+            preview = _build_schedule_import_preview_result(
+                None,
+                workbook=workbook,
+                target_tenant={"id": "tenant-1", "tenant_code": "srs_korea"},
+                scope_site={"id": "site-1", "site_code": "R692", "company_id": "company-1", "company_code": "APPLE"},
+                selected_month="2026-03",
+                user={"id": "user-1", "role": "developer"},
+                filename="preview.xlsx",
+                file_sha256="sha-preview",
+            )
+
+        create_row = next(
+            row
+            for row in preview["preview_rows"]
+            if row["source_block"] == "night_support_worker"
+            and row["schedule_date"] == date(2026, 3, 3)
+            and row["work_value"] == "자체 서성원"
+        )
+        self.assertEqual(create_row["diff_category"], "create")
+        self.assertIsNone(create_row["current_work_value"])
+        self.assertFalse(
+            any(
+                row["source_block"] == "night_support_worker"
+                and row["schedule_date"] == date(2026, 3, 3)
+                and row["work_value"] == "BK 김진수"
+                for row in preview["preview_rows"]
+            )
+        )
+        workbook.close()
+
+    def test_build_schedule_import_preview_result_treats_same_night_time_as_existing_even_when_template_differs(self):
+        workbook = self._build_sample_workbook()
+        sheet = workbook[ARLS_SHEET_NAME]
+        rows_meta = _locate_support_section_rows(sheet)
+        target_col = 6  # 2026-03-03
+        sheet.cell(row=rows_meta["night_rows"][0], column=target_col, value="자체 서성원")
+
+        export_ctx = {
+            "export_revision": "rev-20260309",
+            "parsed_sheet": {"body_cells": [], "need_cells": [], "support_cells": []},
+            "support_rows": [],
+            "overnight_rows": [],
+            "employee_overnight_rows": [],
+        }
+        existing_rows = [
+            {
+                "schedule_id": "soc-night-1",
+                "tenant_id": "tenant-1",
+                "company_id": "company-1",
+                "site_id": "site-1",
+                "employee_id": "emp-2",
+                "schedule_date": date(2026, 3, 3),
+                "shift_type": "night",
+                "template_id": "tpl-night-soc",
+                "shift_start_time": "22:00:00",
+                "shift_end_time": "08:00:00",
+                "paid_hours": 10,
+                "schedule_note": None,
+                "source": "SOC",
+                "source_ticket_id": "ticket-1",
+                "duty_type": "night",
+                "template_name": "SOC 야간 10시간",
+                "employee_code": "R692-2",
+                "employee_name": "서성원",
+            }
+        ]
+
+        with patch("app.routers.v1.schedules._collect_monthly_export_context", return_value=export_ctx), patch(
+            "app.routers.v1.schedules._fetch_schedule_templates",
+            return_value=self._build_preview_template_rows(),
+        ), patch(
+            "app.routers.v1.schedules._fetch_active_schedule_import_mapping_profile",
+            return_value=self._build_preview_mapping_profile(),
+        ), patch(
+            "app.routers.v1.schedules._load_site_employees",
+            return_value=self._build_preview_employee_rows(),
+        ), patch(
+            "app.routers.v1.schedules._load_existing_schedule_rows_for_import",
+            return_value=existing_rows,
+        ), patch(
+            "app.routers.v1.schedules._read_monthly_support_request_rows_for_export",
+            return_value=[],
+        ):
+            preview = _build_schedule_import_preview_result(
+                None,
+                workbook=workbook,
+                target_tenant={"id": "tenant-1", "tenant_code": "srs_korea"},
+                scope_site={"id": "site-1", "site_code": "R692", "company_id": "company-1", "company_code": "APPLE"},
+                selected_month="2026-03",
+                user={"id": "user-1", "role": "developer"},
+                filename="preview.xlsx",
+                file_sha256="sha-preview",
+            )
+
+        self.assertFalse(
+            any(
+                row["source_block"] == "night_support_worker"
+                and row["schedule_date"] == date(2026, 3, 3)
+                and row["work_value"] == "자체 서성원"
+                and row.get("validation_code") == "TIME_CONFLICT"
+                for row in preview["preview_rows"]
+            )
+        )
+        workbook.close()
+
     def test_load_canonical_schedule_import_apply_payload_rows_rebuilds_from_raw_workbook(self):
         workbook = self._build_sample_workbook()
         rebuilt_rows = {

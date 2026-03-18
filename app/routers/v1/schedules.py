@@ -6587,6 +6587,115 @@ def _build_support_value_index(rows: list[dict]) -> dict[tuple[str, str, int, in
     return index
 
 
+def _normalize_support_value_match_token(value: object) -> str:
+    return re.sub(r"\s+", " ", str(_normalize_workbook_display_value(value) or "").strip()).lower()
+
+
+def _build_support_current_value_match_index(
+    uploaded_rows: list[dict[str, Any]],
+    current_rows: list[dict[str, Any]],
+) -> dict[tuple[str, str, int, int], dict[str, Any] | None]:
+    grouped_uploaded: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    grouped_current: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in uploaded_rows or []:
+        source_block = str(row.get("source_block") or "").strip()
+        if source_block not in {"day_support_worker", "night_support_worker"}:
+            continue
+        schedule_date = row.get("schedule_date")
+        date_key = schedule_date.isoformat() if isinstance(schedule_date, date) else str(schedule_date or "").strip()
+        if not date_key:
+            continue
+        grouped_uploaded.setdefault((source_block, date_key), []).append(dict(row))
+    for row in current_rows or []:
+        source_block = str(row.get("source_block") or "").strip()
+        if source_block not in {"day_support_worker", "night_support_worker"}:
+            continue
+        schedule_date = row.get("schedule_date")
+        date_key = schedule_date.isoformat() if isinstance(schedule_date, date) else str(schedule_date or "").strip()
+        if not date_key:
+            continue
+        grouped_current.setdefault((source_block, date_key), []).append(dict(row))
+
+    match_index: dict[tuple[str, str, int, int], dict[str, Any] | None] = {}
+    for group_key, uploaded_group in grouped_uploaded.items():
+        current_group = list(grouped_current.get(group_key) or [])
+        if not current_group:
+            continue
+        unused_current_indexes = set(range(len(current_group)))
+
+        def _uploaded_key(payload: dict[str, Any]) -> tuple[str, str, int, int]:
+            return (
+                str(payload.get("source_block") or "").strip(),
+                str(group_key[1]),
+                int(payload.get("row_no") or 0),
+                int(payload.get("col_no") or 0),
+            )
+
+        def _current_token(payload: dict[str, Any]) -> str:
+            return _normalize_support_value_match_token(payload.get("work_value"))
+
+        uploaded_group = sorted(
+            uploaded_group,
+            key=lambda item: (
+                int(item.get("row_no") or 0),
+                int(item.get("col_no") or 0),
+            ),
+        )
+        for uploaded in uploaded_group:
+            match_index.setdefault(_uploaded_key(uploaded), None)
+
+        for uploaded in uploaded_group:
+            uploaded_token = _normalize_support_value_match_token(uploaded.get("work_value"))
+            if not uploaded_token:
+                continue
+            uploaded_row_no = int(uploaded.get("row_no") or 0)
+            uploaded_col_no = int(uploaded.get("col_no") or 0)
+            match_idx = next(
+                (
+                    idx
+                    for idx in unused_current_indexes
+                    if int(current_group[idx].get("row_no") or 0) == uploaded_row_no
+                    and int(current_group[idx].get("col_no") or 0) == uploaded_col_no
+                    and _current_token(current_group[idx]) == uploaded_token
+                ),
+                None,
+            )
+            if match_idx is None:
+                match_idx = next(
+                    (
+                        idx for idx in unused_current_indexes
+                        if _current_token(current_group[idx]) == uploaded_token
+                    ),
+                    None,
+                )
+            if match_idx is None:
+                continue
+            match_index[_uploaded_key(uploaded)] = dict(current_group[match_idx])
+            unused_current_indexes.remove(match_idx)
+
+        for uploaded in uploaded_group:
+            target_key = _uploaded_key(uploaded)
+            if target_key in match_index:
+                continue
+            uploaded_row_no = int(uploaded.get("row_no") or 0)
+            uploaded_col_no = int(uploaded.get("col_no") or 0)
+            match_idx = next(
+                (
+                    idx
+                    for idx in unused_current_indexes
+                    if int(current_group[idx].get("row_no") or 0) == uploaded_row_no
+                    and int(current_group[idx].get("col_no") or 0) == uploaded_col_no
+                ),
+                None,
+            )
+            if match_idx is None:
+                continue
+            match_index[target_key] = dict(current_group[match_idx])
+            unused_current_indexes.remove(match_idx)
+
+    return match_index
+
+
 def _build_import_current_body_index_from_existing_schedule_rows(
     rows: list[dict],
 ) -> dict[tuple[Any, ...], dict[str, Any]]:
@@ -17426,6 +17535,8 @@ def _current_cell_has_time_conflict(current_rows: list[dict], *, next_start: str
         return True
     for row in comparable_rows:
         row_start_time, row_end_time = _resolve_schedule_row_conflict_range(row)
+        if not row_start_time or not row_end_time:
+            continue
         if _schedule_time_ranges_overlap(
             next_start,
             next_end,
@@ -17481,6 +17592,10 @@ def _build_schedule_import_preview_result(
     current_body_index = _build_visible_value_index(current_parsed.get("body_cells") or [])
     current_need_index = _build_visible_value_index(current_parsed.get("need_cells") or [], include_employee=False)
     current_support_index = _build_support_value_index(current_parsed.get("support_cells") or [])
+    current_support_match_index = _build_support_current_value_match_index(
+        list(parsed_uploaded.get("support_cells") or []),
+        list(current_parsed.get("support_cells") or []),
+    )
     timings_ms["current_value_index_build"] = _rounded_timing_ms(current_index_started_at)
 
     template_preload_started_at = time.perf_counter()
@@ -17921,7 +18036,10 @@ def _build_schedule_import_preview_result(
             int(row.get("row_no") or 0),
             int(row.get("col_no") or 0),
         )
-        current_row = current_support_index.get(current_key) or {}
+        if current_key in current_support_match_index:
+            current_row = dict(current_support_match_index.get(current_key) or {})
+        else:
+            current_row = current_support_index.get(current_key) or {}
         current_value = str(current_row.get("work_value") or "").strip()
         validation_code = _normalize_import_issue_code(row.get("issue_code")) or None
         validation_error = str(row.get("issue_message") or "").strip() or None
@@ -19073,14 +19191,31 @@ def _is_daytime_need_base_source(source: object) -> bool:
 
 
 def _schedule_import_current_row_matches(current_row: dict[str, Any], desired_row: dict[str, Any]) -> bool:
-    return (
-        _normalize_shift_type(current_row.get("shift_type")) == _normalize_shift_type(desired_row.get("shift_type"))
-        and str(current_row.get("template_id") or "").strip() == str(desired_row.get("template_id") or "").strip()
+    same_shift_type = _normalize_shift_type(current_row.get("shift_type")) == _normalize_shift_type(desired_row.get("shift_type"))
+    same_note = str(current_row.get("schedule_note") or "").strip() == str(desired_row.get("schedule_note") or "").strip()
+    if not same_shift_type or not same_note:
+        return False
+
+    same_template_identity = (
+        str(current_row.get("template_id") or "").strip() == str(desired_row.get("template_id") or "").strip()
         and _normalize_time_text(current_row.get("shift_start_time")) == _normalize_time_text(desired_row.get("shift_start_time"))
         and _normalize_time_text(current_row.get("shift_end_time")) == _normalize_time_text(desired_row.get("shift_end_time"))
         and _coerce_float_or_none(current_row.get("paid_hours")) == _coerce_float_or_none(desired_row.get("paid_hours"))
-        and str(current_row.get("schedule_note") or "").strip() == str(desired_row.get("schedule_note") or "").strip()
     )
+    if same_template_identity:
+        return True
+
+    current_start_time, current_end_time = _resolve_schedule_row_conflict_range(current_row)
+    desired_start_time, desired_end_time = _resolve_schedule_row_conflict_range(desired_row)
+    if current_start_time != desired_start_time or current_end_time != desired_end_time:
+        return False
+
+    current_hours = _coerce_float_or_none(_resolve_canonical_schedule_time(dict(current_row)).get("hours"))
+    desired_hours = _coerce_float_or_none(_resolve_canonical_schedule_time(dict(desired_row)).get("hours"))
+    if current_hours is not None and desired_hours is not None and not _hours_match(current_hours, desired_hours):
+        return False
+
+    return True
 
 
 def _build_sentrix_support_request_event_id(
