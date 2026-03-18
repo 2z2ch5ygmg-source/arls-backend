@@ -69,6 +69,13 @@ DOCKER_BIN="$(resolve_bin docker \
   "/opt/homebrew/bin/docker" \
   "/Applications/Docker.app/Contents/Resources/bin/docker" || true)"
 
+if [[ -n "$DOCKER_BIN" ]]; then
+  DOCKER_BIN_DIR="$(dirname "$DOCKER_BIN")"
+  if [[ ":$PATH:" != *":$DOCKER_BIN_DIR:"* ]]; then
+    export PATH="${DOCKER_BIN_DIR}:$PATH"
+  fi
+fi
+
 az_cli() {
   if [[ "$AZ_CLI_MODE" == "python" ]]; then
     "$AZ_PYTHON_CLI" -Im azure.cli "$@"
@@ -116,7 +123,7 @@ load_dotenv() {
     value="${value%\'}"; value="${value#\'}"
 
   case "$key" in
-      DATABASE_URL|JWT_SECRET|INIT_SUPER_ADMIN_PASSWORD|INIT_SUPER_ADMIN_USERNAME|INIT_SUPER_ADMIN_TENANT_CODE|CORS_ORIGINS|CORS_ORIGIN_REGEX|AZ_CORS_ORIGINS|AZ_CORS_ORIGIN_REGEX|RATE_LIMIT_PER_MINUTE|API_IDEMPOTENCY_TTL_MINUTES|JWT_EXPIRES_MINUTES|AZ_SUBSCRIPTION_ID|AZ_SUBSCRIPTION_NAME|AZ_FRONT_STORAGE_PREFIX|AZ_FRONT_STORAGE_ACCOUNT|ALLOW_BRANCH_MANAGER_USER_MANAGE|AZ_ALLOW_BRANCH_MANAGER_USER_MANAGE|SOC_INTEGRATION_ENABLED|SOC_INGEST_REQUIRE_HMAC|SOC_INGEST_HMAC_SECRET|SOC_INGEST_REQUIRE_TOKEN|SOC_INGEST_TOKEN|SOC_LEAVE_OVERRIDE_ENABLED|SOC_OVERTIME_ENABLED|SOC_CLOSING_OT_ENABLED|SHEETS_SYNC_ENABLED|APPLE_REPORT_OVERNIGHT_ENABLED|APPLE_REPORT_DAYTIME_ENABLED|APPLE_REPORT_OT_ENABLED|APPLE_REPORT_TOTAL_LATE_ENABLED|PAYROLL_SHEET_ENABLED|GOOGLE_SHEETS_DEFAULT_WEBHOOK|GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON|GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON_B64|GOOGLE_PLACES_API_KEY|GOOGLE_MAPS_API_KEY|PUSH_NOTIFICATIONS_ENABLED|PUSH_ATTENDANCE_AUTO_CHECKOUT_ENABLED|PUSH_FCM_SERVER_KEY|PUSH_ATTENDANCE_TITLE|PUSH_REQUEST_TIMEOUT_SECONDS|AZ_GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON|AZ_GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON_B64|AZ_GOOGLE_PLACES_API_KEY|AZ_GOOGLE_MAPS_API_KEY|AZ_PUSH_NOTIFICATIONS_ENABLED|AZ_PUSH_ATTENDANCE_AUTO_CHECKOUT_ENABLED|AZ_PUSH_FCM_SERVER_KEY|AZ_PUSH_ATTENDANCE_TITLE|AZ_PUSH_REQUEST_TIMEOUT_SECONDS|AZ_SOC_INTEGRATION_ENABLED|AZ_SOC_INGEST_REQUIRE_HMAC|AZ_SOC_INGEST_HMAC_SECRET|AZ_SOC_INGEST_REQUIRE_TOKEN|AZ_SOC_INGEST_TOKEN|AZ_SOC_LEAVE_OVERRIDE_ENABLED|AZ_SOC_OVERTIME_ENABLED|AZ_SOC_CLOSING_OT_ENABLED|AZ_SHEETS_SYNC_ENABLED|AZ_APPLE_REPORT_OVERNIGHT_ENABLED|AZ_APPLE_REPORT_DAYTIME_ENABLED|AZ_APPLE_REPORT_OT_ENABLED|AZ_APPLE_REPORT_TOTAL_LATE_ENABLED|AZ_PAYROLL_SHEET_ENABLED|AZ_GOOGLE_SHEETS_DEFAULT_WEBHOOK|AZ_BACKEND_DEPLOY_MODE|AZ_BACKEND_ACR_NAME|AZ_BACKEND_IMAGE_REPO|AZ_BACKEND_IMAGE_TAG|AZ_BACKEND_IMAGE_PLATFORM)
+      AZ_RG|AZ_BACKEND_APP|AZ_BACKEND_PLAN|AZ_BACKEND_SKU|AZ_BACKEND_RUNTIME|AZ_BACKEND_PORT|AZ_FRONT_STORAGE_PREFIX|AZ_FRONT_STORAGE_ACCOUNT|DATABASE_URL|JWT_SECRET|INIT_SUPER_ADMIN_PASSWORD|INIT_SUPER_ADMIN_USERNAME|INIT_SUPER_ADMIN_TENANT_CODE|CORS_ORIGINS|CORS_ORIGIN_REGEX|AZ_CORS_ORIGINS|AZ_CORS_ORIGIN_REGEX|RATE_LIMIT_PER_MINUTE|API_IDEMPOTENCY_TTL_MINUTES|JWT_EXPIRES_MINUTES|AZ_SUBSCRIPTION_ID|AZ_SUBSCRIPTION_NAME|ALLOW_BRANCH_MANAGER_USER_MANAGE|AZ_ALLOW_BRANCH_MANAGER_USER_MANAGE|SOC_INTEGRATION_ENABLED|SOC_INGEST_REQUIRE_HMAC|SOC_INGEST_HMAC_SECRET|SOC_INGEST_REQUIRE_TOKEN|SOC_INGEST_TOKEN|SOC_LEAVE_OVERRIDE_ENABLED|SOC_OVERTIME_ENABLED|SOC_CLOSING_OT_ENABLED|SHEETS_SYNC_ENABLED|APPLE_REPORT_OVERNIGHT_ENABLED|APPLE_REPORT_DAYTIME_ENABLED|APPLE_REPORT_OT_ENABLED|APPLE_REPORT_TOTAL_LATE_ENABLED|PAYROLL_SHEET_ENABLED|GOOGLE_SHEETS_DEFAULT_WEBHOOK|GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON|GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON_B64|GOOGLE_PLACES_API_KEY|GOOGLE_MAPS_API_KEY|PUSH_NOTIFICATIONS_ENABLED|PUSH_ATTENDANCE_AUTO_CHECKOUT_ENABLED|PUSH_FCM_SERVER_KEY|PUSH_ATTENDANCE_TITLE|PUSH_REQUEST_TIMEOUT_SECONDS|AZ_GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON|AZ_GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON_B64|AZ_GOOGLE_PLACES_API_KEY|AZ_GOOGLE_MAPS_API_KEY|AZ_PUSH_NOTIFICATIONS_ENABLED|AZ_PUSH_ATTENDANCE_AUTO_CHECKOUT_ENABLED|AZ_PUSH_FCM_SERVER_KEY|AZ_PUSH_ATTENDANCE_TITLE|AZ_PUSH_REQUEST_TIMEOUT_SECONDS|AZ_SOC_INTEGRATION_ENABLED|AZ_SOC_INGEST_REQUIRE_HMAC|AZ_SOC_INGEST_HMAC_SECRET|AZ_SOC_INGEST_REQUIRE_TOKEN|AZ_SOC_INGEST_TOKEN|AZ_SOC_LEAVE_OVERRIDE_ENABLED|AZ_SOC_OVERTIME_ENABLED|AZ_SOC_CLOSING_OT_ENABLED|AZ_SHEETS_SYNC_ENABLED|AZ_APPLE_REPORT_OVERNIGHT_ENABLED|AZ_APPLE_REPORT_DAYTIME_ENABLED|AZ_APPLE_REPORT_OT_ENABLED|AZ_APPLE_REPORT_TOTAL_LATE_ENABLED|AZ_PAYROLL_SHEET_ENABLED|AZ_GOOGLE_SHEETS_DEFAULT_WEBHOOK|AZ_BACKEND_DEPLOY_MODE|AZ_BACKEND_ACR_NAME|AZ_BACKEND_IMAGE_REPO|AZ_BACKEND_IMAGE_TAG|AZ_BACKEND_IMAGE_PLATFORM)
         if [[ -z "${!key+x}" ]]; then
           export "$key=$value"
         fi
@@ -189,7 +196,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-AZ_RG="${AZ_RG:-rg-shifty-dev}"
+AZ_RG="${AZ_RG:-}"
 AZ_LOCATION="${AZ_LOCATION:-koreacentral}"
 AZ_BACKEND_APP="${AZ_BACKEND_APP:-rg-arls-backend}"
 AZ_BACKEND_PLAN="${AZ_BACKEND_PLAN:-rg-arls-backend-plan}"
@@ -268,6 +275,109 @@ clean_ws() {
   tr -d '[:space:]'
 }
 
+normalize_acr_input() {
+  local raw="${1:-}"
+  raw="${raw%/}"
+  raw="$(echo "$raw" | clean_ws)"
+  if [[ "$raw" == *"://"* ]]; then
+    raw="${raw##*/}"
+  fi
+  if [[ "$raw" == *"."* ]]; then
+    raw="${raw%%.*}"
+  fi
+  printf '%s\n' "$raw" | tr '[:upper:]' '[:lower:]'
+}
+
+resolve_resource_group() {
+  local explicit_rg="${AZ_RG:-}"
+  local app_rows
+  local row_count
+
+  if [[ -n "$explicit_rg" ]]; then
+    if az_exec group show --name "$explicit_rg" --query name -o tsv >/dev/null 2>&1; then
+      echo "$explicit_rg"
+      return 0
+    fi
+    echo "경고: 지정한 AZ_RG(${explicit_rg})를 찾을 수 없습니다."
+    explicit_rg=""
+  fi
+
+  app_rows="$(az_exec webapp list --query "[?name=='${AZ_BACKEND_APP}'].{name:name,resourceGroup:resourceGroup}" -o tsv 2>/dev/null || true)"
+  if [[ -n "$app_rows" ]]; then
+    row_count="$(printf '%s\n' "$app_rows" | sed '/^$/d' | wc -l | tr -d ' ')"
+    if [[ "$row_count" -eq 1 ]]; then
+      printf '%s\n' "$app_rows" | awk -F '\t' '{print $2}'
+      return 0
+    fi
+    if [[ "$row_count" -gt 1 ]]; then
+      echo "동일한 웹앱명 '$AZ_BACKEND_APP'이(가 여러 Resource Group에 존재합니다)."
+      printf '%s\n' "$app_rows" | awk -F '\t' '{print " - " $2 " / " $1}'
+      echo "환경 변수 AZ_RG를 정확히 지정해 주세요."
+      return 1
+    fi
+  fi
+
+  echo "AZ_RG 미설정/미확인: 대상 웹앱 '$AZ_BACKEND_APP'에 대한 리소스 그룹을 찾지 못했습니다."
+  echo "배포 전 다음 중 하나를 설정하세요."
+  echo " - AZ_RG=rg-your-target"
+  echo " - AZ_RG를 지정하지 않았다면, 기존 웹앱 '$AZ_BACKEND_APP'가 있는 RG에서 자동 탐지합니다."
+  return 1
+}
+
+resolve_acr_login_server() {
+  local raw_acr_name="$1"
+  local normalized
+  local direct
+  local candidates
+  local match_count=0
+  local matched_name=""
+  local matched_login=""
+
+  normalized="$(normalize_acr_input "$raw_acr_name" | tr '[:upper:]' '[:lower:]')"
+
+  if [[ -z "$normalized" ]]; then
+    return 1
+  fi
+
+  direct="$(az_exec acr show --name "$normalized" --query loginServer -o tsv 2>/dev/null || true)"
+  if [[ -n "$direct" ]]; then
+    echo "${normalized}|${direct}"
+    return 0
+  fi
+
+  candidates="$(az_exec acr list --query "[].{name:name,loginServer:loginServer}" --output tsv 2>/dev/null || true)"
+  if [[ -z "$candidates" ]]; then
+    return 1
+  fi
+
+  candidates="$(printf '%s\n' "$candidates" | sed '/^$/d' | sort -u)"
+  while IFS=$'\t' read -r name login; do
+    if [[ -z "$name" ]]; then
+      continue
+    fi
+    if [[ "$(normalize_acr_input "$name")" == "$normalized" || "$(normalize_acr_input "$login")" == "$normalized" ]]; then
+      match_count=$((match_count + 1))
+      if [[ -z "$matched_name" ]]; then
+        matched_name="$name"
+      fi
+      matched_login="$login"
+      direct="$login"
+    fi
+  done <<< "$candidates"
+
+  if [[ "$match_count" -eq 1 ]]; then
+    echo "${matched_name}|${matched_login}"
+    return 0
+  fi
+  if [[ "$match_count" -gt 1 ]]; then
+    echo "동일 문자열 '$raw_acr_name'로 ACR 후보가 여러 개 존재합니다."
+    printf '%s\n' "$candidates" | awk -F '\t' '{print " - "$1" ("$2")"}'
+    return 1
+  fi
+
+  return 1
+}
+
 az_exec() {
   if [[ -n "${AZ_SUBSCRIPTION_MATCHED:-}" ]]; then
     az_cli "$@" --subscription "$AZ_SUBSCRIPTION_MATCHED"
@@ -308,6 +418,11 @@ AZ_SUBSCRIPTION_ID="$(az_cli account show --query id -o tsv 2>/dev/null | clean_
 if [[ -z "$AZ_SUBSCRIPTION_ID" ]]; then
   AZ_SUBSCRIPTION_ID="$AZ_SUBSCRIPTION_MATCHED"
 fi
+
+if ! AZ_RG="$(resolve_resource_group)"; then
+  exit 1
+fi
+echo "대상 리소스 그룹: $AZ_RG"
 
 echo "Azure 구독: $AZ_SUBSCRIPTION_ID"
 
@@ -457,16 +572,31 @@ deploy_backend() {
     fi
     if [[ -z "$AZ_BACKEND_ACR_NAME" ]]; then
       echo "컨테이너 배포 모드에서는 AZ_BACKEND_ACR_NAME 설정이 필요합니다."
-      echo "예: export AZ_BACKEND_ACR_NAME='acrsecurityopsprod001-eneccucxdcfedqhm'"
+      echo "예: export AZ_BACKEND_ACR_NAME='acrsecurityopsprod001'"
       exit 1
     fi
 
     local acr_login_server
-    acr_login_server="$(az_exec acr show --name "$AZ_BACKEND_ACR_NAME" --query loginServer -o tsv 2>/dev/null || true)"
+    local acr_name_resolved
+    local resolved_acr
+
+    resolved_acr="$(resolve_acr_login_server "$AZ_BACKEND_ACR_NAME" || true)"
+    if [[ -z "$resolved_acr" ]]; then
+      echo "ACR 조회 실패: $AZ_BACKEND_ACR_NAME"
+      echo "현재 구독 내에서 ACR 이름/로그인서버 접미어를 확인해 주세요."
+      echo "예: AZ_BACKEND_ACR_NAME='acrsecurityopsprod001'"
+      echo "현재 구독 ACR 목록:"
+      az_exec acr list --query "[].{name:name, loginServer:loginServer, resourceGroup:resourceGroup}" --output table
+      exit 1
+    fi
+
+    acr_name_resolved="$(printf '%s' "$resolved_acr" | awk -F '|' '{print $1}')"
+    acr_login_server="$(printf '%s' "$resolved_acr" | awk -F '|' '{print $2}')"
     if [[ -z "$acr_login_server" ]]; then
       echo "ACR 조회 실패: $AZ_BACKEND_ACR_NAME"
       exit 1
     fi
+    AZ_BACKEND_ACR_NAME="$acr_name_resolved"
 
     BACKEND_IMAGE="${acr_login_server}/${AZ_BACKEND_IMAGE_REPO}:${AZ_BACKEND_IMAGE_TAG}"
     echo "5) 백엔드 컨테이너 빌드/푸시"

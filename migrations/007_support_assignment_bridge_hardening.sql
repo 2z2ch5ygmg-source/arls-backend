@@ -15,6 +15,21 @@ WHERE support_period IS NULL
    OR slot_index IS NULL
    OR updated_at IS NULL;
 
+WITH normalized_slots AS (
+  SELECT
+    id,
+    row_number() OVER (
+      PARTITION BY tenant_id, site_id, work_date, support_period
+      ORDER BY COALESCE(updated_at, created_at, timezone('utc', now())), id
+    ) AS normalized_slot_index
+  FROM support_assignment
+)
+UPDATE support_assignment sa
+SET slot_index = normalized_slots.normalized_slot_index
+FROM normalized_slots
+WHERE sa.id = normalized_slots.id
+  AND sa.slot_index IS DISTINCT FROM normalized_slots.normalized_slot_index;
+
 ALTER TABLE support_assignment
     DROP CONSTRAINT IF EXISTS chk_support_assignment_worker_type;
 

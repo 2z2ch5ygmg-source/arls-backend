@@ -36,6 +36,8 @@ from app.routers.v1.schedules import (
     _build_support_roundtrip_employee_row_index,
     _extract_sentrix_ticket_hq_roster_status,
     _extract_arls_date_columns,
+    _is_hq_scope_signal_present,
+    _is_zero_or_empty_demand_text,
     _find_template_data_start_row,
     _find_template_summary_start_row,
     _locate_support_section_rows,
@@ -44,9 +46,11 @@ from app.routers.v1.schedules import (
     _prepare_support_roster_source_workbook,
     _read_support_roundtrip_metadata,
     _build_support_roundtrip_source_signature_from_import_payloads,
+    _materialize_support_roundtrip_internal_schedule_row,
     _resolve_support_roster_hq_download_sites,
     _resolve_support_roster_hq_sheet_site,
     _resolve_support_roundtrip_source_state_after_refresh,
+    _resolve_support_roundtrip_worker_identity,
     _resolve_sentrix_support_materialized_shift_defaults,
     _support_roundtrip_source_changed,
     _write_sentrix_support_hq_metadata_sheet,
@@ -341,16 +345,16 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
                 user={"id": "user-1"},
             )
 
-        self.assertTrue(preview.can_apply)
-        self.assertEqual(preview.summary["blocking"], 0)
+        self.assertFalse(preview.can_apply)
+        self.assertEqual(preview.summary["blocking"], 1)
         issue = next(item for item in preview.issues if item.code == "REQUEST_COUNT_MISMATCH_OVER")
-        self.assertEqual(issue.severity, "warning")
+        self.assertEqual(issue.severity, "blocking")
 
         scope_row = next(
             item for item in preview.review_rows
             if item.row_kind == "scope_summary" and item.site_code == "R692" and item.work_date.isoformat() == "2026-03-01" and item.shift_kind == "day"
         )
-        self.assertEqual(scope_row.status, "approval_pending")
+        self.assertEqual(scope_row.status, "blocking")
         self.assertEqual(scope_row.reason, "유효 입력 인원이 기존 ticket 요청 수보다 많습니다.")
 
         worker_rows = [
@@ -993,12 +997,12 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
             )
 
         self.assertEqual(len(written_sites), 1)
-        self.assertIn(ARLS_SHEET_NAME, workbook.sheetnames)
+        self.assertIn("Apple_가로수길", workbook.sheetnames)
         for hidden_sheet_name in hidden_sheet_names:
             self.assertIn(hidden_sheet_name, workbook.sheetnames)
         self.assertIn(SENTRIX_SUPPORT_HQ_METADATA_SHEET_NAME, workbook.sheetnames)
 
-        visible_sheet = workbook[ARLS_SHEET_NAME]
+        visible_sheet = workbook["Apple_가로수길"]
         data_start_row = _find_template_data_start_row(visible_sheet)
         self.assertTrue(visible_sheet.row_dimensions[data_start_row].hidden)
         self.assertEqual(visible_sheet.cell(row=rows_meta["weekly_rows"][0], column=day_col).value, "BK 홍길동")
@@ -1270,7 +1274,138 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
 
         self.assertFalse(missing_self["is_valid"])
         self.assertEqual(missing_self["issue_code"], "SELF_STAFF_EMPLOYEE_NOT_FOUND")
-        self.assertIn("조정현", missing_self["issue_message"])
+        self.assertEqual(missing_self["issue_message"], "해당 스토어 직원 명단에 없는 자체 지원근무자입니다: 조정현")
+
+    def test_parse_sentrix_hq_worker_cell_treats_zero_as_empty(self):
+        employee_index = _build_employee_name_index([])
+
+        zero_value = _parse_sentrix_hq_worker_cell(
+            "0",
+            schedule_date=date(2026, 3, 9),
+            employee_index=employee_index,
+        )
+        self.assertFalse(zero_value["is_filled"])
+        self.assertTrue(zero_value["is_valid"])
+        zero_with_unit = _parse_sentrix_hq_worker_cell(
+            "0명",
+            schedule_date=date(2026, 3, 10),
+            employee_index=employee_index,
+        )
+        self.assertFalse(zero_with_unit["is_filled"])
+        self.assertTrue(zero_with_unit["is_valid"])
+
+    def test_hq_scope_signal_false_when_both_counts_zero(self):
+        self.assertFalse(
+            _is_hq_scope_signal_present(
+                workbook_required_count=0,
+                workbook_required_raw="0",
+                external_count=0,
+                external_count_raw="0",
+                purpose_text=None,
+                meaningful_scope=False,
+            )
+        )
+
+    def test_hq_scope_signal_false_for_zero_or_missing_request_text(self):
+        for raw_value in ["0", "없음", "요청없음", "섭외 0인 요청", "0건", "0명"]:
+            self.assertFalse(
+                _is_hq_scope_signal_present(
+                    workbook_required_count=None,
+                    workbook_required_raw=raw_value,
+                    external_count=None,
+                    external_count_raw=None,
+                    purpose_text=None,
+                    meaningful_scope=False,
+                )
+            )
+
+    def test_zero_or_empty_demand_text_helper(self):
+        for raw_value in [None, "", "0", "요청 없음", "없음", "0명", "0인", "요청없음(0)"]:
+            self.assertTrue(_is_zero_or_empty_demand_text(raw_value))
+        self.assertFalse(_is_zero_or_empty_demand_text("섭외 2인 요청"))
+        self.assertFalse(_is_zero_or_empty_demand_text("=A1"))
+
+    @patch("app.routers.v1.schedules._load_site_employees", return_value=[])
+    def test_resolve_support_roundtrip_worker_identity_blocks_missing_internal_name(self, _mock_load_site_employees):
+        (
+            resolved_worker_type,
+            resolved_worker_name,
+            resolved_affiliation,
+            employee_row,
+            validation_code,
+            validation_error,
+        ) = _resolve_support_roundtrip_worker_identity(
+            None,
+            tenant_id="tenant-1",
+            site_id="site-1",
+            raw_entry="자체 조정현",
+            schedule_date=date(2026, 3, 5),
+        )
+
+        self.assertEqual(resolved_worker_type, "INTERNAL")
+        self.assertEqual(resolved_worker_name, "조정현")
+        self.assertIsNone(resolved_affiliation)
+        self.assertIsNone(employee_row)
+        self.assertEqual(validation_code, "EMPLOYEE_MATCH_FAILED")
+        self.assertEqual(validation_error, "해당 스토어 직원 명단에 없는 자체 지원근무자입니다: 조정현")
+
+    @patch(
+        "app.routers.v1.schedules._load_site_employees",
+        return_value=[
+            {
+                "id": "emp-1",
+                "employee_code": "R692-1",
+                "full_name": "민경민",
+                "hire_date": date(2025, 1, 1),
+                "leave_date": None,
+            }
+        ],
+    )
+    def test_resolve_support_roundtrip_worker_identity_accepts_existing_internal_name(self, _mock_load_site_employees):
+        (
+            resolved_worker_type,
+            resolved_worker_name,
+            resolved_affiliation,
+            employee_row,
+            validation_code,
+            validation_error,
+        ) = _resolve_support_roundtrip_worker_identity(
+            None,
+            tenant_id="tenant-1",
+            site_id="site-1",
+            raw_entry="민경민",
+            schedule_date=date(2026, 3, 5),
+        )
+
+        self.assertEqual(resolved_worker_type, "INTERNAL")
+        self.assertEqual(resolved_worker_name, "민경민")
+        self.assertIsNone(resolved_affiliation)
+        self.assertEqual(employee_row["full_name"], "민경민")
+        self.assertIsNone(validation_code)
+        self.assertIsNone(validation_error)
+
+    def test_resolve_support_roundtrip_worker_identity_accepts_affiliated_external_name(self):
+        (
+            resolved_worker_type,
+            resolved_worker_name,
+            resolved_affiliation,
+            employee_row,
+            validation_code,
+            validation_error,
+        ) = _resolve_support_roundtrip_worker_identity(
+            None,
+            tenant_id="tenant-1",
+            site_id="site-1",
+            raw_entry="ks 민경민",
+            schedule_date=date(2026, 3, 5),
+        )
+
+        self.assertEqual(resolved_worker_type, "F")
+        self.assertEqual(resolved_worker_name, "민경민")
+        self.assertEqual(resolved_affiliation, "KS")
+        self.assertIsNone(employee_row)
+        self.assertIsNone(validation_code)
+        self.assertIsNone(validation_error)
 
     def test_aggregated_review_row_prefers_blocking_reason_over_scope_reason(self):
         summary = SupportRosterHqScopeSummaryOut(
@@ -1287,7 +1422,7 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
             purpose_text="1. LiDAR 작업",
             scope_reason="1. LiDAR 작업",
             review_level="error",
-            blocking_errors=["자체 인원 '조정현'을 해당 지점 active employee master에서 찾지 못했습니다."],
+            blocking_errors=["해당 스토어 직원 명단에 없는 자체 지원근무자입니다: 조정현"],
             worker_entries=[
                 {
                     "parsed_display_value": "F 안현철",
@@ -1311,7 +1446,7 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
 
         row = _build_support_roster_hq_aggregated_review_rows([summary])[0]
 
-        self.assertEqual(row.reason, "자체 인원 '조정현'을 해당 지점 active employee master에서 찾지 못했습니다.")
+        self.assertEqual(row.reason, "해당 스토어 직원 명단에 없는 자체 지원근무자입니다: 조정현")
         self.assertEqual(row.worker_names, "F 안현철, BK 김형진")
 
     def test_aggregated_review_row_uses_warning_reason_for_pending_status(self):
@@ -1428,6 +1563,13 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertEqual(payload["affected_scope_count"], 1)
         self.assertEqual(payload["affected_site_codes"], ["R692"])
         self.assertEqual(payload["affected_dates"], ["2026-03-01"])
+        self.assertEqual(payload["snapshot_mode"], "replace")
+        self.assertEqual(payload["replace_scope"]["month"], "2026-03")
+        self.assertEqual(payload["replace_scope"]["site_codes"], ["R692"])
+        self.assertEqual(payload["replace_scope"]["shift_kinds"], ["day", "night"])
+        self.assertEqual(payload["replace_scope"]["date_scope"]["start_date"], "2026-03-01")
+        self.assertEqual(payload["replace_scope"]["date_scope"]["end_date"], "2026-03-31")
+        self.assertEqual(payload["replace_scope"]["source_upload_batch_id"], str(batch_id))
         self.assertNotIn("current_ticket_hint", payload["scopes"][0])
         self.assertNotIn("site_id", payload["scopes"][0])
         self.assertEqual(payload["scopes"][0]["worker_entries"][0]["source_cell_ref"], "D55")
@@ -1530,6 +1672,52 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertEqual(result.handoff_failed_count, 1)
         self.assertEqual(result.scope_results[0].handoff_status, "success")
         self.assertEqual(result.scope_results[0].sentrix_ticket_id, str(ticket_id))
+
+    def test_build_sentrix_support_roster_apply_result_from_handoff_appends_removed_scope_rows(self):
+        batch_id = uuid.uuid4()
+        result = _build_sentrix_support_roster_apply_result_from_handoff(
+            batch_id=batch_id,
+            batch={"month_key": "2026-03"},
+            issue_count=0,
+            handoff_payload={
+                "artifact_id": "sentrix-hq:SRS_KOREA:2026-03:R738:rev-001",
+                "affected_scope_count": 1,
+                "affected_site_codes": ["R738"],
+                "affected_dates": ["2026-03-05"],
+            },
+            handoff_response={
+                "applied": True,
+                "handoff_status": "success",
+                "handoff_success_count": 1,
+                "handoff_failed_count": 0,
+                "affected_scope_count": 1,
+                "affected_site_codes": ["R738"],
+                "affected_dates": ["2026-03-05"],
+                "applied_scope_count": 0,
+                "failed_scope_count": 0,
+                "scope_results": [
+                    {
+                        "scope_key": "R738:2026-03-05:night",
+                        "scope_action": "removed",
+                        "status": "removed",
+                        "handoff_status": "removed",
+                        "ticket_id": "123",
+                        "site_code": "R738",
+                        "site_name": "Apple_명동",
+                        "work_date": "2026-03-05",
+                        "shift_kind": "night",
+                        "next_status": "deleted",
+                    }
+                ],
+            },
+            scope_apply_specs=[],
+        )
+
+        self.assertTrue(result.applied)
+        self.assertEqual(len(result.scope_results), 1)
+        self.assertEqual(result.scope_results[0].scope_key, "R738:2026-03-05:night")
+        self.assertEqual(result.scope_results[0].handoff_status, "removed")
+        self.assertEqual(str(result.scope_results[0].work_date), "2026-03-05")
 
     def test_extract_sentrix_ticket_hq_roster_status_prefers_detail_json(self):
         self.assertEqual(
@@ -1666,6 +1854,116 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertEqual(night_start, "22:00:00")
         self.assertEqual(night_end, "08:00:00")
         self.assertEqual(night_hours, 10.0)
+
+    @patch("app.routers.v1.schedules._insert_monthly_schedule_row", return_value="schedule-night-1")
+    @patch("app.routers.v1.schedules._load_monthly_schedule_row_for_shift", return_value=None)
+    def test_materialize_support_roundtrip_internal_schedule_row_creates_separate_night_shift(
+        self,
+        _mock_load_existing,
+        mock_insert_schedule,
+    ):
+        result = _materialize_support_roundtrip_internal_schedule_row(
+            object(),
+            tenant_id="tenant-1",
+            site_row={"id": "site-1", "company_id": "company-1"},
+            payload={
+                "resolved_worker_type": "INTERNAL",
+                "employee_id": "emp-1",
+                "schedule_date": "2026-03-05",
+                "support_period": "night",
+                "internal_shift_type": "night",
+                "internal_template_id": "template-night-1",
+                "internal_shift_start_time": "22:00:00",
+                "internal_shift_end_time": "08:00:00",
+                "internal_paid_hours": 10,
+            },
+            batch_id="batch-1",
+            source_revision="rev-1",
+        )
+
+        self.assertEqual(result["effect"], "created")
+        self.assertEqual(result["shift_kind"], "night")
+        mock_insert_schedule.assert_called_once()
+        self.assertEqual(mock_insert_schedule.call_args.kwargs["shift_type"], "night")
+        self.assertTrue(mock_insert_schedule.call_args.kwargs["source_self_staff"])
+        self.assertEqual(mock_insert_schedule.call_args.kwargs["source"], SENTRIX_HQ_ROSTER_ASSIGNMENT_SOURCE)
+
+    @patch("app.routers.v1.schedules._update_monthly_schedule_row")
+    @patch(
+        "app.routers.v1.schedules._load_monthly_schedule_row_for_shift",
+        return_value={
+            "id": "schedule-night-1",
+            "source": SENTRIX_HQ_ROSTER_ASSIGNMENT_SOURCE,
+            "schedule_note": "기존 메모",
+        },
+    )
+    def test_materialize_support_roundtrip_internal_schedule_row_updates_existing_hq_owned_row(
+        self,
+        _mock_load_existing,
+        mock_update_schedule,
+    ):
+        result = _materialize_support_roundtrip_internal_schedule_row(
+            object(),
+            tenant_id="tenant-1",
+            site_row={"id": "site-1", "company_id": "company-1"},
+            payload={
+                "resolved_worker_type": "INTERNAL",
+                "employee_id": "emp-1",
+                "schedule_date": "2026-03-05",
+                "support_period": "night",
+                "internal_shift_type": "night",
+                "internal_template_id": "template-night-1",
+                "internal_shift_start_time": "22:00:00",
+                "internal_shift_end_time": "08:00:00",
+                "internal_paid_hours": 10,
+            },
+            batch_id="batch-2",
+            source_revision="rev-2",
+        )
+
+        self.assertEqual(result["effect"], "updated")
+        mock_update_schedule.assert_called_once()
+        self.assertEqual(mock_update_schedule.call_args.kwargs["schedule_id"], "schedule-night-1")
+        self.assertTrue(mock_update_schedule.call_args.kwargs["source_self_staff"])
+
+    @patch("app.routers.v1.schedules._update_monthly_schedule_row")
+    @patch("app.routers.v1.schedules._insert_monthly_schedule_row")
+    @patch(
+        "app.routers.v1.schedules._load_monthly_schedule_row_for_shift",
+        return_value={
+            "id": "regular-night-1",
+            "source": "monthly_base_upload",
+            "schedule_note": None,
+        },
+    )
+    def test_materialize_support_roundtrip_internal_schedule_row_keeps_existing_non_hq_schedule(
+        self,
+        _mock_load_existing,
+        mock_insert_schedule,
+        mock_update_schedule,
+    ):
+        result = _materialize_support_roundtrip_internal_schedule_row(
+            object(),
+            tenant_id="tenant-1",
+            site_row={"id": "site-1", "company_id": "company-1"},
+            payload={
+                "resolved_worker_type": "INTERNAL",
+                "employee_id": "emp-1",
+                "schedule_date": "2026-03-05",
+                "support_period": "night",
+                "internal_shift_type": "night",
+                "internal_template_id": "template-night-1",
+                "internal_shift_start_time": "22:00:00",
+                "internal_shift_end_time": "08:00:00",
+                "internal_paid_hours": 10,
+            },
+            batch_id="batch-3",
+            source_revision="rev-3",
+        )
+
+        self.assertEqual(result["effect"], "linked_existing")
+        mock_insert_schedule.assert_not_called()
+        mock_update_schedule.assert_not_called()
 
 
 if __name__ == "__main__":

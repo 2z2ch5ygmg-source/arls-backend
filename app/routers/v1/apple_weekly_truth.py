@@ -9,7 +9,6 @@ from fastapi.responses import JSONResponse
 from ...config import settings
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
 from ...services.apple_weekly_truth import (
-    APPLE_TENANT_CODE,
     build_apple_weekly_truth_contract,
     build_apple_weekly_truth_failure_contract,
     normalize_week_start,
@@ -31,20 +30,13 @@ def _require_contract_access(user: dict) -> None:
 
 
 def _resolve_target_tenant(conn, user: dict, tenant_code: str | None):
-    tenant = resolve_scoped_tenant(
+    return resolve_scoped_tenant(
         conn,
         user,
         query_tenant_code=tenant_code,
         header_tenant_id=user.get("active_tenant_id"),
         require_dev_context=True,
     )
-    tenant_code_text = str(tenant.get("tenant_code") or "").strip().upper()
-    if tenant_code_text != APPLE_TENANT_CODE:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error": "FORBIDDEN", "message": "Apple Weekly truth contract는 APPLE 테넌트에서만 사용할 수 있습니다."},
-        )
-    return tenant
 
 
 @router.get("/truth")
@@ -58,7 +50,7 @@ def get_apple_weekly_truth(
     _require_contract_access(user)
     if not settings.apple_weekly_truth_enabled:
         failure_contract = build_apple_weekly_truth_failure_contract(
-            tenant_code=tenant_code or APPLE_TENANT_CODE,
+            tenant_code=tenant_code or str(user.get("tenant_code") or "").strip().upper(),
             week_start=normalize_week_start(week_start),
             site_code=site_code,
             message="Apple Weekly truth service is disabled by rollout flag.",
@@ -118,7 +110,7 @@ def get_apple_weekly_truth_debug(
     _require_contract_access(user)
     if not settings.apple_weekly_truth_enabled:
         failure_contract = build_apple_weekly_truth_failure_contract(
-            tenant_code=tenant_code or APPLE_TENANT_CODE,
+            tenant_code=tenant_code or str(user.get("tenant_code") or "").strip().upper(),
             week_start=normalize_week_start(week_start),
             site_code=site_code,
             message="Apple Weekly truth service is disabled by rollout flag.",

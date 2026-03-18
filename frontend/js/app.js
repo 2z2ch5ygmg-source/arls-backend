@@ -322,6 +322,8 @@ const POLL_MAX_INTERVAL_MS = 300000;
 const POLL_FAILURE_LIMIT = 5;
 const HEAVY_CACHE_TTL_SITES_MS = 120000;
 const HEAVY_CACHE_TTL_MONTHLY_MS = 60000;
+const SCHEDULE_LIVE_STREAM_RETRY_MS = 15000;
+const SCHEDULE_LIVE_FALLBACK_POLL_MS = 2000;
 const HEAVY_CACHE_TTL_RECORDS_MS = 30000;
 const PAGED_FETCH_LIMIT = 500;
 const PAGED_FETCH_MAX_PAGES = 40;
@@ -864,6 +866,7 @@ function createInitialScheduleState() {
     importMappingProfile: null,
     importMappingProfileFetchedAt: 0,
     importMappingSelectedProfileId: '',
+    importMappingTemplateDeleteNotice: '',
     siteCatalogByTenant: new Map(),
     templateOwnerTab: SCHEDULE_TEMPLATE_OWNER_TAB_TEMPLATES,
     importSiteOptionsLoading: false,
@@ -1188,6 +1191,14 @@ const state = {
   pollDelayMs: POLL_BASE_INTERVAL_MS,
   pollSuspended: false,
   pollInFlight: false,
+  scheduleLiveRefreshTimer: null,
+  scheduleLiveFallbackTimer: null,
+  scheduleLiveRefreshInFlight: false,
+  scheduleLiveRefreshQueued: false,
+  scheduleLiveStreamAbortController: null,
+  scheduleLiveStreamPath: '',
+  scheduleLiveStreamPromise: null,
+  scheduleLiveStreamConnected: false,
   toastTimer: null,
   companies: [],
   tenantNameByCode: {},
@@ -2671,19 +2682,16 @@ function canCombineScheduleBoardItemPair(left = {}, right = {}) {
   const leftRange = getScheduleBoardItemComparableRange(left);
   const rightRange = getScheduleBoardItemComparableRange(right);
   if (!leftRange || !rightRange) return false;
-  const rangesDoNotOverlap = leftRange.endMinutes <= rightRange.startMinutes
-    || rightRange.endMinutes <= leftRange.startMinutes;
-  return rangesDoNotOverlap;
+  return leftRange.endMinutes === rightRange.startMinutes
+    || rightRange.endMinutes === leftRange.startMinutes;
 }
 
 function canCombineScheduleBoardItems(items = []) {
   const rows = (Array.isArray(items) ? items : []).filter(Boolean);
   if (rows.length < 2) return false;
-  for (let index = 0; index < rows.length; index += 1) {
-    for (let nextIndex = index + 1; nextIndex < rows.length; nextIndex += 1) {
-      if (!canCombineScheduleBoardItemPair(rows[index], rows[nextIndex])) {
-        return false;
-      }
+  for (let index = 1; index < rows.length; index += 1) {
+    if (!canCombineScheduleBoardItemPair(rows[index - 1], rows[index])) {
+      return false;
     }
   }
   return true;
@@ -2704,7 +2712,9 @@ function createCombinedScheduleBoardItemFromItems(items = []) {
   const ranges = rows.map((item) => getScheduleBoardItemComparableRange(item)).filter(Boolean);
   if (ranges.length !== rows.length) return rows[0];
   const shiftTypes = Array.from(new Set(rows.flatMap((item) => getScheduleBoardDisplayShiftTypes(item))));
+  const includesDay = shiftTypes.includes('day');
   const includesNight = shiftTypes.includes('night');
+  const includesOvertime = shiftTypes.includes('overtime');
   const startMinutes = Math.min(...ranges.map((range) => range.startMinutes));
   const endMinutes = Math.max(...ranges.map((range) => range.endMinutes));
   const combinedIds = Array.from(new Set(
@@ -2717,16 +2727,22 @@ function createCombinedScheduleBoardItemFromItems(items = []) {
     }),
   ));
   const base = rows[0];
+  let shiftLabel = '주간+초과';
+  if (includesDay && includesNight) {
+    shiftLabel = '주야';
+  } else if (includesNight && includesOvertime) {
+    shiftLabel = '야간+초과';
+  }
   return {
     ...base,
     schedule_id: '',
-    shift_type: includesNight ? String(base.shift_type || '').trim() : 'day',
+    shift_type: includesNight && !includesDay ? 'night' : 'day',
     employee_id: String(base.employee_id || '').trim(),
     start_time: formatScheduleComparableMinutesToTimeText(startMinutes),
     end_time: formatScheduleComparableMinutesToTimeText(endMinutes),
-    shift_label: includesNight ? '주야' : '주간+초과',
-    schedule_display_type: includesNight ? '' : 'day',
-    schedule_display_label: includesNight ? '' : '주간근무',
+    shift_label: shiftLabel,
+    schedule_display_type: includesNight && !includesDay ? 'night' : 'day',
+    schedule_display_label: shiftLabel,
     display_variant: 'combined',
     display_shift_types: shiftTypes,
     combined_schedule_ids: combinedIds,
@@ -2845,7 +2861,7 @@ function getScheduleMonthGridDateKeys(month) {
 }
 
 function buildScheduleBoardDisplayItems(items = []) {
-  const rows = (Array.isArray(items) ? items : [])
+  const sortedItems = (Array.isArray(items) ? items : [])
     .filter((item) => item && typeof item === 'object')
     .sort((a, b) => {
       const siteCompare = getScheduleBoardSiteDisplayKey(a).localeCompare(getScheduleBoardSiteDisplayKey(b))
@@ -2861,55 +2877,36 @@ function buildScheduleBoardDisplayItems(items = []) {
       if (aStart !== bStart) return aStart - bStart;
       const aEnd = Number.isFinite(aRange?.endMinutes) ? aRange.endMinutes : Number.MAX_SAFE_INTEGER;
       const bEnd = Number.isFinite(bRange?.endMinutes) ? bRange.endMinutes : Number.MAX_SAFE_INTEGER;
-      return aEnd - bEnd;
+      if (aEnd !== bEnd) return aEnd - bEnd;
+      return String(a?.schedule_id || a?.id || '').localeCompare(String(b?.schedule_id || b?.id || ''));
     });
-
-  const groups = buildScheduleBoardGroupedBuckets(rows);
-  return groups.flatMap((group) => buildScheduleBoardMergedGroupItems(group));
+  const groups = buildScheduleBoardGroupedBuckets(sortedItems);
+  return groups
+    .flatMap((group) => buildScheduleBoardMergedGroupItems(group))
+    .sort((a, b) => {
+      const siteCompare = getScheduleBoardSiteDisplayKey(a).localeCompare(getScheduleBoardSiteDisplayKey(b))
+        || getScheduleBoardSiteSortKey(a).localeCompare(getScheduleBoardSiteSortKey(b));
+      if (siteCompare !== 0) return siteCompare;
+      const employeeCompare = getScheduleBoardEmployeeDisplayKey(a).localeCompare(getScheduleBoardEmployeeDisplayKey(b))
+        || getScheduleBoardEmployeeSortKey(a).localeCompare(getScheduleBoardEmployeeSortKey(b));
+      if (employeeCompare !== 0) return employeeCompare;
+      const aRange = getScheduleBoardItemComparableRange(a);
+      const bRange = getScheduleBoardItemComparableRange(b);
+      const aStart = Number.isFinite(aRange?.startMinutes) ? aRange.startMinutes : Number.MAX_SAFE_INTEGER;
+      const bStart = Number.isFinite(bRange?.startMinutes) ? bRange.startMinutes : Number.MAX_SAFE_INTEGER;
+      if (aStart !== bStart) return aStart - bStart;
+      const aEnd = Number.isFinite(aRange?.endMinutes) ? aRange.endMinutes : Number.MAX_SAFE_INTEGER;
+      const bEnd = Number.isFinite(bRange?.endMinutes) ? bRange.endMinutes : Number.MAX_SAFE_INTEGER;
+      if (aEnd !== bEnd) return aEnd - bEnd;
+      return String(a?.schedule_id || a?.id || '').localeCompare(String(b?.schedule_id || b?.id || ''));
+    });
 }
 
 function buildScheduleBoardRenderItemsForCell(items = []) {
   const normalizedItems = (Array.isArray(items) ? items : [])
     .map((item) => normalizeScheduleBoardItem(item))
     .filter((item) => item && typeof item === 'object');
-  const mergedItems = buildScheduleBoardDisplayItems(normalizedItems);
-  if (mergedItems.some((item) => String(item?.display_variant || '').trim().toLowerCase() === 'combined')) {
-    return mergedItems;
-  }
-
-  const groups = new Map();
-  normalizedItems.forEach((item) => {
-    const employeeKey = String(
-      item?.employee_id
-      || item?.employee_code
-      || item?.employee_name
-      || item?.full_name
-      || ''
-    ).trim().toUpperCase();
-    const siteKey = String(item?.site_code || item?.site_name || '').trim().toUpperCase();
-    if (!employeeKey || !siteKey) return;
-    const key = `${employeeKey}::${siteKey}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(item);
-  });
-
-  if (!groups.size) return mergedItems;
-
-  const forcedItems = [];
-  groups.forEach((group) => {
-    forcedItems.push(...buildScheduleBoardMergedGroupItems(group));
-  });
-
-  return forcedItems.sort((a, b) => {
-    const aRange = getScheduleBoardItemComparableRange(a);
-    const bRange = getScheduleBoardItemComparableRange(b);
-    const aStart = Number.isFinite(aRange?.startMinutes) ? aRange.startMinutes : Number.MAX_SAFE_INTEGER;
-    const bStart = Number.isFinite(bRange?.startMinutes) ? bRange.startMinutes : Number.MAX_SAFE_INTEGER;
-    if (aStart !== bStart) return aStart - bStart;
-    const aEnd = Number.isFinite(aRange?.endMinutes) ? aRange.endMinutes : Number.MAX_SAFE_INTEGER;
-    const bEnd = Number.isFinite(bRange?.endMinutes) ? bRange.endMinutes : Number.MAX_SAFE_INTEGER;
-    return aEnd - bEnd;
-  });
+  return buildScheduleBoardDisplayItems(normalizedItems);
 }
 
 function buildScheduleBoardDaysFromRows(month, rows = [], seedDays = []) {
@@ -3039,11 +3036,18 @@ function createRealScheduleProvider() {
       const normalizedMonth = normalizeMonthKey(month);
       if (!normalizedMonth) return { rows: [], employees: [], days: [], metrics: null };
       const tenant = String(tenantCode || '').trim().toLowerCase();
-      const queryString = tenant
-        ? `?month=${encodeURIComponent(normalizedMonth)}&tenant_code=${encodeURIComponent(tenant)}`
-        : `?month=${encodeURIComponent(normalizedMonth)}`;
+      const force = Boolean(arguments[0]?.force);
+      const params = new URLSearchParams();
+      params.set('month', normalizedMonth);
+      if (tenant) {
+        params.set('tenant_code', tenant);
+      }
+      if (force) {
+        params.set('_rt', String(Date.now()));
+      }
+      const queryString = `?${params.toString()}`;
       try {
-        const payload = await apiRequest(`/schedules/monthly-board-lite${queryString}`);
+        const payload = await apiRequest(`/schedules/monthly-board-lite${queryString}`, { noStore: force });
         const days = Array.isArray(payload?.days) ? payload.days : [];
         const rows = Array.isArray(payload?.rows) && payload.rows.length
           ? payload.rows
@@ -3067,7 +3071,7 @@ function createRealScheduleProvider() {
         if (statusCode !== 404 && statusCode !== 405 && code !== 'HTTP_404' && code !== 'HTTP_405') {
           throw error;
         }
-        const payload = await apiRequest(`/schedules/monthly-lite${queryString}`);
+        const payload = await apiRequest(`/schedules/monthly-lite${queryString}`, { noStore: force });
         const rows = Array.isArray(payload?.rows) ? payload.rows : [];
         const employees = Array.isArray(payload?.employees) ? payload.employees : [];
         return {
@@ -3078,14 +3082,19 @@ function createRealScheduleProvider() {
         };
       }
     },
-    async listMonthlySchedules({ month, tenantCode }) {
+    async listMonthlySchedules({ month, tenantCode, force = false }) {
       const normalizedMonth = normalizeMonthKey(month);
       if (!normalizedMonth) return [];
       const tenant = String(tenantCode || '').trim().toLowerCase();
-      const queryString = tenant
-        ? `?month=${encodeURIComponent(normalizedMonth)}&tenant_code=${encodeURIComponent(tenant)}`
-        : `?month=${encodeURIComponent(normalizedMonth)}`;
-      const rows = await apiRequest(`/schedules/monthly${queryString}`);
+      const params = new URLSearchParams();
+      params.set('month', normalizedMonth);
+      if (tenant) {
+        params.set('tenant_code', tenant);
+      }
+      if (force) {
+        params.set('_rt', String(Date.now()));
+      }
+      const rows = await apiRequest(`/schedules/monthly?${params.toString()}`, { noStore: force });
       return Array.isArray(rows) ? rows : [];
     },
     async listEmployees({ search = '' } = {}) {
@@ -3306,6 +3315,16 @@ function invalidateScheduleCache() {
   state.schedule.cacheByMonth.clear();
 }
 
+function invalidateScheduleMonthCache(month, tenantCode) {
+  const cacheKey = getScheduleCacheKey(month, tenantCode);
+  if (cacheKey && state.schedule.liteCacheByMonth instanceof Map) {
+    state.schedule.liteCacheByMonth.delete(cacheKey);
+  }
+  if (cacheKey && state.schedule.cacheByMonth instanceof Map) {
+    state.schedule.cacheByMonth.delete(cacheKey);
+  }
+}
+
 function getScheduleRowMergeKey(row = {}) {
   const id = String(row?.id || row?.schedule_id || '').trim();
   if (id) return `id:${id}`;
@@ -3390,13 +3409,101 @@ function applyCreatedScheduleRowsToCurrentView(createdRows = [], { month = '', t
   return true;
 }
 
-function queueScheduleRefreshAfterMutation({ force = true, deferDetailHydration = true } = {}) {
-  window.setTimeout(() => {
-    loadSchedule({ force, deferDetailHydration, background: true })
-      .catch((error) => {
-        console.error('[RG ARLS] schedule background refresh failed after mutation', error);
-      });
-  }, 0);
+async function refreshScheduleBoardLiteInBackground({ force = true } = {}) {
+  const month = normalizeMonthKey(state.schedule?.month);
+  const tenantCode = ensureScheduleTenantCode(state.schedule?.tenantCode);
+  if (!month || !isScheduleBoardTab(getScheduleActiveTopTab())) {
+    return false;
+  }
+
+  if (force) {
+    invalidateScheduleMonthCache(month, tenantCode);
+  }
+
+  const isManagerMode = isScheduleManagerMode();
+  const liteBundle = await loadMonthlyScheduleLiteWithCache({ month, tenantCode, force });
+  const liteRows = normalizeScheduleRows(Array.isArray(liteBundle?.rows) ? liteBundle.rows : []);
+  const liteDays = normalizeScheduleBoardDays(
+    month,
+    Array.isArray(liteBundle?.days) ? liteBundle.days : [],
+  );
+  const liteEmployees = normalizeScheduleEmployees(Array.isArray(liteBundle?.employees) ? liteBundle.employees : []);
+  const [rowsResult, leaveRowsResult, employeeRowsResult] = await Promise.allSettled([
+    loadMonthlySchedulesForMonths([month], { tenantCode, force }),
+    loadApprovedLeaveRowsForMonths([month], { tenantCode, force }),
+    isManagerMode ? getScheduleDataProvider().listEmployees() : Promise.resolve([]),
+  ]);
+
+  if (state.currentView !== 'schedule' || normalizeMonthKey(state.schedule?.month) !== month) {
+    return false;
+  }
+
+  const detailedRows = rowsResult.status === 'fulfilled' && Array.isArray(rowsResult.value)
+    ? normalizeScheduleRows(rowsResult.value)
+    : liteRows;
+  const leaveRows = leaveRowsResult.status === 'fulfilled' && Array.isArray(leaveRowsResult.value)
+    ? leaveRowsResult.value
+    : (Array.isArray(state.schedule.leaveRows) ? state.schedule.leaveRows : []);
+  const nextEmployees = isManagerMode
+    ? normalizeScheduleEmployees([
+      ...(employeeRowsResult.status === 'fulfilled' && Array.isArray(employeeRowsResult.value)
+        ? employeeRowsResult.value
+        : []),
+      ...liteEmployees,
+      ...buildScheduleEmployeesFromRows(detailedRows),
+    ])
+    : normalizeScheduleEmployees([
+      ...buildScheduleEmployeesFromRows(detailedRows),
+      {
+        employee_code: state.user?.employee_code || '',
+        full_name: state.user?.full_name || '',
+        company_code: '',
+        site_code: '',
+      },
+    ]);
+  const nextBoardDays = buildScheduleBoardDaysFromRows(
+    month,
+    mergeScheduleRowsWithLeaveRows(detailedRows, leaveRows),
+    liteDays,
+  );
+  const currentSignature = buildScheduleRealtimeSignature({
+    rows: state.schedule.rows,
+    leaveRows: state.schedule.leaveRows,
+    employees: state.schedule.employees,
+    boardDays: state.schedule.boardDays,
+  });
+  const nextSignature = buildScheduleRealtimeSignature({
+    rows: detailedRows,
+    leaveRows,
+    employees: nextEmployees,
+    boardDays: nextBoardDays,
+  });
+
+  if (currentSignature === nextSignature) {
+    state.schedule.cacheByMonth.set(getScheduleCacheKey(month, tenantCode), {
+      rows: detailedRows,
+      cachedAt: Date.now(),
+    });
+    state.schedule.liteCacheByMonth.set(getScheduleCacheKey(month, tenantCode), {
+      rows: detailedRows,
+      employees: nextEmployees,
+      days: nextBoardDays,
+      metrics: null,
+      cachedAt: Date.now(),
+    });
+    return false;
+  }
+
+  state.schedule.rows = detailedRows;
+  state.schedule.leaveRows = leaveRows;
+  state.schedule.employees = nextEmployees;
+  state.schedule.boardDays = nextBoardDays;
+  ensureScheduleSelectedEmployee();
+  ensureScheduleSelectedDate();
+  syncScheduleCurrentMonthCaches(month, tenantCode);
+  renderScheduleFilterOptions();
+  renderScheduleAll();
+  return true;
 }
 
 function ensureHeavyApiCacheMap() {
@@ -3580,6 +3687,7 @@ async function loadMonthlyScheduleRowsWithCache({ month, tenantCode, force = fal
   const fetched = await provider.listMonthlySchedules({
     month: normalizedMonth,
     tenantCode: normalizedTenant,
+    force,
   });
   const rows = normalizeScheduleRows(fetched);
   state.schedule.cacheByMonth.set(cacheKey, {
@@ -3624,6 +3732,7 @@ async function loadMonthlyScheduleLiteWithCache({ month, tenantCode, force = fal
   const fetched = await provider.listMonthlySchedulesLite({
     month: normalizedMonth,
     tenantCode: normalizedTenant,
+    force,
   });
   const rows = normalizeScheduleRows(Array.isArray(fetched?.rows) ? fetched.rows : fetched);
   const employees = normalizeScheduleEmployees(
@@ -8244,6 +8353,52 @@ const DRAWER_MENU_BY_ROLE = {
     { type: 'section', title: '내 정보' },
     { id: 'settings', title: '내 정보', action: 'drawer-open-route', route: ROUTE_PROFILE, icon: 'settings' },
   ],
+  SUPERVISOR: [
+    { type: 'section', title: '홈' },
+    { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
+    { type: 'section', title: '업무' },
+    { id: 'attendance', title: '출퇴근', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, icon: 'clock-3' },
+    {
+      id: 'requests',
+      title: '요청',
+      action: 'drawer-open-route',
+      route: ROUTE_REQUESTS,
+      icon: 'clipboard-list',
+      children: [
+        { id: 'requests-exceptions', title: '출퇴근예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
+        { id: 'requests-leave', title: '휴가', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=leave`, sectionMatch: 'leave' },
+        { id: 'requests-approvals', title: '승인함', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=approvals`, sectionMatch: 'approvals' },
+      ],
+    },
+    { id: 'hr', title: '문서', action: 'drawer-open-route', route: ROUTE_HR, icon: 'file-text' },
+    {
+      id: 'schedule',
+      title: '스케줄',
+      action: 'drawer-open-route',
+      route: ROUTE_SCHEDULE_CALENDAR,
+      icon: 'calendar-days',
+      scheduleSectionMatch: 'calendar',
+      children: [
+        { id: 'schedule-calendar', title: '캘린더', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
+        { id: 'schedule-templates', title: '근무 템플릿 생성', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
+        { id: 'schedule-upload', title: '근무표 업로드·자동등록', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+      ],
+    },
+    {
+      id: 'schedule-reports',
+      title: '보고',
+      action: 'drawer-open-route',
+      route: ROUTE_SCHEDULE_REPORTS,
+      icon: 'clipboard-list',
+      scheduleSectionMatch: 'reports',
+      children: [
+        { id: 'schedule-hq-upload', title: '지점별 스케쥴 업로드 확인', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
+        { id: 'schedule-finance', title: 'Finance용 스케쥴 제출', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, scheduleSectionMatch: 'reports' },
+      ],
+    },
+    { type: 'section', title: '내 정보' },
+    { id: 'settings', title: '내 정보', action: 'drawer-open-route', route: ROUTE_PROFILE, icon: 'settings' },
+  ],
   BRANCH_MANAGER: [
     { type: 'section', title: '홈' },
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
@@ -8373,6 +8528,17 @@ const DRAWER_MENU_BY_ROLE = {
     },
   ],
 };
+
+function getDrawerMenuRole() {
+  const normalizedRole = normalizeRoleValue(state.user?.role || '');
+  if (normalizedRole === 'developer' || normalizedRole === 'hq_admin') {
+    return getNavigationRole();
+  }
+  if (normalizedRole === 'supervisor' || normalizedRole === 'vice_supervisor') {
+    return 'SUPERVISOR';
+  }
+  return 'EMPLOYEE';
+}
 
 function readStoredAuthTokenValue(key) {
   try {
@@ -8568,6 +8734,7 @@ function apiRequest(path, options = {}) {
           signal: controller.signal,
           credentials: 'omit',
           mode: 'cors',
+          cache: options.noStore ? 'no-store' : 'default',
         });
       } catch (error) {
         lastError = error;
@@ -8993,6 +9160,31 @@ const SCHEDULE_IMPORT_ISSUE_GROUPS = Object.freeze({
     description: '업로드한 직원명이 현재 지점 active 직원과 일치하지 않습니다.',
     guidance: '직원명 오탈자와 현장 소속을 확인하세요.',
   },
+  SUPPORT_INTERNAL_MATCH_AMBIGUOUS_REVIEW: {
+    title: '지원근무자 내부 매칭 검토',
+    description: '대상 스토어 내부 직원 후보가 둘 이상이라 자동 반영이 불안정합니다.',
+    guidance: '동명이인 또는 내부 직원 식별 정보를 확인한 뒤 다시 판단하세요.',
+  },
+  SUPPORT_OTHER_SITE_MATCH_REVIEW: {
+    title: '타 스토어 후보 검토',
+    description: '대상 스토어에는 없지만 타 스토어 후보가 있어 자동 반영을 보류했습니다.',
+    guidance: '실제 소속 스토어를 확인한 뒤 다시 업로드하거나 수동 검토하세요.',
+  },
+  SUPPORT_INTERNAL_INACTIVE_REVIEW: {
+    title: '비활성 직원 검토',
+    description: '직원 명단에는 있으나 적용 날짜 기준 active 상태가 아닙니다.',
+    guidance: '휴직/퇴사/이동 여부와 적용 날짜를 다시 확인하세요.',
+  },
+  SUPPORT_INTERNAL_TEMPLATE_MISSING: {
+    title: '지원근무 기본 템플릿 없음',
+    description: '내부 지원근무를 생성할 기본 스케줄 템플릿이 없습니다.',
+    guidance: '주간/야간 기본 템플릿을 먼저 준비한 뒤 다시 분석하세요.',
+  },
+  EMPLOYEE_MATCH_AMBIGUOUS: {
+    title: '직원 중복 매칭',
+    description: '동일 이름의 active 직원이 여러 명이라 자동 매칭할 수 없습니다.',
+    guidance: 'employee master에서 동명이인 또는 중복 상태를 정리한 뒤 다시 분석하세요.',
+  },
   TIME_CONFLICT: {
     title: '기존 일정 충돌',
     description: '기존 ARLS 일정과 시간이 겹칩니다.',
@@ -9024,6 +9216,39 @@ const SCHEDULE_IMPORT_ISSUE_GROUPS = Object.freeze({
     guidance: '차단 사유를 해결한 뒤 다시 분석하거나 최신 기준본으로 다시 시작하세요.',
   },
 });
+
+const SCHEDULE_IMPORT_SUPPORT_DECISION_GROUPS = Object.freeze({
+  apply: {
+    title: '지원근무자 즉시 반영 예정',
+    description: '해당 스토어 직원으로 확인된 지원근무자는 즉시 스케줄 반영 대상으로 분류됩니다.',
+    guidance: '적용을 진행하면 ARLS 스케줄에 바로 생성되며 기존 비겹침 근무와 함께 표시됩니다.',
+    level: 'success',
+  },
+  review: {
+    title: '지원근무자 검토 필요',
+    description: '자동 매칭이 불안정하거나 타 스토어/비활성 후보가 있어 수동 검토가 필요합니다.',
+    guidance: '실제 소속 스토어와 직원 상태를 확인한 뒤 다시 업로드하거나 수동으로 판단하세요.',
+    level: 'warning',
+  },
+  block: {
+    title: '지원근무자 차단',
+    description: '대상 스토어 직원 명단에 없거나 형식이 잘못된 값이라 업로드를 차단합니다.',
+    guidance: '이름 오탈자, 셀 형식, 실제 소속 여부를 확인한 뒤 다시 업로드하세요.',
+    level: 'error',
+  },
+});
+
+const SCHEDULE_IMPORT_SUPPORT_ISSUE_CODES = new Set([
+  'WORKER_CELL_INVALID',
+  'MULTI_PERSON_CELL',
+  'EMPLOYEE_MATCH_FAILED',
+  'SUPPORT_INTERNAL_MATCH_AMBIGUOUS_REVIEW',
+  'SUPPORT_OTHER_SITE_MATCH_REVIEW',
+  'SUPPORT_INTERNAL_INACTIVE_REVIEW',
+  'SUPPORT_INTERNAL_TEMPLATE_MISSING',
+  'TIME_CONFLICT',
+  'MULTI_ROW_CONFLICT',
+]);
 
 const SCHEDULE_IMPORT_CONTEXT_FIELD_LABELS = Object.freeze({
   file: '업로드 파일',
@@ -9611,6 +9836,10 @@ function formatScheduleImportDutyLabel(value = '') {
 }
 
 function getScheduleImportRowActionLabel(row = {}) {
+  const decisionStage = String(row?.decision_stage || '').trim().toLowerCase();
+  if (decisionStage === 'apply') return '즉시 반영';
+  if (decisionStage === 'review') return '검토 필요';
+  if (decisionStage === 'block') return '차단';
   const applyAction = String(row?.apply_action || '').trim();
   const diffCategory = String(row?.diff_category || '').trim();
   const isProtected = Boolean(row?.is_protected) || diffCategory === 'ignored_protected';
@@ -9628,6 +9857,16 @@ function getScheduleImportRowActionLabel(row = {}) {
 }
 
 function getScheduleImportRowState(row = {}) {
+  const decisionStage = String(row?.decision_stage || '').trim().toLowerCase();
+  if (decisionStage === 'block') {
+    return { key: 'blocked', chipLabel: '차단', chipClass: 'schedule-upload-result-chip schedule-upload-result-chip-error' };
+  }
+  if (decisionStage === 'review') {
+    return { key: 'review', chipLabel: '검토 필요', chipClass: 'schedule-upload-result-chip schedule-upload-result-chip-warn' };
+  }
+  if (decisionStage === 'apply') {
+    return { key: 'apply', chipLabel: '즉시 반영', chipClass: 'schedule-upload-result-chip schedule-upload-result-chip-apply' };
+  }
   const diffCategory = String(row?.diff_category || '').trim().toLowerCase();
   const isProtected = Boolean(row?.is_protected) || diffCategory === 'ignored_protected';
   const isBlocking = Boolean(row?.is_blocking) || (!isProtected && row?.is_valid === false);
@@ -9649,6 +9888,58 @@ function getScheduleImportRowState(row = {}) {
   return { key: 'review', chipLabel: '검토 필요', chipClass: 'schedule-upload-result-chip schedule-upload-result-chip-warn' };
 }
 
+function isScheduleImportSupportWorkerRow(row = {}) {
+  const validatorKind = String(row?.validator_kind || '').trim().toLowerCase();
+  const sourceBlock = String(row?.source_block || '').trim().toLowerCase();
+  return validatorKind === 'support' || sourceBlock === 'day_support_worker' || sourceBlock === 'night_support_worker';
+}
+
+function getScheduleImportSupportDecisionMessage(row = {}) {
+  if (!isScheduleImportSupportWorkerRow(row)) return '';
+  const decisionStage = String(row?.decision_stage || '').trim().toLowerCase();
+  const workerName = String(row?.employee_name || row?.work_value || '').trim();
+  const supportOriginType = String(row?.support_origin_type || '').trim().toLowerCase();
+  const validationError = String(row?.validation_error || '').trim();
+  if (decisionStage === 'apply') {
+    if (supportOriginType === 'same_store_internal_candidate') {
+      return workerName
+        ? `해당 스토어 직원으로 확인되어 지원근무로 반영됩니다: ${workerName}`
+        : '해당 스토어 직원으로 확인되어 지원근무로 반영됩니다.';
+    }
+    if (supportOriginType === 'internal_candidate') {
+      return workerName
+        ? `내부 직원으로 확인되어 지원근무로 반영됩니다: ${workerName}`
+        : '내부 직원으로 확인되어 지원근무로 반영됩니다.';
+    }
+    return workerName
+      ? `지원근무자로 확인되어 반영됩니다: ${workerName}`
+      : '지원근무자로 확인되어 반영됩니다.';
+  }
+  if (decisionStage === 'review') {
+    return validationError || (workerName
+      ? `내부 직원 매칭이 애매하여 검토가 필요합니다: ${workerName}`
+      : '지원근무자 매칭이 애매하여 검토가 필요합니다.');
+  }
+  if (decisionStage === 'block') {
+    return validationError || (workerName
+      ? `지원근무자 값을 확인할 수 없어 차단되었습니다: ${workerName}`
+      : '지원근무자 값을 확인할 수 없어 차단되었습니다.');
+  }
+  return validationError;
+}
+
+function getScheduleImportRowReasonLabel(row = {}) {
+  const supportDecisionMessage = getScheduleImportSupportDecisionMessage(row);
+  if (supportDecisionMessage) return supportDecisionMessage;
+  return String(
+    row?.validation_error
+    || row?.protected_reason
+    || row?.validation_code
+    || row?.status_label
+    || '-',
+  ).trim() || '-';
+}
+
 function formatScheduleImportRowExample(row = {}) {
   const parts = [];
   const rowNo = Number(row?.row_no || 0);
@@ -9656,15 +9947,44 @@ function formatScheduleImportRowExample(row = {}) {
   if (row?.schedule_date) parts.push(String(row.schedule_date));
   const employee = String(row?.employee_name || row?.employee_code || '').trim();
   if (employee) parts.push(employee);
-  const reason = String(row?.validation_error || row?.protected_reason || row?.status_label || '').trim();
+  const reason = getScheduleImportRowReasonLabel(row);
   if (reason) parts.push(reason);
   return parts.join(' · ');
+}
+
+function buildScheduleImportSupportDecisionGroups(preview = state.preview) {
+  const previewRows = Array.isArray(preview?.preview_rows) ? preview.preview_rows : [];
+  const supportRows = previewRows.filter((row) => isScheduleImportSupportWorkerRow(row));
+  return ['apply', 'review', 'block']
+    .map((stage) => {
+      const stageRows = supportRows.filter((row) => String(row?.decision_stage || '').trim().toLowerCase() === stage);
+      if (!stageRows.length) return null;
+      const meta = SCHEDULE_IMPORT_SUPPORT_DECISION_GROUPS[stage];
+      return {
+        key: `support_${stage}`,
+        count: stageRows.length,
+        title: meta.title,
+        description: meta.description,
+        guidance: meta.guidance,
+        examples: stageRows.slice(0, 3).map((row) => formatScheduleImportRowExample(row)),
+        level: meta.level,
+      };
+    })
+    .filter(Boolean);
 }
 
 function buildScheduleImportIssueGroups(preview = state.preview) {
   if (!preview) return [];
   const groupedIssues = Array.isArray(preview?.issues) ? preview.issues : [];
   const blockedReasons = Array.isArray(preview?.blocked_reasons) ? preview.blocked_reasons.filter(Boolean) : [];
+  const previewRows = Array.isArray(preview?.preview_rows) ? preview.preview_rows : [];
+  const supportDecisionGroups = buildScheduleImportSupportDecisionGroups(preview);
+  const nonSupportCodes = new Set(
+    previewRows
+      .filter((row) => !isScheduleImportSupportWorkerRow(row))
+      .map((row) => normalizeScheduleImportIssueCode(row?.validation_code || ''))
+      .filter(Boolean),
+  );
   const mappingProfile = preview?.metadata?.mapping_profile && typeof preview.metadata.mapping_profile === 'object'
     ? preview.metadata.mapping_profile
     : null;
@@ -9673,6 +9993,9 @@ function buildScheduleImportIssueGroups(preview = state.preview) {
     : formatScheduleImportMappingRequirementLabels(mappingProfile?.missing_required_entries || []);
   const groups = groupedIssues.map((item) => {
     const code = normalizeScheduleImportIssueCode(item?.code || '');
+    if (SCHEDULE_IMPORT_SUPPORT_ISSUE_CODES.has(code) && !nonSupportCodes.has(code)) {
+      return null;
+    }
     const meta = SCHEDULE_IMPORT_ISSUE_GROUPS[code] || SCHEDULE_IMPORT_ISSUE_GROUPS.blocked_reason;
     const exampleRows = Array.isArray(item?.example_rows) ? item.example_rows.filter((value) => Number(value) > 0).slice(0, 3) : [];
     const description = String(item?.message || meta.description || '').trim();
@@ -9689,10 +10012,11 @@ function buildScheduleImportIssueGroups(preview = state.preview) {
       description: needsMappingHelp ? `${description} 필요한 매핑: ${missingMappingLabels.join(', ')}.` : description,
       guidance: needsMappingHelp ? `${guidance} 근무 템플릿 탭에서 매핑 프로필을 설정한 뒤 다시 분석하세요.` : guidance,
       examples: exampleRows.map((rowNo) => `행 ${rowNo}`),
+      level: code === 'blocked_reason' ? 'warning' : 'neutral',
     };
-  }).filter((item) => item.count > 0);
+  }).filter((item) => item && item.count > 0);
 
-  if (blockedReasons.length && !groups.length) {
+  if (blockedReasons.length && !groups.length && !supportDecisionGroups.length) {
     groups.push({
       key: 'blocked_reason',
       count: blockedReasons.length,
@@ -9700,10 +10024,11 @@ function buildScheduleImportIssueGroups(preview = state.preview) {
       description: SCHEDULE_IMPORT_ISSUE_GROUPS.blocked_reason.description,
       guidance: SCHEDULE_IMPORT_ISSUE_GROUPS.blocked_reason.guidance,
       examples: blockedReasons.slice(0, 2),
+      level: 'warning',
     });
   }
 
-  return groups;
+  return [...supportDecisionGroups, ...groups];
 }
 
 function renderScheduleImportSummaryStrip(preview = state.preview) {
@@ -9724,9 +10049,9 @@ function renderScheduleImportSummaryStrip(preview = state.preview) {
   const summaryItems = [
     { label: '전체 행', value: Number(preview?.total_rows || 0) },
     { label: '반영 예정', value: applicableCount },
-    { label: '변경 없음', value: unchangedCount },
     { label: '검토 필요', value: reviewCount },
     { label: '차단', value: blockedCount },
+    { label: '변경 없음', value: unchangedCount },
   ];
 
   summaryItems.forEach((item) => {
@@ -9795,7 +10120,13 @@ function renderScheduleImportIssueGroups(preview = state.preview) {
     const title = document.createElement('strong');
     title.textContent = group.title;
     const count = document.createElement('span');
-    count.className = 'status-pill status-pill-neutral';
+    count.className = group.level === 'success'
+      ? 'status-pill status-pill-success'
+      : (group.level === 'error'
+        ? 'status-pill status-pill-error'
+        : (group.level === 'warning'
+          ? 'status-pill status-pill-warn'
+          : 'status-pill status-pill-neutral'));
     count.textContent = `${group.count}건`;
     head.appendChild(title);
     head.appendChild(count);
@@ -9947,12 +10278,12 @@ function renderScheduleUploadApplyBar() {
       ? `${staleFields} 변경으로 기존 분석 결과를 적용할 수 없습니다. 같은 조건으로 다시 분석하세요.`
       : '현재 입력값과 마지막 분석 결과가 달라 다시 분석이 필요합니다.';
   } else if (preview) {
-    summary = `반영 예정 ${validRows}건 / 차단 ${invalidRows}건`;
+    summary = `반영 예정 ${validRows}건 / 검토 필요 ${reviewRows}건 / 차단 ${invalidRows}건`;
     if (blockedReasons.length) {
       reason = blockedReasons[0];
     } else if (invalidRows > 0) {
       reason = `차단 ${invalidRows}건 해결 후 적용 가능`;
-    } else if (validRows <= 0) {
+    } else if (validRows <= 0 && reviewRows <= 0) {
       summary = '적용 가능한 변경 없음';
       reason = '변경 없음 또는 보호영역만 포함되어 있습니다.';
     } else if (uploadUi.applyResult && uploadUi.applyResult.includes('반영 완료')) {
@@ -10508,12 +10839,7 @@ function renderSchedulePreviewTable(previewRows = []) {
     const workValue = String(row?.work_value || '-').trim() || '-';
     const currentValueLabel = String(row?.current_work_value || '-').trim() || '-';
     const resultLabel = String(row?.status_label || getScheduleImportRowActionLabel(row)).trim() || '-';
-    const reasonLabel = String(
-      row?.validation_error
-      || row?.protected_reason
-      || row?.validation_code
-      || '-',
-    ).trim() || '-';
+    const reasonLabel = getScheduleImportRowReasonLabel(row);
 
     const cells = [
       { primary: row?.row_no ?? '-', secondary: '' },
@@ -10558,10 +10884,12 @@ function normalizeScheduleImportPreviewMode(value = '') {
 
 function isScheduleImportPreviewRowActionable(row = {}) {
   if (typeof row?.actionable === 'boolean') return row.actionable;
+  const decisionStage = String(row?.decision_stage || '').trim().toLowerCase();
+  if (decisionStage === 'apply' || decisionStage === 'review' || decisionStage === 'block') return true;
   const diffCategory = String(row?.diff_category || '').trim().toLowerCase();
   const isProtected = Boolean(row?.is_protected) || diffCategory === 'ignored_protected';
   const isBlocking = Boolean(row?.is_blocking) || (!isProtected && row?.is_valid === false);
-  return isBlocking || diffCategory === 'review';
+  return isBlocking || diffCategory === 'review' || Boolean(String(row?.apply_action || '').trim());
 }
 
 function isScheduleImportPreviewRowProtectedInfoOnly(row = {}) {
@@ -10573,7 +10901,8 @@ function isScheduleImportPreviewRowProtectedInfoOnly(row = {}) {
   const sourceBlock = String(row?.source_block || '').trim().toLowerCase();
   const parsedSemanticType = String(row?.parsed_semantic_type || '').trim().toLowerCase();
   if (sourceBlock === 'sentrix_support_ticket') return true;
-  if (sourceBlock.startsWith('day_support') || sourceBlock.startsWith('night_support')) return true;
+  if (sourceBlock === 'day_support_external_count' || sourceBlock === 'night_support_purpose') return true;
+  if (sourceBlock.endsWith('_summary_count')) return true;
   if (parsedSemanticType.startsWith('protected_') || parsedSemanticType === 'support_demand') return true;
   if ((diffCategory === 'ignored_protected' || diffCategory === 'ignored_no_demand') && sourceBlock !== 'body') return true;
   return false;
@@ -12934,28 +13263,41 @@ function renderScheduleFinanceSubmissionStatus() {
   }
 
   if (overallScope) {
+    const canDownloadOverallReview = canDownloadScheduleFinanceReview();
     if (statePill) {
-      statePill.className = 'status-pill status-pill-neutral';
-      statePill.textContent = '전체';
+      statePill.className = canDownloadOverallReview ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral';
+      statePill.textContent = canDownloadOverallReview ? '전체 1차 다운로드' : '전체';
     }
-    if (statusText) statusText.textContent = 'Finance 제출/최종 업로드는 지점별 워크플로우입니다. 전체 선택 시 상태만 안내하고 실행은 잠급니다.';
-    if (phaseLabel) phaseLabel.textContent = '지점별 진행';
-    if (phaseMeta) phaseMeta.textContent = 'Finance 보고는 전체 범위를 한 번에 처리하지 않습니다.';
-    if (reviewRevision) reviewRevision.textContent = '-';
-    if (reviewMeta) reviewMeta.textContent = '전체 선택에서는 지점별 다운로드만 지원';
+    if (statusText) {
+      statusText.textContent = canDownloadOverallReview
+        ? '전체 선택에서는 사이트별 시트를 한 파일로 묶은 1차 확인본만 다운로드할 수 있습니다. 최종 업로드/최종본 다운로드는 지점별로 진행합니다.'
+        : 'Finance 제출/최종 업로드는 지점별 워크플로우입니다. 전체 선택 시 상태만 안내합니다.';
+    }
+    if (phaseLabel) phaseLabel.textContent = canDownloadOverallReview ? '전체 1차 다운로드' : '지점별 진행';
+    if (phaseMeta) phaseMeta.textContent = canDownloadOverallReview
+      ? '전체 선택 시 현장명 기준 여러 시트가 포함된 1차 확인본 workbook을 생성합니다.'
+      : 'Finance 보고는 전체 범위를 한 번에 처리하지 않습니다.';
+    if (reviewRevision) reviewRevision.textContent = canDownloadOverallReview ? 'ALL' : '-';
+    if (reviewMeta) reviewMeta.textContent = canDownloadOverallReview
+      ? '전체 선택 시 사이트별 시트를 한 파일로 생성'
+      : '1차 확인본 다운로드 권한이 필요합니다.';
     if (finalUploadState) finalUploadState.textContent = '잠금';
     if (finalUploadMeta) finalUploadMeta.textContent = '단일 지점을 선택해야 업로드할 수 있습니다.';
     if (finalDownloadState) finalDownloadState.textContent = '잠금';
     if (finalDownloadMeta) finalDownloadMeta.textContent = '단일 지점을 선택해야 최종본을 다운로드할 수 있습니다.';
-    if (reviewBtn) reviewBtn.disabled = true;
+    if (reviewBtn) reviewBtn.disabled = !canDownloadOverallReview;
     if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
     if (blockedList) {
       blockedList.innerHTML = '';
-      blockedList.classList.remove('hidden');
-      const li = document.createElement('li');
-      li.textContent = 'Finance 보고 탭은 전체 범위가 아니라 지점별 제출/업로드 흐름입니다.';
-      blockedList.appendChild(li);
+      if (canDownloadOverallReview) {
+        blockedList.classList.remove('hidden');
+        const li = document.createElement('li');
+        li.textContent = '전체 선택에서는 1차 확인본 다운로드만 지원합니다. 최종 업로드와 최종본 다운로드는 단일 지점을 선택해 진행하세요.';
+        blockedList.appendChild(li);
+      } else {
+        blockedList.classList.add('hidden');
+      }
     }
     return;
   }
@@ -13078,14 +13420,10 @@ async function onScheduleFinanceReviewDownload() {
     showToast('업로드 지점을 먼저 선택해 주세요.', 'error');
     return;
   }
-  if (siteCode === 'ALL') {
-    showToast('Finance 보고는 전체가 아니라 단일 지점 기준으로만 다운로드할 수 있습니다.', 'error');
-    return;
-  }
   const month = getScheduleMonthValue();
   const params = new URLSearchParams();
   params.set('month', month);
-  params.set('site_code', siteCode);
+  params.set('site_code', siteCode === 'ALL' ? 'all' : siteCode);
   params.set('tenant_code', getScheduleTenantValue());
   const fallbackGeneratedOn = (() => {
     const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -13097,9 +13435,12 @@ async function onScheduleFinanceReviewDownload() {
     const parts = Object.fromEntries(formatter.formatToParts(new Date()).map((part) => [part.type, part.value]));
     return `${parts.year || ''}${parts.month || ''}${parts.day || ''}`;
   })();
+  const fallbackFileLabel = siteCode === 'ALL'
+    ? `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 근무표_전체_1차확인본_${fallbackGeneratedOn}.xlsx`
+    : `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 근무표_${siteCode}_1차확인본_${fallbackGeneratedOn}.xlsx`;
   await downloadScheduleWorkbookWithAuth(
     `${state.activeApiBase}/schedules/finance-submission/review-excel?${params.toString()}`,
-    `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 근무표_${siteCode}_1차확인본_${fallbackGeneratedOn}.xlsx`,
+    fallbackFileLabel,
   );
   await loadScheduleFinanceSubmissionStatus();
   showToast('Finance 1차 확인본을 다운로드했습니다.', 'success', 2200);
@@ -24931,10 +25272,11 @@ function renderDrawerMenu() {
   if (!menu && !desktopMenu) return;
 
   const role = getNavigationRole();
+  const drawerRole = getDrawerMenuRole();
   const actualRoleLabel = state.user
     ? getRoleDisplayLabel(state.user.role)
     : getRoleDisplayLabel(role);
-  const items = DRAWER_MENU_BY_ROLE[role] || DRAWER_MENU_BY_ROLE.EMPLOYEE;
+  const items = DRAWER_MENU_BY_ROLE[drawerRole] || DRAWER_MENU_BY_ROLE.EMPLOYEE;
   const perms = getRolePermissions();
   const currentRoute = state.currentRoute || window.location.hash.replace(/^#/, '') || ROUTE_HOME;
   const tenantLabel = $('#drawerTenantLabel');
@@ -25760,6 +26102,7 @@ async function hydrateSession({ background = false } = {}) {
     }
     state.pendingRouteAfterLogin = DEFAULT_AUTH_ROUTE;
     ensurePolling();
+    restartScheduleLiveRefreshAfterAuth();
     return true;
   } catch (err) {
     const errorCode = String(err?.code || '').trim().toUpperCase();
@@ -25782,6 +26125,7 @@ async function hydrateSession({ background = false } = {}) {
       }
       state.pendingRouteAfterLogin = DEFAULT_AUTH_ROUTE;
       ensurePolling();
+      restartScheduleLiveRefreshAfterAuth();
       showToast('서버 연결이 불안정해 저장된 세션으로 진입했습니다.', 'info', 2600);
       return true;
     }
@@ -27548,6 +27892,7 @@ async function loadSites({
 
 function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad = false } = {}) {
   stopPolling();
+  stopScheduleLiveRefresh();
   const perms = getRolePermissions();
   const requested = mapLegacyViewName(name);
   const viewAllowed = isViewAllowed(requested, perms);
@@ -27631,6 +27976,7 @@ function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad
     })
     .finally(() => {
       ensurePolling();
+      ensureScheduleLiveRefresh();
     });
 }
 
@@ -28080,6 +28426,7 @@ async function loadScheduleViewPresenter() {
     viewName: 'schedule',
   });
   const task = queueScheduleViewPresenterRefresh();
+  ensureScheduleLiveRefresh({ immediate: hasCachedRows && isScheduleBoardTab(getScheduleActiveTopTab()) });
   if (task) {
     task.catch((error) => {
       console.error('[RG ARLS] schedule presenter refresh failed', error);
@@ -39694,6 +40041,9 @@ function getScheduleCreateTemplateCombinationConflict(rows = []) {
 
 function renderScheduleHqTabs() {
   const tabWrap = $('#scheduleHqTabs');
+  const workspaceTitle = $('#scheduleWorkspaceTitle');
+  const workspaceDescription = $('#scheduleWorkspaceDescription');
+  const workspaceHelpButton = $('#scheduleWorkspaceHelpButton');
   bootstrapScheduleTabPanelRefs();
 
   const canOpenTemplateTab = isScheduleTemplateTabVisible();
@@ -39702,6 +40052,18 @@ function renderScheduleHqTabs() {
   const canOpenHqUploadTab = canUseScheduleUploadHqWizard();
   const activeTab = getScheduleActiveTopTab();
   state.schedule.hqTab = activeTab;
+  const reportsOwnerVisible = isScheduleReportsOwnerTab(activeTab);
+  if (workspaceTitle) {
+    workspaceTitle.textContent = reportsOwnerVisible ? '보고' : '근무일정';
+  }
+  if (workspaceDescription) {
+    workspaceDescription.textContent = reportsOwnerVisible
+      ? 'Finance용 스케쥴 제출과 지점별 스케쥴 업로드 결과를 확인하는 보고 워크스페이스입니다.'
+      : '월간 캘린더를 중심으로 배정 현황을 확인하고 날짜별 상세를 바로 처리하는 스케줄 워크스페이스입니다.';
+  }
+  if (workspaceHelpButton instanceof HTMLElement) {
+    workspaceHelpButton.setAttribute('aria-label', reportsOwnerVisible ? '보고 도움말' : '근무일정 도움말');
+  }
   if (activeTab === SCHEDULE_TAB_LIST) {
     state.schedule.viewMode = SCHEDULE_VIEW_MODE_LIST;
   } else if (activeTab === SCHEDULE_TAB_CALENDAR) {
@@ -39711,7 +40073,6 @@ function renderScheduleHqTabs() {
   if (tabWrap instanceof HTMLElement) {
     tabWrap.classList.remove('hidden');
     const uiActiveTab = activeTab === SCHEDULE_TAB_LIST ? SCHEDULE_TAB_CALENDAR : activeTab;
-    const reportsOwnerVisible = isScheduleReportsOwnerTab(activeTab);
     tabWrap.querySelectorAll('[data-action="schedule-hq-tab"]').forEach((button) => {
       const tab = normalizeScheduleHqTab(button?.dataset?.tab || '');
       const isTemplateTab = tab === SCHEDULE_TAB_TEMPLATES;
@@ -39801,6 +40162,7 @@ function onScheduleHqTabChange(tab = SCHEDULE_TAB_CALENDAR) {
   renderScheduleHqTabs();
   syncScheduleRouteTabQuery(state.schedule.hqTab);
   if (state.schedule.hqTab === SCHEDULE_TAB_TEMPLATES) {
+    ensureScheduleLiveRefresh({ immediate: true });
     runActionSafely(
       Promise.allSettled([
         loadScheduleTemplateRows({ force: false }),
@@ -39812,6 +40174,7 @@ function onScheduleHqTabChange(tab = SCHEDULE_TAB_CALENDAR) {
     return;
   }
   if (isScheduleUploadOwnerTab(state.schedule.hqTab)) {
+    ensureScheduleLiveRefresh();
     runActionSafely(
       bootstrapScheduleUploadWorkspace({ force: false }),
       '업로드 지점 목록을 동기화하지 못했습니다.',
@@ -39820,6 +40183,7 @@ function onScheduleHqTabChange(tab = SCHEDULE_TAB_CALENDAR) {
     return;
   }
   if (state.schedule.hqTab === SCHEDULE_TAB_REPORTS) {
+    ensureScheduleLiveRefresh();
     runActionSafely(
       (async () => {
         await refreshScheduleImportSiteOptions({ force: false });
@@ -39833,12 +40197,14 @@ function onScheduleHqTabChange(tab = SCHEDULE_TAB_CALENDAR) {
   }
   const hasRows = Array.isArray(state.schedule?.rows) && state.schedule.rows.length > 0;
   if (!hasRows) {
+    ensureScheduleLiveRefresh();
     runActionSafely(
       loadSchedule({ force: false }),
       '스케줄 월 조회 중 오류가 발생했습니다.',
     );
     return;
   }
+  ensureScheduleLiveRefresh({ immediate: isScheduleBoardTab(state.schedule.hqTab) });
   renderScheduleAll();
 }
 
@@ -39934,6 +40300,14 @@ function getScheduleImportMappingProfiles() {
   return [{ ...profile, profile_id: profileId }];
 }
 
+function buildScheduleTemplateLinkedProfileRows(templateId = '') {
+  const normalizedTemplateId = String(templateId || '').trim();
+  if (!normalizedTemplateId) return [];
+  return getScheduleImportMappingProfiles().filter((profile) => (
+    Array.isArray(profile?.entries) ? profile.entries : []
+  ).some((entry) => String(entry?.template_id || '').trim() === normalizedTemplateId));
+}
+
 function ensureSelectedScheduleImportMappingProfileId() {
   const profiles = getScheduleImportMappingProfiles();
   const current = String(state.schedule?.importMappingSelectedProfileId || '').trim();
@@ -40019,13 +40393,14 @@ function buildScheduleImportMappingRuleSummaries(profile = null) {
 }
 
 function getScheduleImportMappingProfileReadiness(profile = null) {
+  const templateDeleteNotice = String(state.schedule?.importMappingTemplateDeleteNotice || '').trim();
   if (!profile) {
     return {
-      key: 'missing',
-      label: '프로필 미선택',
-      badgeClass: 'status-pill status-pill-warn',
+      key: templateDeleteNotice ? 'template-deleted' : 'missing',
+      label: templateDeleteNotice ? '재설정 필요' : '프로필 미선택',
+      badgeClass: templateDeleteNotice ? 'status-pill status-pill-error' : 'status-pill status-pill-warn',
       ready: false,
-      description: '업로드 전에 사용할 매핑 프로필을 선택해 주세요.',
+      description: templateDeleteNotice || '업로드 전에 사용할 매핑 프로필을 선택해 주세요.',
       missingLabels: [],
       invalidEntries: [],
     };
@@ -40041,6 +40416,18 @@ function getScheduleImportMappingProfileReadiness(profile = null) {
     const status = String(entry?.status || 'ready').trim().toLowerCase();
     return status !== 'ready' || !String(entry?.template_id || '').trim() || !String(entry?.template_name || '').trim();
   });
+  const deletedTemplateEntries = invalidEntries.filter((entry) => !String(entry?.template_id || '').trim());
+  if (deletedTemplateEntries.length || templateDeleteNotice) {
+    return {
+      key: 'template-deleted',
+      label: '재설정 필요',
+      badgeClass: 'status-pill status-pill-error',
+      ready: false,
+      description: templateDeleteNotice || '삭제된 템플릿 연결이 있어 매핑 프로필을 다시 설정해야 합니다.',
+      missingLabels,
+      invalidEntries,
+    };
+  }
   if (profile?.is_active === false) {
     return {
       key: 'inactive',
@@ -40060,7 +40447,9 @@ function getScheduleImportMappingProfileReadiness(profile = null) {
       ready: false,
       description: missingLabels.length
         ? '현재 업로드 기준 필요한 매핑이 모두 준비되지 않았습니다.'
-        : '선택한 프로필에 누락되거나 비활성 템플릿을 참조하는 규칙이 있습니다.',
+        : (deletedTemplateEntries.length
+          ? '삭제된 템플릿 연결이 있어 매핑 프로필을 다시 설정해야 합니다.'
+          : '선택한 프로필에 누락되거나 비활성 템플릿을 참조하는 규칙이 있습니다.'),
       missingLabels,
       invalidEntries,
     };
@@ -40172,6 +40561,9 @@ function renderScheduleImportMappingProfileSummary() {
   if (readiness.missingLabels.length) {
     missingEl.classList.remove('hidden');
     missingEl.textContent = `현재 업로드 기준 필요한 매핑: ${readiness.missingLabels.join(', ')}`;
+  } else if (!selectedProfile && String(state.schedule?.importMappingTemplateDeleteNotice || '').trim()) {
+    missingEl.classList.remove('hidden');
+    missingEl.textContent = String(state.schedule.importMappingTemplateDeleteNotice || '').trim();
   } else {
     missingEl.classList.add('hidden');
     missingEl.textContent = '';
@@ -40388,11 +40780,9 @@ function renderScheduleTemplateTable() {
     deleteBtn.dataset.templateId = templateId;
     deleteBtn.textContent = '삭제';
     if (usageCount > 0) {
-      deleteBtn.disabled = true;
-      deleteBtn.title = `사용 중인 매핑 프로필 ${usageCount}개`;
+      deleteBtn.title = `삭제 시 연결된 매핑 프로필 ${usageCount}개가 비활성화됩니다.`;
     } else if (isActive) {
-      deleteBtn.disabled = true;
-      deleteBtn.title = '삭제 전 비활성화가 필요합니다.';
+      deleteBtn.title = '활성 템플릿도 바로 삭제할 수 있습니다.';
     }
     actionsWrap.appendChild(deleteBtn);
 
@@ -40400,7 +40790,9 @@ function renderScheduleTemplateTable() {
     if (usageCount > 0 || isActive) {
       const note = document.createElement('p');
       note.className = 'schedule-template-action-note';
-      note.textContent = usageCount > 0 ? `사용 중인 매핑 프로필 ${usageCount}개` : '삭제 전 비활성화가 필요합니다.';
+      note.textContent = usageCount > 0
+        ? `삭제 시 연결된 매핑 프로필 ${usageCount}개가 비활성화됩니다.`
+        : '활성 템플릿도 바로 삭제할 수 있습니다.';
       actionTd.appendChild(note);
     }
     tr.appendChild(actionTd);
@@ -40454,6 +40846,17 @@ async function loadScheduleImportMappingProfile({ force = false } = {}) {
   const profile = await apiRequest(`/schedules/import-mapping-profile?tenant_code=${encodeURIComponent(getScheduleBaseTenantCode())}`);
   state.schedule.importMappingProfile = profile && typeof profile === 'object' ? profile : null;
   state.schedule.importMappingProfileFetchedAt = Date.now();
+  const hasActiveHealthyProfile = (() => {
+    const currentProfile = state.schedule?.importMappingProfile;
+    if (!currentProfile || typeof currentProfile !== 'object') return false;
+    if (!String(currentProfile?.profile_id || '').trim()) return false;
+    if (currentProfile?.is_active === false) return false;
+    const entries = Array.isArray(currentProfile?.entries) ? currentProfile.entries : [];
+    return !entries.some((entry) => !String(entry?.template_id || '').trim());
+  })();
+  if (hasActiveHealthyProfile) {
+    state.schedule.importMappingTemplateDeleteNotice = '';
+  }
   ensureSelectedScheduleImportMappingProfileId();
   renderScheduleImportMappingProfileSummary();
   renderScheduleImportMappingProfileManager();
@@ -40732,6 +41135,7 @@ async function onScheduleImportMappingSave() {
   const nextProfile = savedProfile && typeof savedProfile === 'object' ? savedProfile : null;
   state.schedule.importMappingProfile = nextProfile;
   state.schedule.importMappingProfileFetchedAt = Date.now();
+  state.schedule.importMappingTemplateDeleteNotice = '';
   ensureSelectedScheduleImportMappingProfileId();
   syncScheduleImportMappingProfilePreviewMetadata(state.schedule.importMappingProfile);
   renderScheduleImportMappingProfileSummary();
@@ -40763,6 +41167,7 @@ async function onScheduleImportMappingDelete(profileId, profileName) {
     state.schedule.importMappingProfile = null;
     state.schedule.importMappingProfileFetchedAt = 0;
     state.schedule.importMappingSelectedProfileId = '';
+    state.schedule.importMappingTemplateDeleteNotice = '';
   }
   renderScheduleImportMappingProfileSummary();
   renderScheduleImportMappingProfileManager();
@@ -40817,10 +41222,17 @@ async function refreshScheduleImportSiteOptions({ force = false } = {}) {
       .filter((item) => item.site_code)
       .sort((a, b) => String(a.site_code).localeCompare(String(b.site_code)));
     const boardSite = String($('#scheduleSiteFilter')?.value || '').trim().toUpperCase();
+    const userSiteCode = String(state.user?.site_code || '').trim().toUpperCase();
 
     selects.forEach((select) => {
       const isReportsSelect = select.id === 'scheduleReportsSite';
-      const normalizedOptions = isReportsSelect ? normalizedReportOptions : normalizedImportOptions;
+      const normalizedOptions = (() => {
+        const baseOptions = isReportsSelect ? normalizedReportOptions : normalizedImportOptions;
+        if (isReportsSelect && !isScheduleUploadTenantWideUser() && userSiteCode) {
+          return baseOptions.filter((item) => item.site_code === userSiteCode);
+        }
+        return baseOptions;
+      })();
       const current = String(select.dataset.pendingValue || select.value || '').trim().toUpperCase();
       select.innerHTML = '<option value="">지점 선택</option>';
       if (isReportsSelect && isScheduleUploadTenantWideUser()) {
@@ -40837,6 +41249,7 @@ async function refreshScheduleImportSiteOptions({ force = false } = {}) {
       });
       const fallbackValue = current
         || (boardSite && boardSite !== 'ALL' ? boardSite : '')
+        || (isReportsSelect && !isScheduleUploadTenantWideUser() && userSiteCode ? userSiteCode : '')
         || (!isScheduleUploadTenantWideUser() && !isReportsSelect && select.options.length > 1
           ? String(select.options[1].value || '').trim().toUpperCase()
           : '');
@@ -40936,9 +41349,63 @@ function openScheduleDownloadSheet() {
   });
 }
 
+function getScheduleFinanceNavigationSiteCode() {
+  const boardSiteFilter = getScheduleSiteFilterValue();
+  if (boardSiteFilter && boardSiteFilter !== 'all') {
+    return String(boardSiteFilter).trim().toUpperCase();
+  }
+  const importSiteCode = String($('#scheduleImportSite')?.value || '').trim().toUpperCase();
+  if (importSiteCode) {
+    return importSiteCode;
+  }
+  const userSiteCode = String(state.user?.site_code || '').trim().toUpperCase();
+  if (userSiteCode && !isScheduleUploadTenantWideUser()) {
+    return userSiteCode;
+  }
+  return 'ALL';
+}
+
+function openScheduleFinanceDownloadWorkspace(options = {}) {
+  if (!canViewScheduleReportsWorkspace()) {
+    showToast('Finance 제출 탭 접근 권한이 없습니다.', 'error');
+    return;
+  }
+  const requestedMonth = normalizeMonthKey(options?.month || '');
+  const month = requestedMonth || normalizeMonthKey(getScheduleMonthValue()) || normalizeMonthKey(state.schedule?.month || '');
+  if (month) {
+    state.schedule.month = month;
+    const monthInput = $('#scheduleMonth');
+    if (monthInput instanceof HTMLInputElement) {
+      monthInput.value = month;
+    }
+  }
+
+  const requestedSiteCode = String(options?.siteCode || '').trim().toUpperCase();
+  const siteCode = requestedSiteCode || getScheduleFinanceNavigationSiteCode();
+  const reportsSiteSelect = $('#scheduleReportsSite');
+  if (reportsSiteSelect instanceof HTMLSelectElement) {
+    reportsSiteSelect.dataset.pendingValue = siteCode;
+    const hasMatchingOption = Array.from(reportsSiteSelect.options)
+      .some((option) => String(option.value || '').trim().toUpperCase() === siteCode);
+    if (hasMatchingOption) {
+      reportsSiteSelect.value = siteCode;
+    }
+  }
+
+  state.schedule.financeTab = SCHEDULE_FINANCE_TAB_DOWNLOAD;
+  onScheduleHqTabChange(SCHEDULE_TAB_REPORTS);
+  showToast(
+    siteCode && siteCode !== 'ALL'
+      ? `Finance용 스케쥴 제출 탭으로 이동했습니다. (${siteCode} · ${formatScheduleMonthTitle(month)})`
+      : 'Finance용 스케쥴 제출 탭으로 이동했습니다.',
+    'info',
+    2200,
+  );
+}
+
 async function onScheduleDownloadMonthlyExcel() {
-  if (!canMutateScheduleData()) {
-    showToast('다운로드 권한이 없습니다.', 'error');
+  if (!canViewScheduleReportsWorkspace()) {
+    showToast('Finance 제출 탭 접근 권한이 없습니다.', 'error');
     return;
   }
   const month = normalizeMonthKey($(`#${state.sheetContext?.monthInputId || ''}`)?.value || getScheduleMonthValue());
@@ -40948,78 +41415,8 @@ async function onScheduleDownloadMonthlyExcel() {
     showToast('월을 선택해 주세요.', 'error');
     return;
   }
-  const accessToken = getActiveAccessToken();
-  if (!accessToken) {
-    showToast('로그인 후 이용해 주세요.', 'error');
-    return;
-  }
-  const params = new URLSearchParams();
-  params.set('month', month);
-  params.set('tenant_code', getScheduleTenantValue());
-  params.set('site_code', siteCode === 'ALL' ? 'all' : siteCode);
-  const requestUrl = `${state.activeApiBase}/schedules/export/monthly-excel?${params.toString()}`;
-  let response = await fetch(requestUrl, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-    mode: 'cors',
-    credentials: 'omit',
-  });
-  if (response.status === 401) {
-    const refreshed = await requestTokenRefresh();
-    if (refreshed) {
-      response = await fetch(requestUrl, {
-        headers: {
-          Authorization: `Bearer ${getActiveAccessToken()}`,
-        },
-        mode: 'cors',
-        credentials: 'omit',
-      });
-    }
-  }
-  if (!response.ok) {
-    throw new Error(`다운로드 요청 실패 (${response.status})`);
-  }
-  const blob = await response.blob();
-  const href = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  const fallbackGeneratedOn = (() => {
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Seoul',
-      year: '2-digit',
-      month: '2-digit',
-      day: '2-digit',
-    });
-    const parts = Object.fromEntries(
-      formatter.formatToParts(new Date()).map((part) => [part.type, part.value]),
-    );
-    return `${parts.year || ''}${parts.month || ''}${parts.day || ''}`;
-  })();
-  const siteNameForFile = siteCode === 'ALL'
-    ? `HQ_${getCurrentTenantDisplayName()}_월간 근무표_${`20${fallbackGeneratedOn}`}`
-    : `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 근무표_${siteCode}_${fallbackGeneratedOn}`;
-  const fallbackName = `${siteNameForFile}.xlsx`;
-  const disposition = String(response.headers.get('Content-Disposition') || '').trim();
-  const utf8Match = disposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
-  const basicMatch = disposition.match(/filename="?([^"]+)"?/i);
-  let resolvedName = fallbackName;
-  if (utf8Match?.[1]) {
-    try {
-      resolvedName = decodeURIComponent(String(utf8Match[1]).trim());
-    } catch (_) {
-      resolvedName = fallbackName;
-    }
-  } else if (basicMatch?.[1]) {
-    resolvedName = String(basicMatch[1]).trim() || fallbackName;
-  }
-  anchor.href = href;
-  anchor.download = resolvedName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(href);
   closeSheet();
-  showToast('월간 근무표를 다운로드했습니다.', 'success', 2200);
+  openScheduleFinanceDownloadWorkspace({ month, siteCode });
 }
 
 function formatScheduleCreateTemplateOptionLabel(row = {}) {
@@ -42886,6 +43283,45 @@ async function onScheduleTemplateToggleActive(templateId = '', nextActive = true
   await loadScheduleImportMappingProfile({ force: true });
 }
 
+async function onScheduleTemplateDelete(templateId = '') {
+  const id = String(templateId || '').trim();
+  if (!id) {
+    showToast('삭제할 템플릿을 찾을 수 없습니다.', 'error', 2200);
+    return;
+  }
+  const result = await apiRequest(`/schedules/work-templates/${encodeURIComponent(id)}?tenant_code=${encodeURIComponent(getScheduleTenantValue())}`, {
+    method: 'DELETE',
+  });
+  const deactivatedProfiles = Array.isArray(result?.deactivated_profiles) ? result.deactivated_profiles : [];
+  const deactivatedCount = Number(result?.deactivated_profile_count || deactivatedProfiles.length || 0);
+  const profileNotice = String(result?.profile_notice || '').trim();
+  if (state.schedule) {
+    state.schedule.importMappingProfile = null;
+    state.schedule.importMappingProfileFetchedAt = 0;
+    state.schedule.importMappingSelectedProfileId = '';
+    state.schedule.importMappingTemplateDeleteNotice = deactivatedCount > 0
+      ? (profileNotice || '템플릿이 삭제되어 매핑 프로필을 다시 설정해야 업로드를 진행할 수 있습니다.')
+      : '';
+  }
+  await Promise.allSettled([
+    loadScheduleTemplateRows({ force: true }),
+    loadScheduleImportMappingProfile({ force: true }),
+  ]);
+  renderScheduleTemplateTable();
+  renderScheduleUploadWorkspace();
+  invalidateScheduleImportAnalysis(['mapping_profile']);
+
+  const profileNames = deactivatedProfiles
+    .map((item) => String(item?.profile_name || '').trim())
+    .filter(Boolean);
+  const message = [
+    `${String(result?.template_name || '템플릿').trim() || '템플릿'}을(를) 삭제했습니다.`,
+    deactivatedCount > 0 ? `연결된 매핑 프로필 ${deactivatedCount}개 비활성화` : '',
+    profileNames.length ? profileNames.join(', ') : '',
+  ].filter(Boolean).join(' · ');
+  showToast(message, 'success', 3200);
+}
+
 function normalizeScheduleViewMode(value = '') {
   const mode = String(value || '').trim().toLowerCase();
   if (mode === SCHEDULE_VIEW_MODE_LIST) return SCHEDULE_VIEW_MODE_LIST;
@@ -42980,6 +43416,12 @@ function renderScheduleMonthToolbar() {
     leaveManageToggle.checked = state.schedule.showLeaveRows !== false;
   }
   renderScheduleHqTabs();
+}
+
+function syncScheduleToolbarFilterStateFromInputs() {
+  state.schedule.siteFilter = getScheduleSiteFilterValue();
+  state.schedule.shiftFilter = getScheduleShiftFilterValue();
+  state.schedule.showLeaveRows = getScheduleShowLeaveRowsValue();
 }
 
 function buildScheduleToolbarMetaText() {
@@ -43497,7 +43939,7 @@ async function ensureScheduleDateDetails(dateKey, siteCodes = [], { force = fals
   return Promise.all(uniqueSiteCodes.map((siteCode) => loadScheduleDateDetail(workDate, siteCode, { force })));
 }
 
-async function loadApprovedLeaveRowsForMonths(months = [], { tenantCode = '', limit = 300 } = {}) {
+async function loadApprovedLeaveRowsForMonths(months = [], { tenantCode = '', limit = 300, force = false } = {}) {
   if (!can('leave')) return [];
   const normalizedMonths = Array.from(
     new Set(
@@ -43522,9 +43964,12 @@ async function loadApprovedLeaveRowsForMonths(months = [], { tenantCode = '', li
       params.set('employee_code', employeeCode);
     }
   }
+  if (force) {
+    params.set('_rt', String(Date.now()));
+  }
 
   const queryString = params.toString();
-  const rows = await apiRequest(`/leaves${queryString ? `?${queryString}` : ''}`);
+  const rows = await apiRequest(`/leaves${queryString ? `?${queryString}` : ''}`, { noStore: force });
   return normalizeApprovedLeaveRows(rows, normalizedMonths);
 }
 
@@ -44229,7 +44674,13 @@ function getScheduleBoardDayMap(month) {
 function getScheduleCardVariant(item = {}) {
   if (String(item?.display_variant || '').trim().toLowerCase() === 'combined') {
     const variants = getScheduleBoardDisplayShiftTypes(item);
-    if (variants.length && !variants.includes('night')) {
+    if (variants.includes('night') && variants.includes('day')) {
+      return 'combined';
+    }
+    if (variants.includes('night')) {
+      return 'night';
+    }
+    if (variants.length) {
       return 'day';
     }
     return 'combined';
@@ -44684,6 +45135,7 @@ function renderScheduleDetail() {
 
 function renderScheduleAll() {
   const renderStartedAt = getPerfNowMs();
+  syncScheduleToolbarFilterStateFromInputs();
   renderScheduleMonthToolbar();
   renderScheduleFilterOptions();
   state.schedule.filteredRows = getScheduleScopedRows();
@@ -45617,6 +46069,7 @@ async function loadSchedule({ force = false, deferDetailHydration = false, backg
 
     const gridRenderStartedAt = getPerfNowMs();
     renderScheduleAll();
+    ensureScheduleLiveRefresh({ immediate: true });
     const gridRenderElapsedMs = getPerfNowMs() - gridRenderStartedAt;
     const monthSwitchGridReadyMs = monthSwitchStartedAt > 0
       ? (getPerfNowMs() - monthSwitchStartedAt)
@@ -45661,7 +46114,7 @@ async function loadSchedule({ force = false, deferDetailHydration = false, backg
       const detailFetchStartedAt = getPerfNowMs();
       const [rowsResult, leaveRowsResult, employeeRowsResult] = await Promise.allSettled([
         loadMonthlySchedulesForMonths([month], { tenantCode, force }),
-        loadApprovedLeaveRowsForMonths([month], { tenantCode }),
+        loadApprovedLeaveRowsForMonths([month], { tenantCode, force }),
         isManagerMode ? getScheduleDataProvider().listEmployees() : Promise.resolve([]),
       ]);
       const detailApiElapsedMs = getPerfNowMs() - detailFetchStartedAt;
@@ -45718,6 +46171,7 @@ async function loadSchedule({ force = false, deferDetailHydration = false, backg
 
       const detailRenderStartedAt = getPerfNowMs();
       renderScheduleAll();
+      ensureScheduleLiveRefresh({ immediate: true });
       const detailRenderElapsedMs = getPerfNowMs() - detailRenderStartedAt;
       const monthSwitchDetailReadyMs = monthSwitchStartedAt > 0
         ? (getPerfNowMs() - monthSwitchStartedAt)
@@ -45798,6 +46252,346 @@ function resetPollingRuntime() {
   state.pollDelayMs = POLL_BASE_INTERVAL_MS;
   state.pollSuspended = false;
   state.pollInFlight = false;
+}
+
+function isScheduleLiveRefreshEnabled() {
+  if (!state.token) return false;
+  if (state.currentView !== 'schedule') return false;
+  if (document.visibilityState !== 'visible') return false;
+  if (!isScheduleBoardTab(getScheduleActiveTopTab())) return false;
+  return Boolean(normalizeMonthKey(state.schedule?.month));
+}
+
+function getScheduleLiveRefreshSiteCode() {
+  const siteFilter = getScheduleSiteFilterValue();
+  if (!siteFilter || siteFilter === 'all') return '';
+  return String(siteFilter || '').trim().toUpperCase();
+}
+
+function buildScheduleLiveStreamPath() {
+  const month = normalizeMonthKey(state.schedule?.month);
+  if (!month) return '';
+  const params = new URLSearchParams();
+  params.set('month', month);
+  const tenantCode = ensureScheduleTenantCode(state.schedule?.tenantCode);
+  if (tenantCode) params.set('tenant_code', tenantCode);
+  const siteCode = getScheduleLiveRefreshSiteCode();
+  if (siteCode) params.set('site_code', siteCode);
+  return `/schedules/events/stream?${params.toString()}`;
+}
+
+function stopScheduleLiveRefresh() {
+  if (state.scheduleLiveRefreshTimer) {
+    clearTimeout(state.scheduleLiveRefreshTimer);
+  }
+  state.scheduleLiveRefreshTimer = null;
+  if (state.scheduleLiveFallbackTimer) {
+    clearTimeout(state.scheduleLiveFallbackTimer);
+  }
+  state.scheduleLiveFallbackTimer = null;
+  state.scheduleLiveRefreshQueued = false;
+  state.scheduleLiveStreamPath = '';
+  if (state.scheduleLiveStreamAbortController) {
+    try {
+      state.scheduleLiveStreamAbortController.abort();
+    } catch {
+      // no-op
+    }
+  }
+  state.scheduleLiveStreamAbortController = null;
+  state.scheduleLiveStreamPromise = null;
+  state.scheduleLiveStreamConnected = false;
+}
+
+async function runScheduleLiveFallbackCycle() {
+  if (!isScheduleLiveRefreshEnabled()) return;
+  if (state.scheduleLiveStreamConnected) {
+    state.scheduleLiveFallbackTimer = null;
+    return;
+  }
+  if (!getActiveAccessToken()) {
+    scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
+    return;
+  }
+  if (state.scheduleLiveRefreshInFlight) {
+    scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
+    return;
+  }
+  state.scheduleLiveRefreshInFlight = true;
+  try {
+    await refreshScheduleBoardLiteInBackground({ force: true });
+  } catch (error) {
+    console.error('[RG ARLS] schedule live fallback refresh failed', error);
+  } finally {
+    state.scheduleLiveRefreshInFlight = false;
+    scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
+  }
+}
+
+function scheduleNextScheduleLiveFallbackPoll(delayMs = SCHEDULE_LIVE_FALLBACK_POLL_MS) {
+  if (state.scheduleLiveFallbackTimer) {
+    clearTimeout(state.scheduleLiveFallbackTimer);
+  }
+  state.scheduleLiveFallbackTimer = null;
+  if (!isScheduleLiveRefreshEnabled()) return;
+  if (state.scheduleLiveStreamConnected) return;
+  const nextDelay = Math.max(0, Number(delayMs) || SCHEDULE_LIVE_FALLBACK_POLL_MS);
+  state.scheduleLiveFallbackTimer = setTimeout(() => {
+    runScheduleLiveFallbackCycle().catch((error) => {
+      console.error('[RG ARLS] schedule live fallback cycle failed', error);
+    });
+  }, nextDelay);
+}
+
+function scheduleNextScheduleLiveRefresh(delayMs = SCHEDULE_LIVE_STREAM_RETRY_MS) {
+  if (state.scheduleLiveRefreshTimer) {
+    clearTimeout(state.scheduleLiveRefreshTimer);
+  }
+  state.scheduleLiveRefreshTimer = null;
+  if (!isScheduleLiveRefreshEnabled()) return;
+  const nextDelay = Math.max(0, Number(delayMs) || SCHEDULE_LIVE_STREAM_RETRY_MS);
+  state.scheduleLiveRefreshTimer = setTimeout(() => {
+    runScheduleLiveRefreshCycle().catch((error) => {
+      if (isExpectedScheduleLiveRefreshAbort(error)) return;
+      console.error('[RG ARLS] schedule live refresh cycle failed', error);
+    });
+  }, nextDelay);
+}
+
+function isExpectedScheduleLiveRefreshAbort(error) {
+  const name = String(error?.name || '').trim();
+  const message = String(error?.message || '').trim();
+  if (name === 'AbortError') return true;
+  return message.includes('BodyStreamBuffer was aborted');
+}
+
+function handleScheduleLiveStreamEvent(rawEvent = '') {
+  const lines = String(rawEvent || '').replace(/\r/g, '').split('\n');
+  let eventName = 'message';
+  const dataLines = [];
+  lines.forEach((line) => {
+    if (!line || line.startsWith(':')) return;
+    if (line.startsWith('event:')) {
+      eventName = String(line.slice(6) || '').trim() || 'message';
+      return;
+    }
+    if (line.startsWith('data:')) {
+      dataLines.push(String(line.slice(5) || '').trim());
+    }
+  });
+  if (eventName !== 'schedule_changed' || !dataLines.length) return;
+  let payload = null;
+  try {
+    payload = JSON.parse(dataLines.join('\n'));
+  } catch {
+    payload = null;
+  }
+  if (!payload || typeof payload !== 'object') return;
+  const eventMonth = normalizeMonthKey(payload.month || '');
+  if (eventMonth && eventMonth !== normalizeMonthKey(state.schedule?.month)) return;
+  const eventSiteCode = String(payload.site_code || '').trim().toUpperCase();
+  const activeSiteCode = getScheduleLiveRefreshSiteCode();
+  if (activeSiteCode && eventSiteCode && activeSiteCode !== eventSiteCode) return;
+  if (!isScheduleLiveRefreshEnabled()) return;
+  state.scheduleLiveRefreshQueued = true;
+  runActionSafely(triggerScheduleLiveRefreshFromEvent(), '스케줄 변경을 즉시 반영하지 못했습니다.');
+}
+
+function buildScheduleRealtimeSignature({ rows = [], leaveRows = [], employees = [], boardDays = [] } = {}) {
+  return JSON.stringify({
+    rows: normalizeScheduleRows(rows).map((row) => [
+      String(row?.id || row?.schedule_id || '').trim(),
+      String(row?.employee_id || '').trim(),
+      String(row?.employee_code || '').trim(),
+      String(row?.schedule_date || '').trim(),
+      normalizeShiftType(row?.shift_type || ''),
+      String(row?.shift_start_time || row?.start_time || '').trim(),
+      String(row?.shift_end_time || row?.end_time || '').trim(),
+      String(row?.source || '').trim(),
+      String(row?.source_ticket_id || '').trim(),
+      String(row?.schedule_note || '').trim(),
+    ]),
+    leaveRows: (Array.isArray(leaveRows) ? leaveRows : []).map((row) => [
+      String(row?.employee_id || '').trim(),
+      String(row?.employee_code || '').trim(),
+      String(row?.work_date || row?.date || '').trim(),
+      String(row?.status || '').trim(),
+      String(row?.leave_type || '').trim(),
+    ]),
+    employees: normalizeScheduleEmployees(employees).map((row) => [
+      String(row?.employee_id || row?.id || '').trim(),
+      String(row?.employee_code || '').trim(),
+      String(row?.full_name || row?.employee_name || '').trim(),
+      String(row?.site_code || '').trim(),
+    ]),
+    boardDays: normalizeScheduleBoardDays(
+      normalizeMonthKey(state.schedule?.month),
+      Array.isArray(boardDays) ? boardDays : [],
+    ).map((day) => [
+      String(day?.date || '').trim(),
+      Number(day?.support_request_count || 0),
+      (Array.isArray(day?.items) ? day.items : []).map((item) => [
+        String(item?.schedule_id || '').trim(),
+        String(item?.employee_code || '').trim(),
+        normalizeShiftType(item?.shift_type || ''),
+        String(item?.schedule_display_time || '').trim(),
+        String(item?.source || '').trim(),
+      ]),
+    ]),
+  });
+}
+
+async function consumeScheduleLiveStream(response) {
+  const reader = response?.body?.getReader?.();
+  if (!reader) {
+    throw new Error('schedule live stream reader unavailable');
+  }
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let separatorIndex = buffer.indexOf('\n\n');
+    while (separatorIndex >= 0) {
+      const rawEvent = buffer.slice(0, separatorIndex);
+      buffer = buffer.slice(separatorIndex + 2);
+      handleScheduleLiveStreamEvent(rawEvent);
+      separatorIndex = buffer.indexOf('\n\n');
+    }
+  }
+}
+
+async function triggerScheduleLiveRefreshFromEvent() {
+  if (!isScheduleLiveRefreshEnabled()) return false;
+  if (state.scheduleLiveRefreshInFlight) {
+    return false;
+  }
+  state.scheduleLiveRefreshInFlight = true;
+  try {
+    let shouldRun = state.scheduleLiveRefreshQueued;
+    state.scheduleLiveRefreshQueued = false;
+    let changed = false;
+    while (shouldRun) {
+      changed = await refreshScheduleBoardLiteInBackground({ force: true }) || changed;
+      shouldRun = state.scheduleLiveRefreshQueued;
+      state.scheduleLiveRefreshQueued = false;
+    }
+    return changed;
+  } catch (error) {
+    console.error('[RG ARLS] schedule live refresh failed', error);
+    return false;
+  } finally {
+    state.scheduleLiveRefreshInFlight = false;
+  }
+}
+
+async function runScheduleLiveRefreshCycle() {
+  if (!isScheduleLiveRefreshEnabled()) {
+    stopScheduleLiveRefresh();
+    return;
+  }
+  if (state.scheduleLiveStreamPromise) {
+    return state.scheduleLiveStreamPromise;
+  }
+
+  const streamPath = buildScheduleLiveStreamPath();
+  if (!streamPath) return null;
+
+  const authToken = getActiveAccessToken();
+  if (!authToken) {
+    scheduleNextScheduleLiveRefresh(SCHEDULE_LIVE_STREAM_RETRY_MS);
+    return null;
+  }
+
+  const controller = new AbortController();
+  const tenantHeader = String(getActiveTenantHeaderValue() || '').trim();
+  const headers = {
+    Accept: 'text/event-stream',
+  };
+  headers.Authorization = `Bearer ${authToken}`;
+  if (tenantHeader) {
+    headers['X-Tenant-Id'] = tenantHeader;
+  }
+
+  const streamPromise = (async () => {
+    try {
+      const response = await fetch(`${state.activeApiBase}${streamPath}`, {
+        method: 'GET',
+        headers,
+        signal: controller.signal,
+        credentials: 'omit',
+        mode: 'cors',
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `stream failed (${response.status})`);
+      }
+      state.scheduleLiveStreamConnected = true;
+      if (state.scheduleLiveFallbackTimer) {
+        clearTimeout(state.scheduleLiveFallbackTimer);
+      }
+      state.scheduleLiveFallbackTimer = null;
+      await consumeScheduleLiveStream(response);
+    } catch (error) {
+      if (controller.signal.aborted || isExpectedScheduleLiveRefreshAbort(error)) {
+        return null;
+      }
+      throw error;
+    } finally {
+      state.scheduleLiveStreamConnected = false;
+      if (state.scheduleLiveStreamPromise === streamPromise) {
+        state.scheduleLiveStreamPromise = null;
+      }
+      if (state.scheduleLiveStreamAbortController === controller) {
+        state.scheduleLiveStreamAbortController = null;
+      }
+      if (state.scheduleLiveStreamPath === streamPath) {
+        state.scheduleLiveStreamPath = '';
+      }
+      if (!controller.signal.aborted) {
+        scheduleNextScheduleLiveFallbackPoll(0);
+        scheduleNextScheduleLiveRefresh(SCHEDULE_LIVE_STREAM_RETRY_MS);
+      }
+    }
+  })();
+
+  state.scheduleLiveStreamAbortController = controller;
+  state.scheduleLiveStreamPath = streamPath;
+  state.scheduleLiveStreamPromise = streamPromise;
+  return streamPromise;
+}
+
+function ensureScheduleLiveRefresh({ immediate = false } = {}) {
+  if (!isScheduleLiveRefreshEnabled()) {
+    stopScheduleLiveRefresh();
+    return;
+  }
+  const nextStreamPath = buildScheduleLiveStreamPath();
+  if (state.scheduleLiveStreamPromise && state.scheduleLiveStreamPath === nextStreamPath) return;
+  if (state.scheduleLiveStreamPromise && state.scheduleLiveStreamPath !== nextStreamPath) {
+    stopScheduleLiveRefresh();
+  }
+  if (immediate) {
+    if (!state.scheduleLiveStreamConnected) {
+      scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
+    }
+    runScheduleLiveRefreshCycle().catch((error) => {
+      if (isExpectedScheduleLiveRefreshAbort(error)) return;
+      console.error('[RG ARLS] schedule immediate live refresh failed', error);
+    });
+    return;
+  }
+  if (!state.scheduleLiveStreamConnected) {
+    scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
+  }
+  scheduleNextScheduleLiveRefresh(SCHEDULE_LIVE_STREAM_RETRY_MS);
+}
+
+function restartScheduleLiveRefreshAfterAuth() {
+  if (!isScheduleLiveRefreshEnabled()) return;
+  stopScheduleLiveRefresh();
+  ensureScheduleLiveRefresh({ immediate: true });
 }
 
 function scheduleNextPollingCycle(delayMs = state.pollDelayMs) {
@@ -46026,6 +46820,7 @@ async function onLoginSubmit(event) {
     }
     state.pendingRouteAfterLogin = DEFAULT_AUTH_ROUTE;
     ensurePolling();
+    restartScheduleLiveRefreshAfterAuth();
     setAuthMessage('로그인 성공', 'success');
     clearLoginFieldErrors();
   } catch (err) {
@@ -51231,7 +52026,7 @@ function bindUiEvents() {
 
     if (action === 'schedule-open-download-monthly-excel') {
       closeScheduleActionDropdowns();
-      runActionSafely(openScheduleDownloadSheet(), '다운로드 메뉴를 열지 못했습니다.');
+      runActionSafely(Promise.resolve(openScheduleFinanceDownloadWorkspace()), 'Finance 제출 탭으로 이동하지 못했습니다.');
       return;
     }
 
@@ -51473,16 +52268,48 @@ function bindUiEvents() {
       const templateId = String(actionEl.dataset.templateId || '').trim();
       const rows = Array.isArray(state.schedule?.templateRows) ? state.schedule.templateRows : [];
       const current = rows.find((row) => String(row?.id || '').trim() === templateId) || null;
-      const usageCount = Number(buildScheduleImportMappingUsageMap().get(templateId) || 0);
-      if (usageCount > 0) {
-        showToast(`사용 중인 매핑 프로필 ${usageCount}개가 있어 삭제할 수 없습니다.`, 'error', 2400);
+      if (!templateId || !current) {
+        showToast('삭제할 템플릿을 찾을 수 없습니다.', 'error', 2200);
         return;
       }
-      if (current?.is_active !== false) {
-        showToast('삭제 전에 템플릿을 먼저 비활성화해 주세요.', 'error', 2200);
-        return;
+      const linkedProfiles = buildScheduleTemplateLinkedProfileRows(templateId);
+      const usageCount = linkedProfiles.length;
+      const templateName = String(current?.template_name || '').trim() || '선택한 템플릿';
+      const extra = document.createElement('div');
+      extra.className = 'stack';
+      const warningLines = [
+        '삭제 후에는 이 템플릿을 복구할 수 없습니다.',
+        usageCount > 0
+          ? `이 템플릿을 사용하는 매핑 프로필 ${usageCount}개가 자동으로 비활성화됩니다.`
+          : '연결된 매핑 프로필은 없습니다.',
+        '삭제된 템플릿을 참조하던 업로드는 매핑 프로필을 다시 설정할 때까지 계속 차단됩니다.',
+      ];
+      warningLines.forEach((text) => {
+        const line = document.createElement('p');
+        line.className = 'muted';
+        line.textContent = text;
+        extra.appendChild(line);
+      });
+      const profileNames = linkedProfiles
+        .map((profile) => String(profile?.profile_name || '').trim())
+        .filter(Boolean);
+      if (profileNames.length) {
+        const list = document.createElement('p');
+        list.className = 'muted';
+        list.textContent = `영향 프로필: ${profileNames.join(', ')}`;
+        extra.appendChild(list);
       }
-      showToast('현재 배포에서는 템플릿 삭제 API가 준비되지 않아 비활성화 상태로만 관리할 수 있습니다.', 'info', 2800);
+      openConfirmDialog({
+        title: '근무 템플릿 삭제',
+        message: `${templateName}을(를) 삭제하시겠습니까?`,
+        acceptLabel: '삭제',
+        acceptVariant: 'btn-destructive',
+        triggerEl: actionEl,
+        extraNode: extra,
+        onAccept: async () => {
+          await onScheduleTemplateDelete(templateId);
+        },
+      });
       return;
     }
 
@@ -52538,6 +53365,9 @@ function bindUiEvents() {
       resetScheduleExpandedDays();
       ensureScheduleSelectedDate();
       renderScheduleAll();
+      if (target.id === 'scheduleSiteFilter') {
+        ensureScheduleLiveRefresh({ immediate: true });
+      }
       return;
     }
 
@@ -53011,6 +53841,9 @@ function bindUiEvents() {
       resetScheduleExpandedDays();
       ensureScheduleSelectedDate();
       renderScheduleAll();
+      if (target.id === 'scheduleSiteFilter') {
+        ensureScheduleLiveRefresh({ immediate: true });
+      }
       return;
     }
 
@@ -53089,6 +53922,7 @@ function bindUiEvents() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') {
       stopPolling();
+      stopScheduleLiveRefresh();
       return;
     }
     if (!state.token) return;
@@ -53099,10 +53933,12 @@ function bindUiEvents() {
         })
         .finally(() => {
           ensurePolling();
+          ensureScheduleLiveRefresh({ immediate: state.currentView === 'schedule' });
         });
       return;
     }
     ensurePolling();
+    ensureScheduleLiveRefresh({ immediate: state.currentView === 'schedule' });
   }, { signal });
 
   window.addEventListener('hashchange', () => {

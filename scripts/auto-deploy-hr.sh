@@ -29,7 +29,7 @@ resolve_bin() {
 AUTO_DEPLOY_BRANCH="${AUTO_DEPLOY_BRANCH:-main}"
 AUTO_DEPLOY_REMOTE="${AUTO_DEPLOY_REMOTE:-}"
 AUTO_DEPLOY_COMMIT_MSG="${AUTO_DEPLOY_COMMIT_MSG:-ui: auto deploy $(date +%Y-%m-%dT%H:%M:%S)}"
-AZ_RG="${AZ_RG:-rg-shifty-dev}"
+AZ_RG="${AZ_RG:-}"
 AZ_BACKEND_APP="${AZ_BACKEND_APP:-rg-arls-backend}"
 AZ_PYTHON_DEFAULT="$(ls -1 /opt/homebrew/Cellar/azure-cli/*/libexec/bin/python 2>/dev/null | tail -n 1 || true)"
 AZ_PYTHON_CLI="${AZ_PYTHON_CLI:-$AZ_PYTHON_DEFAULT}"
@@ -119,6 +119,10 @@ resolve_acr_name() {
     return 0
   fi
 
+  if [[ -z "${AZ_RG:-}" ]]; then
+    return 0
+  fi
+
   if ! configure_az_cli; then
     log "az CLI 실행 불가로 ACR 자동 감지를 건너뜁니다."
     return 0
@@ -136,9 +140,37 @@ resolve_acr_name() {
   fi
 }
 
+resolve_rg_by_backend_app() {
+  if [[ -z "$AZ_BACKEND_APP" ]]; then
+    return 1
+  fi
+
+  local rows
+  rows="$(az_cli webapp list --query "[?name=='$AZ_BACKEND_APP'].{name:name,resourceGroup:resourceGroup}" -o tsv 2>/dev/null || true)"
+  if [[ -z "$rows" ]]; then
+    return 1
+  fi
+
+  local rg_count
+  rg_count="$(printf '%s\n' "$rows" | sed '/^$/d' | wc -l | tr -d ' ')"
+  if [[ "$rg_count" -eq 1 ]]; then
+    printf '%s\n' "$rows" | awk -F '\t' '{print $2}'
+    return 0
+  fi
+
+  echo "동일한 웹앱명 '$AZ_BACKEND_APP'이(가) 여러 RG에 존재합니다."
+  printf '%s\n' "$rows" | awk -F '\t' '{print " - " $2 " / " $1}'
+  return 1
+}
+
 main() {
   attempt_git_push
   resolve_acr_name
+  if [[ -z "$AZ_RG" ]]; then
+    if ! AZ_RG="$(resolve_rg_by_backend_app)"; then
+      echo "AZ_RG를 지정하지 않으면 컨테이너 자격증명 자동 감지가 정확하지 않을 수 있습니다."
+    fi
+  fi
 
   local has_backend_deploy="false"
   local arg

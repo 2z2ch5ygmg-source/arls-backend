@@ -971,8 +971,18 @@ CREATE TABLE IF NOT EXISTS support_assignment (
     worker_type text NOT NULL,
     employee_id uuid,
     name text NOT NULL,
+    support_period text NOT NULL DEFAULT 'day',
+    slot_index int NOT NULL DEFAULT 1,
+    affiliation text,
     source text NOT NULL DEFAULT 'SHEET',
+    source_ticket_id bigint,
+    source_event_uid text,
     created_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    updated_at timestamptz NOT NULL DEFAULT timezone('utc', now()),
+    CONSTRAINT chk_support_assignment_support_period
+      CHECK (support_period IN ('day', 'night')),
+    CONSTRAINT chk_support_assignment_slot_index
+      CHECK (slot_index >= 1),
     CONSTRAINT chk_support_assignment_worker_type
       CHECK (worker_type IN ('F', 'BK', 'INTERNAL', 'UNAVAILABLE'))
 );
@@ -983,8 +993,36 @@ CREATE INDEX IF NOT EXISTS idx_support_assignment_tenant_site_date
     ON support_assignment (tenant_id, site_id, work_date DESC);
 CREATE INDEX IF NOT EXISTS idx_support_assignment_tenant_employee_date
     ON support_assignment (tenant_id, employee_id, work_date DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_support_assignment_tenant_site_date_name
-    ON support_assignment (tenant_id, site_id, work_date, lower(name));
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'support_assignment'
+      AND column_name = 'support_period'
+  ) THEN
+    DROP INDEX IF EXISTS uq_support_assignment_tenant_site_date_name;
+    DROP INDEX IF EXISTS uq_support_assignment_tenant_site_date_period_name;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_support_assignment_tenant_site_date_period_slot
+      ON support_assignment (tenant_id, site_id, work_date, support_period, slot_index);
+
+    CREATE INDEX IF NOT EXISTS idx_support_assignment_tenant_site_date_period_name
+      ON support_assignment (tenant_id, site_id, work_date, support_period, lower(name));
+
+    CREATE INDEX IF NOT EXISTS idx_support_assignment_source_ticket
+      ON support_assignment (tenant_id, source_ticket_id, work_date DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_support_assignment_source_event
+      ON support_assignment (source_event_uid);
+  ELSE
+    DROP INDEX IF EXISTS uq_support_assignment_tenant_site_date_name;
+    DROP INDEX IF EXISTS uq_support_assignment_tenant_site_date_period_name;
+  END IF;
+END
+$$;
 
 CREATE TABLE IF NOT EXISTS daily_event_log (
     id uuid PRIMARY KEY,

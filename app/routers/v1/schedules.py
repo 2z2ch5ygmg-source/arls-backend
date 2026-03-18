@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 from collections import Counter
 from copy import copy
@@ -17,10 +18,11 @@ from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from io import BytesIO, StringIO
 from pathlib import Path
+from queue import Empty
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, Body, Depends, Form, Header, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from openpyxl.cell.cell import MergedCell
 from openpyxl import Workbook, load_workbook
@@ -35,6 +37,7 @@ from ...db import (
     SENTRIX_SUPPORT_HQ_BATCH_SCOPE_CONSTRAINT_SQL,
     ensure_schedule_import_raw_workbook_columns,
 )
+from ...realtime import schedule_event_bus
 from ...schemas import (
     AppleDaytimeShiftOut,
     ImportPreviewIssueLocationOut,
@@ -82,6 +85,7 @@ from ...schemas import (
     SupportRoundtripStatusOut,
     ScheduleTemplateBulkCreateIn,
     ScheduleTemplateCreate,
+    ScheduleTemplateDeleteOut,
     ScheduleTemplateOut,
     ScheduleTemplateSingleCreateIn,
     ScheduleTemplateUpdate,
@@ -220,6 +224,7 @@ SHIFT_TYPE_BY_DUTY_TYPE = {
     "night": "night",
 }
 ARLS_MONTHLY_BASE_UPLOAD_SOURCE = "arls_monthly_base_upload"
+ARLS_SUPPORT_UPLOAD_INTERNAL_SOURCE = "support_upload_internal"
 ARLS_MONTHLY_BASE_SOURCE_ALIASES = {
     ARLS_MONTHLY_BASE_UPLOAD_SOURCE,
     "workbook_import",
@@ -241,6 +246,7 @@ ARLS_METADATA_SHEET_NAME = "_ARLS_EXPORT_META"
 ARLS_SUPPORT_METADATA_SHEET_NAME = "_ARLS_SUPPORT_META"
 SENTRIX_SUPPORT_HQ_METADATA_SHEET_NAME = "_SENTRIX_SUPPORT_HQ_META"
 ARLS_EXPORT_TEMPLATE_VERSION = "monthly_schedule_template.v5"
+ARLS_LEGACY_HIDDEN_TEMPLATE_SHEET_NAME = "출동.잔업 초과수당(2)"
 ARLS_EXPORT_SOURCE_VERSION = "schedule_export.phase2.roundtrip"
 ARLS_SUPPORT_FORM_VERSION = "support_roundtrip.phase3.v1"
 SENTRIX_HQ_ROSTER_ASSIGNMENT_SOURCE = "HQ_ROUNDTRIP"
@@ -337,18 +343,18 @@ SCHEDULE_IMPORT_MAPPING_ROW_TYPES = {"day", "overtime", "night"}
 SCHEDULE_IMPORT_ISSUE_CATALOG: dict[str, dict[str, str]] = {
     "TEMPLATE_FAMILY_MISMATCH": {
         "severity": "blocking",
-        "message": "지원하지 않는 월간 근무표 템플릿입니다.",
-        "guidance": "현재 ARLS 빈 양식 또는 최신 기준본으로 다시 시작하세요.",
+        "message": "업로드한 파일이 현재 사용하는 양식과 다릅니다.",
+        "guidance": "현재 ARLS 양식을 다시 다운로드한 뒤 작업해 주세요.",
     },
     "TEMPLATE_REVISION_STALE": {
         "severity": "blocking",
-        "message": "업로드한 파일이 현재 ARLS 기준보다 오래되었습니다.",
-        "guidance": "최신 기준본을 다시 다운로드한 뒤 수정본을 업로드하세요.",
+        "message": "이 파일을 받은 뒤 스케줄이 바뀌었습니다.",
+        "guidance": "최신 기준 파일을 다시 다운로드한 뒤 수정해서 업로드해 주세요.",
     },
     "SECTION_NOT_FOUND": {
         "severity": "blocking",
-        "message": "필수 섹션을 찾지 못했습니다.",
-        "guidance": "현재 지원 템플릿 family의 workbook인지 확인하세요.",
+        "message": "파일에서 꼭 필요한 입력 구역을 찾지 못했습니다.",
+        "guidance": "양식 구조를 바꾸지 않았는지 확인하고 최신 파일로 다시 시도해 주세요.",
     },
     "DATE_HEADER_PARSE_FAILED": {
         "severity": "blocking",
@@ -362,8 +368,8 @@ SCHEDULE_IMPORT_ISSUE_CATALOG: dict[str, dict[str, str]] = {
     },
     "TEMPLATE_MAPPING_MISSING": {
         "severity": "blocking",
-        "message": "시간값에 대응하는 근무 템플릿 매핑이 없습니다.",
-        "guidance": "엑셀 숫자값(행 유형 + 시간)을 ARLS 근무 템플릿 시간 범위와 연결하는 import mapping profile을 준비하세요.",
+        "message": "이 시간값과 연결된 근무시간 설정을 찾지 못했습니다.",
+        "guidance": "근무시간 설정을 확인한 뒤 다시 업로드해 주세요.",
     },
     "MULTI_PERSON_CELL": {
         "severity": "blocking",
@@ -405,10 +411,35 @@ SCHEDULE_IMPORT_ISSUE_CATALOG: dict[str, dict[str, str]] = {
         "message": "동일 이름의 active 직원이 여러 명 있어 자동 매칭할 수 없습니다.",
         "guidance": "동일 지점 내 동명이인 정리 후 다시 업로드하세요.",
     },
+    "SUPPORT_INTERNAL_MATCH_AMBIGUOUS_REVIEW": {
+        "severity": "warning",
+        "message": "지원근무자 내부 매칭이 애매해 검토가 필요합니다.",
+        "guidance": "대상 스토어의 동명이인 여부를 확인한 뒤 다시 판단하세요.",
+    },
+    "SUPPORT_OTHER_SITE_MATCH_REVIEW": {
+        "severity": "warning",
+        "message": "해당 스토어에는 없지만 타 스토어 후보가 있어 검토가 필요합니다.",
+        "guidance": "현재 업로드 대상 스토어 소속인지 확인하세요.",
+    },
+    "SUPPORT_INTERNAL_INACTIVE_REVIEW": {
+        "severity": "warning",
+        "message": "직원 명단에는 있으나 현재 날짜 기준 active 상태가 아니어서 검토가 필요합니다.",
+        "guidance": "휴직/퇴사/이동 여부와 적용 날짜를 확인하세요.",
+    },
+    "SUPPORT_INTERNAL_TEMPLATE_MISSING": {
+        "severity": "blocking",
+        "message": "내부 지원근무를 생성할 기본 템플릿이 없습니다.",
+        "guidance": "주간/야간 기본 스케줄 템플릿을 준비한 뒤 다시 업로드하세요.",
+    },
+    "SUPPORT_FOREIGN_LINEAGE_REVIEW": {
+        "severity": "warning",
+        "message": "다른 source가 관리 중인 지원 슬롯이라 검토가 필요합니다.",
+        "guidance": "현재 지원 슬롯을 어떤 업로드/source가 관리하는지 확인하세요.",
+    },
     "NON_BASE_LINEAGE_CONFLICT": {
         "severity": "blocking",
-        "message": "같은 슬롯에 다른 lineage의 스케줄이 있어 base upload로 덮어쓸 수 없습니다.",
-        "guidance": "수동/다른 source 스케줄을 먼저 정리한 뒤 다시 분석하세요.",
+        "message": "이 칸에는 다른 방식으로 등록된 일정이 있어 이번 업로드로 바꿀 수 없습니다.",
+        "guidance": "기존 일정을 먼저 정리한 뒤 다시 업로드해 주세요.",
     },
     "TEMPLATE_PROFILE_NOT_PREPARED": {
         "severity": "blocking",
@@ -548,8 +579,55 @@ def _support_cell_has_multiple_people(text: str) -> bool:
     return len(parts) > 1
 
 
+def _is_self_staff_support_entry(value: object) -> bool:
+    normalized = _normalize_workbook_display_value(value)
+    if not normalized:
+        return False
+    return bool(re.match(r"^자체(?:\s+|$)", normalized))
+
+
+def _parse_affiliated_external_support_entry(value: object) -> tuple[str, str, str] | None:
+    normalized = _normalize_workbook_display_value(value)
+    if not normalized or _is_self_staff_support_entry(normalized):
+        return None
+    parts = re.split(r"\s+", normalized, maxsplit=1)
+    if len(parts) != 2:
+        return None
+    affiliation = str(parts[0] or "").strip()
+    worker_name = str(parts[1] or "").strip()
+    if not affiliation or not worker_name:
+        return None
+    upper_affiliation = affiliation.upper()
+    if upper_affiliation in {"INTERNAL", "SELF", "UNAVAILABLE", "NOT_AVAILABLE"} or affiliation == "자체":
+        return None
+    worker_type = "BK" if upper_affiliation == "BK" else "F"
+    return upper_affiliation, worker_name, worker_type
+
+
+def _build_support_worker_match_message(
+    *,
+    worker_name: str,
+    issue_code: str | None,
+    self_staff: bool = False,
+) -> str | None:
+    normalized_name = str(worker_name or "").strip()
+    normalized_issue = str(issue_code or "").strip()
+    if not normalized_issue:
+        return None
+    if normalized_issue == "EMPLOYEE_MATCH_FAILED":
+        if self_staff:
+            return f"해당 스토어 직원 명단에 없는 자체 지원근무자입니다: {normalized_name}"
+        return f"직원 명단에 없는 지원근무자입니다: {normalized_name}"
+    if normalized_issue == "EMPLOYEE_MATCH_AMBIGUOUS":
+        if self_staff:
+            return f"해당 스토어 active 직원 명단에 동일 이름이 2명 이상입니다: {normalized_name}"
+        return f"동일 이름의 active 직원이 2명 이상입니다: {normalized_name}"
+    return None
+
+
 def _parse_support_worker_cell(value: object) -> dict[str, Any]:
     raw_text = _normalize_workbook_display_value(value)
+    external_entry = _parse_affiliated_external_support_entry(raw_text)
     if not raw_text:
         return {
             "raw_value": "",
@@ -557,6 +635,11 @@ def _parse_support_worker_cell(value: object) -> dict[str, Any]:
             "is_filled": False,
             "issue_code": None,
             "issue_message": None,
+            "worker_type": None,
+            "worker_name": None,
+            "requires_employee_match": False,
+            "self_staff": False,
+            "affiliation": None,
         }
     if raw_text.startswith("#"):
         return {
@@ -565,6 +648,11 @@ def _parse_support_worker_cell(value: object) -> dict[str, Any]:
             "is_filled": True,
             "issue_code": "WORKER_CELL_INVALID",
             "issue_message": "수식 오류 값은 지원근무자 셀에 사용할 수 없습니다.",
+            "worker_type": None,
+            "worker_name": None,
+            "requires_employee_match": False,
+            "self_staff": False,
+            "affiliation": None,
         }
     if _support_cell_has_multiple_people(raw_text):
         return {
@@ -573,6 +661,11 @@ def _parse_support_worker_cell(value: object) -> dict[str, Any]:
             "is_filled": True,
             "issue_code": "MULTI_PERSON_CELL",
             "issue_message": "한 셀에 2명 이상이 입력되어 있습니다.",
+            "worker_type": None,
+            "worker_name": None,
+            "requires_employee_match": False,
+            "self_staff": False,
+            "affiliation": None,
         }
     if raw_text in ARLS_IGNORE_VALUE_TOKENS:
         return {
@@ -581,6 +674,40 @@ def _parse_support_worker_cell(value: object) -> dict[str, Any]:
             "is_filled": True,
             "issue_code": "WORKER_CELL_INVALID",
             "issue_message": "근무자 셀에 라벨 값이 입력되어 있습니다.",
+            "worker_type": None,
+            "worker_name": None,
+            "requires_employee_match": False,
+            "self_staff": False,
+            "affiliation": None,
+        }
+    try:
+        worker_type, worker_name = parse_support_entry_text(raw_text)
+    except HTTPException:
+        return {
+            "raw_value": raw_text,
+            "semantic_type": "invalid",
+            "is_filled": True,
+            "issue_code": "WORKER_CELL_INVALID",
+            "issue_message": "지원근무자 이름 형식이 올바르지 않습니다.",
+            "worker_type": None,
+            "worker_name": None,
+            "requires_employee_match": False,
+            "self_staff": _is_self_staff_support_entry(raw_text),
+            "affiliation": None,
+        }
+    if external_entry and str(worker_type or "").strip().upper() == "INTERNAL":
+        affiliation, external_name, external_type = external_entry
+        return {
+            "raw_value": raw_text,
+            "semantic_type": "single_person",
+            "is_filled": True,
+            "issue_code": None,
+            "issue_message": None,
+            "worker_type": external_type,
+            "worker_name": external_name,
+            "requires_employee_match": False,
+            "self_staff": False,
+            "affiliation": affiliation,
         }
     return {
         "raw_value": raw_text,
@@ -588,6 +715,11 @@ def _parse_support_worker_cell(value: object) -> dict[str, Any]:
         "is_filled": True,
         "issue_code": None,
         "issue_message": None,
+        "worker_type": str(worker_type or "").strip().upper() or None,
+        "worker_name": str(worker_name or "").strip() or None,
+        "requires_employee_match": str(worker_type or "").strip().upper() == "INTERNAL",
+        "self_staff": _is_self_staff_support_entry(raw_text),
+        "affiliation": None,
     }
 
 
@@ -951,12 +1083,6 @@ def _merge_board_items_for_calendar(items: list[dict]) -> list[dict]:
     if len(rows) < 2:
         return rows
 
-    def _minutes_to_time_text(value: int | None) -> str | None:
-        if value is None:
-            return None
-        normalized = int(value) % 1440
-        return f"{normalized // 60:02d}:{normalized % 60:02d}:00"
-
     def _employee_key(item: dict) -> str:
         return str(
             item.get("employee_id")
@@ -972,69 +1098,142 @@ def _merge_board_items_for_calendar(items: list[dict]) -> list[dict]:
         value = _time_text_to_minutes(item.get("start_time"))
         return value if value is not None else 10**9
 
-    rows.sort(key=lambda item: (_site_key(item), _employee_key(item), _start_minutes(item)))
+    def _end_minutes(item: dict) -> int:
+        range_value = _comparable_range(item)
+        if range_value:
+            return range_value[1]
+        value = _time_text_to_minutes(item.get("end_time"))
+        return value if value is not None else 10**9
 
+    def _comparable_range(item: dict) -> tuple[int, int] | None:
+        start_value = _time_text_to_minutes(item.get("start_time"))
+        end_value = _time_text_to_minutes(item.get("end_time"))
+        if start_value is None or end_value is None:
+            return None
+        normalized_end = end_value
+        if normalized_end <= start_value:
+            normalized_end += 1440
+        return start_value, normalized_end
+
+    def _is_combinable(item: dict) -> bool:
+        if str(item.get("display_variant") or "").strip().lower() == "combined":
+            return False
+        if str(item.get("status") or "").strip().lower() == "leave":
+            return False
+        return _normalize_shift_type(str(item.get("shift_type") or "")) in {"day", "overtime", "night"}
+
+    def _can_extend_cluster(cluster: list[dict], candidate: dict) -> bool:
+        if not cluster:
+            return True
+        anchor = cluster[0]
+        if _employee_key(anchor) != _employee_key(candidate):
+            return False
+        if _site_key(anchor) != _site_key(candidate):
+            return False
+        candidate_shift = _normalize_shift_type(str(candidate.get("shift_type") or ""))
+        if candidate_shift not in {"day", "overtime", "night"}:
+            return False
+        used_shift_types = {
+            _normalize_shift_type(str(item.get("shift_type") or ""))
+            for item in cluster
+        }
+        if candidate_shift in used_shift_types:
+            return False
+        prev_range = _comparable_range(cluster[-1])
+        next_range = _comparable_range(candidate)
+        if prev_range is None or next_range is None:
+            return False
+        return prev_range[1] == next_range[0]
+
+    def _format_minutes(minutes: int) -> str:
+        normalized = minutes % 1440
+        return f"{normalized // 60:02d}:{normalized % 60:02d}:00"
+
+    def _build_combined_item(cluster: list[dict]) -> dict | None:
+        if len(cluster) < 2:
+            return cluster[0] if cluster else None
+        ranges = [_comparable_range(item) for item in cluster]
+        if any(value is None for value in ranges):
+            return None
+        normalized_ranges = [value for value in ranges if value is not None]
+        shift_types: list[str] = []
+        for item in cluster:
+            shift_type = _normalize_shift_type(str(item.get("shift_type") or ""))
+            if shift_type and shift_type not in shift_types:
+                shift_types.append(shift_type)
+        has_day = "day" in shift_types
+        has_night = "night" in shift_types
+        has_overtime = "overtime" in shift_types
+        if has_day and has_night:
+            shift_label = "주야"
+        elif has_night and has_overtime:
+            shift_label = "야간+초과"
+        else:
+            shift_label = "주간+초과"
+        combined_schedule_ids = list(
+            dict.fromkeys(
+                [
+                    str(item.get("schedule_id") or "").strip()
+                    for item in cluster
+                    if str(item.get("schedule_id") or "").strip()
+                ]
+            )
+        )
+        base = dict(cluster[0])
+        return {
+            **base,
+            "schedule_id": "",
+            "shift_type": "night" if has_night and not has_day else "day",
+            "start_time": _format_minutes(min(value[0] for value in normalized_ranges)),
+            "end_time": _format_minutes(max(value[1] for value in normalized_ranges)),
+            "shift_label": shift_label,
+            "display_variant": "combined",
+            "display_shift_types": shift_types,
+            "combined_schedule_ids": combined_schedule_ids,
+        }
+
+    rows.sort(
+        key=lambda item: (
+            _site_key(item),
+            _employee_key(item),
+            _start_minutes(item),
+            _end_minutes(item),
+            _normalize_shift_type(str(item.get("shift_type") or "")),
+            str(item.get("schedule_id") or "").strip(),
+        )
+    )
     merged: list[dict] = []
-    index = 0
-    while index < len(rows):
-        current = rows[index]
-        next_item = rows[index + 1] if index + 1 < len(rows) else None
-        current_shift = _normalize_shift_type(str(current.get("shift_type") or ""))
-        if (
-            next_item
-            and str(current.get("status") or "").strip().lower() != "leave"
-            and str(next_item.get("status") or "").strip().lower() != "leave"
-            and _employee_key(current)
-            and _employee_key(current) == _employee_key(next_item)
-            and _site_key(current)
-            and _site_key(current) == _site_key(next_item)
-        ):
-            next_shift = _normalize_shift_type(str(next_item.get("shift_type") or ""))
-            shift_pair = {current_shift, next_shift}
-            if shift_pair == {"day", "night"} and _schedule_time_ranges_do_not_overlap(
-                current.get("start_time"),
-                current.get("end_time"),
-                next_item.get("start_time"),
-                next_item.get("end_time"),
-            ):
-                current_start = _time_text_to_minutes(current.get("start_time"))
-                next_start = _time_text_to_minutes(next_item.get("start_time"))
-                current_end_range = _build_schedule_overlap_range(current.get("start_time"), current.get("end_time"))
-                next_end_range = _build_schedule_overlap_range(next_item.get("start_time"), next_item.get("end_time"))
-                merged_start = min(
-                    value for value in [current_start, next_start] if value is not None
-                )
-                merged_end = max(
-                    value for value in [
-                        current_end_range[1] if current_end_range else None,
-                        next_end_range[1] if next_end_range else None,
-                    ] if value is not None
-                )
-                base = current if current_shift == "day" else next_item
-                merged.append(
-                    {
-                        **base,
-                        "schedule_id": "",
-                        "shift_type": "day",
-                        "display_variant": "combined",
-                        "display_shift_types": ["day", "night"],
-                        "combined_schedule_ids": [
-                            str(current.get("schedule_id") or "").strip(),
-                            str(next_item.get("schedule_id") or "").strip(),
-                        ],
-                        "shift_label": "주간+야간",
-                        "start_time": _format_time_for_response(
-                            _minutes_to_time_text(merged_start)
-                        ),
-                        "end_time": _format_time_for_response(
-                            _minutes_to_time_text(merged_end)
-                        ),
-                    }
-                )
-                index += 2
-                continue
-        merged.append(current)
-        index += 1
+    cluster: list[dict] = []
+
+    def _flush_cluster() -> None:
+        nonlocal cluster
+        if not cluster:
+            return
+        if len(cluster) == 1:
+            merged.append(cluster[0])
+        else:
+            combined_item = _build_combined_item(cluster)
+            if combined_item:
+                merged.append(combined_item)
+            else:
+                merged.extend(cluster)
+        cluster = []
+
+    for item in rows:
+        if not _is_combinable(item):
+            _flush_cluster()
+            merged.append(item)
+            continue
+        if not cluster:
+            cluster = [item]
+            continue
+        if _can_extend_cluster(cluster, item):
+            cluster.append(item)
+            continue
+        _flush_cluster()
+        cluster = [item]
+
+    _flush_cluster()
     return merged
 
 
@@ -1262,7 +1461,14 @@ def _import_status_label(validation_code: str | None) -> str:
     code = _normalize_import_issue_code(validation_code)
     if code in {"EMPLOYEE_MATCH_FAILED", "EMPLOYEE_MATCH_FAILED"}:
         return "직원 미존재"
-    if code in {"TEMPLATE_MAPPING_MISSING", "CANNOT_RESOLVE_TEMPLATE"}:
+    if code in {
+        "SUPPORT_INTERNAL_MATCH_AMBIGUOUS_REVIEW",
+        "SUPPORT_OTHER_SITE_MATCH_REVIEW",
+        "SUPPORT_INTERNAL_INACTIVE_REVIEW",
+        "SUPPORT_FOREIGN_LINEAGE_REVIEW",
+    }:
+        return "검토 필요"
+    if code in {"TEMPLATE_MAPPING_MISSING", "CANNOT_RESOLVE_TEMPLATE", "SUPPORT_INTERNAL_TEMPLATE_MISSING"}:
         return "템플릿 없음"
     if code == "TEMPLATE_PROFILE_NOT_PREPARED":
         return "매핑 프로필 없음"
@@ -1277,7 +1483,20 @@ def _import_status_label(validation_code: str | None) -> str:
     return "오류"
 
 
-def _import_diff_status_label(*, diff_category: str | None, validation_code: str | None, is_blocking: bool = False) -> str:
+def _import_diff_status_label(
+    *,
+    diff_category: str | None,
+    validation_code: str | None,
+    is_blocking: bool = False,
+    decision_stage: str | None = None,
+) -> str:
+    normalized_stage = str(decision_stage or "").strip().lower()
+    if normalized_stage == "apply":
+        return "즉시 반영"
+    if normalized_stage == "review":
+        return "검토 필요"
+    if normalized_stage == "block":
+        return "차단"
     if validation_code:
         normalized_code = _normalize_import_issue_code(validation_code)
         if normalized_code == "TEMPLATE_FAMILY_MISMATCH":
@@ -1313,7 +1532,9 @@ def _is_import_support_preview_info_only(row: dict[str, Any]) -> bool:
     diff_category = str(row.get("diff_category") or "").strip().lower()
     if source_block == "sentrix_support_ticket":
         return True
-    if source_block.startswith("day_support") or source_block.startswith("night_support"):
+    if source_block in {"day_support_external_count", "night_support_purpose"}:
+        return True
+    if source_block.endswith("_summary_count"):
         return True
     if parsed_semantic_type.startswith("protected_") or parsed_semantic_type == "support_demand":
         return True
@@ -1323,6 +1544,13 @@ def _is_import_support_preview_info_only(row: dict[str, Any]) -> bool:
 
 
 def _classify_import_preview_visibility(row: dict[str, Any]) -> tuple[str, bool, bool]:
+    decision_stage = str(row.get("decision_stage") or "").strip().lower()
+    if decision_stage == "block":
+        return "blocked", True, False
+    if decision_stage == "review":
+        return "review_actionable", True, False
+    if decision_stage == "apply":
+        return "apply_actionable", True, False
     diff_category = str(row.get("diff_category") or "").strip().lower()
     is_protected = bool(row.get("is_protected")) or diff_category == "ignored_protected"
     is_blocking = bool(row.get("is_blocking")) or (not is_protected and row.get("is_valid") is False)
@@ -1338,7 +1566,7 @@ def _classify_import_preview_visibility(row: dict[str, Any]) -> tuple[str, bool,
     if diff_category == "unchanged":
         return "unchanged", False, False
     if str(row.get("apply_action") or "").strip():
-        return "apply", False, False
+        return "apply", True, False
     return "hidden_non_actionable", False, False
 
 
@@ -1468,10 +1696,11 @@ def _detect_arls_import_workbook_context(
     issues: list[dict[str, Any]] = []
     blocked_reasons: list[str] = []
     metadata = _read_arls_export_metadata(workbook)
-    visible_sheet = workbook[ARLS_SHEET_NAME] if ARLS_SHEET_NAME in workbook.sheetnames else None
+    visible_sheet_name = _select_arls_import_visible_sheet_name(workbook)
+    visible_sheet = workbook[visible_sheet_name] if visible_sheet_name and visible_sheet_name in workbook.sheetnames else None
     if visible_sheet is None:
         issues.append(_build_import_issue("TEMPLATE_FAMILY_MISMATCH"))
-        blocked_reasons.append("지원하지 않는 월간 근무표 파일입니다. ARLS 호환 workbook을 사용하세요.")
+        blocked_reasons.append("업로드한 파일이 현재 사용하는 양식과 다릅니다. 최신 ARLS 파일을 다시 사용해 주세요.")
         return {
             "metadata": metadata,
             "visible_sheet": None,
@@ -1507,52 +1736,52 @@ def _detect_arls_import_workbook_context(
             issues.append(
                 _build_import_issue(
                     "TEMPLATE_FAMILY_MISMATCH",
-                    message="업로드한 파일의 tenant 정보가 현재 선택값과 일치하지 않습니다.",
+                    message="업로드한 파일의 회사 정보가 현재 화면과 맞지 않습니다.",
                     sheet_name=visible_sheet.title,
                     section="metadata",
                 )
             )
-            _append_blocked_reason(blocked_reasons, "업로드 파일의 tenant 정보가 현재 계정 범위와 맞지 않습니다.")
+            _append_blocked_reason(blocked_reasons, "업로드한 파일의 회사 정보가 현재 화면과 맞지 않습니다.")
         if str(metadata.get("site_code") or "").strip() != expected_site_code:
             issues.append(
                 _build_import_issue(
                     "TEMPLATE_FAMILY_MISMATCH",
-                    message="업로드한 파일의 지점 정보가 현재 선택값과 일치하지 않습니다.",
+                    message="업로드한 파일의 지점 정보가 현재 선택 지점과 맞지 않습니다.",
                     sheet_name=visible_sheet.title,
                     section="metadata",
                 )
             )
-            _append_blocked_reason(blocked_reasons, "업로드 파일의 지점 정보가 현재 선택 지점과 일치하지 않습니다.")
+            _append_blocked_reason(blocked_reasons, "업로드한 파일의 지점 정보가 현재 선택 지점과 맞지 않습니다.")
         if str(metadata.get("month") or "").strip() != selected_month:
             issues.append(
                 _build_import_issue(
                     "TEMPLATE_FAMILY_MISMATCH",
-                    message="업로드한 파일의 대상월이 현재 선택값과 일치하지 않습니다.",
+                    message="업로드한 파일의 대상월이 현재 선택한 월과 맞지 않습니다.",
                     sheet_name=visible_sheet.title,
                     section="metadata",
                 )
             )
-            _append_blocked_reason(blocked_reasons, "업로드 파일의 대상월이 현재 선택한 월과 일치하지 않습니다.")
+            _append_blocked_reason(blocked_reasons, "업로드한 파일의 대상월이 현재 선택한 월과 맞지 않습니다.")
         if not _is_supported_import_template_version(metadata.get("template_version")):
             issues.append(
                 _build_import_issue(
                     "TEMPLATE_FAMILY_MISMATCH",
-                    message="지원하지 않는 템플릿 revision입니다.",
+                    message="현재 사용하는 양식 버전이 아닙니다.",
                     sheet_name=visible_sheet.title,
                     section="metadata",
                 )
             )
-            _append_blocked_reason(blocked_reasons, "현재 지원하지 않는 월간 근무표 템플릿 revision입니다.")
+            _append_blocked_reason(blocked_reasons, "현재 사용하는 양식 버전이 아닙니다. 최신 양식을 다시 다운로드해 주세요.")
         if not _is_supported_import_source_version(metadata.get("export_source_version")):
             issues.append(
                 _build_import_issue(
                     "TEMPLATE_FAMILY_MISMATCH",
-                    message="지원하지 않는 workbook source version입니다.",
+                    message="현재 업로드에서 사용할 수 없는 파일입니다.",
                     sheet_name=visible_sheet.title,
                     section="metadata",
                 )
             )
-            _append_blocked_reason(blocked_reasons, "현재 업로드에서 지원하지 않는 workbook source version입니다.")
+            _append_blocked_reason(blocked_reasons, "현재 업로드에서 사용할 수 없는 파일입니다. 최신 파일을 다시 받아 주세요.")
         export_revision = str(metadata.get("export_revision") or "").strip()
         if current_revision and export_revision and export_revision != str(current_revision).strip():
             is_stale = True
@@ -1563,20 +1792,20 @@ def _detect_arls_import_workbook_context(
                     section="metadata",
                 )
             )
-            _append_blocked_reason(blocked_reasons, "업로드한 파일이 현재 ARLS 기준보다 오래되었습니다. 최신 기준본을 다시 사용하세요.")
+            _append_blocked_reason(blocked_reasons, "이 파일을 받은 뒤 스케줄이 바뀌었습니다. 최신 기준 파일을 다시 사용해 주세요.")
     if not parsed_sheet.get("body_cells"):
         issues.append(_build_import_issue("SECTION_NOT_FOUND", sheet_name=visible_sheet.title, section="base_schedule"))
-        _append_blocked_reason(blocked_reasons, "기본 근무표 영역을 찾지 못했습니다.")
+        _append_blocked_reason(blocked_reasons, "기본 근무표 입력 구역을 찾지 못했습니다.")
     if parsed_month and parsed_month != selected_month:
         issues.append(
             _build_import_issue(
                 "DATE_HEADER_PARSE_FAILED",
-                message="워크북 날짜 헤더의 월 정보가 현재 선택월과 다릅니다.",
+                message="파일의 날짜 헤더가 현재 선택한 월과 맞지 않습니다.",
                 sheet_name=visible_sheet.title,
                 section="date_header",
             )
         )
-        _append_blocked_reason(blocked_reasons, "워크북 날짜 헤더의 월 정보가 현재 선택월과 다릅니다.")
+        _append_blocked_reason(blocked_reasons, "파일의 날짜 헤더가 현재 선택한 월과 맞지 않습니다.")
 
     workbook_valid = not any(str(item.get("severity") or "").lower() == "blocking" for item in issues)
     revision_status = "stale" if is_stale else ("latest" if metadata else "template_only")
@@ -1594,6 +1823,32 @@ def _detect_arls_import_workbook_context(
     }
 
 
+def _select_arls_import_visible_sheet_name(workbook: Workbook) -> str | None:
+    if ARLS_SHEET_NAME in workbook.sheetnames and workbook[ARLS_SHEET_NAME].sheet_state == "visible":
+        return ARLS_SHEET_NAME
+
+    metadata_sheet_names = {
+        ARLS_METADATA_SHEET_NAME,
+        ARLS_SUPPORT_METADATA_SHEET_NAME,
+        SENTRIX_SUPPORT_HQ_METADATA_SHEET_NAME,
+    }
+    visible_sheet_names = [
+        sheet_name
+        for sheet_name in workbook.sheetnames
+        if workbook[sheet_name].sheet_state == "visible"
+        and sheet_name not in metadata_sheet_names
+    ]
+    if len(visible_sheet_names) != 1:
+        return None
+
+    candidate_name = visible_sheet_names[0]
+    candidate_sheet = workbook[candidate_name]
+    date_columns, _month_ctx = _extract_arls_date_columns(candidate_sheet)
+    if not date_columns:
+        return None
+    return candidate_name
+
+
 def _parse_daytime_need_value(value: object) -> tuple[int | None, str]:
     text = _normalize_workbook_display_value(value)
     if not text:
@@ -1607,6 +1862,54 @@ def _parse_daytime_need_value(value: object) -> tuple[int | None, str]:
     if text in {"-", "없음", "0건", "0"}:
         return 0, text
     return None, text
+
+
+def _is_zero_or_empty_demand_text(value: object) -> bool:
+    text = _normalize_workbook_display_value(value)
+    if not text:
+        return True
+    normalized = re.sub(r"\s+", "", text).strip().lower()
+    if normalized in {"-", "없음", "0", "0건", "0명", "0인", "없음(0)", "요청없음", "요청없음(0)"}:
+        return True
+    if normalized.startswith("=0") or normalized == "=0+0" or normalized == "=0+0*0":
+        return True
+    daytime_count, _ = _parse_daytime_need_value(text)
+    support_count, _ = _parse_support_count_value(text)
+    if daytime_count is not None and daytime_count <= 0:
+        return True
+    if support_count is not None and support_count <= 0:
+        return True
+    return False
+
+
+def _is_hq_scope_signal_present(
+    *,
+    workbook_required_count: int | None,
+    workbook_required_raw: str | None,
+    external_count: int | None,
+    external_count_raw: str | None,
+    purpose_text: str | None,
+    meaningful_scope: bool,
+) -> bool:
+    if meaningful_scope:
+        return True
+    if workbook_required_count is not None and workbook_required_count > 0:
+        return True
+    if external_count is not None and external_count > 0:
+        return True
+    if str(workbook_required_raw or "").strip() and workbook_required_count is None:
+        if _is_zero_or_empty_demand_text(workbook_required_raw):
+            # Preserve explicit zero/empty demand declarations as non-signaling.
+            pass
+        else:
+            return True
+    if str(external_count_raw or "").strip() and external_count is None:
+        if _is_zero_or_empty_demand_text(external_count_raw):
+            # Preserve explicit zero/empty external count declarations as non-signaling.
+            pass
+        else:
+            return True
+    return False
 
 
 def _extract_arls_date_columns(sheet) -> tuple[dict[int, date], tuple[int, int] | None]:
@@ -1785,6 +2088,14 @@ def _normalize_import_row(row: dict[str, object]) -> dict[str, str]:
 def _parse_date_or_none(value: str) -> date | None:
     if not value:
         return None
+    try:
+        parsed = datetime.fromisoformat(value)
+        if isinstance(parsed, datetime):
+            return parsed.date()
+        if isinstance(parsed, date):
+            return parsed
+    except ValueError:
+        pass
     try:
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError:
@@ -2040,15 +2351,15 @@ def download_schedule_template(
     out = BytesIO()
     workbook.save(out)
     out.seek(0)
-    if export_all_sites:
-        filename = f"monthly_schedule_ALL_{month_key}.xlsx"
-    else:
-        filename_site_segment = effective_site_code or "blank"
-        filename = f"monthly_schedule_{filename_site_segment}_{month_key}.xlsx"
+    filename = _build_blank_template_filename(
+        month_key=month_key,
+        site_code="ALL" if export_all_sites else (effective_site_code or ""),
+        site_name=None if export_all_sites else resolved_site_name,
+    )
     return StreamingResponse(
         out,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
     )
 
 
@@ -2235,13 +2546,46 @@ def _build_sentrix_support_roster_handoff_payload(
         site_code=selected_site_code or ("ALL" if str(batch.get("download_scope") or "all").strip().lower() != "site" else selected_site_code),
         revision=revision or "latest",
     )
+    replace_site_codes = sorted(
+        {
+            str(code or "").strip().upper()
+            for code in (
+                list(upload_meta_json.get("selected_site_codes") or [])
+                or list(upload_meta_json.get("site_codes") or [])
+                or ([selected_site_code] if selected_site_code else [])
+            )
+            if str(code or "").strip() and str(code or "").strip().upper() != "ALL"
+        }
+    )
+    replace_scope = None
+    if month_key and replace_site_codes:
+        month_start, month_end_exclusive = _month_bounds(month_key)
+        replace_scope = {
+            "mode": "site_month_full_snapshot",
+            "snapshot_mode": "replace",
+            "tenant_code": tenant_code or None,
+            "tenant_id": str(target_tenant.get("id") or "").strip() or None,
+            "month": month_key,
+            "download_scope": str(batch.get("download_scope") or upload_meta_json.get("download_scope") or "all").strip().lower() or "all",
+            "selected_site_code": selected_site_code or (replace_site_codes[0] if len(replace_site_codes) == 1 else None),
+            "site_codes": replace_site_codes,
+            "shift_kinds": ["day", "night"],
+            "date_scope": {
+                "kind": "calendar_month",
+                "start_date": month_start.isoformat(),
+                "end_date": (month_end_exclusive - timedelta(days=1)).isoformat(),
+            },
+            "source_upload_batch_id": str(batch_id),
+            "artifact_id": artifact_id,
+            "revision": revision or None,
+        }
     affected_site_codes = sorted(
         {
             str(spec.get("site_code") or "").strip().upper()
             for spec in scope_apply_specs
             if str(spec.get("site_code") or "").strip()
         }
-    )
+    ) or list(replace_site_codes)
     affected_dates = sorted(
         {
             spec["work_date"].isoformat()
@@ -2291,6 +2635,7 @@ def _build_sentrix_support_roster_handoff_payload(
         "tenant_id": str(target_tenant.get("id") or "").strip() or None,
         "artifact_id": artifact_id,
         "source_upload_batch_id": str(batch_id),
+        "snapshot_mode": "replace" if replace_scope else None,
         "month": month_key,
         "download_scope": str(batch.get("download_scope") or upload_meta_json.get("download_scope") or "all").strip().lower() or "all",
         "selected_site_code": selected_site_code or None,
@@ -2312,6 +2657,7 @@ def _build_sentrix_support_roster_handoff_payload(
             }
         ),
         "scopes": scopes,
+        "replace_scope": replace_scope,
         "technical_details": {
             "artifact_id": artifact_id,
             "revision": revision or None,
@@ -2518,6 +2864,42 @@ def _build_sentrix_support_roster_apply_result_from_handoff(
                 exclusion_reason=str(spec.get("exclusion_reason") or "").strip() or None,
                 artifact_source_batch_id=str(dict(spec.get("scope_payload") or {}).get("artifact_source_batch_id") or "").strip() or None,
                 artifact_source_revision=str(dict(spec.get("scope_payload") or {}).get("artifact_source_revision") or "").strip() or None,
+            )
+        )
+    known_scope_keys = {
+        str(spec.get("scope_key") or "").strip()
+        for spec in [*list(scope_apply_specs or []), *list(excluded_scope_specs or [])]
+        if str(spec.get("scope_key") or "").strip()
+    }
+    for handoff_scope in response_scope_results:
+        if not isinstance(handoff_scope, dict):
+            continue
+        scope_key = str(handoff_scope.get("scope_key") or "").strip()
+        if not scope_key or scope_key in known_scope_keys:
+            continue
+        work_date_value = None
+        raw_work_date = str(handoff_scope.get("work_date") or "").strip()
+        if raw_work_date:
+            try:
+                work_date_value = date.fromisoformat(raw_work_date)
+            except Exception:
+                work_date_value = None
+        scope_results.append(
+            SupportRosterHqApplyScopeOut(
+                scope_key=scope_key,
+                sheet_name=str(handoff_scope.get("sheet_name") or handoff_scope.get("site_name") or handoff_scope.get("site_code") or "-").strip() or "-",
+                site_name=str(handoff_scope.get("site_name") or "").strip() or None,
+                site_code=str(handoff_scope.get("site_code") or "").strip() or None,
+                work_date=work_date_value,
+                shift_kind=str(handoff_scope.get("shift_kind") or "").strip() or None,
+                request_count=max(int(handoff_scope.get("request_count") or 0), 0),
+                valid_filled_count=max(int(handoff_scope.get("valid_filled_count") or 0), 0),
+                previous_status=str(handoff_scope.get("previous_status") or "").strip() or None,
+                target_status=str(handoff_scope.get("next_status") or handoff_scope.get("target_status") or "").strip() or None,
+                assignment_count=max(int(handoff_scope.get("confirmed_workers_written") or handoff_scope.get("assignment_count") or 0), 0),
+                handoff_status=str(handoff_scope.get("handoff_status") or handoff_scope.get("status") or "").strip() or None,
+                handoff_message=str(handoff_scope.get("handoff_message") or handoff_scope.get("message") or "").strip() or None,
+                sentrix_ticket_id=str(handoff_scope.get("sentrix_ticket_id") or handoff_scope.get("ticket_id") or "").strip() or None,
             )
         )
     applied_scope_count = max(int(handoff_response.get("applied_scope_count") or 0), 0)
@@ -2738,7 +3120,7 @@ def _build_schedule_import_mapping_summary(profile: dict[str, Any] | None) -> di
         status = "ready"
         if not str(entry.get("template_id") or "").strip():
             issue_code = "CANNOT_RESOLVE_TEMPLATE"
-            issue_message = "매핑된 템플릿이 존재하지 않습니다."
+            issue_message = "매핑된 템플릿이 삭제되어 프로필을 다시 설정해야 합니다."
             status = "invalid"
         elif not template_name or not template_is_active:
             issue_code = "CANNOT_RESOLVE_TEMPLATE"
@@ -3401,6 +3783,200 @@ def _resolve_import_employee_match(
     if len(active_matches) > 1:
         return None, "EMPLOYEE_MATCH_AMBIGUOUS", "동일 이름의 active 직원이 2명 이상입니다."
     return None, "EMPLOYEE_MATCH_FAILED", "현재 날짜 기준 active 직원으로 매칭되지 않습니다."
+
+
+def _validate_regular_shift_worker(
+    employee_index: dict[str, list[dict[str, Any]]],
+    *,
+    employee_name: str,
+    schedule_date: date | None,
+) -> tuple[dict[str, Any] | None, str | None, str | None]:
+    return _resolve_import_employee_match(
+        employee_index,
+        employee_name=employee_name,
+        schedule_date=schedule_date,
+    )
+
+
+def _load_tenant_named_employee_rows(
+    conn,
+    *,
+    tenant_id: str,
+    employee_name: str,
+) -> list[dict[str, Any]]:
+    normalized_token = _normalize_name_token(employee_name)
+    if not normalized_token:
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, tenant_id, company_id, site_id, employee_code, full_name,
+                   sequence_no, hire_date, leave_date
+            FROM employees
+            WHERE tenant_id = %s
+              AND regexp_replace(lower(full_name), E'\\s+', '', 'g') = %s
+            ORDER BY site_id ASC, employee_code ASC
+            """,
+            (tenant_id, normalized_token),
+        )
+        return [dict(row) for row in (cur.fetchall() or [])]
+
+
+def _validate_support_shift_worker(
+    conn,
+    *,
+    tenant_id: str,
+    site_id: str,
+    parsed_worker: dict[str, Any],
+    employee_index: dict[str, list[dict[str, Any]]],
+    schedule_date: date | None,
+) -> dict[str, Any]:
+    worker_name = str(
+        parsed_worker.get("worker_name")
+        or parsed_worker.get("raw_value")
+        or ""
+    ).strip()
+    worker_type = str(parsed_worker.get("worker_type") or "").strip().upper()
+    self_staff = bool(parsed_worker.get("self_staff"))
+    requires_employee_match = bool(parsed_worker.get("requires_employee_match"))
+    support_origin_type = (
+        "same_store_internal_candidate"
+        if self_staff
+        else ("internal_candidate" if requires_employee_match else f"{worker_type.lower()}_support_worker")
+    )
+
+    if not worker_name and requires_employee_match:
+        return {
+            "employee_row": None,
+            "validation_code": "WORKER_CELL_INVALID",
+            "validation_error": "지원근무자 이름 형식이 올바르지 않습니다.",
+            "decision_stage": "block",
+            "support_origin_type": support_origin_type,
+        }
+
+    if not requires_employee_match:
+        return {
+            "employee_row": None,
+            "validation_code": None,
+            "validation_error": None,
+            "decision_stage": "apply",
+            "support_origin_type": support_origin_type,
+        }
+
+    site_matches = [dict(item) for item in (employee_index.get(_normalize_name_token(worker_name)) or [])]
+    site_active_matches = [
+        item for item in site_matches
+        if _employee_is_active_for_schedule_date(item, schedule_date)
+    ]
+    if len(site_active_matches) == 1:
+        return {
+            "employee_row": site_active_matches[0],
+            "validation_code": None,
+            "validation_error": None,
+            "decision_stage": "apply",
+            "support_origin_type": support_origin_type,
+        }
+    if len(site_active_matches) > 1:
+        return {
+            "employee_row": None,
+            "validation_code": "SUPPORT_INTERNAL_MATCH_AMBIGUOUS_REVIEW",
+            "validation_error": (
+                f"해당 스토어 active 직원 명단에 동일 이름이 2명 이상 있어 검토가 필요합니다: {worker_name}"
+            ),
+            "decision_stage": "review",
+            "support_origin_type": support_origin_type,
+        }
+
+    tenant_matches = _load_tenant_named_employee_rows(
+        conn,
+        tenant_id=tenant_id,
+        employee_name=worker_name,
+    )
+    tenant_active_matches = [
+        item for item in tenant_matches
+        if _employee_is_active_for_schedule_date(item, schedule_date)
+    ]
+    other_site_active_matches = [
+        item for item in tenant_active_matches
+        if str(item.get("site_id") or "").strip() != str(site_id or "").strip()
+    ]
+    if other_site_active_matches:
+        return {
+            "employee_row": None,
+            "validation_code": "SUPPORT_OTHER_SITE_MATCH_REVIEW",
+            "validation_error": (
+                f"해당 스토어 직원 명단에는 없지만 타 스토어 동명이인 후보가 있어 검토가 필요합니다: {worker_name}"
+            ),
+            "decision_stage": "review",
+            "support_origin_type": support_origin_type,
+        }
+
+    if site_matches or tenant_matches:
+        return {
+            "employee_row": None,
+            "validation_code": "SUPPORT_INTERNAL_INACTIVE_REVIEW",
+            "validation_error": (
+                f"해당 이름은 직원 명단에 있으나 현재 날짜 기준 active 상태가 아니어서 검토가 필요합니다: {worker_name}"
+            ),
+            "decision_stage": "review",
+            "support_origin_type": support_origin_type,
+        }
+
+    return {
+        "employee_row": None,
+        "validation_code": "EMPLOYEE_MATCH_FAILED",
+        "validation_error": _build_support_worker_match_message(
+            worker_name=worker_name,
+            issue_code="EMPLOYEE_MATCH_FAILED",
+            self_staff=self_staff,
+        ),
+        "decision_stage": "block",
+        "support_origin_type": support_origin_type,
+    }
+
+
+def _resolve_import_support_worker_match(
+    *,
+    parsed_worker: dict[str, Any],
+    employee_index: dict[str, list[dict[str, Any]]],
+    schedule_date: date | None,
+) -> tuple[dict[str, Any] | None, str | None, str | None]:
+    worker_name = str(
+        parsed_worker.get("worker_name")
+        or parsed_worker.get("raw_value")
+        or ""
+    ).strip()
+    if not worker_name or not bool(parsed_worker.get("requires_employee_match")):
+        return None, None, None
+    employee_row, issue_code, _issue_message = _resolve_import_employee_match(
+        employee_index,
+        employee_name=worker_name,
+        schedule_date=schedule_date,
+    )
+    if issue_code == "EMPLOYEE_MATCH_FAILED":
+        return None, issue_code, _build_support_worker_match_message(
+            worker_name=worker_name,
+            issue_code=issue_code,
+            self_staff=bool(parsed_worker.get("self_staff")),
+        )
+    if issue_code == "EMPLOYEE_MATCH_AMBIGUOUS":
+        return None, issue_code, _build_support_worker_match_message(
+            worker_name=worker_name,
+            issue_code=issue_code,
+            self_staff=bool(parsed_worker.get("self_staff")),
+        )
+    return employee_row, None, None
+
+
+def _build_import_support_worker_blocked_reason(row: dict[str, Any], message: str) -> str:
+    section_label = str(row.get("section_label") or "지원근무자").strip() or "지원근무자"
+    schedule_date = row.get("schedule_date")
+    date_label = schedule_date.isoformat() if isinstance(schedule_date, date) else str(schedule_date or "").strip()
+    row_no = int(row.get("row_no") or 0)
+    col_no = int(row.get("col_no") or 0)
+    cell_ref = f"{_excel_col_label(col_no) or '?'}{row_no}" if row_no > 0 and col_no > 0 else None
+    parts = [part for part in [date_label, section_label, cell_ref, str(message or "").strip()] if part]
+    return " · ".join(parts)
 
 
 def _load_existing_schedule_keys(
@@ -4142,8 +4718,67 @@ def _read_monthly_support_request_rows_for_export(
             logger.exception(
                 "[schedule][export] failed to read support-demand scopes from import batch batch_id=%s",
                 artifact_batch_id,
-            )
+    )
     return _merge_support_request_scope_rows([], live_rows)
+
+
+def _build_active_support_request_scope_keys(
+    support_request_rows: list[dict[str, Any]] | None,
+) -> set[tuple[str, str]]:
+    active_keys: set[tuple[str, str]] = set()
+    for row in support_request_rows or []:
+        work_date = row.get("work_date")
+        if not isinstance(work_date, date):
+            continue
+        status = str(row.get("status") or SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS).strip().lower()
+        if status and status != SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS:
+            continue
+        request_count = _coerce_int_or_none(row.get("request_count"))
+        if request_count is not None and request_count <= 0:
+            continue
+        shift_kind = "night" if str(row.get("shift_kind") or "").strip().lower() == "night" else "day"
+        active_keys.add((work_date.isoformat(), shift_kind))
+    return active_keys
+
+
+def _filter_support_assignment_rows_for_active_scopes(
+    support_rows: list[dict[str, Any]] | None,
+    support_request_rows: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    active_scope_keys = _build_active_support_request_scope_keys(support_request_rows)
+    if not active_scope_keys:
+        return []
+    filtered: list[dict[str, Any]] = []
+    for row in support_rows or []:
+        work_date = row.get("work_date")
+        if not isinstance(work_date, date):
+            continue
+        support_period = "night" if str(row.get("support_period") or "").strip().lower() == "night" else "day"
+        if (work_date.isoformat(), support_period) in active_scope_keys:
+            filtered.append(dict(row))
+    return filtered
+
+
+def _filter_existing_schedule_rows_for_active_support_scopes(
+    existing_rows: list[dict[str, Any]] | None,
+    support_request_rows: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    active_scope_keys = _build_active_support_request_scope_keys(support_request_rows)
+    filtered: list[dict[str, Any]] = []
+    for row in existing_rows or []:
+        if not _is_support_upload_internal_source(row.get("source")):
+            filtered.append(dict(row))
+            continue
+        schedule_date = row.get("schedule_date")
+        if not isinstance(schedule_date, date):
+            continue
+        shift_kind = _normalize_shift_type(row.get("shift_type"))
+        if shift_kind not in {"day", "night"}:
+            filtered.append(dict(row))
+            continue
+        if (schedule_date.isoformat(), shift_kind) in active_scope_keys:
+            filtered.append(dict(row))
+    return filtered
 
 
 def _build_support_request_ticket_index(rows: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str, Any]]:
@@ -4393,6 +5028,17 @@ def _resolve_internal_support_default_hours(row: dict, *, support_period: str) -
     return "12"
 
 
+def _resolve_internal_support_template_paid_hours(template_row: dict[str, Any] | None) -> float | None:
+    template = dict(template_row or {})
+    explicit_hours = _coerce_float_or_none(template.get("paid_hours"))
+    if explicit_hours is not None:
+        return explicit_hours
+    return _infer_canonical_shift_hours(
+        template.get("start_time"),
+        template.get("end_time"),
+    )
+
+
 def _parse_export_shift_label_range(label: object) -> tuple[str | None, str | None]:
     text = str(label or "").strip()
     match = re.fullmatch(r"(\d{2}:\d{2})-(\d{2}:\d{2})", text)
@@ -4605,6 +5251,11 @@ def _clear_template_hidden_sheet(sheet) -> None:
             cell.value = None
 
 
+def _remove_template_legacy_hidden_sheet(workbook: Workbook) -> None:
+    if ARLS_LEGACY_HIDDEN_TEMPLATE_SHEET_NAME in workbook.sheetnames:
+        workbook.remove(workbook[ARLS_LEGACY_HIDDEN_TEMPLATE_SHEET_NAME])
+
+
 def _set_sheet_cell_value_if_writable(sheet, *, row: int, column: int, value: Any) -> bool:
     cell = sheet.cell(row=row, column=column)
     if isinstance(cell, MergedCell):
@@ -4657,9 +5308,7 @@ def _reset_arls_month_template_sheet(sheet, *, employee_count: int) -> tuple[obj
                 continue
             cell.value = None if col_idx >= ARLS_DATE_START_COL or col_idx in {1, 35, 36, 37} else cell.value
 
-    hidden_sheet_name = "출동.잔업 초과수당(2)"
-    if hidden_sheet_name in workbook.sheetnames:
-        _clear_template_hidden_sheet(workbook[hidden_sheet_name])
+    _remove_template_legacy_hidden_sheet(workbook)
 
     return sheet, data_start_row, summary_start_row
 
@@ -4681,6 +5330,9 @@ def _prepare_blank_arls_template_workbook(
     site_address: str = "",
 ) -> None:
     sheet = workbook[ARLS_SHEET_NAME] if ARLS_SHEET_NAME in workbook.sheetnames else workbook.active
+    desired_title = _normalize_excel_sheet_title(site_name, fallback=ARLS_SHEET_NAME) if str(site_name or "").strip() else ARLS_SHEET_NAME
+    if sheet.title != desired_title:
+        sheet.title = desired_title
     _prepare_blank_arls_template_sheet(
         workbook,
         sheet=sheet,
@@ -4717,10 +5369,9 @@ def _populate_blank_arls_month_template_headers(
     holiday_map = _holiday_text_map_for_month(month_key)
     day_keys = _month_day_keys(start_date, end_date)
 
-    sheet["B1"] = f"{start_date.year}년 {start_date.month}월"
-    sheet["B2"] = f"현장명  {str(site_name or '').strip() or '-'}"
-    address_text = str(site_address or "").strip() or "-"
-    sheet["B3"] = f"현장주소\n{address_text}"
+    sheet["B1"] = f"{start_date.month}월"
+    sheet["B2"] = f"{start_date.year}년 {start_date.month}월"
+    sheet["B3"] = _build_template_site_display(site_name, site_address)
 
     max_supported_days = ARLS_DATE_END_COL - ARLS_DATE_START_COL + 1
     for idx, date_key in enumerate(day_keys[:max_supported_days]):
@@ -4766,9 +5417,7 @@ def _prepare_blank_arls_template_sheet(
         site_name=site_name,
         site_address=site_address,
     )
-    hidden_sheet_name = "출동.잔업 초과수당(2)"
-    if hidden_sheet_name in workbook.sheetnames:
-        _repair_template_hidden_sheet(workbook[hidden_sheet_name], month_key=month_key)
+    _remove_template_legacy_hidden_sheet(workbook)
 
 
 def _build_export_employee_blocks(
@@ -5144,6 +5793,165 @@ def _build_all_sites_export_revision(contexts: list[dict[str, Any]]) -> str:
     return hashlib.sha256(payload_json.encode("utf-8")).hexdigest()[:16]
 
 
+def _monthly_export_context_has_employee_source_rows(export_ctx: dict[str, Any]) -> bool:
+    return bool(
+        export_ctx.get("rows")
+        or export_ctx.get("support_rows")
+        or export_ctx.get("employee_overnight_rows")
+    )
+
+
+def _monthly_export_context_has_visible_employee_blocks(export_ctx: dict[str, Any]) -> bool:
+    return bool(export_ctx.get("employee_blocks"))
+
+
+def _collect_finance_review_export_context(
+    conn,
+    *,
+    target_tenant: dict,
+    site_row: dict,
+    month_key: str,
+    user: dict,
+) -> dict[str, Any]:
+    export_ctx = _collect_monthly_export_context(
+        conn,
+        target_tenant=target_tenant,
+        site_row=site_row,
+        month_key=month_key,
+        user=user,
+        build_workbook=False,
+        allow_empty_employee_blocks=True,
+    )
+    if _monthly_export_context_has_visible_employee_blocks(export_ctx):
+        return export_ctx
+    if _monthly_export_context_has_employee_source_rows(export_ctx):
+        raise HTTPException(status_code=422, detail="employee mapping unavailable for monthly export")
+    raise HTTPException(status_code=404, detail="monthly schedule export data not found")
+
+
+def _collect_finance_review_all_site_export_contexts(
+    conn,
+    *,
+    target_tenant: dict,
+    month_key: str,
+    user: dict,
+) -> list[dict[str, Any]]:
+    site_rows = _list_site_contexts_for_export(conn, tenant_id=str(target_tenant["id"]))
+    if not site_rows:
+        raise HTTPException(status_code=404, detail="site not found")
+    export_contexts: list[dict[str, Any]] = []
+    for site_row in site_rows:
+        export_ctx = _collect_monthly_export_context(
+            conn,
+            target_tenant=target_tenant,
+            site_row=site_row,
+            month_key=month_key,
+            user=user,
+            build_workbook=False,
+            allow_empty_employee_blocks=True,
+        )
+        if _monthly_export_context_has_visible_employee_blocks(export_ctx):
+            export_contexts.append(export_ctx)
+            continue
+        if _monthly_export_context_has_employee_source_rows(export_ctx):
+            raise HTTPException(
+                status_code=422,
+                detail=f"employee mapping unavailable for monthly export: {str(site_row.get('site_code') or '').strip()}",
+            )
+    if not export_contexts:
+        raise HTTPException(status_code=404, detail="monthly schedule export data not found")
+    return export_contexts
+
+
+def _build_monthly_export_workbook_from_contexts(
+    *,
+    export_contexts: list[dict[str, Any]],
+    month_key: str,
+    tenant_code: str,
+    source_version: str,
+    include_summary_sections: bool = True,
+    include_support_assignment_sections: bool = True,
+    support_status_rows_by_site_code: dict[str, list[dict[str, Any]]] | None = None,
+) -> tuple[Workbook, Path, str]:
+    if not export_contexts:
+        raise HTTPException(status_code=404, detail="monthly schedule export data not found")
+    workbook, template_path = _load_required_arls_month_workbook()
+    if ARLS_SHEET_NAME not in workbook.sheetnames:
+        raise HTTPException(status_code=500, detail="monthly schedule template sheet unavailable")
+    template_version = _describe_arls_template_version(template_path)
+    template_sheet = workbook[ARLS_SHEET_NAME]
+    target_sheets = [template_sheet]
+    for _ in range(1, len(export_contexts)):
+        target_sheets.append(workbook.copy_worksheet(template_sheet))
+
+    used_titles: set[str] = set()
+    for index, (site_ctx, target_sheet) in enumerate(zip(export_contexts, target_sheets), start=1):
+        desired_title = _normalize_excel_sheet_title(
+            site_ctx.get("site_name"),
+            fallback=f"{site_ctx.get('site_code') or 'SITE'}_{index}",
+        )
+        sheet_title = desired_title
+        suffix = 2
+        while sheet_title in used_titles:
+            base_title = desired_title[: max(0, 31 - len(f"_{suffix}"))]
+            sheet_title = f"{base_title}_{suffix}"
+            suffix += 1
+        used_titles.add(sheet_title)
+        target_sheet.title = sheet_title
+        _build_arls_month_sheet(
+            workbook,
+            sheet_name=sheet_title,
+            month_key=month_key,
+            rows=site_ctx["rows"],
+            tenant_code=tenant_code,
+            site_code=site_ctx["site_code"],
+            site_name=site_ctx["site_name"],
+            site_address=site_ctx["site_address"],
+            support_rows=site_ctx["support_rows"],
+            support_request_rows=site_ctx["support_request_rows"],
+            overnight_rows=site_ctx["overnight_rows"],
+            employee_overnight_rows=site_ctx["employee_overnight_rows"],
+            daytime_need_rows=site_ctx["daytime_need_rows"],
+            export_revision=site_ctx["export_revision"],
+            template_version=template_version,
+            source_version=source_version,
+            write_metadata=False,
+            include_summary_sections=include_summary_sections,
+            include_support_assignment_sections=include_support_assignment_sections,
+        )
+        support_status_rows = (support_status_rows_by_site_code or {}).get(str(site_ctx.get("site_code") or "").strip().upper())
+        if support_status_rows is not None:
+            _populate_support_status_sections(
+                workbook[sheet_title],
+                support_status_rows=support_status_rows,
+            )
+
+    metadata_site_code = "ALL"
+    metadata_site_name = "전체 지점"
+    metadata_revision = _build_all_sites_export_revision(export_contexts)
+    if len(export_contexts) == 1:
+        metadata_site_code = str(export_contexts[0].get("site_code") or "").strip()
+        metadata_site_name = str(export_contexts[0].get("site_name") or "").strip()
+        metadata_revision = str(export_contexts[0].get("export_revision") or "").strip()
+
+    _upsert_arls_export_metadata_sheet(
+        workbook,
+        tenant_code=tenant_code,
+        site_code=metadata_site_code,
+        site_name=metadata_site_name,
+        month_key=month_key,
+        export_revision=metadata_revision,
+        template_version=template_version,
+        source_version=source_version,
+        employee_count=sum(len(ctx.get("employee_blocks") or []) for ctx in export_contexts),
+        row_count=sum(len(ctx.get("rows") or []) for ctx in export_contexts),
+        support_row_count=sum(len(ctx.get("support_rows") or []) for ctx in export_contexts),
+        overnight_row_count=sum(len(ctx.get("overnight_rows") or []) for ctx in export_contexts),
+        employee_overnight_row_count=sum(len(ctx.get("employee_overnight_rows") or []) for ctx in export_contexts),
+    )
+    return workbook, template_path, template_version
+
+
 def _normalize_excel_sheet_title(raw: object, *, fallback: str) -> str:
     text = str(raw or "").strip() or fallback
     text = re.sub(r"[:\\\\/?*\\[\\]]", "_", text)
@@ -5206,6 +6014,8 @@ def _build_arls_month_sheet(
     source_version: str = ARLS_EXPORT_SOURCE_VERSION,
     sheet_name: str | None = None,
     write_metadata: bool = True,
+    include_summary_sections: bool = True,
+    include_support_assignment_sections: bool = True,
 ) -> None:
     employee_blocks = _build_export_employee_blocks(
         rows,
@@ -5276,20 +6086,22 @@ def _build_arls_month_sheet(
         sheet.cell(row=current_row, column=ARLS_SUMMARY_START_COL + 2, value="\n".join(notes) if notes else None)
         current_row += 3
 
-    _populate_arls_month_template_summary_sections(
-        sheet,
-        summary_start_row=summary_start_row,
-        day_keys=day_keys,
-        employee_blocks=employee_blocks,
-        daytime_need_rows=daytime_need_rows,
-        support_request_rows=support_request_rows,
-    )
-    _populate_support_assignment_sections(
-        sheet,
-        day_keys=day_keys,
-        assignment_rows=support_rows or [],
-        include_internal=False,
-    )
+    if include_summary_sections:
+        _populate_arls_month_template_summary_sections(
+            sheet,
+            summary_start_row=summary_start_row,
+            day_keys=day_keys,
+            employee_blocks=employee_blocks,
+            daytime_need_rows=daytime_need_rows,
+            support_request_rows=support_request_rows,
+        )
+    if include_support_assignment_sections:
+        _populate_support_assignment_sections(
+            sheet,
+            day_keys=day_keys,
+            assignment_rows=support_rows or [],
+            include_internal=False,
+        )
     if write_metadata:
         _upsert_arls_export_metadata_sheet(
             workbook,
@@ -5520,7 +6332,14 @@ def _parse_arls_canonical_import_sheet(sheet) -> dict[str, Any]:
                     parsed_semantic_type=str(parsed_worker.get("semantic_type") or ""),
                     issue_code=issue_code,
                     issue_message=issue_message,
-                    extra={"slot_index": slot_index},
+                    extra={
+                        "slot_index": slot_index,
+                        "worker_type": str(parsed_worker.get("worker_type") or "").strip() or None,
+                        "worker_name": str(parsed_worker.get("worker_name") or "").strip() or None,
+                        "requires_employee_match": bool(parsed_worker.get("requires_employee_match")),
+                        "self_staff": bool(parsed_worker.get("self_staff")),
+                        "affiliation": str(parsed_worker.get("affiliation") or "").strip() or None,
+                    },
                 )
                 worker_slots.append(slot_payload)
                 support_cells.append(slot_payload)
@@ -5801,11 +6620,21 @@ def _collect_monthly_export_context(
             site_code=str(site_row.get("site_code") or "").strip(),
         ),
     )
+    support_request_rows = _read_monthly_support_request_rows_for_export(
+        conn,
+        tenant_id=str(target_tenant["id"]),
+        site_id=str(site_row["id"]),
+        month_key=month_key,
+    )
     support_rows = _read_monthly_support_assignment_rows_for_export(
         conn,
         tenant_id=str(target_tenant["id"]),
         site_code=str(site_row["site_code"]),
         month_key=month_key,
+    )
+    support_rows = _filter_support_assignment_rows_for_active_scopes(
+        support_rows,
+        support_request_rows,
     )
     overnight_rows = _read_monthly_overnight_rows_for_export(
         conn,
@@ -5820,12 +6649,6 @@ def _collect_monthly_export_context(
         month_key=month_key,
     )
     daytime_need_rows = _read_monthly_daytime_need_rows_for_export(
-        conn,
-        tenant_id=str(target_tenant["id"]),
-        site_id=str(site_row["id"]),
-        month_key=month_key,
-    )
-    support_request_rows = _read_monthly_support_request_rows_for_export(
         conn,
         tenant_id=str(target_tenant["id"]),
         site_id=str(site_row["id"]),
@@ -5958,10 +6781,73 @@ def _resolve_employee_by_full_name(conn, *, tenant_id: str, site_id: str, full_n
         return cur.fetchone()
 
 
+def _resolve_support_roundtrip_worker_identity(
+    conn,
+    *,
+    tenant_id: str,
+    site_id: str,
+    raw_entry: str,
+    schedule_date: date | None = None,
+) -> tuple[str | None, str | None, str | None, dict[str, Any] | None, str | None, str | None]:
+    text = str(raw_entry or "").strip()
+    if not text:
+        return None, None, None, None, "invalid_support_entry", "지원근무자 형식을 해석할 수 없습니다."
+    try:
+        worker_type, worker_name = parse_support_entry_text(text)
+    except HTTPException as exc:
+        return None, None, None, None, "invalid_support_entry", str(exc.detail or "지원근무자 형식을 해석할 수 없습니다.")
+
+    resolved_worker_type = str(worker_type or "").strip() or None
+    resolved_worker_name = str(worker_name or "").strip() or None
+    resolved_affiliation = None
+    employee_row = None
+    self_staff = _is_self_staff_support_entry(text)
+
+    external_entry = _parse_affiliated_external_support_entry(text)
+    if external_entry and resolved_worker_type == "INTERNAL" and not self_staff:
+        resolved_affiliation, resolved_worker_name, resolved_worker_type = external_entry
+
+    if resolved_worker_type == "INTERNAL":
+        employee_index = _build_employee_name_index(
+            _load_site_employees(conn, tenant_id=tenant_id, site_id=site_id)
+        )
+        employee_row, issue_code, _issue_message = _resolve_import_employee_match(
+            employee_index,
+            employee_name=resolved_worker_name or "",
+            schedule_date=schedule_date,
+        )
+        if issue_code:
+            return (
+                resolved_worker_type,
+                resolved_worker_name,
+                resolved_affiliation,
+                None,
+                issue_code,
+                _build_support_worker_match_message(
+                    worker_name=resolved_worker_name or "",
+                    issue_code=issue_code,
+                    self_staff=self_staff,
+                ),
+            )
+
+    return (
+        resolved_worker_type,
+        resolved_worker_name,
+        resolved_affiliation,
+        employee_row,
+        None,
+        None,
+    )
+
+
 def _fetch_default_schedule_template_map(conn, *, tenant_id: str, site_id: str) -> dict[str, dict[str, Any]]:
     rows = _fetch_schedule_templates(conn, tenant_id=tenant_id, site_id=site_id, include_inactive=False)
+    return _build_default_schedule_template_map(rows)
+
+
+def _build_default_schedule_template_map(rows: list[dict[str, Any]] | None) -> dict[str, dict[str, Any]]:
     template_map: dict[str, dict[str, Any]] = {}
-    for row in rows:
+    for row in rows or []:
         duty_type = _normalize_schedule_template_duty_type(row.get("duty_type"))
         if duty_type not in {"day", "night", "overtime"}:
             continue
@@ -6410,13 +7296,13 @@ def _build_support_roundtrip_workspace_issue(
     message: str | None = None,
 ) -> SupportRosterHqReviewIssueOut:
     catalog = {
-        "WORKBOOK_METADATA_MISSING": ("blocking", "메타데이터 누락", "지원근무 workbook 메타데이터를 읽지 못했습니다.", "현재 Sentrix HQ 다운로드본으로 다시 시작하세요."),
-        "WORKBOOK_FAMILY_MISMATCH": ("blocking", "workbook family 불일치", "지원하지 않는 지원근무 workbook family 입니다.", "현재 Sentrix HQ 다운로드본을 다시 내려받아 사용하세요."),
+        "WORKBOOK_METADATA_MISSING": ("blocking", "파일 정보 누락", "이 파일이 어떤 기준으로 만들어졌는지 확인할 수 없습니다.", "최신 HQ 제출용 파일을 다시 다운로드해 주세요."),
+        "WORKBOOK_FAMILY_MISMATCH": ("blocking", "잘못된 파일 양식", "현재 업로드에서 사용할 수 없는 파일입니다.", "최신 HQ 제출용 파일을 다시 다운로드해 주세요."),
         "WORKBOOK_MONTH_MISMATCH": ("blocking", "대상월 불일치", "선택한 대상월과 업로드 파일의 대상월이 일치하지 않습니다.", "대상월을 맞추거나 올바른 workbook을 선택하세요."),
         "WORKBOOK_SCOPE_MISMATCH": ("blocking", "다운로드 범위 불일치", "업로드 파일의 범위와 현재 검토 컨텍스트가 맞지 않습니다.", "전체/지점별 범위를 다시 확인하세요."),
-        "WORKBOOK_REVISION_STALE": ("blocking", "구버전 workbook", "현재 source revision 보다 오래된 workbook 입니다.", "최신 전체/지점별 다운로드본을 다시 사용하세요."),
-        "WORKBOOK_SITE_SHEET_MISMATCH": ("blocking", "시트 구성 불일치", "workbook metadata와 실제 시트 구성이 일치하지 않습니다.", "시트명을 수정하지 말고 새 다운로드본으로 다시 작업하세요."),
-        "WORKBOOK_SITE_NOT_FOUND": ("blocking", "지점 식별 실패", "시트명 또는 metadata 기준으로 지점을 찾지 못했습니다.", "지점명 변경 없이 최신 workbook을 사용하세요."),
+        "WORKBOOK_REVISION_STALE": ("blocking", "예전에 받은 파일입니다", "이 파일을 받은 뒤 스케줄이 바뀌었습니다.", "최신 HQ 제출용 파일을 다시 다운로드해 주세요."),
+        "WORKBOOK_SITE_SHEET_MISMATCH": ("blocking", "시트 구성 불일치", "파일에 들어 있는 시트 구성과 현재 양식이 맞지 않습니다.", "시트명을 바꾸지 말고 새 파일을 다시 받아서 사용해 주세요."),
+        "WORKBOOK_SITE_NOT_FOUND": ("blocking", "지점 확인 실패", "시트명으로 지점을 확인하지 못했습니다.", "시트명을 바꾸지 말고 최신 파일을 다시 사용해 주세요."),
     }
     severity, title, default_message, guidance = catalog.get(
         code,
@@ -6465,28 +7351,33 @@ def _list_sentrix_hq_assignment_rows_for_download(
 
 def _sentrix_hq_issue_template(code: str) -> tuple[str, str, str, str | None]:
     catalog = {
-        "WORKBOOK_METADATA_MISSING": ("blocking", "메타데이터 누락", "Sentrix HQ 다운로드 메타데이터를 읽지 못했습니다.", "현재 Sentrix HQ 다운로드본으로 다시 시작하세요."),
-        "WORKBOOK_FAMILY_MISMATCH": ("blocking", "workbook family 불일치", "지원하지 않는 HQ roster workbook family 입니다.", "현재 Sentrix HQ 다운로드본을 다시 내려받아 사용하세요."),
+        "WORKBOOK_METADATA_MISSING": ("blocking", "파일 정보 누락", "이 파일이 어떤 기준으로 만들어졌는지 확인할 수 없습니다.", "최신 HQ 제출용 파일을 다시 다운로드해 주세요."),
+        "WORKBOOK_FAMILY_MISMATCH": ("blocking", "잘못된 파일 양식", "현재 업로드에서 사용할 수 없는 파일입니다.", "최신 HQ 제출용 파일을 다시 다운로드해 주세요."),
         "WORKBOOK_MONTH_MISMATCH": ("blocking", "대상월 불일치", "선택한 대상월과 업로드 파일의 대상월이 일치하지 않습니다.", "대상월을 다시 확인하고 올바른 workbook을 선택하세요."),
         "WORKBOOK_SCOPE_MISMATCH": ("blocking", "다운로드 범위 불일치", "업로드 파일의 다운로드 범위가 현재 검토 컨텍스트와 맞지 않습니다.", "전체/지점별 범위를 다시 확인하세요."),
-        "OUTDATED_WORKBOOK": ("blocking", "구버전 workbook", "현재 Supervisor 기준본보다 오래된 workbook 입니다.", "최신 전체/지점별 다운로드본을 다시 사용하세요."),
-        "SITE_SHEET_NOT_FOUND": ("blocking", "시트 지점 식별 실패", "시트명으로 지점을 정확히 찾지 못했습니다.", "시트명을 수정하지 말고 최신 workbook을 다시 사용하세요."),
+        "OUTDATED_WORKBOOK": ("blocking", "예전에 받은 파일입니다", "이 파일을 받은 뒤 ARLS 스케줄이 바뀌었습니다.", "최신 HQ 제출용 파일을 다시 다운로드해 주세요."),
+        "SITE_SHEET_NOT_FOUND": ("blocking", "지점 확인 실패", "시트명으로 지점을 정확히 찾지 못했습니다.", "시트명을 수정하지 말고 최신 파일을 다시 사용해 주세요."),
         "WORKBOOK_SELECTED_SITE_MISSING": ("blocking", "선택 지점 시트 누락", "선택한 지점 시트가 workbook에 없습니다.", "누락된 지점을 포함해 다시 저장하거나 지점 선택을 다시 확인하세요."),
         "WORKBOOK_EXTRA_SITE_SHEET": ("blocking", "선택 외 지점 시트 포함", "선택하지 않은 지점 시트가 workbook에 포함되어 있습니다.", "선택한 지점만 남기고 다시 업로드하세요."),
         "SITE_NOT_SELECTED": ("blocking", "선택되지 않은 지점 시트", "현재 HQ 작업 범위에 포함되지 않은 지점 시트입니다.", "선택한 지점만 포함된 workbook인지 확인하세요."),
-        "BLOCK_SECTION_NOT_FOUND": ("blocking", "지원 블록 누락", "주간 또는 야간 지원 블록을 찾지 못했습니다.", "다운로드한 workbook 구조를 변경하지 않았는지 확인하세요."),
-        "DATE_SCOPE_NOT_RESOLVED": ("blocking", "날짜 범위 해석 실패", "시트의 날짜 헤더 또는 월 범위를 해석하지 못했습니다.", "월 헤더와 날짜 컬럼을 수정하지 않았는지 확인하세요."),
-        "TICKET_SCOPE_NOT_FOUND": ("blocking", "지원요청 ticket 없음", "해당 지점/날짜/주야간 범위의 기존 Sentrix ticket을 찾지 못했습니다.", "ARLS 원본 업로드로 생성된 ticket scope를 먼저 확인하세요."),
-        "ARTIFACT_SCOPE_NOT_FOUND": ("blocking", "지원 수요 artifact 없음", "해당 지점/날짜/주야간 범위의 지원 수요 artifact를 찾지 못했습니다.", "원본 월간 업로드를 다시 반영하고 HQ 제출용 추출을 새로 생성하세요."),
-        "DAY_SCOPE_REASON_MISSING": ("blocking", "주간 지원 사유 누락", "주간 지원 사유를 현재 artifact에서 찾지 못했습니다.", "주간 지원 요청 사유를 포함한 최신 기준본을 다시 생성하세요."),
+        "BLOCK_SECTION_NOT_FOUND": ("blocking", "지원 블록 누락", "주간 또는 야간 지원 입력 구역을 찾지 못했습니다.", "양식 구조를 바꾸지 않았는지 확인하고 최신 파일로 다시 시도해 주세요."),
+        "DATE_SCOPE_NOT_RESOLVED": ("blocking", "날짜 확인 실패", "파일에서 날짜 범위를 읽지 못했습니다.", "월 헤더와 날짜 칸이 바뀌지 않았는지 확인해 주세요."),
+        "TICKET_SCOPE_NOT_FOUND": ("blocking", "현재 지원 요청 없음", "지금 기준에서 이 지원 요청을 찾지 못했습니다.", "최신 파일을 다시 다운로드하거나 원본 업로드 상태를 확인해 주세요."),
+        "ARTIFACT_SCOPE_NOT_FOUND": ("blocking", "현재 지원 요청 없음", "지금 기준에는 없는 지원 요청입니다.", "최신 파일을 다시 다운로드한 뒤 다시 확인해 주세요."),
+        "DAY_SCOPE_REASON_MISSING": ("blocking", "주간 지원 정보 누락", "현재 기준 파일에서 필요한 주간 지원 정보를 찾지 못했습니다.", "최신 기준 파일을 다시 생성해 주세요."),
         "MULTI_PERSON_CELL": ("blocking", "한 셀 다중 인원", "한 셀에는 1명만 입력할 수 있습니다.", "여러 명을 각각 다른 근무자 셀에 입력하세요."),
         "SELF_STAFF_FORMAT_INVALID": ("blocking", "자체 인원 표기 오류", "자체 인원은 정확히 '자체 {이름}' 형식만 허용됩니다.", "예: '자체 조태환' 형식으로 수정하세요."),
-        "SELF_STAFF_EMPLOYEE_NOT_FOUND": ("blocking", "자체 인원 매칭 실패", "자체 인원을 해당 지점 active employee master에서 찾지 못했습니다.", "이름 또는 지점 소속 정보를 다시 확인하세요."),
-        "SELF_STAFF_EMPLOYEE_AMBIGUOUS": ("blocking", "자체 인원 중복 매칭", "동일 이름의 active 직원이 2명 이상 있어 자동 매칭할 수 없습니다.", "employee master에서 중복 이름을 해소하세요."),
+        "SELF_STAFF_EMPLOYEE_NOT_FOUND": ("blocking", "자체 인원 매칭 실패", "해당 스토어 직원 명단에 없는 자체 지원근무자입니다.", "이름 또는 스토어 소속 정보를 다시 확인하세요."),
+        "SELF_STAFF_EMPLOYEE_AMBIGUOUS": ("blocking", "자체 인원 중복 매칭", "해당 스토어 active 직원 명단에 동일 이름이 2명 이상 있어 자동 매칭할 수 없습니다.", "employee master에서 중복 이름을 해소하세요."),
         "WORKER_CELL_INVALID": ("blocking", "근무자 셀 형식 오류", "근무자 셀 값을 해석할 수 없습니다.", "허용된 지원근무자 표기 형식으로 수정하세요."),
         "REPLACE_SCOPE_CONFLICT": ("blocking", "replace 범위 충돌", "동일 지점/날짜/주야간/슬롯 범위가 workbook 안에서 중복되었습니다.", "중복된 슬롯 입력을 제거하세요."),
         "REQUEST_COUNT_MISMATCH_UNDER": ("warning", "필요 인원 미달", "유효 입력 인원이 기존 ticket 요청 수보다 적습니다.", "현재 업로드를 적용하면 ticket 상태가 승인대기로 계산됩니다."),
-        "REQUEST_COUNT_MISMATCH_OVER": ("warning", "필요 인원 초과", "유효 입력 인원이 기존 ticket 요청 수보다 많습니다.", "현재 업로드를 적용하면 ticket 상태가 승인대기로 계산됩니다."),
+        "REQUEST_COUNT_MISMATCH_OVER": (
+            "blocking",
+            "필요 인원 초과",
+            "유효 입력 인원이 기존 ticket 요청 수보다 많습니다.",
+            "요청 인원 범위를 맞춘 뒤 다시 업로드하세요.",
+        ),
         "PURPOSE_FIELD_PARSE_WARNING": ("warning", "작업 목적 확인", "야간 작업 목적 셀을 참고 정보로만 유지합니다.", "기존 ticket 작업 목적은 유지되고 workbook 값은 정보성으로만 남습니다."),
     }
     return catalog.get(code, ("warning", code, code, None))
@@ -6904,7 +7795,13 @@ def _parse_sentrix_hq_worker_cell(
 ) -> dict[str, Any]:
     raw_text = _normalize_workbook_display_value(raw_value)
     compact_text = re.sub(r"\s+", " ", raw_text).strip() if raw_text else ""
-    if not compact_text or compact_text in {"-", "없음"}:
+    worker_numeric_zero, worker_numeric_raw = _parse_support_count_value(compact_text)
+    if (
+        not compact_text
+        or compact_text in {"-", "없음"}
+        or _is_placeholder_employee_name(compact_text)
+        or (worker_numeric_zero == 0 and bool(worker_numeric_raw))
+    ):
         return {
             "raw_text": raw_text,
             "compact_text": compact_text,
@@ -6951,10 +7848,18 @@ def _parse_sentrix_hq_worker_cell(
         )
         if issue_code == "EMPLOYEE_MATCH_FAILED":
             issue_code = "SELF_STAFF_EMPLOYEE_NOT_FOUND"
-            issue_message = f"자체 인원 '{employee_name}'을 해당 지점 active employee master에서 찾지 못했습니다."
+            issue_message = _build_support_worker_match_message(
+                worker_name=employee_name,
+                issue_code="EMPLOYEE_MATCH_FAILED",
+                self_staff=True,
+            )
         elif issue_code == "EMPLOYEE_MATCH_AMBIGUOUS":
             issue_code = "SELF_STAFF_EMPLOYEE_AMBIGUOUS"
-            issue_message = f"자체 인원 '{employee_name}'이 active employee master에 중복되어 자동 매칭할 수 없습니다."
+            issue_message = _build_support_worker_match_message(
+                worker_name=employee_name,
+                issue_code="EMPLOYEE_MATCH_AMBIGUOUS",
+                self_staff=True,
+            )
         return {
             "raw_text": raw_text,
             "compact_text": compact_text,
@@ -7466,6 +8371,13 @@ def _build_support_roster_hq_download_workbook(
         if not visible_sheet_name:
             raise HTTPException(status_code=409, detail="support workbook sheet missing")
         if workbook is None and single_site_bundle:
+            if (
+                exact_sheet_name
+                and visible_sheet_name in site_workbook.sheetnames
+                and visible_sheet_name != exact_sheet_name
+            ):
+                site_workbook[visible_sheet_name].title = exact_sheet_name
+                visible_sheet_name = exact_sheet_name
             workbook = site_workbook
         elif workbook is None:
             workbook = _prepare_support_roster_bundle_base_workbook(
@@ -7914,7 +8826,7 @@ def _build_support_roster_hq_upload_inspect_result(
             add_issue(
                 "OUTDATED_WORKBOOK",
                 severity="warning",
-                message=f"{sheet_name} 시트의 현재 ARLS 지원 수요 artifact를 찾지 못했습니다. 이 지점은 이번 적용에서 제외됩니다.",
+                message=f"{sheet_name} 시트는 현재 기준 지원 요청을 찾지 못해 이번 적용에서 제외됩니다.",
                 sheet_name=sheet_name,
                 site_code=site_code,
                 site_name=site_name,
@@ -7926,7 +8838,7 @@ def _build_support_roster_hq_upload_inspect_result(
                     site_code=site_code,
                     resolution_method=resolution_method,
                     status="excluded_stale",
-                    message="현재 ARLS artifact 없음",
+                    message="현재 기준 지원 요청 없음",
                     expected_revision=expected_revision,
                     current_revision=current_source_revision,
                     source_batch_id=None,
@@ -7940,7 +8852,7 @@ def _build_support_roster_hq_upload_inspect_result(
             add_issue(
                 "OUTDATED_WORKBOOK",
                 severity="warning",
-                message=f"{sheet_name} 시트의 기준 revision이 현재 ARLS source revision과 다릅니다. 이 지점은 이번 적용에서 제외됩니다.",
+                message=f"{sheet_name} 시트는 예전에 받은 파일이라 이번 적용에서 제외됩니다.",
                 sheet_name=sheet_name,
                 site_code=site_code,
                 site_name=site_name,
@@ -7952,7 +8864,7 @@ def _build_support_roster_hq_upload_inspect_result(
                     site_code=site_code,
                     resolution_method=resolution_method,
                     status="excluded_stale",
-                    message="source revision 불일치",
+                    message="예전에 받은 파일",
                     expected_revision=expected_revision,
                     current_revision=current_source_revision,
                     source_batch_id=source_batch_id,
@@ -8086,10 +8998,20 @@ def _build_support_roster_hq_upload_inspect_result(
                 external_count_raw = _normalize_workbook_display_value(
                     sheet.cell(row=int(vendor_row_no), column=col_idx).value
                 ) if vendor_row_no else None
+                external_count: int | None = None
+                if external_count_raw:
+                    external_count, _ = _parse_support_count_value(external_count_raw)
                 purpose_text = _normalize_workbook_display_value(
                     sheet.cell(row=int(purpose_row_no), column=col_idx).value
                 ) if purpose_row_no else None
-                workbook_scope_present = bool(workbook_required_raw) or bool(external_count_raw) or bool(purpose_text)
+                workbook_scope_present = _is_hq_scope_signal_present(
+                    workbook_required_count=workbook_required_count,
+                    workbook_required_raw=workbook_required_raw,
+                    external_count=external_count,
+                    external_count_raw=external_count_raw,
+                    purpose_text=purpose_text,
+                    meaningful_scope=False,
+                )
 
                 artifact_scope = site_artifact_scope_map.get((schedule_date.isoformat(), shift_kind))
                 request_count = max(int((artifact_scope or {}).get("request_count") or 0), 0)
@@ -8206,7 +9128,7 @@ def _build_support_roster_hq_upload_inspect_result(
                 if not artifact_scope and scope_has_workbook_signal:
                     add_issue(
                         "ARTIFACT_SCOPE_NOT_FOUND",
-                        message="입력된 지원근무 범위와 매칭되는 ARLS 지원 수요 artifact를 찾지 못했습니다.",
+                        message="지금 기준에는 없는 지원 요청입니다.",
                         sheet_name=sheet_name,
                         site_code=site_code,
                         site_name=site_name,
@@ -8251,7 +9173,7 @@ def _build_support_roster_hq_upload_inspect_result(
                         )
                 elif scope_has_workbook_signal:
                     scope_status = "blocking"
-                    scope_reason = "매칭되는 ARLS 지원 수요 artifact가 없습니다."
+                    scope_reason = "지금 기준에는 없는 지원 요청입니다."
 
                 if overflow_count > 0:
                     valid_row_index = 0
@@ -9975,6 +10897,7 @@ def _apply_sentrix_support_bridge_action(
     materialization_result: dict[str, Any] = {
         "bridge_action_id": bridge_action_id,
         "ticket_id": ticket_id,
+        "site_id": str(site["id"]),
         "site_code": str(site.get("site_code") or "").strip() or None,
         "work_date": work_date.isoformat(),
         "shift_kind": shift_kind,
@@ -10087,7 +11010,14 @@ def _apply_sentrix_support_bridge_action(
     deleted_schedule_id: str | None = None
     coexistence_mode = str((existing_materialization or {}).get("coexistence_mode") or "").strip() or SENTRIX_SUPPORT_MATERIALIZATION_MODE_OWNED
     current_schedule_row_id = str((existing_materialization or {}).get("monthly_schedule_id") or "").strip() or None
-    if current_schedule_row_id and coexistence_mode == SENTRIX_SUPPORT_MATERIALIZATION_MODE_OWNED:
+    existing_source = str((existing_schedule or {}).get("source") or "").strip()
+    existing_ticket_uuid = str((existing_schedule or {}).get("source_ticket_uuid") or "").strip()
+    existing_self_staff = bool((existing_schedule or {}).get("source_self_staff"))
+
+    def _delete_owned_support_schedule_by_id(schedule_id: str | None) -> tuple[int, str | None]:
+        normalized_schedule_id = str(schedule_id or "").strip()
+        if not normalized_schedule_id:
+            return 0, None
         cur.execute(
             """
             DELETE FROM monthly_schedules
@@ -10096,30 +11026,75 @@ def _apply_sentrix_support_bridge_action(
               AND COALESCE(source, '') = %s
             RETURNING id
             """,
-            (current_schedule_row_id, tenant_id, SENTRIX_ARLS_BRIDGE_SOURCE),
+            (normalized_schedule_id, tenant_id, SENTRIX_ARLS_BRIDGE_SOURCE),
         )
         deleted = cur.fetchone()
-        if deleted:
-            schedule_deleted = 1
-            deleted_schedule_id = str(deleted.get("id") or current_schedule_row_id)
-    elif existing_schedule:
-        existing_source = str(existing_schedule.get("source") or "").strip()
-        existing_ticket_uuid = str(existing_schedule.get("source_ticket_uuid") or "").strip()
-        if existing_source == SENTRIX_ARLS_BRIDGE_SOURCE and existing_ticket_uuid == ticket_id:
-            cur.execute(
-                """
-                DELETE FROM monthly_schedules
-                WHERE id = %s
-                  AND tenant_id = %s
-                  AND COALESCE(source, '') = %s
-                RETURNING id
-                """,
-                (str(existing_schedule["id"]), tenant_id, SENTRIX_ARLS_BRIDGE_SOURCE),
+        deleted_count = max(int(cur.rowcount or 0), 0)
+        deleted_id = str((deleted or {}).get("id") or normalized_schedule_id).strip() or None
+        return deleted_count, deleted_id
+
+    def _delete_owned_support_schedule_by_target(*, allow_any_ticket_lineage: bool) -> tuple[int, str | None]:
+        clauses = [
+            "tenant_id = %s",
+            "site_id = %s",
+            "employee_id = %s",
+            "schedule_date = %s",
+            "lower(COALESCE(NULLIF(trim(shift_type), ''), 'day')) = %s",
+            "COALESCE(source, '') = %s",
+            "COALESCE(source_self_staff, FALSE) = TRUE",
+        ]
+        params: list[Any] = [
+            tenant_id,
+            str(site["id"]),
+            employee_id,
+            work_date,
+            shift_kind,
+            SENTRIX_ARLS_BRIDGE_SOURCE,
+        ]
+        if not allow_any_ticket_lineage:
+            clauses.append(
+                "(source_ticket_uuid IS NULL OR source_ticket_uuid = %s)"
             )
-            deleted = cur.fetchone()
-            if deleted:
-                schedule_deleted = 1
-                deleted_schedule_id = str(deleted.get("id") or existing_schedule["id"])
+            params.append(ticket_id)
+        cur.execute(
+            f"""
+            DELETE FROM monthly_schedules
+            WHERE {' AND '.join(clauses)}
+            RETURNING id
+            """,
+            tuple(params),
+        )
+        deleted = cur.fetchone()
+        deleted_count = max(int(cur.rowcount or 0), 0)
+        deleted_id = str((deleted or {}).get("id") or "").strip() or None
+        return deleted_count, deleted_id
+
+    if coexistence_mode == SENTRIX_SUPPORT_MATERIALIZATION_MODE_OWNED:
+        schedule_deleted, deleted_schedule_id = _delete_owned_support_schedule_by_id(current_schedule_row_id)
+        should_fallback_to_target_match = (
+            bool(existing_materialization)
+            or not existing_schedule
+            or not existing_ticket_uuid
+        )
+        if schedule_deleted == 0 and should_fallback_to_target_match:
+            # Legacy rollback paths can leave the materialization lineage intact while the
+            # schedule row loses its ticket linkage. Fall back to the concrete target key.
+            schedule_deleted, deleted_schedule_id = _delete_owned_support_schedule_by_target(
+                allow_any_ticket_lineage=bool(existing_materialization),
+            )
+    elif existing_schedule:
+        if existing_source == SENTRIX_ARLS_BRIDGE_SOURCE and existing_ticket_uuid == ticket_id:
+            schedule_deleted, deleted_schedule_id = _delete_owned_support_schedule_by_id(
+                str(existing_schedule["id"]),
+            )
+        elif (
+            existing_source == SENTRIX_ARLS_BRIDGE_SOURCE
+            and existing_self_staff
+            and not existing_ticket_uuid
+        ):
+            schedule_deleted, deleted_schedule_id = _delete_owned_support_schedule_by_target(
+                allow_any_ticket_lineage=False,
+            )
 
     materialization_result.update(
         {
@@ -10155,6 +11130,67 @@ def _apply_sentrix_support_bridge_action(
     materialization_result["materialization_id"] = materialization_id
     materialization_result["status"] = SENTRIX_SUPPORT_MATERIALIZATION_STATUS_RETRACTED
     return materialization_result
+
+
+def _publish_sentrix_support_schedule_realtime_event(
+    *,
+    tenant_id: str,
+    tenant_code: str | None = None,
+    month: str | None = None,
+    work_date: date | str | None = None,
+    site_code: str | None = None,
+    bridge_action: str | None = None,
+    event_uid: str | None = None,
+) -> bool:
+    normalized_tenant_id = str(tenant_id or "").strip()
+    if not normalized_tenant_id:
+        return False
+
+    work_date_text = ""
+    if isinstance(work_date, date):
+        work_date_text = work_date.isoformat()
+    else:
+        work_date_text = str(work_date or "").strip()
+
+    normalized_month = str(month or "").strip()
+    if not normalized_month and len(work_date_text) >= 7:
+        normalized_month = work_date_text[:7]
+    if not normalized_month:
+        return False
+
+    normalized_site_code = str(site_code or "").strip().upper()
+    normalized_action = str(bridge_action or "").strip().upper()
+    if normalized_action == SENTRIX_ARLS_BRIDGE_ACTION_RETRACT:
+        realtime_event_type = "sentrix_support_schedule_retracted"
+    elif normalized_action == SENTRIX_ARLS_BRIDGE_ACTION_UPSERT:
+        realtime_event_type = "sentrix_support_schedule_upserted"
+    else:
+        realtime_event_type = "sentrix_support_schedule_changed"
+    normalized_event_uid = str(event_uid or "").strip() or (
+        f"sentrix-support-bridge:{normalized_tenant_id}:{normalized_site_code or '*'}:{normalized_month}:{realtime_event_type}"
+    )
+
+    logger.info(
+        "[SCHEDULE][REALTIME_PUBLISH] tenant=%s site=%s month=%s event_type=%s event_uid=%s",
+        str(tenant_code or normalized_tenant_id).strip() or normalized_tenant_id,
+        normalized_site_code or "-",
+        normalized_month,
+        realtime_event_type,
+        normalized_event_uid,
+    )
+    schedule_event_bus.publish(
+        {
+            "type": "schedule_changed",
+            "tenant_id": normalized_tenant_id,
+            "tenant_code": str(tenant_code or "").strip() or None,
+            "site_code": normalized_site_code,
+            "month": normalized_month,
+            "work_date": work_date_text or None,
+            "event_type": realtime_event_type,
+            "event_uid": normalized_event_uid,
+        }
+    )
+    return True
 
 
 def _process_sentrix_support_arls_bridge_actions(
@@ -10217,6 +11253,8 @@ def _process_sentrix_support_arls_bridge_actions(
         return result
 
     affected_dates_by_site: dict[str, set[date]] = {}
+    realtime_scopes: dict[tuple[str, str], set[str]] = {}
+    realtime_scope_actions: dict[tuple[str, str], set[str]] = {}
     for action_row in action_rows:
         try:
             with conn.cursor() as cur:
@@ -10251,10 +11289,17 @@ def _process_sentrix_support_arls_bridge_actions(
                     result["materialized_retracted"] += 1
                 else:
                     result["materialized_noop"] += 1
-            site_id = str(action_row.get("site_id") or "").strip()
+            site_id = str(action_result.get("site_id") or action_row.get("site_id") or "").strip()
+            site_code = str(action_result.get("site_code") or action_row.get("site_code") or "").strip().upper()
+            bridge_action = str(action_result.get("action") or action_row.get("action") or "").strip().upper()
             work_date = action_row.get("work_date")
             if site_id and isinstance(work_date, date):
                 affected_dates_by_site.setdefault(site_id, set()).add(work_date)
+            if isinstance(work_date, date):
+                scope_key = (site_code, work_date.isoformat()[:7])
+                realtime_scopes.setdefault(scope_key, set()).add(work_date.isoformat())
+                if bridge_action:
+                    realtime_scope_actions.setdefault(scope_key, set()).add(bridge_action)
         except Exception as exc:
             conn.rollback()
             failure_text = str(exc).strip() or "unknown bridge processing failure"
@@ -10307,6 +11352,33 @@ def _process_sentrix_support_arls_bridge_actions(
                     "site_id": site_id,
                     "error": f"leader refresh failed: {str(exc).strip() or 'unknown error'}",
                 }
+            )
+    tenant_row = fetch_tenant_row_any(conn, tenant_id) if realtime_scopes else None
+    tenant_code = str((tenant_row or {}).get("tenant_code") or "").strip() or None
+    batch_ref = str(batch_id or "").strip() or "adhoc"
+    for (site_code, month), work_dates in sorted(realtime_scopes.items()):
+        scope_actions = {
+            str(action).strip().upper()
+            for action in realtime_scope_actions.get((site_code, month), set())
+            if str(action).strip()
+        }
+        try:
+            _publish_sentrix_support_schedule_realtime_event(
+                tenant_id=tenant_id,
+                tenant_code=tenant_code,
+                month=month,
+                work_date=sorted(work_dates)[0] if len(work_dates) == 1 else None,
+                site_code=site_code or None,
+                bridge_action=next(iter(scope_actions)) if len(scope_actions) == 1 else None,
+                event_uid=f"sentrix-support-bridge:{batch_ref}:{site_code or '*'}:{month}",
+            )
+        except Exception as exc:
+            logger.exception(
+                "[SCHEDULE][REALTIME_PUBLISH_FAILED] tenant=%s site=%s month=%s error=%s",
+                tenant_code or tenant_id,
+                site_code or "-",
+                month,
+                str(exc).strip() or "unknown error",
             )
     return result
 
@@ -10431,7 +11503,7 @@ def _apply_sentrix_hq_roster_batch(
             continue
 
         if not matched_artifact_scope:
-            blocked_reasons.append(f"{sheet_name} {work_date.isoformat()} {shift_kind} 범위의 ARLS 지원 수요 artifact를 찾을 수 없습니다.")
+            blocked_reasons.append(f"{sheet_name} {work_date.isoformat()} {shift_kind} 범위는 지금 기준에 없는 지원 요청입니다.")
             continue
         if blocking_issue_count > 0:
             blocked_reasons.append(f"{sheet_name} {work_date.isoformat()} {shift_kind} 범위에 차단 이슈가 남아 있어 적용할 수 없습니다.")
@@ -11730,60 +12802,55 @@ def _build_support_roundtrip_preview_result(
             protected_reason = None
             internal_template = None
 
-            try:
-                worker_type, worker_name = parse_support_entry_text(raw_entry)
-                resolved_worker_type = worker_type
-                resolved_worker_name = worker_name
-            except HTTPException as exc:
-                validation_code = "invalid_support_entry"
-                validation_error = str(exc.detail or "지원근무자 형식을 해석할 수 없습니다.")
+            (
+                resolved_worker_type,
+                resolved_worker_name,
+                resolved_affiliation,
+                employee_row,
+                validation_code,
+                validation_error,
+            ) = _resolve_support_roundtrip_worker_identity(
+                conn,
+                tenant_id=str(target_tenant["id"]),
+                site_id=str(site_row["id"]),
+                raw_entry=raw_entry,
+                schedule_date=schedule_date,
+            )
+            if validation_code:
                 is_blocking = True
-                worker_type = ""
-                worker_name = ""
 
             if not validation_code and resolved_worker_type == "INTERNAL":
-                employee_row = _resolve_employee_by_full_name(
-                    conn,
-                    tenant_id=str(target_tenant["id"]),
-                    site_id=str(site_row["id"]),
-                    full_name=resolved_worker_name,
+                internal_template = _resolve_internal_support_template(
+                    template_map=template_map,
+                    support_period=support_period,
                 )
-                if not employee_row:
-                    resolved_worker_type = "F"
-                    employee_row = None
-                    resolved_affiliation, resolved_worker_name = _split_support_roundtrip_external_label(raw_entry)
+                if not internal_template:
+                    validation_code = "internal_template_missing"
+                    validation_error = "내부 지원근무에 사용할 기본 템플릿이 없습니다."
+                    is_blocking = True
                 else:
-                    internal_template = _resolve_internal_support_template(
-                        template_map=template_map,
-                        support_period=support_period,
-                    )
-                    if not internal_template:
-                        validation_code = "internal_template_missing"
-                        validation_error = "내부 지원근무에 사용할 기본 템플릿이 없습니다."
-                        is_blocking = True
-                    else:
-                        duty_type = "night" if support_period == "night" else "day"
-                        target_key = (_normalize_name_token(employee_row.get("full_name")), duty_type, date_key)
-                        current_body = current_body_index.get(target_key) or {}
-                        target_value = _format_export_hours_value(
-                            internal_template.get("paid_hours")
-                            if internal_template.get("paid_hours") is not None
-                            else _resolve_export_row_hours(
-                                {
-                                    "paid_hours": internal_template.get("paid_hours"),
-                                    "shift_start_time": internal_template.get("start_time"),
-                                    "shift_end_time": internal_template.get("end_time"),
-                                    "shift_type": "night" if support_period == "night" else "day",
-                                }
-                            )
+                    duty_type = "night" if support_period == "night" else "day"
+                    target_key = (_normalize_name_token(employee_row.get("full_name")), duty_type, date_key)
+                    current_body = current_body_index.get(target_key) or {}
+                    target_value = _format_export_hours_value(
+                        internal_template.get("paid_hours")
+                        if internal_template.get("paid_hours") is not None
+                        else _resolve_export_row_hours(
+                            {
+                                "paid_hours": internal_template.get("paid_hours"),
+                                "shift_start_time": internal_template.get("start_time"),
+                                "shift_end_time": internal_template.get("end_time"),
+                                "shift_type": "night" if support_period == "night" else "day",
+                            }
                         )
-                        current_body_value = str(current_body.get("work_value") or "").strip()
-                        if current_body_value and current_body_value != target_value:
-                            validation_code = "internal_schedule_conflict"
-                            validation_error = "현재 직원 일정 값과 충돌하여 자동 반영할 수 없습니다."
-                            is_blocking = True
-                            diff_category = "conflict"
-                            apply_action = "none"
+                    )
+                    current_body_value = str(current_body.get("work_value") or "").strip()
+                    if current_body_value and current_body_value != target_value:
+                        validation_code = "internal_schedule_conflict"
+                        validation_error = "현재 직원 일정 값과 충돌하여 자동 반영할 수 없습니다."
+                        is_blocking = True
+                        diff_category = "conflict"
+                        apply_action = "none"
 
             if not validation_code:
                 if not current_value:
@@ -11798,6 +12865,18 @@ def _build_support_roundtrip_preview_result(
                 diff_category = "conflict" if is_blocking else "invalid"
                 apply_action = "none"
                 error_counts[validation_code] += 1
+                if is_blocking:
+                    _append_blocked_reason(
+                        blocked_reasons,
+                        " · ".join(
+                            part for part in [
+                                date_key,
+                                str(item.get("section_label") or support_period).strip(),
+                                str(validation_error or "").strip(),
+                            ]
+                            if part
+                        ),
+                    )
 
             diff_counts[diff_category] += 1
             resolved_rows.append(
@@ -11827,7 +12906,7 @@ def _build_support_roundtrip_preview_result(
                     "internal_shift_type": "night" if support_period == "night" else "day",
                     "internal_shift_start_time": _normalize_time_text((internal_template or {}).get("start_time")),
                     "internal_shift_end_time": _normalize_time_text((internal_template or {}).get("end_time")),
-                    "internal_paid_hours": (internal_template or {}).get("paid_hours"),
+                    "internal_paid_hours": _resolve_internal_support_template_paid_hours(internal_template),
                 }
             )
 
@@ -12119,6 +13198,96 @@ def _upsert_support_roundtrip_assignment_row(
     )
 
 
+def _materialize_support_roundtrip_internal_schedule_row(
+    cur,
+    *,
+    tenant_id: str,
+    site_row: dict[str, Any],
+    payload: dict[str, Any],
+    batch_id: str,
+    source_revision: str | None,
+) -> dict[str, Any] | None:
+    if str(payload.get("resolved_worker_type") or "").strip() != "INTERNAL":
+        return None
+    employee_id = str(payload.get("employee_id") or "").strip()
+    schedule_date_text = str(payload.get("schedule_date") or "").strip()
+    if not employee_id or not schedule_date_text:
+        return None
+    try:
+        schedule_date = date.fromisoformat(schedule_date_text)
+    except ValueError:
+        return None
+
+    shift_kind = "night" if str(payload.get("internal_shift_type") or payload.get("support_period") or "").strip() == "night" else "day"
+    existing_schedule = _load_monthly_schedule_row_for_shift(
+        cur,
+        tenant_id=tenant_id,
+        employee_id=employee_id,
+        work_date=schedule_date,
+        shift_kind=shift_kind,
+    )
+    shift_start_time = _normalize_time_text(payload.get("internal_shift_start_time"))
+    shift_end_time = _normalize_time_text(payload.get("internal_shift_end_time"))
+    paid_hours = _coerce_float_or_none(payload.get("internal_paid_hours"))
+
+    if existing_schedule:
+        existing_source = str(existing_schedule.get("source") or "").strip()
+        if existing_source != SENTRIX_HQ_ROSTER_ASSIGNMENT_SOURCE:
+            return {
+                "effect": "linked_existing",
+                "schedule_id": str(existing_schedule.get("id") or "").strip() or None,
+                "schedule_date": schedule_date,
+                "shift_kind": shift_kind,
+            }
+        _update_monthly_schedule_row(
+            cur,
+            schedule_id=str(existing_schedule["id"]),
+            shift_type=shift_kind,
+            template_id=str(payload.get("internal_template_id") or "").strip() or None,
+            shift_start_time=shift_start_time,
+            shift_end_time=shift_end_time,
+            paid_hours=paid_hours,
+            schedule_note=str(existing_schedule.get("schedule_note") or "").strip() or None,
+            source=SENTRIX_HQ_ROSTER_ASSIGNMENT_SOURCE,
+            source_batch_id=batch_id,
+            source_revision=source_revision,
+            source_action="upsert_support_assignment",
+            source_self_staff=True,
+        )
+        return {
+            "effect": "updated",
+            "schedule_id": str(existing_schedule["id"]),
+            "schedule_date": schedule_date,
+            "shift_kind": shift_kind,
+        }
+
+    schedule_id = _insert_monthly_schedule_row(
+        cur,
+        tenant_id=tenant_id,
+        company_id=str(site_row.get("company_id") or "").strip(),
+        site_id=str(site_row["id"]),
+        employee_id=employee_id,
+        schedule_date=schedule_date,
+        shift_type=shift_kind,
+        template_id=str(payload.get("internal_template_id") or "").strip() or None,
+        shift_start_time=shift_start_time,
+        shift_end_time=shift_end_time,
+        paid_hours=paid_hours,
+        schedule_note=None,
+        source=SENTRIX_HQ_ROSTER_ASSIGNMENT_SOURCE,
+        source_batch_id=batch_id,
+        source_revision=source_revision,
+        source_action="upsert_support_assignment",
+        source_self_staff=True,
+    )
+    return {
+        "effect": "created",
+        "schedule_id": schedule_id,
+        "schedule_date": schedule_date,
+        "shift_kind": shift_kind,
+    }
+
+
 def _build_support_roundtrip_employee_row_index(sheet, *, employee_blocks: list[dict[str, Any]]) -> dict[tuple[str, str], int]:
     data_start_row = _find_template_data_start_row(sheet)
     row_index: dict[tuple[str, str], int] = {}
@@ -12234,6 +13403,14 @@ def _build_finance_review_filename(*, month_key: str, site_code: str, generated_
 def _build_finance_final_filename(*, month_key: str, site_code: str, generated_at: datetime | None = None) -> str:
     generated = generated_at or datetime.now(timezone(timedelta(hours=9)))
     return f"{month_key[:4]}년 {int(month_key[5:7])}월 근무표_{site_code}_2차최종_{generated.strftime('%y%m%d')}.xlsx"
+
+
+def _build_blank_template_filename(*, month_key: str, site_code: str, site_name: str | None = None) -> str:
+    normalized_site_code = str(site_code or "").strip().upper()
+    if normalized_site_code == "ALL":
+        return f"monthly_schedule_ALL_{month_key}.xlsx"
+    site_segment = str(site_name or "").strip() or normalized_site_code or "blank"
+    return f"monthly_schedule_{site_segment}_{month_key}.xlsx"
 
 
 def _get_finance_submission_state(conn, *, tenant_id: str, site_id: str, month_key: str) -> dict[str, Any] | None:
@@ -12612,7 +13789,7 @@ def inspect_support_roundtrip_hq_roster_upload(
     _month_bounds(selected_month)
     raw_bytes = file.file.read()
     try:
-        workbook = load_workbook(filename=BytesIO(raw_bytes), read_only=False, data_only=False)
+        workbook = load_workbook(filename=BytesIO(raw_bytes), read_only=False, data_only=True)
     except Exception as exc:
         raise HTTPException(status_code=400, detail="invalid support workbook") from exc
     try:
@@ -13049,6 +14226,7 @@ def apply_support_roundtrip_upload(
     if not _can_use_support_roundtrip_hq(user):
         raise HTTPException(status_code=403, detail="forbidden")
     target_tenant = _resolve_target_tenant(conn, user, tenant_code)
+    active_site_row: dict[str, Any] | None = None
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -13068,9 +14246,18 @@ def apply_support_roundtrip_upload(
             raise HTTPException(status_code=404, detail="support roundtrip batch not found")
         if str(batch.get("status") or "").strip() == "applied":
             raise HTTPException(status_code=409, detail="support roundtrip batch already applied")
+        active_site_id = str(batch.get("active_site_id") or "").strip()
+        if active_site_id:
+            active_site_row = _resolve_site_context_by_id(
+                conn,
+                tenant_id=str(target_tenant["id"]),
+                site_id=active_site_id,
+            )
         blocked_reasons = list(dict.fromkeys(str(item).strip() for item in (batch.get("blocked_reasons_json") or []) if str(item).strip()))
         if bool(batch.get("is_stale")) or str(batch.get("source_revision") or "").strip() != str(batch.get("active_source_revision") or "").strip():
             blocked_reasons.append("현재 HQ 업로드는 최신 Supervisor 소스 리비전 기준이 아니어서 적용할 수 없습니다.")
+        if not active_site_row:
+            blocked_reasons.append("적용 대상 스토어 정보를 찾을 수 없습니다.")
         if blocked_reasons:
             cur.execute(
                 """
@@ -13107,6 +14294,7 @@ def apply_support_roundtrip_upload(
         internal_conversion_count = 0
         conflict_count = 0
         ignored_blank_count = 0
+        materialized_schedule_dates: set[date] = set()
 
         for payload in payload_rows:
             apply_action = str(payload.get("apply_action") or "none").strip()
@@ -13199,10 +14387,26 @@ def apply_support_roundtrip_upload(
                 affiliation=worker_affiliation or None,
                 source_event_uid=str(batch_id),
             )
+            materialized_row = _materialize_support_roundtrip_internal_schedule_row(
+                cur,
+                tenant_id=str(target_tenant["id"]),
+                site_row=active_site_row or {},
+                payload=payload,
+                batch_id=str(batch_id),
+                source_revision=str(batch.get("source_revision") or "").strip() or None,
+            )
             applied += 1
             if str(payload.get("resolved_worker_type") or "").strip() == "INTERNAL":
                 internal_conversion_count += 1
+            if materialized_row and isinstance(materialized_row.get("schedule_date"), date):
+                materialized_schedule_dates.add(materialized_row["schedule_date"])
             if len(applied_rows) < IMPORT_REPORT_LIMIT:
+                materialized_effect = str((materialized_row or {}).get("effect") or "").strip()
+                materialized_reason_suffix = {
+                    "created": " · 내부 지원근무 스케줄 생성",
+                    "updated": " · 내부 지원근무 스케줄 수정",
+                    "linked_existing": " · 기존 동일 shift 스케줄 유지",
+                }.get(materialized_effect, "")
                 applied_rows.append(
                     SupportRoundtripApplyRowOut(
                         row_no=int(payload.get("row_no") or 0),
@@ -13211,7 +14415,7 @@ def apply_support_roundtrip_upload(
                         support_period=str(payload.get("support_period") or "day"),
                         slot_index=int(payload.get("slot_index") or 0),
                         status="applied",
-                        reason="지원근무 병합 반영",
+                        reason=f"지원근무 병합 반영{materialized_reason_suffix}",
                         worker_name=str(payload.get("resolved_worker_name") or "").strip() or None,
                         employee_name=str(payload.get("employee_name") or "").strip() or None,
                     )
@@ -13280,6 +14484,21 @@ def apply_support_roundtrip_upload(
                 batch["source_id"],
             ),
         )
+    if active_site_row and materialized_schedule_dates:
+        try:
+            _refresh_daily_leader_defaults_for_dates(
+                conn,
+                tenant_id=str(target_tenant["id"]),
+                site_id=str(active_site_row["id"]),
+                schedule_dates=sorted(materialized_schedule_dates),
+            )
+        except Exception:
+            logger.exception(
+                "[schedule][support_roundtrip] leader refresh failed tenant=%s site_id=%s dates=%s",
+                str(target_tenant.get("id") or "").strip(),
+                str(active_site_row.get("id") or "").strip(),
+                [item.isoformat() for item in sorted(materialized_schedule_dates)],
+            )
     return SupportRoundtripApplyOut(
         batch_id=batch_id,
         applied=applied,
@@ -13379,81 +14598,127 @@ def download_finance_review_excel(
         raise HTTPException(status_code=403, detail="forbidden")
     _month_bounds(month)
     target_tenant = _resolve_target_tenant(conn, user, tenant_code)
-    site_row = _resolve_site_context_by_code(
-        conn,
-        tenant_id=str(target_tenant["id"]),
-        site_code=str(site_code).strip(),
-    )
-    if not site_row:
-        raise HTTPException(status_code=404, detail="site not found")
-    export_ctx = _collect_monthly_export_context(
-        conn,
-        target_tenant=target_tenant,
-        site_row=site_row,
-        month_key=month,
-        user=user,
-    )
-    workbook = export_ctx["workbook"]
-    current_revision = str(export_ctx.get("export_revision") or "").strip()
-    submission_row = _ensure_finance_submission_state(
-        conn,
-        tenant_id=str(target_tenant["id"]),
-        site_id=str(site_row["id"]),
-        site_code=str(site_row["site_code"]),
-        month_key=month,
-    )
-    filename = _build_finance_review_filename(
-        month_key=month,
-        site_code=str(site_row["site_code"]).strip(),
-    )
-    current_final_is_live = bool(submission_row.get("active_final_revision")) and str(submission_row.get("active_final_revision") or "").strip() == current_revision
-    stale_final = bool(submission_row.get("active_final_revision")) and str(submission_row.get("active_final_revision") or "").strip() != current_revision
-    _create_finance_submission_batch(
-        conn,
-        submission_row=submission_row,
-        batch_kind="review_download",
-        source_revision=current_revision,
-        filename=filename,
-        actor_id=str(user["id"]),
-        actor_role=_finance_submission_normalize_role(user),
-        status="downloaded",
-        metadata={
-            "template_version": ARLS_EXPORT_TEMPLATE_VERSION,
-            "export_source_version": ARLS_EXPORT_SOURCE_VERSION,
-            "export_revision": current_revision,
-            "site_code": str(site_row["site_code"]).strip(),
-            "month": month,
-        },
-    )
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE schedule_finance_submission_states
-            SET state = %s,
-                current_revision = %s,
-                review_download_revision = %s,
-                review_downloaded_at = timezone('utc', now()),
-                review_downloaded_by = %s,
-                review_downloaded_role = %s,
-                review_download_filename = %s,
-                final_upload_stale = %s,
-                final_download_enabled = CASE WHEN %s THEN FALSE ELSE final_download_enabled END,
-                last_event = 'review_downloaded',
-                updated_at = timezone('utc', now())
-            WHERE id = %s
-            """,
-            (
-                "final_upload_stale" if stale_final else ("hq_final_download_ready" if current_final_is_live else "waiting_final_upload"),
-                current_revision,
-                current_revision,
-                user["id"],
-                _finance_submission_normalize_role(user),
-                filename,
-                stale_final,
-                stale_final,
-                submission_row["id"],
-            ),
+    normalized_site_code = str(site_code or "").strip()
+    export_all_sites = normalized_site_code.lower() == "all"
+
+    if export_all_sites:
+        support_status_rows_by_site_code = _load_support_status_rows_by_site_code_for_export(
+            conn,
+            tenant_id=str(target_tenant["id"]),
+            tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
+            month_key=month,
+            site_id=None,
         )
+        export_contexts = _collect_finance_review_all_site_export_contexts(
+            conn,
+            target_tenant=target_tenant,
+            month_key=month,
+            user=user,
+        )
+        workbook, _template_path, template_version = _build_monthly_export_workbook_from_contexts(
+            export_contexts=export_contexts,
+            month_key=month,
+            tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
+            source_version=f"{ARLS_EXPORT_SOURCE_VERSION}:finance-review:all-sites",
+            include_summary_sections=False,
+            include_support_assignment_sections=False,
+            support_status_rows_by_site_code=support_status_rows_by_site_code,
+        )
+        filename = _build_finance_review_filename(
+            month_key=month,
+            site_code="ALL",
+        )
+    else:
+        site_row = _resolve_site_context_by_code(
+            conn,
+            tenant_id=str(target_tenant["id"]),
+            site_code=normalized_site_code,
+        )
+        if not site_row:
+            raise HTTPException(status_code=404, detail="site not found")
+        support_status_rows_by_site_code = _load_support_status_rows_by_site_code_for_export(
+            conn,
+            tenant_id=str(target_tenant["id"]),
+            tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
+            month_key=month,
+            site_id=str(site_row["id"]),
+        )
+        export_ctx = _collect_finance_review_export_context(
+            conn,
+            target_tenant=target_tenant,
+            site_row=site_row,
+            month_key=month,
+            user=user,
+        )
+        workbook, _template_path, template_version = _build_monthly_export_workbook_from_contexts(
+            export_contexts=[export_ctx],
+            month_key=month,
+            tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
+            source_version=f"{ARLS_EXPORT_SOURCE_VERSION}:finance-review",
+            include_summary_sections=False,
+            include_support_assignment_sections=False,
+            support_status_rows_by_site_code=support_status_rows_by_site_code,
+        )
+        current_revision = str(export_ctx.get("export_revision") or "").strip()
+        submission_row = _ensure_finance_submission_state(
+            conn,
+            tenant_id=str(target_tenant["id"]),
+            site_id=str(site_row["id"]),
+            site_code=str(site_row["site_code"]),
+            month_key=month,
+        )
+        filename = _build_finance_review_filename(
+            month_key=month,
+            site_code=str(site_row["site_code"]).strip(),
+        )
+        current_final_is_live = bool(submission_row.get("active_final_revision")) and str(submission_row.get("active_final_revision") or "").strip() == current_revision
+        stale_final = bool(submission_row.get("active_final_revision")) and str(submission_row.get("active_final_revision") or "").strip() != current_revision
+        _create_finance_submission_batch(
+            conn,
+            submission_row=submission_row,
+            batch_kind="review_download",
+            source_revision=current_revision,
+            filename=filename,
+            actor_id=str(user["id"]),
+            actor_role=_finance_submission_normalize_role(user),
+            status="downloaded",
+            metadata={
+                "template_version": template_version,
+                "export_source_version": f"{ARLS_EXPORT_SOURCE_VERSION}:finance-review",
+                "export_revision": current_revision,
+                "site_code": str(site_row["site_code"]).strip(),
+                "month": month,
+            },
+        )
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE schedule_finance_submission_states
+                SET state = %s,
+                    current_revision = %s,
+                    review_download_revision = %s,
+                    review_downloaded_at = timezone('utc', now()),
+                    review_downloaded_by = %s,
+                    review_downloaded_role = %s,
+                    review_download_filename = %s,
+                    final_upload_stale = %s,
+                    final_download_enabled = CASE WHEN %s THEN FALSE ELSE final_download_enabled END,
+                    last_event = 'review_downloaded',
+                    updated_at = timezone('utc', now())
+                WHERE id = %s
+                """,
+                (
+                    "final_upload_stale" if stale_final else ("hq_final_download_ready" if current_final_is_live else "waiting_final_upload"),
+                    current_revision,
+                    current_revision,
+                    user["id"],
+                    _finance_submission_normalize_role(user),
+                    filename,
+                    stale_final,
+                    stale_final,
+                    submission_row["id"],
+                ),
+            )
     out = BytesIO()
     workbook.save(out)
     out.seek(0)
@@ -14055,6 +15320,109 @@ def update_schedule_work_template(
     if not updated:
         raise HTTPException(status_code=500, detail="template update failed")
     return _format_schedule_template_row(dict(updated))
+
+
+@router.delete("/work-templates/{template_id}", response_model=ScheduleTemplateDeleteOut)
+def delete_schedule_work_template(
+    template_id: uuid.UUID,
+    tenant_code: str | None = Query(default=None, max_length=64),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    if not can_manage_schedule(user["role"]):
+        raise HTTPException(status_code=403, detail="forbidden")
+    target_tenant = _resolve_target_tenant(conn, user, tenant_code)
+    target_tenant_id = str(target_tenant["id"])
+    normalized_template_id = str(template_id)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, tenant_id, template_name
+            FROM schedule_templates
+            WHERE id = %s
+              AND tenant_id = %s
+            LIMIT 1
+            """,
+            (normalized_template_id, target_tenant_id),
+        )
+        template_row = cur.fetchone()
+        if not template_row:
+            raise HTTPException(status_code=404, detail="template not found")
+
+        cur.execute(
+            """
+            SELECT DISTINCT p.id, p.profile_name
+            FROM schedule_import_mapping_profiles p
+            JOIN schedule_import_mapping_entries e
+              ON e.profile_id = p.id
+            WHERE p.tenant_id = %s
+              AND e.template_id = %s
+            ORDER BY p.updated_at DESC, p.created_at DESC
+            """,
+            (target_tenant_id, normalized_template_id),
+        )
+        affected_profiles = [dict(row) for row in (cur.fetchall() or [])]
+
+        cur.execute(
+            """
+            SELECT COUNT(*) AS cnt
+            FROM schedule_import_mapping_entries
+            WHERE template_id = %s
+            """,
+            (normalized_template_id,),
+        )
+        invalidated_entry_count = int((cur.fetchone() or {}).get("cnt") or 0)
+
+        cur.execute(
+            """
+            UPDATE schedule_import_mapping_profiles p
+            SET is_active = FALSE,
+                updated_at = timezone('utc', now())
+            WHERE p.tenant_id = %s
+              AND EXISTS (
+                SELECT 1
+                FROM schedule_import_mapping_entries e
+                WHERE e.profile_id = p.id
+                  AND e.template_id = %s
+              )
+            """,
+            (target_tenant_id, normalized_template_id),
+        )
+
+        cur.execute(
+            """
+            DELETE FROM schedule_templates
+            WHERE id = %s
+              AND tenant_id = %s
+            """,
+            (normalized_template_id, target_tenant_id),
+        )
+
+    deactivated_profiles = [
+        {
+            "profile_id": str(item.get("id") or "").strip(),
+            "profile_name": str(item.get("profile_name") or "").strip() or "기본 월간 업로드 매핑",
+        }
+        for item in affected_profiles
+        if str(item.get("id") or "").strip()
+    ]
+    deactivated_profile_count = len(deactivated_profiles)
+    profile_notice = (
+        f"연결된 매핑 프로필 {deactivated_profile_count}개가 비활성화되었습니다. "
+        "템플릿이 삭제되어 매핑 프로필을 다시 설정해야 업로드를 진행할 수 있습니다."
+        if deactivated_profile_count > 0
+        else None
+    )
+
+    return ScheduleTemplateDeleteOut(
+        template_id=template_row["id"],
+        template_name=str(template_row.get("template_name") or "").strip() or "선택한 템플릿",
+        deactivated_profile_count=deactivated_profile_count,
+        invalidated_entry_count=invalidated_entry_count,
+        deactivated_profiles=deactivated_profiles,
+        profile_notice=profile_notice,
+    )
 
 
 def _create_schedule_rows_with_template(
@@ -14949,6 +16317,85 @@ def monthly_view_lite(
     }
 
 
+def _format_schedule_stream_event(event_name: str, payload: dict[str, Any]) -> str:
+    return f"event: {event_name}\ndata: {json.dumps(_serialize_schedule_stream_value(payload), ensure_ascii=False)}\n\n"
+
+
+def _serialize_schedule_stream_value(value: Any) -> Any:
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, timedelta):
+        return value.total_seconds()
+    if isinstance(value, dict):
+        return {str(key): _serialize_schedule_stream_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_serialize_schedule_stream_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_serialize_schedule_stream_value(item) for item in value]
+    if isinstance(value, set):
+        return [_serialize_schedule_stream_value(item) for item in value]
+    return value
+
+
+@router.get("/events/stream")
+async def schedule_events_stream(
+    request: Request,
+    month: str = Query(..., description="YYYY-MM"),
+    tenant_code: str | None = None,
+    site_code: str | None = Query(default=None),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    normalized_month = str(month or "").strip()
+    if not normalized_month:
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    _month_bounds(normalized_month)
+
+    target_tenant = _resolve_target_tenant(conn, user, tenant_code)
+    requested_site_code = str(site_code or "").strip().upper()
+    staff_scope = enforce_staff_site_scope(user, request_site_code=requested_site_code or None)
+    scoped_site_code = str((staff_scope or {}).get("site_code") or requested_site_code).strip().upper() or None
+    subscription = schedule_event_bus.subscribe(
+        tenant_id=str(target_tenant["id"]),
+        month=normalized_month,
+        site_code=scoped_site_code,
+    )
+
+    async def event_stream():
+        try:
+            yield _format_schedule_stream_event(
+                "connected",
+                {
+                    "type": "connected",
+                    "tenant_code": str(target_tenant.get("tenant_code") or "").strip(),
+                    "month": normalized_month,
+                    "site_code": scoped_site_code,
+                },
+            )
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.to_thread(subscription.queue.get, True, 15.0)
+                except Empty:
+                    yield ": keepalive\n\n"
+                    continue
+                event_name = str(event.get("type") or "schedule_changed").strip() or "schedule_changed"
+                yield _format_schedule_stream_event(event_name, event)
+        finally:
+            schedule_event_bus.unsubscribe(subscription.id)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.get("/monthly-board-lite")
 def monthly_board_lite(
     month: str = Query(..., description="YYYY-MM"),
@@ -15756,6 +17203,17 @@ def _build_existing_schedule_row_index(rows: list[dict]) -> dict[tuple[str, str,
     return index
 
 
+def _build_existing_schedule_rows_by_employee_day(rows: list[dict]) -> dict[tuple[str, str], list[dict]]:
+    index: dict[tuple[str, str], list[dict]] = {}
+    for row in rows:
+        employee_id = str(row.get("employee_id") or "").strip()
+        schedule_date = row.get("schedule_date")
+        if not employee_id or not isinstance(schedule_date, date):
+            continue
+        index.setdefault((employee_id, schedule_date.isoformat()), []).append(dict(row))
+    return index
+
+
 def _build_protected_overnight_key_set(
     *,
     support_rows: list[dict],
@@ -15794,6 +17252,10 @@ def _match_import_employee(employee_index: dict[str, list[dict]], employee_name:
 
 def _is_monthly_base_schedule_source(source: object) -> bool:
     return str(source or "").strip().lower() in ARLS_MONTHLY_BASE_SOURCE_ALIASES
+
+
+def _is_support_upload_internal_source(source: object) -> bool:
+    return str(source or "").strip().lower() == ARLS_SUPPORT_UPLOAD_INTERNAL_SOURCE
 
 
 def _collect_required_mapping_keys(body_cells: list[dict[str, Any]]) -> set[tuple[str, str]]:
@@ -15999,6 +17461,7 @@ def _build_schedule_import_preview_result(
     mapping_lookup = _build_schedule_import_mapping_lookup(mapping_profile)
     mapping_summary = _build_schedule_import_mapping_summary(mapping_profile)
     template_index = _build_template_id_index(templates)
+    default_template_map = _build_default_schedule_template_map(templates)
     timings_ms["template_mapping_preload"] = _rounded_timing_ms(template_preload_started_at)
 
     employee_preload_started_at = time.perf_counter()
@@ -16013,24 +17476,31 @@ def _build_schedule_import_preview_result(
         site_id=str(scope_site["id"]),
         month_key=selected_month,
     )
-    existing_schedule_index = _build_existing_schedule_row_index(existing_schedule_rows)
     current_support_request_rows = _read_monthly_support_request_rows_for_export(
         conn,
         tenant_id=str(target_tenant["id"]),
         site_id=str(scope_site["id"]),
         month_key=selected_month,
     )
+    existing_schedule_rows = _filter_existing_schedule_rows_for_active_support_scopes(
+        existing_schedule_rows,
+        current_support_request_rows,
+    )
+    existing_schedule_index = _build_existing_schedule_row_index(existing_schedule_rows)
+    existing_schedule_rows_by_employee_day = _build_existing_schedule_rows_by_employee_day(existing_schedule_rows)
     current_support_request_index = _build_support_request_ticket_index(current_support_request_rows)
     protected_overnight_keys = _build_protected_overnight_key_set(
         support_rows=export_ctx["support_rows"],
         overnight_rows=export_ctx["overnight_rows"],
         employee_overnight_rows=export_ctx["employee_overnight_rows"],
     )
+    base_current_body_index = _build_import_current_body_index_from_existing_schedule_rows(existing_schedule_rows)
     if not current_body_index and existing_schedule_rows:
-        current_body_index = _build_import_current_body_index_from_existing_schedule_rows(existing_schedule_rows)
+        current_body_index = dict(base_current_body_index)
     timings_ms["existing_state_preload"] = _rounded_timing_ms(existing_preload_started_at)
 
     resolved_rows: list[dict[str, Any]] = []
+    uploaded_body_slot_index: dict[tuple[str, str, str], dict[str, Any]] = {}
     support_ticket_rows: list[dict[str, Any]] = []
     diff_counts: Counter[str] = Counter()
     blocked_reasons: list[str] = list(workbook_ctx.get("blocked_reasons") or [])
@@ -16088,7 +17558,9 @@ def _build_schedule_import_preview_result(
         current_key = (_normalize_name_token(employee_name), duty_type, schedule_date.isoformat())
         current_row = current_body_index.get(current_key) or {}
         current_value = str(current_row.get("work_value") or "").strip()
-        if not workbook_value and not current_value:
+        base_current_row = base_current_body_index.get(current_key) or {}
+        base_current_value = str(base_current_row.get("work_value") or "").strip()
+        if not workbook_value and not base_current_value:
             diff_counts["unchanged"] += 1
             continue
         employee_row = None
@@ -16132,8 +17604,8 @@ def _build_schedule_import_preview_result(
                 )
             is_blocking = True
 
-        if not validation_code and (workbook_value or current_value):
-            employee_row, employee_issue_code, employee_issue_message = _resolve_import_employee_match(
+        if not validation_code and (workbook_value or base_current_value):
+            employee_row, employee_issue_code, employee_issue_message = _validate_regular_shift_worker(
                 employee_index,
                 employee_name=employee_name,
                 schedule_date=schedule_date,
@@ -16186,9 +17658,11 @@ def _build_schedule_import_preview_result(
                     protected_reason = "승인된 야간/자체근무 truth가 관리하는 값이라 업로드로 덮어쓸 수 없습니다."
                 else:
                     diff_category = "unchanged"
-            elif not validation_code and foreign_existing_rows and workbook_value != current_value:
+            elif not validation_code and foreign_existing_rows and workbook_value == current_value:
+                diff_category = "unchanged"
+            elif not validation_code and foreign_existing_rows and workbook_value and workbook_value != base_current_value:
                 validation_code = "NON_BASE_LINEAGE_CONFLICT"
-                validation_error = "같은 슬롯에 다른 lineage의 일정이 있어 base upload로 수정할 수 없습니다."
+                validation_error = "이 칸에는 다른 방식으로 등록된 일정이 있어 이번 업로드로 수정할 수 없습니다."
                 is_blocking = True
                 append_row_issue(
                     validation_code,
@@ -16197,7 +17671,7 @@ def _build_schedule_import_preview_result(
                     section="base_schedule",
                     message=validation_error,
                 )
-            elif not validation_code and len(base_existing_rows) > 1 and workbook_value != current_value:
+            elif not validation_code and len(base_existing_rows) > 1 and workbook_value != base_current_value:
                 validation_code = "MULTI_ROW_CONFLICT"
                 validation_error = "여러 일정이 한 셀에 합산되어 있어 업로드로 자동 수정할 수 없습니다."
                 is_blocking = True
@@ -16209,12 +17683,12 @@ def _build_schedule_import_preview_result(
                     message=validation_error,
                 )
             elif not validation_code:
-                if workbook_value == current_value:
+                if workbook_value == base_current_value:
                     diff_category = "unchanged"
-                elif not workbook_value and current_value:
+                elif not workbook_value and base_current_value:
                     diff_category = "delete"
                     apply_action = "delete"
-                elif workbook_value and not current_value:
+                elif workbook_value and not base_current_value:
                     diff_category = "create"
                     apply_action = "create"
                 else:
@@ -16246,9 +17720,6 @@ def _build_schedule_import_preview_result(
             diff_counts["conflict" if is_blocking else "invalid"] += 1
         else:
             diff_counts[diff_category] += 1
-
-        if not validation_code and diff_category == "unchanged" and not is_protected:
-            continue
 
         resolved_rows.append(
             {
@@ -16288,8 +17759,35 @@ def _build_schedule_import_preview_result(
                 "is_protected": is_protected,
                 "protected_reason": protected_reason,
                 "current_schedule_id": current_schedule_id or None,
+                "validator_kind": "regular",
+                "decision_stage": "block" if is_blocking else (diff_category if diff_category == "review" else ("apply" if apply_action in {"create", "update", "delete"} else None)),
+                "support_origin_type": None,
             }
         )
+        if (
+            not validation_code
+            and employee_row
+            and workbook_value
+            and duty_type in {"day", "night"}
+        ):
+            uploaded_shift_type = _normalize_shift_type(
+                template_meta.get("shift_type") or _resolve_shift_type_from_duty_type(duty_type)
+            )
+            if uploaded_shift_type in {"day", "night"}:
+                uploaded_body_slot_index[
+                    (
+                        str((employee_row or {}).get("id") or "").strip(),
+                        schedule_date.isoformat(),
+                        uploaded_shift_type,
+                    )
+                ] = {
+                    "shift_type": uploaded_shift_type,
+                    "template_id": template_meta.get("template_id"),
+                    "shift_start_time": template_meta.get("shift_start_time"),
+                    "shift_end_time": template_meta.get("shift_end_time"),
+                    "paid_hours": template_meta.get("paid_hours"),
+                    "schedule_note": None,
+                }
 
     for row in parsed_uploaded.get("need_cells") or []:
         schedule_date = row.get("schedule_date")
@@ -16362,15 +17860,25 @@ def _build_schedule_import_preview_result(
                 "current_schedule_id": None,
                 "schedule_note": parsed_raw_text or None,
                 "required_count_state": required_count_state or None,
+                "validator_kind": None,
+                "decision_stage": None,
+                "support_origin_type": None,
             }
         )
-
     for row in parsed_uploaded.get("support_cells") or []:
         schedule_date = row.get("schedule_date")
         if not isinstance(schedule_date, date):
             continue
         workbook_value = str(row.get("work_value") or "").strip()
         source_block = str(row.get("source_block") or "").strip()
+        parsed_support_worker = {
+            "raw_value": workbook_value,
+            "worker_type": str(row.get("worker_type") or "").strip() or None,
+            "worker_name": str(row.get("worker_name") or "").strip() or None,
+            "requires_employee_match": bool(row.get("requires_employee_match")),
+            "self_staff": bool(row.get("self_staff")),
+            "affiliation": str(row.get("affiliation") or "").strip() or None,
+        }
         current_key = (
             source_block,
             schedule_date.isoformat(),
@@ -16385,21 +17893,117 @@ def _build_schedule_import_preview_result(
         diff_category = "unchanged"
         is_protected = False
         protected_reason = None
+        support_employee_row = None
+        validator_kind = "support" if source_block in {"day_support_worker", "night_support_worker"} else None
+        decision_stage = None
+        support_origin_type = None
+        internal_template = None
+        current_schedule_id = None
+        linked_existing_schedule = False
+        if source_block in {"day_support_worker", "night_support_worker"} and not validation_code and workbook_value:
+            support_validation = _validate_support_shift_worker(
+                conn,
+                tenant_id=str(target_tenant["id"]),
+                site_id=str(scope_site["id"]),
+                parsed_worker=parsed_support_worker,
+                employee_index=employee_index,
+                schedule_date=schedule_date,
+            )
+            support_employee_row = dict(support_validation.get("employee_row") or {}) or None
+            validation_code = _normalize_import_issue_code(support_validation.get("validation_code")) or None
+            validation_error = str(support_validation.get("validation_error") or "").strip() or None
+            decision_stage = str(support_validation.get("decision_stage") or "").strip().lower() or None
+            support_origin_type = str(support_validation.get("support_origin_type") or "").strip() or None
+            is_blocking = decision_stage == "block" or (bool(validation_code) and _issue_is_blocking(validation_code))
+            if not is_blocking and decision_stage == "apply" and support_employee_row:
+                support_period = "night" if source_block.startswith("night_support") else "day"
+                internal_template = _resolve_internal_support_template(
+                    template_map=default_template_map,
+                    support_period=support_period,
+                )
+                if not internal_template:
+                    validation_code = "SUPPORT_INTERNAL_TEMPLATE_MISSING"
+                    validation_error = "내부 지원근무를 생성할 기본 근무 템플릿이 없습니다."
+                    decision_stage = "block"
+                    is_blocking = True
+                else:
+                    internal_paid_hours = _resolve_internal_support_template_paid_hours(internal_template)
+                    slot_key = (
+                        str((support_employee_row or {}).get("id") or "").strip(),
+                        schedule_date.isoformat(),
+                        "night" if support_period == "night" else "day",
+                    )
+                    desired_support_schedule_row = {
+                        "shift_type": "night" if support_period == "night" else "day",
+                        "template_id": str((internal_template or {}).get("id") or "").strip() or None,
+                        "shift_start_time": _normalize_time_text((internal_template or {}).get("start_time")),
+                        "shift_end_time": _normalize_time_text((internal_template or {}).get("end_time")),
+                        "paid_hours": internal_paid_hours,
+                        "schedule_note": None,
+                    }
+                    uploaded_body_row = uploaded_body_slot_index.get(slot_key)
+                    existing_same_key_rows = [
+                        dict(item)
+                        for item in (existing_schedule_index.get(slot_key) or [])
+                    ]
+                    matching_same_key_rows = [
+                        item for item in existing_same_key_rows
+                        if _schedule_import_current_row_matches(item, desired_support_schedule_row)
+                    ]
+                    managed_current_rows = [
+                        dict(item)
+                        for item in existing_same_key_rows
+                        if _is_support_upload_internal_source(item.get("source"))
+                    ]
+                    if uploaded_body_row:
+                        linked_existing_schedule = True
+                        current_schedule_id = str((matching_same_key_rows[0] if matching_same_key_rows else {}).get("schedule_id") or "").strip() or None
+                    elif matching_same_key_rows:
+                        linked_existing_schedule = True
+                        current_schedule_id = str(matching_same_key_rows[0].get("schedule_id") or "").strip() or None
+                    elif len(managed_current_rows) > 1:
+                        validation_code = "MULTI_ROW_CONFLICT"
+                        validation_error = "기존 내부 지원근무 row가 중복되어 자동 반영할 수 없습니다."
+                        decision_stage = "block"
+                        is_blocking = True
+                    else:
+                        current_schedule_id = str((managed_current_rows[0] if managed_current_rows else {}).get("schedule_id") or "").strip() or None
+                        employee_day_rows = existing_schedule_rows_by_employee_day.get(
+                            (str((support_employee_row or {}).get("id") or "").strip(), schedule_date.isoformat())
+                        ) or []
+                        if _current_cell_has_time_conflict(
+                            employee_day_rows,
+                            next_start=_normalize_time_text((internal_template or {}).get("start_time")),
+                            next_end=_normalize_time_text((internal_template or {}).get("end_time")),
+                            current_schedule_id=current_schedule_id,
+                        ):
+                            validation_code = "TIME_CONFLICT"
+                            validation_error = "같은 날짜의 기존 일정과 시간이 겹칩니다."
+                            decision_stage = "block"
+                            is_blocking = True
+            if validation_code:
+                append_row_issue(
+                    validation_code,
+                    row_no=int(row.get("row_no") or 0),
+                    col_no=int(row.get("col_no") or 0),
+                    section=source_block,
+                    message=validation_error,
+                )
         if source_block.endswith("_summary_count"):
             validation_code = validation_code or "PROTECTED_FIELD_IGNORED"
             validation_error = validation_error or "요약 행은 검토만 가능하며 직접 반영되지 않습니다."
             is_protected = True
             protected_reason = "요약/관리 영역은 이번 단계에서 직접 반영되지 않습니다."
-        elif source_block in {"day_support_external_count", "night_support_purpose", "day_support_worker", "night_support_worker"}:
+        elif source_block in {"day_support_external_count", "night_support_purpose"}:
             is_protected = True
             protected_reason = "지원 수요/배정 영역은 이번 단계에서 분석 결과로만 제공합니다."
         if not workbook_value and not current_value and not validation_code:
             diff_counts["unchanged"] += 1
             continue
-        if workbook_value != current_value:
-            if validation_code and is_blocking:
-                diff_category = "conflict"
-            elif is_protected:
+        if validation_code and is_blocking and workbook_value:
+            diff_category = "conflict"
+        elif is_protected:
+            if workbook_value != current_value:
                 diff_category = "ignored_protected"
                 if validation_code == "PROTECTED_FIELD_IGNORED":
                     append_row_issue(
@@ -16408,11 +18012,27 @@ def _build_schedule_import_preview_result(
                         col_no=int(row.get("col_no") or 0),
                         section=source_block,
                         message=validation_error,
-                )
-            else:
-                diff_category = "review"
-        elif validation_code and is_blocking and workbook_value:
-            diff_category = "conflict"
+                    )
+        elif decision_stage == "review":
+            diff_category = "review"
+        elif linked_existing_schedule:
+            diff_category = "unchanged"
+        elif workbook_value == current_value:
+            diff_category = "unchanged"
+        elif not workbook_value and current_value:
+            diff_category = "delete"
+        elif workbook_value and not current_value:
+            diff_category = "create"
+        else:
+            diff_category = "update"
+        if source_block in {"day_support_worker", "night_support_worker"} and validation_code and is_blocking:
+            _append_blocked_reason(
+                blocked_reasons,
+                _build_import_support_worker_blocked_reason(
+                    row,
+                    validation_error or "지원근무자 이름을 직원 명단과 매칭할 수 없습니다.",
+                ),
+            )
         diff_counts[diff_category] += 1
 
         if diff_category == "unchanged" and not validation_code and not is_protected:
@@ -16427,12 +18047,16 @@ def _build_schedule_import_preview_result(
                 "company_code": str(scope_site.get("company_code") or "").strip(),
                 "site_id": str(scope_site["id"]),
                 "site_code": str(scope_site["site_code"]),
-                "employee_id": None,
-                "employee_code": "",
-                "employee_name": "",
+                "employee_id": str((support_employee_row or {}).get("id") or "").strip() or None,
+                "employee_code": str((support_employee_row or {}).get("employee_code") or "").strip(),
+                "employee_name": str(
+                    (support_employee_row or {}).get("full_name")
+                    or parsed_support_worker.get("worker_name")
+                    or ""
+                ).strip(),
                 "schedule_date": schedule_date,
-                "shift_type": "",
-                "duty_type": "",
+                "shift_type": "night" if source_block.startswith("night_support") else "day",
+                "duty_type": "night_support" if source_block.startswith("night_support") else "day_support",
                 "source_sheet": str(row.get("source_sheet") or ARLS_SHEET_NAME),
                 "source_col": _excel_col_label(int(row.get("col_no") or 0)),
                 "template_id": None,
@@ -16442,9 +18066,9 @@ def _build_schedule_import_preview_result(
                 "parsed_semantic_type": str(row.get("parsed_semantic_type") or ""),
                 "mapped_hours": None,
                 "mapping_key": None,
-                "shift_start_time": None,
-                "shift_end_time": None,
-                "paid_hours": None,
+                "shift_start_time": _normalize_time_text((internal_template or {}).get("start_time")),
+                "shift_end_time": _normalize_time_text((internal_template or {}).get("end_time")),
+                "paid_hours": (internal_template or {}).get("paid_hours"),
                 "validation_code": validation_code,
                 "validation_error": validation_error,
                 "is_valid": validation_code is None or not is_blocking,
@@ -16455,7 +18079,17 @@ def _build_schedule_import_preview_result(
                 "section_label": str(row.get("section_label") or "").strip(),
                 "is_protected": is_protected,
                 "protected_reason": protected_reason,
-                "current_schedule_id": None,
+                "current_schedule_id": current_schedule_id,
+                "validator_kind": validator_kind,
+                "decision_stage": decision_stage,
+                "support_origin_type": support_origin_type,
+                "internal_template_id": str((internal_template or {}).get("id") or "").strip() or None,
+                "internal_shift_type": "night" if source_block.startswith("night_support") else "day",
+                "internal_shift_start_time": _normalize_time_text((internal_template or {}).get("start_time")),
+                "internal_shift_end_time": _normalize_time_text((internal_template or {}).get("end_time")),
+                "internal_paid_hours": _resolve_internal_support_template_paid_hours(internal_template),
+                "schedule_source": ARLS_SUPPORT_UPLOAD_INTERNAL_SOURCE if decision_stage == "apply" and support_employee_row else None,
+                "support_type": "night_support" if source_block.startswith("night_support") else "day_support",
             }
         )
 
@@ -16517,7 +18151,7 @@ def _build_schedule_import_preview_result(
             diff_counts["conflict"] += 1
         elif apply_action != "none":
             diff_counts[f"sentrix_{diff_category}"] += 1
-        elif diff_category == "unchanged":
+        elif diff_category == "unchanged" and max(int(request_count_numeric or 0), 0) <= 0:
             continue
         support_ticket_rows.append(
             {
@@ -16601,6 +18235,7 @@ def _build_schedule_import_preview_result(
             row.get("diff_category") != "unchanged"
             or row.get("validation_code")
             or row.get("is_protected")
+            or str(row.get("decision_stage") or "").strip().lower() in {"review", "block"}
             or (
                 (
                     str(row.get("source_block") or "").startswith("day_support")
@@ -16643,18 +18278,39 @@ def _build_schedule_import_preview_result(
         and str(row.get("apply_action") or "").strip() in {"create", "update", "delete"}
         and not bool(row.get("is_blocking"))
     )
+    support_apply_rows = sum(
+        1
+        for row in resolved_rows
+        if str(row.get("source_block") or "").strip() in {"day_support_worker", "night_support_worker"}
+        and str(row.get("decision_stage") or "").strip().lower() == "apply"
+        and str(row.get("diff_category") or "").strip().lower() != "unchanged"
+        and not bool(row.get("is_blocking"))
+    )
     ticket_applicable_rows = sum(
         1
         for row in support_ticket_rows
         if str(row.get("apply_action") or "").strip() in {"upsert_sentrix_ticket", "retract_sentrix_ticket"}
         and not bool(row.get("is_blocking"))
     )
-    applicable_rows = base_applicable_rows + ticket_applicable_rows
+    applicable_rows = base_applicable_rows + support_apply_rows + ticket_applicable_rows
     blocked_rows = sum(1 for row in resolved_rows if bool(row.get("is_blocking"))) + sum(1 for row in support_ticket_rows if bool(row.get("is_blocking")))
     unchanged_rows = int(diff_counts.get("unchanged") or 0)
-    warning_rows = sum(
-        int(diff_counts.get(key) or 0)
-        for key in {"review", "ignored_protected", "ignored_no_demand"}
+    warning_rows = (
+        sum(
+            1
+            for row in resolved_rows
+            if not bool(row.get("is_blocking"))
+            and (
+                str(row.get("decision_stage") or "").strip().lower() == "review"
+                or str(row.get("diff_category") or "").strip().lower() in {"review", "ignored_protected", "ignored_no_demand"}
+            )
+        )
+        + sum(
+            1
+            for row in support_ticket_rows
+            if not bool(row.get("is_blocking"))
+            and str(row.get("diff_category") or "").strip().lower() in {"review", "ignored_protected", "ignored_no_demand"}
+        )
     )
 
     can_apply = bool(workbook_ctx.get("workbook_valid")) and not blocked_reasons and blocked_rows == 0
@@ -16845,7 +18501,7 @@ def _persist_schedule_import_preview_batch(
             ):
                 invalid_samples.append(
                     f"row {int(row.get('row_no') or 0)}: "
-                    f"{validation_error or row.get('protected_reason') or _import_diff_status_label(diff_category=row.get('diff_category'), validation_code=validation_code, is_blocking=bool(row.get('is_blocking')))}"
+                    f"{validation_error or row.get('protected_reason') or _import_diff_status_label(diff_category=row.get('diff_category'), validation_code=validation_code, is_blocking=bool(row.get('is_blocking')), decision_stage=str(row.get('decision_stage') or '').strip() or None)}"
                 )
             schedule_date = row.get("schedule_date")
             row_insert_params.append(
@@ -16929,7 +18585,7 @@ def preview_import(
             raise HTTPException(status_code=400, detail="invalid import file") from exc
         workbook_load_ms = _rounded_timing_ms(workbook_load_started_at)
         try:
-            if ARLS_SHEET_NAME in workbook.sheetnames:
+            if _select_arls_import_visible_sheet_name(workbook):
                 effective_site_code = _resolve_scoped_schedule_site_code(user, request_site_code=site_code)
                 if not effective_site_code:
                     raise HTTPException(status_code=400, detail="site_code is required for ARLS import")
@@ -17013,6 +18669,7 @@ def preview_import(
                             diff_category=str(row.get("diff_category") or "").strip(),
                             validation_code=str(row.get("validation_code") or "").strip() or None,
                             is_blocking=bool(row.get("is_blocking")),
+                            decision_stage=str(row.get("decision_stage") or "").strip() or None,
                         ),
                         is_valid=not bool(row.get("is_blocking")),
                         is_blocking=bool(row.get("is_blocking")),
@@ -17025,6 +18682,9 @@ def preview_import(
                         preview_visibility_class=str(row.get("preview_visibility_class") or "").strip() or None,
                         actionable=bool(row.get("actionable")),
                         protected_info_only=bool(row.get("protected_info_only")),
+                        validator_kind=str(row.get("validator_kind") or "").strip() or None,
+                        decision_stage=str(row.get("decision_stage") or "").strip() or None,
+                        support_origin_type=str(row.get("support_origin_type") or "").strip() or None,
                     )
                     for row in (preview.get("preview_rows") or [])
                 ]
@@ -17226,6 +18886,8 @@ def preview_import(
 
 
 def _normalize_schedule_import_payload_date(value: object) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
     if isinstance(value, date):
         return value
     return _parse_date_or_none(str(value or "").strip())
@@ -17252,6 +18914,72 @@ def _load_schedule_import_payload_rows(conn, *, batch_id: uuid.UUID | str) -> li
             (str(batch_id),),
         )
         return [dict(row.get("payload_json") or {}) for row in (cur.fetchall() or [])]
+
+
+def _load_canonical_schedule_import_apply_payload_rows(
+    conn,
+    *,
+    batch_id: uuid.UUID | str,
+    batch: dict[str, Any],
+    target_tenant: dict[str, Any],
+    site_row: dict[str, Any],
+    user: dict[str, Any],
+) -> list[dict[str, Any]]:
+    persisted_payload_rows = _load_schedule_import_payload_rows(conn, batch_id=batch_id)
+    month_key = str(batch.get("month_key") or "").strip()
+    if not month_key:
+        return persisted_payload_rows
+
+    raw_source = None
+    try:
+        raw_source = _load_schedule_import_batch_raw_workbook(
+            conn,
+            tenant_id=str(target_tenant["id"]),
+            batch_id=str(batch_id),
+        )
+    except Exception:
+        logger.exception(
+            "[schedule][import-apply] failed to load raw workbook batch=%s",
+            batch_id,
+        )
+        return persisted_payload_rows
+    if not raw_source or not raw_source.get("workbook"):
+        return persisted_payload_rows
+
+    workbook = raw_source["workbook"]
+    try:
+        preview = _build_schedule_import_preview_result(
+            conn,
+            workbook=workbook,
+            target_tenant=target_tenant,
+            scope_site=site_row,
+            selected_month=month_key,
+            user=user,
+            filename=str(raw_source.get("filename") or "schedule_import.xlsx").strip() or "schedule_import.xlsx",
+            file_sha256=str(
+                raw_source.get("sha256")
+                or dict(batch.get("metadata_json") or {}).get("analysis_file_sha256")
+                or ""
+            ).strip(),
+        )
+        return [
+            *list(preview.get("resolved_rows") or []),
+            *list(preview.get("support_ticket_rows") or []),
+        ]
+    except Exception:
+        logger.exception(
+            "[schedule][import-apply] failed to rebuild canonical payload rows batch=%s",
+            batch_id,
+        )
+        return persisted_payload_rows
+    finally:
+        try:
+            workbook.close()
+        except Exception:
+            logger.exception(
+                "[schedule][import-apply] failed to close raw workbook batch=%s",
+                batch_id,
+            )
 
 
 def _load_daytime_need_count_rows_for_apply(
@@ -17529,8 +19257,19 @@ def _apply_canonical_schedule_import_batch(
         row = cur.fetchone()
         if int((row or {}).get("cnt") or 0) > 0:
             blocked_reasons.append("분석 결과에 차단 이슈가 남아 있어 적용할 수 없습니다.")
-    payload_rows = _load_schedule_import_payload_rows(conn, batch_id=batch_id)
+    payload_rows = _load_canonical_schedule_import_apply_payload_rows(
+        conn,
+        batch_id=batch_id,
+        batch=batch,
+        target_tenant=target_tenant,
+        site_row=site_row,
+        user=user,
+    )
     body_payloads = [row for row in payload_rows if str(row.get("source_block") or "").strip() == "body"]
+    support_worker_payloads = [
+        row for row in payload_rows
+        if str(row.get("source_block") or "").strip() in {"day_support_worker", "night_support_worker"}
+    ]
     support_ticket_payloads = [row for row in payload_rows if str(row.get("source_block") or "").strip() == "sentrix_support_ticket"]
     if blocked_reasons:
         result = ImportApplyOut(
@@ -17566,6 +19305,7 @@ def _apply_canonical_schedule_import_batch(
         month_key=month_key,
     )
     existing_schedule_index = _build_existing_schedule_row_index(existing_schedule_rows)
+    existing_schedule_rows_by_employee_day = _build_existing_schedule_rows_by_employee_day(existing_schedule_rows)
     current_need_rows = _load_daytime_need_count_rows_for_apply(
         conn,
         tenant_id=str(target_tenant["id"]),
@@ -17577,8 +19317,14 @@ def _apply_canonical_schedule_import_batch(
         for row in current_need_rows
         if isinstance(row.get("work_date"), date)
     }
+    default_template_map = _fetch_default_schedule_template_map(
+        conn,
+        tenant_id=str(target_tenant["id"]),
+        site_id=str(site_row["id"]),
+    )
 
     desired_base_rows: dict[tuple[str, str, str], dict[str, Any]] = {}
+    desired_support_internal_rows: dict[tuple[str, str, str], dict[str, Any]] = {}
     desired_support_request_rows: dict[tuple[str, str], dict[str, Any]] = {}
     desired_day_need_rows: dict[str, dict[str, Any]] = {}
     blocking_failures: list[str] = []
@@ -17623,19 +19369,22 @@ def _apply_canonical_schedule_import_batch(
             continue
         shift_type = _normalize_shift_type(payload.get("shift_type") or _resolve_shift_type_from_duty_type(duty_type))
         if shift_type not in ALLOWED_SHIFT_TYPES:
-            append_blocking_failure("지원하지 않는 shift_type입니다.", payload=payload, shift_type=shift_type)
+            append_blocking_failure("근무 구분을 읽지 못했습니다.", payload=payload, shift_type=shift_type)
             continue
         if str(payload.get("parsed_semantic_type") or "").strip() == "numeric_hours" and not str(payload.get("template_id") or "").strip():
-            append_blocking_failure("근무 템플릿 매핑이 없어 적용할 수 없습니다.", payload=payload, shift_type=shift_type)
+            append_blocking_failure("이 시간값과 연결된 근무시간 설정을 찾지 못했습니다.", payload=payload, shift_type=shift_type)
             continue
         key = (str(employee_row.get("id") or "").strip(), schedule_date.isoformat(), duty_type)
         if key in desired_base_rows:
-            append_blocking_failure("같은 직원/날짜/근무유형이 업로드 결과에 중복되어 있습니다.", payload=payload, shift_type=shift_type)
+            append_blocking_failure("같은 직원의 같은 날짜 근무가 파일 안에서 중복되었습니다.", payload=payload, shift_type=shift_type)
             continue
         existing_rows = existing_schedule_index.get(key) or []
         foreign_rows = [item for item in existing_rows if not _is_monthly_base_schedule_source(item.get("source"))]
+        current_work_value = str(payload.get("current_work_value") or "").strip()
+        if foreign_rows and workbook_value == current_work_value:
+            continue
         if foreign_rows:
-            append_blocking_failure("같은 슬롯에 다른 lineage의 일정이 있어 base upload로 덮어쓸 수 없습니다.", payload=payload, shift_type=shift_type)
+            append_blocking_failure("이 칸에는 다른 방식으로 등록된 일정이 있어 이번 업로드로 바꿀 수 없습니다.", payload=payload, shift_type=shift_type)
             continue
         desired_base_rows[key] = {
             "row_no": int(payload.get("row_no") or 0),
@@ -17656,6 +19405,142 @@ def _apply_canonical_schedule_import_batch(
             "schedule_note": workbook_value if shift_type in NON_WORKING_SHIFT_TYPES else None,
         }
 
+    for payload in support_worker_payloads:
+        decision_stage = str(payload.get("decision_stage") or "").strip().lower()
+        if decision_stage == "block" or bool(payload.get("is_blocking")):
+            append_blocking_failure(
+                str(payload.get("validation_error") or "지원근무자 차단 이슈가 남아 있어 적용할 수 없습니다.").strip(),
+                payload=payload,
+                shift_type=str(payload.get("shift_type") or "").strip(),
+            )
+            continue
+        if decision_stage != "apply":
+            continue
+
+        support_origin_type = str(payload.get("support_origin_type") or "").strip().lower()
+        has_internal_schedule_shape = any(
+            payload.get(key) is not None and str(payload.get(key)).strip()
+            for key in ("internal_template_id", "internal_shift_start_time", "internal_shift_end_time")
+        ) or payload.get("internal_paid_hours") is not None
+        should_materialize_internal_schedule = (
+            str(payload.get("schedule_source") or "").strip().lower() == ARLS_SUPPORT_UPLOAD_INTERNAL_SOURCE
+            or support_origin_type in {"same_store_internal_candidate", "internal_candidate"}
+            or bool(payload.get("self_staff"))
+            or str(payload.get("worker_type") or "").strip().upper() == "INTERNAL"
+            or has_internal_schedule_shape
+        )
+        if not should_materialize_internal_schedule:
+            continue
+
+        employee_id = str(payload.get("employee_id") or "").strip()
+        schedule_date = _normalize_schedule_import_payload_date(payload.get("schedule_date"))
+        shift_kind = _normalize_shift_type(
+            payload.get("internal_shift_type")
+            or payload.get("shift_type")
+            or ("night" if str(payload.get("source_block") or "").strip().startswith("night_support") else "day")
+        )
+        if not employee_id or not isinstance(schedule_date, date):
+            append_blocking_failure(
+                "내부 지원근무를 만들기 위한 직원 또는 날짜 정보가 부족합니다.",
+                payload=payload,
+                shift_type=shift_kind,
+            )
+            continue
+        if shift_kind not in {"day", "night"}:
+            append_blocking_failure("지원근무의 주간/야간 구분을 읽지 못했습니다.", payload=payload, shift_type=shift_kind)
+            continue
+
+        internal_template = _resolve_internal_support_template(
+            template_map=default_template_map,
+            support_period=shift_kind,
+        )
+        template_id = str(payload.get("internal_template_id") or (internal_template or {}).get("id") or "").strip() or None
+        shift_start_time = _normalize_time_text(payload.get("internal_shift_start_time") or (internal_template or {}).get("start_time"))
+        shift_end_time = _normalize_time_text(payload.get("internal_shift_end_time") or (internal_template or {}).get("end_time"))
+        paid_hours = _coerce_float_or_none(
+            payload.get("internal_paid_hours")
+            if payload.get("internal_paid_hours") is not None
+            else _resolve_internal_support_template_paid_hours(internal_template)
+        )
+        if not template_id or not shift_start_time or not shift_end_time:
+            append_blocking_failure(
+                "내부 지원근무를 만들 기본 근무시간 설정이 없어 자동 반영할 수 없습니다.",
+                payload=payload,
+                shift_type=shift_kind,
+            )
+            continue
+
+        key = (employee_id, schedule_date.isoformat(), shift_kind)
+        if key in desired_support_internal_rows:
+            append_blocking_failure(
+                "같은 직원의 같은 날짜 지원근무가 파일 안에서 중복되었습니다.",
+                payload=payload,
+                shift_type=shift_kind,
+            )
+            continue
+
+        desired_support_schedule_row = {
+            "shift_type": shift_kind,
+            "template_id": template_id,
+            "shift_start_time": shift_start_time,
+            "shift_end_time": shift_end_time,
+            "paid_hours": paid_hours,
+            "schedule_note": None,
+        }
+        uploaded_base_row = desired_base_rows.get(key)
+        if uploaded_base_row:
+            continue
+
+        existing_same_key_rows = existing_schedule_index.get(key) or []
+        if any(_schedule_import_current_row_matches(item, desired_support_schedule_row) for item in existing_same_key_rows):
+            continue
+        managed_existing_rows = [
+            dict(item) for item in existing_same_key_rows
+            if _is_support_upload_internal_source(item.get("source"))
+        ]
+        if len(managed_existing_rows) > 1:
+            append_blocking_failure(
+                "기존 내부 지원근무 일정이 중복되어 자동 반영할 수 없습니다.",
+                payload=payload,
+                shift_type=shift_kind,
+            )
+            continue
+
+        current_schedule_id = str((managed_existing_rows[0] if managed_existing_rows else {}).get("schedule_id") or "").strip() or None
+        employee_day_rows = existing_schedule_rows_by_employee_day.get((employee_id, schedule_date.isoformat())) or []
+        if _current_cell_has_time_conflict(
+            employee_day_rows,
+            next_start=shift_start_time,
+            next_end=shift_end_time,
+            current_schedule_id=current_schedule_id,
+        ):
+            append_blocking_failure(
+                "같은 날짜에 이미 겹치는 시간이 있어 추가할 수 없습니다.",
+                payload=payload,
+                shift_type=shift_kind,
+            )
+            continue
+
+        desired_support_internal_rows[key] = {
+            "row_no": int(payload.get("row_no") or 0),
+            "tenant_id": str(target_tenant["id"]),
+            "company_id": str(site_row.get("company_id") or "").strip(),
+            "site_id": str(site_row["id"]),
+            "employee_id": employee_id,
+            "employee_code": str(payload.get("employee_code") or "").strip(),
+            "employee_name": str(payload.get("employee_name") or payload.get("resolved_worker_name") or "").strip(),
+            "schedule_date": schedule_date,
+            "shift_type": shift_kind,
+            "duty_type": shift_kind,
+            "template_id": template_id,
+            "template_name": str(payload.get("template_name") or (internal_template or {}).get("template_name") or "").strip() or None,
+            "shift_start_time": shift_start_time,
+            "shift_end_time": shift_end_time,
+            "paid_hours": paid_hours,
+            "schedule_note": None,
+            "support_type": f"{shift_kind}_support",
+        }
+
     for payload in support_ticket_payloads:
         if bool(payload.get("is_blocking")):
             append_blocking_failure(str(payload.get("validation_error") or "지원 요청 차단 이슈가 남아 있습니다.").strip(), payload=payload, shift_type=str(payload.get("shift_type") or "").strip())
@@ -17666,11 +19551,11 @@ def _apply_canonical_schedule_import_batch(
         shift_kind = "night" if str(payload.get("shift_type") or "day").strip().lower() == "night" else "day"
         request_count = _coerce_int_or_none(payload.get("request_count"))
         if request_count is None:
-            append_blocking_failure("지원 요청 인원 수를 해석할 수 없습니다.", payload=payload, shift_type=shift_kind)
+            append_blocking_failure("지원 요청 인원 수를 읽지 못했습니다.", payload=payload, shift_type=shift_kind)
             continue
         support_scope_key = (schedule_date.isoformat(), shift_kind)
         if support_scope_key in desired_support_request_rows:
-            append_blocking_failure("같은 날짜/주야 지원 요청이 중복되었습니다.", payload=payload, shift_type=shift_kind)
+            append_blocking_failure("같은 날짜의 주간/야간 지원 요청이 파일 안에서 중복되었습니다.", payload=payload, shift_type=shift_kind)
             continue
         detail_json = dict(payload.get("detail_json") or {})
         day_reason_text = _extract_support_request_day_reason_text(payload, detail_json)
@@ -17704,12 +19589,18 @@ def _apply_canonical_schedule_import_batch(
                 }
 
     base_existing_by_key: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    support_internal_existing_by_key: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for key, rows in existing_schedule_index.items():
         current_base_rows = [item for item in rows if _is_monthly_base_schedule_source(item.get("source"))]
+        current_support_rows = [item for item in rows if _is_support_upload_internal_source(item.get("source"))]
         if current_base_rows:
             base_existing_by_key[key] = current_base_rows
+        if current_support_rows:
+            support_internal_existing_by_key[key] = current_support_rows
         if len(current_base_rows) > 1:
-            append_blocking_failure("기존 base lineage 일정이 중복되어 자동 반영할 수 없습니다.")
+            append_blocking_failure("기존 기본 일정이 중복되어 자동 반영할 수 없습니다.")
+        if len(current_support_rows) > 1:
+            append_blocking_failure("기존 내부 지원근무 일정이 중복되어 자동 반영할 수 없습니다.")
 
     if blocking_failures:
         result = ImportApplyOut(
@@ -17741,6 +19632,9 @@ def _apply_canonical_schedule_import_batch(
     base_create_ops: list[dict[str, Any]] = []
     base_update_ops: list[dict[str, Any]] = []
     base_delete_ops: list[dict[str, Any]] = []
+    support_internal_create_ops: list[dict[str, Any]] = []
+    support_internal_update_ops: list[dict[str, Any]] = []
+    support_internal_delete_ops: list[dict[str, Any]] = []
     need_upsert_ops: list[dict[str, Any]] = []
     need_delete_ops: list[dict[str, Any]] = []
 
@@ -17759,6 +19653,21 @@ def _apply_canonical_schedule_import_batch(
         for current_row in current_rows:
             base_delete_ops.append(dict(current_row))
 
+    for key, desired in desired_support_internal_rows.items():
+        current_rows = support_internal_existing_by_key.get(key) or []
+        if not current_rows:
+            support_internal_create_ops.append(desired)
+            continue
+        current_row = current_rows[0]
+        if not _schedule_import_current_row_matches(current_row, desired):
+            support_internal_update_ops.append({**desired, "schedule_id": str(current_row.get("schedule_id") or "").strip()})
+
+    for key, current_rows in support_internal_existing_by_key.items():
+        if key in desired_support_internal_rows:
+            continue
+        for current_row in current_rows:
+            support_internal_delete_ops.append(dict(current_row))
+
     for date_key, desired in desired_day_need_rows.items():
         current_row = current_need_index.get(date_key)
         if not current_row:
@@ -17770,7 +19679,7 @@ def _apply_canonical_schedule_import_batch(
             not _is_daytime_need_base_source(current_row.get("source"))
             and (current_required != int(desired.get("required_count") or 0) or current_raw != str(desired.get("raw_text") or "").strip())
         ):
-            append_blocking_failure("기존 필요인원 수가 다른 source에 의해 관리되고 있어 업로드로 변경할 수 없습니다.")
+            append_blocking_failure("이 날짜의 필요인원 수는 다른 화면에서 관리되고 있어 여기서 바꿀 수 없습니다.")
             continue
         if current_required != int(desired.get("required_count") or 0) or current_raw != str(desired.get("raw_text") or "").strip():
             need_upsert_ops.append(desired)
@@ -17812,6 +19721,9 @@ def _apply_canonical_schedule_import_batch(
     base_created = 0
     base_updated = 0
     base_removed = 0
+    support_internal_created = 0
+    support_internal_updated = 0
+    support_internal_removed = 0
     support_scope_count = len(desired_support_request_rows)
 
     try:
@@ -17899,6 +19811,94 @@ def _apply_canonical_schedule_import_batch(
                         )
                     )
 
+            for op in support_internal_create_ops:
+                _insert_monthly_schedule_row(
+                    cur,
+                    tenant_id=str(target_tenant["id"]),
+                    company_id=str(op.get("company_id") or site_row.get("company_id") or ""),
+                    site_id=str(site_row["id"]),
+                    employee_id=str(op["employee_id"]),
+                    schedule_date=op["schedule_date"],
+                    shift_type=str(op.get("shift_type") or ""),
+                    template_id=op.get("template_id"),
+                    shift_start_time=op.get("shift_start_time"),
+                    shift_end_time=op.get("shift_end_time"),
+                    paid_hours=op.get("paid_hours"),
+                    schedule_note=op.get("schedule_note"),
+                    source=ARLS_SUPPORT_UPLOAD_INTERNAL_SOURCE,
+                    source_batch_id=str(batch_id),
+                    source_revision=source_revision,
+                    source_action=str(op.get("support_type") or "").strip() or None,
+                    source_self_staff=True,
+                )
+                support_internal_created += 1
+                affected_site_days.add((str(target_tenant["id"]), str(site_row["id"]), op["schedule_date"].isoformat()))
+                if len(applied_rows) < IMPORT_REPORT_LIMIT:
+                    applied_rows.append(
+                        ImportApplyRowOut(
+                            row_no=int(op.get("row_no") or 0),
+                            employee_code=str(op.get("employee_code") or ""),
+                            site_code=site_code,
+                            schedule_date=op["schedule_date"].isoformat(),
+                            shift_type=str(op.get("shift_type") or ""),
+                            section_label="지원근무 자동 반영",
+                            status="applied",
+                            reason="내부 지원근무 스케줄 생성",
+                        )
+                    )
+
+            for op in support_internal_update_ops:
+                _update_monthly_schedule_row(
+                    cur,
+                    schedule_id=str(op.get("schedule_id") or ""),
+                    shift_type=str(op.get("shift_type") or ""),
+                    template_id=op.get("template_id"),
+                    shift_start_time=op.get("shift_start_time"),
+                    shift_end_time=op.get("shift_end_time"),
+                    paid_hours=op.get("paid_hours"),
+                    schedule_note=op.get("schedule_note"),
+                    source=ARLS_SUPPORT_UPLOAD_INTERNAL_SOURCE,
+                    source_batch_id=str(batch_id),
+                    source_revision=source_revision,
+                    source_action=str(op.get("support_type") or "").strip() or None,
+                    source_self_staff=True,
+                )
+                support_internal_updated += 1
+                affected_site_days.add((str(target_tenant["id"]), str(site_row["id"]), op["schedule_date"].isoformat()))
+                if len(applied_rows) < IMPORT_REPORT_LIMIT:
+                    applied_rows.append(
+                        ImportApplyRowOut(
+                            row_no=int(op.get("row_no") or 0),
+                            employee_code=str(op.get("employee_code") or ""),
+                            site_code=site_code,
+                            schedule_date=op["schedule_date"].isoformat(),
+                            shift_type=str(op.get("shift_type") or ""),
+                            section_label="지원근무 자동 반영",
+                            status="applied",
+                            reason="내부 지원근무 스케줄 수정",
+                        )
+                    )
+
+            for op in support_internal_delete_ops:
+                _delete_monthly_schedule_row(cur, schedule_id=str(op.get("schedule_id") or ""))
+                support_internal_removed += 1
+                schedule_date = op.get("schedule_date")
+                if isinstance(schedule_date, date):
+                    affected_site_days.add((str(target_tenant["id"]), str(site_row["id"]), schedule_date.isoformat()))
+                if len(applied_rows) < IMPORT_REPORT_LIMIT:
+                    applied_rows.append(
+                        ImportApplyRowOut(
+                            row_no=0,
+                            employee_code=str(op.get("employee_code") or ""),
+                            site_code=site_code,
+                            schedule_date=schedule_date.isoformat() if isinstance(schedule_date, date) else None,
+                            shift_type=str(op.get("shift_type") or ""),
+                            section_label="지원근무 자동 반영",
+                            status="applied",
+                            reason="내부 지원근무 스케줄 삭제",
+                        )
+                    )
+
             for op in need_upsert_ops:
                 _upsert_daytime_need_count_row(
                     cur,
@@ -17925,7 +19925,7 @@ def _apply_canonical_schedule_import_batch(
             result = ImportApplyOut(
                 batch_id=batch_id,
                 upload_batch_id=batch_id,
-                applied=base_created + base_updated + base_removed + len(need_upsert_ops) + len(need_delete_ops),
+                applied=base_created + base_updated + base_removed + support_internal_created + support_internal_updated + support_internal_removed + len(need_upsert_ops) + len(need_delete_ops),
                 skipped=0,
                 applied_rows=applied_rows,
                 skipped_rows=[],
@@ -18768,6 +20768,28 @@ def _normalize_support_status_shift_kind(value: object) -> str:
     return "night" if normalized == "night" else "day"
 
 
+def _support_status_export_item_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if hasattr(value, "model_dump"):
+        try:
+            return dict(value.model_dump(mode="python"))
+        except TypeError:
+            return dict(value.model_dump())
+    if hasattr(value, "dict"):
+        try:
+            return dict(value.dict())
+        except TypeError:
+            pass
+    if hasattr(value, "__dict__"):
+        return {
+            key: item
+            for key, item in vars(value).items()
+            if not str(key).startswith("_")
+        }
+    return {}
+
+
 def _support_status_source_label(value: object) -> str:
     normalized = str(value or "").strip()
     upper = normalized.upper()
@@ -18819,6 +20841,224 @@ def _serialize_support_status_assignment_row(row: dict[str, Any]) -> SupportStat
         created_at=row["created_at"],
         updated_at=row.get("updated_at"),
     )
+
+
+def _load_support_status_rows_by_site_code_for_export(
+    conn,
+    *,
+    tenant_id: str,
+    tenant_code: str,
+    month_key: str,
+    site_id: str | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in _load_support_status_workspace_rows(
+        conn,
+        tenant_id=tenant_id,
+        tenant_code=tenant_code,
+        month_key=month_key,
+        site_id=site_id,
+    ):
+        row_payload = _support_status_export_item_dict(row)
+        site_code = str(row_payload.get("site_code") or "").strip().upper()
+        if not site_code:
+            continue
+        request_status = str(row_payload.get("request_status") or "").strip().lower()
+        assignments = list(row_payload.get("assignments") or [])
+        if request_status == SENTRIX_SUPPORT_REQUEST_RETRACTED_STATUS and not assignments:
+            continue
+        grouped.setdefault(site_code, []).append(row_payload)
+    return grouped
+
+
+def _normalize_support_status_assignment_entries(row: dict[str, Any]) -> list[dict[str, Any]]:
+    normalized_entries: list[dict[str, Any]] = []
+    assignments = list(row.get("assignments") or [])
+    for index, assignment in enumerate(assignments, start=1):
+        payload = _support_status_export_item_dict(assignment)
+        display_value = str(payload.get("display_value") or "").strip()
+        worker_type = str(payload.get("worker_type") or "").strip().upper()
+        if not display_value or display_value == "-" or worker_type == "UNAVAILABLE":
+            continue
+        try:
+            slot_index = max(int(payload.get("slot_index") or index), 1)
+        except (TypeError, ValueError):
+            slot_index = index
+        normalized_entries.append(
+            {
+                "slot_index": slot_index,
+                "display_value": display_value,
+                "worker_type": worker_type,
+                "affiliation": str(payload.get("affiliation") or "").strip() or None,
+            }
+        )
+    normalized_entries.sort(key=lambda item: (int(item.get("slot_index") or 0), str(item.get("display_value") or "")))
+    return normalized_entries
+
+
+def _support_status_external_affiliation_label(entry: dict[str, Any]) -> str | None:
+    worker_type = str(entry.get("worker_type") or "").strip().upper()
+    display_value = str(entry.get("display_value") or "").strip()
+    if worker_type == "INTERNAL" or display_value.startswith("자체 "):
+        return None
+    affiliation = str(entry.get("affiliation") or "").strip()
+    if affiliation:
+        return affiliation
+    if worker_type and worker_type != "UNAVAILABLE":
+        return worker_type
+    if " " in display_value:
+        return str(display_value.split(" ", 1)[0] or "").strip() or None
+    return display_value or None
+
+
+def _format_support_status_external_summary(entries: list[dict[str, Any]]) -> str | None:
+    counts: dict[str, int] = {}
+    ordering: list[str] = []
+    for entry in entries:
+        label = _support_status_external_affiliation_label(entry)
+        if not label:
+            continue
+        if label not in counts:
+            counts[label] = 0
+            ordering.append(label)
+        counts[label] += 1
+    lines = [f"{label} {counts[label]}인 투입" for label in ordering if counts.get(label)]
+    return "\n".join(lines) if lines else None
+
+
+def _format_support_status_request_text(request_count: object) -> str | None:
+    try:
+        count = max(int(request_count or 0), 0)
+    except (TypeError, ValueError):
+        count = 0
+    if count <= 0:
+        return None
+    return f"섭외 {count}인 요청"
+
+
+def _populate_support_status_sections(
+    sheet,
+    *,
+    support_status_rows: list[dict[str, Any]] | None,
+) -> None:
+    support_status_rows = list(support_status_rows or [])
+    date_columns, _month_ctx = _extract_arls_date_columns(sheet)
+    day_keys = [current_date.isoformat() for _col_idx, current_date in sorted(date_columns.items())]
+    bucket_index: dict[tuple[str, str], dict[str, Any]] = {}
+    weekly_required = 0
+    night_required = 0
+    for row in support_status_rows:
+        payload = _support_status_export_item_dict(row)
+        work_date = payload.get("work_date")
+        if isinstance(work_date, date):
+            date_key = work_date.isoformat()
+        else:
+            date_key = str(work_date or "").strip()
+        if not date_key:
+            continue
+        shift_kind = _normalize_support_status_shift_kind(payload.get("shift_kind"))
+        assignment_entries = _normalize_support_status_assignment_entries(payload)
+        payload["assignment_entries"] = assignment_entries
+        bucket_index[(date_key, shift_kind)] = payload
+        if shift_kind == "night":
+            night_required = max(night_required, len(assignment_entries))
+        else:
+            weekly_required = max(weekly_required, len(assignment_entries))
+
+    weekly_rows = _ensure_support_slot_rows(sheet, section="day", required_count=max(weekly_required, ARLS_SUPPORT_WEEKLY_MAX_SLOTS))
+    night_rows = _ensure_support_slot_rows(sheet, section="night", required_count=max(night_required, ARLS_SUPPORT_NIGHT_MAX_SLOTS))
+    rows_meta = _locate_support_section_rows(sheet)
+    target_rows = [
+        *weekly_rows,
+        *night_rows,
+        rows_meta.get("weekly_count_row"),
+        rows_meta.get("night_count_row"),
+        rows_meta.get("day_vendor_count_row"),
+        rows_meta.get("night_vendor_count_row"),
+        rows_meta.get("day_need_row"),
+        rows_meta.get("night_need_row"),
+        rows_meta.get("work_note_row"),
+    ]
+    for row_idx in [int(item) for item in target_rows if item]:
+        for idx, _date_key in enumerate(day_keys):
+            col_idx = ARLS_DATE_START_COL + idx
+            _set_sheet_cell_value_if_writable(sheet, row=row_idx, column=col_idx, value=None)
+
+    for idx, date_key in enumerate(day_keys):
+        col_idx = ARLS_DATE_START_COL + idx
+        day_bucket = bucket_index.get((date_key, "day")) or {}
+        night_bucket = bucket_index.get((date_key, "night")) or {}
+        day_entries = list(day_bucket.get("assignment_entries") or [])
+        night_entries = list(night_bucket.get("assignment_entries") or [])
+
+        for slot_idx, entry in enumerate(day_entries):
+            if slot_idx >= len(weekly_rows):
+                break
+            _set_sheet_cell_value_if_writable(
+                sheet,
+                row=weekly_rows[slot_idx],
+                column=col_idx,
+                value=str(entry.get("display_value") or "").strip() or None,
+            )
+        for slot_idx, entry in enumerate(night_entries):
+            if slot_idx >= len(night_rows):
+                break
+            _set_sheet_cell_value_if_writable(
+                sheet,
+                row=night_rows[slot_idx],
+                column=col_idx,
+                value=str(entry.get("display_value") or "").strip() or None,
+            )
+
+        if rows_meta.get("weekly_count_row"):
+            _set_sheet_cell_value_if_writable(
+                sheet,
+                row=rows_meta["weekly_count_row"],
+                column=col_idx,
+                value=len(day_entries) or 0,
+            )
+        if rows_meta.get("night_count_row"):
+            _set_sheet_cell_value_if_writable(
+                sheet,
+                row=rows_meta["night_count_row"],
+                column=col_idx,
+                value=len(night_entries) or 0,
+            )
+        if rows_meta.get("day_vendor_count_row"):
+            _set_sheet_cell_value_if_writable(
+                sheet,
+                row=rows_meta["day_vendor_count_row"],
+                column=col_idx,
+                value=_format_support_status_external_summary(day_entries),
+            )
+        if rows_meta.get("night_vendor_count_row"):
+            _set_sheet_cell_value_if_writable(
+                sheet,
+                row=rows_meta["night_vendor_count_row"],
+                column=col_idx,
+                value=_format_support_status_external_summary(night_entries),
+            )
+        if rows_meta.get("day_need_row"):
+            _set_sheet_cell_value_if_writable(
+                sheet,
+                row=rows_meta["day_need_row"],
+                column=col_idx,
+                value=_format_support_status_request_text(day_bucket.get("request_count")),
+            )
+        if rows_meta.get("night_need_row"):
+            _set_sheet_cell_value_if_writable(
+                sheet,
+                row=rows_meta["night_need_row"],
+                column=col_idx,
+                value=_format_support_status_request_text(night_bucket.get("request_count")),
+            )
+        if rows_meta.get("work_note_row"):
+            _set_sheet_cell_value_if_writable(
+                sheet,
+                row=rows_meta["work_note_row"],
+                column=col_idx,
+                value=str(night_bucket.get("work_purpose") or "").strip() or None,
+            )
 
 
 def _load_support_status_workspace_rows(

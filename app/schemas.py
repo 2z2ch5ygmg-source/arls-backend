@@ -981,6 +981,21 @@ class ScheduleTemplateOut(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+class ScheduleTemplateDeleteAffectedProfileOut(BaseModel):
+    profile_id: str
+    profile_name: str
+
+
+class ScheduleTemplateDeleteOut(BaseModel):
+    status: str = "deleted"
+    template_id: UUID
+    template_name: str
+    deactivated_profile_count: int = 0
+    invalidated_entry_count: int = 0
+    deactivated_profiles: list[ScheduleTemplateDeleteAffectedProfileOut] = Field(default_factory=list)
+    profile_notice: Optional[str] = None
+
+
 class ScheduleTemplateSingleCreateIn(BaseModel):
     site_code: str = Field(min_length=1, max_length=64)
     employee_code: str = Field(min_length=1, max_length=64)
@@ -1167,6 +1182,9 @@ class ImportPreviewRowOut(BaseModel):
     protected_reason: Optional[str] = None
     validation_code: Optional[str] = None
     validation_error: Optional[str] = None
+    validator_kind: Optional[str] = None
+    decision_stage: Optional[str] = None
+    support_origin_type: Optional[str] = None
     preview_visibility_class: Optional[str] = None
     actionable: bool = False
     protected_info_only: bool = False

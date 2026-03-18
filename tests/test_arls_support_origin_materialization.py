@@ -22,11 +22,21 @@ class _FakeCursor:
         self.executed: list[tuple[str, object]] = []
         self.rowcount = 0
         self._fetchone = None
+        self.delete_by_id_result = None
+        self.delete_by_target_result = None
 
     def execute(self, query: str, params=None) -> None:
         self.executed.append((query, params))
         self.rowcount = 0
         self._fetchone = None
+        normalized_query = " ".join(str(query).split())
+        if normalized_query.startswith("DELETE FROM monthly_schedules"):
+            if "WHERE id = %s" in normalized_query:
+                self._fetchone = self.delete_by_id_result
+                self.rowcount = 1 if self.delete_by_id_result else 0
+            else:
+                self._fetchone = self.delete_by_target_result
+                self.rowcount = 1 if self.delete_by_target_result else 0
 
     def fetchone(self):
         return self._fetchone
@@ -133,6 +143,57 @@ class ArlsSupportOriginMaterializationTests(unittest.TestCase):
         mock_upsert_materialization.assert_called_once()
 
     @patch("app.routers.v1.schedules._upsert_sentrix_support_materialization_row")
+    @patch("app.routers.v1.schedules._insert_monthly_schedule_row")
+    @patch("app.routers.v1.schedules._update_monthly_schedule_row")
+    @patch("app.routers.v1.schedules._resolve_sentrix_support_materialized_shift_defaults")
+    @patch("app.routers.v1.schedules._load_monthly_schedule_row_for_shift")
+    @patch("app.routers.v1.schedules._load_sentrix_support_materialization_row")
+    @patch("app.routers.v1.schedules._resolve_sentrix_support_bridge_employee")
+    @patch("app.routers.v1.schedules._resolve_sentrix_support_bridge_site")
+    def test_day_upsert_updates_same_ticket_lineage_without_duplicate(
+        self,
+        mock_resolve_site,
+        mock_resolve_employee,
+        mock_load_materialization,
+        mock_load_schedule,
+        mock_resolve_shift_defaults,
+        mock_update_schedule,
+        mock_insert_schedule,
+        mock_upsert_materialization,
+    ):
+        cur = _FakeCursor()
+        action_row = self._build_action_row(
+            action=SENTRIX_ARLS_BRIDGE_ACTION_UPSERT,
+            ticket_state=SENTRIX_HQ_ROSTER_FINAL_APPROVED_STATE,
+            payload_overrides={"shift_kind": "day"},
+        )
+        action_row["shift_kind"] = "day"
+        mock_resolve_site.return_value = {"id": "site-1", "site_code": "R692", "company_id": "comp-1"}
+        mock_resolve_employee.return_value = {"id": "emp-7", "employee_code": "R692-0007", "full_name": "조태환"}
+        mock_load_materialization.return_value = None
+        mock_load_schedule.return_value = {
+            "id": "schedule-day-1",
+            "source": SENTRIX_ARLS_BRIDGE_SOURCE,
+            "source_ticket_uuid": "ticket-1",
+            "schedule_note": None,
+        }
+        mock_resolve_shift_defaults.return_value = ("09:00:00", "18:00:00", 9.0)
+        mock_upsert_materialization.return_value = "mat-day-1"
+
+        result = _apply_sentrix_support_bridge_action(
+            cur,
+            tenant_id="tenant-1",
+            action_row=action_row,
+        )
+
+        self.assertEqual(result["shift_kind"], "day")
+        self.assertEqual(result["schedule_effect"], "updated")
+        self.assertEqual(result["monthly_schedule_id"], "schedule-day-1")
+        mock_update_schedule.assert_called_once()
+        mock_insert_schedule.assert_not_called()
+        mock_upsert_materialization.assert_called_once()
+
+    @patch("app.routers.v1.schedules._upsert_sentrix_support_materialization_row")
     @patch("app.routers.v1.schedules._load_monthly_schedule_row_for_shift")
     @patch("app.routers.v1.schedules._load_sentrix_support_materialization_row")
     @patch("app.routers.v1.schedules._resolve_sentrix_support_bridge_employee")
@@ -175,6 +236,133 @@ class ArlsSupportOriginMaterializationTests(unittest.TestCase):
         self.assertEqual(result["status"], "retracted")
         self.assertEqual(cur.executed, [])
         mock_upsert_materialization.assert_called_once()
+
+    @patch("app.routers.v1.schedules._upsert_sentrix_support_materialization_row")
+    @patch("app.routers.v1.schedules._load_monthly_schedule_row_for_shift")
+    @patch("app.routers.v1.schedules._load_sentrix_support_materialization_row")
+    @patch("app.routers.v1.schedules._resolve_sentrix_support_bridge_employee")
+    @patch("app.routers.v1.schedules._resolve_sentrix_support_bridge_site")
+    def test_retract_falls_back_to_target_match_when_owned_lineage_lost_ticket_uuid(
+        self,
+        mock_resolve_site,
+        mock_resolve_employee,
+        mock_load_materialization,
+        mock_load_schedule,
+        mock_upsert_materialization,
+    ):
+        cur = _FakeCursor()
+        cur.delete_by_target_result = {"id": "schedule-fallback-1"}
+        action_row = self._build_action_row(
+            action=SENTRIX_ARLS_BRIDGE_ACTION_RETRACT,
+            ticket_state=SENTRIX_HQ_ROSTER_PENDING_STATUS,
+        )
+        mock_resolve_site.return_value = {"id": "site-1", "site_code": "R692", "company_id": "comp-1"}
+        mock_resolve_employee.return_value = {"id": "emp-7", "employee_code": "R692-0007", "full_name": "조태환"}
+        mock_load_materialization.return_value = {
+            "id": "mat-1",
+            "coexistence_mode": "owned_schedule",
+            "monthly_schedule_id": None,
+        }
+        mock_load_schedule.return_value = {
+            "id": "schedule-stale-1",
+            "source": SENTRIX_ARLS_BRIDGE_SOURCE,
+            "source_ticket_uuid": "ticket-legacy",
+            "source_self_staff": True,
+        }
+        mock_upsert_materialization.return_value = "mat-1"
+
+        result = _apply_sentrix_support_bridge_action(
+            cur,
+            tenant_id="tenant-1",
+            action_row=action_row,
+        )
+
+        self.assertEqual(result["schedule_effect"], "retracted")
+        self.assertEqual(result["deleted_schedule_id"], "schedule-fallback-1")
+        self.assertTrue(
+            any("employee_id = %s" in " ".join(query.split()) for query, _params in cur.executed)
+        )
+        mock_upsert_materialization.assert_called_once()
+
+    @patch("app.routers.v1.schedules._upsert_sentrix_support_materialization_row")
+    @patch("app.routers.v1.schedules._load_monthly_schedule_row_for_shift")
+    @patch("app.routers.v1.schedules._load_sentrix_support_materialization_row")
+    @patch("app.routers.v1.schedules._resolve_sentrix_support_bridge_employee")
+    @patch("app.routers.v1.schedules._resolve_sentrix_support_bridge_site")
+    def test_retract_falls_back_to_blank_ticket_target_without_materialization(
+        self,
+        mock_resolve_site,
+        mock_resolve_employee,
+        mock_load_materialization,
+        mock_load_schedule,
+        mock_upsert_materialization,
+    ):
+        cur = _FakeCursor()
+        cur.delete_by_target_result = {"id": "schedule-blank-1"}
+        action_row = self._build_action_row(
+            action=SENTRIX_ARLS_BRIDGE_ACTION_RETRACT,
+            ticket_state=SENTRIX_HQ_ROSTER_PENDING_STATUS,
+        )
+        mock_resolve_site.return_value = {"id": "site-1", "site_code": "R692", "company_id": "comp-1"}
+        mock_resolve_employee.return_value = {"id": "emp-7", "employee_code": "R692-0007", "full_name": "조태환"}
+        mock_load_materialization.return_value = None
+        mock_load_schedule.return_value = {
+            "id": "schedule-blank-1",
+            "source": SENTRIX_ARLS_BRIDGE_SOURCE,
+            "source_ticket_uuid": None,
+            "source_self_staff": True,
+        }
+        mock_upsert_materialization.return_value = "mat-1"
+
+        result = _apply_sentrix_support_bridge_action(
+            cur,
+            tenant_id="tenant-1",
+            action_row=action_row,
+        )
+
+        self.assertEqual(result["schedule_effect"], "retracted")
+        self.assertEqual(result["deleted_schedule_id"], "schedule-blank-1")
+        self.assertTrue(
+            any("employee_id = %s" in " ".join(query.split()) for query, _params in cur.executed)
+        )
+
+    @patch("app.routers.v1.schedules._upsert_sentrix_support_materialization_row")
+    @patch("app.routers.v1.schedules._load_monthly_schedule_row_for_shift")
+    @patch("app.routers.v1.schedules._load_sentrix_support_materialization_row")
+    @patch("app.routers.v1.schedules._resolve_sentrix_support_bridge_employee")
+    @patch("app.routers.v1.schedules._resolve_sentrix_support_bridge_site")
+    def test_retract_keeps_other_ticket_lineage_without_owned_materialization(
+        self,
+        mock_resolve_site,
+        mock_resolve_employee,
+        mock_load_materialization,
+        mock_load_schedule,
+        mock_upsert_materialization,
+    ):
+        cur = _FakeCursor()
+        action_row = self._build_action_row(
+            action=SENTRIX_ARLS_BRIDGE_ACTION_RETRACT,
+            ticket_state=SENTRIX_HQ_ROSTER_PENDING_STATUS,
+        )
+        mock_resolve_site.return_value = {"id": "site-1", "site_code": "R692", "company_id": "comp-1"}
+        mock_resolve_employee.return_value = {"id": "emp-7", "employee_code": "R692-0007", "full_name": "조태환"}
+        mock_load_materialization.return_value = None
+        mock_load_schedule.return_value = {
+            "id": "schedule-other-ticket-1",
+            "source": SENTRIX_ARLS_BRIDGE_SOURCE,
+            "source_ticket_uuid": "ticket-other",
+            "source_self_staff": True,
+        }
+        mock_upsert_materialization.return_value = "mat-1"
+
+        result = _apply_sentrix_support_bridge_action(
+            cur,
+            tenant_id="tenant-1",
+            action_row=action_row,
+        )
+
+        self.assertEqual(result["schedule_effect"], "noop_already_retracted")
+        self.assertEqual(cur.executed, [])
 
 
 if __name__ == "__main__":

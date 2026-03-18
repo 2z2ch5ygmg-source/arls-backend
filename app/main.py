@@ -15,6 +15,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .bootstrap import ensure_seed_admin
 from .config import settings
 from .db import get_connection, get_pool
+from .realtime import schedule_event_bus
 from .services.attendance_runtime import ensure_attendance_runtime_schema, start_attendance_auto_checkout_scheduler
 from .routers import (
     admin_sites_router,
@@ -140,6 +141,22 @@ def _api_error_payload(status_code: int, detail: Any = None) -> dict[str, Any]:
     message = default_message
     detail_value = detail
     fields_value: dict[str, Any] | None = None
+    detail_message_map: dict[str, str] = {
+        "invalid import header": "업로드한 파일 형식이 현재 양식과 다릅니다. 최신 양식을 다시 다운로드해 주세요.",
+        "invalid support workbook": "업로드한 파일을 읽을 수 없습니다. 최신 HQ 제출용 파일인지 확인해 주세요.",
+        "support roundtrip source missing": "먼저 지점 스케줄 원본 업로드를 완료해 주세요.",
+        "no support workbook source is ready for the selected month": "선택한 월에 HQ 제출용으로 사용할 지점 스케줄 원본이 아직 준비되지 않았습니다.",
+        "support workbook sheet missing": "HQ 제출용 시트 구조를 찾지 못했습니다. 최신 파일을 다시 생성해 주세요.",
+        "support workbook generation failed": "HQ 제출용 파일을 만드는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+        "finance review download missing": "먼저 1차 스케줄 다운로드를 다시 생성해 주세요.",
+        "finance final workbook not available": "제출용 최종 파일이 아직 준비되지 않았습니다. 이전 단계를 먼저 완료해 주세요.",
+        "batch not found": "작업 내역을 찾지 못했습니다. 다시 시도해 주세요.",
+        "batch already applied": "이미 적용이 완료된 작업입니다.",
+        "shift_type invalid": "근무 구분을 읽지 못했습니다.",
+        "site not found": "선택한 지점을 찾지 못했습니다.",
+        "format must be xlsx": "엑셀(.xlsx) 파일만 업로드할 수 있습니다.",
+        "monthly schedule export data not found": "선택한 조건에 맞는 스케줄 데이터가 없습니다.",
+    }
 
     if isinstance(detail, dict):
         detail_code = detail.get("error") or detail.get("code")
@@ -147,7 +164,8 @@ def _api_error_payload(status_code: int, detail: Any = None) -> dict[str, Any]:
         if detail_code:
             code = str(detail_code)
         if detail_message:
-            message = str(detail_message)
+            raw_message = str(detail_message).strip()
+            message = detail_message_map.get(raw_message, raw_message)
         if isinstance(detail.get("fields"), dict):
             fields_value = detail.get("fields")
         if "errors" in detail:
@@ -157,7 +175,8 @@ def _api_error_payload(status_code: int, detail: Any = None) -> dict[str, Any]:
         else:
             detail_value = None
     elif isinstance(detail, str) and detail.strip():
-        message = detail.strip()
+        raw_message = detail.strip()
+        message = detail_message_map.get(raw_message, raw_message)
 
     generic_map = {"forbidden", "not authenticated", "invalid token", "invalid token payload", "account not found"}
     if status_code == 403 and str(message).strip().lower() in generic_map:
@@ -351,6 +370,8 @@ def startup() -> None:
             return
         _startup_warmup_started = True
 
+    schedule_event_bus.enable_database_transport()
+
     def _warmup_runtime() -> None:
         try:
             get_pool()
@@ -372,3 +393,8 @@ def startup() -> None:
         daemon=True,
     )
     thread.start()
+
+
+@app.on_event("shutdown")
+def shutdown() -> None:
+    schedule_event_bus.stop()

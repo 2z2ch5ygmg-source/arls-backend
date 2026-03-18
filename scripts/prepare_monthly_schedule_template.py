@@ -115,7 +115,7 @@ def prepare_template(source: Path, dest: Path) -> None:
 
     hidden_sheet_name = "출동.잔업 초과수당(2)"
     if hidden_sheet_name in workbook.sheetnames:
-        _clear_hidden_sheet(workbook[hidden_sheet_name])
+        workbook.remove(workbook[hidden_sheet_name])
 
     for meta_sheet in ARLS_METADATA_SHEETS:
         if meta_sheet in workbook.sheetnames:

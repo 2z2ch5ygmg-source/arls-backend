@@ -2023,10 +2023,10 @@
             <div class="schedule-page-head ui-pageHeader">
               <div class="schedule-page-title-group">
                 <div class="schedule-page-title-row">
-                  <h2>근무일정</h2>
-                  <button class="btn btn-icon btn-secondary" type="button" data-action="drawer-help" aria-label="근무일정 도움말">?</button>
+                  <h2 id="scheduleWorkspaceTitle">근무일정</h2>
+                  <button id="scheduleWorkspaceHelpButton" class="btn btn-icon btn-secondary" type="button" data-action="drawer-help" aria-label="근무일정 도움말">?</button>
                 </div>
-                <p class="muted">월간 캘린더를 중심으로 배정 현황을 확인하고 날짜별 상세를 바로 처리하는 스케줄 워크스페이스입니다.</p>
+                <p id="scheduleWorkspaceDescription" class="muted">월간 캘린더를 중심으로 배정 현황을 확인하고 날짜별 상세를 바로 처리하는 스케줄 워크스페이스입니다.</p>
               </div>
             </div>
             <p id="schedulePermissionHint" class="muted permission-hint hidden"></p>
@@ -2038,8 +2038,8 @@
               <button class="btn btn-secondary workspace-tab active" type="button" data-action="schedule-hq-tab" data-tab="calendar">캘린더</button>
               <button class="btn btn-secondary workspace-tab shell-manager-only hidden" type="button" data-action="schedule-hq-tab" data-tab="templates">근무 템플릿 생성</button>
               <button class="btn btn-secondary workspace-tab" type="button" data-action="schedule-hq-tab" data-tab="upload">근무표 업로드·자동등록</button>
-              <button class="btn btn-secondary workspace-tab hidden" type="button" data-action="schedule-hq-tab" data-tab="reports">Finance용 스케쥴 제출</button>
               <button class="btn btn-secondary workspace-tab hidden" type="button" data-action="schedule-hq-tab" data-tab="hq-upload">지점별 스케쥴 업로드 확인</button>
+              <button class="btn btn-secondary workspace-tab hidden" type="button" data-action="schedule-hq-tab" data-tab="reports">Finance용 스케쥴 제출</button>
             </div>
             <section id="scheduleOpsToolbar" class="schedule-ops-toolbar">
               <div class="schedule-ops-toolbar-main">

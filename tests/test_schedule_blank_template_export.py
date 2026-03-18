@@ -8,6 +8,7 @@ from openpyxl import load_workbook
 
 from app.routers.v1.schedules import (
     ARLS_SHEET_NAME,
+    _build_blank_template_filename,
     _extract_arls_date_columns,
     _load_required_arls_month_workbook,
     _prepare_blank_arls_template_sheet,
@@ -30,10 +31,11 @@ class BlankTemplateExportTests(unittest.TestCase):
             site_address="서울 강남구 도산대로 1",
         )
 
-        sheet = self.workbook[ARLS_SHEET_NAME]
-        self.assertEqual(sheet["B1"].value, "2026년 3월")
-        self.assertEqual(sheet["B2"].value, "현장명  Apple_가로수길")
-        self.assertEqual(sheet["B3"].value, "현장주소\n서울 강남구 도산대로 1")
+        sheet = self.workbook["Apple_가로수길"]
+        self.assertEqual(sheet["B1"].value, "3월")
+        self.assertEqual(sheet["B2"].value, "2026년 3월")
+        self.assertIn("Apple_가로수길", str(sheet["B3"].value or ""))
+        self.assertIn("서울 강남구 도산대로 1", str(sheet["B3"].value or ""))
         self.assertEqual(sheet["D2"].value, date(2026, 3, 1))
         self.assertEqual(sheet["D3"].value, "일")
         self.assertEqual(sheet["D4"].value, "3·1절")
@@ -50,7 +52,7 @@ class BlankTemplateExportTests(unittest.TestCase):
             site_address="서울 중구 명동길 1",
         )
 
-        sheet = self.workbook[ARLS_SHEET_NAME]
+        sheet = self.workbook["Apple_명동"]
         self.assertEqual(sheet["AE2"].value, date(2026, 2, 28))
         self.assertEqual(sheet["AE3"].value, "토")
         self.assertIsNone(sheet["AF2"].value)
@@ -69,14 +71,14 @@ class BlankTemplateExportTests(unittest.TestCase):
             site_address="서울 강남구 도산대로 1",
         )
 
-        sheet = self.workbook[ARLS_SHEET_NAME]
+        sheet = self.workbook["Apple_가로수길"]
         date_map, month_ctx = _extract_arls_date_columns(sheet)
         self.assertEqual(month_ctx, (2026, 3))
         self.assertEqual(date_map[4], date(2026, 3, 1))
         self.assertEqual(date_map[34], date(2026, 3, 31))
 
     @patch("app.routers.v1.schedules._fetch_kr_public_holiday_map")
-    def test_blank_template_repairs_hidden_sheet_ref_dependency(self, mock_holidays) -> None:
+    def test_blank_template_removes_legacy_hidden_sheet(self, mock_holidays) -> None:
         mock_holidays.return_value = {}
 
         _prepare_blank_arls_template_workbook(
@@ -86,9 +88,8 @@ class BlankTemplateExportTests(unittest.TestCase):
             site_address="서울 강남구 도산대로 1",
         )
 
-        hidden_sheet = self.workbook["출동.잔업 초과수당(2)"]
-        self.assertEqual(hidden_sheet["B3"].value, date(2026, 3, 1))
-        self.assertNotIn("#REF!", str(hidden_sheet["B3"].value))
+        self.assertIn("Apple_가로수길", self.workbook.sheetnames)
+        self.assertNotIn("출동.잔업 초과수당(2)", self.workbook.sheetnames)
 
     @patch("app.routers.v1.schedules._fetch_kr_public_holiday_map")
     def test_blank_template_can_prepare_multiple_site_sheets(self, mock_holidays) -> None:
@@ -114,10 +115,22 @@ class BlankTemplateExportTests(unittest.TestCase):
             site_address="서울 강남구 도산대로 1",
         )
 
-        self.assertEqual(template_sheet["B2"].value, "현장명  Apple_명동")
-        self.assertEqual(second_sheet["B2"].value, "현장명  Apple_가로수길")
+        self.assertEqual(template_sheet["B2"].value, "2026년 3월")
+        self.assertEqual(second_sheet["B2"].value, "2026년 3월")
+        self.assertIn("Apple_명동", str(template_sheet["B3"].value or ""))
+        self.assertIn("Apple_가로수길", str(second_sheet["B3"].value or ""))
         self.assertEqual(template_sheet["D4"].value, "3·1절")
         self.assertEqual(second_sheet["D4"].value, "3·1절")
+
+    def test_blank_template_filename_uses_site_name_when_available(self) -> None:
+        self.assertEqual(
+            _build_blank_template_filename(month_key="2026-03", site_code="R692", site_name="Apple_가로수길"),
+            "monthly_schedule_Apple_가로수길_2026-03.xlsx",
+        )
+        self.assertEqual(
+            _build_blank_template_filename(month_key="2026-03", site_code="ALL", site_name=None),
+            "monthly_schedule_ALL_2026-03.xlsx",
+        )
 
 
 if __name__ == "__main__":

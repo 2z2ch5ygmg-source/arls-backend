@@ -23,7 +23,7 @@ TEMPLATE_PATH = Path("/Users/seoseong-won/Documents/rg-arls-dev/backend/app/temp
 
 
 class MonthlyScheduleTemplateExportTests(unittest.TestCase):
-    def test_monthly_board_items_merge_day_and_night_for_same_employee_site(self):
+    def test_monthly_board_items_combine_contiguous_day_and_night_for_same_employee_site(self):
         merged = _merge_board_items_for_calendar(
             [
                 {
@@ -58,6 +58,100 @@ class MonthlyScheduleTemplateExportTests(unittest.TestCase):
         self.assertEqual(merged[0]["display_shift_types"], ["day", "night"])
         self.assertEqual(merged[0]["start_time"], "10:00:00")
         self.assertEqual(merged[0]["end_time"], "08:00:00")
+        self.assertEqual(merged[0]["shift_label"], "주야")
+        self.assertEqual(merged[0]["combined_schedule_ids"], ["day-1", "night-1"])
+
+    def test_monthly_board_items_keep_support_night_shift_when_uploaded_before_day_shift(self):
+        merged = _merge_board_items_for_calendar(
+            [
+                {
+                    "schedule_id": "night-support-1",
+                    "employee_id": "emp-1",
+                    "employee_code": "R692-2",
+                    "employee_name": "민경민",
+                    "site_code": "R692",
+                    "site_name": "Apple_가로수길",
+                    "shift_type": "night",
+                    "start_time": "22:00:00",
+                    "end_time": "08:00:00",
+                    "status": "scheduled",
+                    "source": "sentrix_support_ticket",
+                    "source_type": "support",
+                },
+                {
+                    "schedule_id": "day-regular-1",
+                    "employee_id": "emp-1",
+                    "employee_code": "R692-2",
+                    "employee_name": "민경민",
+                    "site_code": "R692",
+                    "site_name": "Apple_가로수길",
+                    "shift_type": "day",
+                    "start_time": "08:00:00",
+                    "end_time": "18:00:00",
+                    "status": "scheduled",
+                    "source": "SOC",
+                },
+            ]
+        )
+
+        self.assertEqual(
+            [item["schedule_id"] for item in merged],
+            ["day-regular-1", "night-support-1"],
+        )
+        self.assertEqual(
+            [(item["shift_type"], item["start_time"], item["end_time"]) for item in merged],
+            [("day", "08:00:00", "18:00:00"), ("night", "22:00:00", "08:00:00")],
+        )
+
+    def test_monthly_board_items_combine_contiguous_day_overtime_and_night_for_same_employee_site(self):
+        merged = _merge_board_items_for_calendar(
+            [
+                {
+                    "schedule_id": "day-1",
+                    "employee_id": "emp-1",
+                    "employee_code": "R738-8",
+                    "employee_name": "서경원",
+                    "site_code": "R738",
+                    "site_name": "Apple_명동",
+                    "shift_type": "day",
+                    "start_time": "08:00:00",
+                    "end_time": "18:00:00",
+                    "status": "scheduled",
+                },
+                {
+                    "schedule_id": "ot-1",
+                    "employee_id": "emp-1",
+                    "employee_code": "R738-8",
+                    "employee_name": "서경원",
+                    "site_code": "R738",
+                    "site_name": "Apple_명동",
+                    "shift_type": "overtime",
+                    "start_time": "18:00:00",
+                    "end_time": "22:00:00",
+                    "status": "scheduled",
+                },
+                {
+                    "schedule_id": "night-1",
+                    "employee_id": "emp-1",
+                    "employee_code": "R738-8",
+                    "employee_name": "서경원",
+                    "site_code": "R738",
+                    "site_name": "Apple_명동",
+                    "shift_type": "night",
+                    "start_time": "22:00:00",
+                    "end_time": "08:00:00",
+                    "status": "scheduled",
+                },
+            ]
+        )
+
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["display_variant"], "combined")
+        self.assertEqual(merged[0]["display_shift_types"], ["day", "overtime", "night"])
+        self.assertEqual(merged[0]["start_time"], "08:00:00")
+        self.assertEqual(merged[0]["end_time"], "08:00:00")
+        self.assertEqual(merged[0]["shift_label"], "주야")
+        self.assertEqual(merged[0]["combined_schedule_ids"], ["day-1", "ot-1", "night-1"])
 
     def test_canonical_schedule_time_repairs_malformed_day_ranges_by_role_default(self):
         supervisor = _resolve_canonical_schedule_time(
