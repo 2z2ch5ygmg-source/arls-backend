@@ -1838,15 +1838,12 @@ def _select_arls_import_visible_sheet_name(workbook: Workbook) -> str | None:
         if workbook[sheet_name].sheet_state == "visible"
         and sheet_name not in metadata_sheet_names
     ]
-    if len(visible_sheet_names) != 1:
-        return None
-
-    candidate_name = visible_sheet_names[0]
-    candidate_sheet = workbook[candidate_name]
-    date_columns, _month_ctx = _extract_arls_date_columns(candidate_sheet)
-    if not date_columns:
-        return None
-    return candidate_name
+    for candidate_name in visible_sheet_names:
+        candidate_sheet = workbook[candidate_name]
+        date_columns, _month_ctx = _extract_arls_date_columns(candidate_sheet)
+        if date_columns:
+            return candidate_name
+    return None
 
 
 def _parse_daytime_need_value(value: object) -> tuple[int | None, str]:
@@ -1964,6 +1961,35 @@ def _schedule_import_headers() -> list[str]:
     ]
 
 
+SCHEDULE_IMPORT_HEADER_ALIASES: dict[str, str] = {
+    "tenantcode": "tenant_code",
+    "tenant_code": "tenant_code",
+    "tenant": "tenant_code",
+    "tenantid": "tenant_code",
+    "companycode": "company_code",
+    "company_code": "company_code",
+    "company": "company_code",
+    "sitecode": "site_code",
+    "site_code": "site_code",
+    "site": "site_code",
+    "employeecode": "employee_code",
+    "employee_code": "employee_code",
+    "employee": "employee_code",
+    "empcode": "employee_code",
+    "employeeid": "employee_code",
+    "empid": "employee_code",
+    "scheduledate": "schedule_date",
+    "schedule_date": "schedule_date",
+    "workdate": "schedule_date",
+    "date": "schedule_date",
+    "shift_type": "shift_type",
+    "shifttype": "shift_type",
+    "shift": "shift_type",
+    "type": "shift_type",
+    "dutytype": "shift_type",
+}
+
+
 def _month_bounds(value: str) -> tuple[date, date]:
     try:
         start = datetime.strptime(value, "%Y-%m").date()
@@ -2065,6 +2091,16 @@ def _normalize_header(value: str | None) -> str:
     return (value or "").strip().strip("\ufeff").lower()
 
 
+def _canonicalize_import_header(value: str | None) -> str:
+    normalized = _normalize_import_header_token(value)
+    return SCHEDULE_IMPORT_HEADER_ALIASES.get(normalized, normalized)
+
+
+def _normalize_import_header_token(value: str | None) -> str:
+    base = _normalize_header(value)
+    return re.sub(r"[\s\-_./:()]+", "", base)
+
+
 def _normalize_import_row(row: dict[str, object]) -> dict[str, str]:
     normalized: dict[str, str] = {}
     for key, value in row.items():
@@ -2116,7 +2152,7 @@ def _read_import_rows(file: UploadFile, raw_bytes: bytes) -> tuple[str, list[str
             header_cells = next(rows_iter, None)
             if not header_cells:
                 return detected, [], []
-            headers = [_normalize_header(str(cell) if cell is not None else "") for cell in header_cells]
+            headers = [_canonicalize_import_header(str(cell) if cell is not None else "") for cell in header_cells]
             rows: list[dict[str, str]] = []
             for values in rows_iter:
                 row_map: dict[str, str] = {}
@@ -2142,7 +2178,7 @@ def _read_import_rows(file: UploadFile, raw_bytes: bytes) -> tuple[str, list[str
     except UnicodeDecodeError:
         raw = raw_bytes.decode("cp949")
     reader = csv.DictReader(io.StringIO(raw))
-    raw_headers = [_normalize_header(item) for item in (reader.fieldnames or [])]
+    raw_headers = [_canonicalize_import_header(item) for item in (reader.fieldnames or [])]
     rows = [_normalize_import_row(row) for row in reader]
     return detected, raw_headers, rows
 
@@ -18725,12 +18761,38 @@ def preview_import(
     seen_employee_date: set[tuple[str, str, str]] = set()
 
     required_headers = set(_schedule_import_headers())
-    if (
-        not raw_headers
-        or len(raw_headers) != len(set(raw_headers))
-        or set(raw_headers) != required_headers
-    ):
-        raise HTTPException(status_code=400, detail="invalid import header")
+    detected_headers = list(raw_headers)
+    normalized_headers = set(detected_headers)
+    missing_headers = sorted(required_headers - normalized_headers)
+    duplicate_headers = sorted(
+        name
+        for name, count in Counter(detected_headers).items()
+        if count > 1 and name in required_headers
+    )
+
+    if not detected_headers or missing_headers:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid import header",
+                "message": "invalid import header",
+                "expected_headers": sorted(required_headers),
+                "detected_headers": detected_headers,
+                "missing_headers": missing_headers,
+                "duplicate_headers": duplicate_headers,
+            },
+        )
+    if duplicate_headers:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid import header",
+                "message": "invalid import header",
+                "expected_headers": sorted(required_headers),
+                "detected_headers": detected_headers,
+                "duplicate_headers": duplicate_headers,
+            },
+        )
 
     with conn.cursor() as cur:
         cur.execute(
