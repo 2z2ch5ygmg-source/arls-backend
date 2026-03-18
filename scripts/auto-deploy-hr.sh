@@ -119,10 +119,6 @@ resolve_acr_name() {
     return 0
   fi
 
-  if [[ -z "${AZ_RG:-}" ]]; then
-    return 0
-  fi
-
   if ! configure_az_cli; then
     log "az CLI 실행 불가로 ACR 자동 감지를 건너뜁니다."
     return 0
@@ -137,7 +133,50 @@ resolve_acr_name() {
   if [[ -n "$acr_user" ]]; then
     export AZ_BACKEND_ACR_NAME="$acr_user"
     log "AZ_BACKEND_ACR_NAME 자동 설정: $AZ_BACKEND_ACR_NAME"
+    return 0
   fi
+
+  if [[ -n "${AZ_RG:-}" ]]; then
+    local rg_acrs
+    rg_acrs="$(az_cli acr list --resource-group "$AZ_RG" --query "[].name" -o tsv 2>/dev/null || true)"
+    local rg_acr_count
+    rg_acr_count="$(printf '%s\n' "$rg_acrs" | sed '/^$/d' | wc -l | tr -d ' ' )"
+    if [[ "$rg_acr_count" -eq 1 ]]; then
+      export AZ_BACKEND_ACR_NAME="$(printf '%s\n' "$rg_acrs" | sed '/^$/d')"
+      log "AZ_BACKEND_ACR_NAME 자동 설정: $AZ_BACKEND_ACR_NAME (RG)"
+      return 0
+    fi
+  fi
+
+  local all_acrs
+  all_acrs="$(az_cli acr list --query "[].name" -o tsv 2>/dev/null || true)"
+  local acr_count
+  acr_count="$(printf '%s\n' "$all_acrs" | sed '/^$/d' | wc -l | tr -d ' ')"
+  if [[ "$acr_count" -eq 1 ]]; then
+    export AZ_BACKEND_ACR_NAME="$(printf '%s\n' "$all_acrs" | sed '/^$/d')"
+    log "AZ_BACKEND_ACR_NAME 자동 설정: $AZ_BACKEND_ACR_NAME (구독)"
+    return 0
+  fi
+
+  if [[ "$acr_count" -gt 1 ]]; then
+    log "구독에 여러 ACR이 있어 AZ_BACKEND_ACR_NAME을 자동 선택할 수 없습니다."
+    log "확인된 ACR 목록:"
+    az_cli acr list --query "[].{name:name, loginServer:loginServer, resourceGroup:resourceGroup}" --output table
+  elif [[ -n "${AZ_RG:-}" ]]; then
+    local rg_acrs_list
+    rg_acrs_list="$(printf '%s\n' "$rg_acrs" | sed '/^$/d' | tr '\n' ' ')"
+    if [[ -n "$rg_acrs_list" ]]; then
+      log "RG($AZ_RG)에서 ACR 후보: $rg_acrs_list"
+    fi
+  else
+    log "AZ_RG 미설정 상태입니다."
+  fi
+
+  if [[ -n "${AZ_RG:-}" ]]; then
+    return 0
+  fi
+
+  return 0
 }
 
 resolve_rg_by_backend_app() {
