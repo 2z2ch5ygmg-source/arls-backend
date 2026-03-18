@@ -17,6 +17,7 @@ from app.routers.v1.schedules import (
     ARLS_SHEET_NAME,
     SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS,
     _apply_canonical_schedule_import_batch,
+    _sync_canonical_schedule_import_sentrix_support_requests,
     _build_support_request_rows_from_import_payloads,
     _classify_import_preview_visibility,
     _build_arls_month_sheet,
@@ -1875,6 +1876,176 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
 
         self.assertEqual([row["row_no"] for row in payload_rows], [5, 8, 55])
 
+    def test_sync_canonical_schedule_import_sentrix_support_requests_posts_full_replace_snapshot(self):
+        batch_id = uuid.UUID("00000000-0000-0000-0000-000000000111")
+        parsed_uploaded = {
+            "support_blocks": [
+                {
+                    "target_month": "2026-03",
+                    "target_date": date(2026, 3, 1),
+                    "block_type": "day_support",
+                    "required_count_numeric": 2,
+                    "required_count_state": "provided",
+                    "valid_filled_count": 1,
+                    "invalid_filled_count": 0,
+                    "purpose_text": None,
+                    "source_sheet": "Apple_가로수길",
+                    "worker_slots": [
+                        {
+                            "row_no": 48,
+                            "col_no": 4,
+                            "slot_index": 1,
+                            "work_value": "자체 최유진",
+                            "worker_name": "최유진",
+                            "worker_type": "INTERNAL",
+                            "self_staff": True,
+                            "affiliation": "자체",
+                            "issue_code": None,
+                            "source_sheet": "Apple_가로수길",
+                        },
+                        {
+                            "row_no": 49,
+                            "col_no": 4,
+                            "slot_index": 2,
+                            "work_value": "",
+                            "worker_name": None,
+                            "worker_type": None,
+                            "self_staff": False,
+                            "affiliation": None,
+                            "issue_code": None,
+                            "source_sheet": "Apple_가로수길",
+                        },
+                    ],
+                },
+                {
+                    "target_month": "2026-03",
+                    "target_date": date(2026, 3, 2),
+                    "block_type": "day_support",
+                    "required_count_numeric": 0,
+                    "required_count_state": "no_demand",
+                    "valid_filled_count": 0,
+                    "invalid_filled_count": 0,
+                    "purpose_text": None,
+                    "source_sheet": "Apple_가로수길",
+                    "worker_slots": [],
+                },
+            ]
+        }
+        captured_payload: dict[str, object] = {}
+
+        def _record_handoff(payload):
+            captured_payload["payload"] = payload
+            return {
+                "ok": True,
+                "applied": True,
+                "partial_success": False,
+                "created_scope_count": 0,
+                "updated_existing_scope_count": 1,
+                "restored_scope_count": 0,
+                "removed_scope_count": 1,
+                "failed_scope_count": 0,
+                "scope_results": [],
+            }
+
+        with patch(
+            "app.routers.v1.schedules._load_canonical_schedule_import_apply_context",
+            return_value={"payload_rows": [], "parsed_uploaded": parsed_uploaded, "preview": None},
+        ), patch(
+            "app.routers.v1.schedules._post_sentrix_support_roster_handoff",
+            side_effect=_record_handoff,
+        ):
+            response = _sync_canonical_schedule_import_sentrix_support_requests(
+                None,
+                batch_id=batch_id,
+                batch={
+                    "site_code": "R692",
+                    "month_key": "2026-03",
+                    "metadata_json": {"template_version": ARLS_EXPORT_TEMPLATE_VERSION},
+                    "export_revision": "rev-20260318",
+                },
+                target_tenant={"id": "tenant-1", "tenant_code": "srs_korea"},
+                site_row={"id": "site-1", "site_code": "R692", "site_name": "Apple_가로수길"},
+                user={"id": "user-1", "role": "developer"},
+            )
+
+        payload = dict(captured_payload["payload"])
+        self.assertEqual(payload["month"], "2026-03")
+        self.assertEqual(payload["download_scope"], "site")
+        self.assertEqual(payload["replace_scope"]["site_codes"], ["R692"])
+        self.assertEqual(payload["replace_scope"]["month"], "2026-03")
+        self.assertEqual(len(payload["scopes"]), 1)
+        scope = payload["scopes"][0]
+        self.assertEqual(scope["scope_key"], "R692:2026-03-01:day")
+        self.assertEqual(scope["request_count"], 2)
+        self.assertEqual(scope["shift_kind"], "day")
+        self.assertEqual(scope["target_status"], "approval_pending")
+        self.assertEqual(len(scope["worker_entries"]), 2)
+        self.assertEqual(scope["worker_entries"][0]["normalized_name"], "최유진")
+        self.assertTrue(scope["worker_entries"][0]["self_staff"])
+        self.assertEqual(response["updated_existing_scope_count"], 1)
+        self.assertEqual(response["removed_scope_count"], 1)
+
+    def test_sync_canonical_schedule_import_sentrix_support_requests_sends_empty_scope_snapshot_for_removed_day_requests(self):
+        batch_id = uuid.UUID("00000000-0000-0000-0000-000000000112")
+        parsed_uploaded = {
+            "support_blocks": [
+                {
+                    "target_month": "2026-03",
+                    "target_date": date(2026, 3, 25),
+                    "block_type": "day_support",
+                    "required_count_numeric": 0,
+                    "required_count_state": "no_demand",
+                    "valid_filled_count": 0,
+                    "invalid_filled_count": 0,
+                    "purpose_text": None,
+                    "source_sheet": "Apple_가로수길",
+                    "worker_slots": [],
+                }
+            ]
+        }
+        captured_payload: dict[str, object] = {}
+
+        def _record_handoff(payload):
+            captured_payload["payload"] = payload
+            return {
+                "ok": True,
+                "applied": True,
+                "partial_success": False,
+                "created_scope_count": 0,
+                "updated_existing_scope_count": 0,
+                "restored_scope_count": 0,
+                "removed_scope_count": 1,
+                "failed_scope_count": 0,
+                "scope_results": [],
+            }
+
+        with patch(
+            "app.routers.v1.schedules._load_canonical_schedule_import_apply_context",
+            return_value={"payload_rows": [], "parsed_uploaded": parsed_uploaded, "preview": None},
+        ), patch(
+            "app.routers.v1.schedules._post_sentrix_support_roster_handoff",
+            side_effect=_record_handoff,
+        ):
+            response = _sync_canonical_schedule_import_sentrix_support_requests(
+                None,
+                batch_id=batch_id,
+                batch={
+                    "site_code": "R692",
+                    "month_key": "2026-03",
+                    "metadata_json": {"template_version": ARLS_EXPORT_TEMPLATE_VERSION},
+                    "export_revision": "rev-20260318",
+                },
+                target_tenant={"id": "tenant-1", "tenant_code": "srs_korea"},
+                site_row={"id": "site-1", "site_code": "R692", "site_name": "Apple_가로수길"},
+                user={"id": "user-1", "role": "developer"},
+            )
+
+        payload = dict(captured_payload["payload"])
+        self.assertEqual(payload["replace_scope"]["site_codes"], ["R692"])
+        self.assertEqual(payload["replace_scope"]["month"], "2026-03")
+        self.assertEqual(payload["scopes"], [])
+        self.assertEqual(response["removed_scope_count"], 1)
+
     def test_apply_canonical_schedule_import_batch_reupload_replaces_only_target_scope(self):
         batch_id = uuid.UUID("00000000-0000-0000-0000-000000000101")
         conn = _ConnectionStub(cursor_responses=[[{"cnt": 0}], []])
@@ -2892,7 +3063,7 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
             )
 
         self.assertTrue(result.blocked)
-        self.assertIn("같은 직원/날짜/지원근무유형이 업로드 결과에 중복되어 있습니다.", result.blocked_reasons)
+        self.assertIn("같은 직원의 같은 날짜 지원근무가 파일 안에서 중복되었습니다.", result.blocked_reasons)
         insert_row.assert_not_called()
         update_row.assert_not_called()
         delete_row.assert_not_called()

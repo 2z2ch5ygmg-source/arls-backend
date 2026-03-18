@@ -20267,6 +20267,8 @@ def _apply_canonical_schedule_import_batch(
     desired_support_internal_rows: dict[tuple[str, str, str], dict[str, Any]] = {}
     desired_support_request_rows: dict[tuple[str, str], dict[str, Any]] = {}
     desired_day_need_rows: dict[str, dict[str, Any]] = {}
+    # Preserve foreign-lineage rows when the uploaded body cell was a no-op for that slot.
+    preserved_foreign_schedule_keys: set[tuple[str, str, str]] = set()
     blocking_failures: list[str] = []
     skipped_rows: list[ImportApplyRowOut] = []
 
@@ -20305,7 +20307,13 @@ def _apply_canonical_schedule_import_batch(
         if employee_issue_code or not employee_row:
             append_blocking_failure(employee_issue_message or "직원을 매칭할 수 없습니다.", payload=payload, shift_type=str(payload.get("shift_type") or "").strip())
             continue
+        key = (str(employee_row.get("id") or "").strip(), schedule_date.isoformat(), duty_type)
+        existing_rows = existing_schedule_index.get(key) or []
+        foreign_rows = [item for item in existing_rows if not _is_monthly_base_schedule_source(item.get("source"))]
+        current_work_value = str(payload.get("current_work_value") or "").strip()
         if not workbook_value:
+            if foreign_rows:
+                preserved_foreign_schedule_keys.add(key)
             continue
         shift_type = _normalize_shift_type(payload.get("shift_type") or _resolve_shift_type_from_duty_type(duty_type))
         if shift_type not in ALLOWED_SHIFT_TYPES:
@@ -20314,14 +20322,11 @@ def _apply_canonical_schedule_import_batch(
         if str(payload.get("parsed_semantic_type") or "").strip() == "numeric_hours" and not str(payload.get("template_id") or "").strip():
             append_blocking_failure("이 시간값과 연결된 근무시간 설정을 찾지 못했습니다.", payload=payload, shift_type=shift_type)
             continue
-        key = (str(employee_row.get("id") or "").strip(), schedule_date.isoformat(), duty_type)
         if key in desired_base_rows:
             append_blocking_failure("같은 직원의 같은 날짜 근무가 파일 안에서 중복되었습니다.", payload=payload, shift_type=shift_type)
             continue
-        existing_rows = existing_schedule_index.get(key) or []
-        foreign_rows = [item for item in existing_rows if not _is_monthly_base_schedule_source(item.get("source"))]
-        current_work_value = str(payload.get("current_work_value") or "").strip()
         if foreign_rows and workbook_value == current_work_value:
+            preserved_foreign_schedule_keys.add(key)
             continue
         if foreign_rows:
             append_blocking_failure("이 칸에는 다른 방식으로 등록된 일정이 있어 이번 업로드로 바꿀 수 없습니다.", payload=payload, shift_type=shift_type)
@@ -20603,7 +20608,7 @@ def _apply_canonical_schedule_import_batch(
             support_internal_update_ops.append({**desired, "schedule_id": str(current_row.get("schedule_id") or "").strip()})
 
     for key, current_rows in support_internal_existing_by_key.items():
-        if key in desired_support_internal_rows:
+        if key in desired_support_internal_rows or key in preserved_foreign_schedule_keys:
             continue
         for current_row in current_rows:
             support_internal_delete_ops.append(dict(current_row))
