@@ -1,4 +1,0 @@
-[GET] https://rg-arls-backend.azurewebsites.net/api/v1/schedules/work-templates?tenant_code=master&include_inactive=true => [200] 
-[GET] https://rg-arls-backend.azurewebsites.net/api/v1/sites?page=1&page_size=500 => [200] 
-[GET] https://rg-arls-backend.azurewebsites.net/api/v1/schedules/import-mapping-profile?tenant_code=srs_korea => [200] 
-[GET] https://rg-arls-backend.azurewebsites.net/api/v1/sites?limit=500&offset=0 => [200] 

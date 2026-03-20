@@ -66,7 +66,80 @@ configure_az_cli() {
   return 1
 }
 
+collect_changed_paths() {
+  {
+    git diff --name-only
+    git diff --cached --name-only
+    git ls-files --others --exclude-standard
+  } | sed '/^$/d' | sort -u
+}
+
+build_allowed_git_patterns() {
+  local frontend_only="false"
+  local backend_only="false"
+  local arg
+
+  for arg in "$@"; do
+    case "$arg" in
+      --frontend-only)
+        frontend_only="true"
+        ;;
+      --backend-only)
+        backend_only="true"
+        ;;
+    esac
+  done
+
+  local -a patterns=()
+  if [[ "$frontend_only" == "true" ]]; then
+    patterns=(
+      "frontend/*"
+    )
+  elif [[ "$backend_only" == "true" ]]; then
+    patterns=(
+      "app/*"
+      "migrations/*"
+      "tests/*"
+      "requirements*.txt"
+      "Dockerfile"
+      "Dockerfile.*"
+      "scripts/deploy-azure.sh"
+      "scripts/auto-deploy-hr.sh"
+    )
+  else
+    patterns=(
+      "frontend/*"
+      "app/*"
+      "migrations/*"
+      "tests/*"
+      "requirements*.txt"
+      "Dockerfile"
+      "Dockerfile.*"
+      "scripts/deploy-azure.sh"
+      "scripts/auto-deploy-hr.sh"
+    )
+  fi
+
+  printf '%s\n' "${patterns[@]}"
+}
+
+path_matches_allowed_patterns() {
+  local path="$1"
+  shift || true
+
+  local pattern
+  for pattern in "$@"; do
+    if [[ "$path" == $pattern ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 attempt_git_push() {
+  local args=("$@")
+
   if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     log "Git repo가 아니어서 commit/push를 건너뜁니다."
     return 0
@@ -98,12 +171,45 @@ attempt_git_push() {
     return 0
   fi
 
-  if [[ -z "$(git status --porcelain)" ]]; then
+  local -a changed_paths=()
+  while IFS= read -r path; do
+    [[ -n "$path" ]] && changed_paths+=("$path")
+  done < <(collect_changed_paths)
+  if [[ "${#changed_paths[@]}" -eq 0 ]]; then
     log "변경 사항이 없어 commit/push를 건너뜁니다."
     return 0
   fi
 
-  git add .
+  local -a allowed_patterns=()
+  while IFS= read -r path; do
+    [[ -n "$path" ]] && allowed_patterns+=("$path")
+  done < <(build_allowed_git_patterns "${args[@]}")
+  local -a stageable_paths=()
+  local -a blocked_paths=()
+  local path
+
+  for path in "${changed_paths[@]}"; do
+    if path_matches_allowed_patterns "$path" "${allowed_patterns[@]}"; then
+      stageable_paths+=("$path")
+    else
+      blocked_paths+=("$path")
+    fi
+  done
+
+  if [[ "${#blocked_paths[@]}" -gt 0 ]]; then
+    log "배포 범위 밖 변경이 있어 자동 commit/push를 건너뜁니다."
+    for path in "${blocked_paths[@]}"; do
+      log "범위 밖 변경: $path"
+    done
+    return 0
+  fi
+
+  if [[ "${#stageable_paths[@]}" -eq 0 ]]; then
+    log "배포 범위 내 변경이 없어 commit/push를 건너뜁니다."
+    return 0
+  fi
+
+  git add -- "${stageable_paths[@]}"
   if git diff --cached --quiet; then
     log "staged 변경이 없어 commit/push를 건너뜁니다."
     return 0
@@ -203,7 +309,7 @@ resolve_rg_by_backend_app() {
 }
 
 main() {
-  attempt_git_push
+  attempt_git_push "$@"
   resolve_acr_name
   if [[ -z "$AZ_RG" ]]; then
     if ! AZ_RG="$(resolve_rg_by_backend_app)"; then

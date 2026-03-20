@@ -1,11 +1,13 @@
 __pycache__/
 *.py[cod]
 .DS_Store
+.playwright-cli/
 .env
 .venv/
 .pytest_cache/
 .pycache_tmp/
 node_modules/
+output/playwright/
 ios/
 app_logs.zip
 webapp_logs.zip
