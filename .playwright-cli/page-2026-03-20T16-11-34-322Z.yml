@@ -1,0 +1,39 @@
+- generic [ref=e2]:
+  - banner [ref=e3]
+  - status [ref=e4]
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]: RG
+      - generic [ref=e8]:
+        - heading "회사 로그인" [level=2] [ref=e9]
+        - paragraph [ref=e10]: 회사 식별값 + 계정으로 로그인하세요.
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - text: 회사
+        - 'combobox "회사 예: MASTER 또는 회사 식별값" [active] [ref=e13]': MASTER
+        - generic [ref=e14]: MASTER 슈퍼어드민 로그인 모드입니다.
+      - generic [ref=e15]:
+        - text: 아이디
+        - textbox "아이디" [ref=e16]
+      - generic [ref=e17]:
+        - text: 비밀번호
+        - generic [ref=e18]:
+          - textbox "비밀번호" [ref=e19]
+          - button "보기" [ref=e20]
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - checkbox "회사 기억" [checked] [ref=e23]
+          - text: 회사 기억
+        - generic [ref=e24]:
+          - checkbox "슈퍼어드민 로그인 (MASTER)" [ref=e25]
+          - text: 슈퍼어드민 로그인 (MASTER)
+        - generic [ref=e26]:
+          - checkbox "아이디 기억" [checked] [ref=e27]
+          - text: 아이디 기억
+        - generic [ref=e28]:
+          - checkbox "비밀번호(키체인) 저장" [ref=e29]
+          - text: 비밀번호(키체인) 저장
+        - paragraph [ref=e30]: 현재 실행환경에서는 키체인 저장이 지원되지 않습니다. 비밀번호는 저장되지 않습니다.
+      - button "로그인" [disabled] [ref=e31]
+    - paragraph [ref=e32]
+  - text: ▾

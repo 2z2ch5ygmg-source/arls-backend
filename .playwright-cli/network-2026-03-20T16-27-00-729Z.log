@@ -1,0 +1,5 @@
+[GET] https://rg-arls-backend.azurewebsites.net/api/v1/tenants?include_inactive=true&include_deleted=true => [200] 
+[POST] https://rg-arls-backend.azurewebsites.net/api/v1/auth/refresh => [200] 
+[GET] https://rg-arls-backend.azurewebsites.net/api/v1/sites?page=1&page_size=500 => [200] 
+[GET] https://rg-arls-backend.azurewebsites.net/api/v1/schedules/import-mapping-profile?tenant_code=srs_korea => [200] 
+[GET] https://rg-arls-backend.azurewebsites.net/api/v1/sites?limit=500&offset=0 => [200] 

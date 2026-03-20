@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from time import perf_counter
 from typing import Any, Callable
 
 from .feature_flags import SOC_INTEGRATION_ENABLED
@@ -63,6 +64,7 @@ class SocEventReceiver:
         tenant_code: str,
         signature_valid: bool,
     ) -> dict[str, Any]:
+        received_started_at = perf_counter()
         duplicate, existing_row = self.idempotency_store.ingest_received(
             event_uid=event_uid,
             tenant_code=tenant_code,
@@ -70,10 +72,18 @@ class SocEventReceiver:
             payload=payload.model_dump(),
             signature_valid=signature_valid,
         )
+        ingest_received_elapsed_ms = round((perf_counter() - received_started_at) * 1000)
         if duplicate:
-            return {"duplicate": True, "row": existing_row, "tenant": None}
+            return {
+                "duplicate": True,
+                "row": existing_row,
+                "tenant": None,
+                "timings": {"ingest_received_ms": ingest_received_elapsed_ms},
+            }
 
+        tenant_resolve_started_at = perf_counter()
         tenant = self.tenant_resolver(tenant_code)
+        tenant_resolve_elapsed_ms = round((perf_counter() - tenant_resolve_started_at) * 1000)
         status_text = "processed"
         error_text = None
         applied_changes: dict[str, Any] = {}
@@ -94,6 +104,7 @@ class SocEventReceiver:
                 status_text = "failed"
                 error_text = apply_error
 
+        finalize_started_at = perf_counter()
         row = self.idempotency_store.finalize(
             event_uid=event_uid,
             tenant_id=tenant["id"] if tenant else None,
@@ -102,8 +113,11 @@ class SocEventReceiver:
             error_text=error_text,
             applied_changes=applied_changes,
         )
+        finalize_elapsed_ms = round((perf_counter() - finalize_started_at) * 1000)
 
+        audit_elapsed_ms = 0
         if tenant:
+            audit_started_at = perf_counter()
             self.audit_log.write(
                 tenant_id=tenant["id"],
                 action_type="soc_event_ingested" if status_text == "processed" else "soc_event_failed",
@@ -119,6 +133,7 @@ class SocEventReceiver:
                     "applied_changes": applied_changes,
                 },
             )
+            audit_elapsed_ms = round((perf_counter() - audit_started_at) * 1000)
 
         return {
             "duplicate": False,
@@ -127,4 +142,10 @@ class SocEventReceiver:
             "status_text": status_text,
             "error_text": error_text,
             "applied_changes": applied_changes,
+            "timings": {
+                "ingest_received_ms": ingest_received_elapsed_ms,
+                "tenant_resolve_ms": tenant_resolve_elapsed_ms,
+                "finalize_ms": finalize_elapsed_ms,
+                "audit_ms": audit_elapsed_ms,
+            },
         }

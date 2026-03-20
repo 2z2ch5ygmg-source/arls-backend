@@ -23,7 +23,7 @@ from typing import Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, Form, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from openpyxl.cell.cell import MergedCell
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -120,6 +120,11 @@ from ...services.p1_schedule import (
     resolve_tenant,
     upsert_site_shift_policy,
     upsert_support_assignment,
+)
+from ...services.apple_weekly_truth import (
+    build_apple_weekly_truth_contract,
+    build_apple_weekly_truth_failure_contract,
+    normalize_week_start,
 )
 from ...services.push_notifications import send_push_notification_to_users
 from ...utils.permissions import can_manage_schedule, is_super_admin, normalize_role, normalize_user_role
@@ -1021,6 +1026,10 @@ def _can_use_support_roundtrip_final_download(user: dict | None) -> bool:
     return _support_roundtrip_normalize_role(user) in {"developer", "hq_admin", "supervisor", "vice_supervisor"}
 
 
+def _can_read_schedule_import_mapping_profile(user: dict | None) -> bool:
+    return _support_roundtrip_normalize_role(user) in {"developer", "hq_admin", "supervisor", "vice_supervisor"}
+
+
 def _finance_submission_normalize_role(user: dict | None) -> str:
     return normalize_user_role((user or {}).get("role"))
 
@@ -1030,7 +1039,7 @@ def _can_view_finance_submission(user: dict | None) -> bool:
 
 
 def _can_download_finance_review(user: dict | None) -> bool:
-    return _finance_submission_normalize_role(user) in {"developer", "hq_admin"}
+    return _finance_submission_normalize_role(user) in {"developer", "hq_admin", "supervisor"}
 
 
 def _can_upload_finance_final(user: dict | None) -> bool:
@@ -1038,7 +1047,7 @@ def _can_upload_finance_final(user: dict | None) -> bool:
 
 
 def _can_download_finance_final(user: dict | None) -> bool:
-    return _finance_submission_normalize_role(user) in {"developer", "hq_admin"}
+    return _finance_submission_normalize_role(user) in {"developer", "hq_admin", "supervisor"}
 
 
 def _build_schedule_overlap_range(start_time: object, end_time: object) -> tuple[int, int] | None:
@@ -2488,6 +2497,15 @@ def _require_sentrix_support_bridge_token(x_sentrix_bridge_token: str | None) ->
         raise HTTPException(status_code=401, detail="invalid sentrix support bridge token")
 
 
+def _extract_bearer_token(authorization: str | None) -> str:
+    raw_value = str(authorization or "").strip()
+    if not raw_value:
+        return ""
+    if raw_value.lower().startswith("bearer "):
+        return raw_value[7:].strip()
+    return raw_value
+
+
 def _resolve_sentrix_bridge_tenant(conn, tenant_code: str | None) -> dict[str, Any]:
     tenant_ref = str(tenant_code or "").strip()
     if not tenant_ref:
@@ -3275,7 +3293,7 @@ def get_schedule_import_mapping_profile(
     conn=Depends(get_db_conn),
     user=Depends(get_current_user),
 ):
-    if not can_manage_schedule(user["role"]):
+    if not _can_read_schedule_import_mapping_profile(user):
         raise HTTPException(status_code=403, detail="forbidden")
     target_tenant = _resolve_target_tenant(conn, user, tenant_code)
     profile = _fetch_active_schedule_import_mapping_profile(conn, tenant_id=str(target_tenant["id"]))
@@ -14066,6 +14084,50 @@ def get_sentrix_hq_submission_workspace_bridge(
         },
         "selected_site": selected_site.model_dump(mode="json") if selected_site else None,
     }
+
+
+@bridge_router.get("/apple-weekly/truth")
+def get_sentrix_hq_apple_weekly_truth_bridge(
+    week_start: date = Query(..., description="Any date within the target week; normalized to Monday in KST."),
+    tenant_code: str = Query(..., max_length=64),
+    site_code: str | None = Query(default=None, max_length=64),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_sentrix_bridge_token: str | None = Header(default=None, alias="X-Sentrix-Bridge-Token"),
+    conn=Depends(get_db_conn),
+):
+    bridge_token = str(x_sentrix_bridge_token or "").strip() or _extract_bearer_token(authorization)
+    _require_sentrix_support_bridge_token(bridge_token)
+    target_tenant = _resolve_sentrix_bridge_tenant(conn, tenant_code)
+    try:
+        return build_apple_weekly_truth_contract(
+            conn,
+            tenant_row=target_tenant,
+            week_start=normalize_week_start(week_start),
+            site_code=site_code,
+            include_debug=False,
+        )
+    except LookupError as exc:
+        if str(exc) == "site_not_found":
+            raise HTTPException(status_code=404, detail="site_code를 찾을 수 없습니다.") from exc
+        raise
+    except Exception as exc:
+        logger.exception(
+            "sentrix_hq_apple_weekly_truth_bridge_failed",
+            extra={
+                "tenant_code": str(target_tenant.get("tenant_code") or "").strip().upper(),
+                "week_start": normalize_week_start(week_start).isoformat(),
+                "site_code": str(site_code or "").strip().upper() or None,
+            },
+            exc_info=exc,
+        )
+        failure_contract = build_apple_weekly_truth_failure_contract(
+            tenant_code=str(target_tenant.get("tenant_code") or "").strip().upper(),
+            week_start=normalize_week_start(week_start),
+            site_code=site_code,
+            message="Apple Weekly truth generation failed inside ARLS bridge.",
+            debug_enabled=False,
+        )
+        return JSONResponse(status_code=503, content=failure_contract)
 
 
 @bridge_router.get("/artifact/download")

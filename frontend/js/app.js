@@ -322,7 +322,7 @@ const POLL_MAX_INTERVAL_MS = 300000;
 const POLL_FAILURE_LIMIT = 5;
 const HEAVY_CACHE_TTL_SITES_MS = 120000;
 const HEAVY_CACHE_TTL_MONTHLY_MS = 60000;
-const SCHEDULE_LIVE_STREAM_RETRY_MS = 15000;
+const SCHEDULE_LIVE_STREAM_RETRY_MS = 1000;
 const SCHEDULE_LIVE_FALLBACK_POLL_MS = 2000;
 const HEAVY_CACHE_TTL_RECORDS_MS = 30000;
 const PAGED_FETCH_LIMIT = 500;
@@ -373,6 +373,14 @@ const ROUTE_ADMIN_SITES_NEW = '/branch/sites/new';
 const ROUTE_ADMIN_EMPLOYEES = '/branch/employees';
 const ROUTE_ADMIN_EMPLOYEES_IMPORT = '/branch/employees/import';
 const ROUTE_ADMIN_EMPLOYEES_NEW = '/branch/employees/new';
+// TEMP(runtime-verification): keep the initial password-change state intact, but
+// narrowly bypass the forced profile gate for ARLS Supervisor evidence capture.
+// TODO: disable/revert after runtime verification is complete.
+const TEMP_RUNTIME_TEST_INITIAL_PASSWORD_GATE_BYPASS = {
+  enabled: false,
+  roles: new Set(['supervisor']),
+  tenantCodes: new Set(['SRS_KOREA']),
+};
 const EMPLOYEE_REG_MODE_MANUAL = 'manual';
 const EMPLOYEE_REG_MODE_IMPORT = 'import';
 const HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE = 'employment_certificate';
@@ -765,6 +773,7 @@ function createInitialEmployeeAdminState() {
     siteFilterCode: 'all',
     siteRows: [],
     detailEmployeeId: '',
+    detailTriggerEl: null,
     detailTab: 'overview',
     detailDrawerOpen: false,
     detailLoading: false,
@@ -1184,6 +1193,7 @@ const state = {
   lastAllowedRoute: DEFAULT_AUTH_ROUTE,
   pendingRouteAfterLogin: DEFAULT_AUTH_ROUTE,
   skipNextHashEvent: false,
+  skipNextHashRoute: '',
   previewBatchId: '',
   preview: null,
   pollTimer: null,
@@ -1314,6 +1324,8 @@ let pushBridgeInstalled = false;
 let pushListenersBound = false;
 let pushRegistrationPromise = null;
 let tokenRefreshPromise = null;
+let tokenRefreshPromiseToken = '';
+let drawerReturnFocusEl = null;
 
 window.__RG_ARLS_HANDLERS_BOUND__ = false;
 
@@ -1957,6 +1969,32 @@ function isDesktopViewport() {
 
 function isDestructiveVariant(variant = '') {
   return String(variant || '').trim().toLowerCase().includes('destructive');
+}
+
+function moveFocusOutsideHiddenContainer(container, fallbackEl = null) {
+  const hiddenContainer = container instanceof HTMLElement ? container : null;
+  if (!hiddenContainer) return;
+  const activeEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  if (!activeEl || !hiddenContainer.contains(activeEl)) return;
+
+  const restoreTarget = fallbackEl instanceof HTMLElement
+    && fallbackEl.isConnected
+    && !hiddenContainer.contains(fallbackEl)
+    ? fallbackEl
+    : null;
+
+  if (restoreTarget && typeof restoreTarget.focus === 'function') {
+    try {
+      restoreTarget.focus({ preventScroll: true });
+      return;
+    } catch {
+      // no-op
+    }
+  }
+
+  if (typeof activeEl.blur === 'function') {
+    activeEl.blur();
+  }
 }
 
 function normalizeTypedConfirmValue(value = '', normalize = 'exact') {
@@ -3428,6 +3466,28 @@ async function refreshScheduleBoardLiteInBackground({ force = true } = {}) {
     Array.isArray(liteBundle?.days) ? liteBundle.days : [],
   );
   const liteEmployees = normalizeScheduleEmployees(Array.isArray(liteBundle?.employees) ? liteBundle.employees : []);
+  const currentLiteSignature = buildScheduleBoardLiteSignature({
+    rows: state.schedule.rows,
+    employees: state.schedule.employees,
+    boardDays: state.schedule.boardDays,
+  });
+  const nextLiteSignature = buildScheduleBoardLiteSignature({
+    rows: liteRows,
+    employees: liteEmployees,
+    boardDays: liteDays,
+  });
+
+  if (currentLiteSignature === nextLiteSignature) {
+    state.schedule.liteCacheByMonth.set(getScheduleCacheKey(month, tenantCode), {
+      rows: liteRows,
+      employees: liteEmployees,
+      days: liteDays,
+      metrics: liteBundle?.metrics && typeof liteBundle.metrics === 'object' ? liteBundle.metrics : null,
+      cachedAt: Date.now(),
+    });
+    return false;
+  }
+
   const [rowsResult, leaveRowsResult, employeeRowsResult] = await Promise.allSettled([
     loadMonthlySchedulesForMonths([month], { tenantCode, force }),
     loadApprovedLeaveRowsForMonths([month], { tenantCode, force }),
@@ -4279,10 +4339,10 @@ function renderOpsWorkspaceScopeHint() {
   if (!hintEl) return;
   const tab = normalizeOpsViewTab(state.ops?.viewTab || 'overview');
   const copyByTab = {
-    overview: '개요는 오늘 바로 실행할 작업과 즉시 조치할 blocker를 먼저 정리하는 실행 화면입니다.',
-    soc: 'SOC 탭은 최근 이벤트, 실패, 재시도 대상을 빠르게 확인하는 운영 화면입니다.',
-    sheets: '사이트 동기화 탭은 시트 반영, 엑셀 실행, reconciliation 이슈를 함께 확인하는 실행 화면입니다.',
-    logs: '작업 로그 탭은 최근 실행 이력과 오류 메시지를 추적하는 기록 화면입니다.',
+    overview: '개요는 오늘 운영 이슈와 바로 실행할 작업만 정리하는 실행 화면입니다.',
+    soc: 'SOC 탭은 최근 상태, 이벤트 목록, 재시도 대상을 점검하는 모니터링 화면입니다.',
+    sheets: '사이트 동기화 탭은 실행, 실패 로그, 재시도 대상을 처리하는 실행 화면입니다.',
+    logs: '작업 로그 탭은 최근 실행 이력과 오류 메시지를 검토하는 기록 화면입니다.',
   };
   hintEl.textContent = copyByTab[tab] || copyByTab.overview;
 }
@@ -5166,6 +5226,7 @@ function renderOpsWorkspacePanels() {
   const automationTitle = $('#opsAutomationCardTitle');
   const isDesktop = isDesktopViewport();
   const tab = normalizeOpsViewTab(state.ops?.viewTab || 'overview');
+  const integrationManage = canManageIntegrations();
   state.ops.viewTab = tab;
 
   if (tabs) {
@@ -5203,6 +5264,15 @@ function renderOpsWorkspacePanels() {
   if (socRow) socRow.classList.toggle('hidden', isDesktop && tab === 'sheets');
   if (sheetsRow) sheetsRow.classList.toggle('hidden', isDesktop && tab === 'soc');
   if (excelRow) excelRow.classList.toggle('hidden', isDesktop && tab === 'soc');
+
+  toggleVisibility(
+    '#opsSheetsExecutionSection',
+    integrationManage && (!isDesktop || tab === 'overview' || tab === 'sheets'),
+  );
+  toggleVisibility(
+    '#opsSocMonitorSection',
+    integrationManage && (!isDesktop || tab === 'overview' || tab === 'soc'),
+  );
 
   if (automationTitle) {
     if (tab === 'soc') automationTitle.textContent = 'SOC 동기화 상태';
@@ -7470,11 +7540,11 @@ function renderReportsScopeHint() {
   const tenantCode = getReportsTenantCode();
   if (!tenantCode) {
     hint.textContent = navRole === 'DEV'
-      ? '개발자 계정은 상단 회사 배지에서 작업 회사를 선택하면 리포트 팩이 표시됩니다.'
+      ? '개발자 계정은 상단 회사 배지에서 작업 회사를 선택하면 전용 보고 pack과 실행 이력을 확인할 수 있습니다.'
       : '리포트 대상 회사를 확인할 수 없습니다.';
     return;
   }
-  hint.textContent = `현재 회사: ${tenantCode}`;
+  hint.textContent = `현재 회사: ${tenantCode} · 전용 보고 pack과 실행 이력을 확인하는 화면입니다.`;
 }
 
 function renderReportsPackList() {
@@ -8360,7 +8430,7 @@ const DRAWER_MENU_BY_ROLE = {
     { id: 'attendance', title: '출퇴근', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, icon: 'clock-3' },
     {
       id: 'requests',
-      title: '요청',
+      title: '요청·승인',
       action: 'drawer-open-route',
       route: ROUTE_REQUESTS,
       icon: 'clipboard-list',
@@ -8379,9 +8449,9 @@ const DRAWER_MENU_BY_ROLE = {
       icon: 'calendar-days',
       scheduleSectionMatch: 'calendar',
       children: [
-        { id: 'schedule-calendar', title: '캘린더', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
-        { id: 'schedule-templates', title: '근무 템플릿 생성', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
-        { id: 'schedule-upload', title: '근무표 업로드·자동등록', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+        { id: 'schedule-calendar', title: '월간 캘린더', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
+        { id: 'schedule-upload', title: 'Excel 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+        { id: 'schedule-templates', title: '근무 템플릿', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
       ],
     },
     {
@@ -8392,8 +8462,7 @@ const DRAWER_MENU_BY_ROLE = {
       icon: 'clipboard-list',
       scheduleSectionMatch: 'reports',
       children: [
-        { id: 'schedule-hq-upload', title: '지점별 스케쥴 업로드 확인', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
-        { id: 'schedule-finance', title: 'Finance용 스케쥴 제출', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, scheduleSectionMatch: 'reports' },
+        { id: 'schedule-finance', title: 'Finance 제출', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, scheduleSectionMatch: 'reports' },
       ],
     },
     { type: 'section', title: '내 정보' },
@@ -8425,9 +8494,10 @@ const DRAWER_MENU_BY_ROLE = {
       icon: 'calendar-days',
       scheduleSectionMatch: 'calendar',
       children: [
-        { id: 'schedule-calendar', title: '캘린더', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
-        { id: 'schedule-templates', title: '근무 템플릿 생성', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
-        { id: 'schedule-upload', title: '근무표 업로드·자동등록', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+        { id: 'schedule-calendar', title: '월간 캘린더', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
+        { id: 'schedule-upload', title: 'Excel 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+        { id: 'schedule-hq-upload', title: '지점별 업로드 확인', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
+        { id: 'schedule-templates', title: '근무 템플릿', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
       ],
     },
     {
@@ -8438,8 +8508,7 @@ const DRAWER_MENU_BY_ROLE = {
       icon: 'clipboard-list',
       scheduleSectionMatch: 'reports',
       children: [
-        { id: 'schedule-hq-upload', title: '지점별 스케쥴 업로드 확인', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
-        { id: 'schedule-finance', title: 'Finance용 스케쥴 제출', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, scheduleSectionMatch: 'reports' },
+        { id: 'schedule-finance', title: 'Finance 제출', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, scheduleSectionMatch: 'reports' },
       ],
     },
     { type: 'section', title: '조직' },
@@ -8483,9 +8552,10 @@ const DRAWER_MENU_BY_ROLE = {
       icon: 'calendar-days',
       scheduleSectionMatch: 'calendar',
       children: [
-        { id: 'schedule-calendar', title: '캘린더', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
-        { id: 'schedule-templates', title: '근무 템플릿 생성', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
-        { id: 'schedule-upload', title: '근무표 업로드·자동등록', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+        { id: 'schedule-calendar', title: '월간 캘린더', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
+        { id: 'schedule-upload', title: 'Excel 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+        { id: 'schedule-hq-upload', title: '지점별 업로드 확인', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
+        { id: 'schedule-templates', title: '근무 템플릿', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
       ],
     },
     {
@@ -8496,8 +8566,7 @@ const DRAWER_MENU_BY_ROLE = {
       icon: 'clipboard-list',
       scheduleSectionMatch: 'reports',
       children: [
-        { id: 'schedule-hq-upload', title: '지점별 스케쥴 업로드 확인', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
-        { id: 'schedule-finance', title: 'Finance용 스케쥴 제출', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, scheduleSectionMatch: 'reports' },
+        { id: 'schedule-finance', title: 'Finance 제출', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, scheduleSectionMatch: 'reports' },
       ],
     },
     { type: 'section', title: '조직' },
@@ -8608,6 +8677,29 @@ function getActiveRefreshToken() {
   return storedToken;
 }
 
+function createAuthSessionSnapshot({ token = '', refreshToken = '', user = null } = {}) {
+  return {
+    token: normalizeStoredJwtToken(token),
+    refreshToken: normalizeStoredJwtToken(refreshToken),
+    userId: String(user?.id || '').trim(),
+  };
+}
+
+function isAuthSessionSnapshotSuperseded(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return false;
+  const snapshotToken = normalizeStoredJwtToken(snapshot.token);
+  const snapshotRefreshToken = normalizeStoredJwtToken(snapshot.refreshToken);
+  const snapshotUserId = String(snapshot.userId || '').trim();
+  const currentToken = normalizeStoredJwtToken(state.token);
+  const currentRefreshToken = normalizeStoredJwtToken(state.refreshToken);
+  const currentUserId = String(state.user?.id || '').trim();
+
+  if (snapshotToken && currentToken && snapshotToken !== currentToken) return true;
+  if (snapshotRefreshToken && currentRefreshToken && snapshotRefreshToken !== currentRefreshToken) return true;
+  if (snapshotUserId && currentUserId && snapshotUserId !== currentUserId) return true;
+  return false;
+}
+
 function persistStoredAuthTokens(accessToken = '', refreshToken = '') {
   try {
     const access = String(accessToken || '').trim();
@@ -8628,11 +8720,16 @@ function persistStoredAuthTokens(accessToken = '', refreshToken = '') {
 }
 
 async function requestTokenRefresh() {
-  if (tokenRefreshPromise) return tokenRefreshPromise;
-  tokenRefreshPromise = (async () => {
-    const refreshToken = getActiveRefreshToken();
-    if (!refreshToken) return false;
+  const refreshToken = getActiveRefreshToken();
+  if (!refreshToken) return false;
+  if (tokenRefreshPromise && tokenRefreshPromiseToken === refreshToken) return tokenRefreshPromise;
 
+  const refreshSnapshot = createAuthSessionSnapshot({
+    token: state.token,
+    refreshToken,
+    user: state.user,
+  });
+  tokenRefreshPromise = (async () => {
     try {
       const response = await fetch(`${state.activeApiBase}/auth/refresh`, {
         method: 'POST',
@@ -8647,6 +8744,13 @@ async function requestTokenRefresh() {
       const envelope = normalizeApiEnvelope(payload, response.ok);
 
       if (!response.ok) {
+        const refreshStillCurrent = normalizeStoredJwtToken(getActiveRefreshToken()) === refreshToken;
+        const currentAccessToken = normalizeStoredJwtToken(getActiveAccessToken());
+        if (response.status === 401 && refreshStillCurrent && currentAccessToken) {
+          state.refreshToken = '';
+          persistSession();
+          console.warn('[RG ARLS][Auth] discarded invalid refresh token and kept current access token');
+        }
         console.warn('[RG ARLS][Auth] refresh failed', {
           status: response.status,
           message: getApiErrorMessage(envelope, 'refresh failed'),
@@ -8658,6 +8762,10 @@ async function requestTokenRefresh() {
       const nextAccessToken = String(data?.access_token || '').trim();
       const nextRefreshToken = String(data?.refresh_token || refreshToken).trim();
       if (!nextAccessToken) return false;
+      if (isAuthSessionSnapshotSuperseded(refreshSnapshot)) {
+        console.info('[RG ARLS][Auth] refresh result ignored after auth session changed');
+        return false;
+      }
 
       state.token = nextAccessToken;
       state.refreshToken = nextRefreshToken;
@@ -8671,9 +8779,13 @@ async function requestTokenRefresh() {
       console.warn('[RG ARLS][Auth] refresh error', error);
       return false;
     } finally {
-      tokenRefreshPromise = null;
+      if (tokenRefreshPromiseToken === refreshToken) {
+        tokenRefreshPromise = null;
+        tokenRefreshPromiseToken = '';
+      }
     }
   })();
+  tokenRefreshPromiseToken = refreshToken;
 
   return tokenRefreshPromise;
 }
@@ -8772,8 +8884,12 @@ function apiRequest(path, options = {}) {
       const authError = new Error(detail);
       authError.code = 'UNAUTHORIZED';
       authError.status = 401;
+      const currentAuthToken = normalizeStoredJwtToken(getActiveAccessToken());
+      const requestAuthToken = normalizeStoredJwtToken(authToken);
+      const requestBelongsToCurrentSession = Boolean(currentAuthToken) && currentAuthToken === requestAuthToken;
+      authError.staleAuthSession = Boolean(currentAuthToken) && currentAuthToken !== requestAuthToken;
 
-      if (!isLoginRequest && !isRefreshRequest && getActiveAccessToken()) {
+      if (!isLoginRequest && !isRefreshRequest && requestBelongsToCurrentSession) {
         clearSession();
         stopPolling();
         if (!options.suppressUnauthorizedRedirect) {
@@ -8782,6 +8898,7 @@ function apiRequest(path, options = {}) {
         const sessionExpiredError = new Error('세션이 만료되었습니다. 다시 로그인해 주세요.');
         sessionExpiredError.code = 'UNAUTHORIZED';
         sessionExpiredError.status = 401;
+        sessionExpiredError.staleAuthSession = false;
         throw sessionExpiredError;
       }
       throw authError;
@@ -9536,6 +9653,13 @@ function endScheduleImportAnalysisWithError() {
 function isScheduleUploadTenantWideUser() {
   const role = normalizeRoleValue(state.user?.role || '');
   return role === 'developer' || role === 'hq_admin';
+}
+
+function getPinnedScheduleFinanceSiteCode() {
+  if (getScheduleDataProvider().mode !== 'real') return '';
+  const role = normalizeRoleValue(state.user?.role || '');
+  const userSiteCode = String(state.user?.site_code || '').trim().toUpperCase();
+  return role === 'supervisor' && userSiteCode ? userSiteCode : '';
 }
 
 function canSelectScheduleWorkflowTenant() {
@@ -10608,6 +10732,28 @@ function openScheduleUploadWorkflowSection(section = SCHEDULE_UPLOAD_WORKFLOW_MA
   setScheduleHqWizardStep(SCHEDULE_HQ_WIZARD_STEP_UPLOAD, { scroll });
 }
 
+function openScheduleUploadMappingWorkspace({ openManager = false, scroll = true } = {}) {
+  if (!canOpenScheduleUploadWorkspace()) {
+    showToast('근무표 업로드 workspace를 열 수 없습니다.', 'error');
+    return;
+  }
+  onScheduleHqTabChange(SCHEDULE_TAB_UPLOAD);
+  setScheduleBaseWizardStep(SCHEDULE_BASE_WIZARD_STEP_MAPPING, { scroll: false });
+  requestAnimationFrame(() => {
+    const mappingSection = $('#scheduleExcelWorkflowMappingSection');
+    const managerDetails = $('#scheduleImportProfileLibraryDetails');
+    if (openManager && managerDetails instanceof HTMLDetailsElement) {
+      managerDetails.open = true;
+    }
+    const target = openManager && managerDetails instanceof HTMLElement
+      ? managerDetails
+      : mappingSection;
+    if (scroll && target instanceof HTMLElement) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+}
+
 function renderScheduleUploadWorkspace() {
   const activeTopTab = getScheduleActiveTopTab();
   if (state.schedule) {
@@ -10663,6 +10809,7 @@ function renderScheduleUploadWorkspace() {
     || supportHqWorkspace.applyLoading
   );
   const siteOptionsLoading = Boolean(state.schedule.importSiteOptionsLoading);
+  const canManageImportProfiles = canManageScheduleImportMappingProfile();
 
   syncScheduleImportStaleState();
   if (uploadHeaderTitle) {
@@ -10672,8 +10819,8 @@ function renderScheduleUploadWorkspace() {
   }
   if (uploadHeaderText) {
     uploadHeaderText.textContent = activeTopTab === SCHEDULE_TAB_HQ_UPLOAD
-      ? '선택한 지점의 source artifact를 추출하고 HQ 작성본 workbook 업로드를 단계별로 진행합니다.'
-      : '월간 스케줄 원본 업로드와 HQ 지원근무 workbook 흐름을 단계별 wizard로 진행합니다.';
+      ? '지원근무 workbook의 source 추출, HQ 작성본 업로드, 검토와 적용을 이 workflow에서 진행합니다.'
+      : '스케줄 Excel workflow owner 화면으로, 매핑 준비부터 검토와 적용까지 이 곳에서 완료합니다.';
   }
   renderScheduleImportMappingProfileSummary();
   renderScheduleUploadWorkflowSections();
@@ -10757,7 +10904,8 @@ function renderScheduleUploadWorkspace() {
   }
   mappingManageButtons.forEach((button) => {
     if (button instanceof HTMLButtonElement) {
-      button.disabled = uploadWorkspaceBooting || uploadUi.analysisInFlight || supportHqBusy || !canMutateScheduleData();
+      button.classList.toggle('hidden', !canManageImportProfiles);
+      button.disabled = uploadWorkspaceBooting || uploadUi.analysisInFlight || supportHqBusy || !canManageImportProfiles;
     }
   });
 
@@ -11126,7 +11274,7 @@ function getScheduleSupportHqWorkspaceSites() {
     downloadReady: Boolean(site?.download_ready),
     sourceState: String(site?.source_state || '').trim() || 'source_missing',
     sourceRevision: String(site?.source_revision || '').trim(),
-    sourceUploadedAt: String(site?.source_uploaded_at || site?.latest_uploaded_at || '').trim(),
+    sourceUploadedAt: String(site?.last_uploaded_at || site?.source_uploaded_at || site?.latest_uploaded_at || '').trim(),
     latestHqRevision: String(site?.latest_hq_revision || '').trim(),
     latestHqUploadedAt: String(site?.latest_hq_uploaded_at || '').trim(),
     latestStatus: String(site?.latest_status || '').trim() || 'source_missing',
@@ -12409,11 +12557,13 @@ function getScheduleSupportSelectedSiteCode() {
   const hqContext = buildScheduleSupportHqContext();
   const hqSite = String(hqContext.siteCode || '').trim().toUpperCase();
   const reportsSite = String($('#scheduleReportsSite')?.value || '').trim().toUpperCase();
+  const pinnedFinanceSite = getPinnedScheduleFinanceSiteCode();
   if (isScheduleUploadOwnerTab(getScheduleActiveTopTab())) {
     if (getScheduleUploadWorkspaceMode() === SCHEDULE_UPLOAD_MODE_HQ && hqSite) return hqSite;
     return '';
   } else {
     if (reportsSite) return reportsSite;
+    if (pinnedFinanceSite) return pinnedFinanceSite;
     if (hqSite) return hqSite;
   }
   const boardSite = String($('#scheduleSiteFilter')?.value || '').trim().toUpperCase();
@@ -12493,7 +12643,7 @@ function renderScheduleSupportShortcutCard() {
       pill.textContent = '지점 선택';
     }
     if (text) {
-      text.textContent = '보고 지점을 먼저 선택하면 Excel workflow 바로가기를 해당 지점/월 컨텍스트로 열 수 있습니다.';
+      text.textContent = '보고 지점을 먼저 선택하면 Excel workflow를 해당 지점/월 컨텍스트로 바로 열 수 있습니다.';
     }
     return;
   }
@@ -12504,7 +12654,7 @@ function renderScheduleSupportShortcutCard() {
       pill.textContent = '조회 중';
     }
     if (text) {
-      text.textContent = '선택한 지점 기준 source artifact 상태를 확인하는 중입니다. 준비되면 Excel workflow에서 이어갈 수 있습니다.';
+      text.textContent = '선택한 지점 기준 source artifact 상태를 확인하는 중입니다. 준비되면 Excel 업로드 workflow에서 이어갈 수 있습니다.';
     }
     return;
   }
@@ -12518,7 +12668,7 @@ function renderScheduleSupportShortcutCard() {
       pill.textContent = readySiteCount > 0 ? '전체 준비' : '전체 대기';
     }
     if (text) {
-      text.textContent = `${getScheduleMonthValue()} 기준 전체 ${readySiteCount}/${totalSiteCount || 0}개 지점이 준비되어 있습니다. 세부 추출/제출은 Excel workflow 탭에서 진행하세요.`;
+      text.textContent = `${getScheduleMonthValue()} 기준 전체 ${readySiteCount}/${totalSiteCount || 0}개 지점이 준비되어 있습니다. 세부 추출과 업로드는 Excel 업로드 탭에서 진행하세요.`;
     }
     return;
   }
@@ -12533,7 +12683,7 @@ function renderScheduleSupportShortcutCard() {
     text.textContent = [
       `${selectedSite} · ${status?.month || getScheduleMonthValue()}`,
       artifactContext.revision ? `artifact ${artifactContext.revision.slice(0, 12)}` : 'artifact 준비 전',
-      '실제 workflow는 근무표 업로드·자동등록 탭에서 진행',
+      '실제 workflow는 Excel 업로드 탭에서 진행',
     ].filter(Boolean).join(' · ');
   }
 }
@@ -12543,7 +12693,14 @@ function renderScheduleReportsTabs() {
   if (!(panel instanceof HTMLElement)) return;
   const financeAllowed = canViewScheduleFinanceSubmission();
   const financePanel = $('#scheduleFinanceSubmissionPanel');
+  const reportsContextRow = panel.querySelector('.schedule-reports-context-row');
+  const hideReportsSiteSelector = Boolean(getPinnedScheduleFinanceSiteCode());
   state.schedule.reportsTab = SCHEDULE_REPORTS_TAB_FINANCE;
+
+  if (reportsContextRow instanceof HTMLElement) {
+    reportsContextRow.classList.toggle('hidden', hideReportsSiteSelector);
+    reportsContextRow.setAttribute('aria-hidden', hideReportsSiteSelector ? 'true' : 'false');
+  }
 
   renderScheduleFinanceSubmissionStatus();
   if (financePanel instanceof HTMLElement) {
@@ -12594,7 +12751,7 @@ function renderScheduleSupportRoundtripStatus() {
       statePill.className = 'status-pill status-pill-neutral';
       statePill.textContent = '지점 선택 필요';
     }
-    if (statusText) statusText.textContent = '업로드 지점과 대상 월을 먼저 고정하면 source artifact와 Sentrix handoff 상태를 불러옵니다.';
+    if (statusText) statusText.textContent = '업로드 지점과 대상 월을 먼저 고정하면 source 준비 상태와 다음 작업을 불러옵니다.';
     if (sourceRevision) sourceRevision.textContent = '없음';
     if (sourceMeta) sourceMeta.textContent = '지점 선택 후 확인';
     if (mergeState) mergeState.textContent = '대기';
@@ -12620,7 +12777,7 @@ function renderScheduleSupportRoundtripStatus() {
       statePill.className = 'status-pill status-pill-neutral';
       statePill.textContent = '조회 중';
     }
-    if (statusText) statusText.textContent = 'source artifact와 Sentrix handoff 상태를 조회하는 중입니다.';
+    if (statusText) statusText.textContent = 'source 준비 상태와 최신 handoff 정보를 조회하는 중입니다.';
     if (hqDownloadBtn) hqDownloadBtn.disabled = true;
     if (openSentrixBtn) openSentrixBtn.disabled = true;
     if (copyArtifactBtn) copyArtifactBtn.disabled = true;
@@ -12727,7 +12884,7 @@ function renderScheduleSupportRoundtripStatus() {
   if (finalMeta) {
     if (mergeStale) finalMeta.textContent = '최신 source artifact 기준으로 STEP 4에서 HQ 작성본을 다시 검토/적용해야 합니다.';
     else if (sourceMissing) finalMeta.textContent = '원본 업로드 후 source artifact가 생성됩니다.';
-    else finalMeta.textContent = 'HQ 작성본 업로드/검토/적용 시작은 ARLS, 내부 roster/ticket state 엔진은 Sentrix가 처리합니다.';
+      else finalMeta.textContent = 'HQ 작성본 업로드와 검토는 여기서 시작하고, 내부 roster/ticket state 처리는 Sentrix가 담당합니다.';
   }
   renderScheduleSupportArtifactMeta(artifactContext);
 
@@ -13231,7 +13388,7 @@ function renderScheduleFinanceSubmissionStatus() {
       statePill.className = 'status-pill status-pill-neutral';
       statePill.textContent = '지점 선택 필요';
     }
-    if (statusText) statusText.textContent = '업로드 지점을 선택하면 Finance 제출 상태를 조회합니다.';
+    if (statusText) statusText.textContent = '업로드 지점을 선택하면 Finance 제출 단계와 다음 작업을 조회합니다.';
     if (phaseLabel) phaseLabel.textContent = '확인 대기';
     if (phaseMeta) phaseMeta.textContent = '지점 선택 후 확인';
     if (reviewRevision) reviewRevision.textContent = '없음';
@@ -16286,8 +16443,8 @@ function renderShellMode() {
   const homeSubtitle = $('#homeViewSubtitle');
   if (homeSubtitle) {
     homeSubtitle.textContent = managerMode
-      ? '오늘 운영 상태를 빠르게 파악할 수 있도록 핵심 지표만 요약합니다.'
-      : '오늘 근무와 진행 중 요청을 먼저 확인하고 실제 처리는 각 워크스페이스에서 이어갑니다.';
+      ? '오늘 확인할 운영 위험과 바로 이동할 작업만 먼저 브리핑합니다.'
+      : '오늘 근무와 진행 중 요청을 먼저 브리핑하고 실제 처리는 각 탭에서 이어갑니다.';
   }
   const requestsTitle = $('#requestsViewTitle');
   if (requestsTitle) {
@@ -16300,8 +16457,8 @@ function renderShellMode() {
   const profileSubtitle = $('#profileViewSubtitle');
   if (profileSubtitle) {
     profileSubtitle.textContent = managerMode
-      ? '보안, 알림, 연동, 관리자 보조 설정을 관리합니다.'
-      : '개인 정보, 알림, 연동, 보안 설정을 관리합니다.';
+      ? '계정, 알림, 연동 프로필과 회사 설정을 관리합니다. 실행 상태와 로그는 운영에서 확인합니다.'
+      : '내 계정, 알림, 연동, 보안 설정을 관리합니다.';
   }
 
   renderProfileWorkspaceSegments();
@@ -16382,8 +16539,15 @@ function renderAttendanceMobileSegments() {
 function renderRequestsWorkspaceSegments() {
   const wrapper = $('#requestsWorkspaceSegments');
   if (!wrapper) return;
+  const row = wrapper.closest('.workspace-tabbar-row');
   const managerMode = isManagerShellRole();
   const tab = normalizeRequestsTabView(state.requestsTabView);
+  const showDesktopTabs = isDesktopViewport();
+
+  wrapper.classList.toggle('hidden', !showDesktopTabs);
+  if (row) {
+    row.classList.toggle('hidden', !showDesktopTabs);
+  }
 
   wrapper.querySelectorAll('[data-action="requests-workspace-segment"]').forEach((button) => {
     const segment = String(button?.dataset?.segment || '').trim();
@@ -17781,15 +17945,42 @@ function renderRequestsTabSections() {
   tab = normalizeRequestsTabView(state.requestsTabView);
 
   if (titleEl) {
-    titleEl.textContent = tab === 'leave' ? '휴가 관리' : '요청·승인';
+    if (tab === 'leave') {
+      titleEl.textContent = '휴가 요청';
+    } else if (tab === 'documents') {
+      titleEl.textContent = '문서 요청';
+    } else if (tab === 'correction') {
+      titleEl.textContent = '정정 요청';
+    } else if (tab === 'approvals') {
+      titleEl.textContent = '승인함';
+    } else {
+      titleEl.textContent = '요청·승인';
+    }
   }
   if (descriptionEl) {
-    descriptionEl.textContent = tab === 'leave'
-      ? '휴가 유형, 요청 이력, 사용 현황을 한 화면에서 관리합니다.'
-      : '요청 유형을 선택하고 목록을 확인한 뒤 우측 패널에서 바로 처리합니다.';
+    if (tab === 'leave') {
+      descriptionEl.textContent = '휴가 유형, 요청 이력, 사용 현황을 한 흐름에서 확인하고 상세 패널에서 이어서 처리합니다.';
+    } else if (tab === 'documents') {
+      descriptionEl.textContent = '재직증명서 요청과 발급 상태를 목록과 상세 패널에서 확인합니다. 신규 발급은 문서 센터로 이어집니다.';
+    } else if (tab === 'correction') {
+      descriptionEl.textContent = '정정 요청 이력을 비교하고 상세 패널에서 변경 전후와 상태를 이어서 확인합니다.';
+    } else if (tab === 'approvals') {
+      descriptionEl.textContent = '여러 요청 유형을 한 큐에서 비교하고 상세 패널에서 승인과 반려를 처리합니다.';
+    } else {
+      descriptionEl.textContent = '요청 유형을 선택하고 목록을 확인한 뒤 상세 패널에서 등록과 처리를 이어갑니다.';
+    }
   }
   if (newRequestBtn) {
-    newRequestBtn.textContent = tab === 'leave' ? '휴가 신청' : '새 요청';
+    if (tab === 'leave') {
+      newRequestBtn.textContent = '휴가 신청';
+    } else if (tab === 'documents') {
+      newRequestBtn.textContent = '문서 센터';
+    } else if (tab === 'correction') {
+      newRequestBtn.textContent = '정정 흐름 보기';
+    } else {
+      newRequestBtn.textContent = '새 요청';
+    }
+    newRequestBtn.classList.toggle('hidden', tab === 'approvals' || tab === 'correction');
   }
 
   const docsButton = document.querySelector('#requestsWorkspaceSegments [data-segment="documents"]');
@@ -18153,7 +18344,6 @@ function updateRouteHash(routePath = ROUTE_LOGIN, { replace = false } = {}) {
   const routeWithQuery = parsed.query ? `${path}?${parsed.query}` : path;
   const nextHash = `#${routeWithQuery}`;
   if (window.location.hash === nextHash) return;
-  state.skipNextHashEvent = true;
   if (replace) {
     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${nextHash}`);
     return;
@@ -24348,19 +24538,24 @@ function getWorkspaceViewTitle(viewName = state.currentView || 'home') {
 function getDesktopGlobalSearchItems() {
   const role = getNavigationRole();
   const items = [
-    { label: '홈', route: ROUTE_HOME, hint: '오늘 요약', keywords: ['대시보드', 'today', 'home'] },
-    { label: '출퇴근', route: ROUTE_ATTENDANCE, hint: '기록/예외', keywords: ['근태', 'attendance', '타임시트'] },
-    { label: role === 'EMPLOYEE' ? '요청' : '요청·승인', route: ROUTE_REQUESTS, hint: '요청 센터', keywords: ['요청', '승인', '휴가', '예외'] },
+    { label: '홈', route: ROUTE_HOME, hint: '오늘 브리핑', keywords: ['대시보드', 'today', 'home', '브리핑'] },
+    { label: '출퇴근', route: ROUTE_ATTENDANCE, hint: '기록/예외 스캔', keywords: ['근태', 'attendance', '타임시트', '예외'] },
+    { label: role === 'EMPLOYEE' ? '요청' : '요청·승인', route: ROUTE_REQUESTS, hint: '요청 inbox', keywords: ['요청', '승인', '휴가', '예외', 'inbox'] },
     { label: '문서', route: ROUTE_HR, hint: '문서 센터', keywords: ['문서', '재직증명서', 'hr'] },
-    { label: '스케줄', route: ROUTE_SCHEDULE_CALENDAR, hint: '캘린더/업로드', keywords: ['스케줄', '일정', 'calendar'] },
-    { label: role === 'EMPLOYEE' ? '내 정보' : '설정', route: ROUTE_PROFILE, hint: '설정/보안', keywords: ['설정', '프로필', '알림', '보안'] },
+    { label: '스케줄', route: ROUTE_SCHEDULE_CALENDAR, hint: '월간 캘린더', keywords: ['스케줄', '일정', 'calendar', '캘린더'] },
+    { label: role === 'EMPLOYEE' ? '내 정보' : '설정', route: ROUTE_PROFILE, hint: '계정/연동 설정', keywords: ['설정', '프로필', '알림', '보안', '연동'] },
   ];
 
   if (role === 'BRANCH_MANAGER' || role === 'DEV') {
     items.splice(1, 0, { label: '운영', route: ROUTE_OPS, hint: '운영 워크스페이스', keywords: ['운영', 'ops', '자동화', 'soc', '시트'] });
     items.splice(2, 0, { label: '지원근무자 현황', route: ROUTE_SUPPORT_STATUS, hint: '지원 배정 현황', keywords: ['지원근무', '지원근무자', 'support', '주간', '야간', 'sentrix'] });
+    items.splice(7, 0,
+      { label: 'Excel 업로드', route: ROUTE_SCHEDULE_UPLOAD, hint: '근무표 업로드', keywords: ['엑셀', '업로드', '근무표', 'wizard'] },
+      { label: '보고', route: ROUTE_SCHEDULE_REPORTS, hint: 'Finance 제출 상태', keywords: ['보고', 'finance', '제출', 'handoff'] },
+      { label: '전용 보고', route: ROUTE_REPORTS, hint: 'pack/실행 이력', keywords: ['리포트', '보고', 'apple', 'history'] },
+    );
     items.push(
-      { label: '조직', route: ROUTE_ADMIN_EMPLOYEES, hint: '직원/지점', keywords: ['조직', '직원', '지점', '현장'] },
+      { label: '조직', route: ROUTE_ADMIN_EMPLOYEES, hint: '직원/지점 운영', keywords: ['조직', '직원', '지점', '현장'] },
     );
   }
 
@@ -25205,10 +25400,16 @@ function closeDrawer() {
   const drawer = $('#sideDrawer');
   const backdrop = $('#drawerBackdrop');
   if (drawer) {
+    const fallbackFocusEl = drawerReturnFocusEl instanceof HTMLElement
+      ? drawerReturnFocusEl
+      : $('#btnDrawerOpen');
+    moveFocusOutsideHiddenContainer(drawer, fallbackFocusEl);
+    drawer.setAttribute('inert', '');
     drawer.classList.add('hidden');
     drawer.setAttribute('aria-hidden', 'true');
   }
   if (backdrop) backdrop.classList.add('hidden');
+  drawerReturnFocusEl = null;
   state.drawerOpen = false;
   syncBodyScrollLocks();
 }
@@ -25221,7 +25422,10 @@ function openDrawer() {
   const drawer = $('#sideDrawer');
   const backdrop = $('#drawerBackdrop');
   if (!drawer || !backdrop) return;
+  const activeEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  drawerReturnFocusEl = activeEl && !drawer.contains(activeEl) ? activeEl : $('#btnDrawerOpen');
   drawer.classList.remove('hidden');
+  drawer.removeAttribute('inert');
   drawer.setAttribute('aria-hidden', 'false');
   backdrop.classList.remove('hidden');
   state.drawerOpen = true;
@@ -25503,6 +25707,10 @@ function applyWriteAccessUI(perms) {
   const permissionGroup = resolvePermissionGroup(state.user?.role || 'officer');
   const workingTenantCode = getWorkingTenantDisplayCode() || '-';
   const isDev = navRole === 'DEV';
+  const employeeRoute = normalizeRoutePath(parseRouteCandidate(getCurrentRouteWithQuery()).path);
+  const employeeCreateRoute = employeeRoute === ROUTE_ADMIN_EMPLOYEES_NEW;
+  const employeeImportRoute = employeeRoute === ROUTE_ADMIN_EMPLOYEES_IMPORT;
+  const employeeListRoute = employeeRoute === ROUTE_ADMIN_EMPLOYEES;
 
   const approvalTitle = $('#approvalModuleTitle');
   const approvalScopeHint = $('#approvalModuleScopeHint');
@@ -25518,38 +25726,55 @@ function applyWriteAccessUI(perms) {
   const employeesViewTitle = $('#employeesViewTitle');
   const employeesScopeHint = $('#employeesScopeHint');
   if (employeesViewTitle) {
-    employeesViewTitle.textContent = '조직 허브';
+    employeesViewTitle.textContent = employeeImportRoute
+      ? '직원 대량 등록'
+      : (employeeCreateRoute ? '직원 등록' : '조직');
   }
   if (employeesScopeHint) {
-    employeesScopeHint.textContent = permissionGroup === 'DEV'
-      ? `조회 테넌트 ${workingTenantCode} 기준으로 직원과 권한, 대량 등록을 같은 패턴으로 관리합니다.`
-      : '직원 기본 정보, 권한, 대량 등록을 같은 워크스페이스 언어로 관리합니다.';
+    if (employeeImportRoute) {
+      employeesScopeHint.textContent = permissionGroup === 'DEV'
+        ? `조회 테넌트 ${workingTenantCode} 기준으로 명부 업로드, 오류 검토, 등록 실행을 단계별로 진행합니다.`
+        : '명부 업로드, 오류 검토, 등록 실행을 단계별로 진행합니다.';
+    } else if (employeeCreateRoute) {
+      employeesScopeHint.textContent = permissionGroup === 'DEV'
+        ? `조회 테넌트 ${workingTenantCode} 기준으로 새 직원을 등록합니다. 저장 후 조직 목록에서 상세를 확인합니다.`
+        : '새 직원을 등록한 뒤 조직 목록으로 돌아가 상세 패널에서 상태를 확인합니다.';
+    } else {
+      employeesScopeHint.textContent = permissionGroup === 'DEV'
+        ? `조회 테넌트 ${workingTenantCode} 기준으로 직원을 목록과 상세 패널 패턴으로 관리합니다. 등록과 대량 등록은 별도 흐름으로 이동합니다.`
+        : '직원을 목록과 상세 패널 패턴으로 관리합니다. 등록과 대량 등록은 별도 흐름으로 이동합니다.';
+    }
+  }
+  const employeeTopActionHint = $('#employeeTopActionHint');
+  if (employeeTopActionHint) {
+    employeeTopActionHint.textContent = '목록에서 직원을 선택하면 상세 패널이 열립니다. 현장 단위 전체 삭제는 목록 화면에서만 가능합니다.';
   }
 
   const orgViewTitle = $('#orgViewTitle');
   const orgScopeHint = $('#orgScopeHint');
   const siteSectionTitle = $('#siteSectionTitle');
   if (orgViewTitle) {
-    orgViewTitle.textContent = '조직 허브';
+    orgViewTitle.textContent = '조직';
   }
   if (orgScopeHint) {
     orgScopeHint.textContent = permissionGroup === 'DEV'
-      ? `조회 테넌트 ${workingTenantCode} 기준으로 회사, 지점, 직원을 같은 패턴으로 관리합니다.`
-      : '본인 회사의 지점과 직원을 같은 레이아웃 패턴으로 관리합니다.';
+      ? `조회 테넌트 ${workingTenantCode} 기준으로 지점과 직원을 목록과 상세 패널 패턴으로 관리합니다. 등록은 별도 흐름으로 이동합니다.`
+      : '본인 회사의 지점과 직원을 목록과 상세 패널 패턴으로 관리합니다. 등록은 별도 흐름으로 이동합니다.';
   }
   if (siteSectionTitle) {
     siteSectionTitle.textContent = '지점 목록';
   }
 
-  const employeeRoute = normalizeRoutePath(parseRouteCandidate(getCurrentRouteWithQuery()).path);
-  const employeeCreateRoute = employeeRoute === ROUTE_ADMIN_EMPLOYEES_NEW;
-  const employeeImportRoute = employeeRoute === ROUTE_ADMIN_EMPLOYEES_IMPORT;
-  const employeeListRoute = employeeRoute === ROUTE_ADMIN_EMPLOYEES;
+  const showEmployeeListWorkspace = Boolean(perms.employees) && employeeListRoute;
   toggleVisibility('#employeeTopActionBar', Boolean(perms.employees) && employeeWrite && employeeListRoute);
-  toggleVisibility('#employeeToolbar', Boolean(perms.employees) && employeeListRoute);
+  toggleVisibility('#employeeToolbar', showEmployeeListWorkspace);
   toggleVisibility('#employeeFormCard', employeeWrite && employeeCreateRoute);
   toggleVisibility('#employeeRosterImportCard', employeeWrite && employeeImportRoute);
-  toggleVisibility('#employeeDesktopTableCard', Boolean(perms.employees));
+  toggleVisibility('#employeeDesktopTableCard', showEmployeeListWorkspace);
+  toggleVisibility('#employeeList', showEmployeeListWorkspace);
+  if (!showEmployeeListWorkspace) {
+    closeEmployeeDirectoryDetail({ clearSelection: false });
+  }
   if (!employeeWrite) {
     state.employeeAdmin.rosterImportOpen = false;
     state.employeeAdmin.registrationMode = EMPLOYEE_REG_MODE_MANUAL;
@@ -25692,7 +25917,8 @@ function applyWriteAccessUI(perms) {
     state.schedule.usingMockProvider
       ? 'Mock 데이터 모드입니다. 스케줄 조회/캘린더 검증만 가능합니다.'
       : '읽기 전용: 스케줄 조회/내보내기만 가능합니다.',
-    Boolean(perms.schedule) && (!scheduleWriteEnabled || state.schedule.usingMockProvider),
+    state.schedule.usingMockProvider
+      || (Boolean(perms.schedule) && !scheduleWriteEnabled && !scheduleSourceUploadEnabled && !scheduleFinanceVisible),
   );
   if (!scheduleSourceUploadEnabled) {
     state.preview = null;
@@ -25719,7 +25945,11 @@ function applyWriteAccessUI(perms) {
   const integrationManage = navRole === 'DEV' || navRole === 'BRANCH_MANAGER';
   toggleVisibility('#integrationFlagsCard', integrationManage);
   toggleVisibility('#googleSheetProfileCard', integrationManage);
+  toggleVisibility('#googleSheetExecutionCard', integrationManage);
+  toggleVisibility('#googleSheetFailureLogCard', integrationManage);
   toggleVisibility('#socMonitorCard', integrationManage);
+  toggleVisibility('#opsSheetsExecutionSection', integrationManage);
+  toggleVisibility('#opsSocMonitorSection', integrationManage);
   if (integrationManage) {
     applyIntegrationTenantFieldState();
     renderIntegrationFlags();
@@ -25767,6 +25997,7 @@ function clearSession() {
     // no-op
   });
   tokenRefreshPromise = null;
+  tokenRefreshPromiseToken = '';
   state.token = '';
   state.refreshToken = '';
   state.user = null;
@@ -25819,6 +26050,7 @@ function clearSession() {
   state.lastAllowedRoute = DEFAULT_AUTH_ROUTE;
   state.pendingRouteAfterLogin = DEFAULT_AUTH_ROUTE;
   state.skipNextHashEvent = false;
+  state.skipNextHashRoute = '';
   revokeRequestPhotoPreviewUrls();
   scheduleDataProvider = null;
   try {
@@ -26082,18 +26314,32 @@ async function hydrateSession({ background = false } = {}) {
   state.token = String(stored.token || '').trim();
   state.refreshToken = String(stored.refreshToken || '').trim();
   state.user = resolveSessionUser(state.token, stored.user);
+  const authSnapshot = createAuthSessionSnapshot({
+    token: state.token,
+    refreshToken: state.refreshToken,
+    user: state.user,
+  });
+  const hasHydrateSessionBeenSuperseded = () => background && isAuthSessionSnapshotSuperseded(authSnapshot);
   console.info('[RG ARLS][Auth] stored token check', {
     hasAccessToken: Boolean(state.token),
     hasRefreshToken: Boolean(state.refreshToken),
   });
   if (state.refreshToken) {
     const refreshed = await requestTokenRefresh();
+    if (hasHydrateSessionBeenSuperseded()) {
+      console.info('[RG ARLS][Auth] ignored stale background hydrate after newer session replaced it');
+      return false;
+    }
     if (!refreshed && !state.token) {
       clearSession();
       setAuthStatus(AUTH_STATUS_UNAUTHENTICATED);
       showAuthPanel();
       return false;
     }
+  }
+  if (hasHydrateSessionBeenSuperseded()) {
+    console.info('[RG ARLS][Auth] ignored stale background hydrate after newer session replaced it');
+    return false;
   }
   if (!state.token) {
     clearSession();
@@ -26103,6 +26349,10 @@ async function hydrateSession({ background = false } = {}) {
   }
   try {
     const me = await apiRequest('/auth/me', { suppressUnauthorizedRedirect: true });
+    if (hasHydrateSessionBeenSuperseded()) {
+      console.info('[RG ARLS][Auth] ignored stale background hydrate after newer session replaced it');
+      return false;
+    }
     state.user = resolveSessionUser(state.token, me);
     persistSession();
     setAuthStatus(AUTH_STATUS_AUTHENTICATED);
@@ -26121,6 +26371,10 @@ async function hydrateSession({ background = false } = {}) {
     restartScheduleLiveRefreshAfterAuth();
     return true;
   } catch (err) {
+    if (err?.staleAuthSession || hasHydrateSessionBeenSuperseded()) {
+      console.info('[RG ARLS][Auth] ignored stale background hydrate failure after newer session replaced it');
+      return false;
+    }
     const errorCode = String(err?.code || '').trim().toUpperCase();
     const status = Number(err?.status || 0);
     const isUnauthorized = status === 401 || errorCode === 'UNAUTHORIZED';
@@ -27908,7 +28162,6 @@ async function loadSites({
 
 function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad = false } = {}) {
   stopPolling();
-  stopScheduleLiveRefresh();
   const perms = getRolePermissions();
   const requested = mapLegacyViewName(name);
   const viewAllowed = isViewAllowed(requested, perms);
@@ -27919,6 +28172,9 @@ function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad
   }
   const targetView = viewAllowed ? requested : 'home';
   const previousView = state.currentView;
+  if (!(previousView === 'schedule' && targetView === 'schedule')) {
+    stopScheduleLiveRefresh();
+  }
   state.currentView = targetView;
   if (previousView === 'attendance-check' && targetView !== 'attendance-check') {
     clearHomeAttendanceCheckWatch();
@@ -28348,7 +28604,7 @@ async function loadScheduleViewPresenter() {
   renderScheduleOpsToolbar();
   const schedulePerfRoute = getSchedulePerfRoutePath();
   const activeTab = getScheduleActiveTopTab();
-  syncScheduleRouteTabQuery(activeTab);
+  syncScheduleRouteTabQuery(activeTab, { replace: true });
   if (activeTab === SCHEDULE_TAB_TEMPLATES) {
     renderScheduleTemplateTable();
     markViewPerfStage('first_paintable_ui', {
@@ -29997,11 +30253,41 @@ function resolveEmployeeRegistrationModeFromRoute(routeWithQuery = '') {
 
 function applyEmployeeRegistrationRoutePresentation() {
   const canWrite = can('employeeWrite');
+  const canReadEmployees = can('employees');
   const parsed = parseRouteCandidate(getCurrentRouteWithQuery());
   const route = normalizeRoutePath(parsed.path);
   const isListRoute = route === ROUTE_ADMIN_EMPLOYEES;
   const isCreateRoute = canWrite && route === ROUTE_ADMIN_EMPLOYEES_NEW;
   const isImportRoute = canWrite && route === ROUTE_ADMIN_EMPLOYEES_IMPORT;
+  const permissionGroup = resolvePermissionGroup(state.user?.role || 'officer');
+  const workingTenantCode = getWorkingTenantDisplayCode() || '-';
+  const titleEl = $('#employeesViewTitle');
+  const hintEl = $('#employeesScopeHint');
+  const actionHintEl = $('#employeeTopActionHint');
+
+  if (titleEl) {
+    titleEl.textContent = isImportRoute
+      ? '직원 대량 등록'
+      : (isCreateRoute ? '직원 등록' : '조직');
+  }
+  if (hintEl) {
+    if (isImportRoute) {
+      hintEl.textContent = permissionGroup === 'DEV'
+        ? `조회 테넌트 ${workingTenantCode} 기준으로 명부 업로드, 오류 검토, 등록 실행을 단계별로 진행합니다.`
+        : '명부 업로드, 오류 검토, 등록 실행을 단계별로 진행합니다.';
+    } else if (isCreateRoute) {
+      hintEl.textContent = permissionGroup === 'DEV'
+        ? `조회 테넌트 ${workingTenantCode} 기준으로 새 직원을 등록합니다. 저장 후 조직 목록에서 상세를 확인합니다.`
+        : '새 직원을 등록한 뒤 조직 목록으로 돌아가 상세 패널에서 상태를 확인합니다.';
+    } else {
+      hintEl.textContent = permissionGroup === 'DEV'
+        ? `조회 테넌트 ${workingTenantCode} 기준으로 직원을 목록과 상세 패널 패턴으로 관리합니다. 등록과 대량 등록은 별도 흐름으로 이동합니다.`
+        : '직원을 목록과 상세 패널 패턴으로 관리합니다. 등록과 대량 등록은 별도 흐름으로 이동합니다.';
+    }
+  }
+  if (actionHintEl) {
+    actionHintEl.textContent = '목록에서 직원을 선택하면 상세 패널이 열립니다. 현장 단위 전체 삭제는 목록 화면에서만 가능합니다.';
+  }
 
   if (isImportRoute) {
     state.employeeAdmin.registrationMode = EMPLOYEE_REG_MODE_IMPORT;
@@ -30018,6 +30304,9 @@ function applyEmployeeRegistrationRoutePresentation() {
     toggleVisibility('#employeeToolbar', false);
     toggleVisibility('#employeeFormCard', false);
     toggleVisibility('#employeeRosterImportCard', false);
+    toggleVisibility('#employeeDesktopTableCard', canReadEmployees && isListRoute);
+    toggleVisibility('#employeeList', canReadEmployees && isListRoute);
+    closeEmployeeDirectoryDetail({ clearSelection: false });
     return;
   }
 
@@ -30028,6 +30317,8 @@ function applyEmployeeRegistrationRoutePresentation() {
     toggleVisibility('#employeeToolbar', true);
     toggleVisibility('#employeeFormCard', false);
     toggleVisibility('#employeeRosterImportCard', false);
+    toggleVisibility('#employeeDesktopTableCard', true);
+    toggleVisibility('#employeeList', true);
     refreshEmployeeBulkDeleteButtonState();
     return;
   }
@@ -30039,6 +30330,9 @@ function applyEmployeeRegistrationRoutePresentation() {
     toggleVisibility('#employeeToolbar', false);
     toggleVisibility('#employeeFormCard', true);
     toggleVisibility('#employeeRosterImportCard', false);
+    toggleVisibility('#employeeDesktopTableCard', false);
+    toggleVisibility('#employeeList', false);
+    closeEmployeeDirectoryDetail({ clearSelection: false });
     return;
   }
 
@@ -30049,6 +30343,9 @@ function applyEmployeeRegistrationRoutePresentation() {
     toggleVisibility('#employeeToolbar', false);
     toggleVisibility('#employeeFormCard', false);
     toggleVisibility('#employeeRosterImportCard', true);
+    toggleVisibility('#employeeDesktopTableCard', false);
+    toggleVisibility('#employeeList', false);
+    closeEmployeeDirectoryDetail({ clearSelection: false });
     return;
   }
 
@@ -30058,6 +30355,9 @@ function applyEmployeeRegistrationRoutePresentation() {
   toggleVisibility('#employeeToolbar', false);
   toggleVisibility('#employeeFormCard', false);
   toggleVisibility('#employeeRosterImportCard', false);
+  toggleVisibility('#employeeDesktopTableCard', false);
+  toggleVisibility('#employeeList', false);
+  closeEmployeeDirectoryDetail({ clearSelection: false });
 }
 
 function ensureEmployeeFormPresentation() {
@@ -30933,6 +31233,12 @@ function setEmployeeDirectoryDrawerOpen(open = false) {
   state.employeeAdmin.detailDrawerOpen = shouldOpen;
   if (backdrop) backdrop.classList.toggle('hidden', !shouldOpen);
   if (panel) {
+    if (!shouldOpen) {
+      moveFocusOutsideHiddenContainer(panel, state.employeeAdmin?.detailTriggerEl || null);
+      panel.setAttribute('inert', '');
+    } else {
+      panel.removeAttribute('inert');
+    }
     panel.classList.toggle('hidden', !shouldOpen);
     panel.setAttribute('aria-hidden', shouldOpen ? 'false' : 'true');
   }
@@ -30945,6 +31251,7 @@ function closeEmployeeDirectoryDetail({ clearSelection = true } = {}) {
   state.employeeAdmin.detailTab = 'overview';
   state.employeeAdmin.detailError = '';
   setEmployeeDirectoryDrawerOpen(false);
+  state.employeeAdmin.detailTriggerEl = null;
   syncEmployeeDirectorySelection();
 }
 
@@ -31757,9 +32064,10 @@ async function loadEmployeeDirectoryDetail(employeeId = '', { force = false } = 
   }
 }
 
-async function openEmployeeDirectoryDetail(employeeId = '', { force = false } = {}) {
+async function openEmployeeDirectoryDetail(employeeId = '', { force = false, triggerEl = null } = {}) {
   const normalizedId = String(employeeId || '').trim();
   if (!normalizedId) return;
+  state.employeeAdmin.detailTriggerEl = triggerEl instanceof HTMLElement ? triggerEl : null;
   state.employeeAdmin.detailEmployeeId = normalizedId;
   state.employeeAdmin.detailTab = normalizeEmployeeDetailTab(state.employeeAdmin.detailTab || 'overview');
   setEmployeeDirectoryDrawerOpen(true);
@@ -33941,12 +34249,13 @@ async function loadEmployees({ preferCache = true, skipNetworkWhenCached = false
     const fetchStartedAt = getPerfNowMs();
     const tenantSelection = getEmployeeTenantFilterSelection();
     const isDevAllTenants = getNavigationRole() === 'DEV' && tenantSelection.isAll;
-    const { siteCode: siteCodeFilter, tenantCode: siteTenantCodeFilter } = getEmployeeSiteFilterScope();
+    const { tenantCode: siteTenantCodeFilter } = getEmployeeSiteFilterScope();
     const include = getEmployeeIncludeFilters();
     const params = new URLSearchParams();
-    if (siteCodeFilter) params.set('site_code', siteCodeFilter);
     if (include.includeInactive) params.set('include_inactive', 'true');
     if (include.includeDeleted) params.set('include_deleted', 'true');
+    // Keep the employee directory source tenant-wide so the site filter stays purely client-side.
+    // Otherwise a previously selected site can shrink the cached dataset and hide other sites until a hard refresh.
     if (isDevAllTenants && siteTenantCodeFilter) {
       params.set('tenant_code', siteTenantCodeFilter);
     }
@@ -37418,7 +37727,7 @@ function renderAttendanceManagerDetail(row = null) {
   const pendingAttendanceRequest = row.pendingRequests[0] || null;
   const pendingCorrection = row.pendingCorrections[0] || null;
   if (pendingAttendanceRequest && can('attendanceReview')) {
-    appendAction({ label: '정정 승인', variant: 'btn-primary', action: 'attendance-request-approve', dataset: { requestId: pendingAttendanceRequest.id } });
+    appendAction({ label: '예외 승인', variant: 'btn-primary', action: 'attendance-request-approve', dataset: { requestId: pendingAttendanceRequest.id } });
     appendAction({ label: '반려', variant: 'btn-destructive', action: 'attendance-request-reject-sheet', dataset: { requestId: pendingAttendanceRequest.id } });
   }
   if (pendingCorrection && can('attendanceReview')) {
@@ -37780,12 +38089,16 @@ function applyCorrectionPrefill() {
 }
 
 async function onAttendanceGoCorrection({ missingOnly = false } = {}) {
-  if (!can('attendanceWrite')) {
-    showToast('정정 요청 권한이 없습니다.', 'error', 2600);
+  if (!can('attendance') && !can('attendanceReview') && !can('leaveReview')) {
+    showToast('요청 화면 이동 권한이 없습니다.', 'error', 2600);
     return;
   }
   void missingOnly;
-  await navigateToRoute(ROUTE_REQUESTS_CORRECTION);
+  if (canUseAttendanceManagerFilter()) {
+    await navigateToRoute(`${ROUTE_REQUESTS}?section=${encodeURIComponent(REQUESTS_MANAGER_TAB_PENDING)}`);
+    return;
+  }
+  await navigateToRoute(ROUTE_REQUESTS);
 }
 
 function getSelectedAttendanceManagerRow(rows = []) {
@@ -37841,7 +38154,7 @@ function renderAttendanceManagerDrawer(row = null) {
   if (metaEl instanceof HTMLElement) {
     metaEl.textContent = row
       ? `${row.siteName} · ${row.statusLabel} · 예정 ${row.scheduledLabel || '-'}`
-      : '기록을 선택하면 예정 근무, 실제 출퇴근, 요청 이력을 함께 확인할 수 있습니다.';
+      : '기록을 선택하면 요약, 타임라인, 요청 이력을 한 패널에서 순서대로 확인할 수 있습니다.';
   }
   renderAttendanceManagerDetail(row);
   renderAttendanceSupportSections(row);
@@ -37861,7 +38174,11 @@ function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
     return;
   }
   const list = Array.isArray(rows) ? rows : [];
-  if (metaEl) metaEl.textContent = `${list.length}건`;
+  if (metaEl) {
+    metaEl.textContent = list.length
+      ? `${list.length}건 · 행을 선택하면 상세 패널이 열립니다.`
+      : '조건에 맞는 기록이 없습니다.';
+  }
   if (!list.length) {
     renderAdminTableEmptyState(tbody, 11, '조건에 맞는 출퇴근 기록이 없습니다.');
     renderAttendanceManagerDrawer(null);
@@ -39775,6 +40092,16 @@ function canUseScheduleSupportRoundtripFinalDownload() {
     || role === 'vice_supervisor';
 }
 
+function canReadScheduleImportMappingProfile() {
+  return canUseScheduleSupportRoundtripSource();
+}
+
+function canManageScheduleImportMappingProfile() {
+  if (getScheduleDataProvider().mode !== 'real') return false;
+  const role = normalizeRoleValue(state.user?.role || '');
+  return role === 'developer' || role === 'hq_admin';
+}
+
 function canViewScheduleFinanceSubmission() {
   if (getScheduleDataProvider().mode !== 'real') return false;
   const role = normalizeRoleValue(state.user?.role || '');
@@ -39787,7 +40114,7 @@ function canViewScheduleFinanceSubmission() {
 function canDownloadScheduleFinanceReview() {
   if (getScheduleDataProvider().mode !== 'real') return false;
   const role = normalizeRoleValue(state.user?.role || '');
-  return role === 'developer' || role === 'hq_admin';
+  return role === 'developer' || role === 'hq_admin' || role === 'supervisor';
 }
 
 function canUploadScheduleFinanceFinal() {
@@ -39799,7 +40126,7 @@ function canUploadScheduleFinanceFinal() {
 function canDownloadScheduleFinanceFinal() {
   if (getScheduleDataProvider().mode !== 'real') return false;
   const role = normalizeRoleValue(state.user?.role || '');
-  return role === 'developer' || role === 'hq_admin';
+  return role === 'developer' || role === 'hq_admin' || role === 'supervisor';
 }
 
 function canViewScheduleReportsWorkspace() {
@@ -39873,7 +40200,7 @@ function isScheduleBoardTab(tab = '') {
 
 function isScheduleReportsOwnerTab(tab = '') {
   const normalized = normalizeScheduleHqTab(tab);
-  return normalized === SCHEDULE_TAB_HQ_UPLOAD || normalized === SCHEDULE_TAB_REPORTS;
+  return normalized === SCHEDULE_TAB_REPORTS;
 }
 
 function closeScheduleActionDropdowns({ keepMenuId = '' } = {}) {
@@ -39921,7 +40248,7 @@ function getScheduleActiveTopTab() {
   return current;
 }
 
-function syncScheduleRouteTabQuery(tab = '') {
+function syncScheduleRouteTabQuery(tab = '', { replace = false } = {}) {
   const route = normalizeRoutePath(state.currentRoute || '');
   if (!isScheduleRoutePath(route)) return;
   const normalized = normalizeScheduleHqTab(tab || state.schedule?.hqTab || SCHEDULE_TAB_CALENDAR);
@@ -39929,7 +40256,7 @@ function syncScheduleRouteTabQuery(tab = '') {
   if (!nextRoute) return;
   state.currentRoute = nextRoute;
   state.lastAllowedRoute = nextRoute;
-  updateRouteHash(nextRoute, { replace: true });
+  updateRouteHash(nextRoute, { replace });
   applyDesktopRouteLayout(nextRoute);
 }
 
@@ -40073,9 +40400,17 @@ function renderScheduleHqTabs() {
     workspaceTitle.textContent = reportsOwnerVisible ? '보고' : '근무일정';
   }
   if (workspaceDescription) {
-    workspaceDescription.textContent = reportsOwnerVisible
-      ? 'Finance용 스케쥴 제출과 지점별 스케쥴 업로드 결과를 확인하는 보고 워크스페이스입니다.'
-      : '월간 캘린더를 중심으로 배정 현황을 확인하고 날짜별 상세를 바로 처리하는 스케줄 워크스페이스입니다.';
+    if (reportsOwnerVisible) {
+      workspaceDescription.textContent = 'Finance 제출 상태와 전달 결과를 확인하는 보고 워크스페이스입니다.';
+    } else if (activeTab === SCHEDULE_TAB_HQ_UPLOAD) {
+      workspaceDescription.textContent = '지원근무 workbook 추출과 HQ 작성본 검토를 진행하는 스케줄 업로드 워크스페이스입니다.';
+    } else if (activeTab === SCHEDULE_TAB_UPLOAD) {
+      workspaceDescription.textContent = '월간 근무표와 지원근무 workbook을 단계별로 처리하는 스케줄 업로드 워크스페이스입니다.';
+    } else if (activeTab === SCHEDULE_TAB_TEMPLATES) {
+      workspaceDescription.textContent = '근무 템플릿 라이브러리를 관리하는 준비 워크스페이스입니다. 매핑 프로필 선택과 관리는 업로드 STEP 1에서 이어집니다.';
+    } else {
+      workspaceDescription.textContent = '월간 캘린더를 중심으로 배정 현황을 확인하고 날짜별 상세를 바로 처리하는 스케줄 워크스페이스입니다.';
+    }
   }
   if (workspaceHelpButton instanceof HTMLElement) {
     workspaceHelpButton.setAttribute('aria-label', reportsOwnerVisible ? '보고 도움말' : '근무일정 도움말');
@@ -40096,8 +40431,8 @@ function renderScheduleHqTabs() {
       const isHqUploadTab = tab === SCHEDULE_TAB_HQ_UPLOAD;
       const isReportsTab = tab === SCHEDULE_TAB_REPORTS;
       const isCalendarTab = tab === SCHEDULE_TAB_CALENDAR;
-      const isScheduleOwnerTab = isCalendarTab || isTemplateTab || isUploadTab;
-      const groupHidden = reportsOwnerVisible ? isScheduleOwnerTab : (isHqUploadTab || isReportsTab);
+      const isScheduleOwnerTab = isCalendarTab || isTemplateTab || isUploadTab || isHqUploadTab;
+      const groupHidden = reportsOwnerVisible ? isScheduleOwnerTab : isReportsTab;
       button.classList.toggle(
         'hidden',
         groupHidden
@@ -40270,8 +40605,6 @@ function buildScheduleImportMappingTemplateOptionLabel(row = {}) {
 }
 
 function normalizeScheduleTemplateOwnerTab(value = '') {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === SCHEDULE_TEMPLATE_OWNER_TAB_PROFILES) return SCHEDULE_TEMPLATE_OWNER_TAB_PROFILES;
   return SCHEDULE_TEMPLATE_OWNER_TAB_TEMPLATES;
 }
 
@@ -40286,9 +40619,13 @@ function setScheduleTemplateOwnerTab(tab = SCHEDULE_TEMPLATE_OWNER_TAB_TEMPLATES
   renderScheduleTemplateOwnerSections();
 }
 
-function openScheduleTemplateOwnerWorkspace(tab = SCHEDULE_TEMPLATE_OWNER_TAB_PROFILES) {
+function openScheduleTemplateOwnerWorkspace(tab = SCHEDULE_TEMPLATE_OWNER_TAB_TEMPLATES) {
+  if (String(tab || '').trim().toLowerCase() === SCHEDULE_TEMPLATE_OWNER_TAB_PROFILES) {
+    openScheduleUploadMappingWorkspace({ openManager: true });
+    return;
+  }
   onScheduleHqTabChange(SCHEDULE_TAB_TEMPLATES);
-  setScheduleTemplateOwnerTab(tab);
+  setScheduleTemplateOwnerTab(SCHEDULE_TEMPLATE_OWNER_TAB_TEMPLATES);
   requestAnimationFrame(() => {
     const target = document.querySelector('#scheduleTemplatePanel');
     if (target instanceof HTMLElement) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -40296,11 +40633,10 @@ function openScheduleTemplateOwnerWorkspace(tab = SCHEDULE_TEMPLATE_OWNER_TAB_PR
 }
 
 function renderScheduleTemplateOwnerSections() {
-  const activeTab = getScheduleTemplateOwnerTab();
-  toggleVisibility('#scheduleTemplateTemplatesSection', activeTab === SCHEDULE_TEMPLATE_OWNER_TAB_TEMPLATES);
-  toggleVisibility('#scheduleTemplateProfilesSection', activeTab === SCHEDULE_TEMPLATE_OWNER_TAB_PROFILES);
+  toggleVisibility('#scheduleTemplateTemplatesSection', true);
+  toggleVisibility('#scheduleTemplateProfilesSection', false);
   document.querySelectorAll('[data-action="schedule-template-owner-tab"]').forEach((button) => {
-    const isActive = normalizeScheduleTemplateOwnerTab(button?.dataset?.tab || '') === activeTab;
+    const isActive = normalizeScheduleTemplateOwnerTab(button?.dataset?.tab || '') === SCHEDULE_TEMPLATE_OWNER_TAB_TEMPLATES;
     button.classList.toggle('active', isActive);
     button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   });
@@ -40450,7 +40786,7 @@ function getScheduleImportMappingProfileReadiness(profile = null) {
       label: '비활성 프로필',
       badgeClass: 'status-pill status-pill-error',
       ready: false,
-      description: '선택한 프로필이 비활성 상태입니다. 근무 템플릿에서 활성 상태를 확인해 주세요.',
+      description: '선택한 프로필이 비활성 상태입니다. STEP 1의 매핑 프로필 관리에서 상태를 확인해 주세요.',
       missingLabels,
       invalidEntries,
     };
@@ -40557,7 +40893,7 @@ function renderScheduleImportMappingProfileSummary() {
     if (!ruleSummaries.length) {
       const empty = document.createElement('p');
       empty.className = 'muted';
-      empty.textContent = '저장된 매핑 규칙이 없습니다. 근무 템플릿에서 프로필을 편집해 주세요.';
+      empty.textContent = '저장된 매핑 규칙이 없습니다. STEP 1의 매핑 프로필 관리에서 규칙을 추가해 주세요.';
       summaryList.appendChild(empty);
     } else {
       ruleSummaries.forEach((item) => {
@@ -40592,6 +40928,7 @@ function renderScheduleImportMappingProfileManager() {
   const manageBtn = $('#scheduleImportProfileManageBtn');
   if (!(tableBody instanceof HTMLElement)) return;
   tableBody.innerHTML = '';
+  const canManageProfiles = canManageScheduleImportMappingProfile();
 
   const profiles = getScheduleImportMappingProfiles();
   const selectedProfile = getSelectedScheduleImportMappingProfile();
@@ -40600,7 +40937,8 @@ function renderScheduleImportMappingProfileManager() {
   if (manageBtn instanceof HTMLButtonElement) {
     manageBtn.textContent = '매핑 프로필 생성';
     manageBtn.dataset.profileMode = 'create';
-    manageBtn.disabled = !canMutateScheduleData();
+    manageBtn.classList.toggle('hidden', !canManageProfiles);
+    manageBtn.disabled = !canManageProfiles;
   }
 
   if (!profiles.length) {
@@ -40667,6 +41005,7 @@ function renderScheduleImportMappingProfileManager() {
     editBtn.dataset.action = 'schedule-import-profile-manage';
     editBtn.dataset.profileMode = 'edit';
     editBtn.textContent = '편집';
+    editBtn.disabled = !canManageProfiles;
     actionsWrap.appendChild(editBtn);
 
     const copyBtn = document.createElement('button');
@@ -40684,6 +41023,7 @@ function renderScheduleImportMappingProfileManager() {
     deleteBtn.dataset.profileId = profileId;
     deleteBtn.dataset.profileName = String(profile?.profile_name || '기본 월간 업로드 매핑').trim() || '기본 월간 업로드 매핑';
     deleteBtn.textContent = '삭제';
+    deleteBtn.disabled = !canManageProfiles;
     actionsWrap.appendChild(deleteBtn);
 
     actionTd.appendChild(actionsWrap);
@@ -40704,6 +41044,13 @@ function renderScheduleTemplateTable() {
   renderScheduleImportMappingProfileSummary();
   renderScheduleImportMappingProfileManager();
   renderScheduleTemplateOwnerSections();
+
+  document.querySelectorAll('[data-action="schedule-open-upload-mapping-step"]').forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) return;
+    const canOpenUpload = canOpenScheduleUploadWorkspace();
+    button.classList.toggle('hidden', !canOpenUpload);
+    button.disabled = !canOpenUpload;
+  });
 
   const rows = Array.isArray(state.schedule?.templateRows) ? state.schedule.templateRows : [];
   const usageMap = buildScheduleImportMappingUsageMap();
@@ -40849,7 +41196,12 @@ async function loadScheduleTemplateRows({ force = false } = {}) {
 }
 
 async function loadScheduleImportMappingProfile({ force = false } = {}) {
-  if (!canMutateScheduleData()) return null;
+  if (!canReadScheduleImportMappingProfile()) {
+    state.schedule.importMappingProfile = null;
+    state.schedule.importMappingProfileFetchedAt = 0;
+    state.schedule.importMappingSelectedProfileId = '';
+    return null;
+  }
   const now = Date.now();
   const cached = state.schedule?.importMappingProfile;
   const fetchedAt = Number(state.schedule?.importMappingProfileFetchedAt || 0);
@@ -40997,7 +41349,7 @@ function createScheduleImportMappingEntryEditorRow(entry = {}, templateOptions =
 }
 
 async function openScheduleImportMappingEditor(options = {}) {
-  if (!canMutateScheduleData()) {
+  if (!canManageScheduleImportMappingProfile()) {
     showToast('매핑 프로필 권한이 없습니다.', 'error');
     return;
   }
@@ -41106,7 +41458,7 @@ async function openScheduleImportMappingEditor(options = {}) {
 }
 
 async function onScheduleImportMappingSave() {
-  if (!canMutateScheduleData()) {
+  if (!canManageScheduleImportMappingProfile()) {
     showToast('매핑 프로필 권한이 없습니다.', 'error');
     return;
   }
@@ -41164,7 +41516,7 @@ async function onScheduleImportMappingSave() {
 }
 
 async function onScheduleImportMappingDelete(profileId, profileName) {
-  if (!canMutateScheduleData()) {
+  if (!canManageScheduleImportMappingProfile()) {
     showToast('매핑 프로필 권한이 없습니다.', 'error');
     return;
   }
@@ -41239,11 +41591,15 @@ async function refreshScheduleImportSiteOptions({ force = false } = {}) {
       .sort((a, b) => String(a.site_code).localeCompare(String(b.site_code)));
     const boardSite = String($('#scheduleSiteFilter')?.value || '').trim().toUpperCase();
     const userSiteCode = String(state.user?.site_code || '').trim().toUpperCase();
+    const pinnedFinanceSiteCode = getPinnedScheduleFinanceSiteCode();
 
     selects.forEach((select) => {
       const isReportsSelect = select.id === 'scheduleReportsSite';
       const normalizedOptions = (() => {
         const baseOptions = isReportsSelect ? normalizedReportOptions : normalizedImportOptions;
+        if (isReportsSelect && pinnedFinanceSiteCode) {
+          return baseOptions.filter((item) => item.site_code === pinnedFinanceSiteCode);
+        }
         if (isReportsSelect && !isScheduleUploadTenantWideUser() && userSiteCode) {
           return baseOptions.filter((item) => item.site_code === userSiteCode);
         }
@@ -41265,6 +41621,7 @@ async function refreshScheduleImportSiteOptions({ force = false } = {}) {
       });
       const fallbackValue = current
         || (boardSite && boardSite !== 'ALL' ? boardSite : '')
+        || (isReportsSelect && pinnedFinanceSiteCode ? pinnedFinanceSiteCode : '')
         || (isReportsSelect && !isScheduleUploadTenantWideUser() && userSiteCode ? userSiteCode : '')
         || (!isScheduleUploadTenantWideUser() && !isReportsSelect && select.options.length > 1
           ? String(select.options[1].value || '').trim().toUpperCase()
@@ -41397,7 +41754,7 @@ function openScheduleFinanceDownloadWorkspace(options = {}) {
   }
 
   const requestedSiteCode = String(options?.siteCode || '').trim().toUpperCase();
-  const siteCode = requestedSiteCode || getScheduleFinanceNavigationSiteCode();
+  const siteCode = getPinnedScheduleFinanceSiteCode() || requestedSiteCode || getScheduleFinanceNavigationSiteCode();
   const reportsSiteSelect = $('#scheduleReportsSite');
   if (reportsSiteSelect instanceof HTMLSelectElement) {
     reportsSiteSelect.dataset.pendingValue = siteCode;
@@ -46321,10 +46678,6 @@ function stopScheduleLiveRefresh() {
 
 async function runScheduleLiveFallbackCycle() {
   if (!isScheduleLiveRefreshEnabled()) return;
-  if (state.scheduleLiveStreamConnected) {
-    state.scheduleLiveFallbackTimer = null;
-    return;
-  }
   if (!getActiveAccessToken()) {
     scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
     return;
@@ -46350,7 +46703,6 @@ function scheduleNextScheduleLiveFallbackPoll(delayMs = SCHEDULE_LIVE_FALLBACK_P
   }
   state.scheduleLiveFallbackTimer = null;
   if (!isScheduleLiveRefreshEnabled()) return;
-  if (state.scheduleLiveStreamConnected) return;
   const nextDelay = Math.max(0, Number(delayMs) || SCHEDULE_LIVE_FALLBACK_POLL_MS);
   state.scheduleLiveFallbackTimer = setTimeout(() => {
     runScheduleLiveFallbackCycle().catch((error) => {
@@ -46433,6 +46785,43 @@ function buildScheduleRealtimeSignature({ rows = [], leaveRows = [], employees =
       String(row?.work_date || row?.date || '').trim(),
       String(row?.status || '').trim(),
       String(row?.leave_type || '').trim(),
+    ]),
+    employees: normalizeScheduleEmployees(employees).map((row) => [
+      String(row?.employee_id || row?.id || '').trim(),
+      String(row?.employee_code || '').trim(),
+      String(row?.full_name || row?.employee_name || '').trim(),
+      String(row?.site_code || '').trim(),
+    ]),
+    boardDays: normalizeScheduleBoardDays(
+      normalizeMonthKey(state.schedule?.month),
+      Array.isArray(boardDays) ? boardDays : [],
+    ).map((day) => [
+      String(day?.date || '').trim(),
+      Number(day?.support_request_count || 0),
+      (Array.isArray(day?.items) ? day.items : []).map((item) => [
+        String(item?.schedule_id || '').trim(),
+        String(item?.employee_code || '').trim(),
+        normalizeShiftType(item?.shift_type || ''),
+        String(item?.schedule_display_time || '').trim(),
+        String(item?.source || '').trim(),
+      ]),
+    ]),
+  });
+}
+
+function buildScheduleBoardLiteSignature({ rows = [], employees = [], boardDays = [] } = {}) {
+  return JSON.stringify({
+    rows: normalizeScheduleRows(rows).map((row) => [
+      String(row?.id || row?.schedule_id || '').trim(),
+      String(row?.employee_id || '').trim(),
+      String(row?.employee_code || '').trim(),
+      String(row?.schedule_date || '').trim(),
+      normalizeShiftType(row?.shift_type || ''),
+      String(row?.shift_start_time || row?.start_time || '').trim(),
+      String(row?.shift_end_time || row?.end_time || '').trim(),
+      String(row?.source || '').trim(),
+      String(row?.source_ticket_id || '').trim(),
+      String(row?.schedule_note || '').trim(),
     ]),
     employees: normalizeScheduleEmployees(employees).map((row) => [
       String(row?.employee_id || row?.id || '').trim(),
@@ -46544,10 +46933,7 @@ async function runScheduleLiveRefreshCycle() {
         throw new Error(text || `stream failed (${response.status})`);
       }
       state.scheduleLiveStreamConnected = true;
-      if (state.scheduleLiveFallbackTimer) {
-        clearTimeout(state.scheduleLiveFallbackTimer);
-      }
-      state.scheduleLiveFallbackTimer = null;
+      scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
       await consumeScheduleLiveStream(response);
     } catch (error) {
       if (controller.signal.aborted || isExpectedScheduleLiveRefreshAbort(error)) {
@@ -46566,7 +46952,7 @@ async function runScheduleLiveRefreshCycle() {
         state.scheduleLiveStreamPath = '';
       }
       if (!controller.signal.aborted) {
-        scheduleNextScheduleLiveFallbackPoll(0);
+        scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
         scheduleNextScheduleLiveRefresh(SCHEDULE_LIVE_STREAM_RETRY_MS);
       }
     }
@@ -46589,18 +46975,14 @@ function ensureScheduleLiveRefresh({ immediate = false } = {}) {
     stopScheduleLiveRefresh();
   }
   if (immediate) {
-    if (!state.scheduleLiveStreamConnected) {
-      scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
-    }
     runScheduleLiveRefreshCycle().catch((error) => {
       if (isExpectedScheduleLiveRefreshAbort(error)) return;
       console.error('[RG ARLS] schedule immediate live refresh failed', error);
     });
+    scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
     return;
   }
-  if (!state.scheduleLiveStreamConnected) {
-    scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
-  }
+  scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
   scheduleNextScheduleLiveRefresh(SCHEDULE_LIVE_STREAM_RETRY_MS);
 }
 
@@ -46739,9 +47121,22 @@ async function setCurrentLocation(forceShowToast = false) {
   }
 }
 
+function shouldTemporarilyBypassMustChangePasswordGate() {
+  const role = normalizeRoleValue(state.user?.role || '');
+  const tenantCode = String(state.user?.tenant_code || '').trim().toUpperCase();
+  return Boolean(TEMP_RUNTIME_TEST_INITIAL_PASSWORD_GATE_BYPASS.enabled)
+    && TEMP_RUNTIME_TEST_INITIAL_PASSWORD_GATE_BYPASS.roles.has(role)
+    && TEMP_RUNTIME_TEST_INITIAL_PASSWORD_GATE_BYPASS.tenantCodes.has(tenantCode);
+}
+
 async function enforceMustChangePasswordGate() {
   const mustChange = Boolean(state.user?.must_change_password ?? state.user?.mustChangePassword);
   if (!mustChange) return false;
+  // TEMP(runtime-verification): bypass only the blocking redirect/profile gate.
+  // The underlying must_change_password state remains unchanged for later restore.
+  if (shouldTemporarilyBypassMustChangePasswordGate()) {
+    return false;
+  }
   await navigateToRoute(ROUTE_PROFILE, { replace: true, silentDeniedModal: true });
   setInlineStatus('#profilePasswordStatus', '초기 비밀번호입니다. 계속하려면 비밀번호를 먼저 변경해 주세요.', 'error');
   showToast('초기 비밀번호 변경이 필요합니다.', 'info', 3000);
@@ -48077,8 +48472,14 @@ function closeSheet() {
     ? state.confirmContext
     : null;
 
+  const restoreFocusEl = sheetConfirmContext?.triggerEl instanceof HTMLElement
+    ? sheetConfirmContext.triggerEl
+    : (prevSheetContext?.triggerEl instanceof HTMLElement ? prevSheetContext.triggerEl : null);
+
   if (backdrop) backdrop.classList.add('hidden');
   if (sheet) {
+    moveFocusOutsideHiddenContainer(sheet, restoreFocusEl);
+    sheet.setAttribute('inert', '');
     sheet.classList.add('hidden');
     sheet.setAttribute('aria-hidden', 'true');
     sheet.classList.remove('sheet-layout-schedule-create');
@@ -48157,6 +48558,7 @@ function openSheet({ title = '작업', contentNode = null, actions = [] } = {}) 
 
   backdrop.classList.remove('hidden');
   sheet.classList.remove('hidden');
+  sheet.removeAttribute('inert');
   sheet.setAttribute('aria-hidden', 'false');
   document.body.classList.add('sheet-modal-open');
   syncBodyScrollLocks();
@@ -48190,6 +48592,8 @@ function closeConfirmDialog({ restoreFocus = true } = {}) {
 
   if (backdrop) backdrop.classList.add('hidden');
   if (dialog) {
+    moveFocusOutsideHiddenContainer(dialog, restoreFocus ? previousFocus : null);
+    dialog.setAttribute('inert', '');
     dialog.classList.add('hidden');
     dialog.setAttribute('aria-hidden', 'true');
   }
@@ -48405,6 +48809,7 @@ function openConfirmDialog({
 
   backdrop.classList.remove('hidden');
   dialog.classList.remove('hidden');
+  dialog.removeAttribute('inert');
   dialog.setAttribute('aria-hidden', 'false');
   syncBodyScrollLocks();
 }
@@ -50953,6 +51358,11 @@ function bindUiEvents() {
         scrollToSelector('#leaveWorkspaceComposer');
         return;
       }
+      const segment = normalizeRequestsTabView(state.requestsTabView);
+      if (segment === 'documents') {
+        runActionSafely(navigateToRoute(ROUTE_HR), '문서 화면 이동에 실패했습니다.');
+        return;
+      }
       openRequestsNewRequestSheet();
       return;
     }
@@ -51719,7 +52129,7 @@ function bindUiEvents() {
     if (action === 'employee-open-detail') {
       const employeeId = String(actionEl.dataset.employeeId || '').trim();
       if (!employeeId) return;
-      runActionSafely(openEmployeeDirectoryDetail(employeeId), '직원 상세를 열지 못했습니다.');
+      runActionSafely(openEmployeeDirectoryDetail(employeeId, { triggerEl: actionEl }), '직원 상세를 열지 못했습니다.');
       return;
     }
 
@@ -52211,8 +52621,13 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'schedule-open-upload-mapping-step') {
+      openScheduleUploadMappingWorkspace();
+      return;
+    }
+
     if (action === 'schedule-open-template-profile-manager') {
-      openScheduleTemplateOwnerWorkspace(SCHEDULE_TEMPLATE_OWNER_TAB_PROFILES);
+      openScheduleUploadMappingWorkspace({ openManager: true });
       return;
     }
 
@@ -53957,11 +54372,7 @@ function bindUiEvents() {
     ensureScheduleLiveRefresh({ immediate: state.currentView === 'schedule' });
   }, { signal });
 
-  window.addEventListener('hashchange', () => {
-    if (state.skipNextHashEvent) {
-      state.skipNextHashEvent = false;
-      return;
-    }
+  const handleBrowserRouteChange = () => {
     const parsed = parseRouteFromLocation();
     const routePath = normalizeRoutePath(parsed.path) || (state.user ? resolvePostLoginDefaultRoute() : ROUTE_LOGIN);
     const targetRoute = parsed.query ? `${routePath}?${parsed.query}` : routePath;
@@ -53974,6 +54385,28 @@ function bindUiEvents() {
     navigateToRoute(targetRoute, { replace: true }).catch((err) => {
       console.error('[RG ARLS] hash route change failed', err);
     });
+  };
+
+  window.addEventListener('popstate', () => {
+    state.skipNextHashRoute = String(window.location.hash || '').trim();
+    handleBrowserRouteChange();
+  }, { signal });
+
+  window.addEventListener('hashchange', () => {
+    const currentHash = String(window.location.hash || '').trim();
+    if (state.skipNextHashRoute) {
+      const shouldSkip = state.skipNextHashRoute === currentHash;
+      state.skipNextHashRoute = '';
+      if (shouldSkip) {
+        state.skipNextHashEvent = false;
+        return;
+      }
+    }
+    if (state.skipNextHashEvent) {
+      state.skipNextHashEvent = false;
+      return;
+    }
+    handleBrowserRouteChange();
   }, { signal });
 
   document.addEventListener('keydown', (event) => {

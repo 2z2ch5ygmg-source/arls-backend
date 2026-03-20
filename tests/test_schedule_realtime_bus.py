@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import MagicMock, patch
 
 from app.realtime import ScheduleEventBus
 
@@ -95,6 +96,27 @@ class ScheduleEventBusTest(unittest.TestCase):
             self.assertTrue(subscription.queue.empty())
         finally:
             bus.unsubscribe(subscription.id)
+
+    @patch("app.realtime.connect")
+    def test_publish_uses_existing_db_connection_for_notify_when_provided(self, mock_connect) -> None:
+        bus = ScheduleEventBus(enable_database_transport=True)
+        conn = MagicMock()
+
+        with patch.object(bus, "_ensure_listener") as mock_ensure_listener:
+            bus.publish(
+                {
+                    "type": "schedule_changed",
+                    "tenant_id": "tenant-1",
+                    "month": "2026-03",
+                    "site_code": "R692",
+                    "event_uid": "evt-5",
+                },
+                db_conn=conn,
+            )
+
+        mock_ensure_listener.assert_called_once()
+        mock_connect.assert_not_called()
+        conn.cursor.assert_called()
 
 
 if __name__ == "__main__":

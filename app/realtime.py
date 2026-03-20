@@ -79,7 +79,7 @@ class ScheduleEventBus:
         with self._lock:
             self._subscriptions.pop(key, None)
 
-    def publish(self, event: dict[str, Any] | None) -> None:
+    def publish(self, event: dict[str, Any] | None, *, db_conn=None) -> None:
         normalized = self._normalize_event(event)
         if not normalized:
             return
@@ -87,7 +87,7 @@ class ScheduleEventBus:
         self._deliver(normalized)
         if self._database_transport_enabled:
             self._ensure_listener()
-            self._notify_database(normalized)
+            self._notify_database(normalized, db_conn=db_conn)
 
     def handle_remote_event(self, event: dict[str, Any] | None) -> None:
         normalized = self._normalize_event(event)
@@ -179,11 +179,15 @@ class ScheduleEventBus:
                 logger.exception("schedule realtime listener failed")
                 self._listener_stop_event.wait(1.0)
 
-    def _notify_database(self, event: dict[str, Any]) -> None:
+    def _notify_database(self, event: dict[str, Any], *, db_conn=None) -> None:
         if not settings.database_url:
             return
         try:
             payload_text = json.dumps(event, ensure_ascii=False, default=str)
+            if db_conn is not None:
+                with db_conn.cursor() as cur:
+                    cur.execute("SELECT pg_notify(%s, %s)", (SCHEDULE_EVENT_CHANNEL, payload_text))
+                return
             with connect(settings.database_url, autocommit=True) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT pg_notify(%s, %s)", (SCHEDULE_EVENT_CHANNEL, payload_text))

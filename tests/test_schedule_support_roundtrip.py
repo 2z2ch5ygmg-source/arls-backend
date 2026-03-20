@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
-from datetime import date
+from datetime import date, datetime, timezone
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -34,6 +34,7 @@ from app.routers.v1.schedules import (
     _clone_support_hq_sheet_to_workbook,
     _build_support_only_workbook,
     _build_support_roundtrip_employee_row_index,
+    _build_support_roundtrip_stale_comparison_basis,
     _extract_sentrix_ticket_hq_roster_status,
     _extract_arls_date_columns,
     _is_hq_scope_signal_present,
@@ -627,6 +628,38 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
         self.assertEqual(workspace.sites[0].upload_state, "재추출 필요")
         self.assertEqual(workspace.sites[0].blocked_reason, "재추출 필요 / stale")
 
+    def test_workspace_payload_keeps_legacy_source_uploaded_at_field(self):
+        uploaded_at = datetime(2026, 3, 18, 6, 18, 36, tzinfo=timezone.utc)
+        with patch("app.routers.v1.schedules._list_support_roundtrip_workspace_sites", return_value=[
+            {
+                "site_id": "site-1",
+                "site_code": "R692",
+                "site_name": "Apple_가로수길",
+                "sheet_name": "Apple_가로수길",
+                "download_ready": True,
+                "raw_workbook_available": True,
+                "source_state": "waiting_for_hq_merge",
+                "source_uploaded_at": uploaded_at,
+                "source_revision": "rev-live",
+                "latest_hq_revision": None,
+                "latest_status": "latest",
+                "hq_merge_stale": False,
+            },
+        ]), patch("app.routers.v1.schedules._load_support_roster_hq_resume_state", return_value={
+            "available": False,
+            "current_step": None,
+            "selected_site_codes": ["R692"],
+        }):
+            workspace = _build_support_roster_hq_workspace_payload(
+                None,
+                target_tenant={"id": "tenant-1", "tenant_code": "srs_korea", "tenant_name": "SRS Korea"},
+                user={"role": "HQ_ADMIN"},
+                month_key="2026-03",
+            )
+
+        self.assertEqual(workspace.sites[0].last_uploaded_at, uploaded_at)
+        self.assertEqual(workspace.sites[0].source_uploaded_at, uploaded_at)
+
     def test_support_roundtrip_source_changed_prefers_raw_workbook_sha(self):
         self.assertFalse(
             _support_roundtrip_source_changed(
@@ -858,6 +891,75 @@ class ScheduleSupportRoundtripTests(unittest.TestCase):
                 next_raw_workbook_sha256="abc123",
                 current_source_signature="sig-old",
                 next_source_signature="sig-new",
+            )
+        )
+
+    def test_stale_comparison_basis_prefers_latest_hq_source_over_current_stale_source(self):
+        hq_payload_rows = [
+            {
+                "source_block": "body",
+                "employee_name": "박동훈",
+                "schedule_date": date(2026, 3, 1),
+                "duty_type": "day",
+                "work_value": "12",
+            }
+        ]
+        stale_payload_rows = [
+            {
+                "source_block": "body",
+                "employee_name": "박동훈",
+                "schedule_date": date(2026, 3, 1),
+                "duty_type": "day",
+                "work_value": "OFF",
+            }
+        ]
+        next_payload_rows = list(hq_payload_rows)
+        with patch(
+            "app.routers.v1.schedules._find_schedule_import_batch_id_for_source_revision",
+            return_value="batch-hq",
+        ), patch(
+            "app.routers.v1.schedules._load_schedule_import_batch_source_meta",
+            side_effect=lambda _conn, *, batch_id, tenant_id: {
+                "batch-hq": {"raw_workbook_sha256": "sha-hq"},
+                "batch-stale": {"raw_workbook_sha256": "sha-stale"},
+            }.get(batch_id, {}),
+        ), patch(
+            "app.routers.v1.schedules._load_schedule_import_payload_rows",
+            side_effect=lambda _conn, *, batch_id: {
+                "batch-hq": hq_payload_rows,
+                "batch-stale": stale_payload_rows,
+                "batch-next": next_payload_rows,
+            }.get(batch_id, []),
+        ):
+            basis = _build_support_roundtrip_stale_comparison_basis(
+                None,
+                tenant_id="tenant-1",
+                site_code="R692",
+                month_key="2026-03",
+                current_source_row={
+                    "source_batch_id": "batch-stale",
+                    "source_revision": "rev-stale",
+                },
+                latest_hq_batch_row={
+                    "source_revision": "rev-hq",
+                },
+            )
+
+        self.assertEqual(basis["source_batch_id"], "batch-hq")
+        self.assertEqual(basis["source_revision"], "rev-hq")
+        self.assertEqual(basis["raw_workbook_sha256"], "sha-hq")
+        self.assertNotEqual(
+            basis["source_signature"],
+            _build_support_roundtrip_source_signature_from_import_payloads(stale_payload_rows),
+        )
+        self.assertFalse(
+            _support_roundtrip_source_changed(
+                current_source_revision=basis["source_revision"],
+                current_raw_workbook_sha256=basis["raw_workbook_sha256"],
+                next_source_revision="rev-next",
+                next_raw_workbook_sha256="sha-next",
+                current_source_signature=basis["source_signature"],
+                next_source_signature=_build_support_roundtrip_source_signature_from_import_payloads(next_payload_rows),
             )
         )
 

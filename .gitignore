@@ -10,3 +10,4 @@ ios/
 app_logs.zip
 webapp_logs.zip
 *.sha256
+native/**/.build/

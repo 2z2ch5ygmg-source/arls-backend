@@ -1374,6 +1374,7 @@ class SupportRosterHqWorkspaceSiteOut(BaseModel):
     selectable: bool = False
     selected: bool = False
     last_uploaded_at: Optional[datetime] = None
+    source_uploaded_at: Optional[datetime] = None
     note: Optional[str] = None
     stale: bool = False
     stale_reason: Optional[str] = None

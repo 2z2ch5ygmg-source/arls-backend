@@ -9,6 +9,7 @@ import re
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
+from time import perf_counter
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request as UrlRequest, urlopen
@@ -91,6 +92,16 @@ GUARD_DAY_SHIFT_HOURS = 12.0
 DEFAULT_NIGHT_SHIFT_START = "22:00:00"
 DEFAULT_NIGHT_SHIFT_END = "08:00:00"
 DEFAULT_NIGHT_SHIFT_HOURS = 10.0
+
+
+def _timing_elapsed_ms(started_at: float) -> int:
+    return int((perf_counter() - started_at) * 1000)
+
+
+def _emit_soc_timing(message: str, *args: Any) -> None:
+    rendered = message % args if args else message
+    print(rendered, flush=True)
+    logger.info(rendered)
 
 SOC_LEAVE_EVENT_TYPES = {
     "leave_approved",
@@ -255,6 +266,38 @@ def _is_sync_intent_enabled(conn, tenant_id, intent: str) -> bool:
     return _is_feature_enabled(conn, tenant_id, PAYROLL_SHEET_ENABLED)
 
 
+def _sync_intent_flag_key(intent: str) -> str:
+    if intent == SYNC_INTENT_APPLE_OVERNIGHT:
+        return APPLE_REPORT_OVERNIGHT_ENABLED
+    if intent == SYNC_INTENT_APPLE_DAYTIME:
+        return APPLE_REPORT_DAYTIME_ENABLED
+    if intent == SYNC_INTENT_APPLE_OT:
+        return APPLE_REPORT_OT_ENABLED
+    if intent == SYNC_INTENT_APPLE_TOTAL_LATE:
+        return APPLE_REPORT_TOTAL_LATE_ENABLED
+    return PAYROLL_SHEET_ENABLED
+
+
+def _get_feature_flag_snapshot(conn, tenant_id, *flag_keys: str) -> dict[str, bool]:
+    if not hasattr(conn, "cursor"):
+        return {flag_key: _is_feature_enabled(conn, tenant_id, flag_key) for flag_key in flag_keys}
+    service = FeatureFlagService(conn, FEATURE_FLAG_DEFAULTS)
+    latest_overrides = service._get_latest_overrides(tenant_id)
+    snapshot: dict[str, bool] = {}
+    for flag_key in flag_keys:
+        canonical = normalize_flag_key(flag_key)
+        override = latest_overrides.get(canonical)
+        if override is None:
+            snapshot[flag_key] = bool(service.defaults.get(canonical, False))
+        else:
+            snapshot[flag_key] = bool(override.get("enabled"))
+    return snapshot
+
+
+def _is_sync_intent_enabled_from_snapshot(flag_states: dict[str, Any], intent: str) -> bool:
+    return bool(flag_states.get(_sync_intent_flag_key(intent)))
+
+
 def _normalize_profile_type(value: str | None) -> str:
     normalized = str(value or "").strip().upper()
     if normalized in PROFILE_TYPE_TO_SYNC_MODE:
@@ -369,6 +412,7 @@ def _safe_json(value: Any) -> str:
 
 def _publish_schedule_realtime_event(
     *,
+    conn=None,
     tenant: dict[str, Any] | None,
     payload: SocEventIn,
     event_type: str,
@@ -401,7 +445,7 @@ def _publish_schedule_realtime_event(
     if not site_code:
         site_code = str(payload.site_code or "").strip().upper()
 
-    logger.info(
+    _emit_soc_timing(
         "[SCHEDULE][REALTIME_PUBLISH] tenant=%s site=%s month=%s event_type=%s event_uid=%s",
         str((tenant or {}).get("tenant_code") or payload.tenant_code or "").strip(),
         site_code or "-",
@@ -419,7 +463,8 @@ def _publish_schedule_realtime_event(
             "work_date": work_date_text,
             "event_type": event_type,
             "event_uid": str(event_uid or "").strip(),
-        }
+        },
+        db_conn=conn,
     )
 
 
@@ -2549,10 +2594,19 @@ def _apply_overnight_for_ticket(
     work_date: date,
     ticket_id: int | None,
 ) -> dict[str, Any]:
+    total_started_at = perf_counter()
+    resolve_targets_ms = 0
+    schedule_retract_ms = 0
+    assignment_upsert_ms = 0
+    apple_report_ms = 0
+    overnight_targets_ms = 0
+    external_support_ms = 0
+
     target_keys = _extract_soc_employee_keys(payload, "overnight_approved")
     internal_worker_names = _extract_soc_internal_confirmed_worker_names(payload)
     employees: list[dict[str, Any]] = []
     if target_keys or internal_worker_names:
+        resolve_started_at = perf_counter()
         try:
             employees = _resolve_soc_target_employees(
                 conn,
@@ -2573,9 +2627,11 @@ def _apply_overnight_for_ticket(
             raise
         if not site and employees and employees[0].get("site_id"):
             site = _resolve_site_by_id(conn, tenant["id"], employees[0]["site_id"])
+        resolve_targets_ms = _timing_elapsed_ms(resolve_started_at)
 
     schedule_retract: dict[str, Any] | None = None
     if ticket_id is not None:
+        retract_started_at = perf_counter()
         schedule_retract = _retract_materialized_schedule_rows_for_ticket(
             conn,
             tenant_id=tenant["id"],
@@ -2584,8 +2640,10 @@ def _apply_overnight_for_ticket(
             shift_type="night",
             source_ticket_id=ticket_id,
         )
+        schedule_retract_ms = _timing_elapsed_ms(retract_started_at)
 
     request_count = _extract_overnight_need_count(payload)
+    assignment_started_at = perf_counter()
     assignment = _upsert_overnight_assignment(
         conn,
         tenant=tenant,
@@ -2599,9 +2657,11 @@ def _apply_overnight_for_ticket(
             "metadata": payload.metadata if isinstance(payload.metadata, dict) else {},
         },
     )
+    assignment_upsert_ms = _timing_elapsed_ms(assignment_started_at)
 
     apple_report_record: dict[str, Any] | None = None
     if site:
+        apple_report_started_at = perf_counter()
         headcount = max(0, int(request_count))
         if headcount == 0 and assignment and assignment.get("requested_count") is not None:
             try:
@@ -2621,9 +2681,11 @@ def _apply_overnight_for_ticket(
         )
         if overnight_row:
             apple_report_record = _serialize_value(dict(overnight_row))
+        apple_report_ms = _timing_elapsed_ms(apple_report_started_at)
 
     overnight_targets: list[dict[str, Any]] = []
     if employees:
+        overnight_targets_started_at = perf_counter()
         for employee in employees:
             source_uid = _build_soc_source_event_uid(event_uid, str(employee["id"]))
             row = _apply_overnight(
@@ -2638,6 +2700,7 @@ def _apply_overnight_for_ticket(
             row["employee_id"] = str(employee["id"])
             row["employee_code"] = employee["employee_code"]
             overnight_targets.append(row)
+        overnight_targets_ms = _timing_elapsed_ms(overnight_targets_started_at)
 
     external_confirmed_workers = []
     seen_external_support_keys: set[tuple[str, str]] = set()
@@ -2667,6 +2730,7 @@ def _apply_overnight_for_ticket(
 
     external_support_rows: list[dict[str, Any]] = []
     if site and ticket_id is not None:
+        external_support_started_at = perf_counter()
         delete_support_assignments_by_source_ticket(
             conn,
             tenant_id=tenant["id"],
@@ -2696,6 +2760,28 @@ def _apply_overnight_for_ticket(
             row_payload = _serialize_value(dict(row))
             row_payload["created"] = bool(created)
             external_support_rows.append(row_payload)
+        external_support_ms = _timing_elapsed_ms(external_support_started_at)
+
+    _emit_soc_timing(
+        "[SOC_OVERNIGHT][TIMING] tenant=%s site=%s work_date=%s ticket=%s event_uid=%s "
+        "resolve_targets_ms=%s schedule_retract_ms=%s assignment_upsert_ms=%s "
+        "apple_report_ms=%s overnight_targets_ms=%s external_support_ms=%s total_ms=%s "
+        "target_count=%s external_support_count=%s",
+        str(tenant.get("tenant_code") or tenant.get("id") or "").strip(),
+        str((site or {}).get("site_code") or "").strip(),
+        work_date.isoformat(),
+        ticket_id,
+        str(event_uid or "").strip(),
+        resolve_targets_ms,
+        schedule_retract_ms,
+        assignment_upsert_ms,
+        apple_report_ms,
+        overnight_targets_ms,
+        external_support_ms,
+        _timing_elapsed_ms(total_started_at),
+        len(overnight_targets),
+        len(external_support_rows),
+    )
 
     return {
         "overnight": True,
@@ -3303,6 +3389,7 @@ def _apply_closing_overtime(
 
 
 def _apply_soc_event(conn, *, tenant, payload: SocEventIn, event_type: str) -> dict[str, Any]:
+    apply_started_at = perf_counter()
     metadata = payload.metadata if isinstance(payload.metadata, dict) else {}
     template_fields = payload.payload if isinstance(payload.payload, dict) else {}
     ticket_id = _extract_ticket_id_from_payload(payload)
@@ -3337,19 +3424,21 @@ def _apply_soc_event(conn, *, tenant, payload: SocEventIn, event_type: str) -> d
         applied_changes["site_code"] = site["site_code"]
 
     handlers_run: list[str] = []
-    flag_states = {
-        SOC_INTEGRATION_ENABLED: _is_feature_enabled(conn, tenant["id"], SOC_INTEGRATION_ENABLED),
-        SHEETS_SYNC_ENABLED: _is_feature_enabled(conn, tenant["id"], SHEETS_SYNC_ENABLED),
-        APPLE_REPORT_OVERNIGHT_ENABLED: _is_feature_enabled(conn, tenant["id"], APPLE_REPORT_OVERNIGHT_ENABLED),
-        APPLE_REPORT_DAYTIME_ENABLED: _is_feature_enabled(conn, tenant["id"], APPLE_REPORT_DAYTIME_ENABLED),
-        APPLE_REPORT_OT_ENABLED: _is_feature_enabled(conn, tenant["id"], APPLE_REPORT_OT_ENABLED),
-        APPLE_REPORT_TOTAL_LATE_ENABLED: _is_feature_enabled(conn, tenant["id"], APPLE_REPORT_TOTAL_LATE_ENABLED),
-        PAYROLL_SHEET_ENABLED: _is_feature_enabled(conn, tenant["id"], PAYROLL_SHEET_ENABLED),
-        "soc_leave_override_enabled": _is_feature_enabled(conn, tenant["id"], "soc_leave_override_enabled"),
-        "soc_overnight_enabled": _is_feature_enabled(conn, tenant["id"], "soc_overnight_enabled"),
-        "soc_overtime_enabled": _is_feature_enabled(conn, tenant["id"], "soc_overtime_enabled"),
-        "soc_closing_ot_enabled": _is_feature_enabled(conn, tenant["id"], "soc_closing_ot_enabled"),
-    }
+    flag_states = _get_feature_flag_snapshot(
+        conn,
+        tenant["id"],
+        SOC_INTEGRATION_ENABLED,
+        SHEETS_SYNC_ENABLED,
+        APPLE_REPORT_OVERNIGHT_ENABLED,
+        APPLE_REPORT_DAYTIME_ENABLED,
+        APPLE_REPORT_OT_ENABLED,
+        APPLE_REPORT_TOTAL_LATE_ENABLED,
+        PAYROLL_SHEET_ENABLED,
+        "soc_leave_override_enabled",
+        "soc_overnight_enabled",
+        "soc_overtime_enabled",
+        "soc_closing_ot_enabled",
+    )
 
     if event_type in SOC_LEAVE_EVENT_TYPES:
         handlers_run.append("leave_override")
@@ -3369,6 +3458,7 @@ def _apply_soc_event(conn, *, tenant, payload: SocEventIn, event_type: str) -> d
     if event_type in SOC_OVERNIGHT_EVENT_TYPES:
         handlers_run.append("overnight")
         if flag_states["soc_overnight_enabled"]:
+            overnight_started_at = perf_counter()
             applied_changes["overnight"] = _apply_overnight_for_ticket(
                 conn,
                 tenant=tenant,
@@ -3377,6 +3467,15 @@ def _apply_soc_event(conn, *, tenant, payload: SocEventIn, event_type: str) -> d
                 work_date=work_date,
                 event_uid=payload.event_uid,
                 ticket_id=ticket_id,
+            )
+            _emit_soc_timing(
+                "[SOC_INGEST][TIMING] stage=overnight_apply tenant=%s site=%s work_date=%s ticket=%s event_uid=%s elapsed_ms=%s",
+                str(tenant.get("tenant_code") or tenant.get("id") or "").strip(),
+                str((site or {}).get("site_code") or "").strip(),
+                work_date.isoformat(),
+                ticket_id,
+                str(payload.event_uid or "").strip(),
+                _timing_elapsed_ms(overnight_started_at),
             )
         else:
             support_schedule_sync = _apply_internal_support_schedule_targets(
@@ -3397,6 +3496,7 @@ def _apply_soc_event(conn, *, tenant, payload: SocEventIn, event_type: str) -> d
 
     if event_type in SOC_OVERNIGHT_RETRACT_EVENT_TYPES:
         handlers_run.append("overnight")
+        overnight_retract_started_at = perf_counter()
         applied_changes["overnight"] = _retract_overnight_for_ticket(
             conn,
             tenant=tenant,
@@ -3404,6 +3504,15 @@ def _apply_soc_event(conn, *, tenant, payload: SocEventIn, event_type: str) -> d
             payload=payload,
             work_date=work_date,
             ticket_id=ticket_id,
+        )
+        _emit_soc_timing(
+            "[SOC_INGEST][TIMING] stage=overnight_retract tenant=%s site=%s work_date=%s ticket=%s event_uid=%s elapsed_ms=%s",
+            str(tenant.get("tenant_code") or tenant.get("id") or "").strip(),
+            str((site or {}).get("site_code") or "").strip(),
+            work_date.isoformat(),
+            ticket_id,
+            str(payload.event_uid or "").strip(),
+            _timing_elapsed_ms(overnight_retract_started_at),
         )
 
     if event_type in SOC_OVERTIME_EVENT_TYPES:
@@ -3495,6 +3604,14 @@ def _apply_soc_event(conn, *, tenant, payload: SocEventIn, event_type: str) -> d
         applied_changes["handlers"] = handlers_run
 
     applied_changes["flag_states"] = flag_states
+    _emit_soc_timing(
+        "[SOC_INGEST][TIMING] stage=apply_total tenant=%s event_type=%s event_uid=%s elapsed_ms=%s handlers=%s",
+        str(tenant.get("tenant_code") or tenant.get("id") or "").strip(),
+        event_type,
+        str(payload.event_uid or "").strip(),
+        _timing_elapsed_ms(apply_started_at),
+        ",".join(handlers_run) if handlers_run else "-",
+    )
     return applied_changes
 
 
@@ -4646,6 +4763,7 @@ async def ingest_soc_event(
     authorization: str | None = Header(default=None, alias="Authorization"),
     conn=Depends(get_db_conn),
 ):
+    request_started_at = perf_counter()
     raw_body = await request.body()
     if not raw_body.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="request body is required")
@@ -4704,6 +4822,7 @@ async def ingest_soc_event(
         audit_log=AuditLogService(conn),
         tenant_resolver=lambda code: _resolve_tenant_by_code(conn, code),
     )
+    receiver_started_at = perf_counter()
     result = receiver.receive(
         payload=payload,
         event_uid=event_uid,
@@ -4711,12 +4830,36 @@ async def ingest_soc_event(
         tenant_code=tenant_code,
         signature_valid=signature_valid,
     )
+    receiver_timings = result.get("timings") if isinstance(result, dict) else {}
+    if not isinstance(receiver_timings, dict):
+        receiver_timings = {}
+    _emit_soc_timing(
+        "[SOC_INGEST][TIMING] stage=receiver event_uid=%s event_type=%s tenant=%s elapsed_ms=%s status=%s duplicate=%s ingest_received_ms=%s tenant_resolve_ms=%s finalize_ms=%s audit_ms=%s",
+        event_uid,
+        event_type,
+        tenant_code,
+        _timing_elapsed_ms(receiver_started_at),
+        str(result.get("status_text") or "").lower() or "-",
+        bool(result.get("duplicate")),
+        receiver_timings.get("ingest_received_ms", 0),
+        receiver_timings.get("tenant_resolve_ms", 0),
+        receiver_timings.get("finalize_ms", 0),
+        receiver_timings.get("audit_ms", 0),
+    )
     row = result.get("row")
     if not row:
         raise HTTPException(status_code=500, detail="event ingest row missing")
     status_text = str(result.get("status_text") or row.get("status") or "").lower()
     if status_text == "failed":
         conn.commit()
+        _emit_soc_timing(
+            "[SOC_INGEST][TIMING] stage=total event_uid=%s event_type=%s tenant=%s elapsed_ms=%s status=%s",
+            event_uid,
+            event_type,
+            tenant_code,
+            _timing_elapsed_ms(request_started_at),
+            status_text,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"soc event apply failed: {row.get('error_text') or 'unknown error'}",
@@ -4724,14 +4867,34 @@ async def ingest_soc_event(
 
     if status_text == "processed":
         # Commit the schedule mutation before any live refresh signal is published.
+        commit_started_at = perf_counter()
         conn.commit()
+        _emit_soc_timing(
+            "[SOC_INGEST][TIMING] stage=commit event_uid=%s event_type=%s tenant=%s elapsed_ms=%s",
+            event_uid,
+            event_type,
+            tenant_code,
+            _timing_elapsed_ms(commit_started_at),
+        )
 
     tenant = result.get("tenant")
     if tenant and status_text == "processed":
-        sheets_enabled = _is_feature_enabled(conn, tenant["id"], SHEETS_SYNC_ENABLED)
-        intents = _event_type_to_sync_intents(event_type)
-        enabled_intents = {intent for intent in intents if _is_sync_intent_enabled(conn, tenant["id"], intent)}
+        post_commit_started_at = perf_counter()
         applied_changes = row.get("applied_changes") if isinstance(row.get("applied_changes"), dict) else {}
+        flag_states = applied_changes.get("flag_states") if isinstance(applied_changes, dict) else {}
+        if not isinstance(flag_states, dict):
+            flag_states = {}
+        sheets_enabled = (
+            bool(flag_states.get(SHEETS_SYNC_ENABLED))
+            if SHEETS_SYNC_ENABLED in flag_states
+            else _is_feature_enabled(conn, tenant["id"], SHEETS_SYNC_ENABLED)
+        )
+        intents = _event_type_to_sync_intents(event_type)
+        enabled_intents = (
+            {intent for intent in intents if _is_sync_intent_enabled_from_snapshot(flag_states, intent)}
+            if flag_states
+            else {intent for intent in intents if _is_sync_intent_enabled(conn, tenant["id"], intent)}
+        )
         work_date_iso = str(applied_changes.get("work_date") or "").strip() or None
         if sheets_enabled and enabled_intents:
             background_tasks.add_task(
@@ -4741,13 +4904,38 @@ async def ingest_soc_event(
                 event_type,
                 work_date_iso,
             )
+        realtime_started_at = perf_counter()
         _publish_schedule_realtime_event(
+            conn=conn,
             tenant=tenant,
             payload=payload,
             event_type=event_type,
             event_uid=event_uid,
             row=row,
         )
+        _emit_soc_timing(
+            "[SOC_INGEST][TIMING] stage=realtime_publish event_uid=%s event_type=%s tenant=%s elapsed_ms=%s",
+            event_uid,
+            event_type,
+            tenant_code,
+            _timing_elapsed_ms(realtime_started_at),
+        )
+        _emit_soc_timing(
+            "[SOC_INGEST][TIMING] stage=post_commit event_uid=%s event_type=%s tenant=%s elapsed_ms=%s",
+            event_uid,
+            event_type,
+            tenant_code,
+            _timing_elapsed_ms(post_commit_started_at),
+        )
+
+    _emit_soc_timing(
+        "[SOC_INGEST][TIMING] stage=total event_uid=%s event_type=%s tenant=%s elapsed_ms=%s status=%s",
+        event_uid,
+        event_type,
+        tenant_code,
+        _timing_elapsed_ms(request_started_at),
+        status_text,
+    )
 
     return _row_to_soc_out(row, duplicate=bool(result.get("duplicate")))
 

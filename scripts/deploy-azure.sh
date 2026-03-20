@@ -57,6 +57,51 @@ usage() {
 EOF
 }
 
+BACKEND_APP_SETTINGS_CACHE="$TMP_DIR/backend-appsettings.json"
+BACKEND_APP_SETTINGS_LOADED="0"
+
+load_existing_backend_app_settings() {
+  if [[ "$BACKEND_APP_SETTINGS_LOADED" == "1" ]]; then
+    return 0
+  fi
+  BACKEND_APP_SETTINGS_LOADED="1"
+  if [[ -z "${AZ_RG:-}" || -z "${AZ_BACKEND_APP:-}" ]]; then
+    return 0
+  fi
+  if ! az_cli webapp config appsettings list \
+    --resource-group "$AZ_RG" \
+    --name "$AZ_BACKEND_APP" \
+    --output json >"$BACKEND_APP_SETTINGS_CACHE" 2>/dev/null; then
+    rm -f "$BACKEND_APP_SETTINGS_CACHE"
+  fi
+}
+
+get_existing_backend_app_setting() {
+  local key="$1"
+  load_existing_backend_app_settings
+  if [[ ! -f "$BACKEND_APP_SETTINGS_CACHE" ]]; then
+    return 0
+  fi
+  python3 - "$BACKEND_APP_SETTINGS_CACHE" "$key" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+key = sys.argv[2]
+try:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+except Exception:
+    raise SystemExit(0)
+for item in payload:
+    if str(item.get("name") or "").strip() == key:
+        value = str(item.get("value") or "")
+        if value:
+            print(value)
+        break
+PY
+}
+
 AZ_PYTHON_DEFAULT="$(ls -1 /opt/homebrew/Cellar/azure-cli/*/libexec/bin/python 2>/dev/null | tail -n 1 || true)"
 AZ_PYTHON_CLI="${AZ_PYTHON_CLI:-$AZ_PYTHON_DEFAULT}"
 AZ_CLI_MODE="az"
@@ -219,12 +264,22 @@ if [[ "$AZ_BACKEND_DEPLOY_MODE" != "container" && "$AZ_BACKEND_DEPLOY_MODE" != "
 fi
 
 AZ_DATABASE_URL="${AZ_DATABASE_URL:-${DATABASE_URL:-}}"
-AZ_JWT_SECRET="${AZ_JWT_SECRET:-${JWT_SECRET:-$(python3 - <<'PY'
+AZ_JWT_SECRET="${AZ_JWT_SECRET:-${JWT_SECRET:-}}"
+if [[ -z "$AZ_JWT_SECRET" ]]; then
+  AZ_JWT_SECRET="$(get_existing_backend_app_setting "JWT_SECRET")"
+  if [[ -n "$AZ_JWT_SECRET" ]]; then
+    echo "기존 Azure JWT_SECRET 값을 재사용합니다."
+  fi
+fi
+if [[ -z "$AZ_JWT_SECRET" ]]; then
+  AZ_JWT_SECRET="$(python3 - <<'PY'
 import secrets
 
 print(secrets.token_urlsafe(32))
 PY
-)}}"
+)"
+  echo "기존 JWT_SECRET을 찾지 못해 새 값을 생성했습니다."
+fi
 AZ_JWT_EXPIRES_MINUTES="${AZ_JWT_EXPIRES_MINUTES:-${JWT_EXPIRES_MINUTES:-480}}"
 AZ_JWT_ALGORITHM="${AZ_JWT_ALGORITHM:-${JWT_ALGORITHM:-HS256}}"
 AZ_RATE_LIMIT_PER_MINUTE="${AZ_RATE_LIMIT_PER_MINUTE:-240}"
@@ -237,7 +292,14 @@ AZ_CORS_ORIGINS="${AZ_CORS_ORIGINS:-}"
 AZ_CORS_ORIGIN_REGEX="${AZ_CORS_ORIGIN_REGEX:-${CORS_ORIGIN_REGEX:-}}"
 AZ_SOC_INTEGRATION_ENABLED="${AZ_SOC_INTEGRATION_ENABLED:-${SOC_INTEGRATION_ENABLED:-true}}"
 AZ_SOC_INGEST_REQUIRE_HMAC="${AZ_SOC_INGEST_REQUIRE_HMAC:-${SOC_INGEST_REQUIRE_HMAC:-true}}"
-AZ_SOC_INGEST_HMAC_SECRET="${AZ_SOC_INGEST_HMAC_SECRET:-${SOC_INGEST_HMAC_SECRET:-${HR_WEBHOOK_SECRET:-$AZ_JWT_SECRET}}}"
+AZ_SOC_INGEST_HMAC_SECRET="${AZ_SOC_INGEST_HMAC_SECRET:-${SOC_INGEST_HMAC_SECRET:-${HR_WEBHOOK_SECRET:-}}}"
+if [[ -z "$AZ_SOC_INGEST_HMAC_SECRET" ]]; then
+  AZ_SOC_INGEST_HMAC_SECRET="$(get_existing_backend_app_setting "SOC_INGEST_HMAC_SECRET")"
+  if [[ -n "$AZ_SOC_INGEST_HMAC_SECRET" ]]; then
+    echo "기존 Azure SOC_INGEST_HMAC_SECRET 값을 재사용합니다."
+  fi
+fi
+AZ_SOC_INGEST_HMAC_SECRET="${AZ_SOC_INGEST_HMAC_SECRET:-$AZ_JWT_SECRET}"
 AZ_SOC_INGEST_REQUIRE_TOKEN="${AZ_SOC_INGEST_REQUIRE_TOKEN:-${SOC_INGEST_REQUIRE_TOKEN:-false}}"
 AZ_SOC_INGEST_TOKEN="${AZ_SOC_INGEST_TOKEN:-${SOC_INGEST_TOKEN:-}}"
 AZ_SOC_LEAVE_OVERRIDE_ENABLED="${AZ_SOC_LEAVE_OVERRIDE_ENABLED:-${SOC_LEAVE_OVERRIDE_ENABLED:-true}}"

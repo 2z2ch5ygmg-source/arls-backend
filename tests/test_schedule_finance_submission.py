@@ -6,6 +6,7 @@ import unittest
 from app.routers.v1.schedules import (
     _build_finance_final_filename,
     _build_finance_review_filename,
+    _can_read_schedule_import_mapping_profile,
     _can_download_finance_final,
     _can_download_finance_review,
     _can_upload_finance_final,
@@ -38,7 +39,8 @@ class ScheduleFinanceSubmissionHelpersTests(unittest.TestCase):
 
         self.assertTrue(_can_download_finance_review(hq))
         self.assertTrue(_can_download_finance_review(developer))
-        self.assertFalse(_can_download_finance_review(supervisor))
+        self.assertTrue(_can_download_finance_review(supervisor))
+        self.assertFalse(_can_download_finance_review(vice))
 
         self.assertTrue(_can_upload_finance_final(supervisor))
         self.assertTrue(_can_upload_finance_final(developer))
@@ -47,7 +49,15 @@ class ScheduleFinanceSubmissionHelpersTests(unittest.TestCase):
 
         self.assertTrue(_can_download_finance_final(hq))
         self.assertTrue(_can_download_finance_final(developer))
-        self.assertFalse(_can_download_finance_final(supervisor))
+        self.assertTrue(_can_download_finance_final(supervisor))
+        self.assertFalse(_can_download_finance_final(vice))
+
+    def test_schedule_import_mapping_profile_is_readable_for_upload_roles_only(self):
+        self.assertTrue(_can_read_schedule_import_mapping_profile({"role": "Developer"}))
+        self.assertTrue(_can_read_schedule_import_mapping_profile({"role": "HQ_Admin"}))
+        self.assertTrue(_can_read_schedule_import_mapping_profile({"role": "Supervisor"}))
+        self.assertTrue(_can_read_schedule_import_mapping_profile({"role": "Vice_Supervisor"}))
+        self.assertFalse(_can_read_schedule_import_mapping_profile({"role": "Officer"}))
 
 
 if __name__ == "__main__":

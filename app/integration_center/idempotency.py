@@ -195,6 +195,7 @@ class EventIdempotencyStore:
                     applied_changes = %s::jsonb,
                     processed_at = timezone('utc', now())
                 WHERE event_uid = %s
+                RETURNING id, event_uid, event_type, tenant_code, status, received_at, processed_at, error_text, applied_changes
                 """,
                 (
                     tenant_id,
@@ -205,6 +206,7 @@ class EventIdempotencyStore:
                     event_uid,
                 ),
             )
+            row = cur.fetchone()
             cur.execute(
                 """
                 UPDATE integration_event_log
@@ -220,4 +222,4 @@ class EventIdempotencyStore:
                     event_uid,
                 ),
             )
-        return self.get(event_uid)
+        return row
