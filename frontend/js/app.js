@@ -1244,6 +1244,8 @@ const state = {
   siteEditorLookupSeq: 0,
   siteEditorLookupPending: 0,
   siteEditorLookupLoading: false,
+  siteDirectoryDetailId: '',
+  siteDirectoryTriggerEl: null,
   siteTenantFilterValue: '',
   submitSiteBusy: false,
   submitEmployeeBusy: false,
@@ -8100,6 +8102,7 @@ function syncUiThemeButtons(theme = state.uiTheme || 'light') {
     btn.classList.toggle('is-active', active);
     btn.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
+  renderProfileThemeState();
 }
 
 function applyUiTheme(nextTheme = 'light', { persist = false } = {}) {
@@ -16118,6 +16121,7 @@ function renderReminderSettings() {
   const statusEl = $('#notifStatus');
   const summaryEl = $('#notifScheduledSummary');
   const permissionPill = $('#notificationPermissionPill');
+  const schedulePill = $('#notificationSchedulePill');
   const pushApprovalsInput = $('#notifPushApprovals');
   const pushScheduleInput = $('#notifPushSchedule');
 
@@ -16146,13 +16150,15 @@ function renderReminderSettings() {
   }
   if (permissionBtn) {
     permissionBtn.disabled = !canEdit;
-    permissionBtn.textContent = denied ? '알림 권한 다시 요청' : '출근 알림 받기';
+    permissionBtn.textContent = denied ? '권한 다시 요청' : '알림 권한 요청';
+    permissionBtn.classList.toggle('hidden', granted || !available);
   }
   if (resyncBtn) {
     resyncBtn.disabled = !(canEdit && enabled && granted);
   }
   if (openSettingsBtn) {
     openSettingsBtn.disabled = !canEdit;
+    openSettingsBtn.classList.toggle('hidden', !(denied && available));
   }
   if (statusEl) {
     if (!available) {
@@ -16191,6 +16197,20 @@ function renderReminderSettings() {
       permissionPill.textContent = '권한 확인 필요';
     }
   }
+  if (schedulePill) {
+    schedulePill.className = 'status-pill status-pill-neutral';
+    if (!enabled) {
+      schedulePill.textContent = '알림 꺼짐';
+    } else if (!granted) {
+      schedulePill.className = 'status-pill status-pill-warn';
+      schedulePill.textContent = '권한 필요';
+    } else if (Number(state.reminder.scheduledCount || 0) > 0) {
+      schedulePill.className = 'status-pill status-pill-success';
+      schedulePill.textContent = `예약 ${Number(state.reminder.scheduledCount || 0)}건`;
+    } else {
+      schedulePill.textContent = '예약 대기';
+    }
+  }
   if (pushApprovalsInput) {
     pushApprovalsInput.checked = Boolean(state.reminder.pushApprovalsEnabled);
     pushApprovalsInput.disabled = !loggedIn;
@@ -16199,6 +16219,7 @@ function renderReminderSettings() {
     pushScheduleInput.checked = Boolean(state.reminder.pushScheduleEnabled);
     pushScheduleInput.disabled = !loggedIn;
   }
+  renderProfileSettingsRail();
 }
 
 function computeReminderNotificationId(seed) {
@@ -17601,8 +17622,8 @@ function renderShellMode() {
   const profileSubtitle = $('#profileViewSubtitle');
   if (profileSubtitle) {
     profileSubtitle.textContent = managerMode
-      ? '계정, 알림, 연동값을 관리합니다.'
-      : '내 계정과 알림 설정을 관리합니다.';
+      ? '운영 설정과 연동값을 관리합니다.'
+      : '비밀번호와 알림을 관리합니다.';
   }
 
   renderProfileWorkspaceSegments();
@@ -19738,6 +19759,7 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
   applyOpsRouteStateFromQuery(route, parsedParams);
   applyReportsRouteStateFromQuery(route, parsedParams);
   applyScheduleRouteStateFromQuery(route, parsedParams);
+  applyProfileRouteStateFromQuery(route, parsedParams);
 
   startViewPerfSession({
     routePath: route,
@@ -25849,9 +25871,7 @@ function renderProfileSummary() {
   const name = state.user?.full_name || '-';
   const username = state.user?.username || '-';
   const ctx = getActiveTenantContext();
-  const tenant = getNavigationRole() === 'DEV'
-    ? `${state.user?.tenant_code || '-'} (선택: ${ctx.code || '-'})`
-    : (state.user?.tenant_code || '-');
+  const tenant = String(ctx?.name || ctx?.code || state.user?.tenant_code || '-').trim() || '-';
   const role = state.user ? getRoleDisplayLabel(state.user.role) : '-';
 
   const map = [
@@ -25868,7 +25888,105 @@ function renderProfileSummary() {
     }
   });
 
+  const rolePill = $('#profileAccountRolePill');
+  if (rolePill) {
+    rolePill.textContent = role;
+  }
+
+  renderProfileSettingsRail();
+  renderProfileThemeState();
   renderLockPolicySkeleton();
+}
+
+function formatProfileStatusDateTime(rawValue = '') {
+  const text = String(rawValue || '').trim();
+  if (!text) return '대기';
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return '대기';
+  return date.toLocaleString('ko-KR', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+function renderProfileThemeState() {
+  const currentMode = $('#profileThemeCurrentMode');
+  if (currentMode) {
+    currentMode.textContent = normalizeUiTheme(state.uiTheme || readStoredUiTheme()) === 'dark' ? '다크' : '라이트';
+  }
+}
+
+function renderProfileSettingsRail() {
+  const roleValue = $('#profileRailRoleValue');
+  const tenantValue = $('#profileRailTenantValue');
+  const notificationValue = $('#profileRailNotificationValue');
+  const syncValue = $('#profileRailSyncValue');
+  const integrationValue = $('#profileRailIntegrationValue');
+  const profileValue = $('#profileRailProfileValue');
+  const lockValue = $('#profileRailLockValue');
+  const noteValue = $('#profileRailStatusNote');
+
+  const roleLabel = state.user ? getRoleDisplayLabel(state.user.role) : '-';
+  const ctx = getActiveTenantContext();
+  const tenantLabel = String(ctx?.name || ctx?.code || state.user?.tenant_code || '-').trim() || '-';
+  const permissionLabel = !state.user
+    ? '로그인 필요'
+    : (!state.reminder.available
+      ? '미지원'
+      : (isReminderPermissionDenied()
+        ? '권한 거부'
+        : (isReminderPermissionGranted()
+          ? (state.reminder.enabled ? '권한 허용' : '허용 · 꺼짐')
+          : '확인 필요')));
+  const syncLabel = !state.user
+    ? '로그인 필요'
+    : (state.reminder.lastSyncedAt
+      ? formatProfileStatusDateTime(state.reminder.lastSyncedAt)
+      : (state.reminder.enabled ? '동기화 대기' : '예약 안 함'));
+  const enabledFlags = INTEGRATION_FLAG_KEYS.filter((key) => Boolean(state.integration.flags?.[key])).length;
+  const hasFlags = Object.keys(state.integration.flags || {}).length > 0;
+  const selectedProfile = getSelectedGoogleSheetProfile();
+  const lockPillText = String($('#lockStatusPill')?.textContent || '').trim();
+
+  if (roleValue) roleValue.textContent = roleLabel;
+  if (tenantValue) tenantValue.textContent = tenantLabel;
+  if (notificationValue) notificationValue.textContent = permissionLabel;
+  if (syncValue) syncValue.textContent = syncLabel;
+  if (integrationValue) {
+    integrationValue.textContent = canManageIntegrations()
+      ? (hasFlags ? `${enabledFlags}/${INTEGRATION_FLAG_KEYS.length} 사용` : '조회 대기')
+      : '-';
+  }
+  if (profileValue) {
+    profileValue.textContent = canManageIntegrations()
+      ? (selectedProfile?.profile_name ? String(selectedProfile.profile_name).trim() : '선택 대기')
+      : '-';
+  }
+  if (lockValue) {
+    lockValue.textContent = canManageIntegrations() ? (lockPillText || '열림') : '-';
+  }
+  if (noteValue) {
+    if (!state.user) {
+      noteValue.textContent = '로그인 후 설정을 확인할 수 있습니다.';
+    } else if (canManageIntegrations()) {
+      noteValue.textContent = selectedProfile?.profile_name
+        ? '활성 프로파일과 플래그를 확인한 뒤 저장하면 바로 운영에 반영됩니다.'
+        : '먼저 활성 프로파일과 플래그 상태를 확인한 뒤 저장하세요.';
+    } else if (!state.reminder.available) {
+      noteValue.textContent = '현재 기기에서는 예약 알림을 지원하지 않습니다.';
+    } else if (isReminderPermissionDenied()) {
+      noteValue.textContent = '설정 열기에서 알림 권한을 다시 허용해 주세요.';
+    } else if (!isReminderPermissionGranted()) {
+      noteValue.textContent = '알림 권한을 허용하면 스케줄 기준으로 자동 예약됩니다.';
+    } else {
+      noteValue.textContent = state.reminder.enabled
+        ? '스케줄이 바뀌면 예약 알림이 자동으로 다시 동기화됩니다.'
+        : '알림을 켜면 근무 시작과 퇴근 예정 알림을 자동 예약합니다.';
+    }
+  }
 }
 
 function normalizeProfileWorkspaceSegment(value = '') {
@@ -25897,12 +26015,45 @@ function renderProfileWorkspaceSegments() {
   toggleVisibility('#profileThemePanel', segment === 'theme');
 }
 
-function setProfileWorkspaceSegment(value = '') {
+function buildProfileRouteWithSegment(segment = '') {
+  const normalizedSegment = normalizeProfileWorkspaceSegment(segment || 'settings');
+  const parsed = parseRouteCandidate(getCurrentRouteWithQuery());
+  const route = normalizeRoutePath(parsed.path) || ROUTE_PROFILE;
+  if (route !== ROUTE_PROFILE) return '';
+  const params = new URLSearchParams(parsed.query || '');
+  if (normalizedSegment === 'theme') {
+    params.set('segment', 'theme');
+  } else {
+    params.delete('segment');
+  }
+  const query = params.toString();
+  return query ? `${ROUTE_PROFILE}?${query}` : ROUTE_PROFILE;
+}
+
+function syncProfileWorkspaceSegmentRoute({ replace = false } = {}) {
+  const nextRoute = buildProfileRouteWithSegment(state.profile?.workspaceSegment || 'settings');
+  if (!nextRoute) return;
+  updateRouteHash(nextRoute, { replace });
+}
+
+function applyProfileRouteStateFromQuery(routePath = '', parsedParams = new URLSearchParams()) {
+  const route = normalizeRoutePath(routePath);
+  if (route !== ROUTE_PROFILE) return;
+  if (!state.profile || typeof state.profile !== 'object') {
+    state.profile = createInitialProfileViewState();
+  }
+  state.profile.workspaceSegment = normalizeProfileWorkspaceSegment(parsedParams.get('segment') || 'settings');
+}
+
+function setProfileWorkspaceSegment(value = '', { syncRoute = true, replace = false } = {}) {
   if (!state.profile || typeof state.profile !== 'object') {
     state.profile = createInitialProfileViewState();
   }
   state.profile.workspaceSegment = normalizeProfileWorkspaceSegment(value || state.profile.workspaceSegment || 'settings');
   renderProfileWorkspaceSegments();
+  if (syncRoute && normalizeRoutePath(state.currentRoute || '') === ROUTE_PROFILE) {
+    syncProfileWorkspaceSegmentRoute({ replace });
+  }
 }
 
 function canManageIntegrations() {
@@ -25968,6 +26119,7 @@ function renderIntegrationFlags() {
     checkbox.checked = Boolean(state.integration.flags?.[flagKey]);
     checkbox.disabled = !canManageIntegrations();
   });
+  renderProfileSettingsRail();
   renderOpsAutomationStatus();
 }
 
@@ -26065,6 +26217,7 @@ function applyGoogleSheetProfileSelection(profileId) {
     `선택 프로파일: ${profile.profile_name} · ${scopeLabel}${siteLabel}${profile.is_active ? ' (활성)' : ''}`,
     'info',
   );
+  renderProfileSettingsRail();
 }
 
 function renderGoogleSheetSyncLogList() {
@@ -26123,6 +26276,7 @@ async function loadGoogleSheetSyncLogs({ notifyOnError = true, force = false } =
   if (isFresh) {
     renderGoogleSheetSyncLogList();
     setInlineStatus('#googleSheetLogStatus', `최근 실패 로그 ${Array.isArray(state.integration.sheetLogs) ? state.integration.sheetLogs.length : 0}건`, 'success');
+    renderProfileSettingsRail();
     renderOpsAutomationStatus();
     return Array.isArray(state.integration.sheetLogs) ? state.integration.sheetLogs : [];
   }
@@ -26153,6 +26307,7 @@ async function loadGoogleSheetSyncLogs({ notifyOnError = true, force = false } =
     }
     renderGoogleSheetSyncLogList();
     setInlineStatus('#googleSheetLogStatus', `최근 실패 로그 ${state.integration.sheetLogs.length}건`, 'success');
+    renderProfileSettingsRail();
     renderOpsAutomationStatus();
     return state.integration.sheetLogs;
   } catch (error) {
@@ -26165,6 +26320,7 @@ async function loadGoogleSheetSyncLogs({ notifyOnError = true, force = false } =
     if (notifyOnError) {
       showToast(message, 'error', 3000);
     }
+    renderProfileSettingsRail();
     renderOpsAutomationStatus();
     return [];
   }
@@ -26213,6 +26369,7 @@ async function loadIntegrationFlags({ force = false } = {}) {
   if (isFresh) {
     renderIntegrationFlags();
     setInlineStatus('#integrationFlagsStatus', '플래그 조회 완료(캐시)', 'success');
+    renderProfileSettingsRail();
     return state.integration.flags;
   }
 
@@ -26229,6 +26386,7 @@ async function loadIntegrationFlags({ force = false } = {}) {
   state.integration.flagsFetchedAt = Date.now();
   renderIntegrationFlags();
   setInlineStatus('#integrationFlagsStatus', '플래그 조회 완료', 'success');
+  renderProfileSettingsRail();
   return nextFlags;
 }
 
@@ -26262,6 +26420,7 @@ async function saveIntegrationFlags() {
   setInlineStatus('#integrationFlagsStatus', '플래그 저장 완료', 'success');
   showToast('연동 플래그를 저장했습니다.', 'success', 1800);
   await loadIntegrationFlags();
+  renderProfileSettingsRail();
 }
 
 async function loadGoogleSheetProfiles() {
@@ -26286,6 +26445,7 @@ async function loadGoogleSheetProfiles() {
   applyGoogleSheetProfileSelection(state.integration.selectedProfileId);
   setInlineStatus('#googleSheetProfileStatus', `프로파일 ${state.integration.profiles.length}건`, 'success');
   await loadGoogleSheetSyncLogs();
+  renderProfileSettingsRail();
 }
 
 function collectGoogleSheetProfilePayload() {
@@ -26351,6 +26511,7 @@ async function onGoogleSheetProfileSubmit(event) {
   await loadGoogleSheetProfiles();
   setInlineStatus('#googleSheetProfileStatus', '프로파일 저장 완료', 'success');
   showToast('구글 시트 프로파일을 저장했습니다.', 'success', 1800);
+  renderProfileSettingsRail();
 }
 
 async function syncGoogleSheetProfileNow() {
@@ -26456,6 +26617,7 @@ async function loadProfileIntegrationData() {
 
   if (!allowed) {
     renderOpsAutomationStatus();
+    renderProfileSettingsRail();
     return;
   }
 
@@ -26467,6 +26629,7 @@ async function loadProfileIntegrationData() {
     loadSocEvents(),
   ]);
   renderOpsAutomationStatus();
+  renderProfileSettingsRail();
 }
 
 function resetProfilePasswordForm() {
@@ -26543,8 +26706,12 @@ function renderLockPolicySkeleton() {
   const navRole = getNavigationRole();
   const canLockManage = (navRole === 'DEV' || navRole === 'BRANCH_MANAGER') && can('schedule');
   const isLockRoute = normalizeRoutePath(state.currentRoute || '') === ROUTE_ADMIN_REPORTS_LOCK;
-  card.classList.toggle('hidden', !canLockManage || !isLockRoute);
-  if (!canLockManage || !isLockRoute) return;
+  const isProfileRoute = normalizeRoutePath(state.currentRoute || '') === ROUTE_PROFILE;
+  card.classList.toggle('hidden', !canLockManage || (!isLockRoute && !isProfileRoute));
+  if (!canLockManage || (!isLockRoute && !isProfileRoute)) {
+    renderProfileSettingsRail();
+    return;
+  }
 
   const today = new Date();
   const monthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
@@ -26558,7 +26725,8 @@ function renderLockPolicySkeleton() {
 
   pill.className = 'status-pill status-pill-warn';
   pill.textContent = '열림';
-  summary.textContent = 'P1 골격: 마감 상태/예외승인 정책은 백엔드 연동 전이라 표시만 제공됩니다.';
+  summary.textContent = '잠금 정책은 별도 화면에서 이어서 관리합니다. 이 카드에서는 현재 기간과 상태만 먼저 확인합니다.';
+  renderProfileSettingsRail();
 }
 
 function renderNotificationBadge() {
@@ -26914,21 +27082,21 @@ function applyWriteAccessUI(perms) {
   if (employeesScopeHint) {
     if (employeeImportRoute) {
       employeesScopeHint.textContent = permissionGroup === 'DEV'
-        ? `조회 테넌트 ${workingTenantCode} 기준으로 명부 업로드, 오류 검토, 등록 실행을 단계별로 진행합니다.`
-        : '명부 업로드, 오류 검토, 등록 실행을 단계별로 진행합니다.';
+        ? '선택한 조직 범위에서 명부 업로드와 등록 결과 확인을 단계별로 진행합니다.'
+        : '명부 업로드와 등록 결과 확인을 단계별로 진행합니다.';
     } else if (employeeCreateRoute) {
       employeesScopeHint.textContent = permissionGroup === 'DEV'
-        ? `조회 테넌트 ${workingTenantCode} 기준으로 새 직원을 등록합니다. 저장 후 조직 목록에서 상세를 확인합니다.`
-        : '새 직원을 등록한 뒤 조직 목록으로 돌아가 상세 패널에서 상태를 확인합니다.';
+        ? '선택한 조직 범위에서 새 직원을 등록한 뒤 목록과 상세 패널에서 바로 확인합니다.'
+        : '새 직원을 등록한 뒤 목록과 상세 패널에서 바로 확인합니다.';
     } else {
       employeesScopeHint.textContent = permissionGroup === 'DEV'
-        ? `조회 테넌트 ${workingTenantCode} 기준으로 직원을 목록과 상세 패널 패턴으로 관리합니다. 등록과 대량 등록은 별도 흐름으로 이동합니다.`
-        : '직원을 목록과 상세 패널 패턴으로 관리합니다. 등록과 대량 등록은 별도 흐름으로 이동합니다.';
+        ? '조회 범위 기준으로 직원 디렉터리를 관리합니다.'
+        : '직원을 목록과 상세 패널로 관리합니다.';
     }
   }
   const employeeTopActionHint = $('#employeeTopActionHint');
   if (employeeTopActionHint) {
-    employeeTopActionHint.textContent = '목록에서 직원을 선택하면 상세 패널이 열립니다. 현장 단위 전체 삭제는 목록 화면에서만 가능합니다.';
+    employeeTopActionHint.textContent = '목록에서 직원을 선택하면 상세 패널이 열립니다.';
   }
 
   const orgViewTitle = $('#orgViewTitle');
@@ -26939,11 +27107,11 @@ function applyWriteAccessUI(perms) {
   }
   if (orgScopeHint) {
     orgScopeHint.textContent = permissionGroup === 'DEV'
-      ? `조회 테넌트 ${workingTenantCode} 기준으로 지점과 직원을 목록과 상세 패널 패턴으로 관리합니다. 등록은 별도 흐름으로 이동합니다.`
-      : '본인 회사의 지점과 직원을 목록과 상세 패널 패턴으로 관리합니다. 등록은 별도 흐름으로 이동합니다.';
+      ? '조회 범위 기준으로 지점 디렉터리를 관리합니다.'
+      : '지점을 목록과 보조 상세 패널로 관리합니다.';
   }
   if (siteSectionTitle) {
-    siteSectionTitle.textContent = '지점 목록';
+    siteSectionTitle.textContent = '지점';
   }
 
   const showEmployeeListWorkspace = Boolean(perms.employees) && employeeListRoute;
@@ -28998,6 +29166,252 @@ function closeSiteEditor() {
   ensureSiteRoutePresentation();
 }
 
+function getSiteDirectoryDetailPanel() {
+  const target = $('#siteDirectoryDetailPanel');
+  return target instanceof HTMLElement ? target : null;
+}
+
+function getSiteDirectoryDetailBody() {
+  const target = $('#siteDirectoryDetailBody');
+  return target instanceof HTMLElement ? target : null;
+}
+
+function getSiteDirectoryDetailActions() {
+  const target = $('#siteDirectoryDetailActions');
+  return target instanceof HTMLElement ? target : null;
+}
+
+function getSiteDirectoryDetailBadges() {
+  const target = $('#siteDirectoryDetailBadges');
+  return target instanceof HTMLElement ? target : null;
+}
+
+function buildSiteDirectoryCompactEmpty(title = '지점을 선택해 주세요.', description = '') {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'site-directory-empty';
+  const titleEl = document.createElement('div');
+  titleEl.className = 'site-directory-empty-title';
+  titleEl.textContent = title;
+  wrapper.appendChild(titleEl);
+  if (String(description || '').trim()) {
+    const descEl = document.createElement('div');
+    descEl.className = 'site-directory-empty-description';
+    descEl.textContent = String(description).trim();
+    wrapper.appendChild(descEl);
+  }
+  return wrapper;
+}
+
+function buildSiteDirectorySection(title = '', bodyNode = null) {
+  const section = document.createElement('section');
+  section.className = 'site-directory-section';
+  const heading = document.createElement('h5');
+  heading.textContent = title;
+  section.appendChild(heading);
+  if (bodyNode instanceof Node) section.appendChild(bodyNode);
+  return section;
+}
+
+function buildSiteDirectoryFactGrid(items = []) {
+  const grid = document.createElement('div');
+  grid.className = 'site-directory-fact-grid';
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const label = String(item?.label || '').trim();
+    const value = String(item?.value || '').trim();
+    if (!label || !value) return;
+    const card = document.createElement('div');
+    card.className = 'site-directory-fact-card';
+    if (String(item?.tone || '').trim()) {
+      card.dataset.tone = String(item.tone).trim();
+    }
+    const labelEl = document.createElement('span');
+    labelEl.textContent = label;
+    const valueEl = document.createElement('strong');
+    valueEl.textContent = value;
+    card.append(labelEl, valueEl);
+    if (String(item?.meta || '').trim()) {
+      const metaEl = document.createElement('small');
+      metaEl.textContent = String(item.meta).trim();
+      card.appendChild(metaEl);
+    }
+    grid.appendChild(card);
+  });
+  return grid;
+}
+
+function getSiteDirectorySiteById(siteId = '') {
+  const normalizedId = String(siteId || '').trim();
+  if (!normalizedId || !Array.isArray(state.sites)) return null;
+  return state.sites.find((site) => String(site?.id || '').trim() === normalizedId) || null;
+}
+
+function getSiteDirectoryEmployeeCount(siteCode = '') {
+  const normalizedCode = String(siteCode || '').trim().toUpperCase();
+  if (!normalizedCode || !Array.isArray(state.employeeAdmin?.rows)) return null;
+  return state.employeeAdmin.rows.filter((row) => String(row?.site_code || '').trim().toUpperCase() === normalizedCode).length;
+}
+
+function buildSiteDirectoryHeaderPayload(site = null) {
+  const radius = Number(site?.radius_meters);
+  const lat = Number(site?.latitude);
+  const lng = Number(site?.longitude);
+  const siteCode = String(site?.site_code || '').trim().toUpperCase();
+  const wifiSsid = String(getSiteWifiSsid(siteCode) || '').trim();
+  return {
+    id: String(site?.id || '').trim(),
+    companyName: renderTenantName(site),
+    siteCode,
+    siteName: String(site?.site_name || siteCode || '지점 상세').trim() || '지점 상세',
+    address: String(site?.address || '').trim(),
+    isActive: Boolean(site?.is_active),
+    radiusLabel: Number.isFinite(radius) ? `${Math.round(radius)}m` : '',
+    latLabel: Number.isFinite(lat) ? lat.toFixed(6) : '',
+    lngLabel: Number.isFinite(lng) ? lng.toFixed(6) : '',
+    wifiLabel: wifiSsid,
+    employeeCount: getSiteDirectoryEmployeeCount(siteCode),
+  };
+}
+
+function renderSiteDirectoryDetail(site = null) {
+  const panel = getSiteDirectoryDetailPanel();
+  const body = getSiteDirectoryDetailBody();
+  const actions = getSiteDirectoryDetailActions();
+  const eyebrow = $('#siteDirectoryDetailEyebrow');
+  const title = $('#siteDirectoryDetailTitle');
+  const subtitle = $('#siteDirectoryDetailSubtitle');
+  const badges = getSiteDirectoryDetailBadges();
+  if (!(panel instanceof HTMLElement) || !(body instanceof HTMLElement) || !(actions instanceof HTMLElement)) return;
+
+  if (!site) {
+    if (eyebrow) eyebrow.textContent = '지점 선택';
+    if (title) title.textContent = '지점을 선택해 주세요';
+    if (subtitle) subtitle.textContent = '목록에서 지점을 선택하면 운영 요약과 바로 가는 액션이 열립니다.';
+    if (badges) badges.innerHTML = '';
+    body.innerHTML = '';
+    body.appendChild(buildSiteDirectoryCompactEmpty('지점을 선택해 주세요.', '왼쪽 목록에서 지점을 클릭하면 기본 정보와 운영 상태를 확인할 수 있습니다.'));
+    actions.innerHTML = '';
+    actions.classList.add('hidden');
+    panel.classList.add('is-empty');
+    return;
+  }
+
+  const header = buildSiteDirectoryHeaderPayload(site);
+  if (eyebrow) eyebrow.textContent = header.companyName || '지점 상세';
+  if (title) title.textContent = header.siteName;
+  if (subtitle) {
+    subtitle.textContent = [header.siteCode, header.address || header.radiusLabel || '기본 정보를 확인하세요.'].filter(Boolean).join(' · ');
+  }
+  if (badges) {
+    badges.innerHTML = '';
+    const status = document.createElement('span');
+    status.className = header.isActive ? 'status-pill status-pill-success' : 'status-pill status-pill-warn';
+    status.textContent = header.isActive ? '운영중' : '비활성';
+    badges.appendChild(status);
+    if (header.employeeCount != null) {
+      const count = document.createElement('span');
+      count.className = 'status-pill status-pill-neutral';
+      count.textContent = `${header.employeeCount}명`;
+      badges.appendChild(count);
+    }
+  }
+
+  const statusFacts = [
+    { label: '운영 상태', value: header.isActive ? '활성' : '비활성', tone: header.isActive ? 'success' : 'warn' },
+    { label: '반경', value: header.radiusLabel || '미설정', tone: header.radiusLabel ? '' : 'warn' },
+    { label: 'Wi-Fi', value: header.wifiLabel || '미등록', tone: header.wifiLabel ? 'success' : 'warn' },
+  ].filter((item) => String(item.value || '').trim());
+  if (header.employeeCount != null) {
+    statusFacts.splice(2, 0, { label: '직원 수', value: `${header.employeeCount}명`, tone: header.employeeCount > 0 ? 'success' : '' });
+  }
+  const infoFacts = [
+    { label: '회사', value: header.companyName },
+    { label: '현장번호', value: header.siteCode },
+    { label: '주소', value: header.address || '미입력', tone: header.address ? '' : 'warn' },
+    { label: '좌표', value: header.latLabel && header.lngLabel ? `${header.latLabel}, ${header.lngLabel}` : '미설정', tone: header.latLabel && header.lngLabel ? '' : 'warn' },
+  ].filter((item) => String(item.value || '').trim());
+
+  body.innerHTML = '';
+  body.appendChild(buildSiteDirectorySection('운영 상태', buildSiteDirectoryFactGrid(statusFacts)));
+  body.appendChild(buildSiteDirectorySection('기본 정보', buildSiteDirectoryFactGrid(infoFacts)));
+
+  actions.innerHTML = '';
+  const fragment = document.createDocumentFragment();
+  if (can('siteWrite')) {
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'btn btn-primary';
+    editBtn.dataset.action = 'site-edit';
+    editBtn.dataset.siteId = header.id;
+    editBtn.textContent = '지점 수정';
+    fragment.appendChild(editBtn);
+  }
+  const employeeBtn = document.createElement('button');
+  employeeBtn.type = 'button';
+  employeeBtn.className = 'btn btn-secondary';
+  employeeBtn.dataset.action = 'site-directory-open-employees';
+  employeeBtn.dataset.siteCode = header.siteCode;
+  employeeBtn.textContent = '직원 보기';
+  fragment.appendChild(employeeBtn);
+
+  const scheduleBtn = document.createElement('button');
+  scheduleBtn.type = 'button';
+  scheduleBtn.className = 'btn btn-secondary';
+  scheduleBtn.dataset.action = 'site-directory-open-schedule';
+  scheduleBtn.dataset.siteCode = header.siteCode;
+  scheduleBtn.textContent = '스케줄 보기';
+  fragment.appendChild(scheduleBtn);
+
+  actions.appendChild(fragment);
+  actions.classList.remove('hidden');
+  panel.classList.remove('is-empty');
+}
+
+function renderSiteDirectorySummaryStrip(rows = []) {
+  const list = Array.isArray(rows) ? rows : [];
+  const activeCount = list.filter((site) => Boolean(site?.is_active)).length;
+  const inactiveCount = list.filter((site) => !site?.is_active).length;
+  const missingAddressCount = list.filter((site) => !String(site?.address || '').trim()).length;
+  const missingWifiCount = list.filter((site) => !String(getSiteWifiSsid(site?.site_code) || '').trim()).length;
+  const items = [
+    { label: '조회 지점', value: `${list.length}곳` },
+    { label: '활성', value: `${activeCount}곳`, tone: activeCount > 0 ? 'success' : '' },
+  ];
+  if (inactiveCount > 0) {
+    items.push({ label: '비활성', value: `${inactiveCount}곳`, tone: 'warn' });
+  }
+  if (missingAddressCount > 0) {
+    items.push({ label: '주소 확인 필요', value: `${missingAddressCount}곳`, tone: 'warn' });
+  }
+  if (missingWifiCount > 0) {
+    items.push({ label: 'Wi-Fi 미등록', value: `${missingWifiCount}곳`, tone: 'danger' });
+  }
+  renderOrganizationSummaryStrip('#siteDirectorySummaryStrip', items);
+}
+
+function openSiteDirectoryDetail(siteId = '', { triggerEl = null } = {}) {
+  const normalizedId = String(siteId || '').trim();
+  state.siteDirectoryTriggerEl = triggerEl instanceof HTMLElement ? triggerEl : null;
+  state.siteDirectoryDetailId = normalizedId;
+  renderSiteCards(state.sites);
+}
+
+async function navigateToEmployeesForSite(siteCode = '') {
+  const normalizedCode = String(siteCode || '').trim().toUpperCase();
+  const moved = await navigateToRoute(ROUTE_ADMIN_EMPLOYEES);
+  if (!moved) return;
+  state.employeeAdmin.siteFilterCode = normalizedCode || 'all';
+  await syncEmployeeSiteFilterOptions({ force: true });
+  const select = $('#employeeSiteFilter');
+  if (select instanceof HTMLSelectElement && normalizedCode) {
+    const matched = Array.from(select.options).find((option) => String(option.dataset.siteCode || '').trim().toUpperCase() === normalizedCode);
+    if (matched) {
+      select.value = matched.value;
+      state.employeeAdmin.siteFilterCode = normalizedCode;
+    }
+  }
+  renderEmployeesFromCache();
+}
+
 function renderSiteCards(rows = []) {
   const target = $('#siteList');
   const tableBody = $('#siteDesktopTableBody');
@@ -29015,6 +29429,7 @@ function renderSiteCards(rows = []) {
   if (tableBody) tableBody.innerHTML = '';
   if (!renderDesktop && !renderMobile) return;
   const sortedRows = getSortedSiteRows(rows);
+  renderSiteDirectorySummaryStrip(sortedRows);
 
   if (!sortedRows.length) {
     if (renderMobile && target) {
@@ -29023,6 +29438,8 @@ function renderSiteCards(rows = []) {
     if (renderDesktop && tableBody) {
       renderAdminTableEmptyState(tableBody, 6, '등록된 현장이 없습니다.');
     }
+    state.siteDirectoryDetailId = '';
+    renderSiteDirectoryDetail(null);
     renderSiteSortHeaders();
     markViewPerfStage('critical_ui_ready', {
       routePath: ROUTE_ADMIN_SITES,
@@ -29062,6 +29479,12 @@ function renderSiteCards(rows = []) {
   const buildSiteTableRow = (item) => {
     const { companyName, radius } = resolveSiteMeta(item);
     const tr = document.createElement('tr');
+    tr.className = 'site-directory-row';
+    tr.dataset.action = 'site-open-detail';
+    tr.dataset.siteId = String(item?.id || '');
+    if (String(state.siteDirectoryDetailId || '').trim() === String(item?.id || '').trim()) {
+      tr.classList.add('is-selected');
+    }
     const companyTd = document.createElement('td');
     companyTd.textContent = companyName;
     tr.appendChild(companyTd);
@@ -29170,14 +29593,24 @@ function renderSiteCards(rows = []) {
   };
 
   if (renderDesktop && tableBody) {
+    const selectedId = String(state.siteDirectoryDetailId || '').trim();
+    const selectedVisible = selectedId && sortedRows.some((item) => String(item?.id || '').trim() === selectedId);
+    if (sortedRows.length === 1 && !selectedId) {
+      state.siteDirectoryDetailId = String(sortedRows[0]?.id || '').trim();
+    } else if (selectedId && !selectedVisible) {
+      state.siteDirectoryDetailId = '';
+    }
     const tableFragment = document.createDocumentFragment();
     sortedRows.forEach((item) => {
       tableFragment.appendChild(buildSiteTableRow(item));
     });
     tableBody.appendChild(tableFragment);
+    renderSiteDirectoryDetail(getSiteDirectorySiteById(state.siteDirectoryDetailId));
   }
 
   if (renderMobile && target) {
+    state.siteDirectoryDetailId = '';
+    renderSiteDirectoryDetail(null);
     if (sortedRows.length > 200) {
       renderChunkedNodes(target, sortedRows, buildSiteCardNode, { chunkSize: 50 });
     } else {
@@ -29207,6 +29640,8 @@ async function loadSites({
 
   if (!can('org')) {
     state.sites = [];
+    renderSiteDirectorySummaryStrip([]);
+    renderSiteDirectoryDetail(null);
     if (target) renderEmptyState(target, '현장 조회 권한이 없습니다.');
     if (tableBody) renderAdminTableEmptyState(tableBody, 6, '현장 조회 권한이 없습니다.');
     return [];
@@ -29894,6 +30329,7 @@ async function loadProfileViewPresenter() {
   setInlineStatus('#profilePasswordStatus', '', 'info');
   await refreshReminderPermissionState();
   renderReminderSettings();
+  renderProfileThemeState();
   // 연동 카드 로딩은 백그라운드로 처리해 프로필 탭 첫 진입 체감을 줄인다.
   runActionSafely(
     loadProfileIntegrationData(),
@@ -30986,6 +31422,13 @@ const VIEW_PRESENTERS = {
   profile: {
     loadingMessage: '프로필/알림 설정을 불러오는 중입니다...',
     errorMessage: '프로필 데이터를 불러오지 못했습니다.',
+    onCacheHit: () => {
+      renderProfileSummary();
+      renderProfileWorkspaceSegments();
+      renderReminderSettings();
+      renderProfileThemeState();
+      renderLockPolicySkeleton();
+    },
     load: loadProfileViewPresenter,
   },
   roadmap: {
@@ -31443,20 +31886,20 @@ function applyEmployeeRegistrationRoutePresentation() {
   if (hintEl) {
     if (isImportRoute) {
       hintEl.textContent = permissionGroup === 'DEV'
-        ? `조회 테넌트 ${workingTenantCode} 기준으로 명부 업로드, 오류 검토, 등록 실행을 단계별로 진행합니다.`
-        : '명부 업로드, 오류 검토, 등록 실행을 단계별로 진행합니다.';
+        ? '선택한 조직 범위에서 명부 업로드와 등록 결과 확인을 단계별로 진행합니다.'
+        : '명부 업로드와 등록 결과 확인을 단계별로 진행합니다.';
     } else if (isCreateRoute) {
       hintEl.textContent = permissionGroup === 'DEV'
-        ? `조회 테넌트 ${workingTenantCode} 기준으로 새 직원을 등록합니다. 저장 후 조직 목록에서 상세를 확인합니다.`
-        : '새 직원을 등록한 뒤 조직 목록으로 돌아가 상세 패널에서 상태를 확인합니다.';
+        ? '선택한 조직 범위에서 새 직원을 등록한 뒤 목록과 상세 패널에서 바로 확인합니다.'
+        : '새 직원을 등록한 뒤 목록과 상세 패널에서 바로 확인합니다.';
     } else {
       hintEl.textContent = permissionGroup === 'DEV'
-        ? `조회 테넌트 ${workingTenantCode} 기준으로 직원을 목록과 상세 패널 패턴으로 관리합니다. 등록과 대량 등록은 별도 흐름으로 이동합니다.`
-        : '직원을 목록과 상세 패널 패턴으로 관리합니다. 등록과 대량 등록은 별도 흐름으로 이동합니다.';
+        ? '조회 범위 기준으로 직원 디렉터리를 관리합니다.'
+        : '직원을 목록과 상세 패널로 관리합니다.';
     }
   }
   if (actionHintEl) {
-    actionHintEl.textContent = '목록에서 직원을 선택하면 상세 패널이 열립니다. 현장 단위 전체 삭제는 목록 화면에서만 가능합니다.';
+    actionHintEl.textContent = '목록에서 직원을 선택하면 상세 패널이 열립니다.';
   }
 
   if (isImportRoute) {
@@ -31472,6 +31915,7 @@ function applyEmployeeRegistrationRoutePresentation() {
     setEmployeeRosterImportOpen(false);
     toggleVisibility('#employeeTopActionBar', false);
     toggleVisibility('#employeeToolbar', false);
+    toggleVisibility('#employeeDirectorySummaryStrip', false);
     toggleVisibility('#employeeFormCard', false);
     toggleVisibility('#employeeRosterImportCard', false);
     toggleVisibility('#employeeDesktopTableCard', canReadEmployees && isListRoute);
@@ -31485,6 +31929,7 @@ function applyEmployeeRegistrationRoutePresentation() {
     setEmployeeRosterImportOpen(false);
     toggleVisibility('#employeeTopActionBar', true);
     toggleVisibility('#employeeToolbar', true);
+    toggleVisibility('#employeeDirectorySummaryStrip', true);
     toggleVisibility('#employeeFormCard', false);
     toggleVisibility('#employeeRosterImportCard', false);
     toggleVisibility('#employeeDesktopTableCard', true);
@@ -31498,6 +31943,7 @@ function applyEmployeeRegistrationRoutePresentation() {
     setEmployeeRosterImportOpen(false);
     toggleVisibility('#employeeTopActionBar', false);
     toggleVisibility('#employeeToolbar', false);
+    toggleVisibility('#employeeDirectorySummaryStrip', false);
     toggleVisibility('#employeeFormCard', true);
     toggleVisibility('#employeeRosterImportCard', false);
     toggleVisibility('#employeeDesktopTableCard', false);
@@ -31511,6 +31957,7 @@ function applyEmployeeRegistrationRoutePresentation() {
     setEmployeeRosterImportOpen(true);
     toggleVisibility('#employeeTopActionBar', false);
     toggleVisibility('#employeeToolbar', false);
+    toggleVisibility('#employeeDirectorySummaryStrip', false);
     toggleVisibility('#employeeFormCard', false);
     toggleVisibility('#employeeRosterImportCard', true);
     toggleVisibility('#employeeDesktopTableCard', false);
@@ -31523,6 +31970,7 @@ function applyEmployeeRegistrationRoutePresentation() {
   setEmployeeRosterImportOpen(false);
   toggleVisibility('#employeeTopActionBar', false);
   toggleVisibility('#employeeToolbar', false);
+  toggleVisibility('#employeeDirectorySummaryStrip', false);
   toggleVisibility('#employeeFormCard', false);
   toggleVisibility('#employeeRosterImportCard', false);
   toggleVisibility('#employeeDesktopTableCard', false);
@@ -31541,10 +31989,16 @@ function applySiteRoutePresentation() {
   const inSiteCreateRoute = canWrite && (route === ROUTE_ADMIN_SITES_NEW || route === ROUTE_ADMIN_SITES_EDIT);
 
   toggleVisibility('#siteFilterGrid', !inSiteCreateRoute);
+  toggleVisibility('#siteDirectorySummaryStrip', !inSiteCreateRoute);
+  toggleVisibility('#siteDirectoryWorkspace', !inSiteCreateRoute);
   toggleVisibility('#siteDesktopTableWrap', !inSiteCreateRoute);
   toggleVisibility('#siteList', !inSiteCreateRoute);
   toggleVisibility('#siteEditorCard', inSiteCreateRoute);
   toggleVisibility('#siteCreateBtn', canWrite && !inSiteCreateRoute);
+  if (inSiteCreateRoute) {
+    state.siteDirectoryDetailId = '';
+    renderSiteDirectoryDetail(null);
+  }
 }
 
 function ensureSiteRoutePresentation() {
@@ -32110,7 +32564,7 @@ function getFilteredEmployeeRows() {
   return filtered.slice().sort((left, right) => compareEmployeeSortValues(left, right, sortKey, sortDirection));
 }
 
-const EMPLOYEE_TABLE_COLUMN_COUNT = 10;
+const EMPLOYEE_TABLE_COLUMN_COUNT = 7;
 
 function getEmployeeDesktopTableBody() {
   const tbody = $('#employeeDesktopTableBody');
@@ -32178,11 +32632,8 @@ function buildEmployeeDesktopTableRow(item) {
   const siteLabel = siteCode && siteName !== siteCode ? `${siteName} (${siteCode})` : siteName;
   const employeeCode = String(item.employee_code || '-').trim() || '-';
   const fullName = String(item.full_name || '-').trim() || '-';
-  const hireDate = formatDateLabel(item.hire_date, '-') || '-';
-  const phone = String(item.phone || '-').trim() || '-';
   const roleLabel = getEmployeeRoleLabel(item);
   const employmentMeta = getEmployeeEmploymentStatusMeta(item);
-  const linkageMeta = getEmployeeAccountLinkageMeta(item);
 
   appendTextCell(companyName);
   appendTextCell(siteLabel, 'site-cell');
@@ -32192,11 +32643,6 @@ function buildEmployeeDesktopTableRow(item) {
   const employmentTd = document.createElement('td');
   employmentTd.innerHTML = `<span class="${employmentMeta.className}">${employmentMeta.label}</span>`;
   tr.appendChild(employmentTd);
-  const linkageTd = document.createElement('td');
-  linkageTd.innerHTML = `<span class="${linkageMeta.className}">${linkageMeta.label}</span>`;
-  tr.appendChild(linkageTd);
-  appendTextCell(hireDate);
-  appendTextCell(phone, 'phone-cell');
 
   const actionsTd = document.createElement('td');
   actionsTd.className = 'actions-cell';
@@ -32366,6 +32812,58 @@ function renderEmployeeDirectoryCount(filteredRows = []) {
   target.textContent = filteredCount === totalCount
     ? `총 ${totalCount}명`
     : `조회 ${filteredCount}명 / 전체 ${totalCount}명`;
+}
+
+function renderOrganizationSummaryStrip(selector = '', items = []) {
+  const target = $(selector);
+  if (!(target instanceof HTMLElement)) return;
+  const rows = Array.isArray(items)
+    ? items.filter((item) => item && String(item.value || '').trim())
+    : [];
+  target.innerHTML = '';
+  target.classList.toggle('hidden', rows.length === 0);
+  if (!rows.length) return;
+  const fragment = document.createDocumentFragment();
+  rows.forEach((item) => {
+    const card = document.createElement('article');
+    card.className = 'organization-summary-item';
+    if (String(item.tone || '').trim()) {
+      card.dataset.tone = String(item.tone).trim();
+    }
+    const label = document.createElement('span');
+    label.className = 'organization-summary-label';
+    label.textContent = String(item.label || '').trim();
+    const value = document.createElement('strong');
+    value.className = 'organization-summary-value';
+    value.textContent = String(item.value || '').trim();
+    card.append(label, value);
+    if (String(item.meta || '').trim()) {
+      const meta = document.createElement('span');
+      meta.className = 'organization-summary-meta';
+      meta.textContent = String(item.meta).trim();
+      card.appendChild(meta);
+    }
+    fragment.appendChild(card);
+  });
+  target.appendChild(fragment);
+}
+
+function renderEmployeeDirectorySummaryStrip(filteredRows = []) {
+  const rows = Array.isArray(filteredRows) ? filteredRows : [];
+  const activeCount = rows.filter((item) => getEmployeeEmploymentStatusMeta(item).key === 'active').length;
+  const inactiveCount = rows.filter((item) => getEmployeeEmploymentStatusMeta(item).key !== 'active').length;
+  const unlinkedCount = rows.filter((item) => String(getEmployeeAccountLinkageMeta(item).label || '').trim() !== '연결됨').length;
+  const items = [
+    { label: '조회 직원', value: `${rows.length}명` },
+    { label: '재직중', value: `${activeCount}명`, tone: activeCount > 0 ? 'success' : '' },
+  ];
+  if (inactiveCount > 0) {
+    items.push({ label: '비활성/퇴직', value: `${inactiveCount}명`, tone: 'warn' });
+  }
+  if (unlinkedCount > 0) {
+    items.push({ label: '계정 연결 필요', value: `${unlinkedCount}명`, tone: 'danger' });
+  }
+  renderOrganizationSummaryStrip('#employeeDirectorySummaryStrip', items);
 }
 
 function syncEmployeeDirectorySelection() {
@@ -32839,7 +33337,7 @@ function getEmployeeDrawerShiftKindLabel(shiftKind = '') {
 function buildEmployeeDirectoryWorkforceFacts(header = {}, workforceInfo = {}) {
   const items = [
     { label: '직원번호', value: String(workforceInfo.employee_number || header.employee_number || '').trim() },
-    { label: '관리번호', value: String(workforceInfo.manager_or_admin_number || header.manager_or_admin_number || '').trim() },
+    { label: '소속 지점', value: String(workforceInfo.site_display || header.site_display || '').trim() },
     { label: '연락처', value: String(workforceInfo.phone || header.phone || '').trim() },
     { label: '입사일', value: formatDateLabel(workforceInfo.hire_date || header.hire_date, '') },
     { label: '퇴직일', value: formatDateLabel(workforceInfo.leave_date || header.leave_date, '') },
@@ -32857,13 +33355,14 @@ function buildEmployeeDirectoryAccountFacts(detail = null, header = {}) {
   const accountStatus = String(workforceInfo.account_link_status || header.account_link_status || getEmployeeAccountLinkageMeta(employee).label || '').trim();
   const loginId = String(employee?.soc_login_id || employee?.username || '').trim();
   const roleLabel = String(employee?.user_role || employee?.soc_role ? getRoleDisplayLabel(employee?.user_role || employee?.soc_role) : '').trim();
+  const showLoginId = getNavigationRole() === 'DEV';
   const items = [
     {
       label: '연동 상태',
       value: accountStatus,
       className: accountStatus === '연결됨' ? 'is-success' : 'is-unavailable',
     },
-    { label: '로그인 ID', value: loginId },
+    { label: '로그인 ID', value: showLoginId ? loginId : '' },
     { label: '권한', value: roleLabel && roleLabel !== '계정 미연결' ? roleLabel : '' },
   ].filter((item) => isEmployeeDirectoryMeaningfulValue(item.value));
   if (!items.length) {
@@ -32964,7 +33463,7 @@ function renderEmployeeDirectoryHeader(detail = null) {
 
   if (!detail) {
     titleEl.textContent = '직원을 선택해 주세요';
-    subtitleEl.textContent = '직원을 고르면 핵심 상태가 열립니다.';
+    subtitleEl.textContent = '목록에서 직원을 선택하면 핵심 상태와 바로 가는 액션이 열립니다.';
     eyebrowEl.textContent = '직원 선택';
     if (badgesEl) badgesEl.innerHTML = '';
     if (metaEl) {
@@ -32978,12 +33477,11 @@ function renderEmployeeDirectoryHeader(detail = null) {
   const header = getEmployeeDirectoryHeaderPayload(detail);
   titleEl.textContent = header.employee_name;
   subtitleEl.textContent = header.subtitle || '선택한 직원의 상태를 확인합니다.';
-  eyebrowEl.textContent = header.company_name || '직원 상세';
+  eyebrowEl.textContent = header.employee_number || header.company_name || '직원 상세';
   if (metaEl) {
     metaEl.innerHTML = '';
     const metaItems = [
       { label: '직원번호', value: header.employee_number },
-      { label: '관리번호', value: header.manager_or_admin_number },
       { label: '연락처', value: header.phone },
       { label: '입사일', value: formatDateLabel(header.hire_date, '') },
     ].filter((item) => isEmployeeDirectoryMeaningfulValue(item.value));
@@ -33029,16 +33527,16 @@ function buildEmployeeDirectoryOverviewTab(detail = null) {
   const fragment = document.createDocumentFragment();
 
   if (kpis.length) {
-    fragment.appendChild(createEmployeeDirectorySection('핵심 상태', buildEmployeeDirectoryKpiGrid(kpis)));
+    fragment.appendChild(createEmployeeDirectorySection('현재 상태', buildEmployeeDirectoryKpiGrid(kpis)));
   } else {
     fragment.appendChild(createEmployeeDirectorySection(
-      '핵심 상태',
+      '현재 상태',
       buildEmployeeDirectoryCompactEmpty('표시할 상태가 없습니다.', '최근 출퇴근, 일정, 요청 데이터가 아직 없습니다.'),
     ));
   }
 
   fragment.appendChild(createEmployeeDirectorySection('기본 정보', buildEmployeeDirectoryWorkforceFacts(header, workforceInfo)));
-  fragment.appendChild(createEmployeeDirectorySection('계정 연결', buildEmployeeDirectoryAccountFacts(detail, header)));
+  fragment.appendChild(createEmployeeDirectorySection('계정/권한', buildEmployeeDirectoryAccountFacts(detail, header)));
 
   const activityGroups = [];
   if (recentAttendance.length) {
@@ -34440,6 +34938,7 @@ function renderEmployeesFromCache() {
     sortSelect.value = getEmployeeSortControlValue();
   }
   renderEmployeeDirectoryCount(filtered);
+  renderEmployeeDirectorySummaryStrip(filtered);
 
   if (mode === 'desktop') {
     if (mobileList instanceof HTMLElement) clearList(mobileList);
@@ -53782,6 +54281,13 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'site-open-detail') {
+      const siteId = String(actionEl.dataset.siteId || '').trim();
+      if (!siteId || !isDesktopViewport()) return;
+      openSiteDirectoryDetail(siteId, { triggerEl: actionEl });
+      return;
+    }
+
     if (action === 'site-editor-close') {
       closeSiteEditor();
       return;
@@ -53828,6 +54334,16 @@ function bindUiEvents() {
         if (!ok) return;
         onSiteEdit(actionEl.dataset.siteId);
       }, '편집기 준비 중...');
+      return;
+    }
+
+    if (action === 'site-directory-open-employees') {
+      runActionSafely(navigateToEmployeesForSite(actionEl.dataset.siteCode || ''), '직원 목록으로 이동하지 못했습니다.');
+      return;
+    }
+
+    if (action === 'site-directory-open-schedule') {
+      runActionSafely(navigateToRoute(ROUTE_SCHEDULE_CALENDAR), '스케줄 화면으로 이동하지 못했습니다.');
       return;
     }
 
