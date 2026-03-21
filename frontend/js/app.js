@@ -32802,7 +32802,7 @@ function getEmployeeDirectoryHeaderPayload(detail = null) {
   const companyName = String(header.company_name || resolveEmployeeCompanyDisplayName(employee)).trim();
   const siteName = String(header.site_name || getEmployeeSiteDisplayLabel(employee)).trim();
   const siteCode = String(header.site_code || employee.site_code || '').trim();
-  const siteDisplay = siteCode && siteName && siteCode !== siteName
+  const siteDisplay = siteCode && siteName && siteCode !== siteName && !siteName.includes(`(${siteCode})`)
     ? `${siteName} (${siteCode})`
     : siteName || siteCode;
   const subtitle = String(header.subtitle || '').trim()
