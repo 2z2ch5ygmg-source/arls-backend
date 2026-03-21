@@ -7871,6 +7871,11 @@ a:hover {
   font-weight: var(--ui-weight-semibold);
 }
 
+#view-org .site-toolbar-field input,
+#view-org .site-toolbar-field select {
+  min-width: 0;
+}
+
 #view-org .site-toolbar-search-field {
   min-width: 280px;
   flex: 1 1 340px;
@@ -8648,6 +8653,10 @@ a:hover {
   #view-org #siteDirectoryWorkspace {
     grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.92fr);
     align-items: start;
+  }
+
+  #view-org #siteDesktopTableCard {
+    min-width: 0;
   }
 
   #view-org .site-directory-detail-panel {
@@ -9445,6 +9454,21 @@ a:hover {
     padding: 8px;
   }
 
+  #view-org .organization-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #view-org .site-toolbar-search-field,
+  #view-org .site-toolbar-toggles,
+  #view-org .site-toolbar-actions {
+    grid-column: 1 / -1;
+  }
+
+  #view-org .site-directory-table-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   #view-org #siteList > li {
     border: 1px solid var(--ui-border-subtle);
     border-radius: var(--ui-radius-lg);
@@ -9453,6 +9477,10 @@ a:hover {
     min-height: 56px;
     content-visibility: auto;
     contain-intrinsic-size: 80px;
+  }
+
+  #view-org .site-card-statuses {
+    justify-content: flex-start;
   }
 
   #view-org #siteGoogleMap {
