@@ -132,21 +132,20 @@
             <div class="workspace-head home-workspace-head">
               <div class="workspace-head-main">
                 <h2 id="homeViewTitle">홈</h2>
-                <p id="homeViewSubtitle" class="muted">오늘 가장 먼저 확인할 상태와 바로 이동할 작업만 보여주는 브리핑 화면입니다.</p>
-              </div>
-              <div class="workspace-head-actions shell-manager-only hidden">
-                <button class="btn btn-secondary" type="button" data-action="ops-open-overview">운영</button>
-                <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/schedules/calendar">오늘 스케줄</button>
+                <p id="homeViewSubtitle" class="muted">오늘 운영 상태를 위에서 아래로 읽는 브리핑 대시보드입니다.</p>
               </div>
             </div>
             <div class="home-stack">
-              <article class="module-card stack shell-manager-only home-dashboard-card home-dashboard-card-primary home-manager-kpi-card">
-                <div class="approval-head">
-                  <div>
-                    <h3>오늘 브리핑</h3>
+              <article class="module-card stack shell-manager-only home-manager-hero-card">
+                <div class="home-manager-hero-head">
+                  <div class="home-manager-hero-copy">
+                    <span class="home-manager-eyebrow">운영 브리핑</span>
+                    <h3>오늘 운영 개요</h3>
+                    <p id="homeManagerHeroMeta" class="muted">오늘 상태를 불러오는 중입니다.</p>
                   </div>
+                  <span id="homeManagerOverviewPill" class="status-pill status-pill-neutral">확인 중</span>
                 </div>
-                <div class="home-manager-kpi-grid home-manager-kpi-grid-compact">
+                <div class="home-manager-kpi-grid home-manager-kpi-grid-hero">
                   <div class="home-manager-kpi">
                     <span>출근 예정</span>
                     <strong id="homeManagerScheduledCount">-</strong>
@@ -167,30 +166,198 @@
                 <p id="homeManagerOpsMeta" class="muted hidden">운영 집계 대기중</p>
               </article>
 
-              <article class="module-card stack shell-manager-only home-dashboard-card home-dashboard-card-primary home-manager-priority-card">
-                <div class="approval-head">
-                  <div>
-                    <h3>오늘 우선 조치</h3>
+              <article class="module-card stack shell-manager-only home-manager-section home-manager-attendance-card">
+                <div class="home-manager-section-head">
+                  <div class="home-manager-section-title">
+                    <span class="home-manager-section-icon" aria-hidden="true">⏱</span>
+                    <div>
+                      <h3>출퇴근</h3>
+                      <p class="muted">오늘 출근 상태와 바로 확인할 예외를 먼저 봅니다.</p>
+                    </div>
                   </div>
-                  <span id="homeManagerPriorityPill" class="status-pill status-pill-neutral">확인 중</span>
                 </div>
-                <ul id="homeManagerPriorityList" class="list compact-list"></ul>
+                <div class="home-attendance-overview-grid">
+                  <article class="home-attendance-rate-card">
+                    <span class="home-attendance-card-label">오늘 출근율</span>
+                    <div class="home-attendance-rate-visual">
+                      <div id="homeManagerAttendanceRateRing" class="home-attendance-rate-ring" style="--progress: 0%;">
+                        <div class="home-attendance-rate-core">
+                          <strong id="homeManagerAttendanceRateValue">-</strong>
+                          <span id="homeManagerAttendanceRateCaption">집계 대기</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="home-attendance-rate-foot">
+                      <span id="homeManagerAttendanceRateMeta">출근 완료 0 / 예정 0</span>
+                    </div>
+                  </article>
+
+                  <article class="home-attendance-status-card">
+                    <div class="home-mini-metric-grid">
+                      <div class="home-mini-metric">
+                        <span>출근 완료</span>
+                        <strong id="homeManagerAttendancePresent">-</strong>
+                      </div>
+                      <div class="home-mini-metric">
+                        <span>미출근</span>
+                        <strong id="homeManagerAttendanceMissing">-</strong>
+                      </div>
+                      <div class="home-mini-metric">
+                        <span>확인 필요</span>
+                        <strong id="homeManagerAttendanceReview">-</strong>
+                      </div>
+                      <div class="home-mini-metric">
+                        <span>휴가/야간</span>
+                        <strong id="homeManagerAttendanceLeave">-</strong>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article class="home-attendance-issue-card">
+                    <div class="home-attendance-issue-head">
+                      <span class="home-attendance-card-label">오늘 우선 확인</span>
+                      <span id="homeManagerAttendanceIssuePill" class="status-pill status-pill-neutral">확인 중</span>
+                    </div>
+                    <ul id="homeManagerAttendanceIssueList" class="list compact-list"></ul>
+                  </article>
+                </div>
               </article>
 
-              <article class="module-card stack shell-manager-only home-dashboard-card home-dashboard-card-secondary home-manager-shortcuts-card">
-                <div class="approval-head">
-                  <div>
-                    <h3>바로 이동</h3>
+              <article class="module-card stack shell-manager-only home-manager-section home-manager-schedule-card">
+                <div class="home-manager-section-head">
+                  <div class="home-manager-section-title">
+                    <span class="home-manager-section-icon" aria-hidden="true">📅</span>
+                    <div>
+                      <h3>오늘 스케줄</h3>
+                      <p class="muted">배치 상태, 마감/리더 지정, 누락 여부를 한 번에 확인합니다.</p>
+                    </div>
                   </div>
                 </div>
-                <div class="quick-actions">
-                  <button class="btn btn-secondary" type="button" data-action="ops-open-overview">운영</button>
-                  <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/attendance">출퇴근</button>
-                  <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/schedules/calendar">오늘 스케줄</button>
-                  <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/requests">요청·승인</button>
-                  <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/reports">보고</button>
+                <div class="home-schedule-grid">
+                  <article class="home-schedule-summary-card">
+                    <div class="home-mini-metric-grid home-mini-metric-grid-schedule">
+                      <div class="home-mini-metric">
+                        <span>오늘 근무 인원</span>
+                        <strong id="homeManagerScheduleTodayCount">-</strong>
+                      </div>
+                      <div class="home-mini-metric">
+                        <span>이번주 배정</span>
+                        <strong id="homeManagerScheduleWeekCount">-</strong>
+                      </div>
+                      <div class="home-mini-metric">
+                        <span>근무 현장</span>
+                        <strong id="homeManagerScheduleSiteCount">-</strong>
+                      </div>
+                      <div class="home-mini-metric">
+                        <span>결원 지점</span>
+                        <strong id="homeManagerScheduleVacancySites">-</strong>
+                      </div>
+                    </div>
+                  </article>
+                  <article class="home-schedule-summary-card">
+                    <ul id="homeManagerScheduleList" class="list compact-list"></ul>
+                  </article>
                 </div>
               </article>
+
+              <article class="module-card stack shell-manager-only home-manager-section home-manager-requests-card">
+                <div class="home-manager-section-head">
+                  <div class="home-manager-section-title">
+                    <span class="home-manager-section-icon" aria-hidden="true">🗂</span>
+                    <div>
+                      <h3>요청·승인</h3>
+                      <p class="muted">지금 처리해야 할 승인 대기와 보류 건수를 요약합니다.</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="home-requests-grid">
+                  <article class="home-requests-summary-card">
+                    <div class="home-mini-metric-grid home-mini-metric-grid-requests">
+                      <div class="home-mini-metric">
+                        <span>처리 필요</span>
+                        <strong id="homeManagerRequestPendingCount">-</strong>
+                      </div>
+                      <div class="home-mini-metric">
+                        <span>휴가 대기</span>
+                        <strong id="homeManagerRequestLeaveCount">-</strong>
+                      </div>
+                      <div class="home-mini-metric">
+                        <span>정정 대기</span>
+                        <strong id="homeManagerRequestCorrectionCount">-</strong>
+                      </div>
+                      <div class="home-mini-metric">
+                        <span>읽지 않음</span>
+                        <strong id="homeManagerRequestUnreadCount">-</strong>
+                      </div>
+                    </div>
+                  </article>
+                  <article class="home-requests-summary-card">
+                    <ul id="homeManagerRequestList" class="list compact-list"></ul>
+                  </article>
+                </div>
+              </article>
+
+              <div class="shell-manager-only home-manager-bottom-grid">
+                <article id="homeManagerPeopleCard" class="module-card stack home-manager-section home-manager-people-card hidden">
+                  <div class="home-manager-section-head">
+                    <div class="home-manager-section-title">
+                      <span class="home-manager-section-icon" aria-hidden="true">👥</span>
+                      <div>
+                        <h3>구성원</h3>
+                        <p class="muted">인원 구조와 계정 연결 상태를 요약합니다.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="home-mini-metric-grid">
+                    <div class="home-mini-metric">
+                      <span>전체 인원</span>
+                      <strong id="homeManagerPeopleTotal">-</strong>
+                    </div>
+                    <div class="home-mini-metric">
+                      <span>재직중</span>
+                      <strong id="homeManagerPeopleActive">-</strong>
+                    </div>
+                    <div class="home-mini-metric">
+                      <span>관리자/리더</span>
+                      <strong id="homeManagerPeopleManagers">-</strong>
+                    </div>
+                    <div class="home-mini-metric">
+                      <span>계정 연결 필요</span>
+                      <strong id="homeManagerPeopleUnlinked">-</strong>
+                    </div>
+                  </div>
+                </article>
+
+                <article id="homeManagerSitesCard" class="module-card stack home-manager-section home-manager-sites-card hidden">
+                  <div class="home-manager-section-head">
+                    <div class="home-manager-section-title">
+                      <span class="home-manager-section-icon" aria-hidden="true">🏢</span>
+                      <div>
+                        <h3>근무지</h3>
+                        <p class="muted">운영 중인 현장과 배정 상태를 간단히 확인합니다.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="home-mini-metric-grid">
+                    <div class="home-mini-metric">
+                      <span>전체 현장</span>
+                      <strong id="homeManagerSitesTotal">-</strong>
+                    </div>
+                    <div class="home-mini-metric">
+                      <span>활성 현장</span>
+                      <strong id="homeManagerSitesActive">-</strong>
+                    </div>
+                    <div class="home-mini-metric">
+                      <span>직원 배정 현장</span>
+                      <strong id="homeManagerSitesAssigned">-</strong>
+                    </div>
+                    <div class="home-mini-metric">
+                      <span>미배정 직원</span>
+                      <strong id="homeManagerSitesUnassignedEmployees">-</strong>
+                    </div>
+                  </div>
+                </article>
+              </div>
 
               <article class="module-card home-today-card">
                 <div class="shell-employee-only">
@@ -3875,10 +4042,10 @@
           </section>
 
           <section id="view-employees" class="panel card view hidden">
-            <div class="workspace-head organization-workspace-head">
+            <div class="workspace-head organization-workspace-head employee-workspace-head">
               <div class="workspace-head-main">
-                <h2 id="employeesViewTitle">조직</h2>
-                <p id="employeesScopeHint" class="muted">직원 목록에서 선택하고 상세 패널에서 확인합니다. 등록과 대량 등록은 별도 흐름으로 이동합니다.</p>
+                <h2 id="employeesViewTitle">직원 관리</h2>
+                <p id="employeesScopeHint" class="muted">직원 디렉터리에서 검색하고, 선택한 직원은 오른쪽 상세 패널에서 바로 확인합니다.</p>
               </div>
             </div>
             <div class="workspace-tabs organization-workspace-tabs">
@@ -3887,51 +4054,88 @@
               <button class="btn btn-secondary workspace-tab shell-dev-only hidden" type="button" data-action="drawer-open-route" data-route="/master/tenants" data-organization-route="/master/tenants">회사</button>
             </div>
             <p id="employeesPermissionHint" class="muted permission-hint hidden"></p>
-            <div id="employeeTopActionBar" class="employee-top-action-bar command-bar hidden">
-              <span id="employeeTopActionHint" class="muted">목록에서 직원을 선택하면 상세 패널이 열립니다. 현장 단위 전체 삭제는 목록 화면에서만 가능합니다.</span>
-              <button id="employeeBulkDeleteSiteBtn" class="btn btn-destructive" type="button" data-action="employee-bulk-delete-site" disabled>현장 직원 전체 삭제</button>
+            <div id="employeeDirectorySummaryStrip" class="organization-summary-strip employee-directory-summary-strip hidden" aria-live="polite"></div>
+
+            <div id="employeeTopActionBar" class="employee-top-action-bar employee-console-topbar command-bar hidden">
+              <div class="employee-console-topbar-main">
+                <div class="employee-console-title-stack">
+                  <span class="employee-console-eyebrow">직원 디렉터리</span>
+                  <div id="employeeDirectoryCount" class="employee-directory-count" aria-live="polite">총 0명</div>
+                </div>
+                <p id="employeeTopActionHint" class="muted">직원을 선택하면 오른쪽 상세 패널에서 상태와 계정 연결 정보를 확인합니다.</p>
+              </div>
+              <div class="employee-console-topbar-actions">
+                <button id="employeeBulkDeleteSiteBtn" class="btn btn-destructive" type="button" data-action="employee-bulk-delete-site" disabled>선택 현장 전체 삭제</button>
+              </div>
             </div>
 
-            <div id="employeeToolbar" class="employee-toolbar command-bar ui-filterbar">
-              <select id="employeeTenantFilter">
-                <option value="">현재 작업회사</option>
-              </select>
-              <select id="employeeSiteFilter">
-                <option value="all">전체(활성)</option>
-              </select>
-              <select id="employeeRoleFilter">
-                <option value="all">전체 역할</option>
-              </select>
-              <select id="employeeEmploymentStatusFilter">
-                <option value="all">전체 재직 상태</option>
-                <option value="active">재직중</option>
-                <option value="inactive">비활성</option>
-                <option value="retired">퇴직</option>
-                <option value="deleted">삭제됨</option>
-              </select>
-              <input id="employeeSearchInput" type="search" placeholder="현장, 직원번호, 이름, 연락처 검색" autocomplete="off" />
-              <select id="employeeSortSelect">
-                <option value="default">기본 정렬</option>
-                <option value="name_asc">이름 ↑</option>
-                <option value="site_asc">현장 ↑</option>
-                <option value="role_asc">역할 ↑</option>
-                <option value="status_asc">재직상태 ↑</option>
-                <option value="join_desc">입사일 ↓</option>
-              </select>
-              <div id="employeeDirectoryCount" class="employee-directory-count" aria-live="polite">총 0명</div>
-              <label class="choice-row compact-filter-toggle" for="employeeIncludeInactive">
-                <input id="employeeIncludeInactive" type="checkbox" />
-                비활성 포함
+            <div id="employeeToolbar" class="employee-toolbar employee-console-toolbar command-bar ui-filterbar">
+              <label class="employee-toolbar-field employee-toolbar-search-field">
+                <span>검색</span>
+                <input id="employeeSearchInput" type="search" placeholder="이름, 직원번호, 연락처, 현장 검색" autocomplete="off" />
               </label>
-              <label class="choice-row compact-filter-toggle" for="employeeIncludeDeleted">
-                <input id="employeeIncludeDeleted" type="checkbox" />
-                삭제 포함
-              </label>
-              <button class="btn btn-primary" type="button" data-action="drawer-open-route" data-route="/branch/employees/new">직원 등록</button>
-              <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/branch/employees/import">대량 등록</button>
-            </div>
 
-            <div id="employeeDirectorySummaryStrip" class="organization-summary-strip hidden" aria-live="polite"></div>
+              <label id="employeeTenantFilterField" class="employee-toolbar-field">
+                <span>회사</span>
+                <select id="employeeTenantFilter">
+                  <option value="">현재 작업회사</option>
+                </select>
+              </label>
+
+              <label class="employee-toolbar-field">
+                <span>현장</span>
+                <select id="employeeSiteFilter">
+                  <option value="all">전체(활성)</option>
+                </select>
+              </label>
+
+              <label class="employee-toolbar-field">
+                <span>역할</span>
+                <select id="employeeRoleFilter">
+                  <option value="all">전체 역할</option>
+                </select>
+              </label>
+
+              <label class="employee-toolbar-field">
+                <span>재직 상태</span>
+                <select id="employeeEmploymentStatusFilter">
+                  <option value="all">전체 재직 상태</option>
+                  <option value="active">재직중</option>
+                  <option value="inactive">비활성</option>
+                  <option value="retired">퇴직</option>
+                  <option value="deleted">삭제됨</option>
+                </select>
+              </label>
+
+              <label class="employee-toolbar-field">
+                <span>정렬</span>
+                <select id="employeeSortSelect">
+                  <option value="default">기본 정렬</option>
+                  <option value="name_asc">이름 ↑</option>
+                  <option value="site_asc">현장 ↑</option>
+                  <option value="role_asc">역할 ↑</option>
+                  <option value="account_asc">계정 연결 ↑</option>
+                  <option value="status_asc">재직상태 ↑</option>
+                  <option value="join_desc">입사일 ↓</option>
+                </select>
+              </label>
+
+              <div id="employeeAdvancedFilterToggles" class="employee-toolbar-toggles">
+                <label class="choice-row compact-filter-toggle" for="employeeIncludeInactive">
+                  <input id="employeeIncludeInactive" type="checkbox" />
+                  비활성 포함
+                </label>
+                <label class="choice-row compact-filter-toggle" for="employeeIncludeDeleted">
+                  <input id="employeeIncludeDeleted" type="checkbox" />
+                  삭제 포함
+                </label>
+              </div>
+
+              <div class="employee-toolbar-actions">
+                <button class="btn btn-primary" type="button" data-action="drawer-open-route" data-route="/branch/employees/new">직원 등록</button>
+                <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/branch/employees/import">대량 등록</button>
+              </div>
+            </div>
 
             <article id="employeeFormCard" class="module-card stack">
               <div class="wizard-card-head">
@@ -4235,26 +4439,32 @@
               </div>
             </article>
 
-            <article id="employeeDesktopTableCard" class="module-card stack">
+            <article id="employeeDesktopTableCard" class="module-card stack employee-directory-table-card">
+              <div class="employee-directory-table-head">
+                <div class="employee-directory-table-head-main">
+                  <h3>직원 목록</h3>
+                  <p class="muted">행을 선택하면 오른쪽 상세 패널에서 계정, 출퇴근, 스케줄 상태를 이어서 확인합니다.</p>
+                </div>
+              </div>
               <div class="employee-table-wrap">
                 <table class="employee-table">
                   <thead>
                     <tr>
                       <th class="sortable-col" scope="col">
                         <button class="employee-sort-btn" type="button" data-action="employee-sort" data-sort-key="companyName">
-                          <span>회사명</span>
+                          <span>회사</span>
                           <span class="employee-sort-indicator" aria-hidden="true"></span>
                         </button>
                       </th>
                       <th class="site-col sortable-col" scope="col">
                         <button class="employee-sort-btn" type="button" data-action="employee-sort" data-sort-key="siteName">
-                          <span>근무현장</span>
+                          <span>현장</span>
                           <span class="employee-sort-indicator" aria-hidden="true"></span>
                         </button>
                       </th>
                       <th class="sortable-col" scope="col">
                         <button class="employee-sort-btn" type="button" data-action="employee-sort" data-sort-key="fullName">
-                          <span>이름</span>
+                          <span>직원</span>
                           <span class="employee-sort-indicator" aria-hidden="true"></span>
                         </button>
                       </th>
@@ -4267,6 +4477,12 @@
                       <th class="sortable-col" scope="col">
                         <button class="employee-sort-btn" type="button" data-action="employee-sort" data-sort-key="roleLabel">
                           <span>역할</span>
+                          <span class="employee-sort-indicator" aria-hidden="true"></span>
+                        </button>
+                      </th>
+                      <th class="sortable-col" scope="col">
+                        <button class="employee-sort-btn" type="button" data-action="employee-sort" data-sort-key="accountLinkage">
+                          <span>계정 연결</span>
                           <span class="employee-sort-indicator" aria-hidden="true"></span>
                         </button>
                       </th>

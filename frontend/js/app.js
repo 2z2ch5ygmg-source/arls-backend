@@ -595,6 +595,12 @@ function createInitialHomeAttendanceCheckState() {
 function createInitialHomeManagerDashboardState() {
   return {
     attendanceIssues: [],
+    attendanceSummary: {
+      missingInCount: 0,
+      missingOutCount: 0,
+      duplicateCount: 0,
+      reviewCount: 0,
+    },
     attentionItems: [],
     scheduleSummary: {
       todayScheduledCount: 0,
@@ -614,6 +620,24 @@ function createInitialHomeManagerDashboardState() {
       overnightCount: 0,
       latestLogLabel: '최근 실행 없음',
       latestLogStatus: '',
+    },
+    requestSummary: {
+      totalPendingCount: 0,
+      leavePendingCount: 0,
+      attendancePendingCount: 0,
+      correctionPendingCount: 0,
+      unreadCount: 0,
+    },
+    organizationSummary: {
+      loading: false,
+      employeeTotal: 0,
+      activeEmployeeCount: 0,
+      managerCount: 0,
+      unlinkedCount: 0,
+      siteTotal: 0,
+      activeSiteCount: 0,
+      assignedSiteCount: 0,
+      unassignedEmployeeCount: 0,
     },
     approvalPendingCount: 0,
   };
@@ -4824,6 +4848,12 @@ function renderHomeDashboardList(listSelector, rows = [], emptyText = '표시할
   });
 }
 
+function getHomeUnreadNotificationCount() {
+  return (Array.isArray(state.notificationItems) ? state.notificationItems : [])
+    .filter((item) => !item?.read)
+    .length;
+}
+
 function buildHomeManagerPointRows() {
   const dashboard = getHomeManagerDashboardState();
   const scheduleSummary = dashboard.scheduleSummary || {};
@@ -4904,12 +4934,163 @@ function buildHomeManagerPointRows() {
   return pointRows.slice(0, 4);
 }
 
+function buildHomeAttendanceIssueRows() {
+  const dashboard = getHomeManagerDashboardState();
+  const rows = Array.isArray(dashboard.attendanceIssues) ? dashboard.attendanceIssues : [];
+  if (!rows.length) {
+    return [{
+      title: '오늘 출퇴근 예외 없음',
+      subtitle: '현재 범위에서 먼저 확인할 출퇴근 이슈가 없습니다.',
+      pillLabel: '정상',
+      pillVariant: 'success',
+    }];
+  }
+  return rows.slice(0, 4).map((item) => ({
+    title: `${item.employeeName || '직원'} · ${item.statusLabel || '확인 필요'}`,
+    subtitle: `${item.siteName || '현장 미지정'} · ${item.dateLabel || toDateLabel(getOpsActiveDate())}`,
+    pillLabel: item.statusLabel || '확인 필요',
+    pillVariant: item.pillVariant || 'warn',
+    danger: Boolean(item.danger),
+  }));
+}
+
+function buildHomeScheduleRows() {
+  const dashboard = getHomeManagerDashboardState();
+  const scheduleSummary = dashboard.scheduleSummary || {};
+  const rows = [];
+  if (Number(scheduleSummary.vacancySiteCount || 0) > 0 || Number(scheduleSummary.scheduleGapCount || 0) > 0) {
+    rows.push({
+      title: '현장 배정/스케줄 누락',
+      subtitle: `결원 지점 ${Number(scheduleSummary.vacancySiteCount || 0)}개 · 배정 누락 ${Number(scheduleSummary.scheduleGapCount || 0)}건`,
+      pillLabel: '확인 필요',
+      pillVariant: 'warn',
+    });
+  }
+  rows.push({
+    title: '오늘 마감자',
+    subtitle: state.ops?.closerAssigned
+      ? `현재 마감자 ${String(state.ops?.closerLabel || '').trim() || '-' }`
+      : '오늘 스케줄에서 마감자를 먼저 지정해야 합니다.',
+    pillLabel: state.ops?.closerAssigned ? '지정됨' : '미지정',
+    pillVariant: state.ops?.closerAssigned ? 'success' : 'error',
+  });
+  rows.push({
+    title: '오늘 리더',
+    subtitle: state.ops?.leaderAssigned
+      ? `현재 리더 ${String(state.ops?.leaderLabel || '').trim() || '-'}`
+      : '현장 리더가 비어 있습니다. 오늘 스케줄에서 지정해 주세요.',
+    pillLabel: state.ops?.leaderAssigned ? '지정됨' : '미지정',
+    pillVariant: state.ops?.leaderAssigned ? 'success' : 'error',
+  });
+  if (Number(dashboard.leaveSummary?.todayLeaveCount || 0) > 0 || Number(dashboard.reportSummary?.overnightCount || 0) > 0) {
+    rows.push({
+      title: '휴가/야간 운영',
+      subtitle: `휴가 ${Number(dashboard.leaveSummary?.todayLeaveCount || 0)}명 · 야간 ${Number(dashboard.reportSummary?.overnightCount || 0)}건`,
+      pillLabel: '주의',
+      pillVariant: 'warn',
+    });
+  }
+  return rows.slice(0, 4);
+}
+
+function buildHomeRequestRows() {
+  const dashboard = getHomeManagerDashboardState();
+  const requestSummary = dashboard.requestSummary || {};
+  const rows = [];
+  if (Number(requestSummary.totalPendingCount || 0) > 0) {
+    rows.push({
+      title: '처리 필요 요청',
+      subtitle: `지금 바로 확인할 승인 대기 ${Number(requestSummary.totalPendingCount || 0)}건`,
+      pillLabel: `${Number(requestSummary.totalPendingCount || 0)}건`,
+      pillVariant: 'warn',
+    });
+  }
+  if (Number(requestSummary.leavePendingCount || 0) > 0) {
+    rows.push({
+      title: '휴가 승인 대기',
+      subtitle: `휴가 요청 ${Number(requestSummary.leavePendingCount || 0)}건이 대기 중입니다.`,
+      pillLabel: `${Number(requestSummary.leavePendingCount || 0)}건`,
+      pillVariant: 'warn',
+    });
+  }
+  const attendanceReviewCount = Number(requestSummary.attendancePendingCount || 0) + Number(requestSummary.correctionPendingCount || 0);
+  if (attendanceReviewCount > 0) {
+    rows.push({
+      title: '출퇴근 예외/정정 대기',
+      subtitle: `출근 예외 ${Number(requestSummary.attendancePendingCount || 0)}건 · 정정 ${Number(requestSummary.correctionPendingCount || 0)}건`,
+      pillLabel: `${attendanceReviewCount}건`,
+      pillVariant: 'warn',
+    });
+  }
+  if (Number(requestSummary.unreadCount || 0) > 0) {
+    rows.push({
+      title: '읽지 않은 알림',
+      subtitle: `공지와 알림 ${Number(requestSummary.unreadCount || 0)}건을 아직 확인하지 않았습니다.`,
+      pillLabel: `${Number(requestSummary.unreadCount || 0)}건`,
+      pillVariant: 'warn',
+    });
+  }
+  if (!rows.length) {
+    rows.push({
+      title: '처리 대기 없음',
+      subtitle: '승인 대기와 미확인 알림이 없습니다.',
+      pillLabel: '정상',
+      pillVariant: 'success',
+    });
+  }
+  return rows.slice(0, 4);
+}
+
+function renderHomeManagerOrgSections() {
+  const dashboard = getHomeManagerDashboardState();
+  const organizationSummary = dashboard.organizationSummary || {};
+  const peopleCard = $('#homeManagerPeopleCard');
+  const sitesCard = $('#homeManagerSitesCard');
+
+  if (peopleCard instanceof HTMLElement) {
+    peopleCard.classList.toggle('hidden', !can('employees'));
+  }
+  if (sitesCard instanceof HTMLElement) {
+    sitesCard.classList.toggle('hidden', !can('org'));
+  }
+
+  const loadingText = organizationSummary.loading ? '조회 중' : '-';
+  const setMetric = (selector, value = '') => {
+    const el = $(selector);
+    if (!(el instanceof HTMLElement)) return;
+    const hasValue = value !== null && value !== undefined && value !== '';
+    el.textContent = hasValue ? String(value) : loadingText;
+  };
+
+  setMetric('#homeManagerPeopleTotal', can('employees') ? `${Number(organizationSummary.employeeTotal || 0)}명` : '');
+  setMetric('#homeManagerPeopleActive', can('employees') ? `${Number(organizationSummary.activeEmployeeCount || 0)}명` : '');
+  setMetric('#homeManagerPeopleManagers', can('employees') ? `${Number(organizationSummary.managerCount || 0)}명` : '');
+  setMetric('#homeManagerPeopleUnlinked', can('employees') ? `${Number(organizationSummary.unlinkedCount || 0)}명` : '');
+
+  setMetric('#homeManagerSitesTotal', can('org') ? `${Number(organizationSummary.siteTotal || 0)}개` : '');
+  setMetric('#homeManagerSitesActive', can('org') ? `${Number(organizationSummary.activeSiteCount || 0)}개` : '');
+  setMetric('#homeManagerSitesAssigned', can('org') ? `${Number(organizationSummary.assignedSiteCount || 0)}개` : '');
+  setMetric('#homeManagerSitesUnassignedEmployees', can('org') ? `${Number(organizationSummary.unassignedEmployeeCount || 0)}명` : '');
+}
+
 function renderHomeManagerDashboard() {
   if (!isManagerShellRole()) return;
 
   const dashboard = getHomeManagerDashboardState();
   const leaveSummary = dashboard.leaveSummary || {};
   const reportSummary = dashboard.reportSummary || {};
+  const scheduleSummary = dashboard.scheduleSummary || {};
+  const requestSummary = dashboard.requestSummary || {};
+  const attendanceIssues = Array.isArray(dashboard.attendanceIssues) ? dashboard.attendanceIssues : [];
+  const scheduledCount = Math.max(0, Number(state.ops?.scheduledCount || 0));
+  const presentCount = Math.max(0, Number(state.ops?.presentCount || 0));
+  const attendanceRate = scheduledCount > 0 ? Math.round((presentCount / scheduledCount) * 100) : 0;
+  const immediateCount = attendanceIssues.length
+    + Math.max(0, Number(scheduleSummary.vacancySiteCount || 0))
+    + Math.max(0, Number(scheduleSummary.scheduleGapCount || 0))
+    + Math.max(0, Number(requestSummary.totalPendingCount || 0))
+    + (state.ops?.closerAssigned ? 0 : 1)
+    + (state.ops?.leaderAssigned ? 0 : 1);
 
   const leaveCount = Number(leaveSummary.todayLeaveCount || 0);
   const overnightCount = Number(reportSummary.overnightCount || state.ops?.overnightCount || 0);
@@ -4923,19 +5104,48 @@ function renderHomeManagerDashboard() {
   }
   setTextToSelectors(['#homeManagerLeaveOrNightLabel'], leaveOrNightText);
 
-  const briefingMetaEl = $('#homeManagerOpsMeta');
-  let briefingMeta = '';
+  const homeTitle = $('#homeViewTitle');
+  if (homeTitle instanceof HTMLElement) {
+    homeTitle.textContent = `${String(state.user?.full_name || state.user?.username || '운영 관리자').trim()}님, 안녕하세요`;
+  }
+  const homeSubtitle = $('#homeViewSubtitle');
+  if (homeSubtitle instanceof HTMLElement) {
+    homeSubtitle.textContent = `${toDateLabel(getOpsActiveDate())} · 오늘 운영 브리핑`;
+  }
+
+  setHomeDashboardPill(
+    '#homeManagerOverviewPill',
+    state.ops.loading ? '확인 중' : (immediateCount > 0 ? `즉시 확인 ${immediateCount}건` : '안정'),
+    state.ops.loading ? 'neutral' : (immediateCount > 0 ? 'warn' : 'success'),
+  );
+
+  const heroMetaEl = $('#homeManagerHeroMeta');
+  let heroMeta = '';
   if (state.ops.loading) {
-    briefingMeta = '오늘 브리핑을 집계하는 중입니다.';
+    heroMeta = '운영 집계와 승인 상태를 불러오는 중입니다.';
   } else if (state.ops.error) {
-    briefingMeta = '오늘 브리핑을 불러오지 못했습니다.';
+    heroMeta = '오늘 운영 개요를 불러오지 못했습니다.';
   } else {
-    const metaParts = [
-      `${toDateLabel(getOpsActiveDate())} 기준`,
-    ];
+    const metaParts = [`${toDateLabel(getOpsActiveDate())} 기준`];
     if (state.ops?.lastSyncedAt) {
       metaParts.push(`최근 ${new Date(state.ops.lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`);
     }
+    heroMeta = metaParts.join(' · ');
+  }
+  if (heroMetaEl instanceof HTMLElement) {
+    heroMetaEl.textContent = heroMeta;
+  }
+
+  const briefingMetaEl = $('#homeManagerOpsMeta');
+  let briefingMeta = '';
+  if (state.ops.loading) {
+    briefingMeta = '오늘 운영 브리핑을 집계하는 중입니다.';
+  } else if (state.ops.error) {
+    briefingMeta = '오늘 운영 브리핑을 불러오지 못했습니다.';
+  } else {
+    const metaParts = [
+      immediateCount > 0 ? `지금 바로 확인할 운영 이슈 ${immediateCount}건` : '현재 즉시 확인이 필요한 운영 이슈는 없습니다.',
+    ];
     briefingMeta = metaParts.join(' · ');
   }
   if (briefingMetaEl) {
@@ -4943,10 +5153,62 @@ function renderHomeManagerDashboard() {
     briefingMetaEl.classList.toggle('hidden', !briefingMeta);
   }
 
-  const priorityRows = buildHomeManagerPointRows();
-  const priorityCount = priorityRows.filter((row) => row?.pillVariant && row.pillVariant !== 'success' && row.pillVariant !== 'neutral').length;
-  setHomeDashboardPill('#homeManagerPriorityPill', state.ops.loading ? '확인 중' : (priorityCount > 0 ? `${priorityCount}건` : '정상'), state.ops.loading ? 'neutral' : (priorityCount > 0 ? 'warn' : 'success'));
-  renderHomeDashboardList('#homeManagerPriorityList', priorityRows, '오늘 바로 확인할 항목이 없습니다.', '세부 처리는 각 owner 탭에서 이어갑니다.');
+  const rateValueEl = $('#homeManagerAttendanceRateValue');
+  if (rateValueEl instanceof HTMLElement) {
+    rateValueEl.textContent = scheduledCount > 0 ? `${attendanceRate}%` : '0%';
+  }
+  const rateCaptionEl = $('#homeManagerAttendanceRateCaption');
+  if (rateCaptionEl instanceof HTMLElement) {
+    rateCaptionEl.textContent = scheduledCount > 0 ? '오늘 출근율' : '오늘 근무 없음';
+  }
+  const rateMetaEl = $('#homeManagerAttendanceRateMeta');
+  if (rateMetaEl instanceof HTMLElement) {
+    rateMetaEl.textContent = `출근 완료 ${presentCount} / 예정 ${scheduledCount}`;
+  }
+  const rateRingEl = $('#homeManagerAttendanceRateRing');
+  if (rateRingEl instanceof HTMLElement) {
+    rateRingEl.style.setProperty('--progress', `${Math.max(0, Math.min(100, attendanceRate))}%`);
+  }
+
+  setTextToSelectors(['#homeManagerAttendancePresent'], String(presentCount));
+  setTextToSelectors(['#homeManagerAttendanceMissing'], String(Math.max(0, Number(state.ops?.vacancyCount || 0))));
+  setTextToSelectors(['#homeManagerAttendanceReview'], String(attendanceIssues.length));
+  setTextToSelectors(['#homeManagerAttendanceLeave'], `${leaveCount}/${overnightCount}`);
+  setHomeDashboardPill(
+    '#homeManagerAttendanceIssuePill',
+    state.ops.loading ? '확인 중' : (attendanceIssues.length > 0 ? `${attendanceIssues.length}건` : '정상'),
+    state.ops.loading ? 'neutral' : (attendanceIssues.length > 0 ? 'warn' : 'success'),
+  );
+  renderHomeDashboardList(
+    '#homeManagerAttendanceIssueList',
+    buildHomeAttendanceIssueRows(),
+    '오늘 출퇴근 예외가 없습니다.',
+    '현재 범위에서는 먼저 확인할 예외가 없습니다.',
+  );
+
+  setTextToSelectors(['#homeManagerScheduleTodayCount'], `${Number(scheduleSummary.todayScheduledCount || 0)}명`);
+  setTextToSelectors(['#homeManagerScheduleWeekCount'], `${Number(scheduleSummary.weekScheduledCount || 0)}건`);
+  setTextToSelectors(['#homeManagerScheduleSiteCount'], `${Number(scheduleSummary.siteCount || 0)}개`);
+  setTextToSelectors(['#homeManagerScheduleVacancySites'], `${Number(scheduleSummary.vacancySiteCount || 0)}개`);
+  renderHomeDashboardList(
+    '#homeManagerScheduleList',
+    buildHomeScheduleRows(),
+    '오늘 스케줄 이슈가 없습니다.',
+    '배치와 지정 상태가 안정적입니다.',
+  );
+
+  setTextToSelectors(['#homeManagerRequestPendingCount'], `${Number(requestSummary.totalPendingCount || 0)}건`);
+  setTextToSelectors(['#homeManagerRequestLeaveCount'], `${Number(requestSummary.leavePendingCount || 0)}건`);
+  setTextToSelectors(['#homeManagerRequestCorrectionCount'], `${Number(requestSummary.correctionPendingCount || 0)}건`);
+  setTextToSelectors(['#homeManagerRequestUnreadCount'], `${Number(requestSummary.unreadCount || 0)}건`);
+  renderHomeDashboardList(
+    '#homeManagerRequestList',
+    buildHomeRequestRows(),
+    '처리할 요청이 없습니다.',
+    '현재 승인 대기와 미확인 알림이 없습니다.',
+  );
+
+  renderHomeManagerOrgSections();
 }
 
 async function loadHomeManagerSupplementaryData({ force = false } = {}) {
@@ -4955,13 +5217,17 @@ async function loadHomeManagerSupplementaryData({ force = false } = {}) {
   }
 
   const dashboard = getHomeManagerDashboardState();
-  let pendingApprovalCount = Number(getCorrectionRowsByStatuses(['pending']).length || 0);
+  const correctionPendingCount = Number(getCorrectionRowsByStatuses(['pending']).length || 0);
+  let pendingApprovalCount = correctionPendingCount;
+  let leavePendingCount = 0;
+  let attendancePendingCount = 0;
 
   let leaveRows = [];
   if (can('leaveReview')) {
     try {
       leaveRows = await fetchManagerLeaveRequests(['pending', 'approved']);
-      pendingApprovalCount += leaveRows.filter((row) => String(row?.status || '').trim().toLowerCase() === 'pending').length;
+      leavePendingCount = leaveRows.filter((row) => String(row?.status || '').trim().toLowerCase() === 'pending').length;
+      pendingApprovalCount += leavePendingCount;
     } catch {
       leaveRows = [];
     }
@@ -4970,7 +5236,8 @@ async function loadHomeManagerSupplementaryData({ force = false } = {}) {
   if (can('attendanceReview')) {
     try {
       const attendanceRows = await fetchManagerAttendanceRequests(['pending']);
-      pendingApprovalCount += Array.isArray(attendanceRows) ? attendanceRows.length : 0;
+      attendancePendingCount = Array.isArray(attendanceRows) ? attendanceRows.length : 0;
+      pendingApprovalCount += attendancePendingCount;
     } catch {
       // no-op
     }
@@ -4983,6 +5250,13 @@ async function loadHomeManagerSupplementaryData({ force = false } = {}) {
     pendingCount: Number(leaveSummary?.pendingCount || 0),
   };
   dashboard.approvalPendingCount = pendingApprovalCount;
+  dashboard.requestSummary = {
+    totalPendingCount: pendingApprovalCount,
+    leavePendingCount,
+    attendancePendingCount,
+    correctionPendingCount,
+    unreadCount: getHomeUnreadNotificationCount(),
+  };
 
   let approvedOtCount = 0;
   let overnightCount = Number(state.ops?.overnightCount || 0);
@@ -5027,6 +5301,78 @@ async function loadHomeManagerSupplementaryData({ force = false } = {}) {
 
   renderHomeManagerDashboard();
   return dashboard;
+}
+
+async function loadHomeManagerOrgSummary({ force = false } = {}) {
+  if (!isManagerShellRole()) return null;
+  const dashboard = getHomeManagerDashboardState();
+  const summary = dashboard.organizationSummary || createInitialHomeManagerDashboardState().organizationSummary;
+  dashboard.organizationSummary = {
+    ...summary,
+    loading: true,
+  };
+  renderHomeManagerDashboard();
+
+  try {
+    let employeeRows = Array.isArray(state.employeeAdmin?.rows) && state.employeeAdmin.rows.length
+      ? state.employeeAdmin.rows
+      : [];
+    if (can('employees') && (!employeeRows.length || force)) {
+      const tenantHeader = String(getTenantIdForScopedAdminApi() || state.user?.tenant_id || '').trim();
+      employeeRows = await fetchPagedApiRows('/employees', {
+        headers: tenantHeader ? { 'X-Tenant-Id': tenantHeader } : null,
+        pageLimit: 500,
+        maxPages: 20,
+      });
+      state.employeeAdmin.rows = Array.isArray(employeeRows)
+        ? employeeRows.map((row, index) => ({ ...row, __sourceIndex: index }))
+        : [];
+    }
+
+    let siteRows = Array.isArray(state.siteCatalog) && state.siteCatalog.length
+      ? state.siteCatalog
+      : [];
+    if (can('org') && (!siteRows.length || force)) {
+      siteRows = await refreshSiteCatalog({ force });
+    }
+
+    const employees = Array.isArray(employeeRows) ? employeeRows : [];
+    const activeEmployees = employees.filter((item) => getEmployeeEmploymentStatusMeta(item).key === 'active');
+    const managerCount = activeEmployees.filter((item) => {
+      const role = String(item?.user_role || item?.soc_role || '').trim().toLowerCase();
+      return Boolean(role) && !['officer', 'employee', 'staff', 'guard'].includes(role);
+    }).length;
+    const unlinkedCount = activeEmployees.filter((item) => getEmployeeAccountLinkageMeta(item).key !== 'linked').length;
+    const assignedSiteCount = new Set(
+      activeEmployees
+        .map((item) => String(item?.site_code || '').trim().toUpperCase())
+        .filter(Boolean),
+    ).size;
+    const unassignedEmployeeCount = activeEmployees.filter((item) => !String(item?.site_code || '').trim()).length;
+
+    const sites = Array.isArray(siteRows) ? siteRows : [];
+    const activeSiteCount = sites.filter((item) => item?.is_active !== false).length;
+
+    dashboard.organizationSummary = {
+      loading: false,
+      employeeTotal: employees.length,
+      activeEmployeeCount: activeEmployees.length,
+      managerCount,
+      unlinkedCount,
+      siteTotal: sites.length,
+      activeSiteCount,
+      assignedSiteCount,
+      unassignedEmployeeCount,
+    };
+  } catch {
+    dashboard.organizationSummary = {
+      ...(dashboard.organizationSummary || createInitialHomeManagerDashboardState().organizationSummary),
+      loading: false,
+    };
+  }
+
+  renderHomeManagerDashboard();
+  return dashboard.organizationSummary;
 }
 
 function renderOpsRoleStatus() {
@@ -5390,6 +5736,7 @@ async function loadOpsSummary({ force = false } = {}) {
         employeeName: String(scheduleRow?.employee_name || scheduleRow?.full_name || '').trim(),
         siteName,
         dateLabel: toDateLabel(activeDate),
+        statusCode,
         statusLabel: statusMeta.label,
         pillVariant: statusCode === 'duplicate' ? 'warn' : 'error',
         danger: Boolean(statusMeta.danger),
@@ -5434,6 +5781,12 @@ async function loadOpsSummary({ force = false } = {}) {
 
     const dashboard = getHomeManagerDashboardState();
     dashboard.attendanceIssues = attendanceIssues;
+    dashboard.attendanceSummary = {
+      missingInCount: attendanceIssues.filter((item) => String(item?.statusCode || '').trim() === 'missing_in').length,
+      missingOutCount: attendanceIssues.filter((item) => String(item?.statusCode || '').trim() === 'missing_out').length,
+      duplicateCount: attendanceIssues.filter((item) => String(item?.statusCode || '').trim() === 'duplicate').length,
+      reviewCount: attendanceIssues.length,
+    };
     dashboard.scheduleSummary = {
       todayScheduledCount: scheduledCount,
       weekScheduledCount: weekScheduleRows.length,
@@ -5450,6 +5803,7 @@ async function loadOpsSummary({ force = false } = {}) {
     state.ops.error = normalizeActionError(error, '운영 집계를 불러오지 못했습니다.');
     const dashboard = getHomeManagerDashboardState();
     dashboard.attendanceIssues = [];
+    dashboard.attendanceSummary = createInitialHomeManagerDashboardState().attendanceSummary;
     dashboard.scheduleSummary = createInitialHomeManagerDashboardState().scheduleSummary;
   } finally {
     state.ops.loading = false;
@@ -17732,12 +18086,14 @@ function renderShellMode() {
 
   const homeTitle = $('#homeViewTitle');
   if (homeTitle) {
-    homeTitle.textContent = '홈';
+    homeTitle.textContent = managerMode
+      ? `${String(state.user?.full_name || state.user?.username || '운영 관리자').trim()}님, 안녕하세요`
+      : '홈';
   }
   const homeSubtitle = $('#homeViewSubtitle');
   if (homeSubtitle) {
     homeSubtitle.textContent = managerMode
-      ? '오늘 먼저 확인할 위험과 바로 이동할 작업만 보여줍니다.'
+      ? `${toDateLabel(toLocalDateKey(new Date()))} · 오늘 운영 브리핑`
       : '오늘 근무와 진행 중 요청을 먼저 확인하고 필요한 작업은 각 탭에서 이어갑니다.';
   }
   const requestsTitle = $('#requestsViewTitle');
@@ -21602,6 +21958,16 @@ async function loadHomeData({ quiet = false, force = false } = {}) {
       } catch (err) {
         if (!quiet) {
           showToast(normalizeActionError(err, '홈 요약 데이터를 불러오지 못했습니다.'), 'error', 3200);
+        }
+      }
+    })());
+
+    backgroundJobs.push((async () => {
+      try {
+        await trace.run('loadHomeManagerOrgSummary', () => loadHomeManagerOrgSummary({ force }));
+      } catch (err) {
+        if (!quiet) {
+          showToast(normalizeActionError(err, '구성원/근무지 요약을 불러오지 못했습니다.'), 'error', 3200);
         }
       }
     })());
@@ -27206,7 +27572,7 @@ function applyWriteAccessUI(perms) {
   if (employeesViewTitle) {
     employeesViewTitle.textContent = employeeImportRoute
       ? '직원 대량 등록'
-      : (employeeCreateRoute ? '직원 등록' : '조직');
+      : (employeeCreateRoute ? '직원 등록' : '직원 관리');
   }
   if (employeesScopeHint) {
     if (employeeImportRoute) {
@@ -27215,17 +27581,17 @@ function applyWriteAccessUI(perms) {
         : '명부 업로드와 등록 결과 확인을 단계별로 진행합니다.';
     } else if (employeeCreateRoute) {
       employeesScopeHint.textContent = permissionGroup === 'DEV'
-        ? '선택한 조직 범위에서 새 직원을 등록한 뒤 목록과 상세 패널에서 바로 확인합니다.'
-        : '새 직원을 등록한 뒤 목록과 상세 패널에서 바로 확인합니다.';
+        ? '선택한 조직 범위에서 새 직원을 등록하고 바로 디렉터리에서 확인합니다.'
+        : '새 직원을 등록하고 바로 디렉터리에서 확인합니다.';
     } else {
       employeesScopeHint.textContent = permissionGroup === 'DEV'
-        ? '조회 범위 기준으로 직원 디렉터리를 관리합니다.'
-        : '직원을 목록과 상세 패널로 관리합니다.';
+        ? '조회 범위 기준으로 직원 디렉터리와 상세 패널을 관리합니다.'
+        : '직원 디렉터리에서 검색하고 상세 패널로 상태를 확인합니다.';
     }
   }
   const employeeTopActionHint = $('#employeeTopActionHint');
   if (employeeTopActionHint) {
-    employeeTopActionHint.textContent = '목록에서 직원을 선택하면 상세 패널이 열립니다.';
+    employeeTopActionHint.textContent = '직원을 선택하면 오른쪽 상세 패널에서 계정, 출퇴근, 스케줄을 이어서 확인합니다.';
   }
 
   const orgViewTitle = $('#orgViewTitle');
@@ -27244,8 +27610,9 @@ function applyWriteAccessUI(perms) {
   }
 
   const showEmployeeListWorkspace = Boolean(perms.employees) && employeeListRoute;
-  toggleVisibility('#employeeTopActionBar', Boolean(perms.employees) && employeeWrite && employeeListRoute);
+  toggleVisibility('#employeeTopActionBar', showEmployeeListWorkspace);
   toggleVisibility('#employeeToolbar', showEmployeeListWorkspace);
+  toggleVisibility('#employeeDirectorySummaryStrip', showEmployeeListWorkspace);
   toggleVisibility('#employeeFormCard', employeeWrite && employeeCreateRoute);
   toggleVisibility('#employeeRosterImportCard', employeeWrite && employeeImportRoute);
   toggleVisibility('#employeeDesktopTableCard', showEmployeeListWorkspace);
@@ -32010,7 +32377,7 @@ function applyEmployeeRegistrationRoutePresentation() {
   if (titleEl) {
     titleEl.textContent = isImportRoute
       ? '직원 대량 등록'
-      : (isCreateRoute ? '직원 등록' : '조직');
+      : (isCreateRoute ? '직원 등록' : '직원 관리');
   }
   if (hintEl) {
     if (isImportRoute) {
@@ -32019,16 +32386,20 @@ function applyEmployeeRegistrationRoutePresentation() {
         : '명부 업로드와 등록 결과 확인을 단계별로 진행합니다.';
     } else if (isCreateRoute) {
       hintEl.textContent = permissionGroup === 'DEV'
-        ? '선택한 조직 범위에서 새 직원을 등록한 뒤 목록과 상세 패널에서 바로 확인합니다.'
-        : '새 직원을 등록한 뒤 목록과 상세 패널에서 바로 확인합니다.';
+        ? '선택한 조직 범위에서 새 직원을 등록하고 바로 디렉터리에서 확인합니다.'
+        : '새 직원을 등록하고 바로 디렉터리에서 확인합니다.';
     } else {
       hintEl.textContent = permissionGroup === 'DEV'
-        ? '조회 범위 기준으로 직원 디렉터리를 관리합니다.'
-        : '직원을 목록과 상세 패널로 관리합니다.';
+        ? '조회 범위 기준으로 직원 디렉터리와 상세 패널을 관리합니다.'
+        : '직원 디렉터리에서 검색하고 상세 패널로 상태를 확인합니다.';
     }
   }
   if (actionHintEl) {
-    actionHintEl.textContent = '목록에서 직원을 선택하면 상세 패널이 열립니다.';
+    actionHintEl.textContent = '직원을 선택하면 오른쪽 상세 패널에서 계정, 출퇴근, 스케줄을 이어서 확인합니다.';
+  }
+  const advancedToggleBar = $('#employeeAdvancedFilterToggles');
+  if (advancedToggleBar instanceof HTMLElement) {
+    advancedToggleBar.classList.toggle('hidden', permissionGroup !== 'DEV');
   }
 
   if (isImportRoute) {
@@ -32042,14 +32413,14 @@ function applyEmployeeRegistrationRoutePresentation() {
   if (!canWrite) {
     setEmployeeFormExpanded(false, { force: true });
     setEmployeeRosterImportOpen(false);
-    toggleVisibility('#employeeTopActionBar', false);
-    toggleVisibility('#employeeToolbar', false);
-    toggleVisibility('#employeeDirectorySummaryStrip', false);
+    toggleVisibility('#employeeTopActionBar', canReadEmployees && isListRoute);
+    toggleVisibility('#employeeToolbar', canReadEmployees && isListRoute);
+    toggleVisibility('#employeeDirectorySummaryStrip', canReadEmployees && isListRoute);
     toggleVisibility('#employeeFormCard', false);
     toggleVisibility('#employeeRosterImportCard', false);
     toggleVisibility('#employeeDesktopTableCard', canReadEmployees && isListRoute);
     toggleVisibility('#employeeList', canReadEmployees && isListRoute);
-    closeEmployeeDirectoryDetail({ clearSelection: false });
+    refreshEmployeeBulkDeleteButtonState();
     return;
   }
 
@@ -32250,6 +32621,7 @@ function refreshEmployeeBulkDeleteButtonState() {
   const permissionGroup = resolvePermissionGroup(state.user?.role || 'officer');
   const canBulkDelete = permissionGroup === 'DEV' || permissionGroup === 'ADMIN';
   const siteCode = getEmployeeSiteFilterCode();
+  button.classList.toggle('hidden', !canBulkDelete);
   button.disabled = !isListRoute || !canBulkDelete || !siteCode;
   if (!isListRoute) {
     button.title = '직원목록 화면에서만 사용할 수 있습니다.';
@@ -32339,6 +32711,7 @@ function getEmployeeSortControlValue() {
   if (sortKey === 'fullName' && direction === 'asc') return 'name_asc';
   if (sortKey === 'siteName' && direction === 'asc') return 'site_asc';
   if (sortKey === 'roleLabel' && direction === 'asc') return 'role_asc';
+  if (sortKey === 'accountLinkage' && direction === 'asc') return 'account_asc';
   if (sortKey === 'employmentStatus' && direction === 'asc') return 'status_asc';
   if (sortKey === 'hireDate' && direction === 'desc') return 'join_desc';
   return 'default';
@@ -32358,6 +32731,11 @@ function applyEmployeeSortControlValue(rawValue = 'default') {
   }
   if (value === 'role_asc') {
     state.employeeAdmin.sortKey = 'roleLabel';
+    state.employeeAdmin.sortDirection = 'asc';
+    return;
+  }
+  if (value === 'account_asc') {
+    state.employeeAdmin.sortKey = 'accountLinkage';
     state.employeeAdmin.sortDirection = 'asc';
     return;
   }
@@ -32693,7 +33071,7 @@ function getFilteredEmployeeRows() {
   return filtered.slice().sort((left, right) => compareEmployeeSortValues(left, right, sortKey, sortDirection));
 }
 
-const EMPLOYEE_TABLE_COLUMN_COUNT = 7;
+const EMPLOYEE_TABLE_COLUMN_COUNT = 8;
 
 function getEmployeeDesktopTableBody() {
   const tbody = $('#employeeDesktopTableBody');
@@ -32745,10 +33123,28 @@ function buildEmployeeDesktopTableRow(item) {
   if (String(state.employeeAdmin?.detailEmployeeId || '').trim() === String(item?.id || '').trim()) {
     tr.classList.add('is-selected');
   }
-  const appendTextCell = (value, className = '') => {
+  const appendStackCell = ({ title = '-', subtitle = '', meta = '', className = '' } = {}) => {
     const td = document.createElement('td');
-    td.textContent = String(value || '-').trim() || '-';
     if (className) td.className = className;
+    const stack = document.createElement('div');
+    stack.className = 'employee-table-cell-stack';
+    const titleEl = document.createElement('strong');
+    titleEl.className = 'employee-table-cell-title';
+    titleEl.textContent = String(title || '-').trim() || '-';
+    stack.appendChild(titleEl);
+    if (subtitle) {
+      const subtitleEl = document.createElement('span');
+      subtitleEl.className = 'employee-table-cell-subtitle';
+      subtitleEl.textContent = String(subtitle).trim();
+      stack.appendChild(subtitleEl);
+    }
+    if (meta) {
+      const metaEl = document.createElement('span');
+      metaEl.className = 'employee-table-cell-meta';
+      metaEl.textContent = String(meta).trim();
+      stack.appendChild(metaEl);
+    }
+    td.appendChild(stack);
     tr.appendChild(td);
     return td;
   };
@@ -32758,19 +33154,68 @@ function buildEmployeeDesktopTableRow(item) {
     (site) => String(site?.site_code || '').trim().toUpperCase() === siteCode,
   );
   const siteName = String(siteRow?.site_name || item.site_name || item.site_code || '-').trim() || '-';
-  const siteLabel = siteCode && siteName !== siteCode ? `${siteName} (${siteCode})` : siteName;
   const employeeCode = String(item.employee_code || '-').trim() || '-';
   const fullName = String(item.full_name || '-').trim() || '-';
+  const managementNo = String(item.management_no_str || item.management_no || '').trim();
+  const phone = String(item.phone || '').trim();
   const roleLabel = getEmployeeRoleLabel(item);
   const employmentMeta = getEmployeeEmploymentStatusMeta(item);
+  const accountMeta = getEmployeeAccountLinkageMeta(item);
+  const loginId = String(item.soc_login_id || item.username || '').trim();
 
-  appendTextCell(companyName);
-  appendTextCell(siteLabel, 'site-cell');
-  appendTextCell(fullName);
-  appendTextCell(employeeCode);
-  appendTextCell(roleLabel, 'role-cell');
+  appendStackCell({
+    title: companyName,
+    subtitle: String(item.tenant_code || '').trim().toUpperCase() ? `회사 코드 ${String(item.tenant_code || '').trim().toUpperCase()}` : '',
+    className: 'company-cell',
+  });
+  appendStackCell({
+    title: siteName,
+    subtitle: siteCode ? `현장 코드 ${siteCode}` : '',
+    className: 'site-cell',
+  });
+  appendStackCell({
+    title: fullName,
+    subtitle: phone || '연락처 없음',
+    className: 'employee-cell',
+  });
+  appendStackCell({
+    title: employeeCode,
+    subtitle: managementNo ? `관리번호 ${managementNo}` : '',
+    className: 'code-cell',
+  });
+  appendStackCell({
+    title: roleLabel,
+    subtitle: loginId ? 'SOC 계정 사용' : '계정 연결 전',
+    className: 'role-cell',
+  });
+  const accountTd = document.createElement('td');
+  accountTd.className = 'account-cell';
+  const accountWrap = document.createElement('div');
+  accountWrap.className = 'employee-table-status-stack';
+  accountWrap.appendChild(buildEmployeeDirectoryBadge(accountMeta.label, accountMeta.className));
+  if (loginId) {
+    const loginEl = document.createElement('span');
+    loginEl.className = 'employee-table-cell-subtitle';
+    loginEl.textContent = loginId;
+    accountWrap.appendChild(loginEl);
+  }
+  accountTd.appendChild(accountWrap);
+  tr.appendChild(accountTd);
   const employmentTd = document.createElement('td');
-  employmentTd.innerHTML = `<span class="${employmentMeta.className}">${employmentMeta.label}</span>`;
+  employmentTd.className = 'employment-cell';
+  const employmentWrap = document.createElement('div');
+  employmentWrap.className = 'employee-table-status-stack';
+  employmentWrap.appendChild(buildEmployeeDirectoryBadge(employmentMeta.label, employmentMeta.className));
+  const employmentDate = String(item.leave_date || item.hire_date || '').trim();
+  if (employmentDate) {
+    const dateEl = document.createElement('span');
+    dateEl.className = 'employee-table-cell-subtitle';
+    dateEl.textContent = item.leave_date
+      ? `퇴직 ${formatDateLabel(item.leave_date, item.leave_date)}`
+      : `입사 ${formatDateLabel(item.hire_date, item.hire_date)}`;
+    employmentWrap.appendChild(dateEl);
+  }
+  employmentTd.appendChild(employmentWrap);
   tr.appendChild(employmentTd);
 
   const actionsTd = document.createElement('td');
@@ -32939,8 +33384,8 @@ function renderEmployeeDirectoryCount(filteredRows = []) {
   const filteredCount = Array.isArray(filteredRows) ? filteredRows.length : 0;
   const totalCount = Array.isArray(state.employeeAdmin?.rows) ? state.employeeAdmin.rows.length : 0;
   target.textContent = filteredCount === totalCount
-    ? `총 ${totalCount}명`
-    : `조회 ${filteredCount}명 / 전체 ${totalCount}명`;
+    ? `전체 ${totalCount}명`
+    : `표시 ${filteredCount}명 / 전체 ${totalCount}명`;
 }
 
 function renderOrganizationSummaryStrip(selector = '', items = []) {
@@ -32978,21 +33423,129 @@ function renderOrganizationSummaryStrip(selector = '', items = []) {
 }
 
 function renderEmployeeDirectorySummaryStrip(filteredRows = []) {
+  const target = $('#employeeDirectorySummaryStrip');
+  if (!(target instanceof HTMLElement)) return;
   const rows = Array.isArray(filteredRows) ? filteredRows : [];
+  const totalRows = Array.isArray(state.employeeAdmin?.rows) ? state.employeeAdmin.rows : [];
   const activeCount = rows.filter((item) => getEmployeeEmploymentStatusMeta(item).key === 'active').length;
-  const inactiveCount = rows.filter((item) => getEmployeeEmploymentStatusMeta(item).key !== 'active').length;
-  const unlinkedCount = rows.filter((item) => String(getEmployeeAccountLinkageMeta(item).label || '').trim() !== '연결됨').length;
-  const items = [
-    { label: '조회 직원', value: `${rows.length}명` },
-    { label: '재직중', value: `${activeCount}명`, tone: activeCount > 0 ? 'success' : '' },
-  ];
-  if (inactiveCount > 0) {
-    items.push({ label: '비활성/퇴직', value: `${inactiveCount}명`, tone: 'warn' });
-  }
-  if (unlinkedCount > 0) {
-    items.push({ label: '계정 연결 필요', value: `${unlinkedCount}명`, tone: 'danger' });
-  }
-  renderOrganizationSummaryStrip('#employeeDirectorySummaryStrip', items);
+  const inactiveCount = Math.max(0, rows.length - activeCount);
+  const linkedCount = rows.filter((item) => getEmployeeAccountLinkageMeta(item).key === 'linked').length;
+  const unlinkedCount = Math.max(0, rows.length - linkedCount);
+  const uniqueSiteCount = new Set(
+    rows.map((item) => String(item?.site_code || '').trim().toUpperCase()).filter(Boolean),
+  ).size;
+  const activeRate = rows.length ? Math.round((activeCount / rows.length) * 100) : 0;
+  const linkedRate = rows.length ? Math.round((linkedCount / rows.length) * 100) : 0;
+  const siteFilterCode = getEmployeeSiteFilterCode();
+  const roleCounts = Array.from(
+    rows.reduce((map, item) => {
+      const label = getEmployeeRoleLabel(item);
+      map.set(label, Number(map.get(label) || 0) + 1);
+      return map;
+    }, new Map()),
+  )
+    .sort((left, right) => Number(right[1] || 0) - Number(left[1] || 0))
+    .slice(0, 3);
+
+  const buildMetricCard = ({ title = '', value = '', meta = '', details = [], percent = null, tone = '' } = {}) => {
+    const card = document.createElement('article');
+    card.className = 'employee-summary-card';
+    if (tone) {
+      card.dataset.tone = tone;
+    }
+
+    const head = document.createElement('div');
+    head.className = 'employee-summary-card-head';
+    const titleEl = document.createElement('span');
+    titleEl.className = 'employee-summary-card-title';
+    titleEl.textContent = title;
+    head.appendChild(titleEl);
+    if (Number.isFinite(Number(percent))) {
+      const ring = document.createElement('div');
+      ring.className = 'employee-summary-ring';
+      ring.style.setProperty('--employee-summary-ring-progress', `${Math.max(0, Math.min(100, Number(percent)))}%`);
+      const ringValue = document.createElement('strong');
+      ringValue.textContent = `${Math.round(Number(percent))}%`;
+      ring.appendChild(ringValue);
+      head.appendChild(ring);
+    }
+    card.appendChild(head);
+
+    const valueEl = document.createElement('strong');
+    valueEl.className = 'employee-summary-card-value';
+    valueEl.textContent = value;
+    card.appendChild(valueEl);
+
+    if (meta) {
+      const metaEl = document.createElement('p');
+      metaEl.className = 'employee-summary-card-meta';
+      metaEl.textContent = meta;
+      card.appendChild(metaEl);
+    }
+
+    if (Array.isArray(details) && details.length) {
+      const list = document.createElement('div');
+      list.className = 'employee-summary-card-list';
+      details.forEach((detail) => {
+        const row = document.createElement('div');
+        row.className = 'employee-summary-card-list-row';
+        const labelEl = document.createElement('span');
+        labelEl.textContent = String(detail?.label || '').trim();
+        const valueDetailEl = document.createElement('strong');
+        valueDetailEl.textContent = String(detail?.value || '').trim();
+        row.append(labelEl, valueDetailEl);
+        list.appendChild(row);
+      });
+      card.appendChild(list);
+    }
+    return card;
+  };
+
+  target.innerHTML = '';
+  target.classList.remove('hidden');
+  const fragment = document.createDocumentFragment();
+  fragment.appendChild(buildMetricCard({
+    title: '전체 직원',
+    value: `${rows.length}명`,
+    meta: rows.length === totalRows.length
+      ? `운영 현장 ${uniqueSiteCount}곳`
+      : `전체 ${totalRows.length}명 중 현재 조건 ${rows.length}명`,
+    details: [
+      { label: '선택 현장', value: siteFilterCode || '전체' },
+      { label: '표시 범위', value: uniqueSiteCount ? `${uniqueSiteCount}곳` : '0곳' },
+    ],
+  }));
+  fragment.appendChild(buildMetricCard({
+    title: '재직 현황',
+    value: `${activeCount}명`,
+    meta: rows.length ? `현재 조건 기준 재직 비율 ${activeRate}%` : '표시할 직원이 없습니다.',
+    percent: activeRate,
+    tone: activeCount > 0 ? 'success' : '',
+    details: [
+      { label: '재직중', value: `${activeCount}명` },
+      { label: '비활성/퇴직', value: `${inactiveCount}명` },
+    ],
+  }));
+  fragment.appendChild(buildMetricCard({
+    title: '계정 연결',
+    value: `${linkedCount}명`,
+    meta: rows.length ? `SOC 계정 연결 비율 ${linkedRate}%` : '표시할 직원이 없습니다.',
+    percent: linkedRate,
+    tone: unlinkedCount > 0 ? 'warn' : 'success',
+    details: [
+      { label: '연결됨', value: `${linkedCount}명` },
+      { label: '미연결', value: `${unlinkedCount}명` },
+    ],
+  }));
+  fragment.appendChild(buildMetricCard({
+    title: '역할 구성',
+    value: roleCounts.length ? String(roleCounts[0][0] || '-').trim() : '직원 없음',
+    meta: roleCounts.length ? `가장 많은 역할 ${roleCounts[0][1]}명` : '역할 구성이 없습니다.',
+    details: roleCounts.length
+      ? roleCounts.map(([label, count]) => ({ label, value: `${count}명` }))
+      : [{ label: '표시 결과', value: '0명' }],
+  }));
+  target.appendChild(fragment);
 }
 
 function syncEmployeeDirectorySelection() {
@@ -35107,6 +35660,7 @@ function renderEmployeesFromCache() {
 async function syncEmployeeTenantFilterOptions({ force = false } = {}) {
   const select = $('#employeeTenantFilter');
   if (!(select instanceof HTMLSelectElement)) return;
+  const field = $('#employeeTenantFilterField');
 
   const navRole = getNavigationRole();
   const tenantRows = await getTenantRowsForScopedAdminUi({ force });
@@ -35114,6 +35668,9 @@ async function syncEmployeeTenantFilterOptions({ force = false } = {}) {
   const previousTenantId = String(state.employeeAdmin.tenantFilterId || '').trim();
 
   select.classList.toggle('hidden', navRole !== 'DEV');
+  if (field instanceof HTMLElement) {
+    field.classList.toggle('hidden', navRole !== 'DEV');
+  }
   select.innerHTML = '';
 
   if (navRole === 'DEV') {
