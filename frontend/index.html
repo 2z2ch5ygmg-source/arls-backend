@@ -2053,8 +2053,12 @@
                           </div>
                           <p id="attendanceRateMeta" class="attendance-rate-meta">출근 완료 0 / 예정 0</p>
                         </article>
-                        <div class="attendance-kpi-strip" id="attendanceManagerKpiStrip"></div>
+                        <div class="attendance-status-summary-stack">
+                          <div class="attendance-kpi-strip" id="attendanceManagerKpiStrip"></div>
+                          <div id="attendanceManagerStatusMatrix" class="attendance-status-matrix" aria-live="polite"></div>
+                        </div>
                       </div>
+                      <div id="attendanceManagerSpecialCaseStrip" class="attendance-status-special-strip" aria-live="polite"></div>
                     </section>
 
                     <div class="attendance-status-main-grid">
@@ -2075,8 +2079,8 @@
                       <article id="attendanceStatusRecordCard" class="module-card stack attendance-status-record-card">
                         <div class="approval-head attendance-grid-head">
                           <div class="requests-heading-block">
-                            <h3>오늘 기록</h3>
-                            <p id="attendanceStatusRecordHint" class="muted">오늘 범위에서 바로 확인할 출퇴근 상태를 보여줍니다.</p>
+                            <h3>출근인원 근무상태</h3>
+                            <p id="attendanceStatusRecordHint" class="muted">오늘 범위에서 직원별 실제 시각과 판별 상태를 보여줍니다.</p>
                           </div>
                           <div class="attendance-grid-head-actions">
                             <p id="attendanceStatusRecordMeta" class="muted hidden"></p>
@@ -2085,6 +2089,39 @@
                         <ul id="attendanceStatusRecordList" class="list attendance-status-record-list" aria-live="polite" aria-busy="false"></ul>
                       </article>
                     </div>
+                  </section>
+
+                  <section id="attendanceListPanel" class="stack hidden">
+                    <article id="attendanceManagerTableCard" class="module-card stack attendance-table-card">
+                      <div class="approval-head attendance-grid-head">
+                        <div class="requests-heading-block">
+                          <h3>출퇴근 기록 목록</h3>
+                          <p class="muted">기간, 상태, 지각/조퇴 기준으로 검색하고 행을 선택해 우측 패널에서 수정합니다.</p>
+                        </div>
+                        <div class="attendance-grid-head-actions">
+                          <p id="attendanceRecordTableMeta" class="muted hidden"></p>
+                        </div>
+                      </div>
+                      <div class="attendance-workspace-table-wrap">
+                        <table class="admin-table attendance-record-table attendance-admin-record-table">
+                          <thead>
+                            <tr>
+                              <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="date"><span>날짜</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+                              <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="employee"><span>직원</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+                              <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="site"><span>현장 / 예정 근무</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+                              <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="check_in"><span>출근</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+                              <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="check_out"><span>퇴근</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+                              <th><span>휴게</span></th>
+                              <th><span>총 시간</span></th>
+                              <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="status"><span>상태</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+                              <th><span>지각 / 조퇴</span></th>
+                              <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="review"><span>확인 포인트</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+                            </tr>
+                          </thead>
+                          <tbody id="attendanceManagerRecordTableBody"></tbody>
+                        </table>
+                      </div>
+                    </article>
                   </section>
                 </div>
 
@@ -2133,39 +2170,6 @@
                 </div>
                 <div id="attendanceCalendarSummaryStrip" class="attendance-calendar-summary-strip"></div>
                 <div id="attendanceCalendarGridWrap" class="attendance-calendar-grid-wrap" aria-live="polite" aria-busy="false"></div>
-              </section>
-
-              <section id="attendanceListPanel" class="stack hidden">
-                <article id="attendanceManagerTableCard" class="module-card stack attendance-table-card">
-                  <div class="approval-head attendance-grid-head">
-                    <div class="requests-heading-block">
-                      <h3>출퇴근 기록 목록</h3>
-                      <p class="muted">기간, 상태, 지각/조퇴 기준으로 검색하고 행을 클릭해 수정합니다.</p>
-                    </div>
-                    <div class="attendance-grid-head-actions">
-                      <p id="attendanceRecordTableMeta" class="muted hidden"></p>
-                    </div>
-                  </div>
-                  <div class="attendance-workspace-table-wrap">
-                    <table class="admin-table attendance-record-table attendance-admin-record-table">
-                      <thead>
-                        <tr>
-                          <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="date"><span>날짜</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
-                          <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="employee"><span>직원</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
-                          <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="site"><span>현장 / 예정 근무</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
-                          <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="check_in"><span>출근</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
-                          <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="check_out"><span>퇴근</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
-                          <th><span>휴게</span></th>
-                          <th><span>총 시간</span></th>
-                          <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="status"><span>상태</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
-                          <th><span>지각 / 조퇴</span></th>
-                          <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="review"><span>확인 포인트</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
-                        </tr>
-                      </thead>
-                      <tbody id="attendanceManagerRecordTableBody"></tbody>
-                    </table>
-                  </div>
-                </article>
               </section>
             </section>
 
@@ -3663,7 +3667,7 @@
             <div class="workspace-tabs system-workspace-tabs">
               <button class="btn btn-secondary workspace-tab master-route-tab" type="button" data-action="master-route" data-route="/master/tenants">회사 관리</button>
               <button class="btn btn-secondary workspace-tab master-route-tab" type="button" data-action="master-route" data-route="/master/tenants/new">회사 등록</button>
-              <button class="btn btn-secondary workspace-tab" type="button" data-action="drawer-open-route" data-route="/master/audit-logs" data-system-route="/master/audit-logs">감사로그</button>
+              <button class="btn btn-secondary workspace-tab master-route-tab" type="button" data-action="drawer-open-route" data-route="/master/audit-logs" data-system-route="/master/audit-logs">감사로그</button>
             </div>
 
             <article id="masterConsoleSummary" class="module-card stack hidden">

@@ -1814,8 +1814,10 @@ function renderChunkedNodes(
 
 function resolveViewRuntimeCacheKey(viewName = '') {
   const normalizedView = String(viewName || '').trim() || 'unknown';
-  const routePath = normalizeRoutePath(state.currentRoute || resolveRouteForView(normalizedView) || '');
-  return `${normalizedView}:${routePath || normalizedView}`;
+  const routeWithQuery = typeof window !== 'undefined'
+    ? String(getCurrentRouteWithQuery() || '').trim()
+    : String(state.currentRoute || resolveRouteForView(normalizedView) || '').trim();
+  return `${normalizedView}:${routeWithQuery || normalizedView}`;
 }
 
 function ensureViewRuntimeStats(viewName = '') {
@@ -3819,6 +3821,44 @@ async function loadMonthlyScheduleRowsWithCache({ month, tenantCode, force = fal
     cachedAt: Date.now(),
   });
   return rows;
+}
+
+const ATTENDANCE_MANAGER_FETCH_CONCURRENCY = 6;
+
+async function mapWithConcurrency(items = [], limit = ATTENDANCE_MANAGER_FETCH_CONCURRENCY, mapper = async (item) => item) {
+  const list = Array.isArray(items) ? items : [];
+  const maxWorkers = Math.max(1, Number(limit) || 1);
+  if (!list.length) return [];
+  const results = new Array(list.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < list.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await mapper(list[index], index);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(maxWorkers, list.length) }, () => worker()));
+  return results;
+}
+
+async function fetchAttendanceRecordsByDateKeys(dateKeys = [], { force = false } = {}) {
+  const groups = await mapWithConcurrency(dateKeys, ATTENDANCE_MANAGER_FETCH_CONCURRENCY, (dateKey) => (
+    getScheduleDataProvider().listAttendanceByDate({ date: dateKey, force })
+  ));
+  return groups.flat();
+}
+
+async function fetchAttendanceOvertimeByDateKeys(dateKeys = [], { tenantCode = '', force = false } = {}) {
+  const groups = await mapWithConcurrency(dateKeys, ATTENDANCE_MANAGER_FETCH_CONCURRENCY, (dateKey) => {
+    const params = new URLSearchParams();
+    params.set('date', dateKey);
+    if (tenantCode) params.set('tenant_code', tenantCode);
+    return apiRequest(`/schedules/overtime-daily?${params.toString()}`);
+  });
+  return groups.flat();
 }
 
 async function loadMonthlyScheduleLiteWithCache({ month, tenantCode, force = false } = {}) {
@@ -20134,8 +20174,7 @@ function applyAttendanceRouteStateFromQuery(routePath = '', parsedParams = new U
   if (!state.attendanceView) {
     state.attendanceView = createInitialAttendanceViewState();
   }
-  ensureAttendanceManagerPreferencesLoaded();
-  state.attendanceView.managerTab = normalizeAttendanceManagerTab(parsedParams.get('tab') || state.attendanceView.managerTab || 'status');
+  setAttendanceManagerTab(parsedParams.get('tab') || state.attendanceView.managerTab || 'status');
 }
 
 function applyReportsRouteStateFromQuery(routePath = '', parsedParams = new URLSearchParams()) {
@@ -24738,7 +24777,8 @@ function getTenantIdForScopedAdminApi() {
   if (!ctxCode || ctxCode === 'MASTER') {
     return '';
   }
-  const tenants = Array.isArray(state.devAdmin.tenants) ? state.devAdmin.tenants : [];
+  const tenants = (Array.isArray(state.devAdmin.tenants) ? state.devAdmin.tenants : [])
+    .filter((tenant) => String(tenant?.tenant_code || '').trim().toUpperCase() !== 'MASTER');
   const matched = tenants.find((row) => String(row?.tenant_code || '').trim().toUpperCase() === ctxCode);
   return String(matched?.id || state.devAdmin.selectedTenantId || '').trim();
 }
@@ -25236,11 +25276,424 @@ function getCachedUsersByTenantCode(tenantCode = '') {
   return Array.isArray(rows) ? rows : [];
 }
 
+function getMasterTenantProfileCacheEntry(tenantId = '') {
+  const normalizedId = String(tenantId || '').trim();
+  const cache = state.devAdmin?.tenantProfilesByTenantId;
+  const hasEntry = Boolean(
+    normalizedId
+      && cache
+      && typeof cache === 'object'
+      && Object.prototype.hasOwnProperty.call(cache, normalizedId),
+  );
+  return {
+    loaded: hasEntry,
+    profile: hasEntry && cache && typeof cache === 'object' ? (cache[normalizedId] || {}) : null,
+  };
+}
+
+function getMasterTenantSiteCount(tenant = null) {
+  const tenantCode = String(tenant?.tenant_code || '').trim().toUpperCase();
+  if (!tenantCode) return null;
+  const rows = Array.isArray(state.siteCatalog) && state.siteCatalog.length
+    ? state.siteCatalog
+    : (Array.isArray(state.sites) ? state.sites : []);
+  if (!rows.length) return null;
+  return rows.filter((row) => {
+    const rowTenantCode = String(row?.tenant_code || row?.company_code || '').trim().toUpperCase();
+    return rowTenantCode === tenantCode;
+  }).length;
+}
+
+function getMasterTenantUserCount(tenant = null) {
+  const tenantCode = String(tenant?.tenant_code || '').trim().toUpperCase();
+  if (!tenantCode) return null;
+  const employeeRows = Array.isArray(state.employeeAdmin?.rows) ? state.employeeAdmin.rows : [];
+  if (employeeRows.length) {
+    return employeeRows.filter((row) => String(row?.tenant_code || '').trim().toUpperCase() === tenantCode).length;
+  }
+  const cache = state.devAdmin?.usersByTenant;
+  if (cache && typeof cache === 'object' && Object.prototype.hasOwnProperty.call(cache, tenantCode)) {
+    return getCachedUsersByTenantCode(tenantCode).length;
+  }
+  return null;
+}
+
+function buildMasterTenantProfileCompletion(profileEntry = null) {
+  const profile = profileEntry && typeof profileEntry === 'object' ? profileEntry : {};
+  const requiredKeys = ['ceo_name', 'biz_reg_no', 'phone', 'email', 'address'];
+  const completedCount = requiredKeys.reduce((count, key) => {
+    return count + (String(profile?.[key] || '').trim() ? 1 : 0);
+  }, 0);
+  const requiredCount = requiredKeys.length;
+  const sealReady = Boolean(String(profile?.seal_attachment_id || '').trim());
+  const isComplete = completedCount === requiredCount;
+  let statusLabel = '미조회';
+  let tone = 'warn';
+  if (profileEntry && typeof profileEntry === 'object') {
+    if (isComplete) {
+      statusLabel = '기입 완료';
+      tone = 'success';
+    } else if (completedCount > 0) {
+      statusLabel = `${completedCount}/${requiredCount} 완료`;
+      tone = 'warn';
+    } else {
+      statusLabel = '미입력';
+      tone = 'danger';
+    }
+  }
+  return {
+    completedCount,
+    requiredCount,
+    sealReady,
+    isComplete,
+    statusLabel,
+    tone,
+  };
+}
+
+function renderMasterTenantCount(filteredRows = []) {
+  const target = $('#masterTenantCount');
+  if (!(target instanceof HTMLElement)) return;
+  const rows = Array.isArray(filteredRows) ? filteredRows : [];
+  const totalCount = Array.isArray(state.devAdmin?.tenants) ? state.devAdmin.tenants.length : rows.length;
+  target.textContent = rows.length === totalCount
+    ? `전체 ${totalCount}개`
+    : `표시 ${rows.length}개 / 전체 ${totalCount}개`;
+}
+
+function buildMasterCompanyCompactEmpty(title = '회사를 선택해 주세요.', description = '') {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'master-company-empty';
+  const titleEl = document.createElement('div');
+  titleEl.className = 'master-company-empty-title';
+  titleEl.textContent = title;
+  wrapper.appendChild(titleEl);
+  if (String(description || '').trim()) {
+    const descEl = document.createElement('div');
+    descEl.className = 'master-company-empty-description';
+    descEl.textContent = String(description).trim();
+    wrapper.appendChild(descEl);
+  }
+  return wrapper;
+}
+
+function buildMasterCompanySection(title = '', bodyNode = null) {
+  const section = document.createElement('section');
+  section.className = 'master-company-section';
+  const heading = document.createElement('h5');
+  heading.textContent = title;
+  section.appendChild(heading);
+  if (bodyNode instanceof Node) section.appendChild(bodyNode);
+  return section;
+}
+
+function buildMasterCompanyFactGrid(items = []) {
+  const grid = document.createElement('div');
+  grid.className = 'master-company-fact-grid';
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const label = String(item?.label || '').trim();
+    const value = String(item?.value || '').trim();
+    if (!label || !value) return;
+    const card = document.createElement('div');
+    card.className = 'master-company-fact-card';
+    if (String(item?.tone || '').trim()) {
+      card.dataset.tone = String(item.tone).trim();
+    }
+    const labelEl = document.createElement('span');
+    labelEl.textContent = label;
+    const valueEl = document.createElement('strong');
+    valueEl.textContent = value;
+    card.append(labelEl, valueEl);
+    if (String(item?.meta || '').trim()) {
+      const metaEl = document.createElement('small');
+      metaEl.textContent = String(item.meta).trim();
+      card.appendChild(metaEl);
+    }
+    grid.appendChild(card);
+  });
+  return grid;
+}
+
+function getMasterTenantWorkspaceSelection() {
+  const routeMeta = getMasterRouteContext();
+  if (routeMeta.name !== 'tenant-overview') return null;
+  const tenant = getTenantById(routeMeta.tenantId || state.devAdmin.selectedTenantId || '');
+  const tenantCode = String(tenant?.tenant_code || '').trim().toUpperCase();
+  return tenantCode === 'MASTER' ? null : tenant;
+}
+
+function getMasterWorkspaceTenantRows(rows = []) {
+  return (Array.isArray(rows) ? rows : [])
+    .filter((item) => String(item?.tenant_code || '').trim().toUpperCase() !== 'MASTER');
+}
+
+function renderMasterTenantSummaryStrip(rows = []) {
+  const list = getMasterWorkspaceTenantRows(rows);
+  const activeCount = list.filter((item) => !item?.is_deleted && item?.is_active !== false).length;
+  const disabledCount = list.filter((item) => !item?.is_deleted && item?.is_active === false).length;
+  const deletedCount = list.filter((item) => Boolean(item?.is_deleted)).length;
+  const recentCount = list.filter((item) => {
+    const raw = String(item?.updated_at || item?.created_at || '').trim();
+    if (!raw) return false;
+    const time = Date.parse(raw);
+    return Number.isFinite(time) && (Date.now() - time) <= (7 * 24 * 60 * 60 * 1000);
+  }).length;
+  renderOrganizationSummaryStrip('#masterTenantSummaryStrip', [
+    {
+      label: '전체 회사',
+      value: `${list.length}개`,
+      meta: 'MASTER 제외 운영 범위',
+    },
+    {
+      label: '활성',
+      value: `${activeCount}개`,
+      meta: `비활성 ${disabledCount}개`,
+      tone: activeCount > 0 ? 'success' : '',
+    },
+    {
+      label: '삭제됨',
+      value: `${deletedCount}개`,
+      meta: '복구 또는 정리 대상',
+      tone: deletedCount > 0 ? 'warn' : '',
+    },
+    {
+      label: '최근 변경',
+      value: `${recentCount}개`,
+      meta: '최근 7일 기준',
+      tone: recentCount > 0 ? 'success' : '',
+    },
+  ]);
+}
+
+function renderMasterTenantDetailPanel(tenant = null) {
+  const panel = $('#masterTenantDetailPanel');
+  const body = $('#masterTenantDetailBody');
+  const actions = $('#masterTenantDetailActions');
+  const eyebrow = $('#masterTenantDetailEyebrow');
+  const title = $('#masterTenantDetailTitle');
+  const subtitle = $('#masterTenantDetailSubtitle');
+  const badges = $('#masterTenantDetailBadges');
+  if (!(panel instanceof HTMLElement) || !(body instanceof HTMLElement) || !(actions instanceof HTMLElement)) return;
+
+  if (!tenant) {
+    if (eyebrow) eyebrow.textContent = '회사 선택';
+    if (title) title.textContent = '회사를 선택해 주세요';
+    if (subtitle) subtitle.textContent = '왼쪽 목록에서 회사를 선택하면 상태, 연결 현황, 수정 액션이 열립니다.';
+    if (badges) badges.innerHTML = '';
+    body.innerHTML = '';
+    body.appendChild(buildMasterCompanyCompactEmpty('회사를 선택해 주세요.', '목록에서 회사를 선택하면 기본 정보, 연결 현황, 수정/상태 변경 액션을 확인할 수 있습니다.'));
+    actions.innerHTML = '';
+    actions.classList.add('hidden');
+    panel.classList.add('is-empty');
+    return;
+  }
+
+  const tenantId = String(tenant?.id || '').trim();
+  const tenantCode = String(tenant?.tenant_code || '').trim().toUpperCase();
+  const tenantName = String(tenant?.tenant_name || tenantCode || '회사 상세').trim() || '회사 상세';
+  const isDeleted = Boolean(tenant?.is_deleted);
+  const isActive = !isDeleted && tenant?.is_active !== false;
+  const profileEntry = getMasterTenantProfileCacheEntry(tenantId);
+  const profile = profileEntry.profile;
+  const completion = buildMasterTenantProfileCompletion(profileEntry.loaded ? profile : null);
+  const siteCount = getMasterTenantSiteCount(tenant);
+  const userCount = getMasterTenantUserCount(tenant);
+  const updatedAt = String(tenant?.updated_at || tenant?.created_at || '').trim();
+
+  if (eyebrow) eyebrow.textContent = tenantCode || '회사 상세';
+  if (title) title.textContent = tenantName;
+  if (subtitle) {
+    const parts = [
+      tenantCode,
+      updatedAt ? `최근 변경 ${formatOpsDateTime(updatedAt)}` : '',
+      completion.statusLabel === '미조회' ? '회사 정보 확인 필요' : `회사 정보 ${completion.statusLabel}`,
+    ].filter(Boolean);
+    subtitle.textContent = parts.join(' · ');
+  }
+  if (badges) {
+    badges.innerHTML = '';
+    const statusBadge = document.createElement('span');
+    statusBadge.className = isDeleted
+      ? 'status-pill status-pill-neutral'
+      : (isActive ? 'status-pill status-pill-success' : 'status-pill status-pill-warn');
+    statusBadge.textContent = isDeleted ? '삭제됨' : (isActive ? '활성' : '비활성');
+    badges.appendChild(statusBadge);
+
+    const infoBadge = document.createElement('span');
+    infoBadge.className = completion.tone === 'success'
+      ? 'status-pill status-pill-success'
+      : (completion.tone === 'danger' ? 'status-pill status-pill-error' : 'status-pill status-pill-warn');
+    infoBadge.textContent = `정보 ${completion.statusLabel}`;
+    badges.appendChild(infoBadge);
+
+    const sealBadge = document.createElement('span');
+    sealBadge.className = completion.sealReady ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral';
+    sealBadge.textContent = completion.sealReady ? '도장 등록' : '도장 미등록';
+    badges.appendChild(sealBadge);
+  }
+
+  const basicFacts = [
+    { label: '상태', value: isDeleted ? '삭제됨' : (isActive ? '활성' : '비활성'), tone: isDeleted ? 'warn' : (isActive ? 'success' : 'warn') },
+    { label: '대표자', value: String(profile?.ceo_name || '').trim() || '미입력', tone: String(profile?.ceo_name || '').trim() ? '' : 'warn' },
+    { label: '사업자 번호', value: String(profile?.biz_reg_no || '').trim() || '미입력', tone: String(profile?.biz_reg_no || '').trim() ? '' : 'warn' },
+    { label: '연락처', value: String(profile?.phone || '').trim() || '미입력', tone: String(profile?.phone || '').trim() ? '' : 'warn' },
+    { label: '이메일', value: String(profile?.email || '').trim() || '미입력', tone: String(profile?.email || '').trim() ? '' : 'warn' },
+    { label: '주소', value: String(profile?.address || '').trim() || '미입력', tone: String(profile?.address || '').trim() ? '' : 'warn' },
+  ];
+  const opsFacts = [
+    { label: '정보 기입', value: completion.statusLabel, tone: completion.tone, meta: `필수 ${completion.requiredCount}개 기준` },
+    { label: '도장 상태', value: completion.sealReady ? '등록됨' : '미등록', tone: completion.sealReady ? 'success' : 'warn' },
+    { label: '지점 수', value: Number.isFinite(Number(siteCount)) ? `${siteCount}곳` : '미조회', tone: Number.isFinite(Number(siteCount)) ? 'success' : '' },
+    { label: '직원 수', value: Number.isFinite(Number(userCount)) ? `${userCount}명` : '미조회', tone: Number.isFinite(Number(userCount)) ? 'success' : '' },
+  ];
+
+  body.innerHTML = '';
+  body.appendChild(buildMasterCompanySection('기본 정보', buildMasterCompanyFactGrid(basicFacts)));
+  body.appendChild(buildMasterCompanySection('운영 현황', buildMasterCompanyFactGrid(opsFacts)));
+
+  actions.innerHTML = '';
+  const primaryActions = document.createElement('div');
+  primaryActions.className = 'master-company-primary-actions';
+
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'btn btn-primary';
+  editBtn.dataset.action = 'master-route';
+  editBtn.dataset.route = buildMasterTenantRoute(tenantId, 'users');
+  editBtn.textContent = '회사 정보 수정';
+  primaryActions.appendChild(editBtn);
+
+  const sitesBtn = document.createElement('button');
+  sitesBtn.type = 'button';
+  sitesBtn.className = 'btn btn-secondary';
+  sitesBtn.dataset.action = 'master-company-open-sites';
+  sitesBtn.dataset.tenantId = tenantId;
+  sitesBtn.textContent = '지점 보기';
+  primaryActions.appendChild(sitesBtn);
+
+  const employeesBtn = document.createElement('button');
+  employeesBtn.type = 'button';
+  employeesBtn.className = 'btn btn-secondary';
+  employeesBtn.dataset.action = 'master-company-open-employees';
+  employeesBtn.dataset.tenantId = tenantId;
+  employeesBtn.textContent = '직원 보기';
+  primaryActions.appendChild(employeesBtn);
+
+  actions.appendChild(primaryActions);
+
+  const dangerZone = document.createElement('section');
+  dangerZone.className = 'master-company-danger-zone';
+  const dangerTitle = document.createElement('strong');
+  dangerTitle.textContent = '상태 / 삭제';
+  const dangerDesc = document.createElement('p');
+  dangerDesc.className = 'muted';
+  dangerDesc.textContent = '상태 변경과 삭제는 이 회사 선택 상태에서만 실행합니다.';
+  const dangerActions = document.createElement('div');
+  dangerActions.className = 'master-company-danger-actions';
+
+  const toggleBtn = document.createElement('button');
+  toggleBtn.type = 'button';
+  toggleBtn.id = 'masterTenantDetailToggleActiveBtn';
+  toggleBtn.className = isActive ? 'btn btn-secondary' : 'btn btn-primary';
+  toggleBtn.dataset.action = 'master-tenant-toggle-active';
+  toggleBtn.dataset.tenantId = tenantId;
+  toggleBtn.dataset.tenantName = tenantName;
+  toggleBtn.dataset.tenantCode = tenantCode;
+  toggleBtn.dataset.nextActive = isActive ? 'false' : 'true';
+  toggleBtn.textContent = isActive ? '비활성 전환' : '활성 전환';
+  toggleBtn.disabled = !can('tenantManage') || isDeleted;
+  dangerActions.appendChild(toggleBtn);
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.type = 'button';
+  deleteBtn.id = 'masterTenantDetailDeleteBtn';
+  deleteBtn.className = 'btn btn-destructive';
+  deleteBtn.dataset.action = 'master-tenant-delete';
+  deleteBtn.dataset.tenantId = tenantId;
+  deleteBtn.dataset.tenantName = tenantName;
+  deleteBtn.dataset.tenantCode = tenantCode;
+  deleteBtn.textContent = '회사 삭제';
+  deleteBtn.disabled = !can('tenantManage');
+  dangerActions.appendChild(deleteBtn);
+
+  dangerZone.append(dangerTitle, dangerDesc, dangerActions);
+  actions.appendChild(dangerZone);
+  actions.classList.remove('hidden');
+  panel.classList.remove('is-empty');
+}
+
+async function navigateToSitesForTenant(tenantId = '') {
+  const normalizedTenantId = String(tenantId || '').trim();
+  if (!normalizedTenantId) return;
+  state.siteTenantFilterValue = normalizedTenantId;
+  const tenant = getTenantById(normalizedTenantId);
+  const tenantCode = String(tenant?.tenant_code || '').trim().toUpperCase();
+  const tenantName = String(tenant?.tenant_name || tenantCode || normalizedTenantId).trim();
+  const moved = await navigateToRoute(ROUTE_ADMIN_SITES);
+  if (!moved) return;
+  await loadOrgViewPresenter();
+  await syncSiteTenantFilterOptions({ force: true });
+  const select = $('#siteTenantFilter');
+  if (select instanceof HTMLSelectElement) {
+    let hasTarget = Array.from(select.options).some((option) => String(option.value || '').trim() === normalizedTenantId);
+    if (!hasTarget && tenantCode) {
+      const option = document.createElement('option');
+      option.value = normalizedTenantId;
+      option.textContent = tenantName;
+      option.dataset.tenantCode = tenantCode;
+      option.dataset.tenantName = tenantName;
+      select.appendChild(option);
+      hasTarget = true;
+    }
+    if (hasTarget) {
+      select.value = normalizedTenantId;
+      state.siteTenantFilterValue = normalizedTenantId;
+    }
+  }
+  await loadCompanies({ preferCache: true, force: true });
+  await loadSites({ preferCache: false, skipNetworkWhenCached: false });
+  renderSiteCards(state.sites);
+}
+
+async function navigateToEmployeesForTenant(tenantId = '') {
+  const normalizedTenantId = String(tenantId || '').trim();
+  if (!normalizedTenantId) return;
+  state.employeeAdmin.tenantFilterId = normalizedTenantId;
+  state.employeeAdmin.siteFilterCode = 'all';
+  const tenant = getTenantById(normalizedTenantId);
+  const tenantCode = String(tenant?.tenant_code || '').trim().toUpperCase();
+  const tenantName = String(tenant?.tenant_name || tenantCode || normalizedTenantId).trim();
+  const moved = await navigateToRoute(ROUTE_ADMIN_EMPLOYEES);
+  if (!moved) return;
+  await loadEmployeesViewPresenter();
+  await syncEmployeeTenantFilterOptions({ force: true });
+  const select = $('#employeeTenantFilter');
+  if (select instanceof HTMLSelectElement) {
+    let hasTarget = Array.from(select.options).some((option) => String(option.value || '').trim() === normalizedTenantId);
+    if (!hasTarget && tenantCode) {
+      const option = document.createElement('option');
+      option.value = normalizedTenantId;
+      option.textContent = tenantName;
+      option.dataset.tenantCode = tenantCode;
+      option.dataset.tenantName = tenantName;
+      select.appendChild(option);
+      hasTarget = true;
+    }
+    if (hasTarget) {
+      select.value = normalizedTenantId;
+      state.employeeAdmin.tenantFilterId = normalizedTenantId;
+    }
+  }
+  await syncEmployeeSiteFilterOptions({ force: true });
+  await loadEmployees({ preferCache: true, skipNetworkWhenCached: false });
+  renderEmployeesFromCache();
+}
+
 function renderMasterSectionVisibility() {
   const sectionByRoute = {
     dashboard: '#masterSectionDashboard',
     'tenant-create': '#masterSectionTenantCreate',
-    'tenant-overview': '#masterSectionTenantOverview',
+    'tenant-overview': '#masterSectionDashboard',
     'tenant-users': '#masterSectionTenantUsers',
     'tenant-user-detail': '#masterSectionUserDetail',
     'tenant-security': '#masterSectionTenantSecurity',
@@ -25510,7 +25963,7 @@ function renderMasterTenantDashboard() {
 
   const query = String(state.devAdmin.tenantSearchQuery || '').trim().toLowerCase();
   const statusFilter = String(state.devAdmin.tenantStatusFilter || 'active').trim();
-  const tenants = Array.isArray(state.devAdmin.tenants) ? state.devAdmin.tenants : [];
+  const tenants = getMasterWorkspaceTenantRows(state.devAdmin.tenants);
   const filtered = tenants.filter((tenant) => {
     const isDeleted = Boolean(tenant?.is_deleted);
     const active = !isDeleted && tenant?.is_active !== false;
@@ -25523,11 +25976,16 @@ function renderMasterTenantDashboard() {
     return code.includes(query) || name.includes(query);
   });
   const sorted = getSortedMasterTenantRows(filtered);
+  const selectedTenant = getMasterTenantWorkspaceSelection();
+
+  renderMasterTenantSummaryStrip(tenants);
+  renderMasterTenantCount(sorted);
 
   if (!sorted.length) {
     if (renderMobile && list) renderEmptyState(list, '조건에 맞는 회사가 없습니다.');
-    if (renderDesktop && tableBody) renderAdminTableEmptyState(tableBody, 4, '조건에 맞는 회사가 없습니다.');
+    if (renderDesktop && tableBody) renderAdminTableEmptyState(tableBody, 5, '조건에 맞는 회사가 없습니다.');
     renderMasterTenantSortHeaders();
+    renderMasterTenantDetailPanel(null);
     renderMasterPurgeResult();
     markViewPerfStage('critical_ui_ready', {
       routePath: companyPerfRoute,
@@ -25541,59 +25999,80 @@ function renderMasterTenantDashboard() {
 
   sorted.forEach((tenant) => {
     const tenantCode = String(tenant?.tenant_code || '').trim().toUpperCase();
-    const tenantCodeLower = tenantCode.toLowerCase();
     const logo = getMasterTenantLogo(tenantCode);
-    const userCount = getCachedUsersByTenantCode(tenantCode).length;
     const isDeleted = Boolean(tenant?.is_deleted);
     const active = !isDeleted && tenant?.is_active !== false;
     const statusText = isDeleted ? '삭제됨' : (active ? '활성' : '비활성');
     const statusClass = isDeleted
       ? 'status-pill status-pill-neutral'
       : (active ? 'status-pill status-pill-success' : 'status-pill status-pill-error');
-    const canRowAdminActions = canRunSocSiteBackfill();
-    const infoActionDisabledAttr = tenant?.id ? '' : ' disabled';
-    const infoActionButton = `
-      <button class="btn btn-secondary master-tenant-info-action" type="button" data-action="master-route" data-route="${buildMasterTenantRoute(tenant.id, 'users')}"${infoActionDisabledAttr}>정보</button>
-    `;
-    const hrResetRunning = isMasterTenantRowActionRunning('hr', tenantCodeLower);
-    const resetFullRunning = isMasterTenantRowActionRunning('reset_full', tenantCodeLower);
-    const socResetRunning = isMasterTenantRowActionRunning('soc_reset', tenantCodeLower);
-    const rowActionBusy = hrResetRunning || resetFullRunning || socResetRunning;
-    const rowActionDisabledAttr = rowActionBusy ? ' disabled' : '';
-    const destructiveActionButtons = canRowAdminActions
-      ? `
-        <button class="btn btn-destructive ${hrResetRunning ? 'is-loading' : ''}" type="button" data-action="master-tenant-hr-reset" data-tenant-id="${tenant.id}" data-tenant-code="${tenantCode}" data-tenant-code-lower="${tenantCodeLower}" data-tenant-name="${tenant?.tenant_name || tenantCode}"${rowActionDisabledAttr}>${hrResetRunning ? 'HR 초기화 중...' : '테넌트 데이터 초기화(HR)'}</button>
-        <button class="btn btn-destructive ${socResetRunning ? 'is-loading' : ''}" type="button" data-action="master-tenant-soc-reset" data-tenant-id="${tenant.id}" data-tenant-code="${tenantCode}" data-tenant-code-lower="${tenantCodeLower}" data-tenant-name="${tenant?.tenant_name || tenantCode}"${rowActionDisabledAttr}>${socResetRunning ? 'SOC 초기화 중...' : 'SOC 완전 초기화'}</button>
-        <button class="btn btn-destructive ${resetFullRunning ? 'is-loading' : ''}" type="button" data-action="master-tenant-reset-full" data-tenant-id="${tenant.id}" data-tenant-code="${tenantCode}" data-tenant-code-lower="${tenantCodeLower}" data-tenant-name="${tenant?.tenant_name || tenantCode}"${rowActionDisabledAttr}>${resetFullRunning ? '완전 초기화 중...' : '테넌트 완전 초기화(HR+SOC)'}</button>
-      `
-      : '';
+    const profileEntry = getMasterTenantProfileCacheEntry(tenant?.id);
+    const completion = buildMasterTenantProfileCompletion(profileEntry.loaded ? profileEntry.profile : null);
+    const siteCount = getMasterTenantSiteCount(tenant);
+    const userCount = getMasterTenantUserCount(tenant);
+    const infoPillClass = completion.tone === 'success'
+      ? 'status-pill status-pill-success'
+      : (completion.tone === 'danger' ? 'status-pill status-pill-error' : 'status-pill status-pill-warn');
+    const siteLabel = Number.isFinite(Number(siteCount)) ? `${siteCount}곳` : '미조회';
+    const userLabel = Number.isFinite(Number(userCount)) ? `${userCount}명` : '미조회';
+    const isSelected = Boolean(selectedTenant) && String(selectedTenant?.id || '').trim() === String(tenant?.id || '').trim();
+    const detailRoute = tenant?.id ? buildMasterTenantRoute(tenant.id, 'overview') : ROUTE_MASTER_TENANTS;
+    const editRoute = tenant?.id ? buildMasterTenantRoute(tenant.id, 'users') : ROUTE_MASTER_TENANTS;
 
     if (renderDesktop && tableBody) {
       const tr = document.createElement('tr');
-
+      tr.className = `master-company-row${isSelected ? ' is-selected' : ''}`;
+      tr.dataset.action = 'master-route';
+      tr.dataset.route = detailRoute;
+      tr.tabIndex = 0;
+      tr.setAttribute('role', 'button');
       const nameTd = document.createElement('td');
-      nameTd.textContent = String(tenant?.tenant_name || '-').trim() || '-';
+      nameTd.className = 'company-cell';
+      nameTd.innerHTML = `
+        <div class="master-company-cell-stack">
+          <strong class="master-company-cell-title">${String(tenant?.tenant_name || '-').trim() || '-'}</strong>
+          <span class="master-company-cell-subtitle">${tenantCode || '-'}</span>
+        </div>
+      `;
       tr.appendChild(nameTd);
 
-      const codeTd = document.createElement('td');
-      codeTd.textContent = tenantCode || '-';
-      tr.appendChild(codeTd);
-
       const statusTd = document.createElement('td');
-      const statusPill = document.createElement('span');
-      statusPill.className = statusClass;
-      statusPill.textContent = statusText;
-      statusTd.appendChild(statusPill);
+      statusTd.className = 'status-cell';
+      statusTd.innerHTML = `
+        <div class="master-company-status-stack">
+          <span class="${statusClass}">${statusText}</span>
+          <span class="master-company-cell-meta">${isDeleted ? '삭제 플래그 적용' : (active ? '운영 가능' : '비활성 처리됨')}</span>
+        </div>
+      `;
       tr.appendChild(statusTd);
+
+      const infoTd = document.createElement('td');
+      infoTd.className = 'info-cell';
+      infoTd.innerHTML = `
+        <div class="master-company-status-stack">
+          <span class="${infoPillClass}">${completion.statusLabel}</span>
+          <span class="master-company-cell-meta">${completion.sealReady ? '도장 등록' : '도장 미등록'}</span>
+        </div>
+      `;
+      tr.appendChild(infoTd);
+
+      const connectionsTd = document.createElement('td');
+      connectionsTd.className = 'connections-cell';
+      connectionsTd.innerHTML = `
+        <div class="master-company-cell-stack">
+          <strong class="master-company-cell-title">지점 ${siteLabel}</strong>
+          <span class="master-company-cell-subtitle">직원 ${userLabel}</span>
+        </div>
+      `;
+      tr.appendChild(connectionsTd);
 
       const actionsTd = document.createElement('td');
       actionsTd.className = 'actions-cell';
       const actionsWrap = document.createElement('div');
       actionsWrap.className = 'table-actions';
       actionsWrap.innerHTML = `
-        ${infoActionButton}
-        ${destructiveActionButtons}
-        <button class="btn btn-destructive" type="button" data-action="master-tenant-delete-inline" data-tenant-id="${tenant.id}" data-tenant-code="${tenantCode}" data-tenant-name="${tenant?.tenant_name || tenantCode}"${can('tenantManage') ? '' : ' disabled'}>테넌트 삭제</button>
+        <button class="btn btn-secondary master-tenant-info-action" type="button" data-action="master-route" data-route="${detailRoute}"${tenant?.id ? '' : ' disabled'}>상세</button>
+        <button class="btn btn-secondary" type="button" data-action="master-route" data-route="${editRoute}"${tenant?.id ? '' : ' disabled'}>정보 수정</button>
       `;
       actionsTd.appendChild(actionsWrap);
       tr.appendChild(actionsTd);
@@ -25611,15 +26090,14 @@ function renderMasterTenantDashboard() {
             ${logo ? `<img src="${logo}" alt="${tenantCode} logo" class="master-tenant-logo" />` : '<div class="master-tenant-logo master-tenant-logo-fallback">RG</div>'}
             <div>
               <strong>${tenantCode} · ${tenant?.tenant_name || '-'}</strong>
-              <p class="muted">상태: ${statusText} · 유저 수: ${userCount || '-'}</p>
+              <p class="muted">상태 ${statusText} · 정보 ${completion.statusLabel} · 지점 ${siteLabel}</p>
             </div>
           </div>
           <span class="${statusClass}">${statusText}</span>
         </div>
         <div class="inline-actions">
-          ${infoActionButton}
-          ${destructiveActionButtons}
-          <button class="btn btn-destructive" type="button" data-action="master-tenant-delete-inline" data-tenant-id="${tenant.id}" data-tenant-code="${tenantCode}" data-tenant-name="${tenant?.tenant_name || tenantCode}"${can('tenantManage') ? '' : ' disabled'}>테넌트 삭제</button>
+          <button class="btn btn-secondary master-tenant-info-action" type="button" data-action="master-route" data-route="${detailRoute}"${tenant?.id ? '' : ' disabled'}>상세</button>
+          <button class="btn btn-secondary" type="button" data-action="master-route" data-route="${editRoute}"${tenant?.id ? '' : ' disabled'}>정보 수정</button>
         </div>
       `;
       li.appendChild(card);
@@ -25627,6 +26105,7 @@ function renderMasterTenantDashboard() {
     }
   });
   renderMasterTenantSortHeaders();
+  renderMasterTenantDetailPanel(selectedTenant);
   renderMasterPurgeResult();
   markViewPerfStage('critical_ui_ready', {
     routePath: companyPerfRoute,
@@ -25692,98 +26171,7 @@ function renderMasterTenantCreateForm() {
 }
 
 function renderMasterTenantOverview() {
-  const tenant = getMasterTenantByRouteOrContext();
-  const title = $('#masterOverviewTitle');
-  const code = $('#masterOverviewTenantCode');
-  const name = $('#masterOverviewTenantName');
-  const stateText = $('#masterOverviewTenantState');
-  const users = $('#masterOverviewTenantUsers');
-  const pill = $('#masterOverviewStatusPill');
-  const quickUsers = $('#masterOverviewQuickUsers');
-  const quickSecurity = $('#masterOverviewQuickSecurity');
-  const socDangerStatus = $('#masterSocDangerStatus');
-
-  if (!tenant) {
-    if (title) title.textContent = '선택된 회사 없음';
-    if (code) code.textContent = '-';
-    if (name) name.textContent = '-';
-    if (stateText) stateText.textContent = '-';
-    if (users) users.textContent = '-';
-    if (pill) {
-      pill.className = 'status-pill status-pill-warn';
-      pill.textContent = '없음';
-    }
-    const toggleBtn = $('#masterOverviewToggleActiveBtn');
-    const deleteBtn = $('#masterOverviewDeleteBtn');
-    const socResetBtn = $('#masterSocFullResetBtn');
-    const socBackfillBtn = $('#masterSocBackfillBtn');
-    if (toggleBtn) {
-      toggleBtn.disabled = true;
-      toggleBtn.dataset.tenantId = '';
-      toggleBtn.dataset.tenantCode = '';
-    }
-    if (deleteBtn) {
-      deleteBtn.disabled = true;
-      deleteBtn.dataset.tenantId = '';
-      deleteBtn.dataset.tenantCode = '';
-    }
-    if (socResetBtn) {
-      socResetBtn.disabled = true;
-      socResetBtn.dataset.tenantId = '';
-      socResetBtn.dataset.tenantCode = '';
-      socResetBtn.dataset.tenantCodeLower = '';
-      socResetBtn.dataset.tenantName = '';
-    }
-    if (socBackfillBtn) {
-      socBackfillBtn.disabled = true;
-      socBackfillBtn.dataset.tenantId = '';
-      socBackfillBtn.dataset.tenantCode = '';
-      socBackfillBtn.dataset.tenantCodeLower = '';
-      socBackfillBtn.dataset.tenantName = '';
-    }
-    if (socDangerStatus) socDangerStatus.textContent = '';
-    updateMasterSocFullResetButtonState();
-    updateMasterSocBackfillButtonState();
-    return;
-  }
-
-  const tenantCode = String(tenant.tenant_code || '').trim().toUpperCase();
-  const isActive = tenant.is_active !== false;
-  if (title) title.textContent = `${tenantCode} 개요`;
-  if (code) code.textContent = tenantCode;
-  if (name) name.textContent = tenant.tenant_name || '-';
-  if (stateText) stateText.textContent = isActive ? '활성' : '비활성';
-  if (users) users.textContent = String(getCachedUsersByTenantCode(tenantCode).length || '-');
-  if (pill) {
-    pill.className = isActive ? 'status-pill status-pill-success' : 'status-pill status-pill-error';
-    pill.textContent = isActive ? '활성' : '비활성';
-  }
-  const toggleBtn = $('#masterOverviewToggleActiveBtn');
-  const deleteBtn = $('#masterOverviewDeleteBtn');
-  if (toggleBtn) {
-    toggleBtn.dataset.tenantId = String(tenant.id || '');
-    toggleBtn.dataset.tenantName = tenant.tenant_name || tenantCode;
-    toggleBtn.dataset.tenantCode = tenantCode;
-    toggleBtn.dataset.nextActive = isActive ? 'false' : 'true';
-    toggleBtn.textContent = isActive ? '회사 비활성화' : '회사 활성화';
-    toggleBtn.className = isActive ? 'btn btn-destructive' : 'btn btn-primary';
-    toggleBtn.disabled = !can('tenantManage');
-  }
-  if (deleteBtn) {
-    deleteBtn.dataset.tenantId = String(tenant.id || '');
-    deleteBtn.dataset.tenantName = tenant.tenant_name || tenantCode;
-    deleteBtn.dataset.tenantCode = tenantCode;
-    deleteBtn.disabled = !can('tenantManage');
-  }
-  if (quickUsers) {
-    quickUsers.dataset.route = buildMasterTenantRoute(tenant.id, 'users');
-  }
-  if (quickSecurity) {
-    quickSecurity.dataset.route = buildMasterTenantRoute(tenant.id, 'security');
-  }
-  if (socDangerStatus) socDangerStatus.textContent = '';
-  updateMasterSocFullResetButtonState();
-  updateMasterSocBackfillButtonState();
+  renderMasterTenantDetailPanel(getMasterTenantWorkspaceSelection());
 }
 
 function getMasterTenantProfileContext() {
@@ -25897,6 +26285,10 @@ function renderMasterTenantProfilePanel() {
   if (!context) {
     fillMasterTenantProfileForm(null, null);
     clearMasterTenantSealPreview();
+    setTextContentIfPresent('#masterTenantProfileRailCode', '-', '-');
+    setTextContentIfPresent('#masterTenantProfileRailStatus', '-', '-');
+    setTextContentIfPresent('#masterTenantProfileRailCounts', '-', '-');
+    setTextContentIfPresent('#masterTenantProfileRailSeal', '미등록', '미등록');
     setInlineStatus('#masterTenantProfileStatus', '회사를 먼저 선택해 주세요.', 'error');
     return;
   }
@@ -25906,6 +26298,29 @@ function renderMasterTenantProfilePanel() {
     fillMasterTenantProfileForm(cached, context.tenant);
   } else {
     fillMasterTenantProfileForm(null, context.tenant);
+  }
+  const tenantCode = String(context.tenant?.tenant_code || '').trim().toUpperCase();
+  const siteCount = getMasterTenantSiteCount(context.tenant);
+  const userCount = getMasterTenantUserCount(context.tenant);
+  setTextContentIfPresent('#masterTenantProfileRailCode', tenantCode || '-', '-');
+  setTextContentIfPresent('#masterTenantProfileRailStatus', context.tenant?.is_active === false ? '비활성' : '활성', '-');
+  setTextContentIfPresent(
+    '#masterTenantProfileRailCounts',
+    `${Number.isFinite(Number(siteCount)) ? `${siteCount}곳` : '지점 미조회'} / ${Number.isFinite(Number(userCount)) ? `${userCount}명` : '직원 미조회'}`,
+    '-',
+  );
+  setTextContentIfPresent(
+    '#masterTenantProfileRailSeal',
+    String(cached?.seal_attachment_id || '').trim() ? '등록됨' : '미등록',
+    '미등록',
+  );
+  const siteBtn = $('#masterTenantProfileOpenSitesBtn');
+  if (siteBtn instanceof HTMLButtonElement) {
+    siteBtn.dataset.tenantId = cacheKey;
+  }
+  const employeeBtn = $('#masterTenantProfileOpenEmployeesBtn');
+  if (employeeBtn instanceof HTMLButtonElement) {
+    employeeBtn.dataset.tenantId = cacheKey;
   }
 }
 
@@ -25925,6 +26340,7 @@ async function loadMasterTenantProfile({ force = false, silent = false } = {}) {
   if (!force && cached && typeof cached === 'object') {
     fillMasterTenantProfileForm(cached, context.tenant);
     await renderMasterTenantSealPreview(context, cached.seal_attachment_id);
+    renderMasterTenantProfilePanel();
     if (!silent) {
       setInlineStatus('#masterTenantProfileStatus', '저장된 회사 정보를 불러왔습니다.', 'success');
     }
@@ -25944,6 +26360,7 @@ async function loadMasterTenantProfile({ force = false, silent = false } = {}) {
   state.devAdmin.tenantProfilesByTenantId[cacheKey] = profile && typeof profile === 'object' ? profile : {};
   fillMasterTenantProfileForm(profile, context.tenant);
   await renderMasterTenantSealPreview(context, profile?.seal_attachment_id);
+  renderMasterTenantProfilePanel();
   if (!silent) {
     setInlineStatus('#masterTenantProfileStatus', '회사 정보 로드 완료', 'success');
   }
@@ -25980,7 +26397,7 @@ async function onMasterTenantProfileSubmit(event) {
     state.devAdmin.tenantProfilesByTenantId[String(context.tenantId)] = profile;
     fillMasterTenantProfileForm(profile, context.tenant);
     await renderMasterTenantSealPreview(context, profile?.seal_attachment_id);
-    setInlineStatus('#masterTenantProfileStatus', '회사 정보를 저장했습니다. 회사 목록으로 이동합니다.', 'success');
+    setInlineStatus('#masterTenantProfileStatus', '회사 정보를 저장했습니다. 상세 화면으로 이동합니다.', 'success');
     showToast('회사 정보가 저장되었습니다.', 'success', 1800);
 
     await ensureDevTenantCatalog({ force: true });
@@ -25989,7 +26406,7 @@ async function onMasterTenantProfileSubmit(event) {
     await new Promise((resolve) => {
       window.setTimeout(resolve, 700);
     });
-    await navigateToRoute(ROUTE_MASTER_TENANTS, { replace: true, silentDeniedModal: true });
+    await navigateToRoute(buildMasterTenantRoute(context.tenantId, 'overview'), { replace: true, silentDeniedModal: true });
   } catch (error) {
     const message = normalizeActionError(error, '회사 정보 저장에 실패했습니다.');
     setInlineStatus('#masterTenantProfileStatus', message, 'error');
@@ -26039,6 +26456,7 @@ async function onMasterTenantProfileUploadSeal() {
     cached.seal_attachment_id = sealAttachmentId;
   }
   await renderMasterTenantSealPreview(context, sealAttachmentId);
+  renderMasterTenantProfilePanel();
   fileInput.value = '';
   setInlineStatus('#masterTenantProfileStatus', '도장 이미지를 업로드했습니다.', 'success');
   showToast('도장 업로드 완료', 'success', 1800);
@@ -26054,6 +26472,7 @@ function onMasterTenantProfileClearSeal() {
   if (cached && typeof cached === 'object') {
     cached.seal_attachment_id = '';
   }
+  renderMasterTenantProfilePanel();
   setInlineStatus('#masterTenantProfileStatus', '도장 첨부를 제거했습니다. 저장 버튼을 눌러 반영하세요.', 'info');
 }
 
@@ -26243,6 +26662,7 @@ function renderMasterRoutePanels() {
   if (routeMeta.name === 'tenant-create') {
     renderMasterTenantCreateForm();
   } else if (routeMeta.name === 'tenant-overview') {
+    renderMasterTenantDashboard();
     renderMasterTenantOverview();
   } else if (routeMeta.name === 'tenant-users') {
     renderMasterTenantProfilePanel();
@@ -31164,11 +31584,13 @@ async function loadDevConsoleViewPresenter() {
       await loadMasterTenantUsers(tenant, { force: true });
     }
   }
-  if (routeMeta.name === 'tenant-users') {
+  if (routeMeta.name === 'tenant-users' || routeMeta.name === 'tenant-overview') {
     try {
-      await loadMasterTenantProfile({ force: true });
+      await loadMasterTenantProfile({ force: routeMeta.name === 'tenant-users', silent: routeMeta.name === 'tenant-overview' });
     } catch (error) {
-      setInlineStatus('#masterTenantProfileStatus', normalizeActionError(error, '회사 정보를 불러오지 못했습니다.'), 'error');
+      if (routeMeta.name === 'tenant-users') {
+        setInlineStatus('#masterTenantProfileStatus', normalizeActionError(error, '회사 정보를 불러오지 못했습니다.'), 'error');
+      }
     }
   }
   renderMasterConsoleSummary();
@@ -38159,7 +38581,7 @@ async function onMasterUserDetailDelete() {
 }
 
 async function onMasterTenantOverviewToggleActive() {
-  const btn = $('#masterOverviewToggleActiveBtn');
+  const btn = $('#masterTenantDetailToggleActiveBtn') || $('#masterOverviewToggleActiveBtn');
   if (!btn) return;
   const tenantId = String(btn.dataset.tenantId || '').trim();
   const tenantName = String(btn.dataset.tenantName || '').trim();
@@ -38209,7 +38631,7 @@ async function onMasterTenantDelete({ hardDelete = true, tenantId: tenantIdArg =
     showToast('회사 삭제 권한이 없습니다.', 'error');
     return;
   }
-  const fallbackBtn = $('#masterOverviewDeleteBtn');
+  const fallbackBtn = $('#masterTenantDetailDeleteBtn') || $('#masterOverviewDeleteBtn');
   const tenantId = String(tenantIdArg || fallbackBtn?.dataset?.tenantId || '').trim();
   const tenantCode = String(tenantCodeArg || fallbackBtn?.dataset?.tenantCode || '').trim().toUpperCase();
   const tenantName = String(tenantNameArg || fallbackBtn?.dataset?.tenantName || tenantCode).trim();
@@ -38242,7 +38664,7 @@ async function onMasterTenantDelete({ hardDelete = true, tenantId: tenantIdArg =
       : `${tenantName} 회사를 삭제(soft)했습니다. (감사로그 기록됨)`,
     'success',
     2400,
-  );
+    );
 }
 
 async function onMasterTenantsPurge({ mode = PURGE_MODE_SOFT } = {}) {
@@ -39140,7 +39562,7 @@ function getAttendanceManagerFetchRange() {
     }
     return {
       start: toLocalDateKey(meta.firstDate),
-      end: toLocalDateKey(new Date(meta.year, meta.monthIndex + 1, meta.daysInMonth)),
+      end: toLocalDateKey(new Date(meta.year, meta.monthIndex, meta.daysInMonth)),
     };
   }
   return getAttendanceDateRange();
@@ -40063,6 +40485,9 @@ function buildAttendanceManagerRows({
     ...correctionMap.keys(),
   ]);
   const scopedTenantCode = getTenantCodeForScopedAdminApi();
+  const todayKey = toLocalDateKey(new Date());
+  const now = new Date();
+  const nowMinutes = (now.getHours() * 60) + now.getMinutes();
   const rows = [];
 
   allKeys.forEach((key) => {
@@ -40123,8 +40548,12 @@ function buildAttendanceManagerRows({
       ? endMinutes - actualCheckOutMinutes
       : 0;
     const hasPendingRequest = pendingRequests.length > 0 || pendingCorrections.length > 0;
-    const hasMissingIn = !hasLeave && Boolean(scheduleRow) && checkInCount === 0;
-    const hasMissingOut = !hasLeave && checkInCount > 0 && checkOutCount === 0;
+    const isFutureDate = Boolean(dateKey) && dateKey > todayKey;
+    const isToday = dateKey === todayKey;
+    const beforeCheckInCutoff = isToday && Number.isFinite(startMinutes) && nowMinutes <= (startMinutes + lateThreshold);
+    const beforeCheckOutCutoff = isToday && Number.isFinite(endMinutes) && nowMinutes <= (endMinutes - earlyLeaveThreshold);
+    const hasMissingIn = !hasLeave && Boolean(scheduleRow) && checkInCount === 0 && !isFutureDate && !beforeCheckInCutoff;
+    const hasMissingOut = !hasLeave && checkInCount > 0 && checkOutCount === 0 && !isFutureDate && !beforeCheckOutCutoff;
     const hasLate = !hasLeave && checkInCount > 0 && lateMinutes > 0;
     const hasEarlyLeave = !hasLeave && checkOutCount > 0 && earlyLeaveMinutes > 0;
     const hasAttendanceWithoutSchedule = !hasLeave && !scheduleRow && (checkInCount > 0 || checkOutCount > 0);
@@ -40171,6 +40600,9 @@ function buildAttendanceManagerRows({
     } else if (hasLate) {
       processingState = '지각 확인';
       reviewRank = 5;
+    } else if (scheduleRow && !checkInCount && !checkOutCount) {
+      processingState = isFutureDate || beforeCheckInCutoff ? '출근 전' : '기록 대기';
+      reviewRank = isFutureDate || beforeCheckInCutoff ? 7 : 5;
     } else if (isEdited) {
       processingState = '수정 기록';
       reviewRank = 6;
@@ -40501,91 +40933,233 @@ function buildAttendanceManagerExceptionRows(rows = []) {
     });
 }
 
-function renderAttendanceManagerKpiStrip(summary = null) {
+function isAttendanceEducationSchedule(scheduleRow = null) {
+  if (!scheduleRow || typeof scheduleRow !== 'object') return false;
+  const haystack = [
+    scheduleRow?.schedule_note,
+    scheduleRow?.shift_label,
+    scheduleRow?.schedule_display_label,
+    scheduleRow?.schedule_display_time,
+    scheduleRow?.source_type,
+  ].map((value) => String(value || '').trim().toLowerCase()).join(' ');
+  return /교육|training|train/.test(haystack);
+}
+
+function buildAttendanceStatusDashboard(rows = [], summary = null) {
+  const list = Array.isArray(rows) ? rows : [];
+  const counts = summary && typeof summary === 'object'
+    ? summary
+    : buildAttendanceManagerSummary(list);
+
+  let workingTarget = 0;
+  let checkedIn = 0;
+  let beforeStart = 0;
+  let offCount = 0;
+  let leaveCount = 0;
+  let educationCount = 0;
+  let otherScheduleCount = 0;
+  let noScheduleCount = 0;
+  let correctionNeeded = 0;
+  let outsideScheduleCount = 0;
+  let editedCount = 0;
+  let locationIssueCount = 0;
+
+  list.forEach((row) => {
+    if (row?.checkInCount > 0) checkedIn += 1;
+    if (String(row?.processingState || '').trim() === '출근 전') beforeStart += 1;
+    if (Number(row?.pendingCount || 0) > 0) correctionNeeded += 1;
+    if (row?.hasAttendanceWithoutSchedule) outsideScheduleCount += 1;
+    if (row?.isEdited) editedCount += 1;
+    if (row?.hasLocationIssue) locationIssueCount += 1;
+
+    if (row?.hasLeave) {
+      leaveCount += 1;
+      return;
+    }
+
+    const scheduleRow = row?.scheduleRow || null;
+    if (!scheduleRow) {
+      noScheduleCount += 1;
+      return;
+    }
+
+    const displayType = resolveScheduleDisplayType(scheduleRow);
+    if (['off', 'holiday'].includes(displayType)) {
+      offCount += 1;
+      return;
+    }
+    if (isAttendanceEducationSchedule(scheduleRow)) {
+      educationCount += 1;
+      return;
+    }
+    if (isScheduleNonWorkingDisplayType(displayType)) {
+      otherScheduleCount += 1;
+      return;
+    }
+    if (['day', 'night', 'overtime'].includes(displayType) || normalizeShiftType(scheduleRow?.shift_type || '')) {
+      workingTarget += 1;
+      return;
+    }
+    otherScheduleCount += 1;
+  });
+
+  const attendanceRate = workingTarget > 0
+    ? Math.round((checkedIn / Math.max(1, workingTarget)) * 100)
+    : 0;
+
+  return {
+    ...counts,
+    workingTarget,
+    checkedIn,
+    beforeStart,
+    offCount,
+    leaveCount,
+    educationCount,
+    otherScheduleCount,
+    noScheduleCount,
+    correctionNeeded,
+    outsideScheduleCount,
+    editedCount,
+    locationIssueCount,
+    attendanceRate,
+  };
+}
+
+function renderAttendanceManagerKpiStrip(summary = null, rows = []) {
   const target = $('#attendanceManagerKpiStrip');
   const secondaryTarget = $('#attendanceManagerSecondaryKpiStrip');
   const metaEl = $('#attendanceManagerKpiMeta');
   const rateValueEl = $('#attendanceRateValue');
   const rateMetaEl = $('#attendanceRateMeta');
   const rateRingEl = $('#attendanceRateRing');
-  if (!(target instanceof HTMLElement)) return;
+  const matrixTarget = $('#attendanceManagerStatusMatrix');
+  const specialTarget = $('#attendanceManagerSpecialCaseStrip');
+  if (!(target instanceof HTMLElement) || !(secondaryTarget instanceof HTMLElement) || !(matrixTarget instanceof HTMLElement) || !(specialTarget instanceof HTMLElement)) return;
   target.innerHTML = '';
-  if (secondaryTarget instanceof HTMLElement) {
-    secondaryTarget.innerHTML = '';
-  }
+  secondaryTarget.innerHTML = '';
+  matrixTarget.innerHTML = '';
+  specialTarget.innerHTML = '';
   const counts = summary && typeof summary === 'object'
     ? summary
     : { scheduled: 0, normal: 0, late: 0, earlyLeave: 0, missingIn: 0, missingOut: 0, leave: 0, locationIssue: 0, correctionPending: 0, edited: 0 };
+  const dashboard = buildAttendanceStatusDashboard(rows, counts);
   const statusFilter = normalizeAttendanceStatusFilter(state.attendanceView?.statusFilter || 'all');
-  const attentionCount = Math.max(0, Number(counts.missingIn || 0))
-    + Math.max(0, Number(counts.missingOut || 0))
-    + Math.max(0, Number(counts.late || 0))
-    + Math.max(0, Number(counts.earlyLeave || 0))
-    + Math.max(0, Number(counts.correctionPending || 0));
-  const attendanceRate = Math.max(0, Number(counts.scheduled || 0)) > 0
-    ? Math.round((Math.max(0, Number(counts.normal || 0)) / Math.max(1, Number(counts.scheduled || 0))) * 100)
-    : 0;
-  const items = [
-    { label: '출근 완료', value: counts.normal, filter: 'normal', tone: 'success', meta: '정상 처리' },
-    { label: '미출근', value: counts.missingIn, filter: 'missing_in', tone: 'danger', meta: '가장 먼저 확인' },
-    { label: '지각', value: counts.late, filter: 'late', tone: 'warn', meta: '지연 기록 스캔' },
-    { label: '조퇴', value: counts.earlyLeave, filter: 'early_leave', tone: 'warn', meta: '조기 퇴근 확인' },
+  const attentionCount = Math.max(0, Number(dashboard.missingIn || 0))
+    + Math.max(0, Number(dashboard.missingOut || 0))
+    + Math.max(0, Number(dashboard.late || 0))
+    + Math.max(0, Number(dashboard.earlyLeave || 0))
+    + Math.max(0, Number(dashboard.correctionNeeded || 0))
+    + Math.max(0, Number(dashboard.locationIssueCount || 0))
+    + Math.max(0, Number(dashboard.outsideScheduleCount || 0));
+  const primaryItems = [
+    { label: '출근 완료', value: dashboard.checkedIn, filter: 'normal', tone: 'success', meta: '실제 출근 기준' },
+    { label: '출근 전', value: dashboard.beforeStart, filter: '', tone: 'neutral', meta: '예정 시작 전' },
+    { label: '미출근', value: dashboard.missingIn, filter: 'missing_in', tone: 'danger', meta: '가장 먼저 확인' },
+    { label: '출근 대상', value: dashboard.workingTarget, filter: '', tone: 'accent', meta: '근무 예정 인원' },
   ];
-  const secondaryItems = [
-    { label: '근무 대상', value: counts.scheduled, filter: 'all', tone: 'neutral' },
-    { label: '미퇴근', value: counts.missingOut, filter: 'missing_out', tone: 'warn' },
-    { label: '휴가', value: counts.leave, filter: 'leave', tone: 'neutral' },
-    { label: '위치 이상', value: counts.locationIssue, filter: '', tone: 'warn' },
-    { label: '수정됨', value: counts.edited, filter: '', tone: 'accent' },
-    { label: '정정 대기', value: counts.correctionPending, filter: 'correction_pending', tone: 'accent' },
+  const matrixItems = [
+    { label: '지각', value: dashboard.late, filter: 'late', tone: 'warn', meta: '지연 기록 스캔' },
+    { label: '조퇴', value: dashboard.earlyLeave, filter: 'early_leave', tone: 'warn', meta: '조기 퇴근 확인' },
+    { label: '휴가', value: dashboard.leaveCount, filter: 'leave', tone: 'neutral', meta: '당일 반영' },
+    { label: '휴무/공휴일', value: dashboard.offCount, filter: '', tone: 'neutral', meta: '비근무 일정' },
+    { label: '교육', value: dashboard.educationCount, filter: '', tone: 'accent', meta: '교육 일정' },
+    { label: '일정 없음', value: dashboard.noScheduleCount, filter: '', tone: 'neutral', meta: '스케줄 미배정' },
   ];
-  if (metaEl instanceof HTMLElement) {
-    metaEl.textContent = attentionCount > 0
-      ? `지금 바로 확인이 필요한 기록 ${attentionCount}건입니다.`
-      : '현재 범위에서 바로 확인할 예외는 없습니다.';
-  }
-  if (rateValueEl instanceof HTMLElement) {
-    rateValueEl.textContent = `${attendanceRate}%`;
-  }
-  if (rateMetaEl instanceof HTMLElement) {
-    rateMetaEl.textContent = `출근 완료 ${Math.max(0, Number(counts.normal || 0))} / 예정 ${Math.max(0, Number(counts.scheduled || 0))}`;
-  }
-  if (rateRingEl instanceof HTMLElement) {
-    rateRingEl.style.setProperty('--progress', `${attendanceRate}%`);
-  }
-  items.forEach((item) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'attendance-kpi-item';
-    button.dataset.action = 'attendance-set-status-filter';
-    button.dataset.status = item.filter;
-    button.dataset.tone = item.tone || 'neutral';
-    button.classList.toggle('active', (statusFilter === item.filter) || (item.filter === 'all' && statusFilter === 'all'));
-    button.innerHTML = `
+  const chipItems = [
+    { label: '근무 대상', value: dashboard.workingTarget, filter: 'all', tone: 'neutral' },
+    { label: '정상 출근', value: counts.normal, filter: 'normal', tone: 'success' },
+    { label: '휴가', value: dashboard.leaveCount, filter: 'leave', tone: 'neutral' },
+    { label: '위치 이상', value: dashboard.locationIssueCount, filter: '', tone: 'warn' },
+  ];
+  const specialItems = [
+    { label: '미퇴근', value: dashboard.missingOut, filter: 'missing_out', tone: 'warn', meta: '퇴근 누락 확인' },
+    { label: '미배정 근무지 출근', value: dashboard.outsideScheduleCount, filter: '', tone: 'warn', meta: '스케줄 없이 기록만 존재' },
+    { label: '출퇴근 기록 수정됨', value: dashboard.editedCount, filter: '', tone: 'accent', meta: '브라우저 수정 반영' },
+    { label: '정정 대기', value: dashboard.correctionNeeded, filter: 'correction_pending', tone: 'accent', meta: '승인/반려 필요' },
+  ].filter((item) => item.value > 0);
+
+  const appendMetricCard = (container, item, className = 'attendance-kpi-item') => {
+    const isButton = Boolean(item.filter);
+    const el = document.createElement(isButton ? 'button' : 'article');
+    el.className = className;
+    el.dataset.tone = item.tone || 'neutral';
+    if (isButton) {
+      el.type = 'button';
+      el.dataset.action = 'attendance-set-status-filter';
+      el.dataset.status = item.filter;
+      el.classList.toggle('active', statusFilter === item.filter);
+    }
+    el.innerHTML = `
       <span class="attendance-kpi-label">${item.label}</span>
       <strong class="attendance-kpi-value">${Math.max(0, Number(item.value) || 0)}</strong>
       <span class="attendance-kpi-meta">${item.meta}</span>
     `;
-    target.appendChild(button);
-  });
-  if (secondaryTarget instanceof HTMLElement) {
-    secondaryItems.forEach((item) => {
-      const isButton = Boolean(item.filter);
-      const el = document.createElement(isButton ? 'button' : 'span');
-      el.className = 'attendance-kpi-mini';
-      el.dataset.tone = item.tone || 'neutral';
-      if (isButton) {
-        el.type = 'button';
-        el.dataset.action = 'attendance-set-status-filter';
-        el.dataset.status = item.filter;
-        el.classList.toggle('active', statusFilter === item.filter);
-      }
-      el.innerHTML = `
-        <span class="attendance-kpi-mini-label">${item.label}</span>
-        <strong class="attendance-kpi-mini-value">${Math.max(0, Number(item.value) || 0)}</strong>
-      `;
-      secondaryTarget.appendChild(el);
-    });
+    container.appendChild(el);
+  };
+
+  const appendChip = (item) => {
+    const isButton = Boolean(item.filter);
+    const el = document.createElement(isButton ? 'button' : 'span');
+    el.className = 'attendance-kpi-mini';
+    el.dataset.tone = item.tone || 'neutral';
+    if (isButton) {
+      el.type = 'button';
+      el.dataset.action = 'attendance-set-status-filter';
+      el.dataset.status = item.filter;
+      el.classList.toggle('active', statusFilter === item.filter);
+    }
+    el.innerHTML = `
+      <span class="attendance-kpi-mini-label">${item.label}</span>
+      <strong class="attendance-kpi-mini-value">${Math.max(0, Number(item.value) || 0)}</strong>
+    `;
+    secondaryTarget.appendChild(el);
+  };
+
+  const appendSpecial = (item) => {
+    const isButton = Boolean(item.filter);
+    const el = document.createElement(isButton ? 'button' : 'article');
+    el.className = 'attendance-status-special-card';
+    el.dataset.tone = item.tone || 'neutral';
+    if (isButton) {
+      el.type = 'button';
+      el.dataset.action = 'attendance-set-status-filter';
+      el.dataset.status = item.filter;
+      el.classList.toggle('active', statusFilter === item.filter);
+    }
+    el.innerHTML = `
+      <span class="attendance-status-special-label">${item.label}</span>
+      <strong class="attendance-status-special-value">${Math.max(0, Number(item.value) || 0)}</strong>
+      <span class="attendance-status-special-meta">${item.meta}</span>
+    `;
+    specialTarget.appendChild(el);
+  };
+
+  if (metaEl instanceof HTMLElement) {
+    metaEl.textContent = attentionCount > 0
+      ? `지금 바로 확인이 필요한 기록 ${attentionCount}건입니다.`
+      : '현재 범위에서는 즉시 조치가 필요한 예외가 없습니다.';
+  }
+  if (rateValueEl instanceof HTMLElement) {
+    rateValueEl.textContent = `${dashboard.attendanceRate}%`;
+  }
+  if (rateMetaEl instanceof HTMLElement) {
+    rateMetaEl.textContent = `출근 완료 ${Math.max(0, Number(dashboard.checkedIn || 0))} / 예정 ${Math.max(0, Number(dashboard.workingTarget || 0))}`;
+  }
+  if (rateRingEl instanceof HTMLElement) {
+    rateRingEl.style.setProperty('--progress', `${dashboard.attendanceRate}%`);
+  }
+
+  primaryItems.forEach((item) => appendMetricCard(target, item));
+  matrixItems.forEach((item) => appendMetricCard(matrixTarget, item, 'attendance-status-matrix-card'));
+  chipItems.forEach((item) => appendChip(item));
+
+  if (specialItems.length) {
+    specialItems.forEach((item) => appendSpecial(item));
+  } else {
+    const empty = document.createElement('div');
+    empty.className = 'attendance-status-special-empty';
+    empty.innerHTML = '<strong>오늘 특이사항 없음</strong><span>미배정 출근, 위치 이상, 수정 기록, 정정 대기 모두 없습니다.</span>';
+    specialTarget.appendChild(empty);
   }
 }
 
@@ -41200,7 +41774,7 @@ function renderAttendanceWorkspaceHeader() {
     return;
   }
   if (tab === 'list') {
-    subtitleEl.textContent = '기간, 상태, 지각/조퇴 기준으로 검색하고 행을 클릭해 기록을 수정합니다.';
+    subtitleEl.textContent = '기간, 상태, 지각/조퇴 기준으로 검색하고 행을 선택해 우측 패널에서 수정합니다.';
     return;
   }
   subtitleEl.textContent = '오늘 출근 상태와 바로 확인할 예외를 먼저 봅니다.';
@@ -41230,9 +41804,12 @@ function renderAttendanceToolbarVisibility() {
 
 function renderAttendanceManagerPanelVisibility() {
   const tab = getAttendanceManagerTab();
-  toggleVisibility('#attendanceManagerWorkspace', tab === 'status');
+  const showWorkspace = tab === 'status' || tab === 'list';
+  toggleVisibility('#attendanceManagerWorkspace', showWorkspace);
+  toggleVisibility('#attendanceStatusPanel', tab === 'status');
   toggleVisibility('#attendanceCalendarPanel', tab === 'calendar');
   toggleVisibility('#attendanceListPanel', tab === 'list');
+  toggleVisibility('#attendanceAdminDetailPanel', showWorkspace);
 }
 
 function buildAttendanceCalendarEmployeeGroups(rows = []) {
@@ -41339,8 +41916,12 @@ function renderAttendanceCalendarPanel(rows = [], scopedRows = [], { loading = f
       if (row.hasMissingIn || row.hasMissingOut) button.classList.add('is-danger');
       else if (row.hasLate || row.hasEarlyLeave) button.classList.add('is-warn');
       else if (row.isEdited) button.classList.add('is-accent');
-      else if (row.hasLeave) button.classList.add('is-neutral');
+      else if (row.hasLeave || (row.scheduleRow && row.checkInLabel === '-' && row.checkOutLabel === '-')) button.classList.add('is-neutral');
       else button.classList.add('is-success');
+      const scheduledStart = String(row.scheduleRow?.start_time || '').trim().slice(0, 5) || '-';
+      const scheduledEnd = String(row.scheduleRow?.end_time || '').trim().slice(0, 5) || '-';
+      const displayCheckIn = row.checkInLabel !== '-' ? row.checkInLabel : (row.scheduleRow ? scheduledStart : '-');
+      const displayCheckOut = row.checkOutLabel !== '-' ? row.checkOutLabel : (row.scheduleRow ? scheduledEnd : '-');
       const badges = [
         row.hasMissingIn ? '미출근' : '',
         row.hasMissingOut ? '미퇴근' : '',
@@ -41348,10 +41929,11 @@ function renderAttendanceCalendarPanel(rows = [], scopedRows = [], { loading = f
         row.hasEarlyLeave ? '조퇴' : '',
         row.isEdited ? '수정' : '',
         row.hasLeave ? '휴가' : '',
+        row.scheduleRow && row.checkInLabel === '-' && row.checkOutLabel === '-' && !row.hasLeave ? '예정' : '',
       ].filter(Boolean).slice(0, 2);
       button.innerHTML = `
-        <span class="attendance-calendar-clock">${row.checkInLabel}</span>
-        <span class="attendance-calendar-clock">${row.checkOutLabel}</span>
+        <span class="attendance-calendar-clock">${displayCheckIn}</span>
+        <span class="attendance-calendar-clock">${displayCheckOut}</span>
         <span class="attendance-calendar-badge-row">${badges.map((badge) => `<small>${badge}</small>`).join('')}</span>
       `;
       td.appendChild(button);
@@ -41445,7 +42027,7 @@ function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
   const selected = getSelectedAttendanceManagerRow(list);
   list.forEach((row) => {
     const tr = document.createElement('tr');
-    tr.dataset.action = 'attendance-list-edit';
+    tr.dataset.action = 'attendance-manager-select';
     tr.dataset.recordKey = row.key;
     tr.classList.toggle('is-selected', row.key === selected?.key);
     const statusTone = row?.statusMeta?.danger
@@ -41512,18 +42094,20 @@ function renderAttendanceManagerWorkspace({ rows = [], scopedRows = [], loading 
   renderAttendanceToolbarVisibility();
   renderAttendanceManagerPanelVisibility();
   if (tab === 'status') {
-    renderAttendanceManagerKpiStrip(summary);
+    renderAttendanceManagerKpiStrip(summary, scopedRows);
     renderAttendanceManagerExceptions(exceptions, { loading });
     renderAttendanceStatusRecordList(rows, { loading });
-    if (!selectedRow) {
-      renderAttendanceManagerDrawer(null);
-    } else {
-      renderAttendanceManagerDrawer(selectedRow);
-    }
   } else if (tab === 'calendar') {
     renderAttendanceCalendarPanel(rows, scopedRows, { loading });
   } else {
     renderAttendanceManagerTableRows(rows, { loading });
+  }
+  if (tab === 'status' || tab === 'list') {
+    if (!selectedRow || loading) {
+      renderAttendanceManagerDrawer(null);
+    } else {
+      renderAttendanceManagerDrawer(selectedRow);
+    }
   }
   const exportBtn = $('#attendanceExportBtn');
   if (exportBtn instanceof HTMLButtonElement) {
@@ -41573,17 +42157,34 @@ function removeAttendanceRecordEdit(recordKey = '') {
   return true;
 }
 
+function escapeAttendanceSheetHtml(value = '') {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 function buildAttendanceEditForm(recordKey = '') {
   const row = getAttendanceManagerRowByKey(recordKey);
   if (!row) return null;
+  const safeDateLabel = escapeAttendanceSheetHtml(row.dateLabel);
+  const safeEmployeeName = escapeAttendanceSheetHtml(row.employeeName);
+  const safeEmployeeCode = escapeAttendanceSheetHtml(row.employeeCode);
+  const safeScheduledLabel = escapeAttendanceSheetHtml(row.scheduledLabel || '스케줄 없음');
+  const safeSiteName = escapeAttendanceSheetHtml(row.siteName);
+  const safeStatusLabel = escapeAttendanceSheetHtml(row.statusLabel);
+  const safeProcessingState = escapeAttendanceSheetHtml(row.processingState);
+  const safeNote = escapeAttendanceSheetHtml(row.editNote || '');
   const wrapper = document.createElement('div');
   wrapper.className = 'attendance-edit-sheet';
   wrapper.innerHTML = `
     <div class="attendance-edit-sheet-grid">
-      <div class="attendance-edit-sheet-readonly"><span>날짜</span><strong>${row.dateLabel}</strong></div>
-      <div class="attendance-edit-sheet-readonly"><span>직원</span><strong>${row.employeeName} (${row.employeeCode})</strong></div>
-      <div class="attendance-edit-sheet-readonly"><span>예정 근무</span><strong>${row.scheduledLabel || '스케줄 없음'}</strong></div>
-      <div class="attendance-edit-sheet-readonly"><span>현장</span><strong>${row.siteName}</strong></div>
+      <div class="attendance-edit-sheet-readonly"><span>날짜</span><strong>${safeDateLabel}</strong></div>
+      <div class="attendance-edit-sheet-readonly"><span>직원</span><strong>${safeEmployeeName} (${safeEmployeeCode})</strong></div>
+      <div class="attendance-edit-sheet-readonly"><span>예정 근무</span><strong>${safeScheduledLabel}</strong></div>
+      <div class="attendance-edit-sheet-readonly"><span>현장</span><strong>${safeSiteName}</strong></div>
       <label class="input-field">
         <span>출근시간</span>
         <input id="attendanceEditCheckInInput" type="time" value="${normalizeAttendanceClockValue(row.checkInLabel === '-' ? '' : row.checkInLabel)}" />
@@ -41596,11 +42197,11 @@ function buildAttendanceEditForm(recordKey = '') {
         <span>휴게시간(분)</span>
         <input id="attendanceEditBreakMinutesInput" type="number" min="0" step="5" value="${Math.max(0, Number(row.breakMinutes || 0) || 0)}" />
       </label>
-      <div class="attendance-edit-sheet-readonly"><span>판별 상태</span><strong>${row.statusLabel} · ${row.processingState}</strong></div>
+      <div class="attendance-edit-sheet-readonly"><span>판별 상태</span><strong>${safeStatusLabel} · ${safeProcessingState}</strong></div>
     </div>
     <label class="input-field">
       <span>근무 메모</span>
-      <textarea id="attendanceEditNoteInput" rows="4" placeholder="수정 사유 또는 현장 메모를 남겨 주세요.">${escapeHtml(row.editNote || '')}</textarea>
+      <textarea id="attendanceEditNoteInput" rows="4" placeholder="수정 사유 또는 현장 메모를 남겨 주세요.">${safeNote}</textarea>
     </label>
     <p class="muted">저장은 현재 브라우저 기준으로 적용됩니다. 누락 기록도 시간 입력 후 저장하면 화면에 바로 반영됩니다.</p>
   `;
@@ -41692,7 +42293,8 @@ function openAttendanceManagerMobileDetailSheet(recordKey = '') {
     title: '출퇴근 상세',
     contentNode: wrapper,
     actions: [
-      { label: '요청·승인으로 이동', variant: 'btn-primary', action: 'attendance-go-correction' },
+      ...(can('attendanceWrite') ? [{ label: '기록 수정', variant: 'btn-primary', action: 'attendance-open-edit', recordKey: row.key }] : []),
+      { label: '요청·승인으로 이동', variant: 'btn-secondary', action: 'attendance-go-correction' },
       { label: '닫기', variant: 'btn-secondary', action: 'sheet-close' },
     ],
   });
@@ -41773,6 +42375,7 @@ async function loadAttendanceManagerView({ force = false } = {}) {
   renderAttendanceFilterMeta();
   renderAttendanceManagerWorkspace({ rows: [], scopedRows: [], loading: true });
 
+  const activeTab = getAttendanceManagerTab();
   const { start, end } = getAttendanceManagerFetchRange();
   const dateKeys = buildDateKeysBetween(start, end);
   const months = buildMonthKeysBetween(start, end);
@@ -41782,38 +42385,59 @@ async function loadAttendanceManagerView({ force = false } = {}) {
   leaveParams.set('limit', '300');
   if (tenantCode) leaveParams.set('tenant_code', tenantCode);
 
-  const [recordsResult, schedulesResult, leavesResult, pendingAttendanceResult, overtimeResult] = await Promise.allSettled([
-    Promise.all(dateKeys.map((dateKey) => getScheduleDataProvider().listAttendanceByDate({ date: dateKey, force }))).then((groups) => groups.flat()),
+  const [schedulesResult, leavesResult, pendingAttendanceResult] = await Promise.allSettled([
     Promise.all(months.map((month) => loadMonthlyScheduleRowsWithCache({ month, tenantCode, force }))).then((groups) => groups.flat()),
     apiRequest(`/leaves?${leaveParams.toString()}`),
     can('attendanceReview') ? fetchManagerAttendanceRequests(['pending']) : Promise.resolve([]),
-    Promise.all(dateKeys.map((dateKey) => {
-      const params = new URLSearchParams();
-      params.set('date', dateKey);
-      if (tenantCode) params.set('tenant_code', tenantCode);
-      return apiRequest(`/schedules/overtime-daily?${params.toString()}`);
-    })).then((groups) => groups.flat()),
+  ]);
+  const scheduleRows = schedulesResult.status === 'fulfilled' && Array.isArray(schedulesResult.value) ? schedulesResult.value : [];
+  const leaveRows = leavesResult.status === 'fulfilled' && Array.isArray(leavesResult.value) ? leavesResult.value : [];
+  const pendingAttendanceRequests = pendingAttendanceResult.status === 'fulfilled' && Array.isArray(pendingAttendanceResult.value) ? pendingAttendanceResult.value : [];
+  const correctionRows = can('attendanceReview') ? getCorrectionRowsByStatuses(['pending']) : [];
+  state.attendanceView.leaveRows = leaveRows;
+  state.attendanceView.managerPendingAttendanceRequests = pendingAttendanceRequests;
+  state.attendanceView.managerPendingCorrections = correctionRows;
+
+  if (activeTab !== 'status') {
+    const previewRows = buildAttendanceManagerRows({
+      records: [],
+      scheduleRows,
+      leaveRows,
+      overtimeRows: [],
+      pendingAttendanceRequests,
+      correctionRows,
+      recordEdits: state.attendanceView.managerRecordEdits || {},
+      rangeStart: start,
+      rangeEnd: end,
+    });
+    state.attendanceView.records = [];
+    state.attendanceView.overtimeRows = [];
+    state.attendanceView.managerRows = previewRows;
+    const previewScopedRows = getFilteredAttendanceManagerRows(previewRows, { applyStatus: false });
+    const previewFilteredRows = getFilteredAttendanceManagerRows(previewRows, { applyStatus: true });
+    renderAttendanceFilterMeta();
+    renderAttendanceManagerWorkspace({ rows: previewFilteredRows, scopedRows: previewScopedRows, loading: false });
+  }
+
+  const [recordsResult, overtimeResult] = await Promise.allSettled([
+    fetchAttendanceRecordsByDateKeys(dateKeys, { force }),
+    fetchAttendanceOvertimeByDateKeys(dateKeys, { tenantCode, force }),
   ]);
 
   if (recordsResult.status !== 'fulfilled') {
     const message = mapAttendanceErrorMessage(recordsResult.reason, '출퇴근 기록을 불러오지 못했습니다.');
-    renderAttendanceManagerWorkspace({ rows: [], scopedRows: [], loading: false });
+    const fallbackRows = Array.isArray(state.attendanceView.managerRows) ? state.attendanceView.managerRows : [];
+    const fallbackScopedRows = getFilteredAttendanceManagerRows(fallbackRows, { applyStatus: false });
+    const fallbackFilteredRows = getFilteredAttendanceManagerRows(fallbackRows, { applyStatus: true });
+    renderAttendanceManagerWorkspace({ rows: fallbackFilteredRows, scopedRows: fallbackScopedRows, loading: false });
     showToast(message, 'error', 3200);
-    return [];
+    return fallbackFilteredRows;
   }
 
   const records = Array.isArray(recordsResult.value) ? recordsResult.value : [];
-  const scheduleRows = schedulesResult.status === 'fulfilled' && Array.isArray(schedulesResult.value) ? schedulesResult.value : [];
-  const leaveRows = leavesResult.status === 'fulfilled' && Array.isArray(leavesResult.value) ? leavesResult.value : [];
-  const pendingAttendanceRequests = pendingAttendanceResult.status === 'fulfilled' && Array.isArray(pendingAttendanceResult.value) ? pendingAttendanceResult.value : [];
   const overtimeRows = overtimeResult.status === 'fulfilled' && Array.isArray(overtimeResult.value) ? overtimeResult.value : [];
-  const correctionRows = can('attendanceReview') ? getCorrectionRowsByStatuses(['pending']) : [];
-
   state.attendanceView.records = records;
-  state.attendanceView.leaveRows = leaveRows;
   state.attendanceView.overtimeRows = overtimeRows;
-  state.attendanceView.managerPendingAttendanceRequests = pendingAttendanceRequests;
-  state.attendanceView.managerPendingCorrections = correctionRows;
 
   const managerRows = buildAttendanceManagerRows({
     records,
@@ -41843,9 +42467,6 @@ async function loadAttendanceManagerView({ force = false } = {}) {
 }
 
 async function loadAttendanceView({ force = false } = {}) {
-  const listEl = $('#attendanceTimelineList');
-  if (!listEl) return [];
-
   if (!can('attendance')) {
     setPermissionHint('#attendanceViewPermissionHint', '출퇴근 조회 권한이 없습니다.', true);
     renderAttendanceSummary(null);
@@ -41867,7 +42488,11 @@ async function loadAttendanceView({ force = false } = {}) {
 
   renderAttendanceLayoutMode();
 
-  if (canUseAttendanceManagerFilter()) {
+  const managerMode = canUseAttendanceManagerFilter();
+  const listEl = $('#attendanceTimelineList');
+  if (!managerMode && !listEl) return [];
+
+  if (managerMode) {
     return loadAttendanceManagerView({ force });
   }
 
@@ -54026,10 +54651,29 @@ function bindUiEvents() {
     if (action === 'master-refresh-dashboard') {
       runWithBusy(async () => {
         await ensureDevTenantCatalog({ force: true });
+        if (getMasterRouteContext().name === 'tenant-overview') {
+          try {
+            await loadMasterTenantProfile({ force: true, silent: true });
+          } catch {
+            // no-op
+          }
+        }
         renderMasterConsoleSummary();
         renderMasterTenantDashboard();
         setInlineStatus('#masterConsoleStatus', '대시보드를 새로고침했습니다.', 'success');
       }, '동기화 중...');
+      return;
+    }
+
+    if (action === 'master-company-open-sites') {
+      const tenantId = String(actionEl.dataset.tenantId || '').trim();
+      runActionSafely(navigateToSitesForTenant(tenantId), '지점 화면 이동에 실패했습니다.');
+      return;
+    }
+
+    if (action === 'master-company-open-employees') {
+      const tenantId = String(actionEl.dataset.tenantId || '').trim();
+      runActionSafely(navigateToEmployeesForTenant(tenantId), '직원 화면 이동에 실패했습니다.');
       return;
     }
 
@@ -54270,8 +54914,11 @@ function bindUiEvents() {
     }
 
     if (action === 'master-tenant-delete') {
-      const tenantCode = String($('#masterOverviewDeleteBtn')?.dataset.tenantCode || '').trim().toUpperCase();
-      const tenantName = String($('#masterOverviewDeleteBtn')?.dataset.tenantName || tenantCode).trim();
+      const sourceBtn = actionEl instanceof HTMLElement
+        ? actionEl
+        : ($('#masterTenantDetailDeleteBtn') || $('#masterOverviewDeleteBtn'));
+      const tenantCode = String(sourceBtn?.dataset?.tenantCode || '').trim().toUpperCase();
+      const tenantName = String(sourceBtn?.dataset?.tenantName || tenantCode).trim();
       openDestructiveTypedConfirm({
         title: '회사 삭제',
         message: `${tenantName || tenantCode || '선택 회사'}를 영구삭제합니다. 관련 데이터도 함께 삭제됩니다.`,
@@ -55413,7 +56060,15 @@ function bindUiEvents() {
     if (action === 'attendance-switch-tab') {
       const nextTab = setAttendanceManagerTab(actionEl.dataset.tab || 'status');
       syncAttendanceManagerFilterInputs();
-      runWithBusy(() => navigateToRoute(getAttendanceRouteWithTab(nextTab), { replace: true, silentDeniedModal: true }), '화면 전환 중...');
+      renderAttendanceWorkspaceHeader();
+      renderAttendanceWorkspaceTabs();
+      renderAttendanceToolbarVisibility();
+      renderAttendanceManagerPanelVisibility();
+      navigateToRoute(getAttendanceRouteWithTab(nextTab), { replace: true, silentDeniedModal: true })
+        .catch((error) => {
+          console.error(error);
+          showToast(normalizeActionError(error, '출퇴근 탭 전환 중 오류가 발생했습니다.'), 'error', 2600);
+        });
       return;
     }
 
