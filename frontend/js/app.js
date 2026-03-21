@@ -1275,6 +1275,7 @@ const state = {
   siteDirectoryDetailId: '',
   siteDirectoryTriggerEl: null,
   siteTenantFilterValue: '',
+  siteSearchQuery: '',
   submitSiteBusy: false,
   submitEmployeeBusy: false,
   submitLoginBusy: false,
@@ -27612,15 +27613,15 @@ function applyWriteAccessUI(perms) {
   const orgScopeHint = $('#orgScopeHint');
   const siteSectionTitle = $('#siteSectionTitle');
   if (orgViewTitle) {
-    orgViewTitle.textContent = '조직';
+    orgViewTitle.textContent = '지점 관리';
   }
   if (orgScopeHint) {
     orgScopeHint.textContent = permissionGroup === 'DEV'
-      ? '조회 범위 기준으로 지점 디렉터리를 관리합니다.'
-      : '지점을 목록과 보조 상세 패널로 관리합니다.';
+      ? '조회 범위 기준으로 지점 목록과 상세 패널을 함께 관리합니다.'
+      : '지점을 목록에서 비교하고 오른쪽 상세 패널에서 바로 수정 흐름으로 이동합니다.';
   }
   if (siteSectionTitle) {
-    siteSectionTitle.textContent = '지점';
+    siteSectionTitle.textContent = '지점 목록';
   }
 
   const showEmployeeListWorkspace = Boolean(perms.employees) && employeeListRoute;
@@ -29761,25 +29762,113 @@ function getSiteDirectoryEmployeeCount(siteCode = '') {
   return state.employeeAdmin.rows.filter((row) => String(row?.site_code || '').trim().toUpperCase() === normalizedCode).length;
 }
 
-function buildSiteDirectoryHeaderPayload(site = null) {
+function buildSiteDirectoryReadiness(site = null) {
+  const address = String(site?.address || '').trim();
   const radius = Number(site?.radius_meters);
   const lat = Number(site?.latitude);
   const lng = Number(site?.longitude);
   const siteCode = String(site?.site_code || '').trim().toUpperCase();
   const wifiSsid = String(getSiteWifiSsid(siteCode) || '').trim();
+  const hasAddress = Boolean(address);
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+  const hasRadius = Number.isFinite(radius) && radius > 0;
+  const hasWifi = Boolean(wifiSsid);
+  const coreReadyCount = [hasAddress, hasCoords, hasRadius].filter(Boolean).length;
+  const coreReady = coreReadyCount === 3;
+  return {
+    hasAddress,
+    hasCoords,
+    hasRadius,
+    hasWifi,
+    address,
+    radius,
+    lat,
+    lng,
+    wifiSsid,
+    coreReadyCount,
+    coreReady,
+    readinessLabel: coreReady ? '준비 완료' : `${coreReadyCount}/3 완료`,
+    readinessTone: coreReady ? 'success' : (coreReadyCount === 0 ? 'danger' : 'warn'),
+    checklist: [
+      { label: '주소', ready: hasAddress, detail: hasAddress ? address : '입력 필요' },
+      { label: '좌표', ready: hasCoords, detail: hasCoords ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : '설정 필요' },
+      { label: '반경', ready: hasRadius, detail: hasRadius ? `${Math.round(radius)}m` : '설정 필요' },
+      { label: 'Wi-Fi', ready: hasWifi, detail: hasWifi ? wifiSsid : '미등록' },
+    ],
+  };
+}
+
+function buildSiteSearchText(site = null) {
+  const tenantFilter = getSiteTenantFilterSelection();
+  const fallbackTenantCode = tenantFilter.isAll ? '' : String(tenantFilter.tenantCode || '').trim().toUpperCase();
+  const fallbackTenantName = tenantFilter.isAll ? '' : String(tenantFilter.tenantName || '').trim();
+  return [
+    renderTenantName(site, { fallbackTenantCode, fallbackTenantName }),
+    site?.tenant_code,
+    site?.site_code,
+    site?.site_name,
+    site?.address,
+    getSiteWifiSsid(site?.site_code),
+  ]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter(Boolean)
+    .join(' ');
+}
+
+function getFilteredSiteRows(rows = []) {
+  const list = Array.isArray(rows) ? rows : [];
+  const queryText = String(state.siteSearchQuery || '').trim().toLowerCase();
+  if (!queryText) return list.slice();
+  return list.filter((item) => buildSiteSearchText(item).includes(queryText));
+}
+
+function buildSiteDirectoryHeaderPayload(site = null) {
+  const readiness = buildSiteDirectoryReadiness(site);
+  const siteCode = String(site?.site_code || '').trim().toUpperCase();
   return {
     id: String(site?.id || '').trim(),
     companyName: renderTenantName(site),
     siteCode,
     siteName: String(site?.site_name || siteCode || '지점 상세').trim() || '지점 상세',
-    address: String(site?.address || '').trim(),
+    address: readiness.address,
     isActive: Boolean(site?.is_active),
-    radiusLabel: Number.isFinite(radius) ? `${Math.round(radius)}m` : '',
-    latLabel: Number.isFinite(lat) ? lat.toFixed(6) : '',
-    lngLabel: Number.isFinite(lng) ? lng.toFixed(6) : '',
-    wifiLabel: wifiSsid,
+    radiusLabel: readiness.hasRadius ? `${Math.round(readiness.radius)}m` : '',
+    latLabel: readiness.hasCoords ? readiness.lat.toFixed(6) : '',
+    lngLabel: readiness.hasCoords ? readiness.lng.toFixed(6) : '',
+    wifiLabel: readiness.wifiSsid,
     employeeCount: getSiteDirectoryEmployeeCount(siteCode),
+    readiness,
   };
+}
+
+function buildSiteDirectoryChecklist(items = []) {
+  const list = document.createElement('div');
+  list.className = 'site-directory-checklist';
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const row = document.createElement('div');
+    row.className = 'site-directory-check-row';
+    const label = document.createElement('strong');
+    label.textContent = String(item?.label || '').trim();
+    const meta = document.createElement('span');
+    meta.className = 'site-directory-check-meta';
+    meta.textContent = String(item?.detail || '').trim();
+    const badge = document.createElement('span');
+    badge.className = item?.ready ? 'status-pill status-pill-success' : 'status-pill status-pill-warn';
+    badge.textContent = item?.ready ? '완료' : '확인 필요';
+    row.append(label, meta, badge);
+    list.appendChild(row);
+  });
+  return list;
+}
+
+function renderSiteDirectoryCount(rows = []) {
+  const target = $('#siteDirectoryCount');
+  if (!(target instanceof HTMLElement)) return;
+  const filteredCount = Array.isArray(rows) ? rows.length : 0;
+  const totalCount = Array.isArray(state.sites) ? state.sites.length : filteredCount;
+  target.textContent = filteredCount === totalCount
+    ? `전체 ${totalCount}곳`
+    : `표시 ${filteredCount}곳 / 전체 ${totalCount}곳`;
 }
 
 function renderSiteDirectoryDetail(site = null) {
@@ -29795,10 +29884,10 @@ function renderSiteDirectoryDetail(site = null) {
   if (!site) {
     if (eyebrow) eyebrow.textContent = '지점 선택';
     if (title) title.textContent = '지점을 선택해 주세요';
-    if (subtitle) subtitle.textContent = '목록에서 지점을 선택하면 운영 요약과 바로 가는 액션이 열립니다.';
+    if (subtitle) subtitle.textContent = '목록에서 지점을 선택하면 운영 기준과 수정 액션이 열립니다.';
     if (badges) badges.innerHTML = '';
     body.innerHTML = '';
-    body.appendChild(buildSiteDirectoryCompactEmpty('지점을 선택해 주세요.', '왼쪽 목록에서 지점을 클릭하면 기본 정보와 운영 상태를 확인할 수 있습니다.'));
+    body.appendChild(buildSiteDirectoryCompactEmpty('지점을 선택해 주세요.', '왼쪽 목록에서 지점을 클릭하면 상태, 기준값, 수정 액션을 확인할 수 있습니다.'));
     actions.innerHTML = '';
     actions.classList.add('hidden');
     panel.classList.add('is-empty');
@@ -29809,7 +29898,7 @@ function renderSiteDirectoryDetail(site = null) {
   if (eyebrow) eyebrow.textContent = header.companyName || '지점 상세';
   if (title) title.textContent = header.siteName;
   if (subtitle) {
-    subtitle.textContent = [header.siteCode, header.address || header.radiusLabel || '기본 정보를 확인하세요.'].filter(Boolean).join(' · ');
+    subtitle.textContent = [header.siteCode, header.address || '주소 확인 필요', '운영 기준 점검'].filter(Boolean).join(' · ');
   }
   if (badges) {
     badges.innerHTML = '';
@@ -29823,10 +29912,15 @@ function renderSiteDirectoryDetail(site = null) {
       count.textContent = `${header.employeeCount}명`;
       badges.appendChild(count);
     }
+    const readiness = document.createElement('span');
+    readiness.className = header.readiness.coreReady ? 'status-pill status-pill-success' : 'status-pill status-pill-warn';
+    readiness.textContent = header.readiness.readinessLabel;
+    badges.appendChild(readiness);
   }
 
   const statusFacts = [
     { label: '운영 상태', value: header.isActive ? '활성' : '비활성', tone: header.isActive ? 'success' : 'warn' },
+    { label: '출퇴근 기준', value: header.readiness.readinessLabel, tone: header.readiness.readinessTone },
     { label: '반경', value: header.radiusLabel || '미설정', tone: header.radiusLabel ? '' : 'warn' },
     { label: 'Wi-Fi', value: header.wifiLabel || '미등록', tone: header.wifiLabel ? 'success' : 'warn' },
   ].filter((item) => String(item.value || '').trim());
@@ -29841,8 +29935,9 @@ function renderSiteDirectoryDetail(site = null) {
   ].filter((item) => String(item.value || '').trim());
 
   body.innerHTML = '';
-  body.appendChild(buildSiteDirectorySection('운영 상태', buildSiteDirectoryFactGrid(statusFacts)));
+  body.appendChild(buildSiteDirectorySection('핵심 상태', buildSiteDirectoryFactGrid(statusFacts)));
   body.appendChild(buildSiteDirectorySection('기본 정보', buildSiteDirectoryFactGrid(infoFacts)));
+  body.appendChild(buildSiteDirectorySection('출퇴근 기준 점검', buildSiteDirectoryChecklist(header.readiness.checklist)));
 
   actions.innerHTML = '';
   const fragment = document.createDocumentFragment();
@@ -29854,6 +29949,15 @@ function renderSiteDirectoryDetail(site = null) {
     editBtn.dataset.siteId = header.id;
     editBtn.textContent = '지점 수정';
     fragment.appendChild(editBtn);
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = header.isActive ? 'btn btn-secondary' : 'btn btn-primary';
+    toggleBtn.dataset.action = 'site-toggle-active';
+    toggleBtn.dataset.siteId = header.id;
+    toggleBtn.dataset.nextActive = header.isActive ? 'false' : 'true';
+    toggleBtn.textContent = header.isActive ? '비활성 전환' : '활성 전환';
+    fragment.appendChild(toggleBtn);
   }
   const employeeBtn = document.createElement('button');
   employeeBtn.type = 'button';
@@ -29871,6 +29975,17 @@ function renderSiteDirectoryDetail(site = null) {
   scheduleBtn.textContent = '스케줄 보기';
   fragment.appendChild(scheduleBtn);
 
+  if (can('siteWrite')) {
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'btn btn-destructive';
+    deleteBtn.dataset.action = 'site-delete';
+    deleteBtn.dataset.siteId = header.id;
+    deleteBtn.dataset.siteName = header.siteName;
+    deleteBtn.textContent = '지점 삭제';
+    fragment.appendChild(deleteBtn);
+  }
+
   actions.appendChild(fragment);
   actions.classList.remove('hidden');
   panel.classList.remove('is-empty');
@@ -29878,23 +29993,39 @@ function renderSiteDirectoryDetail(site = null) {
 
 function renderSiteDirectorySummaryStrip(rows = []) {
   const list = Array.isArray(rows) ? rows : [];
+  const totalCount = Array.isArray(state.sites) ? state.sites.length : list.length;
+  const tenantCount = new Set(
+    list.map((site) => String(site?.tenant_code || site?.company_code || '').trim().toUpperCase()).filter(Boolean),
+  ).size;
   const activeCount = list.filter((site) => Boolean(site?.is_active)).length;
   const inactiveCount = list.filter((site) => !site?.is_active).length;
-  const missingAddressCount = list.filter((site) => !String(site?.address || '').trim()).length;
-  const missingWifiCount = list.filter((site) => !String(getSiteWifiSsid(site?.site_code) || '').trim()).length;
+  const readyCount = list.filter((site) => buildSiteDirectoryReadiness(site).coreReady).length;
+  const wifiReadyCount = list.filter((site) => buildSiteDirectoryReadiness(site).hasWifi).length;
   const items = [
-    { label: '조회 지점', value: `${list.length}곳` },
-    { label: '활성', value: `${activeCount}곳`, tone: activeCount > 0 ? 'success' : '' },
+    {
+      label: '조회 지점',
+      value: `${list.length}곳`,
+      meta: list.length === totalCount ? `${Math.max(tenantCount, 1)}개 회사 범위` : `전체 ${totalCount}곳 중 ${list.length}곳`,
+    },
+    {
+      label: '운영 중',
+      value: `${activeCount}곳`,
+      meta: `비활성 ${inactiveCount}곳`,
+      tone: activeCount > 0 ? 'success' : '',
+    },
+    {
+      label: '출퇴근 기준 준비',
+      value: `${readyCount}곳`,
+      meta: `미완료 ${Math.max(0, list.length - readyCount)}곳`,
+      tone: readyCount === list.length && list.length ? 'success' : (readyCount > 0 ? 'warn' : 'danger'),
+    },
+    {
+      label: 'Wi-Fi 등록',
+      value: `${wifiReadyCount}곳`,
+      meta: `미등록 ${Math.max(0, list.length - wifiReadyCount)}곳`,
+      tone: wifiReadyCount === list.length && list.length ? 'success' : (wifiReadyCount > 0 ? 'warn' : 'danger'),
+    },
   ];
-  if (inactiveCount > 0) {
-    items.push({ label: '비활성', value: `${inactiveCount}곳`, tone: 'warn' });
-  }
-  if (missingAddressCount > 0) {
-    items.push({ label: '주소 확인 필요', value: `${missingAddressCount}곳`, tone: 'warn' });
-  }
-  if (missingWifiCount > 0) {
-    items.push({ label: 'Wi-Fi 미등록', value: `${missingWifiCount}곳`, tone: 'danger' });
-  }
   renderOrganizationSummaryStrip('#siteDirectorySummaryStrip', items);
 }
 
@@ -29938,15 +30069,21 @@ function renderSiteCards(rows = []) {
   if (target) clearList(target);
   if (tableBody) tableBody.innerHTML = '';
   if (!renderDesktop && !renderMobile) return;
-  const sortedRows = getSortedSiteRows(rows);
+  const sortedRows = getSortedSiteRows(getFilteredSiteRows(rows));
   renderSiteDirectorySummaryStrip(sortedRows);
+  renderSiteDirectoryCount(sortedRows);
 
   if (!sortedRows.length) {
+    const searchQuery = String(state.siteSearchQuery || '').trim();
+    const emptyTitle = searchQuery ? '검색 결과가 없습니다.' : '등록된 지점이 없습니다.';
+    const emptyDescription = searchQuery
+      ? '검색어와 필터 조건을 다시 확인해 주세요.'
+      : '상단 지점 등록 버튼으로 새 지점을 추가하세요.';
     if (renderMobile && target) {
-      renderEmptyState(target, '등록된 현장이 없습니다.', '상단 +추가 버튼으로 현장을 등록하세요.');
+      renderEmptyState(target, emptyTitle, emptyDescription);
     }
     if (renderDesktop && tableBody) {
-      renderAdminTableEmptyState(tableBody, 6, '등록된 현장이 없습니다.');
+      renderAdminTableEmptyState(tableBody, 6, emptyTitle);
     }
     state.siteDirectoryDetailId = '';
     renderSiteDirectoryDetail(null);
@@ -29965,29 +30102,21 @@ function renderSiteCards(rows = []) {
     : String(tenantFilter.tenantName || resolveTenantNameByCode(scopedTenantCode) || '').trim();
 
   const resolveSiteMeta = (item) => {
-    const lat = Number(item?.latitude);
-    const lng = Number(item?.longitude);
-    const radius = Number(item?.radius_meters);
+    const readiness = buildSiteDirectoryReadiness(item);
     const companyName = renderTenantName(item, {
       fallbackTenantCode: scopedTenantCode,
       fallbackTenantName: scopedTenantName,
     });
-    const metaRows = [
-      `${companyName} · 반경 ${Number.isFinite(radius) ? Math.round(radius) : '-'}m`,
-      `현장 번호: ${item?.site_code || '-'}`,
-      `${Number.isFinite(lat) ? lat.toFixed(6) : '-'}, ${Number.isFinite(lng) ? lng.toFixed(6) : '-'}`,
-      item?.address || '주소 미입력',
-      getSiteWifiSsid(item?.site_code) ? `와이파이 SSID: ${getSiteWifiSsid(item.site_code)}` : '와이파이 SSID: 미등록(P1)',
-    ];
+    const employeeCount = getSiteDirectoryEmployeeCount(item?.site_code);
     return {
       companyName,
-      radius,
-      metaRows,
+      readiness,
+      employeeCount,
     };
   };
 
   const buildSiteTableRow = (item) => {
-    const { companyName, radius } = resolveSiteMeta(item);
+    const { companyName, readiness, employeeCount } = resolveSiteMeta(item);
     const tr = document.createElement('tr');
     tr.className = 'site-directory-row';
     tr.dataset.action = 'site-open-detail';
@@ -29995,40 +30124,80 @@ function renderSiteCards(rows = []) {
     if (String(state.siteDirectoryDetailId || '').trim() === String(item?.id || '').trim()) {
       tr.classList.add('is-selected');
     }
-    const companyTd = document.createElement('td');
-    companyTd.textContent = companyName;
-    tr.appendChild(companyTd);
+    const appendStackCell = ({ title = '-', subtitle = '', meta = '', className = '' } = {}) => {
+      const td = document.createElement('td');
+      if (className) td.className = className;
+      const stack = document.createElement('div');
+      stack.className = 'site-table-cell-stack';
+      const titleEl = document.createElement('strong');
+      titleEl.className = 'site-table-cell-title';
+      titleEl.textContent = String(title || '-').trim() || '-';
+      stack.appendChild(titleEl);
+      if (subtitle) {
+        const subtitleEl = document.createElement('span');
+        subtitleEl.className = 'site-table-cell-subtitle';
+        subtitleEl.textContent = String(subtitle).trim();
+        stack.appendChild(subtitleEl);
+      }
+      if (meta) {
+        const metaEl = document.createElement('span');
+        metaEl.className = 'site-table-cell-meta';
+        metaEl.textContent = String(meta).trim();
+        stack.appendChild(metaEl);
+      }
+      td.appendChild(stack);
+      tr.appendChild(td);
+      return td;
+    };
 
-    const siteCodeTd = document.createElement('td');
-    siteCodeTd.textContent = String(item?.site_code || '-');
-    tr.appendChild(siteCodeTd);
-
-    const siteNameTd = document.createElement('td');
-    siteNameTd.textContent = String(item?.site_name || '-');
-    tr.appendChild(siteNameTd);
-
-    const radiusTd = document.createElement('td');
-    radiusTd.textContent = Number.isFinite(radius) ? String(Math.round(radius)) : '-';
-    tr.appendChild(radiusTd);
+    appendStackCell({
+      title: String(item?.site_name || '-').trim() || '-',
+      subtitle: String(item?.site_code || '').trim() ? `현장번호 ${String(item.site_code).trim()}` : '',
+      meta: employeeCount != null ? `직원 ${employeeCount}명` : '',
+      className: 'site-name-cell',
+    });
+    appendStackCell({
+      title: companyName || '-',
+      subtitle: String(item?.tenant_code || '').trim().toUpperCase() ? `회사 코드 ${String(item.tenant_code).trim().toUpperCase()}` : '',
+      className: 'company-cell',
+    });
+    appendStackCell({
+      title: String(item?.address || '').trim() || '주소 입력 필요',
+      subtitle: readiness.hasCoords ? `${readiness.lat.toFixed(6)}, ${readiness.lng.toFixed(6)}` : '좌표 설정 필요',
+      className: 'address-cell',
+    });
+    appendStackCell({
+      title: readiness.hasRadius ? `반경 ${Math.round(readiness.radius)}m` : '반경 설정 필요',
+      subtitle: readiness.coreReady ? '주소·좌표·반경 준비 완료' : `준비 ${readiness.coreReadyCount}/3`,
+      meta: readiness.hasWifi ? `Wi-Fi ${readiness.wifiSsid}` : 'Wi-Fi 미등록',
+      className: 'ops-cell',
+    });
 
     const statusTd = document.createElement('td');
+    statusTd.className = 'status-cell';
+    const statusStack = document.createElement('div');
+    statusStack.className = 'site-table-status-stack';
     const status = document.createElement('span');
     status.className = item?.is_active ? 'status-pill status-pill-success' : 'status-pill status-pill-error';
     status.textContent = item?.is_active ? '활성' : '비활성';
-    statusTd.appendChild(status);
+    statusStack.appendChild(status);
+    const readinessPill = document.createElement('span');
+    readinessPill.className = readiness.coreReady ? 'status-pill status-pill-neutral' : 'status-pill status-pill-warn';
+    readinessPill.textContent = readiness.readinessLabel;
+    statusStack.appendChild(readinessPill);
+    statusTd.appendChild(statusStack);
     tr.appendChild(statusTd);
 
     const actionsTd = document.createElement('td');
     actionsTd.className = 'actions-cell';
     if (can('siteWrite')) {
-      const actions = document.createElement('div');
-      actions.className = 'table-actions';
-      actions.innerHTML = `
-        <button type="button" class="btn btn-secondary" data-action="site-edit" data-site-id="${String(item?.id || '')}">수정</button>
-        <button type="button" class="${item?.is_active ? 'btn btn-destructive' : 'btn btn-secondary'}" data-action="site-toggle-active" data-site-id="${String(item?.id || '')}" data-next-active="${item?.is_active ? 'false' : 'true'}">${item?.is_active ? '비활성화' : '활성화'}</button>
-        <button type="button" class="btn btn-destructive" data-action="site-delete" data-site-id="${String(item?.id || '')}" data-site-name="${String(item?.site_name || '').trim()}">삭제</button>
-      `;
-      actionsTd.appendChild(actions);
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'btn btn-secondary';
+      editBtn.dataset.action = 'site-edit';
+      editBtn.dataset.siteId = String(item?.id || '');
+      editBtn.textContent = '편집';
+      actionsTd.appendChild(editBtn);
     } else {
       actionsTd.textContent = '-';
     }
@@ -30037,7 +30206,7 @@ function renderSiteCards(rows = []) {
   };
 
   const buildSiteCardNode = (item) => {
-    const { metaRows } = resolveSiteMeta(item);
+    const { companyName, readiness, employeeCount } = resolveSiteMeta(item);
     const li = document.createElement('li');
     li.className = 'site-card';
 
@@ -30053,18 +30222,27 @@ function renderSiteCards(rows = []) {
 
     const sub = document.createElement('div');
     sub.className = 'site-card-meta';
-    metaRows.forEach((line) => {
-      const span = document.createElement('span');
-      span.textContent = line;
-      sub.appendChild(span);
-    });
+    [companyName, `현장번호 ${String(item?.site_code || '-').trim() || '-'}`, employeeCount != null ? `직원 ${employeeCount}명` : '', String(item?.address || '').trim() || '주소 입력 필요', readiness.hasWifi ? `Wi-Fi ${readiness.wifiSsid}` : 'Wi-Fi 미등록']
+      .filter(Boolean)
+      .forEach((line) => {
+        const span = document.createElement('span');
+        span.textContent = line;
+        sub.appendChild(span);
+      });
     left.appendChild(sub);
     head.appendChild(left);
 
+    const statusGroup = document.createElement('div');
+    statusGroup.className = 'site-card-statuses';
     const status = document.createElement('span');
     status.className = item?.is_active ? 'status-pill status-pill-success' : 'status-pill status-pill-error';
     status.textContent = item?.is_active ? '활성' : '비활성';
-    head.appendChild(status);
+    statusGroup.appendChild(status);
+    const readinessPill = document.createElement('span');
+    readinessPill.className = readiness.coreReady ? 'status-pill status-pill-neutral' : 'status-pill status-pill-warn';
+    readinessPill.textContent = readiness.readinessLabel;
+    statusGroup.appendChild(readinessPill);
+    head.appendChild(statusGroup);
     li.appendChild(head);
 
     if (can('siteWrite')) {
@@ -30074,7 +30252,7 @@ function renderSiteCards(rows = []) {
       const editBtn = document.createElement('button');
       editBtn.type = 'button';
       editBtn.className = 'btn btn-secondary';
-      editBtn.textContent = '수정';
+      editBtn.textContent = '편집';
       editBtn.dataset.action = 'site-edit';
       editBtn.dataset.siteId = String(item?.id || '');
       actions.appendChild(editBtn);
@@ -31798,8 +31976,12 @@ async function loadOrgViewPresenter() {
   const isDevRole = getNavigationRole() === 'DEV';
   const includeInactiveToggle = $('#siteIncludeInactive');
   const includeDeletedToggle = $('#siteIncludeDeleted');
+  const siteSearchInput = $('#siteSearchInput');
   if (includeInactiveToggle instanceof HTMLInputElement) includeInactiveToggle.checked = false;
   if (includeDeletedToggle instanceof HTMLInputElement) includeDeletedToggle.checked = false;
+  if (siteSearchInput instanceof HTMLInputElement) {
+    siteSearchInput.value = String(state.siteSearchQuery || '').trim();
+  }
   const includeInactiveLabel = document.querySelector('label[for="siteIncludeInactive"]');
   const includeDeletedLabel = document.querySelector('label[for="siteIncludeDeleted"]');
   if (includeInactiveLabel instanceof HTMLElement) includeInactiveLabel.classList.toggle('hidden', !isDevRole);
@@ -56785,6 +56967,12 @@ function bindUiEvents() {
     if (target.id === 'employeeSearchInput') {
       state.employeeAdmin.searchQuery = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
       renderEmployeesFromCache();
+      return;
+    }
+
+    if (target.id === 'siteSearchInput') {
+      state.siteSearchQuery = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
+      renderSiteCards(state.sites);
       return;
     }
 

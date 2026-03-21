@@ -4593,8 +4593,8 @@
           <section id="view-org" class="panel card view hidden">
             <div class="workspace-head organization-workspace-head">
               <div class="workspace-head-main">
-                <h2 id="orgViewTitle">조직</h2>
-                <p id="orgScopeHint" class="muted">지점 목록에서 선택하고 상세 패널에서 확인합니다. 등록은 별도 흐름으로 이동합니다.</p>
+                <h2 id="orgViewTitle">지점 관리</h2>
+                <p id="orgScopeHint" class="muted">지점 목록을 확인하고, 선택한 지점은 오른쪽 상세 패널에서 바로 수정 흐름으로 이어집니다.</p>
               </div>
             </div>
             <div class="workspace-tabs organization-workspace-tabs">
@@ -4605,74 +4605,89 @@
             <p id="orgPermissionHint" class="muted permission-hint hidden"></p>
 
             <div id="siteSection" class="stack">
-              <div class="site-head command-bar">
-                <h3 id="siteSectionTitle">지점 목록</h3>
-                <button class="btn btn-primary" type="button" id="siteCreateBtn" data-action="site-open-create">지점 등록</button>
-              </div>
               <p id="sitePermissionHint" class="muted permission-hint hidden"></p>
-              <div id="siteFilterGrid" class="site-filter-grid ui-filterbar">
-                <select id="siteTenantFilter">
-                  <option value="">현재 작업회사</option>
-                </select>
-                <select id="siteActiveFilter">
-                  <option value="all">전체(활성)</option>
-                  <option value="active">활성</option>
-                  <option value="inactive">비활성</option>
-                </select>
-                <label class="choice-row compact-filter-toggle" for="siteIncludeInactive">
-                  <input id="siteIncludeInactive" type="checkbox" />
-                  비활성 포함
-                </label>
-                <label class="choice-row compact-filter-toggle" for="siteIncludeDeleted">
-                  <input id="siteIncludeDeleted" type="checkbox" />
-                  삭제 포함
-                </label>
-                <button class="btn btn-secondary" type="button" data-action="site-search">적용</button>
-              </div>
               <div id="siteDirectorySummaryStrip" class="organization-summary-strip hidden" aria-live="polite"></div>
+              <div id="siteFilterGrid" class="site-filter-grid site-console-toolbar command-bar ui-filterbar">
+                <label class="site-toolbar-field site-toolbar-search-field">
+                  <span>검색</span>
+                  <input id="siteSearchInput" type="search" placeholder="지점명, 현장번호, 주소, 회사명 검색" autocomplete="off" />
+                </label>
+                <label class="site-toolbar-field">
+                  <span>회사</span>
+                  <select id="siteTenantFilter">
+                    <option value="">현재 작업회사</option>
+                  </select>
+                </label>
+                <label class="site-toolbar-field">
+                  <span>상태</span>
+                  <select id="siteActiveFilter">
+                    <option value="all">전체(활성)</option>
+                    <option value="active">활성</option>
+                    <option value="inactive">비활성</option>
+                  </select>
+                </label>
+                <div class="site-toolbar-toggles">
+                  <label class="choice-row compact-filter-toggle" for="siteIncludeInactive">
+                    <input id="siteIncludeInactive" type="checkbox" />
+                    비활성 포함
+                  </label>
+                  <label class="choice-row compact-filter-toggle" for="siteIncludeDeleted">
+                    <input id="siteIncludeDeleted" type="checkbox" />
+                    삭제 포함
+                  </label>
+                </div>
+                <div class="site-toolbar-actions">
+                  <button class="btn btn-secondary" type="button" data-action="site-search">새로고침</button>
+                  <button class="btn btn-primary" type="button" id="siteCreateBtn" data-action="site-open-create">지점 등록</button>
+                </div>
+              </div>
               <div id="siteDirectoryWorkspace" class="site-directory-workspace">
                 <div class="site-directory-main">
-                  <div id="siteDesktopTableWrap" class="table-wrap">
-                    <table class="admin-table">
-                      <thead>
-                        <tr>
-                          <th class="sortable-col">
-                            <button class="admin-sort-btn" type="button" data-action="site-sort" data-sort-key="companyName">
-                              <span>회사</span>
-                              <span class="admin-sort-indicator" aria-hidden="true"></span>
-                            </button>
-                          </th>
-                          <th class="sortable-col">
-                            <button class="admin-sort-btn" type="button" data-action="site-sort" data-sort-key="siteCode">
-                              <span>현장번호</span>
-                              <span class="admin-sort-indicator" aria-hidden="true"></span>
-                            </button>
-                          </th>
-                          <th class="sortable-col">
-                            <button class="admin-sort-btn" type="button" data-action="site-sort" data-sort-key="siteName">
-                              <span>현장명</span>
-                              <span class="admin-sort-indicator" aria-hidden="true"></span>
-                            </button>
-                          </th>
-                          <th class="sortable-col">
-                            <button class="admin-sort-btn" type="button" data-action="site-sort" data-sort-key="radius">
-                              <span>반경(m)</span>
-                              <span class="admin-sort-indicator" aria-hidden="true"></span>
-                            </button>
-                          </th>
-                          <th class="sortable-col">
-                            <button class="admin-sort-btn" type="button" data-action="site-sort" data-sort-key="status">
-                              <span>상태</span>
-                              <span class="admin-sort-indicator" aria-hidden="true"></span>
-                            </button>
-                          </th>
-                          <th>작업</th>
-                        </tr>
-                      </thead>
-                      <tbody id="siteDesktopTableBody"></tbody>
-                    </table>
-                  </div>
-                  <ul id="siteList" class="list"></ul>
+                  <article id="siteDesktopTableCard" class="module-card stack site-directory-table-card">
+                    <div class="site-directory-table-head">
+                      <div class="site-directory-table-head-main">
+                        <h3 id="siteSectionTitle">지점 목록</h3>
+                        <p id="siteDirectoryCount" class="muted">전체 0곳</p>
+                      </div>
+                      <p id="siteTableHint" class="muted">행을 선택하면 오른쪽 패널에서 운영 상태와 수정 액션을 확인합니다.</p>
+                    </div>
+                    <div id="siteDesktopTableWrap" class="table-wrap">
+                      <table class="admin-table site-directory-table">
+                        <thead>
+                          <tr>
+                            <th class="sortable-col">
+                              <button class="admin-sort-btn" type="button" data-action="site-sort" data-sort-key="siteName">
+                                <span>지점명 / 코드</span>
+                                <span class="admin-sort-indicator" aria-hidden="true"></span>
+                              </button>
+                            </th>
+                            <th class="sortable-col">
+                              <button class="admin-sort-btn" type="button" data-action="site-sort" data-sort-key="companyName">
+                                <span>회사</span>
+                                <span class="admin-sort-indicator" aria-hidden="true"></span>
+                              </button>
+                            </th>
+                            <th>주소</th>
+                            <th class="sortable-col">
+                              <button class="admin-sort-btn" type="button" data-action="site-sort" data-sort-key="radius">
+                                <span>출퇴근 기준</span>
+                                <span class="admin-sort-indicator" aria-hidden="true"></span>
+                              </button>
+                            </th>
+                            <th class="sortable-col">
+                              <button class="admin-sort-btn" type="button" data-action="site-sort" data-sort-key="status">
+                                <span>상태</span>
+                                <span class="admin-sort-indicator" aria-hidden="true"></span>
+                              </button>
+                            </th>
+                            <th>작업</th>
+                          </tr>
+                        </thead>
+                        <tbody id="siteDesktopTableBody"></tbody>
+                      </table>
+                    </div>
+                    <ul id="siteList" class="list"></ul>
+                  </article>
                 </div>
                 <aside id="siteDirectoryDetailPanel" class="site-directory-detail-panel">
                   <div class="site-directory-detail-shell">
@@ -4682,7 +4697,7 @@
                         <h4 id="siteDirectoryDetailTitle">지점을 선택해 주세요</h4>
                         <div id="siteDirectoryDetailBadges" class="site-directory-detail-badges"></div>
                       </div>
-                      <p id="siteDirectoryDetailSubtitle" class="muted">목록에서 지점을 선택하면 운영 요약과 바로 가는 액션이 열립니다.</p>
+                      <p id="siteDirectoryDetailSubtitle" class="muted">목록에서 지점을 선택하면 운영 기준과 수정 액션이 열립니다.</p>
                     </div>
                     <div id="siteDirectoryDetailBody" class="site-directory-detail-body"></div>
                     <div id="siteDirectoryDetailActions" class="site-directory-detail-actions hidden"></div>
