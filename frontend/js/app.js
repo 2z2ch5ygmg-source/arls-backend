@@ -5046,12 +5046,26 @@ function renderHomeManagerOrgSections() {
   const organizationSummary = dashboard.organizationSummary || {};
   const peopleCard = $('#homeManagerPeopleCard');
   const sitesCard = $('#homeManagerSitesCard');
+  const peopleMetrics = [
+    Number(organizationSummary.employeeTotal || 0),
+    Number(organizationSummary.activeEmployeeCount || 0),
+    Number(organizationSummary.managerCount || 0),
+    Number(organizationSummary.unlinkedCount || 0),
+  ];
+  const siteMetrics = [
+    Number(organizationSummary.siteTotal || 0),
+    Number(organizationSummary.activeSiteCount || 0),
+    Number(organizationSummary.assignedSiteCount || 0),
+    Number(organizationSummary.unassignedEmployeeCount || 0),
+  ];
+  const showPeopleCard = can('employees') && (organizationSummary.loading || peopleMetrics.some((value) => value > 0));
+  const showSitesCard = can('org') && (organizationSummary.loading || siteMetrics.some((value) => value > 0));
 
   if (peopleCard instanceof HTMLElement) {
-    peopleCard.classList.toggle('hidden', !can('employees'));
+    peopleCard.classList.toggle('hidden', !showPeopleCard);
   }
   if (sitesCard instanceof HTMLElement) {
-    sitesCard.classList.toggle('hidden', !can('org'));
+    sitesCard.classList.toggle('hidden', !showSitesCard);
   }
 
   const loadingText = organizationSummary.loading ? '조회 중' : '-';
@@ -5062,15 +5076,15 @@ function renderHomeManagerOrgSections() {
     el.textContent = hasValue ? String(value) : loadingText;
   };
 
-  setMetric('#homeManagerPeopleTotal', can('employees') ? `${Number(organizationSummary.employeeTotal || 0)}명` : '');
-  setMetric('#homeManagerPeopleActive', can('employees') ? `${Number(organizationSummary.activeEmployeeCount || 0)}명` : '');
-  setMetric('#homeManagerPeopleManagers', can('employees') ? `${Number(organizationSummary.managerCount || 0)}명` : '');
-  setMetric('#homeManagerPeopleUnlinked', can('employees') ? `${Number(organizationSummary.unlinkedCount || 0)}명` : '');
+  setMetric('#homeManagerPeopleTotal', showPeopleCard ? `${Number(organizationSummary.employeeTotal || 0)}명` : '');
+  setMetric('#homeManagerPeopleActive', showPeopleCard ? `${Number(organizationSummary.activeEmployeeCount || 0)}명` : '');
+  setMetric('#homeManagerPeopleManagers', showPeopleCard ? `${Number(organizationSummary.managerCount || 0)}명` : '');
+  setMetric('#homeManagerPeopleUnlinked', showPeopleCard ? `${Number(organizationSummary.unlinkedCount || 0)}명` : '');
 
-  setMetric('#homeManagerSitesTotal', can('org') ? `${Number(organizationSummary.siteTotal || 0)}개` : '');
-  setMetric('#homeManagerSitesActive', can('org') ? `${Number(organizationSummary.activeSiteCount || 0)}개` : '');
-  setMetric('#homeManagerSitesAssigned', can('org') ? `${Number(organizationSummary.assignedSiteCount || 0)}개` : '');
-  setMetric('#homeManagerSitesUnassignedEmployees', can('org') ? `${Number(organizationSummary.unassignedEmployeeCount || 0)}명` : '');
+  setMetric('#homeManagerSitesTotal', showSitesCard ? `${Number(organizationSummary.siteTotal || 0)}개` : '');
+  setMetric('#homeManagerSitesActive', showSitesCard ? `${Number(organizationSummary.activeSiteCount || 0)}개` : '');
+  setMetric('#homeManagerSitesAssigned', showSitesCard ? `${Number(organizationSummary.assignedSiteCount || 0)}개` : '');
+  setMetric('#homeManagerSitesUnassignedEmployees', showSitesCard ? `${Number(organizationSummary.unassignedEmployeeCount || 0)}명` : '');
 }
 
 function renderHomeManagerDashboard() {
