@@ -4889,12 +4889,17 @@ button:disabled,
   background: rgba(148, 163, 184, 0.22);
 }
 
+.schedule-upload-progress .task-progress-track,
+.task-progress-strip .task-progress-track {
+  background: rgba(255, 107, 0, 0.14);
+}
+
 .task-progress-fill {
   width: 0;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #60a5fa);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.22);
+  background: linear-gradient(90deg, #ea580c, #fb923c);
+  box-shadow: 0 4px 12px rgba(255, 107, 0, 0.22);
   transition: width 0.24s ease;
 }
 
@@ -4956,8 +4961,9 @@ button:disabled,
   border-radius: 50%;
   background:
     radial-gradient(circle at center, rgba(255, 255, 255, 0.96) 0 26px, transparent 27px),
-    conic-gradient(from 210deg, #60a5fa 0deg, #2563eb 210deg, rgba(191, 219, 254, 0.2) 210deg 360deg);
-  animation: task-progress-pulse 1.8s ease-in-out infinite;
+    conic-gradient(from 210deg, #fb923c 0deg, #ea580c 210deg, rgba(255, 107, 0, 0.16) 210deg 360deg);
+  box-shadow: 0 10px 22px rgba(255, 107, 0, 0.18);
+  animation: task-progress-spin 1.35s linear infinite;
 }
 
 .schedule-upload-file-meta {
