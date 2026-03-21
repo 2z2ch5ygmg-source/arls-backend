@@ -10168,7 +10168,7 @@ function updateLongTaskProgress(taskId = '', updates = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'progress')) {
     progress.progress = Math.max(0, Math.min(100, Number(updates.progress || 0)));
-    progress.explicitProgressUntil = Date.now() + 1200;
+    progress.explicitProgressUntil = Date.now() + (progress.tone === LONG_TASK_TONE_DOWNLOAD ? 320 : 900);
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'visible')) {
     progress.visible = Boolean(updates.visible);
