@@ -15634,3 +15634,75 @@ textarea::placeholder {
 #view-ops .ops-execution-list .empty-state {
   background: rgba(248, 250, 252, 0.8);
 }
+
+/* ARLS Phase 6 final polish */
+@media (min-width: 1200px) {
+  #shell[data-shell-mode='manager'] #view-home .home-manager-shortcuts-card {
+    grid-column: 1 / -1;
+    padding: 16px 18px;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-shortcuts-card .quick-actions {
+    margin-top: 0;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    align-items: stretch;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-shortcuts-card .quick-actions .btn {
+    width: 100%;
+    min-height: 40px;
+  }
+
+  #view-reports {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #view-reports > article:first-of-type,
+  #view-reports > [data-reports-panel='finance'],
+  #view-reports > [data-reports-panel='support'],
+  #view-reports > [data-reports-panel='pack'],
+  #view-reports > [data-reports-panel='history'],
+  #view-reports > #reportsDefaultCard,
+  #view-reports > #reportsAppleCard {
+    grid-column: 1 / -1;
+    max-height: none;
+    overflow: visible;
+  }
+
+  #view-reports .reports-panel-shell,
+  #view-reports .reports-owner-card,
+  #view-reports #scheduleFinanceSubmissionPanel,
+  #view-reports #reportsSupportCard {
+    min-width: 0;
+  }
+
+  #view-reports .reports-owner-card .approval-head {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  #view-reports .reports-owner-card .quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 0;
+  }
+
+  #view-reports .reports-owner-card .quick-actions .btn {
+    width: auto;
+    min-width: 136px;
+  }
+}
+
+@media (max-width: 1023px) {
+  #view-reports .schedule-support-status-grid,
+  #view-schedule .schedule-support-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #view-reports .reports-owner-summary,
+  #view-reports .reports-owner-summary-secondary {
+    padding: 12px 14px;
+  }
+}
