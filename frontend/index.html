@@ -3656,11 +3656,13 @@
           <section id="view-dev-console" class="panel card view hidden">
             <div class="workspace-head system-workspace-head">
               <div class="workspace-head-main">
-                <h2 id="masterConsoleHeader">시스템 워크스페이스</h2>
-                <p class="muted">개발자 슈퍼어드민 전용 콘솔입니다. 회사, 계정, 권한, 보안정책을 통합 관리합니다.</p>
+                <h2 id="masterConsoleHeader">회사 관리</h2>
+                <p class="muted">회사를 조회하고 운영 상태와 기본 정보를 관리합니다.</p>
               </div>
             </div>
             <div class="workspace-tabs system-workspace-tabs">
+              <button class="btn btn-secondary workspace-tab master-route-tab" type="button" data-action="master-route" data-route="/master/tenants">회사 관리</button>
+              <button class="btn btn-secondary workspace-tab master-route-tab" type="button" data-action="master-route" data-route="/master/tenants/new">회사 등록</button>
               <button class="btn btn-secondary workspace-tab" type="button" data-action="drawer-open-route" data-route="/master/audit-logs" data-system-route="/master/audit-logs">감사로그</button>
             </div>
 
@@ -3692,68 +3694,101 @@
             <p id="masterConsoleStatus" class="muted"></p>
 
             <section id="masterSectionDashboard" class="stack">
-              <article class="module-card stack">
-                <div class="master-dashboard-toolbar command-bar">
-                  <h3 class="master-dashboard-title">회사 목록</h3>
-                  <div class="master-dashboard-search">
-                    <input id="masterTenantSearchInput" placeholder="회사명/번호 검색" />
-                  </div>
-                  <div class="master-dashboard-right">
-                    <div class="master-dashboard-actions roadmap-actions">
-                      <button class="btn btn-primary" type="button" data-action="master-route" data-route="/master/tenants/new">+ 회사 추가</button>
-                      <button class="btn btn-destructive" type="button" data-action="master-tenants-purge">전체 회사 정리</button>
-                      <button class="btn btn-secondary" type="button" data-action="master-refresh-dashboard">새로고침</button>
-                    </div>
+              <div id="masterTenantSummaryStrip" class="organization-summary-strip hidden"></div>
+
+              <article class="module-card stack master-company-toolbar-card">
+                <div id="masterTenantToolbar" class="master-company-toolbar">
+                  <label class="master-company-toolbar-field master-company-toolbar-search" for="masterTenantSearchInput">
+                    <span>검색</span>
+                    <input id="masterTenantSearchInput" placeholder="회사명 또는 코드 검색" />
+                  </label>
+                  <div class="master-company-toolbar-field">
+                    <span>상태</span>
                     <div class="master-status-tabs master-status-segment">
                       <button class="btn btn-secondary master-status-tab active" type="button" data-action="master-tenant-status" data-status="active">활성</button>
                       <button class="btn btn-secondary master-status-tab" type="button" data-action="master-tenant-status" data-status="disabled">비활성</button>
                       <button class="btn btn-secondary master-status-tab" type="button" data-action="master-tenant-status" data-status="deleted">삭제됨</button>
                     </div>
                   </div>
+                  <div class="master-company-toolbar-actions">
+                    <button id="masterTenantRefreshBtn" class="btn btn-secondary" type="button" data-action="master-refresh-dashboard">새로고침</button>
+                    <button id="masterTenantCreateBtn" class="btn btn-primary" type="button" data-action="master-route" data-route="/master/tenants/new">회사 추가</button>
+                  </div>
                 </div>
-                <div id="masterPurgeResultCard" class="module-card stack hidden">
-                  <h4>최근 일괄 정리 결과</h4>
-                  <p id="masterPurgeResultStatus" class="muted">-</p>
-                  <pre id="masterPurgeResultBody" class="master-summary-pre"></pre>
-                </div>
-                <div id="masterTenantTableWrap" class="table-wrap">
-                  <table class="admin-table">
-                    <thead>
-                      <tr>
-                        <th class="sortable-col">
-                          <button class="admin-sort-btn" type="button" data-action="master-tenant-sort" data-sort-key="tenantName">
-                            <span>회사명</span>
-                            <span class="admin-sort-indicator" aria-hidden="true"></span>
-                          </button>
-                        </th>
-                        <th class="sortable-col">
-                          <button class="admin-sort-btn" type="button" data-action="master-tenant-sort" data-sort-key="tenantCode">
-                            <span>회사 ID</span>
-                            <span class="admin-sort-indicator" aria-hidden="true"></span>
-                          </button>
-                        </th>
-                        <th class="sortable-col">
-                          <button class="admin-sort-btn" type="button" data-action="master-tenant-sort" data-sort-key="status">
-                            <span>상태</span>
-                            <span class="admin-sort-indicator" aria-hidden="true"></span>
-                          </button>
-                        </th>
-                        <th>작업</th>
-                      </tr>
-                    </thead>
-                    <tbody id="masterTenantTableBody"></tbody>
-                  </table>
-                </div>
-                <ul id="masterTenantCardList" class="list"></ul>
               </article>
+
+              <div class="master-company-workspace">
+                <article class="module-card stack master-company-table-card">
+                  <div class="master-company-table-head">
+                    <div class="master-company-table-head-main">
+                      <h3>회사 목록</h3>
+                      <p class="muted">회사를 선택하면 오른쪽 패널에서 상태와 다음 작업을 바로 확인할 수 있습니다.</p>
+                    </div>
+                    <span id="masterTenantCount" class="master-company-table-count">전체 0개</span>
+                  </div>
+
+                  <details class="master-company-utility">
+                    <summary>운영 도구</summary>
+                    <div class="master-company-utility-body">
+                      <p class="muted">전체 회사 정리는 예외 상황에서만 사용합니다.</p>
+                      <button class="btn btn-destructive" type="button" data-action="master-tenants-purge">전체 회사 정리</button>
+                    </div>
+                  </details>
+
+                  <div id="masterPurgeResultCard" class="module-card stack hidden">
+                    <h4>최근 일괄 정리 결과</h4>
+                    <p id="masterPurgeResultStatus" class="muted">-</p>
+                    <pre id="masterPurgeResultBody" class="master-summary-pre"></pre>
+                  </div>
+
+                  <div id="masterTenantTableWrap" class="table-wrap">
+                    <table class="admin-table master-company-table">
+                      <thead>
+                        <tr>
+                          <th class="sortable-col">
+                            <button class="admin-sort-btn" type="button" data-action="master-tenant-sort" data-sort-key="tenantName">
+                              <span>회사</span>
+                              <span class="admin-sort-indicator" aria-hidden="true"></span>
+                            </button>
+                          </th>
+                          <th class="sortable-col">
+                            <button class="admin-sort-btn" type="button" data-action="master-tenant-sort" data-sort-key="status">
+                              <span>상태</span>
+                              <span class="admin-sort-indicator" aria-hidden="true"></span>
+                            </button>
+                          </th>
+                          <th>정보 기입</th>
+                          <th>연결 현황</th>
+                          <th>작업</th>
+                        </tr>
+                      </thead>
+                      <tbody id="masterTenantTableBody"></tbody>
+                    </table>
+                  </div>
+                  <ul id="masterTenantCardList" class="list"></ul>
+                </article>
+
+                <aside id="masterTenantDetailPanel" class="module-card stack master-company-detail-panel is-empty">
+                  <div class="master-company-detail-head">
+                    <span id="masterTenantDetailEyebrow" class="master-company-detail-eyebrow">회사 선택</span>
+                    <div class="master-company-detail-title-row">
+                      <h3 id="masterTenantDetailTitle">회사를 선택해 주세요</h3>
+                    </div>
+                    <div id="masterTenantDetailBadges" class="master-company-detail-badges"></div>
+                    <p id="masterTenantDetailSubtitle" class="muted">목록에서 회사를 선택하면 상태, 연결 현황, 수정 액션이 열립니다.</p>
+                  </div>
+                  <div id="masterTenantDetailBody" class="master-company-detail-body"></div>
+                  <div id="masterTenantDetailActions" class="master-company-detail-actions hidden"></div>
+                </aside>
+              </div>
             </section>
 
             <section id="masterSectionTenantCreate" class="stack hidden">
               <article class="module-card stack">
                 <div class="wizard-card-head">
                   <div>
-                    <h3>회사 생성</h3>
-                    <p class="muted">조직 컨텍스트 → 기본 정보 → 운영/권한 → 검토 순서로 저장합니다.</p>
+                    <h3>회사 등록</h3>
+                    <p class="muted">브랜드 정보, 기본 정보, 초기 관리자만 확인하고 저장합니다.</p>
                   </div>
                 </div>
                 <form id="masterTenantCreateForm" class="stack registration-form">
@@ -3946,62 +3981,115 @@
 
             <section id="masterSectionTenantUsers" class="stack hidden">
               <article class="module-card stack">
-                <div class="approval-head">
-                  <h3>회사 정보 기입</h3>
-                  <button class="btn btn-secondary" type="button" data-action="master-tenant-profile-refresh">새로고침</button>
+                <div class="wizard-card-head">
+                  <div>
+                    <h3>회사 정보 수정</h3>
+                    <p class="muted">문서 발급 기준과 회사 기본 정보를 같은 화면에서 정리합니다.</p>
+                  </div>
+                  <div class="inline-actions">
+                    <button class="btn btn-secondary" type="button" data-action="master-tenant-profile-refresh">새로고침</button>
+                  </div>
                 </div>
                 <form id="masterTenantProfileForm" class="stack">
-                  <div class="master-form-divider">
-                    <strong>재직증명서/서류 발급용 회사 정보</strong>
-                  </div>
-                  <div class="master-company-profile-grid">
-                    <label class="input-field" for="masterTenantProfileCompanyName">
-                      회사명
-                      <input id="masterTenantProfileCompanyName" placeholder="선택한 회사명" readonly />
-                    </label>
-                    <label class="input-field" for="masterTenantProfileCeoName">
-                      대표자
-                      <input id="masterTenantProfileCeoName" placeholder="예: 홍길동" />
-                    </label>
-                    <label class="input-field" for="masterTenantProfileBizRegNo">
-                      사업자 등록 번호
-                      <input id="masterTenantProfileBizRegNo" placeholder="예: 123-45-67890" />
-                    </label>
-                    <label class="input-field" for="masterTenantProfilePhone">
-                      전화번호
-                      <input id="masterTenantProfilePhone" placeholder="예: 02-1234-5678" />
-                    </label>
-                    <label class="input-field" for="masterTenantProfileEmail">
-                      회사 이메일
-                      <input id="masterTenantProfileEmail" type="email" placeholder="예: hr@company.co.kr" />
-                    </label>
-                    <label class="input-field" for="masterTenantProfileAddress">
-                      주소
-                      <textarea id="masterTenantProfileAddress" rows="2" placeholder="회사 주소를 입력하세요"></textarea>
-                    </label>
-                  </div>
+                  <div class="registration-workspace master-profile-workspace">
+                    <div class="registration-main stack">
+                      <section class="registration-step-section stack">
+                        <div class="wizard-form-divider">
+                          <strong>기본 정보</strong>
+                          <span>회사 기본 정보와 문서 발급 기준을 입력합니다.</span>
+                        </div>
+                        <div class="master-company-profile-grid">
+                          <label class="input-field" for="masterTenantProfileCompanyName">
+                            회사명
+                            <input id="masterTenantProfileCompanyName" placeholder="선택한 회사명" readonly />
+                          </label>
+                          <label class="input-field" for="masterTenantProfileCeoName">
+                            대표자
+                            <input id="masterTenantProfileCeoName" placeholder="예: 홍길동" />
+                          </label>
+                          <label class="input-field" for="masterTenantProfileBizRegNo">
+                            사업자 등록 번호
+                            <input id="masterTenantProfileBizRegNo" placeholder="예: 123-45-67890" />
+                          </label>
+                          <label class="input-field" for="masterTenantProfilePhone">
+                            전화번호
+                            <input id="masterTenantProfilePhone" placeholder="예: 02-1234-5678" />
+                          </label>
+                          <label class="input-field" for="masterTenantProfileEmail">
+                            회사 이메일
+                            <input id="masterTenantProfileEmail" type="email" placeholder="예: hr@company.co.kr" />
+                          </label>
+                          <label class="input-field" for="masterTenantProfileAddress">
+                            주소
+                            <textarea id="masterTenantProfileAddress" rows="2" placeholder="회사 주소를 입력하세요"></textarea>
+                          </label>
+                        </div>
+                      </section>
 
-                  <input id="masterTenantProfileSealAttachmentId" type="hidden" />
+                      <section class="registration-step-section stack">
+                        <div class="wizard-form-divider">
+                          <strong>문서 발급 이미지</strong>
+                          <span>도장은 선택 파일을 업로드해 관리합니다.</span>
+                        </div>
+                        <input id="masterTenantProfileSealAttachmentId" type="hidden" />
 
-                  <label class="input-field" for="masterTenantSealFile">
-                    도장 사진 첨부
-                    <input id="masterTenantSealFile" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
-                    <span class="input-helper">PNG/JPG, 최대 2MB</span>
-                  </label>
-                  <div class="master-seal-preview-actions">
-                    <button class="btn btn-secondary" type="button" data-action="master-tenant-profile-upload-seal">도장 업로드</button>
-                    <button class="btn btn-secondary" type="button" data-action="master-tenant-profile-clear-seal">도장 제거</button>
-                  </div>
-                  <div id="masterTenantSealPreviewWrap" class="master-seal-preview-wrap hidden">
-                    <img id="masterTenantSealPreview" alt="도장 미리보기" />
-                  </div>
+                        <label class="input-field" for="masterTenantSealFile">
+                          도장 사진 첨부
+                          <input id="masterTenantSealFile" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
+                          <span class="input-helper">PNG/JPG, 최대 2MB</span>
+                        </label>
+                        <div class="master-seal-preview-actions">
+                          <button class="btn btn-secondary" type="button" data-action="master-tenant-profile-upload-seal">도장 업로드</button>
+                          <button class="btn btn-secondary" type="button" data-action="master-tenant-profile-clear-seal">도장 제거</button>
+                        </div>
+                        <div id="masterTenantSealPreviewWrap" class="master-seal-preview-wrap hidden">
+                          <img id="masterTenantSealPreview" alt="도장 미리보기" />
+                        </div>
+                      </section>
+                    </div>
 
-                  <div class="inline-actions">
-                    <button class="btn btn-primary" type="submit">저장</button>
+                    <aside class="registration-rail stack">
+                      <article class="registration-rail-card stack">
+                        <h4>현재 회사</h4>
+                        <dl class="registration-summary-list">
+                          <div>
+                            <dt>회사 코드</dt>
+                            <dd id="masterTenantProfileRailCode">-</dd>
+                          </div>
+                          <div>
+                            <dt>상태</dt>
+                            <dd id="masterTenantProfileRailStatus">-</dd>
+                          </div>
+                          <div>
+                            <dt>지점 / 직원</dt>
+                            <dd id="masterTenantProfileRailCounts">-</dd>
+                          </div>
+                          <div>
+                            <dt>도장 상태</dt>
+                            <dd id="masterTenantProfileRailSeal">미등록</dd>
+                          </div>
+                        </dl>
+                      </article>
+
+                      <article class="registration-rail-card stack">
+                        <h4>바로가기</h4>
+                        <div class="inline-actions">
+                          <button id="masterTenantProfileOpenSitesBtn" class="btn btn-secondary" type="button" data-action="master-company-open-sites">지점 보기</button>
+                          <button id="masterTenantProfileOpenEmployeesBtn" class="btn btn-secondary" type="button" data-action="master-company-open-employees">직원 보기</button>
+                        </div>
+                      </article>
+
+                      <article class="registration-rail-card registration-action-rail stack">
+                        <h4>저장</h4>
+                        <p id="masterTenantProfileStatus" class="muted">입력한 회사 정보를 저장합니다.</p>
+                        <div class="registration-action-buttons">
+                          <button class="btn btn-primary" type="submit">저장</button>
+                          <button class="btn btn-secondary" type="button" data-action="master-route" data-route="/master/tenants">목록으로</button>
+                        </div>
+                      </article>
+                    </aside>
                   </div>
                 </form>
-
-                <p id="masterTenantProfileStatus" class="muted"></p>
               </article>
             </section>
 

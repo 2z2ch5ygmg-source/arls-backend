@@ -8772,8 +8772,19 @@ function isDrawerScheduleSectionActive(section = '', currentRouteRaw = '') {
   return false;
 }
 
+function isDrawerAttendanceSectionActive(section = '', currentRouteRaw = '') {
+  const normalized = normalizeAttendanceManagerTab(section);
+  const currentRoute = normalizeRoutePath(parseRouteCandidate(currentRouteRaw).path);
+  if (currentRoute !== ROUTE_ATTENDANCE) return false;
+  return normalizeAttendanceManagerTab(state.attendanceView?.managerTab || 'status') === normalized;
+}
+
 function isDrawerItemActive(item = null, currentRouteRaw = '') {
   if (!item || typeof item !== 'object') return false;
+  const attendanceTabMatch = String(item.attendanceTabMatch || '').trim().toLowerCase();
+  if (attendanceTabMatch) {
+    return isDrawerAttendanceSectionActive(attendanceTabMatch, currentRouteRaw);
+  }
   const reportsTabMatch = String(item.reportsTabMatch || '').trim().toLowerCase();
   if (reportsTabMatch) {
     const currentRoute = normalizeRoutePath(parseRouteCandidate(currentRouteRaw).path);
@@ -8813,7 +8824,18 @@ const DRAWER_MENU_BY_ROLE = {
     { type: 'section', title: '홈' },
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
     { type: 'section', title: '업무' },
-    { id: 'attendance', title: '출퇴근', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, icon: 'clock-3' },
+    {
+      id: 'attendance',
+      title: '출퇴근',
+      action: 'drawer-open-route',
+      route: ROUTE_ATTENDANCE,
+      icon: 'clock-3',
+      children: [
+        { id: 'attendance-status', title: '출퇴근 현황', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, attendanceTabMatch: 'status' },
+        { id: 'attendance-calendar', title: '달력형', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?tab=calendar`, attendanceTabMatch: 'calendar' },
+        { id: 'attendance-list', title: '리스트형', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?tab=list`, attendanceTabMatch: 'list' },
+      ],
+    },
     {
       id: 'requests',
       title: '요청·승인',
@@ -8859,7 +8881,18 @@ const DRAWER_MENU_BY_ROLE = {
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
     { type: 'section', title: '운영' },
     { id: 'ops', title: '운영', action: 'drawer-open-route', route: ROUTE_OPS, icon: 'activity' },
-    { id: 'attendance', title: '출퇴근', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, icon: 'clock-3' },
+    {
+      id: 'attendance',
+      title: '출퇴근',
+      action: 'drawer-open-route',
+      route: ROUTE_ATTENDANCE,
+      icon: 'clock-3',
+      children: [
+        { id: 'attendance-status', title: '출퇴근 현황', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, attendanceTabMatch: 'status' },
+        { id: 'attendance-calendar', title: '달력형', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?tab=calendar`, attendanceTabMatch: 'calendar' },
+        { id: 'attendance-list', title: '리스트형', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?tab=list`, attendanceTabMatch: 'list' },
+      ],
+    },
     {
       id: 'work-center',
       title: '요청·승인',
@@ -8917,7 +8950,18 @@ const DRAWER_MENU_BY_ROLE = {
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
     { type: 'section', title: '운영' },
     { id: 'ops', title: '운영', action: 'drawer-open-route', route: ROUTE_OPS, icon: 'activity' },
-    { id: 'attendance', title: '출퇴근', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, icon: 'clock-3' },
+    {
+      id: 'attendance',
+      title: '출퇴근',
+      action: 'drawer-open-route',
+      route: ROUTE_ATTENDANCE,
+      icon: 'clock-3',
+      children: [
+        { id: 'attendance-status', title: '출퇴근 현황', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, attendanceTabMatch: 'status' },
+        { id: 'attendance-calendar', title: '달력형', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?tab=calendar`, attendanceTabMatch: 'calendar' },
+        { id: 'attendance-list', title: '리스트형', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?tab=list`, attendanceTabMatch: 'list' },
+      ],
+    },
     {
       id: 'work-center',
       title: '요청·승인',
@@ -19858,7 +19902,7 @@ function getTenantByCode(tenantCode = '') {
 
 function resolveRouteForView(viewName = '') {
   const raw = String(viewName || '').trim().toLowerCase();
-  if (raw === 'attendance') return ROUTE_ATTENDANCE;
+  if (raw === 'attendance') return getAttendanceRouteWithTab();
   if (raw === 'hr') return ROUTE_HR;
   if (raw === 'leave') return `${ROUTE_REQUESTS}?section=leave`;
   if (raw === 'ops') return ROUTE_OPS;
@@ -20084,6 +20128,16 @@ function applyOpsRouteStateFromQuery(routePath = '', parsedParams = new URLSearc
   setOpsViewTab(parsedParams.get('tab') || 'overview');
 }
 
+function applyAttendanceRouteStateFromQuery(routePath = '', parsedParams = new URLSearchParams()) {
+  const route = normalizeRoutePath(routePath);
+  if (route !== ROUTE_ATTENDANCE) return;
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  ensureAttendanceManagerPreferencesLoaded();
+  state.attendanceView.managerTab = normalizeAttendanceManagerTab(parsedParams.get('tab') || state.attendanceView.managerTab || 'status');
+}
+
 function applyReportsRouteStateFromQuery(routePath = '', parsedParams = new URLSearchParams()) {
   const route = normalizeRoutePath(routePath);
   if (route !== ROUTE_REPORTS && route !== ROUTE_REPORTS_APPLE && route !== ROUTE_SCHEDULE_REPORTS) return;
@@ -20265,6 +20319,7 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
     setOpsViewTab(parsedParams.get('tab') || 'overview');
   }
 
+  applyAttendanceRouteStateFromQuery(route, parsedParams);
   applyOpsRouteStateFromQuery(route, parsedParams);
   applyReportsRouteStateFromQuery(route, parsedParams);
   applyScheduleRouteStateFromQuery(route, parsedParams);
@@ -39122,6 +39177,10 @@ function syncAttendanceManagerFilterInputs() {
   const statusSelect = $('#attendanceStatusSelect');
   const searchInput = $('#attendanceSearchInput');
   const sortSelect = $('#attendanceSortSelect');
+  const statusDateInput = $('#attendanceStatusDateInput');
+  const calendarMonthInput = $('#attendanceCalendarMonthInput');
+  const lateThresholdSelect = $('#attendanceLateThresholdSelect');
+  const earlyThresholdSelect = $('#attendanceEarlyThresholdSelect');
   if (employeeSelect instanceof HTMLSelectElement) {
     employeeSelect.value = String(state.attendanceView.employeeCode || '').trim();
   }
@@ -39137,6 +39196,18 @@ function syncAttendanceManagerFilterInputs() {
   if (sortSelect instanceof HTMLSelectElement) {
     sortSelect.value = getAttendanceManagerSortControlValue();
   }
+  if (statusDateInput instanceof HTMLInputElement) {
+    statusDateInput.value = getAttendanceActiveDate();
+  }
+  if (calendarMonthInput instanceof HTMLInputElement) {
+    calendarMonthInput.value = normalizeMonthKey(state.attendanceView.calendarMonth || '') || getMonthFromDateKey(getAttendanceActiveDate()) || toMonthKey(new Date());
+  }
+  if (lateThresholdSelect instanceof HTMLSelectElement) {
+    lateThresholdSelect.value = String(normalizeAttendanceThresholdMinutes(state.attendanceView.lateThresholdMinutes));
+  }
+  if (earlyThresholdSelect instanceof HTMLSelectElement) {
+    earlyThresholdSelect.value = String(normalizeAttendanceThresholdMinutes(state.attendanceView.earlyLeaveThresholdMinutes));
+  }
   setAttendanceDateRange({
     start: state.attendanceView.rangeStart,
     end: state.attendanceView.rangeEnd,
@@ -39148,6 +39219,17 @@ function syncAttendanceManagerFilterInputs() {
     button.classList.toggle('active', preset === normalizeAttendanceRangePreset(state.attendanceView.rangePreset || 'today'));
     button.setAttribute('aria-pressed', button.classList.contains('active') ? 'true' : 'false');
   });
+  document.querySelectorAll('[data-action="attendance-status-preset"]').forEach((button) => {
+    const range = String(button?.dataset?.range || '').trim().toLowerCase();
+    const active = (range === 'today' && getAttendanceActiveDate() === toLocalDateKey(new Date()))
+      || (range === 'yesterday' && getAttendanceActiveDate() === toLocalDateKey(new Date(Date.now() - 86400000)));
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+  renderAttendanceWorkspaceTabs();
+  renderAttendanceWorkspaceHeader();
+  renderAttendanceToolbarVisibility();
+  renderAttendanceManagerPanelVisibility();
 }
 
 function normalizeAttendanceManagerSortKey(sortKey = '') {
@@ -40015,10 +40097,14 @@ function buildAttendanceManagerRows({
     const editedCheckOut = normalizeAttendanceClockValue(edit?.checkOut || '');
     const breakMinutes = Math.max(0, Number(edit?.breakMinutes || 0) || 0);
     const isEdited = Boolean(edit && (editedCheckIn || editedCheckOut || breakMinutes > 0 || String(edit?.note || '').trim()));
-    const checkInLabel = editedCheckIn || (firstCheckIn ? formatAttendanceTime(firstCheckIn.event_at) : '-');
-    const checkOutLabel = editedCheckOut || (lastCheckOut ? formatAttendanceTime(lastCheckOut.event_at) : '-');
-    const workHours = editedCheckIn && checkOutLabel && checkOutLabel !== '-'
-      ? formatAttendanceWorkDurationFromClockTimes(editedCheckIn, checkOutLabel, breakMinutes)
+    const rawCheckInClock = normalizeAttendanceClockValue(firstCheckIn ? formatAttendanceTime(firstCheckIn.event_at) : '');
+    const rawCheckOutClock = normalizeAttendanceClockValue(lastCheckOut ? formatAttendanceTime(lastCheckOut.event_at) : '');
+    const checkInLabel = editedCheckIn || rawCheckInClock || '-';
+    const checkOutLabel = editedCheckOut || rawCheckOutClock || '-';
+    const effectiveCheckInClock = editedCheckIn || rawCheckInClock;
+    const effectiveCheckOutClock = editedCheckOut || rawCheckOutClock;
+    const workHours = effectiveCheckInClock && effectiveCheckOutClock
+      ? formatAttendanceWorkDurationFromClockTimes(effectiveCheckInClock, effectiveCheckOutClock, breakMinutes)
       : (firstCheckIn && lastCheckOut ? formatAttendanceWorkDuration(firstCheckIn.event_at, lastCheckOut.event_at) : '-');
     const hasLeave = leaves.length > 0;
     const hasLocationIssue = checkInRows.some((row) => row?.is_within_radius === false);
@@ -40196,8 +40282,14 @@ function getFilteredAttendanceManagerRows(rows = [], { applyStatus = true } = {}
         if (sortKey === 'company') return String(row?.companyName || '');
         if (sortKey === 'site') return String(row?.siteName || row?.siteCode || '');
         if (sortKey === 'scheduled') return Number.isFinite(Number(row?.scheduledSortValue)) ? Number(row?.scheduledSortValue) : Number.POSITIVE_INFINITY;
-        if (sortKey === 'check_in') return Number.isFinite(getAttendanceComparableMinutes(String(row?.firstCheckIn?.event_at || '').slice(11, 16))) ? getAttendanceComparableMinutes(String(row?.firstCheckIn?.event_at || '').slice(11, 16)) : Number.POSITIVE_INFINITY;
-        if (sortKey === 'check_out') return Number.isFinite(getAttendanceComparableMinutes(String(row?.lastCheckOut?.event_at || '').slice(11, 16))) ? getAttendanceComparableMinutes(String(row?.lastCheckOut?.event_at || '').slice(11, 16)) : Number.POSITIVE_INFINITY;
+        if (sortKey === 'check_in') {
+          const value = getAttendanceComparableMinutes(normalizeAttendanceClockValue(row?.checkInLabel || ''));
+          return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY;
+        }
+        if (sortKey === 'check_out') {
+          const value = getAttendanceComparableMinutes(normalizeAttendanceClockValue(row?.checkOutLabel || ''));
+          return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY;
+        }
         if (sortKey === 'status') return String(row?.statusLabel || '');
         if (sortKey === 'late_minutes') return Number(row?.lateMinutes || 0);
         if (sortKey === 'overtime') return Number(row?.overtimeSortValue || 0);
@@ -40413,6 +40505,9 @@ function renderAttendanceManagerKpiStrip(summary = null) {
   const target = $('#attendanceManagerKpiStrip');
   const secondaryTarget = $('#attendanceManagerSecondaryKpiStrip');
   const metaEl = $('#attendanceManagerKpiMeta');
+  const rateValueEl = $('#attendanceRateValue');
+  const rateMetaEl = $('#attendanceRateMeta');
+  const rateRingEl = $('#attendanceRateRing');
   if (!(target instanceof HTMLElement)) return;
   target.innerHTML = '';
   if (secondaryTarget instanceof HTMLElement) {
@@ -40420,28 +40515,43 @@ function renderAttendanceManagerKpiStrip(summary = null) {
   }
   const counts = summary && typeof summary === 'object'
     ? summary
-    : { scheduled: 0, normal: 0, late: 0, missingIn: 0, missingOut: 0, leave: 0, locationIssue: 0, correctionPending: 0 };
+    : { scheduled: 0, normal: 0, late: 0, earlyLeave: 0, missingIn: 0, missingOut: 0, leave: 0, locationIssue: 0, correctionPending: 0, edited: 0 };
   const statusFilter = normalizeAttendanceStatusFilter(state.attendanceView?.statusFilter || 'all');
   const attentionCount = Math.max(0, Number(counts.missingIn || 0))
     + Math.max(0, Number(counts.missingOut || 0))
     + Math.max(0, Number(counts.late || 0))
+    + Math.max(0, Number(counts.earlyLeave || 0))
     + Math.max(0, Number(counts.correctionPending || 0));
+  const attendanceRate = Math.max(0, Number(counts.scheduled || 0)) > 0
+    ? Math.round((Math.max(0, Number(counts.normal || 0)) / Math.max(1, Number(counts.scheduled || 0))) * 100)
+    : 0;
   const items = [
+    { label: '출근 완료', value: counts.normal, filter: 'normal', tone: 'success', meta: '정상 처리' },
     { label: '미출근', value: counts.missingIn, filter: 'missing_in', tone: 'danger', meta: '가장 먼저 확인' },
-    { label: '미퇴근', value: counts.missingOut, filter: 'missing_out', tone: 'warn', meta: '퇴근 누락 확인' },
     { label: '지각', value: counts.late, filter: 'late', tone: 'warn', meta: '지연 기록 스캔' },
-    { label: '정정 대기', value: counts.correctionPending, filter: 'correction_pending', tone: 'accent', meta: '요청 우선 확인' },
+    { label: '조퇴', value: counts.earlyLeave, filter: 'early_leave', tone: 'warn', meta: '조기 퇴근 확인' },
   ];
   const secondaryItems = [
     { label: '근무 대상', value: counts.scheduled, filter: 'all', tone: 'neutral' },
-    { label: '정상 출근', value: counts.normal, filter: 'normal', tone: 'success' },
+    { label: '미퇴근', value: counts.missingOut, filter: 'missing_out', tone: 'warn' },
     { label: '휴가', value: counts.leave, filter: 'leave', tone: 'neutral' },
     { label: '위치 이상', value: counts.locationIssue, filter: '', tone: 'warn' },
+    { label: '수정됨', value: counts.edited, filter: '', tone: 'accent' },
+    { label: '정정 대기', value: counts.correctionPending, filter: 'correction_pending', tone: 'accent' },
   ];
   if (metaEl instanceof HTMLElement) {
     metaEl.textContent = attentionCount > 0
       ? `지금 바로 확인이 필요한 기록 ${attentionCount}건입니다.`
       : '현재 범위에서 바로 확인할 예외는 없습니다.';
+  }
+  if (rateValueEl instanceof HTMLElement) {
+    rateValueEl.textContent = `${attendanceRate}%`;
+  }
+  if (rateMetaEl instanceof HTMLElement) {
+    rateMetaEl.textContent = `출근 완료 ${Math.max(0, Number(counts.normal || 0))} / 예정 ${Math.max(0, Number(counts.scheduled || 0))}`;
+  }
+  if (rateRingEl instanceof HTMLElement) {
+    rateRingEl.style.setProperty('--progress', `${attendanceRate}%`);
   }
   items.forEach((item) => {
     const button = document.createElement('button');
@@ -40542,6 +40652,61 @@ function renderAttendanceManagerExceptions(rows = [], { loading = false } = {}) 
   }
 }
 
+function renderAttendanceStatusRecordList(rows = [], { loading = false } = {}) {
+  const listEl = $('#attendanceStatusRecordList');
+  const metaEl = $('#attendanceStatusRecordMeta');
+  if (!(listEl instanceof HTMLElement)) return;
+  clearList(listEl);
+  if (loading) {
+    if (metaEl instanceof HTMLElement) {
+      metaEl.textContent = '조회 중';
+      metaEl.classList.remove('hidden');
+    }
+    renderSkeleton(listEl, 4);
+    return;
+  }
+  const list = (Array.isArray(rows) ? rows : []).slice(0, 8);
+  if (metaEl instanceof HTMLElement) {
+    metaEl.textContent = list.length ? `상위 ${list.length}건` : '표시할 기록이 없습니다.';
+    metaEl.classList.remove('hidden');
+  }
+  if (!list.length) {
+    renderAttendanceCompactEmpty(listEl, '표시할 기록 없음', '현재 조건에 맞는 출퇴근 기록이 없습니다.');
+    return;
+  }
+  list.forEach((row) => {
+    const li = document.createElement('li');
+    li.className = 'schedule-row attendance-status-record-row';
+    li.dataset.action = 'attendance-manager-select';
+    li.dataset.recordKey = row.key;
+    li.tabIndex = 0;
+    li.setAttribute('role', 'button');
+    li.classList.toggle('is-selected', String(state.attendanceView?.selectedManagerRowKey || '').trim() === String(row.key || '').trim());
+    li.innerHTML = `
+      <div class="attendance-status-record-main">
+        <div class="attendance-status-record-title">
+          <strong>${row.employeeName}</strong>
+          <span>${row.siteName}</span>
+        </div>
+        <div class="attendance-status-record-sub">
+          <span>${row.scheduledLabel || '스케줄 없음'}</span>
+          <span>${row.checkInLabel} / ${row.checkOutLabel}</span>
+        </div>
+      </div>
+      <div class="attendance-status-record-side">
+        <span class="${row.statusMeta.className}">${row.statusLabel}</span>
+        <span class="attendance-status-record-review">${[
+          row.hasLate ? row.lateMinutesLabel : '',
+          row.hasEarlyLeave ? row.earlyLeaveMinutesLabel : '',
+          row.pendingCount > 0 ? row.correctionState : '',
+          row.isEdited ? '수정됨' : '',
+        ].filter(Boolean).join(' · ') || row.processingState}</span>
+      </div>
+    `;
+    listEl.appendChild(li);
+  });
+}
+
 function renderAttendanceManagerDetail(row = null) {
   const content = $('#attendanceAdminDetailContent');
   const actions = $('#attendanceAdminDetailActions');
@@ -40583,7 +40748,9 @@ function renderAttendanceManagerDetail(row = null) {
           <div><span>현장</span><strong>${row.siteName}</strong></div>
           <div><span>예정 근무</span><strong>${row.scheduledLabel || '스케줄 없음'}</strong></div>
           <div><span>출근/퇴근</span><strong>${row.checkInLabel} / ${row.checkOutLabel}</strong></div>
+          <div><span>휴게시간</span><strong>${row.breakLabel}</strong></div>
           <div><span>관련 요청</span><strong>${requestSummary}</strong></div>
+          <div><span>기록 상태</span><strong>${row.isEdited ? '로컬 수정됨' : '원본 기준'}</strong></div>
         </div>
       </section>
       <section class="attendance-admin-detail-section-card">
@@ -40594,6 +40761,7 @@ function renderAttendanceManagerDetail(row = null) {
           <div><span>처리 상태</span><strong>${row.processingState}</strong></div>
           <div><span>근무시간</span><strong>${row.workHours}</strong></div>
           <div><span>지각</span><strong>${row.lateMinutesLabel}</strong></div>
+          <div><span>조퇴</span><strong>${row.earlyLeaveMinutesLabel}</strong></div>
           <div><span>거리/위치</span><strong>${row.distanceLabel}</strong></div>
         </div>
       </section>
@@ -40614,6 +40782,7 @@ function renderAttendanceManagerDetail(row = null) {
           <div><span>보정 상태</span><strong>${row.correctionState}</strong></div>
           <div><span>출근 건수</span><strong>${row.checkInCount}건</strong></div>
           <div><span>퇴근 건수</span><strong>${row.checkOutCount}건</strong></div>
+          <div class="attendance-admin-detail-span-full"><span>메모</span><strong>${row.editNote || '메모 없음'}</strong></div>
         </div>
       </section>
     </div>
@@ -40631,12 +40800,13 @@ function renderAttendanceManagerDetail(row = null) {
     actions.appendChild(button);
   };
 
-  if (row.pendingCount > 0) {
-    appendAction({ label: '관련 요청 보기', variant: 'btn-primary', action: 'attendance-open-related-request', dataset: { recordKey: row.key } });
-    appendAction({ label: '요청·승인으로 이동', variant: 'btn-secondary', action: 'attendance-go-correction' });
-  } else {
-    appendAction({ label: '요청·승인으로 이동', variant: 'btn-primary', action: 'attendance-go-correction' });
+  if (can('attendanceWrite')) {
+    appendAction({ label: '기록 수정', variant: 'btn-primary', action: 'attendance-open-edit', dataset: { recordKey: row.key } });
   }
+  if (row.pendingCount > 0) {
+    appendAction({ label: '관련 요청 보기', variant: 'btn-secondary', action: 'attendance-open-related-request', dataset: { recordKey: row.key } });
+  }
+  appendAction({ label: '요청·승인으로 이동', variant: 'btn-secondary', action: 'attendance-go-correction' });
   actions.classList.toggle('hidden', !actions.children.length);
 }
 
@@ -40689,9 +40859,11 @@ function renderAttendanceSupportSections(row = null) {
 
   const logs = [];
   if (row.hasLate) logs.push({ title: '지각 감지', subtitle: `${row.lateMinutes}분 지연`, pill: '지각' });
+  if (row.hasEarlyLeave) logs.push({ title: '조퇴 감지', subtitle: `${row.earlyLeaveMinutes}분 조기 퇴근`, pill: '조퇴' });
   if (row.hasLocationIssue) logs.push({ title: '위치 이상', subtitle: row.distanceLabel, pill: '위치 이상' });
   if (row.scheduleRow) logs.push({ title: '예정 근무', subtitle: formatAttendanceScheduleTimeLabel(row.scheduleRow), pill: row.scheduleRow.shift_type || 'day' });
   if (row.leaveRows?.length) logs.push({ title: '휴가 반영', subtitle: normalizeLeaveDisplayType(row.leaveRows[0]?.leave_type || ''), pill: '휴가' });
+  if (row.isEdited) logs.push({ title: '수정 기록', subtitle: row.editNote || '브라우저에서 직접 수정됨', pill: '수정됨' });
 
   if (!logs.length) {
     renderAttendanceCompactEmpty(logList, '검토 메모 없음', '이 기록에서 따로 남길 검토 포인트가 없습니다.');
@@ -41019,6 +41191,182 @@ async function onAttendanceGoCorrection({ missingOnly = false } = {}) {
   await navigateToRoute(ROUTE_REQUESTS);
 }
 
+function renderAttendanceWorkspaceHeader() {
+  const subtitleEl = $('#attendanceWorkspaceSubtitle');
+  if (!(subtitleEl instanceof HTMLElement)) return;
+  const tab = getAttendanceManagerTab();
+  if (tab === 'calendar') {
+    subtitleEl.textContent = '월간 기준으로 직원별 출퇴근 누락, 지각, 조퇴, 수정 기록을 비교합니다.';
+    return;
+  }
+  if (tab === 'list') {
+    subtitleEl.textContent = '기간, 상태, 지각/조퇴 기준으로 검색하고 행을 클릭해 기록을 수정합니다.';
+    return;
+  }
+  subtitleEl.textContent = '오늘 출근 상태와 바로 확인할 예외를 먼저 봅니다.';
+}
+
+function renderAttendanceWorkspaceTabs() {
+  const tab = getAttendanceManagerTab();
+  const wrapper = $('#attendanceWorkspaceTabs');
+  if (!(wrapper instanceof HTMLElement)) return;
+  wrapper.querySelectorAll('[data-action="attendance-switch-tab"]').forEach((button) => {
+    const buttonTab = normalizeAttendanceManagerTab(button?.dataset?.tab || 'status');
+    const active = buttonTab === tab;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+}
+
+function renderAttendanceToolbarVisibility() {
+  const tab = getAttendanceManagerTab();
+  toggleVisibility('#attendanceToolbarStatusFields', tab === 'status');
+  toggleVisibility('#attendanceToolbarCalendarFields', tab === 'calendar');
+  toggleVisibility('#attendanceToolbarListFields', tab === 'list');
+  toggleVisibility('#attendanceLateThresholdField', tab === 'calendar' || tab === 'list');
+  toggleVisibility('#attendanceEarlyThresholdField', tab === 'calendar' || tab === 'list');
+  toggleVisibility('#attendanceSortField', tab === 'list');
+}
+
+function renderAttendanceManagerPanelVisibility() {
+  const tab = getAttendanceManagerTab();
+  toggleVisibility('#attendanceManagerWorkspace', tab === 'status');
+  toggleVisibility('#attendanceCalendarPanel', tab === 'calendar');
+  toggleVisibility('#attendanceListPanel', tab === 'list');
+}
+
+function buildAttendanceCalendarEmployeeGroups(rows = []) {
+  const groups = new Map();
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const employeeKey = `${String(row?.employeeCode || '').trim()}|${String(row?.employeeName || '').trim()}`;
+    if (!groups.has(employeeKey)) {
+      groups.set(employeeKey, {
+        key: employeeKey,
+        employeeCode: String(row?.employeeCode || '').trim(),
+        employeeName: String(row?.employeeName || '').trim() || String(row?.employeeCode || '').trim(),
+        siteName: String(row?.siteName || '').trim(),
+        days: new Map(),
+      });
+    }
+    groups.get(employeeKey).days.set(String(row?.dateKey || '').trim(), row);
+  });
+  return [...groups.values()].sort((a, b) => String(a.employeeName || '').localeCompare(String(b.employeeName || ''), 'ko', { numeric: true, sensitivity: 'base' }));
+}
+
+function renderAttendanceCalendarSummaryStrip(summary = null) {
+  const target = $('#attendanceCalendarSummaryStrip');
+  if (!(target instanceof HTMLElement)) return;
+  target.innerHTML = '';
+  const counts = summary && typeof summary === 'object'
+    ? summary
+    : { scheduled: 0, missingIn: 0, missingOut: 0, late: 0, earlyLeave: 0, correctionPending: 0 };
+  const items = [
+    { label: '근무 대상', value: counts.scheduled, tone: 'neutral' },
+    { label: '미출근', value: counts.missingIn, tone: 'danger' },
+    { label: '미퇴근', value: counts.missingOut, tone: 'warn' },
+    { label: '지각', value: counts.late, tone: 'warn' },
+    { label: '조퇴', value: counts.earlyLeave, tone: 'warn' },
+    { label: '정정 대기', value: counts.correctionPending, tone: 'accent' },
+  ];
+  items.forEach((item) => {
+    const chip = document.createElement('span');
+    chip.className = 'attendance-calendar-summary-chip';
+    chip.dataset.tone = item.tone || 'neutral';
+    chip.innerHTML = `<span>${item.label}</span><strong>${Math.max(0, Number(item.value || 0))}</strong>`;
+    target.appendChild(chip);
+  });
+}
+
+function renderAttendanceCalendarPanel(rows = [], scopedRows = [], { loading = false } = {}) {
+  const wrap = $('#attendanceCalendarGridWrap');
+  const metaEl = $('#attendanceCalendarScopeMeta');
+  if (!(wrap instanceof HTMLElement)) return;
+  wrap.innerHTML = '';
+  renderAttendanceCalendarSummaryStrip(buildAttendanceManagerSummary(scopedRows));
+  if (metaEl instanceof HTMLElement) {
+    metaEl.textContent = '';
+    metaEl.classList.add('hidden');
+  }
+  if (loading) {
+    wrap.innerHTML = '<div class="attendance-calendar-loading">월간 출퇴근 기록을 불러오는 중입니다.</div>';
+    return;
+  }
+  const { start, end } = getAttendanceManagerFetchRange();
+  const dateKeys = buildDateKeysBetween(start, end);
+  const employeeGroups = buildAttendanceCalendarEmployeeGroups(rows);
+  if (metaEl instanceof HTMLElement) {
+    metaEl.textContent = employeeGroups.length ? `직원 ${employeeGroups.length}명` : '조건에 맞는 기록이 없습니다.';
+    metaEl.classList.remove('hidden');
+  }
+  if (!employeeGroups.length || !dateKeys.length) {
+    wrap.innerHTML = '<div class="attendance-calendar-loading">조건에 맞는 월간 출퇴근 기록이 없습니다.</div>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'attendance-calendar-table';
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  headRow.innerHTML = `<th class="attendance-calendar-name-col">직원</th>${dateKeys.map((dateKey) => {
+    const date = new Date(`${dateKey}T00:00:00`);
+    const weekday = ['일', '월', '화', '수', '목', '금', '토'][date.getDay()];
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+    return `<th class="${isWeekend ? 'is-weekend' : ''}">${Number(dateKey.slice(-2))}<small>${weekday}</small></th>`;
+  }).join('')}<th class="attendance-calendar-total-col">합계</th>`;
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  employeeGroups.forEach((group) => {
+    const tr = document.createElement('tr');
+    const nameCell = document.createElement('th');
+    nameCell.className = 'attendance-calendar-name-col';
+    nameCell.innerHTML = `<strong>${group.employeeName}</strong><span>${group.employeeCode}</span>`;
+    tr.appendChild(nameCell);
+    let filledCount = 0;
+    dateKeys.forEach((dateKey) => {
+      const td = document.createElement('td');
+      const row = group.days.get(dateKey) || null;
+      if (!row) {
+        td.innerHTML = '<div class="attendance-calendar-cell is-empty">-</div>';
+        tr.appendChild(td);
+        return;
+      }
+      filledCount += 1;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'attendance-calendar-cell';
+      button.dataset.action = 'attendance-calendar-cell';
+      button.dataset.recordKey = row.key;
+      if (row.hasMissingIn || row.hasMissingOut) button.classList.add('is-danger');
+      else if (row.hasLate || row.hasEarlyLeave) button.classList.add('is-warn');
+      else if (row.isEdited) button.classList.add('is-accent');
+      else if (row.hasLeave) button.classList.add('is-neutral');
+      else button.classList.add('is-success');
+      const badges = [
+        row.hasMissingIn ? '미출근' : '',
+        row.hasMissingOut ? '미퇴근' : '',
+        row.hasLate ? '지각' : '',
+        row.hasEarlyLeave ? '조퇴' : '',
+        row.isEdited ? '수정' : '',
+        row.hasLeave ? '휴가' : '',
+      ].filter(Boolean).slice(0, 2);
+      button.innerHTML = `
+        <span class="attendance-calendar-clock">${row.checkInLabel}</span>
+        <span class="attendance-calendar-clock">${row.checkOutLabel}</span>
+        <span class="attendance-calendar-badge-row">${badges.map((badge) => `<small>${badge}</small>`).join('')}</span>
+      `;
+      td.appendChild(button);
+      tr.appendChild(td);
+    });
+    const totalCell = document.createElement('td');
+    totalCell.className = 'attendance-calendar-total-col';
+    totalCell.textContent = String(filledCount);
+    tr.appendChild(totalCell);
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+}
+
 function getSelectedAttendanceManagerRow(rows = []) {
   const list = Array.isArray(rows) ? rows : [];
   if (!list.length) return null;
@@ -41077,12 +41425,11 @@ function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
   tbody.innerHTML = '';
   renderAttendanceManagerSortHeaders();
   if (loading) {
-    renderAdminTableEmptyState(tbody, 7, '출퇴근 기록을 불러오는 중입니다...');
+    renderAdminTableEmptyState(tbody, 10, '출퇴근 기록을 불러오는 중입니다...');
     if (metaEl) {
       metaEl.textContent = '데이터를 조회 중입니다.';
       metaEl.classList.remove('hidden');
     }
-    renderAttendanceManagerDrawer(null);
     return;
   }
   const list = Array.isArray(rows) ? rows : [];
@@ -41091,15 +41438,14 @@ function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
     metaEl.classList.remove('hidden');
   }
   if (!list.length) {
-    renderAdminTableEmptyState(tbody, 7, '조건에 맞는 출퇴근 기록이 없습니다.');
-    renderAttendanceManagerDrawer(null);
+    renderAdminTableEmptyState(tbody, 10, '조건에 맞는 출퇴근 기록이 없습니다.');
     return;
   }
 
   const selected = getSelectedAttendanceManagerRow(list);
   list.forEach((row) => {
     const tr = document.createElement('tr');
-    tr.dataset.action = 'attendance-manager-select';
+    tr.dataset.action = 'attendance-list-edit';
     tr.dataset.recordKey = row.key;
     tr.classList.toggle('is-selected', row.key === selected?.key);
     const statusTone = row?.statusMeta?.danger
@@ -41126,20 +41472,25 @@ function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
     `);
     renderCell(`<span class="${row.checkInLabel === '-' ? 'attendance-grid-null' : ''}">${row.checkInLabel || '-'}</span>`);
     renderCell(`<span class="${row.checkOutLabel === '-' ? 'attendance-grid-null' : ''}">${row.checkOutLabel || '-'}</span>`);
+    renderCell(`<span>${row.breakLabel}</span>`);
+    renderCell(`<span>${row.workHours}</span>`);
     renderCell(`
       <span class="attendance-grid-status ${statusTone}">
         <span class="attendance-grid-status-dot" aria-hidden="true"></span>
         <span>${row.statusLabel}</span>
       </span>
     `);
+    renderCell(`<span>${row.lateMinutesLabel} / ${row.earlyLeaveMinutesLabel}</span>`);
     renderCell(`
       <div class="attendance-grid-primary-cell">
         <strong>${row.processingState}</strong>
         <span>${[
           row.pendingCount > 0 ? row.correctionState : '',
           row.pendingCount <= 0 && row.hasLate ? row.lateMinutesLabel : '',
+          row.pendingCount <= 0 && row.hasEarlyLeave ? row.earlyLeaveMinutesLabel : '',
           row.pendingCount <= 0 && row.hasLocationIssue ? '거리 확인' : '',
           row.pendingCount <= 0 && row.hasAttendanceWithoutSchedule ? '스케줄 없음' : '',
+          row.pendingCount <= 0 && row.isEdited ? '수정됨' : '',
           row.pendingCount <= 0 && row.overtimeSortValue > 0 ? row.overtimeLabel : '',
         ].filter(Boolean).join(' · ') || '즉시 조치 없음'}</span>
       </div>
@@ -41152,21 +41503,160 @@ function renderAttendanceManagerWorkspace({ rows = [], scopedRows = [], loading 
   const summary = buildAttendanceManagerSummary(scopedRows);
   const exceptions = buildAttendanceManagerExceptionRows(scopedRows);
   const selectedRow = getSelectedAttendanceManagerRow(rows);
+  const tab = getAttendanceManagerTab();
   state.attendanceView.managerSummary = summary;
   state.attendanceView.managerExceptionRows = exceptions;
   state.attendanceView.selectedManagerRowKey = selectedRow?.key || '';
-  renderAttendanceManagerKpiStrip(summary);
-  renderAttendanceManagerExceptions(exceptions, { loading });
-  renderAttendanceManagerTableRows(rows, { loading });
-  if (!selectedRow) {
-    renderAttendanceManagerDrawer(null);
+  renderAttendanceWorkspaceHeader();
+  renderAttendanceWorkspaceTabs();
+  renderAttendanceToolbarVisibility();
+  renderAttendanceManagerPanelVisibility();
+  if (tab === 'status') {
+    renderAttendanceManagerKpiStrip(summary);
+    renderAttendanceManagerExceptions(exceptions, { loading });
+    renderAttendanceStatusRecordList(rows, { loading });
+    if (!selectedRow) {
+      renderAttendanceManagerDrawer(null);
+    } else {
+      renderAttendanceManagerDrawer(selectedRow);
+    }
+  } else if (tab === 'calendar') {
+    renderAttendanceCalendarPanel(rows, scopedRows, { loading });
   } else {
-    renderAttendanceManagerDrawer(selectedRow);
+    renderAttendanceManagerTableRows(rows, { loading });
   }
   const exportBtn = $('#attendanceExportBtn');
   if (exportBtn instanceof HTMLButtonElement) {
     exportBtn.disabled = !rows.length;
   }
+}
+
+function getAttendanceManagerRowByKey(recordKey = '') {
+  const key = String(recordKey || '').trim();
+  if (!key) return null;
+  const rows = Array.isArray(state.attendanceView?.managerRows) ? state.attendanceView.managerRows : [];
+  return rows.find((row) => String(row?.key || '').trim() === key) || null;
+}
+
+function saveAttendanceRecordEdit(recordKey = '', payload = {}) {
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  const key = String(recordKey || '').trim();
+  if (!key) return false;
+  const nextValue = {
+    checkIn: normalizeAttendanceClockValue(payload.checkIn || ''),
+    checkOut: normalizeAttendanceClockValue(payload.checkOut || ''),
+    breakMinutes: Math.max(0, Number(payload.breakMinutes || 0) || 0),
+    note: String(payload.note || '').trim(),
+    updatedAt: new Date().toISOString(),
+  };
+  state.attendanceView.managerRecordEdits = {
+    ...(state.attendanceView.managerRecordEdits || {}),
+    [key]: nextValue,
+  };
+  persistAttendanceManagerRecordEdits();
+  return true;
+}
+
+function removeAttendanceRecordEdit(recordKey = '') {
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  const key = String(recordKey || '').trim();
+  if (!key) return false;
+  const next = { ...(state.attendanceView.managerRecordEdits || {}) };
+  if (!next[key]) return false;
+  delete next[key];
+  state.attendanceView.managerRecordEdits = next;
+  persistAttendanceManagerRecordEdits();
+  return true;
+}
+
+function buildAttendanceEditForm(recordKey = '') {
+  const row = getAttendanceManagerRowByKey(recordKey);
+  if (!row) return null;
+  const wrapper = document.createElement('div');
+  wrapper.className = 'attendance-edit-sheet';
+  wrapper.innerHTML = `
+    <div class="attendance-edit-sheet-grid">
+      <div class="attendance-edit-sheet-readonly"><span>날짜</span><strong>${row.dateLabel}</strong></div>
+      <div class="attendance-edit-sheet-readonly"><span>직원</span><strong>${row.employeeName} (${row.employeeCode})</strong></div>
+      <div class="attendance-edit-sheet-readonly"><span>예정 근무</span><strong>${row.scheduledLabel || '스케줄 없음'}</strong></div>
+      <div class="attendance-edit-sheet-readonly"><span>현장</span><strong>${row.siteName}</strong></div>
+      <label class="input-field">
+        <span>출근시간</span>
+        <input id="attendanceEditCheckInInput" type="time" value="${normalizeAttendanceClockValue(row.checkInLabel === '-' ? '' : row.checkInLabel)}" />
+      </label>
+      <label class="input-field">
+        <span>퇴근시간</span>
+        <input id="attendanceEditCheckOutInput" type="time" value="${normalizeAttendanceClockValue(row.checkOutLabel === '-' ? '' : row.checkOutLabel)}" />
+      </label>
+      <label class="input-field">
+        <span>휴게시간(분)</span>
+        <input id="attendanceEditBreakMinutesInput" type="number" min="0" step="5" value="${Math.max(0, Number(row.breakMinutes || 0) || 0)}" />
+      </label>
+      <div class="attendance-edit-sheet-readonly"><span>판별 상태</span><strong>${row.statusLabel} · ${row.processingState}</strong></div>
+    </div>
+    <label class="input-field">
+      <span>근무 메모</span>
+      <textarea id="attendanceEditNoteInput" rows="4" placeholder="수정 사유 또는 현장 메모를 남겨 주세요.">${escapeHtml(row.editNote || '')}</textarea>
+    </label>
+    <p class="muted">저장은 현재 브라우저 기준으로 적용됩니다. 누락 기록도 시간 입력 후 저장하면 화면에 바로 반영됩니다.</p>
+  `;
+  return wrapper;
+}
+
+function openAttendanceEditSheet(recordKey = '') {
+  const row = getAttendanceManagerRowByKey(recordKey);
+  if (!row) {
+    showToast('수정할 출퇴근 기록을 찾을 수 없습니다.', 'error', 2200);
+    return;
+  }
+  if (!can('attendanceWrite')) {
+    showToast('출퇴근 기록 수정 권한이 없습니다.', 'error', 2200);
+    return;
+  }
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  state.attendanceView.editingRowKey = row.key;
+  const contentNode = buildAttendanceEditForm(row.key);
+  if (!contentNode) return;
+  openSheet({
+    title: '출퇴근기록 수정하기',
+    contentNode,
+    actions: [
+      ...(row.isEdited ? [{ label: '수정 초기화', variant: 'btn-destructive', action: 'attendance-edit-reset', recordKey: row.key }] : []),
+      { label: '닫기', variant: 'btn-secondary', action: 'sheet-close' },
+      { label: '변경사항 저장', variant: 'btn-primary', action: 'attendance-edit-save', recordKey: row.key },
+    ],
+  });
+}
+
+async function submitAttendanceEditSheet(recordKey = '') {
+  const row = getAttendanceManagerRowByKey(recordKey);
+  if (!row) {
+    showToast('수정 대상을 찾을 수 없습니다.', 'error', 2200);
+    return;
+  }
+  const checkIn = normalizeAttendanceClockValue($('#attendanceEditCheckInInput')?.value || '');
+  const checkOut = normalizeAttendanceClockValue($('#attendanceEditCheckOutInput')?.value || '');
+  const breakMinutes = Math.max(0, Number($('#attendanceEditBreakMinutesInput')?.value || 0) || 0);
+  const note = String($('#attendanceEditNoteInput')?.value || '').trim();
+  if (!checkIn && !checkOut) {
+    showToast('출근시간 또는 퇴근시간 중 하나는 입력해 주세요.', 'error', 2200);
+    return;
+  }
+  saveAttendanceRecordEdit(recordKey, {
+    checkIn,
+    checkOut,
+    breakMinutes,
+    note,
+  });
+  closeSheet();
+  await loadAttendanceView({ force: false });
+  showToast('출퇴근 기록을 반영했습니다. (브라우저 로컬 저장)', 'success', 2200);
 }
 
 function openAttendanceManagerMobileDetailSheet(recordKey = '') {
@@ -41276,13 +41766,14 @@ async function onAttendanceCorrectionReview(requestId = '', nextStatus = 'approv
 }
 
 async function loadAttendanceManagerView({ force = false } = {}) {
+  ensureAttendanceManagerPreferencesLoaded();
   renderAttendanceLayoutMode();
   await ensureAttendanceFilterOptionsLoaded();
   renderAttendanceManagerFilterOptions();
   renderAttendanceFilterMeta();
   renderAttendanceManagerWorkspace({ rows: [], scopedRows: [], loading: true });
 
-  const { start, end } = getAttendanceDateRange();
+  const { start, end } = getAttendanceManagerFetchRange();
   const dateKeys = buildDateKeysBetween(start, end);
   const months = buildMonthKeysBetween(start, end);
   const tenantCode = getTenantCodeForScopedAdminApi();
@@ -41331,6 +41822,9 @@ async function loadAttendanceManagerView({ force = false } = {}) {
     overtimeRows,
     pendingAttendanceRequests,
     correctionRows,
+    recordEdits: state.attendanceView.managerRecordEdits || {},
+    rangeStart: start,
+    rangeEnd: end,
   });
   state.attendanceView.managerRows = managerRows;
 
@@ -54916,6 +55410,43 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'attendance-switch-tab') {
+      const nextTab = setAttendanceManagerTab(actionEl.dataset.tab || 'status');
+      syncAttendanceManagerFilterInputs();
+      runWithBusy(() => navigateToRoute(getAttendanceRouteWithTab(nextTab), { replace: true, silentDeniedModal: true }), '화면 전환 중...');
+      return;
+    }
+
+    if (action === 'attendance-status-preset') {
+      const range = String(actionEl.dataset.range || 'today').trim().toLowerCase();
+      if (range === 'yesterday') {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        setAttendanceActiveDate(toLocalDateKey(yesterday), { syncInput: false });
+      } else {
+        setAttendanceActiveDate(toLocalDateKey(new Date()), { syncInput: false });
+      }
+      syncAttendanceManagerFilterInputs();
+      runWithBusy(() => loadAttendanceView({ force: true }), '현황 조회 중...');
+      return;
+    }
+
+    if (action === 'attendance-calendar-shift') {
+      if (!state.attendanceView) {
+        state.attendanceView = createInitialAttendanceViewState();
+      }
+      const currentMonth = normalizeMonthKey(state.attendanceView.calendarMonth || '') || toMonthKey(new Date());
+      const meta = getMonthMeta(currentMonth);
+      if (!meta) return;
+      const direction = Number(actionEl.dataset.direction || 0);
+      const nextDate = new Date(meta.year, meta.monthIndex + direction, 1);
+      state.attendanceView.calendarMonth = toMonthKey(nextDate);
+      persistAttendanceManagerPrefs();
+      syncAttendanceManagerFilterInputs();
+      runWithBusy(() => loadAttendanceView({ force: true }), '월간 기록 조회 중...');
+      return;
+    }
+
     if (action === 'attendance-export-records') {
       exportAttendanceManagerRows();
       return;
@@ -55050,6 +55581,18 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'attendance-calendar-cell' || action === 'attendance-list-edit' || action === 'attendance-open-edit') {
+      const recordKey = String(actionEl.dataset.recordKey || '').trim();
+      if (recordKey) {
+        if (!state.attendanceView) {
+          state.attendanceView = createInitialAttendanceViewState();
+        }
+        state.attendanceView.selectedManagerRowKey = recordKey;
+      }
+      openAttendanceEditSheet(recordKey);
+      return;
+    }
+
     if (action === 'attendance-close-drawer') {
       if (!state.attendanceView) {
         state.attendanceView = createInitialAttendanceViewState();
@@ -55065,6 +55608,19 @@ function bindUiEvents() {
 
     if (action === 'attendance-open-related-request') {
       runWithBusy(() => onAttendanceOpenRelatedRequest(actionEl.dataset.recordKey || ''), '이동 중...');
+      return;
+    }
+
+    if (action === 'attendance-edit-save') {
+      runWithBusy(() => submitAttendanceEditSheet(actionEl.dataset.recordKey || ''), '기록 저장 중...');
+      return;
+    }
+
+    if (action === 'attendance-edit-reset') {
+      const recordKey = String(actionEl.dataset.recordKey || '').trim();
+      removeAttendanceRecordEdit(recordKey);
+      closeSheet();
+      runWithBusy(() => loadAttendanceView({ force: false }), '수정 초기화 중...');
       return;
     }
 
@@ -56962,6 +57518,27 @@ function bindUiEvents() {
       return;
     }
 
+    if (target.id === 'attendanceStatusDateInput') {
+      const nextDate = normalizeAttendanceDate(target instanceof HTMLInputElement ? target.value : '');
+      if (nextDate) {
+        setAttendanceActiveDate(nextDate, { syncInput: false });
+        syncAttendanceManagerFilterInputs();
+        runActionSafely(loadAttendanceView({ force: true }), '출퇴근 현황 조회 중 오류가 발생했습니다.');
+      }
+      return;
+    }
+
+    if (target.id === 'attendanceCalendarMonthInput') {
+      if (!state.attendanceView) {
+        state.attendanceView = createInitialAttendanceViewState();
+      }
+      state.attendanceView.calendarMonth = normalizeMonthKey(target instanceof HTMLInputElement ? target.value : '') || toMonthKey(new Date());
+      persistAttendanceManagerPrefs();
+      syncAttendanceManagerFilterInputs();
+      runActionSafely(loadAttendanceView({ force: true }), '월간 출퇴근 기록 조회 중 오류가 발생했습니다.');
+      return;
+    }
+
     if (target.id === 'attendanceRangeStartInput' || target.id === 'attendanceRangeEndInput') {
       const startInput = $('#attendanceRangeStartInput');
       const endInput = $('#attendanceRangeEndInput');
@@ -56970,6 +57547,19 @@ function bindUiEvents() {
       setAttendanceDateRange({ start, end, preset: 'custom', syncInputs: true });
       syncAttendanceManagerFilterInputs();
       runActionSafely(loadAttendanceView({ force: true }), '출퇴근 기간 조회 중 오류가 발생했습니다.');
+      return;
+    }
+
+    if (target.id === 'attendanceLateThresholdSelect' || target.id === 'attendanceEarlyThresholdSelect') {
+      if (!state.attendanceView) {
+        state.attendanceView = createInitialAttendanceViewState();
+      }
+      const lateSelect = $('#attendanceLateThresholdSelect');
+      const earlySelect = $('#attendanceEarlyThresholdSelect');
+      state.attendanceView.lateThresholdMinutes = normalizeAttendanceThresholdMinutes(lateSelect instanceof HTMLSelectElement ? lateSelect.value : 10);
+      state.attendanceView.earlyLeaveThresholdMinutes = normalizeAttendanceThresholdMinutes(earlySelect instanceof HTMLSelectElement ? earlySelect.value : 10);
+      persistAttendanceManagerPrefs();
+      runActionSafely(loadAttendanceView({ force: false }), '표시 기준을 갱신하지 못했습니다.');
       return;
     }
 
