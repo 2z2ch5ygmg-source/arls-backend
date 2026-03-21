@@ -4760,9 +4760,14 @@
       <div id="taskProgressBackdrop" class="task-progress-backdrop hidden"></div>
       <section id="taskProgressModal" class="task-progress-modal hidden" role="dialog" aria-modal="true" aria-live="polite" aria-hidden="true" aria-labelledby="taskProgressTitle">
         <div class="task-progress-visual" aria-hidden="true">
-          <div class="task-progress-ring">
-            <div class="task-progress-ring-core"></div>
-          </div>
+          <svg class="task-progress-ring-svg" viewBox="0 0 120 120" focusable="false">
+            <circle class="task-progress-ring-track-circle" cx="60" cy="60" r="42"></circle>
+            <g class="task-progress-ring-rotor">
+              <circle class="task-progress-ring-arc" cx="60" cy="60" r="42"></circle>
+            </g>
+            <circle class="task-progress-ring-core-circle" cx="60" cy="60" r="28"></circle>
+            <path class="task-progress-check" d="M46 61l10 10 19-23"></path>
+          </svg>
         </div>
         <span id="taskProgressStage" class="task-progress-stage">진행 중</span>
         <h3 id="taskProgressTitle">작업을 처리하고 있습니다</h3>

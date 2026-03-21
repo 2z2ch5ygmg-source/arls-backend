@@ -5828,35 +5828,59 @@ a:hover {
 .task-progress-visual {
   display: grid;
   place-items: center;
-  width: 120px;
-  height: 120px;
+  width: 132px;
+  height: 132px;
   animation: task-progress-float 2.8s ease-in-out infinite;
 }
 
-.task-progress-ring {
-  position: relative;
-  width: 104px;
-  height: 104px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background:
-    conic-gradient(
-      from -90deg,
-      var(--task-progress-fill-end) 0turn,
-      var(--task-progress-fill-start) calc(var(--task-progress-ratio) * 1turn),
-      var(--task-progress-ring-track) calc(var(--task-progress-ratio) * 1turn) 1turn
-    );
-  box-shadow: 0 12px 28px var(--task-progress-shadow);
-  animation: task-progress-spin 1.35s linear infinite;
+.task-progress-ring-svg {
+  width: 120px;
+  height: 120px;
+  overflow: visible;
+  filter: drop-shadow(0 12px 28px var(--task-progress-shadow));
 }
 
-.task-progress-ring-core {
-  width: 66px;
-  height: 66px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: inset 0 0 0 1px var(--task-progress-core-border);
+.task-progress-ring-track-circle {
+  fill: none;
+  stroke: var(--task-progress-ring-track);
+  stroke-width: 12;
+}
+
+.task-progress-ring-rotor {
+  transform-origin: 60px 60px;
+  transform-box: fill-box;
+  animation: task-progress-spin 1.15s linear infinite;
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+
+.task-progress-ring-arc {
+  fill: none;
+  stroke: var(--task-progress-fill-start);
+  stroke-width: 12;
+  stroke-linecap: round;
+  stroke-dasharray: 94 170;
+}
+
+.task-progress-ring-core-circle {
+  fill: rgba(255, 255, 255, 0.98);
+  stroke: var(--task-progress-core-border);
+  stroke-width: 1.5;
+  transition: fill 180ms ease, stroke 180ms ease;
+}
+
+.task-progress-check {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 44;
+  stroke-dashoffset: 44;
+  opacity: 0;
+  transition:
+    opacity 180ms ease,
+    stroke 180ms ease,
+    stroke-dashoffset 260ms ease;
 }
 
 .task-progress-stage {
@@ -5918,6 +5942,22 @@ a:hover {
   --task-progress-core-border: rgba(22, 163, 74, 0.18);
 }
 
+.task-progress-modal[data-state='success'] .task-progress-ring-rotor {
+  animation: none;
+  opacity: 0;
+  transform: scale(0.84);
+}
+
+.task-progress-modal[data-state='success'] .task-progress-ring-core-circle {
+  fill: rgba(240, 253, 244, 0.98);
+}
+
+.task-progress-modal[data-state='success'] .task-progress-check {
+  opacity: 1;
+  stroke: #16a34a;
+  stroke-dashoffset: 0;
+}
+
 .task-progress-modal[data-state='error'] {
   --task-progress-fill-start: #dc2626;
   --task-progress-fill-end: #fb7185;
@@ -5927,6 +5967,10 @@ a:hover {
   --task-progress-ring-track: rgba(220, 38, 38, 0.12);
   --task-progress-shadow: rgba(220, 38, 38, 0.2);
   --task-progress-core-border: rgba(220, 38, 38, 0.18);
+}
+
+.task-progress-modal[data-state='error'] .task-progress-ring-rotor {
+  animation-duration: 1.45s;
 }
 
 @keyframes task-progress-pulse {

@@ -1189,6 +1189,7 @@ function createInitialTaskProgressState() {
     detail: '',
     statusLabel: '',
     tone: 'default',
+    revealMode: 'adaptive',
     stages: [],
     stageIndex: 0,
     progress: 0,
@@ -9811,7 +9812,13 @@ const SCHEDULE_IMPORT_PROGRESS_STAGES = Object.freeze([
   },
 ]);
 
-const LONG_TASK_MODAL_DELAY_MS = 3200;
+const LONG_TASK_REVEAL_IMMEDIATE = 'immediate';
+const LONG_TASK_REVEAL_ADAPTIVE = 'adaptive';
+const LONG_TASK_REVEAL_QUIET = 'quiet';
+const LONG_TASK_MODAL_DELAY_IMMEDIATE_MS = 0;
+const LONG_TASK_MODAL_DELAY_ADAPTIVE_MS = 650;
+const LONG_TASK_MODAL_DELAY_QUIET_MS = 1800;
+const LONG_TASK_MODAL_DELAY_MS = LONG_TASK_MODAL_DELAY_ADAPTIVE_MS;
 const LONG_TASK_STAGE_TICK_MS = 1100;
 const LONG_TASK_TONE_DEFAULT = 'default';
 const LONG_TASK_TONE_DOWNLOAD = 'download';
@@ -9839,36 +9846,42 @@ const LONG_TASK_STAGES_SCHEDULE_APPLY = Object.freeze([
 const LONG_TASK_STAGES_SUPPORT_HQ_INSPECT = Object.freeze([
   { key: 'file_check', label: '파일 계약 확인', detail: 'HQ 작성본 workbook 계약과 범위를 확인하고 있습니다.', progress: 18 },
   { key: 'support_parse', label: '지원근무 파싱', detail: '시트별 지원근무 셀과 scope를 검토하는 중입니다.', progress: 54 },
-  { key: 'support_preview', label: '검토 결과 생성', detail: 'issue summary와 미리보기를 구성하는 중입니다.', progress: 90 },
+  { key: 'support_preview', label: '검토 결과 생성', detail: 'issue summary와 미리보기를 구성하는 중입니다.', progress: 96 },
+]);
+
+const LONG_TASK_STAGES_SUPPORT_HQ_APPLY = Object.freeze([
+  { key: 'handoff_prepare', label: '반영 준비', detail: '검토 결과와 전달 범위를 정리하고 있습니다.', progress: 22 },
+  { key: 'handoff_commit', label: '지원근무 전달', detail: '정규화된 지원근무 snapshot을 Sentrix로 전달하는 중입니다.', progress: 76 },
+  { key: 'handoff_refresh', label: '상태 새로고침', detail: '반영 결과와 후속 상태를 다시 불러오는 중입니다.', progress: 98 },
 ]);
 
 const LONG_TASK_STAGES_FINANCE_PREVIEW = Object.freeze([
   { key: 'finance_file_check', label: '파일 확인', detail: 'Finance 최종 업로드 파일과 지점 컨텍스트를 확인하고 있습니다.', progress: 18 },
   { key: 'finance_diff', label: 'diff 계산', detail: '기존 ARLS 값과 업로드 값을 비교하는 중입니다.', progress: 58 },
-  { key: 'finance_preview', label: '미리보기 구성', detail: '차단 사유와 반영 가능 행을 정리하는 중입니다.', progress: 90 },
+  { key: 'finance_preview', label: '미리보기 구성', detail: '차단 사유와 반영 가능 행을 정리하는 중입니다.', progress: 96 },
 ]);
 
 const LONG_TASK_STAGES_FINANCE_APPLY = Object.freeze([
   { key: 'finance_apply_prepare', label: '반영 준비', detail: '최종 업로드 batch를 준비하고 있습니다.', progress: 22 },
   { key: 'finance_apply_commit', label: 'Finance 반영', detail: '허용된 diff를 Finance 제출 상태에 반영하는 중입니다.', progress: 70 },
-  { key: 'finance_refreshing', label: '상태 새로고침', detail: '제출 상태와 후속 다운로드 상태를 다시 불러오는 중입니다.', progress: 92 },
+  { key: 'finance_refreshing', label: '상태 새로고침', detail: '제출 상태와 후속 다운로드 상태를 다시 불러오는 중입니다.', progress: 98 },
 ]);
 
 const LONG_TASK_STAGES_EMPLOYEE_ROSTER_UPLOAD = Object.freeze([
   { key: 'docx_upload', label: '파일 업로드', detail: '명부 docx 파일을 업로드하고 있습니다.', progress: 18 },
   { key: 'docx_parse', label: '문서 파싱', detail: '명부 문서에서 직원 정보를 추출하는 중입니다.', progress: 52 },
-  { key: 'site_match', label: '현장 자동 매칭', detail: '지점 인덱스를 기준으로 근무현장을 연결하는 중입니다.', progress: 88 },
+  { key: 'site_match', label: '현장 자동 매칭', detail: '지점 인덱스를 기준으로 근무현장을 연결하는 중입니다.', progress: 94 },
 ]);
 
 const LONG_TASK_STAGES_EMPLOYEE_ROSTER_COMMIT = Object.freeze([
   { key: 'commit_validate', label: '등록 검증', detail: '필수값과 현장 선택 상태를 검증하고 있습니다.', progress: 16 },
   { key: 'commit_create', label: '일괄 등록', detail: '직원 계정과 첨부 정보를 일괄 등록하는 중입니다.', progress: 70 },
-  { key: 'commit_refresh', label: '목록 새로고침', detail: '등록 결과를 목록과 상세 화면에 반영하는 중입니다.', progress: 92 },
+  { key: 'commit_refresh', label: '목록 새로고침', detail: '등록 결과를 목록과 상세 화면에 반영하는 중입니다.', progress: 96 },
 ]);
 
 const LONG_TASK_STAGES_WORKBOOK_DOWNLOAD = Object.freeze([
-  { key: 'download_prepare', label: '파일 준비', detail: '다운로드할 파일을 생성하고 있습니다.', progress: 22 },
-  { key: 'download_stream', label: '브라우저 전달', detail: '생성된 파일을 브라우저에 전달하는 중입니다.', progress: 48 },
+  { key: 'download_prepare', label: '파일 준비', detail: '다운로드할 파일을 생성하고 있습니다.', progress: 14 },
+  { key: 'download_stream', label: '브라우저 전달', detail: '생성된 파일을 브라우저에 전달하는 중입니다.', progress: 58 },
 ]);
 
 const LONG_TASK_STAGES_APPLE_REPORT = Object.freeze([
@@ -9943,6 +9956,28 @@ function normalizeLongTaskTone(value = '') {
   return String(value || '').trim().toLowerCase() === LONG_TASK_TONE_DOWNLOAD
     ? LONG_TASK_TONE_DOWNLOAD
     : LONG_TASK_TONE_DEFAULT;
+}
+
+function normalizeLongTaskRevealMode(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === LONG_TASK_REVEAL_IMMEDIATE) return LONG_TASK_REVEAL_IMMEDIATE;
+  if (normalized === LONG_TASK_REVEAL_QUIET) return LONG_TASK_REVEAL_QUIET;
+  return LONG_TASK_REVEAL_ADAPTIVE;
+}
+
+function resolveLongTaskModalDelay(modalDelayMs = null, revealMode = LONG_TASK_REVEAL_ADAPTIVE) {
+  if (Number.isFinite(Number(modalDelayMs)) && Number(modalDelayMs) >= 0) {
+    return Number(modalDelayMs);
+  }
+  const normalized = normalizeLongTaskRevealMode(revealMode);
+  if (normalized === LONG_TASK_REVEAL_IMMEDIATE) return LONG_TASK_MODAL_DELAY_IMMEDIATE_MS;
+  if (normalized === LONG_TASK_REVEAL_QUIET) return LONG_TASK_MODAL_DELAY_QUIET_MS;
+  return LONG_TASK_MODAL_DELAY_ADAPTIVE_MS;
+}
+
+function easeOutCubic(value = 0) {
+  const ratio = Math.max(0, Math.min(1, Number(value || 0)));
+  return 1 - ((1 - ratio) ** 3);
 }
 
 function resolveTaskProgressPillClass(outcome = 'working') {
@@ -10163,6 +10198,9 @@ function updateLongTaskProgress(taskId = '', updates = {}) {
   if (Object.prototype.hasOwnProperty.call(updates, 'tone')) {
     progress.tone = normalizeLongTaskTone(updates.tone || LONG_TASK_TONE_DEFAULT);
   }
+  if (Object.prototype.hasOwnProperty.call(updates, 'revealMode')) {
+    progress.revealMode = normalizeLongTaskRevealMode(updates.revealMode || LONG_TASK_REVEAL_ADAPTIVE);
+  }
   if (Object.prototype.hasOwnProperty.call(updates, 'surfaceKey')) {
     progress.surfaceKey = String(updates.surfaceKey || '').trim();
   }
@@ -10196,7 +10234,7 @@ function updateLongTaskProgress(taskId = '', updates = {}) {
 function finalizeLongTaskProgress(taskId = '', {
   outcome = 'success',
   detail = '',
-  keepVisibleMs = 520,
+  keepVisibleMs = 1200,
 } = {}) {
   const progress = ensureTaskProgressState();
   if (String(progress.activeId || '').trim() !== String(taskId || '').trim()) return;
@@ -10233,9 +10271,10 @@ function beginLongTaskProgress({
   detail = '',
   statusLabel = '처리 중',
   tone = LONG_TASK_TONE_DEFAULT,
+  revealMode = LONG_TASK_REVEAL_ADAPTIVE,
   surfaceKey = '',
   stages = [],
-  modalDelayMs = LONG_TASK_MODAL_DELAY_MS,
+  modalDelayMs = null,
   stageAdvanceMs = LONG_TASK_STAGE_TICK_MS,
 } = {}) {
   resetTaskProgressState({ syncUi: false });
@@ -10247,21 +10286,26 @@ function beginLongTaskProgress({
   progress.detail = String(detail || '').trim();
   progress.statusLabel = String(statusLabel || '처리 중').trim();
   progress.tone = normalizeLongTaskTone(tone || LONG_TASK_TONE_DEFAULT);
+  progress.revealMode = normalizeLongTaskRevealMode(revealMode || LONG_TASK_REVEAL_ADAPTIVE);
   progress.stages = normalizeLongTaskStages(stages);
   progress.stageIndex = 0;
   progress.progress = Math.max(6, Math.min(100, Number(progress.stages[0]?.progress || 12)));
   progress.explicitProgressUntil = 0;
   progress.startedAt = Date.now();
-  progress.visible = false;
   progress.outcome = 'working';
-  progress.modalDelayMs = Number(modalDelayMs || LONG_TASK_MODAL_DELAY_MS);
+  progress.modalDelayMs = resolveLongTaskModalDelay(modalDelayMs, progress.revealMode);
+  progress.visible = progress.modalDelayMs <= 0;
   progress.stageAdvanceMs = Math.max(700, Number(stageAdvanceMs || LONG_TASK_STAGE_TICK_MS));
-  progress.revealTimer = window.setTimeout(() => {
-    const current = ensureTaskProgressState();
-    if (String(current.activeId || '').trim() !== taskId) return;
-    current.visible = true;
-    renderLongTaskProgressUi();
-  }, progress.modalDelayMs);
+  if (progress.modalDelayMs > 0) {
+    progress.revealTimer = window.setTimeout(() => {
+      const current = ensureTaskProgressState();
+      if (String(current.activeId || '').trim() !== taskId) return;
+      current.visible = true;
+      renderLongTaskProgressUi();
+    }, progress.modalDelayMs);
+  } else {
+    progress.revealTimer = 0;
+  }
   progress.tickTimer = window.setInterval(() => {
     const current = ensureTaskProgressState();
     if (String(current.activeId || '').trim() !== taskId || current.outcome !== 'working') return;
@@ -10285,10 +10329,12 @@ function beginLongTaskProgress({
         const withinStageRatio = Math.max(0, Math.min(1, stageElapsedMs / stageAdvanceMsValue));
         nextProgressValue = stageStartProgress + ((nextStageProgress - stageStartProgress) * withinStageRatio);
       } else {
-        const tailRatio = Math.max(0, Math.min(1, stageElapsedMs / (stageAdvanceMsValue * 2.4)));
-        nextProgressValue = stageStartProgress + ((96 - stageStartProgress) * tailRatio);
+        const tailTarget = current.tone === LONG_TASK_TONE_DOWNLOAD ? 99 : 98;
+        const tailDuration = stageAdvanceMsValue * (current.tone === LONG_TASK_TONE_DOWNLOAD ? 1.45 : 1.2);
+        const tailRatio = Math.max(0, Math.min(1, stageElapsedMs / tailDuration));
+        nextProgressValue = stageStartProgress + ((tailTarget - stageStartProgress) * easeOutCubic(tailRatio));
       }
-      current.progress = Math.max(current.progress || 0, Math.max(6, Math.min(96, nextProgressValue)));
+      current.progress = Math.max(current.progress || 0, Math.max(6, Math.min(99, nextProgressValue)));
     }
     renderLongTaskProgressUi();
   }, 250);
@@ -13129,7 +13175,7 @@ async function loadScheduleSupportHqWorkspaceContract({ force = false } = {}) {
   }
 }
 
-async function onScheduleSupportHqInspect() {
+async function onScheduleSupportHqInspect(progressController = null) {
   const workspace = ensureScheduleSupportHqWorkspaceState();
   const context = buildScheduleSupportHqContext();
   if (!canUseScheduleSupportRoundtripHq()) {
@@ -13166,6 +13212,13 @@ async function onScheduleSupportHqInspect() {
   workspace.uploadFileLastModified = file?.lastModified
     ? new Date(file.lastModified).toLocaleString('ko-KR')
     : '';
+  if (progressController) {
+    progressController.update({
+      stageKey: 'file_check',
+      progress: 18,
+      detail: 'HQ 작성본 workbook 계약과 범위를 확인하고 있습니다.',
+    });
+  }
   renderScheduleUploadWorkspace();
   const body = new FormData();
   body.append('file', file);
@@ -13176,6 +13229,13 @@ async function onScheduleSupportHqInspect() {
     if (value) body.append('site_codes', value);
   });
   try {
+    if (progressController) {
+      progressController.update({
+        stageKey: 'support_parse',
+        progress: 54,
+        detail: '시트별 지원근무 셀과 scope를 검토하는 중입니다.',
+      });
+    }
     const result = await apiRequest('/schedules/support-roundtrip/hq-roster-upload/inspect', {
       method: 'POST',
       body,
@@ -13187,6 +13247,13 @@ async function onScheduleSupportHqInspect() {
     workspace.inspectResult = result && typeof result === 'object' ? result : null;
     workspace.inspectLoading = false;
     workspace.previewMode = 'actionable';
+    if (progressController) {
+      progressController.update({
+        stageKey: 'support_preview',
+        progress: 96,
+        detail: 'issue summary와 미리보기를 구성하는 중입니다.',
+      });
+    }
     const mismatch = buildScheduleSupportHqWorkbookMismatch(workspace.inspectResult);
     if (mismatch.messages.length) {
       workspace.inspectError = mismatch.messages.join(' · ');
@@ -13213,7 +13280,7 @@ async function onScheduleSupportHqInspect() {
   }
 }
 
-async function onScheduleSupportHqApply() {
+async function onScheduleSupportHqApply(progressController = null) {
   const workspace = ensureScheduleSupportHqWorkspaceState();
   const context = buildScheduleSupportHqContext();
   const batchId = String(workspace.inspectResult?.batch_id || '').trim();
@@ -13237,11 +13304,19 @@ async function onScheduleSupportHqApply() {
   workspace.applyError = '';
   workspace.applyResult = null;
   workspace.successBanner = null;
+  progressController?.update({
+    stageKey: 'handoff_prepare',
+    detail: `${context.selectedSiteCodes.length}개 지점 기준 반영 대상을 준비하고 있습니다.`,
+  });
   setScheduleHqWizardStep(SCHEDULE_HQ_WIZARD_STEP_COMPLETE, { scroll: false });
   renderScheduleUploadWorkspace();
   const params = new URLSearchParams();
   params.set('tenant_code', getScheduleHqTenantCode());
   try {
+    progressController?.update({
+      stageKey: 'handoff_commit',
+      detail: '지원근무 반영 결과를 Sentrix와 후속 상태에 전달하는 중입니다.',
+    });
     const result = await apiRequest(`/schedules/support-roundtrip/hq-roster-upload/${batchId}/apply?${params.toString()}`, {
       method: 'POST',
     });
@@ -13258,6 +13333,11 @@ async function onScheduleSupportHqApply() {
         ].filter(Boolean).join(' · '),
       };
     }
+    progressController?.update({
+      stageKey: 'handoff_refresh',
+      progress: 98,
+      detail: '반영 결과와 최신 지원근무 상태를 새로고침하고 있습니다.',
+    });
     await Promise.allSettled([
       loadScheduleSupportRoundtripStatus(),
       loadScheduleSupportHqWorkspaceContract({ force: true }),
@@ -13961,11 +14041,11 @@ function resolveDownloadTransferProgress({
   totalBytes = 0,
   chunkCount = 0,
   elapsedMs = 0,
-  startProgress = 48,
-  maxProgress = 96,
+  startProgress = 58,
+  maxProgress = 99,
 } = {}) {
-  const start = Math.max(6, Math.min(96, Number(startProgress || 0)));
-  const max = Math.max(start, Math.min(96, Number(maxProgress || 96)));
+  const start = Math.max(6, Math.min(99, Number(startProgress || 0)));
+  const max = Math.max(start, Math.min(99.4, Number(maxProgress || 99)));
   if (totalBytes > 0) {
     const ratio = Math.max(0, Math.min(1, receivedBytes / totalBytes));
     return start + ((max - start) * ratio);
@@ -14041,8 +14121,8 @@ async function readDownloadResponsePayload(response, {
   fallbackName = 'download.bin',
   progressController = null,
   streamStageKey = 'download_stream',
-  startProgress = 48,
-  maxProgress = 96,
+  startProgress = 58,
+  maxProgress = 99,
 } = {}) {
   const fileName = parseContentDispositionFilename(
     String(response?.headers?.get('Content-Disposition') || '').trim(),
@@ -14054,7 +14134,7 @@ async function readDownloadResponsePayload(response, {
   if (!(response?.body) || typeof response.body.getReader !== 'function') {
     progressController?.update({
       stageKey: streamStageKey,
-      progress: totalBytes > 0 ? maxProgress : Math.max(startProgress, 88),
+      progress: totalBytes > 0 ? maxProgress : Math.max(startProgress, 94),
       detail: buildDownloadProgressDetail({ receivedBytes: totalBytes, totalBytes }),
     });
     return {
@@ -14094,7 +14174,7 @@ async function readDownloadResponsePayload(response, {
       maxProgress,
     });
     const now = Date.now();
-    if ((nextProgress - lastReportedProgress) >= 1 || (now - lastReportedAt) >= 160) {
+    if ((nextProgress - lastReportedProgress) >= 0.2 || (now - lastReportedAt) >= 80) {
       progressController?.update({
         stageKey: streamStageKey,
         progress: nextProgress,
@@ -14107,7 +14187,7 @@ async function readDownloadResponsePayload(response, {
 
   progressController?.update({
     stageKey: streamStageKey,
-    progress: 99,
+    progress: 99.4,
     detail: '브라우저 다운로드를 시작하고 있습니다.',
   });
 
@@ -51535,6 +51615,7 @@ function bindUiEvents() {
         progressOptions: {
           title: '지원근무자용 시트를 준비하고 있습니다',
           detail: '선택한 월과 지점 기준으로 전달용 workbook을 생성하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           tone: LONG_TASK_TONE_DOWNLOAD,
           stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
         },
@@ -51596,6 +51677,7 @@ function bindUiEvents() {
         progressOptions: {
           title: '전용 보고 업데이트를 실행하고 있습니다',
           detail: '대상 월 데이터를 수집하고 실행 결과를 갱신하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           stages: LONG_TASK_STAGES_APPLE_REPORT,
         },
       });
@@ -51609,6 +51691,7 @@ function bindUiEvents() {
         progressOptions: {
           title: '전용 보고 재시도를 실행하고 있습니다',
           detail: '실패한 대상을 다시 처리하고 최신 상태를 반영하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           stages: LONG_TASK_STAGES_APPLE_REPORT,
         },
       });
@@ -51741,6 +51824,7 @@ function bindUiEvents() {
         progressOptions: {
           title: 'HQ workbook을 준비하고 있습니다',
           detail: '선택한 범위 기준으로 다운로드 파일을 생성하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           tone: LONG_TASK_TONE_DOWNLOAD,
           stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
         },
@@ -51755,6 +51839,7 @@ function bindUiEvents() {
         progressOptions: {
           title: 'HQ workbook을 검토하고 있습니다',
           detail: '파일 계약 확인과 검토 결과 생성을 진행하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           surfaceKey: LONG_TASK_SURFACE_SCHEDULE_SUPPORT_HQ,
           stages: LONG_TASK_STAGES_SUPPORT_HQ_INSPECT,
         },
@@ -52892,6 +52977,7 @@ function bindUiEvents() {
         progressOptions: {
           title: '재직증명서 PDF를 준비하고 있습니다',
           detail: '승인된 문서를 PDF로 생성해 브라우저에 전달하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           tone: LONG_TASK_TONE_DOWNLOAD,
           stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
         },
@@ -53408,6 +53494,7 @@ function bindUiEvents() {
         progressOptions: {
           title: '경비원명부를 업로드하고 있습니다',
           detail: '문서 파싱과 현장 자동 매칭이 끝나면 검토용 시트가 채워집니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           surfaceKey: LONG_TASK_SURFACE_EMPLOYEE_ROSTER,
           stages: LONG_TASK_STAGES_EMPLOYEE_ROSTER_UPLOAD,
         },
@@ -53428,6 +53515,7 @@ function bindUiEvents() {
         progressOptions: {
           title: '직원 일괄 등록을 처리하고 있습니다',
           detail: '검증을 통과한 항목부터 계정과 첨부 정보를 순서대로 반영합니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           surfaceKey: LONG_TASK_SURFACE_EMPLOYEE_ROSTER,
           stages: LONG_TASK_STAGES_EMPLOYEE_ROSTER_COMMIT,
         },
@@ -54262,6 +54350,7 @@ function bindUiEvents() {
         progressOptions: {
           title: 'HQ 제출용 workbook을 준비하고 있습니다',
           detail: '선택한 지점 범위 기준으로 제출용 시트를 생성하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           tone: LONG_TASK_TONE_DOWNLOAD,
           stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
         },
@@ -54276,6 +54365,7 @@ function bindUiEvents() {
         progressOptions: {
           title: 'HQ 작성본을 검토하고 있습니다',
           detail: '파일 계약 확인과 지원근무 미리보기를 생성하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           surfaceKey: LONG_TASK_SURFACE_SCHEDULE_SUPPORT_HQ,
           stages: LONG_TASK_STAGES_SUPPORT_HQ_INSPECT,
         },
@@ -54284,7 +54374,17 @@ function bindUiEvents() {
     }
 
     if (action === 'schedule-support-apply') {
-      runWithBusy(() => onScheduleSupportHqApply(), 'HQ 작성본 적용 중...');
+      runWithProgressTask((progressController) => onScheduleSupportHqApply(progressController), {
+        busyLabel: 'HQ 작성본 적용 중...',
+        fallbackMessage: 'HQ 작성본 적용에 실패했습니다.',
+        progressOptions: {
+          title: 'HQ 작성본 반영을 진행하고 있습니다',
+          detail: '검토된 scope를 전달하고 후속 상태를 반영하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
+          surfaceKey: LONG_TASK_SURFACE_SCHEDULE_SUPPORT_HQ,
+          stages: LONG_TASK_STAGES_SUPPORT_HQ_APPLY,
+        },
+      });
       return;
     }
 
@@ -54295,6 +54395,7 @@ function bindUiEvents() {
         progressOptions: {
           title: 'HQ 작성본을 검토하고 있습니다',
           detail: '파일 계약 확인과 지원근무 미리보기를 생성하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           surfaceKey: LONG_TASK_SURFACE_SCHEDULE_SUPPORT_HQ,
           stages: LONG_TASK_STAGES_SUPPORT_HQ_INSPECT,
         },
@@ -54319,6 +54420,7 @@ function bindUiEvents() {
         progressOptions: {
           title: '병합 완료본을 준비하고 있습니다',
           detail: '지원근무 반영 결과를 최종 workbook으로 생성하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           tone: LONG_TASK_TONE_DOWNLOAD,
           stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
         },
@@ -54339,6 +54441,7 @@ function bindUiEvents() {
         progressOptions: {
           title: 'Finance 1차 확인본을 준비하고 있습니다',
           detail: '검토용 workbook을 생성해 브라우저에 전달하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           tone: LONG_TASK_TONE_DOWNLOAD,
           stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
         },
@@ -54353,6 +54456,7 @@ function bindUiEvents() {
         progressOptions: {
           title: 'Finance 최종 업로드 미리보기를 생성하고 있습니다',
           detail: '기존 값과 업로드 값을 비교해 차단 사유와 반영 가능 행을 정리하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           surfaceKey: LONG_TASK_SURFACE_SCHEDULE_FINANCE,
           stages: LONG_TASK_STAGES_FINANCE_PREVIEW,
         },
@@ -54367,6 +54471,7 @@ function bindUiEvents() {
         progressOptions: {
           title: 'Finance 최종 업로드를 반영하고 있습니다',
           detail: '허용된 diff를 반영하고 제출 상태를 새로고침하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           surfaceKey: LONG_TASK_SURFACE_SCHEDULE_FINANCE,
           stages: LONG_TASK_STAGES_FINANCE_APPLY,
         },
@@ -54381,6 +54486,7 @@ function bindUiEvents() {
         progressOptions: {
           title: 'Finance 최종본을 준비하고 있습니다',
           detail: '최종 업로드 기준 workbook을 생성해 브라우저에 전달하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           tone: LONG_TASK_TONE_DOWNLOAD,
           stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
         },
@@ -54395,6 +54501,7 @@ function bindUiEvents() {
         progressOptions: {
           title: '월간 근무표를 분석하고 있습니다',
           detail: '파일, 지점, 대상 월 기준으로 workbook을 읽고 미리보기를 생성하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           surfaceKey: LONG_TASK_SURFACE_SCHEDULE_IMPORT,
           stages: LONG_TASK_STAGES_SCHEDULE_IMPORT,
         },
@@ -54409,6 +54516,7 @@ function bindUiEvents() {
         progressOptions: {
           title: '월간 근무표를 반영하고 있습니다',
           detail: '검증을 통과한 행만 ARLS에 반영하고 결과를 새로고침하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           surfaceKey: LONG_TASK_SURFACE_SCHEDULE_IMPORT,
           stages: LONG_TASK_STAGES_SCHEDULE_APPLY,
         },
