@@ -1188,9 +1188,11 @@ function createInitialTaskProgressState() {
     title: '',
     detail: '',
     statusLabel: '',
+    tone: 'default',
     stages: [],
     stageIndex: 0,
     progress: 0,
+    explicitProgressUntil: 0,
     startedAt: 0,
     visible: false,
     outcome: 'idle',
@@ -7191,7 +7193,7 @@ async function loadSupportStatusHqWorkspaceContract({ force = false } = {}) {
   }
 }
 
-async function onSupportStatusHqDownload() {
+async function onSupportStatusHqDownload(progressController = null) {
   const hqWorkspace = ensureSupportStatusHqWorkspaceState();
   if (!canUseSupportStatusHqWorkspace()) {
     showToast('HQ workbook 다운로드 권한이 없습니다.', 'error');
@@ -7213,8 +7215,12 @@ async function onSupportStatusHqDownload() {
     getTenantCodeForScopedAdminApi(),
   );
   const fallbackName = `${String(hqWorkspace.month || '').trim()}_support_roster_${normalizeSupportStatusHqScope(hqWorkspace.scope || 'all')}.xlsx`;
-  await downloadScheduleWorkbookWithAuth(requestUrl, fallbackName);
-  showToast('HQ 지원근무 workbook을 다운로드했습니다.', 'success', 2200);
+  await downloadAuthorizedFile({
+    requestUrl,
+    fallbackName,
+    successMessage: 'HQ 지원근무 workbook을 다운로드했습니다.',
+    progressController,
+  });
 }
 
 async function onSupportStatusHqInspect(progressController = null) {
@@ -9807,6 +9813,8 @@ const SCHEDULE_IMPORT_PROGRESS_STAGES = Object.freeze([
 
 const LONG_TASK_MODAL_DELAY_MS = 3200;
 const LONG_TASK_STAGE_TICK_MS = 1100;
+const LONG_TASK_TONE_DEFAULT = 'default';
+const LONG_TASK_TONE_DOWNLOAD = 'download';
 const LONG_TASK_SURFACE_SCHEDULE_IMPORT = 'schedule-import';
 const LONG_TASK_SURFACE_SCHEDULE_SUPPORT_HQ = 'schedule-support-hq';
 const LONG_TASK_SURFACE_SCHEDULE_FINANCE = 'schedule-finance';
@@ -9859,8 +9867,8 @@ const LONG_TASK_STAGES_EMPLOYEE_ROSTER_COMMIT = Object.freeze([
 ]);
 
 const LONG_TASK_STAGES_WORKBOOK_DOWNLOAD = Object.freeze([
-  { key: 'download_prepare', label: '파일 준비', detail: '다운로드할 workbook을 생성하고 있습니다.', progress: 34 },
-  { key: 'download_stream', label: '브라우저 전달', detail: '생성된 파일을 브라우저에 전달하는 중입니다.', progress: 86 },
+  { key: 'download_prepare', label: '파일 준비', detail: '다운로드할 파일을 생성하고 있습니다.', progress: 22 },
+  { key: 'download_stream', label: '브라우저 전달', detail: '생성된 파일을 브라우저에 전달하는 중입니다.', progress: 48 },
 ]);
 
 const LONG_TASK_STAGES_APPLE_REPORT = Object.freeze([
@@ -9931,6 +9939,12 @@ function normalizeLongTaskStages(stages = []) {
   });
 }
 
+function normalizeLongTaskTone(value = '') {
+  return String(value || '').trim().toLowerCase() === LONG_TASK_TONE_DOWNLOAD
+    ? LONG_TASK_TONE_DOWNLOAD
+    : LONG_TASK_TONE_DEFAULT;
+}
+
 function resolveTaskProgressPillClass(outcome = 'working') {
   if (outcome === 'error') return 'status-pill status-pill-error';
   if (outcome === 'success') return 'status-pill status-pill-success';
@@ -9969,6 +9983,7 @@ function renderTaskProgressModal() {
   backdrop.classList.toggle('hidden', !active);
   modal.classList.toggle('hidden', !active);
   modal.dataset.state = active ? String(progress.outcome || 'working').trim() : 'idle';
+  modal.dataset.tone = active ? normalizeLongTaskTone(progress.tone || LONG_TASK_TONE_DEFAULT) : LONG_TASK_TONE_DEFAULT;
   if (!active) {
     modal.setAttribute('aria-hidden', 'true');
     return;
@@ -9980,7 +9995,14 @@ function renderTaskProgressModal() {
   const elapsed = formatLongTaskElapsed(Date.now() - Number(progress.startedAt || Date.now()));
 
   modal.setAttribute('aria-hidden', 'false');
-  if (stageEl instanceof HTMLElement) stageEl.textContent = String(stage?.label || progress.statusLabel || '진행 중').trim() || '진행 중';
+  modal.style.setProperty('--task-progress-ratio', String(Math.max(0.06, Math.min(1, progressValue / 100))));
+  if (stageEl instanceof HTMLElement) {
+    stageEl.textContent = progress.outcome === 'success'
+      ? '완료'
+      : (progress.outcome === 'error'
+        ? '실패'
+        : (String(stage?.label || progress.statusLabel || '진행 중').trim() || '진행 중'));
+  }
   if (titleEl instanceof HTMLElement) titleEl.textContent = String(progress.title || '작업을 진행하고 있습니다.').trim();
   if (detailEl instanceof HTMLElement) detailEl.textContent = String(progress.detail || stage?.detail || '잠시만 기다려 주세요.').trim();
   if (barEl instanceof HTMLElement) {
@@ -10004,6 +10026,7 @@ function renderTaskProgressStrip({
   const show = Boolean(task && String(task.activeId || '').trim());
   root.classList.toggle('hidden', !show);
   root.dataset.state = show ? String(task.outcome || 'working').trim() : 'idle';
+  root.dataset.tone = show ? normalizeLongTaskTone(task.tone || LONG_TASK_TONE_DEFAULT) : LONG_TASK_TONE_DEFAULT;
   if (!show) return;
 
   const pill = $(pillSelector);
@@ -10137,11 +10160,15 @@ function updateLongTaskProgress(taskId = '', updates = {}) {
   if (Object.prototype.hasOwnProperty.call(updates, 'statusLabel')) {
     progress.statusLabel = String(updates.statusLabel || '').trim();
   }
+  if (Object.prototype.hasOwnProperty.call(updates, 'tone')) {
+    progress.tone = normalizeLongTaskTone(updates.tone || LONG_TASK_TONE_DEFAULT);
+  }
   if (Object.prototype.hasOwnProperty.call(updates, 'surfaceKey')) {
     progress.surfaceKey = String(updates.surfaceKey || '').trim();
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'progress')) {
     progress.progress = Math.max(0, Math.min(100, Number(updates.progress || 0)));
+    progress.explicitProgressUntil = Date.now() + 1200;
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'visible')) {
     progress.visible = Boolean(updates.visible);
@@ -10205,6 +10232,7 @@ function beginLongTaskProgress({
   title = '작업을 처리하고 있습니다.',
   detail = '',
   statusLabel = '처리 중',
+  tone = LONG_TASK_TONE_DEFAULT,
   surfaceKey = '',
   stages = [],
   modalDelayMs = LONG_TASK_MODAL_DELAY_MS,
@@ -10218,9 +10246,11 @@ function beginLongTaskProgress({
   progress.title = String(title || '작업을 처리하고 있습니다.').trim();
   progress.detail = String(detail || '').trim();
   progress.statusLabel = String(statusLabel || '처리 중').trim();
+  progress.tone = normalizeLongTaskTone(tone || LONG_TASK_TONE_DEFAULT);
   progress.stages = normalizeLongTaskStages(stages);
   progress.stageIndex = 0;
   progress.progress = Math.max(6, Math.min(100, Number(progress.stages[0]?.progress || 12)));
+  progress.explicitProgressUntil = 0;
   progress.startedAt = Date.now();
   progress.visible = false;
   progress.outcome = 'working';
@@ -10237,13 +10267,28 @@ function beginLongTaskProgress({
     if (String(current.activeId || '').trim() !== taskId || current.outcome !== 'working') return;
     const stagesList = Array.isArray(current.stages) ? current.stages : [];
     const lastIndex = Math.max(0, stagesList.length - 1);
-    const nextIndex = Math.min(lastIndex, Math.floor((Date.now() - Number(current.startedAt || 0)) / Math.max(700, Number(current.stageAdvanceMs || LONG_TASK_STAGE_TICK_MS))));
+    const now = Date.now();
+    const stageAdvanceMsValue = Math.max(700, Number(current.stageAdvanceMs || LONG_TASK_STAGE_TICK_MS));
+    const elapsedMs = Math.max(0, now - Number(current.startedAt || 0));
+    const nextIndex = Math.min(lastIndex, Math.floor(elapsedMs / stageAdvanceMsValue));
     if (nextIndex !== current.stageIndex) {
       current.stageIndex = nextIndex;
-      const nextStage = stagesList[nextIndex];
+    }
+    if (now >= Number(current.explicitProgressUntil || 0)) {
+      const activeStage = stagesList[current.stageIndex] || null;
+      const nextStage = stagesList[Math.min(lastIndex, current.stageIndex + 1)] || null;
+      const stageElapsedMs = Math.max(0, elapsedMs - (current.stageIndex * stageAdvanceMsValue));
+      const stageStartProgress = Math.max(6, Math.min(96, Number(activeStage?.progress || current.progress || 12)));
+      let nextProgressValue = stageStartProgress;
       if (nextStage && Number.isFinite(Number(nextStage.progress))) {
-        current.progress = Math.max(6, Math.min(96, Number(nextStage.progress || current.progress)));
+        const nextStageProgress = Math.max(6, Math.min(96, Number(nextStage.progress || stageStartProgress)));
+        const withinStageRatio = Math.max(0, Math.min(1, stageElapsedMs / stageAdvanceMsValue));
+        nextProgressValue = stageStartProgress + ((nextStageProgress - stageStartProgress) * withinStageRatio);
+      } else {
+        const tailRatio = Math.max(0, Math.min(1, stageElapsedMs / (stageAdvanceMsValue * 2.4)));
+        nextProgressValue = stageStartProgress + ((96 - stageStartProgress) * tailRatio);
       }
+      current.progress = Math.max(current.progress || 0, Math.max(6, Math.min(96, nextProgressValue)));
     }
     renderLongTaskProgressUi();
   }, 250);
@@ -13867,14 +13912,99 @@ async function loadScheduleSupportRoundtripStatus() {
 }
 
 async function downloadScheduleWorkbookWithAuth(requestUrl, fallbackName) {
+  return downloadAuthorizedFile({
+    requestUrl,
+    fallbackName,
+  });
+}
+
+function parseDownloadContentLength(response) {
+  if (!response || typeof response !== 'object') return 0;
+  const raw = [
+    response.headers?.get?.('Content-Length'),
+    response.headers?.get?.('X-File-Size'),
+    response.headers?.get?.('x-file-size'),
+  ].find(Boolean);
+  const parsed = Number(raw || 0);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function formatDownloadTransferSize(bytes = 0) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = value;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  const digits = unitIndex === 0 ? 0 : (size >= 10 ? 1 : 2);
+  return `${size.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+function buildDownloadProgressDetail({
+  receivedBytes = 0,
+  totalBytes = 0,
+} = {}) {
+  if (totalBytes > 0) {
+    return `파일을 브라우저에 전달하는 중입니다. ${formatDownloadTransferSize(receivedBytes)} / ${formatDownloadTransferSize(totalBytes)}`;
+  }
+  if (receivedBytes > 0) {
+    return `파일을 브라우저에 전달하는 중입니다. ${formatDownloadTransferSize(receivedBytes)} 수신`;
+  }
+  return '파일을 브라우저에 전달하는 중입니다.';
+}
+
+function resolveDownloadTransferProgress({
+  receivedBytes = 0,
+  totalBytes = 0,
+  chunkCount = 0,
+  elapsedMs = 0,
+  startProgress = 48,
+  maxProgress = 96,
+} = {}) {
+  const start = Math.max(6, Math.min(96, Number(startProgress || 0)));
+  const max = Math.max(start, Math.min(96, Number(maxProgress || 96)));
+  if (totalBytes > 0) {
+    const ratio = Math.max(0, Math.min(1, receivedBytes / totalBytes));
+    return start + ((max - start) * ratio);
+  }
+  const chunkBoost = Math.log2(Math.max(1, Number(chunkCount || 0)) + 1) * 8;
+  const timeBoost = Math.min(28, Math.max(0, Number(elapsedMs || 0)) / 260);
+  return Math.min(max, start + chunkBoost + timeBoost);
+}
+
+function triggerBrowserDownloadFromBlob(blob, fileName = 'download.bin') {
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = href;
+  anchor.download = String(fileName || 'download.bin').trim() || 'download.bin';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(href), 8000);
+}
+
+async function fetchAuthorizedDownloadResponse({
+  requestUrl,
+  method = 'GET',
+  headers = {},
+  body = null,
+} = {}) {
   const accessToken = getActiveAccessToken();
   if (!accessToken) {
     throw new Error('로그인 후 이용해 주세요.');
   }
+
+  const requestHeaders = {
+    ...headers,
+    Authorization: `Bearer ${accessToken}`,
+  };
   let response = await fetch(requestUrl, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
+    method,
+    headers: requestHeaders,
+    body,
     mode: 'cors',
     credentials: 'omit',
   });
@@ -13882,9 +14012,12 @@ async function downloadScheduleWorkbookWithAuth(requestUrl, fallbackName) {
     const refreshed = await requestTokenRefresh();
     if (refreshed) {
       response = await fetch(requestUrl, {
+        method,
         headers: {
+          ...headers,
           Authorization: `Bearer ${getActiveAccessToken()}`,
         },
+        body,
         mode: 'cors',
         credentials: 'omit',
       });
@@ -13895,27 +14028,124 @@ async function downloadScheduleWorkbookWithAuth(requestUrl, fallbackName) {
     let detail = '';
     try {
       const payload = text ? JSON.parse(text) : null;
-      detail = String(payload?.detail || payload?.message || '').trim();
+      detail = String(payload?.detail?.message || payload?.detail || payload?.message || '').trim();
     } catch {
       detail = String(text || '').trim();
     }
     throw new Error(detail || `요청 실패 (${response.status})`);
   }
-  const blob = await response.blob();
-  const href = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = href;
-  anchor.download = parseContentDispositionFilename(
-    String(response.headers.get('Content-Disposition') || '').trim(),
-    fallbackName,
-  );
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(href);
+  return response;
 }
 
-async function onScheduleSupportHqDownload() {
+async function readDownloadResponsePayload(response, {
+  fallbackName = 'download.bin',
+  progressController = null,
+  streamStageKey = 'download_stream',
+  startProgress = 48,
+  maxProgress = 96,
+} = {}) {
+  const fileName = parseContentDispositionFilename(
+    String(response?.headers?.get('Content-Disposition') || '').trim(),
+    fallbackName,
+  );
+  const contentType = String(response?.headers?.get('Content-Type') || '').trim() || 'application/octet-stream';
+  const totalBytes = parseDownloadContentLength(response);
+
+  if (!(response?.body) || typeof response.body.getReader !== 'function') {
+    progressController?.update({
+      stageKey: streamStageKey,
+      progress: totalBytes > 0 ? maxProgress : Math.max(startProgress, 88),
+      detail: buildDownloadProgressDetail({ receivedBytes: totalBytes, totalBytes }),
+    });
+    return {
+      blob: await response.blob(),
+      fileName,
+      totalBytes,
+    };
+  }
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let receivedBytes = 0;
+  let chunkCount = 0;
+  let lastReportedProgress = Math.max(0, Number(startProgress || 0));
+  let lastReportedAt = 0;
+  const startedAt = Date.now();
+  progressController?.update({
+    stageKey: streamStageKey,
+    progress: startProgress,
+    detail: buildDownloadProgressDetail({ receivedBytes: 0, totalBytes }),
+  });
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!(value instanceof Uint8Array) || !value.byteLength) continue;
+    chunks.push(value);
+    receivedBytes += value.byteLength;
+    chunkCount += 1;
+
+    const nextProgress = resolveDownloadTransferProgress({
+      receivedBytes,
+      totalBytes,
+      chunkCount,
+      elapsedMs: Date.now() - startedAt,
+      startProgress,
+      maxProgress,
+    });
+    const now = Date.now();
+    if ((nextProgress - lastReportedProgress) >= 1 || (now - lastReportedAt) >= 160) {
+      progressController?.update({
+        stageKey: streamStageKey,
+        progress: nextProgress,
+        detail: buildDownloadProgressDetail({ receivedBytes, totalBytes }),
+      });
+      lastReportedProgress = nextProgress;
+      lastReportedAt = now;
+    }
+  }
+
+  progressController?.update({
+    stageKey: streamStageKey,
+    progress: 99,
+    detail: '브라우저 다운로드를 시작하고 있습니다.',
+  });
+
+  return {
+    blob: new Blob(chunks, { type: contentType }),
+    fileName,
+    totalBytes,
+    receivedBytes,
+  };
+}
+
+async function downloadAuthorizedFile({
+  requestUrl,
+  fallbackName = 'download.bin',
+  successMessage = '',
+  method = 'GET',
+  headers = {},
+  body = null,
+  progressController = null,
+} = {}) {
+  const response = await fetchAuthorizedDownloadResponse({
+    requestUrl,
+    method,
+    headers,
+    body,
+  });
+  const payload = await readDownloadResponsePayload(response, {
+    fallbackName,
+    progressController,
+  });
+  triggerBrowserDownloadFromBlob(payload.blob, payload.fileName);
+  if (successMessage) {
+    showToast(successMessage, 'success', 2200);
+  }
+  return payload;
+}
+
+async function onScheduleSupportHqDownload(progressController = null) {
   if (!canUseScheduleSupportRoundtripHq()) {
     showToast('HQ 지원근무 추출 권한이 없습니다.', 'error');
     return;
@@ -13948,17 +14178,14 @@ async function onScheduleSupportHqDownload() {
     const parts = Object.fromEntries(formatter.formatToParts(new Date()).map((part) => [part.type, part.value]));
     return `${parts.year || ''}${parts.month || ''}${parts.day || ''}`;
   })();
-  await downloadScheduleWorkbookWithAuth(
-    `${state.activeApiBase}/schedules/support-roundtrip/hq-roster-workbook?${params.toString()}`,
-      `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 지원근무자용 스케쥴 제출_${isMultiSelection ? 'MULTI' : selectedSiteCodes[0]}_${fallbackGeneratedOn}.xlsx`,
-  );
+  await downloadAuthorizedFile({
+    requestUrl: `${state.activeApiBase}/schedules/support-roundtrip/hq-roster-workbook?${params.toString()}`,
+    fallbackName: `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 지원근무자용 스케쥴 제출_${isMultiSelection ? 'MULTI' : selectedSiteCodes[0]}_${fallbackGeneratedOn}.xlsx`,
+    successMessage: isAllSites || isMultiSelection ? '선택한 지점 지원근무자용 workbook을 다운로드했습니다.' : 'HQ 지원근무자용 시트를 다운로드했습니다.',
+    progressController,
+  });
   const workspace = ensureScheduleSupportHqWorkspaceState();
   workspace.lastDownloadedRevision = String(workspace.contract?.template_version || '').trim();
-  showToast(
-    isAllSites || isMultiSelection ? '선택한 지점 지원근무자용 workbook을 다운로드했습니다.' : 'HQ 지원근무자용 시트를 다운로드했습니다.',
-    'success',
-    2200,
-  );
 }
 
 async function onScheduleSupportPreview() {
@@ -14015,7 +14242,7 @@ async function onScheduleSupportCopyArtifact() {
   await copyTextToClipboard(artifactContext.artifact_id, 'artifact_id를 복사했습니다.');
 }
 
-async function onScheduleSupportFinalDownload() {
+async function onScheduleSupportFinalDownload(progressController = null) {
   if (!canUseScheduleSupportRoundtripFinalDownload()) {
     showToast('병합 완료본 다운로드 권한이 없습니다.', 'error');
     return;
@@ -14040,11 +14267,12 @@ async function onScheduleSupportFinalDownload() {
     const parts = Object.fromEntries(formatter.formatToParts(new Date()).map((part) => [part.type, part.value]));
     return `${parts.year || ''}${parts.month || ''}${parts.day || ''}`;
   })();
-  await downloadScheduleWorkbookWithAuth(
-    `${state.activeApiBase}/schedules/support-roundtrip/final-excel?${params.toString()}`,
-    `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 근무표_${siteCode}_지원병합_${fallbackGeneratedOn}.xlsx`,
-  );
-  showToast('병합 완료본을 다운로드했습니다.', 'success', 2200);
+  await downloadAuthorizedFile({
+    requestUrl: `${state.activeApiBase}/schedules/support-roundtrip/final-excel?${params.toString()}`,
+    fallbackName: `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 근무표_${siteCode}_지원병합_${fallbackGeneratedOn}.xlsx`,
+    successMessage: '병합 완료본을 다운로드했습니다.',
+    progressController,
+  });
 }
 
 function normalizeScheduleFinanceTab(value = '') {
@@ -14459,7 +14687,7 @@ async function loadScheduleFinanceSubmissionStatus() {
   return state.schedule.financeStatus;
 }
 
-async function onScheduleFinanceReviewDownload() {
+async function onScheduleFinanceReviewDownload(progressController = null) {
   if (!canDownloadScheduleFinanceReview()) {
     showToast('Finance 1차 확인본 다운로드 권한이 없습니다.', 'error');
     return;
@@ -14487,12 +14715,13 @@ async function onScheduleFinanceReviewDownload() {
   const fallbackFileLabel = siteCode === 'ALL'
     ? `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 근무표_전체_1차확인본_${fallbackGeneratedOn}.xlsx`
     : `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 근무표_${siteCode}_1차확인본_${fallbackGeneratedOn}.xlsx`;
-  await downloadScheduleWorkbookWithAuth(
-    `${state.activeApiBase}/schedules/finance-submission/review-excel?${params.toString()}`,
-    fallbackFileLabel,
-  );
+  await downloadAuthorizedFile({
+    requestUrl: `${state.activeApiBase}/schedules/finance-submission/review-excel?${params.toString()}`,
+    fallbackName: fallbackFileLabel,
+    successMessage: 'Finance 1차 확인본을 다운로드했습니다.',
+    progressController,
+  });
   await loadScheduleFinanceSubmissionStatus();
-  showToast('Finance 1차 확인본을 다운로드했습니다.', 'success', 2200);
 }
 
 async function onScheduleFinancePreview(progressController = null) {
@@ -14656,7 +14885,7 @@ async function onScheduleFinanceApply(progressController = null) {
   }
 }
 
-async function onScheduleFinanceFinalDownload() {
+async function onScheduleFinanceFinalDownload(progressController = null) {
   if (!canDownloadScheduleFinanceFinal()) {
     showToast('Finance 최종 다운로드 권한이 없습니다.', 'error');
     return;
@@ -14685,11 +14914,12 @@ async function onScheduleFinanceFinalDownload() {
     const parts = Object.fromEntries(formatter.formatToParts(new Date()).map((part) => [part.type, part.value]));
     return `${parts.year || ''}${parts.month || ''}${parts.day || ''}`;
   })();
-  await downloadScheduleWorkbookWithAuth(
-    `${state.activeApiBase}/schedules/finance-submission/final-excel?${params.toString()}`,
-    `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 근무표_${siteCode}_2차최종_${fallbackGeneratedOn}.xlsx`,
-  );
-  showToast('Finance 최종본을 다운로드했습니다.', 'success', 2200);
+  await downloadAuthorizedFile({
+    requestUrl: `${state.activeApiBase}/schedules/finance-submission/final-excel?${params.toString()}`,
+    fallbackName: `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 근무표_${siteCode}_2차최종_${fallbackGeneratedOn}.xlsx`,
+    successMessage: 'Finance 최종본을 다운로드했습니다.',
+    progressController,
+  });
 }
 
 function showAuthError(msg) {
@@ -30514,7 +30744,7 @@ async function submitHrEmploymentRequest() {
   }
 }
 
-async function downloadHrEmploymentRequestPdf(requestId = '') {
+async function downloadHrEmploymentRequestPdf(requestId = '', progressController = null) {
   const id = String(requestId || '').trim();
   if (!id) {
     throw new Error('다운로드할 요청 ID가 없습니다.');
@@ -30528,31 +30758,14 @@ async function downloadHrEmploymentRequestPdf(requestId = '') {
   if (tenantHeader) {
     headers['X-Tenant-Id'] = tenantHeader;
   }
-  const response = await fetch(
-    `${state.activeApiBase}/hr/documents/requests/${encodeURIComponent(id)}/download`,
-    {
-      method: 'GET',
-      headers,
-      credentials: 'omit',
-      mode: 'cors',
-    },
-  );
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`다운로드 실패 (${response.status}): ${body || 'unknown error'}`);
-  }
-  const blob = await response.blob();
-  const blobUrl = URL.createObjectURL(blob);
-  const link = document.createElement('a');
   const fallbackName = `employment_certificate_${id}.pdf`;
-  const disposition = String(response.headers.get('Content-Disposition') || '').trim();
-  const match = disposition.match(/filename="?([^"]+)"?/i);
-  link.href = blobUrl;
-  link.download = String(match?.[1] || fallbackName).trim() || fallbackName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 8000);
+  await downloadAuthorizedFile({
+    requestUrl: `${state.activeApiBase}/hr/documents/requests/${encodeURIComponent(id)}/download`,
+    fallbackName,
+    headers,
+    successMessage: '재직증명서 PDF를 다운로드했습니다.',
+    progressController,
+  });
 }
 
 async function approveHrEmploymentRequest(requestId = '') {
@@ -33094,7 +33307,7 @@ async function uploadEmployeeFormAttachments({ tenantCode = '' } = {}) {
   return nextIds;
 }
 
-async function downloadEmployeeAttachmentById(attachmentId = '', kind = 'docx') {
+async function downloadEmployeeAttachmentById(attachmentId = '', kind = 'docx', progressController = null) {
   const normalizedId = String(attachmentId || '').trim();
   const normalizedKind = String(kind || 'docx').trim().toLowerCase() === 'photo' ? 'photo' : 'docx';
   if (!normalizedId) {
@@ -33108,31 +33321,14 @@ async function downloadEmployeeAttachmentById(attachmentId = '', kind = 'docx') 
   const tenantHeader = String(getActiveTenantHeaderValue() || '').trim();
   if (tenantHeader) headers['X-Tenant-Id'] = tenantHeader;
 
-  const response = await fetch(
-    `${state.activeApiBase}/employees/import/guard-roster-docx/files/${encodeURIComponent(normalizedId)}?kind=${normalizedKind}`,
-    {
-      method: 'GET',
-      headers,
-      credentials: 'omit',
-      mode: 'cors',
-    },
-  );
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`파일 다운로드 실패 (${response.status}): ${body || 'unknown error'}`);
-  }
-  const blob = await response.blob();
-  const blobUrl = URL.createObjectURL(blob);
-  const link = document.createElement('a');
   const fallbackName = normalizedKind === 'photo' ? `employee-photo-${normalizedId}.jpg` : `employee-roster-${normalizedId}.docx`;
-  const disposition = String(response.headers.get('Content-Disposition') || '').trim();
-  const match = disposition.match(/filename="?([^"]+)"?/i);
-  link.href = blobUrl;
-  link.download = String(match?.[1] || fallbackName).trim() || fallbackName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 8000);
+  await downloadAuthorizedFile({
+    requestUrl: `${state.activeApiBase}/employees/import/guard-roster-docx/files/${encodeURIComponent(normalizedId)}?kind=${normalizedKind}`,
+    fallbackName,
+    headers,
+    successMessage: normalizedKind === 'photo' ? '직원 사진을 다운로드했습니다.' : '경비원명부를 다운로드했습니다.',
+    progressController,
+  });
 }
 
 function updateEmployeeCodePreviewFromForm() {
@@ -33652,7 +33848,7 @@ async function cancelGuardRosterImportSession({ silent = false } = {}) {
   return result;
 }
 
-async function downloadGuardRosterSourceDocx(row) {
+async function downloadGuardRosterSourceDocx(row, progressController = null) {
   const docxId = String(row?.attachments?.roster_docx_id || '').trim();
   if (!docxId) {
     showToast('다운로드 가능한 원본 명부가 없습니다.', 'error');
@@ -33668,28 +33864,13 @@ async function downloadGuardRosterSourceDocx(row) {
   if (tenantHeader) {
     headers['X-Tenant-Id'] = tenantHeader;
   }
-  const response = await fetch(
-    `${state.activeApiBase}/employees/import/guard-roster-docx/files/${encodeURIComponent(docxId)}?kind=docx`,
-    {
-      method: 'GET',
-      headers,
-      credentials: 'omit',
-      mode: 'cors',
-    },
-  );
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`명부 다운로드 실패 (${response.status}): ${body || 'unknown error'}`);
-  }
-  const blob = await response.blob();
-  const blobUrl = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = blobUrl;
-  link.download = String(row?.filename || 'guard-roster.docx').trim() || 'guard-roster.docx';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 8000);
+  await downloadAuthorizedFile({
+    requestUrl: `${state.activeApiBase}/employees/import/guard-roster-docx/files/${encodeURIComponent(docxId)}?kind=docx`,
+    fallbackName: String(row?.filename || 'guard-roster.docx').trim() || 'guard-roster.docx',
+    headers,
+    successMessage: '원본 명부를 다운로드했습니다.',
+    progressController,
+  });
 }
 
 async function onGuardRosterImportUpload(progressController = null) {
@@ -42742,7 +42923,7 @@ async function openReportsSupportOwnerWorkspace() {
   showToast('Excel 업로드 owner 화면으로 이동했습니다.', 'info', 2200);
 }
 
-async function onReportsSupportDownload() {
+async function onReportsSupportDownload(progressController = null) {
   if (!canUseScheduleSupportRoundtripHq()) {
     showToast('지원근무자용 시트 다운로드 권한이 없습니다.', 'error');
     return;
@@ -42772,11 +42953,12 @@ async function onReportsSupportDownload() {
     const parts = Object.fromEntries(formatter.formatToParts(new Date()).map((part) => [part.type, part.value]));
     return `${parts.year || ''}${parts.month || ''}${parts.day || ''}`;
   })();
-  await downloadScheduleWorkbookWithAuth(
-    `${state.activeApiBase}/schedules/support-roundtrip/hq-roster-workbook?${params.toString()}`,
-    `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 지원근무자용 스케쥴 제출_${siteCode}_${fallbackGeneratedOn}.xlsx`,
-  );
-  showToast('지원근무자용 시트를 다운로드했습니다.', 'success', 2200);
+  await downloadAuthorizedFile({
+    requestUrl: `${state.activeApiBase}/schedules/support-roundtrip/hq-roster-workbook?${params.toString()}`,
+    fallbackName: `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 지원근무자용 스케쥴 제출_${siteCode}_${fallbackGeneratedOn}.xlsx`,
+    successMessage: '지원근무자용 시트를 다운로드했습니다.',
+    progressController,
+  });
 }
 
 async function onReportsSupportOpenSentrix() {
@@ -49437,64 +49619,21 @@ async function onScheduleApply(progressController = null) {
   }
 }
 
-async function downloadAuthorizedScheduleWorkbook({ requestUrl, fallbackName, successMessage }) {
-  const accessToken = getActiveAccessToken();
-  if (!accessToken) {
-    showToast('로그인 후 이용해 주세요.', 'error');
-    return;
-  }
-
-  let response = await fetch(requestUrl, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-    mode: 'cors',
-    credentials: 'omit',
-  });
-  if (response.status === 401) {
-    const refreshed = await requestTokenRefresh();
-    if (refreshed) {
-      response = await fetch(requestUrl, {
-        headers: {
-          Authorization: `Bearer ${getActiveAccessToken()}`,
-        },
-        mode: 'cors',
-        credentials: 'omit',
-      });
-    }
-  }
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    let message = `요청 실패 (${response.status})`;
-    if (text) {
-      try {
-        const payload = JSON.parse(text);
-        message = payload?.detail?.message || payload?.detail || message;
-      } catch {
-        message = text || message;
-      }
-    }
-    throw new Error(message);
-  }
-
-  const blob = await response.blob();
-  const href = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = href;
-  anchor.download = parseContentDispositionFilename(
-    String(response.headers.get('Content-Disposition') || '').trim(),
+async function downloadAuthorizedScheduleWorkbook({
+  requestUrl,
+  fallbackName,
+  successMessage,
+  progressController = null,
+}) {
+  await downloadAuthorizedFile({
+    requestUrl,
     fallbackName,
-  );
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(href);
-
-  showToast(successMessage, 'success', 2200);
+    successMessage,
+    progressController,
+  });
 }
 
-async function onScheduleTemplateDownload() {
+async function onScheduleTemplateDownload(progressController = null) {
   if (!canUseScheduleSupportRoundtripSource()) {
     showToast('스케줄 템플릿 다운로드 권한이 없습니다.', 'error');
     return;
@@ -49513,10 +49652,11 @@ async function onScheduleTemplateDownload() {
     requestUrl,
     fallbackName: `schedule_monthly_template_${monthKey.replace('-', '') || 'sample'}.xlsx`,
     successMessage: '빈 양식 workbook을 다운로드했습니다.',
+    progressController,
   });
 }
 
-async function onScheduleLatestBaseDownload() {
+async function onScheduleLatestBaseDownload(progressController = null) {
   if (!canUseScheduleSupportRoundtripSource()) {
     showToast('최신 기준본 다운로드 권한이 없습니다.', 'error');
     return;
@@ -49536,6 +49676,7 @@ async function onScheduleLatestBaseDownload() {
     requestUrl: `${state.activeApiBase}/schedules/import/latest-base?${params.toString()}`,
     fallbackName: `schedule_monthly_latest_base_${importSiteCode}_${importMonth.replace('-', '')}.xlsx`,
     successMessage: '최신 기준본 workbook을 다운로드했습니다.',
+    progressController,
   });
 }
 
@@ -51388,12 +51529,13 @@ function bindUiEvents() {
     }
 
     if (action === 'reports-support-download') {
-      runWithProgressTask(() => onReportsSupportDownload(), {
+      runWithProgressTask((progressController) => onReportsSupportDownload(progressController), {
         busyLabel: '지원근무자용 시트 준비 중...',
         fallbackMessage: '지원근무자용 시트를 준비하지 못했습니다.',
         progressOptions: {
           title: '지원근무자용 시트를 준비하고 있습니다',
           detail: '선택한 월과 지점 기준으로 전달용 workbook을 생성하는 중입니다.',
+          tone: LONG_TASK_TONE_DOWNLOAD,
           stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
         },
       });
@@ -51593,7 +51735,16 @@ function bindUiEvents() {
     }
 
     if (action === 'support-status-hq-download') {
-      runWithBusy(() => onSupportStatusHqDownload(), 'HQ workbook 다운로드 중...');
+      runWithProgressTask((progressController) => onSupportStatusHqDownload(progressController), {
+        busyLabel: 'HQ workbook 다운로드 중...',
+        fallbackMessage: 'HQ workbook 다운로드에 실패했습니다.',
+        progressOptions: {
+          title: 'HQ workbook을 준비하고 있습니다',
+          detail: '선택한 범위 기준으로 다운로드 파일을 생성하는 중입니다.',
+          tone: LONG_TASK_TONE_DOWNLOAD,
+          stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+        },
+      });
       return;
     }
 
@@ -52735,7 +52886,16 @@ function bindUiEvents() {
 
     if (action === 'hr-employment-download') {
       const requestId = String(actionEl.dataset.requestId || '').trim();
-      runWithBusy(() => downloadHrEmploymentRequestPdf(requestId), 'PDF 다운로드 중...');
+      runWithProgressTask((progressController) => downloadHrEmploymentRequestPdf(requestId, progressController), {
+        busyLabel: 'PDF 다운로드 중...',
+        fallbackMessage: '재직증명서 PDF 다운로드에 실패했습니다.',
+        progressOptions: {
+          title: '재직증명서 PDF를 준비하고 있습니다',
+          detail: '승인된 문서를 PDF로 생성해 브라우저에 전달하는 중입니다.',
+          tone: LONG_TASK_TONE_DOWNLOAD,
+          stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+        },
+      });
       return;
     }
 
@@ -53281,13 +53441,31 @@ function bindUiEvents() {
         showToast('다운로드할 명부 항목을 찾을 수 없습니다.', 'error');
         return;
       }
-      runWithBusy(() => downloadGuardRosterSourceDocx(row), '원본 문서 다운로드 중...');
+      runWithProgressTask((progressController) => downloadGuardRosterSourceDocx(row, progressController), {
+        busyLabel: '원본 문서 다운로드 중...',
+        fallbackMessage: '원본 문서 다운로드에 실패했습니다.',
+        progressOptions: {
+          title: '원본 명부 문서를 준비하고 있습니다',
+          detail: '선택한 원본 docx 파일을 브라우저에 전달하는 중입니다.',
+          tone: LONG_TASK_TONE_DOWNLOAD,
+          stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+        },
+      });
       return;
     }
 
     if (action === 'employee-download-roster-file') {
       const rosterId = String($('#empRosterAttachmentId')?.value || '').trim();
-      runWithBusy(() => downloadEmployeeAttachmentById(rosterId, 'docx'), '경비원명부 다운로드 중...');
+      runWithProgressTask((progressController) => downloadEmployeeAttachmentById(rosterId, 'docx', progressController), {
+        busyLabel: '경비원명부 다운로드 중...',
+        fallbackMessage: '경비원명부 다운로드에 실패했습니다.',
+        progressOptions: {
+          title: '경비원명부를 준비하고 있습니다',
+          detail: '선택한 첨부 docx 파일을 브라우저에 전달하는 중입니다.',
+          tone: LONG_TASK_TONE_DOWNLOAD,
+          stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+        },
+      });
       return;
     }
 
@@ -53297,13 +53475,31 @@ function bindUiEvents() {
         showToast('다운로드 가능한 명부가 없습니다.', 'error');
         return;
       }
-      runWithBusy(() => downloadEmployeeAttachmentById(rosterId, 'docx'), '경비원명부 다운로드 중...');
+      runWithProgressTask((progressController) => downloadEmployeeAttachmentById(rosterId, 'docx', progressController), {
+        busyLabel: '경비원명부 다운로드 중...',
+        fallbackMessage: '경비원명부 다운로드에 실패했습니다.',
+        progressOptions: {
+          title: '경비원명부를 준비하고 있습니다',
+          detail: '선택한 첨부 docx 파일을 브라우저에 전달하는 중입니다.',
+          tone: LONG_TASK_TONE_DOWNLOAD,
+          stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+        },
+      });
       return;
     }
 
     if (action === 'employee-download-photo-file') {
       const photoId = String($('#empPhotoAttachmentId')?.value || '').trim();
-      runWithBusy(() => downloadEmployeeAttachmentById(photoId, 'photo'), '사진 다운로드 중...');
+      runWithProgressTask((progressController) => downloadEmployeeAttachmentById(photoId, 'photo', progressController), {
+        busyLabel: '사진 다운로드 중...',
+        fallbackMessage: '사진 다운로드에 실패했습니다.',
+        progressOptions: {
+          title: '직원 사진을 준비하고 있습니다',
+          detail: '선택한 사진 파일을 브라우저에 전달하는 중입니다.',
+          tone: LONG_TASK_TONE_DOWNLOAD,
+          stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+        },
+      });
       return;
     }
 
@@ -54032,22 +54228,41 @@ function bindUiEvents() {
     }
 
     if (action === 'download-template' || action === 'schedule-download-blank-template') {
-      runWithBusy(() => onScheduleTemplateDownload(), '다운로드 중...');
+      runWithProgressTask((progressController) => onScheduleTemplateDownload(progressController), {
+        busyLabel: '다운로드 중...',
+        fallbackMessage: '빈 양식 workbook 다운로드에 실패했습니다.',
+        progressOptions: {
+          title: '빈 양식 workbook을 준비하고 있습니다',
+          detail: '선택한 월 기준 템플릿 파일을 생성해 브라우저에 전달하는 중입니다.',
+          tone: LONG_TASK_TONE_DOWNLOAD,
+          stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+        },
+      });
       return;
     }
 
     if (action === 'schedule-download-latest-base') {
-      runWithBusy(() => onScheduleLatestBaseDownload(), '최신 기준본 다운로드 중...');
+      runWithProgressTask((progressController) => onScheduleLatestBaseDownload(progressController), {
+        busyLabel: '최신 기준본 다운로드 중...',
+        fallbackMessage: '최신 기준본 다운로드에 실패했습니다.',
+        progressOptions: {
+          title: '최신 기준본 workbook을 준비하고 있습니다',
+          detail: '선택한 지점과 월 기준 최신 기준본을 생성해 브라우저에 전달하는 중입니다.',
+          tone: LONG_TASK_TONE_DOWNLOAD,
+          stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+        },
+      });
       return;
     }
 
     if (action === 'schedule-support-hq-download') {
-      runWithProgressTask(() => onScheduleSupportHqDownload(), {
+      runWithProgressTask((progressController) => onScheduleSupportHqDownload(progressController), {
         busyLabel: 'HQ 제출용 시트 준비 중...',
         fallbackMessage: 'HQ 제출용 시트를 준비하지 못했습니다.',
         progressOptions: {
           title: 'HQ 제출용 workbook을 준비하고 있습니다',
           detail: '선택한 지점 범위 기준으로 제출용 시트를 생성하는 중입니다.',
+          tone: LONG_TASK_TONE_DOWNLOAD,
           stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
         },
       });
@@ -54098,12 +54313,13 @@ function bindUiEvents() {
     }
 
     if (action === 'schedule-support-final-download') {
-      runWithProgressTask(() => onScheduleSupportFinalDownload(), {
+      runWithProgressTask((progressController) => onScheduleSupportFinalDownload(progressController), {
         busyLabel: '병합 완료본 다운로드 중...',
         fallbackMessage: '병합 완료본 다운로드에 실패했습니다.',
         progressOptions: {
           title: '병합 완료본을 준비하고 있습니다',
           detail: '지원근무 반영 결과를 최종 workbook으로 생성하는 중입니다.',
+          tone: LONG_TASK_TONE_DOWNLOAD,
           stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
         },
       });
@@ -54117,12 +54333,13 @@ function bindUiEvents() {
     }
 
     if (action === 'schedule-finance-review-download') {
-      runWithProgressTask(() => onScheduleFinanceReviewDownload(), {
+      runWithProgressTask((progressController) => onScheduleFinanceReviewDownload(progressController), {
         busyLabel: '1차 확인본 다운로드 중...',
         fallbackMessage: 'Finance 1차 확인본 다운로드에 실패했습니다.',
         progressOptions: {
           title: 'Finance 1차 확인본을 준비하고 있습니다',
           detail: '검토용 workbook을 생성해 브라우저에 전달하는 중입니다.',
+          tone: LONG_TASK_TONE_DOWNLOAD,
           stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
         },
       });
@@ -54158,12 +54375,13 @@ function bindUiEvents() {
     }
 
     if (action === 'schedule-finance-final-download') {
-      runWithProgressTask(() => onScheduleFinanceFinalDownload(), {
+      runWithProgressTask((progressController) => onScheduleFinanceFinalDownload(progressController), {
         busyLabel: '최종본 다운로드 중...',
         fallbackMessage: 'Finance 최종본 다운로드에 실패했습니다.',
         progressOptions: {
           title: 'Finance 최종본을 준비하고 있습니다',
           detail: '최종 업로드 기준 workbook을 생성해 브라우저에 전달하는 중입니다.',
+          tone: LONG_TASK_TONE_DOWNLOAD,
           stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
         },
       });

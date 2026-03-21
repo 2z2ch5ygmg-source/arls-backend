@@ -5636,7 +5636,7 @@ button:disabled,
 
 :root[data-ui-theme='dark'] .task-progress-ring-core {
   background: rgba(15, 23, 42, 0.96);
-  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.22);
+  box-shadow: inset 0 0 0 1px var(--task-progress-core-border);
 }
 
 .schedule-detail-head {
@@ -5788,6 +5788,15 @@ a:hover {
 }
 
 .task-progress-modal {
+  --task-progress-fill-start: var(--brand-orange-strong);
+  --task-progress-fill-end: #fb923c;
+  --task-progress-stage-bg: rgba(255, 107, 0, 0.12);
+  --task-progress-stage-text: #9a3412;
+  --task-progress-track-bg: rgba(255, 107, 0, 0.16);
+  --task-progress-ring-track: rgba(255, 107, 0, 0.12);
+  --task-progress-shadow: rgba(255, 107, 0, 0.22);
+  --task-progress-core-border: rgba(255, 107, 0, 0.18);
+  --task-progress-ratio: 0.06;
   position: fixed;
   left: 50%;
   top: 50%;
@@ -5815,17 +5824,25 @@ a:hover {
   place-items: center;
   width: 120px;
   height: 120px;
+  animation: task-progress-float 2.8s ease-in-out infinite;
 }
 
 .task-progress-ring {
+  position: relative;
   width: 104px;
   height: 104px;
   display: grid;
   place-items: center;
   border-radius: 50%;
   background:
-    conic-gradient(from 210deg, #60a5fa 0deg, #2563eb 220deg, rgba(191, 219, 254, 0.18) 220deg 360deg);
-  animation: task-progress-pulse 1.8s ease-in-out infinite;
+    conic-gradient(
+      from -90deg,
+      var(--task-progress-fill-end) 0turn,
+      var(--task-progress-fill-start) calc(var(--task-progress-ratio) * 1turn),
+      var(--task-progress-ring-track) calc(var(--task-progress-ratio) * 1turn) 1turn
+    );
+  box-shadow: 0 12px 28px var(--task-progress-shadow);
+  animation: task-progress-spin 1.35s linear infinite;
 }
 
 .task-progress-ring-core {
@@ -5833,7 +5850,7 @@ a:hover {
   height: 66px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.98);
-  box-shadow: inset 0 0 0 1px rgba(191, 219, 254, 0.35);
+  box-shadow: inset 0 0 0 1px var(--task-progress-core-border);
 }
 
 .task-progress-stage {
@@ -5842,8 +5859,8 @@ a:hover {
   min-height: 28px;
   padding: 0 12px;
   border-radius: 999px;
-  background: rgba(37, 99, 235, 0.1);
-  color: #1d4ed8;
+  background: var(--task-progress-stage-bg);
+  color: var(--task-progress-stage-text);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -5861,40 +5878,49 @@ a:hover {
 
 .task-progress-modal .task-progress-track {
   width: 100%;
+  background: var(--task-progress-track-bg);
+}
+
+.task-progress-modal .task-progress-fill {
+  background: linear-gradient(90deg, var(--task-progress-fill-start), var(--task-progress-fill-end));
+  box-shadow: 0 4px 12px var(--task-progress-shadow);
 }
 
 .task-progress-modal .task-progress-meta {
   width: 100%;
 }
 
-.task-progress-modal[data-state='success'] .task-progress-stage {
-  background: rgba(22, 163, 74, 0.12);
-  color: #15803d;
+.task-progress-modal[data-tone='download'] {
+  --task-progress-fill-start: #ea580c;
+  --task-progress-fill-end: #fb923c;
+  --task-progress-stage-bg: rgba(255, 107, 0, 0.12);
+  --task-progress-stage-text: #9a3412;
+  --task-progress-track-bg: rgba(255, 107, 0, 0.16);
+  --task-progress-ring-track: rgba(255, 107, 0, 0.12);
+  --task-progress-shadow: rgba(255, 107, 0, 0.22);
+  --task-progress-core-border: rgba(255, 107, 0, 0.18);
 }
 
-.task-progress-modal[data-state='success'] .task-progress-ring {
-  background:
-    conic-gradient(from 210deg, #4ade80 0deg, #16a34a 240deg, rgba(187, 247, 208, 0.18) 240deg 360deg);
+.task-progress-modal[data-state='success'] {
+  --task-progress-fill-start: #15803d;
+  --task-progress-fill-end: #4ade80;
+  --task-progress-stage-bg: rgba(22, 163, 74, 0.12);
+  --task-progress-stage-text: #15803d;
+  --task-progress-track-bg: rgba(22, 163, 74, 0.16);
+  --task-progress-ring-track: rgba(22, 163, 74, 0.12);
+  --task-progress-shadow: rgba(22, 163, 74, 0.22);
+  --task-progress-core-border: rgba(22, 163, 74, 0.18);
 }
 
-.task-progress-modal[data-state='success'] .task-progress-fill {
-  background: linear-gradient(90deg, #16a34a, #4ade80);
-  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.2);
-}
-
-.task-progress-modal[data-state='error'] .task-progress-stage {
-  background: rgba(220, 38, 38, 0.12);
-  color: #b91c1c;
-}
-
-.task-progress-modal[data-state='error'] .task-progress-ring {
-  background:
-    conic-gradient(from 210deg, #fb7185 0deg, #dc2626 220deg, rgba(254, 205, 211, 0.2) 220deg 360deg);
-}
-
-.task-progress-modal[data-state='error'] .task-progress-fill {
-  background: linear-gradient(90deg, #dc2626, #fb7185);
-  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
+.task-progress-modal[data-state='error'] {
+  --task-progress-fill-start: #dc2626;
+  --task-progress-fill-end: #fb7185;
+  --task-progress-stage-bg: rgba(220, 38, 38, 0.12);
+  --task-progress-stage-text: #b91c1c;
+  --task-progress-track-bg: rgba(220, 38, 38, 0.16);
+  --task-progress-ring-track: rgba(220, 38, 38, 0.12);
+  --task-progress-shadow: rgba(220, 38, 38, 0.2);
+  --task-progress-core-border: rgba(220, 38, 38, 0.18);
 }
 
 @keyframes task-progress-pulse {
@@ -5906,6 +5932,25 @@ a:hover {
   }
   100% {
     transform: scale(0.98);
+  }
+}
+
+@keyframes task-progress-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes task-progress-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
   }
 }
 
