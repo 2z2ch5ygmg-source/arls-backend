@@ -18597,120 +18597,268 @@ button.attendance-status-special-card.active {
   padding-inline: 12px;
 }
 
-.home-manager-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: rgba(255, 107, 0, 0.08);
-  color: var(--brand-orange-strong);
-  font-size: 12px;
-  font-weight: 700;
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-card,
+#shell[data-shell-mode='manager'] #view-home .home-manager-section,
+#shell[data-shell-mode='manager'] #view-home .home-manager-bottom-grid {
+  grid-column: 1 / -1;
 }
 
-.home-manager-hero-card,
-.home-manager-section {
-  gap: 16px;
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-card,
+#shell[data-shell-mode='manager'] #view-home .home-manager-section {
+  gap: 18px;
+  padding: 20px 22px;
 }
 
-.home-manager-hero-head,
-.home-manager-section-head {
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-head,
+#shell[data-shell-mode='manager'] #view-home .home-manager-section-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
 }
 
-.home-manager-hero-copy,
-.home-manager-section-title > div {
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy,
+#shell[data-shell-mode='manager'] #view-home .home-manager-section-title > div {
   display: grid;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
 }
 
-.home-manager-hero-copy h3,
-.home-manager-section-title h3 {
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy h3,
+#shell[data-shell-mode='manager'] #view-home .home-manager-section-title h3 {
   margin: 0;
+  font-size: 31px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
 }
 
-.home-manager-section-title {
+#shell[data-shell-mode='manager'] #view-home .home-manager-section-title h3 {
+  font-size: 30px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-section-title {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
 }
 
-.home-manager-section-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+#shell[data-shell-mode='manager'] #view-home .home-manager-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(15, 23, 42, 0.03);
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-section-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
   display: inline-grid;
   place-items: center;
-  background: rgba(15, 23, 42, 0.05);
-  font-size: 16px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--ui-border-subtle);
+  font-size: 17px;
   line-height: 1;
   flex: 0 0 auto;
 }
 
-.home-manager-kpi-grid-hero {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-#view-home .home-manager-hero-card #homeManagerOpsMeta {
-  margin: 0;
-}
-
-.home-attendance-overview-grid {
-  display: grid;
-  grid-template-columns: minmax(240px, 300px) repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  align-items: stretch;
-}
-
-.home-attendance-rate-card,
-.home-attendance-status-card,
-.home-attendance-issue-card,
-.home-schedule-summary-card,
-.home-requests-summary-card {
+#shell[data-shell-mode='manager'] #view-home .home-section-chevron {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
   border: 1px solid var(--ui-border-subtle);
-  border-radius: 16px;
   background: var(--ui-bg-surface);
-  padding: 16px;
-  min-width: 0;
+  color: var(--ui-text-secondary);
+  font-size: 28px;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, transform 120ms ease;
 }
 
-.home-attendance-card-label {
+#shell[data-shell-mode='manager'] #view-home .home-section-chevron:hover,
+#shell[data-shell-mode='manager'] #view-home .home-section-chevron:focus-visible {
+  border-color: rgba(255, 107, 0, 0.4);
+  color: var(--ui-text-primary);
+  transform: translateX(1px);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.1fr) minmax(0, 1.3fr);
+  gap: 16px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight {
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 20px;
+  background: var(--ui-bg-surface);
+  padding: 20px 22px;
+  display: grid;
+  gap: 10px;
+  min-height: 196px;
+  align-content: start;
+  position: relative;
+  overflow: hidden;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: rgba(148, 163, 184, 0.55);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight[data-tone='success']::before {
+  background: #1f9d68;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight[data-tone='warn']::before {
+  background: #d97706;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight[data-tone='error']::before {
+  background: #c2410c;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ui-text-secondary);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight strong {
+  font-size: clamp(38px, 5vw, 60px);
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight[data-tone='success'] strong {
+  color: #0f8a5f;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight[data-tone='warn'] strong {
+  color: #c96a04;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight[data-tone='error'] strong {
+  color: #b5432a;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-stat-rack {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 20px;
+  background: var(--bg-surface-elevated);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-stat {
+  border-radius: 14px;
+  background: transparent;
+  padding: 16px 14px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 92px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-stat span,
+#shell[data-shell-mode='manager'] #view-home .home-mini-metric span,
+#shell[data-shell-mode='manager'] #view-home .home-inline-stat span {
   color: var(--ui-text-secondary);
   font-size: 12px;
   font-weight: 700;
 }
 
-.home-attendance-rate-card {
+#shell[data-shell-mode='manager'] #view-home .home-briefing-stat strong,
+#shell[data-shell-mode='manager'] #view-home .home-mini-metric strong,
+#shell[data-shell-mode='manager'] #view-home .home-inline-stat strong {
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--ui-text-primary);
+}
+
+#shell[data-shell-mode='manager'] #view-home #homeManagerOpsMeta {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ui-text-secondary);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-overview-grid {
   display: grid;
-  gap: 14px;
+  grid-template-columns: minmax(260px, 300px) minmax(260px, 1fr) minmax(320px, 1.1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card,
+#shell[data-shell-mode='manager'] #view-home .home-attendance-status-card,
+#shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card,
+#shell[data-shell-mode='manager'] #view-home .home-schedule-summary-card,
+#shell[data-shell-mode='manager'] #view-home .home-requests-summary-card,
+#shell[data-shell-mode='manager'] #view-home .home-insight-visual,
+#shell[data-shell-mode='manager'] #view-home .home-insight-breakdown {
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 20px;
+  background: var(--ui-bg-surface);
+  min-width: 0;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card,
+#shell[data-shell-mode='manager'] #view-home .home-attendance-status-card,
+#shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card,
+#shell[data-shell-mode='manager'] #view-home .home-schedule-summary-card,
+#shell[data-shell-mode='manager'] #view-home .home-requests-summary-card {
+  padding: 20px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-card-label {
+  color: var(--ui-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card {
+  display: grid;
+  gap: 18px;
   align-content: start;
 }
 
-.home-attendance-rate-visual {
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-visual {
   display: grid;
   justify-content: center;
 }
 
-.home-attendance-rate-ring {
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-ring,
+#shell[data-shell-mode='manager'] #view-home .home-insight-ring {
   --progress: 0%;
-  width: min(100%, 176px);
+  width: min(100%, 182px);
   aspect-ratio: 1;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background:
-    conic-gradient(var(--ui-accent) 0 var(--progress), rgba(255, 107, 0, 0.14) var(--progress) 100%);
   padding: 12px;
+  background:
+    conic-gradient(#2563eb 0 var(--progress), rgba(15, 23, 42, 0.08) var(--progress) 100%);
 }
 
-.home-attendance-rate-core {
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-core,
+#shell[data-shell-mode='manager'] #view-home .home-insight-ring-core {
   width: 100%;
   height: 100%;
   border-radius: 50%;
@@ -18721,71 +18869,288 @@ button.attendance-status-special-card.active {
   gap: 4px;
 }
 
-.home-attendance-rate-core strong {
-  font-size: 32px;
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-core strong,
+#shell[data-shell-mode='manager'] #view-home .home-insight-ring-core strong {
+  font-size: 34px;
   line-height: 1;
+  letter-spacing: -0.05em;
 }
 
-.home-attendance-rate-core span,
-.home-attendance-rate-foot {
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-core span,
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-foot,
+#shell[data-shell-mode='manager'] #view-home .home-insight-ring-core span {
   color: var(--ui-text-secondary);
   font-size: 13px;
 }
 
-.home-mini-metric-grid {
+#shell[data-shell-mode='manager'] #view-home .home-attendance-status-rack,
+#shell[data-shell-mode='manager'] #view-home .home-mini-metric-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 18px;
+  background: var(--bg-surface-elevated);
 }
 
-.home-mini-metric {
-  border: 1px solid var(--ui-border-subtle);
+#shell[data-shell-mode='manager'] #view-home .home-mini-metric {
+  border: none;
   border-radius: 14px;
-  background: var(--bg-surface-elevated);
-  padding: 14px 16px;
+  background: transparent;
+  padding: 14px 12px;
   display: grid;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
-.home-mini-metric span {
+#shell[data-shell-mode='manager'] #view-home .home-section-rail {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-issue-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain {
+  display: grid;
+  gap: 10px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain > li {
+  border: none;
+  box-shadow: inset 0 0 0 1px var(--ui-border-subtle);
+  border-left: 4px solid rgba(37, 99, 235, 0.9);
+  border-radius: 16px;
+  background: var(--ui-bg-surface);
+  padding: 14px 16px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain > li.attendance-outside {
+  border-left-color: #c2410c;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain .list-row {
+  align-items: flex-start;
+  gap: 14px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain .list-row-title {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain .list-row-sub {
+  color: var(--ui-text-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-schedule-grid,
+#shell[data-shell-mode='manager'] #view-home .home-requests-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 1fr);
+  gap: 16px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-card {
+  display: grid;
+  gap: 18px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-meta {
+  display: grid;
+  gap: 4px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-meta span {
   color: var(--ui-text-secondary);
   font-size: 12px;
   font-weight: 700;
 }
 
-.home-mini-metric strong {
-  font-size: 24px;
-  line-height: 1.1;
+#shell[data-shell-mode='manager'] #view-home .home-distribution-meta strong {
+  font-size: 20px;
+  line-height: 1.2;
 }
 
-.home-attendance-issue-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.home-schedule-grid,
-.home-requests-grid {
+#shell[data-shell-mode='manager'] #view-home .home-distribution-bars {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+  min-height: 220px;
 }
 
-.home-manager-bottom-grid {
+#shell[data-shell-mode='manager'] #view-home .home-distribution-bar {
+  --fill: 10%;
+  border: none;
+  box-shadow: inset 0 0 0 1px var(--ui-border-subtle);
+  border-radius: 18px;
+  background:
+    linear-gradient(to top, rgba(37, 99, 235, 0.28) 0 var(--fill), var(--bg-surface-elevated) var(--fill) 100%);
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 10px;
+  min-height: 220px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-bar:nth-child(2) {
+  background:
+    linear-gradient(to top, rgba(15, 23, 42, 0.18) 0 var(--fill), var(--bg-surface-elevated) var(--fill) 100%);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-bar:nth-child(3) {
+  background:
+    linear-gradient(to top, rgba(5, 150, 105, 0.24) 0 var(--fill), var(--bg-surface-elevated) var(--fill) 100%);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-bar:nth-child(4) {
+  background:
+    linear-gradient(to top, rgba(217, 119, 6, 0.24) 0 var(--fill), var(--bg-surface-elevated) var(--fill) 100%);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-bar strong {
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-bar span {
+  color: var(--ui-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter-card {
+  display: grid;
+  align-content: start;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter-list {
+  display: grid;
+  gap: 16px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter {
+  display: grid;
+  gap: 10px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter-copy {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter-copy span {
+  color: var(--ui-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter-copy strong {
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter-track,
+#shell[data-shell-mode='manager'] #view-home .home-progress-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter-fill,
+#shell[data-shell-mode='manager'] #view-home .home-progress-fill {
+  display: block;
+  width: var(--fill);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #1d4ed8);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-bottom-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
-#shell[data-shell-mode='manager'] #view-home .home-manager-hero-card,
-#shell[data-shell-mode='manager'] #view-home .home-manager-attendance-card,
-#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card,
-#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card,
-#shell[data-shell-mode='manager'] #view-home .home-manager-bottom-grid {
-  grid-column: 1 / -1;
+#shell[data-shell-mode='manager'] #view-home .home-insight-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  gap: 16px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-insight-visual,
+#shell[data-shell-mode='manager'] #view-home .home-insight-breakdown {
+  padding: 18px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-insight-visual {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 14px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-inline-stat-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 18px;
+  background: var(--bg-surface-elevated);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-inline-stat {
+  border: none;
+  border-radius: 14px;
+  padding: 14px 12px;
+  display: grid;
+  gap: 8px;
+  background: transparent;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-progress-stack {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-progress-row {
+  --fill: 0%;
+  display: grid;
+  gap: 8px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-progress-copy {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-progress-copy span {
+  color: var(--ui-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-progress-copy strong {
+  font-size: 20px;
+  line-height: 1;
 }
 
 @media (min-width: 1024px) {
@@ -18803,9 +19168,15 @@ button.attendance-status-special-card.active {
     gap: 16px;
     align-items: start;
   }
+}
 
-  #shell[data-shell-mode='manager'] #view-home .home-manager-hero-card {
-    padding: 18px 20px;
+@media (max-width: 1199px) {
+  #shell[data-shell-mode='manager'] #view-home .home-briefing-grid,
+  #shell[data-shell-mode='manager'] #view-home .home-attendance-overview-grid,
+  #shell[data-shell-mode='manager'] #view-home .home-schedule-grid,
+  #shell[data-shell-mode='manager'] #view-home .home-requests-grid,
+  #shell[data-shell-mode='manager'] #view-home .home-insight-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -18818,25 +19189,73 @@ button.attendance-status-special-card.active {
     min-width: 0;
   }
 
-  .home-manager-kpi-grid-hero,
-  .home-attendance-overview-grid,
-  .home-schedule-grid,
-  .home-requests-grid,
-  .home-manager-bottom-grid,
-  .home-mini-metric-grid {
+  #shell[data-shell-mode='manager'] #view-home .home-manager-bottom-grid,
+  #shell[data-shell-mode='manager'] #view-home .home-briefing-stat-rack,
+  #shell[data-shell-mode='manager'] #view-home .home-inline-stat-list,
+  #shell[data-shell-mode='manager'] #view-home .home-attendance-status-rack,
+  #shell[data-shell-mode='manager'] #view-home .home-mini-metric-grid {
     grid-template-columns: 1fr;
   }
 
-  .home-attendance-rate-ring {
-    width: 160px;
+  #shell[data-shell-mode='manager'] #view-home .home-distribution-bars {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-height: 0;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-distribution-bar {
+    min-height: 168px;
   }
 }
 
 @media (max-width: 767px) {
-  .home-manager-hero-head,
-  .home-manager-section-head,
-  .home-attendance-issue-head {
+  #shell[data-shell-mode='manager'] #view-home .home-manager-hero-head,
+  #shell[data-shell-mode='manager'] #view-home .home-manager-section-head,
+  #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-head {
     flex-direction: column;
     align-items: flex-start;
   }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-bottom-grid,
+  #shell[data-shell-mode='manager'] #view-home .home-distribution-bars {
+    grid-template-columns: 1fr;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-ring,
+  #shell[data-shell-mode='manager'] #view-home .home-insight-ring {
+    width: 156px;
+  }
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-manager-eyebrow {
+  border-color: rgba(148, 163, 184, 0.24);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--ui-text-secondary);
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-status-card,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-schedule-summary-card,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-requests-summary-card,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-insight-visual,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-insight-breakdown,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-briefing-stat,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-mini-metric,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-inline-stat,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain > li,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-distribution-bar {
+  background-color: var(--bg-surface-elevated);
+  border-color: var(--state-inset-border);
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-ring,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-insight-ring {
+  background:
+    conic-gradient(#60a5fa 0 var(--progress), rgba(255, 255, 255, 0.08) var(--progress) 100%);
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-request-meter-track,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-progress-track {
+  background: rgba(255, 255, 255, 0.08);
 }

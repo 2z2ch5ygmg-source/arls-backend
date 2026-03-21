@@ -4816,6 +4816,26 @@ function setHomeDashboardPill(selector, label = '', variant = 'neutral') {
   el.textContent = String(label || '-').trim() || '-';
 }
 
+function setHomeDashboardTone(selector, tone = 'neutral') {
+  const el = $(selector);
+  if (!(el instanceof HTMLElement)) return;
+  el.dataset.tone = String(tone || 'neutral').trim() || 'neutral';
+}
+
+function setHomeRatioRing(selector, percent = 0) {
+  const el = $(selector);
+  if (!(el instanceof HTMLElement)) return;
+  const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+  el.style.setProperty('--progress', `${safePercent}%`);
+}
+
+function setHomeProgressFill(selector, percent = 0) {
+  const el = $(selector);
+  if (!(el instanceof HTMLElement)) return;
+  const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+  el.style.setProperty('--fill', `${safePercent}%`);
+}
+
 function createHomeDashboardListRow({
   title = '',
   subtitle = '',
@@ -5135,6 +5155,34 @@ function renderHomeManagerOrgSections() {
   setMetric('#homeManagerSitesActive', showSitesCard ? `${Number(organizationSummary.activeSiteCount || 0)}개` : '');
   setMetric('#homeManagerSitesAssigned', showSitesCard ? `${Number(organizationSummary.assignedSiteCount || 0)}개` : '');
   setMetric('#homeManagerSitesUnassignedEmployees', showSitesCard ? `${Number(organizationSummary.unassignedEmployeeCount || 0)}명` : '');
+
+  const employeeTotal = Math.max(0, Number(organizationSummary.employeeTotal || 0));
+  const activeEmployees = Math.max(0, Number(organizationSummary.activeEmployeeCount || 0));
+  const managerCount = Math.max(0, Number(organizationSummary.managerCount || 0));
+  const unlinkedCount = Math.max(0, Number(organizationSummary.unlinkedCount || 0));
+  const activeRatio = employeeTotal > 0 ? Math.round((activeEmployees / employeeTotal) * 100) : 0;
+  setTextToSelectors(['#homeManagerPeopleRatioValue'], `${activeRatio}%`);
+  setTextToSelectors(
+    ['#homeManagerPeopleRatioMeta'],
+    organizationSummary.loading ? '구성원 집계 중' : `재직 ${activeEmployees}명 / 전체 ${employeeTotal}명`,
+  );
+  setHomeRatioRing('#homeManagerPeopleRing', activeRatio);
+  setHomeProgressFill('#homeManagerPeopleManagersRow', employeeTotal > 0 ? Math.round((managerCount / employeeTotal) * 100) : 0);
+  setHomeProgressFill('#homeManagerPeopleUnlinkedRow', activeEmployees > 0 ? Math.round((unlinkedCount / activeEmployees) * 100) : 0);
+
+  const totalSites = Math.max(0, Number(organizationSummary.siteTotal || 0));
+  const activeSites = Math.max(0, Number(organizationSummary.activeSiteCount || 0));
+  const assignedSites = Math.max(0, Number(organizationSummary.assignedSiteCount || 0));
+  const unassignedEmployees = Math.max(0, Number(organizationSummary.unassignedEmployeeCount || 0));
+  const siteCoverage = activeSites > 0 ? Math.round((assignedSites / activeSites) * 100) : 0;
+  setTextToSelectors(['#homeManagerSitesCoverageValue'], `${siteCoverage}%`);
+  setTextToSelectors(
+    ['#homeManagerSitesCoverageMeta'],
+    organizationSummary.loading ? '근무지 집계 중' : `배정 현장 ${assignedSites}개 / 활성 ${activeSites}개`,
+  );
+  setHomeRatioRing('#homeManagerSitesRing', siteCoverage);
+  setHomeProgressFill('#homeManagerSitesAssignedRow', activeSites > 0 ? Math.round((assignedSites / activeSites) * 100) : 0);
+  setHomeProgressFill('#homeManagerSitesUnassignedRow', employeeTotal > 0 ? Math.round((unassignedEmployees / employeeTotal) * 100) : 0);
 }
 
 function renderHomeManagerDashboard() {
@@ -5148,11 +5196,15 @@ function renderHomeManagerDashboard() {
   const attendanceIssues = Array.isArray(dashboard.attendanceIssues) ? dashboard.attendanceIssues : [];
   const scheduledCount = Math.max(0, Number(state.ops?.scheduledCount || 0));
   const presentCount = Math.max(0, Number(state.ops?.presentCount || 0));
+  const vacancyCount = Math.max(0, Number(state.ops?.vacancyCount || 0));
   const attendanceRate = scheduledCount > 0 ? Math.round((presentCount / scheduledCount) * 100) : 0;
+  const totalPendingCount = Math.max(0, Number(requestSummary.totalPendingCount || 0));
+  const scheduleGapCount = Math.max(0, Number(scheduleSummary.scheduleGapCount || 0));
+  const vacancySiteCount = Math.max(0, Number(scheduleSummary.vacancySiteCount || 0));
   const immediateCount = attendanceIssues.length
-    + Math.max(0, Number(scheduleSummary.vacancySiteCount || 0))
-    + Math.max(0, Number(scheduleSummary.scheduleGapCount || 0))
-    + Math.max(0, Number(requestSummary.totalPendingCount || 0))
+    + vacancySiteCount
+    + scheduleGapCount
+    + totalPendingCount
     + (state.ops?.closerAssigned ? 0 : 1)
     + (state.ops?.leaderAssigned ? 0 : 1);
 
@@ -5167,6 +5219,7 @@ function renderHomeManagerDashboard() {
     leaveOrNightText = `야간 ${overnightCount}건`;
   }
   setTextToSelectors(['#homeManagerLeaveOrNightLabel'], leaveOrNightText);
+  setTextToSelectors(['#homeManagerHeroApprovalCount'], `${totalPendingCount}건`);
 
   const homeTitle = $('#homeViewTitle');
   if (homeTitle instanceof HTMLElement) {
@@ -5176,6 +5229,46 @@ function renderHomeManagerDashboard() {
   if (homeSubtitle instanceof HTMLElement) {
     homeSubtitle.textContent = `${toDateLabel(getOpsActiveDate())} · 오늘 운영 브리핑`;
   }
+
+  let heroTone = 'neutral';
+  let heroPrimaryLabel = '대표 상태';
+  let heroPrimaryValue = '-';
+  let heroPrimaryMeta = '오늘 운영 브리핑을 집계하는 중입니다.';
+  if (state.ops.loading) {
+    heroTone = 'neutral';
+    heroPrimaryLabel = '운영 집계';
+    heroPrimaryValue = '…';
+    heroPrimaryMeta = '출근, 승인, 스케줄 상태를 불러오는 중입니다.';
+  } else if (state.ops.error) {
+    heroTone = 'error';
+    heroPrimaryLabel = '조회 실패';
+    heroPrimaryValue = '재시도';
+    heroPrimaryMeta = '오늘 운영 집계를 불러오지 못했습니다.';
+  } else if (vacancyCount > 0) {
+    heroTone = 'error';
+    heroPrimaryLabel = '결원/미출근';
+    heroPrimaryValue = `${vacancyCount}건`;
+    heroPrimaryMeta = '오늘 가장 먼저 확인해야 할 출퇴근 이슈입니다.';
+  } else if (totalPendingCount > 0) {
+    heroTone = 'warn';
+    heroPrimaryLabel = '승인 대기';
+    heroPrimaryValue = `${totalPendingCount}건`;
+    heroPrimaryMeta = '요청·승인에서 바로 처리할 대기 건이 있습니다.';
+  } else if (scheduleGapCount > 0 || vacancySiteCount > 0 || !state.ops?.closerAssigned || !state.ops?.leaderAssigned) {
+    heroTone = 'warn';
+    heroPrimaryLabel = '스케줄 확인';
+    heroPrimaryValue = `${scheduleGapCount + vacancySiteCount + (state.ops?.closerAssigned ? 0 : 1) + (state.ops?.leaderAssigned ? 0 : 1)}건`;
+    heroPrimaryMeta = '배정 누락과 오늘 마감/리더 지정 상태를 먼저 점검해 주세요.';
+  } else {
+    heroTone = 'success';
+    heroPrimaryLabel = '운영 안정';
+    heroPrimaryValue = 'OK';
+    heroPrimaryMeta = '지금 바로 확인할 핵심 운영 이슈는 없습니다.';
+  }
+  setHomeDashboardTone('#homeManagerHeroPrimaryCard', heroTone);
+  setTextToSelectors(['#homeManagerHeroPrimaryLabel'], heroPrimaryLabel);
+  setTextToSelectors(['#homeManagerHeroPrimaryValue'], heroPrimaryValue);
+  setTextToSelectors(['#homeManagerHeroPrimaryMeta'], heroPrimaryMeta);
 
   setHomeDashboardPill(
     '#homeManagerOverviewPill',
@@ -5203,14 +5296,13 @@ function renderHomeManagerDashboard() {
   const briefingMetaEl = $('#homeManagerOpsMeta');
   let briefingMeta = '';
   if (state.ops.loading) {
-    briefingMeta = '오늘 운영 브리핑을 집계하는 중입니다.';
+    briefingMeta = '운영 집계와 승인 상태를 모으는 중입니다.';
   } else if (state.ops.error) {
     briefingMeta = '오늘 운영 브리핑을 불러오지 못했습니다.';
   } else {
-    const metaParts = [
-      immediateCount > 0 ? `지금 바로 확인할 운영 이슈 ${immediateCount}건` : '현재 즉시 확인이 필요한 운영 이슈는 없습니다.',
-    ];
-    briefingMeta = metaParts.join(' · ');
+    briefingMeta = immediateCount > 0
+      ? `즉시 확인 ${immediateCount}건 · 출근 완료 ${presentCount}/${scheduledCount}`
+      : `운영 안정 · 출근 완료 ${presentCount}/${scheduledCount}`;
   }
   if (briefingMetaEl) {
     briefingMetaEl.textContent = briefingMeta;
@@ -5235,7 +5327,7 @@ function renderHomeManagerDashboard() {
   }
 
   setTextToSelectors(['#homeManagerAttendancePresent'], String(presentCount));
-  setTextToSelectors(['#homeManagerAttendanceMissing'], String(Math.max(0, Number(state.ops?.vacancyCount || 0))));
+  setTextToSelectors(['#homeManagerAttendanceMissing'], String(vacancyCount));
   setTextToSelectors(['#homeManagerAttendanceReview'], String(attendanceIssues.length));
   setTextToSelectors(['#homeManagerAttendanceLeave'], `${leaveCount}/${overnightCount}`);
   setHomeDashboardPill(
@@ -5253,7 +5345,25 @@ function renderHomeManagerDashboard() {
   setTextToSelectors(['#homeManagerScheduleTodayCount'], `${Number(scheduleSummary.todayScheduledCount || 0)}명`);
   setTextToSelectors(['#homeManagerScheduleWeekCount'], `${Number(scheduleSummary.weekScheduledCount || 0)}건`);
   setTextToSelectors(['#homeManagerScheduleSiteCount'], `${Number(scheduleSummary.siteCount || 0)}개`);
-  setTextToSelectors(['#homeManagerScheduleVacancySites'], `${Number(scheduleSummary.vacancySiteCount || 0)}개`);
+  setTextToSelectors(['#homeManagerScheduleVacancySites'], `${vacancySiteCount}개`);
+  setTextToSelectors(
+    ['#homeManagerScheduleDistributionMeta'],
+    state.ops.loading
+      ? '집계 중'
+      : `근무 ${Number(scheduleSummary.todayScheduledCount || 0)}명 · 결원 지점 ${vacancySiteCount}개`,
+  );
+  const scheduleBarValues = [
+    Math.max(0, Number(scheduleSummary.todayScheduledCount || 0)),
+    Math.max(0, Number(scheduleSummary.weekScheduledCount || 0)),
+    Math.max(0, Number(scheduleSummary.siteCount || 0)),
+    vacancySiteCount,
+  ];
+  const scheduleBarMax = Math.max(...scheduleBarValues, 1);
+  const scheduleBarPercent = (value) => (value > 0 ? Math.max(18, Math.round((value / scheduleBarMax) * 100)) : 10);
+  setHomeProgressFill('#homeManagerScheduleBarToday', scheduleBarPercent(scheduleBarValues[0]));
+  setHomeProgressFill('#homeManagerScheduleBarWeek', scheduleBarPercent(scheduleBarValues[1]));
+  setHomeProgressFill('#homeManagerScheduleBarSites', scheduleBarPercent(scheduleBarValues[2]));
+  setHomeProgressFill('#homeManagerScheduleBarVacancy', scheduleBarPercent(scheduleBarValues[3]));
   renderHomeDashboardList(
     '#homeManagerScheduleList',
     buildHomeScheduleRows(),
@@ -5261,10 +5371,22 @@ function renderHomeManagerDashboard() {
     '배치와 지정 상태가 안정적입니다.',
   );
 
-  setTextToSelectors(['#homeManagerRequestPendingCount'], `${Number(requestSummary.totalPendingCount || 0)}건`);
+  setTextToSelectors(['#homeManagerRequestPendingCount'], `${totalPendingCount}건`);
   setTextToSelectors(['#homeManagerRequestLeaveCount'], `${Number(requestSummary.leavePendingCount || 0)}건`);
   setTextToSelectors(['#homeManagerRequestCorrectionCount'], `${Number(requestSummary.correctionPendingCount || 0)}건`);
   setTextToSelectors(['#homeManagerRequestUnreadCount'], `${Number(requestSummary.unreadCount || 0)}건`);
+  const requestBarValues = [
+    totalPendingCount,
+    Math.max(0, Number(requestSummary.leavePendingCount || 0)),
+    Math.max(0, Number(requestSummary.correctionPendingCount || 0)),
+    Math.max(0, Number(requestSummary.unreadCount || 0)),
+  ];
+  const requestBarMax = Math.max(...requestBarValues, 1);
+  const requestBarPercent = (value) => (value > 0 ? Math.max(16, Math.round((value / requestBarMax) * 100)) : 8);
+  setHomeProgressFill('#homeManagerRequestPendingBar', requestBarPercent(requestBarValues[0]));
+  setHomeProgressFill('#homeManagerRequestLeaveBar', requestBarPercent(requestBarValues[1]));
+  setHomeProgressFill('#homeManagerRequestCorrectionBar', requestBarPercent(requestBarValues[2]));
+  setHomeProgressFill('#homeManagerRequestUnreadBar', requestBarPercent(requestBarValues[3]));
   renderHomeDashboardList(
     '#homeManagerRequestList',
     buildHomeRequestRows(),
