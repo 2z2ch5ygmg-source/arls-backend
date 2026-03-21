@@ -74,6 +74,10 @@ collect_changed_paths() {
   } | sed '/^$/d' | sort -u
 }
 
+collect_staged_paths() {
+  git diff --cached --name-only | sed '/^$/d' | sort -u
+}
+
 build_allowed_git_patterns() {
   local frontend_only="false"
   local backend_only="false"
@@ -186,6 +190,8 @@ attempt_git_push() {
   done < <(build_allowed_git_patterns "${args[@]}")
   local -a stageable_paths=()
   local -a blocked_paths=()
+  local -a staged_paths=()
+  local -a staged_blocked_paths=()
   local path
 
   for path in "${changed_paths[@]}"; do
@@ -196,20 +202,61 @@ attempt_git_push() {
     fi
   done
 
-  if [[ "${#blocked_paths[@]}" -gt 0 ]]; then
-    log "배포 범위 밖 변경이 있어 자동 commit/push를 건너뜁니다."
-    for path in "${blocked_paths[@]}"; do
-      log "범위 밖 변경: $path"
-    done
-    return 0
-  fi
-
   if [[ "${#stageable_paths[@]}" -eq 0 ]]; then
     log "배포 범위 내 변경이 없어 commit/push를 건너뜁니다."
     return 0
   fi
 
+  while IFS= read -r path; do
+    [[ -n "$path" ]] && staged_paths+=("$path")
+  done < <(collect_staged_paths)
+
+  if [[ "${#staged_paths[@]}" -gt 0 ]]; then
+    for path in "${staged_paths[@]}"; do
+      if ! path_matches_allowed_patterns "$path" "${allowed_patterns[@]}"; then
+        staged_blocked_paths+=("$path")
+      fi
+    done
+  fi
+
+  if [[ "${#staged_blocked_paths[@]}" -gt 0 ]]; then
+    log "배포 범위 밖 staged 변경이 있어 자동 commit/push를 건너뜁니다."
+    for path in "${staged_blocked_paths[@]}"; do
+      log "staged 범위 밖 변경: $path"
+    done
+    return 0
+  fi
+
+  if [[ "${#blocked_paths[@]}" -gt 0 ]]; then
+    log "배포 범위 밖 변경은 제외하고 범위 내 변경만 자동 commit/push 합니다."
+    for path in "${blocked_paths[@]}"; do
+      log "제외되는 범위 밖 변경: $path"
+    done
+  fi
+
   git add -- "${stageable_paths[@]}"
+  local -a final_staged_paths=()
+  while IFS= read -r path; do
+    [[ -n "$path" ]] && final_staged_paths+=("$path")
+  done < <(collect_staged_paths)
+
+  local -a final_staged_blocked_paths=()
+  if [[ "${#final_staged_paths[@]}" -gt 0 ]]; then
+    for path in "${final_staged_paths[@]}"; do
+      if ! path_matches_allowed_patterns "$path" "${allowed_patterns[@]}"; then
+        final_staged_blocked_paths+=("$path")
+      fi
+    done
+  fi
+
+  if [[ "${#final_staged_blocked_paths[@]}" -gt 0 ]]; then
+    log "staged 영역에 범위 밖 변경이 남아 있어 자동 commit/push를 중단합니다."
+    for path in "${final_staged_blocked_paths[@]}"; do
+      log "최종 staged 범위 밖 변경: $path"
+    done
+    return 0
+  fi
+
   if git diff --cached --quiet; then
     log "staged 변경이 없어 commit/push를 건너뜁니다."
     return 0
