@@ -5111,78 +5111,105 @@ function buildHomeRequestRows() {
   return rows.slice(0, 4);
 }
 
-function renderHomeManagerOrgSections() {
+function buildHomeOrgIssueRows() {
   const dashboard = getHomeManagerDashboardState();
   const organizationSummary = dashboard.organizationSummary || {};
-  const peopleCard = $('#homeManagerPeopleCard');
-  const sitesCard = $('#homeManagerSitesCard');
-  const peopleMetrics = [
-    Number(organizationSummary.employeeTotal || 0),
-    Number(organizationSummary.activeEmployeeCount || 0),
-    Number(organizationSummary.managerCount || 0),
-    Number(organizationSummary.unlinkedCount || 0),
-  ];
-  const siteMetrics = [
-    Number(organizationSummary.siteTotal || 0),
-    Number(organizationSummary.activeSiteCount || 0),
-    Number(organizationSummary.assignedSiteCount || 0),
-    Number(organizationSummary.unassignedEmployeeCount || 0),
-  ];
-  const showPeopleCard = can('employees') && (organizationSummary.loading || peopleMetrics.some((value) => value > 0));
-  const showSitesCard = can('org') && (organizationSummary.loading || siteMetrics.some((value) => value > 0));
-
-  if (peopleCard instanceof HTMLElement) {
-    peopleCard.classList.toggle('hidden', !showPeopleCard);
-  }
-  if (sitesCard instanceof HTMLElement) {
-    sitesCard.classList.toggle('hidden', !showSitesCard);
-  }
-
-  const loadingText = organizationSummary.loading ? '조회 중' : '-';
-  const setMetric = (selector, value = '') => {
-    const el = $(selector);
-    if (!(el instanceof HTMLElement)) return;
-    const hasValue = value !== null && value !== undefined && value !== '';
-    el.textContent = hasValue ? String(value) : loadingText;
-  };
-
-  setMetric('#homeManagerPeopleTotal', showPeopleCard ? `${Number(organizationSummary.employeeTotal || 0)}명` : '');
-  setMetric('#homeManagerPeopleActive', showPeopleCard ? `${Number(organizationSummary.activeEmployeeCount || 0)}명` : '');
-  setMetric('#homeManagerPeopleManagers', showPeopleCard ? `${Number(organizationSummary.managerCount || 0)}명` : '');
-  setMetric('#homeManagerPeopleUnlinked', showPeopleCard ? `${Number(organizationSummary.unlinkedCount || 0)}명` : '');
-
-  setMetric('#homeManagerSitesTotal', showSitesCard ? `${Number(organizationSummary.siteTotal || 0)}개` : '');
-  setMetric('#homeManagerSitesActive', showSitesCard ? `${Number(organizationSummary.activeSiteCount || 0)}개` : '');
-  setMetric('#homeManagerSitesAssigned', showSitesCard ? `${Number(organizationSummary.assignedSiteCount || 0)}개` : '');
-  setMetric('#homeManagerSitesUnassignedEmployees', showSitesCard ? `${Number(organizationSummary.unassignedEmployeeCount || 0)}명` : '');
-
+  const rows = [];
   const employeeTotal = Math.max(0, Number(organizationSummary.employeeTotal || 0));
   const activeEmployees = Math.max(0, Number(organizationSummary.activeEmployeeCount || 0));
   const managerCount = Math.max(0, Number(organizationSummary.managerCount || 0));
   const unlinkedCount = Math.max(0, Number(organizationSummary.unlinkedCount || 0));
-  const activeRatio = employeeTotal > 0 ? Math.round((activeEmployees / employeeTotal) * 100) : 0;
-  setTextToSelectors(['#homeManagerPeopleRatioValue'], `${activeRatio}%`);
-  setTextToSelectors(
-    ['#homeManagerPeopleRatioMeta'],
-    organizationSummary.loading ? '구성원 집계 중' : `재직 ${activeEmployees}명 / 전체 ${employeeTotal}명`,
-  );
-  setHomeRatioRing('#homeManagerPeopleRing', activeRatio);
-  setHomeProgressFill('#homeManagerPeopleManagersRow', employeeTotal > 0 ? Math.round((managerCount / employeeTotal) * 100) : 0);
-  setHomeProgressFill('#homeManagerPeopleUnlinkedRow', activeEmployees > 0 ? Math.round((unlinkedCount / activeEmployees) * 100) : 0);
-
   const totalSites = Math.max(0, Number(organizationSummary.siteTotal || 0));
   const activeSites = Math.max(0, Number(organizationSummary.activeSiteCount || 0));
   const assignedSites = Math.max(0, Number(organizationSummary.assignedSiteCount || 0));
   const unassignedEmployees = Math.max(0, Number(organizationSummary.unassignedEmployeeCount || 0));
-  const siteCoverage = activeSites > 0 ? Math.round((assignedSites / activeSites) * 100) : 0;
-  setTextToSelectors(['#homeManagerSitesCoverageValue'], `${siteCoverage}%`);
-  setTextToSelectors(
-    ['#homeManagerSitesCoverageMeta'],
-    organizationSummary.loading ? '근무지 집계 중' : `배정 현장 ${assignedSites}개 / 활성 ${activeSites}개`,
+
+  if (unlinkedCount > 0) {
+    rows.push({
+      title: '계정 연결 필요',
+      subtitle: `로그인 연결이 필요한 직원 ${unlinkedCount}명`,
+      pillLabel: `${unlinkedCount}명`,
+      pillVariant: 'warn',
+      actionLabel: '직원',
+      route: '/branch/employees',
+    });
+  }
+  if (unassignedEmployees > 0) {
+    rows.push({
+      title: '미배정 직원',
+      subtitle: `현장에 아직 연결되지 않은 직원 ${unassignedEmployees}명`,
+      pillLabel: `${unassignedEmployees}명`,
+      pillVariant: 'warn',
+      actionLabel: '조직',
+      route: '/branch/employees',
+    });
+  }
+  if (totalSites > activeSites) {
+    rows.push({
+      title: '비활성 현장 존재',
+      subtitle: `전체 ${totalSites}개 중 운영 중 현장 ${activeSites}개`,
+      pillLabel: `${Math.max(0, totalSites - activeSites)}개`,
+      pillVariant: 'neutral',
+      actionLabel: '지점',
+      route: '/branch/sites',
+    });
+  }
+  if (activeSites > assignedSites) {
+    rows.push({
+      title: '직원 미배치 현장',
+      subtitle: `활성 현장 ${activeSites}개 중 직원 배정 완료 ${assignedSites}개`,
+      pillLabel: `${Math.max(0, activeSites - assignedSites)}개`,
+      pillVariant: 'warn',
+      actionLabel: '지점',
+      route: '/branch/sites',
+    });
+  }
+  if (activeEmployees > 0 && managerCount === 0) {
+    rows.push({
+      title: '관리자/리더 확인 필요',
+      subtitle: `재직 직원 ${employeeTotal}명인데 관리자·리더가 없습니다.`,
+      pillLabel: '확인',
+      pillVariant: 'error',
+      actionLabel: '직원',
+      route: '/branch/employees',
+    });
+  }
+  return rows.slice(0, 4);
+}
+
+function renderHomeManagerOrgSections() {
+  const dashboard = getHomeManagerDashboardState();
+  const organizationSummary = dashboard.organizationSummary || {};
+  const orgCard = $('#homeManagerOrgCard');
+  const homeStack = document.querySelector('#view-home .home-stack');
+  const issueRows = buildHomeOrgIssueRows();
+  const canSeeOrg = can('employees') || can('org');
+  const showOrgCard = canSeeOrg && issueRows.length > 0;
+
+  if (orgCard instanceof HTMLElement) {
+    orgCard.classList.toggle('hidden', !showOrgCard);
+  }
+  if (homeStack instanceof HTMLElement) {
+    homeStack.classList.toggle('home-stack-has-org', showOrgCard);
+  }
+
+  const setMetric = (selector, value = '') => {
+    const el = $(selector);
+    if (!(el instanceof HTMLElement)) return;
+    el.textContent = String(value ?? '-').trim() || '-';
+  };
+
+  setMetric('#homeManagerPeopleTotal', `${Number(organizationSummary.employeeTotal || 0)}명`);
+  setMetric('#homeManagerPeopleActive', `${Number(organizationSummary.activeEmployeeCount || 0)}명`);
+  setMetric('#homeManagerSitesActive', `${Number(organizationSummary.activeSiteCount || 0)}개`);
+  setMetric('#homeManagerSitesAssigned', `${Number(organizationSummary.assignedSiteCount || 0)}개`);
+
+  renderHomeDashboardList(
+    '#homeManagerOrgIssueList',
+    issueRows,
+    '조직 운영 이슈가 없습니다.',
+    '직원 연결, 현장 배정, 관리자 상태가 안정적입니다.',
   );
-  setHomeRatioRing('#homeManagerSitesRing', siteCoverage);
-  setHomeProgressFill('#homeManagerSitesAssignedRow', activeSites > 0 ? Math.round((assignedSites / activeSites) * 100) : 0);
-  setHomeProgressFill('#homeManagerSitesUnassignedRow', employeeTotal > 0 ? Math.round((unassignedEmployees / employeeTotal) * 100) : 0);
 }
 
 function renderHomeManagerDashboard() {
@@ -5381,6 +5408,11 @@ function renderHomeManagerDashboard() {
     Math.max(0, Number(requestSummary.correctionPendingCount || 0)),
     Math.max(0, Number(requestSummary.unreadCount || 0)),
   ];
+  const requestsCard = document.querySelector('#view-home .home-manager-requests-card');
+  const hasRequestSummary = requestBarValues.some((value) => value > 0);
+  if (requestsCard instanceof HTMLElement) {
+    requestsCard.dataset.compact = hasRequestSummary ? 'false' : 'true';
+  }
   const requestBarMax = Math.max(...requestBarValues, 1);
   const requestBarPercent = (value) => (value > 0 ? Math.max(16, Math.round((value / requestBarMax) * 100)) : 8);
   setHomeProgressFill('#homeManagerRequestPendingBar', requestBarPercent(requestBarValues[0]));

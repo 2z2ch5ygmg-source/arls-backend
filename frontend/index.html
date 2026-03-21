@@ -176,7 +176,7 @@
               <article class="module-card stack shell-manager-only home-manager-section home-manager-attendance-card">
                 <div class="home-manager-section-head">
                   <div class="home-manager-section-title">
-                    <span class="home-manager-section-icon" aria-hidden="true">⏱</span>
+                    <span class="home-manager-section-icon" aria-hidden="true"><i data-lucide="clock-3"></i></span>
                     <div>
                       <h3>출퇴근</h3>
                       <p class="muted">오늘 출근 상태와 바로 확인할 예외를 먼저 봅니다.</p>
@@ -234,7 +234,7 @@
               <article class="module-card stack shell-manager-only home-manager-section home-manager-schedule-card">
                 <div class="home-manager-section-head">
                   <div class="home-manager-section-title">
-                    <span class="home-manager-section-icon" aria-hidden="true">📅</span>
+                    <span class="home-manager-section-icon" aria-hidden="true"><i data-lucide="calendar-days"></i></span>
                     <div>
                       <h3>오늘 스케줄</h3>
                       <p class="muted">배치 상태, 마감/리더 지정, 누락 여부를 한 번에 확인합니다.</p>
@@ -278,7 +278,7 @@
               <article class="module-card stack shell-manager-only home-manager-section home-manager-requests-card">
                 <div class="home-manager-section-head">
                   <div class="home-manager-section-title">
-                    <span class="home-manager-section-icon" aria-hidden="true">🗂</span>
+                    <span class="home-manager-section-icon" aria-hidden="true"><i data-lucide="files"></i></span>
                     <div>
                       <h3>요청·승인</h3>
                       <p class="muted">지금 처리해야 할 승인 대기와 보류 건수를 요약합니다.</p>
@@ -325,111 +325,43 @@
                 </div>
               </article>
 
-              <div class="shell-manager-only home-manager-bottom-grid">
-                <article id="homeManagerPeopleCard" class="module-card stack home-manager-section home-manager-people-card hidden">
-                  <div class="home-manager-section-head">
-                    <div class="home-manager-section-title">
-                      <span class="home-manager-section-icon" aria-hidden="true">👥</span>
-                      <div>
-                      <h3>구성원</h3>
-                      <p class="muted">인원 구조와 계정 연결 상태를 요약합니다.</p>
+              <article id="homeManagerOrgCard" class="module-card stack shell-manager-only home-manager-section home-manager-org-card hidden">
+                <div class="home-manager-section-head">
+                  <div class="home-manager-section-title">
+                    <span class="home-manager-section-icon" aria-hidden="true"><i data-lucide="building-2"></i></span>
+                    <div>
+                      <h3>조직 운영</h3>
+                      <p class="muted">홈에서는 바로 조치가 필요한 조직 이슈만 간단히 보여줍니다.</p>
                     </div>
                   </div>
-                  <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/branch/employees" aria-label="구성원 탭 열기">›</button>
+                  <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/branch/employees" aria-label="조직 탭 열기">›</button>
                 </div>
-                  <div class="home-insight-grid">
-                    <article class="home-insight-visual">
-                      <div id="homeManagerPeopleRing" class="home-insight-ring" style="--progress: 0%;">
-                        <div class="home-insight-ring-core">
-                          <strong id="homeManagerPeopleRatioValue">-</strong>
-                          <span>재직 비율</span>
-                        </div>
+                <div class="home-org-grid">
+                  <article class="home-org-summary-card">
+                    <div class="home-org-stat-grid">
+                      <div class="home-org-stat">
+                        <span>전체 인원</span>
+                        <strong id="homeManagerPeopleTotal">-</strong>
                       </div>
-                      <p id="homeManagerPeopleRatioMeta" class="muted">구성원 집계 중</p>
-                    </article>
-                    <div class="home-insight-breakdown">
-                      <div class="home-inline-stat-list">
-                        <div class="home-inline-stat">
-                          <span>전체 인원</span>
-                          <strong id="homeManagerPeopleTotal">-</strong>
-                        </div>
-                        <div class="home-inline-stat">
-                          <span>재직중</span>
-                          <strong id="homeManagerPeopleActive">-</strong>
-                        </div>
+                      <div class="home-org-stat">
+                        <span>재직중</span>
+                        <strong id="homeManagerPeopleActive">-</strong>
                       </div>
-                      <div class="home-progress-stack">
-                        <div id="homeManagerPeopleManagersRow" class="home-progress-row" style="--fill: 0%;">
-                          <div class="home-progress-copy">
-                            <span>관리자/리더</span>
-                            <strong id="homeManagerPeopleManagers">-</strong>
-                          </div>
-                          <div class="home-progress-track"><span class="home-progress-fill"></span></div>
-                        </div>
-                        <div id="homeManagerPeopleUnlinkedRow" class="home-progress-row" style="--fill: 0%;">
-                          <div class="home-progress-copy">
-                            <span>계정 연결 필요</span>
-                            <strong id="homeManagerPeopleUnlinked">-</strong>
-                          </div>
-                          <div class="home-progress-track"><span class="home-progress-fill"></span></div>
-                        </div>
+                      <div class="home-org-stat">
+                        <span>활성 현장</span>
+                        <strong id="homeManagerSitesActive">-</strong>
+                      </div>
+                      <div class="home-org-stat">
+                        <span>직원 배정 현장</span>
+                        <strong id="homeManagerSitesAssigned">-</strong>
                       </div>
                     </div>
-                  </div>
-                </article>
-
-                <article id="homeManagerSitesCard" class="module-card stack home-manager-section home-manager-sites-card hidden">
-                  <div class="home-manager-section-head">
-                    <div class="home-manager-section-title">
-                      <span class="home-manager-section-icon" aria-hidden="true">🏢</span>
-                      <div>
-                      <h3>근무지</h3>
-                      <p class="muted">운영 중인 현장과 배정 상태를 간단히 확인합니다.</p>
-                    </div>
-                  </div>
-                  <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/branch/sites" aria-label="근무지 탭 열기">›</button>
+                  </article>
+                  <article class="home-org-summary-card home-section-rail">
+                    <ul id="homeManagerOrgIssueList" class="list compact-list home-dashboard-list-plain"></ul>
+                  </article>
                 </div>
-                  <div class="home-insight-grid">
-                    <article class="home-insight-visual">
-                      <div id="homeManagerSitesRing" class="home-insight-ring" style="--progress: 0%;">
-                        <div class="home-insight-ring-core">
-                          <strong id="homeManagerSitesCoverageValue">-</strong>
-                          <span>배정 커버리지</span>
-                        </div>
-                      </div>
-                      <p id="homeManagerSitesCoverageMeta" class="muted">근무지 집계 중</p>
-                    </article>
-                    <div class="home-insight-breakdown">
-                      <div class="home-inline-stat-list">
-                        <div class="home-inline-stat">
-                          <span>전체 현장</span>
-                          <strong id="homeManagerSitesTotal">-</strong>
-                        </div>
-                        <div class="home-inline-stat">
-                          <span>활성 현장</span>
-                          <strong id="homeManagerSitesActive">-</strong>
-                        </div>
-                      </div>
-                      <div class="home-progress-stack">
-                        <div id="homeManagerSitesAssignedRow" class="home-progress-row" style="--fill: 0%;">
-                          <div class="home-progress-copy">
-                            <span>직원 배정 현장</span>
-                            <strong id="homeManagerSitesAssigned">-</strong>
-                          </div>
-                          <div class="home-progress-track"><span class="home-progress-fill"></span></div>
-                        </div>
-                        <div id="homeManagerSitesUnassignedRow" class="home-progress-row" style="--fill: 0%;">
-                          <div class="home-progress-copy">
-                            <span>미배정 직원</span>
-                            <strong id="homeManagerSitesUnassignedEmployees">-</strong>
-                          </div>
-                          <div class="home-progress-track"><span class="home-progress-fill"></span></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              </div>
+              </article>
 
               <article class="module-card home-today-card">
                 <div class="shell-employee-only">

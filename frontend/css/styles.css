@@ -18632,14 +18632,18 @@ button.attendance-status-special-card.active {
   letter-spacing: -0.03em;
 }
 
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy h3 {
+  font-size: clamp(34px, 4vw, 46px);
+}
+
 #shell[data-shell-mode='manager'] #view-home .home-manager-section-title h3 {
-  font-size: 30px;
+  font-size: 22px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-section-title {
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -18659,16 +18663,22 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-section-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   display: inline-grid;
   place-items: center;
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--ui-border-subtle);
-  font-size: 17px;
+  background: rgba(37, 99, 235, 0.08);
+  border: none;
+  color: #2563eb;
   line-height: 1;
   flex: 0 0 auto;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-section-icon i {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.2;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-section-chevron {
@@ -18695,7 +18705,7 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-briefing-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 1.1fr) minmax(0, 1.3fr);
+  grid-template-columns: minmax(260px, 1.05fr) minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -18706,7 +18716,7 @@ button.attendance-status-special-card.active {
   padding: 20px 22px;
   display: grid;
   gap: 10px;
-  min-height: 196px;
+  min-height: 176px;
   align-content: start;
   position: relative;
   overflow: hidden;
@@ -18760,20 +18770,20 @@ button.attendance-status-special-card.active {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  padding: 10px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 20px;
-  background: var(--bg-surface-elevated);
+  padding: 0;
+  border: none;
+  background: transparent;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-briefing-stat {
   border-radius: 14px;
-  background: transparent;
-  padding: 16px 14px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.02), rgba(15, 23, 42, 0));
+  padding: 18px 16px;
   display: grid;
   align-content: start;
   gap: 8px;
-  min-height: 92px;
+  min-height: 84px;
+  border: 1px solid var(--ui-border-subtle);
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-briefing-stat span,
@@ -18807,10 +18817,10 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card,
-#shell[data-shell-mode='manager'] #view-home .home-attendance-status-card,
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card,
 #shell[data-shell-mode='manager'] #view-home .home-schedule-summary-card,
 #shell[data-shell-mode='manager'] #view-home .home-requests-summary-card,
+#shell[data-shell-mode='manager'] #view-home .home-org-summary-card,
 #shell[data-shell-mode='manager'] #view-home .home-insight-visual,
 #shell[data-shell-mode='manager'] #view-home .home-insight-breakdown {
   border: 1px solid var(--ui-border-subtle);
@@ -18820,10 +18830,10 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card,
-#shell[data-shell-mode='manager'] #view-home .home-attendance-status-card,
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card,
 #shell[data-shell-mode='manager'] #view-home .home-schedule-summary-card,
-#shell[data-shell-mode='manager'] #view-home .home-requests-summary-card {
+#shell[data-shell-mode='manager'] #view-home .home-requests-summary-card,
+#shell[data-shell-mode='manager'] #view-home .home-org-summary-card {
   padding: 20px;
 }
 
@@ -18837,6 +18847,14 @@ button.attendance-status-special-card.active {
   display: grid;
   gap: 18px;
   align-content: start;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-status-card {
+  display: grid;
+  align-content: start;
+  padding: 0;
+  background: transparent;
+  border: none;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-visual {
@@ -18888,17 +18906,17 @@ button.attendance-status-special-card.active {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  padding: 10px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 18px;
-  background: var(--bg-surface-elevated);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-mini-metric {
-  border: none;
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 14px;
-  background: transparent;
-  padding: 14px 12px;
+  background: var(--bg-surface-elevated);
+  padding: 16px 14px;
   display: grid;
   gap: 8px;
   min-width: 0;
@@ -18923,16 +18941,16 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain > li {
-  border: none;
-  box-shadow: inset 0 0 0 1px var(--ui-border-subtle);
-  border-left: 4px solid rgba(37, 99, 235, 0.9);
+  border: 1px solid var(--ui-border-subtle);
+  border-left: 3px solid rgba(37, 99, 235, 0.95);
+  box-shadow: none;
   border-radius: 16px;
-  background: var(--ui-bg-surface);
+  background: var(--bg-surface-elevated);
   padding: 14px 16px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain > li.attendance-outside {
-  border-left-color: #c2410c;
+  border-left-color: #b42318;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain .list-row {
@@ -18982,43 +19000,52 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-distribution-bars {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 14px;
-  min-height: 220px;
+  min-height: 0;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-distribution-bar {
   --fill: 10%;
+  --bar-color: #2563eb;
+  position: relative;
   border: none;
-  box-shadow: inset 0 0 0 1px var(--ui-border-subtle);
-  border-radius: 18px;
-  background:
-    linear-gradient(to top, rgba(37, 99, 235, 0.28) 0 var(--fill), var(--bg-surface-elevated) var(--fill) 100%);
-  padding: 18px 14px;
+  box-shadow: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 0 16px;
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 10px;
-  min-height: 220px;
+  flex-direction: row-reverse;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 0;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-distribution-bar:nth-child(2) {
-  background:
-    linear-gradient(to top, rgba(15, 23, 42, 0.18) 0 var(--fill), var(--bg-surface-elevated) var(--fill) 100%);
+  --bar-color: #475467;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-distribution-bar:nth-child(3) {
-  background:
-    linear-gradient(to top, rgba(5, 150, 105, 0.24) 0 var(--fill), var(--bg-surface-elevated) var(--fill) 100%);
+  --bar-color: #1f9d68;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-distribution-bar:nth-child(4) {
+  --bar-color: #d97706;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-bar::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 10px;
+  border-radius: 999px;
   background:
-    linear-gradient(to top, rgba(217, 119, 6, 0.24) 0 var(--fill), var(--bg-surface-elevated) var(--fill) 100%);
+    linear-gradient(90deg, var(--bar-color) 0 var(--fill), rgba(148, 163, 184, 0.16) var(--fill) 100%);
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-distribution-bar strong {
-  font-size: 30px;
+  font-size: 34px;
   line-height: 1;
   letter-spacing: -0.05em;
 }
@@ -19032,6 +19059,18 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-request-meter-card {
   display: grid;
   align-content: start;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-request-meter-card {
+  display: none;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-requests-grid {
+  grid-template-columns: 1fr;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-requests-summary-card {
+  min-height: 0;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-request-meter-list {
@@ -19080,10 +19119,37 @@ button.attendance-status-special-card.active {
   background: linear-gradient(90deg, #2563eb, #1d4ed8);
 }
 
-#shell[data-shell-mode='manager'] #view-home .home-manager-bottom-grid {
+#shell[data-shell-mode='manager'] #view-home .home-org-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
+  gap: 16px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-org-stat-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-org-stat {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--ui-border-subtle);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.02), rgba(15, 23, 42, 0));
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-org-stat span {
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-org-stat strong {
+  font-size: 32px;
+  line-height: 1;
+  letter-spacing: -0.04em;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-insight-grid {
@@ -19170,11 +19236,32 @@ button.attendance-status-special-card.active {
   }
 }
 
+@media (min-width: 1280px) {
+  #shell[data-shell-mode='manager'] #view-home .home-manager-hero-card,
+  #shell[data-shell-mode='manager'] #view-home .home-manager-attendance-card,
+  #shell[data-shell-mode='manager'] #view-home .home-manager-org-card {
+    grid-column: 1 / -1;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card {
+    grid-column: 1 / span 7;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card {
+    grid-column: 8 / -1;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card .home-requests-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 1199px) {
   #shell[data-shell-mode='manager'] #view-home .home-briefing-grid,
   #shell[data-shell-mode='manager'] #view-home .home-attendance-overview-grid,
   #shell[data-shell-mode='manager'] #view-home .home-schedule-grid,
   #shell[data-shell-mode='manager'] #view-home .home-requests-grid,
+  #shell[data-shell-mode='manager'] #view-home .home-org-grid,
   #shell[data-shell-mode='manager'] #view-home .home-insight-grid {
     grid-template-columns: 1fr;
   }
@@ -19192,18 +19279,14 @@ button.attendance-status-special-card.active {
   #shell[data-shell-mode='manager'] #view-home .home-manager-bottom-grid,
   #shell[data-shell-mode='manager'] #view-home .home-briefing-stat-rack,
   #shell[data-shell-mode='manager'] #view-home .home-inline-stat-list,
+  #shell[data-shell-mode='manager'] #view-home .home-org-stat-grid,
   #shell[data-shell-mode='manager'] #view-home .home-attendance-status-rack,
   #shell[data-shell-mode='manager'] #view-home .home-mini-metric-grid {
     grid-template-columns: 1fr;
   }
 
-  #shell[data-shell-mode='manager'] #view-home .home-distribution-bars {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    min-height: 0;
-  }
-
-  #shell[data-shell-mode='manager'] #view-home .home-distribution-bar {
-    min-height: 168px;
+  #shell[data-shell-mode='manager'] #view-home .home-org-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -19215,7 +19298,6 @@ button.attendance-status-special-card.active {
     align-items: flex-start;
   }
 
-  #shell[data-shell-mode='manager'] #view-home .home-manager-bottom-grid,
   #shell[data-shell-mode='manager'] #view-home .home-distribution-bars {
     grid-template-columns: 1fr;
   }
@@ -19232,19 +19314,24 @@ button.attendance-status-special-card.active {
   color: var(--ui-text-secondary);
 }
 
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-manager-section-icon {
+  background: rgba(96, 165, 250, 0.12);
+  color: #93c5fd;
+}
+
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight,
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card,
-:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-status-card,
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card,
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-schedule-summary-card,
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-requests-summary-card,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-org-summary-card,
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-insight-visual,
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-insight-breakdown,
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-briefing-stat,
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-mini-metric,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-org-stat,
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-inline-stat,
-:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain > li,
-:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-distribution-bar {
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain > li {
   background-color: var(--bg-surface-elevated);
   border-color: var(--state-inset-border);
 }
