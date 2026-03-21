@@ -210,6 +210,8 @@ const SCHEDULE_TEMPLATE_ROWS_CACHE_TTL_MS = 5 * 60 * 1000;
 const SCHEDULE_CREATE_EMPLOYEE_CACHE_TTL_MS = 5 * 60 * 1000;
 const ATTENDANCE_REQUEST_DRAFT_KEY = 'rg-arls-attendance-request-draft';
 const ATTENDANCE_REQUEST_STATUS_CACHE_KEY = 'rg-arls-attendance-request-status';
+const ATTENDANCE_MANAGER_PREFS_KEY = 'rg-arls-attendance-manager-prefs';
+const ATTENDANCE_MANAGER_EDIT_KEY = 'rg-arls-attendance-manager-edit-cache';
 const LEAVE_REQUEST_STATUS_CACHE_KEY = 'rg-arls-leave-request-status';
 const IN_APP_NOTIFICATION_CACHE_KEY = 'rg-arls-in-app-notifications';
 const SITE_WIFI_SSID_CACHE_KEY = 'rg-arls-site-wifi-ssid-cache';
@@ -698,9 +700,13 @@ function createInitialAttendanceViewState() {
   const today = toLocalDateKey(new Date());
   return {
     date: today,
+    calendarMonth: getMonthFromDateKey(today) || toMonthKey(new Date()),
     rangeStart: today,
     rangeEnd: today,
     rangePreset: 'today',
+    managerTab: 'status',
+    lateThresholdMinutes: 10,
+    earlyLeaveThresholdMinutes: 10,
     employeeCode: '',
     siteCode: '',
     statusFilter: 'all',
@@ -725,6 +731,9 @@ function createInitialAttendanceViewState() {
     managerSortKey: '',
     managerSortDirection: '',
     managerDrawerOpen: false,
+    managerRecordEdits: {},
+    managerPrefsLoaded: false,
+    editingRowKey: '',
   };
 }
 
@@ -38819,6 +38828,104 @@ function setAttendanceActiveDate(nextDate, { syncInput = true } = {}) {
   return normalized;
 }
 
+function normalizeAttendanceManagerTab(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'calendar') return 'calendar';
+  if (normalized === 'list') return 'list';
+  return 'status';
+}
+
+function getAttendanceManagerStorageScope() {
+  const tenantCode = String(getTenantCodeForScopedAdminApi() || state.user?.tenant_code || state.user?.tenantCode || 'default').trim().toUpperCase() || 'DEFAULT';
+  const userCode = String(state.user?.employee_code || state.user?.username || state.user?.id || 'anonymous').trim().toUpperCase() || 'ANONYMOUS';
+  return `${tenantCode}:${userCode}`;
+}
+
+function getAttendanceManagerPrefsStorageKey() {
+  return `${ATTENDANCE_MANAGER_PREFS_KEY}:${getAttendanceManagerStorageScope()}`;
+}
+
+function getAttendanceManagerEditStorageKey() {
+  return `${ATTENDANCE_MANAGER_EDIT_KEY}:${getAttendanceManagerStorageScope()}`;
+}
+
+function normalizeAttendanceThresholdMinutes(value = '') {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 10;
+  const allowed = [0, 5, 10, 15, 30];
+  return allowed.includes(parsed) ? parsed : 10;
+}
+
+function normalizeAttendanceClockValue(value = '') {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (/^\d{2}:\d{2}$/.test(text)) return text;
+  if (/^\d{1,2}:\d{2}$/.test(text)) {
+    const [hoursRaw, minutesRaw] = text.split(':');
+    return `${String(Number(hoursRaw || 0)).padStart(2, '0')}:${minutesRaw}`;
+  }
+  return '';
+}
+
+function loadAttendanceManagerPrefs() {
+  try {
+    const raw = localStorage.getItem(getAttendanceManagerPrefsStorageKey());
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistAttendanceManagerPrefs() {
+  if (!state.attendanceView) return;
+  try {
+    const payload = {
+      managerTab: normalizeAttendanceManagerTab(state.attendanceView.managerTab || 'status'),
+      calendarMonth: normalizeMonthKey(state.attendanceView.calendarMonth || ''),
+      lateThresholdMinutes: normalizeAttendanceThresholdMinutes(state.attendanceView.lateThresholdMinutes),
+      earlyLeaveThresholdMinutes: normalizeAttendanceThresholdMinutes(state.attendanceView.earlyLeaveThresholdMinutes),
+    };
+    localStorage.setItem(getAttendanceManagerPrefsStorageKey(), JSON.stringify(payload));
+  } catch {}
+}
+
+function loadAttendanceManagerRecordEdits() {
+  try {
+    const raw = localStorage.getItem(getAttendanceManagerEditStorageKey());
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistAttendanceManagerRecordEdits() {
+  if (!state.attendanceView) return;
+  try {
+    const edits = state.attendanceView.managerRecordEdits && typeof state.attendanceView.managerRecordEdits === 'object'
+      ? state.attendanceView.managerRecordEdits
+      : {};
+    localStorage.setItem(getAttendanceManagerEditStorageKey(), JSON.stringify(edits));
+  } catch {}
+}
+
+function ensureAttendanceManagerPreferencesLoaded() {
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  if (state.attendanceView.managerPrefsLoaded) return;
+  const prefs = loadAttendanceManagerPrefs();
+  state.attendanceView.managerTab = normalizeAttendanceManagerTab(prefs.managerTab || state.attendanceView.managerTab || 'status');
+  state.attendanceView.calendarMonth = normalizeMonthKey(prefs.calendarMonth || state.attendanceView.calendarMonth || '') || getMonthFromDateKey(state.attendanceView.date || '') || toMonthKey(new Date());
+  state.attendanceView.lateThresholdMinutes = normalizeAttendanceThresholdMinutes(prefs.lateThresholdMinutes ?? state.attendanceView.lateThresholdMinutes);
+  state.attendanceView.earlyLeaveThresholdMinutes = normalizeAttendanceThresholdMinutes(prefs.earlyLeaveThresholdMinutes ?? state.attendanceView.earlyLeaveThresholdMinutes);
+  state.attendanceView.managerRecordEdits = loadAttendanceManagerRecordEdits();
+  state.attendanceView.managerPrefsLoaded = true;
+}
+
 function normalizeAttendanceRangePreset(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
   if (['today', 'yesterday', 'week', 'month', 'custom'].includes(normalized)) return normalized;
@@ -38827,7 +38934,7 @@ function normalizeAttendanceRangePreset(value = '') {
 
 function normalizeAttendanceStatusFilter(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
-  if (['all', 'normal', 'late', 'missing_in', 'missing_out', 'leave', 'correction_pending'].includes(normalized)) {
+  if (['all', 'normal', 'late', 'early_leave', 'missing_in', 'missing_out', 'leave', 'correction_pending'].includes(normalized)) {
     return normalized;
   }
   return 'all';
@@ -38928,6 +39035,60 @@ function getAttendanceDateRange() {
     preset: state.attendanceView.rangePreset || 'custom',
     syncInputs: false,
   });
+}
+
+function getAttendanceManagerTab() {
+  ensureAttendanceManagerPreferencesLoaded();
+  return normalizeAttendanceManagerTab(state.attendanceView?.managerTab || 'status');
+}
+
+function getAttendanceRouteWithTab(tabRaw = '') {
+  const tab = normalizeAttendanceManagerTab(tabRaw || getAttendanceManagerTab());
+  return tab === 'status' ? ROUTE_ATTENDANCE : `${ROUTE_ATTENDANCE}?tab=${encodeURIComponent(tab)}`;
+}
+
+function setAttendanceManagerTab(tabRaw = 'status', { syncRoute = false } = {}) {
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  const nextTab = normalizeAttendanceManagerTab(tabRaw);
+  state.attendanceView.managerTab = nextTab;
+  if (nextTab === 'status') {
+    setAttendanceDateRange({
+      start: getAttendanceActiveDate(),
+      end: getAttendanceActiveDate(),
+      preset: 'today',
+      syncInputs: false,
+    });
+  } else if (nextTab === 'calendar') {
+    state.attendanceView.calendarMonth = normalizeMonthKey(state.attendanceView.calendarMonth || '') || getMonthFromDateKey(state.attendanceView.date || '') || toMonthKey(new Date());
+  }
+  persistAttendanceManagerPrefs();
+  if (syncRoute) {
+    navigateToRoute(getAttendanceRouteWithTab(nextTab), { replace: true, silentDeniedModal: true });
+  }
+  return nextTab;
+}
+
+function getAttendanceManagerFetchRange() {
+  const tab = getAttendanceManagerTab();
+  if (tab === 'status') {
+    const dateKey = getAttendanceActiveDate();
+    return { start: dateKey, end: dateKey };
+  }
+  if (tab === 'calendar') {
+    const month = normalizeMonthKey(state.attendanceView?.calendarMonth || '') || toMonthKey(new Date());
+    const meta = getMonthMeta(month);
+    if (!meta) {
+      const today = toLocalDateKey(new Date());
+      return { start: today, end: today };
+    }
+    return {
+      start: toLocalDateKey(meta.firstDate),
+      end: toLocalDateKey(new Date(meta.year, meta.monthIndex + 1, meta.daysInMonth)),
+    };
+  }
+  return getAttendanceDateRange();
 }
 
 function buildDateKeysBetween(startRaw = '', endRaw = '') {
@@ -39078,6 +39239,19 @@ function formatAttendanceWorkDuration(startRaw = '', endRaw = '') {
   return `${hours}시간 ${minutes}분`;
 }
 
+function formatAttendanceWorkDurationFromClockTimes(startClock = '', endClock = '', breakMinutesRaw = 0) {
+  const startMinutes = getAttendanceComparableMinutes(normalizeAttendanceClockValue(startClock));
+  const endMinutes = getAttendanceComparableMinutes(normalizeAttendanceClockValue(endClock));
+  if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) return '-';
+  let totalMinutes = endMinutes - startMinutes;
+  if (totalMinutes < 0) totalMinutes += 24 * 60;
+  totalMinutes -= Math.max(0, Number(breakMinutesRaw) || 0);
+  if (totalMinutes < 0) totalMinutes = 0;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}시간 ${minutes}분`;
+}
+
 function mapAttendanceErrorMessage(err, fallback = '출퇴근 기록을 불러오지 못했습니다.') {
   const status = Number(err?.status || 0);
   const code = String(err?.code || '').trim().toUpperCase();
@@ -39095,6 +39269,9 @@ function getAttendanceStatusMeta(statusCode = 'pending') {
   }
   if (normalized === 'late') {
     return { label: '지각', className: 'status-pill status-pill-warn', danger: true };
+  }
+  if (normalized === 'early_leave') {
+    return { label: '조퇴', className: 'status-pill status-pill-warn', danger: true };
   }
   if (normalized === 'missing_in') {
     return { label: '출근 누락', className: 'status-pill status-pill-error', danger: true };
@@ -39781,8 +39958,12 @@ function buildAttendanceManagerRows({
   overtimeRows = [],
   pendingAttendanceRequests = [],
   correctionRows = [],
+  recordEdits = {},
+  rangeStart = '',
+  rangeEnd = '',
 } = {}) {
-  const { start, end } = getAttendanceDateRange();
+  const start = normalizeAttendanceDate(rangeStart || '') || getAttendanceManagerFetchRange().start;
+  const end = normalizeAttendanceDate(rangeEnd || '') || getAttendanceManagerFetchRange().end;
   const dateKeys = buildDateKeysBetween(start, end);
   const dateSet = new Set(dateKeys);
   const recordMap = buildAttendanceRecordGroupMap(records, dateSet);
@@ -39829,22 +40010,37 @@ function buildAttendanceManagerRows({
     const siteName = String(scheduleRow?.site_name || sample?.site_name || sample?.siteName || siteCode || '현장 미지정').trim() || '현장 미지정';
     const companyName = renderTenantName(sample || scheduleRow || {}, { fallbackTenantCode: scopedTenantCode }) || String(state.user?.tenant_name || scopedTenantCode || '-').trim() || '-';
     const scheduledLabel = scheduleRow ? formatAttendanceScheduleTimeLabel(scheduleRow) : '-';
-    const checkInLabel = firstCheckIn ? formatAttendanceTime(firstCheckIn.event_at) : '-';
-    const checkOutLabel = lastCheckOut ? formatAttendanceTime(lastCheckOut.event_at) : '-';
-    const workHours = firstCheckIn && lastCheckOut ? formatAttendanceWorkDuration(firstCheckIn.event_at, lastCheckOut.event_at) : '-';
+    const edit = recordEdits && typeof recordEdits === 'object' ? recordEdits[key] : null;
+    const editedCheckIn = normalizeAttendanceClockValue(edit?.checkIn || '');
+    const editedCheckOut = normalizeAttendanceClockValue(edit?.checkOut || '');
+    const breakMinutes = Math.max(0, Number(edit?.breakMinutes || 0) || 0);
+    const isEdited = Boolean(edit && (editedCheckIn || editedCheckOut || breakMinutes > 0 || String(edit?.note || '').trim()));
+    const checkInLabel = editedCheckIn || (firstCheckIn ? formatAttendanceTime(firstCheckIn.event_at) : '-');
+    const checkOutLabel = editedCheckOut || (lastCheckOut ? formatAttendanceTime(lastCheckOut.event_at) : '-');
+    const workHours = editedCheckIn && checkOutLabel && checkOutLabel !== '-'
+      ? formatAttendanceWorkDurationFromClockTimes(editedCheckIn, checkOutLabel, breakMinutes)
+      : (firstCheckIn && lastCheckOut ? formatAttendanceWorkDuration(firstCheckIn.event_at, lastCheckOut.event_at) : '-');
     const hasLeave = leaves.length > 0;
     const hasLocationIssue = checkInRows.some((row) => row?.is_within_radius === false);
-    const checkInCount = checkInRows.length;
-    const checkOutCount = checkOutRows.length;
+    const checkInCount = editedCheckIn ? Math.max(1, checkInRows.length) : checkInRows.length;
+    const checkOutCount = editedCheckOut ? Math.max(1, checkOutRows.length) : checkOutRows.length;
     const startMinutes = getAttendanceComparableMinutes(scheduleRow?.start_time || '');
-    const actualMinutes = getAttendanceComparableMinutes(String(firstCheckIn?.event_at || '').trim().slice(11, 16));
-    const lateMinutes = Number.isFinite(startMinutes) && Number.isFinite(actualMinutes) && actualMinutes > (startMinutes + 5)
+    const endMinutes = getAttendanceComparableMinutes(scheduleRow?.end_time || '');
+    const actualMinutes = getAttendanceComparableMinutes(editedCheckIn || String(firstCheckIn?.event_at || '').trim().slice(11, 16));
+    const actualCheckOutMinutes = getAttendanceComparableMinutes(editedCheckOut || String(lastCheckOut?.event_at || '').trim().slice(11, 16));
+    const lateThreshold = normalizeAttendanceThresholdMinutes(state.attendanceView?.lateThresholdMinutes);
+    const earlyLeaveThreshold = normalizeAttendanceThresholdMinutes(state.attendanceView?.earlyLeaveThresholdMinutes);
+    const lateMinutes = Number.isFinite(startMinutes) && Number.isFinite(actualMinutes) && actualMinutes > (startMinutes + lateThreshold)
       ? actualMinutes - startMinutes
+      : 0;
+    const earlyLeaveMinutes = Number.isFinite(endMinutes) && Number.isFinite(actualCheckOutMinutes) && actualCheckOutMinutes < (endMinutes - earlyLeaveThreshold)
+      ? endMinutes - actualCheckOutMinutes
       : 0;
     const hasPendingRequest = pendingRequests.length > 0 || pendingCorrections.length > 0;
     const hasMissingIn = !hasLeave && Boolean(scheduleRow) && checkInCount === 0;
     const hasMissingOut = !hasLeave && checkInCount > 0 && checkOutCount === 0;
     const hasLate = !hasLeave && checkInCount > 0 && lateMinutes > 0;
+    const hasEarlyLeave = !hasLeave && checkOutCount > 0 && earlyLeaveMinutes > 0;
     const hasAttendanceWithoutSchedule = !hasLeave && !scheduleRow && (checkInCount > 0 || checkOutCount > 0);
 
     let statusCode = 'normal';
@@ -39853,6 +40049,7 @@ function buildAttendanceManagerRows({
     else if (hasMissingIn) statusCode = 'missing_in';
     else if (hasMissingOut) statusCode = 'missing_out';
     else if (hasLate) statusCode = 'late';
+    else if (hasEarlyLeave) statusCode = 'early_leave';
     else if (hasLocationIssue) statusCode = 'location_issue';
     else if (!checkInCount && !checkOutCount && !scheduleRow) return;
 
@@ -39867,7 +40064,7 @@ function buildAttendanceManagerRows({
       : (hasLocationIssue ? '반경 밖' : '-');
     const correctionState = hasPendingRequest
       ? `대기 ${pendingRequests.length + pendingCorrections.length}건`
-      : (pendingRequests.length || pendingCorrections.length ? '이력 있음' : '-');
+      : (isEdited ? '로컬 수정됨' : (pendingRequests.length || pendingCorrections.length ? '이력 있음' : '-'));
     let processingState = can('attendanceReview') ? '검토 가능' : '조회';
     let reviewRank = 5;
     if (hasPendingRequest) {
@@ -39876,15 +40073,21 @@ function buildAttendanceManagerRows({
     } else if (hasMissingIn || hasMissingOut) {
       processingState = '예외 검토';
       reviewRank = 1;
+    } else if (hasEarlyLeave) {
+      processingState = '조퇴 확인';
+      reviewRank = 2;
     } else if (hasAttendanceWithoutSchedule) {
       processingState = '스케줄 확인';
-      reviewRank = 2;
+      reviewRank = 3;
     } else if (hasLocationIssue) {
       processingState = '위치 검토';
-      reviewRank = 3;
+      reviewRank = 4;
     } else if (hasLate) {
       processingState = '지각 확인';
-      reviewRank = 4;
+      reviewRank = 5;
+    } else if (isEdited) {
+      processingState = '수정 기록';
+      reviewRank = 6;
     }
     const meta = getAttendanceStatusMeta(statusCode);
     rows.push({
@@ -39904,7 +40107,10 @@ function buildAttendanceManagerRows({
       checkInLabel,
       checkOutLabel,
       workHours,
+      breakMinutes,
+      breakLabel: breakMinutes > 0 ? `${breakMinutes}분` : '-',
       lateMinutesLabel: lateMinutes > 0 ? `${lateMinutes}분` : '-',
+      earlyLeaveMinutesLabel: earlyLeaveMinutes > 0 ? `${earlyLeaveMinutes}분` : '-',
       overtimeLabel: overtimeSummary.label,
       overtimeSortValue: overtimeSummary.totalMinutes,
       overtimeSourceLabel: overtimeSummary.sourceLabel,
@@ -39919,9 +40125,13 @@ function buildAttendanceManagerRows({
       hasMissingIn,
       hasMissingOut,
       hasLate,
+      hasEarlyLeave,
       hasLocationIssue,
       hasAttendanceWithoutSchedule,
       lateMinutes,
+      earlyLeaveMinutes,
+      isEdited,
+      editNote: String(edit?.note || '').trim(),
       rawRecords: sortedRecords,
       scheduleRow,
       leaveRows: leaves,
@@ -40018,11 +40228,13 @@ function buildAttendanceManagerSummary(rows = []) {
     scheduled: list.filter((row) => Boolean(row?.scheduleRow)).length,
     normal: list.filter((row) => String(row?.statusCode || '').trim() === 'normal').length,
     late: list.filter((row) => row?.hasLate).length,
+    earlyLeave: list.filter((row) => row?.hasEarlyLeave).length,
     missingIn: list.filter((row) => row?.hasMissingIn).length,
     missingOut: list.filter((row) => row?.hasMissingOut).length,
     leave: list.filter((row) => row?.hasLeave).length,
     locationIssue: list.filter((row) => row?.hasLocationIssue).length,
     correctionPending: list.filter((row) => (Number(row?.pendingCount || 0) > 0)).length,
+    edited: list.filter((row) => row?.isEdited).length,
   };
 }
 
@@ -40047,26 +40259,32 @@ const ATTENDANCE_EXCEPTION_RULES = [
     buildMeta: (row) => `${Math.max(0, Number(row?.lateMinutes || 0))}분 지각`,
   },
   {
-    key: 'correction_pending',
+    key: 'early_leave',
     priority: 3,
+    label: '조퇴',
+    buildMeta: (row) => `${Math.max(0, Number(row?.earlyLeaveMinutes || 0))}분 조기 퇴근`,
+  },
+  {
+    key: 'correction_pending',
+    priority: 4,
     label: '정정 요청 대기',
     buildMeta: (row) => `대기 ${Math.max(0, Number(row?.pendingCount || 0))}건`,
   },
   {
     key: 'location_issue',
-    priority: 4,
+    priority: 5,
     label: '거리/위치 이상',
     buildMeta: (row) => row?.distanceLabel || '거리 확인 필요',
   },
   {
     key: 'schedule_missing',
-    priority: 5,
+    priority: 6,
     label: '스케줄 없음',
     buildMeta: () => '근태만 존재',
   },
   {
     key: 'site_error',
-    priority: 6,
+    priority: 7,
     label: '현장 오류',
     buildMeta: () => '현장 미지정',
   },
@@ -40099,36 +40317,44 @@ function getAttendanceExceptionReasons(row = null) {
       meta: ATTENDANCE_EXCEPTION_RULES[2].buildMeta(row),
     });
   }
+  if (row?.hasEarlyLeave) {
+    reasons.push({
+      key: 'early_leave',
+      priority: 3,
+      label: '조퇴',
+      meta: ATTENDANCE_EXCEPTION_RULES[3].buildMeta(row),
+    });
+  }
   if (Number(row?.pendingCount || 0) > 0) {
     reasons.push({
       key: 'correction_pending',
-      priority: 3,
+      priority: 4,
       label: '정정 요청 대기',
-      meta: ATTENDANCE_EXCEPTION_RULES[3].buildMeta(row),
+      meta: ATTENDANCE_EXCEPTION_RULES[4].buildMeta(row),
     });
   }
   if (row?.hasLocationIssue) {
     reasons.push({
       key: 'location_issue',
-      priority: 4,
+      priority: 5,
       label: '거리/위치 이상',
-      meta: ATTENDANCE_EXCEPTION_RULES[4].buildMeta(row),
+      meta: ATTENDANCE_EXCEPTION_RULES[5].buildMeta(row),
     });
   }
   if (row?.hasAttendanceWithoutSchedule) {
     reasons.push({
       key: 'schedule_missing',
-      priority: 5,
+      priority: 6,
       label: '스케줄 없음',
-      meta: ATTENDANCE_EXCEPTION_RULES[5].buildMeta(row),
+      meta: ATTENDANCE_EXCEPTION_RULES[6].buildMeta(row),
     });
   }
   if (!String(row?.siteCode || '').trim()) {
     reasons.push({
       key: 'site_error',
-      priority: 6,
+      priority: 7,
       label: '현장 오류',
-      meta: ATTENDANCE_EXCEPTION_RULES[6].buildMeta(row),
+      meta: ATTENDANCE_EXCEPTION_RULES[7].buildMeta(row),
     });
   }
   return reasons;
