@@ -8539,6 +8539,56 @@ a:hover {
   padding: 12px;
 }
 
+:root {
+  --ui-filter-control-h: 44px;
+  --ui-filter-control-px: 14px;
+}
+
+.ui-filterbar .input-field,
+#view-employees .employee-toolbar-field,
+#view-requests .leave-filter-field,
+.attendance-filter-row .input-field,
+.attendance-ops-field {
+  align-content: start;
+}
+
+.ui-filterbar .input-field > span,
+#view-employees .employee-toolbar-field > span,
+#view-requests .leave-filter-field > span,
+.attendance-filter-row .input-field > span,
+.attendance-ops-field > span {
+  display: block;
+  line-height: 1.28;
+  padding-bottom: 1px;
+}
+
+.ui-filterbar .input-field input,
+.ui-filterbar .input-field select,
+#view-employees .employee-toolbar-field input,
+#view-employees .employee-toolbar-field select,
+#view-requests .leave-filter-field input,
+#view-requests .leave-filter-field select,
+.attendance-filter-row input,
+.attendance-filter-row select,
+.attendance-ops-field input,
+.attendance-ops-field select {
+  min-height: var(--ui-filter-control-h);
+  height: var(--ui-filter-control-h);
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-inline: var(--ui-filter-control-px);
+  line-height: 1.25;
+  box-sizing: border-box;
+}
+
+.ui-filterbar .btn,
+.attendance-range-presets .btn,
+#view-requests .requests-range-shortcuts .btn {
+  min-height: var(--ui-filter-control-h);
+  height: var(--ui-filter-control-h);
+  padding-inline: var(--ui-filter-control-px);
+}
+
 .hr-doc-card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -11763,8 +11813,10 @@ textarea::placeholder {
 
 #view-requests .requests-filterbar .input-field input,
 #view-requests .requests-filterbar .input-field select {
-  min-height: 36px;
-  height: 36px;
+  min-height: var(--ui-filter-control-h);
+  height: var(--ui-filter-control-h);
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 #view-requests .requests-range-shortcuts {
@@ -11775,9 +11827,9 @@ textarea::placeholder {
 }
 
 #view-requests .requests-range-shortcuts .btn {
-  min-height: 36px;
-  height: 36px;
-  padding: 0 14px;
+  min-height: var(--ui-filter-control-h);
+  height: var(--ui-filter-control-h);
+  padding: 0 var(--ui-filter-control-px);
 }
 
 #view-requests #requestsKpiStrip {
@@ -12935,8 +12987,10 @@ textarea::placeholder {
 
 #view-requests .requests-filterbar .input-field input,
 #view-requests .requests-filterbar .input-field select {
-  min-height: 36px;
-  height: 36px;
+  min-height: var(--ui-filter-control-h);
+  height: var(--ui-filter-control-h);
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 #view-requests .requests-range-shortcuts {
@@ -13320,8 +13374,10 @@ textarea::placeholder {
 
 #view-requests .leave-filter-field input,
 #view-requests .leave-filter-field select {
-  min-height: 36px;
-  height: 36px;
+  min-height: var(--ui-filter-control-h);
+  height: var(--ui-filter-control-h);
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 #view-requests .leave-workspace-composer,
@@ -13808,8 +13864,10 @@ textarea::placeholder {
 
 .attendance-filter-row input,
 .attendance-filter-row select {
-  min-height: 36px;
-  height: 36px;
+  min-height: var(--ui-filter-control-h);
+  height: var(--ui-filter-control-h);
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .attendance-filter-row .input-field > span,
@@ -13825,8 +13883,9 @@ textarea::placeholder {
 }
 
 .attendance-range-presets .btn {
-  min-height: 36px;
-  padding-inline: 14px;
+  min-height: var(--ui-filter-control-h);
+  height: var(--ui-filter-control-h);
+  padding-inline: var(--ui-filter-control-px);
 }
 
 .attendance-range-presets .btn.active {
@@ -14228,8 +14287,10 @@ textarea::placeholder {
 
 .attendance-ops-field input,
 .attendance-ops-field select {
-  min-height: 36px;
-  height: 36px;
+  min-height: var(--ui-filter-control-h);
+  height: var(--ui-filter-control-h);
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .attendance-kpi-strip {
@@ -16256,6 +16317,7 @@ button.attendance-kpi-mini.active {
 @media (min-width: 1200px) {
   :root {
     --arls-desktop-toolbar-h: 36px;
+    --arls-desktop-filter-h: var(--ui-filter-control-h);
     --arls-desktop-toolbar-gap: 10px;
     --arls-desktop-toolbar-pad-y: 14px;
     --arls-desktop-toolbar-pad-x: 16px;
@@ -16380,8 +16442,13 @@ button.attendance-kpi-mini.active {
   #view-profile .settings-profile-selector-row select,
   #view-profile .settings-sync-date-row input,
   #view-profile #socMonitorCard select {
-    min-height: var(--arls-desktop-toolbar-h);
-    height: var(--arls-desktop-toolbar-h);
+    min-height: var(--arls-desktop-filter-h);
+    height: var(--arls-desktop-filter-h);
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-inline: var(--ui-filter-control-px);
+    line-height: 1.25;
+    box-sizing: border-box;
   }
 
   .workspace-tabbar-row {
