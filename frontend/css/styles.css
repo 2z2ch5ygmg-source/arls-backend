@@ -15977,6 +15977,10 @@ button.attendance-kpi-mini.active {
   background: rgba(255, 243, 237, 0.92);
 }
 
+.attendance-admin-record-table tbody tr.is-edited td {
+  background: color-mix(in srgb, var(--status-info-bg) 38%, var(--ui-bg-surface) 62%);
+}
+
 .attendance-admin-record-table tbody tr.is-selected td:first-child {
   box-shadow: inset 3px 0 0 var(--ui-accent);
 }

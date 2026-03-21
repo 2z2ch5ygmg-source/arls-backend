@@ -42029,7 +42029,9 @@ function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
     const tr = document.createElement('tr');
     tr.dataset.action = 'attendance-manager-select';
     tr.dataset.recordKey = row.key;
+    tr.dataset.edited = row.isEdited ? '1' : '0';
     tr.classList.toggle('is-selected', row.key === selected?.key);
+    tr.classList.toggle('is-edited', row.isEdited);
     const statusTone = row?.statusMeta?.danger
       ? 'is-danger'
       : (String(row?.statusCode || '').trim() === 'normal' ? 'is-success' : 'is-warn');
@@ -42068,11 +42070,11 @@ function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
         <strong>${row.processingState}</strong>
         <span>${[
           row.pendingCount > 0 ? row.correctionState : '',
+          row.isEdited ? '수정됨' : '',
           row.pendingCount <= 0 && row.hasLate ? row.lateMinutesLabel : '',
           row.pendingCount <= 0 && row.hasEarlyLeave ? row.earlyLeaveMinutesLabel : '',
           row.pendingCount <= 0 && row.hasLocationIssue ? '거리 확인' : '',
           row.pendingCount <= 0 && row.hasAttendanceWithoutSchedule ? '스케줄 없음' : '',
-          row.pendingCount <= 0 && row.isEdited ? '수정됨' : '',
           row.pendingCount <= 0 && row.overtimeSortValue > 0 ? row.overtimeLabel : '',
         ].filter(Boolean).join(' · ') || '즉시 조치 없음'}</span>
       </div>
@@ -52727,6 +52729,7 @@ function openSheet({ title = '작업', contentNode = null, actions = [] } = {}) 
     if (action.siteCode) btn.dataset.siteCode = String(action.siteCode);
     if (action.requestId) btn.dataset.requestId = String(action.requestId);
     if (action.requestKey) btn.dataset.requestKey = String(action.requestKey);
+    if (action.recordKey) btn.dataset.recordKey = String(action.recordKey);
     if (action.readonly) btn.dataset.readonly = String(action.readonly);
     if (action.view) btn.dataset.view = String(action.view);
     actionsEl.appendChild(btn);
