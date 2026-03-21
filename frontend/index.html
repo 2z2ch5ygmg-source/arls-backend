@@ -164,7 +164,7 @@
                     <strong id="homeManagerLeaveOrNightLabel">-</strong>
                   </div>
                 </div>
-                <p id="homeManagerOpsMeta" class="muted">운영 집계 대기중</p>
+                <p id="homeManagerOpsMeta" class="muted hidden">운영 집계 대기중</p>
               </article>
 
               <article class="module-card stack shell-manager-only home-dashboard-card home-dashboard-card-primary home-manager-priority-card">
@@ -352,8 +352,8 @@
           <section id="view-ops" class="panel card view hidden">
             <div class="ops-page-head ui-pageHeader">
               <div class="ops-page-title">
-                <h2 id="opsViewTitle">운영 센터</h2>
-                <p id="opsHeaderMeta" class="muted">운영 요약을 준비하는 중입니다.</p>
+                <h2 id="opsViewTitle">운영</h2>
+                <p id="opsHeaderMeta" class="muted">운영 상태를 준비하는 중입니다.</p>
               </div>
             </div>
             <div class="workspace-tabbar-row">
@@ -364,11 +364,11 @@
                 <button class="btn btn-secondary workspace-tab" type="button" data-action="ops-view-tab" data-tab="logs">작업 로그</button>
               </div>
               <div class="workspace-tabbar-actions">
-                <button class="btn btn-secondary" type="button" data-action="refresh-ops-summary">새로고침</button>
+                <button class="btn btn-secondary" type="button" data-action="refresh-ops-summary">상태 새로고침</button>
               </div>
             </div>
 
-            <p id="opsWorkspaceScopeHint" class="muted workspace-scope-hint">개요는 오늘 운영 이슈와 바로 실행할 작업만 정리하는 실행 화면입니다.</p>
+            <p id="opsWorkspaceScopeHint" class="muted workspace-scope-hint hidden">오늘 운영 상태와 필요한 조치만 보여줍니다.</p>
 
             <article id="opsOverviewWorkspace" class="module-card stack" data-ops-panel="overview">
               <div class="ops-overview-filterbar ui-filterbar">
@@ -383,7 +383,7 @@
                   </select>
                 </label>
               </div>
-              <p id="opsFilterMeta" class="muted ops-filter-meta">현재 필터를 확인하는 중입니다.</p>
+              <p id="opsFilterMeta" class="muted ops-filter-meta hidden">현재 필터를 확인하는 중입니다.</p>
 
               <div class="ops-status-strip">
                 <button class="ops-status-item" type="button" data-action="ops-open-attendance" data-focus="scheduled">
@@ -407,273 +407,204 @@
                   <small>야간 지원 현황</small>
                 </button>
               </div>
-              <p id="opsViewSummaryMeta" class="muted ops-overview-summary-meta">운영 집계 대기중</p>
+              <p id="opsViewSummaryMeta" class="muted ops-overview-summary-meta hidden">운영 집계 대기중</p>
 
               <div class="ops-overview-main">
-                <div class="ops-overview-core">
-                  <section class="module-card ops-action-board">
-                    <div class="approval-head">
-                      <h3>오늘 바로 실행</h3>
-                    </div>
-                    <p class="muted ops-section-note">지금 바로 실행할 주요 작업만 모았습니다.</p>
-                    <div class="ops-action-groups">
-                      <section class="ops-action-group">
-                        <h4>근무 운영</h4>
-                        <div class="ops-action-list">
-                          <button class="ops-action-item" type="button" data-action="ops-open-attendance" data-focus="vacancy">
-                            <span class="ops-action-title">출퇴근 보기</span>
-                            <span class="ops-action-sub">결원과 누락부터 바로 확인</span>
-                          </button>
-                          <button class="ops-action-item" type="button" data-action="ops-open-schedule-today">
-                            <span class="ops-action-title">오늘 스케줄</span>
-                            <span class="ops-action-sub">배정, 리더, 마감자 점검</span>
-                          </button>
-                          <button class="ops-action-item" type="button" data-action="drawer-open-route" data-route="/requests">
-                            <span class="ops-action-title">요청·승인 보기</span>
-                            <span class="ops-action-sub">정정, 휴가, 승인 대기 확인</span>
-                          </button>
-                        </div>
-                      </section>
-                      <section class="ops-action-group">
-                        <h4>배치 / 조직</h4>
-                        <div class="ops-action-list">
-                          <button class="ops-action-item" type="button" data-action="ops-open-support-workers">
-                            <span class="ops-action-title">지원근무자 확인</span>
-                            <span class="ops-action-sub">지원 배정과 충원 현황 확인</span>
-                          </button>
-                          <button class="ops-action-item" type="button" data-action="drawer-open-route" data-route="/branch/sites">
-                            <span class="ops-action-title">현장 관리</span>
-                            <span class="ops-action-sub">현장 정보와 지오펜스 점검</span>
-                          </button>
-                        </div>
-                      </section>
-                      <section class="ops-action-group">
-                        <h4>연동 / 실행</h4>
-                        <div class="ops-action-list">
-                          <button class="ops-action-item" type="button" data-action="ops-view-tab" data-tab="sheets">
-                            <span class="ops-action-title">사이트 동기화</span>
-                            <span class="ops-action-sub">동기화 상태와 실패 확인</span>
-                          </button>
-                          <button class="ops-action-item" type="button" data-action="ops-view-tab" data-tab="soc">
-                            <span class="ops-action-title">SOC 상태</span>
-                            <span class="ops-action-sub">최근 이벤트와 재시도 확인</span>
-                          </button>
-                          <button class="ops-action-item" type="button" data-action="ops-view-tab" data-tab="logs">
-                            <span class="ops-action-title">작업 로그</span>
-                            <span class="ops-action-sub">최근 실행 기록과 오류 확인</span>
-                          </button>
-                          <button id="opsRunAppleReportBtn" class="ops-action-item hidden" type="button" data-action="ops-run-apple-report">
-                            <span class="ops-action-title">전용 보고 업데이트</span>
-                            <span class="ops-action-sub">Apple 보고 실행 상태 갱신</span>
-                          </button>
-                        </div>
-                      </section>
-                    </div>
-                  </section>
-
-                  <section class="module-card ops-execution-summary">
-                    <div class="approval-head">
-                      <h3>최근 실행 상태</h3>
-                    </div>
-                    <div class="ops-execution-list">
-                      <button class="ops-execution-row" type="button" data-action="ops-view-tab" data-tab="soc">
-                        <div class="list-row-main">
-                          <div class="list-row-title">SOC 연동</div>
-                          <div id="opsOverviewSocMeta" class="list-row-sub">최근 이벤트를 확인 중입니다.</div>
-                        </div>
-                        <span id="opsOverviewSocStatusPill" class="status-pill status-pill-warn">확인 중</span>
-                      </button>
-                      <button class="ops-execution-row" type="button" data-action="ops-view-tab" data-tab="sheets">
-                        <div class="list-row-main">
-                          <div class="list-row-title">사이트 동기화</div>
-                          <div id="opsOverviewSheetsMeta" class="list-row-sub">최근 동기화를 확인 중입니다.</div>
-                        </div>
-                        <span id="opsOverviewSheetsStatusPill" class="status-pill status-pill-warn">확인 중</span>
-                      </button>
-                      <button class="ops-execution-row" type="button" data-action="ops-view-tab" data-tab="logs">
-                        <div class="list-row-main">
-                          <div class="list-row-title">엑셀 가져오기 / 작업 로그</div>
-                          <div id="opsOverviewExcelMeta" class="list-row-sub">최근 실행 기록을 확인 중입니다.</div>
-                        </div>
-                        <span id="opsOverviewExcelStatusPill" class="status-pill status-pill-warn">확인 중</span>
-                      </button>
-                    </div>
-                    <p id="opsOverviewAutomationMeta" class="muted ops-overview-summary-meta">자동화 상태를 불러오는 중입니다.</p>
-                  </section>
-                </div>
-
                 <section class="module-card ops-attention-card">
                   <div class="approval-head">
                     <h3>오늘 우선 조치</h3>
                     <span id="opsAttentionCountPill" class="status-pill status-pill-neutral">0건</span>
                   </div>
-                  <p id="opsAttentionMeta" class="muted ops-section-note">결원, 미지정, 연동 실패처럼 바로 확인할 항목만 표시합니다.</p>
+                  <p id="opsAttentionMeta" class="muted ops-section-note hidden">지금 바로 확인할 이슈만 정리합니다.</p>
                   <ul id="opsAttentionList" class="list compact-list ops-attention-list"></ul>
+                </section>
+
+                <section class="module-card ops-quicklinks-card">
+                  <div class="approval-head">
+                    <h3>바로 이동</h3>
+                  </div>
+                  <div class="ops-quick-link-grid">
+                    <button class="ops-action-item" type="button" data-action="ops-open-attendance" data-focus="vacancy">
+                      <span class="ops-action-title">출퇴근 확인</span>
+                      <span class="ops-action-sub">결원과 누락부터 바로 확인</span>
+                    </button>
+                    <button class="ops-action-item" type="button" data-action="ops-open-schedule-today">
+                      <span class="ops-action-title">오늘 스케줄</span>
+                      <span class="ops-action-sub">배정, 리더, 마감자 점검</span>
+                    </button>
+                    <button class="ops-action-item" type="button" data-action="drawer-open-route" data-route="/requests">
+                      <span class="ops-action-title">요청 확인</span>
+                      <span class="ops-action-sub">정정, 휴가, 승인 대기 확인</span>
+                    </button>
+                    <button class="ops-action-item" type="button" data-action="ops-open-support-workers">
+                      <span class="ops-action-title">지원근무자 현황</span>
+                      <span class="ops-action-sub">지원 배정과 충원 현황 확인</span>
+                    </button>
+                    <button class="ops-action-item" type="button" data-action="ops-view-tab" data-tab="sheets">
+                      <span class="ops-action-title">사이트 동기화</span>
+                      <span class="ops-action-sub">차단 원인과 다음 조치 확인</span>
+                    </button>
+                    <button class="ops-action-item" type="button" data-action="ops-view-tab" data-tab="soc">
+                      <span class="ops-action-title">SOC 상태</span>
+                      <span class="ops-action-sub">최근 이벤트와 재시도 대상 확인</span>
+                    </button>
+                    <button class="ops-action-item" type="button" data-action="ops-view-tab" data-tab="logs">
+                      <span class="ops-action-title">작업 로그</span>
+                      <span class="ops-action-sub">최근 실행 기록과 오류 확인</span>
+                    </button>
+                    <button id="opsRunAppleReportBtn" class="ops-action-item hidden" type="button" data-action="ops-run-apple-report">
+                      <span class="ops-action-title">전용 보고 업데이트</span>
+                      <span class="ops-action-sub">Apple 보고 실행 상태 갱신</span>
+                    </button>
+                  </div>
+                </section>
+              </div>
+
+              <section class="module-card ops-execution-summary">
+                <div class="approval-head">
+                  <h3>최근 실행 상태</h3>
+                </div>
+                <div class="ops-execution-list">
+                  <button class="ops-execution-row" type="button" data-action="ops-view-tab" data-tab="soc">
+                    <div class="list-row-main">
+                      <div class="list-row-title">SOC 연동</div>
+                      <div id="opsOverviewSocMeta" class="list-row-sub">최근 이벤트를 확인 중입니다.</div>
+                    </div>
+                    <span id="opsOverviewSocStatusPill" class="status-pill status-pill-warn">확인 중</span>
+                  </button>
+                  <button class="ops-execution-row" type="button" data-action="ops-view-tab" data-tab="sheets">
+                    <div class="list-row-main">
+                      <div class="list-row-title">사이트 동기화</div>
+                      <div id="opsOverviewSheetsMeta" class="list-row-sub">최근 동기화를 확인 중입니다.</div>
+                    </div>
+                    <span id="opsOverviewSheetsStatusPill" class="status-pill status-pill-warn">확인 중</span>
+                  </button>
+                  <button class="ops-execution-row" type="button" data-action="ops-view-tab" data-tab="logs">
+                    <div class="list-row-main">
+                      <div class="list-row-title">엑셀 업로드 상태</div>
+                      <div id="opsOverviewExcelMeta" class="list-row-sub">최근 실행 기록을 확인 중입니다.</div>
+                    </div>
+                    <span id="opsOverviewExcelStatusPill" class="status-pill status-pill-warn">확인 중</span>
+                  </button>
+                </div>
+                <p id="opsOverviewAutomationMeta" class="muted ops-overview-summary-meta hidden">자동화 상태를 불러오는 중입니다.</p>
+              </section>
+            </article>
+
+            <article id="opsSocPanel" class="module-card stack hidden" data-ops-panel="soc">
+              <div class="approval-head">
+                <h3>SOC</h3>
+                <button class="btn btn-secondary" type="button" data-action="refresh-ops-automation">상태 새로고침</button>
+              </div>
+              <p id="opsSocScopeMeta" class="muted ops-section-note hidden">최근 상태와 이벤트를 확인하고 필요한 조치만 실행합니다.</p>
+              <div class="ops-tool-health-strip ops-panel-summary-strip">
+                <div class="ops-tool-health-item">
+                  <span>현재 상태</span>
+                  <strong id="opsSocPrimaryStatusLabel">-</strong>
+                </div>
+                <div class="ops-tool-health-item">
+                  <span>마지막 갱신</span>
+                  <strong id="opsSocLastRunLabel">-</strong>
+                </div>
+                <div class="ops-tool-health-item">
+                  <span>이슈 수</span>
+                  <strong id="opsSocIssueLabel">-</strong>
+                </div>
+              </div>
+              <div class="ops-panel-shell">
+                <div class="ops-panel-main">
+                  <div id="opsAutomationRowSoc" class="ops-automation-row">
+                    <div class="list-row-main">
+                      <div class="list-row-title">SOC 연동</div>
+                      <div id="opsViewSocMeta" class="list-row-sub">최근 이벤트를 확인 중입니다.</div>
+                    </div>
+                    <div class="ops-automation-actions">
+                      <span id="opsViewSocStatusPill" class="status-pill status-pill-warn">확인 중</span>
+                      <button id="opsSocPrimaryActionBtn" class="btn btn-secondary" type="button" data-action="ops-retry-target" data-target="soc">재시도</button>
+                      <button class="btn btn-secondary" type="button" data-action="ops-view-logs" data-target="soc">로그 보기</button>
+                    </div>
+                  </div>
+                  <section class="ops-panel-card">
+                    <div class="approval-head">
+                      <h4>최근 이벤트</h4>
+                    </div>
+                    <ul id="opsSocRecentList" class="list compact-list ops-automation-related-list"></ul>
+                  </section>
+                </div>
+                <section class="ops-panel-card ops-panel-actions">
+                  <div class="approval-head">
+                    <h4>다음 조치</h4>
+                  </div>
+                  <ul id="opsSocActionList" class="list compact-list ops-automation-related-list"></ul>
                 </section>
               </div>
             </article>
 
-            <article id="opsAutomationCard" class="module-card stack" data-ops-panel="automation">
+            <article id="opsSheetsPanel" class="module-card stack hidden" data-ops-panel="sheets">
               <div class="approval-head">
-                <h3 id="opsAutomationCardTitle">자동화 상태</h3>
-                <button class="btn btn-secondary" type="button" data-action="refresh-ops-automation">상태 갱신</button>
+                <h3>사이트 동기화</h3>
+                <button class="btn btn-secondary" type="button" data-action="refresh-ops-automation">상태 새로고침</button>
               </div>
-              <p id="opsAutomationScopeMeta" class="muted ops-section-note">현재 탭의 최근 실행, 실패, 재시도 대상을 확인합니다.</p>
-              <div class="ops-tool-health-strip">
+              <p id="opsSheetsScopeMeta" class="muted ops-section-note hidden">차단 원인과 실행 상태를 분리해 보여주고 다음 조치를 안내합니다.</p>
+              <div class="ops-tool-health-strip ops-panel-summary-strip">
                 <div class="ops-tool-health-item">
                   <span>현재 상태</span>
-                  <strong id="opsAutomationPrimaryStatusLabel">-</strong>
+                  <strong id="opsSheetsPrimaryStatusLabel">-</strong>
                 </div>
                 <div class="ops-tool-health-item">
                   <span>마지막 갱신</span>
-                  <strong id="opsAutomationLastRunLabel">-</strong>
+                  <strong id="opsSheetsLastRunLabel">-</strong>
                 </div>
                 <div class="ops-tool-health-item">
                   <span>이슈 수</span>
-                  <strong id="opsAutomationIssueLabel">-</strong>
+                  <strong id="opsSheetsIssueLabel">-</strong>
                 </div>
               </div>
-              <div class="ops-automation-grid">
-                <div id="opsAutomationRowSoc" class="ops-automation-row">
-                  <div class="list-row-main">
-                    <div class="list-row-title">SOC 연동</div>
-                    <div id="opsViewSocMeta" class="list-row-sub">최근 이벤트를 확인 중입니다.</div>
+              <div class="ops-panel-shell">
+                <div class="ops-panel-main">
+                  <div id="opsAutomationRowSheets" class="ops-automation-row">
+                    <div class="list-row-main">
+                      <div class="list-row-title">구글 시트 동기화</div>
+                      <div id="opsViewSheetsMeta" class="list-row-sub">최근 동기화를 확인 중입니다.</div>
+                    </div>
+                    <div class="ops-automation-actions">
+                      <span id="opsViewSheetsStatusPill" class="status-pill status-pill-warn">확인 중</span>
+                      <button id="opsSheetsPrimaryActionBtn" class="btn btn-secondary" type="button" data-action="ops-retry-target" data-target="sheets">재시도</button>
+                      <button class="btn btn-secondary" type="button" data-action="ops-view-logs" data-target="sheets">로그 보기</button>
+                    </div>
                   </div>
-                  <div class="ops-automation-actions">
-                    <span id="opsViewSocStatusPill" class="status-pill status-pill-warn">확인 중</span>
-                    <button class="btn btn-secondary" type="button" data-action="ops-retry-target" data-target="soc">재시도</button>
-                    <button class="btn btn-secondary" type="button" data-action="ops-view-logs" data-target="soc">로그 보기</button>
+                  <div id="opsAutomationRowExcel" class="ops-automation-row">
+                    <div class="list-row-main">
+                      <div class="list-row-title">엑셀 업로드 상태</div>
+                      <div id="opsViewExcelMeta" class="list-row-sub">최근 실행 기록을 확인 중입니다.</div>
+                    </div>
+                    <div class="ops-automation-actions">
+                      <span id="opsViewExcelStatusPill" class="status-pill status-pill-warn">확인 중</span>
+                      <button id="opsExcelPrimaryActionBtn" class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/schedules/upload">화면 열기</button>
+                      <button class="btn btn-secondary" type="button" data-action="ops-view-logs" data-target="excel">로그 보기</button>
+                    </div>
                   </div>
+                  <section class="ops-panel-card">
+                    <div class="approval-head">
+                      <h4>최근 실행</h4>
+                    </div>
+                    <ul id="opsSheetsRecentList" class="list compact-list ops-automation-related-list"></ul>
+                  </section>
                 </div>
-                <div id="opsAutomationRowSheets" class="ops-automation-row">
-                  <div class="list-row-main">
-                    <div class="list-row-title">구글 시트 동기화</div>
-                    <div id="opsViewSheetsMeta" class="list-row-sub">최근 동기화를 확인 중입니다.</div>
-                  </div>
-                  <div class="ops-automation-actions">
-                    <span id="opsViewSheetsStatusPill" class="status-pill status-pill-warn">확인 중</span>
-                    <button class="btn btn-secondary" type="button" data-action="ops-retry-target" data-target="sheets">재시도</button>
-                    <button class="btn btn-secondary" type="button" data-action="ops-view-logs" data-target="sheets">로그 보기</button>
-                  </div>
-                </div>
-                <div id="opsAutomationRowExcel" class="ops-automation-row">
-                  <div class="list-row-main">
-                    <div class="list-row-title">엑셀 가져오기</div>
-                    <div id="opsViewExcelMeta" class="list-row-sub">최근 실행 기록을 확인 중입니다.</div>
-                  </div>
-                  <div class="ops-automation-actions">
-                    <span id="opsViewExcelStatusPill" class="status-pill status-pill-warn">확인 중</span>
-                    <button class="btn btn-secondary" type="button" data-action="ops-retry-target" data-target="excel">재시도</button>
-                    <button class="btn btn-secondary" type="button" data-action="ops-view-logs" data-target="excel">로그 보기</button>
-                  </div>
-                </div>
-              </div>
-              <p id="opsViewAutomationMeta" class="muted">자동화 상태를 불러오는 중입니다.</p>
-              <div class="ops-automation-support">
-                <section class="ops-automation-panel">
-                  <div class="approval-head">
-                    <h4>최근 관련 실행</h4>
-                  </div>
-                  <ul id="opsAutomationRecentList" class="list compact-list ops-automation-related-list"></ul>
-                </section>
-                <section class="ops-automation-panel">
+                <section class="ops-panel-card ops-panel-actions">
                   <div class="approval-head">
                     <h4>다음 조치</h4>
                   </div>
-                  <ul id="opsAutomationActionList" class="list compact-list ops-automation-related-list"></ul>
+                  <ul id="opsSheetsActionList" class="list compact-list ops-automation-related-list"></ul>
                 </section>
               </div>
-              <section id="opsSheetsExecutionSection" class="profile-settings-section shell-manager-only">
-                <div class="profile-settings-section-head">
-                  <div>
-                    <h3>시트 실행 / 실패 추적</h3>
-                    <p class="muted">설정과 분리해, 현재 프로파일 기준 실행과 실패 이력을 운영에서 확인합니다.</p>
-                  </div>
-                </div>
-                <div class="profile-settings-lower-grid profile-settings-execution-grid">
-                  <article id="googleSheetExecutionCard" class="module-card stack">
-                    <div class="approval-head">
-                      <div>
-                        <h3>동기화 실행</h3>
-                        <p class="muted">선택된 프로파일과 기간 범위로 즉시 동기화를 실행합니다.</p>
-                      </div>
-                    </div>
-                    <div class="settings-execution-body">
-                      <div class="schedule-filter-row settings-sync-date-row">
-                        <label class="input-field" for="gsSyncStartDate">
-                          동기화 시작일
-                          <input id="gsSyncStartDate" type="date" />
-                        </label>
-                        <label class="input-field" for="gsSyncEndDate">
-                          동기화 종료일
-                          <input id="gsSyncEndDate" type="date" />
-                        </label>
-                      </div>
-                      <p class="muted settings-inline-note">설정 저장과 별개로, 현재 선택 프로파일 범위만 즉시 실행합니다.</p>
-                      <p id="googleSheetSyncStatus" class="muted"></p>
-                    </div>
-                    <div class="inline-actions settings-scoped-actions">
-                      <button class="btn btn-primary" type="button" data-action="google-profile-sync">지금 동기화</button>
-                    </div>
-                  </article>
-                  <article id="googleSheetFailureLogCard" class="module-card stack">
-                    <div class="approval-head">
-                      <div>
-                        <h3>실패 로그</h3>
-                        <p class="muted">최근 구글 시트 동기화 실패 이력만 compact하게 표시합니다.</p>
-                      </div>
-                    </div>
-                    <div class="settings-log-toolbar">
-                      <p id="googleSheetLogStatus" class="muted">최근 실패 로그를 불러오면 여기 표시됩니다.</p>
-                      <div class="inline-actions settings-scoped-actions">
-                        <button class="btn btn-secondary" type="button" data-action="google-log-refresh">실패 로그 새로고침</button>
-                      </div>
-                    </div>
-                    <ul id="googleSheetLogList" class="list settings-compact-log-list"></ul>
-                  </article>
-                </div>
-              </section>
-              <section id="opsSocMonitorSection" class="profile-settings-section shell-manager-only">
-                <div class="profile-settings-section-head">
-                  <div>
-                    <h3>SOC 모니터링</h3>
-                    <p class="muted">최근 SOC 수신 상태와 재확인 대상을 운영 화면에서 점검합니다.</p>
-                  </div>
-                </div>
-                <article id="socMonitorCard" class="module-card stack shell-manager-only">
-                  <div class="approval-head">
-                    <div>
-                      <h3>SOC 이벤트 모니터</h3>
-                      <p class="muted">최근 수신 이벤트를 상태별로 조회하고 재확인합니다.</p>
-                    </div>
-                    <span class="status-pill status-pill-warn">최근 수신</span>
-                  </div>
-                  <div class="settings-monitor-toolbar">
-                    <label class="input-field" for="socStatusFilter">
-                      상태 필터
-                      <select id="socStatusFilter">
-                        <option value="">전체</option>
-                        <option value="processed">처리완료</option>
-                        <option value="failed">실패</option>
-                        <option value="skipped">건너뜀</option>
-                        <option value="received">수신됨</option>
-                      </select>
-                    </label>
-                    <div class="inline-actions settings-scoped-actions">
-                      <button class="btn btn-secondary" type="button" data-action="soc-events-refresh">목록 새로고침</button>
-                    </div>
-                  </div>
-                  <p id="socMonitorStatus" class="muted"></p>
-                  <ul id="socEventList" class="list settings-compact-log-list"></ul>
-                </article>
-              </section>
             </article>
 
             <article id="opsLogsPanel" class="module-card stack hidden" data-ops-panel="logs">
               <div class="ops-log-head">
                 <div class="ops-log-head-copy">
-                  <h3>최근 작업 로그</h3>
-                  <p id="opsLogsSummaryMeta" class="muted">최근 실행 이력과 오류 메시지를 한 곳에서 추적합니다.</p>
+                  <h3>작업 로그</h3>
+                  <p id="opsLogsSummaryMeta" class="muted">최근 실행 이력과 오류 메시지를 한 곳에서 확인합니다.</p>
                 </div>
                 <div class="ops-log-count-strip">
                   <div class="ops-log-count-chip">
@@ -1567,7 +1498,7 @@
                 <button class="btn btn-secondary workspace-tab" type="button" data-action="support-status-workspace-tab" data-tab="hq" aria-pressed="false">HQ 엑셀 워크스페이스</button>
               </div>
             </div>
-            <p id="supportStatusWorkspaceScopeHint" class="muted workspace-scope-hint">지원근무 현황과 HQ 엑셀 워크스페이스를 같은 화면에서 전환합니다.</p>
+            <p id="supportStatusWorkspaceScopeHint" class="muted workspace-scope-hint">운영 보기와 HQ 작업판을 전환합니다.</p>
 
             <section id="supportStatusStatusPanel" class="stack">
               <section class="module-card stack support-status-toolbar-card">
@@ -1684,7 +1615,7 @@
                     <div>
                       <span class="schedule-upload-step-kicker">1. 다운로드 준비</span>
                       <h4>다운로드 준비</h4>
-                      <p class="muted">전체 다운로드를 기본값으로 두고, 필요하면 지점별 workbook으로 범위를 좁힙니다.</p>
+                      <p class="muted">전체 또는 지점 범위를 선택합니다.</p>
                     </div>
                     <button class="btn btn-secondary" type="button" data-action="support-status-hq-refresh">범위 새로고침</button>
                   </div>
@@ -1719,7 +1650,7 @@
                     <div>
                       <span class="schedule-upload-step-kicker">2. 업로드 준비</span>
                       <h4>업로드 준비</h4>
-                      <p class="muted">HQ가 배정용 엑셀을 다시 업로드하기 전에 file contract와 메타데이터를 먼저 검토합니다.</p>
+                      <p class="muted">파일과 기준 월이 맞는지만 먼저 확인합니다.</p>
                     </div>
                   </div>
                   <div class="schedule-upload-file-row">
@@ -1731,7 +1662,7 @@
                   </div>
                   <div class="support-status-hq-replace-note">
                     <strong>REPLACE 정책</strong>
-                    <p>업로드한 파일의 최신 내용으로 기존 지원근무자 배정을 덮어씁니다. 재업로드 시 기존 명단은 병합되지 않고 최신 파일 기준으로 교체됩니다.</p>
+                    <p>재업로드 시 최신 파일 기준으로 교체됩니다.</p>
                   </div>
                   <div id="supportStatusHqUploadMeta" class="schedule-upload-file-meta"></div>
                 </section>
@@ -1741,14 +1672,14 @@
                     <div>
                       <span class="schedule-upload-step-kicker">3. 적용 전 검토</span>
                       <h4>적용 전 검토</h4>
-                      <p class="muted">이번 phase에서는 workbook validity, revision 상태, scope/month mismatch, 시트 범위만 구조적으로 검토합니다.</p>
+                      <p class="muted">검토가 필요한 항목만 확인합니다.</p>
                     </div>
                   </div>
                   <div id="supportStatusHqReviewSummary" class="schedule-upload-summary-strip"></div>
                   <div id="supportStatusHqIssueGroups" class="schedule-upload-issue-groups"></div>
                   <div id="supportStatusHqReviewPlaceholder" class="schedule-upload-placeholder">
-                    <strong>업로드 파일 검토를 시작하면 review 구조가 여기에 표시됩니다.</strong>
-                    <p>scope별 요청 수, 유효 입력 수, 근무자 셀 파싱 결과가 이 구역에 표시됩니다.</p>
+                    <strong>검토를 시작하면 필요한 항목만 표시됩니다.</strong>
+                    <p>파일을 올린 뒤 검토를 실행하세요.</p>
                   </div>
                   <div id="supportStatusHqReviewTableWrap" class="schedule-preview-wrap hidden">
                     <table class="schedule-preview-table schedule-upload-preview-table support-status-hq-review-table">
@@ -1804,7 +1735,7 @@
             <div class="workspace-head attendance-workspace-head">
               <div class="workspace-head-main">
                 <h2>출퇴근</h2>
-                <p class="muted">기록을 스캔하고 예외를 선별하는 출퇴근 워크스페이스입니다. 승인과 정정 처리는 요청·승인에서 이어집니다.</p>
+                <p class="muted">기록을 스캔하고 확인이 필요한 예외만 먼저 봅니다.</p>
               </div>
               <div class="workspace-head-actions">
                 <button class="btn btn-secondary" type="button" data-action="attendance-go-correction" id="attendanceCorrectionBtn">요청·승인</button>
@@ -1888,23 +1819,9 @@
                     <div class="approval-head">
                       <div class="attendance-exception-heading">
                         <div class="requests-heading-block">
-                          <h3>예외 큐</h3>
-                          <p id="attendanceExceptionHint" class="muted">현재 범위에서 우선 검토가 필요한 기록만 먼저 보여줍니다.</p>
+                          <h3>우선 확인 예외</h3>
+                          <p id="attendanceExceptionHint" class="muted hidden">먼저 열어봐야 할 기록만 상단에 모았습니다.</p>
                         </div>
-                        <button
-                          id="attendanceExceptionHelpButton"
-                          class="icon-btn attendance-exception-info-btn"
-                          type="button"
-                          data-action="attendance-toggle-exception-help"
-                          aria-label="예외 큐 기준 보기"
-                          aria-expanded="false"
-                        >ⓘ</button>
-                        <div
-                          id="attendanceExceptionHelpPopover"
-                          class="attendance-exception-help-popover hidden"
-                          role="tooltip"
-                          aria-hidden="true"
-                        ></div>
                       </div>
                       <span id="attendanceExceptionCountPill" class="status-pill status-pill-warn">0건</span>
                     </div>
@@ -1915,11 +1832,8 @@
                   <article id="attendanceManagerTableCard" class="module-card stack attendance-table-card">
                     <div class="approval-head attendance-grid-head">
                       <div class="requests-heading-block">
-                        <h3>기록 리스트</h3>
-                        <p id="attendanceRecordTableMeta" class="muted">선택 기간의 예정 근무와 실제 기록을 비교하고, 상세 패널에서 요청 이력까지 이어서 확인합니다.</p>
-                      </div>
-                      <div class="attendance-grid-head-actions">
-                        <p class="muted attendance-grid-head-note">승인과 정정 처리 owner는 요청·승인 탭이며, 이 화면은 스캔과 예외 판별에 집중합니다.</p>
+                        <h3>출퇴근 기록</h3>
+                        <p id="attendanceRecordTableMeta" class="muted hidden">기간 내 스케줄과 실제 기록을 비교해 예외를 빠르게 스캔합니다.</p>
                       </div>
                     </div>
                     <div class="attendance-workspace-table-wrap">
@@ -1928,15 +1842,12 @@
                           <tr>
                             <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="date"><span>날짜</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
                             <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="employee"><span>직원</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
-                            <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="company"><span>회사</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
                             <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="site"><span>현장</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
                             <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="scheduled"><span>예정 근무</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
                             <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="check_in"><span>출근</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
                             <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="check_out"><span>퇴근</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
                             <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="status"><span>상태</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
-                            <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="late_minutes"><span>지각</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
-                            <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="overtime"><span>OT</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
-                            <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="review"><span>검토 상태</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+                            <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="review"><span>확인 포인트</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
                           </tr>
                         </thead>
                         <tbody id="attendanceManagerRecordTableBody"></tbody>
@@ -1950,14 +1861,20 @@
               <aside id="attendanceAdminDrawer" class="attendance-admin-drawer hidden" aria-hidden="true">
                 <div class="attendance-admin-drawer-head">
                   <div class="attendance-admin-drawer-title">
-                    <span class="attendance-admin-drawer-eyebrow">출퇴근 상세</span>
-                    <h3 id="attendanceAdminDrawerTitle">상세 / 처리 패널</h3>
-                    <p id="attendanceAdminDrawerMeta" class="muted">기록을 선택하면 요약, 타임라인, 요청 이력을 같은 패널에서 순서대로 확인할 수 있습니다.</p>
+                    <span class="attendance-admin-drawer-eyebrow">기록 상세</span>
+                    <h3 id="attendanceAdminDrawerTitle">요약 / 관련 요청</h3>
+                    <p id="attendanceAdminDrawerMeta" class="muted hidden">기록을 선택하면 요약과 관련 요청, 타임라인을 차례로 확인할 수 있습니다.</p>
                   </div>
                   <button class="icon-btn" type="button" data-action="attendance-close-drawer" aria-label="상세 닫기">✕</button>
                 </div>
                 <div class="attendance-admin-drawer-body">
                   <div id="attendanceAdminDetailContent" class="attendance-admin-detail-content"></div>
+                  <section class="attendance-admin-drawer-section">
+                    <div class="approval-head">
+                      <h3>관련 요청</h3>
+                    </div>
+                    <ul id="attendanceSupportRequestList" class="list" aria-live="polite" aria-busy="false"></ul>
+                  </section>
                   <section class="attendance-admin-drawer-section">
                     <div class="approval-head">
                       <h3>타임라인</h3>
@@ -1966,13 +1883,7 @@
                   </section>
                   <section class="attendance-admin-drawer-section">
                     <div class="approval-head">
-                      <h3>요청 이력</h3>
-                    </div>
-                    <ul id="attendanceSupportRequestList" class="list" aria-live="polite" aria-busy="false"></ul>
-                  </section>
-                  <section class="attendance-admin-drawer-section">
-                    <div class="approval-head">
-                      <h3>수정 로그</h3>
+                      <h3>검토 메모</h3>
                     </div>
                     <ul id="attendanceSupportLogList" class="list" aria-live="polite" aria-busy="false"></ul>
                   </section>
@@ -2060,7 +1971,7 @@
                   <h2 id="scheduleWorkspaceTitle">근무일정</h2>
                   <button id="scheduleWorkspaceHelpButton" class="btn btn-icon btn-secondary" type="button" data-action="drawer-help" aria-label="근무일정 도움말">?</button>
                 </div>
-                <p id="scheduleWorkspaceDescription" class="muted">월간 캘린더와 Excel 업로드 흐름을 역할에 맞게 나눠 사용하는 스케줄 워크스페이스입니다.</p>
+                <p id="scheduleWorkspaceDescription" class="muted">월간 배치와 업로드 작업을 여기서 이어갑니다.</p>
               </div>
             </div>
             <p id="schedulePermissionHint" class="muted permission-hint hidden"></p>
@@ -2152,9 +2063,9 @@
             <aside id="scheduleDesktopDrawer" class="schedule-detail-drawer hidden" aria-hidden="true">
               <div class="schedule-detail-drawer-head">
                 <div class="schedule-detail-drawer-title">
-                  <span class="schedule-detail-drawer-eyebrow">일정 상세</span>
+                  <span class="schedule-detail-drawer-eyebrow">날짜 요약</span>
                   <h3 id="scheduleDetailTitle">선택 날짜 상세</h3>
-                  <p id="scheduleDetailSummary" class="muted">달력 날짜를 선택하면 배정 현황과 액션을 바로 확인할 수 있습니다.</p>
+                  <p id="scheduleDetailSummary" class="muted">날짜를 고르면 배정과 근무 정보를 바로 확인할 수 있습니다.</p>
                 </div>
                 <div class="schedule-detail-drawer-head-actions">
                   <span id="scheduleDetailDateBadge" class="status-pill status-pill-warn">날짜 선택</span>
@@ -2171,10 +2082,10 @@
                 </section>
                 <section class="schedule-detail-section">
                   <div class="approval-head">
-                    <h3>운영 메타</h3>
+                    <h3>근무 정보</h3>
                     <span id="scheduleBreakPolicyPill" class="status-pill status-pill-warn">날짜 선택</span>
                   </div>
-                  <p id="scheduleBreakSummary" class="muted">날짜를 선택하면 해당 일자의 휴게/운영 메타를 함께 확인할 수 있습니다.</p>
+                  <p id="scheduleBreakSummary" class="muted">날짜를 선택하면 해당 일자의 근무 정보와 휴가 상태를 함께 보여줍니다.</p>
                 </section>
               </div>
               <div id="scheduleDetailActions" class="schedule-detail-actions hidden"></div>
@@ -2183,33 +2094,53 @@
             <div id="scheduleUploadPanel" class="stack schedule-tab-panel hidden schedule-upload-workspace">
             <header class="schedule-upload-header">
               <div>
-                <h3 id="scheduleUploadHeaderTitle">근무표 업로드·자동등록</h3>
-                <p id="scheduleUploadHeaderText" class="muted">스케줄 Excel workflow owner 화면으로, 매핑 준비부터 검토와 적용까지 이 곳에서 진행합니다.</p>
+                <h3 id="scheduleUploadHeaderTitle">월간 업로드</h3>
+                <p id="scheduleUploadHeaderText" class="muted">지금 단계에서 필요한 작업만 보여줍니다.</p>
               </div>
             </header>
 
+            <section id="scheduleUploadGuidePanel" class="schedule-upload-guide-panel" aria-live="polite">
+              <div class="schedule-upload-guide-main">
+                <span id="scheduleUploadGuidePill" class="status-pill status-pill-neutral">준비</span>
+                <div class="schedule-upload-guide-copy">
+                  <strong id="scheduleUploadGuideTitle">업로드 준비</strong>
+                  <p id="scheduleUploadGuideText" class="muted">지금 필요한 작업만 먼저 안내합니다.</p>
+                </div>
+              </div>
+              <div class="schedule-upload-guide-meta">
+                <article id="scheduleUploadGuideBlockedCard" class="schedule-upload-guide-card">
+                  <span>막힌 이유</span>
+                  <strong id="scheduleUploadGuideBlocked">없음</strong>
+                </article>
+                <article id="scheduleUploadGuideNextCard" class="schedule-upload-guide-card">
+                  <span>다음 행동</span>
+                  <strong id="scheduleUploadGuideNext">단계를 선택해 시작</strong>
+                </article>
+              </div>
+            </section>
+
             <section id="scheduleExcelWorkflowContextStrip" class="schedule-excel-context-strip" aria-label="업로드 컨텍스트">
-              <article class="schedule-excel-context-card">
+              <article id="scheduleExcelWorkflowContextTenantCard" class="schedule-excel-context-card">
                 <span class="schedule-excel-context-label">대상 테넌트</span>
                 <strong id="scheduleExcelWorkflowContextTenant" class="schedule-excel-context-value">테넌트 확인</strong>
               </article>
-              <article class="schedule-excel-context-card">
+              <article id="scheduleExcelWorkflowContextSiteCard" class="schedule-excel-context-card">
                 <span class="schedule-excel-context-label">대상 지점</span>
                 <strong id="scheduleExcelWorkflowContextSite" class="schedule-excel-context-value">지점 선택</strong>
               </article>
-              <article class="schedule-excel-context-card">
+              <article id="scheduleExcelWorkflowContextMonthCard" class="schedule-excel-context-card">
                 <span class="schedule-excel-context-label">대상 월</span>
                 <strong id="scheduleExcelWorkflowContextMonth" class="schedule-excel-context-value">월 선택</strong>
               </article>
-              <article class="schedule-excel-context-card">
+              <article id="scheduleExcelWorkflowContextFileCard" class="schedule-excel-context-card">
                 <span class="schedule-excel-context-label">현재 파일</span>
                 <strong id="scheduleExcelWorkflowContextFile" class="schedule-excel-context-value">파일 선택 전</strong>
               </article>
-              <article class="schedule-excel-context-card">
+              <article id="scheduleExcelWorkflowContextRevisionCard" class="schedule-excel-context-card">
                 <span class="schedule-excel-context-label">리비전</span>
                 <strong id="scheduleExcelWorkflowContextRevision" class="schedule-excel-context-value">-</strong>
               </article>
-              <article class="schedule-excel-context-card">
+              <article id="scheduleExcelWorkflowContextStageCard" class="schedule-excel-context-card">
                 <span class="schedule-excel-context-label">현재 단계</span>
                 <strong id="scheduleExcelWorkflowContextStage" class="schedule-excel-context-value">-</strong>
               </article>
@@ -2251,7 +2182,7 @@
                   </label>
                   <button class="btn btn-secondary" type="button" data-action="schedule-open-template-profile-manager">매핑 프로필 관리</button>
                 </div>
-                <div class="schedule-mapping-profile-meta-grid">
+                <div id="scheduleTemplateMappingMetaGrid" class="schedule-mapping-profile-meta-grid">
                   <article class="schedule-mapping-profile-meta-card">
                     <span>선택 프로필</span>
                     <strong id="scheduleTemplateMappingSelectedName">프로필 미선택</strong>
@@ -2269,17 +2200,17 @@
                     <strong id="scheduleTemplateMappingSelectedUpdated">-</strong>
                   </article>
                 </div>
-                <p id="scheduleTemplateMappingText" class="muted">엑셀 숫자값을 ARLS 근무 템플릿 시간 범위와 연결해야 업로드 분석이 가능합니다.</p>
+                <p id="scheduleTemplateMappingText" class="muted">업로드 파일의 값과 ARLS 근무 템플릿을 연결하면 다음 단계로 넘어갈 수 있습니다.</p>
                 <p id="scheduleTemplateMappingMissing" class="muted hidden"></p>
                 <div id="scheduleTemplateMappingSummaryList" class="schedule-mapping-rule-summary"></div>
               </div>
               <details id="scheduleImportProfileLibraryDetails" class="schedule-mapping-manager-details">
-                <summary>매핑 프로필 라이브러리 관리</summary>
+                <summary>매핑 프로필 목록</summary>
                 <div class="schedule-mapping-manager-card stack">
                   <div class="approval-head">
                     <div>
                       <h4>매핑 프로필</h4>
-                      <p class="muted">STEP 1 owner 영역입니다. 업로드에서 사용할 규칙을 생성하거나 수정한 뒤, 같은 화면에서 바로 다시 선택합니다.</p>
+                      <p class="muted">업로드에 쓸 프로필을 만들거나 수정한 뒤 바로 다시 선택할 수 있습니다.</p>
                     </div>
                     <div class="quick-actions">
                       <button class="btn btn-primary" type="button" id="scheduleImportProfileManageBtn" data-action="schedule-import-profile-manage" data-profile-mode="create">매핑 프로필 생성</button>
@@ -2303,7 +2234,7 @@
                       <tbody id="scheduleTemplateProfileTableBody"></tbody>
                     </table>
                   </div>
-                  <p class="muted schedule-template-owner-note">프로필을 수정한 뒤에도 실제 반영은 현재 선택된 프로필 기준으로만 진행됩니다.</p>
+                  <p class="muted schedule-template-owner-note">실제 반영은 현재 선택된 프로필 기준으로만 진행됩니다.</p>
                 </div>
               </details>
               <div class="schedule-wizard-actions">
@@ -2357,7 +2288,7 @@
                       <article class="schedule-upload-template-card">
                         <div>
                           <h5>빈 양식 다운로드</h5>
-                          <p class="muted">처음 작성하는 경우 현재 ARLS 호환 workbook 양식을 내려받아 사용합니다.</p>
+                          <p class="muted">처음 작성할 때 사용할 최신 양식을 내려받습니다.</p>
                         </div>
                         <button class="btn btn-secondary" type="button" id="scheduleBlankTemplateBtn" data-action="schedule-download-blank-template">빈 양식 다운로드</button>
                       </article>
@@ -2379,7 +2310,7 @@
                       <div class="task-progress-main">
                         <div class="schedule-upload-progress-copy">
                           <strong id="scheduleImportProgressTitle">분석 대기</strong>
-                          <p id="scheduleImportProgressText" class="muted">분석이 시작되면 현재 단계와 잠긴 입력 항목을 여기에 표시합니다.</p>
+                          <p id="scheduleImportProgressText" class="muted">분석이 시작되면 현재 단계와 진행 상태를 여기에 표시합니다.</p>
                         </div>
                         <div class="task-progress-track" aria-hidden="true">
                           <div id="scheduleImportProgressBar" class="task-progress-fill"></div>
@@ -2397,7 +2328,7 @@
                 <section id="scheduleBaseReviewStage" class="schedule-upload-step hidden">
                   <div id="scheduleImportAnalysisEmpty" class="schedule-upload-placeholder">
                     <strong>분석 대기 중</strong>
-                    <p class="muted">지점, 대상 월, 업로드 파일을 준비한 뒤 <code>분석 시작</code>을 실행하면 결과가 여기에 표시됩니다.</p>
+                    <p class="muted">지점, 월, 파일을 준비한 뒤 <code>분석 시작</code>을 누르면 결과가 여기에 표시됩니다.</p>
                   </div>
 
                   <div id="scheduleImportAnalysisWorkspace" class="stack hidden">
@@ -2410,7 +2341,7 @@
                       <div class="schedule-preview-head">
                         <div>
                           <h3>이슈 요약</h3>
-                          <p class="muted">반복되는 raw 오류 대신 유형별로 묶어서 조치 방법을 안내합니다.</p>
+                          <p class="muted">검토가 필요한 항목만 묶어서 보여줍니다.</p>
                         </div>
                       </div>
                       <div id="scheduleImportIssueGroups" class="schedule-upload-issue-groups"></div>
@@ -2424,7 +2355,7 @@
                       <div class="schedule-preview-head">
                         <div>
                           <h3>행 미리보기</h3>
-                          <p class="muted">기본 보기에서는 실제 조치가 필요한 검토/차단 행만 표시합니다. 보호/요약 지원 메타데이터는 이슈 요약에서만 확인합니다.</p>
+                          <p class="muted">기본 보기에서는 실제 조치가 필요한 행만 먼저 보여줍니다.</p>
                         </div>
                         <div id="schedulePreviewModeSwitch" class="workspace-tabs" role="group" aria-label="행 미리보기 보기 방식">
                           <button class="btn btn-secondary workspace-tab active" type="button" data-action="schedule-preview-mode" data-mode="actionable" aria-pressed="true">기본 보기</button>
@@ -2471,7 +2402,7 @@
                 <div id="scheduleUploadApplyBar" class="schedule-upload-apply-bar">
                   <div class="schedule-upload-apply-state">
                     <strong id="scheduleApplyStateSummary">분석 전</strong>
-                    <p id="scheduleApplyStateReason" class="muted">지점, 월, 파일을 준비한 뒤 분석을 시작하세요.</p>
+                    <p id="scheduleApplyStateReason" class="muted">지점, 월, 파일을 준비한 뒤 분석하세요.</p>
                   </div>
                 </div>
 
@@ -2486,7 +2417,7 @@
                 <div>
                   <span class="schedule-upload-step-kicker">STEP 3</span>
                   <h4>HQ 제출용 추출</h4>
-                  <p class="muted">HQ가 채워야 할 지원근무 workbook을 ARLS에서 한 번에 생성합니다. 여러 지점을 선택하면 한 파일에 지점별 시트로 묶습니다.</p>
+                  <p class="muted">준비된 지점만 골라 제출본을 만듭니다.</p>
                 </div>
                 <span id="scheduleSupportStatePill" class="status-pill status-pill-neutral">원본 대기</span>
               </div>
@@ -2506,7 +2437,7 @@
                   <input id="scheduleHqMonth" type="month" />
                 </label>
               </div>
-              <p id="scheduleSupportStatusText" class="muted">대상 월과 지점을 선택하면 지원근무 workbook의 준비 상태와 다음 작업을 확인할 수 있습니다.</p>
+              <p id="scheduleSupportStatusText" class="muted">월과 지점을 고정하면 제출본 준비 상태를 확인합니다.</p>
               <div id="scheduleSupportHqSuccessBanner" class="schedule-upload-success-banner hidden" role="status" aria-live="polite">
                 <div>
                   <strong id="scheduleSupportHqSuccessTitle">업로드가 완료되었습니다.</strong>
@@ -2520,7 +2451,7 @@
                   <div>
                     <span class="schedule-upload-step-kicker">대상 지점 선택</span>
                     <h4>지점 상태 확인</h4>
-                    <p class="muted">업로드 완료 지점만 선택할 수 있습니다. 여러 지점을 선택하면 한 workbook 안에 지점별 시트로 생성됩니다.</p>
+                    <p class="muted">준비된 지점만 선택할 수 있습니다.</p>
                   </div>
                   <div class="quick-actions">
                     <button class="btn btn-secondary" type="button" data-action="schedule-support-hq-select-ready">완료 지점 전체 선택</button>
@@ -2546,7 +2477,7 @@
                 <div class="approval-head">
                   <h3>HQ 제출용 추출</h3>
                 </div>
-                <p class="muted">한 workbook 안에 선택한 지점들이 각각 별도 시트로 생성됩니다. 시트명은 지점/현장명 기준입니다.</p>
+                <p class="muted">선택 지점을 한 workbook으로 내려받습니다.</p>
                 <div class="schedule-support-upload-actions">
                   <span id="scheduleSupportHqSelectionSummary" class="muted">선택한 지점이 없습니다.</span>
                   <button class="btn btn-secondary" type="button" id="scheduleSupportHqDownloadBtn" data-action="schedule-support-hq-download">시트 다운로드</button>
@@ -2560,21 +2491,17 @@
                 <div>
                   <span class="schedule-upload-step-kicker">STEP 4</span>
                   <h4>HQ 작성본 업로드</h4>
-                  <p class="muted">다운로드한 workbook을 다시 올려 업로드 미리보기와 반영 시작까지 진행합니다.</p>
+                  <p class="muted">작성본을 올리고 검토 후 반영합니다.</p>
                 </div>
               </div>
               <section id="scheduleSupportUploadSection" class="schedule-support-action-section stack">
                 <div class="approval-head">
                   <h3>HQ 작성본 업로드</h3>
                 </div>
-                <p id="scheduleSupportHqContractHint" class="muted">선택한 지점과 대상 월 기준으로 HQ 작성본 workbook을 검토합니다.</p>
+                <p id="scheduleSupportHqContractHint" class="muted">선택한 지점 기준으로 검토합니다.</p>
                 <div class="schedule-upload-guidance-box">
-                  <strong>업로드 전에 확인하세요</strong>
-                  <ol>
-                    <li>시트명은 선택한 지점/현장명과 일치해야 합니다.</li>
-                    <li>시트명이 손상된 경우 병합셀 BC34의 텍스트를 fallback으로 사용합니다.</li>
-                    <li>둘 다 확인할 수 없으면 업로드가 차단됩니다.</li>
-                  </ol>
+                  <strong>업로드 기준</strong>
+                  <p class="muted">선택 지점과 시트명이 맞아야 검토를 이어갈 수 있습니다.</p>
                 </div>
                 <div id="scheduleSupportArtifactUserMeta" class="schedule-upload-file-meta"></div>
                 <details id="scheduleSupportArtifactTechDetails" class="schedule-upload-tech-details hidden">
@@ -2623,7 +2550,7 @@
                 <div class="task-progress-main">
                   <div class="schedule-upload-progress-copy">
                     <strong id="scheduleSupportHqProgressTitle">검토 대기</strong>
-                    <p id="scheduleSupportHqProgressText" class="muted">검토를 시작하면 현재 단계와 진행 상태가 여기에 표시됩니다.</p>
+                    <p id="scheduleSupportHqProgressText" class="muted">검토를 시작하면 진행 상태가 표시됩니다.</p>
                   </div>
                   <div class="task-progress-track" aria-hidden="true">
                     <div id="scheduleSupportHqProgressBar" class="task-progress-fill"></div>
@@ -2634,7 +2561,7 @@
                   </div>
                 </div>
               </div>
-              <p id="scheduleSupportHqBatchInfo" class="muted">source artifact lineage와 workbook 계약을 확인한 뒤 검토를 시작하세요.</p>
+              <p id="scheduleSupportHqBatchInfo" class="muted">파일을 올린 뒤 검토를 시작하세요.</p>
               <div id="scheduleSupportHqReviewSummary" class="schedule-upload-summary-strip"></div>
               <div id="scheduleSupportHqIssueGroups" class="schedule-upload-issue-groups"></div>
               <div id="scheduleSupportHqPreviewModeSwitch" class="workspace-tabs" role="group" aria-label="HQ 지원근무자 미리보기 보기 방식">
@@ -2642,8 +2569,8 @@
                 <button class="btn btn-secondary workspace-tab" type="button" data-action="schedule-support-hq-preview-mode" data-mode="all" aria-pressed="false">전체 보기</button>
               </div>
               <div id="scheduleSupportHqReviewPlaceholder" class="schedule-upload-placeholder">
-                <strong>HQ 작성본 workbook 검토 대기 중</strong>
-                <p>업로드 파일을 선택한 뒤 <code>검토 시작</code>을 실행하면 scope별 상태와 근무자 셀 파싱 결과가 여기에 표시됩니다.</p>
+                <strong>HQ 작성본 검토 대기</strong>
+                <p>파일을 선택한 뒤 <code>검토 시작</code>을 누르세요.</p>
               </div>
               <div id="scheduleSupportHqReviewTableWrap" class="schedule-preview-wrap hidden">
                 <table class="schedule-preview-table schedule-upload-preview-table support-status-hq-review-table">
@@ -2682,7 +2609,7 @@
                   <button class="btn btn-primary" type="button" data-action="schedule-hq-wizard-finish">종료</button>
                 </div>
               </div>
-              <p id="scheduleSupportHqApplyResult" class="muted">적용 결과와 handoff 상태가 여기에 표시됩니다.</p>
+              <p id="scheduleSupportHqApplyResult" class="muted">반영 결과가 여기에 표시됩니다.</p>
               <ul id="scheduleSupportHqApplyDetails" class="list hidden"></ul>
               </div>
             </section>
@@ -2707,7 +2634,7 @@
               <div class="approval-head">
                 <div>
                   <h3>근무 템플릿</h3>
-                  <p class="muted">근무 시간대와 총시간을 관리하는 템플릿 라이브러리입니다. 매핑 프로필 선택과 관리는 업로드 STEP 1 owner 화면에서 진행합니다.</p>
+                  <p class="muted">근무 시간대와 총시간을 관리하는 템플릿 라이브러리입니다.</p>
                 </div>
                 <div class="quick-actions">
                   <button class="btn btn-secondary" type="button" data-action="schedule-template-refresh">새로고침</button>
@@ -2716,8 +2643,8 @@
               </div>
               <section class="schedule-template-owner-summary">
                 <div>
-                  <strong>매핑 프로필 owner는 업로드 STEP 1입니다.</strong>
-                  <p class="muted">이 화면에서는 템플릿 CRUD와 연결된 프로필 수만 확인합니다. 프로필 선택이나 수정이 필요하면 업로드 STEP 1로 이동하세요.</p>
+                  <strong>템플릿 관리만 이 화면에서 진행합니다.</strong>
+                  <p class="muted">매핑 프로필 연결은 Excel 업로드 STEP 1에서 이어집니다.</p>
                 </div>
                 <div class="schedule-template-owner-summary-actions">
                   <button class="btn btn-secondary" type="button" data-action="schedule-open-upload-mapping-step">업로드 STEP 1 열기</button>
@@ -2751,7 +2678,7 @@
             <div class="workspace-head profile-workspace-head">
               <div class="workspace-head-main">
                 <h2 id="profileViewTitle">내 정보</h2>
-                <p id="profileViewSubtitle" class="muted">개인 정보, 보안, 알림, 연동 설정을 관리합니다.</p>
+                <p id="profileViewSubtitle" class="muted">계정, 알림, 연동값을 관리합니다.</p>
               </div>
             </div>
             <div id="profileWorkspaceTabs" class="workspace-tabs profile-workspace-tabs">
@@ -2794,7 +2721,6 @@
             </div>
             <article id="profilePasswordCard" class="module-card stack shell-employee-only">
               <h3>내 비밀번호 변경</h3>
-              <p class="muted">사원은 본인 계정만 변경할 수 있고, 관리자는 별도 계정관리 메뉴에서 사용자 비밀번호를 재설정합니다.</p>
               <form id="profilePasswordForm" class="stack">
                 <label class="input-field" for="profileCurrentPassword">
                   현재 비밀번호
@@ -2855,11 +2781,11 @@
                 <button class="btn btn-secondary" type="button" id="notifOpenSettingsBtn" data-action="notification-open-settings">설정 열기</button>
               </div>
 
-              <p id="notifStatus" class="muted">앱 알림은 iOS 앱에서만 예약됩니다.</p>
+              <p id="notifStatus" class="muted">권한과 예약 상태를 확인합니다.</p>
               <p id="notifScheduledSummary" class="muted"></p>
             </article>
 
-            <article class="module-card stack notification-push-card shell-employee-only">
+            <article class="module-card stack notification-push-card shell-employee-only hidden">
               <h3>푸시 확장 준비</h3>
               <label class="choice-row notification-toggle-row" for="notifPushApprovals">
                 <input id="notifPushApprovals" type="checkbox" />
@@ -2869,7 +2795,7 @@
                 <input id="notifPushSchedule" type="checkbox" />
                 스케줄 변경 푸시
               </label>
-              <p class="muted">원격 푸시 서버 연동은 다음 단계에서 연결됩니다. 현재는 설정/딥링크 뼈대만 동작합니다.</p>
+              <p class="muted">원격 푸시 연결 전까지는 이 화면에서 노출하지 않습니다.</p>
             </article>
             <div class="profile-manager-settings-shell shell-manager-only">
               <section class="profile-settings-top-workspace">
@@ -2878,7 +2804,6 @@
                     <div class="approval-head">
                       <div>
                         <h3>P0 기능 플래그</h3>
-                        <p class="muted">현재 회사에 적용되는 운영/자동화 정책을 관리합니다.</p>
                       </div>
                       <span class="status-pill status-pill-warn">SOC/시트</span>
                     </div>
@@ -2886,7 +2811,6 @@
                       <section class="settings-flag-group">
                         <div class="settings-flag-group-head">
                           <h4>SOC 동작</h4>
-                          <p class="muted">이벤트 수신과 휴무/야간/초과근무 반영 규칙</p>
                         </div>
                         <div class="settings-flag-list">
                           <label class="choice-row notification-toggle-row" for="flagSocIngest">
@@ -2910,7 +2834,6 @@
                       <section class="settings-flag-group">
                         <div class="settings-flag-group-head">
                           <h4>자동화 / 시트</h4>
-                          <p class="muted">마감 산정과 Google Sheets 동기화 제어</p>
                         </div>
                         <div class="settings-flag-list">
                           <label class="choice-row notification-toggle-row" for="flagClosingOt">
@@ -2926,7 +2849,6 @@
                       <section class="settings-flag-group settings-flag-group-wide">
                         <div class="settings-flag-group-head">
                           <h4>Apple 자동화</h4>
-                          <p class="muted">Apple 주간 보고 관련 자동화 플래그</p>
                         </div>
                         <div class="settings-flag-list">
                           <label class="choice-row notification-toggle-row" for="flagAppleDaytime">
@@ -2956,7 +2878,6 @@
                     <div class="approval-head">
                       <div>
                         <h3>구글 시트 프로필</h3>
-                        <p class="muted">프로파일 선택과 매핑 값 저장은 이 섹션에서만 관리합니다.</p>
                       </div>
                       <span class="status-pill status-pill-success">P0 운영</span>
                     </div>
@@ -2973,13 +2894,11 @@
                       <section class="settings-form-group settings-span-full">
                         <div class="settings-form-group-head">
                           <h4>프로파일 범위</h4>
-                          <p class="muted">어느 회사/범위를 어떤 방식으로 동기화할지 정의합니다.</p>
                         </div>
                         <div class="settings-profile-subgrid">
                           <label class="input-field settings-span-full" for="gsTenantCode">
                             대상 회사 번호
                             <input id="gsTenantCode" placeholder="예: T001" />
-                            <span class="input-helper">개발자는 선택 회사 자동 반영, 지점관리자는 본인 회사 고정</span>
                           </label>
                           <label class="input-field" for="gsProfileName">
                             프로파일명
@@ -2996,7 +2915,6 @@
                               <option value="DUTY_LOG">근무상황기록부</option>
                               <option value="SUPPORT_ASSIGNMENT">지원근무자 (시트→DB)</option>
                             </select>
-                            <span class="input-helper">P0에서는 범위를 분리해 운영하세요. 하나의 프로파일은 하나의 범위만 담당합니다.</span>
                           </label>
                           <label class="input-field" for="gsProfileType">
                             프로파일 타입
@@ -3004,7 +2922,6 @@
                               <option value="KEY_ROW" selected>키 기준 행 (KEY_ROW)</option>
                               <option value="NAMED_RANGE">이름 지정 범위 (NAMED_RANGE)</option>
                             </select>
-                            <span class="input-helper">A1 셀 하드코딩 없이 프로파일 매핑으로 동작합니다.</span>
                           </label>
                           <label class="input-field settings-span-full" for="gsProfileSiteCodes">
                             대상 현장 번호 (선택)
@@ -3016,7 +2933,6 @@
                       <section class="settings-form-group settings-span-full">
                         <div class="settings-form-group-head">
                           <h4>시트 / 매핑</h4>
-                          <p class="muted">워크시트와 스프레드시트 연결 대상을 정의합니다.</p>
                         </div>
                         <div class="settings-profile-subgrid">
                           <label class="input-field settings-span-full" for="gsSpreadsheetId">
@@ -3040,7 +2956,6 @@
                       <section class="settings-form-group settings-span-full">
                         <div class="settings-form-group-head">
                           <h4>전송 / 활성화</h4>
-                          <p class="muted">전송 엔드포인트와 현재 활성 프로파일을 지정합니다.</p>
                         </div>
                         <div class="settings-profile-subgrid">
                           <label class="input-field settings-span-full" for="gsWebhookUrl">
@@ -3090,7 +3005,6 @@
                 <h3>모드 변경</h3>
                 <span class="status-pill status-pill-neutral">설정</span>
               </div>
-              <p class="muted">앱 화면 모드를 선택합니다. 선택한 모드는 이 기기 브라우저에 저장됩니다.</p>
               <section class="theme-switcher profile-theme-switcher" aria-label="화면 모드 선택">
                 <div class="theme-switcher-actions">
                   <button class="btn btn-secondary theme-switch-btn" type="button" data-action="ui-theme-set" data-theme="light" aria-pressed="true">라이트</button>
@@ -3104,7 +3018,7 @@
             <div class="workspace-head">
               <div class="workspace-head-main">
                 <h2>보고</h2>
-                <p id="reportsScopeHint" class="muted">회사별 보고 상태를 불러오는 중입니다.</p>
+                <p id="reportsScopeHint" class="muted">월과 지점 기준으로 필요한 보고 상태만 확인합니다.</p>
               </div>
             </div>
 
@@ -3122,10 +3036,10 @@
                     </select>
                   </label>
                 </div>
-                <div class="reports-center-freshness">
-                  <span id="reportsFreshnessPill" class="status-pill status-pill-neutral">상태 확인 대기</span>
-                  <p id="reportsFreshnessText" class="muted">대상 월과 지점을 고정하면 보고 상태와 handoff 결과를 함께 확인할 수 있습니다.</p>
-                </div>
+              </div>
+              <div id="reportsCenterSummary" class="reports-center-context-summary hidden">
+                <span id="reportsFreshnessPill" class="status-pill status-pill-neutral hidden">상태 확인 대기</span>
+                <p id="reportsFreshnessText" class="muted hidden">월과 지점을 고정하면 현재 상태를 확인합니다.</p>
               </div>
             </section>
 
@@ -3133,61 +3047,38 @@
               <div id="reportsWorkspaceTabs" class="workspace-tabs">
                 <button class="btn btn-secondary workspace-tab active" type="button" data-action="reports-view-tab" data-tab="finance">Finance 제출</button>
                 <button class="btn btn-secondary workspace-tab" type="button" data-action="reports-view-tab" data-tab="support">지원근무 전달</button>
-                <button class="btn btn-secondary workspace-tab" type="button" data-action="reports-view-tab" data-tab="pack">전용 팩</button>
-                <button class="btn btn-secondary workspace-tab" type="button" data-action="reports-view-tab" data-tab="history">실행 이력</button>
               </div>
               <div class="workspace-tabbar-actions">
                 <button class="btn btn-secondary" type="button" data-action="reports-refresh">새로고침</button>
               </div>
             </div>
 
-            <article class="stack reports-panel-shell" data-reports-panel="finance">
-              <section class="module-card stack reports-owner-card">
+            <article id="scheduleFinanceSubmissionPanel" class="module-card stack reports-panel-shell hidden" data-reports-panel="finance">
                 <div class="approval-head">
                   <div>
                     <h3>Finance 제출</h3>
-                    <p class="muted">월말 Finance 제출과 최종 업로드 반영은 이 보고 탭에서 진행합니다.</p>
+                    <p class="muted">필요한 제출 단계만 보여줍니다.</p>
                   </div>
-                  <div class="quick-actions">
+                  <div class="quick-actions reports-panel-head-actions">
+                    <span id="scheduleFinanceStatePill" class="status-pill status-pill-neutral hidden">상태 확인 대기</span>
                     <button class="btn btn-secondary" type="button" data-action="reports-open-schedule-upload">Excel 업로드 열기</button>
                   </div>
                 </div>
-                <div class="reports-owner-summary">
-                  <div>
-                    <strong>Finance 제출 owner는 보고 탭입니다.</strong>
-                    <p class="muted">1차 확인본, 최종본, 미리보기, 최종 반영은 여기서 처리하고, 월간 원본 관리와 매핑은 스케줄 owner 화면에서 이어집니다.</p>
-                  </div>
-                </div>
-              </section>
-
-              <section id="scheduleFinanceSubmissionPanel" class="module-card stack hidden">
-                <div class="approval-head">
-                  <div>
-                    <h3>Finance용 스케쥴 제출</h3>
-                    <p class="muted">HQ는 1차 확인본/최종본을 다운로드하고, Supervisor는 최종 정정본을 업로드합니다.</p>
-                  </div>
-                  <span id="scheduleFinanceStatePill" class="status-pill status-pill-neutral">상태 확인 대기</span>
-                </div>
-                <p id="scheduleFinanceStatusText" class="muted">업로드 지점을 선택하면 Finance 제출 단계와 필요한 다음 작업을 확인할 수 있습니다.</p>
+                <p id="scheduleFinanceStatusText" class="muted hidden">대상 지점을 고정하면 지금 필요한 제출 단계만 간단히 보여줍니다.</p>
                 <div id="scheduleFinanceStatusGrid" class="schedule-support-status-grid schedule-finance-status-grid">
-                  <article class="schedule-support-meta-card">
-                    <span class="schedule-support-meta-label">현재 단계</span>
-                    <strong id="scheduleFinancePhaseLabel">확인 대기</strong>
-                    <span id="scheduleFinancePhaseMeta" class="muted">지점 선택 후 확인</span>
-                  </article>
-                  <article class="schedule-support-meta-card">
+                  <article id="scheduleFinanceReviewCard" class="schedule-support-meta-card">
                     <span class="schedule-support-meta-label">1차 확인본</span>
-                    <strong id="scheduleFinanceReviewRevision">없음</strong>
-                    <span id="scheduleFinanceReviewMeta" class="muted">HQ 다운로드 전</span>
+                    <strong id="scheduleFinanceReviewRevision">대기</strong>
+                    <span id="scheduleFinanceReviewMeta" class="muted">지점 선택 후 다운로드</span>
                   </article>
-                  <article class="schedule-support-meta-card">
+                  <article id="scheduleFinanceFinalUploadCard" class="schedule-support-meta-card">
                     <span class="schedule-support-meta-label">최종 업로드</span>
                     <strong id="scheduleFinanceFinalUploadState">대기</strong>
                     <span id="scheduleFinanceFinalUploadMeta" class="muted">Supervisor 업로드 전</span>
                   </article>
-                  <article class="schedule-support-meta-card">
-                    <span class="schedule-support-meta-label">HQ 최종 다운로드</span>
-                    <strong id="scheduleFinanceFinalDownloadState">비활성</strong>
+                  <article id="scheduleFinanceFinalDownloadCard" class="schedule-support-meta-card">
+                    <span class="schedule-support-meta-label">최종 다운로드</span>
+                    <strong id="scheduleFinanceFinalDownloadState">잠금</strong>
                     <span id="scheduleFinanceFinalDownloadMeta" class="muted">최종 업로드 후 활성화</span>
                   </article>
                 </div>
@@ -3216,7 +3107,6 @@
                   <div class="approval-head">
                     <h3>HQ 다운로드</h3>
                   </div>
-                  <p class="muted">1차 확인본은 현재 assembled truth 기준으로 생성되고, 2차 최종본은 Supervisor가 올린 최종 파일 그대로 제공합니다.</p>
                   <div class="schedule-support-upload-actions">
                     <button class="btn btn-secondary" type="button" id="scheduleFinanceReviewDownloadBtn" data-action="schedule-finance-review-download">1차 스케쥴 다운로드</button>
                     <button class="btn btn-primary" type="button" id="scheduleFinanceFinalDownloadBtn" data-action="schedule-finance-final-download">2차 최종 스케쥴 다운로드</button>
@@ -3226,7 +3116,6 @@
                   <div class="approval-head">
                     <h3>Supervisor 최종 업로드</h3>
                   </div>
-                  <p class="muted">canonical workbook만 허용되며, 최신 1차 확인본보다 오래된 파일이나 보호 영역 수정은 차단됩니다.</p>
                   <input id="scheduleFinanceUploadFile" type="file" accept=".xlsx" />
                   <div class="schedule-support-upload-actions">
                     <button class="btn btn-secondary" type="button" id="scheduleFinancePreviewBtn" data-action="schedule-finance-preview">최종 업로드 미리보기</button>
@@ -3238,7 +3127,7 @@
                   <div class="task-progress-main">
                     <div class="schedule-upload-progress-copy">
                       <strong id="scheduleFinanceProgressTitle">Finance 처리 대기</strong>
-                      <p id="scheduleFinanceProgressText" class="muted">미리보기 생성이나 반영이 시작되면 현재 진행 상태가 여기에 표시됩니다.</p>
+                      <p id="scheduleFinanceProgressText" class="muted">미리보기 또는 반영이 시작되면 진행 상태가 표시됩니다.</p>
                     </div>
                     <div class="task-progress-track" aria-hidden="true">
                       <div id="scheduleFinanceProgressBar" class="task-progress-fill"></div>
@@ -3249,12 +3138,12 @@
                     </div>
                   </div>
                 </div>
-                <p id="scheduleFinanceBatchInfo" class="muted"></p>
+                <p id="scheduleFinanceBatchInfo" class="muted hidden"></p>
                 <ul id="scheduleFinanceBatchIssues" class="list hidden"></ul>
                 <div id="scheduleFinancePreviewTableWrap" class="schedule-preview-wrap hidden">
                   <div class="schedule-preview-head">
                     <h3>Finance 최종 업로드 미리보기</h3>
-                    <span class="muted">protected/conflict/stale 변경은 차단되고, 허용된 diff만 반영됩니다.</span>
+                    <span class="muted">차단/허용 결과만 표시합니다.</span>
                   </div>
                   <table class="schedule-preview-table">
                     <thead>
@@ -3274,60 +3163,44 @@
                     <tbody id="scheduleFinancePreviewTableBody"></tbody>
                   </table>
                 </div>
-                <p id="scheduleFinanceApplyResult" class="muted"></p>
+                <p id="scheduleFinanceApplyResult" class="muted hidden"></p>
                 <ul id="scheduleFinanceApplyDetails" class="list hidden"></ul>
-              </section>
             </article>
 
-            <article class="stack reports-panel-shell hidden" data-reports-panel="support">
-              <section id="reportsSupportCard" class="module-card stack">
+            <article id="reportsSupportCard" class="module-card stack reports-panel-shell hidden" data-reports-panel="support">
                 <div class="approval-head">
                   <div>
                     <h3>지원근무 전달</h3>
-                    <p class="muted">ARLS에서 생성한 source artifact 상태를 확인하고, Sentrix handoff로 이어집니다.</p>
+                    <p class="muted">전달 준비 상태만 확인합니다.</p>
                   </div>
-                  <span id="reportsSupportStatePill" class="status-pill status-pill-neutral">상태 확인 대기</span>
+                  <div class="quick-actions reports-panel-head-actions">
+                    <span id="reportsSupportStatePill" class="status-pill status-pill-neutral hidden">상태 확인 대기</span>
+                    <button class="btn btn-secondary" type="button" data-action="reports-support-open-schedule-hq-upload">지점별 업로드 확인 열기</button>
+                  </div>
                 </div>
-                <p id="reportsSupportStatusText" class="muted">대상 월과 지점을 고정하면 전달 상태, stale 여부, 다음 작업을 확인할 수 있습니다.</p>
+                <p id="reportsSupportStatusText" class="muted hidden">월과 지점을 고정하면 전달 상태를 확인합니다.</p>
                 <div id="reportsSupportStatusGrid" class="schedule-support-status-grid">
-                  <article class="schedule-support-meta-card">
-                    <span class="schedule-support-meta-label">현재 단계</span>
-                    <strong id="reportsSupportPhaseLabel">확인 대기</strong>
-                    <span id="reportsSupportPhaseMeta" class="muted">지점 선택 후 확인</span>
-                  </article>
-                  <article class="schedule-support-meta-card">
+                  <article id="reportsSupportArtifactCard" class="schedule-support-meta-card">
                     <span class="schedule-support-meta-label">전달 기준</span>
                     <strong id="reportsSupportArtifactLabel">미생성</strong>
                     <span id="reportsSupportArtifactMeta" class="muted">source artifact 대기</span>
                   </article>
-                  <article class="schedule-support-meta-card">
+                  <article id="reportsSupportDeliveryCard" class="schedule-support-meta-card">
                     <span class="schedule-support-meta-label">최근 전달</span>
                     <strong id="reportsSupportDeliveryLabel">대기</strong>
                     <span id="reportsSupportDeliveryMeta" class="muted">Sentrix 제출 전</span>
                   </article>
-                  <article class="schedule-support-meta-card">
-                    <span class="schedule-support-meta-label">다음 작업</span>
-                    <strong id="reportsSupportNextActionLabel">지점 선택</strong>
-                    <span id="reportsSupportNextActionMeta" class="muted">보고 탭 또는 스케줄 owner 화면에서 이어집니다.</span>
-                  </article>
                 </div>
                 <ul id="reportsSupportBlockedReasons" class="list hidden"></ul>
-                <section class="reports-owner-summary reports-owner-summary-secondary">
-                  <div>
-                    <strong>이 화면은 handoff/status workspace입니다.</strong>
-                    <p class="muted">실제 workbook 업로드와 검토/반영은 스케줄의 `지점별 업로드 확인` owner 화면에서 진행합니다. 여기서는 최신 artifact, stale, Sentrix 연결 상태만 확인합니다.</p>
-                  </div>
-                  <div class="reports-owner-summary-actions">
-                    <button class="btn btn-secondary" type="button" data-action="reports-support-open-schedule-hq-upload">지점별 업로드 확인 열기</button>
-                  </div>
-                </section>
                 <div class="schedule-support-upload-actions">
                   <button class="btn btn-secondary" type="button" id="reportsSupportDownloadBtn" data-action="reports-support-download">지원근무자용 시트 다운로드</button>
                   <button class="btn btn-primary" type="button" id="reportsSupportOpenSentrixBtn" data-action="reports-support-open-sentrix">Sentrix에서 열기</button>
-                  <button class="btn btn-secondary" type="button" id="reportsSupportCopyArtifactBtn" data-action="reports-support-copy-artifact">artifact_id 복사</button>
                 </div>
                 <details id="reportsSupportArtifactTechDetails" class="schedule-upload-tech-details hidden">
-                  <summary>상세 정보</summary>
+                  <summary>세부 정보</summary>
+                  <div class="schedule-support-upload-actions reports-support-detail-actions">
+                    <button class="btn btn-secondary hidden" type="button" id="reportsSupportCopyArtifactBtn" data-action="reports-support-copy-artifact">artifact_id 복사</button>
+                  </div>
                   <dl class="schedule-support-artifact-list">
                     <div class="schedule-support-artifact-row">
                       <dt>artifact_id</dt>
@@ -3351,105 +3224,6 @@
                     </div>
                   </dl>
                 </details>
-              </section>
-            </article>
-
-            <article class="module-card stack" data-reports-panel="pack">
-              <div class="approval-head">
-                <div>
-                  <h3>전용 팩</h3>
-                  <p class="muted">회사별 보고 pack 상태와 실행 경로를 한 곳에서 관리합니다.</p>
-                </div>
-              </div>
-              <div class="reports-pack-layout">
-                <section class="stack reports-pack-list-column">
-                  <div class="reports-catalog-groups">
-                    <span class="status-pill status-pill-neutral">운영</span>
-                    <span class="status-pill status-pill-neutral">출퇴근</span>
-                    <span class="status-pill status-pill-neutral">스케줄</span>
-                    <span class="status-pill status-pill-warn">Apple pack</span>
-                  </div>
-                  <ul id="reportsPackList" class="list"></ul>
-                  <p id="reportsPackHint" class="muted"></p>
-                </section>
-                <section class="stack reports-pack-detail-column">
-                  <article id="reportsDefaultCard" class="module-card stack">
-                    <div class="approval-head">
-                      <h3>기본 보고 팩</h3>
-                      <span class="status-pill status-pill-neutral">기본</span>
-                    </div>
-                    <p class="muted">기본 보고는 월간 스케줄 기준으로 이어집니다. 필요 화면으로 바로 이동해 후속 작업을 진행하세요.</p>
-                    <div class="quick-actions">
-                      <button class="btn btn-secondary" type="button" data-action="reports-open-default-timesheet">월간 스케쥴 열기</button>
-                      <button class="btn btn-secondary" type="button" data-action="reports-open-default-duty-log">근무 캘린더 열기</button>
-                    </div>
-                  </article>
-
-                  <article id="reportsPackEmptyCard" class="module-card stack hidden">
-                    <div class="approval-head">
-                      <h3>전용 팩</h3>
-                      <span class="status-pill status-pill-neutral">준비 상태</span>
-                    </div>
-                    <p id="reportsPackEmptyMessage" class="muted">현재 회사에는 전용 팩이 연결되어 있지 않습니다.</p>
-                  </article>
-
-                  <article id="reportsAppleCard" class="module-card stack hidden">
-                    <div class="approval-head">
-                      <h3>Apple pack</h3>
-                      <span id="reportsApplePackPill" class="status-pill status-pill-warn">선택 회사 전용</span>
-                    </div>
-                    <div class="ops-kpi-grid ops-kpi-grid-lg">
-                      <div class="profile-item">
-                        <span>Daytime 반영</span>
-                        <strong id="reportsAppleDaytimeStatus">-</strong>
-                      </div>
-                      <div class="profile-item">
-                        <span>Overtime 반영</span>
-                        <strong id="reportsAppleOvertimeStatus">-</strong>
-                      </div>
-                      <div class="profile-item">
-                        <span>Overnight 반영</span>
-                        <strong id="reportsAppleOvernightStatus">-</strong>
-                      </div>
-                      <div class="profile-item">
-                        <span>Late/Event 반영</span>
-                        <strong id="reportsAppleLateEventStatus">-</strong>
-                      </div>
-                    </div>
-                    <div class="ops-automation-row">
-                      <div class="list-row-main">
-                        <div class="list-row-title">구글 시트 동기화</div>
-                        <div id="reportsAppleSheetsMeta" class="list-row-sub">최근 동기화 정보를 불러오는 중입니다.</div>
-                      </div>
-                      <div class="ops-automation-actions">
-                        <span id="reportsAppleSheetsPill" class="status-pill status-pill-warn">확인 중</span>
-                        <button class="btn btn-secondary" type="button" data-action="reports-apple-refresh-status">상태 갱신</button>
-                      </div>
-                    </div>
-                    <div class="quick-actions">
-                      <button class="btn btn-primary" type="button" data-action="reports-apple-run">이번달 업데이트 실행</button>
-                      <button class="btn btn-secondary" type="button" data-action="reports-apple-retry">실패 재시도</button>
-                      <button class="btn btn-secondary" type="button" data-action="reports-apple-view-logs">로그 보기</button>
-                    </div>
-                    <p id="reportsAppleHint" class="muted">전용 보고 상태를 확인하세요.</p>
-                  </article>
-                </section>
-              </div>
-            </article>
-
-            <article id="reportsHistoryCard" class="module-card stack hidden" data-reports-panel="history">
-              <div class="approval-head">
-                <h3>실행 이력</h3>
-                <button class="btn btn-secondary" type="button" data-action="reports-apple-refresh-status">상태 갱신</button>
-              </div>
-              <div class="reports-history-layout">
-                <ul id="reportsHistoryList" class="list"></ul>
-                <aside class="reports-history-detail">
-                  <h3>상세</h3>
-                  <p id="reportsHistoryDetailTitle">항목 선택</p>
-                  <p id="reportsHistoryDetailBody" class="muted">실행 이력을 선택하면 상세 로그를 확인할 수 있습니다.</p>
-                </aside>
-              </div>
             </article>
           </section>
 
@@ -4379,14 +4153,13 @@
                       <h3 id="employeeDirectoryDetailTitle">직원을 선택해 주세요</h3>
                       <div id="employeeDirectoryDetailBadges" class="employee-directory-drawer-badges"></div>
                     </div>
-                    <p id="employeeDirectoryDetailSubtitle" class="muted">목록에서 직원을 클릭하면 직원 개요와 최근 상태가 표시됩니다.</p>
+                    <p id="employeeDirectoryDetailSubtitle" class="muted">직원을 고르면 핵심 상태가 열립니다.</p>
                     <div id="employeeDirectoryDetailMeta" class="employee-directory-drawer-meta"></div>
                   </div>
                 </div>
                 <div class="employee-directory-drawer-head-actions">
                   <button class="btn btn-icon" type="button" aria-label="닫기" data-action="employee-directory-close">✕</button>
                 </div>
-                <div id="employeeDirectoryDetailActions" class="employee-directory-drawer-actions"></div>
               </div>
               <div class="employee-directory-detail-tabs" role="tablist" aria-label="직원 상세 탭">
                 <button class="employee-directory-detail-tab active" type="button" data-action="employee-directory-switch-tab" data-tab="overview" role="tab" aria-selected="true">개요</button>
@@ -4395,6 +4168,7 @@
                 <button class="employee-directory-detail-tab" type="button" data-action="employee-directory-switch-tab" data-tab="leave_requests" role="tab" aria-selected="false">휴가·요청</button>
               </div>
               <div id="employeeDirectoryDetailBody" class="employee-directory-drawer-body"></div>
+              <div id="employeeDirectoryDetailActions" class="employee-directory-drawer-actions hidden"></div>
             </aside>
 
             <ul id="employeeList" class="list"></ul>

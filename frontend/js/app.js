@@ -1056,6 +1056,8 @@ function createInitialOpsState() {
     sheetsStatus: '',
     sheetsLastSyncedAt: '',
     sheetsMessage: '',
+    sheetsBlockedReason: '',
+    sheetsActionMode: '',
     excelImportStatus: '',
     excelImportAt: '',
     excelImportMessage: '',
@@ -1134,11 +1136,8 @@ function createInitialReportsState() {
   return {
     tenantCode: '',
     loading: false,
-    selectedPack: 'default',
     viewTab: 'finance',
-    selectedHistoryLogKey: '',
     month: toMonthKey(new Date()),
-    packs: [],
     appleStatus: null,
     appleLogs: [],
     lastSyncedAt: '',
@@ -2320,6 +2319,7 @@ function getUiStatusLabel(value = '') {
     invalid: '유효성오류',
     idle: '대기중',
     off: '비활성',
+    missing_profile: '프로파일 필요',
     active: '활성',
     inactive: '비활성',
     locked: '잠금',
@@ -4354,21 +4354,16 @@ function renderOpsHeaderMeta() {
     headerEl.textContent = `${tenantLabel} · 기준일 ${dateKey}`;
   }
   if (filterEl) {
-    filterEl.textContent = `현재 필터: ${siteLabel}`;
+    filterEl.textContent = selectedSiteCode ? `선택 현장: ${siteLabel}` : '';
+    filterEl.classList.toggle('hidden', !selectedSiteCode);
   }
 }
 
 function renderOpsWorkspaceScopeHint() {
   const hintEl = $('#opsWorkspaceScopeHint');
   if (!hintEl) return;
-  const tab = normalizeOpsViewTab(state.ops?.viewTab || 'overview');
-  const copyByTab = {
-    overview: '개요는 오늘 운영 이슈와 바로 실행할 작업만 정리하는 실행 화면입니다.',
-    soc: 'SOC 탭은 최근 상태, 이벤트 목록, 재시도 대상을 점검하는 모니터링 화면입니다.',
-    sheets: '사이트 동기화 탭은 실행, 실패 로그, 재시도 대상을 처리하는 실행 화면입니다.',
-    logs: '작업 로그 탭은 최근 실행 이력과 오류 메시지를 검토하는 기록 화면입니다.',
-  };
-  hintEl.textContent = copyByTab[tab] || copyByTab.overview;
+  hintEl.textContent = '';
+  hintEl.classList.add('hidden');
 }
 
 function createOpsAttentionRow({
@@ -4513,6 +4508,7 @@ function renderOpsOverviewAttention() {
     }
     if (meta) {
       meta.textContent = '결원, 미지정, 연동 이슈를 계산하는 중입니다.';
+      meta.classList.remove('hidden');
     }
     renderEmptyState(list, '운영 우선 조치를 계산하는 중입니다.');
     return;
@@ -4524,6 +4520,7 @@ function renderOpsOverviewAttention() {
     }
     if (meta) {
       meta.textContent = '운영 이슈를 정상적으로 불러오지 못했습니다.';
+      meta.classList.remove('hidden');
     }
     renderEmptyState(list, '운영 이슈를 불러오지 못했습니다.', state.ops.error);
     return;
@@ -4537,9 +4534,8 @@ function renderOpsOverviewAttention() {
     pill.textContent = issueCount > 0 ? `${issueCount}건` : '정상';
   }
   if (meta) {
-    meta.textContent = issueCount > 0
-      ? '오늘 바로 확인할 이슈만 상단에 정리합니다.'
-      : '오늘 즉시 조치가 필요한 blocker는 없습니다.';
+    meta.textContent = '';
+    meta.classList.add('hidden');
   }
 
   if (!items.length) {
@@ -4597,6 +4593,7 @@ function getOpsStatusVariant(status = '') {
   const normalized = normalizeOpsRunStatus(status);
   if (normalized === 'SUCCESS' || normalized === 'APPLIED' || normalized === 'VALIDATED') return 'success';
   if (normalized === 'FAIL') return 'error';
+  if (normalized === 'OFF' || normalized === 'MISSING_PROFILE' || normalized === 'IDLE') return 'warn';
   return 'warn';
 }
 
@@ -4641,10 +4638,12 @@ function renderOpsAutomationStatus() {
     : (!socEnabled ? 'SOC 연동이 비활성화되어 있습니다.' : '최근 이벤트 없음');
 
   const sheetsEnabled = Boolean(flags.google_sheets_sync_enabled);
+  const selectedSheetProfile = getSelectedGoogleSheetProfile();
   const latestSheetFail = pickLatestRowByTimestamp(state.integration.sheetLogs || [], ['created_at']);
   let sheetsStatus = normalizeOpsRunStatus(state.ops.sheetsStatus || (sheetsEnabled ? 'PENDING' : 'OFF'));
   let sheetsAt = String(state.ops.sheetsLastSyncedAt || '').trim();
   let sheetsMessage = String(state.ops.sheetsMessage || '').trim();
+  let sheetsBlockedReason = '';
   if (latestSheetFail && sheetsStatus !== 'SUCCESS') {
     sheetsStatus = 'FAIL';
     sheetsAt = String(latestSheetFail.created_at || sheetsAt).trim();
@@ -4652,8 +4651,12 @@ function renderOpsAutomationStatus() {
       sheetsMessage = String(latestSheetFail.error_message || '최근 시트 동기화 실패').trim();
     }
   }
-  if (!sheetsEnabled && sheetsStatus === 'PENDING') {
+  if (!sheetsEnabled) {
     sheetsStatus = 'OFF';
+    sheetsBlockedReason = '시트 동기화가 비활성화되어 있습니다.';
+  } else if (!selectedSheetProfile?.id) {
+    sheetsStatus = 'MISSING_PROFILE';
+    sheetsBlockedReason = '선택된 구글 시트 프로파일이 없습니다.';
   }
 
   const excelStatus = normalizeOpsRunStatus(state.ops.excelImportStatus || 'IDLE');
@@ -4665,6 +4668,8 @@ function renderOpsAutomationStatus() {
   state.ops.sheetsStatus = sheetsStatus;
   state.ops.sheetsLastSyncedAt = sheetsAt;
   state.ops.sheetsMessage = sheetsMessage;
+  state.ops.sheetsBlockedReason = sheetsBlockedReason;
+  state.ops.sheetsActionMode = !sheetsEnabled ? 'settings' : (!selectedSheetProfile?.id ? 'profile' : (sheetsStatus === 'FAIL' ? 'retry' : 'logs'));
   state.ops.excelImportStatus = excelStatus;
   state.ops.excelImportAt = excelAt;
   state.ops.excelImportMessage = excelMessage;
@@ -4676,8 +4681,8 @@ function renderOpsAutomationStatus() {
   setTextToSelectors(['#opsSocMeta', '#opsViewSocMeta', '#opsOverviewSocMeta'], socMetaText);
 
   let sheetsMetaText = '최근 동기화 없음';
-  if (sheetsStatus === 'OFF') {
-    sheetsMetaText = '시트 동기화가 비활성화되어 있습니다.';
+  if (sheetsStatus === 'OFF' || sheetsStatus === 'MISSING_PROFILE') {
+    sheetsMetaText = sheetsBlockedReason || '시트 동기화 준비가 필요합니다.';
   } else if (sheetsMessage && sheetsAt) {
     sheetsMetaText = `${sheetsMessage} · ${formatOpsDateTime(sheetsAt)}`;
   } else if (sheetsMessage) {
@@ -4697,14 +4702,11 @@ function renderOpsAutomationStatus() {
   }
   setTextToSelectors(['#opsExcelMeta', '#opsViewExcelMeta', '#opsOverviewExcelMeta'], excelMetaText);
 
-  const latestTimes = [socAt, sheetsAt, excelAt]
-    .map((value) => new Date(String(value || '').trim()).getTime())
-    .filter((value) => Number.isFinite(value) && value > 0);
-  let summaryText = '마지막 자동화 동기화 정보가 없습니다.';
-  if (latestTimes.length) {
-    summaryText = `마지막 자동화 갱신 ${new Date(Math.max(...latestTimes)).toLocaleString('ko-KR')}`;
+  const automationMetaEl = $('#opsOverviewAutomationMeta');
+  if (automationMetaEl) {
+    automationMetaEl.textContent = '';
+    automationMetaEl.classList.add('hidden');
   }
-  setTextToSelectors(['#opsAutomationMeta', '#opsViewAutomationMeta', '#opsOverviewAutomationMeta'], summaryText);
   renderOpsOverviewAttention();
   renderOpsWorkspacePanels();
 }
@@ -4915,7 +4917,8 @@ function renderHomeManagerDashboard() {
   }
   setTextToSelectors(['#homeManagerLeaveOrNightLabel'], leaveOrNightText);
 
-  let briefingMeta = '오늘 브리핑을 준비하는 중입니다.';
+  const briefingMetaEl = $('#homeManagerOpsMeta');
+  let briefingMeta = '';
   if (state.ops.loading) {
     briefingMeta = '오늘 브리핑을 집계하는 중입니다.';
   } else if (state.ops.error) {
@@ -4923,20 +4926,16 @@ function renderHomeManagerDashboard() {
   } else {
     const metaParts = [
       `${toDateLabel(getOpsActiveDate())} 기준`,
-      `출근 ${Number(state.ops?.presentCount || 0)}/${Number(state.ops?.scheduledCount || 0)}`,
     ];
-    if (Number(state.ops?.vacancyCount || 0) > 0) {
-      metaParts.push(`결원 ${Number(state.ops.vacancyCount || 0)}명`);
-    }
-    if (Number(dashboard.approvalPendingCount || 0) > 0) {
-      metaParts.push(`승인 대기 ${Number(dashboard.approvalPendingCount || 0)}건`);
-    }
     if (state.ops?.lastSyncedAt) {
       metaParts.push(`최근 ${new Date(state.ops.lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`);
     }
     briefingMeta = metaParts.join(' · ');
   }
-  setTextToSelectors(['#homeManagerOpsMeta'], briefingMeta);
+  if (briefingMetaEl) {
+    briefingMetaEl.textContent = briefingMeta;
+    briefingMetaEl.classList.toggle('hidden', !briefingMeta);
+  }
 
   const priorityRows = buildHomeManagerPointRows();
   const priorityCount = priorityRows.filter((row) => row?.pillVariant && row.pillVariant !== 'success' && row.pillVariant !== 'neutral').length;
@@ -4996,9 +4995,20 @@ async function loadHomeManagerSupplementaryData({ force = false } = {}) {
     const metrics = state.reports?.appleStatus?.metrics || {};
     approvedOtCount = Number(metrics?.approved_ot_rows || 0);
     overnightCount = Number(metrics?.overnight_rows || overnightCount || 0);
-    const latestLog = buildReportsHistoryRows()[0] || null;
+    const latestLog = (Array.isArray(state.reports?.appleLogs) ? state.reports.appleLogs : [])
+      .slice()
+      .sort((a, b) => {
+        const aTime = new Date(String(a?.created_at || a?.updated_at || '')).getTime();
+        const bTime = new Date(String(b?.created_at || b?.updated_at || '')).getTime();
+        const safeA = Number.isFinite(aTime) ? aTime : 0;
+        const safeB = Number.isFinite(bTime) ? bTime : 0;
+        return safeB - safeA;
+      })[0] || null;
     if (latestLog) {
-      latestLogLabel = `${latestLog.title} · ${latestLog.subtitle}`;
+      latestLogLabel = [
+        String(latestLog.profile_name || latestLog.profile_scope || '전용 보고').trim(),
+        formatOpsDateTime(latestLog.created_at || latestLog.updated_at || ''),
+      ].filter(Boolean).join(' · ');
     }
   }
 
@@ -5055,7 +5065,7 @@ function renderOpsSummary() {
   setTextToSelectors(['#homeManagerVacancyCount', '#opsVacancyCount', '#opsViewVacancyCount'], vacancyText);
   setTextToSelectors(['#homeManagerOvernightLabel', '#opsOvernightLabel', '#opsViewOvernightLabel'], overnightText);
 
-  let summaryText = '운영 집계 대기중';
+  let summaryText = '';
   if (state.ops.loading) {
     summaryText = '운영 집계 중...';
   } else if (state.ops.error) {
@@ -5063,7 +5073,11 @@ function renderOpsSummary() {
   } else if (state.ops.lastSyncedAt) {
     summaryText = `마지막 집계: ${new Date(state.ops.lastSyncedAt).toLocaleString('ko-KR')}`;
   }
-  setTextToSelectors(['#homeManagerOpsMeta', '#opsSummaryMeta', '#opsViewSummaryMeta'], summaryText);
+  setTextToSelectors(['#opsSummaryMeta', '#opsViewSummaryMeta'], summaryText);
+  const opsSummaryMetaEl = $('#opsViewSummaryMeta');
+  if (opsSummaryMetaEl) {
+    opsSummaryMetaEl.classList.toggle('hidden', !summaryText);
+  }
 
   renderOpsOverviewAttention();
   renderOpsRoleStatus();
@@ -5121,7 +5135,7 @@ function buildOpsWorkspaceLogRows() {
       key: 'excel:latest',
       channel: 'excel',
       at,
-      title: '엑셀 가져오기',
+      title: '엑셀 업로드 상태',
       subtitle: `${formatOpsDateTime(at) || '-'} · ${getUiStatusLabel(status)}`,
       pill: status || 'idle',
       detail: String(state.ops?.excelImportMessage || '상세 메시지 없음').trim(),
@@ -5181,18 +5195,10 @@ function renderOpsWorkspaceLogs() {
 
 function renderOpsWorkspacePanels() {
   const tabs = $('#opsWorkspaceTabs');
-  const tabbarRow = tabs?.closest('.workspace-tabbar-row');
-  const automationTitle = $('#opsAutomationCardTitle');
-  const isDesktop = isDesktopViewport();
   const tab = normalizeOpsViewTab(state.ops?.viewTab || 'overview');
-  const integrationManage = canManageIntegrations();
   state.ops.viewTab = tab;
 
   if (tabs) {
-    tabs.classList.toggle('hidden', !isDesktop);
-    if (tabbarRow instanceof HTMLElement) {
-      tabbarRow.classList.toggle('hidden', !isDesktop);
-    }
     tabs.querySelectorAll('[data-action="ops-view-tab"]').forEach((button) => {
       const buttonTab = normalizeOpsViewTab(button?.dataset?.tab || '');
       button.classList.toggle('active', buttonTab === tab);
@@ -5203,43 +5209,13 @@ function renderOpsWorkspacePanels() {
   renderOpsWorkspaceScopeHint();
 
   const panels = Array.from(document.querySelectorAll('#view-ops [data-ops-panel]'));
-  const showPanel = (panelType) => {
-    if (!isDesktop) {
-      return panelType !== 'logs';
-    }
-    if (tab === 'logs') return panelType === 'logs';
-    if (tab === 'soc') return panelType === 'automation';
-    if (tab === 'sheets') return panelType === 'automation';
-    return panelType === 'overview';
-  };
   panels.forEach((panel) => {
     const panelType = String(panel?.dataset?.opsPanel || '').trim();
-    panel.classList.toggle('hidden', !showPanel(panelType));
+    panel.classList.toggle('hidden', panelType !== tab);
   });
 
-  const socRow = $('#opsAutomationRowSoc');
-  const sheetsRow = $('#opsAutomationRowSheets');
-  const excelRow = $('#opsAutomationRowExcel');
-  if (socRow) socRow.classList.toggle('hidden', isDesktop && tab === 'sheets');
-  if (sheetsRow) sheetsRow.classList.toggle('hidden', isDesktop && tab === 'soc');
-  if (excelRow) excelRow.classList.toggle('hidden', isDesktop && tab === 'soc');
-
-  toggleVisibility(
-    '#opsSheetsExecutionSection',
-    integrationManage && (!isDesktop || tab === 'overview' || tab === 'sheets'),
-  );
-  toggleVisibility(
-    '#opsSocMonitorSection',
-    integrationManage && (!isDesktop || tab === 'overview' || tab === 'soc'),
-  );
-
-  if (automationTitle) {
-    if (tab === 'soc') automationTitle.textContent = 'SOC 동기화 상태';
-    else if (tab === 'sheets') automationTitle.textContent = '사이트 동기화 상태';
-    else automationTitle.textContent = '자동화 상태';
-  }
-
-  renderOpsAutomationWorkspace();
+  renderOpsSocPanel();
+  renderOpsSheetsPanel();
   renderOpsWorkspaceLogs();
 }
 
@@ -5562,15 +5538,11 @@ async function onOpsOpenAttendance(focus = 'scheduled') {
 }
 
 async function onOpsOpenOvernightReport() {
-  const targetRoute = isAppleReportPackEnabled() ? ROUTE_REPORTS_APPLE : ROUTE_REPORTS;
+  const targetRoute = `${ROUTE_REPORTS}?tab=support`;
   const moved = await navigateToRoute(targetRoute);
   if (!moved) return;
-  scrollToSelector('#reportsPackList');
-  if (isAppleReportPackEnabled()) {
-    showToast('보고 > 전용 팩으로 이동했습니다.', 'info', 2200);
-  } else {
-    showToast('보고 > 전용 팩으로 이동했습니다.', 'info', 2200);
-  }
+  scrollToSelector('#view-reports');
+  showToast('보고 > 지원근무 전달로 이동했습니다.', 'info', 2200);
 }
 
 function buildOpsRetryScope() {
@@ -5610,18 +5582,18 @@ async function onOpsRetryTarget(target = '') {
     }
   }
 
-    if (!apiRetried) {
-      if (normalizedTarget === 'sheets') {
-        await onOpsRetrySheetsSync();
-        return;
-      }
-      if (normalizedTarget === 'soc') {
+  if (!apiRetried) {
+    if (normalizedTarget === 'sheets') {
+      await onOpsRetrySheetsSync();
+      return;
+    }
+    if (normalizedTarget === 'soc') {
       await loadSocEvents({ force: true });
-        showToast('SOC 상태를 다시 조회했습니다.', 'info', 2200);
-      } else if (normalizedTarget === 'excel') {
-        await navigateToRoute(ROUTE_ADMIN_SCHEDULE_TOOLS);
-        showToast('엑셀 가져오기 화면으로 이동했습니다.', 'info', 2200);
-      }
+      showToast('SOC 상태를 다시 조회했습니다.', 'info', 2200);
+    } else if (normalizedTarget === 'excel') {
+      await navigateToRoute(ROUTE_SCHEDULE_UPLOAD);
+      showToast('엑셀 업로드 화면으로 이동했습니다.', 'info', 2200);
+    }
   }
 
   await refreshOpsAutomationSnapshot({ force: true });
@@ -5646,7 +5618,7 @@ function buildOpsLogRows(target = '') {
     }));
   }
   return [{
-    title: '엑셀 가져오기',
+    title: '엑셀 업로드 상태',
     subtitle: `${String(state.ops.excelImportMessage || '최근 실행 정보 없음').trim()} · ${formatOpsDateTime(state.ops.excelImportAt || '') || '-'}`,
     pill: String(state.ops.excelImportStatus || 'IDLE').trim() || 'IDLE',
   }];
@@ -5657,6 +5629,7 @@ function createOpsCompactActionRow({
   subtitle = '',
   pill = '',
   action = '',
+  route = '',
   tab = '',
   target = '',
 } = {}) {
@@ -5665,6 +5638,10 @@ function createOpsCompactActionRow({
   button.type = 'button';
   button.className = 'ops-attention-row ops-compact-action-row';
   if (action) button.dataset.action = action;
+  if (route) {
+    button.dataset.action = String(action || 'drawer-open-route').trim();
+    button.dataset.route = String(route || '').trim();
+  }
   if (tab) button.dataset.tab = tab;
   if (target) button.dataset.target = target;
 
@@ -5765,135 +5742,244 @@ function getOpsAutomationRelatedRows(tab = '') {
   return buildOpsWorkspaceLogRows().slice(0, 8);
 }
 
-function buildOpsAutomationActionRows(tab = '') {
-  const normalizedTab = normalizeOpsViewTab(tab || state.ops?.viewTab || 'overview');
-  if (normalizedTab === 'soc') {
-    return [
-      createOpsCompactActionRow({
-        title: 'SOC 상태 다시 확인',
-        subtitle: '최근 이벤트와 상태를 즉시 새로 조회합니다.',
-        pill: '새로고침',
-        action: 'refresh-ops-automation',
-      }),
-      createOpsCompactActionRow({
-        title: 'SOC 재시도',
-        subtitle: '실패한 SOC 연동을 다시 시도합니다.',
-        pill: '재시도',
-        action: 'ops-retry-target',
-        target: 'soc',
-      }),
-      createOpsCompactActionRow({
-        title: '관련 로그 보기',
-        subtitle: '최근 SOC 실행 기록을 로그 화면에서 추적합니다.',
-        pill: '로그',
-        action: 'ops-view-logs',
-        target: 'soc',
-      }),
-    ];
-  }
-  if (normalizedTab === 'sheets') {
-    return [
-      createOpsCompactActionRow({
-        title: '시트 동기화 재시도',
-        subtitle: '최근 실패한 시트 반영을 다시 실행합니다.',
-        pill: '재시도',
-        action: 'ops-retry-target',
-        target: 'sheets',
-      }),
-      createOpsCompactActionRow({
-        title: '엑셀 실행 확인',
-        subtitle: '엑셀 가져오기 결과와 최근 실행 상태를 확인합니다.',
-        pill: '실행',
-        action: 'ops-view-logs',
-        target: 'excel',
-      }),
-      createOpsCompactActionRow({
-        title: '작업 로그 열기',
-        subtitle: '동기화와 실행 이력을 한곳에서 검토합니다.',
-        pill: '로그',
-        action: 'ops-view-tab',
-        tab: 'logs',
-      }),
-    ];
-  }
-  return [
+function buildOpsSocActionRows() {
+  const canManage = canManageIntegrations();
+  const rows = [
     createOpsCompactActionRow({
-      title: '작업 로그 새로고침',
-      subtitle: '가장 최근 실행 결과를 다시 불러옵니다.',
+      title: 'SOC 상태 다시 확인',
+      subtitle: '최근 이벤트와 상태를 다시 조회합니다.',
       pill: '새로고침',
       action: 'refresh-ops-automation',
     }),
     createOpsCompactActionRow({
-      title: '사이트 동기화 보기',
-      subtitle: '시트 반영 상태와 실패를 확인합니다.',
-      pill: '동기화',
-      action: 'ops-view-tab',
-      tab: 'sheets',
-    }),
-    createOpsCompactActionRow({
-      title: 'SOC 상태 보기',
-      subtitle: 'SOC 이벤트와 재시도 대상을 확인합니다.',
-      pill: 'SOC',
-      action: 'ops-view-tab',
-      tab: 'soc',
+      title: '관련 로그 보기',
+      subtitle: '최근 SOC 실행 기록을 자세히 확인합니다.',
+      pill: '로그',
+      action: 'ops-view-logs',
+      target: 'soc',
     }),
   ];
+  if (canManage) {
+    rows.splice(1, 0, createOpsCompactActionRow({
+      title: 'SOC 재시도',
+      subtitle: '실패한 SOC 연동만 다시 시도합니다.',
+      pill: '재시도',
+      action: 'ops-retry-target',
+      target: 'soc',
+    }));
+  }
+  return rows;
 }
 
-function renderOpsAutomationWorkspace() {
-  const tab = normalizeOpsViewTab(state.ops?.viewTab || 'overview');
-  const scopeMeta = $('#opsAutomationScopeMeta');
-  const primaryStatusLabel = $('#opsAutomationPrimaryStatusLabel');
-  const lastRunLabel = $('#opsAutomationLastRunLabel');
-  const issueLabel = $('#opsAutomationIssueLabel');
-  const recentList = $('#opsAutomationRecentList');
-  const actionList = $('#opsAutomationActionList');
-  if (!scopeMeta || !primaryStatusLabel || !lastRunLabel || !issueLabel || !recentList || !actionList) return;
+function buildOpsSheetsActionRows() {
+  const rows = [];
+  const canManage = canManageIntegrations();
+  const mode = String(state.ops?.sheetsActionMode || '').trim();
+  const blockedReason = String(state.ops?.sheetsBlockedReason || '').trim();
 
-  const tabCopy = {
-    soc: 'SOC 관련 상태, 최근 이벤트, 재시도 대상을 한 번에 확인합니다.',
-    sheets: '시트 반영과 엑셀 실행 상태를 함께 점검하고 바로 재시도할 수 있습니다.',
-    logs: '최근 실행 기록과 오류를 추적하고 다음 조치를 정합니다.',
-    overview: '운영 자동화 상태를 요약해 보여줍니다.',
-  };
-  scopeMeta.textContent = tabCopy[tab] || tabCopy.overview;
-
-  let primaryStatus = 'PENDING';
-  let lastRun = '';
-  let issueCount = 0;
-  if (tab === 'soc') {
-    primaryStatus = normalizeOpsRunStatus(state.ops?.socStatus || 'PENDING');
-    lastRun = String(state.ops?.socLastSyncedAt || '').trim();
-    issueCount = getOpsAutomationRelatedRows(tab).filter((row) => normalizeOpsRunStatus(row?.pill || '') === 'FAIL').length;
-  } else if (tab === 'sheets') {
-    const sheetStatus = normalizeOpsRunStatus(state.ops?.sheetsStatus || 'PENDING');
-    const excelStatus = normalizeOpsRunStatus(state.ops?.excelImportStatus || 'IDLE');
-    primaryStatus = sheetStatus === 'FAIL' || excelStatus === 'FAIL'
-      ? 'FAIL'
-      : (sheetStatus === 'SUCCESS' || excelStatus === 'SUCCESS' ? 'SUCCESS' : sheetStatus);
-    lastRun = String(state.ops?.sheetsLastSyncedAt || state.ops?.excelImportAt || '').trim();
-    issueCount = getOpsAutomationRelatedRows(tab).filter((row) => normalizeOpsRunStatus(row?.pill || '') === 'FAIL').length;
+  if (mode === 'settings') {
+    rows.push(createOpsCompactActionRow({
+      title: '연동 설정 열기',
+      subtitle: blockedReason || '시트 동기화 설정을 먼저 활성화해야 합니다.',
+      pill: '설정',
+      route: ROUTE_PROFILE,
+    }));
+  } else if (mode === 'profile') {
+    rows.push(createOpsCompactActionRow({
+      title: '프로파일 선택',
+      subtitle: blockedReason || '구글 시트 프로파일을 먼저 선택해야 합니다.',
+      pill: '필수',
+      route: ROUTE_PROFILE,
+    }));
+  } else if (mode === 'retry' && canManage) {
+    rows.push(createOpsCompactActionRow({
+      title: '시트 동기화 다시 실행',
+      subtitle: '최근 실패한 시트 반영만 다시 실행합니다.',
+      pill: '재시도',
+      action: 'ops-retry-target',
+      target: 'sheets',
+    }));
   } else {
-    const rows = buildOpsWorkspaceLogRows();
-    primaryStatus = rows.some((row) => normalizeOpsRunStatus(row?.pill || '') === 'FAIL')
-      ? 'FAIL'
-      : (rows.length ? 'SUCCESS' : 'PENDING');
-    lastRun = rows[0]?.at || '';
-    issueCount = rows.filter((row) => normalizeOpsRunStatus(row?.pill || '') === 'FAIL').length;
+    rows.push(createOpsCompactActionRow({
+      title: '동기화 상태 다시 확인',
+      subtitle: '최근 동기화 상태와 차단 원인을 다시 조회합니다.',
+      pill: '새로고침',
+      action: 'refresh-ops-automation',
+    }));
   }
 
-  primaryStatusLabel.textContent = getUiStatusLabel(primaryStatus || 'PENDING');
-  lastRunLabel.textContent = formatOpsDateTime(lastRun) || '최근 기록 없음';
-  issueLabel.textContent = issueCount > 0 ? `${issueCount}건` : '없음';
+  rows.push(
+    createOpsCompactActionRow({
+      title: '동기화 로그 보기',
+      subtitle: '시트 반영 실패와 최근 실행 기록을 확인합니다.',
+      pill: '로그',
+      action: 'ops-view-logs',
+      target: 'sheets',
+    }),
+    createOpsCompactActionRow({
+      title: '엑셀 업로드 화면 열기',
+      subtitle: '검증과 반영은 스케줄 owner 화면에서 이어집니다.',
+      pill: '이동',
+      route: ROUTE_SCHEDULE_UPLOAD,
+    }),
+  );
 
-  const recentRows = getOpsAutomationRelatedRows(tab).slice(0, 4).map((row) => createOpsCompactLogRow({
+  return rows;
+}
+
+function renderOpsPanelSummary({
+  statusSelector = '',
+  lastRunSelector = '',
+  issueSelector = '',
+  status = '',
+  lastRun = '',
+  issueCount = 0,
+} = {}) {
+  const statusEl = $(statusSelector);
+  const lastRunEl = $(lastRunSelector);
+  const issueEl = $(issueSelector);
+  if (statusEl) statusEl.textContent = getUiStatusLabel(status || 'pending');
+  if (lastRunEl) lastRunEl.textContent = formatOpsDateTime(lastRun) || '최근 기록 없음';
+  if (issueEl) issueEl.textContent = issueCount > 0 ? `${issueCount}건` : '없음';
+}
+
+function renderOpsSocPanel() {
+  const recentList = $('#opsSocRecentList');
+  const actionList = $('#opsSocActionList');
+  const scopeMeta = $('#opsSocScopeMeta');
+  const primaryActionBtn = $('#opsSocPrimaryActionBtn');
+  if (!recentList || !actionList) return;
+
+  const recentRows = getOpsAutomationRelatedRows('soc').slice(0, 6).map((row) => createOpsCompactLogRow({
     title: row.title,
     subtitle: row.subtitle,
     pill: row.pill,
     danger: normalizeOpsRunStatus(row?.pill || '') === 'FAIL',
   }));
-  renderOpsCompactList(recentList, recentRows, '최근 관련 실행이 없습니다.', '이 탭과 연결된 최근 실행 기록이 여기에 표시됩니다.');
-  renderOpsCompactList(actionList, buildOpsAutomationActionRows(tab), '바로 실행할 작업이 없습니다.');
+  const issueCount = getOpsAutomationRelatedRows('soc').filter((row) => normalizeOpsRunStatus(row?.pill || '') === 'FAIL').length;
+
+  renderOpsPanelSummary({
+    statusSelector: '#opsSocPrimaryStatusLabel',
+    lastRunSelector: '#opsSocLastRunLabel',
+    issueSelector: '#opsSocIssueLabel',
+    status: state.ops?.socStatus || 'pending',
+    lastRun: state.ops?.socLastSyncedAt || '',
+    issueCount,
+  });
+  if (scopeMeta) {
+    const socStatus = normalizeOpsRunStatus(state.ops?.socStatus || 'pending');
+    if (socStatus === 'OFF') {
+      scopeMeta.textContent = 'SOC 연동이 비활성화되어 있습니다. 상태 확인과 관련 로그만 확인할 수 있습니다.';
+      scopeMeta.classList.remove('hidden');
+    } else if (socStatus === 'FAIL') {
+      scopeMeta.textContent = '최근 실패한 SOC 이벤트를 우선 확인하고 필요한 경우 다시 시도합니다.';
+      scopeMeta.classList.remove('hidden');
+    } else {
+      scopeMeta.textContent = '';
+      scopeMeta.classList.add('hidden');
+    }
+  }
+  if (primaryActionBtn instanceof HTMLButtonElement) {
+    if (canManageIntegrations()) {
+      primaryActionBtn.textContent = 'SOC 재시도';
+      primaryActionBtn.dataset.action = 'ops-retry-target';
+      primaryActionBtn.dataset.target = 'soc';
+      delete primaryActionBtn.dataset.route;
+    } else {
+      primaryActionBtn.textContent = '상태 다시 확인';
+      primaryActionBtn.dataset.action = 'refresh-ops-automation';
+      delete primaryActionBtn.dataset.target;
+      delete primaryActionBtn.dataset.route;
+    }
+  }
+  renderOpsCompactList(recentList, recentRows, '표시할 SOC 이벤트가 없습니다.', '최근 수신 이벤트가 여기에 표시됩니다.');
+  renderOpsCompactList(actionList, buildOpsSocActionRows(), '지금 바로 할 조치가 없습니다.');
+}
+
+function renderOpsSheetsPanel() {
+  const recentList = $('#opsSheetsRecentList');
+  const actionList = $('#opsSheetsActionList');
+  const scopeMeta = $('#opsSheetsScopeMeta');
+  const primaryActionBtn = $('#opsSheetsPrimaryActionBtn');
+  const excelActionBtn = $('#opsExcelPrimaryActionBtn');
+  if (!recentList || !actionList) return;
+
+  const relatedRows = getOpsAutomationRelatedRows('sheets');
+  const recentRows = relatedRows.slice(0, 6).map((row) => createOpsCompactLogRow({
+    title: row.title,
+    subtitle: row.subtitle,
+    pill: row.pill,
+    danger: normalizeOpsRunStatus(row?.pill || '') === 'FAIL',
+  }));
+  const sheetsStatus = normalizeOpsRunStatus(state.ops?.sheetsStatus || 'pending');
+  const excelStatus = normalizeOpsRunStatus(state.ops?.excelImportStatus || 'idle');
+  let primaryStatus = sheetsStatus;
+  if (sheetsStatus === 'FAIL' || excelStatus === 'FAIL') {
+    primaryStatus = 'FAIL';
+  } else if (sheetsStatus === 'MISSING_PROFILE') {
+    primaryStatus = 'MISSING_PROFILE';
+  } else if (sheetsStatus === 'OFF') {
+    primaryStatus = 'OFF';
+  } else if (sheetsStatus === 'SUCCESS' || excelStatus === 'VALIDATED' || excelStatus === 'APPLIED') {
+    primaryStatus = 'SUCCESS';
+  }
+  const blockedReason = String(state.ops?.sheetsBlockedReason || '').trim();
+  const issueCount = relatedRows.filter((row) => normalizeOpsRunStatus(row?.pill || '') === 'FAIL').length
+    || (blockedReason ? 1 : 0);
+
+  renderOpsPanelSummary({
+    statusSelector: '#opsSheetsPrimaryStatusLabel',
+    lastRunSelector: '#opsSheetsLastRunLabel',
+    issueSelector: '#opsSheetsIssueLabel',
+    status: primaryStatus,
+    lastRun: state.ops?.sheetsLastSyncedAt || state.ops?.excelImportAt || '',
+    issueCount,
+  });
+
+  if (scopeMeta) {
+    if (blockedReason) {
+      scopeMeta.textContent = `${blockedReason} 필요한 다음 조치를 먼저 안내합니다.`;
+      scopeMeta.classList.remove('hidden');
+    } else if (primaryStatus === 'FAIL') {
+      scopeMeta.textContent = '최근 실패한 실행이 있어 로그와 재시도 대상을 먼저 보여줍니다.';
+      scopeMeta.classList.remove('hidden');
+    } else {
+      scopeMeta.textContent = '';
+      scopeMeta.classList.add('hidden');
+    }
+  }
+  if (primaryActionBtn instanceof HTMLButtonElement) {
+    const mode = String(state.ops?.sheetsActionMode || '').trim();
+    if (mode === 'settings') {
+      primaryActionBtn.textContent = '설정 열기';
+      primaryActionBtn.dataset.action = 'drawer-open-route';
+      primaryActionBtn.dataset.route = ROUTE_PROFILE;
+      delete primaryActionBtn.dataset.target;
+    } else if (mode === 'profile') {
+      primaryActionBtn.textContent = '프로파일 선택';
+      primaryActionBtn.dataset.action = 'drawer-open-route';
+      primaryActionBtn.dataset.route = ROUTE_PROFILE;
+      delete primaryActionBtn.dataset.target;
+    } else if (mode === 'retry' && canManageIntegrations()) {
+      primaryActionBtn.textContent = '다시 실행';
+      primaryActionBtn.dataset.action = 'ops-retry-target';
+      primaryActionBtn.dataset.target = 'sheets';
+      delete primaryActionBtn.dataset.route;
+    } else {
+      primaryActionBtn.textContent = '상태 다시 확인';
+      primaryActionBtn.dataset.action = 'refresh-ops-automation';
+      delete primaryActionBtn.dataset.target;
+      delete primaryActionBtn.dataset.route;
+    }
+  }
+  if (excelActionBtn instanceof HTMLButtonElement) {
+    excelActionBtn.textContent = '화면 열기';
+    excelActionBtn.dataset.action = 'drawer-open-route';
+    excelActionBtn.dataset.route = ROUTE_SCHEDULE_UPLOAD;
+  }
+
+  renderOpsCompactList(recentList, recentRows, '표시할 최근 실행이 없습니다.', '시트 동기화와 엑셀 업로드 최근 실행이 여기에 표시됩니다.');
+  renderOpsCompactList(actionList, buildOpsSheetsActionRows(), '지금 바로 할 조치가 없습니다.');
 }
 
 function renderOpsLogsSummary() {
@@ -5918,7 +6004,7 @@ function openOpsLogsSheet(target = '') {
   const titleMap = {
     soc: 'SOC 연동 로그',
     sheets: '구글 시트 동기화 로그',
-    excel: '엑셀 가져오기 로그',
+    excel: '엑셀 업로드 상태 로그',
   };
   const rows = buildOpsLogRows(normalizedTarget);
   const wrapper = document.createElement('div');
@@ -6685,19 +6771,22 @@ function renderSupportStatusWorkspaceTabs() {
   setTextContentIfPresent(
     '#supportStatusWorkspaceScopeHint',
     canUseSupportStatusHqWorkspace()
-      ? '지원근무 현황과 HQ 엑셀 워크스페이스를 같은 화면에서 전환합니다.'
+      ? '운영 보기와 HQ 작업판을 전환합니다.'
       : 'HQ 엑셀 워크스페이스는 HQ/Admin만 사용할 수 있습니다.',
     '',
   );
 }
 
 function createSupportStatusHqMetaItem(label = '', value = '') {
+  const normalizedLabel = String(label || '').trim();
+  const normalizedValue = String(value || '').trim();
+  if (!normalizedLabel || !normalizedValue || normalizedValue === '-') return null;
   const item = document.createElement('div');
   item.className = 'schedule-upload-meta-item';
   const labelEl = document.createElement('span');
-  labelEl.textContent = String(label || '').trim() || '-';
+  labelEl.textContent = normalizedLabel;
   const valueEl = document.createElement('strong');
-  valueEl.textContent = String(value || '').trim() || '-';
+  valueEl.textContent = normalizedValue;
   item.appendChild(labelEl);
   item.appendChild(valueEl);
   return item;
@@ -6707,7 +6796,8 @@ function renderSupportStatusHqMetaGrid(container, items = []) {
   if (!(container instanceof HTMLElement)) return;
   container.innerHTML = '';
   items.forEach((item) => {
-    container.appendChild(createSupportStatusHqMetaItem(item.label, item.value));
+    const metaItem = createSupportStatusHqMetaItem(item.label, item.value);
+    if (metaItem) container.appendChild(metaItem);
   });
 }
 
@@ -6749,12 +6839,8 @@ function renderSupportStatusHqReviewSummary() {
   const summaryItems = inspectResult
     ? [
       {
-        label: 'workbook 유효성',
+        label: '검토 상태',
         value: inspectResult.workbook_valid ? '검토 가능' : '검토 필요',
-      },
-      {
-        label: 'ticket scope',
-        value: `${Number(inspectResult.total_scope_count || 0)}건`,
       },
       {
         label: '적용 가능',
@@ -6772,19 +6858,9 @@ function renderSupportStatusHqReviewSummary() {
         label: '차단',
         value: `${Number(inspectResult.summary?.blocking || 0)}건`,
       },
-      {
-        label: 'worker row',
-        value: `${Number(inspectResult.summary?.worker_rows || 0)}건`,
-      },
     ]
     : [
-      { label: 'workbook 유효성', value: '파일 선택 대기' },
-      { label: 'ticket scope', value: '-' },
-      { label: '적용 가능', value: '-' },
-      { label: '자동승인 예상', value: '-' },
-      { label: '승인대기 예상', value: '-' },
-      { label: '차단', value: '-' },
-      { label: 'worker row', value: '-' },
+      { label: '검토 상태', value: hqWorkspace.uploadFileName ? '검토 실행 전' : '파일 선택 전' },
     ];
   summaryItems.forEach((item) => {
     const card = document.createElement('div');
@@ -6812,7 +6888,7 @@ function renderSupportStatusHqIssueGroups() {
     const placeholder = document.createElement('div');
     placeholder.className = 'schedule-upload-placeholder support-status-hq-placeholder';
     const strong = document.createElement('strong');
-    strong.textContent = inspectResult ? '현재 검토 이슈가 없습니다.' : '검토를 시작하면 workbook validity와 revision 상태가 여기에 표시됩니다.';
+    strong.textContent = inspectResult ? '현재 검토 이슈가 없습니다.' : '검토를 시작하면 필요한 이슈만 표시됩니다.';
     placeholder.appendChild(strong);
     if (inspectResult?.next_step_message) {
       const meta = document.createElement('p');
@@ -6863,11 +6939,11 @@ function renderSupportStatusHqReviewTable() {
     placeholder.classList.remove('hidden');
     const strong = placeholder.querySelector('strong');
     const meta = placeholder.querySelector('p');
-    if (strong) strong.textContent = hqWorkspace.uploadFileName ? '업로드 파일 검토를 실행하면 scope별 상태와 근무자 셀 결과가 표시됩니다.' : '업로드할 지원근무 workbook 파일을 선택하세요.';
+    if (strong) strong.textContent = hqWorkspace.uploadFileName ? '검토를 실행하면 필요한 항목만 표시됩니다.' : '업로드할 지원근무 workbook 파일을 선택하세요.';
     if (meta) {
       meta.textContent = inspectResult?.next_step_message
         ? String(inspectResult.next_step_message || '').trim()
-        : '지원요청 scope, 유효 입력 수, 근무자 셀 파싱 결과를 이 구역에서 검토합니다.';
+        : '파일을 올린 뒤 검토를 실행하세요.';
     }
     return;
   }
@@ -6992,9 +7068,9 @@ function renderSupportStatusHqWorkspace() {
     hqWorkspace.error
       ? hqWorkspace.error
       : hqWorkspace.loading
-        ? '다운로드 가능한 workbook 범위를 불러오는 중입니다.'
-        : '전체 다운로드는 기본값이며, 지점별 다운로드는 지점을 명시적으로 선택해야 합니다.',
-    '다운로드 가능한 workbook 범위를 불러오는 중입니다.',
+        ? '다운로드 범위를 불러오는 중입니다.'
+        : '다운로드 범위를 확인하세요.',
+    '다운로드 범위를 불러오는 중입니다.',
   );
 
   const downloadMetaItems = (() => {
@@ -7004,10 +7080,8 @@ function renderSupportStatusHqWorkspace() {
     return [
       { label: '대상월', value: formatScheduleMonthTitle(hqWorkspace.month) },
       { label: '다운로드 범위', value: getSupportStatusHqScopeLabel(hqWorkspace.scope) },
-      { label: hqWorkspace.scope === 'site' ? '대상 지점' : '전체 시트 수', value: hqWorkspace.scope === 'site' ? (selectedSite ? getSupportStatusSiteLabel(selectedSite.siteCode, selectedSite.siteName) : '지점 선택') : `${readyCount}개` },
-      { label: 'workbook family', value: String(hqWorkspace.contract?.workbook_family || SUPPORT_STATUS_HQ_WORKBOOK_FAMILY).trim() || SUPPORT_STATUS_HQ_WORKBOOK_FAMILY },
-      { label: 'revision/build', value: String(hqWorkspace.contract?.template_version || SUPPORT_STATUS_HQ_TEMPLATE_VERSION).trim() || SUPPORT_STATUS_HQ_TEMPLATE_VERSION },
-      { label: 'latest 상태', value: readyCount > 0 ? '시스템 최신 기준본' : '원본 대기' },
+      { label: hqWorkspace.scope === 'site' ? '대상 지점' : '준비된 시트', value: hqWorkspace.scope === 'site' ? (selectedSite ? getSupportStatusSiteLabel(selectedSite.siteCode, selectedSite.siteName) : '지점 선택') : `${readyCount}개` },
+      { label: '기준본 상태', value: readyCount > 0 ? '준비됨' : '원본 대기' },
     ];
   })();
   renderSupportStatusHqMetaGrid($('#supportStatusHqDownloadMeta'), downloadMetaItems);
@@ -7019,12 +7093,10 @@ function renderSupportStatusHqWorkspace() {
     ? inspectResult.upload_meta
     : null;
   const uploadMetaItems = [
-    { label: '파일명', value: String(uploadMeta?.file_name || hqWorkspace.uploadFileName || '선택 전').trim() || '선택 전' },
+    { label: '파일명', value: String(uploadMeta?.file_name || hqWorkspace.uploadFileName || '파일 선택 전').trim() || '파일 선택 전' },
     { label: '대상월', value: formatScheduleMonthTitle(String(uploadMeta?.month || hqWorkspace.month || '')) },
     { label: '범위', value: getSupportStatusHqScopeLabel(uploadMeta?.download_scope || hqWorkspace.scope) },
-    { label: 'workbook family', value: String(uploadMeta?.workbook_family || (hqWorkspace.uploadFileName ? '검토 전' : '선택 전')).trim() || (hqWorkspace.uploadFileName ? '검토 전' : '선택 전') },
-    { label: 'revision', value: String(uploadMeta?.revision || (hqWorkspace.uploadFileName ? '검토 전' : '선택 전')).trim() || (hqWorkspace.uploadFileName ? '검토 전' : '선택 전') },
-    { label: 'latest 상태', value: uploadMeta ? getSupportStatusHqLatestStatusLabel(uploadMeta.latest_status || '') : (hqWorkspace.uploadFileName ? '검토 전' : '선택 전') },
+    { label: '기준본 상태', value: uploadMeta ? getSupportStatusHqLatestStatusLabel(uploadMeta.latest_status || '') : (hqWorkspace.uploadFileName ? '검토 전' : '파일 선택 전') },
     {
       label: '지점 범위',
       value: uploadMeta
@@ -7035,7 +7107,7 @@ function renderSupportStatusHqWorkspace() {
               ? getSupportStatusSiteLabel(uploadMeta.selected_site_code || '', uploadMeta.selected_site_name || '')
               : `${Math.max(Number(uploadMeta.site_count || 0), 1)}개 지점`)
         )
-        : (hqWorkspace.uploadFileName ? '검토 전' : '선택 전'),
+        : (hqWorkspace.uploadFileName ? '검토 전' : '파일 선택 전'),
     },
   ];
   renderSupportStatusHqMetaGrid($('#supportStatusHqUploadMeta'), uploadMetaItems);
@@ -7088,7 +7160,7 @@ function renderSupportStatusHqWorkspace() {
     } else {
       reviewText.textContent = inspectResult
         ? String(inspectResult.next_step_message || '검토 결과를 확인한 뒤 적용 여부를 결정하세요.').trim()
-        : '지원요청 scope, 유효 입력 수, 근무자 셀 파싱 결과를 검토한 뒤 적용합니다.';
+        : '검토를 실행하면 적용 가능 여부가 표시됩니다.';
     }
   }
 }
@@ -7466,31 +7538,10 @@ function applyAppleTenantScopedUiVisibility() {
   updateOpsAppleActionVisibility();
 }
 
-function normalizeReportPackValue(value = '') {
-  const raw = String(value || '').trim().toLowerCase();
-  if (raw === 'apple' || raw === 'apple_report_pack') return 'apple';
-  return 'default';
-}
-
-function getSelectedReportsPack() {
-  return normalizeReportPackValue(state.reports?.selectedPack || 'default');
-}
-
-function setSelectedReportsPack(value = '') {
-  const next = normalizeReportPackValue(value);
-  if (!state.reports) {
-    state.reports = createInitialReportsState();
-  }
-  state.reports.selectedPack = next;
-  return next;
-}
-
 function getReportsAvailableTabs() {
   const tabs = [];
   if (canViewReportsFinanceTab()) tabs.push('finance');
   if (canViewReportsSupportTab()) tabs.push('support');
-  if (canViewReportsPackTab()) tabs.push('pack');
-  if (canViewReportsHistoryTab()) tabs.push('history');
   return tabs.length ? tabs : ['finance'];
 }
 
@@ -7540,249 +7591,37 @@ function setReportsOwnerMonthValue(monthValue, { syncInputs = true } = {}) {
 function renderReportsScopeHint() {
   const hint = $('#reportsScopeHint');
   if (!hint) return;
-  const navRole = getNavigationRole();
-  const tenantCode = getReportsTenantCode();
-  if (!tenantCode) {
-    hint.textContent = navRole === 'DEV'
-      ? '개발자 계정은 상단 회사 배지에서 작업 회사를 선택하면 전용 보고 pack과 실행 이력을 확인할 수 있습니다.'
-      : '리포트 대상 회사를 확인할 수 없습니다.';
-    return;
-  }
-  hint.textContent = `현재 회사: ${tenantCode} · Finance 제출, 지원근무 전달, 전용 팩, 실행 이력을 한 화면에서 확인합니다.`;
+  const tab = normalizeReportsViewTab(state.reports?.viewTab || getDefaultReportsViewTab());
+  hint.textContent = tab === 'support'
+    ? '월과 지점 기준으로 지원근무 전달 준비 상태만 확인합니다.'
+    : '월과 지점 기준으로 Finance 제출 상태만 확인합니다.';
+}
+
+function setReportsSummaryMessage(target, text = '') {
+  if (!(target instanceof HTMLElement)) return false;
+  const normalized = String(text || '').trim();
+  target.textContent = normalized;
+  target.classList.toggle('hidden', !normalized);
+  return Boolean(normalized);
+}
+
+function setReportsSummaryPill(target, text = '', className = 'status-pill status-pill-neutral') {
+  if (!(target instanceof HTMLElement)) return false;
+  const normalized = String(text || '').trim();
+  target.className = className;
+  target.textContent = normalized;
+  target.classList.toggle('hidden', !normalized);
+  return Boolean(normalized);
 }
 
 function renderReportsContextSummary() {
+  const summary = $('#reportsCenterSummary');
   const pill = $('#reportsFreshnessPill');
   const text = $('#reportsFreshnessText');
-  if (!(pill instanceof HTMLElement) || !(text instanceof HTMLElement)) return;
-
-  const tab = normalizeReportsViewTab(state.reports?.viewTab || getDefaultReportsViewTab());
-  const month = getReportsMonthValue();
-  const siteCode = getScheduleSupportSelectedSiteCode();
-  const siteLabel = siteCode === 'ALL' ? '전체 지점' : (siteCode || '지점 선택');
-  const refreshedAt = formatOpsDateTime(state.reports?.lastSyncedAt || '');
-
-  pill.className = 'status-pill status-pill-neutral';
-  pill.textContent = '상태 확인 대기';
-  text.textContent = `${formatScheduleMonthTitle(month)} · ${siteLabel} 기준 상태를 확인합니다.`;
-
-  if (tab === 'finance') {
-    const status = state.schedule?.financeStatus && typeof state.schedule.financeStatus === 'object'
-      ? state.schedule.financeStatus
-      : null;
-    if (!siteCode) {
-      pill.textContent = '지점 선택';
-      text.textContent = `${formatScheduleMonthTitle(month)} 기준 Finance 제출 상태를 조회하려면 지점을 선택하세요.`;
-      return;
-    }
-    if (!status) {
-      pill.textContent = '조회 중';
-      text.textContent = `${formatScheduleMonthTitle(month)} · ${siteLabel} 기준 Finance 제출 상태를 확인하는 중입니다.`;
-      return;
-    }
-    if (siteCode === 'ALL' || status.overall_scope) {
-      pill.className = canDownloadScheduleFinanceReview() ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral';
-      pill.textContent = canDownloadScheduleFinanceReview() ? '전체 1차 다운로드' : '전체 안내';
-      text.textContent = '전체 선택에서는 1차 확인본 다운로드만 지원하고, 최종 업로드/최종본 다운로드는 단일 지점에서 진행합니다.';
-      return;
-    }
-    const stateLabel = getScheduleFinanceStateLabel(status.state || '');
-    pill.className = getScheduleFinanceStateClass(status.state || '');
-    pill.textContent = stateLabel;
-    text.textContent = [
-      `${formatScheduleMonthTitle(month)} · ${siteLabel}`,
-      status.final_upload_stale ? '최종본 재검토 필요' : '',
-      refreshedAt ? `마지막 갱신 ${refreshedAt}` : '',
-    ].filter(Boolean).join(' · ');
-    return;
-  }
-
-  if (tab === 'support') {
-    const status = state.schedule?.supportStatus && typeof state.schedule.supportStatus === 'object'
-      ? state.schedule.supportStatus
-      : null;
-    if (!siteCode) {
-      pill.textContent = '지점 선택';
-      text.textContent = `${formatScheduleMonthTitle(month)} 기준 지원근무 전달 상태를 조회하려면 지점을 선택하세요.`;
-      return;
-    }
-    if (!status) {
-      pill.textContent = '조회 중';
-      text.textContent = `${formatScheduleMonthTitle(month)} · ${siteLabel} 기준 지원근무 전달 상태를 확인하는 중입니다.`;
-      return;
-    }
-    const sourceState = String(status.source_state || '').trim();
-    pill.className = getScheduleSupportRoundtripStateClass(sourceState, status);
-    pill.textContent = (siteCode === 'ALL' || status.overall_scope)
-      ? '전체'
-      : getScheduleSupportRoundtripStateLabel(sourceState);
-    text.textContent = [
-      `${formatScheduleMonthTitle(month)} · ${siteLabel}`,
-      refreshedAt ? `마지막 갱신 ${refreshedAt}` : '',
-      status.hq_merge_stale ? '재전달 필요' : '',
-    ].filter(Boolean).join(' · ');
-    return;
-  }
-
-  if (tab === 'pack') {
-    const selectedPack = getSelectedReportsPack();
-    if (selectedPack === 'apple' && isAppleReportPackEnabled()) {
-      const sheetsStatus = String(state.reports?.appleStatus?.status?.sheets?.status || '').trim().toUpperCase();
-      const variant = getOpsStatusVariant(sheetsStatus);
-      pill.className = variant === 'success'
-        ? 'status-pill status-pill-success'
-        : (variant === 'error' ? 'status-pill status-pill-error' : 'status-pill status-pill-warn');
-      pill.textContent = getUiStatusLabel(sheetsStatus || 'pending');
-      text.textContent = refreshedAt
-        ? `Apple pack 상태 기준 · 마지막 갱신 ${refreshedAt}`
-        : 'Apple pack 상태를 확인하는 중입니다.';
-      return;
-    }
-    pill.textContent = '기본 팩';
-    text.textContent = '기본 보고 팩은 스케줄 owner 화면으로 이어지는 실행 경로를 정리합니다.';
-    return;
-  }
-
-  pill.textContent = '로그 보기';
-  text.textContent = refreshedAt
-    ? `최근 보고 실행 이력 기준 · 마지막 갱신 ${refreshedAt}`
-    : '최근 보고 실행 이력을 확인합니다.';
-}
-
-function renderReportsPackList() {
-  const list = $('#reportsPackList');
-  const hint = $('#reportsPackHint');
-  if (!list || !hint) return;
-  clearList(list);
-
-  const rows = Array.isArray(state.reports?.packs) ? state.reports.packs : [];
-  if (!rows.length) {
-    renderEmptyState(list, '이 회사에 설정된 보고서 양식이 없습니다.');
-    hint.textContent = '리포트 팩이 없는 회사입니다.';
-    return;
-  }
-
-  const selectedPack = getSelectedReportsPack();
-  rows.forEach((pack) => {
-    const li = document.createElement('li');
-    const key = normalizeReportPackValue(pack?.type || pack?.key || '');
-    const isSelected = key === selectedPack;
-    const row = makeListRow({
-      title: String(pack?.title || '-').trim() || '-',
-      subtitle: String(pack?.description || '').trim() || '설명 없음',
-      pill: isSelected ? '선택됨' : (pack?.enabled === false ? '비활성' : '사용 가능'),
-      danger: pack?.enabled === false,
-    });
-    const actions = document.createElement('div');
-    actions.className = 'inline-actions';
-    const openBtn = document.createElement('button');
-    openBtn.type = 'button';
-    openBtn.className = isSelected ? 'btn btn-primary' : 'btn btn-secondary';
-    openBtn.dataset.action = 'reports-select-pack';
-    openBtn.dataset.pack = key;
-    openBtn.textContent = isSelected ? '선택됨' : '열기';
-    actions.appendChild(openBtn);
-    row.appendChild(actions);
-    li.appendChild(row);
-    list.appendChild(li);
-  });
-
-  hint.textContent = selectedPack === 'apple'
-    ? '전용 보고가 선택되었습니다.'
-    : '기본 리포트 팩이 선택되었습니다.';
-  renderReportsWorkspacePanels();
-}
-
-function renderReportsAppleCard() {
-  const selectedPack = getSelectedReportsPack();
-  const isApplePack = selectedPack === 'apple';
-  const appleEnabled = isAppleReportPackEnabled();
-  const appleCard = $('#reportsAppleCard');
-  const emptyPackCard = $('#reportsPackEmptyCard');
-  const emptyPackMessage = $('#reportsPackEmptyMessage');
-  const defaultCard = $('#reportsDefaultCard');
-  const appleHint = $('#reportsAppleHint');
-  const sheetsMeta = $('#reportsAppleSheetsMeta');
-  const sheetsPill = $('#reportsAppleSheetsPill');
-  const showPackEmpty = !isApplePack || !appleEnabled;
-
-  if (appleCard) appleCard.classList.toggle('hidden', !isApplePack || !appleEnabled);
-  if (emptyPackCard) emptyPackCard.classList.toggle('hidden', !showPackEmpty);
-  if (defaultCard) defaultCard.classList.toggle('hidden', isApplePack);
-  if (emptyPackMessage) {
-    emptyPackMessage.textContent = appleEnabled
-      ? '전용 팩을 선택하면 실행/로그를 확인할 수 있습니다.'
-      : '현재 회사에는 전용 팩이 연결되어 있지 않습니다.';
-  }
-
-  if (!appleEnabled) {
-    if (appleHint) appleHint.textContent = '이 회사에 해당 보고서가 없습니다.';
-    if (sheetsMeta) sheetsMeta.textContent = '사용할 수 없음';
-    if (sheetsPill) {
-      sheetsPill.className = 'status-pill status-pill-warn';
-      sheetsPill.textContent = '비대상';
-    }
-    renderReportsWorkspacePanels();
-    return;
-  }
-
-  const status = state.reports?.appleStatus || null;
-  if (!status) {
-    $('#reportsAppleDaytimeStatus').textContent = '-';
-    $('#reportsAppleOvertimeStatus').textContent = '-';
-    $('#reportsAppleOvernightStatus').textContent = '-';
-    $('#reportsAppleLateEventStatus').textContent = '-';
-    if (sheetsPill) {
-      sheetsPill.className = 'status-pill status-pill-warn';
-      sheetsPill.textContent = '확인 중';
-    }
-    if (sheetsMeta) {
-      sheetsMeta.textContent = '최근 동기화 정보를 불러오는 중입니다.';
-    }
-    if (appleHint) {
-      appleHint.textContent = '전용 보고 상태를 확인하세요.';
-    }
-    renderReportsWorkspacePanels();
-    return;
-  }
-
-  const statusMap = status.status || {};
-  const daytimeStatus = String(statusMap.daytime?.status || '-').trim().toUpperCase();
-  const overtimeStatus = String(statusMap.overtime?.status || '-').trim().toUpperCase();
-  const overnightStatus = String(statusMap.overnight?.status || '-').trim().toUpperCase();
-  const lateEventStatus = String(statusMap.late_event_additional?.status || '-').trim().toUpperCase();
-  const sheetsStatus = String(statusMap.sheets?.status || '-').trim().toUpperCase();
-  const sheetsLastAt = formatOpsDateTime(statusMap.sheets?.last_at || '');
-  const sheetsError = String(statusMap.sheets?.error || '').trim();
-
-  $('#reportsAppleDaytimeStatus').textContent = getUiStatusLabel(daytimeStatus);
-  $('#reportsAppleOvertimeStatus').textContent = getUiStatusLabel(overtimeStatus);
-  $('#reportsAppleOvernightStatus').textContent = getUiStatusLabel(overnightStatus);
-  $('#reportsAppleLateEventStatus').textContent = getUiStatusLabel(lateEventStatus);
-
-  if (sheetsPill) {
-    const variant = getOpsStatusVariant(sheetsStatus);
-    if (variant === 'success') sheetsPill.className = 'status-pill status-pill-success';
-    else if (variant === 'error') sheetsPill.className = 'status-pill status-pill-error';
-    else sheetsPill.className = 'status-pill status-pill-warn';
-    sheetsPill.textContent = getUiStatusLabel(sheetsStatus);
-  }
-
-  if (sheetsMeta) {
-    if (sheetsError) {
-      sheetsMeta.textContent = `${sheetsError}${sheetsLastAt ? ` · ${sheetsLastAt}` : ''}`;
-    } else if (sheetsLastAt) {
-      sheetsMeta.textContent = `마지막 동기화 ${sheetsLastAt}`;
-    } else {
-      sheetsMeta.textContent = '최근 동기화 이력이 없습니다.';
-    }
-  }
-
-  if (appleHint) {
-    const metrics = status.metrics || {};
-    appleHint.textContent = `월 집계: Overnight ${Number(metrics.overnight_rows || 0)}건 · OT ${Number(metrics.approved_ot_rows || 0)}건 · Late/Event ${Number(metrics.late_rows || 0) + Number(metrics.event_rows || 0) + Number(metrics.additional_rows || 0)}건`;
-  }
-  renderReportsWorkspacePanels();
+  if (!(summary instanceof HTMLElement) || !(pill instanceof HTMLElement) || !(text instanceof HTMLElement)) return;
+  setReportsSummaryPill(pill, '', 'status-pill status-pill-neutral');
+  setReportsSummaryMessage(text, '');
+  summary.classList.add('hidden');
 }
 
 function renderReportsSupportArtifactMeta(context = null) {
@@ -7812,23 +7651,23 @@ function renderReportsSupportHandoffPanel() {
     : null;
   const pill = $('#reportsSupportStatePill');
   const text = $('#reportsSupportStatusText');
-  const phaseLabel = $('#reportsSupportPhaseLabel');
-  const phaseMeta = $('#reportsSupportPhaseMeta');
+  const statusGrid = $('#reportsSupportStatusGrid');
   const artifactLabel = $('#reportsSupportArtifactLabel');
   const artifactMeta = $('#reportsSupportArtifactMeta');
   const deliveryLabel = $('#reportsSupportDeliveryLabel');
   const deliveryMeta = $('#reportsSupportDeliveryMeta');
-  const nextActionLabel = $('#reportsSupportNextActionLabel');
-  const nextActionMeta = $('#reportsSupportNextActionMeta');
   const blockedList = $('#reportsSupportBlockedReasons');
   const downloadBtn = $('#reportsSupportDownloadBtn');
   const sentrixBtn = $('#reportsSupportOpenSentrixBtn');
   const copyBtn = $('#reportsSupportCopyArtifactBtn');
   const techDetails = $('#reportsSupportArtifactTechDetails');
-  const month = getReportsMonthValue();
+  const refreshedAt = formatOpsDateTime(state.reports?.lastSyncedAt || '');
 
   if (techDetails instanceof HTMLElement) {
     techDetails.classList.toggle('hidden', !canSelectScheduleWorkflowTenant());
+  }
+  if (statusGrid instanceof HTMLElement) {
+    statusGrid.classList.toggle('hidden', !siteCode || !status);
   }
 
   const setBlockedReasons = (reasons = []) => {
@@ -7848,36 +7687,26 @@ function renderReportsSupportHandoffPanel() {
   };
 
   if (!siteCode) {
-    if (pill) {
-      pill.className = 'status-pill status-pill-neutral';
-      pill.textContent = '지점 선택';
-    }
-    if (text) text.textContent = `${formatScheduleMonthTitle(month)} 기준 전달 상태를 보려면 지점을 선택하세요.`;
-    if (phaseLabel) phaseLabel.textContent = '확인 대기';
-    if (phaseMeta) phaseMeta.textContent = '지점 선택 후 확인';
+    setReportsSummaryPill(pill, '', 'status-pill status-pill-neutral');
+    setReportsSummaryMessage(text, '');
     if (artifactLabel) artifactLabel.textContent = '미생성';
-    if (artifactMeta) artifactMeta.textContent = 'source artifact 대기';
+    if (artifactMeta) artifactMeta.textContent = 'source 업로드 전';
     if (deliveryLabel) deliveryLabel.textContent = '대기';
     if (deliveryMeta) deliveryMeta.textContent = 'Sentrix 제출 전';
-    if (nextActionLabel) nextActionLabel.textContent = '지점 선택';
-    if (nextActionMeta) nextActionMeta.textContent = '보고 탭 또는 스케줄 owner 화면에서 이어집니다.';
     if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = true;
     if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = true;
-    if (copyBtn instanceof HTMLButtonElement) copyBtn.disabled = true;
+    if (copyBtn instanceof HTMLElement) copyBtn.classList.add('hidden');
     renderReportsSupportArtifactMeta(null);
     setBlockedReasons([]);
     return;
   }
 
   if (!status) {
-    if (pill) {
-      pill.className = 'status-pill status-pill-neutral';
-      pill.textContent = '조회 중';
-    }
-    if (text) text.textContent = `${formatScheduleMonthTitle(month)} · ${siteCode === 'ALL' ? '전체 지점' : siteCode} 기준 전달 상태를 확인하는 중입니다.`;
+    setReportsSummaryPill(pill, '조회 중', 'status-pill status-pill-neutral');
+    setReportsSummaryMessage(text, '전달 상태를 확인하는 중입니다.');
     if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = true;
     if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = true;
-    if (copyBtn instanceof HTMLButtonElement) copyBtn.disabled = true;
+    if (copyBtn instanceof HTMLElement) copyBtn.classList.add('hidden');
     renderReportsSupportArtifactMeta(null);
     setBlockedReasons([]);
     return;
@@ -7897,52 +7726,45 @@ function renderReportsSupportHandoffPanel() {
   if (overallScope) {
     const totalSiteCount = Number(status.total_site_count || 0);
     const readySiteCount = Number(status.ready_site_count || 0);
-    if (pill) {
-      pill.className = readySiteCount > 0 ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral';
-      pill.textContent = readySiteCount > 0 ? '전체 준비' : '전체 대기';
-    }
-    if (text) text.textContent = `${formatScheduleMonthTitle(month)} 기준 전체 ${readySiteCount}/${totalSiteCount || 0}개 지점 handoff 준비 상태입니다.`;
-    if (phaseLabel) phaseLabel.textContent = '전체 상태';
-    if (phaseMeta) phaseMeta.textContent = readySiteCount > 0 ? '준비된 지점은 Sentrix handoff로 이어질 수 있습니다.' : '준비된 지점이 없습니다.';
-    if (artifactLabel) artifactLabel.textContent = readySiteCount > 0 ? `${readySiteCount}개 ready` : '미생성';
-    if (artifactMeta) artifactMeta.textContent = artifactContext.artifact_id ? `artifact ${String(artifactContext.revision || 'latest').slice(0, 12)}` : 'source artifact 대기';
+    setReportsSummaryPill(
+      pill,
+      readySiteCount > 0 ? '전체 준비' : '전체 대기',
+      readySiteCount > 0 ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral',
+    );
+    setReportsSummaryMessage(
+      text,
+      [
+        totalSiteCount > 0 ? `준비 ${readySiteCount}/${totalSiteCount}` : '',
+        refreshedAt ? `마지막 갱신 ${refreshedAt}` : '',
+      ].filter(Boolean).join(' · '),
+    );
+    if (artifactLabel) artifactLabel.textContent = readySiteCount > 0 ? `${readySiteCount}개 준비` : '미생성';
+    if (artifactMeta) artifactMeta.textContent = readySiteCount > 0 ? '세부 업로드는 지점별로 진행합니다.' : '업로드 전';
     if (deliveryLabel) deliveryLabel.textContent = readySiteCount > 0 ? '지점별 확인 필요' : '대기';
-    if (deliveryMeta) deliveryMeta.textContent = '전체 범위에서는 지점별 상태를 묶어서 안내합니다.';
-    if (nextActionLabel) nextActionLabel.textContent = '지점별 업로드 확인';
-    if (nextActionMeta) nextActionMeta.textContent = '실제 workbook 검토와 반영은 스케줄 owner 화면에서 진행합니다.';
+    if (deliveryMeta) deliveryMeta.textContent = '전체 범위는 지점별 상태만 요약합니다.';
     if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = !canUseScheduleSupportRoundtripHq() || readySiteCount <= 0;
     if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = !canUseScheduleSupportRoundtripHq() || readySiteCount <= 0 || !artifactContext.artifact_id;
-    if (copyBtn instanceof HTMLButtonElement) copyBtn.disabled = !artifactContext.artifact_id;
+    if (copyBtn instanceof HTMLElement) {
+      copyBtn.classList.toggle('hidden', !artifactContext.artifact_id || !canSelectScheduleWorkflowTenant());
+    }
     setBlockedReasons(blockedReasons);
     return;
   }
 
-  if (pill) {
-    pill.className = getScheduleSupportRoundtripStateClass(sourceState, status);
-    pill.textContent = getScheduleSupportRoundtripStateLabel(sourceState);
-  }
-  if (text) {
-    text.textContent = [
-      `${formatScheduleMonthTitle(month)} · ${siteCode}`,
-      artifactContext.revision ? `artifact ${artifactContext.revision.slice(0, 12)}` : 'artifact 준비 전',
-      mergeStale ? '재전달 필요' : (mergeAvailable ? '최근 전달 이력 있음' : 'Sentrix 제출 대기'),
-    ].filter(Boolean).join(' · ');
-  }
-  if (phaseLabel) phaseLabel.textContent = getScheduleSupportRoundtripStateLabel(sourceState);
-  if (phaseMeta) {
-    phaseMeta.textContent = [
-      status.latest_hq_uploaded_at ? formatOpsDateTime(status.latest_hq_uploaded_at) : '',
-      status.latest_hq_uploaded_by ? String(status.latest_hq_uploaded_by).trim() : '',
-      mergeStale ? '최신 source 기준 재검토 필요' : '',
-    ].filter(Boolean).join(' · ') || '지점/월 기준 최신 전달 상태입니다.';
-  }
-  if (artifactLabel) artifactLabel.textContent = artifactContext.revision ? artifactContext.revision.slice(0, 12) : '미생성';
+  setReportsSummaryPill(pill, getScheduleSupportRoundtripStateLabel(sourceState), getScheduleSupportRoundtripStateClass(sourceState, status));
+  setReportsSummaryMessage(
+    text,
+    [
+      sourceMissing ? '원본 업로드 필요' : '',
+      mergeStale ? '재전달 필요' : '',
+      refreshedAt ? `마지막 갱신 ${refreshedAt}` : '',
+    ].filter(Boolean).join(' · '),
+  );
+  if (artifactLabel) artifactLabel.textContent = readyForHandoff ? '준비됨' : '미생성';
   if (artifactMeta) {
-    artifactMeta.textContent = [
-      status.source_filename ? String(status.source_filename).trim() : '',
-      status.source_uploaded_at ? formatOpsDateTime(status.source_uploaded_at) : '',
-      artifactContext.generated_at ? `생성 ${formatOpsDateTime(artifactContext.generated_at)}` : '',
-    ].filter(Boolean).join(' · ') || 'source artifact 대기';
+    artifactMeta.textContent = artifactContext.generated_at
+      ? `생성 ${formatOpsDateTime(artifactContext.generated_at)}`
+      : '업로드 전';
   }
   if (deliveryLabel) {
     deliveryLabel.textContent = mergeStale
@@ -7950,22 +7772,9 @@ function renderReportsSupportHandoffPanel() {
       : (mergeAvailable ? '전달 이력 있음' : '전달 대기');
   }
   if (deliveryMeta) {
-    deliveryMeta.textContent = [
-      status.latest_hq_revision ? `Sentrix ${String(status.latest_hq_revision).slice(0, 12)}` : '',
-      status.latest_hq_uploaded_at ? formatOpsDateTime(status.latest_hq_uploaded_at) : '',
-      status.handoff_message ? String(status.handoff_message).trim() : '',
-    ].filter(Boolean).join(' · ') || 'Sentrix 제출 전';
-  }
-  if (nextActionLabel) {
-    if (sourceMissing) nextActionLabel.textContent = '원본 업로드 필요';
-    else if (mergeStale) nextActionLabel.textContent = '지점별 업로드 확인';
-    else if (mergeAvailable) nextActionLabel.textContent = 'Sentrix에서 이어서 처리';
-    else nextActionLabel.textContent = '지원근무 제출 시작';
-  }
-  if (nextActionMeta) {
-    if (sourceMissing) nextActionMeta.textContent = 'Excel 업로드와 source artifact 생성이 먼저 필요합니다.';
-    else if (mergeStale) nextActionMeta.textContent = '최신 source 기준으로 스케줄 owner 화면에서 다시 검토/적용해야 합니다.';
-    else nextActionMeta.textContent = '이 화면에서는 상태 확인과 외부 앱 연결만 제공하고, 실제 업로드/반영은 스케줄 owner 화면에서 진행합니다.';
+    deliveryMeta.textContent = status.latest_hq_uploaded_at
+      ? `최근 전달 ${formatOpsDateTime(status.latest_hq_uploaded_at)}`
+      : '제출 전';
   }
 
   if (downloadBtn instanceof HTMLButtonElement) {
@@ -7974,75 +7783,13 @@ function renderReportsSupportHandoffPanel() {
   if (sentrixBtn instanceof HTMLButtonElement) {
     sentrixBtn.disabled = !canUseScheduleSupportRoundtripHq() || !readyForHandoff || !artifactContext.artifact_id;
   }
-  if (copyBtn instanceof HTMLButtonElement) {
-    copyBtn.disabled = !artifactContext.artifact_id;
+  if (copyBtn instanceof HTMLElement) {
+    copyBtn.classList.toggle('hidden', !artifactContext.artifact_id || !canSelectScheduleWorkflowTenant());
+  }
+  if (techDetails instanceof HTMLElement) {
+    techDetails.classList.toggle('hidden', !canSelectScheduleWorkflowTenant() || !artifactContext.artifact_id);
   }
   setBlockedReasons(blockedReasons);
-}
-
-function buildReportsHistoryRows() {
-  const rows = [];
-  const appleLogs = Array.isArray(state.reports?.appleLogs) ? state.reports.appleLogs : [];
-  appleLogs.forEach((row, index) => {
-    const key = `apple:${String(row?.id || row?.log_id || index).trim() || index}`;
-    const at = String(row?.created_at || row?.updated_at || '').trim();
-    const status = String(row?.status || 'pending').trim();
-    const title = String(row?.profile_name || row?.profile_scope || '전용 보고').trim();
-    const detail = String(row?.error_message || row?.message || '').trim();
-    rows.push({
-      key,
-      at,
-      title,
-      subtitle: `${formatOpsDateTime(at) || '-'} · ${getUiStatusLabel(status)}`,
-      pill: status || 'pending',
-      detail: detail || '상세 메시지 없음',
-    });
-  });
-  return rows.sort((a, b) => {
-    const aTime = new Date(String(a.at || '')).getTime();
-    const bTime = new Date(String(b.at || '')).getTime();
-    const safeA = Number.isFinite(aTime) ? aTime : 0;
-    const safeB = Number.isFinite(bTime) ? bTime : 0;
-    return safeB - safeA;
-  });
-}
-
-function renderReportsHistoryPanel() {
-  const list = $('#reportsHistoryList');
-  const detailTitle = $('#reportsHistoryDetailTitle');
-  const detailBody = $('#reportsHistoryDetailBody');
-  if (!list || !detailTitle || !detailBody) return;
-
-  const rows = buildReportsHistoryRows();
-  clearList(list);
-  if (!rows.length) {
-    renderEmptyState(list, '실행 이력이 없습니다.');
-    detailTitle.textContent = '항목 선택';
-    detailBody.textContent = '실행 이력을 선택하면 상세 로그를 확인할 수 있습니다.';
-    return;
-  }
-
-  const selected = rows.find((row) => row.key === String(state.reports?.selectedHistoryLogKey || '').trim()) || rows[0];
-  state.reports.selectedHistoryLogKey = selected.key;
-
-  rows.forEach((row) => {
-    const li = document.createElement('li');
-    const item = makeListRow({
-      title: row.title,
-      subtitle: row.subtitle,
-      pill: row.pill,
-      danger: String(row.pill || '').trim().toUpperCase() === 'FAIL',
-    });
-    item.classList.add('reports-history-row');
-    item.classList.toggle('active', row.key === selected.key);
-    item.dataset.action = 'reports-history-select';
-    item.dataset.logKey = row.key;
-    li.appendChild(item);
-    list.appendChild(li);
-  });
-
-  detailTitle.textContent = selected.title;
-  detailBody.textContent = `${selected.subtitle} · ${selected.detail}`;
 }
 
 function renderReportsWorkspacePanels() {
@@ -8071,57 +7818,21 @@ function renderReportsWorkspacePanels() {
     panel.classList.toggle('hidden', panelType !== tab);
   });
 
-  renderReportsSupportHandoffPanel();
-  renderReportsHistoryPanel();
-  renderReportsContextSummary();
-}
-
-async function loadReportsPacks({ force = false } = {}) {
-  if (!state.user || !state.token) return [];
-  if (!state.reports) state.reports = createInitialReportsState();
-
-  if (!force && Array.isArray(state.reports.packs) && state.reports.packs.length) {
-    renderReportsScopeHint();
-    renderReportsPackList();
-    renderReportsAppleCard();
-    return state.reports.packs;
-  }
-
-  const fallback = buildDefaultReportPacksForTenant();
-  try {
-    const rows = await apiRequest(buildReportsApiPath('/reports/packs'));
-    const packs = Array.isArray(rows?.packs) ? rows.packs : (Array.isArray(rows) ? rows : []);
-    state.reports.packs = packs.length ? packs : fallback;
-    state.reports.tenantCode = String(rows?.tenant_code || getReportsTenantCode() || '').trim().toUpperCase();
-  } catch (error) {
-    state.reports.packs = fallback;
-    state.reports.tenantCode = getReportsTenantCode();
-    state.reports.error = normalizeActionError(error, '리포트 팩을 불러오지 못했습니다.');
-    showToast(state.reports.error, 'error', 2800);
-  }
-
-  const appleEnabled = state.reports.packs.some((pack) => normalizeReportPackValue(pack?.type || pack?.key || '') === 'apple');
-  if (!appleEnabled && getSelectedReportsPack() === 'apple') {
-    setSelectedReportsPack('default');
-  }
-
   renderReportsScopeHint();
-  renderReportsPackList();
-  renderReportsAppleCard();
-  return state.reports.packs;
+  renderScheduleFinanceSubmissionStatus();
+  renderReportsSupportHandoffPanel();
+  renderReportsContextSummary();
 }
 
 async function loadAppleReportStatus({ force = false } = {}) {
   if (!state.user || !state.token) return null;
   if (!isAppleReportPackEnabled()) {
     state.reports.appleStatus = null;
-    renderReportsAppleCard();
     return null;
   }
 
   const month = setReportsMonthValue(getReportsMonthValue(), { syncInput: true });
   if (!force && state.reports.appleStatus && state.reports.appleStatus.month === month) {
-    renderReportsAppleCard();
     return state.reports.appleStatus;
   }
 
@@ -8131,11 +7842,9 @@ async function loadAppleReportStatus({ force = false } = {}) {
     const payload = await apiRequest(path);
     state.reports.appleStatus = payload || null;
     state.reports.lastSyncedAt = new Date().toISOString();
-    renderReportsAppleCard();
     return state.reports.appleStatus;
   } catch (error) {
     state.reports.appleStatus = null;
-    renderReportsAppleCard();
     throw error;
   }
 }
@@ -8157,34 +7866,6 @@ async function loadAppleReportLogs({ force = false } = {}) {
   const logs = Array.isArray(payload?.logs) ? payload.logs : [];
   state.reports.appleLogs = logs;
   return logs;
-}
-
-function openAppleReportLogsSheet() {
-  const logs = Array.isArray(state.reports?.appleLogs) ? state.reports.appleLogs : [];
-  const content = document.createElement('div');
-  content.className = 'stack';
-  const list = document.createElement('ul');
-  list.className = 'list';
-  if (!logs.length) {
-    renderEmptyState(list, '표시할 전용 보고 로그가 없습니다.');
-  } else {
-    logs.forEach((row) => {
-      const li = document.createElement('li');
-      li.appendChild(makeListRow({
-        title: `${row.profile_name || row.profile_scope || '전용 보고'} · ${getUiStatusLabel(row.status || '-')}`,
-        subtitle: `${formatOpsDateTime(row.created_at || '') || '-'}${row.error_message ? ` · ${row.error_message}` : ''}`,
-        pill: row.status || 'PENDING',
-        danger: String(row.status || '').toUpperCase() === 'FAIL',
-      }));
-      list.appendChild(li);
-    });
-  }
-  content.appendChild(list);
-  openSheet({
-    title: '전용 보고 동기화 로그',
-    contentNode: content,
-    actions: [{ label: '닫기', variant: 'btn-secondary', action: 'sheet-close' }],
-  });
 }
 
 async function onReportsAppleRun({ retry = false, progressController = null } = {}) {
@@ -8222,22 +7903,14 @@ async function loadReportsViewPresenter() {
   applyAppleTenantScopedUiVisibility();
   renderReportsWorkspacePanels();
   await Promise.allSettled([
-    loadReportsPacks({ force: true }),
     refreshScheduleImportSiteOptions({ force: true }),
   ]);
   updateOpsAppleActionVisibility();
   await Promise.allSettled([
     canViewReportsFinanceTab() ? loadScheduleFinanceSubmissionStatus() : Promise.resolve(null),
     canViewReportsSupportTab() ? loadScheduleSupportRoundtripStatus() : Promise.resolve(null),
-    canViewReportsPackTab() && getSelectedReportsPack() === 'apple' && isAppleReportPackEnabled()
-      ? loadAppleReportStatus({ force: true })
-      : Promise.resolve(null),
-    canViewReportsHistoryTab() && isAppleReportPackEnabled()
-      ? loadAppleReportLogs({ force: true })
-      : Promise.resolve([]),
   ]);
   state.reports.lastSyncedAt = new Date().toISOString();
-  renderReportsAppleCard();
   renderReportsSupportHandoffPanel();
   renderReportsWorkspacePanels();
 }
@@ -8245,22 +7918,14 @@ async function loadReportsViewPresenter() {
 async function refreshReportsCenterData({ force = false } = {}) {
   if (force) {
     await Promise.allSettled([
-      loadReportsPacks({ force: true }),
       refreshScheduleImportSiteOptions({ force: true }),
     ]);
   }
   await Promise.allSettled([
     canViewReportsFinanceTab() ? loadScheduleFinanceSubmissionStatus() : Promise.resolve(null),
     canViewReportsSupportTab() ? loadScheduleSupportRoundtripStatus() : Promise.resolve(null),
-    canViewReportsPackTab() && getSelectedReportsPack() === 'apple' && isAppleReportPackEnabled()
-      ? loadAppleReportStatus({ force })
-      : Promise.resolve(null),
-    canViewReportsHistoryTab() && isAppleReportPackEnabled()
-      ? loadAppleReportLogs({ force })
-      : Promise.resolve([]),
   ]);
   state.reports.lastSyncedAt = new Date().toISOString();
-  renderReportsAppleCard();
   renderReportsSupportHandoffPanel();
   renderReportsWorkspacePanels();
 }
@@ -8845,8 +8510,6 @@ const DRAWER_MENU_BY_ROLE = {
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
         { id: 'reports-support', title: '지원근무 전달', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=support`, reportsTabMatch: 'support' },
-        { id: 'reports-pack', title: '전용 팩', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=pack`, reportsTabMatch: 'pack' },
-        { id: 'reports-history', title: '실행 이력', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=history`, reportsTabMatch: 'history' },
       ],
     },
     { type: 'section', title: '조직' },
@@ -8905,8 +8568,6 @@ const DRAWER_MENU_BY_ROLE = {
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
         { id: 'reports-support', title: '지원근무 전달', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=support`, reportsTabMatch: 'support' },
-        { id: 'reports-pack', title: '전용 팩', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=pack`, reportsTabMatch: 'pack' },
-        { id: 'reports-history', title: '실행 이력', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=history`, reportsTabMatch: 'history' },
       ],
     },
     { type: 'section', title: '조직' },
@@ -11490,11 +11151,373 @@ function renderScheduleUploadWorkflowContext() {
   setTextContentIfPresent('#scheduleExcelWorkflowContextFile', fileName, '파일 선택 전');
   setTextContentIfPresent('#scheduleExcelWorkflowContextRevision', revision, '-');
   setTextContentIfPresent('#scheduleExcelWorkflowContextStage', stepLabel, '-');
+  const baseStep = getScheduleBaseWizardStep();
+  const hqStep = getScheduleHqWizardStep();
+  const showTenant = canSelectScheduleWorkflowTenant();
+  const showSite = mode === SCHEDULE_UPLOAD_MODE_HQ
+    ? hqStep !== SCHEDULE_HQ_WIZARD_STEP_EXPORT && !isNonInformativeScheduleMetaValue(siteLabel)
+    : (baseStep === SCHEDULE_BASE_WIZARD_STEP_REVIEW || baseStep === SCHEDULE_BASE_WIZARD_STEP_APPLY)
+      && !isNonInformativeScheduleMetaValue(siteLabel);
+  const showMonth = mode === SCHEDULE_UPLOAD_MODE_HQ
+    ? hqStep !== SCHEDULE_HQ_WIZARD_STEP_EXPORT && !isNonInformativeScheduleMetaValue(monthLabel)
+    : (baseStep === SCHEDULE_BASE_WIZARD_STEP_REVIEW || baseStep === SCHEDULE_BASE_WIZARD_STEP_APPLY)
+      && !isNonInformativeScheduleMetaValue(monthLabel);
+  const showFile = !isNonInformativeScheduleMetaValue(fileName);
+  const showRevision = getNavigationRole() === 'DEV' && !isNonInformativeScheduleMetaValue(revision);
+  const visibleCards = [
+    toggleScheduleUploadContextCard('#scheduleExcelWorkflowContextTenant', showTenant),
+    toggleScheduleUploadContextCard('#scheduleExcelWorkflowContextSite', showSite),
+    toggleScheduleUploadContextCard('#scheduleExcelWorkflowContextMonth', showMonth),
+    toggleScheduleUploadContextCard('#scheduleExcelWorkflowContextFile', showFile),
+    toggleScheduleUploadContextCard('#scheduleExcelWorkflowContextRevision', showRevision),
+    toggleScheduleUploadContextCard('#scheduleExcelWorkflowContextStage', false),
+  ].filter(Boolean).length;
+  const contextStrip = $('#scheduleExcelWorkflowContextStrip');
+  if (contextStrip instanceof HTMLElement) {
+    contextStrip.classList.toggle('hidden', visibleCards <= 0);
+  }
   const tenantReadonly = $('#scheduleImportTenantReadonly');
   if (tenantReadonly instanceof HTMLInputElement) {
     tenantReadonly.value = tenantLabel;
     tenantReadonly.readOnly = true;
   }
+}
+
+function isNonInformativeScheduleMetaValue(value = '') {
+  const normalized = String(value || '').trim();
+  return !normalized
+    || normalized === '-'
+    || normalized === '없음'
+    || normalized === '파일 선택 전'
+    || normalized === '지점 선택'
+    || normalized === '월 선택'
+    || normalized === '테넌트 확인';
+}
+
+function toggleScheduleUploadContextCard(valueSelector = '', visible = false) {
+  const valueEl = $(valueSelector);
+  const card = valueEl instanceof HTMLElement ? valueEl.closest('.schedule-excel-context-card') : null;
+  if (card instanceof HTMLElement) {
+    card.classList.toggle('hidden', !visible);
+  }
+  return Boolean(visible && card instanceof HTMLElement);
+}
+
+function isUsefulScheduleGuideBlockedValue(value = '') {
+  const normalized = String(value || '').trim();
+  if (!normalized || normalized === '없음') return false;
+  return ![
+    '업로드 파일이 아직 선택되지 않았습니다.',
+    '업로드할 지점이 아직 선택되지 않았습니다.',
+    '대상 월이 아직 선택되지 않았습니다.',
+    '선택한 지점이 없습니다.',
+  ].includes(normalized);
+}
+
+function isUsefulScheduleGuideNextValue(value = '') {
+  const normalized = String(value || '').trim();
+  if (!normalized) return false;
+  return ![
+    '단계를 선택해 시작',
+    '대상 지점과 월 선택',
+    '지점과 대상 월 선택',
+    '파일 선택 후 분석 시작',
+    '매핑 프로필 선택 또는 생성',
+    '완료 지점 선택',
+    '시트 다운로드 후 다음',
+    '파일 선택 후 검토 시작',
+    '업로드 미리보기',
+    '반영 시작',
+    '적용하기',
+    '행 미리보기 확인',
+    '종료',
+  ].includes(normalized);
+}
+
+function isUsefulScheduleGuideTextValue(value = '') {
+  const normalized = String(value || '').trim();
+  if (!normalized) return false;
+  return ![
+    '지금 단계에서 필요한 항목과 다음 행동을 먼저 안내합니다.',
+    '지금 필요한 작업만 먼저 안내합니다.',
+    '업로드 파일 검토가 끝나면 이곳에서 결과를 확인합니다.',
+    '분석이 끝나면 검토가 필요한 행과 반영 가능 항목을 여기서 확인합니다.',
+    '결과를 확인한 뒤 종료하거나 다음 업로드로 넘어갈 수 있습니다.',
+  ].includes(normalized);
+}
+
+function setScheduleUploadGuidePanel({
+  pillLabel = '준비',
+  pillClass = 'status-pill status-pill-neutral',
+  title = '업로드 준비',
+  text = '',
+  blocked = '없음',
+  next = '단계를 선택해 시작',
+} = {}) {
+  const pillEl = $('#scheduleUploadGuidePill');
+  const titleEl = $('#scheduleUploadGuideTitle');
+  const textEl = $('#scheduleUploadGuideText');
+  const blockedEl = $('#scheduleUploadGuideBlocked');
+  const nextEl = $('#scheduleUploadGuideNext');
+  if (pillEl instanceof HTMLElement) {
+    pillEl.className = pillClass;
+    pillEl.textContent = String(pillLabel || '준비').trim() || '준비';
+  }
+  if (titleEl instanceof HTMLElement) {
+    titleEl.textContent = String(title || '업로드 준비').trim() || '업로드 준비';
+  }
+  const normalizedText = String(text || '').trim();
+  if (textEl instanceof HTMLElement) {
+    textEl.textContent = normalizedText;
+    textEl.classList.toggle('hidden', !isUsefulScheduleGuideTextValue(normalizedText));
+  }
+  const blockedValue = String(blocked || '없음').trim() || '없음';
+  if (blockedEl instanceof HTMLElement) {
+    blockedEl.textContent = blockedValue;
+  }
+  const nextValue = String(next || '단계를 선택해 시작').trim() || '단계를 선택해 시작';
+  if (nextEl instanceof HTMLElement) {
+    nextEl.textContent = nextValue;
+  }
+  const blockedCard = blockedEl instanceof HTMLElement ? blockedEl.closest('.schedule-upload-guide-card') : null;
+  const nextCard = nextEl instanceof HTMLElement ? nextEl.closest('.schedule-upload-guide-card') : null;
+  const metaWrap = blockedCard instanceof HTMLElement ? blockedCard.parentElement : (nextCard instanceof HTMLElement ? nextCard.parentElement : null);
+  const showBlocked = isUsefulScheduleGuideBlockedValue(blockedValue);
+  const showNext = isUsefulScheduleGuideNextValue(nextValue);
+  if (blockedCard instanceof HTMLElement) {
+    blockedCard.classList.toggle('hidden', !showBlocked);
+  }
+  if (nextCard instanceof HTMLElement) {
+    nextCard.classList.toggle('hidden', !showNext);
+  }
+  if (metaWrap instanceof HTMLElement) {
+    metaWrap.classList.toggle('hidden', !showBlocked && !showNext);
+  }
+}
+
+function renderScheduleUploadGuidePanel() {
+  const mode = getScheduleUploadWorkspaceMode();
+  const uploadUi = getScheduleUploadUiState();
+  const mappingReadiness = getScheduleImportMappingProfileReadiness(getSelectedScheduleImportMappingProfile());
+  const selectedSite = String($('#scheduleImportSite')?.value || '').trim().toUpperCase();
+  const selectedMonth = normalizeMonthKey($('#scheduleImportMonth')?.value || '') || getScheduleMonthValue();
+  const siteLabel = selectedSite ? getScheduleImportSiteLabel(selectedSite) : '지점 선택';
+  const monthLabel = formatScheduleMonthTitle(selectedMonth);
+
+  if (mode === SCHEDULE_UPLOAD_MODE_HQ) {
+    const workspace = ensureScheduleSupportHqWorkspaceState();
+    const hqContext = buildScheduleSupportHqContext();
+    const selectedSiteCodes = Array.isArray(hqContext.selectedSiteCodes) ? hqContext.selectedSiteCodes : [];
+    const selectedSites = getScheduleSupportHqWorkspaceSites().filter((site) => selectedSiteCodes.includes(site.siteCode));
+    const readySiteCount = selectedSites.filter((site) => site.downloadReady).length;
+    const artifactContext = buildScheduleSupportArtifactContext(
+      state.schedule.supportStatus && typeof state.schedule.supportStatus === 'object' ? state.schedule.supportStatus : null,
+      hqContext.siteCode,
+    );
+    const hasFile = Boolean($('#scheduleSupportHqUploadFile')?.files?.length);
+    const inspectResult = workspace.inspectResult && typeof workspace.inspectResult === 'object'
+      ? workspace.inspectResult
+      : null;
+    const applyResult = workspace.applyResult && typeof workspace.applyResult === 'object'
+      ? workspace.applyResult
+      : null;
+    const mismatch = buildScheduleSupportHqWorkbookMismatch(inspectResult);
+    const staleFields = formatScheduleSupportHqContextFields(workspace.staleFields);
+    const step = getScheduleHqWizardStep();
+
+    if (step === SCHEDULE_HQ_WIZARD_STEP_EXPORT) {
+      setScheduleUploadGuidePanel({
+        pillLabel: readySiteCount > 0 ? '추출 준비' : '지점 확인',
+        pillClass: readySiteCount > 0 ? 'status-pill status-pill-success' : 'status-pill status-pill-warn',
+        title: '제출본 준비',
+        text: `${formatScheduleMonthTitle(hqContext.month)} 제출본을 만듭니다.`,
+        blocked: !selectedSiteCodes.length
+          ? '선택한 지점이 없습니다.'
+          : readySiteCount <= 0
+            ? '다운로드할 수 있는 지점이 아직 없습니다.'
+            : '없음',
+        next: !selectedSiteCodes.length
+          ? '완료 지점 선택'
+          : readySiteCount <= 0
+            ? '지점 업로드 상태 확인'
+            : '시트 다운로드 후 다음',
+      });
+      return;
+    }
+
+    if (step === SCHEDULE_HQ_WIZARD_STEP_UPLOAD) {
+      setScheduleUploadGuidePanel({
+        pillLabel: workspace.inspectLoading ? '검토 중' : (artifactContext.artifact_id ? '업로드 준비' : 'source 확인'),
+        pillClass: workspace.inspectLoading
+          ? 'status-pill status-pill-neutral'
+          : (artifactContext.artifact_id ? 'status-pill status-pill-success' : 'status-pill status-pill-warn'),
+        title: '작성본 검토 준비',
+        text: `${selectedSiteCodes.length ? `${selectedSiteCodes.length}개 지점` : '선택 지점'} · ${formatScheduleMonthTitle(hqContext.month)}`,
+        blocked: !artifactContext.artifact_id
+          ? '기준 source가 아직 준비되지 않았습니다.'
+          : !hasFile
+            ? '업로드 파일이 아직 선택되지 않았습니다.'
+            : mismatch.messages[0]
+              ? String(mismatch.messages[0]).trim()
+              : (workspace.inspectLoading ? '검토가 진행 중입니다.' : '없음'),
+        next: !artifactContext.artifact_id
+          ? 'STEP 3에서 제출용 추출'
+          : !hasFile
+            ? '파일 선택 후 검토 시작'
+            : (workspace.inspectLoading ? '검토 완료 대기' : '업로드 미리보기'),
+      });
+      return;
+    }
+
+    if (step === SCHEDULE_HQ_WIZARD_STEP_PREVIEW) {
+      const previewBlocked = workspace.stale
+        ? `${staleFields || '조건'} 변경으로 다시 검토가 필요합니다.`
+        : (mismatch.messages[0]
+          ? String(mismatch.messages[0]).trim()
+          : (!inspectResult
+            ? '검토 결과가 아직 없습니다.'
+            : (inspectResult.can_apply
+              ? '없음'
+              : String(inspectResult.next_step_message || '보완 후 다시 검토가 필요합니다.').trim() || '보완 후 다시 검토가 필요합니다.')));
+      setScheduleUploadGuidePanel({
+        pillLabel: workspace.applyLoading ? '반영 중' : (inspectResult?.can_apply ? '반영 가능' : '검토 필요'),
+        pillClass: workspace.applyLoading
+          ? 'status-pill status-pill-neutral'
+          : (inspectResult?.can_apply ? 'status-pill status-pill-success' : 'status-pill status-pill-warn'),
+        title: '검토 결과',
+        text: inspectResult
+          ? String(inspectResult.next_step_message || '').trim()
+          : '',
+        blocked: previewBlocked,
+        next: workspace.applyLoading
+          ? '반영 완료 대기'
+          : (inspectResult?.can_apply ? '반영 시작' : '파일 보완 후 다시 검토'),
+      });
+      return;
+    }
+
+    setScheduleUploadGuidePanel({
+      pillLabel: workspace.applyLoading ? '반영 중' : '완료',
+      pillClass: workspace.applyLoading ? 'status-pill status-pill-neutral' : 'status-pill status-pill-success',
+      title: workspace.applyLoading ? 'ARLS 반영 중' : 'HQ 업로드 완료',
+      text: workspace.applyLoading
+        ? '반영 결과를 정리하고 있습니다.'
+        : '',
+      blocked: applyResult?.blocked && Array.isArray(applyResult.blocked_reasons) && applyResult.blocked_reasons.length
+        ? String(applyResult.blocked_reasons[0] || '').trim() || '차단 사유를 확인하세요.'
+        : '없음',
+      next: workspace.applyLoading ? '완료 대기' : '종료',
+    });
+    return;
+  }
+
+  const step = getScheduleBaseWizardStep();
+  const hasFile = Boolean($('#scheduleImportFile')?.files?.length);
+  const preview = state.preview;
+  const blockedReasons = Array.isArray(preview?.blocked_reasons) ? preview.blocked_reasons.filter(Boolean) : [];
+
+  if (step === SCHEDULE_BASE_WIZARD_STEP_MAPPING) {
+    setScheduleUploadGuidePanel({
+      pillLabel: mappingReadiness.label,
+      pillClass: mappingReadiness.badgeClass,
+      title: '매핑 프로필 확인',
+      text: mappingReadiness.ready
+        ? '업로드 규칙이 준비되었습니다.'
+        : '업로드에 사용할 규칙을 먼저 맞춰야 다음 단계로 넘어갑니다.',
+      blocked: mappingReadiness.ready ? '없음' : mappingReadiness.description,
+      next: mappingReadiness.ready ? '대상 지점과 월 선택' : '매핑 프로필 선택 또는 생성',
+    });
+    return;
+  }
+
+  if (step === SCHEDULE_BASE_WIZARD_STEP_CONTEXT) {
+    const blocked = !selectedSite
+      ? '업로드할 지점이 아직 선택되지 않았습니다.'
+      : !selectedMonth
+        ? '대상 월이 아직 선택되지 않았습니다.'
+        : '없음';
+    setScheduleUploadGuidePanel({
+      pillLabel: selectedSite && selectedMonth ? '대상 준비' : '대상 선택',
+      pillClass: selectedSite && selectedMonth ? 'status-pill status-pill-success' : 'status-pill status-pill-warn',
+      title: '업로드 대상 선택',
+      text: `${siteLabel} · ${monthLabel}`,
+      blocked,
+      next: blocked === '없음' ? '파일 준비' : '지점과 대상 월 선택',
+    });
+    return;
+  }
+
+  if (step === SCHEDULE_BASE_WIZARD_STEP_FILE) {
+    setScheduleUploadGuidePanel({
+      pillLabel: uploadUi.analysisInFlight ? '분석 중' : (hasFile ? '파일 준비' : '파일 선택'),
+      pillClass: uploadUi.analysisInFlight
+        ? 'status-pill status-pill-neutral'
+        : (hasFile ? 'status-pill status-pill-success' : 'status-pill status-pill-warn'),
+      title: '업로드 파일 준비',
+      text: `${siteLabel} · ${monthLabel}`,
+      blocked: uploadUi.analysisInFlight
+        ? String(getScheduleImportProgressStage(uploadUi.analysisStageKey).detail || '분석이 진행 중입니다.').trim()
+        : (hasFile ? '없음' : '업로드 파일이 아직 선택되지 않았습니다.'),
+      next: uploadUi.analysisInFlight ? '분석 완료 대기' : (hasFile ? '분석 시작' : '파일 선택 후 분석 시작'),
+    });
+    return;
+  }
+
+  if (step === SCHEDULE_BASE_WIZARD_STEP_REVIEW) {
+    let blocked = '분석 결과가 아직 없습니다.';
+    let next = '이전 단계로 돌아가 분석 시작';
+    let pillLabel = '검토 대기';
+    let pillClass = 'status-pill status-pill-warn';
+    let text = '';
+    if (uploadUi.analysisInFlight) {
+      blocked = String(getScheduleImportProgressStage(uploadUi.analysisStageKey).detail || '분석이 진행 중입니다.').trim();
+      next = '분석 완료 대기';
+      pillLabel = '분석 중';
+      pillClass = 'status-pill status-pill-neutral';
+    } else if (uploadUi.stale) {
+      blocked = `${formatScheduleImportContextFields(uploadUi.staleFields) || '조건'} 변경으로 다시 분석이 필요합니다.`;
+      next = '같은 조건으로 다시 분석';
+      pillLabel = '재분석 필요';
+      pillClass = 'status-pill status-pill-warn';
+    } else if (preview) {
+      text = `${siteLabel} · ${monthLabel}`;
+      if (blockedReasons.length) {
+        blocked = String(blockedReasons[0] || '').trim() || '차단 사유를 먼저 해결해야 합니다.';
+        next = '파일 또는 매핑 수정 후 다시 분석';
+        pillLabel = '검토 필요';
+        pillClass = 'status-pill status-pill-warn';
+      } else if (uploadUi.canApply) {
+        blocked = '없음';
+        next = '적용하기';
+        pillLabel = '적용 가능';
+        pillClass = 'status-pill status-pill-success';
+      } else {
+        blocked = '검토 결과를 먼저 확인하세요.';
+        next = '행 미리보기 확인';
+      }
+    }
+    setScheduleUploadGuidePanel({
+      pillLabel,
+      pillClass,
+      title: '검토 결과 확인',
+      text,
+      blocked,
+      next,
+    });
+    return;
+  }
+
+  const applyDone = String(uploadUi.applyResult || '').includes('반영 완료');
+  setScheduleUploadGuidePanel({
+    pillLabel: applyDone ? '완료' : '적용 진행',
+    pillClass: applyDone ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral',
+    title: applyDone ? '월간 업로드 완료' : 'ARLS 반영 중',
+    text: applyDone
+      ? ''
+      : '적용 결과를 정리하고 있습니다.',
+    blocked: applyDone ? '없음' : (String(uploadUi.applyResult || '').trim() || '적용 결과를 기다리는 중입니다.'),
+    next: '종료',
+  });
 }
 
 function renderScheduleUploadModeTabs() {
@@ -11715,13 +11738,13 @@ function renderScheduleUploadWorkspace() {
   syncScheduleImportStaleState();
   if (uploadHeaderTitle) {
     uploadHeaderTitle.textContent = activeTopTab === SCHEDULE_TAB_HQ_UPLOAD
-      ? '지점별 스케쥴 업로드 확인'
-      : '근무표 업로드·자동등록';
+      ? '지점별 업로드 확인'
+      : '월간 업로드';
   }
   if (uploadHeaderText) {
     uploadHeaderText.textContent = activeTopTab === SCHEDULE_TAB_HQ_UPLOAD
-      ? '지원근무 workbook의 source 추출, HQ 작성본 업로드, 검토와 적용을 이 workflow에서 진행합니다.'
-      : '스케줄 Excel workflow owner 화면으로, 매핑 준비부터 검토와 적용까지 이 곳에서 완료합니다.';
+      ? '지점별 제출본을 만들고 작성본 검토만 이어갑니다.'
+      : '지금 단계에서 필요한 작업만 보여줍니다.';
   }
   renderScheduleImportMappingProfileSummary();
   renderScheduleUploadWorkflowSections();
@@ -11745,17 +11768,17 @@ function renderScheduleUploadWorkspace() {
 
   if (permissionSummary) {
     permissionSummary.textContent = isScheduleUploadTenantWideUser()
-      ? '현재 계정은 tenant 전체 지점을 업로드할 수 있습니다.'
-      : '현재 계정은 본인 지점만 업로드 가능합니다.';
+      ? '현재 계정은 tenant 전체 지점을 선택할 수 있습니다.'
+      : '현재 계정은 본인 지점만 선택할 수 있습니다.';
   }
   if (siteHint) {
     if (uploadWorkspaceBooting) {
-      siteHint.textContent = 'Excel workflow 초기 상태를 준비하는 중입니다. 준비가 끝나면 지점과 월을 선택할 수 있습니다.';
+      siteHint.textContent = '초기 상태를 준비하는 중입니다. 잠시 후 지점과 월을 선택할 수 있습니다.';
     } else if (siteOptionsLoading) {
-      siteHint.textContent = '지점 목록을 불러오는 중입니다. 로딩이 끝나면 선택할 수 있습니다.';
+      siteHint.textContent = '지점 목록을 불러오는 중입니다.';
     } else {
       siteHint.textContent = isScheduleUploadTenantWideUser()
-        ? 'HQ 계정은 같은 tenant의 모든 지점을 선택할 수 있습니다.'
+        ? '같은 tenant 안에서 업로드할 지점을 고를 수 있습니다.'
         : `지점 범위가 ${getScheduleImportSiteLabel(state.user?.site_code || selectedSite)}로 고정됩니다.`;
     }
   }
@@ -11830,6 +11853,7 @@ function renderScheduleUploadWorkspace() {
 
   renderScheduleUploadApplyBar();
   renderScheduleSupportHqWorkspace();
+  renderScheduleUploadGuidePanel();
 }
 
 function renderSchedulePreviewTable(previewRows = []) {
@@ -12407,22 +12431,18 @@ function renderScheduleSupportHqReviewSummary() {
     : null;
   const summaryItems = inspectResult
     ? [
-      { label: 'workbook 유효성', value: inspectResult.workbook_valid ? '검토 가능' : '검토 필요' },
-      { label: 'ticket scope', value: `${Number(inspectResult.total_scope_count || 0)}건` },
+      { label: '검토 상태', value: inspectResult.can_apply ? '반영 가능' : '검토 필요' },
       { label: '적용 가능', value: `${Number(inspectResult.valid_scope_count || 0)}건` },
-      { label: '자동승인 예상', value: `${Number(inspectResult.summary?.auto_approved || 0)}건` },
-      { label: '승인대기 예상', value: `${Number(inspectResult.summary?.approval_pending || 0)}건` },
       { label: '차단', value: `${Number(inspectResult.summary?.blocking || 0)}건` },
-      { label: 'worker row', value: `${Number(inspectResult.summary?.worker_rows || 0)}건` },
-    ]
+      ...(Number(inspectResult.summary?.approval_pending || 0) > 0
+        ? [{ label: '승인대기', value: `${Number(inspectResult.summary?.approval_pending || 0)}건` }]
+        : []),
+      ...(Number(inspectResult.summary?.auto_approved || 0) > 0
+        ? [{ label: '자동승인', value: `${Number(inspectResult.summary?.auto_approved || 0)}건` }]
+        : []),
+    ].filter((item) => !(item.label === '차단' && item.value === '0건'))
     : [
-      { label: 'workbook 유효성', value: workspace.stale ? '재검토 필요' : '파일 선택 대기' },
-      { label: 'ticket scope', value: '-' },
-      { label: '적용 가능', value: '-' },
-      { label: '자동승인 예상', value: '-' },
-      { label: '승인대기 예상', value: '-' },
-      { label: '차단', value: '-' },
-      { label: 'worker row', value: '-' },
+      { label: '검토 상태', value: workspace.stale ? '재검토 필요' : '파일 선택 대기' },
     ];
   summaryItems.forEach((item) => {
     const card = document.createElement('div');
@@ -12455,7 +12475,7 @@ function renderScheduleSupportHqIssueGroups() {
     } else if (workspace.stale) {
       strong.textContent = '현재 검토 결과가 stale 상태입니다.';
     } else {
-      strong.textContent = inspectResult ? '현재 검토 이슈가 없습니다.' : '검토를 시작하면 workbook validity와 revision 상태가 여기에 표시됩니다.';
+      strong.textContent = inspectResult ? '현재 검토 이슈가 없습니다.' : '검토를 시작하면 필요한 이슈만 표시됩니다.';
     }
     placeholder.appendChild(strong);
     const meta = document.createElement('p');
@@ -12464,7 +12484,7 @@ function renderScheduleSupportHqIssueGroups() {
     } else if (workspace.stale) {
       meta.textContent = `${formatScheduleSupportHqContextFields(workspace.staleFields)} 변경으로 다시 검토해야 합니다.`;
     } else {
-      meta.textContent = String(inspectResult?.next_step_message || 'scope별 요청 수(ticket 기준), 유효 입력 수, 업로드 workbook 근무자 셀 파싱 결과가 여기에 묶여 표시됩니다.').trim();
+      meta.textContent = String(inspectResult?.next_step_message || '검토를 시작하면 필요한 이슈만 표시됩니다.').trim();
     }
     placeholder.appendChild(meta);
     container.appendChild(placeholder);
@@ -12527,8 +12547,8 @@ function renderScheduleSupportHqReviewTable() {
         strong.textContent = '현재 검토 결과는 stale 상태입니다.';
       } else if (workspace.uploadFileName) {
         strong.textContent = previewMode === 'actionable'
-          ? '기본 보기에서는 업로드 차단 scope만 표시됩니다.'
-          : '업로드 파일 검토를 실행하면 scope별 상태와 근무자 셀 결과가 표시됩니다.';
+          ? '기본 보기에서는 차단 항목만 표시됩니다.'
+          : '업로드 파일을 검토하면 결과가 표시됩니다.';
       } else {
         strong.textContent = '업로드할 HQ 작성본 workbook 파일을 선택하세요.';
       }
@@ -12540,11 +12560,11 @@ function renderScheduleSupportHqReviewTable() {
         meta.textContent = String(workspace.inspectError || '').trim();
       } else {
         meta.textContent = previewMode === 'actionable'
-          ? '전체 보기로 전환하면 승인대기와 자동승인 scope를 포함한 모든 support scope를 볼 수 있습니다.'
+          ? '전체 보기로 전환하면 모든 검토 결과를 볼 수 있습니다.'
           : (
             inspectResult?.next_step_message
               ? String(inspectResult.next_step_message || '').trim()
-              : '지원요청 scope, 유효 입력 수, 업로드 workbook 근무자 셀 파싱 결과를 이 구역에서 검토합니다. 요청 수는 기존 Sentrix ticket 기준입니다.'
+              : '검토 결과가 이 구역에 표시됩니다.'
           );
       }
     }
@@ -12919,19 +12939,19 @@ function renderScheduleSupportHqWorkspace() {
 
   if (contractHint) {
     if (!allowed) {
-      contractHint.textContent = 'HQ/Admin 권한이 있어야 HQ 작성본 workbook 검토와 적용을 시작할 수 있습니다.';
+      contractHint.textContent = '권한이 있어야 검토와 반영을 시작할 수 있습니다.';
     } else if (!selectedSiteCodes.length) {
-      contractHint.textContent = '대상 월을 고른 뒤 지점 상태표에서 업로드 완료 지점을 선택하면 HQ 제출용 workbook을 생성할 수 있습니다.';
+      contractHint.textContent = '준비된 지점을 먼저 고르세요.';
     } else if (workspace.loading) {
-      contractHint.textContent = '선택한 월 기준 제출용 workbook 상태를 불러오는 중입니다.';
+      contractHint.textContent = '제출본 상태를 불러오는 중입니다.';
     } else if (workspace.error) {
       contractHint.textContent = String(workspace.error || '').trim();
     } else if (!artifactContext.artifact_id) {
-      contractHint.textContent = '선택한 지점 중 제출용 source가 준비되지 않은 항목이 있습니다. 업로드 완료 지점만 선택해 주세요.';
+      contractHint.textContent = '제출본 source가 아직 준비되지 않았습니다.';
     } else if (selectedSiteCodes.length > 1) {
-      contractHint.textContent = `${selectedSiteCodes.length}개 지점을 한 workbook으로 묶어 진행합니다. 각 시트명은 지점/현장명과 일치해야 합니다.`;
+      contractHint.textContent = `${selectedSiteCodes.length}개 지점을 한 workbook으로 묶어 진행합니다.`;
     } else {
-      contractHint.textContent = `${selectedSiteLabel} 기준 HQ 작성본을 검토하고 반영합니다. 요청 인원수는 현재 시스템 기준을 사용하고, 업로드 파일에서는 근무자 입력만 읽습니다.`;
+      contractHint.textContent = `${selectedSiteLabel} 기준으로 검토합니다.`;
     }
   }
 
@@ -12940,41 +12960,35 @@ function renderScheduleSupportHqWorkspace() {
     renderSupportStatusHqMetaGrid(userMetaGrid, [
       { label: '선택 지점', value: selectedSiteLabel },
       { label: '대상 월', value: formatScheduleMonthTitle(context.month) },
-      { label: '선택 파일', value: String(workspace.uploadFileName || '선택 전').trim() || '선택 전' },
-      { label: 'workbook 계열', value: String(workspace.contract?.workbook_family || SUPPORT_STATUS_HQ_WORKBOOK_FAMILY).trim() || SUPPORT_STATUS_HQ_WORKBOOK_FAMILY },
       { label: '기준 상태', value: uploadMeta ? getSupportStatusHqLatestStatusLabel(uploadMeta.latest_status || '') : (artifactContext.artifact_id ? '최신 기준 사용 가능' : 'source 대기') },
-      { label: '마지막 다운로드 기준', value: String(workspace.lastDownloadedRevision || workspace.contract?.template_version || '-').trim() || '-' },
     ]);
   }
   const uploadMetaItems = [
     { label: '파일명', value: String(uploadMeta?.file_name || workspace.uploadFileName || '선택 전').trim() || '선택 전' },
-    { label: '파일 크기', value: workspace.uploadFileSize > 0 ? `${Number(workspace.uploadFileSize).toLocaleString('ko-KR')} bytes` : '선택 전' },
-    { label: '파일 수정시각', value: String(workspace.uploadFileLastModified || '선택 전').trim() || '선택 전' },
     { label: '대상월', value: formatScheduleMonthTitle(String(uploadMeta?.month || context.month || '')) },
     { label: '업로드 범위', value: selectedSiteLabel },
-    { label: 'workbook family', value: String(uploadMeta?.workbook_family || workspace.contract?.workbook_family || SUPPORT_STATUS_HQ_WORKBOOK_FAMILY).trim() || SUPPORT_STATUS_HQ_WORKBOOK_FAMILY },
-    { label: 'latest 상태', value: uploadMeta ? getSupportStatusHqLatestStatusLabel(uploadMeta.latest_status || '') : (artifactContext.artifact_id ? 'latest source 기준' : 'source 대기') },
+    { label: '기준 상태', value: uploadMeta ? getSupportStatusHqLatestStatusLabel(uploadMeta.latest_status || '') : (artifactContext.artifact_id ? '최신 기준 사용 가능' : 'source 대기') },
   ];
   renderSupportStatusHqMetaGrid(uploadMetaGrid, uploadMetaItems);
 
   if (batchInfoEl) {
     if (!allowed) {
-      batchInfoEl.textContent = '권한이 없어서 HQ 작성본 upload/apply 워크플로우를 시작할 수 없습니다.';
+      batchInfoEl.textContent = '권한이 없어 HQ 작성본 검토를 시작할 수 없습니다.';
     } else if (workspace.stale) {
-      batchInfoEl.textContent = `${formatScheduleSupportHqContextFields(workspace.staleFields)} 변경으로 이전 검토 결과가 stale 상태가 되었습니다. 다시 검토를 실행하세요.`;
+      batchInfoEl.textContent = `${formatScheduleSupportHqContextFields(workspace.staleFields)} 변경으로 다시 검토해야 합니다.`;
     } else if (!selectedSiteCodes.length) {
-      batchInfoEl.textContent = '대상 월을 선택한 뒤 업로드 완료 지점을 고르세요.';
+      batchInfoEl.textContent = '업로드할 지점을 먼저 고르세요.';
     } else if (!artifactContext.artifact_id) {
-      batchInfoEl.textContent = '선택 지점 중 source 준비가 완료되지 않은 항목이 있어 제출용 workbook을 시작할 수 없습니다.';
+      batchInfoEl.textContent = '제출본 source가 아직 준비되지 않았습니다.';
     } else if (inspectResult?.batch_id) {
       batchInfoEl.textContent = [
         `${selectedSiteCodes.length}개 지점`,
         formatScheduleMonthTitle(context.month),
-        `입력 ${Number(inspectResult.summary?.worker_rows || 0)}건`,
-        `검토본 ${String(inspectResult.batch_id).slice(0, 12)}`,
+        `적용 가능 ${Number(inspectResult.valid_scope_count || 0)}건`,
+        Number(inspectResult.summary?.blocking || 0) > 0 ? `차단 ${Number(inspectResult.summary?.blocking || 0)}건` : '',
       ].join(' · ');
     } else {
-      batchInfoEl.textContent = `${selectedSiteLabel} · ${formatScheduleMonthTitle(context.month)} 기준 HQ 작성본 workbook을 검토합니다. 여러 지점을 선택했다면 한 파일 안에 지점별 시트가 있어야 합니다.`;
+      batchInfoEl.textContent = `${selectedSiteLabel} · ${formatScheduleMonthTitle(context.month)}`;
     }
   }
 
@@ -13012,23 +13026,23 @@ function renderScheduleSupportHqWorkspace() {
   }
   if (reviewText) {
     if (workspace.applyLoading) {
-      reviewText.textContent = 'normalized roster snapshot을 Sentrix로 전달하고 있습니다. 완료될 때까지 잠시 기다려 주세요.';
+      reviewText.textContent = '반영 결과와 후속 상태를 갱신하는 중입니다.';
     } else if (applyResult?.applied) {
-      reviewText.textContent = `scope ${Number(applyResult.applied_scope_count || 0)}건 handoff 완료 · ticket ${Number(applyResult.tickets_updated || 0)}건 갱신 · 자동승인 ${Number(applyResult.tickets_auto_approved || 0)}건 · 승인대기 ${Number(applyResult.tickets_pending || 0)}건`;
+      reviewText.textContent = [
+        `반영 ${Number(applyResult.applied_scope_count || 0)}건`,
+        `자동승인 ${Number(applyResult.tickets_auto_approved || 0)}건`,
+        `승인대기 ${Number(applyResult.tickets_pending || 0)}건`,
+      ].join(' · ');
     } else if (applyResult?.partial_success) {
       reviewText.textContent = [
-        `scope ${Number(applyResult.handoff_success_count || 0)}건 전달`,
+        `반영 ${Number(applyResult.handoff_success_count || 0)}건`,
         `실패 ${Number(applyResult.handoff_failed_count || 0)}건`,
         applyResult?.handoff_message ? String(applyResult.handoff_message).trim() : '',
-        applyResult?.retry_token ? `retry ${String(applyResult.retry_token).slice(0, 12)}` : '',
       ].filter(Boolean).join(' · ');
     } else if (applyResult?.blocked && Array.isArray(applyResult.blocked_reasons) && applyResult.blocked_reasons.length) {
       reviewText.textContent = String(applyResult.blocked_reasons[0] || '').trim() || '차단 사유를 해결한 뒤 다시 검토하세요.';
     } else if (applyResult?.handoff_status === 'failed') {
-      reviewText.textContent = [
-        String(applyResult.handoff_message || 'Sentrix handoff에 실패했습니다.').trim(),
-        applyResult?.retry_token ? `retry ${String(applyResult.retry_token).slice(0, 12)}` : '',
-      ].filter(Boolean).join(' · ');
+      reviewText.textContent = String(applyResult.handoff_message || '후속 전달에 실패했습니다.').trim();
     } else if (workspace.applyError) {
       reviewText.textContent = String(workspace.applyError || '').trim();
     } else if (workspace.inspectError) {
@@ -13038,40 +13052,36 @@ function renderScheduleSupportHqWorkspace() {
     } else if (inspectResult) {
       reviewText.textContent = String(inspectResult.next_step_message || '검토 결과를 확인한 뒤 적용 여부를 결정하세요.').trim();
     } else {
-      reviewText.textContent = 'HQ 작성본 workbook을 검토한 뒤 반영을 시작하면 상태 계산과 후속 연동이 순서대로 진행됩니다.';
+      reviewText.textContent = '검토 후 반영을 시작하면 처리 결과가 여기에 표시됩니다.';
     }
   }
 
   if (applyResultEl) {
     if (workspace.applyLoading) {
-      applyResultEl.textContent = '업로드 진행중... ARLS가 Sentrix state engine handoff를 실행하고 있습니다.';
+      applyResultEl.textContent = '반영 결과를 저장하고 있습니다.';
     } else if (applyResult?.applied) {
-      const partialBits = [];
-      if (Number(applyResult.notifications_created || 0) > 0) partialBits.push(`알림 ${Number(applyResult.notifications_created || 0)}건`);
-      if (Number(applyResult.bridge_actions_created || 0) > 0) partialBits.push(`ARLS bridge ${Number(applyResult.bridge_actions_created || 0)}건`);
-      if (Number(applyResult.push_failed || 0) > 0 || Number(applyResult.bridge_failed || 0) > 0) {
-        partialBits.push(`후처리 실패 push ${Number(applyResult.push_failed || 0)}건 / bridge ${Number(applyResult.bridge_failed || 0)}건`);
-      }
-      applyResultEl.textContent = `ARLS apply가 완료되었습니다. Sentrix state engine handoff 기준 batch ${String(applyResult.batch_id || '').slice(0, 12)} · ${partialBits.join(' · ') || '후처리 완료'}`;
+      applyResultEl.textContent = [
+        '반영이 완료되었습니다.',
+        `자동승인 ${Number(applyResult.tickets_auto_approved || 0)}건`,
+        `승인대기 ${Number(applyResult.tickets_pending || 0)}건`,
+      ].join(' · ');
     } else if (applyResult?.partial_success) {
       applyResultEl.textContent = [
-        'ARLS 검토 결과는 유지됐지만 Sentrix handoff가 일부만 완료되었습니다.',
+        '일부만 반영되었습니다.',
         `성공 ${Number(applyResult.handoff_success_count || 0)}건`,
         `실패 ${Number(applyResult.handoff_failed_count || 0)}건`,
-        applyResult?.retry_token ? `retry ${String(applyResult.retry_token).slice(0, 12)}` : '',
       ].filter(Boolean).join(' · ');
     } else if (applyResult?.handoff_status === 'failed') {
       applyResultEl.textContent = [
-        'ARLS local apply는 완료됐지만 Sentrix handoff에 실패했습니다.',
+        '후속 전달에 실패했습니다.',
         String(applyResult.handoff_message || '').trim(),
-        applyResult?.retry_token ? `retry ${String(applyResult.retry_token).slice(0, 12)}` : '',
       ].filter(Boolean).join(' · ');
     } else if (workspace.applyError) {
       applyResultEl.textContent = String(workspace.applyError || '').trim();
     } else if (workspace.stale) {
       applyResultEl.textContent = '현재 검토 결과는 더 이상 apply할 수 없습니다. 다시 검토한 뒤 적용하세요.';
     } else {
-      applyResultEl.textContent = '반영을 시작하면 scope별 처리 결과와 후속 상태가 여기에 표시됩니다.';
+      applyResultEl.textContent = '반영을 시작하면 처리 결과가 여기에 표시됩니다.';
     }
   }
 
@@ -13696,14 +13706,14 @@ function renderScheduleSupportRoundtripStatus() {
       statePill.className = 'status-pill status-pill-neutral';
       statePill.textContent = '지점 선택 필요';
     }
-    if (statusText) statusText.textContent = '업로드 지점과 대상 월을 먼저 고정하면 source 준비 상태와 다음 작업을 불러옵니다.';
+    if (statusText) statusText.textContent = '업로드할 지점과 월을 먼저 고르세요.';
     if (sourceRevision) sourceRevision.textContent = '없음';
     if (sourceMeta) sourceMeta.textContent = '지점 선택 후 확인';
     if (mergeState) mergeState.textContent = '대기';
-    if (mergeMeta) mergeMeta.textContent = 'ARLS STEP 4 대기';
+    if (mergeMeta) mergeMeta.textContent = '작성본 업로드 대기';
     if (assignmentCount) assignmentCount.textContent = '미생성';
-    if (conflictMeta) conflictMeta.textContent = 'site/month 선택 후 확인';
-    if (finalState) finalState.textContent = 'ARLS STEP 4';
+    if (conflictMeta) conflictMeta.textContent = '지점과 월 선택 후 확인';
+    if (finalState) finalState.textContent = '검토 단계';
     if (finalMeta) finalMeta.textContent = 'HQ 작성본 업로드와 검토/적용 시작은 ARLS에서 진행됩니다.';
     if (hqDownloadBtn) hqDownloadBtn.disabled = true;
     if (openSentrixBtn) openSentrixBtn.disabled = true;
@@ -13740,15 +13750,15 @@ function renderScheduleSupportRoundtripStatus() {
       statePill.className = readySiteCount > 0 ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral';
       statePill.textContent = '전체';
     }
-    if (statusText) statusText.textContent = `${getScheduleMonthValue()} · 전체 ${readySiteCount}/${totalSiteCount || 0}개 지점 source workbook 준비`;
-    if (sourceRevision) sourceRevision.textContent = `${readySiteCount}/${totalSiteCount || 0} ready`;
-    if (sourceMeta) sourceMeta.textContent = '전체 지점 HQ 작성본 업로드를 위한 source 준비 현황';
-    if (mergeState) mergeState.textContent = readySiteCount > 0 ? 'ARLS 검토 가능' : '대기';
-    if (mergeMeta) mergeMeta.textContent = readySiteCount > 0 ? 'Excel workflow STEP 4에서 multi-sheet upload' : '준비된 지점 없음';
-    if (assignmentCount) assignmentCount.textContent = artifactContext.artifact_id ? `${readySiteCount}개 ready` : '미생성';
+    if (statusText) statusText.textContent = `전체 ${readySiteCount}/${totalSiteCount || 0}개 지점 준비`;
+    if (sourceRevision) sourceRevision.textContent = `${readySiteCount}/${totalSiteCount || 0}개 준비`;
+    if (sourceMeta) sourceMeta.textContent = '전체 지점 제출본 준비 상태';
+    if (mergeState) mergeState.textContent = readySiteCount > 0 ? '검토 가능' : '대기';
+    if (mergeMeta) mergeMeta.textContent = readySiteCount > 0 ? '전체 범위는 ARLS에서 이어집니다.' : '준비된 지점 없음';
+    if (assignmentCount) assignmentCount.textContent = artifactContext.artifact_id ? '준비됨' : '미생성';
     if (conflictMeta) conflictMeta.textContent = totalSiteCount > 0 ? `총 ${totalSiteCount}개 지점` : '지점 정보 없음';
-    if (finalState) finalState.textContent = 'ARLS STEP 4';
-    if (finalMeta) finalMeta.textContent = '전체 범위 HQ 작성본 업로드/검토는 ARLS에서 진행되고, 내부 state 엔진은 Sentrix가 처리합니다.';
+    if (finalState) finalState.textContent = '검토 단계';
+    if (finalMeta) finalMeta.textContent = '전체 범위는 지점별 상태 확인용입니다.';
     renderScheduleSupportArtifactMeta(artifactContext);
 
     if (blockedList) {
@@ -13786,42 +13796,35 @@ function renderScheduleSupportRoundtripStatus() {
   }
   if (statusText) {
     statusText.textContent = sourceMissing
-      ? '현재 month/site 기준 Supervisor 원본 업로드가 아직 없습니다.'
+      ? '제출본 source가 아직 없습니다.'
       : [
-        `${selectedSite} · ${status.month || getScheduleMonthValue()}`,
-        artifactContext.revision ? `artifact ${artifactContext.revision.slice(0, 12)}` : 'artifact 준비',
-        mergeStale ? 'ARLS STEP 4 재업로드 필요' : (mergeAvailable ? '최근 HQ 제출 이력 있음' : 'HQ 작성본 업로드 대기'),
+        `${formatScheduleMonthTitle(status.month || getScheduleMonthValue())} · ${selectedSite}`,
+        mergeStale ? '재검토 필요' : (mergeAvailable ? '최근 제출 이력 있음' : '작성본 업로드 대기'),
       ].filter(Boolean).join(' · ');
   }
   if (sourceRevision) {
-    sourceRevision.textContent = String(status.source_revision || '').trim().slice(0, 12) || '없음';
+    sourceRevision.textContent = artifactContext.artifact_id ? '준비됨' : '없음';
   }
   if (sourceMeta) {
-    const metaBits = [];
-    if (status.source_filename) metaBits.push(String(status.source_filename).trim());
-    if (status.source_uploaded_by) metaBits.push(String(status.source_uploaded_by).trim());
-    if (status.source_uploaded_at) metaBits.push(formatOpsDateTime(status.source_uploaded_at));
-    sourceMeta.textContent = metaBits.filter(Boolean).join(' · ') || '원본 업로드 대기';
+    sourceMeta.textContent = status.source_uploaded_at
+      ? `최근 업로드 ${formatOpsDateTime(status.source_uploaded_at)}`
+      : '원본 업로드 대기';
   }
   if (mergeState) {
     mergeState.textContent = mergeStale ? '재검토 필요' : (mergeAvailable ? '제출 이력 있음' : '대기');
   }
   if (mergeMeta) {
-    const bits = [];
-    if (status.latest_hq_revision) bits.push(`Sentrix ${String(status.latest_hq_revision).slice(0, 12)}`);
-    if (status.latest_hq_uploaded_by) bits.push(String(status.latest_hq_uploaded_by).trim());
-    if (status.latest_hq_uploaded_at) bits.push(formatOpsDateTime(status.latest_hq_uploaded_at));
-    mergeMeta.textContent = bits.filter(Boolean).join(' · ') || (mergeAvailable ? '최근 HQ 작성본 제출 이력 확인됨' : 'HQ 작성본 제출 전');
+    mergeMeta.textContent = status.latest_hq_uploaded_at
+      ? `최근 제출 ${formatOpsDateTime(status.latest_hq_uploaded_at)}`
+      : (mergeAvailable ? '최근 제출 이력 확인' : 'HQ 작성본 제출 전');
   }
   if (assignmentCount) {
     assignmentCount.textContent = artifactContext.artifact_id ? '준비됨' : '미생성';
   }
   if (conflictMeta) {
-    conflictMeta.textContent = artifactContext.artifact_id
-      ? [artifactContext.revision ? `revision ${artifactContext.revision.slice(0, 12)}` : '', artifactContext.generated_at ? formatOpsDateTime(artifactContext.generated_at) : '']
-        .filter(Boolean)
-        .join(' · ') || '현재 source artifact 준비됨'
-      : '현재 source artifact 없음';
+    conflictMeta.textContent = artifactContext.generated_at
+      ? `생성 ${formatOpsDateTime(artifactContext.generated_at)}`
+      : (artifactContext.artifact_id ? '현재 기준 사용 가능' : '현재 기준 없음');
   }
   if (finalState) {
     finalState.textContent = 'ARLS STEP 4';
@@ -14441,8 +14444,16 @@ function setScheduleFinanceUI({
   const resultEl = $('#scheduleFinanceApplyResult');
   const applyBtn = $('#scheduleFinanceApplyBtn');
 
-  if (infoEl) infoEl.textContent = batchInfo;
-  if (resultEl) resultEl.textContent = applyResult;
+  if (infoEl instanceof HTMLElement) {
+    const normalizedInfo = String(batchInfo || '').trim();
+    infoEl.textContent = normalizedInfo;
+    infoEl.classList.toggle('hidden', !normalizedInfo);
+  }
+  if (resultEl instanceof HTMLElement) {
+    const normalizedResult = String(applyResult || '').trim();
+    resultEl.textContent = normalizedResult;
+    resultEl.classList.toggle('hidden', !normalizedResult);
+  }
   if (applyBtn) applyBtn.disabled = !canApply;
 
   if (issuesEl) {
@@ -14500,9 +14511,8 @@ function renderScheduleFinanceSubmissionStatus() {
   const selectedSite = getScheduleSupportSelectedSiteCode();
   const statePill = $('#scheduleFinanceStatePill');
   const statusText = $('#scheduleFinanceStatusText');
+  const statusGrid = $('#scheduleFinanceStatusGrid');
   const blockedList = $('#scheduleFinanceBlockedReasons');
-  const phaseLabel = $('#scheduleFinancePhaseLabel');
-  const phaseMeta = $('#scheduleFinancePhaseMeta');
   const reviewRevision = $('#scheduleFinanceReviewRevision');
   const reviewMeta = $('#scheduleFinanceReviewMeta');
   const finalUploadState = $('#scheduleFinanceFinalUploadState');
@@ -14513,20 +14523,20 @@ function renderScheduleFinanceSubmissionStatus() {
   const finalDownloadBtn = $('#scheduleFinanceFinalDownloadBtn');
   const previewBtn = $('#scheduleFinancePreviewBtn');
   const overallScope = selectedSite === 'ALL' || Boolean(status?.overall_scope);
+  const refreshedAt = formatOpsDateTime(state.reports?.lastSyncedAt || '');
+
+  if (statusGrid instanceof HTMLElement) {
+    statusGrid.classList.toggle('hidden', !selectedSite || !status);
+  }
 
   if (!selectedSite) {
-    if (statePill) {
-      statePill.className = 'status-pill status-pill-neutral';
-      statePill.textContent = '지점 선택 필요';
-    }
-    if (statusText) statusText.textContent = '업로드 지점을 선택하면 Finance 제출 단계와 다음 작업을 조회합니다.';
-    if (phaseLabel) phaseLabel.textContent = '확인 대기';
-    if (phaseMeta) phaseMeta.textContent = '지점 선택 후 확인';
-    if (reviewRevision) reviewRevision.textContent = '없음';
-    if (reviewMeta) reviewMeta.textContent = 'HQ 다운로드 전';
+    setReportsSummaryPill(statePill, '', 'status-pill status-pill-neutral');
+    setReportsSummaryMessage(statusText, '');
+    if (reviewRevision) reviewRevision.textContent = '대기';
+    if (reviewMeta) reviewMeta.textContent = '지점 선택 후 다운로드';
     if (finalUploadState) finalUploadState.textContent = '대기';
     if (finalUploadMeta) finalUploadMeta.textContent = 'Supervisor 업로드 전';
-    if (finalDownloadState) finalDownloadState.textContent = '비활성';
+    if (finalDownloadState) finalDownloadState.textContent = '잠금';
     if (finalDownloadMeta) finalDownloadMeta.textContent = '최종 업로드 후 활성화';
     if (reviewBtn) reviewBtn.disabled = true;
     if (finalDownloadBtn) finalDownloadBtn.disabled = true;
@@ -14540,11 +14550,8 @@ function renderScheduleFinanceSubmissionStatus() {
   }
 
   if (!status) {
-    if (statePill) {
-      statePill.className = 'status-pill status-pill-neutral';
-      statePill.textContent = '조회 중';
-    }
-    if (statusText) statusText.textContent = 'Finance 제출 상태를 조회하는 중입니다.';
+    setReportsSummaryPill(statePill, '조회 중', 'status-pill status-pill-neutral');
+    setReportsSummaryMessage(statusText, 'Finance 제출 상태를 조회하는 중입니다.');
     if (reviewBtn) reviewBtn.disabled = true;
     if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
@@ -14554,23 +14561,21 @@ function renderScheduleFinanceSubmissionStatus() {
 
   if (overallScope) {
     const canDownloadOverallReview = canDownloadScheduleFinanceReview();
-    if (statePill) {
-      statePill.className = canDownloadOverallReview ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral';
-      statePill.textContent = canDownloadOverallReview ? '전체 1차 다운로드' : '전체';
-    }
-    if (statusText) {
-      statusText.textContent = canDownloadOverallReview
-        ? '전체 선택에서는 사이트별 시트를 한 파일로 묶은 1차 확인본만 다운로드할 수 있습니다. 최종 업로드/최종본 다운로드는 지점별로 진행합니다.'
-        : 'Finance 제출/최종 업로드는 지점별 워크플로우입니다. 전체 선택 시 상태만 안내합니다.';
-    }
-    if (phaseLabel) phaseLabel.textContent = canDownloadOverallReview ? '전체 1차 다운로드' : '지점별 진행';
-    if (phaseMeta) phaseMeta.textContent = canDownloadOverallReview
-      ? '전체 선택 시 현장명 기준 여러 시트가 포함된 1차 확인본 workbook을 생성합니다.'
-      : 'Finance 보고는 전체 범위를 한 번에 처리하지 않습니다.';
-    if (reviewRevision) reviewRevision.textContent = canDownloadOverallReview ? 'ALL' : '-';
+    setReportsSummaryPill(
+      statePill,
+      canDownloadOverallReview ? '전체 1차 다운로드' : '전체 안내',
+      canDownloadOverallReview ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral',
+    );
+    setReportsSummaryMessage(
+      statusText,
+      canDownloadOverallReview
+        ? '전체 선택은 1차 확인본만 지원합니다.'
+        : '최종 업로드와 최종본 다운로드는 지점별로 진행합니다.',
+    );
+    if (reviewRevision) reviewRevision.textContent = canDownloadOverallReview ? '다운로드 가능' : '대기';
     if (reviewMeta) reviewMeta.textContent = canDownloadOverallReview
-      ? '전체 선택 시 사이트별 시트를 한 파일로 생성'
-      : '1차 확인본 다운로드 권한이 필요합니다.';
+      ? '전체 지점을 한 파일로 생성합니다.'
+      : '다운로드 권한이 필요합니다.';
     if (finalUploadState) finalUploadState.textContent = '잠금';
     if (finalUploadMeta) finalUploadMeta.textContent = '단일 지점을 선택해야 업로드할 수 있습니다.';
     if (finalDownloadState) finalDownloadState.textContent = '잠금';
@@ -14580,14 +14585,7 @@ function renderScheduleFinanceSubmissionStatus() {
     if (previewBtn) previewBtn.disabled = true;
     if (blockedList) {
       blockedList.innerHTML = '';
-      if (canDownloadOverallReview) {
-        blockedList.classList.remove('hidden');
-        const li = document.createElement('li');
-        li.textContent = '전체 선택에서는 1차 확인본 다운로드만 지원합니다. 최종 업로드와 최종본 다운로드는 단일 지점을 선택해 진행하세요.';
-        blockedList.appendChild(li);
-      } else {
-        blockedList.classList.add('hidden');
-      }
+      blockedList.classList.add('hidden');
     }
     renderScheduleFinanceProgress();
     return;
@@ -14597,52 +14595,47 @@ function renderScheduleFinanceSubmissionStatus() {
   const blockedReasons = Array.isArray(status.blocked_reasons) ? status.blocked_reasons.filter(Boolean) : [];
   const finalEnabled = Boolean(status.final_download_enabled) && !Boolean(status.final_upload_stale);
 
-  if (statePill) {
-    statePill.className = getScheduleFinanceStateClass(phase);
-    statePill.textContent = getScheduleFinanceStateLabel(phase);
-  }
-  if (statusText) {
-    statusText.textContent = [
-      `${selectedSite} · ${status.month || getScheduleMonthValue()}`,
-      status.final_upload_stale ? '최종본 재검토 필요' : '',
-      finalEnabled ? 'HQ 최종 다운로드 가능' : '',
-    ].filter(Boolean).join(' · ') || 'Finance 제출 상태를 확인하세요.';
-  }
-  if (phaseLabel) phaseLabel.textContent = getScheduleFinanceStateLabel(phase);
-  if (phaseMeta) {
-    phaseMeta.textContent = [
-      status.current_revision ? `assembled ${String(status.current_revision).slice(0, 12)}` : '',
-      status.last_event ? String(status.last_event).trim() : '',
-    ].filter(Boolean).join(' · ') || '현재 리비전 확인 대기';
-  }
+  setReportsSummaryPill(statePill, getScheduleFinanceStateLabel(phase), getScheduleFinanceStateClass(phase));
+  setReportsSummaryMessage(
+    statusText,
+    [
+      status.final_upload_stale ? '최종본 다시 확인 필요' : '',
+      refreshedAt ? `마지막 갱신 ${refreshedAt}` : '',
+    ].filter(Boolean).join(' · '),
+  );
   if (reviewRevision) {
-    reviewRevision.textContent = String(status.review_download_revision || '').slice(0, 12) || '없음';
+    reviewRevision.textContent = status.review_download_revision
+      ? '준비됨'
+      : (canDownloadScheduleFinanceReview() ? '다운로드 가능' : '대기');
   }
   if (reviewMeta) {
-    reviewMeta.textContent = [
-      status.review_download_filename ? String(status.review_download_filename).trim() : '',
-      status.review_downloaded_by ? String(status.review_downloaded_by).trim() : '',
-      status.review_downloaded_at ? formatOpsDateTime(status.review_downloaded_at) : '',
-    ].filter(Boolean).join(' · ') || 'HQ 다운로드 전';
+    reviewMeta.textContent = status.review_downloaded_at
+      ? `최근 다운로드 ${formatOpsDateTime(status.review_downloaded_at)}`
+      : '1차 확인본 다운로드';
   }
   if (finalUploadState) {
-    finalUploadState.textContent = status.final_uploaded_at ? '완료' : '대기';
+    if (status.final_uploaded_at && status.final_upload_stale) {
+      finalUploadState.textContent = '재업로드 필요';
+    } else if (status.final_uploaded_at) {
+      finalUploadState.textContent = '완료';
+    } else if (status.review_download_revision) {
+      finalUploadState.textContent = '업로드 대기';
+    } else {
+      finalUploadState.textContent = '대기';
+    }
   }
   if (finalUploadMeta) {
-    finalUploadMeta.textContent = [
-      status.active_final_filename ? String(status.active_final_filename).trim() : '',
-      status.final_uploaded_by ? String(status.final_uploaded_by).trim() : '',
-      status.final_uploaded_at ? formatOpsDateTime(status.final_uploaded_at) : '',
-      status.final_upload_stale ? 'stale' : '',
-    ].filter(Boolean).join(' · ') || 'Supervisor 업로드 전';
+    finalUploadMeta.textContent = status.final_uploaded_at
+      ? `${formatOpsDateTime(status.final_uploaded_at)}${status.final_upload_stale ? ' · 다시 업로드 필요' : ''}`
+      : '업로드 전';
   }
   if (finalDownloadState) {
-    finalDownloadState.textContent = finalEnabled ? '다운로드 가능' : '비활성';
+    finalDownloadState.textContent = finalEnabled ? '다운로드 가능' : '잠금';
   }
   if (finalDownloadMeta) {
     finalDownloadMeta.textContent = status.final_upload_stale
-      ? '최신 assembled truth 기준으로 다시 최종 업로드가 필요합니다.'
-      : (status.active_final_revision ? `최종 ${String(status.active_final_revision).slice(0, 12)}` : '최종 업로드 후 활성화');
+      ? '최신 기준으로 다시 업로드해야 합니다.'
+      : (finalEnabled ? '다운로드 가능' : '최종 업로드 후 활성화');
   }
 
   if (blockedList) {
@@ -14791,27 +14784,18 @@ async function onScheduleFinancePreview(progressController = null) {
     });
     state.schedule.financePreviewBatchId = String(result?.finance_batch_id || '').trim();
     state.schedule.financePreview = result;
-    const diffCounts = result?.diff_counts && typeof result.diff_counts === 'object'
-      ? Object.entries(result.diff_counts)
-        .filter(([, count]) => Number(count || 0) > 0)
-        .map(([code, count]) => `${code}:${count}`)
-        .join(', ')
-      : '';
-    const metadata = result?.metadata && typeof result.metadata === 'object' ? result.metadata : {};
     const blockedReasons = Array.isArray(result?.blocked_reasons) ? result.blocked_reasons.filter(Boolean) : [];
     setScheduleFinanceUI({
       batchInfo: [
         `요약: 전체 ${Number(result?.total_rows || 0)}건, 적용 가능 ${Number(result?.valid_rows || 0)}건, 차단 ${Number(result?.invalid_rows || 0)}건`,
-        diffCounts ? `변경(${diffCounts})` : '',
-        metadata.export_revision ? `원본 ${String(metadata.export_revision).slice(0, 12)}` : '',
-        metadata.is_stale ? '구버전 파일' : '',
+        result?.metadata?.is_stale ? '구버전 파일' : '',
       ].filter(Boolean).join(' · '),
       issues: blockedReasons,
       canApply: Boolean(result?.can_apply) && Boolean(result?.finance_batch_id),
       previewRows: result?.preview_rows || [],
       applyResult: blockedReasons.length
-        ? '차단 사유를 먼저 해결해야 최종 업로드를 반영할 수 있습니다.'
-        : 'diff를 확인한 뒤 "최종 업로드 반영"을 실행하세요.',
+        ? '차단 사유를 먼저 해결하세요.'
+        : '검토 후 반영을 실행하세요.',
       clearApplyDetails: true,
     });
     if (blockedReasons.length) {
@@ -16171,13 +16155,26 @@ function renderReminderSettings() {
     openSettingsBtn.disabled = !canEdit;
   }
   if (statusEl) {
-    statusEl.textContent = getReminderStatusMessage();
+    if (!available) {
+      statusEl.textContent = '현재 기기에서는 예약 알림을 지원하지 않습니다.';
+    } else if (denied) {
+      statusEl.textContent = '알림 권한이 꺼져 있습니다.';
+    } else if (granted) {
+      statusEl.textContent = enabled ? '예약 알림 사용 중' : '예약 알림이 꺼져 있습니다.';
+    } else {
+      statusEl.textContent = '알림 권한을 확인하세요.';
+    }
   }
   if (summaryEl) {
-    const syncedText = state.reminder.lastSyncedAt
-      ? ` · 마지막 동기화 ${new Date(state.reminder.lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`
-      : '';
-    summaryEl.textContent = `권한: ${getReminderPermissionLabel()} · 예약 ${state.reminder.scheduledCount}건${syncedText}`;
+    const summaryParts = [];
+    if (enabled) {
+      summaryParts.push(`예약 ${Number(state.reminder.scheduledCount || 0)}건`);
+    }
+    if (granted && state.reminder.lastSyncedAt) {
+      summaryParts.push(`동기화 ${new Date(state.reminder.lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`);
+    }
+    summaryEl.textContent = summaryParts.join(' · ');
+    summaryEl.classList.toggle('hidden', !summaryParts.length);
   }
   if (permissionPill) {
     permissionPill.className = 'status-pill status-pill-warn';
@@ -17423,8 +17420,6 @@ function normalizeReportsViewTab(value = '') {
   const available = getReportsAvailableTabs();
   if (tab === 'finance' && available.includes('finance')) return 'finance';
   if (tab === 'support' && available.includes('support')) return 'support';
-  if (tab === 'history' && available.includes('history')) return 'history';
-  if (tab === 'pack' && available.includes('pack')) return 'pack';
   return available[0] || 'finance';
 }
 
@@ -17451,19 +17446,14 @@ function setReportsViewTab(value = '', { syncRoute = false } = {}) {
   if (!syncRoute) return;
   const currentRoute = normalizeRoutePath(state.currentRoute || '');
   if (currentRoute !== ROUTE_REPORTS && currentRoute !== ROUTE_REPORTS_APPLE && currentRoute !== ROUTE_SCHEDULE_REPORTS) return;
-  const selectedPack = getSelectedReportsPack();
-  const base = next === 'pack' && selectedPack === 'apple' ? ROUTE_REPORTS_APPLE : ROUTE_REPORTS;
   const params = new URLSearchParams();
-  if (next === 'pack' && selectedPack !== 'apple') {
-    params.set('pack', selectedPack || 'default');
-  }
   if (next !== getDefaultReportsViewTab()) {
     params.set('tab', next);
   }
   const query = params.toString();
-  const routeWithQuery = query ? `${base}?${query}` : base;
-  state.currentRoute = base;
-  state.lastAllowedRoute = base;
+  const routeWithQuery = query ? `${ROUTE_REPORTS}?${query}` : ROUTE_REPORTS;
+  state.currentRoute = ROUTE_REPORTS;
+  state.lastAllowedRoute = ROUTE_REPORTS;
   updateRouteHash(routeWithQuery, { replace: true });
 }
 
@@ -17597,7 +17587,7 @@ function renderShellMode() {
   const homeSubtitle = $('#homeViewSubtitle');
   if (homeSubtitle) {
     homeSubtitle.textContent = managerMode
-      ? `${formatHomeHeaderDate(new Date())} 기준으로 오늘 먼저 확인할 위험과 바로 이동할 작업만 보여줍니다.`
+      ? '오늘 먼저 확인할 위험과 바로 이동할 작업만 보여줍니다.'
       : '오늘 근무와 진행 중 요청을 먼저 확인하고 필요한 작업은 각 탭에서 이어갑니다.';
   }
   const requestsTitle = $('#requestsViewTitle');
@@ -17611,8 +17601,8 @@ function renderShellMode() {
   const profileSubtitle = $('#profileViewSubtitle');
   if (profileSubtitle) {
     profileSubtitle.textContent = managerMode
-      ? '계정, 알림, 연동 프로필과 회사 설정을 관리합니다. 실행 상태와 로그는 운영에서 확인합니다.'
-      : '내 계정, 알림, 연동, 보안 설정을 관리합니다.';
+      ? '계정, 알림, 연동값을 관리합니다.'
+      : '내 계정과 알림 설정을 관리합니다.';
   }
 
   renderProfileWorkspaceSegments();
@@ -19567,14 +19557,7 @@ function applyOpsRouteStateFromQuery(routePath = '', parsedParams = new URLSearc
 function applyReportsRouteStateFromQuery(routePath = '', parsedParams = new URLSearchParams()) {
   const route = normalizeRoutePath(routePath);
   if (route !== ROUTE_REPORTS && route !== ROUTE_REPORTS_APPLE && route !== ROUTE_SCHEDULE_REPORTS) return;
-  if (route === ROUTE_REPORTS_APPLE) {
-    setSelectedReportsPack('apple');
-  } else {
-    setSelectedReportsPack(parsedParams.get('pack') || getSelectedReportsPack() || 'default');
-  }
-  const fallbackTab = route === ROUTE_REPORTS_APPLE
-    ? 'pack'
-    : (route === ROUTE_SCHEDULE_REPORTS ? 'finance' : getDefaultReportsViewTab());
+  const fallbackTab = route === ROUTE_SCHEDULE_REPORTS ? 'finance' : getDefaultReportsViewTab();
   setReportsViewTab(parsedParams.get('tab') || fallbackTab);
 }
 
@@ -19634,6 +19617,12 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
   const fallbackAuthedRoute = state.user ? resolvePostLoginDefaultRoute() : ROUTE_LOGIN;
   const requestedRoute = normalizeRoutePath(parsed.path) || fallbackAuthedRoute;
   let route = isKnownRoute(requestedRoute) ? requestedRoute : fallbackAuthedRoute;
+  if (route === ROUTE_REPORTS_APPLE) {
+    if (!parsedParams.get('tab')) {
+      parsedParams.set('tab', getDefaultReportsViewTab());
+    }
+    route = ROUTE_REPORTS;
+  }
   if (route === ROUTE_SCHEDULE_REPORTS) {
     if (!parsedParams.get('tab')) {
       parsedParams.set('tab', 'finance');
@@ -19701,14 +19690,6 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
     }
   }
 
-  if (route === ROUTE_REPORTS_APPLE && !isAppleReportPackEnabled()) {
-    updateRouteHash(ROUTE_REPORTS, { replace: true });
-    if (!silentDeniedModal) {
-      showToast('이 회사에 해당 보고서가 없습니다.', 'error', 3200);
-    }
-    return false;
-  }
-
   if (!isRouteAllowed(route, perms, navRole)) {
     const fallback = resolveFallbackRoute(perms, navRole);
     updateRouteHash(fallback, { replace: true });
@@ -19754,11 +19735,6 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
     setOpsViewTab(parsedParams.get('tab') || 'overview');
   }
 
-  if (route === ROUTE_REPORTS) {
-    setSelectedReportsPack(parsedParams.get('pack') || 'default');
-  } else if (route === ROUTE_REPORTS_APPLE) {
-    setSelectedReportsPack('apple');
-  }
   applyOpsRouteStateFromQuery(route, parsedParams);
   applyReportsRouteStateFromQuery(route, parsedParams);
   applyScheduleRouteStateFromQuery(route, parsedParams);
@@ -19791,8 +19767,8 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
     scrollToSelector('#lockPolicyCard');
   }
 
-  if (route === ROUTE_REPORTS || route === ROUTE_REPORTS_APPLE) {
-    scrollToSelector('#reportsPackList');
+  if (route === ROUTE_REPORTS) {
+    scrollToSelector('#view-reports');
   }
 
   if (FEATURE_SKELETON_ROUTES.has(route)) {
@@ -24440,6 +24416,7 @@ function renderDevTenantContextBar() {
     || savedUiTenant.activeTenantName
     || fallbackCode,
   ).trim();
+  const hasUsableFallbackTenant = Boolean(fallbackCode && fallbackCode !== 'MASTER');
   const now = Date.now();
   const retryAfter = Number(state.devAdmin.tenantContextHydrateRetryAfter || 0);
   const canRetryHydration = now >= retryAfter;
@@ -24462,7 +24439,9 @@ function renderDevTenantContextBar() {
       }
       select.disabled = true;
     });
-    if (!state.devAdmin.tenantContextHydrating && canRetryHydration) {
+    // If a usable tenant context is already selected, keep the bar stable and let
+    // owner screens explicitly hydrate the full catalog when they actually need it.
+    if (!state.devAdmin.tenantContextHydrating && canRetryHydration && !hasUsableFallbackTenant) {
       state.devAdmin.tenantContextHydrating = true;
       ensureDevTenantCatalog()
         .then((rows) => {
@@ -24539,7 +24518,40 @@ async function ensureDevTenantCatalog({
   const params = new URLSearchParams();
   if (includeInactive) params.set('include_inactive', 'true');
   if (includeDeleted) params.set('include_deleted', 'true');
-  const rows = await apiRequest(`/tenants${params.size ? `?${params.toString()}` : ''}`);
+  let rows = [];
+  try {
+    rows = await apiRequest(`/tenants${params.size ? `?${params.toString()}` : ''}`);
+  } catch (error) {
+    const activeContext = getActiveTenantContext();
+    const savedUiTenant = readUiActiveTenantFilterContext();
+    const fallbackCode = normalizeTenantCode(
+      activeContext.code && activeContext.code !== 'MASTER'
+        ? activeContext.code
+        : savedUiTenant.activeTenantCode,
+    );
+    const fallbackId = String(
+      state.devAdmin.selectedTenantId
+      || savedUiTenant.activeTenantId
+      || '',
+    ).trim();
+    const fallbackName = String(
+      activeContext.name
+      || state.devAdmin.selectedTenantName
+      || savedUiTenant.activeTenantName
+      || fallbackCode,
+    ).trim();
+    if (!fallbackCode || fallbackCode === 'MASTER') {
+      throw error;
+    }
+    rows = [{
+      id: fallbackId,
+      tenant_code: fallbackCode,
+      tenant_name: fallbackName || fallbackCode,
+      is_active: true,
+      is_deleted: false,
+      __fallbackOnly: true,
+    }];
+  }
   state.devAdmin.tenants = Array.isArray(rows)
     ? rows.map((row, index) => ({ ...row, __sourceIndex: index }))
     : [];
@@ -25720,7 +25732,7 @@ function getDesktopGlobalSearchItems() {
     items.splice(2, 0, { label: '지원근무자 현황', route: ROUTE_SUPPORT_STATUS, hint: '지원 배정 현황', keywords: ['지원근무', '지원근무자', 'support', '주간', '야간', 'sentrix'] });
     items.splice(7, 0,
       { label: 'Excel 업로드', route: ROUTE_SCHEDULE_UPLOAD, hint: '근무표 업로드', keywords: ['엑셀', '업로드', '근무표', 'wizard'] },
-      { label: '보고', route: ROUTE_REPORTS, hint: 'Finance 제출 / 지원근무 전달 / 전용 팩', keywords: ['보고', 'finance', '제출', 'handoff', 'apple', 'history'] },
+      { label: '보고', route: ROUTE_REPORTS, hint: 'Finance 제출 / 지원근무 전달', keywords: ['보고', 'finance', '제출', 'handoff', '지원근무'] },
     );
     items.push(
       { label: '조직', route: ROUTE_ADMIN_EMPLOYEES, hint: '직원/지점 운영', keywords: ['조직', '직원', '지점', '현장'] },
@@ -27117,8 +27129,6 @@ function applyWriteAccessUI(perms) {
   toggleVisibility('#googleSheetExecutionCard', integrationManage);
   toggleVisibility('#googleSheetFailureLogCard', integrationManage);
   toggleVisibility('#socMonitorCard', integrationManage);
-  toggleVisibility('#opsSheetsExecutionSection', integrationManage);
-  toggleVisibility('#opsSocMonitorSection', integrationManage);
   if (integrationManage) {
     applyIntegrationTenantFieldState();
     renderIntegrationFlags();
@@ -30932,7 +30942,8 @@ const VIEW_PRESENTERS = {
     loadingMessage: '보고 데이터를 불러오는 중입니다...',
     errorMessage: '보고 데이터를 불러오지 못했습니다.',
     onCacheHit: () => {
-      renderReportsAppleCard();
+      renderReportsScopeHint();
+      renderScheduleFinanceSubmissionStatus();
       renderReportsSupportHandoffPanel();
       renderReportsWorkspacePanels();
     },
@@ -32442,6 +32453,11 @@ function createEmployeeDirectorySection(title = '', bodyNode = null) {
   return section;
 }
 
+function isEmployeeDirectoryMeaningfulValue(value = '') {
+  const text = String(value ?? '').trim();
+  return Boolean(text && text !== '-' && text !== '없음');
+}
+
 function buildEmployeeDirectorySummaryGrid(items = []) {
   const grid = document.createElement('div');
   grid.className = 'profile-grid';
@@ -32518,6 +32534,9 @@ function buildEmployeeDirectoryFactGrid(items = []) {
     if (!label || !value) return;
     const cell = document.createElement('div');
     cell.className = 'employee-directory-fact-card';
+    if (String(item?.className || '').trim()) {
+      cell.classList.add(...String(item.className).trim().split(/\s+/));
+    }
     const labelEl = document.createElement('span');
     labelEl.textContent = label;
     const valueEl = document.createElement('strong');
@@ -32526,6 +32545,25 @@ function buildEmployeeDirectoryFactGrid(items = []) {
     grid.appendChild(cell);
   });
   return grid;
+}
+
+function buildEmployeeDirectoryHeaderMeta(items = []) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'employee-directory-drawer-meta-grid';
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const label = String(item?.label || '').trim();
+    const value = String(item?.value || '').trim();
+    if (!label || !value) return;
+    const cell = document.createElement('div');
+    cell.className = 'employee-directory-drawer-meta-item';
+    const labelEl = document.createElement('span');
+    labelEl.textContent = label;
+    const valueEl = document.createElement('strong');
+    valueEl.textContent = value;
+    cell.append(labelEl, valueEl);
+    wrapper.appendChild(cell);
+  });
+  return wrapper;
 }
 
 function normalizeEmployeeDrawerMetric(metric = null) {
@@ -32764,8 +32802,12 @@ function getEmployeeDirectoryHeaderPayload(detail = null) {
   const companyName = String(header.company_name || resolveEmployeeCompanyDisplayName(employee)).trim();
   const siteName = String(header.site_name || getEmployeeSiteDisplayLabel(employee)).trim();
   const siteCode = String(header.site_code || employee.site_code || '').trim();
+  const siteDisplay = siteCode && siteName && siteCode !== siteName
+    ? `${siteName} (${siteCode})`
+    : siteName || siteCode;
   const subtitle = String(header.subtitle || '').trim()
-    || [siteName, roleDisplay, employmentStatus].filter(Boolean).join(' · ');
+    || siteDisplay
+    || [employmentStatus || roleDisplay].filter(Boolean).join(' · ');
   return {
     employee_id: String(header.employee_id || employee.id || '').trim(),
     employee_name: String(header.employee_name || employee.full_name || employeeNumber || '직원 상세').trim() || '직원 상세',
@@ -32776,6 +32818,7 @@ function getEmployeeDirectoryHeaderPayload(detail = null) {
     company_name: companyName,
     site_name: siteName,
     site_code: siteCode,
+    site_display: siteDisplay,
     hire_date: header.hire_date || employee.hire_date || '',
     leave_date: header.leave_date || employee.leave_date || '',
     account_link_status: String(header.account_link_status || getEmployeeAccountLinkageMeta(employee).label || '').trim(),
@@ -32794,26 +32837,56 @@ function getEmployeeDrawerShiftKindLabel(shiftKind = '') {
 }
 
 function buildEmployeeDirectoryWorkforceFacts(header = {}, workforceInfo = {}) {
-  return buildEmployeeDirectoryFactGrid([
-    { label: '회사', value: String(workforceInfo.company_name || header.company_name || '').trim() || '-' },
-    { label: '지점', value: String(workforceInfo.site_name || header.site_name || '').trim() || '-' },
-    { label: '직원번호', value: String(workforceInfo.employee_number || header.employee_number || '').trim() || '-' },
-    { label: '관리번호', value: String(workforceInfo.manager_or_admin_number || header.manager_or_admin_number || '').trim() || '-' },
-    { label: '역할', value: String(workforceInfo.role_display || header.role_display || '').trim() || '-' },
-    { label: '재직상태', value: String(workforceInfo.employment_status || header.employment_status || '').trim() || '-' },
-    { label: '계정 연동', value: String(workforceInfo.account_link_status || header.account_link_status || '').trim() || '-' },
-    { label: '입사일', value: formatDateLabel(workforceInfo.hire_date || header.hire_date, '-') },
-    { label: '퇴직일', value: formatDateLabel(workforceInfo.leave_date || header.leave_date, '-') },
-    { label: '연락처', value: String(workforceInfo.phone || header.phone || '').trim() || '-' },
-  ]);
+  const items = [
+    { label: '직원번호', value: String(workforceInfo.employee_number || header.employee_number || '').trim() },
+    { label: '관리번호', value: String(workforceInfo.manager_or_admin_number || header.manager_or_admin_number || '').trim() },
+    { label: '연락처', value: String(workforceInfo.phone || header.phone || '').trim() },
+    { label: '입사일', value: formatDateLabel(workforceInfo.hire_date || header.hire_date, '') },
+    { label: '퇴직일', value: formatDateLabel(workforceInfo.leave_date || header.leave_date, '') },
+  ].filter((item) => isEmployeeDirectoryMeaningfulValue(item.value));
+  if (!items.length) {
+    return buildEmployeeDirectoryCompactEmpty('표시할 인사 정보가 없습니다.', '');
+  }
+  return buildEmployeeDirectoryFactGrid(items);
 }
 
-function buildEmployeeDirectoryActivityCard(title = '', bodyNode = null) {
+function buildEmployeeDirectoryAccountFacts(detail = null, header = {}) {
+  const employee = detail?.employee || {};
+  const overview = detail?.overview && typeof detail.overview === 'object' ? detail.overview : {};
+  const workforceInfo = overview?.workforce_info && typeof overview.workforce_info === 'object' ? overview.workforce_info : {};
+  const accountStatus = String(workforceInfo.account_link_status || header.account_link_status || getEmployeeAccountLinkageMeta(employee).label || '').trim();
+  const loginId = String(employee?.soc_login_id || employee?.username || '').trim();
+  const roleLabel = String(employee?.user_role || employee?.soc_role ? getRoleDisplayLabel(employee?.user_role || employee?.soc_role) : '').trim();
+  const items = [
+    {
+      label: '연동 상태',
+      value: accountStatus,
+      className: accountStatus === '연결됨' ? 'is-success' : 'is-unavailable',
+    },
+    { label: '로그인 ID', value: loginId },
+    { label: '권한', value: roleLabel && roleLabel !== '계정 미연결' ? roleLabel : '' },
+  ].filter((item) => isEmployeeDirectoryMeaningfulValue(item.value));
+  if (!items.length) {
+    return buildEmployeeDirectoryCompactEmpty('연결된 계정이 없습니다.', '계정이 연결되면 로그인 ID와 상태가 표시됩니다.');
+  }
+  return buildEmployeeDirectoryFactGrid(items);
+}
+
+function buildEmployeeDirectoryActivityGroup(title = '', bodyNode = null, meta = '') {
   const section = document.createElement('section');
-  section.className = 'employee-directory-activity-card';
+  section.className = 'employee-directory-activity-group';
+  const head = document.createElement('div');
+  head.className = 'employee-directory-activity-group-head';
   const heading = document.createElement('h5');
   heading.textContent = title;
-  section.appendChild(heading);
+  head.appendChild(heading);
+  if (String(meta || '').trim()) {
+    const metaEl = document.createElement('span');
+    metaEl.className = 'employee-directory-activity-group-meta';
+    metaEl.textContent = String(meta).trim();
+    head.appendChild(metaEl);
+  }
+  section.appendChild(head);
   if (bodyNode instanceof Node) section.appendChild(bodyNode);
   return section;
 }
@@ -32891,39 +32964,52 @@ function renderEmployeeDirectoryHeader(detail = null) {
 
   if (!detail) {
     titleEl.textContent = '직원을 선택해 주세요';
-    subtitleEl.textContent = '목록에서 직원을 클릭하면 직원 개요와 최근 상태를 확인할 수 있습니다.';
+    subtitleEl.textContent = '직원을 고르면 핵심 상태가 열립니다.';
     eyebrowEl.textContent = '직원 선택';
     if (badgesEl) badgesEl.innerHTML = '';
-    if (metaEl) metaEl.textContent = '';
+    if (metaEl) {
+      metaEl.innerHTML = '';
+      metaEl.classList.add('hidden');
+    }
     if (avatarEl) avatarEl.textContent = '직';
     return;
   }
 
   const header = getEmployeeDirectoryHeaderPayload(detail);
   titleEl.textContent = header.employee_name;
-  subtitleEl.textContent = header.subtitle || '기본 인사 정보와 최근 운영 상태를 확인할 수 있습니다.';
-  eyebrowEl.textContent = [
-    header.employee_number ? `직원번호 ${header.employee_number}` : '',
-    header.manager_or_admin_number ? `관리번호 ${header.manager_or_admin_number}` : '',
-  ].filter(Boolean).join(' · ') || '직원 상세';
+  subtitleEl.textContent = header.subtitle || '선택한 직원의 상태를 확인합니다.';
+  eyebrowEl.textContent = header.company_name || '직원 상세';
   if (metaEl) {
-    metaEl.textContent = [
-      header.hire_date ? `입사 ${formatDateLabel(header.hire_date, '-')}` : '',
-      header.leave_date ? `퇴직 ${formatDateLabel(header.leave_date, '-')}` : '',
-      header.account_link_status ? `계정 ${header.account_link_status}` : '',
-      header.phone ? `연락처 ${header.phone}` : '',
-    ].filter(Boolean).join(' · ');
+    metaEl.innerHTML = '';
+    const metaItems = [
+      { label: '직원번호', value: header.employee_number },
+      { label: '관리번호', value: header.manager_or_admin_number },
+      { label: '연락처', value: header.phone },
+      { label: '입사일', value: formatDateLabel(header.hire_date, '') },
+    ].filter((item) => isEmployeeDirectoryMeaningfulValue(item.value));
+    metaEl.classList.toggle('hidden', metaItems.length === 0);
+    if (metaItems.length) {
+      metaEl.appendChild(buildEmployeeDirectoryHeaderMeta(metaItems));
+    }
   }
   if (avatarEl) avatarEl.textContent = header.avatar_initials || getEmployeeDirectoryAvatarToken(detail?.employee || {});
   if (badgesEl) {
     badgesEl.innerHTML = '';
-    badgesEl.append(
-      buildEmployeeDirectoryBadge(header.role_display || '직원', 'status-pill status-pill-neutral'),
-      buildEmployeeDirectoryBadge(
-        header.employment_status || '상태',
-        getEmployeeDrawerStatusBadge(header.employment_status, { fallback: '상태' }).className,
-      ),
-    );
+    const badgeNodes = [];
+    if (header.role_display && header.role_display !== '계정 미연결') {
+      badgeNodes.push(buildEmployeeDirectoryBadge(header.role_display, 'status-pill status-pill-neutral'));
+    }
+    badgeNodes.push(buildEmployeeDirectoryBadge(
+      header.employment_status || '상태',
+      getEmployeeDrawerStatusBadge(header.employment_status, { fallback: '상태' }).className,
+    ));
+    if (isEmployeeDirectoryMeaningfulValue(header.account_link_status)) {
+      badgeNodes.push(buildEmployeeDirectoryBadge(
+        header.account_link_status,
+        getEmployeeDrawerStatusBadge(header.account_link_status, { fallback: '계정' }).className,
+      ));
+    }
+    badgesEl.append(...badgeNodes);
   }
 }
 
@@ -32932,53 +33018,56 @@ function buildEmployeeDirectoryOverviewTab(detail = null) {
   const header = getEmployeeDirectoryHeaderPayload(detail);
   const workforceInfo = overview?.workforce_info && typeof overview.workforce_info === 'object' ? overview.workforce_info : {};
   const kpis = [
-    { label: '이번달 출퇴근 예외', metric: overview?.monthly_attendance_exception_count, meta: '지각/누락 포함', tone: 'warn' },
-    { label: '다음 일정', metric: overview?.next_schedule_summary, meta: '가장 가까운 배정', tone: 'accent' },
-    { label: '연차 잔여', metric: overview?.annual_leave_remaining_days, meta: '사용 가능', tone: 'success' },
-    { label: '요청 대기', metric: overview?.pending_request_count, meta: '미처리 요청', tone: 'accent' },
-  ];
+    { label: '출퇴근 예외', metric: overview?.monthly_attendance_exception_count, tone: 'warn' },
+    { label: '다음 일정', metric: overview?.next_schedule_summary, tone: 'accent' },
+    { label: '연차 잔여', metric: overview?.annual_leave_remaining_days, tone: 'success' },
+    { label: '요청 대기', metric: overview?.pending_request_count, tone: 'accent' },
+  ].filter((item) => normalizeEmployeeDrawerMetric(item.metric).state !== 'empty');
   const recentAttendance = buildEmployeeDirectoryAttendanceFeedItems(overview?.recent_attendance_preview || []);
   const recentRequests = buildEmployeeDirectoryRequestFeedItems(overview?.recent_request_preview || []);
   const upcomingSchedules = buildEmployeeDirectoryScheduleFeedItems(overview?.upcoming_schedule_preview || []);
   const fragment = document.createDocumentFragment();
 
-  if (hasEmployeeDirectoryMeaningfulSummary(kpis) || recentAttendance.length || recentRequests.length || upcomingSchedules.length) {
-    fragment.appendChild(createEmployeeDirectorySection('현재 상태', buildEmployeeDirectoryKpiGrid(kpis)));
+  if (kpis.length) {
+    fragment.appendChild(createEmployeeDirectorySection('핵심 상태', buildEmployeeDirectoryKpiGrid(kpis)));
   } else {
     fragment.appendChild(createEmployeeDirectorySection(
-      '현재 상태',
-      buildEmployeeDirectoryCompactEmpty('표시할 운영 요약이 없습니다.', '최근 출퇴근, 일정, 요청 데이터가 아직 없습니다.'),
+      '핵심 상태',
+      buildEmployeeDirectoryCompactEmpty('표시할 상태가 없습니다.', '최근 출퇴근, 일정, 요청 데이터가 아직 없습니다.'),
     ));
   }
 
   fragment.appendChild(createEmployeeDirectorySection('기본 정보', buildEmployeeDirectoryWorkforceFacts(header, workforceInfo)));
+  fragment.appendChild(createEmployeeDirectorySection('계정 연결', buildEmployeeDirectoryAccountFacts(detail, header)));
 
-  const activityGrid = document.createElement('div');
-  activityGrid.className = 'employee-directory-activity-grid';
-  activityGrid.append(
-    buildEmployeeDirectoryActivityCard(
-      '최근 출퇴근 3건',
-      buildEmployeeDirectoryFeed(recentAttendance.slice(0, 3), {
-        emptyTitle: '최근 출퇴근 기록이 없습니다.',
-        emptyDescription: '최근 3건 기준 표시할 출퇴근 기록이 없습니다.',
-      }),
-    ),
-    buildEmployeeDirectoryActivityCard(
-      '최근 요청 3건',
-      buildEmployeeDirectoryFeed(recentRequests.slice(0, 3), {
-        emptyTitle: '최근 요청이 없습니다.',
-        emptyDescription: '최근 요청 3건을 표시할 수 없습니다.',
-      }),
-    ),
-    buildEmployeeDirectoryActivityCard(
-      '다가오는 일정 3건',
-      buildEmployeeDirectoryFeed(upcomingSchedules.slice(0, 3), {
-        emptyTitle: '다가오는 일정이 없습니다.',
-        emptyDescription: '표시할 예정 일정이 없습니다.',
-      }),
-    ),
-  );
-  fragment.appendChild(createEmployeeDirectorySection('최근 상태 / 최근 활동', activityGrid));
+  const activityGroups = [];
+  if (recentAttendance.length) {
+    activityGroups.push(buildEmployeeDirectoryActivityGroup(
+      '최근 출퇴근',
+      buildEmployeeDirectoryFeed(recentAttendance.slice(0, 3)),
+      `${Math.min(recentAttendance.length, 3)}건`,
+    ));
+  }
+  if (recentRequests.length) {
+    activityGroups.push(buildEmployeeDirectoryActivityGroup(
+      '최근 요청',
+      buildEmployeeDirectoryFeed(recentRequests.slice(0, 3)),
+      `${Math.min(recentRequests.length, 3)}건`,
+    ));
+  }
+  if (upcomingSchedules.length) {
+    activityGroups.push(buildEmployeeDirectoryActivityGroup(
+      '다가오는 일정',
+      buildEmployeeDirectoryFeed(upcomingSchedules.slice(0, 3)),
+      `${Math.min(upcomingSchedules.length, 3)}건`,
+    ));
+  }
+  if (activityGroups.length) {
+    const activityStack = document.createElement('div');
+    activityStack.className = 'employee-directory-activity-stack';
+    activityStack.append(...activityGroups);
+    fragment.appendChild(createEmployeeDirectorySection('최근 흐름', activityStack));
+  }
   return fragment;
 }
 
@@ -37837,19 +37926,19 @@ function renderAttendanceSummary(summary = null) {
   siteEl.textContent = summary.siteLabel || '-';
 
   if (summary.statusCode === 'missing_in') {
-    hintEl.textContent = '출근 기록이 누락되었습니다. 정정 요청을 통해 보정하세요.';
+    hintEl.textContent = '출근 기록이 누락되었습니다. 요청에서 정정할 수 있습니다.';
   } else if (summary.statusCode === 'missing_out') {
-    hintEl.textContent = '퇴근 기록이 누락되었습니다. 정정 요청을 통해 보정하세요.';
+    hintEl.textContent = '퇴근 기록이 누락되었습니다. 요청에서 정정할 수 있습니다.';
   } else if (summary.statusCode === 'exception') {
-    hintEl.textContent = '예외 출근 승인 기록이 포함되어 있습니다.';
+    hintEl.textContent = '예외 승인 기록이 포함되어 있습니다.';
   } else if (summary.statusCode === 'leave') {
-    hintEl.textContent = '휴가 승인으로 휴무 처리된 일자입니다.';
+    hintEl.textContent = '휴가 승인으로 처리된 일자입니다.';
   } else if (summary.statusCode === 'empty') {
     hintEl.textContent = '선택한 날짜의 출퇴근 기록이 없습니다.';
   } else if (summary.statusCode === 'duplicate') {
-    hintEl.textContent = '중복 출퇴근 기록이 감지되었습니다. 정정 요청을 검토해 주세요.';
+    hintEl.textContent = '중복 기록이 감지되었습니다. 요청 이력을 확인하세요.';
   } else {
-    hintEl.textContent = '출퇴근 기록이 정상적으로 확인되었습니다.';
+    hintEl.textContent = '출퇴근 기록이 정상적으로 반영되었습니다.';
   }
 
   toggleVisibility('#attendanceMissingBtn', Boolean(summary.showMissingAction));
@@ -37888,7 +37977,7 @@ function renderAttendanceTimeline(timelineRows = [], { loading = false, errorMes
     return;
   }
 
-  hintEl.textContent = '출근/퇴근/OT/휴무 이벤트를 시간순으로 표시합니다.';
+  hintEl.textContent = '출근, 퇴근, OT, 휴무 이벤트를 시간순으로 보여줍니다.';
   rows.forEach((row, index) => {
     const rowNode = createListRow({
       title: row.title,
@@ -38726,7 +38815,6 @@ function renderAttendanceManagerKpiStrip(summary = null) {
     { label: '지각', value: counts.late, filter: 'late', tone: 'warn' },
     { label: '미출근', value: counts.missingIn, filter: 'missing_in', tone: 'danger' },
     { label: '미퇴근', value: counts.missingOut, filter: 'missing_out', tone: 'warn' },
-    { label: '휴가/외근', value: counts.leaveOutside, filter: 'leave', tone: 'neutral' },
     { label: '정정대기', value: counts.correctionPending, filter: 'correction_pending', tone: 'warn' },
   ];
   items.forEach((item) => {
@@ -38750,25 +38838,18 @@ function renderAttendanceManagerExceptions(rows = [], { loading = false } = {}) 
   const countPill = $('#attendanceExceptionCountPill');
   const overflowMeta = $('#attendanceExceptionOverflowMeta');
   const hintEl = $('#attendanceExceptionHint');
-  const helpButton = $('#attendanceExceptionHelpButton');
-  const helpPopover = $('#attendanceExceptionHelpPopover');
   if (!(listEl instanceof HTMLElement) || !(countPill instanceof HTMLElement)) return;
   clearList(listEl);
   if (overflowMeta instanceof HTMLElement) {
     overflowMeta.textContent = '';
     overflowMeta.classList.add('hidden');
   }
-  if (helpPopover instanceof HTMLElement) {
-    helpPopover.textContent = getAttendanceExceptionHelpText();
-  }
-  if (helpButton instanceof HTMLButtonElement || helpPopover instanceof HTMLElement) {
-    setAttendanceExceptionHelpOpen(false);
-  }
   if (loading) {
     countPill.className = 'status-pill status-pill-neutral';
     countPill.textContent = '조회 중';
     if (hintEl instanceof HTMLElement) {
       hintEl.textContent = '현재 범위의 예외를 확인하는 중입니다.';
+      hintEl.classList.remove('hidden');
     }
     renderSkeleton(listEl, 2);
     return;
@@ -38779,7 +38860,8 @@ function renderAttendanceManagerExceptions(rows = [], { loading = false } = {}) 
   countPill.className = list.length ? 'status-pill status-pill-warn' : 'status-pill status-pill-success';
   countPill.textContent = `${list.length}건`;
   if (hintEl instanceof HTMLElement) {
-    hintEl.textContent = `현재 기간·현장·직원·검색 범위에서 상태 필터와 무관하게 우선 검토 예외를 최대 ${ATTENDANCE_EXCEPTION_PREVIEW_LIMIT}건 먼저 보여줍니다.`;
+    hintEl.textContent = '';
+    hintEl.classList.add('hidden');
   }
   if (!list.length) {
     renderAttendanceCompactEmpty(listEl, '우선 검토 예외 없음', '현재 범위에서는 바로 확인할 예외가 없습니다.');
@@ -38825,7 +38907,7 @@ function renderAttendanceManagerDetail(row = null) {
     content.innerHTML = `
       <div class="attendance-detail-empty">
         <div class="attendance-compact-empty-title">기록을 선택하세요</div>
-        <div class="attendance-compact-empty-description">기록 리스트에서 대상을 선택하면 처리 패널이 열립니다.</div>
+        <div class="attendance-compact-empty-description">예외 큐 또는 기록 리스트에서 대상을 선택하면 상세 패널이 열립니다.</div>
       </div>
     `;
     return;
@@ -38834,30 +38916,49 @@ function renderAttendanceManagerDetail(row = null) {
   const requestSummary = Number(row.pendingCount || 0) > 0
     ? `대기 ${row.pendingCount}건`
     : '요청 없음';
-  const reviewHistory = [];
-  row.pendingRequests.forEach((item) => {
-    reviewHistory.push(`예외 요청 · ${formatAttendanceRequestReason(item.reason_code)} · ${toRequestDateLabel(item.requested_at)}`);
-  });
-  row.pendingCorrections.forEach((item) => {
-    reviewHistory.push(`정정 요청 · ${normalizeCorrectionTypeLabel(item.correctionType)} · ${item.workDate || '-'}`);
-  });
+  const reviewPoints = [];
+  if (row.pendingCount > 0) reviewPoints.push(`${requestSummary} · 요청 우선 확인`);
+  if (row.hasMissingIn) reviewPoints.push('출근 기록이 누락되어 확인이 필요합니다.');
+  if (row.hasMissingOut) reviewPoints.push('퇴근 기록이 누락되어 확인이 필요합니다.');
+  if (row.hasAttendanceWithoutSchedule) reviewPoints.push('스케줄 없이 기록만 있어 배정을 확인해야 합니다.');
+  if (row.hasLocationIssue) reviewPoints.push(`${row.distanceLabel} · 위치 검토가 필요합니다.`);
+  if (row.hasLate) reviewPoints.push(`${row.lateMinutesLabel} 지연되었습니다.`);
+  if (!reviewPoints.length) reviewPoints.push('현재 범위에서 바로 조치할 예외는 없습니다.');
   content.innerHTML = `
-    <div class="attendance-admin-detail-grid">
-      <div><span>직원</span><strong>${row.employeeName} (${row.employeeCode})</strong></div>
-      <div><span>날짜</span><strong>${row.dateLabel}</strong></div>
-      <div><span>상태</span><strong>${row.statusLabel}</strong></div>
-      <div><span>회사</span><strong>${row.companyName}</strong></div>
-      <div><span>예정 근무</span><strong>${row.scheduledLabel || '스케줄 없음'}</strong></div>
-      <div><span>출근/퇴근</span><strong>${row.checkInLabel} / ${row.checkOutLabel}</strong></div>
-      <div><span>근무시간</span><strong>${row.workHours}</strong></div>
-      <div><span>지각</span><strong>${row.lateMinutesLabel}</strong></div>
-      <div><span>OT</span><strong>${row.overtimeLabel}</strong></div>
-      <div><span>근무지</span><strong>${row.siteName}</strong></div>
-      <div><span>거리/위치</span><strong>${row.distanceLabel}</strong></div>
-      <div><span>요청 이력</span><strong>${requestSummary}</strong></div>
-      <div><span>검토 상태</span><strong>${row.processingState}</strong></div>
-      <div><span>정정 가능</span><strong>${can('attendanceWrite') ? '가능' : '읽기 전용'}</strong></div>
-      <div class="attendance-admin-detail-span-full"><span>메모/사유</span><strong>${reviewHistory.length ? reviewHistory.join(' · ') : '등록된 메모 없음'}</strong></div>
+    <div class="attendance-admin-detail-stack">
+      <section class="attendance-admin-detail-section-card">
+        <div class="attendance-admin-detail-section-head">
+          <h4>요약</h4>
+          <span class="${row.statusMeta.className}">${row.statusLabel}</span>
+        </div>
+        <div class="attendance-admin-detail-grid">
+          <div><span>직원</span><strong>${row.employeeName} (${row.employeeCode})</strong></div>
+          <div><span>날짜</span><strong>${row.dateLabel}</strong></div>
+          <div><span>현장</span><strong>${row.siteName}</strong></div>
+          <div><span>예정 근무</span><strong>${row.scheduledLabel || '스케줄 없음'}</strong></div>
+          <div><span>출근/퇴근</span><strong>${row.checkInLabel} / ${row.checkOutLabel}</strong></div>
+          <div><span>관련 요청</span><strong>${requestSummary}</strong></div>
+        </div>
+      </section>
+      <section class="attendance-admin-detail-section-card">
+        <div class="attendance-admin-detail-section-head">
+          <h4>판별 포인트</h4>
+        </div>
+        <ul class="attendance-admin-detail-list">
+          ${reviewPoints.map((item) => `<li>${item}</li>`).join('')}
+        </ul>
+      </section>
+      <section class="attendance-admin-detail-section-card">
+        <div class="attendance-admin-detail-section-head">
+          <h4>근무 / 위치</h4>
+        </div>
+        <div class="attendance-admin-detail-grid attendance-admin-detail-grid-secondary">
+          <div><span>근무시간</span><strong>${row.workHours}</strong></div>
+          <div><span>지각</span><strong>${row.lateMinutesLabel}</strong></div>
+          <div><span>OT</span><strong>${row.overtimeLabel}</strong></div>
+          <div><span>거리/위치</span><strong>${row.distanceLabel}</strong></div>
+        </div>
+      </section>
     </div>
   `;
 
@@ -38873,17 +38974,12 @@ function renderAttendanceManagerDetail(row = null) {
     actions.appendChild(button);
   };
 
-  const pendingAttendanceRequest = row.pendingRequests[0] || null;
-  const pendingCorrection = row.pendingCorrections[0] || null;
-  if (pendingAttendanceRequest && can('attendanceReview')) {
-    appendAction({ label: '예외 승인', variant: 'btn-primary', action: 'attendance-request-approve', dataset: { requestId: pendingAttendanceRequest.id } });
-    appendAction({ label: '반려', variant: 'btn-destructive', action: 'attendance-request-reject-sheet', dataset: { requestId: pendingAttendanceRequest.id } });
+  if (row.pendingCount > 0) {
+    appendAction({ label: '관련 요청 보기', variant: 'btn-primary', action: 'attendance-open-related-request', dataset: { recordKey: row.key } });
+    appendAction({ label: '요청·승인으로 이동', variant: 'btn-secondary', action: 'attendance-go-correction' });
+  } else {
+    appendAction({ label: '요청·승인으로 이동', variant: 'btn-primary', action: 'attendance-go-correction' });
   }
-  if (pendingCorrection && can('attendanceReview')) {
-    appendAction({ label: '정정 승인', variant: 'btn-primary', action: 'attendance-correction-approve', dataset: { requestId: pendingCorrection.id } });
-    appendAction({ label: '반려', variant: 'btn-destructive', action: 'attendance-correction-reject', dataset: { requestId: pendingCorrection.id } });
-  }
-  appendAction({ label: '관련 요청으로 이동', variant: 'btn-secondary', action: 'attendance-open-related-request', dataset: { recordKey: row.key } });
   actions.classList.toggle('hidden', !actions.children.length);
 }
 
@@ -38896,10 +38992,28 @@ function renderAttendanceSupportSections(row = null) {
   clearList(requestList);
   clearList(logList);
   if (!row) {
+    renderAttendanceCompactEmpty(requestList, '관련 요청 없음', '기록 선택 후 연결된 요청을 확인할 수 있습니다.');
     renderAttendanceCompactEmpty(timelineList, '타임라인 없음', '기록 선택 후 확인할 수 있습니다.');
-    renderAttendanceCompactEmpty(requestList, '요청 이력 없음', '선택한 기록의 요청 내역이 여기에 표시됩니다.');
-    renderAttendanceCompactEmpty(logList, '수정 로그 없음', '선택한 기록의 처리 로그가 있으면 표시됩니다.');
+    renderAttendanceCompactEmpty(logList, '검토 메모 없음', '선택한 기록의 메모가 있으면 여기에 표시됩니다.');
     return;
+  }
+
+  const requestItems = [...row.pendingRequests, ...row.pendingCorrections];
+  if (!requestItems.length) {
+    renderAttendanceCompactEmpty(requestList, '관련 요청 없음', '연결된 정정 또는 예외 요청이 없습니다.');
+  } else {
+    requestItems.forEach((item) => {
+      const isCorrection = Boolean(item?.correctionType || item?.workDate);
+      requestList.appendChild(createListRow({
+        title: isCorrection
+          ? `정정 요청 · ${normalizeCorrectionTypeLabel(item.correctionType)}`
+          : `예외 요청 · ${formatAttendanceRequestReason(item.reason_code)}`,
+        subtitle: isCorrection
+          ? `${item.workDate || '-'} · ${item.reason || '-'}`
+          : `${toRequestDateLabel(item.requested_at)} · ${item.reason_detail || '-'}`,
+        pill: item.status || 'pending',
+      }));
+    });
   }
 
   const timelineItems = Array.isArray(row.rawRecords) ? row.rawRecords : [];
@@ -38916,24 +39030,6 @@ function renderAttendanceSupportSections(row = null) {
     });
   }
 
-  const requestItems = [...row.pendingRequests, ...row.pendingCorrections];
-  if (!requestItems.length) {
-    renderAttendanceCompactEmpty(requestList, '요청 이력 없음', '연결된 정정/예외 요청이 없습니다.');
-  } else {
-    requestItems.forEach((item) => {
-      const isCorrection = Boolean(item?.correctionType || item?.workDate);
-      requestList.appendChild(createListRow({
-        title: isCorrection
-          ? `정정 요청 · ${normalizeCorrectionTypeLabel(item.correctionType)}`
-          : `예외 요청 · ${formatAttendanceRequestReason(item.reason_code)}`,
-        subtitle: isCorrection
-          ? `${item.workDate || '-'} · ${item.reason || '-'}`
-          : `${toRequestDateLabel(item.requested_at)} · ${item.reason_detail || '-'}`,
-        pill: item.status || 'pending',
-      }));
-    });
-  }
-
   const logs = [];
   if (row.hasLate) logs.push({ title: '지각 감지', subtitle: `${row.lateMinutes}분 지연`, pill: '지각' });
   if (row.hasLocationIssue) logs.push({ title: '위치 이상', subtitle: row.distanceLabel, pill: '위치 이상' });
@@ -38941,7 +39037,7 @@ function renderAttendanceSupportSections(row = null) {
   if (row.leaveRows?.length) logs.push({ title: '휴가 반영', subtitle: normalizeLeaveDisplayType(row.leaveRows[0]?.leave_type || ''), pill: '휴가' });
 
   if (!logs.length) {
-    renderAttendanceCompactEmpty(logList, '수정 로그 없음', '선택한 기록의 처리 이력이 없습니다.');
+    renderAttendanceCompactEmpty(logList, '검토 메모 없음', '이 기록에서 따로 남길 검토 포인트가 없습니다.');
   } else {
     logs.forEach((item) => {
       logList.appendChild(createListRow({
@@ -38966,10 +39062,20 @@ function renderAttendanceFilterMeta() {
       .find((item) => String(item?.employee_code || '').trim() === employeeCode);
     const site = (Array.isArray(state.attendanceView?.sites) ? state.attendanceView.sites : [])
       .find((item) => String(item?.site_code || '').trim() === siteCode);
-    const employeeLabel = employeeCode ? `${employeeCode}${employee?.full_name ? `(${employee.full_name})` : ''}` : '전체 직원';
-    const siteLabel = siteCode ? `${siteCode}${site?.site_name ? `(${site.site_name})` : ''}` : '전체 현장';
-    const statusMeta = statusFilter === 'all' ? '전체 상태' : getAttendanceStatusMeta(statusFilter).label;
-    metaEl.textContent = `필터: ${buildAttendanceRangeLabel(start, end)} · ${siteLabel} · ${employeeLabel} · ${statusMeta}${searchQuery ? ` · 검색:${searchQuery}` : ''}`;
+    const parts = [buildAttendanceRangeLabel(start, end)];
+    if (siteCode) {
+      parts.push(`${siteCode}${site?.site_name ? `(${site.site_name})` : ''}`);
+    }
+    if (employeeCode) {
+      parts.push(`${employeeCode}${employee?.full_name ? `(${employee.full_name})` : ''}`);
+    }
+    if (statusFilter !== 'all') {
+      parts.push(getAttendanceStatusMeta(statusFilter).label);
+    }
+    if (searchQuery) {
+      parts.push(`검색 ${searchQuery}`);
+    }
+    metaEl.textContent = `필터: ${parts.join(' · ')}`;
     return;
   }
   const metaEl = $('#attendanceEmployeeFilterMeta');
@@ -39298,12 +39404,13 @@ function renderAttendanceManagerDrawer(row = null) {
   const titleEl = $('#attendanceAdminDrawerTitle');
   const metaEl = $('#attendanceAdminDrawerMeta');
   if (titleEl instanceof HTMLElement) {
-    titleEl.textContent = row ? `${row.employeeName} · ${row.dateLabel}` : '상세 / 처리 패널';
+    titleEl.textContent = row ? `${row.employeeName} · ${row.dateLabel}` : '요약 / 관련 요청';
   }
   if (metaEl instanceof HTMLElement) {
     metaEl.textContent = row
-      ? `${row.siteName} · ${row.statusLabel} · 예정 ${row.scheduledLabel || '-'}`
-      : '기록을 선택하면 요약, 타임라인, 요청 이력을 한 패널에서 순서대로 확인할 수 있습니다.';
+      ? ''
+      : '기록을 선택하면 요약과 관련 요청, 타임라인을 차례로 확인할 수 있습니다.';
+    metaEl.classList.toggle('hidden', Boolean(row));
   }
   renderAttendanceManagerDetail(row);
   renderAttendanceSupportSections(row);
@@ -39317,19 +39424,21 @@ function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
   tbody.innerHTML = '';
   renderAttendanceManagerSortHeaders();
   if (loading) {
-    renderAdminTableEmptyState(tbody, 11, '출퇴근 기록을 불러오는 중입니다...');
-    if (metaEl) metaEl.textContent = '데이터를 조회 중입니다.';
+    renderAdminTableEmptyState(tbody, 8, '출퇴근 기록을 불러오는 중입니다...');
+    if (metaEl) {
+      metaEl.textContent = '데이터를 조회 중입니다.';
+      metaEl.classList.remove('hidden');
+    }
     renderAttendanceManagerDrawer(null);
     return;
   }
   const list = Array.isArray(rows) ? rows : [];
   if (metaEl) {
-    metaEl.textContent = list.length
-      ? `${list.length}건 · 행을 선택하면 상세 패널이 열립니다.`
-      : '조건에 맞는 기록이 없습니다.';
+    metaEl.textContent = list.length ? '' : '조건에 맞는 기록이 없습니다.';
+    metaEl.classList.toggle('hidden', Boolean(list.length));
   }
   if (!list.length) {
-    renderAdminTableEmptyState(tbody, 11, '조건에 맞는 출퇴근 기록이 없습니다.');
+    renderAdminTableEmptyState(tbody, 8, '조건에 맞는 출퇴근 기록이 없습니다.');
     renderAttendanceManagerDrawer(null);
     return;
   }
@@ -39356,11 +39465,10 @@ function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
         <span>${row.employeeCode}</span>
       </div>
     `);
-    renderCell(`<span>${row.companyName || '-'}</span>`);
     renderCell(`
       <div class="attendance-grid-primary-cell">
         <strong>${row.siteName || '현장 미지정'}</strong>
-        <span>${row.siteCode || '-'}</span>
+        <span>${row.siteCode || row.companyName || '-'}</span>
       </div>
     `);
     renderCell(`<span class="${row.scheduleRow ? '' : 'attendance-grid-null'}">${row.scheduledLabel || '스케줄 없음'}</span>`);
@@ -39372,17 +39480,16 @@ function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
         <span>${row.statusLabel}</span>
       </span>
     `);
-    renderCell(`<span class="${row.lateMinutes > 0 ? 'attendance-grid-emphasis' : 'attendance-grid-null'}">${row.lateMinutesLabel}</span>`);
-    renderCell(`
-      <div class="attendance-grid-primary-cell">
-        <strong class="${row.overtimeSortValue > 0 ? 'attendance-grid-emphasis' : 'attendance-grid-null'}">${row.overtimeLabel}</strong>
-        <span>${row.overtimeSourceLabel || '연장 없음'}</span>
-      </div>
-    `);
     renderCell(`
       <div class="attendance-grid-primary-cell">
         <strong>${row.processingState}</strong>
-        <span>${row.correctionState}</span>
+        <span>${[
+          row.pendingCount > 0 ? row.correctionState : '',
+          row.pendingCount <= 0 && row.hasLate ? row.lateMinutesLabel : '',
+          row.pendingCount <= 0 && row.hasLocationIssue ? '거리 확인' : '',
+          row.pendingCount <= 0 && row.hasAttendanceWithoutSchedule ? '스케줄 없음' : '',
+          row.pendingCount <= 0 && row.overtimeSortValue > 0 ? row.overtimeLabel : '',
+        ].filter(Boolean).join(' · ') || '즉시 조치 없음'}</span>
       </div>
     `);
     tbody.appendChild(tr);
@@ -39407,6 +39514,45 @@ function renderAttendanceManagerWorkspace({ rows = [], scopedRows = [], loading 
   if (exportBtn instanceof HTMLButtonElement) {
     exportBtn.disabled = !rows.length;
   }
+}
+
+function openAttendanceManagerMobileDetailSheet(recordKey = '') {
+  const rows = Array.isArray(state.attendanceView?.managerRows) ? state.attendanceView.managerRows : [];
+  const row = rows.find((item) => item.key === String(recordKey || '').trim()) || null;
+  if (!row) return;
+  const reviewPoints = [];
+  if (row.pendingCount > 0) reviewPoints.push(`관련 요청 ${row.pendingCount}건`);
+  if (row.hasMissingIn) reviewPoints.push('출근 기록 누락');
+  if (row.hasMissingOut) reviewPoints.push('퇴근 기록 누락');
+  if (row.hasAttendanceWithoutSchedule) reviewPoints.push('스케줄 없음');
+  if (row.hasLocationIssue) reviewPoints.push('위치 검토 필요');
+  if (row.hasLate) reviewPoints.push(`${row.lateMinutesLabel} 지연`);
+  if (!reviewPoints.length) reviewPoints.push('즉시 조치할 예외 없음');
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'stack';
+  wrapper.innerHTML = `
+    <div class="attendance-detail-empty">
+      <div class="attendance-compact-empty-title">${row.employeeName} · ${row.statusLabel}</div>
+      <div class="attendance-compact-empty-description">${row.dateLabel} · ${row.siteName}</div>
+    </div>
+    <div class="attendance-admin-detail-grid">
+      <div><span>예정 근무</span><strong>${row.scheduledLabel || '스케줄 없음'}</strong></div>
+      <div><span>출근/퇴근</span><strong>${row.checkInLabel} / ${row.checkOutLabel}</strong></div>
+      <div><span>근무시간</span><strong>${row.workHours}</strong></div>
+      <div><span>거리/위치</span><strong>${row.distanceLabel}</strong></div>
+      <div class="attendance-admin-detail-span-full"><span>판별 포인트</span><strong>${reviewPoints.join(' · ')}</strong></div>
+    </div>
+  `;
+
+  openSheet({
+    title: '출퇴근 상세',
+    contentNode: wrapper,
+    actions: [
+      { label: '요청·승인으로 이동', variant: 'btn-primary', action: 'attendance-go-correction' },
+      { label: '닫기', variant: 'btn-secondary', action: 'sheet-close' },
+    ],
+  });
 }
 
 function csvEscape(value = '') {
@@ -41293,18 +41439,16 @@ function canViewReportsSupportTab() {
 }
 
 function canViewReportsPackTab() {
-  return isManagerShellRole(getNavigationRole());
+  return false;
 }
 
 function canViewReportsHistoryTab() {
-  return isManagerShellRole(getNavigationRole());
+  return false;
 }
 
 function canViewReportsCenter() {
   return canViewReportsFinanceTab()
-    || canViewReportsSupportTab()
-    || canViewReportsPackTab()
-    || canViewReportsHistoryTab();
+    || canViewReportsSupportTab();
 }
 
 function canOpenScheduleUploadWorkspace() {
@@ -41577,13 +41721,13 @@ function renderScheduleHqTabs() {
     if (reportsOwnerVisible) {
       workspaceDescription.textContent = 'Finance 제출 상태와 전달 결과를 확인하는 보고 워크스페이스입니다.';
     } else if (activeTab === SCHEDULE_TAB_HQ_UPLOAD) {
-      workspaceDescription.textContent = '지원근무 workbook 추출과 HQ 작성본 검토를 진행하는 스케줄 업로드 워크스페이스입니다.';
+      workspaceDescription.textContent = '지점별 제출본을 만들고 HQ 작성본을 검토하는 흐름입니다.';
     } else if (activeTab === SCHEDULE_TAB_UPLOAD) {
-      workspaceDescription.textContent = '월간 근무표와 지원근무 workbook을 단계별로 처리하는 스케줄 업로드 워크스페이스입니다.';
+      workspaceDescription.textContent = '월간 업로드를 단계별로 준비하고 검토하는 흐름입니다.';
     } else if (activeTab === SCHEDULE_TAB_TEMPLATES) {
-      workspaceDescription.textContent = '근무 템플릿 라이브러리를 관리하는 준비 워크스페이스입니다. 매핑 프로필 선택과 관리는 업로드 STEP 1에서 이어집니다.';
+      workspaceDescription.textContent = '근무 템플릿을 관리하는 라이브러리입니다.';
     } else {
-      workspaceDescription.textContent = '월간 캘린더를 중심으로 배정 현황을 확인하고 날짜별 상세를 바로 처리하는 스케줄 워크스페이스입니다.';
+      workspaceDescription.textContent = '월간 배치를 보고 날짜별 상세를 바로 확인합니다.';
     }
   }
   if (workspaceHelpButton instanceof HTMLElement) {
@@ -42013,6 +42157,7 @@ function renderScheduleImportMappingProfileSummary() {
   const badgeEl = $('#scheduleTemplateMappingBadge');
   const textEl = $('#scheduleTemplateMappingText');
   const missingEl = $('#scheduleTemplateMappingMissing');
+  const metaGrid = $('#scheduleTemplateMappingMetaGrid');
   const selector = $('#scheduleImportMappingProfileSelect');
   const nameEl = $('#scheduleTemplateMappingSelectedName');
   const scopeEl = $('#scheduleTemplateMappingSelectedScope');
@@ -42043,6 +42188,10 @@ function renderScheduleImportMappingProfileSummary() {
   badgeEl.className = readiness.badgeClass;
   badgeEl.textContent = readiness.label;
   textEl.textContent = readiness.description;
+
+  if (metaGrid instanceof HTMLElement) {
+    metaGrid.classList.toggle('hidden', !selectedProfile);
+  }
 
   if (nameEl instanceof HTMLElement) {
     nameEl.textContent = selectedProfile
@@ -42416,7 +42565,6 @@ async function bootstrapScheduleUploadWorkspace({ force = false } = {}) {
     renderScheduleUploadWorkspace();
     try {
       if (canSelectScheduleWorkflowTenant()) {
-        await ensureDevTenantCatalog({ force });
         await ensureDevWorkingTenantContext({ silentToast: true });
       }
       ensureScheduleSupportHqWorkspaceDefaults();
@@ -43045,7 +43193,6 @@ async function openScheduleFinanceDownloadWorkspace(options = {}) {
   }
 
   state.schedule.financeTab = SCHEDULE_FINANCE_TAB_DOWNLOAD;
-  setSelectedReportsPack('default');
   setReportsViewTab(canViewReportsFinanceTab() ? 'finance' : getDefaultReportsViewTab());
   const route = canViewReportsFinanceTab()
     ? ROUTE_REPORTS
@@ -46163,7 +46310,7 @@ function renderScheduleDetailSkeleton() {
   titleEl.textContent = '선택 날짜 상세';
   dateBadge.className = 'status-pill status-pill-warn';
   dateBadge.textContent = '로딩 중';
-  summaryEl.textContent = '스케줄 상세를 불러오는 중입니다.';
+  summaryEl.textContent = '선택 날짜의 배정과 근무 정보를 불러오는 중입니다.';
   renderScheduleBreaktimeSkeleton([], state.schedule.selectedDateKey || '');
   renderSkeleton(listEl, 2);
 }
@@ -46706,20 +46853,20 @@ function renderScheduleBreaktimeSkeleton(rows = [], dateKey = '') {
   if (!dateKey) {
     statusPill.className = 'status-pill status-pill-warn';
     statusPill.textContent = '날짜 선택';
-    summary.textContent = '날짜를 선택하면 휴게시간 정책 표시 영역이 활성화됩니다.';
+    summary.textContent = '날짜를 선택하면 근무 정보와 휴가 상태를 함께 보여줍니다.';
     return;
   }
 
   if (!list.length) {
-    statusPill.className = 'status-pill status-pill-warn';
-    statusPill.textContent = '스케줄 없음';
-    summary.textContent = '선택일에 스케줄이 없어 휴게시간 정책을 계산할 수 없습니다.';
+    statusPill.className = 'status-pill status-pill-neutral';
+    statusPill.textContent = '정보 없음';
+    summary.textContent = '선택일에 표시할 근무 정보가 없습니다.';
     return;
   }
 
   statusPill.className = 'status-pill status-pill-success';
-  statusPill.textContent = 'P1 표시영역';
-  summary.textContent = `${dateKey} 기준 ${list.length}건 스케줄의 휴게시간 정책 표시 골격입니다.`;
+  statusPill.textContent = '근무 정보';
+  summary.textContent = `${dateKey} 기준 ${list.length}건의 근무/휴가 정보 요약입니다.`;
 }
 
 function renderScheduleDetail() {
@@ -46739,7 +46886,7 @@ function renderScheduleDetail() {
     titleEl.textContent = '선택 날짜 상세';
     dateBadge.className = 'status-pill status-pill-warn';
     dateBadge.textContent = '날짜 선택';
-    summaryEl.textContent = '캘린더 셀을 눌러 근무 상세를 확인하세요.';
+    summaryEl.textContent = '캘린더 날짜를 고르면 배정과 근무 정보를 확인할 수 있습니다.';
     renderScheduleDetailStats([]);
     renderEmptyState(listEl, '선택된 날짜가 없습니다.');
     renderScheduleBreaktimeSkeleton([], '');
@@ -46758,7 +46905,7 @@ function renderScheduleDetail() {
   renderScheduleDetailActions(rows, dateKey);
 
   if (!rows.length) {
-    summaryEl.textContent = '해당 날짜에 배정된 스케줄이 없습니다. 단일 생성으로 바로 배정을 추가할 수 있습니다.';
+    summaryEl.textContent = '해당 날짜에 배정된 스케줄이 없습니다.';
     renderEmptyState(listEl, '스케줄이 없습니다.');
     renderScheduleBreaktimeSkeleton([], dateKey);
     state.schedule.lastPerf.detailRenderMs = getPerfNowMs() - renderStartedAt;
@@ -51502,34 +51649,7 @@ function bindUiEvents() {
 
     if (action === 'reports-view-tab') {
       const nextTab = normalizeReportsViewTab(actionEl.dataset.tab || getDefaultReportsViewTab());
-      if (nextTab === 'pack' && isAppleReportPackEnabled()) {
-        setSelectedReportsPack('apple');
-      }
       setReportsViewTab(nextTab, { syncRoute: true });
-      if (nextTab === 'pack') {
-        runActionSafely(refreshReportsCenterData({ force: false }), '전용 팩 상태를 불러오지 못했습니다.');
-      }
-      if (nextTab === 'history') {
-        runActionSafely(refreshReportsCenterData({ force: false }), '실행 이력을 불러오지 못했습니다.');
-      }
-      return;
-    }
-
-    if (action === 'reports-history-select') {
-      if (!state.reports) state.reports = createInitialReportsState();
-      state.reports.selectedHistoryLogKey = String(actionEl.dataset.logKey || '').trim();
-      renderReportsHistoryPanel();
-      return;
-    }
-
-    if (action === 'reports-select-pack') {
-      const pack = normalizeReportPackValue(actionEl.dataset.pack || 'default');
-      if (pack === 'apple' && !isAppleReportPackEnabled()) {
-        showToast('이 회사에 해당 보고서가 없습니다.', 'error', 2800);
-        return;
-      }
-      const targetRoute = pack === 'apple' ? ROUTE_REPORTS_APPLE : `${ROUTE_REPORTS}?tab=pack&pack=default`;
-      runActionSafely(navigateToRoute(targetRoute, { replace: true }), '리포트 팩 이동에 실패했습니다.');
       return;
     }
 
@@ -51580,64 +51700,6 @@ function bindUiEvents() {
     if (action === 'ops-log-select') {
       state.ops.selectedLogKey = String(actionEl.dataset.logKey || '').trim();
       renderOpsWorkspaceLogs();
-      return;
-    }
-
-    if (action === 'reports-open-default-timesheet') {
-      runActionSafely(navigateToRoute(ROUTE_ADMIN_SCHEDULE_TOOLS), '내부 월표 화면 이동에 실패했습니다.');
-      return;
-    }
-
-    if (action === 'reports-open-default-duty-log') {
-      runActionSafely(navigateToRoute(ROUTE_SCHEDULE_CALENDAR), '근무상황기록부 화면 이동에 실패했습니다.');
-      showToast('스케줄 화면에서 근무상황기록부 항목을 확인하세요.', 'info', 2200);
-      return;
-    }
-
-    if (action === 'reports-apple-refresh-status') {
-      runWithBusy(async () => {
-        await Promise.allSettled([
-          loadAppleReportStatus({ force: true }),
-          loadAppleReportLogs({ force: true }),
-        ]);
-        renderReportsAppleCard();
-      }, '상태 조회 중...');
-      return;
-    }
-
-    if (action === 'reports-apple-run') {
-      runWithProgressTask((progressController) => onReportsAppleRun({ retry: false, progressController }), {
-        busyLabel: '업데이트 실행 중...',
-        fallbackMessage: '전용 보고 업데이트 실행에 실패했습니다.',
-        progressOptions: {
-          title: '전용 보고 업데이트를 실행하고 있습니다',
-          detail: '대상 월 데이터를 수집하고 실행 결과를 갱신하는 중입니다.',
-          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
-          stages: LONG_TASK_STAGES_APPLE_REPORT,
-        },
-      });
-      return;
-    }
-
-    if (action === 'reports-apple-retry') {
-      runWithProgressTask((progressController) => onReportsAppleRun({ retry: true, progressController }), {
-        busyLabel: '재시도 중...',
-        fallbackMessage: '전용 보고 재시도에 실패했습니다.',
-        progressOptions: {
-          title: '전용 보고 재시도를 실행하고 있습니다',
-          detail: '실패한 대상을 다시 처리하고 최신 상태를 반영하는 중입니다.',
-          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
-          stages: LONG_TASK_STAGES_APPLE_REPORT,
-        },
-      });
-      return;
-    }
-
-    if (action === 'reports-apple-view-logs') {
-      runWithBusy(async () => {
-        await loadAppleReportLogs({ force: true });
-        openAppleReportLogsSheet();
-      }, '로그 조회 중...');
       return;
     }
 
@@ -53323,6 +53385,10 @@ function bindUiEvents() {
         state.attendanceView = createInitialAttendanceViewState();
       }
       state.attendanceView.selectedManagerRowKey = String(actionEl.dataset.recordKey || '').trim();
+      if (!isDesktopViewport()) {
+        openAttendanceManagerMobileDetailSheet(state.attendanceView.selectedManagerRowKey);
+        return;
+      }
       state.attendanceView.managerDrawerOpen = true;
       renderAttendanceManagerWorkspace({
         rows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: true }),
