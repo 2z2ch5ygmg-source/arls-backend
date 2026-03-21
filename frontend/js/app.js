@@ -5528,7 +5528,7 @@ async function onOpsOpenAttendance(focus = 'scheduled') {
       scrollToSelector('#attendanceManagerTableCard');
       return;
     }
-    scrollToSelector('#attendanceManagerKpiCard');
+    scrollToSelector('#attendanceManagerKpiRack');
     return;
   }
   if (focus === 'vacancy') {
@@ -39263,11 +39263,12 @@ function buildAttendanceManagerSummary(rows = []) {
   const list = Array.isArray(rows) ? rows : [];
   return {
     scheduled: list.filter((row) => Boolean(row?.scheduleRow)).length,
-    present: list.filter((row) => String(row?.checkInLabel || '-') !== '-').length,
+    normal: list.filter((row) => String(row?.statusCode || '').trim() === 'normal').length,
     late: list.filter((row) => row?.hasLate).length,
     missingIn: list.filter((row) => row?.hasMissingIn).length,
     missingOut: list.filter((row) => row?.hasMissingOut).length,
-    leaveOutside: list.filter((row) => row?.hasLeave || row?.hasLocationIssue).length,
+    leave: list.filter((row) => row?.hasLeave).length,
+    locationIssue: list.filter((row) => row?.hasLocationIssue).length,
     correctionPending: list.filter((row) => (Number(row?.pendingCount || 0) > 0)).length,
   };
 }
@@ -39431,20 +39432,38 @@ function buildAttendanceManagerExceptionRows(rows = []) {
 
 function renderAttendanceManagerKpiStrip(summary = null) {
   const target = $('#attendanceManagerKpiStrip');
+  const secondaryTarget = $('#attendanceManagerSecondaryKpiStrip');
+  const metaEl = $('#attendanceManagerKpiMeta');
   if (!(target instanceof HTMLElement)) return;
   target.innerHTML = '';
+  if (secondaryTarget instanceof HTMLElement) {
+    secondaryTarget.innerHTML = '';
+  }
   const counts = summary && typeof summary === 'object'
     ? summary
-    : { scheduled: 0, present: 0, late: 0, missingIn: 0, missingOut: 0, leaveOutside: 0, correctionPending: 0 };
+    : { scheduled: 0, normal: 0, late: 0, missingIn: 0, missingOut: 0, leave: 0, locationIssue: 0, correctionPending: 0 };
   const statusFilter = normalizeAttendanceStatusFilter(state.attendanceView?.statusFilter || 'all');
+  const attentionCount = Math.max(0, Number(counts.missingIn || 0))
+    + Math.max(0, Number(counts.missingOut || 0))
+    + Math.max(0, Number(counts.late || 0))
+    + Math.max(0, Number(counts.correctionPending || 0));
   const items = [
-    { label: '출근 예정', value: counts.scheduled, filter: 'all', tone: 'neutral' },
-    { label: '출근 완료', value: counts.present, filter: 'normal', tone: 'success' },
-    { label: '지각', value: counts.late, filter: 'late', tone: 'warn' },
-    { label: '미출근', value: counts.missingIn, filter: 'missing_in', tone: 'danger' },
-    { label: '미퇴근', value: counts.missingOut, filter: 'missing_out', tone: 'warn' },
-    { label: '정정대기', value: counts.correctionPending, filter: 'correction_pending', tone: 'warn' },
+    { label: '미출근', value: counts.missingIn, filter: 'missing_in', tone: 'danger', meta: '가장 먼저 확인' },
+    { label: '미퇴근', value: counts.missingOut, filter: 'missing_out', tone: 'warn', meta: '퇴근 누락 확인' },
+    { label: '지각', value: counts.late, filter: 'late', tone: 'warn', meta: '지연 기록 스캔' },
+    { label: '정정 대기', value: counts.correctionPending, filter: 'correction_pending', tone: 'accent', meta: '요청 우선 확인' },
   ];
+  const secondaryItems = [
+    { label: '근무 대상', value: counts.scheduled, filter: 'all', tone: 'neutral' },
+    { label: '정상 출근', value: counts.normal, filter: 'normal', tone: 'success' },
+    { label: '휴가', value: counts.leave, filter: 'leave', tone: 'neutral' },
+    { label: '위치 이상', value: counts.locationIssue, filter: '', tone: 'warn' },
+  ];
+  if (metaEl instanceof HTMLElement) {
+    metaEl.textContent = attentionCount > 0
+      ? `지금 바로 확인이 필요한 기록 ${attentionCount}건입니다.`
+      : '현재 범위에서 바로 확인할 예외는 없습니다.';
+  }
   items.forEach((item) => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -39456,9 +39475,29 @@ function renderAttendanceManagerKpiStrip(summary = null) {
     button.innerHTML = `
       <span class="attendance-kpi-label">${item.label}</span>
       <strong class="attendance-kpi-value">${Math.max(0, Number(item.value) || 0)}</strong>
+      <span class="attendance-kpi-meta">${item.meta}</span>
     `;
     target.appendChild(button);
   });
+  if (secondaryTarget instanceof HTMLElement) {
+    secondaryItems.forEach((item) => {
+      const isButton = Boolean(item.filter);
+      const el = document.createElement(isButton ? 'button' : 'span');
+      el.className = 'attendance-kpi-mini';
+      el.dataset.tone = item.tone || 'neutral';
+      if (isButton) {
+        el.type = 'button';
+        el.dataset.action = 'attendance-set-status-filter';
+        el.dataset.status = item.filter;
+        el.classList.toggle('active', statusFilter === item.filter);
+      }
+      el.innerHTML = `
+        <span class="attendance-kpi-mini-label">${item.label}</span>
+        <strong class="attendance-kpi-mini-value">${Math.max(0, Number(item.value) || 0)}</strong>
+      `;
+      secondaryTarget.appendChild(el);
+    });
+  }
 }
 
 function renderAttendanceManagerExceptions(rows = [], { loading = false } = {}) {
@@ -39535,7 +39574,7 @@ function renderAttendanceManagerDetail(row = null) {
     content.innerHTML = `
       <div class="attendance-detail-empty">
         <div class="attendance-compact-empty-title">기록을 선택하세요</div>
-        <div class="attendance-compact-empty-description">예외 큐 또는 기록 리스트에서 대상을 선택하면 상세 패널이 열립니다.</div>
+        <div class="attendance-compact-empty-description">예외 큐나 기록 리스트에서 대상을 선택하면 우측 상세에서 바로 비교할 수 있습니다.</div>
       </div>
     `;
     return;
@@ -39554,7 +39593,7 @@ function renderAttendanceManagerDetail(row = null) {
   if (!reviewPoints.length) reviewPoints.push('현재 범위에서 바로 조치할 예외는 없습니다.');
   content.innerHTML = `
     <div class="attendance-admin-detail-stack">
-      <section class="attendance-admin-detail-section-card">
+      <section class="attendance-admin-detail-section-card is-summary">
         <div class="attendance-admin-detail-section-head">
           <h4>요약</h4>
           <span class="${row.statusMeta.className}">${row.statusLabel}</span>
@@ -39570,6 +39609,17 @@ function renderAttendanceManagerDetail(row = null) {
       </section>
       <section class="attendance-admin-detail-section-card">
         <div class="attendance-admin-detail-section-head">
+          <h4>현재 판단</h4>
+        </div>
+        <div class="attendance-admin-detail-grid">
+          <div><span>처리 상태</span><strong>${row.processingState}</strong></div>
+          <div><span>근무시간</span><strong>${row.workHours}</strong></div>
+          <div><span>지각</span><strong>${row.lateMinutesLabel}</strong></div>
+          <div><span>거리/위치</span><strong>${row.distanceLabel}</strong></div>
+        </div>
+      </section>
+      <section class="attendance-admin-detail-section-card">
+        <div class="attendance-admin-detail-section-head">
           <h4>판별 포인트</h4>
         </div>
         <ul class="attendance-admin-detail-list">
@@ -39578,13 +39628,13 @@ function renderAttendanceManagerDetail(row = null) {
       </section>
       <section class="attendance-admin-detail-section-card">
         <div class="attendance-admin-detail-section-head">
-          <h4>근무 / 위치</h4>
+          <h4>근무 보조 정보</h4>
         </div>
         <div class="attendance-admin-detail-grid attendance-admin-detail-grid-secondary">
-          <div><span>근무시간</span><strong>${row.workHours}</strong></div>
-          <div><span>지각</span><strong>${row.lateMinutesLabel}</strong></div>
           <div><span>OT</span><strong>${row.overtimeLabel}</strong></div>
-          <div><span>거리/위치</span><strong>${row.distanceLabel}</strong></div>
+          <div><span>보정 상태</span><strong>${row.correctionState}</strong></div>
+          <div><span>출근 건수</span><strong>${row.checkInCount}건</strong></div>
+          <div><span>퇴근 건수</span><strong>${row.checkOutCount}건</strong></div>
         </div>
       </section>
     </div>
@@ -39690,7 +39740,7 @@ function renderAttendanceFilterMeta() {
       .find((item) => String(item?.employee_code || '').trim() === employeeCode);
     const site = (Array.isArray(state.attendanceView?.sites) ? state.attendanceView.sites : [])
       .find((item) => String(item?.site_code || '').trim() === siteCode);
-    const parts = [buildAttendanceRangeLabel(start, end)];
+    const parts = [];
     if (siteCode) {
       parts.push(`${siteCode}${site?.site_name ? `(${site.site_name})` : ''}`);
     }
@@ -39703,7 +39753,13 @@ function renderAttendanceFilterMeta() {
     if (searchQuery) {
       parts.push(`검색 ${searchQuery}`);
     }
-    metaEl.textContent = `필터: ${parts.join(' · ')}`;
+    if (!parts.length) {
+      metaEl.textContent = '';
+      metaEl.classList.add('hidden');
+      return;
+    }
+    metaEl.textContent = `추가 필터: ${parts.join(' · ')}`;
+    metaEl.classList.remove('hidden');
     return;
   }
   const metaEl = $('#attendanceEmployeeFilterMeta');
@@ -39988,7 +40044,7 @@ function getSelectedAttendanceManagerRow(rows = []) {
   const list = Array.isArray(rows) ? rows : [];
   if (!list.length) return null;
   const selectedKey = String(state.attendanceView?.selectedManagerRowKey || '').trim();
-  return list.find((row) => row.key === selectedKey) || null;
+  return list.find((row) => row.key === selectedKey) || list[0] || null;
 }
 
 function renderAttendanceManagerSortHeaders() {
@@ -40017,32 +40073,22 @@ function setAttendanceManagerDrawerOpen(open) {
     state.attendanceView = createInitialAttendanceViewState();
   }
   state.attendanceView.managerDrawerOpen = Boolean(open);
-  const drawer = $('#attendanceAdminDrawer');
-  const backdrop = $('#attendanceAdminDrawerBackdrop');
-  if (drawer instanceof HTMLElement) {
-    drawer.classList.toggle('hidden', !open);
-    drawer.setAttribute('aria-hidden', open ? 'false' : 'true');
-  }
-  if (backdrop instanceof HTMLElement) {
-    backdrop.classList.toggle('hidden', !open);
-  }
 }
 
 function renderAttendanceManagerDrawer(row = null) {
   const titleEl = $('#attendanceAdminDrawerTitle');
   const metaEl = $('#attendanceAdminDrawerMeta');
   if (titleEl instanceof HTMLElement) {
-    titleEl.textContent = row ? `${row.employeeName} · ${row.dateLabel}` : '요약 / 관련 요청';
+    titleEl.textContent = row ? `${row.employeeName} · ${row.dateLabel}` : '기록을 선택하세요';
   }
   if (metaEl instanceof HTMLElement) {
     metaEl.textContent = row
       ? ''
-      : '기록을 선택하면 요약과 관련 요청, 타임라인을 차례로 확인할 수 있습니다.';
+      : '예외 큐나 기록 리스트에서 대상을 선택하면 우측 상세에서 바로 비교할 수 있습니다.';
     metaEl.classList.toggle('hidden', Boolean(row));
   }
   renderAttendanceManagerDetail(row);
   renderAttendanceSupportSections(row);
-  setAttendanceManagerDrawerOpen(Boolean(row) && Boolean(state.attendanceView?.managerDrawerOpen));
 }
 
 function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
@@ -40052,7 +40098,7 @@ function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
   tbody.innerHTML = '';
   renderAttendanceManagerSortHeaders();
   if (loading) {
-    renderAdminTableEmptyState(tbody, 8, '출퇴근 기록을 불러오는 중입니다...');
+    renderAdminTableEmptyState(tbody, 7, '출퇴근 기록을 불러오는 중입니다...');
     if (metaEl) {
       metaEl.textContent = '데이터를 조회 중입니다.';
       metaEl.classList.remove('hidden');
@@ -40062,11 +40108,11 @@ function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
   }
   const list = Array.isArray(rows) ? rows : [];
   if (metaEl) {
-    metaEl.textContent = list.length ? '' : '조건에 맞는 기록이 없습니다.';
-    metaEl.classList.toggle('hidden', Boolean(list.length));
+    metaEl.textContent = list.length ? `필터 결과 ${list.length}건` : '조건에 맞는 기록이 없습니다.';
+    metaEl.classList.remove('hidden');
   }
   if (!list.length) {
-    renderAdminTableEmptyState(tbody, 8, '조건에 맞는 출퇴근 기록이 없습니다.');
+    renderAdminTableEmptyState(tbody, 7, '조건에 맞는 출퇴근 기록이 없습니다.');
     renderAttendanceManagerDrawer(null);
     return;
   }
@@ -40096,10 +40142,9 @@ function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
     renderCell(`
       <div class="attendance-grid-primary-cell">
         <strong>${row.siteName || '현장 미지정'}</strong>
-        <span>${row.siteCode || row.companyName || '-'}</span>
+        <span>${row.scheduledLabel || '스케줄 없음'}${row.siteCode ? ` · ${row.siteCode}` : ''}</span>
       </div>
     `);
-    renderCell(`<span class="${row.scheduleRow ? '' : 'attendance-grid-null'}">${row.scheduledLabel || '스케줄 없음'}</span>`);
     renderCell(`<span class="${row.checkInLabel === '-' ? 'attendance-grid-null' : ''}">${row.checkInLabel || '-'}</span>`);
     renderCell(`<span class="${row.checkOutLabel === '-' ? 'attendance-grid-null' : ''}">${row.checkOutLabel || '-'}</span>`);
     renderCell(`
@@ -40127,15 +40172,16 @@ function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
 function renderAttendanceManagerWorkspace({ rows = [], scopedRows = [], loading = false } = {}) {
   const summary = buildAttendanceManagerSummary(scopedRows);
   const exceptions = buildAttendanceManagerExceptionRows(scopedRows);
+  const selectedRow = getSelectedAttendanceManagerRow(rows);
   state.attendanceView.managerSummary = summary;
   state.attendanceView.managerExceptionRows = exceptions;
+  state.attendanceView.selectedManagerRowKey = selectedRow?.key || '';
   renderAttendanceManagerKpiStrip(summary);
   renderAttendanceManagerExceptions(exceptions, { loading });
   renderAttendanceManagerTableRows(rows, { loading });
-  const selectedRow = getSelectedAttendanceManagerRow(rows);
   if (!selectedRow) {
     renderAttendanceManagerDrawer(null);
-  } else if (state.attendanceView?.managerDrawerOpen) {
+  } else {
     renderAttendanceManagerDrawer(selectedRow);
   }
   const exportBtn = $('#attendanceExportBtn');
@@ -54017,7 +54063,6 @@ function bindUiEvents() {
         openAttendanceManagerMobileDetailSheet(state.attendanceView.selectedManagerRowKey);
         return;
       }
-      state.attendanceView.managerDrawerOpen = true;
       renderAttendanceManagerWorkspace({
         rows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: true }),
         scopedRows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: false }),
@@ -54031,7 +54076,11 @@ function bindUiEvents() {
         state.attendanceView = createInitialAttendanceViewState();
       }
       state.attendanceView.managerDrawerOpen = false;
-      setAttendanceManagerDrawerOpen(false);
+      renderAttendanceManagerWorkspace({
+        rows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: true }),
+        scopedRows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: false }),
+        loading: false,
+      });
       return;
     }
 

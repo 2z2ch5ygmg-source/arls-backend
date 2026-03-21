@@ -1808,9 +1808,19 @@
                   </div>
                 </div>
                 <div class="attendance-ops-toolbar-footer">
-                  <p id="attendanceFilterMeta" class="muted">필터: 전체 기간 · 전체 현장 · 전체 직원</p>
-                  <div class="attendance-kpi-strip" id="attendanceManagerKpiStrip"></div>
+                  <p id="attendanceFilterMeta" class="muted hidden"></p>
                 </div>
+              </section>
+
+              <section id="attendanceManagerKpiRack" class="module-card stack attendance-kpi-rack">
+                <div class="attendance-kpi-head">
+                  <div class="requests-heading-block">
+                    <h3>우선 확인 지표</h3>
+                    <p id="attendanceManagerKpiMeta" class="muted">미출근, 미퇴근, 지각, 정정 요청을 먼저 확인합니다.</p>
+                  </div>
+                  <div id="attendanceManagerSecondaryKpiStrip" class="attendance-kpi-secondary" aria-live="polite"></div>
+                </div>
+                <div class="attendance-kpi-strip" id="attendanceManagerKpiStrip"></div>
               </section>
 
               <section id="attendanceManagerWorkspace" class="attendance-admin-workspace">
@@ -1833,7 +1843,9 @@
                     <div class="approval-head attendance-grid-head">
                       <div class="requests-heading-block">
                         <h3>출퇴근 기록</h3>
-                        <p id="attendanceRecordTableMeta" class="muted hidden">기간 내 스케줄과 실제 기록을 비교해 예외를 빠르게 스캔합니다.</p>
+                      </div>
+                      <div class="attendance-grid-head-actions">
+                        <p id="attendanceRecordTableMeta" class="muted hidden"></p>
                       </div>
                     </div>
                     <div class="attendance-workspace-table-wrap">
@@ -1842,8 +1854,7 @@
                           <tr>
                             <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="date"><span>날짜</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
                             <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="employee"><span>직원</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
-                            <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="site"><span>현장</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
-                            <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="scheduled"><span>예정 근무</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+                            <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="site"><span>현장 / 예정 근무</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
                             <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="check_in"><span>출근</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
                             <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="check_out"><span>퇴근</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
                             <th class="sortable-col"><button class="admin-sort-btn" type="button" data-action="attendance-sort" data-sort-key="status"><span>상태</span><span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
@@ -1855,41 +1866,39 @@
                     </div>
                   </article>
                 </div>
-              </section>
 
-              <div id="attendanceAdminDrawerBackdrop" class="attendance-admin-drawer-backdrop hidden" data-action="attendance-close-drawer"></div>
-              <aside id="attendanceAdminDrawer" class="attendance-admin-drawer hidden" aria-hidden="true">
-                <div class="attendance-admin-drawer-head">
-                  <div class="attendance-admin-drawer-title">
-                    <span class="attendance-admin-drawer-eyebrow">기록 상세</span>
-                    <h3 id="attendanceAdminDrawerTitle">요약 / 관련 요청</h3>
-                    <p id="attendanceAdminDrawerMeta" class="muted hidden">기록을 선택하면 요약과 관련 요청, 타임라인을 차례로 확인할 수 있습니다.</p>
+                <aside id="attendanceAdminDetailPanel" class="module-card stack attendance-admin-detail-panel">
+                  <div class="attendance-admin-detail-panel-head">
+                    <div class="attendance-admin-detail-panel-title">
+                      <span class="attendance-admin-detail-panel-eyebrow">선택한 기록</span>
+                      <h3 id="attendanceAdminDrawerTitle">기록을 선택하세요</h3>
+                      <p id="attendanceAdminDrawerMeta" class="muted">예외 큐나 기록 리스트에서 대상을 선택하면 우측 상세가 갱신됩니다.</p>
+                    </div>
                   </div>
-                  <button class="icon-btn" type="button" data-action="attendance-close-drawer" aria-label="상세 닫기">✕</button>
-                </div>
-                <div class="attendance-admin-drawer-body">
-                  <div id="attendanceAdminDetailContent" class="attendance-admin-detail-content"></div>
-                  <section class="attendance-admin-drawer-section">
-                    <div class="approval-head">
-                      <h3>관련 요청</h3>
-                    </div>
-                    <ul id="attendanceSupportRequestList" class="list" aria-live="polite" aria-busy="false"></ul>
-                  </section>
-                  <section class="attendance-admin-drawer-section">
-                    <div class="approval-head">
-                      <h3>타임라인</h3>
-                    </div>
-                    <ul id="attendanceSupportTimelineList" class="list" aria-live="polite" aria-busy="false"></ul>
-                  </section>
-                  <section class="attendance-admin-drawer-section">
-                    <div class="approval-head">
-                      <h3>검토 메모</h3>
-                    </div>
-                    <ul id="attendanceSupportLogList" class="list" aria-live="polite" aria-busy="false"></ul>
-                  </section>
-                </div>
-                <div id="attendanceAdminDetailActions" class="attendance-admin-drawer-actions hidden"></div>
-              </aside>
+                  <div class="attendance-admin-detail-panel-body">
+                    <div id="attendanceAdminDetailContent" class="attendance-admin-detail-content"></div>
+                    <section class="attendance-admin-detail-panel-section">
+                      <div class="approval-head">
+                        <h3>관련 요청</h3>
+                      </div>
+                      <ul id="attendanceSupportRequestList" class="list" aria-live="polite" aria-busy="false"></ul>
+                    </section>
+                    <section class="attendance-admin-detail-panel-section">
+                      <div class="approval-head">
+                        <h3>타임라인</h3>
+                      </div>
+                      <ul id="attendanceSupportTimelineList" class="list" aria-live="polite" aria-busy="false"></ul>
+                    </section>
+                    <section class="attendance-admin-detail-panel-section">
+                      <div class="approval-head">
+                        <h3>검토 메모</h3>
+                      </div>
+                      <ul id="attendanceSupportLogList" class="list" aria-live="polite" aria-busy="false"></ul>
+                    </section>
+                  </div>
+                  <div id="attendanceAdminDetailActions" class="attendance-admin-detail-panel-actions hidden"></div>
+                </aside>
+              </section>
             </section>
 
             <div id="attendanceEmployeeShell" class="stack shell-employee-only">
