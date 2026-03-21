@@ -15801,3 +15801,108 @@ textarea::placeholder {
     padding: 12px 14px;
   }
 }
+
+/* ===== Home Phase 1 briefing refinement ===== */
+.home-dashboard-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.home-dashboard-row-btn {
+  min-height: 34px;
+  min-width: 72px;
+  padding-inline: 12px;
+}
+
+@media (min-width: 1024px) {
+  #view-home .home-workspace-head .muted {
+    display: block !important;
+    max-width: 62ch;
+  }
+
+  #view-home .workspace-head-main > .view-runtime-hint {
+    display: none !important;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-stack {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-kpi-card {
+    grid-column: 1 / -1;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-priority-card {
+    grid-column: 1 / span 7;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-shortcuts-card {
+    grid-column: 8 / -1;
+    padding: 16px 18px;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-dashboard-card .approval-head {
+    padding-bottom: 0;
+    border-bottom: 0;
+    margin-bottom: 2px;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-kpi-card .home-manager-kpi-grid-compact {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-kpi {
+    min-width: 0;
+    min-height: 84px;
+    padding: 14px 16px;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-kpi strong {
+    font-size: 30px;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home #homeManagerOpsMeta {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ui-text-secondary);
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-shortcuts-card .quick-actions {
+    margin-top: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-shortcuts-card .quick-actions .btn {
+    width: 100%;
+    min-height: 46px;
+  }
+}
+
+@media (min-width: 1366px) {
+  #shell[data-shell-mode='manager'] #view-home .home-manager-priority-card {
+    grid-column: 1 / span 8;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-shortcuts-card {
+    grid-column: 9 / -1;
+  }
+}
+
+@media (max-width: 1023px) {
+  #view-home .home-dashboard-row-actions {
+    justify-content: flex-start;
+  }
+
+  #view-home .home-dashboard-row-btn {
+    min-width: 0;
+  }
+}

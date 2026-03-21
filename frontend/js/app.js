@@ -4740,6 +4740,9 @@ function createHomeDashboardListRow({
   pillLabel = '',
   pillVariant = 'neutral',
   danger = false,
+  actionLabel = '',
+  action = '',
+  route = '',
 } = {}) {
   const li = document.createElement('li');
   li.className = 'content-fade-in';
@@ -4765,13 +4768,33 @@ function createHomeDashboardListRow({
 
   row.appendChild(main);
 
+  const actionGroup = document.createElement('div');
+  actionGroup.className = 'home-dashboard-row-actions';
+
   if (String(pillLabel || '').trim()) {
     const pillEl = document.createElement('span');
     pillEl.className = `status-pill ${pillVariant === 'success'
       ? 'status-pill-success'
       : (pillVariant === 'error' ? 'status-pill-error' : (pillVariant === 'warn' ? 'status-pill-warn' : 'status-pill-neutral'))}`;
     pillEl.textContent = String(pillLabel || '').trim();
-    row.appendChild(pillEl);
+    actionGroup.appendChild(pillEl);
+  }
+
+  const resolvedAction = String(action || '').trim() || (String(route || '').trim() ? 'drawer-open-route' : '');
+  if (String(actionLabel || '').trim() && resolvedAction) {
+    const actionBtn = document.createElement('button');
+    actionBtn.className = 'btn btn-secondary home-dashboard-row-btn';
+    actionBtn.type = 'button';
+    actionBtn.dataset.action = resolvedAction;
+    if (String(route || '').trim()) {
+      actionBtn.dataset.route = String(route || '').trim();
+    }
+    actionBtn.textContent = String(actionLabel || '').trim();
+    actionGroup.appendChild(actionBtn);
+  }
+
+  if (actionGroup.childElementCount) {
+    row.appendChild(actionGroup);
   }
 
   li.appendChild(row);
@@ -4795,31 +4818,30 @@ function renderHomeDashboardList(listSelector, rows = [], emptyText = '표시할
 
 function buildHomeManagerPointRows() {
   const dashboard = getHomeManagerDashboardState();
+  const scheduleSummary = dashboard.scheduleSummary || {};
+  const attendanceIssueCount = Array.isArray(dashboard.attendanceIssues) ? dashboard.attendanceIssues.length : 0;
   const unreadItems = (Array.isArray(state.notificationItems) ? state.notificationItems : [])
-    .filter((item) => !item?.read)
-    .slice(0, 3);
-  if (unreadItems.length) {
-    return {
-      title: '공지사항',
-      meta: '오늘 확인이 필요한 알림만 간단히 표시합니다.',
-      rows: unreadItems.map((item) => ({
-        title: normalizeInAppNotificationMessage(item),
-        subtitle: String(item?.createdAt || '').trim()
-          ? new Date(String(item.createdAt)).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-          : '시간 정보 없음',
-        pillLabel: item?.read ? '읽음' : '미읽음',
-        pillVariant: item?.read ? 'neutral' : 'warn',
-      })),
-    };
-  }
-
+    .filter((item) => !item?.read);
   const pointRows = [];
-  if (Number(state.ops?.vacancyCount || 0) > 0) {
+
+  if (attendanceIssueCount > 0) {
     pointRows.push({
-      title: '결원 확인 필요',
-      subtitle: `오늘 결원(미출근) ${Number(state.ops.vacancyCount || 0)}명을 먼저 확인하세요.`,
-      pillLabel: '주의',
+      title: '결원/미출근 우선 확인',
+      subtitle: `오늘 출퇴근 예외 ${attendanceIssueCount}건을 먼저 확인합니다.`,
+      pillLabel: `${attendanceIssueCount}건`,
       pillVariant: 'warn',
+      actionLabel: '출퇴근',
+      route: ROUTE_ATTENDANCE,
+    });
+  }
+  if (Number(scheduleSummary.scheduleGapCount || 0) > 0 || Number(scheduleSummary.vacancySiteCount || 0) > 0) {
+    pointRows.push({
+      title: '현장 배정/스케줄 누락',
+      subtitle: `현장 누락 ${Number(scheduleSummary.vacancySiteCount || 0)}건 · 배정 누락 ${Number(scheduleSummary.scheduleGapCount || 0)}건`,
+      pillLabel: '확인 필요',
+      pillVariant: 'warn',
+      actionLabel: '스케줄',
+      route: ROUTE_SCHEDULE_CALENDAR,
     });
   }
   if (!state.ops?.closerAssigned) {
@@ -4828,38 +4850,50 @@ function buildHomeManagerPointRows() {
       subtitle: '오늘 스케줄에서 마감자를 먼저 지정해야 합니다.',
       pillLabel: '미지정',
       pillVariant: 'error',
+      actionLabel: '스케줄',
+      route: ROUTE_SCHEDULE_CALENDAR,
     });
   }
   if (!state.ops?.leaderAssigned) {
     pointRows.push({
-      title: '리더 지정 필요',
-      subtitle: '현장 리더가 비어 있습니다. 스케줄에서 지정해 주세요.',
+      title: '오늘 리더 미지정',
+      subtitle: '현장 리더가 비어 있습니다. 오늘 스케줄에서 지정해 주세요.',
       pillLabel: '미지정',
       pillVariant: 'error',
+      actionLabel: '스케줄',
+      route: ROUTE_SCHEDULE_CALENDAR,
     });
   }
-  if (Number(dashboard.scheduleSummary?.scheduleGapCount || 0) > 0) {
+  if (Number(dashboard.approvalPendingCount || 0) > 0) {
     pointRows.push({
-      title: '스케줄 누락 확인',
-      subtitle: `현장/배정 누락 ${Number(dashboard.scheduleSummary.scheduleGapCount || 0)}건이 있습니다.`,
-      pillLabel: '확인',
+      title: '요청·승인 대기 확인',
+      subtitle: `바로 처리할 승인 대기 ${Number(dashboard.approvalPendingCount || 0)}건이 있습니다.`,
+      pillLabel: `${Number(dashboard.approvalPendingCount || 0)}건`,
       pillVariant: 'warn',
+      actionLabel: '요청·승인',
+      route: ROUTE_REQUESTS,
+    });
+  }
+  if (unreadItems.length > 0) {
+    pointRows.push({
+      title: '공지사항 확인',
+      subtitle: `읽지 않은 알림 ${unreadItems.length}건이 있습니다.`,
+      pillLabel: `${unreadItems.length}건`,
+      pillVariant: 'warn',
+      actionLabel: '알림',
+      route: ROUTE_NOTIFICATIONS,
     });
   }
   if (!pointRows.length) {
     pointRows.push({
-      title: '오늘 특이사항 없음',
-      subtitle: '핵심 운영 지표상 즉시 확인이 필요한 이슈는 없습니다.',
+      title: '오늘 우선 조치 없음',
+      subtitle: '핵심 운영 지표상 바로 확인할 이슈는 없습니다.',
       pillLabel: '정상',
       pillVariant: 'success',
     });
   }
 
-  return {
-    title: '오늘 포인트',
-    meta: '공지 데이터가 없을 때 오늘 우선 확인 포인트를 대신 표시합니다.',
-    rows: pointRows.slice(0, 3),
-  };
+  return pointRows.slice(0, 4);
 }
 
 function renderHomeManagerDashboard() {
@@ -4868,8 +4902,6 @@ function renderHomeManagerDashboard() {
   const dashboard = getHomeManagerDashboardState();
   const leaveSummary = dashboard.leaveSummary || {};
   const reportSummary = dashboard.reportSummary || {};
-  const scheduleSummary = dashboard.scheduleSummary || {};
-  const attendanceIssues = Array.isArray(dashboard.attendanceIssues) ? dashboard.attendanceIssues : [];
 
   const leaveCount = Number(leaveSummary.todayLeaveCount || 0);
   const overnightCount = Number(reportSummary.overnightCount || state.ops?.overnightCount || 0);
@@ -4883,13 +4915,14 @@ function renderHomeManagerDashboard() {
   }
   setTextToSelectors(['#homeManagerLeaveOrNightLabel'], leaveOrNightText);
 
-  let briefingMeta = '오늘 운영 상태를 집계하고 있습니다.';
+  let briefingMeta = '오늘 브리핑을 준비하는 중입니다.';
   if (state.ops.loading) {
-    briefingMeta = '오늘 운영 상태를 집계하는 중입니다.';
+    briefingMeta = '오늘 브리핑을 집계하는 중입니다.';
   } else if (state.ops.error) {
-    briefingMeta = state.ops.error;
+    briefingMeta = '오늘 브리핑을 불러오지 못했습니다.';
   } else {
     const metaParts = [
+      `${toDateLabel(getOpsActiveDate())} 기준`,
       `출근 ${Number(state.ops?.presentCount || 0)}/${Number(state.ops?.scheduledCount || 0)}`,
     ];
     if (Number(state.ops?.vacancyCount || 0) > 0) {
@@ -4905,108 +4938,10 @@ function renderHomeManagerDashboard() {
   }
   setTextToSelectors(['#homeManagerOpsMeta'], briefingMeta);
 
-  const attendanceRows = attendanceIssues.slice(0, 5).map((row) => ({
-    title: row.employeeName ? `${row.employeeName} (${row.employeeCode})` : row.employeeCode,
-    subtitle: `${row.dateLabel || toDateLabel(getOpsActiveDate())} · ${row.siteName || '-'} · ${row.statusLabel || '확인 필요'}`,
-    pillLabel: row.statusLabel || '확인 필요',
-    pillVariant: row.pillVariant || 'warn',
-    danger: Boolean(row.danger),
-  }));
-  const attendanceIssueCount = attendanceIssues.length;
-  setHomeDashboardPill(
-    '#homeManagerAttendanceIssuePill',
-    state.ops?.loading ? '조회 중' : `${attendanceIssueCount}건`,
-    state.ops?.loading ? 'neutral' : (attendanceIssueCount > 0 ? 'warn' : 'success'),
-  );
-  renderHomeDashboardList(
-    '#homeManagerAttendanceIssueList',
-    attendanceRows,
-    '오늘 표시할 누락/미퇴근 기록이 없습니다.',
-    '자세한 확인은 출퇴근 화면에서 진행하세요.',
-  );
-
-  const attentionRows = [];
-  if (Number(scheduleSummary.scheduleGapCount || 0) > 0 || Number(scheduleSummary.vacancySiteCount || 0) > 0) {
-    attentionRows.push({
-      title: '스케줄 누락 / 결원 지점',
-      subtitle: `현장 누락 ${Number(scheduleSummary.scheduleGapCount || 0)}건 · 결원 지점 ${Number(scheduleSummary.vacancySiteCount || 0)}개`,
-      pillLabel: '확인 필요',
-      pillVariant: 'warn',
-    });
-  }
-  if (!state.ops?.leaderAssigned) {
-    attentionRows.push({
-      title: '리더 지정 필요',
-      subtitle: '오늘 스케줄에서 현장 리더를 지정해야 합니다.',
-      pillLabel: '미지정',
-      pillVariant: 'error',
-    });
-  }
-  if (!state.ops?.closerAssigned) {
-    attentionRows.push({
-      title: '마감자 지정 필요',
-      subtitle: '오늘 스케줄에서 마감자를 먼저 지정해야 합니다.',
-      pillLabel: '미지정',
-      pillVariant: 'error',
-    });
-  }
-  const pointRows = buildHomeManagerPointRows();
-  const priorityRows = [
-    ...attendanceRows.slice(0, 3),
-    ...attentionRows,
-    ...(Array.isArray(pointRows.rows) ? pointRows.rows : []),
-  ].slice(0, 5);
+  const priorityRows = buildHomeManagerPointRows();
   const priorityCount = priorityRows.filter((row) => row?.pillVariant && row.pillVariant !== 'success' && row.pillVariant !== 'neutral').length;
-  setHomeDashboardPill('#homeManagerPriorityPill', priorityCount > 0 ? `${priorityCount}건` : '정상', priorityCount > 0 ? 'warn' : 'success');
-  renderHomeDashboardList('#homeManagerPriorityList', priorityRows, '지금 바로 확인할 운영 이슈가 없습니다.', '세부 처리는 출퇴근, 스케줄, 요청 탭에서 이어집니다.');
-
-  setTextToSelectors(['#homeManagerTodayScheduleCount'], Number(scheduleSummary.todayScheduledCount || 0) > 0 ? `${Number(scheduleSummary.todayScheduledCount || 0)}명` : '0명');
-  setTextToSelectors(['#homeManagerWeekScheduleCount'], Number(scheduleSummary.weekScheduledCount || 0) > 0 ? `${Number(scheduleSummary.weekScheduledCount || 0)}건` : '0건');
-  setTextToSelectors(['#homeManagerVacancySiteCount'], Number(scheduleSummary.vacancySiteCount || 0) > 0 ? `${Number(scheduleSummary.vacancySiteCount || 0)}개` : '없음');
-  setTextToSelectors(['#homeManagerScheduleGapCount'], Number(scheduleSummary.scheduleGapCount || 0) > 0 ? `${Number(scheduleSummary.scheduleGapCount || 0)}건` : '없음');
-  const scheduleRows = [
-    {
-      title: '결원 발생 지점',
-      subtitle: Array.isArray(scheduleSummary.vacancySiteLabels) && scheduleSummary.vacancySiteLabels.length
-        ? scheduleSummary.vacancySiteLabels.slice(0, 3).join(', ')
-        : '오늘 결원 지점이 없습니다.',
-      pillLabel: Number(scheduleSummary.vacancySiteCount || 0) > 0 ? '주의' : '정상',
-      pillVariant: Number(scheduleSummary.vacancySiteCount || 0) > 0 ? 'warn' : 'success',
-    },
-    {
-      title: '스케줄 누락 여부',
-      subtitle: Number(scheduleSummary.scheduleGapCount || 0) > 0
-        ? `현장/배정 누락 ${Number(scheduleSummary.scheduleGapCount || 0)}건`
-        : '오늘 스케줄 누락은 확인되지 않았습니다.',
-      pillLabel: Number(scheduleSummary.scheduleGapCount || 0) > 0 ? '확인 필요' : '정상',
-      pillVariant: Number(scheduleSummary.scheduleGapCount || 0) > 0 ? 'warn' : 'success',
-    },
-  ];
-  renderHomeDashboardList('#homeManagerScheduleList', scheduleRows);
-
-  setHomeDashboardPill(
-    '#homeManagerApprovalPendingPill',
-    `대기 ${Number(dashboard.approvalPendingCount || 0)}건`,
-    Number(dashboard.approvalPendingCount || 0) > 0 ? 'warn' : 'success',
-  );
-  setTextToSelectors(['#homeManagerTodayLeaveCount'], Number(leaveSummary.todayLeaveCount || 0) > 0 ? `${Number(leaveSummary.todayLeaveCount || 0)}명` : '0명');
-  setTextToSelectors(['#homeManagerWeekLeaveCount'], Number(leaveSummary.weekLeaveCount || 0) > 0 ? `${Number(leaveSummary.weekLeaveCount || 0)}명` : '0명');
-  setTextToSelectors(['#homeManagerApprovedOtCount'], Number(reportSummary.approvedOtCount || 0) > 0 ? `${Number(reportSummary.approvedOtCount || 0)}건` : '0건');
-  setTextToSelectors(['#homeManagerReportOvernightCount'], Number(reportSummary.overnightCount || 0) > 0 ? `${Number(reportSummary.overnightCount || 0)}건` : '0건');
-  renderHomeDashboardList('#homeManagerLeaveReportList', [
-    {
-      title: '휴가 승인 대기',
-      subtitle: `오늘 휴가 ${Number(leaveSummary.todayLeaveCount || 0)}명 · 이번 주 휴가 ${Number(leaveSummary.weekLeaveCount || 0)}명`,
-      pillLabel: Number(leaveSummary.pendingCount || 0) > 0 ? `${Number(leaveSummary.pendingCount || 0)}건` : '없음',
-      pillVariant: Number(leaveSummary.pendingCount || 0) > 0 ? 'warn' : 'success',
-    },
-    {
-      title: '리포트 요약',
-      subtitle: String(reportSummary.latestLogLabel || '최근 실행 없음').trim() || '최근 실행 없음',
-      pillLabel: Number(reportSummary.approvedOtCount || 0) > 0 || Number(reportSummary.overnightCount || 0) > 0 ? '집계됨' : '기본',
-      pillVariant: Number(reportSummary.approvedOtCount || 0) > 0 || Number(reportSummary.overnightCount || 0) > 0 ? 'success' : 'neutral',
-    },
-  ]);
+  setHomeDashboardPill('#homeManagerPriorityPill', state.ops.loading ? '확인 중' : (priorityCount > 0 ? `${priorityCount}건` : '정상'), state.ops.loading ? 'neutral' : (priorityCount > 0 ? 'warn' : 'success'));
+  renderHomeDashboardList('#homeManagerPriorityList', priorityRows, '오늘 바로 확인할 항목이 없습니다.', '세부 처리는 각 owner 탭에서 이어갑니다.');
 }
 
 async function loadHomeManagerSupplementaryData({ force = false } = {}) {
@@ -17657,13 +17592,13 @@ function renderShellMode() {
 
   const homeTitle = $('#homeViewTitle');
   if (homeTitle) {
-    homeTitle.textContent = managerMode ? formatHomeHeaderDate(new Date()) : '홈';
+    homeTitle.textContent = '홈';
   }
   const homeSubtitle = $('#homeViewSubtitle');
   if (homeSubtitle) {
     homeSubtitle.textContent = managerMode
-      ? '오늘 확인할 운영 위험과 바로 이동할 작업만 먼저 브리핑합니다.'
-      : '오늘 근무와 진행 중 요청을 먼저 브리핑하고 실제 처리는 각 탭에서 이어갑니다.';
+      ? `${formatHomeHeaderDate(new Date())} 기준으로 오늘 먼저 확인할 위험과 바로 이동할 작업만 보여줍니다.`
+      : '오늘 근무와 진행 중 요청을 먼저 확인하고 필요한 작업은 각 탭에서 이어갑니다.';
   }
   const requestsTitle = $('#requestsViewTitle');
   if (requestsTitle) {
