@@ -4681,7 +4681,7 @@
         </div>
       </section>
       <div id="taskProgressBackdrop" class="task-progress-backdrop hidden"></div>
-      <section id="taskProgressModal" class="task-progress-modal hidden" role="dialog" aria-modal="true" aria-live="polite" aria-hidden="true" aria-labelledby="taskProgressTitle">
+      <section id="taskProgressModal" class="task-progress-modal hidden" role="dialog" aria-modal="true" aria-live="polite" aria-hidden="true" aria-labelledby="taskProgressTitle" aria-describedby="taskProgressDetail">
         <div class="task-progress-visual" aria-hidden="true">
           <svg class="task-progress-ring-svg" viewBox="0 0 120 120" focusable="false">
             <circle class="task-progress-ring-track-circle" cx="60" cy="60" r="42"></circle>
@@ -4690,17 +4690,31 @@
             <path class="task-progress-check" d="M46 61l10 10 19-23"></path>
           </svg>
         </div>
-        <span id="taskProgressStage" class="task-progress-stage">진행 중</span>
+        <span id="taskProgressStage" class="task-progress-stage">장시간 작업</span>
         <h3 id="taskProgressTitle">작업을 처리하고 있습니다</h3>
-        <p id="taskProgressDetail" class="muted">잠시만 기다려 주세요.</p>
-        <div class="task-progress-track" aria-hidden="true">
+        <p id="taskProgressDetail" class="task-progress-message muted">잠시만 기다려 주세요.</p>
+        <p id="taskProgressStep" class="task-progress-step">1/4 단계 · 준비</p>
+        <div id="taskProgressTrack" class="task-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-labelledby="taskProgressTitle">
           <div id="taskProgressBar" class="task-progress-fill"></div>
         </div>
         <div class="task-progress-meta">
           <span id="taskProgressPercent">0%</span>
           <span id="taskProgressElapsed">00:00</span>
         </div>
+        <div class="task-progress-footer">
+          <p id="taskProgressHint" class="task-progress-hint">잠시 기다려 주세요. 창을 닫지 마세요.</p>
+          <div class="task-progress-actions">
+            <button type="button" id="taskProgressBackgroundBtn" class="btn btn-secondary">백그라운드로 보내기</button>
+          </div>
+        </div>
       </section>
+      <button type="button" id="taskProgressMini" class="task-progress-mini hidden" aria-live="polite" aria-label="진행 중인 작업 다시 보기">
+        <span class="task-progress-mini-pill"></span>
+        <span class="task-progress-mini-copy">
+          <strong id="taskProgressMiniTitle">작업 진행 중</strong>
+          <span id="taskProgressMiniMeta">0% · 상세 보기</span>
+        </span>
+      </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
     <script src="config.js?v=1773534899"></script>

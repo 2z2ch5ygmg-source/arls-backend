@@ -5777,6 +5777,19 @@ button:disabled,
   fill: rgba(15, 23, 42, 0.96);
 }
 
+:root[data-ui-theme='dark'] .task-progress-mini {
+  background: rgba(15, 23, 42, 0.96);
+  border-color: rgba(71, 85, 105, 0.45);
+  box-shadow: 0 20px 42px rgba(2, 6, 23, 0.42);
+}
+
+:root[data-ui-theme='dark'] .task-progress-mini-copy span,
+:root[data-ui-theme='dark'] .task-progress-hint,
+:root[data-ui-theme='dark'] .task-progress-step,
+:root[data-ui-theme='dark'] .task-progress-message {
+  color: rgba(226, 232, 240, 0.82);
+}
+
 .schedule-detail-head {
   display: flex;
   justify-content: space-between;
@@ -5933,6 +5946,7 @@ a:hover {
   --task-progress-track-bg: rgba(255, 107, 0, 0.16);
   --task-progress-ring-track: rgba(255, 107, 0, 0.12);
   --task-progress-shadow: rgba(255, 107, 0, 0.22);
+  --task-progress-core-fill: rgba(255, 255, 255, 0.98);
   --task-progress-core-border: rgba(255, 107, 0, 0.18);
   --task-progress-ratio: 0.06;
   position: fixed;
@@ -5946,9 +5960,9 @@ a:hover {
   gap: 12px;
   padding: 24px;
   border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: var(--radius-20);
+  border-radius: 24px;
   background: rgba(255, 255, 255, 0.98);
-  box-shadow: var(--shadow-modal);
+  box-shadow: 0 28px 66px rgba(15, 23, 42, 0.22);
   text-align: center;
 }
 
@@ -5995,7 +6009,7 @@ a:hover {
 }
 
 .task-progress-ring-core-circle {
-  fill: rgba(255, 255, 255, 0.98);
+  fill: var(--task-progress-core-fill);
   stroke: var(--task-progress-core-border);
   stroke-width: 1.5;
   transition: fill 180ms ease, stroke 180ms ease;
@@ -6032,6 +6046,8 @@ a:hover {
 .task-progress-modal h3 {
   margin: 0;
   font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   line-height: 1.5;
 }
 
@@ -6039,8 +6055,24 @@ a:hover {
   margin: 0;
 }
 
+.task-progress-message {
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.64;
+}
+
+.task-progress-step {
+  margin-top: -4px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .task-progress-modal .task-progress-track {
+  position: relative;
   width: 100%;
+  height: 10px;
+  overflow: hidden;
   background: var(--task-progress-track-bg);
 }
 
@@ -6053,6 +6085,98 @@ a:hover {
   width: 100%;
 }
 
+.task-progress-footer {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+}
+
+.task-progress-hint {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.task-progress-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.task-progress-actions .btn.hidden {
+  display: none !important;
+}
+
+.task-progress-mini {
+  position: fixed;
+  right: 20px;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  z-index: 505;
+  min-width: 240px;
+  max-width: min(320px, calc(100vw - 28px));
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 20px 42px rgba(15, 23, 42, 0.18);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+}
+
+.task-progress-mini:hover,
+.task-progress-mini:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.22);
+}
+
+.task-progress-mini-pill {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #ea580c;
+  box-shadow: 0 0 0 5px rgba(234, 88, 12, 0.18);
+}
+
+.task-progress-mini[data-state='success'] .task-progress-mini-pill {
+  background: #16a34a;
+  box-shadow: 0 0 0 5px rgba(22, 163, 74, 0.18);
+}
+
+.task-progress-mini[data-state='error'] .task-progress-mini-pill {
+  background: #dc2626;
+  box-shadow: 0 0 0 5px rgba(220, 38, 38, 0.18);
+}
+
+.task-progress-mini-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  text-align: left;
+}
+
+.task-progress-mini-copy strong,
+.task-progress-mini-copy span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.task-progress-mini-copy strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.task-progress-mini-copy span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .task-progress-modal[data-tone='download'] {
   --task-progress-fill-start: #ea580c;
   --task-progress-fill-end: #fb923c;
@@ -6061,6 +6185,7 @@ a:hover {
   --task-progress-track-bg: rgba(255, 107, 0, 0.16);
   --task-progress-ring-track: rgba(255, 107, 0, 0.12);
   --task-progress-shadow: rgba(255, 107, 0, 0.22);
+  --task-progress-core-fill: rgba(255, 255, 255, 0.98);
   --task-progress-core-border: rgba(255, 107, 0, 0.18);
 }
 
@@ -6072,6 +6197,7 @@ a:hover {
   --task-progress-track-bg: rgba(22, 163, 74, 0.16);
   --task-progress-ring-track: rgba(22, 163, 74, 0.12);
   --task-progress-shadow: rgba(22, 163, 74, 0.22);
+  --task-progress-core-fill: rgba(240, 253, 244, 0.98);
   --task-progress-core-border: rgba(22, 163, 74, 0.18);
 }
 
@@ -6082,7 +6208,7 @@ a:hover {
 }
 
 .task-progress-modal[data-state='success'] .task-progress-ring-core-circle {
-  fill: rgba(240, 253, 244, 0.98);
+  fill: var(--task-progress-core-fill);
 }
 
 .task-progress-modal[data-state='success'] .task-progress-check {
@@ -6099,6 +6225,7 @@ a:hover {
   --task-progress-track-bg: rgba(220, 38, 38, 0.16);
   --task-progress-ring-track: rgba(220, 38, 38, 0.12);
   --task-progress-shadow: rgba(220, 38, 38, 0.2);
+  --task-progress-core-fill: rgba(254, 242, 242, 0.98);
   --task-progress-core-border: rgba(220, 38, 38, 0.18);
 }
 
@@ -6143,6 +6270,16 @@ a:hover {
   }
   50% {
     transform: translateY(-4px);
+  }
+}
+
+@media (max-width: 860px) {
+  .task-progress-mini {
+    right: 12px;
+    left: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    min-width: 0;
+    max-width: none;
   }
 }
 

@@ -1186,6 +1186,7 @@ function createInitialTaskProgressState() {
     surfaceKey: '',
     title: '',
     detail: '',
+    hint: '',
     statusLabel: '',
     tone: 'default',
     revealMode: 'adaptive',
@@ -1194,7 +1195,10 @@ function createInitialTaskProgressState() {
     progress: 0,
     explicitProgressUntil: 0,
     startedAt: 0,
+    visibleStartedAt: 0,
     visible: false,
+    backgrounded: false,
+    allowBackground: true,
     outcome: 'idle',
     revealTimer: 0,
     tickTimer: 0,
@@ -9601,25 +9605,56 @@ function getActiveLongTaskProgress(surfaceKey = '') {
   return progress;
 }
 
-function renderTaskProgressModal() {
+function setTaskProgressModalVisible(visible = false) {
   const backdrop = $('#taskProgressBackdrop');
+  const modal = $('#taskProgressModal');
+  const nextVisible = Boolean(visible);
+  if (backdrop instanceof HTMLElement) {
+    backdrop.classList.toggle('hidden', !nextVisible);
+  }
+  if (modal instanceof HTMLElement) {
+    modal.classList.toggle('hidden', !nextVisible);
+    modal.setAttribute('aria-hidden', nextVisible ? 'false' : 'true');
+  }
+}
+
+function setTaskProgressMiniVisible(visible = false) {
+  const mini = $('#taskProgressMini');
+  if (!(mini instanceof HTMLElement)) return;
+  const nextVisible = Boolean(visible);
+  mini.classList.toggle('hidden', !nextVisible);
+  mini.setAttribute('aria-hidden', nextVisible ? 'false' : 'true');
+}
+
+function renderTaskProgressModal() {
   const modal = $('#taskProgressModal');
   const stageEl = $('#taskProgressStage');
   const titleEl = $('#taskProgressTitle');
   const detailEl = $('#taskProgressDetail');
+  const stepEl = $('#taskProgressStep');
   const barEl = $('#taskProgressBar');
+  const trackEl = $('#taskProgressTrack');
   const percentEl = $('#taskProgressPercent');
   const elapsedEl = $('#taskProgressElapsed');
-  if (!(backdrop instanceof HTMLElement) || !(modal instanceof HTMLElement)) return;
+  const hintEl = $('#taskProgressHint');
+  const backgroundBtn = $('#taskProgressBackgroundBtn');
+  const mini = $('#taskProgressMini');
+  const miniTitleEl = $('#taskProgressMiniTitle');
+  const miniMetaEl = $('#taskProgressMiniMeta');
+  if (!(modal instanceof HTMLElement)) return;
 
   const progress = ensureTaskProgressState();
-  const active = Boolean(String(progress.activeId || '').trim()) && progress.visible;
-  backdrop.classList.toggle('hidden', !active);
-  modal.classList.toggle('hidden', !active);
-  modal.dataset.state = active ? String(progress.outcome || 'working').trim() : 'idle';
-  modal.dataset.tone = active ? normalizeLongTaskTone(progress.tone || LONG_TASK_TONE_DEFAULT) : LONG_TASK_TONE_DEFAULT;
-  if (!active) {
-    modal.setAttribute('aria-hidden', 'true');
+  const hasTask = Boolean(String(progress.activeId || '').trim());
+  const modalVisible = hasTask && progress.visible && !progress.backgrounded;
+  const miniVisible = hasTask && progress.backgrounded;
+  modal.dataset.state = hasTask ? String(progress.outcome || 'working').trim() : 'idle';
+  modal.dataset.tone = hasTask ? normalizeLongTaskTone(progress.tone || LONG_TASK_TONE_DEFAULT) : LONG_TASK_TONE_DEFAULT;
+  if (mini instanceof HTMLElement) {
+    mini.dataset.state = hasTask ? String(progress.outcome || 'working').trim() : 'idle';
+  }
+  if (!hasTask) {
+    setTaskProgressModalVisible(false);
+    setTaskProgressMiniVisible(false);
     return;
   }
 
@@ -9627,23 +9662,53 @@ function renderTaskProgressModal() {
   const stage = stages[Math.min(Math.max(Number(progress.stageIndex || 0), 0), Math.max(0, stages.length - 1))] || null;
   const progressValue = Math.max(6, Math.min(100, Number(progress.progress || stage?.progress || 0)));
   const elapsed = formatLongTaskElapsed(Date.now() - Number(progress.startedAt || Date.now()));
+  const stagePrefix = stages.length ? `${Math.min(stages.length, Math.max(1, Number(progress.stageIndex || 0) + 1))}/${stages.length} 단계` : '진행 중';
+  const stageText = progress.outcome === 'success'
+    ? '완료'
+    : (progress.outcome === 'error'
+      ? '실패'
+      : (String(stage?.label || '작업 진행').trim() || '작업 진행'));
 
-  modal.setAttribute('aria-hidden', 'false');
   modal.style.setProperty('--task-progress-ratio', String(Math.max(0.06, Math.min(1, progressValue / 100))));
   if (stageEl instanceof HTMLElement) {
-    stageEl.textContent = progress.outcome === 'success'
-      ? '완료'
-      : (progress.outcome === 'error'
-        ? '실패'
-        : (String(stage?.label || progress.statusLabel || '진행 중').trim() || '진행 중'));
+    stageEl.textContent = String(progress.statusLabel || '장시간 작업').trim() || '장시간 작업';
   }
   if (titleEl instanceof HTMLElement) titleEl.textContent = String(progress.title || '작업을 진행하고 있습니다.').trim();
   if (detailEl instanceof HTMLElement) detailEl.textContent = String(progress.detail || stage?.detail || '잠시만 기다려 주세요.').trim();
+  if (stepEl instanceof HTMLElement) {
+    stepEl.textContent = `${stagePrefix} · ${stageText}`;
+  }
   if (barEl instanceof HTMLElement) {
-    barEl.style.width = `${progressValue}%`;
+    barEl.style.width = `${progressValue.toFixed(1)}%`;
+  }
+  if (trackEl instanceof HTMLElement) {
+    trackEl.setAttribute('aria-valuenow', `${Math.round(progressValue)}`);
   }
   if (percentEl instanceof HTMLElement) percentEl.textContent = `${Math.round(progressValue)}%`;
   if (elapsedEl instanceof HTMLElement) elapsedEl.textContent = elapsed;
+  if (hintEl instanceof HTMLElement) {
+    hintEl.textContent = String(progress.hint || '잠시 기다려 주세요. 창을 닫지 마세요.').trim() || '잠시 기다려 주세요. 창을 닫지 마세요.';
+  }
+  if (backgroundBtn instanceof HTMLElement) {
+    const allowBackground = progress.allowBackground !== false && String(progress.outcome || 'working') === 'working';
+    backgroundBtn.classList.toggle('hidden', !allowBackground);
+    if (backgroundBtn instanceof HTMLButtonElement) {
+      backgroundBtn.disabled = !allowBackground;
+    }
+  }
+  if (miniTitleEl instanceof HTMLElement) {
+    miniTitleEl.textContent = String(progress.title || '작업 진행 중').trim() || '작업 진행 중';
+  }
+  if (miniMetaEl instanceof HTMLElement) {
+    miniMetaEl.textContent = `${Math.round(progressValue)}% · ${
+      progress.outcome === 'success'
+        ? '완료'
+        : (progress.outcome === 'error' ? '확인 필요' : '상세 보기')
+    }`;
+  }
+
+  setTaskProgressModalVisible(modalVisible);
+  setTaskProgressMiniVisible(miniVisible);
 }
 
 function renderTaskProgressStrip({
@@ -9657,7 +9722,7 @@ function renderTaskProgressStrip({
 } = {}, task = null) {
   const root = $(rootSelector);
   if (!(root instanceof HTMLElement)) return;
-  const show = Boolean(task && String(task.activeId || '').trim());
+  const show = Boolean(task && String(task.activeId || '').trim() && !task.backgrounded);
   root.classList.toggle('hidden', !show);
   root.dataset.state = show ? String(task.outcome || 'working').trim() : 'idle';
   root.dataset.tone = show ? normalizeLongTaskTone(task.tone || LONG_TASK_TONE_DEFAULT) : LONG_TASK_TONE_DEFAULT;
@@ -9705,7 +9770,7 @@ function renderTaskProgressOverlay({
 } = {}, task = null) {
   const overlay = $(overlaySelector);
   if (!(overlay instanceof HTMLElement)) return;
-  const show = Boolean(task && String(task.activeId || '').trim() && String(task.outcome || 'working') === 'working');
+  const show = Boolean(task && String(task.activeId || '').trim() && !task.backgrounded && String(task.outcome || 'working') === 'working');
   overlay.classList.toggle('hidden', !show);
   if (!show) return;
 
@@ -9791,6 +9856,9 @@ function updateLongTaskProgress(taskId = '', updates = {}) {
   if (Object.prototype.hasOwnProperty.call(updates, 'detail')) {
     progress.detail = String(updates.detail || '').trim();
   }
+  if (Object.prototype.hasOwnProperty.call(updates, 'hint')) {
+    progress.hint = String(updates.hint || '').trim();
+  }
   if (Object.prototype.hasOwnProperty.call(updates, 'statusLabel')) {
     progress.statusLabel = String(updates.statusLabel || '').trim();
   }
@@ -9808,7 +9876,11 @@ function updateLongTaskProgress(taskId = '', updates = {}) {
     progress.explicitProgressUntil = Date.now() + (progress.tone === LONG_TASK_TONE_DOWNLOAD ? 320 : 900);
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'visible')) {
-    progress.visible = Boolean(updates.visible);
+    const nextVisible = Boolean(updates.visible);
+    if (nextVisible && !progress.visible && !progress.backgrounded) {
+      progress.visibleStartedAt = Date.now();
+    }
+    progress.visible = nextVisible;
   }
   if (Object.prototype.hasOwnProperty.call(updates, 'stageIndex')) {
     progress.stageIndex = Math.max(0, Number(updates.stageIndex || 0));
@@ -9826,6 +9898,15 @@ function updateLongTaskProgress(taskId = '', updates = {}) {
   if (Object.prototype.hasOwnProperty.call(updates, 'outcome')) {
     progress.outcome = String(updates.outcome || 'working').trim() || 'working';
   }
+  if (Object.prototype.hasOwnProperty.call(updates, 'allowBackground')) {
+    progress.allowBackground = updates.allowBackground !== false;
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'backgrounded')) {
+    progress.backgrounded = Boolean(updates.backgrounded);
+    if (progress.backgrounded) {
+      progress.visible = false;
+    }
+  }
 
   renderLongTaskProgressUi();
 }
@@ -9840,7 +9921,14 @@ function finalizeLongTaskProgress(taskId = '', {
   clearTaskProgressTimers(progress);
   progress.outcome = outcome === 'error' ? 'error' : 'success';
   progress.progress = 100;
-  progress.visible = progress.visible || (Date.now() - Number(progress.startedAt || 0) >= Number(progress.modalDelayMs || LONG_TASK_MODAL_DELAY_MS));
+  const shouldRevealModal = progress.visible
+    || progress.backgrounded
+    || (Date.now() - Number(progress.startedAt || 0) >= Number(progress.modalDelayMs || LONG_TASK_MODAL_DELAY_MS));
+  progress.backgrounded = false;
+  progress.visible = shouldRevealModal;
+  if (progress.visible && !Number(progress.visibleStartedAt || 0)) {
+    progress.visibleStartedAt = Date.now();
+  }
   if (detail) {
     progress.detail = String(detail || '').trim();
   } else if (progress.outcome === 'success') {
@@ -9852,7 +9940,12 @@ function finalizeLongTaskProgress(taskId = '', {
   }
   renderLongTaskProgressUi();
 
-  const resetDelay = progress.visible ? Math.max(0, Number(keepVisibleMs || 0)) : 0;
+  const elapsedVisibleMs = progress.visible
+    ? Math.max(0, Date.now() - Number(progress.visibleStartedAt || Date.now()))
+    : 0;
+  const resetDelay = progress.visible
+    ? Math.max(0, Number(keepVisibleMs || 0) - elapsedVisibleMs)
+    : 0;
   if (resetDelay > 0) {
     const currentTaskId = String(progress.activeId || '').trim();
     progress.revealTimer = window.setTimeout(() => {
@@ -9868,6 +9961,7 @@ function finalizeLongTaskProgress(taskId = '', {
 function beginLongTaskProgress({
   title = '작업을 처리하고 있습니다.',
   detail = '',
+  hint = '잠시 기다려 주세요. 창을 닫지 마세요.',
   statusLabel = '처리 중',
   tone = LONG_TASK_TONE_DEFAULT,
   revealMode = LONG_TASK_REVEAL_ADAPTIVE,
@@ -9875,6 +9969,7 @@ function beginLongTaskProgress({
   stages = [],
   modalDelayMs = null,
   stageAdvanceMs = LONG_TASK_STAGE_TICK_MS,
+  allowBackground = true,
 } = {}) {
   resetTaskProgressState({ syncUi: false });
   const progress = ensureTaskProgressState();
@@ -9883,6 +9978,7 @@ function beginLongTaskProgress({
   progress.surfaceKey = String(surfaceKey || '').trim();
   progress.title = String(title || '작업을 처리하고 있습니다.').trim();
   progress.detail = String(detail || '').trim();
+  progress.hint = String(hint || '잠시 기다려 주세요. 창을 닫지 마세요.').trim();
   progress.statusLabel = String(statusLabel || '처리 중').trim();
   progress.tone = normalizeLongTaskTone(tone || LONG_TASK_TONE_DEFAULT);
   progress.revealMode = normalizeLongTaskRevealMode(revealMode || LONG_TASK_REVEAL_ADAPTIVE);
@@ -9891,15 +9987,20 @@ function beginLongTaskProgress({
   progress.progress = Math.max(6, Math.min(100, Number(progress.stages[0]?.progress || 12)));
   progress.explicitProgressUntil = 0;
   progress.startedAt = Date.now();
+  progress.visibleStartedAt = progress.visible ? progress.startedAt : 0;
+  progress.backgrounded = false;
+  progress.allowBackground = allowBackground !== false;
   progress.outcome = 'working';
   progress.modalDelayMs = resolveLongTaskModalDelay(modalDelayMs, progress.revealMode);
   progress.visible = progress.modalDelayMs <= 0;
+  progress.visibleStartedAt = progress.visible ? progress.startedAt : 0;
   progress.stageAdvanceMs = Math.max(700, Number(stageAdvanceMs || LONG_TASK_STAGE_TICK_MS));
   if (progress.modalDelayMs > 0) {
     progress.revealTimer = window.setTimeout(() => {
       const current = ensureTaskProgressState();
       if (String(current.activeId || '').trim() !== taskId) return;
       current.visible = true;
+      current.visibleStartedAt = Date.now();
       renderLongTaskProgressUi();
     }, progress.modalDelayMs);
   } else {
@@ -9946,6 +10047,33 @@ function beginLongTaskProgress({
     fail: (updates = {}) => finalizeLongTaskProgress(taskId, { ...updates, outcome: 'error' }),
   };
 }
+
+function backgroundLongTaskProgress() {
+  const progress = ensureTaskProgressState();
+  if (!String(progress.activeId || '').trim() || String(progress.outcome || 'working') !== 'working') return false;
+  progress.backgrounded = true;
+  progress.visible = false;
+  renderLongTaskProgressUi();
+  return true;
+}
+
+function restoreLongTaskProgress() {
+  const progress = ensureTaskProgressState();
+  if (!String(progress.activeId || '').trim()) return false;
+  progress.backgrounded = false;
+  progress.visible = true;
+  progress.visibleStartedAt = Date.now();
+  renderLongTaskProgressUi();
+  return true;
+}
+
+$('#taskProgressBackgroundBtn')?.addEventListener('click', () => {
+  backgroundLongTaskProgress();
+});
+
+$('#taskProgressMini')?.addEventListener('click', () => {
+  restoreLongTaskProgress();
+});
 
 function buildScheduleImportFileSignature(file = null) {
   if (!(file instanceof File)) return '';
@@ -10056,7 +10184,8 @@ function renderScheduleUploadProgress() {
 
   const uploadUi = getScheduleUploadUiState();
   const task = getActiveLongTaskProgress(LONG_TASK_SURFACE_SCHEDULE_IMPORT);
-  const show = Boolean(uploadUi.analysisInFlight || uploadUi.stale || task);
+  const taskVisible = Boolean(task && !task.backgrounded);
+  const show = Boolean(uploadUi.stale || (uploadUi.analysisInFlight && taskVisible) || taskVisible);
   wrap.classList.toggle('hidden', !show);
   if (!show) return;
 
