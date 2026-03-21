@@ -4,6 +4,7 @@ __pycache__/
 .playwright-cli/
 .env
 .venv/
+.venv_phase5_verify/
 .pytest_cache/
 .pycache_tmp/
 node_modules/

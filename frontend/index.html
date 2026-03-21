@@ -191,7 +191,7 @@
                   <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/attendance">출퇴근</button>
                   <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/schedules/calendar">오늘 스케줄</button>
                   <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/requests">요청·승인</button>
-                  <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/reports">전용 보고</button>
+                  <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/reports">보고</button>
                 </div>
               </article>
 
@@ -2379,9 +2379,18 @@
 
                     <div id="scheduleImportProgress" class="schedule-upload-progress hidden" role="status" aria-live="polite">
                       <span id="scheduleImportProgressPill" class="status-pill status-pill-neutral">대기</span>
-                      <div class="schedule-upload-progress-copy">
-                        <strong id="scheduleImportProgressTitle">분석 대기</strong>
-                        <p id="scheduleImportProgressText" class="muted">분석이 시작되면 현재 단계와 잠긴 입력 항목을 여기에 표시합니다.</p>
+                      <div class="task-progress-main">
+                        <div class="schedule-upload-progress-copy">
+                          <strong id="scheduleImportProgressTitle">분석 대기</strong>
+                          <p id="scheduleImportProgressText" class="muted">분석이 시작되면 현재 단계와 잠긴 입력 항목을 여기에 표시합니다.</p>
+                        </div>
+                        <div class="task-progress-track" aria-hidden="true">
+                          <div id="scheduleImportProgressBar" class="task-progress-fill"></div>
+                        </div>
+                        <div class="task-progress-meta" aria-live="off">
+                          <span id="scheduleImportProgressPercent">0%</span>
+                          <span id="scheduleImportProgressElapsed"></span>
+                        </div>
                       </div>
                     </div>
 
@@ -2612,6 +2621,22 @@
                 </div>
               </section>
               <div id="scheduleHqWizardPreviewStage" class="stack hidden">
+              <div id="scheduleSupportHqProgress" class="task-progress-strip hidden" role="status" aria-live="polite">
+                <span id="scheduleSupportHqProgressPill" class="status-pill status-pill-neutral">대기</span>
+                <div class="task-progress-main">
+                  <div class="schedule-upload-progress-copy">
+                    <strong id="scheduleSupportHqProgressTitle">검토 대기</strong>
+                    <p id="scheduleSupportHqProgressText" class="muted">검토를 시작하면 현재 단계와 진행 상태가 여기에 표시됩니다.</p>
+                  </div>
+                  <div class="task-progress-track" aria-hidden="true">
+                    <div id="scheduleSupportHqProgressBar" class="task-progress-fill"></div>
+                  </div>
+                  <div class="task-progress-meta" aria-live="off">
+                    <span id="scheduleSupportHqProgressPercent">0%</span>
+                    <span id="scheduleSupportHqProgressElapsed"></span>
+                  </div>
+                </div>
+              </div>
               <p id="scheduleSupportHqBatchInfo" class="muted">source artifact lineage와 workbook 계약을 확인한 뒤 검토를 시작하세요.</p>
               <div id="scheduleSupportHqReviewSummary" class="schedule-upload-summary-strip"></div>
               <div id="scheduleSupportHqIssueGroups" class="schedule-upload-issue-groups"></div>
@@ -2667,115 +2692,17 @@
             </div>
 
             <div id="scheduleReportsPanel" class="stack schedule-tab-panel hidden">
-            <div class="schedule-reports-context-row">
-              <label class="input-field">
-                <span>대상 지점</span>
-                <select id="scheduleReportsSite">
-                  <option value="">지점 선택</option>
-                </select>
-              </label>
-            </div>
-
-            <section id="scheduleFinanceSubmissionPanel" class="module-card stack hidden">
+            <section class="module-card stack">
               <div class="approval-head">
                 <div>
-                  <h3>Finance용 스케쥴 제출</h3>
-                  <p class="muted">HQ는 1차 확인본/최종본을 다운로드하고, Supervisor는 최종 정정본을 업로드합니다.</p>
+                  <h3>보고 센터로 이동</h3>
+                  <p class="muted">Finance 제출과 지원근무 전달 상태는 보고 탭 owner 화면으로 이동해 확인합니다. 기존 deep link는 그대로 지원됩니다.</p>
                 </div>
-                <span id="scheduleFinanceStatePill" class="status-pill status-pill-neutral">상태 확인 대기</span>
+                <div class="quick-actions">
+                  <button class="btn btn-primary" type="button" data-action="drawer-open-route" data-route="/reports?tab=finance">보고 열기</button>
+                </div>
               </div>
-              <p id="scheduleFinanceStatusText" class="muted">업로드 지점을 선택하면 Finance 제출 단계와 필요한 다음 작업을 확인할 수 있습니다.</p>
-              <div id="scheduleFinanceStatusGrid" class="schedule-support-status-grid schedule-finance-status-grid">
-                <article class="schedule-support-meta-card">
-                  <span class="schedule-support-meta-label">현재 단계</span>
-                  <strong id="scheduleFinancePhaseLabel">확인 대기</strong>
-                  <span id="scheduleFinancePhaseMeta" class="muted">지점 선택 후 확인</span>
-                </article>
-                <article class="schedule-support-meta-card">
-                  <span class="schedule-support-meta-label">1차 확인본</span>
-                  <strong id="scheduleFinanceReviewRevision">없음</strong>
-                  <span id="scheduleFinanceReviewMeta" class="muted">HQ 다운로드 전</span>
-                </article>
-                <article class="schedule-support-meta-card">
-                  <span class="schedule-support-meta-label">최종 업로드</span>
-                  <strong id="scheduleFinanceFinalUploadState">대기</strong>
-                  <span id="scheduleFinanceFinalUploadMeta" class="muted">Supervisor 업로드 전</span>
-                </article>
-                <article class="schedule-support-meta-card">
-                  <span class="schedule-support-meta-label">HQ 최종 다운로드</span>
-                  <strong id="scheduleFinanceFinalDownloadState">비활성</strong>
-                  <span id="scheduleFinanceFinalDownloadMeta" class="muted">최종 업로드 후 활성화</span>
-                </article>
-              </div>
-              <ul id="scheduleFinanceBlockedReasons" class="list hidden"></ul>
-              <div id="scheduleFinanceTabs" class="schedule-finance-tabs" role="tablist" aria-label="Finance 스케쥴 제출 단계">
-                <button
-                  class="btn btn-secondary schedule-finance-tab active"
-                  type="button"
-                  data-action="schedule-finance-tab"
-                  data-tab="download"
-                  aria-pressed="true"
-                >
-                  Finance 스케쥴 다운로드
-                </button>
-                <button
-                  class="btn btn-secondary schedule-finance-tab"
-                  type="button"
-                  data-action="schedule-finance-tab"
-                  data-tab="upload"
-                  aria-pressed="false"
-                >
-                  Finance 스케쥴 업로드
-                </button>
-              </div>
-              <section id="scheduleFinanceDownloadSection" class="schedule-support-action-section stack">
-                <div class="approval-head">
-                  <h3>HQ 다운로드</h3>
-                </div>
-                <p class="muted">1차 확인본은 현재 assembled truth 기준으로 생성되고, 2차 최종본은 Supervisor가 올린 최종 파일 그대로 제공합니다.</p>
-                <div class="schedule-support-upload-actions">
-                  <button class="btn btn-secondary" type="button" id="scheduleFinanceReviewDownloadBtn" data-action="schedule-finance-review-download">1차 스케쥴 다운로드</button>
-                  <button class="btn btn-primary" type="button" id="scheduleFinanceFinalDownloadBtn" data-action="schedule-finance-final-download">2차 최종 스케쥴 다운로드</button>
-                </div>
-              </section>
-              <section id="scheduleFinanceUploadSection" class="schedule-support-action-section stack hidden">
-                <div class="approval-head">
-                  <h3>Supervisor 최종 업로드</h3>
-                </div>
-                <p class="muted">canonical workbook만 허용되며, 최신 1차 확인본보다 오래된 파일이나 보호 영역 수정은 차단됩니다.</p>
-                <input id="scheduleFinanceUploadFile" type="file" accept=".xlsx" />
-                <div class="schedule-support-upload-actions">
-                  <button class="btn btn-secondary" type="button" id="scheduleFinancePreviewBtn" data-action="schedule-finance-preview">최종 업로드 미리보기</button>
-                  <button class="btn btn-primary" type="button" id="scheduleFinanceApplyBtn" data-action="schedule-finance-apply">최종 업로드 반영</button>
-                </div>
-              </section>
-              <p id="scheduleFinanceBatchInfo" class="muted"></p>
-              <ul id="scheduleFinanceBatchIssues" class="list hidden"></ul>
-              <div id="scheduleFinancePreviewTableWrap" class="schedule-preview-wrap hidden">
-                <div class="schedule-preview-head">
-                  <h3>Finance 최종 업로드 미리보기</h3>
-                  <span class="muted">protected/conflict/stale 변경은 차단되고, 허용된 diff만 반영됩니다.</span>
-                </div>
-                <table class="schedule-preview-table">
-                  <thead>
-                    <tr>
-                      <th>행</th>
-                      <th>섹션</th>
-                      <th>날짜</th>
-                      <th>직원명</th>
-                      <th>근무구분</th>
-                      <th>현재값</th>
-                      <th>업로드값</th>
-                      <th>처리</th>
-                      <th>상태</th>
-                      <th>사유</th>
-                    </tr>
-                  </thead>
-                  <tbody id="scheduleFinancePreviewTableBody"></tbody>
-                </table>
-              </div>
-              <p id="scheduleFinanceApplyResult" class="muted"></p>
-              <ul id="scheduleFinanceApplyDetails" class="list hidden"></ul>
+              <p class="muted">스케줄 탭에서는 월간 캘린더, Excel 업로드, 지점별 업로드 확인, 근무 템플릿 owner 화면만 유지합니다.</p>
             </section>
             </div>
 
@@ -3179,86 +3106,338 @@
           <section id="view-reports" class="panel card view hidden">
             <div class="workspace-head">
               <div class="workspace-head-main">
-                <h2>전용 보고</h2>
-                <p id="reportsScopeHint" class="muted">회사별 리포트 팩을 불러오는 중입니다.</p>
+                <h2>보고</h2>
+                <p id="reportsScopeHint" class="muted">회사별 보고 상태를 불러오는 중입니다.</p>
               </div>
             </div>
+
+            <section class="module-card stack reports-center-context-card">
+              <div class="reports-center-context-grid">
+                <label class="input-field">
+                  <span>대상 월</span>
+                  <input id="reportsOwnerMonth" type="month" />
+                </label>
+                <div class="schedule-reports-context-row">
+                  <label class="input-field">
+                    <span>대상 지점</span>
+                    <select id="scheduleReportsSite">
+                      <option value="">지점 선택</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="reports-center-freshness">
+                  <span id="reportsFreshnessPill" class="status-pill status-pill-neutral">상태 확인 대기</span>
+                  <p id="reportsFreshnessText" class="muted">대상 월과 지점을 고정하면 보고 상태와 handoff 결과를 함께 확인할 수 있습니다.</p>
+                </div>
+              </div>
+            </section>
+
             <div class="workspace-tabbar-row">
               <div id="reportsWorkspaceTabs" class="workspace-tabs">
-                <button class="btn btn-secondary workspace-tab active" type="button" data-action="reports-view-tab" data-tab="catalog">카탈로그</button>
-                <button class="btn btn-secondary workspace-tab" type="button" data-action="reports-view-tab" data-tab="history">실행 이력</button>
+                <button class="btn btn-secondary workspace-tab active" type="button" data-action="reports-view-tab" data-tab="finance">Finance 제출</button>
+                <button class="btn btn-secondary workspace-tab" type="button" data-action="reports-view-tab" data-tab="support">지원근무 전달</button>
                 <button class="btn btn-secondary workspace-tab" type="button" data-action="reports-view-tab" data-tab="pack">전용 팩</button>
+                <button class="btn btn-secondary workspace-tab" type="button" data-action="reports-view-tab" data-tab="history">실행 이력</button>
               </div>
               <div class="workspace-tabbar-actions">
                 <button class="btn btn-secondary" type="button" data-action="reports-refresh">새로고침</button>
               </div>
             </div>
 
-            <article class="module-card stack" data-reports-panel="catalog">
-              <div class="approval-head">
-                <h3>카탈로그</h3>
-              </div>
-              <div class="reports-catalog-groups">
-                <span class="status-pill status-pill-neutral">운영 리포트</span>
-                <span class="status-pill status-pill-neutral">출퇴근 리포트</span>
-                <span class="status-pill status-pill-neutral">스케줄 리포트</span>
-                <span class="status-pill status-pill-warn">Apple pack</span>
-              </div>
-              <ul id="reportsPackList" class="list"></ul>
-              <p id="reportsPackHint" class="muted"></p>
+            <article class="stack reports-panel-shell" data-reports-panel="finance">
+              <section class="module-card stack reports-owner-card">
+                <div class="approval-head">
+                  <div>
+                    <h3>Finance 제출</h3>
+                    <p class="muted">월말 Finance 제출과 최종 업로드 반영은 이 보고 탭에서 진행합니다.</p>
+                  </div>
+                  <div class="quick-actions">
+                    <button class="btn btn-secondary" type="button" data-action="reports-open-schedule-upload">Excel 업로드 열기</button>
+                  </div>
+                </div>
+                <div class="reports-owner-summary">
+                  <div>
+                    <strong>Finance 제출 owner는 보고 탭입니다.</strong>
+                    <p class="muted">1차 확인본, 최종본, 미리보기, 최종 반영은 여기서 처리하고, 월간 원본 관리와 매핑은 스케줄 owner 화면에서 이어집니다.</p>
+                  </div>
+                </div>
+              </section>
+
+              <section id="scheduleFinanceSubmissionPanel" class="module-card stack hidden">
+                <div class="approval-head">
+                  <div>
+                    <h3>Finance용 스케쥴 제출</h3>
+                    <p class="muted">HQ는 1차 확인본/최종본을 다운로드하고, Supervisor는 최종 정정본을 업로드합니다.</p>
+                  </div>
+                  <span id="scheduleFinanceStatePill" class="status-pill status-pill-neutral">상태 확인 대기</span>
+                </div>
+                <p id="scheduleFinanceStatusText" class="muted">업로드 지점을 선택하면 Finance 제출 단계와 필요한 다음 작업을 확인할 수 있습니다.</p>
+                <div id="scheduleFinanceStatusGrid" class="schedule-support-status-grid schedule-finance-status-grid">
+                  <article class="schedule-support-meta-card">
+                    <span class="schedule-support-meta-label">현재 단계</span>
+                    <strong id="scheduleFinancePhaseLabel">확인 대기</strong>
+                    <span id="scheduleFinancePhaseMeta" class="muted">지점 선택 후 확인</span>
+                  </article>
+                  <article class="schedule-support-meta-card">
+                    <span class="schedule-support-meta-label">1차 확인본</span>
+                    <strong id="scheduleFinanceReviewRevision">없음</strong>
+                    <span id="scheduleFinanceReviewMeta" class="muted">HQ 다운로드 전</span>
+                  </article>
+                  <article class="schedule-support-meta-card">
+                    <span class="schedule-support-meta-label">최종 업로드</span>
+                    <strong id="scheduleFinanceFinalUploadState">대기</strong>
+                    <span id="scheduleFinanceFinalUploadMeta" class="muted">Supervisor 업로드 전</span>
+                  </article>
+                  <article class="schedule-support-meta-card">
+                    <span class="schedule-support-meta-label">HQ 최종 다운로드</span>
+                    <strong id="scheduleFinanceFinalDownloadState">비활성</strong>
+                    <span id="scheduleFinanceFinalDownloadMeta" class="muted">최종 업로드 후 활성화</span>
+                  </article>
+                </div>
+                <ul id="scheduleFinanceBlockedReasons" class="list hidden"></ul>
+                <div id="scheduleFinanceTabs" class="schedule-finance-tabs" role="tablist" aria-label="Finance 스케쥴 제출 단계">
+                  <button
+                    class="btn btn-secondary schedule-finance-tab active"
+                    type="button"
+                    data-action="schedule-finance-tab"
+                    data-tab="download"
+                    aria-pressed="true"
+                  >
+                    Finance 스케쥴 다운로드
+                  </button>
+                  <button
+                    class="btn btn-secondary schedule-finance-tab"
+                    type="button"
+                    data-action="schedule-finance-tab"
+                    data-tab="upload"
+                    aria-pressed="false"
+                  >
+                    Finance 스케쥴 업로드
+                  </button>
+                </div>
+                <section id="scheduleFinanceDownloadSection" class="schedule-support-action-section stack">
+                  <div class="approval-head">
+                    <h3>HQ 다운로드</h3>
+                  </div>
+                  <p class="muted">1차 확인본은 현재 assembled truth 기준으로 생성되고, 2차 최종본은 Supervisor가 올린 최종 파일 그대로 제공합니다.</p>
+                  <div class="schedule-support-upload-actions">
+                    <button class="btn btn-secondary" type="button" id="scheduleFinanceReviewDownloadBtn" data-action="schedule-finance-review-download">1차 스케쥴 다운로드</button>
+                    <button class="btn btn-primary" type="button" id="scheduleFinanceFinalDownloadBtn" data-action="schedule-finance-final-download">2차 최종 스케쥴 다운로드</button>
+                  </div>
+                </section>
+                <section id="scheduleFinanceUploadSection" class="schedule-support-action-section stack hidden">
+                  <div class="approval-head">
+                    <h3>Supervisor 최종 업로드</h3>
+                  </div>
+                  <p class="muted">canonical workbook만 허용되며, 최신 1차 확인본보다 오래된 파일이나 보호 영역 수정은 차단됩니다.</p>
+                  <input id="scheduleFinanceUploadFile" type="file" accept=".xlsx" />
+                  <div class="schedule-support-upload-actions">
+                    <button class="btn btn-secondary" type="button" id="scheduleFinancePreviewBtn" data-action="schedule-finance-preview">최종 업로드 미리보기</button>
+                    <button class="btn btn-primary" type="button" id="scheduleFinanceApplyBtn" data-action="schedule-finance-apply">최종 업로드 반영</button>
+                  </div>
+                </section>
+                <div id="scheduleFinanceProgress" class="task-progress-strip hidden" role="status" aria-live="polite">
+                  <span id="scheduleFinanceProgressPill" class="status-pill status-pill-neutral">대기</span>
+                  <div class="task-progress-main">
+                    <div class="schedule-upload-progress-copy">
+                      <strong id="scheduleFinanceProgressTitle">Finance 처리 대기</strong>
+                      <p id="scheduleFinanceProgressText" class="muted">미리보기 생성이나 반영이 시작되면 현재 진행 상태가 여기에 표시됩니다.</p>
+                    </div>
+                    <div class="task-progress-track" aria-hidden="true">
+                      <div id="scheduleFinanceProgressBar" class="task-progress-fill"></div>
+                    </div>
+                    <div class="task-progress-meta" aria-live="off">
+                      <span id="scheduleFinanceProgressPercent">0%</span>
+                      <span id="scheduleFinanceProgressElapsed"></span>
+                    </div>
+                  </div>
+                </div>
+                <p id="scheduleFinanceBatchInfo" class="muted"></p>
+                <ul id="scheduleFinanceBatchIssues" class="list hidden"></ul>
+                <div id="scheduleFinancePreviewTableWrap" class="schedule-preview-wrap hidden">
+                  <div class="schedule-preview-head">
+                    <h3>Finance 최종 업로드 미리보기</h3>
+                    <span class="muted">protected/conflict/stale 변경은 차단되고, 허용된 diff만 반영됩니다.</span>
+                  </div>
+                  <table class="schedule-preview-table">
+                    <thead>
+                      <tr>
+                        <th>행</th>
+                        <th>섹션</th>
+                        <th>날짜</th>
+                        <th>직원명</th>
+                        <th>근무구분</th>
+                        <th>현재값</th>
+                        <th>업로드값</th>
+                        <th>처리</th>
+                        <th>상태</th>
+                        <th>사유</th>
+                      </tr>
+                    </thead>
+                    <tbody id="scheduleFinancePreviewTableBody"></tbody>
+                  </table>
+                </div>
+                <p id="scheduleFinanceApplyResult" class="muted"></p>
+                <ul id="scheduleFinanceApplyDetails" class="list hidden"></ul>
+              </section>
             </article>
 
-            <article id="reportsPackEmptyCard" class="module-card stack hidden" data-reports-panel="pack">
-              <div class="approval-head">
-                <h3>전용 팩</h3>
-                <span class="status-pill status-pill-neutral">준비 상태</span>
-              </div>
-              <p id="reportsPackEmptyMessage" class="muted">현재 회사에는 전용 팩이 연결되어 있지 않습니다.</p>
+            <article class="stack reports-panel-shell hidden" data-reports-panel="support">
+              <section id="reportsSupportCard" class="module-card stack">
+                <div class="approval-head">
+                  <div>
+                    <h3>지원근무 전달</h3>
+                    <p class="muted">ARLS에서 생성한 source artifact 상태를 확인하고, Sentrix handoff로 이어집니다.</p>
+                  </div>
+                  <span id="reportsSupportStatePill" class="status-pill status-pill-neutral">상태 확인 대기</span>
+                </div>
+                <p id="reportsSupportStatusText" class="muted">대상 월과 지점을 고정하면 전달 상태, stale 여부, 다음 작업을 확인할 수 있습니다.</p>
+                <div id="reportsSupportStatusGrid" class="schedule-support-status-grid">
+                  <article class="schedule-support-meta-card">
+                    <span class="schedule-support-meta-label">현재 단계</span>
+                    <strong id="reportsSupportPhaseLabel">확인 대기</strong>
+                    <span id="reportsSupportPhaseMeta" class="muted">지점 선택 후 확인</span>
+                  </article>
+                  <article class="schedule-support-meta-card">
+                    <span class="schedule-support-meta-label">전달 기준</span>
+                    <strong id="reportsSupportArtifactLabel">미생성</strong>
+                    <span id="reportsSupportArtifactMeta" class="muted">source artifact 대기</span>
+                  </article>
+                  <article class="schedule-support-meta-card">
+                    <span class="schedule-support-meta-label">최근 전달</span>
+                    <strong id="reportsSupportDeliveryLabel">대기</strong>
+                    <span id="reportsSupportDeliveryMeta" class="muted">Sentrix 제출 전</span>
+                  </article>
+                  <article class="schedule-support-meta-card">
+                    <span class="schedule-support-meta-label">다음 작업</span>
+                    <strong id="reportsSupportNextActionLabel">지점 선택</strong>
+                    <span id="reportsSupportNextActionMeta" class="muted">보고 탭 또는 스케줄 owner 화면에서 이어집니다.</span>
+                  </article>
+                </div>
+                <ul id="reportsSupportBlockedReasons" class="list hidden"></ul>
+                <section class="reports-owner-summary reports-owner-summary-secondary">
+                  <div>
+                    <strong>이 화면은 handoff/status workspace입니다.</strong>
+                    <p class="muted">실제 workbook 업로드와 검토/반영은 스케줄의 `지점별 업로드 확인` owner 화면에서 진행합니다. 여기서는 최신 artifact, stale, Sentrix 연결 상태만 확인합니다.</p>
+                  </div>
+                  <div class="reports-owner-summary-actions">
+                    <button class="btn btn-secondary" type="button" data-action="reports-support-open-schedule-hq-upload">지점별 업로드 확인 열기</button>
+                  </div>
+                </section>
+                <div class="schedule-support-upload-actions">
+                  <button class="btn btn-secondary" type="button" id="reportsSupportDownloadBtn" data-action="reports-support-download">지원근무자용 시트 다운로드</button>
+                  <button class="btn btn-primary" type="button" id="reportsSupportOpenSentrixBtn" data-action="reports-support-open-sentrix">Sentrix에서 열기</button>
+                  <button class="btn btn-secondary" type="button" id="reportsSupportCopyArtifactBtn" data-action="reports-support-copy-artifact">artifact_id 복사</button>
+                </div>
+                <details id="reportsSupportArtifactTechDetails" class="schedule-upload-tech-details hidden">
+                  <summary>상세 정보</summary>
+                  <dl class="schedule-support-artifact-list">
+                    <div class="schedule-support-artifact-row">
+                      <dt>artifact_id</dt>
+                      <dd id="reportsSupportArtifactId">-</dd>
+                    </div>
+                    <div class="schedule-support-artifact-row">
+                      <dt>site</dt>
+                      <dd id="reportsSupportArtifactSite">-</dd>
+                    </div>
+                    <div class="schedule-support-artifact-row">
+                      <dt>month</dt>
+                      <dd id="reportsSupportArtifactMonth">-</dd>
+                    </div>
+                    <div class="schedule-support-artifact-row">
+                      <dt>revision</dt>
+                      <dd id="reportsSupportArtifactRevision">-</dd>
+                    </div>
+                    <div class="schedule-support-artifact-row">
+                      <dt>generated_at</dt>
+                      <dd id="reportsSupportArtifactGeneratedAt">-</dd>
+                    </div>
+                  </dl>
+                </details>
+              </section>
             </article>
 
-            <article id="reportsAppleCard" class="module-card stack hidden" data-reports-panel="pack">
+            <article class="module-card stack" data-reports-panel="pack">
               <div class="approval-head">
-                <h3>Apple pack</h3>
-                <span id="reportsApplePackPill" class="status-pill status-pill-warn">선택 회사 전용</span>
-              </div>
-              <label class="input-field" for="reportsAppleMonth">
-                대상 월
-                <input id="reportsAppleMonth" type="month" />
-              </label>
-              <div class="ops-kpi-grid ops-kpi-grid-lg">
-                <div class="profile-item">
-                  <span>Daytime 반영</span>
-                  <strong id="reportsAppleDaytimeStatus">-</strong>
-                </div>
-                <div class="profile-item">
-                  <span>Overtime 반영</span>
-                  <strong id="reportsAppleOvertimeStatus">-</strong>
-                </div>
-                <div class="profile-item">
-                  <span>Overnight 반영</span>
-                  <strong id="reportsAppleOvernightStatus">-</strong>
-                </div>
-                <div class="profile-item">
-                  <span>Late/Event 반영</span>
-                  <strong id="reportsAppleLateEventStatus">-</strong>
+                <div>
+                  <h3>전용 팩</h3>
+                  <p class="muted">회사별 보고 pack 상태와 실행 경로를 한 곳에서 관리합니다.</p>
                 </div>
               </div>
-              <div class="ops-automation-row">
-                <div class="list-row-main">
-                  <div class="list-row-title">구글 시트 동기화</div>
-                  <div id="reportsAppleSheetsMeta" class="list-row-sub">최근 동기화 정보를 불러오는 중입니다.</div>
-                </div>
-                <div class="ops-automation-actions">
-                  <span id="reportsAppleSheetsPill" class="status-pill status-pill-warn">확인 중</span>
-                  <button class="btn btn-secondary" type="button" data-action="reports-apple-refresh-status">상태 갱신</button>
-                </div>
+              <div class="reports-pack-layout">
+                <section class="stack reports-pack-list-column">
+                  <div class="reports-catalog-groups">
+                    <span class="status-pill status-pill-neutral">운영</span>
+                    <span class="status-pill status-pill-neutral">출퇴근</span>
+                    <span class="status-pill status-pill-neutral">스케줄</span>
+                    <span class="status-pill status-pill-warn">Apple pack</span>
+                  </div>
+                  <ul id="reportsPackList" class="list"></ul>
+                  <p id="reportsPackHint" class="muted"></p>
+                </section>
+                <section class="stack reports-pack-detail-column">
+                  <article id="reportsDefaultCard" class="module-card stack">
+                    <div class="approval-head">
+                      <h3>기본 보고 팩</h3>
+                      <span class="status-pill status-pill-neutral">기본</span>
+                    </div>
+                    <p class="muted">기본 보고는 월간 스케줄 기준으로 이어집니다. 필요 화면으로 바로 이동해 후속 작업을 진행하세요.</p>
+                    <div class="quick-actions">
+                      <button class="btn btn-secondary" type="button" data-action="reports-open-default-timesheet">월간 스케쥴 열기</button>
+                      <button class="btn btn-secondary" type="button" data-action="reports-open-default-duty-log">근무 캘린더 열기</button>
+                    </div>
+                  </article>
+
+                  <article id="reportsPackEmptyCard" class="module-card stack hidden">
+                    <div class="approval-head">
+                      <h3>전용 팩</h3>
+                      <span class="status-pill status-pill-neutral">준비 상태</span>
+                    </div>
+                    <p id="reportsPackEmptyMessage" class="muted">현재 회사에는 전용 팩이 연결되어 있지 않습니다.</p>
+                  </article>
+
+                  <article id="reportsAppleCard" class="module-card stack hidden">
+                    <div class="approval-head">
+                      <h3>Apple pack</h3>
+                      <span id="reportsApplePackPill" class="status-pill status-pill-warn">선택 회사 전용</span>
+                    </div>
+                    <div class="ops-kpi-grid ops-kpi-grid-lg">
+                      <div class="profile-item">
+                        <span>Daytime 반영</span>
+                        <strong id="reportsAppleDaytimeStatus">-</strong>
+                      </div>
+                      <div class="profile-item">
+                        <span>Overtime 반영</span>
+                        <strong id="reportsAppleOvertimeStatus">-</strong>
+                      </div>
+                      <div class="profile-item">
+                        <span>Overnight 반영</span>
+                        <strong id="reportsAppleOvernightStatus">-</strong>
+                      </div>
+                      <div class="profile-item">
+                        <span>Late/Event 반영</span>
+                        <strong id="reportsAppleLateEventStatus">-</strong>
+                      </div>
+                    </div>
+                    <div class="ops-automation-row">
+                      <div class="list-row-main">
+                        <div class="list-row-title">구글 시트 동기화</div>
+                        <div id="reportsAppleSheetsMeta" class="list-row-sub">최근 동기화 정보를 불러오는 중입니다.</div>
+                      </div>
+                      <div class="ops-automation-actions">
+                        <span id="reportsAppleSheetsPill" class="status-pill status-pill-warn">확인 중</span>
+                        <button class="btn btn-secondary" type="button" data-action="reports-apple-refresh-status">상태 갱신</button>
+                      </div>
+                    </div>
+                    <div class="quick-actions">
+                      <button class="btn btn-primary" type="button" data-action="reports-apple-run">이번달 업데이트 실행</button>
+                      <button class="btn btn-secondary" type="button" data-action="reports-apple-retry">실패 재시도</button>
+                      <button class="btn btn-secondary" type="button" data-action="reports-apple-view-logs">로그 보기</button>
+                    </div>
+                    <p id="reportsAppleHint" class="muted">전용 보고 상태를 확인하세요.</p>
+                  </article>
+                </section>
               </div>
-              <div class="quick-actions">
-                <button class="btn btn-primary" type="button" data-action="reports-apple-run">이번달 업데이트 실행</button>
-                <button class="btn btn-secondary" type="button" data-action="reports-apple-retry">실패 재시도</button>
-                <button class="btn btn-secondary" type="button" data-action="reports-apple-view-logs">로그 보기</button>
-              </div>
-              <p id="reportsAppleHint" class="muted">전용 보고 상태를 확인하세요.</p>
             </article>
 
             <article id="reportsHistoryCard" class="module-card stack hidden" data-reports-panel="history">
@@ -4075,9 +4254,32 @@
                   <button id="employeeRosterImportCommitBtn" class="btn btn-primary" type="button" data-action="employee-roster-commit">4. 등록 실행</button>
                 </div>
               </div>
+              <div id="employeeRosterImportProgressStrip" class="task-progress-strip hidden" role="status" aria-live="polite">
+                <span id="employeeRosterImportProgressPill" class="status-pill status-pill-neutral">대기</span>
+                <div class="task-progress-main">
+                  <div class="schedule-upload-progress-copy">
+                    <strong id="employeeRosterImportProgressTitle">업로드 대기</strong>
+                    <p id="employeeRosterImportProgressText" class="muted">업로드를 시작하면 문서 파싱과 현장 자동 매칭 진행 상태가 표시됩니다.</p>
+                  </div>
+                  <div class="task-progress-track" aria-hidden="true">
+                    <div id="employeeRosterImportProgressBar" class="task-progress-fill"></div>
+                  </div>
+                  <div class="task-progress-meta" aria-live="off">
+                    <span id="employeeRosterImportProgressPercent">0%</span>
+                    <span id="employeeRosterImportProgressElapsed"></span>
+                  </div>
+                </div>
+              </div>
               <p id="employeeRosterImportStatus" class="muted"></p>
 
-              <div class="employee-table-wrap">
+              <div class="employee-table-wrap task-progress-region">
+                <div id="employeeRosterImportTableOverlay" class="task-progress-overlay hidden" aria-live="polite">
+                  <div class="task-progress-overlay-card">
+                    <div class="task-progress-overlay-visual" aria-hidden="true"></div>
+                    <strong id="employeeRosterImportOverlayTitle">업로드 처리 중</strong>
+                    <p id="employeeRosterImportOverlayText" class="muted">시트가 준비되면 결과 표가 자동으로 갱신됩니다.</p>
+                  </div>
+                </div>
                 <table class="employee-table guard-import-table">
                   <thead>
                     <tr>
@@ -4553,6 +4755,24 @@
           <button class="btn btn-secondary" type="button" data-action="confirm-cancel">취소</button>
           <button class="btn btn-secondary hidden" id="confirmSecondaryBtn" type="button" data-action="confirm-secondary">추가 작업</button>
           <button class="btn btn-primary" id="confirmAcceptBtn" type="button" data-action="confirm-accept">확인</button>
+        </div>
+      </section>
+      <div id="taskProgressBackdrop" class="task-progress-backdrop hidden"></div>
+      <section id="taskProgressModal" class="task-progress-modal hidden" role="dialog" aria-modal="true" aria-live="polite" aria-hidden="true" aria-labelledby="taskProgressTitle">
+        <div class="task-progress-visual" aria-hidden="true">
+          <div class="task-progress-ring">
+            <div class="task-progress-ring-core"></div>
+          </div>
+        </div>
+        <span id="taskProgressStage" class="task-progress-stage">진행 중</span>
+        <h3 id="taskProgressTitle">작업을 처리하고 있습니다</h3>
+        <p id="taskProgressDetail" class="muted">잠시만 기다려 주세요.</p>
+        <div class="task-progress-track" aria-hidden="true">
+          <div id="taskProgressBar" class="task-progress-fill"></div>
+        </div>
+        <div class="task-progress-meta">
+          <span id="taskProgressPercent">0%</span>
+          <span id="taskProgressElapsed">00:00</span>
         </div>
       </section>
     </div>

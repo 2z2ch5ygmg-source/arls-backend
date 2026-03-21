@@ -1135,7 +1135,7 @@ function createInitialReportsState() {
     tenantCode: '',
     loading: false,
     selectedPack: 'default',
-    viewTab: 'catalog',
+    viewTab: 'finance',
     selectedHistoryLogKey: '',
     month: toMonthKey(new Date()),
     packs: [],
@@ -1178,6 +1178,26 @@ function createInitialHrDocumentsState() {
 function createInitialProfileViewState() {
   return {
     workspaceSegment: 'settings',
+  };
+}
+
+function createInitialTaskProgressState() {
+  return {
+    activeId: '',
+    surfaceKey: '',
+    title: '',
+    detail: '',
+    statusLabel: '',
+    stages: [],
+    stageIndex: 0,
+    progress: 0,
+    startedAt: 0,
+    visible: false,
+    outcome: 'idle',
+    revealTimer: 0,
+    tickTimer: 0,
+    modalDelayMs: 0,
+    stageAdvanceMs: 0,
   };
 }
 
@@ -1266,6 +1286,7 @@ const state = {
   integration: createInitialIntegrationState(),
   uiContext: createInitialUiContextState(),
   viewRuntime: createInitialViewRuntimeState(),
+  taskProgress: createInitialTaskProgressState(),
   requestsTabView: 'requests',
   approvalTab: APPROVAL_TAB_CHECKIN,
   requestsMyFilter: REQUESTS_MY_FILTER_ALL,
@@ -5608,9 +5629,9 @@ async function onOpsOpenOvernightReport() {
   if (!moved) return;
   scrollToSelector('#reportsPackList');
   if (isAppleReportPackEnabled()) {
-    showToast('전용 보고로 이동했습니다.', 'info', 2200);
+    showToast('보고 > 전용 팩으로 이동했습니다.', 'info', 2200);
   } else {
-    showToast('기본 리포트 팩으로 이동했습니다.', 'info', 2200);
+    showToast('보고 > 전용 팩으로 이동했습니다.', 'info', 2200);
   }
 }
 
@@ -7196,7 +7217,7 @@ async function onSupportStatusHqDownload() {
   showToast('HQ 지원근무 workbook을 다운로드했습니다.', 'success', 2200);
 }
 
-async function onSupportStatusHqInspect() {
+async function onSupportStatusHqInspect(progressController = null) {
   const hqWorkspace = ensureSupportStatusHqWorkspaceState();
   if (!canUseSupportStatusHqWorkspace()) {
     showToast('HQ workbook 업로드 권한이 없습니다.', 'error');
@@ -7213,6 +7234,12 @@ async function onSupportStatusHqInspect() {
   hqWorkspace.applyError = '';
   hqWorkspace.applyResult = null;
   hqWorkspace.uploadFileName = String(file?.name || '').trim();
+  if (progressController) {
+    progressController.update({
+      detail: `${String(file?.name || '선택한 workbook').trim() || '선택한 workbook'}을 검토하고 있습니다.`,
+      stageKey: 'file_check',
+    });
+  }
   renderSupportStatusHqWorkspace();
   const body = new FormData();
   body.append('file', file);
@@ -7222,6 +7249,11 @@ async function onSupportStatusHqInspect() {
     const result = await apiRequest('/schedules/support-roundtrip/hq-roster-upload/inspect', {
       method: 'POST',
       body,
+    });
+    progressController?.update({
+      stageKey: 'support_preview',
+      progress: 92,
+      detail: '검토 결과와 issue summary를 정리하고 있습니다.',
     });
     hqWorkspace.inspectResult = result && typeof result === 'object' ? result : null;
     hqWorkspace.inspectLoading = false;
@@ -7511,11 +7543,25 @@ function setSelectedReportsPack(value = '') {
   return next;
 }
 
+function getReportsAvailableTabs() {
+  const tabs = [];
+  if (canViewReportsFinanceTab()) tabs.push('finance');
+  if (canViewReportsSupportTab()) tabs.push('support');
+  if (canViewReportsPackTab()) tabs.push('pack');
+  if (canViewReportsHistoryTab()) tabs.push('history');
+  return tabs.length ? tabs : ['finance'];
+}
+
+function getDefaultReportsViewTab() {
+  return getReportsAvailableTabs()[0] || 'finance';
+}
+
 function getReportsMonthValue() {
-  const monthFromInput = normalizeMonthKey($('#reportsAppleMonth')?.value || '');
+  const monthFromInput = normalizeMonthKey($('#reportsOwnerMonth')?.value || '');
   if (monthFromInput) return monthFromInput;
   const monthFromState = normalizeMonthKey(state.reports?.month || '');
-  return monthFromState || toMonthKey(new Date());
+  if (monthFromState) return monthFromState;
+  return normalizeMonthKey(state.schedule?.month || '') || toMonthKey(new Date());
 }
 
 function setReportsMonthValue(monthValue, { syncInput = true } = {}) {
@@ -7525,10 +7571,26 @@ function setReportsMonthValue(monthValue, { syncInput = true } = {}) {
   }
   state.reports.month = normalized;
   if (syncInput) {
-    const monthInput = $('#reportsAppleMonth');
+    const monthInput = $('#reportsOwnerMonth');
     if (monthInput instanceof HTMLInputElement) {
       monthInput.value = normalized;
     }
+  }
+  return normalized;
+}
+
+function setReportsOwnerMonthValue(monthValue, { syncInputs = true } = {}) {
+  const normalized = setReportsMonthValue(monthValue, { syncInput: syncInputs });
+  if (state.schedule) {
+    state.schedule.month = normalized;
+  }
+  if (syncInputs) {
+    const scheduleMonthInput = $('#scheduleMonth');
+    if (scheduleMonthInput instanceof HTMLInputElement) {
+      scheduleMonthInput.value = normalized;
+    }
+    applyScheduleExportDateFromMonth(normalized);
+    syncScheduleImportMonthInput({ force: true });
   }
   return normalized;
 }
@@ -7544,7 +7606,105 @@ function renderReportsScopeHint() {
       : '리포트 대상 회사를 확인할 수 없습니다.';
     return;
   }
-  hint.textContent = `현재 회사: ${tenantCode} · 전용 보고 pack과 실행 이력을 확인하는 화면입니다.`;
+  hint.textContent = `현재 회사: ${tenantCode} · Finance 제출, 지원근무 전달, 전용 팩, 실행 이력을 한 화면에서 확인합니다.`;
+}
+
+function renderReportsContextSummary() {
+  const pill = $('#reportsFreshnessPill');
+  const text = $('#reportsFreshnessText');
+  if (!(pill instanceof HTMLElement) || !(text instanceof HTMLElement)) return;
+
+  const tab = normalizeReportsViewTab(state.reports?.viewTab || getDefaultReportsViewTab());
+  const month = getReportsMonthValue();
+  const siteCode = getScheduleSupportSelectedSiteCode();
+  const siteLabel = siteCode === 'ALL' ? '전체 지점' : (siteCode || '지점 선택');
+  const refreshedAt = formatOpsDateTime(state.reports?.lastSyncedAt || '');
+
+  pill.className = 'status-pill status-pill-neutral';
+  pill.textContent = '상태 확인 대기';
+  text.textContent = `${formatScheduleMonthTitle(month)} · ${siteLabel} 기준 상태를 확인합니다.`;
+
+  if (tab === 'finance') {
+    const status = state.schedule?.financeStatus && typeof state.schedule.financeStatus === 'object'
+      ? state.schedule.financeStatus
+      : null;
+    if (!siteCode) {
+      pill.textContent = '지점 선택';
+      text.textContent = `${formatScheduleMonthTitle(month)} 기준 Finance 제출 상태를 조회하려면 지점을 선택하세요.`;
+      return;
+    }
+    if (!status) {
+      pill.textContent = '조회 중';
+      text.textContent = `${formatScheduleMonthTitle(month)} · ${siteLabel} 기준 Finance 제출 상태를 확인하는 중입니다.`;
+      return;
+    }
+    if (siteCode === 'ALL' || status.overall_scope) {
+      pill.className = canDownloadScheduleFinanceReview() ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral';
+      pill.textContent = canDownloadScheduleFinanceReview() ? '전체 1차 다운로드' : '전체 안내';
+      text.textContent = '전체 선택에서는 1차 확인본 다운로드만 지원하고, 최종 업로드/최종본 다운로드는 단일 지점에서 진행합니다.';
+      return;
+    }
+    const stateLabel = getScheduleFinanceStateLabel(status.state || '');
+    pill.className = getScheduleFinanceStateClass(status.state || '');
+    pill.textContent = stateLabel;
+    text.textContent = [
+      `${formatScheduleMonthTitle(month)} · ${siteLabel}`,
+      status.final_upload_stale ? '최종본 재검토 필요' : '',
+      refreshedAt ? `마지막 갱신 ${refreshedAt}` : '',
+    ].filter(Boolean).join(' · ');
+    return;
+  }
+
+  if (tab === 'support') {
+    const status = state.schedule?.supportStatus && typeof state.schedule.supportStatus === 'object'
+      ? state.schedule.supportStatus
+      : null;
+    if (!siteCode) {
+      pill.textContent = '지점 선택';
+      text.textContent = `${formatScheduleMonthTitle(month)} 기준 지원근무 전달 상태를 조회하려면 지점을 선택하세요.`;
+      return;
+    }
+    if (!status) {
+      pill.textContent = '조회 중';
+      text.textContent = `${formatScheduleMonthTitle(month)} · ${siteLabel} 기준 지원근무 전달 상태를 확인하는 중입니다.`;
+      return;
+    }
+    const sourceState = String(status.source_state || '').trim();
+    pill.className = getScheduleSupportRoundtripStateClass(sourceState, status);
+    pill.textContent = (siteCode === 'ALL' || status.overall_scope)
+      ? '전체'
+      : getScheduleSupportRoundtripStateLabel(sourceState);
+    text.textContent = [
+      `${formatScheduleMonthTitle(month)} · ${siteLabel}`,
+      refreshedAt ? `마지막 갱신 ${refreshedAt}` : '',
+      status.hq_merge_stale ? '재전달 필요' : '',
+    ].filter(Boolean).join(' · ');
+    return;
+  }
+
+  if (tab === 'pack') {
+    const selectedPack = getSelectedReportsPack();
+    if (selectedPack === 'apple' && isAppleReportPackEnabled()) {
+      const sheetsStatus = String(state.reports?.appleStatus?.status?.sheets?.status || '').trim().toUpperCase();
+      const variant = getOpsStatusVariant(sheetsStatus);
+      pill.className = variant === 'success'
+        ? 'status-pill status-pill-success'
+        : (variant === 'error' ? 'status-pill status-pill-error' : 'status-pill status-pill-warn');
+      pill.textContent = getUiStatusLabel(sheetsStatus || 'pending');
+      text.textContent = refreshedAt
+        ? `Apple pack 상태 기준 · 마지막 갱신 ${refreshedAt}`
+        : 'Apple pack 상태를 확인하는 중입니다.';
+      return;
+    }
+    pill.textContent = '기본 팩';
+    text.textContent = '기본 보고 팩은 스케줄 owner 화면으로 이어지는 실행 경로를 정리합니다.';
+    return;
+  }
+
+  pill.textContent = '로그 보기';
+  text.textContent = refreshedAt
+    ? `최근 보고 실행 이력 기준 · 마지막 갱신 ${refreshedAt}`
+    : '최근 보고 실행 이력을 확인합니다.';
 }
 
 function renderReportsPackList() {
@@ -7683,6 +7843,201 @@ function renderReportsAppleCard() {
   renderReportsWorkspacePanels();
 }
 
+function renderReportsSupportArtifactMeta(context = null) {
+  const artifact = context && typeof context === 'object' ? context : {};
+  setTextContentIfPresent('#reportsSupportArtifactId', String(artifact.artifact_id || '').trim() || '-');
+  setTextContentIfPresent('#reportsSupportArtifactSite', String(artifact.site_code || '').trim() || '-');
+  setTextContentIfPresent('#reportsSupportArtifactMonth', String(artifact.month || '').trim() || '-');
+  setTextContentIfPresent('#reportsSupportArtifactRevision', String(artifact.revision || '').trim() || '-');
+  setTextContentIfPresent(
+    '#reportsSupportArtifactGeneratedAt',
+    artifact.generated_at ? formatOpsDateTime(artifact.generated_at) : '-',
+    '-',
+  );
+}
+
+function renderReportsSupportHandoffPanel() {
+  const panel = $('#reportsSupportCard');
+  if (!(panel instanceof HTMLElement)) return;
+
+  const supportVisible = canViewReportsSupportTab();
+  panel.classList.toggle('hidden', !supportVisible);
+  if (!supportVisible) return;
+
+  const siteCode = getScheduleSupportSelectedSiteCode();
+  const status = state.schedule?.supportStatus && typeof state.schedule.supportStatus === 'object'
+    ? state.schedule.supportStatus
+    : null;
+  const pill = $('#reportsSupportStatePill');
+  const text = $('#reportsSupportStatusText');
+  const phaseLabel = $('#reportsSupportPhaseLabel');
+  const phaseMeta = $('#reportsSupportPhaseMeta');
+  const artifactLabel = $('#reportsSupportArtifactLabel');
+  const artifactMeta = $('#reportsSupportArtifactMeta');
+  const deliveryLabel = $('#reportsSupportDeliveryLabel');
+  const deliveryMeta = $('#reportsSupportDeliveryMeta');
+  const nextActionLabel = $('#reportsSupportNextActionLabel');
+  const nextActionMeta = $('#reportsSupportNextActionMeta');
+  const blockedList = $('#reportsSupportBlockedReasons');
+  const downloadBtn = $('#reportsSupportDownloadBtn');
+  const sentrixBtn = $('#reportsSupportOpenSentrixBtn');
+  const copyBtn = $('#reportsSupportCopyArtifactBtn');
+  const techDetails = $('#reportsSupportArtifactTechDetails');
+  const month = getReportsMonthValue();
+
+  if (techDetails instanceof HTMLElement) {
+    techDetails.classList.toggle('hidden', !canSelectScheduleWorkflowTenant());
+  }
+
+  const setBlockedReasons = (reasons = []) => {
+    if (!(blockedList instanceof HTMLElement)) return;
+    blockedList.innerHTML = '';
+    const rows = Array.isArray(reasons) ? reasons.filter(Boolean) : [];
+    if (!rows.length) {
+      blockedList.classList.add('hidden');
+      return;
+    }
+    blockedList.classList.remove('hidden');
+    rows.forEach((reason) => {
+      const li = document.createElement('li');
+      li.textContent = String(reason || '').trim();
+      blockedList.appendChild(li);
+    });
+  };
+
+  if (!siteCode) {
+    if (pill) {
+      pill.className = 'status-pill status-pill-neutral';
+      pill.textContent = '지점 선택';
+    }
+    if (text) text.textContent = `${formatScheduleMonthTitle(month)} 기준 전달 상태를 보려면 지점을 선택하세요.`;
+    if (phaseLabel) phaseLabel.textContent = '확인 대기';
+    if (phaseMeta) phaseMeta.textContent = '지점 선택 후 확인';
+    if (artifactLabel) artifactLabel.textContent = '미생성';
+    if (artifactMeta) artifactMeta.textContent = 'source artifact 대기';
+    if (deliveryLabel) deliveryLabel.textContent = '대기';
+    if (deliveryMeta) deliveryMeta.textContent = 'Sentrix 제출 전';
+    if (nextActionLabel) nextActionLabel.textContent = '지점 선택';
+    if (nextActionMeta) nextActionMeta.textContent = '보고 탭 또는 스케줄 owner 화면에서 이어집니다.';
+    if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = true;
+    if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = true;
+    if (copyBtn instanceof HTMLButtonElement) copyBtn.disabled = true;
+    renderReportsSupportArtifactMeta(null);
+    setBlockedReasons([]);
+    return;
+  }
+
+  if (!status) {
+    if (pill) {
+      pill.className = 'status-pill status-pill-neutral';
+      pill.textContent = '조회 중';
+    }
+    if (text) text.textContent = `${formatScheduleMonthTitle(month)} · ${siteCode === 'ALL' ? '전체 지점' : siteCode} 기준 전달 상태를 확인하는 중입니다.`;
+    if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = true;
+    if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = true;
+    if (copyBtn instanceof HTMLButtonElement) copyBtn.disabled = true;
+    renderReportsSupportArtifactMeta(null);
+    setBlockedReasons([]);
+    return;
+  }
+
+  const overallScope = siteCode === 'ALL' || Boolean(status.overall_scope);
+  const artifactContext = buildScheduleSupportArtifactContext(status, overallScope ? 'ALL' : siteCode);
+  const sourceState = String(status.source_state || '').trim();
+  const sourceMissing = sourceState === 'source_missing';
+  const mergeAvailable = Boolean(status.hq_merge_available);
+  const mergeStale = Boolean(status.hq_merge_stale) || sourceState === 'hq_merge_stale';
+  const readyForHandoff = Boolean(artifactContext.artifact_id) && !sourceMissing;
+  const blockedReasons = Array.isArray(status.blocked_reasons) ? status.blocked_reasons.filter(Boolean) : [];
+
+  renderReportsSupportArtifactMeta(artifactContext);
+
+  if (overallScope) {
+    const totalSiteCount = Number(status.total_site_count || 0);
+    const readySiteCount = Number(status.ready_site_count || 0);
+    if (pill) {
+      pill.className = readySiteCount > 0 ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral';
+      pill.textContent = readySiteCount > 0 ? '전체 준비' : '전체 대기';
+    }
+    if (text) text.textContent = `${formatScheduleMonthTitle(month)} 기준 전체 ${readySiteCount}/${totalSiteCount || 0}개 지점 handoff 준비 상태입니다.`;
+    if (phaseLabel) phaseLabel.textContent = '전체 상태';
+    if (phaseMeta) phaseMeta.textContent = readySiteCount > 0 ? '준비된 지점은 Sentrix handoff로 이어질 수 있습니다.' : '준비된 지점이 없습니다.';
+    if (artifactLabel) artifactLabel.textContent = readySiteCount > 0 ? `${readySiteCount}개 ready` : '미생성';
+    if (artifactMeta) artifactMeta.textContent = artifactContext.artifact_id ? `artifact ${String(artifactContext.revision || 'latest').slice(0, 12)}` : 'source artifact 대기';
+    if (deliveryLabel) deliveryLabel.textContent = readySiteCount > 0 ? '지점별 확인 필요' : '대기';
+    if (deliveryMeta) deliveryMeta.textContent = '전체 범위에서는 지점별 상태를 묶어서 안내합니다.';
+    if (nextActionLabel) nextActionLabel.textContent = '지점별 업로드 확인';
+    if (nextActionMeta) nextActionMeta.textContent = '실제 workbook 검토와 반영은 스케줄 owner 화면에서 진행합니다.';
+    if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = !canUseScheduleSupportRoundtripHq() || readySiteCount <= 0;
+    if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = !canUseScheduleSupportRoundtripHq() || readySiteCount <= 0 || !artifactContext.artifact_id;
+    if (copyBtn instanceof HTMLButtonElement) copyBtn.disabled = !artifactContext.artifact_id;
+    setBlockedReasons(blockedReasons);
+    return;
+  }
+
+  if (pill) {
+    pill.className = getScheduleSupportRoundtripStateClass(sourceState, status);
+    pill.textContent = getScheduleSupportRoundtripStateLabel(sourceState);
+  }
+  if (text) {
+    text.textContent = [
+      `${formatScheduleMonthTitle(month)} · ${siteCode}`,
+      artifactContext.revision ? `artifact ${artifactContext.revision.slice(0, 12)}` : 'artifact 준비 전',
+      mergeStale ? '재전달 필요' : (mergeAvailable ? '최근 전달 이력 있음' : 'Sentrix 제출 대기'),
+    ].filter(Boolean).join(' · ');
+  }
+  if (phaseLabel) phaseLabel.textContent = getScheduleSupportRoundtripStateLabel(sourceState);
+  if (phaseMeta) {
+    phaseMeta.textContent = [
+      status.latest_hq_uploaded_at ? formatOpsDateTime(status.latest_hq_uploaded_at) : '',
+      status.latest_hq_uploaded_by ? String(status.latest_hq_uploaded_by).trim() : '',
+      mergeStale ? '최신 source 기준 재검토 필요' : '',
+    ].filter(Boolean).join(' · ') || '지점/월 기준 최신 전달 상태입니다.';
+  }
+  if (artifactLabel) artifactLabel.textContent = artifactContext.revision ? artifactContext.revision.slice(0, 12) : '미생성';
+  if (artifactMeta) {
+    artifactMeta.textContent = [
+      status.source_filename ? String(status.source_filename).trim() : '',
+      status.source_uploaded_at ? formatOpsDateTime(status.source_uploaded_at) : '',
+      artifactContext.generated_at ? `생성 ${formatOpsDateTime(artifactContext.generated_at)}` : '',
+    ].filter(Boolean).join(' · ') || 'source artifact 대기';
+  }
+  if (deliveryLabel) {
+    deliveryLabel.textContent = mergeStale
+      ? '재전달 필요'
+      : (mergeAvailable ? '전달 이력 있음' : '전달 대기');
+  }
+  if (deliveryMeta) {
+    deliveryMeta.textContent = [
+      status.latest_hq_revision ? `Sentrix ${String(status.latest_hq_revision).slice(0, 12)}` : '',
+      status.latest_hq_uploaded_at ? formatOpsDateTime(status.latest_hq_uploaded_at) : '',
+      status.handoff_message ? String(status.handoff_message).trim() : '',
+    ].filter(Boolean).join(' · ') || 'Sentrix 제출 전';
+  }
+  if (nextActionLabel) {
+    if (sourceMissing) nextActionLabel.textContent = '원본 업로드 필요';
+    else if (mergeStale) nextActionLabel.textContent = '지점별 업로드 확인';
+    else if (mergeAvailable) nextActionLabel.textContent = 'Sentrix에서 이어서 처리';
+    else nextActionLabel.textContent = '지원근무 제출 시작';
+  }
+  if (nextActionMeta) {
+    if (sourceMissing) nextActionMeta.textContent = 'Excel 업로드와 source artifact 생성이 먼저 필요합니다.';
+    else if (mergeStale) nextActionMeta.textContent = '최신 source 기준으로 스케줄 owner 화면에서 다시 검토/적용해야 합니다.';
+    else nextActionMeta.textContent = '이 화면에서는 상태 확인과 외부 앱 연결만 제공하고, 실제 업로드/반영은 스케줄 owner 화면에서 진행합니다.';
+  }
+
+  if (downloadBtn instanceof HTMLButtonElement) {
+    downloadBtn.disabled = !canUseScheduleSupportRoundtripHq() || !readyForHandoff;
+  }
+  if (sentrixBtn instanceof HTMLButtonElement) {
+    sentrixBtn.disabled = !canUseScheduleSupportRoundtripHq() || !readyForHandoff || !artifactContext.artifact_id;
+  }
+  if (copyBtn instanceof HTMLButtonElement) {
+    copyBtn.disabled = !artifactContext.artifact_id;
+  }
+  setBlockedReasons(blockedReasons);
+}
+
 function buildReportsHistoryRows() {
   const rows = [];
   const appleLogs = Array.isArray(state.reports?.appleLogs) ? state.reports.appleLogs : [];
@@ -7751,18 +8106,18 @@ function renderReportsHistoryPanel() {
 function renderReportsWorkspacePanels() {
   const tabs = $('#reportsWorkspaceTabs');
   const tabbarRow = tabs?.closest('.workspace-tabbar-row');
-  const isDesktop = isDesktopViewport();
-  let tab = normalizeReportsViewTab(state.reports?.viewTab || 'catalog');
+  let tab = normalizeReportsViewTab(state.reports?.viewTab || getDefaultReportsViewTab());
   if (!state.reports) state.reports = createInitialReportsState();
   state.reports.viewTab = tab;
 
   if (tabs) {
-    tabs.classList.toggle('hidden', !isDesktop);
     if (tabbarRow instanceof HTMLElement) {
-      tabbarRow.classList.toggle('hidden', !isDesktop);
+      tabbarRow.classList.remove('hidden');
     }
     tabs.querySelectorAll('[data-action="reports-view-tab"]').forEach((button) => {
       const buttonTab = normalizeReportsViewTab(button?.dataset?.tab || '');
+      const visible = getReportsAvailableTabs().includes(buttonTab);
+      button.classList.toggle('hidden', !visible);
       button.classList.toggle('active', buttonTab === tab);
       button.setAttribute('aria-pressed', buttonTab === tab ? 'true' : 'false');
     });
@@ -7770,15 +8125,13 @@ function renderReportsWorkspacePanels() {
 
   const panels = Array.from(document.querySelectorAll('#view-reports [data-reports-panel]'));
   panels.forEach((panel) => {
-    const panelType = normalizeReportsViewTab(panel?.dataset?.reportsPanel || 'catalog');
-    if (!isDesktop) {
-      panel.classList.toggle('hidden', panelType === 'history');
-      return;
-    }
+    const panelType = normalizeReportsViewTab(panel?.dataset?.reportsPanel || getDefaultReportsViewTab());
     panel.classList.toggle('hidden', panelType !== tab);
   });
 
+  renderReportsSupportHandoffPanel();
   renderReportsHistoryPanel();
+  renderReportsContextSummary();
 }
 
 async function loadReportsPacks({ force = false } = {}) {
@@ -7892,7 +8245,7 @@ function openAppleReportLogsSheet() {
   });
 }
 
-async function onReportsAppleRun({ retry = false } = {}) {
+async function onReportsAppleRun({ retry = false, progressController = null } = {}) {
   if (!isAppleReportPackEnabled()) {
     showToast('이 회사에 해당 보고서가 없습니다.', 'error', 3000);
     return;
@@ -7908,6 +8261,11 @@ async function onReportsAppleRun({ retry = false } = {}) {
   const message = retry
     ? `재시도 완료: 성공 ${success}건, 실패 ${fail}건, 건너뜀 ${skipped}건`
     : `업데이트 완료: 성공 ${success}건, 실패 ${fail}건, 건너뜀 ${skipped}건`;
+  progressController?.update({
+    stageKey: 'pack_refresh',
+    progress: 92,
+    detail: '실행 결과와 로그를 새로고침하고 있습니다.',
+  });
   showToast(message, fail > 0 ? 'error' : 'success', 3200);
   await Promise.allSettled([
     loadAppleReportStatus({ force: true }),
@@ -7918,22 +8276,50 @@ async function onReportsAppleRun({ retry = false } = {}) {
 
 async function loadReportsViewPresenter() {
   if (!state.reports) state.reports = createInitialReportsState();
-  setReportsMonthValue(state.reports.month || toMonthKey(new Date()), { syncInput: true });
+  setReportsOwnerMonthValue(state.reports.month || state.schedule?.month || toMonthKey(new Date()), { syncInputs: true });
   applyAppleTenantScopedUiVisibility();
-  await loadReportsPacks({ force: true });
+  renderReportsWorkspacePanels();
+  await Promise.allSettled([
+    loadReportsPacks({ force: true }),
+    refreshScheduleImportSiteOptions({ force: true }),
+  ]);
   updateOpsAppleActionVisibility();
-
-  const selectedPack = getSelectedReportsPack();
-  if (selectedPack === 'apple' && isAppleReportPackEnabled()) {
-    await Promise.allSettled([
-      loadAppleReportStatus({ force: true }),
-      loadAppleReportLogs({ force: true }),
-    ]);
-    renderReportsAppleCard();
-    renderReportsWorkspacePanels();
-    return;
-  }
+  await Promise.allSettled([
+    canViewReportsFinanceTab() ? loadScheduleFinanceSubmissionStatus() : Promise.resolve(null),
+    canViewReportsSupportTab() ? loadScheduleSupportRoundtripStatus() : Promise.resolve(null),
+    canViewReportsPackTab() && getSelectedReportsPack() === 'apple' && isAppleReportPackEnabled()
+      ? loadAppleReportStatus({ force: true })
+      : Promise.resolve(null),
+    canViewReportsHistoryTab() && isAppleReportPackEnabled()
+      ? loadAppleReportLogs({ force: true })
+      : Promise.resolve([]),
+  ]);
+  state.reports.lastSyncedAt = new Date().toISOString();
   renderReportsAppleCard();
+  renderReportsSupportHandoffPanel();
+  renderReportsWorkspacePanels();
+}
+
+async function refreshReportsCenterData({ force = false } = {}) {
+  if (force) {
+    await Promise.allSettled([
+      loadReportsPacks({ force: true }),
+      refreshScheduleImportSiteOptions({ force: true }),
+    ]);
+  }
+  await Promise.allSettled([
+    canViewReportsFinanceTab() ? loadScheduleFinanceSubmissionStatus() : Promise.resolve(null),
+    canViewReportsSupportTab() ? loadScheduleSupportRoundtripStatus() : Promise.resolve(null),
+    canViewReportsPackTab() && getSelectedReportsPack() === 'apple' && isAppleReportPackEnabled()
+      ? loadAppleReportStatus({ force })
+      : Promise.resolve(null),
+    canViewReportsHistoryTab() && isAppleReportPackEnabled()
+      ? loadAppleReportLogs({ force })
+      : Promise.resolve([]),
+  ]);
+  state.reports.lastSyncedAt = new Date().toISOString();
+  renderReportsAppleCard();
+  renderReportsSupportHandoffPanel();
   renderReportsWorkspacePanels();
 }
 
@@ -8352,6 +8738,7 @@ function isDrawerItemActiveRoute(targetRouteRaw = '', currentRouteRaw = '') {
   if (!targetRoute || !currentRoute) return false;
   if (targetRoute === currentRoute) return true;
   if (targetRoute === ROUTE_OPS && currentRoute === ROUTE_SUPPORT_STATUS) return true;
+  if (targetRoute === ROUTE_REPORTS && (currentRoute === ROUTE_REPORTS_APPLE || currentRoute === ROUTE_SCHEDULE_REPORTS)) return true;
   if (isScheduleRoutePath(targetRoute) && isScheduleRoutePath(currentRoute)) {
     const targetIsReports = targetRoute === ROUTE_SCHEDULE_REPORTS;
     const currentIsReports = currentRoute === ROUTE_SCHEDULE_REPORTS;
@@ -8395,6 +8782,13 @@ function isDrawerScheduleSectionActive(section = '', currentRouteRaw = '') {
 
 function isDrawerItemActive(item = null, currentRouteRaw = '') {
   if (!item || typeof item !== 'object') return false;
+  const reportsTabMatch = String(item.reportsTabMatch || '').trim().toLowerCase();
+  if (reportsTabMatch) {
+    const currentRoute = normalizeRoutePath(parseRouteCandidate(currentRouteRaw).path);
+    if (currentRoute === ROUTE_REPORTS || currentRoute === ROUTE_REPORTS_APPLE || currentRoute === ROUTE_SCHEDULE_REPORTS) {
+      return normalizeReportsViewTab(state.reports?.viewTab || getDefaultReportsViewTab()) === normalizeReportsViewTab(reportsTabMatch);
+    }
+  }
   const sectionMatch = String(item.sectionMatch || '').trim().toLowerCase();
   if (sectionMatch) {
     const currentRoute = normalizeRoutePath(parseRouteCandidate(currentRouteRaw).path);
@@ -8458,11 +8852,11 @@ const DRAWER_MENU_BY_ROLE = {
       id: 'schedule-reports',
       title: '보고',
       action: 'drawer-open-route',
-      route: ROUTE_SCHEDULE_REPORTS,
+      route: ROUTE_REPORTS,
       icon: 'clipboard-list',
-      scheduleSectionMatch: 'reports',
       children: [
-        { id: 'schedule-finance', title: 'Finance 제출', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, scheduleSectionMatch: 'reports' },
+        { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
+        { id: 'reports-support', title: '지원근무 전달', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=support`, reportsTabMatch: 'support' },
       ],
     },
     { type: 'section', title: '내 정보' },
@@ -8504,11 +8898,13 @@ const DRAWER_MENU_BY_ROLE = {
       id: 'schedule-reports',
       title: '보고',
       action: 'drawer-open-route',
-      route: ROUTE_SCHEDULE_REPORTS,
+      route: ROUTE_REPORTS,
       icon: 'clipboard-list',
-      scheduleSectionMatch: 'reports',
       children: [
-        { id: 'schedule-finance', title: 'Finance 제출', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, scheduleSectionMatch: 'reports' },
+        { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
+        { id: 'reports-support', title: '지원근무 전달', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=support`, reportsTabMatch: 'support' },
+        { id: 'reports-pack', title: '전용 팩', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=pack`, reportsTabMatch: 'pack' },
+        { id: 'reports-history', title: '실행 이력', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=history`, reportsTabMatch: 'history' },
       ],
     },
     { type: 'section', title: '조직' },
@@ -8562,11 +8958,13 @@ const DRAWER_MENU_BY_ROLE = {
       id: 'schedule-reports',
       title: '보고',
       action: 'drawer-open-route',
-      route: ROUTE_SCHEDULE_REPORTS,
+      route: ROUTE_REPORTS,
       icon: 'clipboard-list',
-      scheduleSectionMatch: 'reports',
       children: [
-        { id: 'schedule-finance', title: 'Finance 제출', action: 'drawer-open-route', route: ROUTE_SCHEDULE_REPORTS, scheduleSectionMatch: 'reports' },
+        { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
+        { id: 'reports-support', title: '지원근무 전달', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=support`, reportsTabMatch: 'support' },
+        { id: 'reports-pack', title: '전용 팩', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=pack`, reportsTabMatch: 'pack' },
+        { id: 'reports-history', title: '실행 이력', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=history`, reportsTabMatch: 'history' },
       ],
     },
     { type: 'section', title: '조직' },
@@ -9377,29 +9775,98 @@ const SCHEDULE_IMPORT_CONTEXT_FIELD_LABELS = Object.freeze({
 const SCHEDULE_IMPORT_PROGRESS_STAGES = Object.freeze([
   {
     key: 'workbook_loading',
-    label: 'workbook loading',
+    label: 'workbook 읽는 중',
     detail: '업로드 workbook을 읽는 중입니다.',
+    progress: 18,
   },
   {
     key: 'section_parsing',
-    label: 'section parsing',
+    label: '시트 구조 정리',
     detail: '월간 근무표의 섹션과 블록을 정규화하는 중입니다.',
+    progress: 34,
   },
   {
     key: 'employee_matching',
-    label: 'employee matching',
+    label: '직원 매칭',
     detail: '직원 마스터를 기준으로 이름 매칭을 계산하는 중입니다.',
+    progress: 54,
   },
   {
     key: 'template_mapping',
-    label: 'template mapping',
+    label: '템플릿 매핑 확인',
     detail: 'row type + 시간 기준 template mapping을 확인하는 중입니다.',
+    progress: 72,
   },
   {
     key: 'preview_building',
-    label: 'preview building',
+    label: '미리보기 구성',
     detail: '이슈 요약과 행 미리보기를 구성하는 중입니다.',
+    progress: 90,
   },
+]);
+
+const LONG_TASK_MODAL_DELAY_MS = 3200;
+const LONG_TASK_STAGE_TICK_MS = 1100;
+const LONG_TASK_SURFACE_SCHEDULE_IMPORT = 'schedule-import';
+const LONG_TASK_SURFACE_SCHEDULE_SUPPORT_HQ = 'schedule-support-hq';
+const LONG_TASK_SURFACE_SCHEDULE_FINANCE = 'schedule-finance';
+const LONG_TASK_SURFACE_EMPLOYEE_ROSTER = 'employee-roster';
+
+const LONG_TASK_STAGES_SCHEDULE_IMPORT = Object.freeze([
+  { key: 'upload_context', label: '업로드 조건 확인', detail: '지점, 대상 월, workbook을 확인하고 있습니다.', progress: 10 },
+  ...SCHEDULE_IMPORT_PROGRESS_STAGES.map((stage) => ({
+    key: stage.key,
+    label: stage.label,
+    detail: stage.detail,
+    progress: stage.progress,
+  })),
+]);
+
+const LONG_TASK_STAGES_SCHEDULE_APPLY = Object.freeze([
+  { key: 'apply_prepare', label: '반영 준비', detail: '검증된 변경을 반영용 batch로 준비하고 있습니다.', progress: 20 },
+  { key: 'apply_commit', label: '근무표 반영', detail: '허용된 변경을 ARLS 근무표에 반영하는 중입니다.', progress: 66 },
+  { key: 'refreshing', label: '결과 새로고침', detail: '반영 결과와 연계 상태를 다시 불러오는 중입니다.', progress: 92 },
+]);
+
+const LONG_TASK_STAGES_SUPPORT_HQ_INSPECT = Object.freeze([
+  { key: 'file_check', label: '파일 계약 확인', detail: 'HQ 작성본 workbook 계약과 범위를 확인하고 있습니다.', progress: 18 },
+  { key: 'support_parse', label: '지원근무 파싱', detail: '시트별 지원근무 셀과 scope를 검토하는 중입니다.', progress: 54 },
+  { key: 'support_preview', label: '검토 결과 생성', detail: 'issue summary와 미리보기를 구성하는 중입니다.', progress: 90 },
+]);
+
+const LONG_TASK_STAGES_FINANCE_PREVIEW = Object.freeze([
+  { key: 'finance_file_check', label: '파일 확인', detail: 'Finance 최종 업로드 파일과 지점 컨텍스트를 확인하고 있습니다.', progress: 18 },
+  { key: 'finance_diff', label: 'diff 계산', detail: '기존 ARLS 값과 업로드 값을 비교하는 중입니다.', progress: 58 },
+  { key: 'finance_preview', label: '미리보기 구성', detail: '차단 사유와 반영 가능 행을 정리하는 중입니다.', progress: 90 },
+]);
+
+const LONG_TASK_STAGES_FINANCE_APPLY = Object.freeze([
+  { key: 'finance_apply_prepare', label: '반영 준비', detail: '최종 업로드 batch를 준비하고 있습니다.', progress: 22 },
+  { key: 'finance_apply_commit', label: 'Finance 반영', detail: '허용된 diff를 Finance 제출 상태에 반영하는 중입니다.', progress: 70 },
+  { key: 'finance_refreshing', label: '상태 새로고침', detail: '제출 상태와 후속 다운로드 상태를 다시 불러오는 중입니다.', progress: 92 },
+]);
+
+const LONG_TASK_STAGES_EMPLOYEE_ROSTER_UPLOAD = Object.freeze([
+  { key: 'docx_upload', label: '파일 업로드', detail: '명부 docx 파일을 업로드하고 있습니다.', progress: 18 },
+  { key: 'docx_parse', label: '문서 파싱', detail: '명부 문서에서 직원 정보를 추출하는 중입니다.', progress: 52 },
+  { key: 'site_match', label: '현장 자동 매칭', detail: '지점 인덱스를 기준으로 근무현장을 연결하는 중입니다.', progress: 88 },
+]);
+
+const LONG_TASK_STAGES_EMPLOYEE_ROSTER_COMMIT = Object.freeze([
+  { key: 'commit_validate', label: '등록 검증', detail: '필수값과 현장 선택 상태를 검증하고 있습니다.', progress: 16 },
+  { key: 'commit_create', label: '일괄 등록', detail: '직원 계정과 첨부 정보를 일괄 등록하는 중입니다.', progress: 70 },
+  { key: 'commit_refresh', label: '목록 새로고침', detail: '등록 결과를 목록과 상세 화면에 반영하는 중입니다.', progress: 92 },
+]);
+
+const LONG_TASK_STAGES_WORKBOOK_DOWNLOAD = Object.freeze([
+  { key: 'download_prepare', label: '파일 준비', detail: '다운로드할 workbook을 생성하고 있습니다.', progress: 34 },
+  { key: 'download_stream', label: '브라우저 전달', detail: '생성된 파일을 브라우저에 전달하는 중입니다.', progress: 86 },
+]);
+
+const LONG_TASK_STAGES_APPLE_REPORT = Object.freeze([
+  { key: 'pack_prepare', label: '리포트 준비', detail: '대상 월의 전용 팩 실행 조건을 확인하는 중입니다.', progress: 24 },
+  { key: 'pack_run', label: '업데이트 실행', detail: '전용 보고 데이터를 생성하고 동기화하는 중입니다.', progress: 72 },
+  { key: 'pack_refresh', label: '상태 새로고침', detail: '실행 결과와 로그를 다시 불러오는 중입니다.', progress: 92 },
 ]);
 
 function normalizeScheduleImportIssueCode(code = '') {
@@ -9427,6 +9894,367 @@ function clearScheduleImportProgressTimer(uploadUi = getScheduleUploadUiState())
     clearInterval(uploadUi.progressTimer);
     uploadUi.progressTimer = 0;
   }
+}
+
+function ensureTaskProgressState() {
+  if (!state.taskProgress || typeof state.taskProgress !== 'object') {
+    state.taskProgress = createInitialTaskProgressState();
+  }
+  return state.taskProgress;
+}
+
+function clearTaskProgressTimers(progress = ensureTaskProgressState()) {
+  if (progress.revealTimer) {
+    clearTimeout(progress.revealTimer);
+    progress.revealTimer = 0;
+  }
+  if (progress.tickTimer) {
+    clearInterval(progress.tickTimer);
+    progress.tickTimer = 0;
+  }
+}
+
+function normalizeLongTaskStages(stages = []) {
+  const source = Array.isArray(stages) ? stages.filter((item) => item && typeof item === 'object') : [];
+  if (!source.length) {
+    return [{ key: 'working', label: '진행 중', detail: '작업을 진행하고 있습니다.', progress: 72 }];
+  }
+  const lastIndex = Math.max(0, source.length - 1);
+  return source.map((stage, index) => {
+    const fallbackProgress = Math.min(92, 12 + Math.round(((index + 1) / Math.max(1, lastIndex + 1)) * 78));
+    return {
+      key: String(stage.key || `stage-${index + 1}`).trim() || `stage-${index + 1}`,
+      label: String(stage.label || `단계 ${index + 1}`).trim() || `단계 ${index + 1}`,
+      detail: String(stage.detail || '').trim(),
+      progress: Number.isFinite(Number(stage.progress)) ? Number(stage.progress) : fallbackProgress,
+    };
+  });
+}
+
+function resolveTaskProgressPillClass(outcome = 'working') {
+  if (outcome === 'error') return 'status-pill status-pill-error';
+  if (outcome === 'success') return 'status-pill status-pill-success';
+  return 'status-pill status-pill-warn';
+}
+
+function formatLongTaskElapsed(elapsedMs = 0) {
+  const totalSeconds = Math.max(0, Math.floor(Number(elapsedMs || 0) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function getActiveLongTaskProgress(surfaceKey = '') {
+  const progress = ensureTaskProgressState();
+  if (!String(progress.activeId || '').trim()) return null;
+  if (surfaceKey && String(progress.surfaceKey || '').trim() !== String(surfaceKey || '').trim()) {
+    return null;
+  }
+  return progress;
+}
+
+function renderTaskProgressModal() {
+  const backdrop = $('#taskProgressBackdrop');
+  const modal = $('#taskProgressModal');
+  const stageEl = $('#taskProgressStage');
+  const titleEl = $('#taskProgressTitle');
+  const detailEl = $('#taskProgressDetail');
+  const barEl = $('#taskProgressBar');
+  const percentEl = $('#taskProgressPercent');
+  const elapsedEl = $('#taskProgressElapsed');
+  if (!(backdrop instanceof HTMLElement) || !(modal instanceof HTMLElement)) return;
+
+  const progress = ensureTaskProgressState();
+  const active = Boolean(String(progress.activeId || '').trim()) && progress.visible;
+  backdrop.classList.toggle('hidden', !active);
+  modal.classList.toggle('hidden', !active);
+  modal.dataset.state = active ? String(progress.outcome || 'working').trim() : 'idle';
+  if (!active) {
+    modal.setAttribute('aria-hidden', 'true');
+    return;
+  }
+
+  const stages = Array.isArray(progress.stages) ? progress.stages : [];
+  const stage = stages[Math.min(Math.max(Number(progress.stageIndex || 0), 0), Math.max(0, stages.length - 1))] || null;
+  const progressValue = Math.max(6, Math.min(100, Number(progress.progress || stage?.progress || 0)));
+  const elapsed = formatLongTaskElapsed(Date.now() - Number(progress.startedAt || Date.now()));
+
+  modal.setAttribute('aria-hidden', 'false');
+  if (stageEl instanceof HTMLElement) stageEl.textContent = String(stage?.label || progress.statusLabel || '진행 중').trim() || '진행 중';
+  if (titleEl instanceof HTMLElement) titleEl.textContent = String(progress.title || '작업을 진행하고 있습니다.').trim();
+  if (detailEl instanceof HTMLElement) detailEl.textContent = String(progress.detail || stage?.detail || '잠시만 기다려 주세요.').trim();
+  if (barEl instanceof HTMLElement) {
+    barEl.style.width = `${progressValue}%`;
+  }
+  if (percentEl instanceof HTMLElement) percentEl.textContent = `${Math.round(progressValue)}%`;
+  if (elapsedEl instanceof HTMLElement) elapsedEl.textContent = elapsed;
+}
+
+function renderTaskProgressStrip({
+  rootSelector = '',
+  pillSelector = '',
+  titleSelector = '',
+  detailSelector = '',
+  barSelector = '',
+  percentSelector = '',
+  elapsedSelector = '',
+} = {}, task = null) {
+  const root = $(rootSelector);
+  if (!(root instanceof HTMLElement)) return;
+  const show = Boolean(task && String(task.activeId || '').trim());
+  root.classList.toggle('hidden', !show);
+  root.dataset.state = show ? String(task.outcome || 'working').trim() : 'idle';
+  if (!show) return;
+
+  const pill = $(pillSelector);
+  const title = $(titleSelector);
+  const detail = $(detailSelector);
+  const bar = $(barSelector);
+  const percent = $(percentSelector);
+  const elapsed = $(elapsedSelector);
+  const stages = Array.isArray(task.stages) ? task.stages : [];
+  const stage = stages[Math.min(Math.max(Number(task.stageIndex || 0), 0), Math.max(0, stages.length - 1))] || null;
+  const progressValue = Math.max(6, Math.min(100, Number(task.progress || stage?.progress || 0)));
+
+  if (pill instanceof HTMLElement) {
+    pill.className = resolveTaskProgressPillClass(task.outcome || 'working');
+    pill.textContent = task.outcome === 'success'
+      ? '완료'
+      : (task.outcome === 'error'
+        ? '실패'
+        : (String(stage?.label || task.statusLabel || '처리 중').trim() || '처리 중'));
+  }
+  if (title instanceof HTMLElement) {
+    title.textContent = String(task.title || '작업을 진행하고 있습니다.').trim();
+  }
+  if (detail instanceof HTMLElement) {
+    detail.textContent = String(task.detail || stage?.detail || '잠시만 기다려 주세요.').trim();
+  }
+  if (bar instanceof HTMLElement) {
+    bar.style.width = `${progressValue}%`;
+  }
+  if (percent instanceof HTMLElement) {
+    percent.textContent = `${Math.round(progressValue)}%`;
+  }
+  if (elapsed instanceof HTMLElement) {
+    elapsed.textContent = formatLongTaskElapsed(Date.now() - Number(task.startedAt || Date.now()));
+  }
+}
+
+function renderTaskProgressOverlay({
+  overlaySelector = '',
+  titleSelector = '',
+  detailSelector = '',
+} = {}, task = null) {
+  const overlay = $(overlaySelector);
+  if (!(overlay instanceof HTMLElement)) return;
+  const show = Boolean(task && String(task.activeId || '').trim() && String(task.outcome || 'working') === 'working');
+  overlay.classList.toggle('hidden', !show);
+  if (!show) return;
+
+  const title = $(titleSelector);
+  const detail = $(detailSelector);
+  const stages = Array.isArray(task.stages) ? task.stages : [];
+  const stage = stages[Math.min(Math.max(Number(task.stageIndex || 0), 0), Math.max(0, stages.length - 1))] || null;
+  if (title instanceof HTMLElement) {
+    title.textContent = String(stage?.label || task.title || '처리 중').trim() || '처리 중';
+  }
+  if (detail instanceof HTMLElement) {
+    detail.textContent = String(task.detail || stage?.detail || '잠시만 기다려 주세요.').trim();
+  }
+}
+
+function renderScheduleSupportHqProgress() {
+  renderTaskProgressStrip({
+    rootSelector: '#scheduleSupportHqProgress',
+    pillSelector: '#scheduleSupportHqProgressPill',
+    titleSelector: '#scheduleSupportHqProgressTitle',
+    detailSelector: '#scheduleSupportHqProgressText',
+    barSelector: '#scheduleSupportHqProgressBar',
+    percentSelector: '#scheduleSupportHqProgressPercent',
+    elapsedSelector: '#scheduleSupportHqProgressElapsed',
+  }, getActiveLongTaskProgress(LONG_TASK_SURFACE_SCHEDULE_SUPPORT_HQ));
+}
+
+function renderScheduleFinanceProgress() {
+  renderTaskProgressStrip({
+    rootSelector: '#scheduleFinanceProgress',
+    pillSelector: '#scheduleFinanceProgressPill',
+    titleSelector: '#scheduleFinanceProgressTitle',
+    detailSelector: '#scheduleFinanceProgressText',
+    barSelector: '#scheduleFinanceProgressBar',
+    percentSelector: '#scheduleFinanceProgressPercent',
+    elapsedSelector: '#scheduleFinanceProgressElapsed',
+  }, getActiveLongTaskProgress(LONG_TASK_SURFACE_SCHEDULE_FINANCE));
+}
+
+function renderEmployeeRosterImportProgress() {
+  const task = getActiveLongTaskProgress(LONG_TASK_SURFACE_EMPLOYEE_ROSTER);
+  renderTaskProgressStrip({
+    rootSelector: '#employeeRosterImportProgressStrip',
+    pillSelector: '#employeeRosterImportProgressPill',
+    titleSelector: '#employeeRosterImportProgressTitle',
+    detailSelector: '#employeeRosterImportProgressText',
+    barSelector: '#employeeRosterImportProgressBar',
+    percentSelector: '#employeeRosterImportProgressPercent',
+    elapsedSelector: '#employeeRosterImportProgressElapsed',
+  }, task);
+  renderTaskProgressOverlay({
+    overlaySelector: '#employeeRosterImportTableOverlay',
+    titleSelector: '#employeeRosterImportOverlayTitle',
+    detailSelector: '#employeeRosterImportOverlayText',
+  }, task);
+}
+
+function renderLongTaskProgressUi() {
+  renderTaskProgressModal();
+  renderScheduleUploadProgress();
+  renderScheduleSupportHqProgress();
+  renderScheduleFinanceProgress();
+  renderEmployeeRosterImportProgress();
+  syncBodyScrollLocks();
+}
+
+function resetTaskProgressState({ syncUi = true } = {}) {
+  const progress = ensureTaskProgressState();
+  clearTaskProgressTimers(progress);
+  state.taskProgress = createInitialTaskProgressState();
+  if (syncUi) {
+    renderLongTaskProgressUi();
+  }
+}
+
+function updateLongTaskProgress(taskId = '', updates = {}) {
+  const progress = ensureTaskProgressState();
+  if (String(progress.activeId || '').trim() !== String(taskId || '').trim()) return;
+
+  if (Object.prototype.hasOwnProperty.call(updates, 'title')) {
+    progress.title = String(updates.title || '').trim();
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'detail')) {
+    progress.detail = String(updates.detail || '').trim();
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'statusLabel')) {
+    progress.statusLabel = String(updates.statusLabel || '').trim();
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'surfaceKey')) {
+    progress.surfaceKey = String(updates.surfaceKey || '').trim();
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'progress')) {
+    progress.progress = Math.max(0, Math.min(100, Number(updates.progress || 0)));
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'visible')) {
+    progress.visible = Boolean(updates.visible);
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'stageIndex')) {
+    progress.stageIndex = Math.max(0, Number(updates.stageIndex || 0));
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'stageKey')) {
+    const nextStageKey = String(updates.stageKey || '').trim();
+    const nextIndex = progress.stages.findIndex((stage) => String(stage?.key || '').trim() === nextStageKey);
+    if (nextIndex >= 0) {
+      progress.stageIndex = nextIndex;
+      if (!Object.prototype.hasOwnProperty.call(updates, 'progress')) {
+        progress.progress = Math.max(0, Math.min(100, Number(progress.stages[nextIndex]?.progress || progress.progress || 0)));
+      }
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'outcome')) {
+    progress.outcome = String(updates.outcome || 'working').trim() || 'working';
+  }
+
+  renderLongTaskProgressUi();
+}
+
+function finalizeLongTaskProgress(taskId = '', {
+  outcome = 'success',
+  detail = '',
+  keepVisibleMs = 520,
+} = {}) {
+  const progress = ensureTaskProgressState();
+  if (String(progress.activeId || '').trim() !== String(taskId || '').trim()) return;
+  clearTaskProgressTimers(progress);
+  progress.outcome = outcome === 'error' ? 'error' : 'success';
+  progress.progress = 100;
+  progress.visible = progress.visible || (Date.now() - Number(progress.startedAt || 0) >= Number(progress.modalDelayMs || LONG_TASK_MODAL_DELAY_MS));
+  if (detail) {
+    progress.detail = String(detail || '').trim();
+  } else if (progress.outcome === 'success') {
+    progress.detail = progress.detail || '작업을 마쳤습니다.';
+  }
+  const stages = Array.isArray(progress.stages) ? progress.stages : [];
+  if (stages.length) {
+    progress.stageIndex = stages.length - 1;
+  }
+  renderLongTaskProgressUi();
+
+  const resetDelay = progress.visible ? Math.max(0, Number(keepVisibleMs || 0)) : 0;
+  if (resetDelay > 0) {
+    const currentTaskId = String(progress.activeId || '').trim();
+    progress.revealTimer = window.setTimeout(() => {
+      if (String(ensureTaskProgressState().activeId || '').trim() === currentTaskId) {
+        resetTaskProgressState();
+      }
+    }, resetDelay);
+  } else {
+    resetTaskProgressState();
+  }
+}
+
+function beginLongTaskProgress({
+  title = '작업을 처리하고 있습니다.',
+  detail = '',
+  statusLabel = '처리 중',
+  surfaceKey = '',
+  stages = [],
+  modalDelayMs = LONG_TASK_MODAL_DELAY_MS,
+  stageAdvanceMs = LONG_TASK_STAGE_TICK_MS,
+} = {}) {
+  resetTaskProgressState({ syncUi: false });
+  const progress = ensureTaskProgressState();
+  const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  progress.activeId = taskId;
+  progress.surfaceKey = String(surfaceKey || '').trim();
+  progress.title = String(title || '작업을 처리하고 있습니다.').trim();
+  progress.detail = String(detail || '').trim();
+  progress.statusLabel = String(statusLabel || '처리 중').trim();
+  progress.stages = normalizeLongTaskStages(stages);
+  progress.stageIndex = 0;
+  progress.progress = Math.max(6, Math.min(100, Number(progress.stages[0]?.progress || 12)));
+  progress.startedAt = Date.now();
+  progress.visible = false;
+  progress.outcome = 'working';
+  progress.modalDelayMs = Number(modalDelayMs || LONG_TASK_MODAL_DELAY_MS);
+  progress.stageAdvanceMs = Math.max(700, Number(stageAdvanceMs || LONG_TASK_STAGE_TICK_MS));
+  progress.revealTimer = window.setTimeout(() => {
+    const current = ensureTaskProgressState();
+    if (String(current.activeId || '').trim() !== taskId) return;
+    current.visible = true;
+    renderLongTaskProgressUi();
+  }, progress.modalDelayMs);
+  progress.tickTimer = window.setInterval(() => {
+    const current = ensureTaskProgressState();
+    if (String(current.activeId || '').trim() !== taskId || current.outcome !== 'working') return;
+    const stagesList = Array.isArray(current.stages) ? current.stages : [];
+    const lastIndex = Math.max(0, stagesList.length - 1);
+    const nextIndex = Math.min(lastIndex, Math.floor((Date.now() - Number(current.startedAt || 0)) / Math.max(700, Number(current.stageAdvanceMs || LONG_TASK_STAGE_TICK_MS))));
+    if (nextIndex !== current.stageIndex) {
+      current.stageIndex = nextIndex;
+      const nextStage = stagesList[nextIndex];
+      if (nextStage && Number.isFinite(Number(nextStage.progress))) {
+        current.progress = Math.max(6, Math.min(96, Number(nextStage.progress || current.progress)));
+      }
+    }
+    renderLongTaskProgressUi();
+  }, 250);
+  renderLongTaskProgressUi();
+
+  return {
+    id: taskId,
+    update: (updates = {}) => updateLongTaskProgress(taskId, updates),
+    complete: (updates = {}) => finalizeLongTaskProgress(taskId, { ...updates, outcome: 'success' }),
+    fail: (updates = {}) => finalizeLongTaskProgress(taskId, { ...updates, outcome: 'error' }),
+  };
 }
 
 function buildScheduleImportFileSignature(file = null) {
@@ -9529,14 +10357,42 @@ function renderScheduleUploadProgress() {
   const pill = $('#scheduleImportProgressPill');
   const title = $('#scheduleImportProgressTitle');
   const detail = $('#scheduleImportProgressText');
+  const bar = $('#scheduleImportProgressBar');
+  const percent = $('#scheduleImportProgressPercent');
+  const elapsed = $('#scheduleImportProgressElapsed');
   if (!(wrap instanceof HTMLElement) || !(pill instanceof HTMLElement) || !(title instanceof HTMLElement) || !(detail instanceof HTMLElement)) {
     return;
   }
 
   const uploadUi = getScheduleUploadUiState();
-  const show = Boolean(uploadUi.analysisInFlight || uploadUi.stale);
+  const task = getActiveLongTaskProgress(LONG_TASK_SURFACE_SCHEDULE_IMPORT);
+  const show = Boolean(uploadUi.analysisInFlight || uploadUi.stale || task);
   wrap.classList.toggle('hidden', !show);
   if (!show) return;
+
+  if (!uploadUi.analysisInFlight && !uploadUi.stale && task) {
+    const stages = Array.isArray(task.stages) ? task.stages : [];
+    const activeStage = stages[Math.min(Math.max(Number(task.stageIndex || 0), 0), Math.max(0, stages.length - 1))] || null;
+    const progressValue = Math.max(6, Math.min(100, Number(task.progress || activeStage?.progress || 0)));
+    pill.className = resolveTaskProgressPillClass(task.outcome || 'working');
+    pill.textContent = task.outcome === 'success'
+      ? '완료'
+      : (task.outcome === 'error'
+        ? '실패'
+        : (String(activeStage?.label || '분석 중').trim() || '분석 중'));
+    title.textContent = String(task.title || activeStage?.label || '분석 중').trim() || '분석 중';
+    detail.textContent = String(task.detail || activeStage?.detail || '잠시만 기다려 주세요.').trim();
+    if (bar instanceof HTMLElement) {
+      bar.style.width = `${progressValue}%`;
+    }
+    if (percent instanceof HTMLElement) {
+      percent.textContent = `${Math.round(progressValue)}%`;
+    }
+    if (elapsed instanceof HTMLElement) {
+      elapsed.textContent = formatLongTaskElapsed(Date.now() - Number(task.startedAt || Date.now()));
+    }
+    return;
+  }
 
   if (uploadUi.analysisInFlight) {
     const stage = getScheduleImportProgressStage(uploadUi.analysisStageKey);
@@ -9545,22 +10401,41 @@ function renderScheduleUploadProgress() {
         ? uploadUi.analysisLockedFields
         : ['file', 'site', 'month'],
     );
-    pill.className = 'status-pill status-pill-warn';
-    pill.textContent = '분석 중';
+    const progressValue = Math.max(8, Math.min(96, Number(task?.progress || stage.progress || 0)));
+    pill.className = resolveTaskProgressPillClass(task?.outcome || 'working');
+    pill.textContent = String(task?.stages?.[task?.stageIndex]?.label || '분석 중').trim() || '분석 중';
     title.textContent = stage.label;
     detail.textContent = lockedFields
       ? `${uploadUi.analysisStageDetail || stage.detail} ${lockedFields}은(는) 완료 전까지 잠깁니다.`
       : (uploadUi.analysisStageDetail || stage.detail);
+    if (bar instanceof HTMLElement) {
+      bar.style.width = `${progressValue}%`;
+    }
+    if (percent instanceof HTMLElement) {
+      percent.textContent = `${Math.round(progressValue)}%`;
+    }
+    if (elapsed instanceof HTMLElement) {
+      elapsed.textContent = task ? formatLongTaskElapsed(Date.now() - Number(task.startedAt || Date.now())) : '';
+    }
     return;
   }
 
   const staleFields = formatScheduleImportContextFields(uploadUi.staleFields);
   pill.className = 'status-pill status-pill-error';
   pill.textContent = '재분석 필요';
-  title.textContent = 'stale analysis result';
+  title.textContent = '분석 결과 재검토 필요';
   detail.textContent = staleFields
     ? `${staleFields} 변경으로 기존 분석 결과를 그대로 적용할 수 없습니다. 같은 컨텍스트로 다시 분석하세요.`
     : '현재 화면 입력값과 마지막 분석 결과가 일치하지 않습니다. 다시 분석하세요.';
+  if (bar instanceof HTMLElement) {
+    bar.style.width = '100%';
+  }
+  if (percent instanceof HTMLElement) {
+    percent.textContent = '100%';
+  }
+  if (elapsed instanceof HTMLElement) {
+    elapsed.textContent = '';
+  }
 }
 
 function startScheduleImportProgressTimer() {
@@ -12173,6 +13048,8 @@ function renderScheduleSupportHqWorkspace() {
       applyResultEl.textContent = '반영을 시작하면 scope별 처리 결과와 후속 상태가 여기에 표시됩니다.';
     }
   }
+
+  renderScheduleSupportHqProgress();
 }
 
 async function loadScheduleSupportHqWorkspaceContract({ force = false } = {}) {
@@ -12558,7 +13435,16 @@ function getScheduleSupportSelectedSiteCode() {
   const hqSite = String(hqContext.siteCode || '').trim().toUpperCase();
   const reportsSite = String($('#scheduleReportsSite')?.value || '').trim().toUpperCase();
   const pinnedFinanceSite = getPinnedScheduleFinanceSiteCode();
-  if (isScheduleUploadOwnerTab(getScheduleActiveTopTab())) {
+  const currentRoute = normalizeRoutePath(state.currentRoute || '');
+  const reportsViewActive = state.currentView === 'reports'
+    || currentRoute === ROUTE_REPORTS
+    || currentRoute === ROUTE_REPORTS_APPLE
+    || currentRoute === ROUTE_SCHEDULE_REPORTS;
+  if (reportsViewActive) {
+    if (reportsSite) return reportsSite;
+    if (pinnedFinanceSite) return pinnedFinanceSite;
+    if (hqSite) return hqSite;
+  } else if (isScheduleUploadOwnerTab(getScheduleActiveTopTab())) {
     if (getScheduleUploadWorkspaceMode() === SCHEDULE_UPLOAD_MODE_HQ && hqSite) return hqSite;
     return '';
   } else {
@@ -12690,10 +13576,9 @@ function renderScheduleSupportShortcutCard() {
 
 function renderScheduleReportsTabs() {
   const panel = $('#scheduleReportsPanel');
-  if (!(panel instanceof HTMLElement)) return;
   const financeAllowed = canViewScheduleFinanceSubmission();
   const financePanel = $('#scheduleFinanceSubmissionPanel');
-  const reportsContextRow = panel.querySelector('.schedule-reports-context-row');
+  const reportsContextRow = document.querySelector('#view-reports .schedule-reports-context-row, #scheduleReportsPanel .schedule-reports-context-row');
   const hideReportsSiteSelector = Boolean(getPinnedScheduleFinanceSiteCode());
   state.schedule.reportsTab = SCHEDULE_REPORTS_TAB_FINANCE;
 
@@ -13350,7 +14235,10 @@ function renderScheduleFinanceSubmissionStatus() {
 
   const financeVisible = canViewScheduleFinanceSubmission();
   panel.classList.toggle('hidden', !financeVisible);
-  if (!financeVisible) return;
+  if (!financeVisible) {
+    renderScheduleFinanceProgress();
+    return;
+  }
 
   const activeTab = normalizeScheduleFinanceTab(state.schedule.financeTab || SCHEDULE_FINANCE_TAB_DOWNLOAD);
   state.schedule.financeTab = activeTab;
@@ -13404,6 +14292,7 @@ function renderScheduleFinanceSubmissionStatus() {
       blockedList.innerHTML = '';
       blockedList.classList.add('hidden');
     }
+    renderScheduleFinanceProgress();
     return;
   }
 
@@ -13416,6 +14305,7 @@ function renderScheduleFinanceSubmissionStatus() {
     if (reviewBtn) reviewBtn.disabled = true;
     if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
+    renderScheduleFinanceProgress();
     return;
   }
 
@@ -13456,6 +14346,7 @@ function renderScheduleFinanceSubmissionStatus() {
         blockedList.classList.add('hidden');
       }
     }
+    renderScheduleFinanceProgress();
     return;
   }
 
@@ -13533,6 +14424,7 @@ function renderScheduleFinanceSubmissionStatus() {
   if (reviewBtn) reviewBtn.disabled = !canDownloadScheduleFinanceReview();
   if (finalDownloadBtn) finalDownloadBtn.disabled = !canDownloadScheduleFinanceFinal() || !finalEnabled;
   if (previewBtn) previewBtn.disabled = !canPreviewUpload;
+  renderScheduleFinanceProgress();
 }
 
 async function loadScheduleFinanceSubmissionStatus() {
@@ -13603,7 +14495,7 @@ async function onScheduleFinanceReviewDownload() {
   showToast('Finance 1차 확인본을 다운로드했습니다.', 'success', 2200);
 }
 
-async function onScheduleFinancePreview() {
+async function onScheduleFinancePreview(progressController = null) {
   if (!canUploadScheduleFinanceFinal()) {
     showToast('Finance 최종 업로드 권한이 없습니다.', 'error');
     return;
@@ -13635,6 +14527,10 @@ async function onScheduleFinancePreview() {
   body.append('site_code', siteCode);
   body.append('month', getScheduleMonthValue());
   body.append('tenant_code', getScheduleTenantValue());
+  progressController?.update({
+    detail: `${siteCode} · ${formatScheduleMonthTitle(getScheduleMonthValue())} 기준으로 diff를 계산하고 있습니다.`,
+    stageKey: 'finance_file_check',
+  });
   setScheduleFinanceUI({
     batchInfo: '최종 업로드 diff를 계산하는 중입니다...',
     clearApplyDetails: true,
@@ -13643,6 +14539,11 @@ async function onScheduleFinancePreview() {
     const result = await apiRequest('/schedules/finance-submission/final-upload/preview', {
       method: 'POST',
       body,
+    });
+    progressController?.update({
+      stageKey: 'finance_preview',
+      progress: 92,
+      detail: '차단 사유와 반영 가능 행을 정리하고 있습니다.',
     });
     state.schedule.financePreviewBatchId = String(result?.finance_batch_id || '').trim();
     state.schedule.financePreview = result;
@@ -13686,7 +14587,7 @@ async function onScheduleFinancePreview() {
   }
 }
 
-async function onScheduleFinanceApply() {
+async function onScheduleFinanceApply(progressController = null) {
   if (!canUploadScheduleFinanceFinal()) {
     showToast('Finance 최종 업로드 권한이 없습니다.', 'error');
     return;
@@ -13722,6 +14623,11 @@ async function onScheduleFinanceApply() {
       showToast('Finance 최종 업로드가 차단되었습니다.', 'error', 3200);
       return;
     }
+    progressController?.update({
+      stageKey: 'finance_refreshing',
+      progress: 92,
+      detail: '제출 상태와 후속 다운로드 정보를 새로고침하고 있습니다.',
+    });
     setScheduleFinanceUI({
       batchInfo: safeText('#scheduleFinanceBatchInfo'),
       issues: [],
@@ -16269,9 +17175,12 @@ function normalizeOpsViewTab(value = '') {
 
 function normalizeReportsViewTab(value = '') {
   const tab = String(value || '').trim().toLowerCase();
-  if (tab === 'history') return 'history';
-  if (tab === 'pack') return 'pack';
-  return 'catalog';
+  const available = getReportsAvailableTabs();
+  if (tab === 'finance' && available.includes('finance')) return 'finance';
+  if (tab === 'support' && available.includes('support')) return 'support';
+  if (tab === 'history' && available.includes('history')) return 'history';
+  if (tab === 'pack' && available.includes('pack')) return 'pack';
+  return available[0] || 'finance';
 }
 
 function setOpsViewTab(value = '', { syncRoute = false } = {}) {
@@ -16290,20 +17199,20 @@ function setOpsViewTab(value = '', { syncRoute = false } = {}) {
 }
 
 function setReportsViewTab(value = '', { syncRoute = false } = {}) {
-  const next = normalizeReportsViewTab(value || state.reports?.viewTab || 'catalog');
+  const next = normalizeReportsViewTab(value || state.reports?.viewTab || getDefaultReportsViewTab());
   if (!state.reports) state.reports = createInitialReportsState();
   state.reports.viewTab = next;
   renderReportsWorkspacePanels();
   if (!syncRoute) return;
   const currentRoute = normalizeRoutePath(state.currentRoute || '');
-  if (currentRoute !== ROUTE_REPORTS && currentRoute !== ROUTE_REPORTS_APPLE) return;
+  if (currentRoute !== ROUTE_REPORTS && currentRoute !== ROUTE_REPORTS_APPLE && currentRoute !== ROUTE_SCHEDULE_REPORTS) return;
   const selectedPack = getSelectedReportsPack();
-  const base = selectedPack === 'apple' ? ROUTE_REPORTS_APPLE : ROUTE_REPORTS;
+  const base = next === 'pack' && selectedPack === 'apple' ? ROUTE_REPORTS_APPLE : ROUTE_REPORTS;
   const params = new URLSearchParams();
-  if (selectedPack !== 'apple') {
+  if (next === 'pack' && selectedPack !== 'apple') {
     params.set('pack', selectedPack || 'default');
   }
-  if (next !== 'catalog') {
+  if (next !== getDefaultReportsViewTab()) {
     params.set('tab', next);
   }
   const query = params.toString();
@@ -18279,8 +19188,8 @@ function isRouteAllowed(routePath, perms = getRolePermissions(), navRole = getNa
   if (route === ROUTE_HR) return true;
   if (route === ROUTE_OPS) return isManagerShellRole(navRole);
   if (route === ROUTE_SUPPORT_STATUS) return isManagerShellRole(navRole);
-  if (route === ROUTE_REPORTS) return isManagerShellRole(navRole);
-  if (route === ROUTE_REPORTS_APPLE) return isManagerShellRole(navRole) && isAppleReportPackEnabled();
+  if (route === ROUTE_REPORTS) return canViewReportsCenter();
+  if (route === ROUTE_REPORTS_APPLE) return canViewReportsPackTab() && isAppleReportPackEnabled();
   if (route === ROUTE_ATTENDANCE) return Boolean(perms.attendance || perms.attendanceWrite || perms.attendanceReview);
   if (
     route === ROUTE_SCHEDULE
@@ -18290,7 +19199,7 @@ function isRouteAllowed(routePath, perms = getRolePermissions(), navRole = getNa
     || route === ROUTE_SCHEDULE_TEMPLATES
   ) return Boolean(perms.schedule);
   if (route === ROUTE_SCHEDULE_HQ_UPLOAD) return canUseScheduleUploadHqWizard();
-  if (route === ROUTE_SCHEDULE_REPORTS) return canViewScheduleReportsWorkspace();
+  if (route === ROUTE_SCHEDULE_REPORTS) return canViewReportsCenter();
   if (route === ROUTE_REQUESTS) return Boolean(perms.attendance || perms.leave);
   if (route === ROUTE_REQUESTS_CORRECTION) return Boolean(perms.attendance || perms.attendanceWrite);
   if (route === ROUTE_APPROVALS) return Boolean(perms.attendanceReview || perms.leaveReview);
@@ -18412,8 +19321,16 @@ function applyOpsRouteStateFromQuery(routePath = '', parsedParams = new URLSearc
 
 function applyReportsRouteStateFromQuery(routePath = '', parsedParams = new URLSearchParams()) {
   const route = normalizeRoutePath(routePath);
-  if (route !== ROUTE_REPORTS && route !== ROUTE_REPORTS_APPLE) return;
-  setReportsViewTab(parsedParams.get('tab') || (route === ROUTE_REPORTS_APPLE ? 'pack' : 'catalog'));
+  if (route !== ROUTE_REPORTS && route !== ROUTE_REPORTS_APPLE && route !== ROUTE_SCHEDULE_REPORTS) return;
+  if (route === ROUTE_REPORTS_APPLE) {
+    setSelectedReportsPack('apple');
+  } else {
+    setSelectedReportsPack(parsedParams.get('pack') || getSelectedReportsPack() || 'default');
+  }
+  const fallbackTab = route === ROUTE_REPORTS_APPLE
+    ? 'pack'
+    : (route === ROUTE_SCHEDULE_REPORTS ? 'finance' : getDefaultReportsViewTab());
+  setReportsViewTab(parsedParams.get('tab') || fallbackTab);
 }
 
 function scrollToSelector(selector) {
@@ -18468,10 +19385,16 @@ function openRequestsCorrectionEntry() {
 
 async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = false } = {}) {
   const parsed = parseRouteCandidate(rawRoute);
-  const parsedParams = new URLSearchParams(parsed.query || '');
+  let parsedParams = new URLSearchParams(parsed.query || '');
   const fallbackAuthedRoute = state.user ? resolvePostLoginDefaultRoute() : ROUTE_LOGIN;
   const requestedRoute = normalizeRoutePath(parsed.path) || fallbackAuthedRoute;
   let route = isKnownRoute(requestedRoute) ? requestedRoute : fallbackAuthedRoute;
+  if (route === ROUTE_SCHEDULE_REPORTS) {
+    if (!parsedParams.get('tab')) {
+      parsedParams.set('tab', 'finance');
+    }
+    route = ROUTE_REPORTS;
+  }
   if (
     route === ROUTE_ADMIN_EMPLOYEES_NEW
     && normalizeEmployeeRegistrationMode(parsedParams.get('mode') || '') === EMPLOYEE_REG_MODE_IMPORT
@@ -18604,7 +19527,8 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
   state.currentRoute = route;
   state.lastAllowedRoute = route;
   const shouldStripQuery = route === ROUTE_ADMIN_EMPLOYEES || route === ROUTE_ADMIN_EMPLOYEES_NEW || route === ROUTE_ADMIN_EMPLOYEES_IMPORT;
-  updateRouteHash(!shouldStripQuery && parsed.query ? `${route}?${parsed.query}` : route, { replace });
+  const normalizedQuery = parsedParams.toString();
+  updateRouteHash(!shouldStripQuery && normalizedQuery ? `${route}?${normalizedQuery}` : route, { replace });
   renderDrawerMenu();
 
   const view = resolveViewForRoute(route);
@@ -18689,7 +19613,7 @@ function isViewAllowed(view, perms = getRolePermissions()) {
   if (raw === 'leave') return Boolean(perms.leave || perms.leaveWrite || perms.leaveReview);
   if (raw === 'ops') return isManagerShellRole(getNavigationRole());
   if (raw === 'support-status') return isManagerShellRole(getNavigationRole());
-  if (raw === 'reports') return isManagerShellRole(getNavigationRole());
+  if (raw === 'reports') return canViewReportsCenter();
   const target = mapLegacyViewName(view);
   if (target === 'dev-console') return Boolean(perms.tenantManage);
   if (target === 'home' || target === 'profile') return true;
@@ -24529,7 +25453,7 @@ function getWorkspaceViewTitle(viewName = state.currentView || 'home') {
   if (view === 'hr') return '문서';
   if (view === 'schedule') return '스케줄';
   if (view === 'org' || view === 'employees') return '조직';
-  if (view === 'reports') return '리포트';
+  if (view === 'reports') return '보고';
   if (view === 'profile') return managerMode ? '설정' : '내 정보';
   if (view === 'dev-console') return '시스템';
   return '홈';
@@ -24551,8 +25475,7 @@ function getDesktopGlobalSearchItems() {
     items.splice(2, 0, { label: '지원근무자 현황', route: ROUTE_SUPPORT_STATUS, hint: '지원 배정 현황', keywords: ['지원근무', '지원근무자', 'support', '주간', '야간', 'sentrix'] });
     items.splice(7, 0,
       { label: 'Excel 업로드', route: ROUTE_SCHEDULE_UPLOAD, hint: '근무표 업로드', keywords: ['엑셀', '업로드', '근무표', 'wizard'] },
-      { label: '보고', route: ROUTE_SCHEDULE_REPORTS, hint: 'Finance 제출 상태', keywords: ['보고', 'finance', '제출', 'handoff'] },
-      { label: '전용 보고', route: ROUTE_REPORTS, hint: 'pack/실행 이력', keywords: ['리포트', '보고', 'apple', 'history'] },
+      { label: '보고', route: ROUTE_REPORTS, hint: 'Finance 제출 / 지원근무 전달 / 전용 팩', keywords: ['보고', 'finance', '제출', 'handoff', 'apple', 'history'] },
     );
     items.push(
       { label: '조직', route: ROUTE_ADMIN_EMPLOYEES, hint: '직원/지점 운영', keywords: ['조직', '직원', '지점', '현장'] },
@@ -25436,9 +26359,10 @@ function syncBodyScrollLocks() {
   const drawerVisible = !($('#sideDrawer')?.classList.contains('hidden') ?? true);
   const sheetVisible = !($('#appSheet')?.classList.contains('hidden') ?? true);
   const confirmVisible = !($('#confirmDialog')?.classList.contains('hidden') ?? true);
+  const taskProgressVisible = !($('#taskProgressModal')?.classList.contains('hidden') ?? true);
 
   document.body.classList.toggle('drawer-open', drawerVisible);
-  document.body.classList.toggle('sheet-open', sheetVisible || confirmVisible);
+  document.body.classList.toggle('sheet-open', sheetVisible || confirmVisible || taskProgressVisible);
 }
 
 function isDrawerSubmenuExpanded(menuId = '') {
@@ -25987,6 +26911,7 @@ function persistSession() {
 }
 
 function clearSession() {
+  resetTaskProgressState();
   if (state.reminder.syncTimer) {
     clearTimeout(state.reminder.syncTimer);
   }
@@ -26028,6 +26953,7 @@ function clearSession() {
   state.integration = createInitialIntegrationState();
   state.uiContext = createInitialUiContextState();
   state.viewRuntime = createInitialViewRuntimeState();
+  state.taskProgress = createInitialTaskProgressState();
   state.requestsTabView = 'requests';
   state.approvalTab = APPROVAL_TAB_CHECKIN;
   state.requestsMyFilter = REQUESTS_MY_FILTER_ALL;
@@ -29775,8 +30701,13 @@ const VIEW_PRESENTERS = {
     load: loadSupportStatusViewPresenter,
   },
   reports: {
-    loadingMessage: '리포트 팩을 불러오는 중입니다...',
-    errorMessage: '리포트 데이터를 불러오지 못했습니다.',
+    loadingMessage: '보고 데이터를 불러오는 중입니다...',
+    errorMessage: '보고 데이터를 불러오지 못했습니다.',
+    onCacheHit: () => {
+      renderReportsAppleCard();
+      renderReportsSupportHandoffPanel();
+      renderReportsWorkspacePanels();
+    },
     load: loadReportsViewPresenter,
   },
   'checkin-request': {
@@ -32440,6 +33371,7 @@ function renderEmployeeRosterImportRows() {
     tr.appendChild(td);
     tbody.appendChild(tr);
     if (summary) summary.textContent = '대기중: 파일 업로드 후 자동 매칭 결과가 표시됩니다.';
+    renderEmployeeRosterImportProgress();
     return;
   }
 
@@ -32604,6 +33536,7 @@ function renderEmployeeRosterImportRows() {
   if (rebuildBtn instanceof HTMLElement) {
     rebuildBtn.classList.toggle('hidden', !(canRebuildIndex && hasIndexEmpty));
   }
+  renderEmployeeRosterImportProgress();
 }
 
 function updateGuardRosterRowSelection(rowId = '', siteCode = '') {
@@ -32759,7 +33692,7 @@ async function downloadGuardRosterSourceDocx(row) {
   setTimeout(() => URL.revokeObjectURL(blobUrl), 8000);
 }
 
-async function onGuardRosterImportUpload() {
+async function onGuardRosterImportUpload(progressController = null) {
   if (!can('employeeWrite')) {
     showToast('직원 등록 권한이 없습니다.', 'error');
     return;
@@ -32784,6 +33717,10 @@ async function onGuardRosterImportUpload() {
   setEmployeeRosterImportBusy(true);
   const statusEl = $('#employeeRosterImportStatus');
   if (statusEl) statusEl.textContent = '문서 파싱/현장 매칭 중...';
+  progressController?.update({
+    detail: `${files.length}개 파일을 업로드하고 문서 파싱을 시작합니다.`,
+    stageKey: 'docx_upload',
+  });
   try {
     if (hasGuardRosterImportDraft()) {
       await cancelGuardRosterImportSession({ silent: true });
@@ -32792,6 +33729,11 @@ async function onGuardRosterImportUpload() {
       method: 'POST',
       headers: { 'X-Tenant-Id': tenantHeaderForImport },
       body: formData,
+    });
+    progressController?.update({
+      stageKey: 'site_match',
+      progress: 88,
+      detail: '현장 자동 매칭 결과를 검토용 시트에 반영하고 있습니다.',
     });
     state.employeeAdmin.rosterImportSessionId = String(result?.upload_session_id || '').trim();
     const rawItems = Array.isArray(result?.items) ? result.items : [];
@@ -32802,6 +33744,7 @@ async function onGuardRosterImportUpload() {
   } catch (err) {
     if (statusEl) statusEl.textContent = normalizeActionError(err, '업로드에 실패했습니다.');
     showToast(normalizeActionError(err, '경비원명부 업로드에 실패했습니다.'), 'error', 4200);
+    throw err;
   } finally {
     state.employeeAdmin.rosterImportUploading = false;
     setEmployeeRosterImportBusy(false);
@@ -32881,7 +33824,7 @@ function openGuardRosterCommitErrorSheet(status = 0, bodyText = '') {
   });
 }
 
-async function onGuardRosterImportCommit() {
+async function onGuardRosterImportCommit(progressController = null) {
   if (!can('employeeWrite')) {
     showToast('직원 등록 권한이 없습니다.', 'error');
     return;
@@ -33017,6 +33960,10 @@ async function onGuardRosterImportCommit() {
   state.employeeAdmin.rosterImportCommitting = true;
   setEmployeeRosterImportBusy(true);
   if (statusEl) statusEl.textContent = '일괄 등록 처리 중...';
+  progressController?.update({
+    detail: `${readyItems.length}건 등록 대상으로 일괄 등록을 시작합니다.`,
+    stageKey: 'commit_create',
+  });
   try {
     const result = await apiRequest('/employees/import/guard-roster-docx/commit', {
       method: 'POST',
@@ -33076,6 +34023,11 @@ async function onGuardRosterImportCommit() {
       statusEl.textContent = `완료: 생성 ${created}, 갱신 ${updated}, 실패 ${failedCount}${unmatchedFailedCount > 0 ? ` (미매칭 ${unmatchedFailedCount})` : ''}`;
     }
     showToast(`일괄 등록 완료 (생성 ${created}, 갱신 ${updated}, 실패 ${failedCount})`, failedCount ? 'info' : 'success', 3200);
+    progressController?.update({
+      stageKey: 'commit_refresh',
+      progress: 92,
+      detail: '직원 목록과 등록 결과를 새로고침하고 있습니다.',
+    });
     await loadEmployees();
     if (failedCount === 0) {
       clearGuardRosterImportState({ clearInput: true, clearStatus: false });
@@ -33098,6 +34050,7 @@ async function onGuardRosterImportCommit() {
     showToast(message, 'error', 4200);
     openGuardRosterCommitErrorSheet(statusCode || 0, bodyText || message);
     renderEmployeeRosterImportRows();
+    throw err;
   } finally {
     state.employeeAdmin.rosterImportCommitting = false;
     setEmployeeRosterImportBusy(false);
@@ -40133,6 +41086,31 @@ function canViewScheduleReportsWorkspace() {
   return canViewScheduleFinanceSubmission();
 }
 
+function canViewReportsFinanceTab() {
+  return canViewScheduleFinanceSubmission();
+}
+
+function canViewReportsSupportTab() {
+  return canUseScheduleSupportRoundtripSource()
+    || canUseScheduleSupportRoundtripHq()
+    || canUseScheduleSupportRoundtripFinalDownload();
+}
+
+function canViewReportsPackTab() {
+  return isManagerShellRole(getNavigationRole());
+}
+
+function canViewReportsHistoryTab() {
+  return isManagerShellRole(getNavigationRole());
+}
+
+function canViewReportsCenter() {
+  return canViewReportsFinanceTab()
+    || canViewReportsSupportTab()
+    || canViewReportsPackTab()
+    || canViewReportsHistoryTab();
+}
+
 function canOpenScheduleUploadWorkspace() {
   return canMutateScheduleData()
     || canUseScheduleSupportRoundtripSource();
@@ -41738,19 +42716,123 @@ function getScheduleFinanceNavigationSiteCode() {
   return 'ALL';
 }
 
-function openScheduleFinanceDownloadWorkspace(options = {}) {
-  if (!canViewScheduleReportsWorkspace()) {
-    showToast('Finance 제출 탭 접근 권한이 없습니다.', 'error');
+async function openReportsSupportOwnerWorkspace() {
+  const month = normalizeMonthKey(getReportsMonthValue()) || toMonthKey(new Date());
+  const siteCode = String(getScheduleSupportSelectedSiteCode() || '').trim().toUpperCase();
+  if (state.schedule) {
+    state.schedule.month = month;
+  }
+  const scheduleMonthInput = $('#scheduleMonth');
+  if (scheduleMonthInput instanceof HTMLInputElement) {
+    scheduleMonthInput.value = month;
+  }
+  if (canUseScheduleUploadHqWizard()) {
+    const workspace = ensureScheduleSupportHqWorkspaceDefaults();
+    workspace.month = month;
+    workspace.selectedSiteCodes = siteCode ? [siteCode] : [];
+    const monthInput = $('#scheduleHqMonth');
+    if (monthInput instanceof HTMLInputElement) {
+      monthInput.value = month;
+    }
+    await navigateToRoute(ROUTE_SCHEDULE_HQ_UPLOAD);
+    showToast('지점별 업로드 확인 owner 화면으로 이동했습니다.', 'info', 2200);
+    return;
+  }
+  await navigateToRoute(ROUTE_SCHEDULE_UPLOAD);
+  showToast('Excel 업로드 owner 화면으로 이동했습니다.', 'info', 2200);
+}
+
+async function onReportsSupportDownload() {
+  if (!canUseScheduleSupportRoundtripHq()) {
+    showToast('지원근무자용 시트 다운로드 권한이 없습니다.', 'error');
+    return;
+  }
+  const siteCode = String(getScheduleSupportSelectedSiteCode() || '').trim().toUpperCase();
+  if (!siteCode) {
+    showToast('대상 지점을 먼저 선택해 주세요.', 'error');
+    return;
+  }
+  const month = normalizeMonthKey(getReportsMonthValue()) || getScheduleMonthValue();
+  const params = new URLSearchParams();
+  params.set('month', month);
+  params.set('tenant_code', getScheduleTenantValue());
+  if (siteCode === 'ALL') {
+    params.set('scope', 'all');
+  } else {
+    params.set('scope', 'site');
+    params.set('site_code', siteCode);
+  }
+  const fallbackGeneratedOn = (() => {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      year: '2-digit',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const parts = Object.fromEntries(formatter.formatToParts(new Date()).map((part) => [part.type, part.value]));
+    return `${parts.year || ''}${parts.month || ''}${parts.day || ''}`;
+  })();
+  await downloadScheduleWorkbookWithAuth(
+    `${state.activeApiBase}/schedules/support-roundtrip/hq-roster-workbook?${params.toString()}`,
+    `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 지원근무자용 스케쥴 제출_${siteCode}_${fallbackGeneratedOn}.xlsx`,
+  );
+  showToast('지원근무자용 시트를 다운로드했습니다.', 'success', 2200);
+}
+
+async function onReportsSupportOpenSentrix() {
+  if (!canUseScheduleSupportRoundtripHq()) {
+    showToast('Sentrix handoff 열기 권한이 없습니다.', 'error');
+    return;
+  }
+  const siteCode = String(getScheduleSupportSelectedSiteCode() || '').trim().toUpperCase();
+  if (!siteCode) {
+    showToast('대상 지점을 먼저 선택해 주세요.', 'error');
+    return;
+  }
+  const status = (state.schedule.supportStatus && typeof state.schedule.supportStatus === 'object')
+    ? state.schedule.supportStatus
+    : await loadScheduleSupportRoundtripStatus();
+  const artifactContext = buildScheduleSupportArtifactContext(status, siteCode);
+  if (!artifactContext.artifact_id) {
+    showToast('현재 month/site 기준 source artifact가 아직 없습니다.', 'error');
+    return;
+  }
+  if (siteCode === 'ALL' && Number(status?.ready_site_count || 0) <= 0) {
+    showToast('전체 범위에서 Sentrix로 넘길 준비가 된 지점이 아직 없습니다.', 'error');
+    return;
+  }
+  const url = buildSentrixHqSupportSubmissionUrl({
+    tenant_code: getScheduleTenantValue(),
+    month: artifactContext.month || getReportsMonthValue(),
+    site_code: artifactContext.site_code === 'ALL' ? '' : (artifactContext.site_code || siteCode),
+    artifact_id: artifactContext.artifact_id,
+    revision: artifactContext.revision,
+  });
+  window.open(url, '_blank', 'noopener,noreferrer');
+  showToast('Sentrix HQ submission workspace로 이동했습니다.', 'success', 2400);
+}
+
+async function onReportsSupportCopyArtifact() {
+  const siteCode = String(getScheduleSupportSelectedSiteCode() || '').trim().toUpperCase();
+  const status = state.schedule.supportStatus && typeof state.schedule.supportStatus === 'object'
+    ? state.schedule.supportStatus
+    : null;
+  const artifactContext = buildScheduleSupportArtifactContext(status, siteCode);
+  if (!artifactContext.artifact_id) {
+    throw new Error('복사할 artifact_id가 없습니다.');
+  }
+  await copyTextToClipboard(artifactContext.artifact_id, 'artifact_id를 복사했습니다.');
+}
+
+async function openScheduleFinanceDownloadWorkspace(options = {}) {
+  if (!canViewReportsCenter()) {
+    showToast('보고 탭 접근 권한이 없습니다.', 'error');
     return;
   }
   const requestedMonth = normalizeMonthKey(options?.month || '');
   const month = requestedMonth || normalizeMonthKey(getScheduleMonthValue()) || normalizeMonthKey(state.schedule?.month || '');
   if (month) {
-    state.schedule.month = month;
-    const monthInput = $('#scheduleMonth');
-    if (monthInput instanceof HTMLInputElement) {
-      monthInput.value = month;
-    }
+    setReportsOwnerMonthValue(month, { syncInputs: true });
   }
 
   const requestedSiteCode = String(options?.siteCode || '').trim().toUpperCase();
@@ -41766,11 +42848,16 @@ function openScheduleFinanceDownloadWorkspace(options = {}) {
   }
 
   state.schedule.financeTab = SCHEDULE_FINANCE_TAB_DOWNLOAD;
-  onScheduleHqTabChange(SCHEDULE_TAB_REPORTS);
+  setSelectedReportsPack('default');
+  setReportsViewTab(canViewReportsFinanceTab() ? 'finance' : getDefaultReportsViewTab());
+  const route = canViewReportsFinanceTab()
+    ? ROUTE_REPORTS
+    : `${ROUTE_REPORTS}?tab=${encodeURIComponent(getDefaultReportsViewTab())}`;
+  await navigateToRoute(route);
   showToast(
     siteCode && siteCode !== 'ALL'
-      ? `Finance용 스케쥴 제출 탭으로 이동했습니다. (${siteCode} · ${formatScheduleMonthTitle(month)})`
-      : 'Finance용 스케쥴 제출 탭으로 이동했습니다.',
+      ? `보고 > Finance 제출로 이동했습니다. (${siteCode} · ${formatScheduleMonthTitle(month)})`
+      : '보고 > Finance 제출로 이동했습니다.',
     'info',
     2200,
   );
@@ -48102,7 +49189,7 @@ async function onLeaveWorkspaceSubmit(event) {
   }
 }
 
-async function onSchedulePreview() {
+async function onSchedulePreview(progressController = null) {
   if (!canUseScheduleSupportRoundtripSource()) {
     showToast('원본 월간 근무표 업로드 권한이 없습니다.', 'error');
     return;
@@ -48148,6 +49235,10 @@ async function onSchedulePreview() {
   state.previewBatchId = '';
   uploadUi.requestToken = requestToken;
   beginScheduleImportAnalysis(analysisContext);
+  progressController?.update({
+    detail: `${getScheduleImportSiteLabel(importSiteCode)} · ${formatScheduleMonthTitle(importMonth)} 기준으로 workbook을 분석하고 있습니다.`,
+    stageKey: 'upload_context',
+  });
   setScheduleImportUI({
     batchInfo: '검증 중입니다...',
     applyResult: `${getScheduleImportSiteLabel(importSiteCode)} · ${formatScheduleMonthTitle(importMonth)} 기준으로 workbook을 분석하고 있습니다.`,
@@ -48169,6 +49260,11 @@ async function onSchedulePreview() {
 
     state.previewBatchId = result.batch_id;
     state.preview = result;
+    progressController?.update({
+      stageKey: 'preview_building',
+      progress: 92,
+      detail: '이슈 요약과 행 미리보기를 구성하고 있습니다.',
+    });
 
     const errorCounts = result?.error_counts && typeof result.error_counts === 'object'
       ? Object.entries(result.error_counts)
@@ -48249,7 +49345,7 @@ async function onSchedulePreview() {
   }
 }
 
-async function onScheduleApply() {
+async function onScheduleApply(progressController = null) {
   if (!canUseScheduleSupportRoundtripSource()) {
     showToast('원본 월간 근무표 반영 권한이 없습니다.', 'error');
     return;
@@ -48304,6 +49400,11 @@ async function onScheduleApply() {
       showToast(blockedMessage, 'error', 4200);
       return;
     }
+    progressController?.update({
+      stageKey: 'refreshing',
+      progress: 92,
+      detail: '반영 결과와 연계 상태를 다시 불러오고 있습니다.',
+    });
     state.previewBatchId = '';
     invalidateScheduleCache();
     await Promise.allSettled([
@@ -50166,6 +51267,36 @@ function bindUiEvents() {
       });
     };
 
+    const runWithProgressTask = (fn, {
+      busyLabel = '처리 중...',
+      fallbackMessage = '요청 처리 중 오류가 발생했습니다.',
+      showErrorToast = true,
+      progressOptions = null,
+    } = {}) => {
+      setButtonsBusy(actionEl, true, busyLabel);
+      const progressController = progressOptions ? beginLongTaskProgress(progressOptions) : null;
+      Promise.resolve()
+        .then(() => fn(progressController))
+        .then(() => {
+          if (progressController) {
+            progressController.complete();
+          }
+        })
+        .catch((error) => {
+          console.error(error);
+          const normalizedMessage = normalizeActionError(error, fallbackMessage);
+          if (progressController) {
+            progressController.fail({ detail: normalizedMessage });
+          }
+          if (showErrorToast) {
+            showToast(normalizedMessage, 'error', 4500);
+          }
+        })
+        .finally(() => {
+          setButtonsBusy(actionEl, false);
+        });
+    };
+
     if (action === 'toggle-password-visibility') {
       togglePasswordVisibility();
       return;
@@ -50209,21 +51340,21 @@ function bindUiEvents() {
     }
 
     if (action === 'reports-refresh') {
-      runWithBusy(() => loadReportsViewPresenter(), '리포트 조회 중...');
+      runWithBusy(() => refreshReportsCenterData({ force: true }), '보고 조회 중...');
       return;
     }
 
     if (action === 'reports-view-tab') {
-      const nextTab = normalizeReportsViewTab(actionEl.dataset.tab || 'catalog');
+      const nextTab = normalizeReportsViewTab(actionEl.dataset.tab || getDefaultReportsViewTab());
       if (nextTab === 'pack' && isAppleReportPackEnabled()) {
         setSelectedReportsPack('apple');
       }
       setReportsViewTab(nextTab, { syncRoute: true });
       if (nextTab === 'pack') {
-        renderReportsAppleCard();
+        runActionSafely(refreshReportsCenterData({ force: false }), '전용 팩 상태를 불러오지 못했습니다.');
       }
       if (nextTab === 'history') {
-        runActionSafely(loadAppleReportLogs({ force: true }), '실행 이력을 불러오지 못했습니다.');
+        runActionSafely(refreshReportsCenterData({ force: false }), '실행 이력을 불러오지 못했습니다.');
       }
       return;
     }
@@ -50241,8 +51372,41 @@ function bindUiEvents() {
         showToast('이 회사에 해당 보고서가 없습니다.', 'error', 2800);
         return;
       }
-      const targetRoute = pack === 'apple' ? ROUTE_REPORTS_APPLE : `${ROUTE_REPORTS}?pack=default`;
+      const targetRoute = pack === 'apple' ? ROUTE_REPORTS_APPLE : `${ROUTE_REPORTS}?tab=pack&pack=default`;
       runActionSafely(navigateToRoute(targetRoute, { replace: true }), '리포트 팩 이동에 실패했습니다.');
+      return;
+    }
+
+    if (action === 'reports-open-schedule-upload') {
+      runActionSafely(navigateToRoute(ROUTE_SCHEDULE_UPLOAD), 'Excel 업로드 화면 이동에 실패했습니다.');
+      return;
+    }
+
+    if (action === 'reports-support-open-schedule-hq-upload') {
+      runActionSafely(openReportsSupportOwnerWorkspace(), '스케줄 owner 화면 이동에 실패했습니다.');
+      return;
+    }
+
+    if (action === 'reports-support-download') {
+      runWithProgressTask(() => onReportsSupportDownload(), {
+        busyLabel: '지원근무자용 시트 준비 중...',
+        fallbackMessage: '지원근무자용 시트를 준비하지 못했습니다.',
+        progressOptions: {
+          title: '지원근무자용 시트를 준비하고 있습니다',
+          detail: '선택한 월과 지점 기준으로 전달용 workbook을 생성하는 중입니다.',
+          stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+        },
+      });
+      return;
+    }
+
+    if (action === 'reports-support-open-sentrix') {
+      runWithBusy(() => onReportsSupportOpenSentrix(), 'Sentrix 상태 열기 중...');
+      return;
+    }
+
+    if (action === 'reports-support-copy-artifact') {
+      runActionSafely(onReportsSupportCopyArtifact(), 'artifact_id를 복사하지 못했습니다.');
       return;
     }
 
@@ -50284,12 +51448,28 @@ function bindUiEvents() {
     }
 
     if (action === 'reports-apple-run') {
-      runWithBusy(() => onReportsAppleRun({ retry: false }), '업데이트 실행 중...');
+      runWithProgressTask((progressController) => onReportsAppleRun({ retry: false, progressController }), {
+        busyLabel: '업데이트 실행 중...',
+        fallbackMessage: '전용 보고 업데이트 실행에 실패했습니다.',
+        progressOptions: {
+          title: '전용 보고 업데이트를 실행하고 있습니다',
+          detail: '대상 월 데이터를 수집하고 실행 결과를 갱신하는 중입니다.',
+          stages: LONG_TASK_STAGES_APPLE_REPORT,
+        },
+      });
       return;
     }
 
     if (action === 'reports-apple-retry') {
-      runWithBusy(() => onReportsAppleRun({ retry: true }), '재시도 중...');
+      runWithProgressTask((progressController) => onReportsAppleRun({ retry: true, progressController }), {
+        busyLabel: '재시도 중...',
+        fallbackMessage: '전용 보고 재시도에 실패했습니다.',
+        progressOptions: {
+          title: '전용 보고 재시도를 실행하고 있습니다',
+          detail: '실패한 대상을 다시 처리하고 최신 상태를 반영하는 중입니다.',
+          stages: LONG_TASK_STAGES_APPLE_REPORT,
+        },
+      });
       return;
     }
 
@@ -50418,7 +51598,16 @@ function bindUiEvents() {
     }
 
     if (action === 'support-status-hq-inspect') {
-      runWithBusy(() => onSupportStatusHqInspect(), 'workbook 검토 중...');
+      runWithProgressTask((progressController) => onSupportStatusHqInspect(progressController), {
+        busyLabel: 'workbook 검토 중...',
+        fallbackMessage: 'workbook 검토에 실패했습니다.',
+        progressOptions: {
+          title: 'HQ workbook을 검토하고 있습니다',
+          detail: '파일 계약 확인과 검토 결과 생성을 진행하는 중입니다.',
+          surfaceKey: LONG_TASK_SURFACE_SCHEDULE_SUPPORT_HQ,
+          stages: LONG_TASK_STAGES_SUPPORT_HQ_INSPECT,
+        },
+      });
       return;
     }
 
@@ -52052,7 +53241,17 @@ function bindUiEvents() {
     }
 
     if (action === 'employee-roster-upload') {
-      runWithBusy(() => onGuardRosterImportUpload(), '명부 업로드 중...');
+      runWithProgressTask((progressController) => onGuardRosterImportUpload(progressController), {
+        busyLabel: '명부 업로드 중...',
+        fallbackMessage: '경비원명부 업로드에 실패했습니다.',
+        showErrorToast: false,
+        progressOptions: {
+          title: '경비원명부를 업로드하고 있습니다',
+          detail: '문서 파싱과 현장 자동 매칭이 끝나면 검토용 시트가 채워집니다.',
+          surfaceKey: LONG_TASK_SURFACE_EMPLOYEE_ROSTER,
+          stages: LONG_TASK_STAGES_EMPLOYEE_ROSTER_UPLOAD,
+        },
+      });
       return;
     }
 
@@ -52062,7 +53261,17 @@ function bindUiEvents() {
     }
 
     if (action === 'employee-roster-commit') {
-      runWithBusy(() => onGuardRosterImportCommit(), '일괄 등록 중...');
+      runWithProgressTask((progressController) => onGuardRosterImportCommit(progressController), {
+        busyLabel: '일괄 등록 중...',
+        fallbackMessage: '직원 일괄 등록에 실패했습니다.',
+        showErrorToast: false,
+        progressOptions: {
+          title: '직원 일괄 등록을 처리하고 있습니다',
+          detail: '검증을 통과한 항목부터 계정과 첨부 정보를 순서대로 반영합니다.',
+          surfaceKey: LONG_TASK_SURFACE_EMPLOYEE_ROSTER,
+          stages: LONG_TASK_STAGES_EMPLOYEE_ROSTER_COMMIT,
+        },
+      });
       return;
     }
 
@@ -52833,12 +54042,29 @@ function bindUiEvents() {
     }
 
     if (action === 'schedule-support-hq-download') {
-      runWithBusy(() => onScheduleSupportHqDownload(), 'HQ 제출용 시트 준비 중...');
+      runWithProgressTask(() => onScheduleSupportHqDownload(), {
+        busyLabel: 'HQ 제출용 시트 준비 중...',
+        fallbackMessage: 'HQ 제출용 시트를 준비하지 못했습니다.',
+        progressOptions: {
+          title: 'HQ 제출용 workbook을 준비하고 있습니다',
+          detail: '선택한 지점 범위 기준으로 제출용 시트를 생성하는 중입니다.',
+          stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+        },
+      });
       return;
     }
 
     if (action === 'schedule-support-preview') {
-      runWithBusy(() => onScheduleSupportHqInspect(), 'HQ 작성본 검토 중...');
+      runWithProgressTask((progressController) => onScheduleSupportHqInspect(progressController), {
+        busyLabel: 'HQ 작성본 검토 중...',
+        fallbackMessage: 'HQ 작성본 검토에 실패했습니다.',
+        progressOptions: {
+          title: 'HQ 작성본을 검토하고 있습니다',
+          detail: '파일 계약 확인과 지원근무 미리보기를 생성하는 중입니다.',
+          surfaceKey: LONG_TASK_SURFACE_SCHEDULE_SUPPORT_HQ,
+          stages: LONG_TASK_STAGES_SUPPORT_HQ_INSPECT,
+        },
+      });
       return;
     }
 
@@ -52848,7 +54074,16 @@ function bindUiEvents() {
     }
 
     if (action === 'schedule-support-hq-inspect') {
-      runWithBusy(() => onScheduleSupportHqInspect(), 'HQ 작성본 검토 중...');
+      runWithProgressTask((progressController) => onScheduleSupportHqInspect(progressController), {
+        busyLabel: 'HQ 작성본 검토 중...',
+        fallbackMessage: 'HQ 작성본 검토에 실패했습니다.',
+        progressOptions: {
+          title: 'HQ 작성본을 검토하고 있습니다',
+          detail: '파일 계약 확인과 지원근무 미리보기를 생성하는 중입니다.',
+          surfaceKey: LONG_TASK_SURFACE_SCHEDULE_SUPPORT_HQ,
+          stages: LONG_TASK_STAGES_SUPPORT_HQ_INSPECT,
+        },
+      });
       return;
     }
 
@@ -52863,7 +54098,15 @@ function bindUiEvents() {
     }
 
     if (action === 'schedule-support-final-download') {
-      runWithBusy(() => onScheduleSupportFinalDownload(), '병합 완료본 다운로드 중...');
+      runWithProgressTask(() => onScheduleSupportFinalDownload(), {
+        busyLabel: '병합 완료본 다운로드 중...',
+        fallbackMessage: '병합 완료본 다운로드에 실패했습니다.',
+        progressOptions: {
+          title: '병합 완료본을 준비하고 있습니다',
+          detail: '지원근무 반영 결과를 최종 workbook으로 생성하는 중입니다.',
+          stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+        },
+      });
       return;
     }
 
@@ -52874,32 +54117,84 @@ function bindUiEvents() {
     }
 
     if (action === 'schedule-finance-review-download') {
-      runWithBusy(() => onScheduleFinanceReviewDownload(), '1차 확인본 다운로드 중...');
+      runWithProgressTask(() => onScheduleFinanceReviewDownload(), {
+        busyLabel: '1차 확인본 다운로드 중...',
+        fallbackMessage: 'Finance 1차 확인본 다운로드에 실패했습니다.',
+        progressOptions: {
+          title: 'Finance 1차 확인본을 준비하고 있습니다',
+          detail: '검토용 workbook을 생성해 브라우저에 전달하는 중입니다.',
+          stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+        },
+      });
       return;
     }
 
     if (action === 'schedule-finance-preview') {
-      runWithBusy(() => onScheduleFinancePreview(), '최종 업로드 diff 계산 중...');
+      runWithProgressTask((progressController) => onScheduleFinancePreview(progressController), {
+        busyLabel: '최종 업로드 diff 계산 중...',
+        fallbackMessage: 'Finance 최종 업로드 미리보기에 실패했습니다.',
+        progressOptions: {
+          title: 'Finance 최종 업로드 미리보기를 생성하고 있습니다',
+          detail: '기존 값과 업로드 값을 비교해 차단 사유와 반영 가능 행을 정리하는 중입니다.',
+          surfaceKey: LONG_TASK_SURFACE_SCHEDULE_FINANCE,
+          stages: LONG_TASK_STAGES_FINANCE_PREVIEW,
+        },
+      });
       return;
     }
 
     if (action === 'schedule-finance-apply') {
-      runWithBusy(() => onScheduleFinanceApply(), '최종 업로드 반영 중...');
+      runWithProgressTask((progressController) => onScheduleFinanceApply(progressController), {
+        busyLabel: '최종 업로드 반영 중...',
+        fallbackMessage: 'Finance 최종 업로드 반영에 실패했습니다.',
+        progressOptions: {
+          title: 'Finance 최종 업로드를 반영하고 있습니다',
+          detail: '허용된 diff를 반영하고 제출 상태를 새로고침하는 중입니다.',
+          surfaceKey: LONG_TASK_SURFACE_SCHEDULE_FINANCE,
+          stages: LONG_TASK_STAGES_FINANCE_APPLY,
+        },
+      });
       return;
     }
 
     if (action === 'schedule-finance-final-download') {
-      runWithBusy(() => onScheduleFinanceFinalDownload(), '최종본 다운로드 중...');
+      runWithProgressTask(() => onScheduleFinanceFinalDownload(), {
+        busyLabel: '최종본 다운로드 중...',
+        fallbackMessage: 'Finance 최종본 다운로드에 실패했습니다.',
+        progressOptions: {
+          title: 'Finance 최종본을 준비하고 있습니다',
+          detail: '최종 업로드 기준 workbook을 생성해 브라우저에 전달하는 중입니다.',
+          stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+        },
+      });
       return;
     }
 
     if (action === 'preview-schedule') {
-      runWithBusy(() => onSchedulePreview(), '검증 중...');
+      runWithProgressTask((progressController) => onSchedulePreview(progressController), {
+        busyLabel: '검증 중...',
+        fallbackMessage: '월간 근무표 검증에 실패했습니다.',
+        progressOptions: {
+          title: '월간 근무표를 분석하고 있습니다',
+          detail: '파일, 지점, 대상 월 기준으로 workbook을 읽고 미리보기를 생성하는 중입니다.',
+          surfaceKey: LONG_TASK_SURFACE_SCHEDULE_IMPORT,
+          stages: LONG_TASK_STAGES_SCHEDULE_IMPORT,
+        },
+      });
       return;
     }
 
     if (action === 'apply-schedule') {
-      runWithBusy(() => onScheduleApply(), '반영 중...');
+      runWithProgressTask((progressController) => onScheduleApply(progressController), {
+        busyLabel: '반영 중...',
+        fallbackMessage: '월간 근무표 반영에 실패했습니다.',
+        progressOptions: {
+          title: '월간 근무표를 반영하고 있습니다',
+          detail: '검증을 통과한 행만 ARLS에 반영하고 결과를 새로고침하는 중입니다.',
+          surfaceKey: LONG_TASK_SURFACE_SCHEDULE_IMPORT,
+          stages: LONG_TASK_STAGES_SCHEDULE_APPLY,
+        },
+      });
       return;
     }
 
@@ -53493,14 +54788,38 @@ function bindUiEvents() {
         clearApplyDetails: true,
         canApply: false,
       });
+      resetScheduleSupportRoundtripPreview();
+      state.schedule.supportStatus = null;
+      state.schedule.financeStatus = null;
       renderScheduleUploadWorkspace();
       runActionSafely(
-        loadScheduleFinanceSubmissionStatus().then(() => {
+        Promise.allSettled([
+          canViewReportsFinanceTab() ? loadScheduleFinanceSubmissionStatus() : Promise.resolve(null),
+          canViewReportsSupportTab() ? loadScheduleSupportRoundtripStatus() : Promise.resolve(null),
+        ]).then(() => {
           renderScheduleUploadWorkspace();
           renderScheduleReportsTabs();
+          renderReportsSupportHandoffPanel();
+          renderReportsContextSummary();
         }),
-        '제출 상태를 불러오지 못했습니다.',
+        '보고 상태를 불러오지 못했습니다.',
       );
+      return;
+    }
+
+    if (target.id === 'reportsOwnerMonth') {
+      const nextMonth = normalizeMonthKey(target instanceof HTMLInputElement ? target.value : '');
+      if (nextMonth) {
+        setReportsOwnerMonthValue(nextMonth, { syncInputs: true });
+        resetScheduleFinancePreview();
+        resetScheduleSupportRoundtripPreview();
+        state.schedule.supportStatus = null;
+        state.schedule.financeStatus = null;
+        runActionSafely(
+          refreshReportsCenterData({ force: true }),
+          '보고 월 정보를 갱신하지 못했습니다.',
+        );
+      }
       return;
     }
 
@@ -53622,6 +54941,13 @@ function bindUiEvents() {
           'Finance 제출 상태를 갱신하지 못했습니다.',
         );
       }
+      if (state.currentView === 'reports') {
+        setReportsOwnerMonthValue(target instanceof HTMLInputElement ? target.value : '', { syncInputs: true });
+        runActionSafely(
+          refreshReportsCenterData({ force: true }),
+          '보고 월 정보를 갱신하지 못했습니다.',
+        );
+      }
       syncScheduleImportMonthInput({ force: true });
       renderScheduleUploadWorkspace();
       return;
@@ -53696,21 +55022,6 @@ function bindUiEvents() {
         setOpsActiveDate(nextDate, { syncInput: true });
         renderOpsHeaderMeta();
         runActionSafely(loadOpsSummary({ force: true }), '운영 집계 조회 중 오류가 발생했습니다.');
-      }
-      return;
-    }
-
-    if (target.id === 'reportsAppleMonth') {
-      const nextMonth = normalizeMonthKey(target instanceof HTMLInputElement ? target.value : '');
-      if (nextMonth) {
-        setReportsMonthValue(nextMonth, { syncInput: true });
-        runActionSafely(async () => {
-          await Promise.allSettled([
-            loadAppleReportStatus({ force: true }),
-            loadAppleReportLogs({ force: true }),
-          ]);
-          renderReportsAppleCard();
-        }, '전용 보고 월 조회 중 오류가 발생했습니다.');
       }
       return;
     }
