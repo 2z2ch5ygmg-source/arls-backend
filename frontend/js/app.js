@@ -5015,13 +5015,24 @@ function buildHomeAttendanceIssueRows() {
       pillVariant: 'success',
     }];
   }
-  return rows.slice(0, 3).map((item) => ({
+  const visibleRows = rows.slice(0, 3).map((item) => ({
     title: `${item.employeeName || '직원'} · ${item.statusLabel || '확인 필요'}`,
     subtitle: `${item.siteName || '현장 미지정'} · ${item.dateLabel || toDateLabel(getOpsActiveDate())}`,
     pillLabel: item.statusLabel || '확인 필요',
     pillVariant: item.pillVariant || 'warn',
     danger: Boolean(item.danger),
   }));
+  if (rows.length > 3) {
+    visibleRows.push({
+      title: `외 ${rows.length - 3}건 더보기`,
+      subtitle: '남은 출퇴근 예외는 출퇴근 탭에서 이어서 확인하세요.',
+      pillLabel: '더보기',
+      pillVariant: 'neutral',
+      actionLabel: '출퇴근 보기',
+      route: ROUTE_ATTENDANCE,
+    });
+  }
+  return visibleRows;
 }
 
 function buildHomeScheduleRows() {
@@ -5130,8 +5141,6 @@ function buildHomeOrgIssueRows() {
       subtitle: `로그인 연결이 필요한 직원 ${unlinkedCount}명`,
       pillLabel: `${unlinkedCount}명`,
       pillVariant: 'warn',
-      actionLabel: '직원',
-      route: '/branch/employees',
     });
   }
   if (unassignedEmployees > 0) {
@@ -5140,8 +5149,6 @@ function buildHomeOrgIssueRows() {
       subtitle: `현장에 아직 연결되지 않은 직원 ${unassignedEmployees}명`,
       pillLabel: `${unassignedEmployees}명`,
       pillVariant: 'warn',
-      actionLabel: '조직',
-      route: '/branch/employees',
     });
   }
   if (totalSites > activeSites) {
@@ -5150,8 +5157,6 @@ function buildHomeOrgIssueRows() {
       subtitle: `전체 ${totalSites}개 중 운영 중 현장 ${activeSites}개`,
       pillLabel: `${Math.max(0, totalSites - activeSites)}개`,
       pillVariant: 'neutral',
-      actionLabel: '지점',
-      route: '/branch/sites',
     });
   }
   if (activeSites > assignedSites) {
@@ -5160,8 +5165,6 @@ function buildHomeOrgIssueRows() {
       subtitle: `활성 현장 ${activeSites}개 중 직원 배정 완료 ${assignedSites}개`,
       pillLabel: `${Math.max(0, activeSites - assignedSites)}개`,
       pillVariant: 'warn',
-      actionLabel: '지점',
-      route: '/branch/sites',
     });
   }
   if (activeEmployees > 0 && managerCount === 0) {
@@ -5170,16 +5173,12 @@ function buildHomeOrgIssueRows() {
       subtitle: `재직 직원 ${employeeTotal}명인데 관리자·리더가 없습니다.`,
       pillLabel: '확인',
       pillVariant: 'error',
-      actionLabel: '직원',
-      route: '/branch/employees',
     });
   }
   return rows.slice(0, 1);
 }
 
 function renderHomeManagerOrgSections() {
-  const dashboard = getHomeManagerDashboardState();
-  const organizationSummary = dashboard.organizationSummary || {};
   const orgCard = $('#homeManagerOrgCard');
   const homeStack = document.querySelector('#view-home .home-stack');
   const issueRows = buildHomeOrgIssueRows();
@@ -5193,17 +5192,6 @@ function renderHomeManagerOrgSections() {
   if (homeStack instanceof HTMLElement) {
     homeStack.classList.toggle('home-stack-has-org', showOrgCard);
   }
-
-  const setMetric = (selector, value = '') => {
-    const el = $(selector);
-    if (!(el instanceof HTMLElement)) return;
-    el.textContent = String(value ?? '-').trim() || '-';
-  };
-
-  setMetric('#homeManagerPeopleTotal', `${Number(organizationSummary.employeeTotal || 0)}명`);
-  setMetric('#homeManagerPeopleActive', `${Number(organizationSummary.activeEmployeeCount || 0)}명`);
-  setMetric('#homeManagerSitesActive', `${Number(organizationSummary.activeSiteCount || 0)}개`);
-  setMetric('#homeManagerSitesAssigned', `${Number(organizationSummary.assignedSiteCount || 0)}개`);
 
   renderHomeDashboardList(
     '#homeManagerOrgIssueList',
@@ -5247,7 +5235,10 @@ function renderHomeManagerDashboard() {
     leaveOrNightText = `야간 ${overnightCount}건`;
   }
   setTextToSelectors(['#homeManagerLeaveOrNightLabel'], leaveOrNightText);
-  setTextToSelectors(['#homeManagerHeroApprovalCount'], `${totalPendingCount}건`);
+  setTextToSelectors(
+    ['#homeManagerHeroImmediateCount'],
+    state.ops.loading ? '집계 중' : (state.ops.error ? '-' : `${immediateCount}건`),
+  );
 
   const homeTitle = $('#homeViewTitle');
   if (homeTitle instanceof HTMLElement) {
@@ -5266,27 +5257,27 @@ function renderHomeManagerDashboard() {
     heroTone = 'neutral';
     heroPrimaryLabel = '운영 집계';
     heroPrimaryValue = '…';
-    heroPrimaryMeta = '집계 중';
+    heroPrimaryMeta = '오늘 운영 브리핑을 집계하는 중입니다.';
   } else if (state.ops.error) {
     heroTone = 'error';
     heroPrimaryLabel = '조회 실패';
     heroPrimaryValue = '재시도';
-    heroPrimaryMeta = '';
+    heroPrimaryMeta = '잠시 후 다시 새로고침해 주세요.';
   } else if (vacancyCount > 0) {
     heroTone = 'error';
     heroPrimaryLabel = '결원/미출근';
     heroPrimaryValue = `${vacancyCount}건`;
-    heroPrimaryMeta = '우선 확인';
+    heroPrimaryMeta = '';
   } else if (totalPendingCount > 0) {
     heroTone = 'warn';
     heroPrimaryLabel = '승인 대기';
     heroPrimaryValue = `${totalPendingCount}건`;
-    heroPrimaryMeta = '지금 처리';
+    heroPrimaryMeta = '';
   } else if (scheduleGapCount > 0 || vacancySiteCount > 0 || !state.ops?.closerAssigned || !state.ops?.leaderAssigned) {
     heroTone = 'warn';
     heroPrimaryLabel = '스케줄 확인';
     heroPrimaryValue = `${scheduleGapCount + vacancySiteCount + (state.ops?.closerAssigned ? 0 : 1) + (state.ops?.leaderAssigned ? 0 : 1)}건`;
-    heroPrimaryMeta = '지정/누락 점검';
+    heroPrimaryMeta = '';
   } else {
     heroTone = 'success';
     heroPrimaryLabel = '운영 안정';
@@ -5306,7 +5297,7 @@ function renderHomeManagerDashboard() {
     heroMeta = '조회 실패';
   } else {
     if (state.ops?.lastSyncedAt) {
-      heroMeta = `${new Date(state.ops.lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 갱신`;
+      heroMeta = `최근 ${new Date(state.ops.lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 갱신`;
     } else {
       heroMeta = '';
     }

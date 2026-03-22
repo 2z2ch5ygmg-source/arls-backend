@@ -24,7 +24,7 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%23f97316'/%3E%3Ctext x='24' y='31' text-anchor='middle' font-size='22' fill='white' font-family='Arial,sans-serif'%3ERG%3C/text%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="css/styles.css?v=20260313-hq-wizard-v1" />
+    <link rel="stylesheet" href="css/styles.css?v=20260322-home-briefing-v1" />
   </head>
   <body>
     <div id="app">
@@ -152,16 +152,12 @@
                   </article>
                   <div class="home-briefing-stat-rack">
                     <div class="home-briefing-stat">
-                      <span>출근 예정</span>
+                      <span>오늘 인원</span>
                       <strong id="homeManagerScheduledCount">-</strong>
                     </div>
                     <div class="home-briefing-stat">
-                      <span>출근 완료</span>
-                      <strong id="homeManagerPresentCount">-</strong>
-                    </div>
-                    <div class="home-briefing-stat">
-                      <span>승인 대기</span>
-                      <strong id="homeManagerHeroApprovalCount">-</strong>
+                      <span>즉시 확인</span>
+                      <strong id="homeManagerHeroImmediateCount">-</strong>
                     </div>
                     <div class="home-briefing-stat">
                       <span>휴가/야간</span>
@@ -341,26 +337,6 @@
                   </button>
                 </div>
                 <div class="home-org-grid">
-                  <article class="home-org-summary-card">
-                    <div class="home-org-stat-grid">
-                      <div class="home-org-stat">
-                        <span>전체 인원</span>
-                        <strong id="homeManagerPeopleTotal">-</strong>
-                      </div>
-                      <div class="home-org-stat">
-                        <span>재직중</span>
-                        <strong id="homeManagerPeopleActive">-</strong>
-                      </div>
-                      <div class="home-org-stat">
-                        <span>활성 현장</span>
-                        <strong id="homeManagerSitesActive">-</strong>
-                      </div>
-                      <div class="home-org-stat">
-                        <span>직원 배정 현장</span>
-                        <strong id="homeManagerSitesAssigned">-</strong>
-                      </div>
-                    </div>
-                  </article>
                   <article class="home-org-summary-card home-section-rail">
                     <ul id="homeManagerOrgIssueList" class="list compact-list home-dashboard-list-plain"></ul>
                   </article>
@@ -5158,7 +5134,7 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=1773534899"></script>
+    <script src="config.js?v=20260322-home-briefing-v1"></script>
     <script>
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
@@ -5411,7 +5387,7 @@
         });
 
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=1773534899', { updateViaCache: 'none' })
+          navigator.serviceWorker.register('./sw.js?v=20260322-home-briefing-v1', { updateViaCache: 'none' })
             .then((registration) => {
               registration.update().catch(() => {});
 
