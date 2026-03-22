@@ -5188,6 +5188,7 @@ function renderHomeManagerOrgSections() {
 
   if (orgCard instanceof HTMLElement) {
     orgCard.classList.toggle('hidden', !showOrgCard);
+    orgCard.dataset.compact = showOrgCard ? 'true' : 'false';
   }
   if (homeStack instanceof HTMLElement) {
     homeStack.classList.toggle('home-stack-has-org', showOrgCard);
@@ -5265,75 +5266,53 @@ function renderHomeManagerDashboard() {
     heroTone = 'neutral';
     heroPrimaryLabel = '운영 집계';
     heroPrimaryValue = '…';
-    heroPrimaryMeta = '출근, 승인, 스케줄 상태를 불러오는 중입니다.';
+    heroPrimaryMeta = '오늘 운영 상태를 불러오는 중입니다.';
   } else if (state.ops.error) {
     heroTone = 'error';
     heroPrimaryLabel = '조회 실패';
     heroPrimaryValue = '재시도';
-    heroPrimaryMeta = '오늘 운영 집계를 불러오지 못했습니다.';
+    heroPrimaryMeta = '오늘 운영 상태를 불러오지 못했습니다.';
   } else if (vacancyCount > 0) {
     heroTone = 'error';
     heroPrimaryLabel = '결원/미출근';
     heroPrimaryValue = `${vacancyCount}건`;
-    heroPrimaryMeta = '오늘 가장 먼저 확인해야 할 출퇴근 이슈입니다.';
+    heroPrimaryMeta = '가장 먼저 확인해야 할 출퇴근 이슈입니다.';
   } else if (totalPendingCount > 0) {
     heroTone = 'warn';
     heroPrimaryLabel = '승인 대기';
     heroPrimaryValue = `${totalPendingCount}건`;
-    heroPrimaryMeta = '요청·승인에서 바로 처리할 대기 건이 있습니다.';
+    heroPrimaryMeta = '바로 처리할 대기 건이 있습니다.';
   } else if (scheduleGapCount > 0 || vacancySiteCount > 0 || !state.ops?.closerAssigned || !state.ops?.leaderAssigned) {
     heroTone = 'warn';
     heroPrimaryLabel = '스케줄 확인';
     heroPrimaryValue = `${scheduleGapCount + vacancySiteCount + (state.ops?.closerAssigned ? 0 : 1) + (state.ops?.leaderAssigned ? 0 : 1)}건`;
-    heroPrimaryMeta = '배정 누락과 오늘 마감/리더 지정 상태를 먼저 점검해 주세요.';
+    heroPrimaryMeta = '배정 누락과 오늘 지정 상태를 점검해 주세요.';
   } else {
     heroTone = 'success';
     heroPrimaryLabel = '운영 안정';
     heroPrimaryValue = 'OK';
-    heroPrimaryMeta = '지금 바로 확인할 핵심 운영 이슈는 없습니다.';
+    heroPrimaryMeta = '지금 확인할 핵심 운영 이슈가 없습니다.';
   }
   setHomeDashboardTone('#homeManagerHeroPrimaryCard', heroTone);
   setTextToSelectors(['#homeManagerHeroPrimaryLabel'], heroPrimaryLabel);
   setTextToSelectors(['#homeManagerHeroPrimaryValue'], heroPrimaryValue);
   setTextToSelectors(['#homeManagerHeroPrimaryMeta'], heroPrimaryMeta);
 
-  setHomeDashboardPill(
-    '#homeManagerOverviewPill',
-    state.ops.loading ? '확인 중' : (immediateCount > 0 ? `즉시 확인 ${immediateCount}건` : '안정'),
-    state.ops.loading ? 'neutral' : (immediateCount > 0 ? 'warn' : 'success'),
-  );
-
   const heroMetaEl = $('#homeManagerHeroMeta');
   let heroMeta = '';
   if (state.ops.loading) {
-    heroMeta = '운영 집계와 승인 상태를 불러오는 중입니다.';
+    heroMeta = '운영 집계를 불러오는 중입니다.';
   } else if (state.ops.error) {
     heroMeta = '오늘 운영 개요를 불러오지 못했습니다.';
   } else {
-    const metaParts = [`${toDateLabel(getOpsActiveDate())} 기준`];
     if (state.ops?.lastSyncedAt) {
-      metaParts.push(`최근 ${new Date(state.ops.lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`);
+      heroMeta = `최근 ${new Date(state.ops.lastSyncedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 갱신`;
+    } else {
+      heroMeta = '오늘 운영 집계를 반영했습니다.';
     }
-    heroMeta = metaParts.join(' · ');
   }
   if (heroMetaEl instanceof HTMLElement) {
     heroMetaEl.textContent = heroMeta;
-  }
-
-  const briefingMetaEl = $('#homeManagerOpsMeta');
-  let briefingMeta = '';
-  if (state.ops.loading) {
-    briefingMeta = '운영 집계와 승인 상태를 모으는 중입니다.';
-  } else if (state.ops.error) {
-    briefingMeta = '오늘 운영 브리핑을 불러오지 못했습니다.';
-  } else {
-    briefingMeta = immediateCount > 0
-      ? `즉시 확인 ${immediateCount}건 · 출근 완료 ${presentCount}/${scheduledCount}`
-      : `운영 안정 · 출근 완료 ${presentCount}/${scheduledCount}`;
-  }
-  if (briefingMetaEl) {
-    briefingMetaEl.textContent = briefingMeta;
-    briefingMetaEl.classList.toggle('hidden', !briefingMeta);
   }
 
   const rateValueEl = $('#homeManagerAttendanceRateValue');
