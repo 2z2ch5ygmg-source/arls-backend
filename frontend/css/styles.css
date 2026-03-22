@@ -20463,12 +20463,18 @@ button.attendance-status-special-card.active {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: flex-end;
   gap: 14px;
-  padding: 18px 0 18px 18px;
+  padding: 18px 18px 18px 18px;
   border: none;
   border-right: none;
   border-bottom: 1px solid rgba(148, 163, 184, 0.14);
   box-shadow: none;
   background-image: none;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-mini-metric:nth-child(2n),
+#shell[data-shell-mode='manager'] #view-home .home-mini-metric:nth-last-child(-n + 2),
+#shell[data-shell-mode='manager'] #view-home .home-mini-metric:last-child {
+  border-right: none;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-mini-metric:last-child {
