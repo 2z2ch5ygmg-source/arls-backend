@@ -18610,8 +18610,8 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-hero-card {
-  gap: 8px;
-  padding: 14px 16px;
+  gap: 4px;
+  padding: 10px 14px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-hero-head,
@@ -18625,7 +18625,7 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy,
 #shell[data-shell-mode='manager'] #view-home .home-manager-section-title > div {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -18667,6 +18667,11 @@ button.attendance-status-special-card.active {
   text-transform: uppercase;
 }
 
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy .muted:empty,
+#shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight .muted:empty {
+  display: none;
+}
+
 #shell[data-shell-mode='manager'] #view-home .status-pill {
   min-height: 22px;
   padding: 0 9px;
@@ -18703,7 +18708,7 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .workspace-head h2 {
-  font-size: clamp(22px, 2vw, 28px);
+  font-size: clamp(20px, 1.86vw, 26px);
   line-height: 1.12;
   letter-spacing: -0.04em;
 }
@@ -18766,7 +18771,7 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-briefing-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 0.82fr) minmax(0, 0.9fr);
+  grid-template-columns: minmax(208px, 0.72fr) minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -18774,10 +18779,10 @@ button.attendance-status-special-card.active {
   border: 1px solid rgba(249, 115, 22, 0.16);
   border-radius: 20px;
   background: var(--ui-bg-surface);
-  padding: 8px 10px;
+  padding: 7px 9px;
   display: grid;
-  gap: 4px;
-  min-height: 60px;
+  gap: 3px;
+  min-height: 48px;
   align-content: start;
 }
 
@@ -18804,7 +18809,7 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight strong {
-  font-size: clamp(15px, 1.18vw, 18px);
+  font-size: clamp(14px, 1vw, 16px);
   line-height: 0.98;
   letter-spacing: -0.05em;
 }
@@ -18823,7 +18828,7 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-briefing-stat-rack {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   padding: 0;
   border: none;
@@ -18837,7 +18842,7 @@ button.attendance-status-special-card.active {
   display: grid;
   align-content: start;
   gap: 3px;
-  min-height: 38px;
+  min-height: 40px;
   border: 1px solid var(--ui-border-subtle);
 }
 
@@ -18850,7 +18855,7 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-briefing-stat strong {
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1;
   letter-spacing: -0.04em;
   color: var(--ui-text-primary);
@@ -18878,8 +18883,8 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-overview-grid {
   display: grid;
-  grid-template-columns: minmax(198px, 228px) minmax(220px, 0.84fr) minmax(336px, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(160px, 188px) minmax(198px, 0.8fr) minmax(336px, 1fr);
+  gap: 12px;
   align-items: start;
 }
 
@@ -18901,7 +18906,7 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-schedule-summary-card,
 #shell[data-shell-mode='manager'] #view-home .home-requests-summary-card,
 #shell[data-shell-mode='manager'] #view-home .home-org-summary-card {
-  padding: 12px;
+  padding: 8px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-card-label {
@@ -18912,7 +18917,7 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   align-content: start;
   border-color: rgba(249, 115, 22, 0.28);
   background: #f97316;
@@ -18930,14 +18935,14 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-visual {
   display: grid;
   justify-content: center;
-  min-height: 116px;
+  min-height: 70px;
   align-items: center;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-ring,
 #shell[data-shell-mode='manager'] #view-home .home-insight-ring {
   --progress: 0%;
-  width: clamp(132px, 9.8vw, 148px);
+  width: clamp(104px, 7.4vw, 116px);
   aspect-ratio: 1;
   border-radius: 50%;
   display: flex;
@@ -18991,7 +18996,7 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-core strong,
 #shell[data-shell-mode='manager'] #view-home .home-insight-ring-core strong {
-  font-size: 22px;
+  font-size: 18px;
   line-height: 1;
   letter-spacing: -0.05em;
   margin: 0;
@@ -19039,7 +19044,7 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-section-rail {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   align-content: start;
 }
 
@@ -19060,7 +19065,7 @@ button.attendance-status-special-card.active {
   box-shadow: none;
   border-radius: 14px;
   background: var(--bg-surface-elevated);
-  padding: 9px 11px;
+  padding: 7px 9px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain > li.attendance-outside {
@@ -19086,6 +19091,10 @@ button.attendance-status-special-card.active {
   line-height: 1.4;
 }
 
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain .list-row-sub:empty {
+  display: none;
+}
+
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card,
 #shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-section-rail,
 #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card .home-section-rail,
@@ -19102,7 +19111,7 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-schedule-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(360px, 0.88fr);
-  gap: 64px;
+  gap: 40px;
   align-items: start;
 }
 
@@ -19199,8 +19208,8 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-section-rail {
-  padding-top: 46px;
-  gap: 10px;
+  padding-top: 28px;
+  gap: 8px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-request-meter-card {
@@ -19220,9 +19229,22 @@ button.attendance-status-special-card.active {
   display: none;
 }
 
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] {
+  gap: 4px;
+  padding-block: 10px;
+}
+
 #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-requests-summary-card {
   min-height: 0;
-  padding: 8px 10px;
+  padding: 4px 6px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-dashboard-list-plain > li {
+  padding: 8px 9px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-manager-section-head {
+  margin-bottom: -2px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-request-meter-list {
@@ -19274,7 +19296,7 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-org-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
-  gap: 18px;
+  gap: 14px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-org-card[data-compact='true'] .home-org-grid {
@@ -19287,12 +19309,20 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-org-card[data-compact='true'] {
-  gap: 8px;
-  padding-block: 14px;
+  gap: 4px;
+  padding-block: 10px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-org-card[data-compact='true'] .home-manager-section-title .muted {
   display: none;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-org-card[data-compact='true'] .home-dashboard-list-plain > li {
+  padding: 8px 9px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-org-card[data-compact='true'] .home-manager-section-head {
+  margin-bottom: -2px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-org-stat-grid {
