@@ -24,7 +24,7 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%23f97316'/%3E%3Ctext x='24' y='31' text-anchor='middle' font-size='22' fill='white' font-family='Arial,sans-serif'%3ERG%3C/text%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="css/styles.css?v=20260322-home-board-v1" />
+    <link rel="stylesheet" href="css/styles.css?v=20260322-home-board-v2" />
   </head>
   <body>
     <div id="app">
@@ -140,12 +140,14 @@
                 <div class="home-manager-hero-head home-briefing-head">
                   <div class="home-manager-hero-copy">
                     <h3 id="homeManagerHeroHeadline">오늘 운영 개요</h3>
-                    <p id="homeManagerHeroMeta" class="muted">오늘 운영을 한 줄로 읽고, 예외는 아래 작업 보드에서 확인합니다.</p>
+                    <p id="homeManagerHeroMeta" class="muted">최근 갱신 정보를 불러오는 중입니다.</p>
                   </div>
                 </div>
                 <div class="home-briefing-grid">
                   <article id="homeManagerHeroPrimaryCard" class="home-briefing-spotlight" data-tone="neutral">
-                    <span id="homeManagerHeroPrimaryLabel" class="home-briefing-spotlight-label">대표 상태</span>
+                    <div class="home-briefing-spotlight-top">
+                      <span id="homeManagerHeroPrimaryLabel" class="home-briefing-spotlight-label">대표 상태</span>
+                    </div>
                     <strong id="homeManagerHeroPrimaryValue">-</strong>
                     <p id="homeManagerHeroPrimaryMeta" class="muted">오늘 운영 브리핑을 집계하는 중입니다.</p>
                   </article>
@@ -171,7 +173,7 @@
                   <div class="home-manager-section-title">
                     <div>
                       <h3>출퇴근</h3>
-                      <p class="muted">오늘 출근 예외와 후속 조치가 필요한 항목만 먼저 확인합니다.</p>
+                      <p class="muted">예외와 후속 조치가 필요한 항목만 먼저 봅니다.</p>
                     </div>
                   </div>
                   <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/attendance" aria-label="출퇴근 탭 열기">
@@ -180,11 +182,17 @@
                 </div>
                 <div class="home-attendance-overview-grid">
                   <article class="home-attendance-rate-card">
-                    <div class="home-attendance-rate-top">
+                    <div class="home-attendance-panel-head">
                       <span class="home-attendance-card-label">오늘 출근율</span>
-                      <strong id="homeManagerAttendanceRateValue">-</strong>
                     </div>
-                    <span id="homeManagerAttendanceRateCaption" class="home-attendance-rate-caption">집계 대기</span>
+                    <div class="home-attendance-rate-visual">
+                      <div id="homeManagerAttendanceRateRing" class="home-attendance-rate-ring">
+                        <div class="home-attendance-rate-core">
+                          <strong id="homeManagerAttendanceRateValue">-</strong>
+                          <span id="homeManagerAttendanceRateCaption">집계 대기</span>
+                        </div>
+                      </div>
+                    </div>
                     <div class="home-progress-track home-attendance-rate-track">
                       <span id="homeManagerAttendanceRateBar" class="home-progress-fill home-attendance-rate-fill"></span>
                     </div>
@@ -194,16 +202,22 @@
                   </article>
 
                   <article class="home-attendance-status-card">
+                    <div class="home-attendance-panel-head">
+                      <div class="home-attendance-panel-copy">
+                        <span class="home-attendance-card-label">현재 운영 상태</span>
+                        <strong id="homeManagerAttendanceStatusHeadline">집계 중</strong>
+                      </div>
+                    </div>
                     <div class="home-attendance-status-rack">
-                      <div class="home-mini-metric">
+                      <div class="home-mini-metric" data-tone="warn">
                         <span>미출근</span>
                         <strong id="homeManagerAttendanceMissing">-</strong>
                       </div>
-                      <div class="home-mini-metric">
+                      <div class="home-mini-metric" data-tone="neutral">
                         <span>즉시 확인</span>
                         <strong id="homeManagerAttendanceReview">-</strong>
                       </div>
-                      <div class="home-mini-metric">
+                      <div class="home-mini-metric" data-tone="success">
                         <span>휴가·야간</span>
                         <strong id="homeManagerAttendanceLeave">-</strong>
                       </div>
@@ -212,7 +226,10 @@
 
                   <article class="home-attendance-issue-card home-section-rail">
                     <div class="home-attendance-issue-head">
-                      <span class="home-attendance-card-label">오늘 우선 확인</span>
+                      <div class="home-attendance-panel-copy">
+                        <span class="home-attendance-card-label">오늘 우선 확인</span>
+                        <strong id="homeManagerAttendanceIssueHeading">직원별 예외 preview</strong>
+                      </div>
                     </div>
                     <ul id="homeManagerAttendanceIssueList" class="list compact-list home-dashboard-list-plain"></ul>
                   </article>
@@ -224,7 +241,7 @@
                   <div class="home-manager-section-title">
                     <div>
                       <h3>오늘 스케줄</h3>
-                      <p class="muted">배치 readiness와 오늘 지정 이슈를 한 보드에서 읽습니다.</p>
+                      <p class="muted">분포와 오늘 지정 상태를 한 보드에서 읽습니다.</p>
                     </div>
                   </div>
                   <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/schedules/calendar" aria-label="오늘 스케줄 열기">
@@ -240,25 +257,40 @@
                       </div>
                     </div>
                     <div class="home-distribution-bars">
-                      <div id="homeManagerScheduleBarToday" class="home-distribution-bar" style="--bar-size: 0.15;">
+                      <div class="home-distribution-bar">
                         <strong id="homeManagerScheduleTodayCount">-</strong>
+                        <div class="home-distribution-bar-plot">
+                          <span id="homeManagerScheduleBarToday" class="home-distribution-bar-fill"></span>
+                        </div>
                         <span>오늘 근무</span>
                       </div>
-                      <div id="homeManagerScheduleBarWeek" class="home-distribution-bar" style="--bar-size: 0.15;">
+                      <div class="home-distribution-bar">
                         <strong id="homeManagerScheduleWeekCount">-</strong>
+                        <div class="home-distribution-bar-plot">
+                          <span id="homeManagerScheduleBarWeek" class="home-distribution-bar-fill"></span>
+                        </div>
                         <span>이번주 배정</span>
                       </div>
-                      <div id="homeManagerScheduleBarSites" class="home-distribution-bar" style="--bar-size: 0.15;">
+                      <div class="home-distribution-bar">
                         <strong id="homeManagerScheduleSiteCount">-</strong>
+                        <div class="home-distribution-bar-plot">
+                          <span id="homeManagerScheduleBarSites" class="home-distribution-bar-fill"></span>
+                        </div>
                         <span>근무 현장</span>
                       </div>
-                      <div id="homeManagerScheduleBarVacancy" class="home-distribution-bar" style="--bar-size: 0.15;">
+                      <div class="home-distribution-bar">
                         <strong id="homeManagerScheduleVacancySites">-</strong>
+                        <div class="home-distribution-bar-plot">
+                          <span id="homeManagerScheduleBarVacancy" class="home-distribution-bar-fill"></span>
+                        </div>
                         <span>결원 지점</span>
                       </div>
                     </div>
                   </article>
-                  <article class="home-schedule-summary-card home-section-rail">
+                  <article class="home-schedule-summary-card home-section-rail home-schedule-issue-rail">
+                    <div class="home-attendance-panel-copy">
+                      <span class="home-attendance-card-label">오늘 지정 상태</span>
+                    </div>
                     <ul id="homeManagerScheduleList" class="list compact-list home-dashboard-list-plain"></ul>
                   </article>
                 </div>
@@ -269,7 +301,7 @@
                   <div class="home-manager-section-title">
                     <div>
                       <h3>요청·승인</h3>
-                      <p class="muted">처리 큐가 있을 때만 확장하고, 정상일 때는 한 줄로 접습니다.</p>
+                      <p class="muted">대기 큐만 짧게 보여주고, 정상일 때는 더 작게 접습니다.</p>
                     </div>
                   </div>
                   <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/requests" aria-label="요청·승인 탭 열기">
@@ -278,27 +310,25 @@
                 </div>
                 <div class="home-requests-grid">
                   <article class="home-requests-summary-card home-request-meter-card">
+                    <div class="home-request-summary-head">
+                      <div class="home-request-summary-copy">
+                        <span class="home-attendance-card-label">처리 큐</span>
+                        <strong id="homeManagerRequestHeadline">처리 대기 없음</strong>
+                      </div>
+                      <span id="homeManagerRequestStatusTag" class="home-status-tag home-status-tag-success">정상</span>
+                    </div>
                     <div class="home-request-meter-list">
                       <div class="home-request-meter">
-                        <div class="home-request-meter-copy">
-                          <span>휴가 대기</span>
-                          <strong id="homeManagerRequestLeaveCount">-</strong>
-                        </div>
-                        <div class="home-request-meter-track"><span id="homeManagerRequestLeaveBar" class="home-request-meter-fill"></span></div>
+                        <span>휴가 대기</span>
+                        <strong id="homeManagerRequestLeaveCount">-</strong>
                       </div>
                       <div class="home-request-meter">
-                        <div class="home-request-meter-copy">
-                          <span>출퇴근 검토</span>
-                          <strong id="homeManagerRequestAttendanceCount">-</strong>
-                        </div>
-                        <div class="home-request-meter-track"><span id="homeManagerRequestAttendanceBar" class="home-request-meter-fill"></span></div>
+                        <span>출퇴근 검토</span>
+                        <strong id="homeManagerRequestAttendanceCount">-</strong>
                       </div>
                       <div class="home-request-meter">
-                        <div class="home-request-meter-copy">
-                          <span>미확인 알림</span>
-                          <strong id="homeManagerRequestUnreadCount">-</strong>
-                        </div>
-                        <div class="home-request-meter-track"><span id="homeManagerRequestUnreadBar" class="home-request-meter-fill"></span></div>
+                        <span>미확인 알림</span>
+                        <strong id="homeManagerRequestUnreadCount">-</strong>
                       </div>
                     </div>
                   </article>
@@ -5118,7 +5148,7 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260322-home-board-v1"></script>
+    <script src="config.js?v=20260322-home-board-v2"></script>
     <script>
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
@@ -5371,7 +5401,7 @@
         });
 
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=20260322-home-board-v1', { updateViaCache: 'none' })
+          navigator.serviceWorker.register('./sw.js?v=20260322-home-board-v2', { updateViaCache: 'none' })
             .then((registration) => {
               registration.update().catch(() => {});
 
