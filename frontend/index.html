@@ -24,7 +24,7 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%23f97316'/%3E%3Ctext x='24' y='31' text-anchor='middle' font-size='22' fill='white' font-family='Arial,sans-serif'%3ERG%3C/text%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="css/styles.css?v=20260322-home-board-v2" />
+    <link rel="stylesheet" href="css/styles.css?v=20260322-home-board-v3" />
   </head>
   <body>
     <div id="app">
@@ -136,38 +136,6 @@
               </div>
             </div>
             <div class="home-stack">
-              <article class="module-card stack shell-manager-only home-manager-hero-card">
-                <div class="home-manager-hero-head home-briefing-head">
-                  <div class="home-manager-hero-copy">
-                    <h3 id="homeManagerHeroHeadline">오늘 운영 개요</h3>
-                    <p id="homeManagerHeroMeta" class="muted">최근 갱신 정보를 불러오는 중입니다.</p>
-                  </div>
-                </div>
-                <div class="home-briefing-grid">
-                  <article id="homeManagerHeroPrimaryCard" class="home-briefing-spotlight" data-tone="neutral">
-                    <div class="home-briefing-spotlight-top">
-                      <span id="homeManagerHeroPrimaryLabel" class="home-briefing-spotlight-label">대표 상태</span>
-                    </div>
-                    <strong id="homeManagerHeroPrimaryValue">-</strong>
-                    <p id="homeManagerHeroPrimaryMeta" class="muted">오늘 운영 브리핑을 집계하는 중입니다.</p>
-                  </article>
-                  <div class="home-briefing-stat-rack">
-                    <div class="home-briefing-stat">
-                      <span>오늘 인원</span>
-                      <strong id="homeManagerScheduledCount">-</strong>
-                    </div>
-                    <div class="home-briefing-stat">
-                      <span>즉시 확인</span>
-                      <strong id="homeManagerHeroImmediateCount">-</strong>
-                    </div>
-                    <div class="home-briefing-stat">
-                      <span>휴가/야간</span>
-                      <strong id="homeManagerLeaveOrNightLabel">-</strong>
-                    </div>
-                  </div>
-                </div>
-              </article>
-
               <article class="module-card stack shell-manager-only home-manager-section home-manager-attendance-card">
                 <div class="home-manager-section-head">
                   <div class="home-manager-section-title">
@@ -233,6 +201,38 @@
                     </div>
                     <ul id="homeManagerAttendanceIssueList" class="list compact-list home-dashboard-list-plain"></ul>
                   </article>
+                </div>
+              </article>
+
+              <article class="module-card stack shell-manager-only home-manager-hero-card">
+                <div class="home-manager-hero-head home-briefing-head">
+                  <div class="home-manager-hero-copy">
+                    <h3 id="homeManagerHeroHeadline">오늘 운영 개요</h3>
+                    <p id="homeManagerHeroMeta" class="muted">최근 갱신 정보를 불러오는 중입니다.</p>
+                  </div>
+                </div>
+                <div class="home-briefing-grid">
+                  <article id="homeManagerHeroPrimaryCard" class="home-briefing-spotlight" data-tone="neutral">
+                    <div class="home-briefing-spotlight-top">
+                      <span id="homeManagerHeroPrimaryLabel" class="home-briefing-spotlight-label">대표 상태</span>
+                    </div>
+                    <strong id="homeManagerHeroPrimaryValue">-</strong>
+                    <p id="homeManagerHeroPrimaryMeta" class="muted">오늘 운영 브리핑을 집계하는 중입니다.</p>
+                  </article>
+                  <div class="home-briefing-stat-rack">
+                    <div class="home-briefing-stat">
+                      <span>오늘 인원</span>
+                      <strong id="homeManagerScheduledCount">-</strong>
+                    </div>
+                    <div class="home-briefing-stat">
+                      <span>즉시 확인</span>
+                      <strong id="homeManagerHeroImmediateCount">-</strong>
+                    </div>
+                    <div class="home-briefing-stat">
+                      <span>휴가/야간</span>
+                      <strong id="homeManagerLeaveOrNightLabel">-</strong>
+                    </div>
+                  </div>
                 </div>
               </article>
 
@@ -5148,7 +5148,7 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260322-home-board-v2"></script>
+    <script src="config.js?v=20260322-home-board-v3"></script>
     <script>
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
@@ -5401,7 +5401,7 @@
         });
 
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=20260322-home-board-v2', { updateViaCache: 'none' })
+          navigator.serviceWorker.register('./sw.js?v=20260322-home-board-v3', { updateViaCache: 'none' })
             .then((registration) => {
               registration.update().catch(() => {});
 

@@ -20157,7 +20157,7 @@ button.attendance-status-special-card.active {
 
 /* Manager home board premium refresh */
 #shell[data-shell-mode='manager'] #view-home .home-stack {
-  gap: 20px;
+  gap: 18px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-hero-card,
@@ -20167,12 +20167,17 @@ button.attendance-status-special-card.active {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(248, 250, 252, 0.96));
   box-shadow: 0 20px 48px rgba(15, 23, 42, 0.05);
   padding: 22px 24px;
-  gap: 18px;
+  gap: 16px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-card {
+  padding-block: 18px;
+  gap: 14px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-hero-head,
 #shell[data-shell-mode='manager'] #view-home .home-manager-section-head {
-  min-height: 46px;
+  min-height: 42px;
   align-items: flex-start;
   gap: 16px;
 }
@@ -20190,21 +20195,38 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy,
 #shell[data-shell-mode='manager'] #view-home .home-manager-section-title > div {
-  gap: 6px;
+  gap: 5px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy h3,
 #shell[data-shell-mode='manager'] #view-home .home-manager-section-title h3 {
-  font-size: 16px;
-  line-height: 1.15;
-  letter-spacing: -0.03em;
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy h3 {
+  font-size: 15px;
+  line-height: 1.24;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-section-title h3 {
+  font-size: 21px;
+  line-height: 1.08;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy .muted,
 #shell[data-shell-mode='manager'] #view-home .home-manager-section-title .muted {
-  font-size: 13px;
-  line-height: 1.55;
+  line-height: 1.52;
   color: var(--ui-text-secondary);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy .muted {
+  font-size: 12px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-section-title .muted {
+  font-size: 13px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-section-chevron {
@@ -20227,8 +20249,8 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-briefing-grid {
-  grid-template-columns: minmax(340px, 0.98fr) minmax(0, 1.24fr);
-  gap: 18px;
+  grid-template-columns: minmax(280px, 0.84fr) minmax(0, 1.16fr);
+  gap: 16px;
   align-items: stretch;
 }
 
@@ -20236,9 +20258,9 @@ button.attendance-status-special-card.active {
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 22px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 247, 250, 0.98));
-  padding: 20px 22px;
-  min-height: 148px;
-  gap: 10px;
+  padding: 18px 20px;
+  min-height: 128px;
+  gap: 8px;
   align-content: center;
 }
 
@@ -20272,14 +20294,14 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight strong {
-  font-size: clamp(34px, 3vw, 46px);
+  font-size: clamp(30px, 2.7vw, 40px);
   line-height: 0.96;
   letter-spacing: -0.06em;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight .muted {
   max-width: 34ch;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -20291,12 +20313,12 @@ button.attendance-status-special-card.active {
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.86);
   overflow: hidden;
-  min-height: 148px;
+  min-height: 128px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-briefing-stat {
-  padding: 22px 24px;
-  gap: 8px;
+  padding: 18px 20px;
+  gap: 6px;
   border-left: 1px solid rgba(148, 163, 184, 0.14);
   align-content: center;
 }
@@ -20310,13 +20332,14 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-mini-metric span,
 #shell[data-shell-mode='manager'] #view-home .home-request-meter span,
 #shell[data-shell-mode='manager'] #view-home .home-distribution-bar span {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.01em;
   color: var(--ui-text-secondary);
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-briefing-stat strong {
-  font-size: 28px;
+  font-size: 30px;
   line-height: 1;
   letter-spacing: -0.05em;
 }
@@ -20351,15 +20374,15 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-attendance-panel-copy,
 #shell[data-shell-mode='manager'] #view-home .home-request-summary-copy {
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-panel-copy strong,
 #shell[data-shell-mode='manager'] #view-home .home-request-summary-copy strong,
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-head .home-attendance-panel-copy strong {
-  font-size: 20px;
-  line-height: 1.15;
-  letter-spacing: -0.03em;
+  font-size: 24px;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card {
@@ -20436,17 +20459,25 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-mini-metric {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
   padding: 18px 0 18px 18px;
   border: none;
+  border-right: none;
   border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: none;
+  background-image: none;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-mini-metric:last-child {
   border-bottom: none;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-mini-metric span {
+  max-width: 10ch;
+  line-height: 1.35;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-mini-metric::before {
@@ -20473,7 +20504,7 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-mini-metric strong {
-  font-size: 34px;
+  font-size: 36px;
   line-height: 0.96;
   letter-spacing: -0.05em;
 }
@@ -20521,14 +20552,14 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain .list-row-title {
-  font-size: 15px;
-  line-height: 1.35;
+  font-size: 16px;
+  line-height: 1.28;
   font-weight: 700;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain .list-row-sub {
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 11px;
+  line-height: 1.52;
   color: var(--ui-text-secondary);
 }
 
@@ -20711,7 +20742,7 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] {
-  gap: 12px;
+  gap: 8px;
   padding-block: 18px;
 }
 
@@ -20724,10 +20755,37 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-request-meter-card {
-  padding-bottom: 14px;
+  display: none;
 }
 
-#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-dashboard-list-plain > li,
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-section-rail {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-dashboard-list-plain > li {
+  padding: 2px 0 0;
+  border-top: none;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-dashboard-list-plain .list-row {
+  align-items: center;
+  gap: 16px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-dashboard-list-plain .list-row-title {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-dashboard-row-actions {
+  margin-left: auto;
+  padding-left: 14px;
+}
+
 #shell[data-shell-mode='manager'] #view-home .home-manager-org-card[data-compact='true'] .home-dashboard-list-plain > li {
   padding-block: 14px;
 }

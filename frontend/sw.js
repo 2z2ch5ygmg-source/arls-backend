@@ -1,4 +1,4 @@
-const SW_VERSION = 'rg-arls-sw-v20260322-home-board-v2';
+const SW_VERSION = 'rg-arls-sw-v20260322-home-board-v3';
 const SHELL_CACHE = `${SW_VERSION}-shell`;
 const STATIC_CACHE = `${SW_VERSION}-static`;
 const ACTIVE_CACHES = new Set([SHELL_CACHE, STATIC_CACHE]);
