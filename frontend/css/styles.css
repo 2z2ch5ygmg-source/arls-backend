@@ -19628,3 +19628,529 @@ button.attendance-status-special-card.active {
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-progress-track {
   background: rgba(255, 255, 255, 0.08);
 }
+
+/* Manager home board refresh */
+#shell[data-shell-mode='manager'] #view-home .home-stack {
+  gap: 18px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-card,
+#shell[data-shell-mode='manager'] #view-home .home-manager-section {
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 20px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-head,
+#shell[data-shell-mode='manager'] #view-home .home-manager-section-head {
+  align-items: flex-start;
+  gap: 18px;
+  min-height: 42px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy,
+#shell[data-shell-mode='manager'] #view-home .home-manager-section-title > div {
+  gap: 4px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy h3 {
+  font-size: clamp(24px, 2.2vw, 30px);
+  line-height: 1.04;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-section-title h3 {
+  font-size: 20px;
+  line-height: 1.12;
+}
+
+#shell[data-shell-mode='manager'] #view-home .workspace-head .muted,
+#shell[data-shell-mode='manager'] #view-home .home-manager-section-title .muted,
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy .muted {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-section-chevron {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  background: rgba(248, 250, 252, 0.92);
+  color: var(--ui-text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-section-chevron:hover,
+#shell[data-shell-mode='manager'] #view-home .home-section-chevron:focus-visible {
+  background: rgba(241, 245, 249, 0.98);
+  border-color: rgba(100, 116, 139, 0.36);
+  transform: translateY(-1px);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-grid {
+  grid-template-columns: minmax(320px, 1.02fr) minmax(420px, 1.34fr);
+  gap: 26px;
+  align-items: center;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  gap: 8px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight strong {
+  font-size: clamp(32px, 3vw, 42px);
+  line-height: 0.98;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight .muted {
+  max-width: 42ch;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-stat-rack {
+  gap: 0;
+  align-items: stretch;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-stat {
+  min-height: 86px;
+  padding: 10px 18px;
+  gap: 8px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-stat span,
+#shell[data-shell-mode='manager'] #view-home .home-mini-metric span,
+#shell[data-shell-mode='manager'] #view-home .home-inline-stat span,
+#shell[data-shell-mode='manager'] #view-home .home-distribution-meta span,
+#shell[data-shell-mode='manager'] #view-home .home-distribution-bar span,
+#shell[data-shell-mode='manager'] #view-home .home-request-meter-copy span,
+#shell[data-shell-mode='manager'] #view-home .home-attendance-card-label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-briefing-stat strong {
+  font-size: 24px;
+  line-height: 1;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-overview-grid {
+  grid-template-columns: minmax(220px, 0.8fr) minmax(260px, 1fr) minmax(360px, 1.18fr);
+  gap: 22px;
+  align-items: stretch;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card,
+#shell[data-shell-mode='manager'] #view-home .home-attendance-status-card,
+#shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card,
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-distribution-card,
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-section-rail,
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card .home-request-meter-card,
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card .home-section-rail,
+#shell[data-shell-mode='manager'] #view-home .home-manager-org-card .home-org-summary-card {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card {
+  gap: 12px;
+  padding: 18px 18px 16px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 122, 26, 0.14), rgba(255, 245, 236, 0.96));
+  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.1);
+  align-self: start;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-top {
+  display: grid;
+  gap: 8px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-top strong {
+  font-size: clamp(34px, 3vw, 46px);
+  line-height: 0.96;
+  letter-spacing: -0.05em;
+  color: #9a3412;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card .home-attendance-card-label,
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card .home-attendance-rate-caption,
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card .home-attendance-rate-foot {
+  color: #9a3412;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-track {
+  height: 8px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-fill {
+  background: linear-gradient(90deg, #f97316, #ea580c);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-status-rack {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  height: 100%;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-status-card {
+  align-self: start;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-mini-metric {
+  padding: 12px 18px;
+  gap: 10px;
+  border-bottom: none;
+  border-right: 1px solid var(--ui-border-subtle);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-mini-metric:nth-child(2n) {
+  border-right: 1px solid var(--ui-border-subtle);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-mini-metric:last-child {
+  border-right: none;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-mini-metric strong,
+#shell[data-shell-mode='manager'] #view-home .home-inline-stat strong {
+  font-size: 28px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-issue-head {
+  min-height: 28px;
+  align-items: flex-end;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain > li {
+  padding: 15px 0;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain > li.attendance-outside {
+  background: linear-gradient(90deg, rgba(249, 115, 22, 0.06), transparent 58%);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain .list-row {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain .list-row-main {
+  gap: 4px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain .list-row-title {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain .list-row-sub {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-row-actions {
+  gap: 10px;
+  align-self: center;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-dashboard-row-btn {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-status-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-status-tag-neutral {
+  background: rgba(241, 245, 249, 0.9);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: #475569;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-status-tag-success {
+  background: rgba(236, 253, 245, 0.96);
+  border-color: rgba(34, 197, 94, 0.28);
+  color: #166534;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-status-tag-warn {
+  background: rgba(255, 247, 237, 0.98);
+  border-color: rgba(249, 115, 22, 0.24);
+  color: #9a3412;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-status-tag-error {
+  background: rgba(254, 242, 242, 0.98);
+  border-color: rgba(239, 68, 68, 0.24);
+  color: #b91c1c;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-schedule-grid,
+#shell[data-shell-mode='manager'] #view-home .home-requests-grid {
+  gap: 22px;
+  align-items: stretch;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-schedule-grid {
+  grid-template-columns: minmax(0, 1.22fr) minmax(320px, 0.9fr);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-distribution-metrics {
+  min-height: 50px;
+  align-items: flex-end;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-meta {
+  gap: 6px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-meta strong {
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-bars {
+  gap: 16px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-bar {
+  padding: 0 0 14px;
+  gap: 16px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-bar::after {
+  height: 10px;
+  background:
+    linear-gradient(90deg, var(--bar-color) 0 var(--fill), rgba(148, 163, 184, 0.14) var(--fill) 100%);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-bar strong {
+  font-size: 28px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-section-rail {
+  gap: 0;
+  padding-top: 0;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-requests-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.92fr);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter-card {
+  display: grid;
+  align-content: center;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter {
+  gap: 12px;
+  padding: 0 18px;
+  border-left: 1px solid var(--ui-border-subtle);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter:first-child {
+  padding-left: 0;
+  border-left: none;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter:last-child {
+  padding-right: 0;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter-copy {
+  align-items: flex-start;
+  gap: 8px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter-copy strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-request-meter-track,
+#shell[data-shell-mode='manager'] #view-home .home-progress-track {
+  height: 8px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] {
+  gap: 12px;
+  padding-block: 16px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-manager-section-head,
+#shell[data-shell-mode='manager'] #view-home .home-manager-org-card[data-compact='true'] .home-manager-section-head {
+  margin-bottom: 0;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-dashboard-list-plain > li,
+#shell[data-shell-mode='manager'] #view-home .home-manager-org-card[data-compact='true'] .home-dashboard-list-plain > li {
+  padding: 12px 0;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-org-card[data-compact='true'] {
+  gap: 12px;
+  padding-block: 16px;
+}
+
+@media (min-width: 1280px) {
+  #shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card {
+    grid-column: 1 / span 8;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card {
+    grid-column: 9 / -1;
+  }
+}
+
+@media (max-width: 1199px) {
+  #shell[data-shell-mode='manager'] #view-home .home-briefing-grid,
+  #shell[data-shell-mode='manager'] #view-home .home-attendance-overview-grid,
+  #shell[data-shell-mode='manager'] #view-home .home-schedule-grid,
+  #shell[data-shell-mode='manager'] #view-home .home-requests-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-request-meter-list {
+    padding-top: 0;
+    border-top: none;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-request-meter {
+    padding-inline: 0;
+  }
+}
+
+@media (max-width: 1023px) {
+  #shell[data-shell-mode='manager'] #view-home .home-manager-hero-card,
+  #shell[data-shell-mode='manager'] #view-home .home-manager-section {
+    padding: 16px;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-briefing-stat-rack,
+  #shell[data-shell-mode='manager'] #view-home .home-attendance-status-rack,
+  #shell[data-shell-mode='manager'] #view-home .home-request-meter-list {
+    grid-template-columns: 1fr;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-mini-metric,
+  #shell[data-shell-mode='manager'] #view-home .home-request-meter {
+    border-left: none;
+    border-right: none;
+    border-top: 1px solid var(--ui-border-subtle);
+    padding: 14px 0 0;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-mini-metric:first-child,
+  #shell[data-shell-mode='manager'] #view-home .home-request-meter:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  #shell[data-shell-mode='manager'] #view-home .home-manager-hero-head,
+  #shell[data-shell-mode='manager'] #view-home .home-manager-section-head,
+  #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-section-chevron,
+  #shell[data-shell-mode='manager'] #view-home .home-dashboard-row-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-section-chevron {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--ui-border-subtle);
+  color: var(--ui-text-primary);
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card {
+  background: linear-gradient(135deg, rgba(251, 146, 60, 0.18), rgba(32, 36, 44, 0.98));
+  box-shadow: inset 0 0 0 1px rgba(251, 146, 60, 0.16);
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card .home-attendance-card-label,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-top strong,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card .home-attendance-rate-caption,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card .home-attendance-rate-foot {
+  color: #fed7aa;
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-status-tag {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-status-tag-neutral {
+  color: #cbd5e1;
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-status-tag-success {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.24);
+  color: #86efac;
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-status-tag-warn {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.24);
+  color: #fdba74;
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-status-tag-error {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.24);
+  color: #fca5a5;
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain > li.attendance-outside {
+  background: linear-gradient(90deg, rgba(251, 146, 60, 0.1), transparent 58%);
+}

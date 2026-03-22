@@ -24,7 +24,7 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%23f97316'/%3E%3Ctext x='24' y='31' text-anchor='middle' font-size='22' fill='white' font-family='Arial,sans-serif'%3ERG%3C/text%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="css/styles.css?v=20260322-home-briefing-v1" />
+    <link rel="stylesheet" href="css/styles.css?v=20260322-home-board-v1" />
   </head>
   <body>
     <div id="app">
@@ -139,9 +139,8 @@
               <article class="module-card stack shell-manager-only home-manager-hero-card">
                 <div class="home-manager-hero-head home-briefing-head">
                   <div class="home-manager-hero-copy">
-                    <span class="home-manager-eyebrow">운영 브리핑</span>
                     <h3 id="homeManagerHeroHeadline">오늘 운영 개요</h3>
-                    <p id="homeManagerHeroMeta" class="muted">오늘 상태를 불러오는 중입니다.</p>
+                    <p id="homeManagerHeroMeta" class="muted">오늘 운영을 한 줄로 읽고, 예외는 아래 작업 보드에서 확인합니다.</p>
                   </div>
                 </div>
                 <div class="home-briefing-grid">
@@ -172,7 +171,7 @@
                   <div class="home-manager-section-title">
                     <div>
                       <h3>출퇴근</h3>
-                      <p class="muted">오늘 출근 상태와 바로 확인할 예외를 먼저 봅니다.</p>
+                      <p class="muted">오늘 출근 예외와 후속 조치가 필요한 항목만 먼저 확인합니다.</p>
                     </div>
                   </div>
                   <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/attendance" aria-label="출퇴근 탭 열기">
@@ -181,16 +180,13 @@
                 </div>
                 <div class="home-attendance-overview-grid">
                   <article class="home-attendance-rate-card">
-                    <span class="home-attendance-card-label">오늘 출근율</span>
-                    <div class="home-attendance-rate-visual">
-                      <div id="homeManagerAttendanceRateRing" class="home-attendance-rate-ring" style="--progress: 0%;">
-                        <div class="home-attendance-rate-core">
-                          <div class="home-attendance-rate-center">
-                            <strong id="homeManagerAttendanceRateValue">-</strong>
-                            <span id="homeManagerAttendanceRateCaption">집계 대기</span>
-                          </div>
-                        </div>
-                      </div>
+                    <div class="home-attendance-rate-top">
+                      <span class="home-attendance-card-label">오늘 출근율</span>
+                      <strong id="homeManagerAttendanceRateValue">-</strong>
+                    </div>
+                    <span id="homeManagerAttendanceRateCaption" class="home-attendance-rate-caption">집계 대기</span>
+                    <div class="home-progress-track home-attendance-rate-track">
+                      <span id="homeManagerAttendanceRateBar" class="home-progress-fill home-attendance-rate-fill"></span>
                     </div>
                     <div class="home-attendance-rate-foot">
                       <span id="homeManagerAttendanceRateMeta">출근 완료 0 / 예정 0</span>
@@ -200,19 +196,15 @@
                   <article class="home-attendance-status-card">
                     <div class="home-attendance-status-rack">
                       <div class="home-mini-metric">
-                        <span>출근 완료</span>
-                        <strong id="homeManagerAttendancePresent">-</strong>
-                      </div>
-                      <div class="home-mini-metric">
                         <span>미출근</span>
                         <strong id="homeManagerAttendanceMissing">-</strong>
                       </div>
                       <div class="home-mini-metric">
-                        <span>확인 필요</span>
+                        <span>즉시 확인</span>
                         <strong id="homeManagerAttendanceReview">-</strong>
                       </div>
                       <div class="home-mini-metric">
-                        <span>휴가/야간</span>
+                        <span>휴가·야간</span>
                         <strong id="homeManagerAttendanceLeave">-</strong>
                       </div>
                     </div>
@@ -221,7 +213,6 @@
                   <article class="home-attendance-issue-card home-section-rail">
                     <div class="home-attendance-issue-head">
                       <span class="home-attendance-card-label">오늘 우선 확인</span>
-                      <span id="homeManagerAttendanceIssuePill" class="status-pill status-pill-neutral">확인 중</span>
                     </div>
                     <ul id="homeManagerAttendanceIssueList" class="list compact-list home-dashboard-list-plain"></ul>
                   </article>
@@ -233,7 +224,7 @@
                   <div class="home-manager-section-title">
                     <div>
                       <h3>오늘 스케줄</h3>
-                      <p class="muted">배치 상태, 마감/리더 지정, 누락 여부를 한 번에 확인합니다.</p>
+                      <p class="muted">배치 readiness와 오늘 지정 이슈를 한 보드에서 읽습니다.</p>
                     </div>
                   </div>
                   <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/schedules/calendar" aria-label="오늘 스케줄 열기">
@@ -278,7 +269,7 @@
                   <div class="home-manager-section-title">
                     <div>
                       <h3>요청·승인</h3>
-                      <p class="muted">지금 처리해야 할 승인 대기와 보류 건수를 요약합니다.</p>
+                      <p class="muted">처리 큐가 있을 때만 확장하고, 정상일 때는 한 줄로 접습니다.</p>
                     </div>
                   </div>
                   <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/requests" aria-label="요청·승인 탭 열기">
@@ -290,13 +281,6 @@
                     <div class="home-request-meter-list">
                       <div class="home-request-meter">
                         <div class="home-request-meter-copy">
-                          <span>처리 필요</span>
-                          <strong id="homeManagerRequestPendingCount">-</strong>
-                        </div>
-                        <div class="home-request-meter-track"><span id="homeManagerRequestPendingBar" class="home-request-meter-fill"></span></div>
-                      </div>
-                      <div class="home-request-meter">
-                        <div class="home-request-meter-copy">
                           <span>휴가 대기</span>
                           <strong id="homeManagerRequestLeaveCount">-</strong>
                         </div>
@@ -304,14 +288,14 @@
                       </div>
                       <div class="home-request-meter">
                         <div class="home-request-meter-copy">
-                          <span>정정 대기</span>
-                          <strong id="homeManagerRequestCorrectionCount">-</strong>
+                          <span>출퇴근 검토</span>
+                          <strong id="homeManagerRequestAttendanceCount">-</strong>
                         </div>
-                        <div class="home-request-meter-track"><span id="homeManagerRequestCorrectionBar" class="home-request-meter-fill"></span></div>
+                        <div class="home-request-meter-track"><span id="homeManagerRequestAttendanceBar" class="home-request-meter-fill"></span></div>
                       </div>
                       <div class="home-request-meter">
                         <div class="home-request-meter-copy">
-                          <span>읽지 않음</span>
+                          <span>미확인 알림</span>
                           <strong id="homeManagerRequestUnreadCount">-</strong>
                         </div>
                         <div class="home-request-meter-track"><span id="homeManagerRequestUnreadBar" class="home-request-meter-fill"></span></div>
@@ -329,7 +313,7 @@
                   <div class="home-manager-section-title">
                     <div>
                       <h3>조직 운영</h3>
-                      <p class="muted">홈에서는 바로 조치가 필요한 조직 이슈만 간단히 보여줍니다.</p>
+                      <p class="muted">조치가 필요한 조직 이슈만 teaser로 노출합니다.</p>
                     </div>
                   </div>
                   <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/branch/employees" aria-label="조직 탭 열기">
@@ -5134,7 +5118,7 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260322-home-briefing-v1"></script>
+    <script src="config.js?v=20260322-home-board-v1"></script>
     <script>
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
@@ -5387,7 +5371,7 @@
         });
 
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=20260322-home-briefing-v1', { updateViaCache: 'none' })
+          navigator.serviceWorker.register('./sw.js?v=20260322-home-board-v1', { updateViaCache: 'none' })
             .then((registration) => {
               registration.update().catch(() => {});
 

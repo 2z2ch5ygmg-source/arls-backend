@@ -4801,18 +4801,17 @@ function getHomeManagerDashboardState() {
   return state.home.managerDashboard;
 }
 
+function getHomeDashboardTagClass(variant = 'neutral') {
+  if (variant === 'success') return 'home-status-tag home-status-tag-success';
+  if (variant === 'error') return 'home-status-tag home-status-tag-error';
+  if (variant === 'warn') return 'home-status-tag home-status-tag-warn';
+  return 'home-status-tag home-status-tag-neutral';
+}
+
 function setHomeDashboardPill(selector, label = '', variant = 'neutral') {
   const el = $(selector);
   if (!el) return;
-  if (variant === 'success') {
-    el.className = 'status-pill status-pill-success';
-  } else if (variant === 'error') {
-    el.className = 'status-pill status-pill-error';
-  } else if (variant === 'warn') {
-    el.className = 'status-pill status-pill-warn';
-  } else {
-    el.className = 'status-pill status-pill-neutral';
-  }
+  el.className = getHomeDashboardTagClass(variant);
   el.textContent = String(label || '-').trim() || '-';
 }
 
@@ -4875,9 +4874,7 @@ function createHomeDashboardListRow({
 
   if (String(pillLabel || '').trim()) {
     const pillEl = document.createElement('span');
-    pillEl.className = `status-pill ${pillVariant === 'success'
-      ? 'status-pill-success'
-      : (pillVariant === 'error' ? 'status-pill-error' : (pillVariant === 'warn' ? 'status-pill-warn' : 'status-pill-neutral'))}`;
+    pillEl.className = getHomeDashboardTagClass(pillVariant);
     pillEl.textContent = String(pillLabel || '').trim();
     actionGroup.appendChild(pillEl);
   }
@@ -5011,23 +5008,17 @@ function buildHomeAttendanceIssueRows() {
     return [{
       title: '오늘 출퇴근 예외 없음',
       subtitle: '현재 범위에서 먼저 확인할 출퇴근 이슈가 없습니다.',
-      pillLabel: '정상',
-      pillVariant: 'success',
     }];
   }
   const visibleRows = rows.slice(0, 3).map((item) => ({
-    title: `${item.employeeName || '직원'} · ${item.statusLabel || '확인 필요'}`,
-    subtitle: `${item.siteName || '현장 미지정'} · ${item.dateLabel || toDateLabel(getOpsActiveDate())}`,
-    pillLabel: item.statusLabel || '확인 필요',
-    pillVariant: item.pillVariant || 'warn',
+    title: item.employeeName || '직원',
+    subtitle: `${item.statusLabel || '확인 필요'} · ${item.siteName || '현장 미지정'} · ${item.dateLabel || toDateLabel(getOpsActiveDate())}`,
     danger: Boolean(item.danger),
   }));
   if (rows.length > 3) {
     visibleRows.push({
       title: `외 ${rows.length - 3}건 더보기`,
       subtitle: '남은 출퇴근 예외는 출퇴근 탭에서 이어서 확인하세요.',
-      pillLabel: '더보기',
-      pillVariant: 'neutral',
       actionLabel: '출퇴근 보기',
       route: ROUTE_ATTENDANCE,
     });
@@ -5078,36 +5069,25 @@ function buildHomeRequestRows() {
   const dashboard = getHomeManagerDashboardState();
   const requestSummary = dashboard.requestSummary || {};
   const rows = [];
-  if (Number(requestSummary.totalPendingCount || 0) > 0) {
+  const leavePendingCount = Math.max(0, Number(requestSummary.leavePendingCount || 0));
+  const attendanceReviewCount = Math.max(0, Number(requestSummary.attendancePendingCount || 0))
+    + Math.max(0, Number(requestSummary.correctionPendingCount || 0));
+  const unreadCount = Math.max(0, Number(requestSummary.unreadCount || 0));
+  const totalPendingCount = Math.max(0, Number(requestSummary.totalPendingCount || 0));
+
+  if (totalPendingCount > 0) {
     rows.push({
       title: '처리 필요 요청',
-      subtitle: `지금 바로 확인할 승인 대기 ${Number(requestSummary.totalPendingCount || 0)}건`,
-      pillLabel: `${Number(requestSummary.totalPendingCount || 0)}건`,
+      subtitle: `휴가 ${leavePendingCount}건 · 출퇴근 검토 ${attendanceReviewCount}건`,
+      pillLabel: `${totalPendingCount}건`,
       pillVariant: 'warn',
     });
   }
-  if (Number(requestSummary.leavePendingCount || 0) > 0) {
+  if (unreadCount > 0) {
     rows.push({
-      title: '휴가 승인 대기',
-      subtitle: `휴가 요청 ${Number(requestSummary.leavePendingCount || 0)}건이 대기 중입니다.`,
-      pillLabel: `${Number(requestSummary.leavePendingCount || 0)}건`,
-      pillVariant: 'warn',
-    });
-  }
-  const attendanceReviewCount = Number(requestSummary.attendancePendingCount || 0) + Number(requestSummary.correctionPendingCount || 0);
-  if (attendanceReviewCount > 0) {
-    rows.push({
-      title: '출퇴근 예외/정정 대기',
-      subtitle: `출근 예외 ${Number(requestSummary.attendancePendingCount || 0)}건 · 정정 ${Number(requestSummary.correctionPendingCount || 0)}건`,
-      pillLabel: `${attendanceReviewCount}건`,
-      pillVariant: 'warn',
-    });
-  }
-  if (Number(requestSummary.unreadCount || 0) > 0) {
-    rows.push({
-      title: '읽지 않은 알림',
-      subtitle: `공지와 알림 ${Number(requestSummary.unreadCount || 0)}건을 아직 확인하지 않았습니다.`,
-      pillLabel: `${Number(requestSummary.unreadCount || 0)}건`,
+      title: '미확인 알림',
+      subtitle: `공지와 알림 ${unreadCount}건을 아직 확인하지 않았습니다.`,
+      pillLabel: `${unreadCount}건`,
       pillVariant: 'warn',
     });
   }
@@ -5217,6 +5197,8 @@ function renderHomeManagerDashboard() {
   const totalPendingCount = Math.max(0, Number(requestSummary.totalPendingCount || 0));
   const scheduleGapCount = Math.max(0, Number(scheduleSummary.scheduleGapCount || 0));
   const vacancySiteCount = Math.max(0, Number(scheduleSummary.vacancySiteCount || 0));
+  const attendanceReviewCount = Math.max(0, Number(requestSummary.attendancePendingCount || 0))
+    + Math.max(0, Number(requestSummary.correctionPendingCount || 0));
   const immediateCount = attendanceIssues.length
     + vacancySiteCount
     + scheduleGapCount
@@ -5265,24 +5247,24 @@ function renderHomeManagerDashboard() {
     heroPrimaryMeta = '잠시 후 다시 새로고침해 주세요.';
   } else if (vacancyCount > 0) {
     heroTone = 'error';
-    heroPrimaryLabel = '결원/미출근';
+    heroPrimaryLabel = '출근 예외';
     heroPrimaryValue = `${vacancyCount}건`;
-    heroPrimaryMeta = '';
+    heroPrimaryMeta = '미출근과 결원 이슈를 먼저 확인해야 합니다.';
   } else if (totalPendingCount > 0) {
     heroTone = 'warn';
     heroPrimaryLabel = '승인 대기';
     heroPrimaryValue = `${totalPendingCount}건`;
-    heroPrimaryMeta = '';
+    heroPrimaryMeta = '요청·승인 큐를 먼저 정리하면 운영 리듬이 안정됩니다.';
   } else if (scheduleGapCount > 0 || vacancySiteCount > 0 || !state.ops?.closerAssigned || !state.ops?.leaderAssigned) {
     heroTone = 'warn';
     heroPrimaryLabel = '스케줄 확인';
     heroPrimaryValue = `${scheduleGapCount + vacancySiteCount + (state.ops?.closerAssigned ? 0 : 1) + (state.ops?.leaderAssigned ? 0 : 1)}건`;
-    heroPrimaryMeta = '';
+    heroPrimaryMeta = '배정 누락과 오늘 지정 상태를 점검해야 합니다.';
   } else {
     heroTone = 'success';
     heroPrimaryLabel = '운영 안정';
     heroPrimaryValue = 'OK';
-    heroPrimaryMeta = '';
+    heroPrimaryMeta = '즉시 조치할 예외 없이 안정적으로 시작했습니다.';
   }
   setHomeDashboardTone('#homeManagerHeroPrimaryCard', heroTone);
   setTextToSelectors(['#homeManagerHeroPrimaryLabel'], heroPrimaryLabel);
@@ -5312,26 +5294,16 @@ function renderHomeManagerDashboard() {
   }
   const rateCaptionEl = $('#homeManagerAttendanceRateCaption');
   if (rateCaptionEl instanceof HTMLElement) {
-    rateCaptionEl.textContent = scheduledCount > 0 ? '오늘 출근율' : '오늘 근무 없음';
+    rateCaptionEl.textContent = scheduledCount > 0 ? '예정 인원 기준' : '오늘 근무 없음';
   }
   const rateMetaEl = $('#homeManagerAttendanceRateMeta');
   if (rateMetaEl instanceof HTMLElement) {
     rateMetaEl.textContent = `출근 완료 ${presentCount} / 예정 ${scheduledCount}`;
   }
-  const rateRingEl = $('#homeManagerAttendanceRateRing');
-  if (rateRingEl instanceof HTMLElement) {
-    rateRingEl.style.setProperty('--progress', `${Math.max(0, Math.min(100, attendanceRate))}%`);
-  }
-
-  setTextToSelectors(['#homeManagerAttendancePresent'], String(presentCount));
+  setHomeProgressFill('#homeManagerAttendanceRateBar', attendanceRate);
   setTextToSelectors(['#homeManagerAttendanceMissing'], String(vacancyCount));
   setTextToSelectors(['#homeManagerAttendanceReview'], String(attendanceIssues.length));
-  setTextToSelectors(['#homeManagerAttendanceLeave'], `${leaveCount}/${overnightCount}`);
-  setHomeDashboardPill(
-    '#homeManagerAttendanceIssuePill',
-    state.ops.loading ? '확인 중' : (attendanceIssues.length > 0 ? `${attendanceIssues.length}건` : '정상'),
-    state.ops.loading ? 'neutral' : (attendanceIssues.length > 0 ? 'warn' : 'success'),
-  );
+  setTextToSelectors(['#homeManagerAttendanceLeave'], String(leaveCount + overnightCount));
   renderHomeDashboardList(
     '#homeManagerAttendanceIssueList',
     buildHomeAttendanceIssueRows(),
@@ -5368,14 +5340,12 @@ function renderHomeManagerDashboard() {
     '배치와 지정 상태가 안정적입니다.',
   );
 
-  setTextToSelectors(['#homeManagerRequestPendingCount'], `${totalPendingCount}건`);
   setTextToSelectors(['#homeManagerRequestLeaveCount'], `${Number(requestSummary.leavePendingCount || 0)}건`);
-  setTextToSelectors(['#homeManagerRequestCorrectionCount'], `${Number(requestSummary.correctionPendingCount || 0)}건`);
+  setTextToSelectors(['#homeManagerRequestAttendanceCount'], `${attendanceReviewCount}건`);
   setTextToSelectors(['#homeManagerRequestUnreadCount'], `${Number(requestSummary.unreadCount || 0)}건`);
   const requestBarValues = [
-    totalPendingCount,
     Math.max(0, Number(requestSummary.leavePendingCount || 0)),
-    Math.max(0, Number(requestSummary.correctionPendingCount || 0)),
+    attendanceReviewCount,
     Math.max(0, Number(requestSummary.unreadCount || 0)),
   ];
   const requestsCard = document.querySelector('#view-home .home-manager-requests-card');
@@ -5385,10 +5355,9 @@ function renderHomeManagerDashboard() {
   }
   const requestBarMax = Math.max(...requestBarValues, 1);
   const requestBarPercent = (value) => (value > 0 ? Math.max(16, Math.round((value / requestBarMax) * 100)) : 8);
-  setHomeProgressFill('#homeManagerRequestPendingBar', requestBarPercent(requestBarValues[0]));
-  setHomeProgressFill('#homeManagerRequestLeaveBar', requestBarPercent(requestBarValues[1]));
-  setHomeProgressFill('#homeManagerRequestCorrectionBar', requestBarPercent(requestBarValues[2]));
-  setHomeProgressFill('#homeManagerRequestUnreadBar', requestBarPercent(requestBarValues[3]));
+  setHomeProgressFill('#homeManagerRequestLeaveBar', requestBarPercent(requestBarValues[0]));
+  setHomeProgressFill('#homeManagerRequestAttendanceBar', requestBarPercent(requestBarValues[1]));
+  setHomeProgressFill('#homeManagerRequestUnreadBar', requestBarPercent(requestBarValues[2]));
   renderHomeDashboardList(
     '#homeManagerRequestList',
     buildHomeRequestRows(),
