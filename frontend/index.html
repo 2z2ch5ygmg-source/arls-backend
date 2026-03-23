@@ -3014,16 +3014,16 @@
             </div>
 
             <div id="noticesDetailPanel" class="notices-panel hidden">
-              <article class="module-card stack notices-detail-card">
+              <article class="notices-detail-card">
                 <div class="notices-section-head">
                   <div>
                     <h3 id="noticesDetailTitle">공지 상세</h3>
                     <p id="noticesDetailMeta" class="muted">선택한 공지를 준비하는 중입니다.</p>
                   </div>
                   <div class="notices-detail-actions">
-                    <button id="noticesDetailEditBtn" class="btn btn-secondary hidden" type="button" data-action="notices-open-edit">수정</button>
-                    <button id="noticesDetailDeleteBtn" class="btn btn-secondary hidden" type="button" data-action="notices-delete">삭제</button>
-                    <button class="btn btn-secondary" type="button" data-action="notices-go-list">목록으로</button>
+                    <button id="noticesDetailEditBtn" class="btn btn-ghost hidden" type="button" data-action="notices-open-edit">수정</button>
+                    <button id="noticesDetailDeleteBtn" class="btn btn-ghost hidden" type="button" data-action="notices-delete">삭제</button>
+                    <button class="btn btn-ghost" type="button" data-action="notices-go-list">목록으로</button>
                   </div>
                 </div>
                 <div id="noticesDetailBody" class="notices-detail-body"></div>
@@ -3141,7 +3141,7 @@
                           <input id="noticesComposeImageInput" type="file" accept="image/*" multiple class="sr-only" />
                           <div id="noticesComposeImageDropzone" class="notices-image-dropzone" data-action="notices-image-pick" tabindex="0" role="button" aria-label="공지 이미지 추가">
                             <span class="notices-image-dropzone-label">이미지 추가</span>
-                            <span class="notices-image-dropzone-helper">클릭, 드래그 앤 드롭, 붙여넣기</span>
+                            <span class="notices-image-dropzone-helper">클릭, 드래그, 붙여넣기</span>
                           </div>
                           <ul id="noticesComposeImageList" class="notices-image-list"></ul>
                         </div>
@@ -3153,8 +3153,8 @@
                           <button type="button" class="notices-inline-remove" data-action="notices-remove-poll-block">삭제</button>
                         </div>
                         <div id="noticesComposePollPanel" class="notices-poll-panel">
-                          <label class="input-field" for="noticesComposePollQuestion">
-                            <span>질문</span>
+                          <label class="input-field notices-compose-inline-input-field" for="noticesComposePollQuestion">
+                            <span class="sr-only">질문</span>
                             <input id="noticesComposePollQuestion" type="text" placeholder="예: 이번 주 야간 근무 희망 여부를 알려주세요." />
                           </label>
 
@@ -3218,17 +3218,18 @@
                           <button type="button" class="notices-inline-remove" data-action="notices-remove-table-block">삭제</button>
                         </div>
                         <div id="noticesComposeTablePanel" class="notices-table-panel">
-                          <label class="input-field" for="noticesComposeTableTitle">
-                            <span>표 제목</span>
+                          <label class="input-field notices-compose-inline-input-field" for="noticesComposeTableTitle">
+                            <span class="sr-only">표 제목</span>
                             <input id="noticesComposeTableTitle" type="text" placeholder="예: 주요 변경 사항" />
                           </label>
 
                           <div class="notices-table-editor-head">
                             <strong>표 편집</strong>
                             <div class="notices-table-editor-actions">
+                              <button class="notices-editor-action" type="button" data-action="notices-table-toggle-header">헤더 ON</button>
                               <button class="notices-editor-action" type="button" data-action="notices-table-add-column">열 추가</button>
-                              <button class="notices-editor-action" type="button" data-action="notices-table-remove-column">열 제거</button>
                               <button class="notices-editor-action" type="button" data-action="notices-table-add-row">행 추가</button>
+                              <button class="notices-editor-action" type="button" data-action="notices-table-remove-column">열 제거</button>
                               <button class="notices-editor-action" type="button" data-action="notices-table-remove-row">행 제거</button>
                             </div>
                           </div>
