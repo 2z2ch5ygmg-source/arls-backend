@@ -20206,13 +20206,13 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy h3 {
-  font-size: 15px;
-  line-height: 1.24;
+  font-size: 21px;
+  line-height: 1.12;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-section-title h3 {
-  font-size: 21px;
-  line-height: 1.08;
+  font-size: 22px;
+  line-height: 1.1;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy .muted,
@@ -20222,11 +20222,11 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-hero-copy .muted {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-section-title .muted {
-  font-size: 13px;
+  font-size: 14px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-section-chevron {
@@ -20287,7 +20287,7 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight-label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
   color: var(--ui-text-secondary);
   letter-spacing: 0.01em;
@@ -20301,7 +20301,7 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight .muted {
   max-width: 34ch;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -20332,7 +20332,7 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-mini-metric span,
 #shell[data-shell-mode='manager'] #view-home .home-request-meter span,
 #shell[data-shell-mode='manager'] #view-home .home-distribution-bar span {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--ui-text-secondary);
@@ -20380,8 +20380,8 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-attendance-panel-copy strong,
 #shell[data-shell-mode='manager'] #view-home .home-request-summary-copy strong,
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-head .home-attendance-panel-copy strong {
-  font-size: 24px;
-  line-height: 1.1;
+  font-size: 28px;
+  line-height: 1.08;
   letter-spacing: -0.04em;
 }
 
@@ -20558,14 +20558,14 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain .list-row-title {
-  font-size: 16px;
-  line-height: 1.28;
+  font-size: 18px;
+  line-height: 1.3;
   font-weight: 700;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain .list-row-sub {
-  font-size: 11px;
-  line-height: 1.52;
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--ui-text-secondary);
 }
 
@@ -20589,7 +20589,7 @@ button.attendance-status-special-card.active {
   border: 1px solid rgba(148, 163, 184, 0.22);
   background: rgba(255, 255, 255, 0.94);
   color: var(--ui-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
 }
