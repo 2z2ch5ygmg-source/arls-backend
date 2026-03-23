@@ -23,7 +23,7 @@
     <link rel="manifest" href="manifest.json?v=20260323-sentrix-browser-brand-v2" />
     <link rel="icon" type="image/png" sizes="512x512" href="assets/sentrix-hr-favicon.png?v=20260323-sentrix-browser-brand-v2" />
     <link rel="apple-touch-icon" sizes="512x512" href="assets/sentrix-hr-favicon.png?v=20260323-sentrix-browser-brand-v2" />
-    <link rel="stylesheet" href="css/styles.css?v=20260323-sentrix-browser-brand-v2" />
+    <link rel="stylesheet" href="css/styles.css?v=20260323-notices-phase4-v2" />
   </head>
   <body>
     <div id="app">
@@ -5441,7 +5441,7 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260323-notices-phase4-v1"></script>
+    <script src="config.js?v=20260323-notices-phase4-v2"></script>
     <script>
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
@@ -5694,7 +5694,7 @@
         });
 
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=20260323-notices-phase4-v1', { updateViaCache: 'none' })
+          navigator.serviceWorker.register('./sw.js?v=20260323-notices-phase4-v2', { updateViaCache: 'none' })
             .then((registration) => {
               registration.update().catch(() => {});
 
