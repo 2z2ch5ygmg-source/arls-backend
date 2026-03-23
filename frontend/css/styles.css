@@ -21643,11 +21643,13 @@ button.attendance-status-special-card.active {
 .notices-list-item {
   padding: 0 !important;
   margin: 0;
-  border: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-top: none !important;
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16) !important;
 }
 
 .notices-list-button {
