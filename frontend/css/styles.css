@@ -1102,6 +1102,12 @@ body:has(#authView:not(.hidden)) #app {
   box-shadow: 0 6px 14px rgba(255, 107, 44, 0.22);
 }
 
+#authView .choice-row input[type='checkbox']:checked:hover:not(:disabled) {
+  border-color: #ff6b2c;
+  background: linear-gradient(135deg, #ff6b2c, #ff8b3d);
+  box-shadow: 0 6px 14px rgba(255, 107, 44, 0.22);
+}
+
 #authView .choice-row input[type='checkbox']:checked::after {
   opacity: 1;
   transform: rotate(-45deg) translate(0, -1px) scale(1);
@@ -1298,6 +1304,11 @@ body:has(#authView:not(.hidden)) #app {
 }
 
 :root[data-ui-theme='dark'] #authView .choice-row input[type='checkbox']:checked {
+  border-color: #ff7f44;
+  background: linear-gradient(135deg, #ff6b2c, #ff8b3d);
+}
+
+:root[data-ui-theme='dark'] #authView .choice-row input[type='checkbox']:checked:hover:not(:disabled) {
   border-color: #ff7f44;
   background: linear-gradient(135deg, #ff6b2c, #ff8b3d);
 }
