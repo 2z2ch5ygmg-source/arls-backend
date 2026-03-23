@@ -21744,6 +21744,8 @@ button.attendance-status-special-card.active {
   align-items: flex-end;
   justify-content: space-between;
   gap: 20px 28px;
+  width: min(calc(100% - clamp(220px, 18vw, 520px)), 980px);
+  margin-inline: auto;
 }
 
 .notices-panel {
@@ -21766,7 +21768,7 @@ button.attendance-status-special-card.active {
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
   margin-left: auto;
   min-width: 0;
 }
@@ -21786,7 +21788,7 @@ button.attendance-status-special-card.active {
 }
 
 .notices-search-form.is-expanded .notices-search-input-wrap {
-  width: min(340px, 34vw);
+  width: min(320px, 28vw);
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0);
@@ -21861,7 +21863,7 @@ button.attendance-status-special-card.active {
 .notices-list-panel {
   display: grid;
   gap: 14px;
-  padding: 28px 0 16px;
+  padding: 32px 0 20px;
   border: 1px solid rgba(226, 232, 240, 0.92);
   border-radius: 28px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95));
@@ -21870,7 +21872,7 @@ button.attendance-status-special-card.active {
 
 .notices-list-section-head,
 .notices-list-rows {
-  width: min(calc(100% - clamp(160px, 15vw, 420px)), 1120px);
+  width: min(calc(100% - clamp(220px, 18vw, 520px)), 980px);
   margin-inline: auto;
 }
 
@@ -21883,7 +21885,7 @@ button.attendance-status-special-card.active {
   margin: 0;
   padding: 0;
   min-height: 0;
-  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  border-top: 1px solid rgba(148, 163, 184, 0.24);
   display: grid;
   gap: 0;
 }
@@ -21897,7 +21899,7 @@ button.attendance-status-special-card.active {
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.16) !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.24) !important;
 }
 
 .notices-list-button {
@@ -21905,10 +21907,10 @@ button.attendance-status-special-card.active {
   border: none;
   background: transparent;
   display: grid;
-  grid-template-columns: 60px minmax(0, 1fr) 92px;
-  gap: 18px;
+  grid-template-columns: 56px minmax(0, 1fr) 92px;
+  gap: 14px;
   align-items: center;
-  padding: 19px 0;
+  padding: 18px 0;
   text-align: left;
   cursor: pointer;
 }
@@ -21968,7 +21970,7 @@ button.attendance-status-special-card.active {
 
 .notices-detail-card > .notices-section-head,
 .notices-detail-card > .notices-detail-body {
-  width: min(calc(100% - clamp(220px, 18vw, 460px)), 780px);
+  width: min(calc(100% - clamp(300px, 24vw, 720px)), 760px);
   margin-inline: auto;
 }
 
@@ -23020,6 +23022,7 @@ button.attendance-status-special-card.active {
 
   .notices-list-section-head,
   .notices-list-rows,
+  .notices-toolbar-row,
   .notices-detail-card > .notices-section-head,
   .notices-detail-card > .notices-detail-body,
   .notices-compose-document {
