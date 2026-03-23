@@ -1412,6 +1412,7 @@ const state = {
   tenantChecking: false,
   tenantCheckTimer: null,
   tenantCheckSeq: 0,
+  loginCredentialFeedbackTimer: null,
   loginTenantBeforeSuperAdmin: '',
   superAdminLoginMode: false,
   securePasswordAvailable: false,
@@ -9888,6 +9889,82 @@ function clearLoginFieldErrors() {
   setFieldError('#tenantError', '');
   setFieldError('#usernameError', '');
   setFieldError('#passwordError', '');
+  clearLoginCredentialFailureFeedback();
+}
+
+function getLoginCredentialFeedbackElements() {
+  const usernameInput = $('#username');
+  const passwordInput = $('#password');
+  const passwordToggle = $('#togglePasswordBtn');
+  return {
+    usernameInput,
+    passwordInput,
+    passwordToggle,
+    usernameField: usernameInput?.closest('.auth-input-field') || null,
+    passwordField: passwordInput?.closest('.auth-input-field') || null,
+    passwordWrap: passwordInput?.closest('.auth-password-wrap') || null,
+  };
+}
+
+function clearLoginCredentialFailureFeedback() {
+  if (state.loginCredentialFeedbackTimer) {
+    clearTimeout(state.loginCredentialFeedbackTimer);
+    state.loginCredentialFeedbackTimer = null;
+  }
+
+  const {
+    usernameInput,
+    passwordInput,
+    passwordToggle,
+    usernameField,
+    passwordField,
+    passwordWrap,
+  } = getLoginCredentialFeedbackElements();
+
+  [usernameInput, passwordInput].forEach((el) => {
+    if (!el) return;
+    el.classList.remove('input-invalid', 'auth-credential-invalid');
+    el.removeAttribute('aria-invalid');
+  });
+
+  if (passwordToggle) passwordToggle.classList.remove('auth-credential-invalid');
+  if (passwordWrap) passwordWrap.classList.remove('auth-credential-invalid');
+  if (usernameField) usernameField.classList.remove('auth-credential-shake');
+  if (passwordField) passwordField.classList.remove('auth-credential-shake');
+}
+
+function triggerLoginCredentialFailureFeedback() {
+  clearLoginCredentialFailureFeedback();
+
+  const {
+    usernameInput,
+    passwordInput,
+    passwordToggle,
+    usernameField,
+    passwordField,
+    passwordWrap,
+  } = getLoginCredentialFeedbackElements();
+
+  [usernameInput, passwordInput].forEach((el) => {
+    if (!el) return;
+    el.classList.add('input-invalid', 'auth-credential-invalid');
+    el.setAttribute('aria-invalid', 'true');
+  });
+
+  if (passwordToggle) passwordToggle.classList.add('auth-credential-invalid');
+  if (passwordWrap) passwordWrap.classList.add('auth-credential-invalid');
+
+  [usernameField, passwordField].forEach((el) => {
+    if (!el) return;
+    void el.offsetWidth;
+    el.classList.add('auth-credential-shake');
+  });
+
+  state.loginCredentialFeedbackTimer = setTimeout(() => {
+    if (usernameField) usernameField.classList.remove('auth-credential-shake');
+    if (passwordField) passwordField.classList.remove('auth-credential-shake');
+    state.loginCredentialFeedbackTimer = null;
+  }, 520);
 }
 
 function clearSiteFormFieldErrors() {
@@ -15855,6 +15932,16 @@ function showAuthError(msg) {
 
 function showAuthInfo(msg) {
   setAuthMessage(msg, 'info');
+}
+
+function isCredentialLoginFailure(err) {
+  const raw = String(err?.message || '').trim().toLowerCase();
+  const status = Number(err?.status || err?.httpStatus || 0);
+  const code = String(err?.code || '').trim().toUpperCase();
+  return (
+    raw.includes('invalid credentials')
+    || ((status === 401 || code === 'UNAUTHORIZED') && !String(state.user?.id || '').trim())
+  );
 }
 
 function normalizeAuthError(err) {
@@ -53853,13 +53940,22 @@ async function onLoginSubmit(event) {
     clearLoginFieldErrors();
   } catch (err) {
     const message = normalizeAuthError(err);
-    showAuthError(message);
+    const credentialFailure = isCredentialLoginFailure(err);
+
+    if (credentialFailure) {
+      setAuthMessage('');
+      triggerLoginCredentialFailureFeedback();
+    } else {
+      showAuthError(message);
+    }
     showToast(message, 'error', 3600);
 
     if (message.includes('회사')) {
       setFieldError('#tenantError', message);
-    } else if (message.includes('아이디') || message.includes('비밀번호')) {
+    } else if (credentialFailure) {
       setFieldError('#passwordError', '아이디 또는 비밀번호를 확인해 주세요.');
+    } else if (message.includes('아이디') || message.includes('비밀번호')) {
+      setFieldError('#passwordError', message);
     } else {
       setFieldError('#usernameError', message);
     }
@@ -56658,11 +56754,13 @@ function bindUiEvents() {
       return;
     }
     if (target.id === 'username') {
+      clearLoginCredentialFailureFeedback();
       setFieldError('#usernameError', '');
       updateLoginSubmitState();
       return;
     }
     if (target.id === 'password') {
+      clearLoginCredentialFailureFeedback();
       setFieldError('#passwordError', '');
       updateLoginSubmitState();
       return;
