@@ -19338,10 +19338,21 @@ async function saveNoticeDraft() {
   const notices = ensureNoticesState();
   await flushNoticeComposePendingFieldState();
   const draft = notices.composeDraft || {};
-  const category = normalizeNoticeCategory(draft.category || 'ops');
-  const title = String(draft.title || '').trim();
+  const categorySelect = $('#noticesComposeCategory');
+  const titleInput = $('#noticesComposeTitle');
+  const category = categorySelect instanceof HTMLSelectElement
+    ? normalizeNoticeCategory(categorySelect.value || draft.category || 'ops')
+    : normalizeNoticeCategory(draft.category || 'ops');
+  const title = titleInput instanceof HTMLInputElement
+    ? String(titleInput.value || '').trim()
+    : String(draft.title || '').trim();
+  notices.composeDraft = {
+    ...(draft || {}),
+    category: category === 'all' ? 'ops' : category,
+    title,
+  };
   const pollDraft = normalizeNoticePollDraft(draft.poll);
-  const bodyBlocks = buildNoticeBodyBlocksFromDraft(draft);
+  const bodyBlocks = buildNoticeBodyBlocksFromDraft(notices.composeDraft);
   const bodyText = buildNoticeBodyTextFromBlocks(bodyBlocks);
   const editingNoticeId = notices.mode === NOTICE_VIEW_MODE_COMPOSE
     ? String(notices.selectedNoticeId || '').trim()
