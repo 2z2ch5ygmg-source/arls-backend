@@ -23,6 +23,7 @@ from .v1.apple_weekly_truth import router as apple_weekly_truth_router
 from .v1.reports import router as reports_router
 from .v1.hr_documents import router as hr_documents_router
 from .v1.notifications import router as notifications_router
+from .v1.notices import router as notices_router
 from .v1.push import router as push_router
 
 __all__ = [
@@ -52,5 +53,6 @@ __all__ = [
     "reports_router",
     "hr_documents_router",
     "notifications_router",
+    "notices_router",
     "push_router",
 ]

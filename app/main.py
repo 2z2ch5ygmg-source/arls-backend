@@ -38,6 +38,7 @@ from .routers import (
     master_reset_router,
     master_tenants_router,
     notifications_router,
+    notices_router,
     push_router,
     reports_router,
     schedules_router,
@@ -349,6 +350,7 @@ app.include_router(admin_reset_router, prefix="/api/v1")
 app.include_router(admin_tenants_router, prefix="/api/v1")
 app.include_router(hr_documents_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
+app.include_router(notices_router, prefix="/api/v1")
 app.include_router(push_router, prefix="/api/v1")
 
 

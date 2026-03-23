@@ -19634,6 +19634,13 @@ button.attendance-status-special-card.active {
   gap: 18px;
 }
 
+#shell[data-shell-mode='manager'] #view-home .home-manager-top-grid {
+  display: grid;
+  gap: 16px;
+  grid-column: 1 / -1;
+  align-items: start;
+}
+
 #shell[data-shell-mode='manager'] #view-home .home-manager-hero-card,
 #shell[data-shell-mode='manager'] #view-home .home-manager-section {
   gap: 16px;
@@ -20350,6 +20357,78 @@ button.attendance-status-special-card.active {
   align-items: stretch;
 }
 
+#shell[data-shell-mode='manager'] #view-home .home-manager-notices-card {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 0;
+  min-height: 278px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-notice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-notice-item {
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-notice-item:first-child {
+  border-top: none;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-notice-link {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 16px 0;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-notice-link:hover,
+#shell[data-shell-mode='manager'] #view-home .home-notice-link:focus-visible {
+  background: rgba(248, 250, 252, 0.78);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-notice-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-notice-meta-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-notice-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-notice-category,
+#shell[data-shell-mode='manager'] #view-home .home-notice-date {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ui-text-secondary);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-notice-title {
+  font-size: 15px;
+  line-height: 1.4;
+  letter-spacing: -0.02em;
+  color: var(--ui-text-primary);
+}
+
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card,
 #shell[data-shell-mode='manager'] #view-home .home-attendance-status-card,
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card,
@@ -20805,8 +20884,11 @@ button.attendance-status-special-card.active {
 }
 
 @media (min-width: 1280px) {
+  #shell[data-shell-mode='manager'] #view-home .home-manager-top-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(290px, 0.34fr);
+  }
+
   #shell[data-shell-mode='manager'] #view-home .home-manager-hero-card,
-  #shell[data-shell-mode='manager'] #view-home .home-manager-attendance-card,
   #shell[data-shell-mode='manager'] #view-home .home-manager-org-card {
     grid-column: 1 / -1;
   }
@@ -20828,6 +20910,7 @@ button.attendance-status-special-card.active {
 }
 
 @media (max-width: 1199px) {
+  #shell[data-shell-mode='manager'] #view-home .home-manager-top-grid,
   #shell[data-shell-mode='manager'] #view-home .home-briefing-grid,
   #shell[data-shell-mode='manager'] #view-home .home-attendance-overview-grid,
   #shell[data-shell-mode='manager'] #view-home .home-schedule-grid,
@@ -20842,7 +20925,8 @@ button.attendance-status-special-card.active {
   #shell[data-shell-mode='manager'] #view-home .home-schedule-summary-card,
   #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card,
   #shell[data-shell-mode='manager'] #view-home .home-attendance-status-card,
-  #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card {
+  #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card,
+  #shell[data-shell-mode='manager'] #view-home .home-manager-notices-card {
     min-height: 0;
   }
 }
@@ -20941,13 +21025,121 @@ button.attendance-status-special-card.active {
 }
 
 .notices-list-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   min-height: 240px;
+}
+
+.notices-list-item {
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.notices-list-item:first-child {
+  border-top: none;
+}
+
+.notices-list-button {
+  width: 100%;
+  border: none;
+  background: transparent;
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 18px 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notices-list-button:hover,
+.notices-list-button:focus-visible {
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.notices-list-category,
+.notices-list-date {
+  color: var(--ui-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.notices-list-main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.notices-list-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.notices-list-title {
+  font-size: 20px;
+  line-height: 1.28;
+  letter-spacing: -0.03em;
+  color: var(--ui-text-primary);
 }
 
 .notices-detail-body {
   display: grid;
   gap: 12px;
   min-height: 240px;
+}
+
+.notices-detail-card .notices-section-head h3 {
+  font-size: clamp(32px, 3vw, 52px);
+  line-height: 1.08;
+  letter-spacing: -0.05em;
+}
+
+.notices-detail-card .notices-section-head .muted {
+  margin-top: 10px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.notices-detail-prose {
+  display: grid;
+  gap: 18px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.notices-detail-prose p {
+  margin: 0;
+  color: var(--ui-text-primary);
+  font-size: 16px;
+  line-height: 1.85;
+  white-space: pre-wrap;
+}
+
+.notice-meta-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--ui-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.notice-meta-tag-neutral {
+  color: #475569;
+}
+
+.notice-meta-tag-accent {
+  border-color: rgba(249, 115, 22, 0.22);
+  background: rgba(255, 247, 237, 0.96);
+  color: #c2410c;
 }
 
 .notices-compose-grid {
@@ -20986,5 +21178,10 @@ button.attendance-status-special-card.active {
   .notices-section-head {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .notices-list-button {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 }

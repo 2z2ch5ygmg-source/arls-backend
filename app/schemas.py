@@ -1657,6 +1657,44 @@ class InAppNotificationListOut(BaseModel):
     unread_count: int = 0
 
 
+NOTICE_CATEGORY_LITERAL = Literal["ops", "attendance", "schedule", "hr", "system", "event"]
+
+
+class NoticeCreateIn(BaseModel):
+    category: NOTICE_CATEGORY_LITERAL
+    title: str = Field(min_length=1, max_length=160)
+    body_text: str = Field(min_length=1, max_length=20000)
+    is_pinned: bool = False
+
+    @field_validator("title", "body_text", mode="before")
+    @classmethod
+    def _trim_notice_text(cls, value: Optional[str]) -> str:
+        normalized = str(value or "").strip()
+        if not normalized:
+            raise ValueError("value is required")
+        return normalized
+
+
+class NoticeSummaryOut(BaseModel):
+    id: UUID
+    category: NOTICE_CATEGORY_LITERAL
+    title: str
+    body_preview: Optional[str] = None
+    is_pinned: bool = False
+    published_at: datetime
+    created_at: datetime
+    updated_at: datetime
+    created_by_name: Optional[str] = None
+
+
+class NoticeDetailOut(NoticeSummaryOut):
+    body_text: str
+
+
+class NoticeListOut(BaseModel):
+    items: list[NoticeSummaryOut] = Field(default_factory=list)
+
+
 class FinanceSubmissionStatusOut(BaseModel):
     site_code: str
     month: str

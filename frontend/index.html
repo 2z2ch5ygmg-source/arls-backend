@@ -24,7 +24,7 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%23f97316'/%3E%3Ctext x='24' y='31' text-anchor='middle' font-size='22' fill='white' font-family='Arial,sans-serif'%3ERG%3C/text%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="css/styles.css?v=20260323-notices-phase0-v3" />
+    <link rel="stylesheet" href="css/styles.css?v=20260323-notices-phase1-v1" />
   </head>
   <body>
     <div id="app">
@@ -136,73 +136,90 @@
               </div>
             </div>
             <div class="home-stack">
-              <article class="module-card stack shell-manager-only home-manager-section home-manager-attendance-card">
-                <div class="home-manager-section-head">
-                  <div class="home-manager-section-title">
-                    <div>
-                      <h3>출퇴근</h3>
-                      <p class="muted">예외와 후속 조치가 필요한 항목만 먼저 봅니다.</p>
+              <div class="shell-manager-only home-manager-top-grid">
+                <article class="module-card stack shell-manager-only home-manager-section home-manager-attendance-card">
+                  <div class="home-manager-section-head">
+                    <div class="home-manager-section-title">
+                      <div>
+                        <h3>출퇴근</h3>
+                        <p class="muted">예외와 후속 조치가 필요한 항목만 먼저 봅니다.</p>
+                      </div>
                     </div>
+                    <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/attendance" aria-label="출퇴근 탭 열기">
+                      <span>출퇴근 보기</span>
+                    </button>
                   </div>
-                  <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/attendance" aria-label="출퇴근 탭 열기">
-                    <span>출퇴근 보기</span>
-                  </button>
-                </div>
-                <div class="home-attendance-overview-grid">
-                  <article class="home-attendance-rate-card">
-                    <div class="home-attendance-panel-head">
-                      <span class="home-attendance-card-label">오늘 출근율</span>
-                    </div>
-                    <div class="home-attendance-rate-visual">
-                      <div id="homeManagerAttendanceRateRing" class="home-attendance-rate-ring">
-                        <div class="home-attendance-rate-core">
-                          <strong id="homeManagerAttendanceRateValue">-</strong>
-                          <span id="homeManagerAttendanceRateCaption">집계 대기</span>
+                  <div class="home-attendance-overview-grid">
+                    <article class="home-attendance-rate-card">
+                      <div class="home-attendance-panel-head">
+                        <span class="home-attendance-card-label">오늘 출근율</span>
+                      </div>
+                      <div class="home-attendance-rate-visual">
+                        <div id="homeManagerAttendanceRateRing" class="home-attendance-rate-ring">
+                          <div class="home-attendance-rate-core">
+                            <strong id="homeManagerAttendanceRateValue">-</strong>
+                            <span id="homeManagerAttendanceRateCaption">집계 대기</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div class="home-progress-track home-attendance-rate-track">
-                      <span id="homeManagerAttendanceRateBar" class="home-progress-fill home-attendance-rate-fill"></span>
-                    </div>
-                    <div class="home-attendance-rate-foot">
-                      <span id="homeManagerAttendanceRateMeta">출근 완료 0 / 예정 0</span>
-                    </div>
-                  </article>
+                      <div class="home-progress-track home-attendance-rate-track">
+                        <span id="homeManagerAttendanceRateBar" class="home-progress-fill home-attendance-rate-fill"></span>
+                      </div>
+                      <div class="home-attendance-rate-foot">
+                        <span id="homeManagerAttendanceRateMeta">출근 완료 0 / 예정 0</span>
+                      </div>
+                    </article>
 
-                  <article class="home-attendance-status-card">
-                    <div class="home-attendance-panel-head">
-                      <div class="home-attendance-panel-copy">
-                        <span class="home-attendance-card-label">현재 운영 상태</span>
-                        <strong id="homeManagerAttendanceStatusHeadline">집계 중</strong>
+                    <article class="home-attendance-status-card">
+                      <div class="home-attendance-panel-head">
+                        <div class="home-attendance-panel-copy">
+                          <span class="home-attendance-card-label">현재 운영 상태</span>
+                          <strong id="homeManagerAttendanceStatusHeadline">집계 중</strong>
+                        </div>
                       </div>
-                    </div>
-                    <div class="home-attendance-status-rack">
-                      <div class="home-mini-metric" data-tone="warn">
-                        <span>미출근</span>
-                        <strong id="homeManagerAttendanceMissing">-</strong>
+                      <div class="home-attendance-status-rack">
+                        <div class="home-mini-metric" data-tone="warn">
+                          <span>미출근</span>
+                          <strong id="homeManagerAttendanceMissing">-</strong>
+                        </div>
+                        <div class="home-mini-metric" data-tone="neutral">
+                          <span>즉시 확인</span>
+                          <strong id="homeManagerAttendanceReview">-</strong>
+                        </div>
+                        <div class="home-mini-metric" data-tone="success">
+                          <span>휴가·야간</span>
+                          <strong id="homeManagerAttendanceLeave">-</strong>
+                        </div>
                       </div>
-                      <div class="home-mini-metric" data-tone="neutral">
-                        <span>즉시 확인</span>
-                        <strong id="homeManagerAttendanceReview">-</strong>
-                      </div>
-                      <div class="home-mini-metric" data-tone="success">
-                        <span>휴가·야간</span>
-                        <strong id="homeManagerAttendanceLeave">-</strong>
-                      </div>
-                    </div>
-                  </article>
+                    </article>
 
-                  <article class="home-attendance-issue-card home-section-rail">
-                    <div class="home-attendance-issue-head">
-                      <div class="home-attendance-panel-copy">
-                        <span class="home-attendance-card-label">오늘 우선 확인</span>
-                        <strong id="homeManagerAttendanceIssueHeading">직원별 예외 preview</strong>
+                    <article class="home-attendance-issue-card home-section-rail">
+                      <div class="home-attendance-issue-head">
+                        <div class="home-attendance-panel-copy">
+                          <span class="home-attendance-card-label">오늘 우선 확인</span>
+                          <strong id="homeManagerAttendanceIssueHeading">직원별 예외 preview</strong>
+                        </div>
+                      </div>
+                      <ul id="homeManagerAttendanceIssueList" class="list compact-list home-dashboard-list-plain"></ul>
+                    </article>
+                  </div>
+                </article>
+
+                <article class="module-card stack shell-manager-only home-manager-section home-manager-notices-card">
+                  <div class="home-manager-section-head">
+                    <div class="home-manager-section-title">
+                      <div>
+                        <h3>공지사항</h3>
+                        <p id="homeManagerNoticeMeta" class="muted">최신 공지를 불러오는 중입니다.</p>
                       </div>
                     </div>
-                    <ul id="homeManagerAttendanceIssueList" class="list compact-list home-dashboard-list-plain"></ul>
-                  </article>
-                </div>
-              </article>
+                    <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/feature/notices" aria-label="공지사항 열기">
+                      <span>공지사항 보기</span>
+                    </button>
+                  </div>
+                  <ul id="homeManagerNoticeList" class="list compact-list home-notice-list"></ul>
+                </article>
+              </div>
 
               <article class="module-card stack shell-manager-only home-manager-hero-card">
                 <div class="home-manager-hero-head home-briefing-head">
@@ -3033,14 +3050,14 @@
                       <span>중요 공지를 목록 상단에 우선 노출합니다.</span>
                     </span>
                     <span class="settings-switch-control">
-                      <input id="noticesComposePinned" type="checkbox" disabled />
+                      <input id="noticesComposePinned" type="checkbox" />
                       <span class="settings-switch-track" aria-hidden="true"></span>
                     </span>
                   </label>
 
                   <div class="notices-compose-actions">
-                    <button class="btn btn-secondary" type="button" disabled>임시저장</button>
-                    <button class="btn btn-primary" type="button" disabled>발행</button>
+                    <button class="btn btn-secondary" type="button" data-action="notices-go-list">취소</button>
+                    <button id="noticesPublishBtn" class="btn btn-primary" type="button" data-action="notices-publish">발행</button>
                   </div>
                 </aside>
               </div>
@@ -5242,7 +5259,7 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260323-notices-phase0-v3"></script>
+    <script src="config.js?v=20260323-notices-phase1-v1"></script>
     <script>
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
@@ -5495,7 +5512,7 @@
         });
 
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=20260323-notices-phase0-v3', { updateViaCache: 'none' })
+          navigator.serviceWorker.register('./sw.js?v=20260323-notices-phase1-v1', { updateViaCache: 'none' })
             .then((registration) => {
               registration.update().catch(() => {});
 
