@@ -967,8 +967,7 @@ body:has(#authView:not(.hidden)) #app {
 }
 
 #authView .auth-input-field input.auth-credential-invalid,
-#authView .auth-password-wrap.auth-credential-invalid #password,
-#authView .password-toggle.auth-credential-invalid {
+#authView .auth-password-wrap.auth-credential-invalid #password {
   border-color: rgba(239, 68, 68, 0.82);
   box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.14);
 }
@@ -976,11 +975,6 @@ body:has(#authView:not(.hidden)) #app {
 #authView .auth-input-field input.auth-credential-invalid:not(:disabled),
 #authView .auth-password-wrap.auth-credential-invalid #password:not(:disabled) {
   background: rgba(255, 246, 246, 0.98);
-}
-
-#authView .password-toggle.auth-credential-invalid {
-  color: #b42318;
-  background: #fff8f8;
 }
 
 #authView .input-helper {
@@ -1001,22 +995,34 @@ body:has(#authView:not(.hidden)) #app {
 }
 
 #authView .password-toggle {
-  width: 56px;
-  min-width: 56px;
-  min-height: 56px;
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
   padding: 0;
-  border-radius: 16px;
-  border-color: #d8dee8;
-  background: #ffffff;
-  color: #425065;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: none;
+  color: #5f6b7d;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
 }
 
 #authView .password-toggle:hover:not(:disabled) {
-  background: #f7fafc;
-  border-color: #c5cfdb;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: #f97316;
+}
+
+#authView .password-toggle:focus-visible {
+  outline: 2px solid rgba(249, 115, 22, 0.28);
+  outline-offset: 2px;
+}
+
+#authView .password-toggle:disabled {
+  color: #a0aaba;
 }
 
 #authView .password-toggle svg {
@@ -1285,11 +1291,17 @@ body:has(#authView:not(.hidden)) #app {
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
-:root[data-ui-theme='dark'] #authView .auth-input-field input,
-:root[data-ui-theme='dark'] #authView .password-toggle {
+:root[data-ui-theme='dark'] #authView .auth-input-field input {
   background: rgba(34, 42, 53, 0.96);
   border-color: #445063;
   color: #eef2f7;
+}
+
+:root[data-ui-theme='dark'] #authView .password-toggle {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: #c7d1de;
 }
 
 :root[data-ui-theme='dark'] #authView .auth-options {
