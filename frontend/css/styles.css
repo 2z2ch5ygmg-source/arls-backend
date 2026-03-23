@@ -10789,6 +10789,7 @@ a:hover {
 
 @media (min-width: 1024px) {
   :root {
+    --app-topbar-height: 44px;
     --desktop-shell-gap: 24px;
     --desktop-content-padding: 24px;
     --desktop-section-gap: 24px;
@@ -10848,14 +10849,14 @@ a:hover {
     position: sticky;
     top: 0;
     z-index: 70;
-    min-height: 56px;
+    min-height: var(--app-topbar-height);
     margin-bottom: 0;
   }
 
   .desktop-sidebar {
     width: 256px;
-    top: 56px;
-    max-height: calc(100dvh - 56px);
+    top: var(--app-topbar-height);
+    max-height: calc(100dvh - var(--app-topbar-height));
     border-radius: 10px;
     padding: 12px;
     box-shadow: none;
@@ -12045,8 +12046,8 @@ a:hover {
   .topbar.app-topbar {
     margin-bottom: 0;
     box-sizing: border-box;
-    height: 44px;
-    min-height: 44px;
+    height: var(--app-topbar-height);
+    min-height: var(--app-topbar-height);
     padding: 0 24px;
     border-top: 0;
     border-right: 0;
@@ -12060,14 +12061,14 @@ a:hover {
   #shell {
     gap: 0;
     align-items: stretch;
-    min-height: calc(100dvh - 44px);
+    min-height: calc(100dvh - var(--app-topbar-height));
   }
 
   .desktop-sidebar {
     width: 226px;
-    top: 44px;
-    min-height: calc(100dvh - 44px);
-    max-height: calc(100dvh - 44px);
+    top: var(--app-topbar-height);
+    min-height: calc(100dvh - var(--app-topbar-height));
+    max-height: calc(100dvh - var(--app-topbar-height));
     border-top: 0;
     border-right: 1px solid var(--border-default);
     border-bottom: 0;
