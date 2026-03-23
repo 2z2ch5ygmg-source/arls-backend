@@ -5369,20 +5369,10 @@ function createHomeNoticeRailRow(item) {
 
 function renderHomeNoticeRail() {
   const listEl = $('#homeManagerNoticeList');
-  const metaEl = $('#homeManagerNoticeMeta');
   if (!(listEl instanceof HTMLElement)) return;
   clearList(listEl);
   const notices = ensureNoticesState();
   const rows = Array.isArray(notices.homeRows) ? notices.homeRows : [];
-  if (metaEl instanceof HTMLElement) {
-    if (notices.homeLoading) {
-      metaEl.textContent = '최신 공지를 불러오는 중입니다.';
-    } else if (rows.length) {
-      metaEl.textContent = `상단고정 우선 · 최신 ${rows.length}건`;
-    } else {
-      metaEl.textContent = '등록된 공지가 아직 없습니다.';
-    }
-  }
   if (notices.homeLoading) {
     renderSkeleton(listEl, NOTICE_HOME_TEASER_LIMIT);
     return;

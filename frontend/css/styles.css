@@ -21039,7 +21039,7 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-notice-card {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr auto;
   gap: 0;
   min-height: 278px;
   padding: 16px 0 0;
@@ -21062,7 +21062,7 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-notice-item {
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  border-top: 1px solid rgba(148, 163, 184, 0.24);
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-notice-item:first-child {
@@ -21073,7 +21073,7 @@ button.attendance-status-special-card.active {
   width: 100%;
   border: none;
   background: transparent;
-  padding: 10px 18px;
+  padding: 12px 18px;
   display: grid;
   gap: 4px;
   text-align: left;
@@ -21122,6 +21122,30 @@ button.attendance-status-special-card.active {
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-notice-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 18px 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-notice-more-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--ui-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-notice-more-link:hover,
+#shell[data-shell-mode='manager'] #view-home .home-notice-more-link:focus-visible {
+  color: var(--ui-text-primary);
+  text-decoration: underline;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card,
@@ -21304,22 +21328,11 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-notice-head {
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-notice-head .home-attendance-panel-copy {
   min-width: 0;
-}
-
-#shell[data-shell-mode='manager'] #view-home .home-attendance-notice-head .home-attendance-panel-copy .muted {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-#shell[data-shell-mode='manager'] #view-home .home-attendance-notice-head .home-section-chevron {
-  min-height: 30px;
-  padding-inline: 10px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain {

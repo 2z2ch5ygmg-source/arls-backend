@@ -25,7 +25,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="assets/sentrix-hr-favicon-v4-16.png?v=20260323-sentrix-browser-brand-v4" />
     <link rel="shortcut icon" href="assets/sentrix-hr-favicon-v4.ico?v=20260323-sentrix-browser-brand-v4" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/sentrix-hr-favicon-v4-180.png?v=20260323-sentrix-browser-brand-v4" />
-    <link rel="stylesheet" href="css/styles.css?v=20260323-notice-search-toggle-v1" />
+    <link rel="stylesheet" href="css/styles.css?v=20260323-home-notice-more-v1" />
   </head>
   <body>
     <div id="app">
@@ -225,14 +225,14 @@
                       <div class="home-attendance-issue-head home-attendance-notice-head">
                         <div class="home-attendance-panel-copy">
                           <span class="home-attendance-card-label">공지사항</span>
-                          <strong>상단고정 우선</strong>
-                          <p id="homeManagerNoticeMeta" class="muted">최신 공지를 불러오는 중입니다.</p>
                         </div>
-                        <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/feature/notices" aria-label="공지사항 열기">
-                          <span>공지 보기</span>
-                        </button>
                       </div>
                       <ul id="homeManagerNoticeList" class="list compact-list home-notice-list"></ul>
+                      <div class="home-notice-footer">
+                        <button class="home-notice-more-link" type="button" data-action="drawer-open-route" data-route="/feature/notices" aria-label="공지사항 더보기">
+                          더보기
+                        </button>
+                      </div>
                     </article>
                   </div>
                 </article>
