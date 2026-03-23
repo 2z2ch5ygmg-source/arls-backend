@@ -55686,6 +55686,11 @@ function bindUiEvents() {
   const controller = new AbortController();
   const { signal } = controller;
   state.uiBindingsController = controller;
+  const runNoticeImageUpload = (files = []) => {
+    runActionSafely((async () => {
+      await appendNoticeImages(files);
+    })(), '이미지 업로드 중 오류가 발생했습니다.');
+  };
 
   document.addEventListener('submit', (event) => {
     if (window.__RG_ARLS_HANDLERS_BOUND__ !== true) return;
@@ -55922,9 +55927,7 @@ function bindUiEvents() {
 
     if (target.id === 'noticesComposeImageInput') {
       const files = target instanceof HTMLInputElement && target.files ? Array.from(target.files) : [];
-      runWithBusy(async () => {
-        await appendNoticeImages(files);
-      }, '이미지 업로드 중...');
+      runNoticeImageUpload(files);
       return;
     }
   }, { signal });
@@ -55938,9 +55941,7 @@ function bindUiEvents() {
       .filter((file) => file instanceof File);
     if (!files.length) return;
     event.preventDefault();
-    runWithBusy(async () => {
-      await appendNoticeImages(files);
-    }, '이미지 업로드 중...');
+    runNoticeImageUpload(files);
   }, { signal });
 
   document.addEventListener('dragover', (event) => {
@@ -55969,9 +55970,7 @@ function bindUiEvents() {
     const files = Array.from(event.dataTransfer?.files || []).filter((file) => file instanceof File && String(file.type || '').startsWith('image/'));
     if (!files.length) return;
     event.preventDefault();
-    runWithBusy(async () => {
-      await appendNoticeImages(files);
-    }, '이미지 업로드 중...');
+    runNoticeImageUpload(files);
   }, { signal });
 
   document.addEventListener('keydown', (event) => {
