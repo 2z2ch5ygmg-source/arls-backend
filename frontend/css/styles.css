@@ -21902,7 +21902,8 @@ button.attendance-status-special-card.active {
 }
 
 .notices-list-button {
-  width: 100%;
+  width: min(760px, calc(100% - 56px));
+  margin-inline: auto;
   border: none;
   background: transparent;
   display: grid;
