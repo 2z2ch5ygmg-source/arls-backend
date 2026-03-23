@@ -839,8 +839,9 @@ body:has(#authView:not(.hidden)) #app {
 
 .auth-logo-mark {
   width: clamp(192px, 22vw, 276px);
-  height: auto;
+  aspect-ratio: 380 / 411;
   display: block;
+  background: center / contain no-repeat url('../assets/sentrix-hr-mark.png');
   animation: auth-logo-drift 6s ease-in-out infinite;
 }
 
@@ -853,11 +854,9 @@ body:has(#authView:not(.hidden)) #app {
 
 .auth-wordmark {
   width: min(100%, 332px);
-  height: auto;
+  aspect-ratio: 797 / 127;
   display: block;
-  image-rendering: -webkit-optimize-contrast;
-  transform: translateZ(0);
-  filter: saturate(1.03) contrast(1.02);
+  background: center / contain no-repeat url('../assets/sentrix-hr-wordmark.png');
 }
 
 .auth-brand-copy h1 {
@@ -1261,6 +1260,14 @@ body:has(#authView:not(.hidden)) #app {
 :root[data-ui-theme='dark'] #authView .auth-field-label,
 :root[data-ui-theme='dark'] #authView .auth-panel-head h2 {
   color: #f4f7fb;
+}
+
+:root[data-ui-theme='dark'] #authView .auth-logo-mark {
+  background-image: url('../assets/sentrix-hr-mark-dark.png');
+}
+
+:root[data-ui-theme='dark'] #authView .auth-wordmark {
+  background-image: url('../assets/sentrix-hr-wordmark-dark.png');
 }
 
 :root[data-ui-theme='dark'] #authView .auth-intro,
@@ -21708,10 +21715,10 @@ button.attendance-status-special-card.active {
 }
 
 .notices-toolbar-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
-  align-items: end;
-  gap: 18px 28px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px 28px;
 }
 
 .notices-panel {
@@ -21732,17 +21739,81 @@ button.attendance-status-special-card.active {
 
 .notices-search-form {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 0;
-  width: 100%;
+  align-items: flex-end;
   justify-content: flex-end;
+  gap: 12px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.notices-search-input-wrap {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(8px);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.2);
+  transition:
+    width 180ms ease,
+    opacity 150ms ease,
+    transform 180ms ease;
+}
+
+.notices-search-form.is-expanded .notices-search-input-wrap {
+  width: min(340px, 34vw);
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
 }
 
 .notices-search-form input {
-  flex: 1 1 auto;
   width: 100%;
   min-width: 0;
+  padding: 0 0 10px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.notices-search-form input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.notices-search-form input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.notices-search-toggle {
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ui-text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notices-search-toggle:hover,
+.notices-search-toggle:focus-visible {
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.notices-search-toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notices-search-toggle-icon svg {
+  width: 20px;
+  height: 20px;
 }
 
 .notices-section-head {
@@ -21774,7 +21845,7 @@ button.attendance-status-special-card.active {
 
 .notices-list-section-head,
 .notices-list-rows {
-  width: min(calc(100% - clamp(56px, 7vw, 152px)), 1380px);
+  width: min(calc(100% - clamp(160px, 15vw, 420px)), 1120px);
   margin-inline: auto;
 }
 
@@ -21809,10 +21880,10 @@ button.attendance-status-special-card.active {
   border: none;
   background: transparent;
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) 92px;
-  gap: 16px;
+  grid-template-columns: 60px minmax(0, 1fr) 92px;
+  gap: 18px;
   align-items: center;
-  padding: 18px 0;
+  padding: 19px 0;
   text-align: left;
   cursor: pointer;
 }
@@ -21872,7 +21943,7 @@ button.attendance-status-special-card.active {
 
 .notices-detail-card > .notices-section-head,
 .notices-detail-card > .notices-detail-body {
-  width: min(calc(100% - clamp(112px, 14vw, 360px)), 860px);
+  width: min(calc(100% - clamp(220px, 18vw, 460px)), 780px);
   margin-inline: auto;
 }
 
@@ -22890,7 +22961,7 @@ button.attendance-status-special-card.active {
 
 @media (max-width: 767px) {
   .notices-toolbar-row {
-    grid-template-columns: 1fr;
+    flex-direction: column;
     align-items: stretch;
   }
 
@@ -22901,12 +22972,11 @@ button.attendance-status-special-card.active {
 
   .notices-search-form {
     width: 100%;
-    justify-content: stretch;
+    justify-content: flex-end;
     margin-left: 0;
   }
 
-  .notices-search-form input {
-    flex: 1 1 auto;
+  .notices-search-form.is-expanded .notices-search-input-wrap {
     width: 100%;
   }
 

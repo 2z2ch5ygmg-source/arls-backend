@@ -1234,6 +1234,8 @@ function createInitialNoticesState() {
   return {
     category: 'all',
     search: '',
+    searchDraft: '',
+    searchExpanded: false,
     mode: NOTICE_VIEW_MODE_LIST,
     selectedNoticeId: '',
     selectedRow: null,
@@ -18560,6 +18562,12 @@ function ensureNoticesState() {
   if (!state.notices || typeof state.notices !== 'object') {
     state.notices = createInitialNoticesState();
   }
+  if (typeof state.notices.searchDraft !== 'string') {
+    state.notices.searchDraft = String(state.notices.search || '');
+  }
+  if (typeof state.notices.searchExpanded !== 'boolean') {
+    state.notices.searchExpanded = Boolean(String(state.notices.searchDraft || state.notices.search || '').trim());
+  }
   return state.notices;
 }
 
@@ -19771,6 +19779,8 @@ function applyNoticesRouteStateFromQuery(routePath = '', params = new URLSearchP
   const requestedMode = normalizeNoticeViewMode(requestedModeRaw);
   notices.category = normalizeNoticeCategory(params.get('category') || 'all');
   notices.search = normalizeNoticeSearch(params.get('q') || '');
+  notices.searchDraft = notices.search;
+  notices.searchExpanded = Boolean(notices.search);
   notices.selectedNoticeId = String(params.get('notice') || '').trim();
   notices.manageAccessHint = '';
   if (requestedModeRaw && requestedMode === NOTICE_VIEW_MODE_COMPOSE && !canManageNotices()) {
@@ -19788,9 +19798,12 @@ function applyNoticesRouteStateFromQuery(routePath = '', params = new URLSearchP
   }
 }
 
-function applyNoticesSearchRoute(search = '', { replace = false } = {}) {
+function applyNoticesSearchRoute(search = '', { replace = false, expanded = null } = {}) {
   const notices = ensureNoticesState();
-  notices.search = normalizeNoticeSearch(search);
+  const normalizedSearch = normalizeNoticeSearch(search);
+  notices.search = normalizedSearch;
+  notices.searchDraft = normalizedSearch;
+  notices.searchExpanded = expanded == null ? Boolean(normalizedSearch) : Boolean(expanded);
   notices.mode = NOTICE_VIEW_MODE_LIST;
   notices.selectedNoticeId = '';
   notices.selectedRow = null;
@@ -33863,15 +33876,36 @@ function renderNoticesCategoryTabs() {
 
 function renderNoticesSearchControls() {
   const notices = ensureNoticesState();
+  const searchForm = $('#noticesSearchForm');
+  const searchWrap = $('#noticesSearchInputWrap');
   const searchInput = $('#noticesSearchInput');
-  const clearBtn = $('#noticesSearchClearBtn');
+  const toggleBtn = $('#noticesSearchToggleBtn');
+  const searchIcon = $('#noticesSearchIconSearch');
+  const clearIcon = $('#noticesSearchIconClear');
+  const hasDraftValue = Boolean(String(notices.searchDraft || '').trim());
+  const isExpanded = Boolean(notices.searchExpanded || hasDraftValue || notices.search);
+  notices.searchExpanded = isExpanded;
+
   if (searchInput instanceof HTMLInputElement) {
-    if (searchInput.value !== notices.search) {
-      searchInput.value = notices.search;
+    if (searchInput.value !== notices.searchDraft) {
+      searchInput.value = notices.searchDraft;
     }
   }
-  if (clearBtn instanceof HTMLElement) {
-    clearBtn.classList.toggle('hidden', !String(notices.search || '').trim());
+  if (searchForm instanceof HTMLElement) {
+    searchForm.classList.toggle('is-expanded', isExpanded);
+    searchForm.classList.toggle('has-value', hasDraftValue);
+  }
+  if (searchWrap instanceof HTMLElement) {
+    searchWrap.setAttribute('aria-hidden', isExpanded ? 'false' : 'true');
+  }
+  if (toggleBtn instanceof HTMLElement) {
+    toggleBtn.setAttribute('aria-label', hasDraftValue ? '검색어 지우기' : (isExpanded ? '검색 닫기' : '검색 열기'));
+  }
+  if (searchIcon instanceof HTMLElement) {
+    searchIcon.classList.toggle('hidden', hasDraftValue);
+  }
+  if (clearIcon instanceof HTMLElement) {
+    clearIcon.classList.toggle('hidden', !hasDraftValue);
   }
 }
 
@@ -56858,8 +56892,10 @@ function bindUiEvents() {
     }
     if (form.id === 'noticesSearchForm') {
       event.preventDefault();
+      const notices = ensureNoticesState();
       const searchInput = $('#noticesSearchInput');
-      applyNoticesSearchRoute(searchInput instanceof HTMLInputElement ? searchInput.value : '');
+      const value = searchInput instanceof HTMLInputElement ? searchInput.value : notices.searchDraft;
+      applyNoticesSearchRoute(value, { expanded: true });
       return;
     }
     if (form.id === 'correctionForm') {
@@ -57034,7 +57070,8 @@ function bindUiEvents() {
 
     if (target.id === 'noticesSearchInput') {
       const notices = ensureNoticesState();
-      notices.search = target instanceof HTMLInputElement ? normalizeNoticeSearch(target.value) : '';
+      notices.searchDraft = target instanceof HTMLInputElement ? normalizeNoticeSearch(target.value) : '';
+      notices.searchExpanded = true;
       renderNoticesSearchControls();
       return;
     }
@@ -57994,7 +58031,39 @@ function bindUiEvents() {
     }
 
     if (action === 'notices-search-clear') {
-      applyNoticesSearchRoute('', { replace: true });
+      applyNoticesSearchRoute('', { replace: true, expanded: true });
+      const searchInput = $('#noticesSearchInput');
+      if (searchInput instanceof HTMLInputElement) {
+        window.requestAnimationFrame(() => {
+          searchInput.focus();
+        });
+      }
+      return;
+    }
+
+    if (action === 'notices-search-toggle') {
+      const notices = ensureNoticesState();
+      const hasDraftValue = Boolean(String(notices.searchDraft || '').trim());
+      if (hasDraftValue) {
+        applyNoticesSearchRoute('', { replace: true, expanded: true });
+        const searchInput = $('#noticesSearchInput');
+        if (searchInput instanceof HTMLInputElement) {
+          window.requestAnimationFrame(() => {
+            searchInput.focus();
+          });
+        }
+        return;
+      }
+      notices.searchExpanded = !Boolean(notices.searchExpanded);
+      renderNoticesSearchControls();
+      if (notices.searchExpanded) {
+        const searchInput = $('#noticesSearchInput');
+        if (searchInput instanceof HTMLInputElement) {
+          window.requestAnimationFrame(() => {
+            searchInput.focus();
+          });
+        }
+      }
       return;
     }
 

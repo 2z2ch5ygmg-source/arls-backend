@@ -25,7 +25,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="assets/sentrix-hr-favicon-v4-16.png?v=20260323-sentrix-browser-brand-v4" />
     <link rel="shortcut icon" href="assets/sentrix-hr-favicon-v4.ico?v=20260323-sentrix-browser-brand-v4" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/sentrix-hr-favicon-v4-180.png?v=20260323-sentrix-browser-brand-v4" />
-    <link rel="stylesheet" href="css/styles.css?v=20260323-notices-phase4-v3" />
+    <link rel="stylesheet" href="css/styles.css?v=20260323-auth-dark-brand-v1" />
   </head>
   <body>
     <div id="app">
@@ -49,9 +49,9 @@
           <div class="auth-stage-grid">
             <div class="auth-hero">
               <div class="auth-brand-lockup">
-                <img class="auth-logo-mark" src="assets/sentrix-hr-mark.png" alt="Sentrix HR 로고" />
+                <span class="auth-logo-mark" role="img" aria-label="Sentrix HR 로고"></span>
                 <div class="auth-brand-copy">
-                  <img class="auth-wordmark" src="assets/sentrix-hr-wordmark.png" alt="Sentrix HR" />
+                  <span class="auth-wordmark" role="img" aria-label="Sentrix HR"></span>
                   <p class="auth-intro">테넌트 코드와 계정 정보를 입력해 근무 운영 화면으로 바로 이동하세요.</p>
                 </div>
               </div>
@@ -3001,10 +3001,30 @@
             <div class="workspace-tabbar-row notices-toolbar-row">
               <div id="noticesCategoryTabs" class="workspace-tabs" aria-label="공지 카테고리"></div>
               <form id="noticesSearchForm" class="notices-search-form" role="search">
-                <label class="sr-only" for="noticesSearchInput">공지 검색</label>
-                <input id="noticesSearchInput" type="search" placeholder="제목 또는 본문 검색" />
-                <button class="btn btn-secondary" type="submit">검색</button>
-                <button id="noticesSearchClearBtn" class="btn btn-ghost hidden" type="button" data-action="notices-search-clear">지우기</button>
+                <div id="noticesSearchInputWrap" class="notices-search-input-wrap" aria-hidden="true">
+                  <label class="sr-only" for="noticesSearchInput">공지 검색</label>
+                  <input id="noticesSearchInput" type="search" placeholder="검색어를 입력하세요." />
+                </div>
+                <button
+                  id="noticesSearchToggleBtn"
+                  class="notices-search-toggle"
+                  type="button"
+                  data-action="notices-search-toggle"
+                  aria-label="검색 열기"
+                >
+                  <span id="noticesSearchIconSearch" class="notices-search-toggle-icon" aria-hidden="true">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                      <circle cx="9" cy="9" r="5.5"></circle>
+                      <path d="m13 13 4 4"></path>
+                    </svg>
+                  </span>
+                  <span id="noticesSearchIconClear" class="notices-search-toggle-icon hidden" aria-hidden="true">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" focusable="false">
+                      <path d="M5 5 15 15"></path>
+                      <path d="M15 5 5 15"></path>
+                    </svg>
+                  </span>
+                </button>
               </form>
             </div>
 
