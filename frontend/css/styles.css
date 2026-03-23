@@ -20992,6 +20992,11 @@ button.attendance-status-special-card.active {
   gap: 18px;
 }
 
+.notices-workspace-head .workspace-head-actions {
+  align-items: center;
+  gap: 10px;
+}
+
 .notices-toolbar-row {
   align-items: center;
   justify-content: space-between;

@@ -1247,6 +1247,7 @@ function createInitialNoticesState() {
     loadedListCategory: '',
     loadedListSearch: '',
     loadedDetailNoticeId: '',
+    manageAccessHint: '',
     composeSourceNoticeId: '',
     composeDraft: {
       category: 'ops',
@@ -18385,6 +18386,10 @@ function canManageNotices() {
   return role === 'developer' || role === 'hq_admin';
 }
 
+function getNoticesReadOnlyHint() {
+  return '읽기 전용: 공지 조회와 투표만 가능합니다.';
+}
+
 function ensureNoticesState() {
   if (!state.notices || typeof state.notices !== 'object') {
     state.notices = createInitialNoticesState();
@@ -19052,6 +19057,9 @@ async function submitNoticePollVoteRequest(noticeId = '', pollId = '', optionIds
 }
 
 async function uploadNoticeImageFile(file) {
+  if (!canManageNotices()) {
+    throw new Error('공지 작성 권한이 없습니다.');
+  }
   if (!(file instanceof File)) {
     throw new Error('이미지 파일을 다시 선택해 주세요.');
   }
@@ -19107,6 +19115,9 @@ async function appendNoticeImages(files = []) {
 }
 
 async function saveNoticeDraft() {
+  if (!canManageNotices()) {
+    throw new Error('공지 작성 권한이 없습니다.');
+  }
   const notices = ensureNoticesState();
   syncNoticeComposeDraftFromFields();
   const draft = notices.composeDraft || {};
@@ -19151,6 +19162,9 @@ async function saveNoticeDraft() {
 }
 
 async function deleteNoticeRecord(noticeId = '') {
+  if (!canManageNotices()) {
+    throw new Error('공지 삭제 권한이 없습니다.');
+  }
   const targetId = String(noticeId || '').trim();
   if (!targetId) return null;
   const payload = await apiRequest(`/notices/${encodeURIComponent(targetId)}`, {
@@ -19291,11 +19305,17 @@ function applyNoticesRouteStateFromQuery(routePath = '', params = new URLSearchP
   const route = normalizeRoutePath(routePath);
   if (route !== ROUTE_FEATURE_NOTICES) return;
   const notices = ensureNoticesState();
+  const requestedModeRaw = String(params.get('mode') || '').trim();
+  const requestedMode = normalizeNoticeViewMode(requestedModeRaw);
   notices.category = normalizeNoticeCategory(params.get('category') || 'all');
   notices.search = normalizeNoticeSearch(params.get('q') || '');
   notices.selectedNoticeId = String(params.get('notice') || '').trim();
-  if (String(params.get('mode') || '').trim() && canManageNotices()) {
-    notices.mode = normalizeNoticeViewMode(params.get('mode') || '');
+  notices.manageAccessHint = '';
+  if (requestedModeRaw && requestedMode === NOTICE_VIEW_MODE_COMPOSE && !canManageNotices()) {
+    notices.manageAccessHint = getNoticesReadOnlyHint();
+    notices.mode = notices.selectedNoticeId ? NOTICE_VIEW_MODE_DETAIL : NOTICE_VIEW_MODE_LIST;
+  } else if (requestedModeRaw && canManageNotices()) {
+    notices.mode = requestedMode;
   } else if (notices.selectedNoticeId) {
     notices.mode = NOTICE_VIEW_MODE_DETAIL;
   } else {
@@ -33494,6 +33514,7 @@ function renderNoticesComposePanel() {
 function renderNoticesView() {
   const notices = ensureNoticesState();
   const subtitle = $('#noticesViewSubtitle');
+  const readonlyPill = $('#noticesReadonlyPill');
   const createBtn = $('#noticesCreateBtn');
   const editBtn = $('#noticesDetailEditBtn');
   const deleteBtn = $('#noticesDetailDeleteBtn');
@@ -33503,7 +33524,10 @@ function renderNoticesView() {
   if (subtitle) {
     subtitle.textContent = canManageNotices()
       ? '운영 공지를 등록하고, 중요 공지는 상단고정으로 먼저 노출할 수 있습니다.'
-      : '운영 공지와 안내를 카테고리, 제목, 날짜 기준으로 빠르게 확인합니다.';
+      : '운영 공지와 안내를 카테고리, 제목, 날짜 기준으로 읽고, 공지 안 투표에는 바로 참여할 수 있습니다.';
+  }
+  if (readonlyPill instanceof HTMLElement) {
+    readonlyPill.classList.toggle('hidden', canManageNotices());
   }
   if (createBtn instanceof HTMLButtonElement) {
     createBtn.classList.toggle('hidden', !canManageNotices());
@@ -33571,8 +33595,8 @@ async function loadNoticesViewPresenter() {
     setViewRuntimeHint('notices', '작업회사를 먼저 선택해 주세요.', 'info');
     return ensureNoticesState();
   }
-  setViewRuntimeHint('notices', '', 'info');
   const notices = ensureNoticesState();
+  setViewRuntimeHint('notices', String(notices.manageAccessHint || '').trim(), 'info');
   if (notices.mode === NOTICE_VIEW_MODE_DETAIL && notices.selectedNoticeId) {
     try {
       await loadNoticeDetailState(notices.selectedNoticeId);
