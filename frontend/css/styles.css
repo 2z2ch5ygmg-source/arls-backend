@@ -21870,11 +21870,13 @@ button.attendance-status-special-card.active {
 .notices-list-panel {
   display: grid;
   padding: 24px 0 6px;
+  justify-items: center;
 }
 
 .notices-list-rows {
   width: var(--notices-list-width);
   margin-inline: auto;
+  justify-self: center;
 }
 
 .notices-list-rows {
