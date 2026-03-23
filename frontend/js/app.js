@@ -33890,6 +33890,9 @@ function renderNoticesSearchControls() {
     if (searchInput.value !== notices.searchDraft) {
       searchInput.value = notices.searchDraft;
     }
+    if (!isExpanded && document.activeElement === searchInput) {
+      searchInput.blur();
+    }
   }
   if (searchForm instanceof HTMLElement) {
     searchForm.classList.toggle('is-expanded', isExpanded);
@@ -58031,13 +58034,11 @@ function bindUiEvents() {
     }
 
     if (action === 'notices-search-clear') {
-      applyNoticesSearchRoute('', { replace: true, expanded: true });
       const searchInput = $('#noticesSearchInput');
       if (searchInput instanceof HTMLInputElement) {
-        window.requestAnimationFrame(() => {
-          searchInput.focus();
-        });
+        searchInput.blur();
       }
+      applyNoticesSearchRoute('', { replace: true, expanded: false });
       return;
     }
 
@@ -58045,13 +58046,11 @@ function bindUiEvents() {
       const notices = ensureNoticesState();
       const hasDraftValue = Boolean(String(notices.searchDraft || '').trim());
       if (hasDraftValue) {
-        applyNoticesSearchRoute('', { replace: true, expanded: true });
         const searchInput = $('#noticesSearchInput');
         if (searchInput instanceof HTMLInputElement) {
-          window.requestAnimationFrame(() => {
-            searchInput.focus();
-          });
+          searchInput.blur();
         }
+        applyNoticesSearchRoute('', { replace: true, expanded: false });
         return;
       }
       notices.searchExpanded = !Boolean(notices.searchExpanded);
