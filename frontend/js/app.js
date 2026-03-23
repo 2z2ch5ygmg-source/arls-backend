@@ -18429,7 +18429,7 @@ function buildSerializableNoticeComposeDraft(draft = null) {
       ? 'ops'
       : normalizeNoticeCategory(normalizedDraft.category || 'ops'),
     title: String(normalizedDraft.title || ''),
-    summaryText: String(normalizedDraft.summaryText || ''),
+    summaryText: '',
     bodyText: String(normalizedDraft.bodyText || ''),
     blockOrder,
     imagesEnabled: Boolean(normalizedDraft.imagesEnabled),
@@ -18453,8 +18453,10 @@ function normalizeSavedNoticeComposeDraft(raw = null, fallbackCategory = 'ops') 
       ? 'ops'
       : normalizeNoticeCategory(source.category || fallbackCategory || 'ops'),
     title: String(source.title || ''),
-    summaryText: String(source.summaryText || ''),
-    bodyText: String(source.bodyText || ''),
+    summaryText: '',
+    bodyText: [String(source.summaryText || '').trim(), String(source.bodyText || '').trim()]
+      .filter(Boolean)
+      .join('\n\n'),
     blockOrder: normalizeNoticeComposeBlockOrder(source.blockOrder, draftLike),
     imagesEnabled: draftLike.imagesEnabled || draftLike.images.length > 0,
     images: draftLike.images,
@@ -18865,7 +18867,6 @@ function normalizeNoticeBodyBlocks(rawBlocks = null, fallbackBodyText = '') {
 
 function buildNoticeComposeDraftFromBlocks(row = {}) {
   const blocks = normalizeNoticeBodyBlocks(row?.bodyBlocks, row?.bodyText);
-  const summaryParts = [];
   const bodyParts = [];
   const images = [];
   const blockOrder = [];
@@ -18873,11 +18874,7 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
   let table = createDefaultNoticeTableDraft();
   blocks.forEach((block) => {
     if (block.kind === 'paragraph') {
-      if (block.variant === 'lead' && !summaryParts.length) {
-        summaryParts.push(String(block.text || '').trim());
-      } else {
-        bodyParts.push(String(block.text || '').trim());
-      }
+      bodyParts.push(String(block.text || '').trim());
       return;
     }
     if (block.kind === 'image') {
@@ -18920,7 +18917,7 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
       ? 'ops'
       : normalizeNoticeCategory(row?.category || 'ops'),
     title: String(row?.title || '').trim(),
-    summaryText: summaryParts.join('\n\n'),
+    summaryText: '',
     bodyText: bodyParts.join('\n\n'),
     blockOrder: normalizeNoticeComposeBlockOrder(blockOrder, {
       imagesEnabled: images.length > 0,
@@ -18937,8 +18934,9 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
 }
 
 function buildNoticeBodyBlocksFromDraft(draft = null) {
-  const summaryText = String(draft?.summaryText || '').trim();
-  const bodyText = String(draft?.bodyText || '').trim();
+  const bodyText = [String(draft?.summaryText || '').trim(), String(draft?.bodyText || '').trim()]
+    .filter(Boolean)
+    .join('\n\n');
   const images = normalizeNoticeImageDrafts(draft?.images);
   const poll = normalizeNoticePollDraft(draft?.poll);
   const table = normalizeNoticeTableDraft(draft?.table);
@@ -18950,9 +18948,6 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
     table,
   });
   const blocks = [];
-  if (summaryText) {
-    blocks.push({ kind: 'paragraph', variant: 'lead', text: summaryText });
-  }
   bodyText
     .split(/\n{2,}/)
     .map((block) => block.trim())
@@ -19116,7 +19111,6 @@ function isNoticeComposeTextField(target) {
   if (!field) return false;
   const id = String(field.id || '').trim();
   return id === 'noticesComposeTitle'
-    || id === 'noticesComposeSummary'
     || id === 'noticesComposeBody'
     || id === 'noticesComposePollQuestion'
     || id === 'noticesComposeTableTitle';
@@ -19126,7 +19120,6 @@ function syncNoticeComposeDraftFromFields() {
   const notices = ensureNoticesState();
   const categorySelect = $('#noticesComposeCategory');
   const titleInput = $('#noticesComposeTitle');
-  const summaryInput = $('#noticesComposeSummary');
   const bodyInput = $('#noticesComposeBody');
   const pollQuestionInput = $('#noticesComposePollQuestion');
   const pollSelectionModeInput = $('#noticesComposePollSelectionMode');
@@ -19178,7 +19171,7 @@ function syncNoticeComposeDraftFromFields() {
       ? (normalizeNoticeCategory(categorySelect.value) === 'all' ? 'ops' : normalizeNoticeCategory(categorySelect.value))
       : (normalizeNoticeCategory(notices.composeDraft?.category || 'ops') === 'all' ? 'ops' : normalizeNoticeCategory(notices.composeDraft?.category || 'ops')),
     title: titleInput instanceof HTMLInputElement ? String(titleInput.value || '') : String(notices.composeDraft?.title || ''),
-    summaryText: summaryInput instanceof HTMLTextAreaElement ? String(summaryInput.value || '') : String(notices.composeDraft?.summaryText || ''),
+    summaryText: '',
     bodyText: bodyInput instanceof HTMLTextAreaElement ? String(bodyInput.value || '') : String(notices.composeDraft?.bodyText || ''),
     blockOrder: normalizeNoticeComposeBlockOrder(notices.composeDraft?.blockOrder, notices.composeDraft),
     imagesEnabled,
@@ -19203,7 +19196,6 @@ function writeNoticeComposeDraftToFields() {
   const draft = notices.composeDraft || {};
   const categorySelect = $('#noticesComposeCategory');
   const titleInput = $('#noticesComposeTitle');
-  const summaryInput = $('#noticesComposeSummary');
   const bodyInput = $('#noticesComposeBody');
   const pollQuestionInput = $('#noticesComposePollQuestion');
   const pollSelectionModeInput = $('#noticesComposePollSelectionMode');
@@ -19216,9 +19208,6 @@ function writeNoticeComposeDraftToFields() {
   }
   if (titleInput instanceof HTMLInputElement) {
     titleInput.value = String(draft.title || '');
-  }
-  if (summaryInput instanceof HTMLTextAreaElement) {
-    summaryInput.value = String(draft.summaryText || '');
   }
   if (bodyInput instanceof HTMLTextAreaElement) {
     bodyInput.value = String(draft.bodyText || '');
@@ -34032,7 +34021,6 @@ function renderNoticesComposePanel() {
   }
   if (
     !String(notices.composeDraft?.title || '').trim()
-    && !String(notices.composeDraft?.summaryText || '').trim()
     && !String(notices.composeDraft?.bodyText || '').trim()
     && !normalizeNoticeImageDrafts(notices.composeDraft?.images).length
     && !Boolean(notices.composeDraft?.poll?.enabled)
