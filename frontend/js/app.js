@@ -18032,18 +18032,7 @@ function queueTenantValidation({ immediate = false } = {}) {
     markTenantValidation({
       valid: false,
       checking: false,
-      helper: '회사 번호를 먼저 입력해 주세요.',
-      helperLevel: 'info',
-      error: '',
-    });
-    return;
-  }
-
-  if (tenantCodeUpper === 'MASTER') {
-    markTenantValidation({
-      valid: true,
-      checking: false,
-      helper: 'MASTER 슈퍼어드민 로그인 모드입니다.',
+      helper: '테넌트 코드를 먼저 입력해 주세요.',
       helperLevel: 'info',
       error: '',
     });
@@ -18054,9 +18043,9 @@ function queueTenantValidation({ immediate = false } = {}) {
     markTenantValidation({
       valid: false,
       checking: false,
-      helper: '회사 번호는 영문/숫자/._- 만 사용할 수 있습니다.',
+      helper: '테넌트 코드는 영문/숫자/._- 만 사용할 수 있습니다.',
       helperLevel: 'error',
-      error: '유효한 회사 번호를 입력해 주세요.',
+      error: '유효한 테넌트 코드를 입력해 주세요.',
     });
     return;
   }
@@ -30060,7 +30049,7 @@ function showAuthPanel() {
   if ($('#tenantCode')?.value.trim()) {
     queueTenantValidation({ immediate: true });
   } else {
-    setTenantHelper('회사 번호를 먼저 입력해 주세요.', 'info');
+    setTenantHelper('테넌트 코드를 먼저 입력해 주세요.', 'info');
   }
 }
 
@@ -53800,8 +53789,6 @@ async function onLoginSubmit(event) {
   const passwordEl = $('#password');
   const submitBtn = $('#loginSubmitBtn');
   const tenantCode = getLoginTenantCode();
-  const isMasterTenantLogin = String(tenantCode || '').trim().toUpperCase() === 'MASTER';
-
   if (!tenantCodeEl || !usernameEl || !passwordEl) {
     showAuthError('로그인 화면이 정상적으로 로드되지 않았습니다. 새로고침 후 다시 시도해 주세요.');
     return;
@@ -53810,30 +53797,20 @@ async function onLoginSubmit(event) {
   clearLoginFieldErrors();
 
   if (!tenantCode) {
-    setFieldError('#tenantError', '회사 번호를 입력해 주세요.');
+    setFieldError('#tenantError', '테넌트 코드를 입력해 주세요.');
     markTenantValidation({
       valid: false,
       checking: false,
-      helper: '회사 번호를 먼저 입력해 주세요.',
+      helper: '테넌트 코드를 먼저 입력해 주세요.',
       helperLevel: 'error',
-      error: '회사 번호를 입력해 주세요.',
+      error: '테넌트 코드를 입력해 주세요.',
     });
     return;
   }
 
-  if (isMasterTenantLogin && !state.tenantValid) {
-    markTenantValidation({
-      valid: true,
-      checking: false,
-      helper: 'MASTER 슈퍼어드민 로그인 모드입니다.',
-      helperLevel: 'info',
-      error: '',
-    });
-  }
-
-  if (!state.tenantValid && !isMasterTenantLogin) {
+  if (!state.tenantValid) {
     queueTenantValidation({ immediate: true });
-    setFieldError('#tenantError', '유효한 회사를 확인한 뒤 로그인해 주세요.');
+    setFieldError('#tenantError', '유효한 테넌트 코드를 확인한 뒤 로그인해 주세요.');
     return;
   }
 
@@ -53854,7 +53831,7 @@ async function onLoginSubmit(event) {
     };
 
     if (!payload.tenant_code || !payload.username || !payload.password) {
-      throw new Error('회사 번호, 아이디, 비밀번호를 모두 입력해 주세요.');
+      throw new Error('테넌트 코드, 아이디, 비밀번호를 모두 입력해 주세요.');
     }
 
     const result = await apiRequest('/auth/login', {
