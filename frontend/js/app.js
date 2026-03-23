@@ -1250,8 +1250,6 @@ function createInitialNoticesState() {
     loadedDetailNoticeId: '',
     manageAccessHint: '',
     composeSourceNoticeId: '',
-    composeSettingsOpen: false,
-    previewOpen: false,
     composeAutosaveTimer: 0,
     draftSavedAt: '',
     draftStorageMessage: '',
@@ -18687,6 +18685,7 @@ function normalizeNoticeBodyBlocks(rawBlocks = null, fallbackBodyText = '') {
       blocks.push({
         kind: 'table',
         title: table.title,
+        hasHeader: Boolean(table.hasHeader),
         columns: table.columns.slice(),
         rows: table.rows.map((row) => row.slice()),
       });
@@ -33415,84 +33414,6 @@ function renderNoticeDetailBody(target, item) {
   target.appendChild(prose);
 }
 
-function buildNoticeComposePreviewRecord() {
-  const notices = ensureNoticesState();
-  const draft = notices.composeDraft || {};
-  const nowIso = new Date().toISOString();
-  return normalizeNoticeRecord({
-    id: String(notices.selectedNoticeId || 'preview').trim() || 'preview',
-    category: normalizeNoticeCategory(draft.category || notices.category || 'ops'),
-    title: String(draft.title || '').trim() || '제목을 입력하면 여기에 표시됩니다.',
-    body_text: buildNoticeBodyTextFromBlocks(buildNoticeBodyBlocksFromDraft(draft)),
-    body_blocks: buildNoticeBodyBlocksFromDraft(draft),
-    is_pinned: Boolean(draft.isPinned),
-    published_at: nowIso,
-    created_at: nowIso,
-    updated_at: nowIso,
-    created_by_name: String(state.user?.name || state.user?.username || '').trim(),
-  });
-}
-
-function renderNoticeComposePreview() {
-  const notices = ensureNoticesState();
-  const card = $('#noticesComposePreviewCard');
-  const metaEl = $('#noticesComposePreviewMeta');
-  const headEl = $('#noticesComposePreviewHead');
-  const bodyEl = $('#noticesComposePreviewBody');
-  const shouldShow = Boolean(canManageNotices() && notices.previewOpen);
-  if (card instanceof HTMLElement) {
-    card.classList.toggle('hidden', !shouldShow);
-  }
-  if (!shouldShow || !(headEl instanceof HTMLElement) || !(bodyEl instanceof HTMLElement)) return;
-
-  const item = buildNoticeComposePreviewRecord();
-  headEl.innerHTML = '';
-
-  const titleRow = document.createElement('div');
-  titleRow.className = 'notices-compose-preview-title-row';
-  const titleWrap = document.createElement('div');
-  titleWrap.className = 'notices-compose-preview-title-wrap';
-  const title = document.createElement('h4');
-  title.textContent = String(item?.title || '공지 미리보기').trim() || '공지 미리보기';
-  const sub = document.createElement('p');
-  sub.className = 'muted';
-  sub.textContent = `${getNoticeCategoryLabel(item?.category || 'all')} · ${formatOpsDateTime(item?.publishedAt || '') || formatDateLabel(item?.publishedAt || '', '-') || '-'}`;
-  titleWrap.append(title, sub);
-
-  const tagRow = document.createElement('div');
-  tagRow.className = 'notices-compose-preview-tag-row';
-  createNoticeMetaTags(item, { includeFresh: false }).forEach((tag) => {
-    const tagEl = document.createElement('span');
-    tagEl.className = `notice-meta-tag notice-meta-tag-${tag.tone}`;
-    tagEl.textContent = tag.label;
-    tagRow.appendChild(tagEl);
-  });
-  const previewTag = document.createElement('span');
-  previewTag.className = 'notice-meta-tag notice-meta-tag-neutral';
-  previewTag.textContent = '미리보기';
-  tagRow.appendChild(previewTag);
-  titleRow.append(titleWrap, tagRow);
-  headEl.appendChild(titleRow);
-
-  if (metaEl) {
-    const blocks = buildNoticeBodyBlocksFromDraft(notices.composeDraft);
-    metaEl.textContent = blocks.length
-      ? '발행 전 문서형 공지가 실제 상세처럼 렌더됩니다.'
-      : '요약 안내, 본문, 이미지, 표, 투표를 채우면 미리보기에서 바로 확인할 수 있습니다.';
-  }
-
-  const blocks = buildNoticeBodyBlocksFromDraft(notices.composeDraft);
-  if (!blocks.length) {
-    renderEmptyState(
-      bodyEl,
-      '미리볼 공지 내용이 아직 없습니다.',
-      '요약 안내, 본문 문단, 이미지, 투표, 표 중 하나 이상을 채우면 실제 상세 형식으로 바로 확인할 수 있습니다.',
-    );
-    return;
-  }
-  renderNoticeDetailBody(bodyEl, item);
-}
-
 function renderNoticeComposeImageList() {
   const list = $('#noticesComposeImageList');
   const block = $('#noticesComposeImageBlock');
@@ -33588,14 +33509,16 @@ function renderNoticeComposePollEditor() {
     item.className = 'notices-poll-option-item';
 
     const label = document.createElement('label');
-    label.className = 'input-field';
-    label.textContent = `선택지 ${index + 1}`;
+    label.className = 'input-field notices-compose-inline-input-field';
+    const labelText = document.createElement('span');
+    labelText.className = 'sr-only';
+    labelText.textContent = `선택지 ${index + 1}`;
     const input = document.createElement('input');
     input.type = 'text';
-    input.placeholder = `선택지 ${index + 1} 내용을 입력하세요.`;
+    input.placeholder = `선택지 ${index + 1}`;
     input.value = String(option.label || '').trim();
     input.dataset.noticePollOptionIndex = String(index);
-    label.appendChild(input);
+    label.append(labelText, input);
 
     const actions = document.createElement('div');
     actions.className = 'notices-poll-option-actions';
