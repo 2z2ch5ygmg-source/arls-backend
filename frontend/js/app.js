@@ -418,6 +418,20 @@ const ROUTE_FEATURE_SHIFT_SWAP = '/feature/shift-swap';
 const ROUTE_FEATURE_NOTICES = '/feature/notices';
 const ROUTE_FEATURE_AUDIT_LOGS = '/feature/audit-logs';
 const ROUTE_NOTIFICATIONS = '/notifications';
+const NOTICE_PINNED_LIMIT = 3;
+const NOTICE_NEW_BADGE_WINDOW_HOURS = 72;
+const NOTICE_VIEW_MODE_LIST = 'list';
+const NOTICE_VIEW_MODE_DETAIL = 'detail';
+const NOTICE_VIEW_MODE_COMPOSE = 'compose';
+const NOTICE_CATEGORY_OPTIONS = Object.freeze([
+  { value: 'all', label: '전체' },
+  { value: 'ops', label: '운영' },
+  { value: 'attendance', label: '출퇴근' },
+  { value: 'schedule', label: '스케줄' },
+  { value: 'hr', label: '인사' },
+  { value: 'system', label: '시스템' },
+  { value: 'event', label: '이벤트' },
+]);
 const PERF_SCREEN_HOME = 'HOME';
 const PERF_SCREEN_COMPANY_LIST = 'COMPANY_LIST';
 const PERF_SCREEN_SITE_LIST = 'SITE_LIST';
@@ -539,11 +553,6 @@ const FEATURE_SKELETON_META_BY_ROUTE = {
     title: '교대 스왑 (P2)',
     summary: '교대/대체근무 요청·승인 진입 골격입니다.',
     detail: '직원 매칭, 충돌 검증, 승인 체인은 P2 본 구현에서 연결됩니다.',
-  },
-  [ROUTE_FEATURE_NOTICES]: {
-    title: '공지 센터 (P2)',
-    summary: '공지/메시지 게시 및 읽음확인 진입 골격입니다.',
-    detail: '타겟팅(현장/조직)과 수신통계는 P2에서 연결됩니다.',
   },
   [ROUTE_FEATURE_AUDIT_LOGS]: {
     title: '감사로그 (P2)',
@@ -1213,6 +1222,19 @@ function createInitialProfileViewState() {
   };
 }
 
+function createInitialNoticesState() {
+  return {
+    category: 'all',
+    search: '',
+    mode: NOTICE_VIEW_MODE_LIST,
+    selectedNoticeId: '',
+    rows: [],
+    homeRows: [],
+    loading: false,
+    fetchedAt: 0,
+  };
+}
+
 function createInitialTaskProgressState() {
   return {
     activeId: '',
@@ -1323,6 +1345,7 @@ const state = {
   reports: createInitialReportsState(),
   hrDocs: createInitialHrDocumentsState(),
   profile: createInitialProfileViewState(),
+  notices: createInitialNoticesState(),
   reminder: createInitialReminderState(),
   devAdmin: createInitialDevAdminState(),
   integration: createInitialIntegrationState(),
@@ -8979,6 +9002,7 @@ const DRAWER_MENU_BY_ROLE = {
   EMPLOYEE: [
     { type: 'section', title: '홈' },
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
+    { id: 'notices', title: '공지사항', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
     { type: 'section', title: '업무' },
     { id: 'attendance', title: '출퇴근', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, icon: 'clock-3' },
     { id: 'requests', title: '요청', action: 'drawer-open-route', route: ROUTE_REQUESTS, icon: 'clipboard-list' },
@@ -8990,6 +9014,7 @@ const DRAWER_MENU_BY_ROLE = {
   SUPERVISOR: [
     { type: 'section', title: '홈' },
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
+    { id: 'notices', title: '공지사항', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
     { type: 'section', title: '업무' },
     {
       id: 'attendance',
@@ -9046,6 +9071,7 @@ const DRAWER_MENU_BY_ROLE = {
   BRANCH_MANAGER: [
     { type: 'section', title: '홈' },
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
+    { id: 'notices', title: '공지사항', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
     { type: 'section', title: '운영' },
     { id: 'ops', title: '운영', action: 'drawer-open-route', route: ROUTE_OPS, icon: 'activity' },
     {
@@ -9115,6 +9141,7 @@ const DRAWER_MENU_BY_ROLE = {
   DEV: [
     { type: 'section', title: '홈' },
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
+    { id: 'notices', title: '공지사항', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
     { type: 'section', title: '운영' },
     { id: 'ops', title: '운영', action: 'drawer-open-route', route: ROUTE_OPS, icon: 'activity' },
     {
@@ -18162,6 +18189,71 @@ function normalizeReportsViewTab(value = '') {
   return available[0] || 'finance';
 }
 
+function normalizeNoticeCategory(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return 'all';
+  return NOTICE_CATEGORY_OPTIONS.some((item) => item.value === normalized) ? normalized : 'all';
+}
+
+function normalizeNoticeViewMode(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'new' || normalized === 'compose' || normalized === 'edit') return NOTICE_VIEW_MODE_COMPOSE;
+  if (normalized === 'detail' || normalized === 'view') return NOTICE_VIEW_MODE_DETAIL;
+  return NOTICE_VIEW_MODE_LIST;
+}
+
+function canManageNotices() {
+  const role = normalizeRoleValue(state.user?.role || '');
+  return role === 'developer' || role === 'hq_admin';
+}
+
+function ensureNoticesState() {
+  if (!state.notices || typeof state.notices !== 'object') {
+    state.notices = createInitialNoticesState();
+  }
+  return state.notices;
+}
+
+function isNoticeFresh(publishedAt = '', now = new Date()) {
+  const parsed = publishedAt ? new Date(publishedAt) : null;
+  if (!(parsed instanceof Date) || Number.isNaN(parsed?.getTime?.())) return false;
+  return now.getTime() - parsed.getTime() <= NOTICE_NEW_BADGE_WINDOW_HOURS * 60 * 60 * 1000;
+}
+
+function buildNoticesRoute({
+  mode = ensureNoticesState().mode,
+  noticeId = ensureNoticesState().selectedNoticeId,
+  category = ensureNoticesState().category,
+} = {}) {
+  const params = new URLSearchParams();
+  const normalizedCategory = normalizeNoticeCategory(category);
+  const normalizedMode = normalizeNoticeViewMode(mode);
+  const selectedNoticeId = String(noticeId || '').trim();
+  if (normalizedCategory !== 'all') params.set('category', normalizedCategory);
+  if (normalizedMode === NOTICE_VIEW_MODE_COMPOSE && canManageNotices()) {
+    params.set('mode', 'new');
+  } else if (selectedNoticeId) {
+    params.set('notice', selectedNoticeId);
+  }
+  const query = params.toString();
+  return query ? `${ROUTE_FEATURE_NOTICES}?${query}` : ROUTE_FEATURE_NOTICES;
+}
+
+function applyNoticesRouteStateFromQuery(routePath = '', params = new URLSearchParams()) {
+  const route = normalizeRoutePath(routePath);
+  if (route !== ROUTE_FEATURE_NOTICES) return;
+  const notices = ensureNoticesState();
+  notices.category = normalizeNoticeCategory(params.get('category') || 'all');
+  notices.selectedNoticeId = String(params.get('notice') || '').trim();
+  if (String(params.get('mode') || '').trim() && canManageNotices()) {
+    notices.mode = normalizeNoticeViewMode(params.get('mode') || '');
+  } else if (notices.selectedNoticeId) {
+    notices.mode = NOTICE_VIEW_MODE_DETAIL;
+  } else {
+    notices.mode = NOTICE_VIEW_MODE_LIST;
+  }
+}
+
 function setOpsViewTab(value = '', { syncRoute = false } = {}) {
   const next = normalizeOpsViewTab(value || state.ops?.viewTab || 'overview');
   state.ops.viewTab = next;
@@ -20072,6 +20164,7 @@ function resolveRouteForView(viewName = '') {
   if (raw === 'attendance') return getAttendanceRouteWithTab();
   if (raw === 'hr') return ROUTE_HR;
   if (raw === 'leave') return `${ROUTE_REQUESTS}?section=leave`;
+  if (raw === 'notices') return buildNoticesRoute();
   if (raw === 'ops') return ROUTE_OPS;
   if (raw === 'support-status') return ROUTE_SUPPORT_STATUS;
   if (raw === 'reports') return ROUTE_REPORTS;
@@ -20094,6 +20187,7 @@ function resolveViewForRoute(routePath = '') {
   const route = normalizeRoutePath(routePath);
   if (parseMasterRoute(route)) return 'dev-console';
   if (route === ROUTE_HOME) return 'home';
+  if (route === ROUTE_FEATURE_NOTICES) return 'notices';
   if (route === ROUTE_HR) return 'hr';
   if (route === ROUTE_SUPPORT_STATUS) return 'support-status';
   if (route === ROUTE_OPS) return 'ops';
@@ -20489,6 +20583,7 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
   applyOpsRouteStateFromQuery(route, parsedParams);
   applyReportsRouteStateFromQuery(route, parsedParams);
   applyScheduleRouteStateFromQuery(route, parsedParams);
+  applyNoticesRouteStateFromQuery(route, parsedParams);
   applyProfileRouteStateFromQuery(route, parsedParams);
 
   startViewPerfSession({
@@ -20584,6 +20679,7 @@ function isViewAllowed(view, perms = getRolePermissions()) {
   if (raw === 'attendance-check') return Boolean(perms.attendanceWrite);
   if (raw === 'attendance') return Boolean(perms.attendance || perms.attendanceWrite || perms.attendanceReview);
   if (raw === 'leave') return Boolean(perms.leave || perms.leaveWrite || perms.leaveReview);
+  if (raw === 'notices') return true;
   if (raw === 'ops') return isManagerShellRole(getNavigationRole());
   if (raw === 'support-status') return isManagerShellRole(getNavigationRole());
   if (raw === 'reports') return canViewReportsCenter();
@@ -31110,7 +31206,7 @@ function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad
   if (previousView === 'schedule' && targetView !== 'schedule') {
     cancelScheduleEmployeeListChunkRender();
   }
-  ['home', 'attendance-check', 'ops', 'support-status', 'reports', 'checkin-request', 'requests', 'hr', 'attendance', 'schedule', 'profile', 'roadmap', 'dev-console', 'employees', 'org'].forEach((view) => {
+  ['home', 'attendance-check', 'ops', 'support-status', 'reports', 'checkin-request', 'requests', 'notices', 'hr', 'attendance', 'schedule', 'profile', 'roadmap', 'dev-console', 'employees', 'org'].forEach((view) => {
     const panel = $(`#view-${view}`);
     if (!panel) return;
     const isTarget = view === targetView;
@@ -31645,6 +31741,132 @@ async function loadProfileViewPresenter() {
     loadProfileIntegrationData(),
     '프로필 연동 데이터를 동기화하지 못했습니다.',
   );
+}
+
+function getNoticeCategoryLabel(category = '') {
+  const normalized = normalizeNoticeCategory(category);
+  return NOTICE_CATEGORY_OPTIONS.find((item) => item.value === normalized)?.label || '전체';
+}
+
+function renderNoticesCategoryTabs() {
+  const tabs = $('#noticesCategoryTabs');
+  if (!(tabs instanceof HTMLElement)) return;
+  const notices = ensureNoticesState();
+  tabs.innerHTML = '';
+  NOTICE_CATEGORY_OPTIONS.forEach((item) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `btn btn-secondary workspace-tab${item.value === notices.category ? ' active' : ''}`;
+    button.dataset.action = 'notices-set-category';
+    button.dataset.category = item.value;
+    button.textContent = item.label;
+    tabs.appendChild(button);
+  });
+}
+
+function renderNoticesListPanel() {
+  const notices = ensureNoticesState();
+  const list = $('#noticesList');
+  const titleEl = $('#noticesListTitle');
+  const metaEl = $('#noticesListMeta');
+  if (titleEl) {
+    titleEl.textContent = notices.category === 'all'
+      ? '전체 공지'
+      : `${getNoticeCategoryLabel(notices.category)} 공지`;
+  }
+  if (metaEl) {
+    metaEl.textContent = notices.rows.length
+      ? `등록된 공지 ${notices.rows.length}건`
+      : '아직 등록된 공지가 없습니다.';
+  }
+  if (!list) return;
+  renderEmptyState(
+    list,
+    canManageNotices()
+      ? '첫 공지를 등록하면 홈 상단 티저와 공지 목록에 바로 반영됩니다.'
+      : '새 공지가 등록되면 카테고리, 제목, 날짜 형식으로 이 목록에서 확인할 수 있습니다.',
+    canManageNotices()
+      ? `상단고정은 최대 ${NOTICE_PINNED_LIMIT}개까지 유지됩니다.`
+      : `최근 ${Math.round(NOTICE_NEW_BADGE_WINDOW_HOURS / 24)}일 이내 공지는 새 배지로 구분됩니다.`,
+  );
+}
+
+function renderNoticesDetailPanel() {
+  const notices = ensureNoticesState();
+  const titleEl = $('#noticesDetailTitle');
+  const metaEl = $('#noticesDetailMeta');
+  const bodyEl = $('#noticesDetailBody');
+  if (titleEl) titleEl.textContent = '공지 상세';
+  if (metaEl) {
+    metaEl.textContent = notices.selectedNoticeId
+      ? '선택한 공지 상세 데이터는 다음 단계에서 서버와 연결됩니다.'
+      : '공지 목록에서 항목을 선택하면 상세가 열립니다.';
+  }
+  if (bodyEl) {
+    bodyEl.innerHTML = '';
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.innerHTML = `
+      <div class="empty-state-icon" aria-hidden="true">□</div>
+      <div class="empty-state-title">상세 준비 중</div>
+      <div class="empty-state-description">카테고리, 제목, 날짜, 본문, 표, 이미지, 투표 블록은 다음 단계부터 순서대로 연결됩니다.</div>
+    `;
+    bodyEl.appendChild(empty);
+  }
+}
+
+function renderNoticesComposePanel() {
+  const notices = ensureNoticesState();
+  const hintEl = $('#noticesComposeHint');
+  const pinnedHintEl = $('#noticesComposePinnedHint');
+  const categorySelect = $('#noticesComposeCategory');
+  if (hintEl) {
+    hintEl.textContent = '작성 워크스페이스 골격만 먼저 열었습니다. 저장과 발행은 다음 단계에서 연결됩니다.';
+  }
+  if (pinnedHintEl) {
+    pinnedHintEl.textContent = `상단고정은 최대 ${NOTICE_PINNED_LIMIT}개까지 유지할 예정입니다.`;
+  }
+  if (categorySelect instanceof HTMLSelectElement && !categorySelect.options.length) {
+    NOTICE_CATEGORY_OPTIONS.filter((item) => item.value !== 'all').forEach((item) => {
+      const option = document.createElement('option');
+      option.value = item.value;
+      option.textContent = item.label;
+      categorySelect.appendChild(option);
+    });
+  }
+  if (categorySelect instanceof HTMLSelectElement) {
+    const composeCategory = notices.category === 'all' ? 'ops' : notices.category;
+    categorySelect.value = normalizeNoticeCategory(composeCategory) === 'all' ? 'ops' : normalizeNoticeCategory(composeCategory);
+  }
+}
+
+function renderNoticesView() {
+  const notices = ensureNoticesState();
+  const subtitle = $('#noticesViewSubtitle');
+  const createBtn = $('#noticesCreateBtn');
+  const listPanel = $('#noticesListPanel');
+  const detailPanel = $('#noticesDetailPanel');
+  const composePanel = $('#noticesComposePanel');
+  if (subtitle) {
+    subtitle.textContent = canManageNotices()
+      ? '운영 공지를 등록하고, 중요 공지는 상단고정으로 먼저 노출할 수 있습니다.'
+      : '운영 공지와 안내를 카테고리, 제목, 날짜 기준으로 빠르게 확인합니다.';
+  }
+  if (createBtn instanceof HTMLButtonElement) {
+    createBtn.classList.toggle('hidden', !canManageNotices());
+  }
+  renderNoticesCategoryTabs();
+  renderNoticesListPanel();
+  renderNoticesDetailPanel();
+  renderNoticesComposePanel();
+  if (listPanel) listPanel.classList.toggle('hidden', notices.mode !== NOTICE_VIEW_MODE_LIST);
+  if (detailPanel) detailPanel.classList.toggle('hidden', notices.mode !== NOTICE_VIEW_MODE_DETAIL);
+  if (composePanel) composePanel.classList.toggle('hidden', notices.mode !== NOTICE_VIEW_MODE_COMPOSE || !canManageNotices());
+}
+
+async function loadNoticesViewPresenter() {
+  renderNoticesView();
+  return ensureNoticesState();
 }
 
 async function loadRoadmapViewPresenter() {
@@ -32710,6 +32932,14 @@ const VIEW_PRESENTERS = {
     loadingMessage: '요청/기록 데이터를 불러오는 중입니다...',
     errorMessage: '요청/기록 데이터를 불러오지 못했습니다.',
     load: loadRequestsViewPresenter,
+  },
+  notices: {
+    loadingMessage: '공지사항 화면을 준비하는 중입니다...',
+    errorMessage: '공지사항 화면을 준비하지 못했습니다.',
+    onCacheHit: () => {
+      renderNoticesView();
+    },
+    load: loadNoticesViewPresenter,
   },
   hr: {
     loadingMessage: 'HR 문서 데이터를 불러오는 중입니다...',
@@ -55256,6 +55486,45 @@ function bindUiEvents() {
       runActionSafely(navigateToRoute(route), '메뉴 이동에 실패했습니다.');
       closeSheet();
       closeDrawer();
+      return;
+    }
+
+    if (action === 'notices-open-compose') {
+      if (!canManageNotices()) {
+        showToast('공지 작성 권한이 없습니다.', 'error');
+        return;
+      }
+      runActionSafely(
+        navigateToRoute(buildNoticesRoute({
+          mode: NOTICE_VIEW_MODE_COMPOSE,
+          category: ensureNoticesState().category,
+        })),
+        '공지 작성 화면을 열지 못했습니다.',
+      );
+      return;
+    }
+
+    if (action === 'notices-go-list') {
+      runActionSafely(
+        navigateToRoute(buildNoticesRoute({
+          mode: NOTICE_VIEW_MODE_LIST,
+          category: ensureNoticesState().category,
+        })),
+        '공지 목록으로 돌아가지 못했습니다.',
+      );
+      return;
+    }
+
+    if (action === 'notices-set-category') {
+      const category = normalizeNoticeCategory(actionEl.dataset.category || '');
+      const notices = ensureNoticesState();
+      notices.category = category;
+      notices.mode = NOTICE_VIEW_MODE_LIST;
+      notices.selectedNoticeId = '';
+      runActionSafely(
+        navigateToRoute(buildNoticesRoute({ mode: NOTICE_VIEW_MODE_LIST, category })),
+        '공지 카테고리를 전환하지 못했습니다.',
+      );
       return;
     }
 

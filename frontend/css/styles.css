@@ -20902,3 +20902,89 @@ button.attendance-status-special-card.active {
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-distribution-bar-plot {
   background: rgba(30, 41, 59, 0.92);
 }
+
+#view-notices {
+  display: grid;
+  gap: 18px;
+}
+
+.notices-toolbar-row {
+  align-items: center;
+}
+
+.notices-panel {
+  display: grid;
+}
+
+.notices-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.notices-section-head h3 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.12;
+}
+
+.notices-section-head .muted {
+  margin-top: 6px;
+}
+
+.notices-list-card,
+.notices-detail-card,
+.notices-compose-card,
+.notices-compose-rail {
+  border-radius: 24px;
+}
+
+.notices-list-rows {
+  min-height: 240px;
+}
+
+.notices-detail-body {
+  display: grid;
+  gap: 12px;
+  min-height: 240px;
+}
+
+.notices-compose-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.9fr) minmax(280px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.notices-compose-card textarea {
+  min-height: 280px;
+  resize: vertical;
+}
+
+.notices-compose-rail {
+  position: sticky;
+  top: 16px;
+}
+
+.notices-compose-actions {
+  display: grid;
+  gap: 10px;
+}
+
+@media (max-width: 1199px) {
+  .notices-compose-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .notices-compose-rail {
+    position: static;
+  }
+}
+
+@media (max-width: 767px) {
+  .notices-section-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
