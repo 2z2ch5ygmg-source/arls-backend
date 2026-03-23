@@ -9,10 +9,16 @@
   "lang": "ko-KR",
   "icons": [
     {
-      "src": "assets/sentrix-hr-favicon.png",
+      "src": "assets/android-chrome-192x192-boxed.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/android-chrome-512x512-boxed.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
