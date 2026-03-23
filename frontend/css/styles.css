@@ -748,7 +748,7 @@ h3 {
   position: relative;
   width: min(1180px, calc(100% - 32px));
   min-height: min(840px, calc(100svh - 32px));
-  margin: 16px auto;
+  margin: 0;
   padding: 0;
   border: none;
   border-radius: 32px;
@@ -765,13 +765,16 @@ h3 {
 }
 
 body:has(#authView:not(.hidden)) .app-topbar,
-body:has(#authView:not(.hidden)) #userBadge {
+body:has(#authView:not(.hidden)) #userBadge,
+body:has(#authView:not(.hidden)) #globalToast {
   display: none;
 }
 
 body:has(#authView:not(.hidden)) #app {
   min-height: 100svh;
   display: grid;
+  place-items: center;
+  padding: 16px;
 }
 
 .auth-shell {
