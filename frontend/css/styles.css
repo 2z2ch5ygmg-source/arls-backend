@@ -410,6 +410,19 @@ h3 {
   background: var(--ui-bg-surface);
 }
 
+.topbar-brand {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.topbar-wordmark {
+  display: block;
+  width: 156px;
+  height: 18px;
+  background: left center / contain no-repeat url('../assets/sentrix-hr-wordmark.png');
+}
+
 .topbar-actions {
   display: inline-flex;
   align-items: center;
@@ -1273,6 +1286,10 @@ body:has(#authView:not(.hidden)) #app {
 }
 
 :root[data-ui-theme='dark'] #authView .auth-wordmark {
+  background-image: url('../assets/sentrix-hr-wordmark-dark.png');
+}
+
+:root[data-ui-theme='dark'] .topbar-wordmark {
   background-image: url('../assets/sentrix-hr-wordmark-dark.png');
 }
 
@@ -12056,6 +12073,15 @@ a:hover {
     border-radius: 0;
     box-shadow: none;
     background: var(--bg-surface);
+  }
+
+  .topbar-brand {
+    flex: 0 0 auto;
+  }
+
+  .topbar-wordmark {
+    width: 172px;
+    height: 20px;
   }
 
   #shell {
