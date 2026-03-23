@@ -423,6 +423,7 @@ const NOTICE_HOME_TEASER_LIMIT = 3;
 const NOTICE_NEW_BADGE_WINDOW_HOURS = 72;
 const NOTICE_POLL_MAX_OPTIONS = 10;
 const NOTICE_POLL_MIN_OPTIONS = 2;
+const NOTICE_COMPOSE_DRAFT_STORAGE_PREFIX = 'arls_notice_compose_draft_v1';
 const NOTICE_VIEW_MODE_LIST = 'list';
 const NOTICE_VIEW_MODE_DETAIL = 'detail';
 const NOTICE_VIEW_MODE_COMPOSE = 'compose';
@@ -1249,6 +1250,9 @@ function createInitialNoticesState() {
     loadedDetailNoticeId: '',
     manageAccessHint: '',
     composeSourceNoticeId: '',
+    previewOpen: false,
+    draftSavedAt: '',
+    draftStorageMessage: '',
     composeDraft: {
       category: 'ops',
       title: '',
@@ -18390,6 +18394,94 @@ function getNoticesReadOnlyHint() {
   return '읽기 전용: 공지 조회와 투표만 가능합니다.';
 }
 
+function getNoticeComposeActorKey() {
+  const tenantId = String(state.user?.tenant_id || state.user?.tenantId || 'tenant').trim() || 'tenant';
+  const actorId = String(state.user?.id || state.user?.user_id || state.user?.username || 'user').trim() || 'user';
+  return `${tenantId}:${actorId}`;
+}
+
+function getNoticeComposeDraftStorageKey({ noticeId = '' } = {}) {
+  const scope = String(noticeId || '').trim() ? `edit:${String(noticeId || '').trim()}` : 'new';
+  return `${NOTICE_COMPOSE_DRAFT_STORAGE_PREFIX}:${getNoticeComposeActorKey()}:${scope}`;
+}
+
+function clearNoticeComposeDraftStorage({ noticeId = '' } = {}) {
+  try {
+    localStorage.removeItem(getNoticeComposeDraftStorageKey({ noticeId }));
+  } catch {
+    // no-op
+  }
+}
+
+function buildSerializableNoticeComposeDraft(draft = null) {
+  const normalizedDraft = draft && typeof draft === 'object' ? draft : {};
+  return {
+    category: normalizeNoticeCategory(normalizedDraft.category || 'ops') === 'all'
+      ? 'ops'
+      : normalizeNoticeCategory(normalizedDraft.category || 'ops'),
+    title: String(normalizedDraft.title || ''),
+    summaryText: String(normalizedDraft.summaryText || ''),
+    bodyText: String(normalizedDraft.bodyText || ''),
+    imagesEnabled: Boolean(normalizedDraft.imagesEnabled),
+    images: cloneNoticeImageDrafts(normalizedDraft.images),
+    poll: cloneNoticePollDraft(normalizedDraft.poll),
+    table: cloneNoticeTableDraft(normalizedDraft.table),
+    isPinned: Boolean(normalizedDraft.isPinned),
+  };
+}
+
+function normalizeSavedNoticeComposeDraft(raw = null, fallbackCategory = 'ops') {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  return {
+    category: normalizeNoticeCategory(source.category || fallbackCategory || 'ops') === 'all'
+      ? 'ops'
+      : normalizeNoticeCategory(source.category || fallbackCategory || 'ops'),
+    title: String(source.title || ''),
+    summaryText: String(source.summaryText || ''),
+    bodyText: String(source.bodyText || ''),
+    imagesEnabled: Boolean(source.imagesEnabled) || normalizeNoticeImageDrafts(source.images).length > 0,
+    images: cloneNoticeImageDrafts(source.images),
+    poll: cloneNoticePollDraft(source.poll),
+    table: cloneNoticeTableDraft(source.table),
+    isPinned: Boolean(source.isPinned),
+  };
+}
+
+function restoreSavedNoticeComposeDraft({ noticeId = '', fallbackCategory = 'ops' } = {}) {
+  const saved = readLocalJSON(getNoticeComposeDraftStorageKey({ noticeId }), null);
+  if (!saved || typeof saved !== 'object') return false;
+  const notices = ensureNoticesState();
+  notices.composeDraft = normalizeSavedNoticeComposeDraft(saved.draft, fallbackCategory);
+  notices.draftSavedAt = String(saved.savedAt || '').trim();
+  notices.draftStorageMessage = '임시저장된 초안을 복원했습니다.';
+  notices.previewOpen = Boolean(saved.previewOpen);
+  return true;
+}
+
+function saveNoticeComposeDraftToStorage() {
+  const notices = ensureNoticesState();
+  syncNoticeComposeDraftFromFields();
+  const noticeId = notices.mode === NOTICE_VIEW_MODE_COMPOSE ? String(notices.selectedNoticeId || '').trim() : '';
+  const savedAt = new Date().toISOString();
+  writeLocalJSON(
+    getNoticeComposeDraftStorageKey({ noticeId }),
+    {
+      version: 1,
+      savedAt,
+      previewOpen: Boolean(notices.previewOpen),
+      draft: buildSerializableNoticeComposeDraft(notices.composeDraft),
+    },
+  );
+  notices.draftSavedAt = savedAt;
+  notices.draftStorageMessage = '임시저장했습니다.';
+}
+
+function markNoticeComposeDraftDirty() {
+  const notices = ensureNoticesState();
+  if (!String(notices.draftSavedAt || '').trim()) return;
+  notices.draftStorageMessage = '저장 후 변경됨';
+}
+
 function ensureNoticesState() {
   if (!state.notices || typeof state.notices !== 'object') {
     state.notices = createInitialNoticesState();
@@ -18847,6 +18939,9 @@ function normalizeNoticeRecord(row = {}) {
 function resetNoticeComposeDraft(category = 'ops') {
   const notices = ensureNoticesState();
   notices.composeSourceNoticeId = '';
+  notices.previewOpen = false;
+  notices.draftSavedAt = '';
+  notices.draftStorageMessage = '';
   notices.composeDraft = {
     category: normalizeNoticeCategory(category) === 'all' ? 'ops' : normalizeNoticeCategory(category),
     title: '',
@@ -18864,6 +18959,9 @@ function fillNoticeComposeDraftFromRow(row = null) {
   const notices = ensureNoticesState();
   const normalizedRow = row && typeof row === 'object' ? row : null;
   notices.composeSourceNoticeId = String(normalizedRow?.id || '').trim();
+  notices.previewOpen = false;
+  notices.draftSavedAt = '';
+  notices.draftStorageMessage = '';
   notices.composeDraft = buildNoticeComposeDraftFromBlocks(normalizedRow || {});
 }
 
@@ -18947,6 +19045,7 @@ function syncNoticeComposeDraftFromFields() {
     table: nextTable,
     isPinned: pinnedInput instanceof HTMLInputElement ? Boolean(pinnedInput.checked) : Boolean(notices.composeDraft?.isPinned),
   };
+  renderNoticeComposePreview();
 }
 
 function writeNoticeComposeDraftToFields() {
@@ -19103,6 +19202,7 @@ async function appendNoticeImages(files = []) {
     imagesEnabled: existingImages.length > 0 || Boolean(notices.composeDraft?.imagesEnabled),
     images: existingImages,
   };
+  markNoticeComposeDraftDirty();
   const imagesEnabledInput = $('#noticesComposeImagesEnabled');
   if (imagesEnabledInput instanceof HTMLInputElement) {
     imagesEnabledInput.checked = existingImages.length > 0;
@@ -33156,6 +33256,84 @@ function renderNoticeDetailBody(target, item) {
   target.appendChild(prose);
 }
 
+function buildNoticeComposePreviewRecord() {
+  const notices = ensureNoticesState();
+  const draft = notices.composeDraft || {};
+  const nowIso = new Date().toISOString();
+  return normalizeNoticeRecord({
+    id: String(notices.selectedNoticeId || 'preview').trim() || 'preview',
+    category: normalizeNoticeCategory(draft.category || notices.category || 'ops'),
+    title: String(draft.title || '').trim() || '제목을 입력하면 여기에 표시됩니다.',
+    body_text: buildNoticeBodyTextFromBlocks(buildNoticeBodyBlocksFromDraft(draft)),
+    body_blocks: buildNoticeBodyBlocksFromDraft(draft),
+    is_pinned: Boolean(draft.isPinned),
+    published_at: nowIso,
+    created_at: nowIso,
+    updated_at: nowIso,
+    created_by_name: String(state.user?.name || state.user?.username || '').trim(),
+  });
+}
+
+function renderNoticeComposePreview() {
+  const notices = ensureNoticesState();
+  const card = $('#noticesComposePreviewCard');
+  const metaEl = $('#noticesComposePreviewMeta');
+  const headEl = $('#noticesComposePreviewHead');
+  const bodyEl = $('#noticesComposePreviewBody');
+  const shouldShow = Boolean(canManageNotices() && notices.previewOpen);
+  if (card instanceof HTMLElement) {
+    card.classList.toggle('hidden', !shouldShow);
+  }
+  if (!shouldShow || !(headEl instanceof HTMLElement) || !(bodyEl instanceof HTMLElement)) return;
+
+  const item = buildNoticeComposePreviewRecord();
+  headEl.innerHTML = '';
+
+  const titleRow = document.createElement('div');
+  titleRow.className = 'notices-compose-preview-title-row';
+  const titleWrap = document.createElement('div');
+  titleWrap.className = 'notices-compose-preview-title-wrap';
+  const title = document.createElement('h4');
+  title.textContent = String(item?.title || '공지 미리보기').trim() || '공지 미리보기';
+  const sub = document.createElement('p');
+  sub.className = 'muted';
+  sub.textContent = `${getNoticeCategoryLabel(item?.category || 'all')} · ${formatOpsDateTime(item?.publishedAt || '') || formatDateLabel(item?.publishedAt || '', '-') || '-'}`;
+  titleWrap.append(title, sub);
+
+  const tagRow = document.createElement('div');
+  tagRow.className = 'notices-compose-preview-tag-row';
+  createNoticeMetaTags(item, { includeFresh: false }).forEach((tag) => {
+    const tagEl = document.createElement('span');
+    tagEl.className = `notice-meta-tag notice-meta-tag-${tag.tone}`;
+    tagEl.textContent = tag.label;
+    tagRow.appendChild(tagEl);
+  });
+  const previewTag = document.createElement('span');
+  previewTag.className = 'notice-meta-tag notice-meta-tag-neutral';
+  previewTag.textContent = '미리보기';
+  tagRow.appendChild(previewTag);
+  titleRow.append(titleWrap, tagRow);
+  headEl.appendChild(titleRow);
+
+  if (metaEl) {
+    const blocks = buildNoticeBodyBlocksFromDraft(notices.composeDraft);
+    metaEl.textContent = blocks.length
+      ? '발행 전 문서형 공지가 실제 상세처럼 렌더됩니다.'
+      : '요약 안내, 본문, 이미지, 표, 투표를 채우면 미리보기에서 바로 확인할 수 있습니다.';
+  }
+
+  const blocks = buildNoticeBodyBlocksFromDraft(notices.composeDraft);
+  if (!blocks.length) {
+    renderEmptyState(
+      bodyEl,
+      '미리볼 공지 내용이 아직 없습니다.',
+      '요약 안내, 본문 문단, 이미지, 투표, 표 중 하나 이상을 채우면 실제 상세 형식으로 바로 확인할 수 있습니다.',
+    );
+    return;
+  }
+  renderNoticeDetailBody(bodyEl, item);
+}
+
 function renderNoticeComposeImageList() {
   const list = $('#noticesComposeImageList');
   const panel = $('#noticesComposeImagesPanel');
@@ -33225,6 +33403,7 @@ function renderNoticeComposeImageList() {
     item.append(preview, fields, actions);
     list.appendChild(item);
   });
+  renderNoticeComposePreview();
 }
 
 function renderNoticeComposePollEditor() {
@@ -33276,6 +33455,7 @@ function renderNoticeComposePollEditor() {
   if (addBtn instanceof HTMLButtonElement) {
     addBtn.disabled = options.length >= NOTICE_POLL_MAX_OPTIONS;
   }
+  renderNoticeComposePreview();
 }
 
 function renderNoticeComposeTableEditor() {
@@ -33330,6 +33510,7 @@ function renderNoticeComposeTableEditor() {
   });
   table.appendChild(tbody);
   grid.appendChild(table);
+  renderNoticeComposePreview();
 }
 
 function renderNoticesCategoryTabs() {
@@ -33466,9 +33647,11 @@ function renderNoticesComposePanel() {
   const notices = ensureNoticesState();
   const hintEl = $('#noticesComposeHint');
   const pinnedHintEl = $('#noticesComposePinnedHint');
+  const draftMetaEl = $('#noticesComposeDraftMeta');
   const categorySelect = $('#noticesComposeCategory');
   const titleEl = $('#noticesComposePanelTitle');
   const publishBtn = $('#noticesPublishBtn');
+  const previewBtn = $('#noticesPreviewToggleBtn');
   const editing = notices.mode === NOTICE_VIEW_MODE_COMPOSE && Boolean(String(notices.selectedNoticeId || '').trim());
   if (titleEl) {
     titleEl.textContent = editing ? '공지 수정' : '공지 작성';
@@ -33481,8 +33664,25 @@ function renderNoticesComposePanel() {
   if (pinnedHintEl) {
     pinnedHintEl.textContent = `상단고정은 최대 ${NOTICE_PINNED_LIMIT}개까지만 유지됩니다. 오래된 고정 공지는 자동으로 내려갑니다.`;
   }
+  if (draftMetaEl) {
+    const savedAtLabel = notices.draftSavedAt ? formatOpsDateTime(notices.draftSavedAt) || formatDateLabel(notices.draftSavedAt, '-') : '';
+    if (String(notices.draftStorageMessage || '').trim() && savedAtLabel) {
+      draftMetaEl.textContent = `${String(notices.draftStorageMessage || '').trim()} · 마지막 저장 ${savedAtLabel}`;
+    } else if (String(notices.draftStorageMessage || '').trim()) {
+      draftMetaEl.textContent = String(notices.draftStorageMessage || '').trim();
+    } else if (savedAtLabel) {
+      draftMetaEl.textContent = `마지막 임시저장 ${savedAtLabel}`;
+    } else if (editing) {
+      draftMetaEl.textContent = '수정 중인 공지는 임시저장해 두고 다시 이어서 작성할 수 있습니다.';
+    } else {
+      draftMetaEl.textContent = '임시저장 전입니다. 발행 전 미리보기로 문서 흐름을 먼저 확인하세요.';
+    }
+  }
   if (publishBtn instanceof HTMLButtonElement) {
     publishBtn.textContent = editing ? '수정 저장' : '발행';
+  }
+  if (previewBtn instanceof HTMLButtonElement) {
+    previewBtn.textContent = notices.previewOpen ? '미리보기 닫기' : '미리보기';
   }
   if (categorySelect instanceof HTMLSelectElement && !categorySelect.options.length) {
     NOTICE_CATEGORY_OPTIONS.filter((item) => item.value !== 'all').forEach((item) => {
@@ -33509,6 +33709,7 @@ function renderNoticesComposePanel() {
   renderNoticeComposeImageList();
   renderNoticeComposePollEditor();
   renderNoticeComposeTableEditor();
+  renderNoticeComposePreview();
 }
 
 function renderNoticesView() {
@@ -33611,12 +33812,22 @@ async function loadNoticesViewPresenter() {
         if (row) {
           fillNoticeComposeDraftFromRow(row);
         }
+        restoreSavedNoticeComposeDraft({
+          noticeId: notices.selectedNoticeId,
+          fallbackCategory: notices.selectedRow?.category || notices.category || 'ops',
+        });
       } else {
         renderNoticesView();
       }
     } catch {
       // renderNoticesView handles error state
     }
+  } else if (notices.mode === NOTICE_VIEW_MODE_COMPOSE && canManageNotices()) {
+    restoreSavedNoticeComposeDraft({
+      noticeId: '',
+      fallbackCategory: notices.category || 'ops',
+    });
+    renderNoticesView();
   } else if (notices.mode === NOTICE_VIEW_MODE_LIST) {
     try {
       await loadNoticeListState();
@@ -56457,6 +56668,7 @@ function bindUiEvents() {
       || target.id === 'noticesComposePollQuestion'
       || target.id === 'noticesComposeTableTitle'
     ) {
+      markNoticeComposeDraftDirty();
       syncNoticeComposeDraftFromFields();
       return;
     }
@@ -56478,6 +56690,7 @@ function bindUiEvents() {
         ...(notices.composeDraft || {}),
         table,
       };
+      markNoticeComposeDraftDirty();
       return;
     }
 
@@ -56491,6 +56704,7 @@ function bindUiEvents() {
           ...(notices.composeDraft || {}),
           images,
         };
+        markNoticeComposeDraftDirty();
       }
       return;
     }
@@ -56511,6 +56725,7 @@ function bindUiEvents() {
         ...(notices.composeDraft || {}),
         poll,
       };
+      markNoticeComposeDraftDirty();
       return;
     }
 
@@ -57397,6 +57612,10 @@ function bindUiEvents() {
       notices.selectedRow = null;
       notices.loadedDetailNoticeId = '';
       resetNoticeComposeDraft(notices.category);
+      restoreSavedNoticeComposeDraft({
+        noticeId: '',
+        fallbackCategory: notices.category || 'ops',
+      });
       runActionSafely(
         navigateToRoute(buildNoticesRoute({
           mode: NOTICE_VIEW_MODE_COMPOSE,
@@ -57489,6 +57708,10 @@ function bindUiEvents() {
         return;
       }
       fillNoticeComposeDraftFromRow(selected);
+      restoreSavedNoticeComposeDraft({
+        noticeId,
+        fallbackCategory: selected.category || notices.category || 'ops',
+      });
       notices.selectedNoticeId = noticeId;
       notices.mode = NOTICE_VIEW_MODE_COMPOSE;
       runActionSafely(
@@ -57500,6 +57723,30 @@ function bindUiEvents() {
         })),
         '공지 수정 화면을 열지 못했습니다.',
       );
+      return;
+    }
+
+    if (action === 'notices-save-draft') {
+      if (!canManageNotices()) {
+        showToast('공지 작성 권한이 없습니다.', 'error');
+        return;
+      }
+      syncNoticeComposeDraftFromFields();
+      saveNoticeComposeDraftToStorage();
+      renderNoticesComposePanel();
+      showToast('임시저장했습니다.', 'success', 2200);
+      return;
+    }
+
+    if (action === 'notices-toggle-preview') {
+      if (!canManageNotices()) {
+        showToast('공지 작성 권한이 없습니다.', 'error');
+        return;
+      }
+      const notices = ensureNoticesState();
+      syncNoticeComposeDraftFromFields();
+      notices.previewOpen = !Boolean(notices.previewOpen);
+      renderNoticesComposePanel();
       return;
     }
 
@@ -57524,6 +57771,7 @@ function bindUiEvents() {
         triggerEl: actionEl,
         onAccept: async () => {
           await deleteNoticeRecord(noticeId);
+          clearNoticeComposeDraftStorage({ noticeId });
           notices.selectedNoticeId = '';
           notices.selectedRow = null;
           notices.loadedDetailNoticeId = '';
@@ -57577,6 +57825,7 @@ function bindUiEvents() {
         ...(notices.composeDraft || {}),
         table,
       };
+      markNoticeComposeDraftDirty();
       writeNoticeComposeDraftToFields();
       renderNoticeComposeTableEditor();
       return;
@@ -57601,6 +57850,7 @@ function bindUiEvents() {
         imagesEnabled: images.length > 0 ? Boolean(notices.composeDraft?.imagesEnabled) : false,
         images,
       };
+      markNoticeComposeDraftDirty();
       const toggle = $('#noticesComposeImagesEnabled');
       if (toggle instanceof HTMLInputElement) {
         toggle.checked = images.length > 0;
@@ -57622,6 +57872,7 @@ function bindUiEvents() {
         ...(notices.composeDraft || {}),
         poll,
       };
+      markNoticeComposeDraftDirty();
       renderNoticeComposePollEditor();
       return;
     }
@@ -57644,6 +57895,7 @@ function bindUiEvents() {
         ...(notices.composeDraft || {}),
         poll,
       };
+      markNoticeComposeDraftDirty();
       renderNoticeComposePollEditor();
       return;
     }
@@ -57685,6 +57937,10 @@ function bindUiEvents() {
         notices.selectedRow = saved;
         notices.mode = NOTICE_VIEW_MODE_DETAIL;
         notices.loadedDetailNoticeId = saved.id;
+        clearNoticeComposeDraftStorage({ noticeId: editingNoticeId });
+        if (!editingNoticeId) {
+          clearNoticeComposeDraftStorage({ noticeId: '' });
+        }
         resetNoticeComposeDraft(saved.category || 'ops');
         notices.loadedListCategory = '';
         notices.loadedListSearch = '';
@@ -60372,6 +60628,7 @@ function bindUiEvents() {
       || target.id === 'noticesComposePollClosesAt'
       || target.id === 'noticesComposePollAllowChange'
     ) {
+      markNoticeComposeDraftDirty();
       syncNoticeComposeDraftFromFields();
       if (target.id === 'noticesComposeTableEnabled') {
         renderNoticeComposeTableEditor();

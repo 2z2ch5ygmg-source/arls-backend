@@ -21435,6 +21435,15 @@ button.attendance-status-special-card.active {
   top: 16px;
 }
 
+.notices-compose-rail-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 22px;
+  background: rgba(248, 250, 252, 0.82);
+}
+
 .notices-table-panel {
   display: grid;
   gap: 16px;
@@ -21649,6 +21658,59 @@ button.attendance-status-special-card.active {
   gap: 10px;
 }
 
+.notices-compose-actions-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.notices-compose-preview-card {
+  margin-top: 18px;
+}
+
+.notices-compose-preview-head {
+  display: grid;
+  gap: 10px;
+  padding: 20px 22px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.notices-compose-preview-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.notices-compose-preview-title-wrap {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.notices-compose-preview-title-wrap h4 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.25;
+  letter-spacing: -0.03em;
+  color: var(--ui-text-primary);
+}
+
+.notices-compose-preview-title-wrap .muted {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.notices-compose-preview-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notices-compose-preview-body {
+  padding-top: 0;
+}
+
 @media (max-width: 1199px) {
   .notices-compose-grid {
     grid-template-columns: 1fr;
@@ -21669,6 +21731,10 @@ button.attendance-status-special-card.active {
 
   .notices-table-editor-actions {
     justify-content: flex-start;
+  }
+
+  .notices-compose-actions-grid {
+    grid-template-columns: 1fr;
   }
 
   .notices-image-dropzone {
@@ -21728,5 +21794,10 @@ button.attendance-status-special-card.active {
 
   .notices-poll-option-item {
     grid-template-columns: 1fr;
+  }
+
+  .notices-compose-preview-title-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

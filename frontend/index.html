@@ -24,7 +24,7 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%23f97316'/%3E%3Ctext x='24' y='31' text-anchor='middle' font-size='22' fill='white' font-family='Arial,sans-serif'%3ERG%3C/text%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="css/styles.css?v=20260323-notices-phase6-v1" />
+    <link rel="stylesheet" href="css/styles.css?v=20260323-notices-phase7-v1" />
   </head>
   <body>
     <div id="app">
@@ -3229,12 +3229,36 @@
                     </span>
                   </label>
 
-                  <div class="notices-compose-actions">
-                    <button class="btn btn-secondary" type="button" data-action="notices-go-list">취소</button>
-                    <button id="noticesPublishBtn" class="btn btn-primary" type="button" data-action="notices-publish">발행</button>
-                  </div>
+                  <section class="notices-compose-rail-card">
+                    <div class="notices-section-head notices-subsection-head">
+                      <div>
+                        <h4>작성 흐름</h4>
+                        <p id="noticesComposeDraftMeta" class="muted">임시저장 전입니다.</p>
+                      </div>
+                    </div>
+
+                    <div class="notices-compose-actions notices-compose-actions-grid">
+                      <button id="noticesDraftSaveBtn" class="btn btn-secondary" type="button" data-action="notices-save-draft">임시저장</button>
+                      <button id="noticesPreviewToggleBtn" class="btn btn-secondary" type="button" data-action="notices-toggle-preview">미리보기</button>
+                      <button class="btn btn-secondary" type="button" data-action="notices-go-list">취소</button>
+                      <button id="noticesPublishBtn" class="btn btn-primary" type="button" data-action="notices-publish">발행</button>
+                    </div>
+                  </section>
+
                 </aside>
               </div>
+
+              <article id="noticesComposePreviewCard" class="module-card stack notices-compose-preview-card hidden">
+                <div class="notices-section-head">
+                  <div>
+                    <h3>미리보기</h3>
+                    <p id="noticesComposePreviewMeta" class="muted">발행 전 문서형 공지가 실제 상세처럼 렌더됩니다.</p>
+                  </div>
+                  <span class="status-pill status-pill-neutral">저장 전 확인</span>
+                </div>
+                <div id="noticesComposePreviewHead" class="notices-compose-preview-head"></div>
+                <div id="noticesComposePreviewBody" class="notices-detail-body notices-compose-preview-body"></div>
+              </article>
             </div>
           </section>
 
@@ -5433,7 +5457,7 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260323-notices-phase6-v1"></script>
+    <script src="config.js?v=20260323-notices-phase7-v1"></script>
     <script>
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
@@ -5686,7 +5710,7 @@
         });
 
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=20260323-notices-phase6-v1', { updateViaCache: 'none' })
+          navigator.serviceWorker.register('./sw.js?v=20260323-notices-phase7-v1', { updateViaCache: 'none' })
             .then((registration) => {
               registration.update().catch(() => {});
 
