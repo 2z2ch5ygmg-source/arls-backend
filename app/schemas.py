@@ -1826,17 +1826,22 @@ class NoticeBodyBlock(BaseModel):
 class NoticeCreateIn(BaseModel):
     category: NOTICE_CATEGORY_LITERAL
     title: str = Field(min_length=1, max_length=160)
-    body_text: str = Field(min_length=1, max_length=20000)
+    body_text: str = Field(default="", max_length=20000)
     body_blocks: list[NoticeBodyBlock] = Field(default_factory=list)
     is_pinned: bool = False
 
-    @field_validator("title", "body_text", mode="before")
+    @field_validator("title", mode="before")
     @classmethod
-    def _trim_notice_text(cls, value: Optional[str]) -> str:
+    def _trim_notice_title(cls, value: Optional[str]) -> str:
         normalized = str(value or "").strip()
         if not normalized:
             raise ValueError("value is required")
         return normalized
+
+    @field_validator("body_text", mode="before")
+    @classmethod
+    def _trim_notice_body_text(cls, value: Optional[str]) -> str:
+        return str(value or "").strip()
 
 
 class NoticeUpdateIn(NoticeCreateIn):
