@@ -419,7 +419,7 @@ const ROUTE_FEATURE_NOTICES = '/feature/notices';
 const ROUTE_FEATURE_AUDIT_LOGS = '/feature/audit-logs';
 const ROUTE_NOTIFICATIONS = '/notifications';
 const NOTICE_PINNED_LIMIT = 3;
-const NOTICE_HOME_TEASER_LIMIT = 3;
+const NOTICE_HOME_TEASER_LIMIT = 5;
 const NOTICE_NEW_BADGE_WINDOW_HOURS = 72;
 const NOTICE_POLL_MAX_OPTIONS = 10;
 const NOTICE_POLL_MIN_OPTIONS = 2;
@@ -5379,7 +5379,7 @@ function renderHomeNoticeRail() {
     }
   }
   if (notices.homeLoading) {
-    renderSkeleton(listEl, 3);
+    renderSkeleton(listEl, NOTICE_HOME_TEASER_LIMIT);
     return;
   }
   if (!rows.length) {
