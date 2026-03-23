@@ -24,7 +24,7 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%23f97316'/%3E%3Ctext x='24' y='31' text-anchor='middle' font-size='22' fill='white' font-family='Arial,sans-serif'%3ERG%3C/text%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="css/styles.css?v=20260323-notice-lines-v1" />
+    <link rel="stylesheet" href="css/styles.css?v=20260323-notices-settings-strip-v1" />
   </head>
   <body>
     <div id="app">
@@ -3026,7 +3026,6 @@
                       <p id="noticesComposeHint" class="muted">새 공지</p>
                     </div>
                     <div class="notices-compose-commandgroup notices-compose-commandgroup-right">
-                      <p id="noticesComposeDraftMeta" class="muted notices-compose-draft-meta">자동 저장 전입니다.</p>
                       <button id="noticesPublishBtn" class="btn btn-primary notices-command-publish" type="button" data-action="notices-publish">발행</button>
                     </div>
                   </div>
@@ -3038,10 +3037,19 @@
                     </label>
                     <div class="notices-compose-setting-field notices-compose-setting-field-inline">
                       <span class="notices-compose-setting-label">상단고정</span>
-                      <button type="button" id="noticesComposePinnedToggle" class="notices-switch-button" data-action="notices-toggle-pinned" aria-pressed="false">꺼짐</button>
+                      <div class="notices-compose-setting-switchrow">
+                        <button type="button" id="noticesComposePinnedToggle" class="notices-switch-button" data-action="notices-toggle-pinned" aria-pressed="false">
+                          <span class="notices-switch-track" aria-hidden="true"></span>
+                          <span class="notices-switch-copy">꺼짐</span>
+                        </button>
+                        <span class="notices-compose-setting-caption">최대 3개</span>
+                      </div>
                       <input id="noticesComposePinned" type="checkbox" hidden />
                     </div>
-                    <p id="noticesComposePinnedHint" class="muted notices-compose-setting-meta">상단고정은 최대 3개까지만 유지됩니다.</p>
+                    <div class="notices-compose-setting-field notices-compose-setting-field-status" aria-live="polite">
+                      <span class="notices-compose-setting-label">발행 상태</span>
+                      <p id="noticesComposeDraftMeta" class="notices-compose-setting-status">자동 저장 전입니다.</p>
+                    </div>
                   </section>
 
                   <div class="notices-compose-document">
@@ -5399,7 +5407,7 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260323-notice-lines-v1"></script>
+    <script src="config.js?v=20260323-notices-settings-strip-v1"></script>
     <script>
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
@@ -5652,7 +5660,7 @@
         });
 
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=20260323-notice-lines-v1', { updateViaCache: 'none' })
+          navigator.serviceWorker.register('./sw.js?v=20260323-notices-settings-strip-v1', { updateViaCache: 'none' })
             .then((registration) => {
               registration.update().catch(() => {});
 

@@ -19207,6 +19207,9 @@ function renderNoticeComposeSettingsPanel() {
   const notices = ensureNoticesState();
   const panel = $('#noticesComposeSettingsPanel');
   const pinnedToggle = $('#noticesComposePinnedToggle');
+  const pinnedToggleCopy = pinnedToggle instanceof HTMLElement
+    ? pinnedToggle.querySelector('.notices-switch-copy')
+    : null;
   const draft = notices.composeDraft && typeof notices.composeDraft === 'object'
     ? notices.composeDraft
     : {};
@@ -19217,7 +19220,11 @@ function renderNoticeComposeSettingsPanel() {
     const active = Boolean(draft.isPinned);
     pinnedToggle.classList.toggle('is-active', active);
     pinnedToggle.setAttribute('aria-pressed', active ? 'true' : 'false');
-    pinnedToggle.textContent = active ? '켜짐' : '꺼짐';
+    if (pinnedToggleCopy instanceof HTMLElement) {
+      pinnedToggleCopy.textContent = active ? '켜짐' : '꺼짐';
+    } else {
+      pinnedToggle.textContent = active ? '켜짐' : '꺼짐';
+    }
   }
 }
 
@@ -33811,7 +33818,6 @@ function renderNoticesDetailPanel() {
 function renderNoticesComposePanel() {
   const notices = ensureNoticesState();
   const hintEl = $('#noticesComposeHint');
-  const pinnedHintEl = $('#noticesComposePinnedHint');
   const categorySelect = $('#noticesComposeCategory');
   const titleEl = $('#noticesComposePanelTitle');
   const publishBtn = $('#noticesPublishBtn');
@@ -33821,9 +33827,6 @@ function renderNoticesComposePanel() {
   }
   if (hintEl) {
     hintEl.textContent = editing ? '공지 수정' : '새 공지';
-  }
-  if (pinnedHintEl) {
-    pinnedHintEl.textContent = `상단고정은 최대 ${NOTICE_PINNED_LIMIT}개까지만 유지됩니다.`;
   }
   renderNoticeComposeDraftMeta();
   if (publishBtn instanceof HTMLButtonElement) {
