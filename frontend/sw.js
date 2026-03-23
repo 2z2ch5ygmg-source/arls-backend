@@ -1,4 +1,4 @@
-const SW_VERSION = 'rg-arls-sw-v20260323-browser-brand-v3';
+const SW_VERSION = 'rg-arls-sw-v20260323-notices-phase4-v1';
 const SHELL_CACHE = `${SW_VERSION}-shell`;
 const STATIC_CACHE = `${SW_VERSION}-static`;
 const ACTIVE_CACHES = new Set([SHELL_CACHE, STATIC_CACHE]);
@@ -10,13 +10,6 @@ const SHELL_ASSETS = [
   './manifest.json',
   './css/styles.css',
   './js/app.js',
-  './assets/favicon-boxed-16x16.png',
-  './assets/favicon-boxed-32x32.png',
-  './assets/favicon-boxed-48x48.png',
-  './assets/favicon-boxed.ico',
-  './assets/apple-touch-icon-boxed.png',
-  './assets/android-chrome-192x192-boxed.png',
-  './assets/android-chrome-512x512-boxed.png',
 ];
 
 function isCacheableStatic(pathname) {
