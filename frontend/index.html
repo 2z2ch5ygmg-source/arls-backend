@@ -42,56 +42,83 @@
       <div id="userBadge" class="user-badge hidden"></div>
 
       <section id="authView" class="panel card hidden">
-        <div class="auth-brand">
-          <div class="auth-logo">RG</div>
-          <div class="auth-brand-text">
-            <h2>회사 로그인</h2>
-            <p class="muted">회사 식별값 + 계정으로 로그인하세요.</p>
+        <div class="auth-shell">
+          <div class="auth-stage-glow auth-stage-glow-left" aria-hidden="true"></div>
+          <div class="auth-stage-glow auth-stage-glow-right" aria-hidden="true"></div>
+          <div class="auth-stage-grid">
+            <div class="auth-hero">
+              <div class="auth-brand-lockup">
+                <div class="auth-logo-mark" aria-hidden="true">
+                  <svg viewBox="0 0 232 232" role="img" focusable="false">
+                    <path fill="#223348" d="M116 15 28 66v100l88 51 88-51v-42.6l-29.5-17.1v42.7L116 183l-58.5-33.8V82.8L116 49l32.7 18.9-77.6 44.8v37.2l74.6 43.1 25.7-14.8-55.4-32-14.8 8.5-29.6-17.1v-8.4l58.6-33.8 54.6 31.5V66L116 15Z"/>
+                    <path fill="#ff6b2c" d="m148.7 67.9 29.8-17.2L204 65.5v65.4l-58.4-33.7-29.7 17.2-29.7-17.2 59.4-34.3 3.1 1.8Zm-3.1 29.3 58.4 33.7v35L174.5 183l-58.6-33.8 14.8-8.6 15 8.7 28.8-16.6-43.3-25-15.3 8.8-29.7-17.2 29.7-17.2 29.7 17.1Z"/>
+                  </svg>
+                </div>
+                <div class="auth-brand-copy">
+                  <p class="auth-eyebrow">ARLS Workspace</p>
+                  <h1>로그인</h1>
+                  <p class="auth-intro">테넌트 코드와 계정 정보를 입력해 근무 운영 화면으로 바로 이동하세요.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="auth-form-panel">
+              <div class="auth-panel-head">
+                <h2>계정 인증</h2>
+                <p>필수 항목 3개를 모두 입력해야 로그인할 수 있습니다.</p>
+              </div>
+
+              <form id="loginForm" class="stack auth-form" novalidate>
+                <label class="input-field auth-input-field" for="tenantCode">
+                  <span class="auth-field-label">테넌트 코드</span>
+                  <input id="tenantCode" list="recentTenantList" autocomplete="organization" placeholder="예: MASTER 또는 SRS_KOREA" required />
+                  <datalist id="recentTenantList"></datalist>
+                  <span id="tenantHelper" class="input-helper">접속할 회사의 코드 또는 MASTER를 입력하세요.</span>
+                  <span id="tenantError" class="input-error hidden"></span>
+                </label>
+
+                <label class="input-field auth-input-field" for="username">
+                  <span class="auth-field-label">아이디</span>
+                  <input id="username" autocomplete="username" placeholder="로그인 아이디" required disabled />
+                  <span id="usernameError" class="input-error hidden"></span>
+                </label>
+
+                <label class="input-field auth-input-field" for="password">
+                  <span class="auth-field-label">비밀번호</span>
+                  <div class="password-wrap auth-password-wrap">
+                    <input id="password" type="password" autocomplete="current-password" placeholder="비밀번호" required disabled />
+                    <button id="togglePasswordBtn" class="btn btn-secondary password-toggle" type="button" data-action="toggle-password-visibility" aria-label="비밀번호 표시 전환">보기</button>
+                  </div>
+                  <span id="passwordError" class="input-error hidden"></span>
+                </label>
+
+                <div class="auth-options">
+                  <label class="choice-row" for="rememberTenant">
+                    <input id="rememberTenant" type="checkbox" checked />
+                    테넌트 코드 기억
+                  </label>
+                  <label class="choice-row" for="rememberId">
+                    <input id="rememberId" type="checkbox" checked />
+                    아이디 기억
+                  </label>
+                  <label class="choice-row" for="rememberPassword">
+                    <input id="rememberPassword" type="checkbox" />
+                    비밀번호 저장
+                  </label>
+                  <label class="choice-row" for="superAdminLoginMode">
+                    <input id="superAdminLoginMode" type="checkbox" />
+                    슈퍼어드민 로그인 (MASTER)
+                  </label>
+                  <p id="rememberPasswordHint" class="input-helper">보안 저장소를 사용할 수 있으면 키체인에 안전하게 저장합니다.</p>
+                </div>
+
+                <button id="loginSubmitBtn" class="btn btn-primary auth-submit-btn" type="submit" disabled>로그인</button>
+              </form>
+
+              <p id="authMessage" class="muted"></p>
+            </div>
           </div>
         </div>
-        <form id="loginForm" class="stack" novalidate>
-          <label class="input-field" for="tenantCode">
-            회사
-            <input id="tenantCode" list="recentTenantList" autocomplete="organization" required />
-            <datalist id="recentTenantList"></datalist>
-            <span id="tenantHelper" class="input-helper">예: MASTER 또는 회사 식별값</span>
-            <span id="tenantError" class="input-error hidden"></span>
-          </label>
-          <label class="input-field" for="username">
-            아이디
-            <input id="username" autocomplete="username" required disabled />
-            <span id="usernameError" class="input-error hidden"></span>
-          </label>
-          <label class="input-field" for="password">
-            비밀번호
-            <div class="password-wrap">
-              <input id="password" type="password" autocomplete="current-password" required disabled />
-              <button id="togglePasswordBtn" class="btn btn-secondary password-toggle" type="button" data-action="toggle-password-visibility">보기</button>
-            </div>
-            <span id="passwordError" class="input-error hidden"></span>
-          </label>
-          <div class="auth-options">
-            <label class="choice-row" for="rememberTenant">
-              <input id="rememberTenant" type="checkbox" checked />
-              회사 기억
-            </label>
-            <label class="choice-row" for="superAdminLoginMode">
-              <input id="superAdminLoginMode" type="checkbox" />
-              슈퍼어드민 로그인 (MASTER)
-            </label>
-            <label class="choice-row" for="rememberId">
-              <input id="rememberId" type="checkbox" checked />
-              아이디 기억
-            </label>
-            <label class="choice-row" for="rememberPassword">
-              <input id="rememberPassword" type="checkbox" />
-              비밀번호(키체인) 저장
-            </label>
-            <p id="rememberPasswordHint" class="input-helper">보안 저장소를 사용할 수 있으면 키체인에 저장합니다.</p>
-          </div>
-          <button id="loginSubmitBtn" class="btn btn-primary" type="submit" disabled>로그인</button>
-        </form>
-        <p id="authMessage" class="muted"></p>
       </section>
 
       <section id="shell" class="hidden">

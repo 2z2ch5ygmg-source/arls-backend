@@ -17937,6 +17937,7 @@ function refreshLoginFieldAvailability() {
   const usernameEl = $('#username');
   const passwordEl = $('#password');
   const togglePasswordBtn = $('#togglePasswordBtn');
+  const submitBtn = $('#loginSubmitBtn');
   const rememberTenant = $('#rememberTenant');
   const rememberId = $('#rememberId');
   const rememberPassword = $('#rememberPassword');
@@ -17950,6 +17951,7 @@ function refreshLoginFieldAvailability() {
   if (usernameEl) usernameEl.disabled = !allowCredentials;
   if (passwordEl) passwordEl.disabled = !allowCredentials;
   if (togglePasswordBtn) togglePasswordBtn.disabled = !allowCredentials;
+  if (submitBtn && !allowCredentials) submitBtn.disabled = true;
   if (rememberTenant) rememberTenant.disabled = lockAll;
   if (rememberId) rememberId.disabled = lockAll;
   if (rememberPassword) rememberPassword.disabled = lockAll;

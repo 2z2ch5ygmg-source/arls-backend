@@ -744,6 +744,317 @@ h3 {
   white-space: pre-wrap;
 }
 
+#authView {
+  position: relative;
+  width: min(1180px, calc(100% - 32px));
+  min-height: min(840px, calc(100svh - 32px));
+  margin: 16px auto;
+  padding: 0;
+  border: none;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 107, 44, 0.16), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(34, 51, 72, 0.12), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 248, 251, 0.92));
+  box-shadow: 0 30px 80px rgba(24, 39, 75, 0.12);
+  overflow: hidden;
+}
+
+#authView.hidden {
+  display: none;
+}
+
+body:has(#authView:not(.hidden)) .app-topbar,
+body:has(#authView:not(.hidden)) #userBadge {
+  display: none;
+}
+
+body:has(#authView:not(.hidden)) #app {
+  min-height: 100svh;
+  display: grid;
+}
+
+.auth-shell {
+  position: relative;
+  min-height: inherit;
+  padding: clamp(24px, 4vw, 40px);
+}
+
+.auth-stage-grid {
+  position: relative;
+  z-index: 1;
+  min-height: calc(min(840px, calc(100svh - 32px)) - (clamp(24px, 4vw, 40px) * 2));
+  display: grid;
+  grid-template-columns: minmax(300px, 1.05fr) minmax(380px, 0.95fr);
+  align-items: center;
+  gap: clamp(28px, 4vw, 56px);
+}
+
+.auth-stage-glow {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(10px);
+  pointer-events: none;
+}
+
+.auth-stage-glow-left {
+  inset: 56px auto auto -48px;
+  width: 220px;
+  height: 220px;
+  background: rgba(255, 107, 44, 0.14);
+}
+
+.auth-stage-glow-right {
+  inset: auto -64px 44px auto;
+  width: 260px;
+  height: 260px;
+  background: rgba(34, 51, 72, 0.12);
+}
+
+.auth-hero {
+  display: grid;
+  align-items: center;
+  justify-items: center;
+  min-height: 100%;
+}
+
+.auth-brand-lockup {
+  display: grid;
+  justify-items: center;
+  gap: 26px;
+  text-align: center;
+  animation: auth-fade-up 0.55s ease;
+}
+
+.auth-logo-mark {
+  width: clamp(148px, 19vw, 232px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  animation: auth-logo-drift 6s ease-in-out infinite;
+}
+
+.auth-logo-mark svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter: drop-shadow(0 22px 34px rgba(34, 51, 72, 0.11));
+}
+
+.auth-brand-copy {
+  display: grid;
+  gap: 10px;
+  max-width: 420px;
+}
+
+.auth-eyebrow {
+  margin: 0;
+  color: #ff6b2c;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.auth-brand-copy h1 {
+  margin: 0;
+  color: #1f3146;
+  font-size: clamp(34px, 4.2vw, 56px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.auth-intro {
+  margin: 0;
+  color: #5d6878;
+  font-size: clamp(15px, 1.55vw, 18px);
+  line-height: 1.7;
+}
+
+.auth-form-panel {
+  justify-self: stretch;
+  width: min(100%, 470px);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(215, 221, 229, 0.8);
+  border-radius: 28px;
+  padding: clamp(24px, 3vw, 34px);
+  box-shadow:
+    0 28px 56px rgba(20, 34, 61, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(16px);
+  animation: auth-fade-up 0.65s ease;
+}
+
+.auth-panel-head {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.auth-panel-head h2 {
+  margin: 0;
+  color: #1f2937;
+  font-size: clamp(28px, 2.5vw, 34px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.auth-panel-head p {
+  margin: 0;
+  color: #7a8594;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.auth-form {
+  gap: 16px;
+}
+
+#authView .auth-input-field {
+  gap: 8px;
+}
+
+#authView .auth-field-label {
+  color: #223348;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+}
+
+#authView .auth-input-field input {
+  min-height: 56px;
+  padding: 0 16px;
+  border: 1px solid #d8dee8;
+  border-radius: 16px;
+  background: rgba(245, 247, 251, 0.95);
+  color: #1f2937;
+  font-size: 15px;
+  line-height: 20px;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+#authView .auth-input-field input::placeholder {
+  color: #a0aaba;
+}
+
+#authView .auth-input-field input:hover:not(:disabled) {
+  border-color: #c7d0dd;
+  background: #f8fafc;
+}
+
+#authView .auth-input-field input:focus {
+  border-color: rgba(255, 107, 44, 0.7);
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(255, 107, 44, 0.12);
+  transform: translateY(-1px);
+}
+
+#authView .auth-input-field input:disabled {
+  border-color: #e2e8f0;
+  background: #edf1f6;
+  color: #94a3b8;
+}
+
+#authView .input-helper {
+  font-size: 12px;
+  line-height: 18px;
+  color: #7a8594;
+}
+
+#authView .input-error {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+#authView .auth-password-wrap {
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: stretch;
+}
+
+#authView .password-toggle {
+  min-width: 72px;
+  min-height: 56px;
+  border-radius: 16px;
+  border-color: #d8dee8;
+  background: #ffffff;
+  color: #425065;
+}
+
+#authView .password-toggle:hover:not(:disabled) {
+  background: #f7fafc;
+  border-color: #c5cfdb;
+}
+
+#authView .auth-options {
+  margin-top: 6px;
+  padding: 14px 16px;
+  border: 1px solid #e6ebf2;
+  border-radius: 20px;
+  background: rgba(248, 250, 252, 0.96);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+#authView .choice-row {
+  min-height: 38px;
+  font-size: 13px;
+  line-height: 18px;
+  color: #344256;
+}
+
+#authView .choice-row input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: #ff6b2c;
+}
+
+#authView #rememberPasswordHint {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+}
+
+#authView .auth-submit-btn {
+  min-height: 58px;
+  border: none;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #ff6b2c, #ff8b3d);
+  box-shadow: 0 18px 30px rgba(255, 107, 44, 0.24);
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+#authView .auth-submit-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ff5c18, #ff7d22);
+  transform: translateY(-1px);
+}
+
+#authView .auth-submit-btn:disabled {
+  background: #cfd7e3;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+#authView .auth-form:has(#username:disabled) .auth-submit-btn {
+  background: #cfd7e3;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+
+#authView #authMessage {
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 19px;
+}
+
 .auth-brand {
   display: flex;
   align-items: center;
@@ -781,6 +1092,200 @@ h3 {
 #authMessage.auth-error {
   color: var(--state-error);
   font-weight: 600;
+}
+
+@keyframes auth-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes auth-logo-drift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+:root[data-ui-theme='dark'] #authView {
+  background:
+    radial-gradient(circle at top left, rgba(255, 122, 26, 0.18), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(118, 138, 161, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(30, 36, 44, 0.98), rgba(24, 29, 36, 0.95));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.34);
+}
+
+:root[data-ui-theme='dark'] #authView .auth-brand-copy h1,
+:root[data-ui-theme='dark'] #authView .auth-field-label,
+:root[data-ui-theme='dark'] #authView .auth-panel-head h2 {
+  color: #f4f7fb;
+}
+
+:root[data-ui-theme='dark'] #authView .auth-intro,
+:root[data-ui-theme='dark'] #authView .auth-panel-head p,
+:root[data-ui-theme='dark'] #authView .input-helper,
+:root[data-ui-theme='dark'] #authView .choice-row {
+  color: #b1bccb;
+}
+
+:root[data-ui-theme='dark'] #authView .auth-form-panel {
+  background: rgba(29, 35, 44, 0.88);
+  border-color: rgba(84, 96, 112, 0.78);
+  box-shadow:
+    0 28px 56px rgba(0, 0, 0, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+:root[data-ui-theme='dark'] #authView .auth-input-field input,
+:root[data-ui-theme='dark'] #authView .password-toggle,
+:root[data-ui-theme='dark'] #authView .auth-options {
+  background: rgba(34, 42, 53, 0.96);
+  border-color: #445063;
+  color: #eef2f7;
+}
+
+:root[data-ui-theme='dark'] #authView .auth-input-field input::placeholder {
+  color: #8894a7;
+}
+
+:root[data-ui-theme='dark'] #authView .auth-input-field input:disabled {
+  background: #2a3340;
+  color: #7f8a9a;
+}
+
+@media (max-width: 960px) {
+  #authView {
+    width: min(100%, calc(100% - 20px));
+    min-height: calc(100svh - 20px);
+    margin: 10px auto;
+    border-radius: 28px;
+  }
+
+  .auth-shell {
+    padding: 22px 18px;
+  }
+
+  .auth-stage-grid {
+    min-height: auto;
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+
+  .auth-brand-lockup {
+    gap: 18px;
+  }
+
+  .auth-brand-copy {
+    max-width: 100%;
+  }
+
+  .auth-form-panel {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+  #authView {
+    width: min(100%, calc(100% - 12px));
+    min-height: calc(100svh - 12px);
+    margin: 6px auto;
+    border-radius: 24px;
+  }
+
+  .auth-shell {
+    padding: 12px 12px 14px;
+  }
+
+  .auth-stage-grid {
+    gap: 14px;
+  }
+
+  .auth-logo-mark {
+    width: 104px;
+  }
+
+  .auth-brand-lockup {
+    gap: 12px;
+  }
+
+  .auth-eyebrow {
+    font-size: 11px;
+    line-height: 14px;
+    letter-spacing: 0.14em;
+  }
+
+  .auth-brand-copy {
+    gap: 6px;
+  }
+
+  .auth-brand-copy h1 {
+    font-size: 44px;
+  }
+
+  .auth-intro {
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .auth-panel-head {
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+
+  .auth-panel-head h2 {
+    font-size: 24px;
+  }
+
+  .auth-panel-head p {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .auth-form-panel {
+    padding: 20px 18px;
+  }
+
+  #authView .auth-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 12px 14px;
+    gap: 8px 10px;
+  }
+
+  #authView .auth-password-wrap {
+    grid-template-columns: 1fr;
+  }
+
+  #authView .password-toggle,
+  #authView .auth-submit-btn,
+  #authView .auth-input-field input {
+    min-height: 50px;
+  }
+
+  #authView .choice-row {
+    min-height: 32px;
+    font-size: 12px;
+    line-height: 16px;
+  }
+
+  #authView #rememberPasswordHint {
+    font-size: 11px;
+    line-height: 16px;
+  }
+}
+
+@media (max-width: 430px) {
+  #authView .auth-options {
+    grid-template-columns: 1fr;
+  }
 }
 
 .panel,
