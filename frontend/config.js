@@ -1,5 +1,5 @@
 window.ENV_API_BASE = window.ENV_API_BASE || 'https://rg-arls-backend.azurewebsites.net';
-window.ENV_BUILD_ID = window.ENV_BUILD_ID || '20260323-notice-title-ime-fix-v1';
+window.ENV_BUILD_ID = window.ENV_BUILD_ID || '20260323-notices-phase3-toolbar-v1';
 window.ENV_GOOGLE_MAPS_API_KEY = window.ENV_GOOGLE_MAPS_API_KEY || '';
 
 if (typeof window.__RG_ARLS_HANDLE_TAB_CLICK__ !== 'function') {

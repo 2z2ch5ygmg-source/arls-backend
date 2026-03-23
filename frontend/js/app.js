@@ -17872,42 +17872,15 @@ function setTenantHelper(message, level = 'info') {
 }
 
 function isSuperAdminLoginModeEnabled() {
-  const toggle = $('#superAdminLoginMode');
-  return Boolean(toggle?.checked || state.superAdminLoginMode);
+  return false;
 }
 
 function getLoginTenantCode() {
-  const tenantRaw = String($('#tenantCode')?.value || '').trim();
-  if (isSuperAdminLoginModeEnabled()) return 'MASTER';
-  return tenantRaw;
+  return String($('#tenantCode')?.value || '').trim();
 }
 
 function applySuperAdminLoginMode(enabled, { fromPreference = false } = {}) {
-  const tenantEl = $('#tenantCode');
-  const toggleEl = $('#superAdminLoginMode');
-  if (!tenantEl || !toggleEl) return;
-
-  const nextEnabled = Boolean(enabled);
-  toggleEl.checked = nextEnabled;
-  state.superAdminLoginMode = nextEnabled;
-
-  if (nextEnabled) {
-    const currentTenant = String(tenantEl.value || '').trim();
-    if (currentTenant && currentTenant.toUpperCase() !== 'MASTER') {
-      state.loginTenantBeforeSuperAdmin = currentTenant;
-    }
-    tenantEl.value = 'MASTER';
-    setTenantHelper('슈퍼어드민 로그인 모드: MASTER 회사로 로그인합니다.', 'info');
-  } else if (String(tenantEl.value || '').trim().toUpperCase() === 'MASTER') {
-    tenantEl.value = state.loginTenantBeforeSuperAdmin || '';
-    if (!fromPreference) {
-      setTenantHelper('일반 회사 로그인 모드로 전환되었습니다.', 'info');
-    }
-  }
-
-  clearLoginFieldErrors();
-  queueTenantValidation({ immediate: true });
-  refreshLoginFieldAvailability();
+  state.superAdminLoginMode = false;
 }
 
 function updateLoginSubmitState() {
@@ -17933,28 +17906,24 @@ function updateLoginSubmitState() {
 
 function refreshLoginFieldAvailability() {
   const tenantEl = $('#tenantCode');
-  const superAdminToggle = $('#superAdminLoginMode');
   const usernameEl = $('#username');
   const passwordEl = $('#password');
   const togglePasswordBtn = $('#togglePasswordBtn');
   const submitBtn = $('#loginSubmitBtn');
   const rememberTenant = $('#rememberTenant');
   const rememberId = $('#rememberId');
-  const rememberPassword = $('#rememberPassword');
 
   const lockAll = state.submitLoginBusy || state.loadingLoginPrefs;
   const allowCredentials = !lockAll && state.tenantValid;
-  const lockTenantInput = lockAll || isSuperAdminLoginModeEnabled();
+  const lockTenantInput = lockAll;
 
   if (tenantEl) tenantEl.disabled = lockTenantInput;
-  if (superAdminToggle) superAdminToggle.disabled = lockAll;
   if (usernameEl) usernameEl.disabled = !allowCredentials;
   if (passwordEl) passwordEl.disabled = !allowCredentials;
   if (togglePasswordBtn) togglePasswordBtn.disabled = !allowCredentials;
   if (submitBtn && !allowCredentials) submitBtn.disabled = true;
   if (rememberTenant) rememberTenant.disabled = lockAll;
   if (rememberId) rememberId.disabled = lockAll;
-  if (rememberPassword) rememberPassword.disabled = lockAll;
 
   updateLoginSubmitState();
 }
@@ -18119,16 +18088,14 @@ function togglePasswordVisibility() {
 function getLoginPreferenceSnapshot() {
   const rememberTenant = Boolean($('#rememberTenant')?.checked);
   const rememberId = Boolean($('#rememberId')?.checked);
-  const rememberPassword = Boolean($('#rememberPassword')?.checked);
-  const superAdminLogin = isSuperAdminLoginModeEnabled();
   const tenantCode = getLoginTenantCode();
   const username = $('#username')?.value.trim() || '';
 
   return {
     rememberTenant,
     rememberId,
-    rememberPassword,
-    superAdminLogin,
+    rememberPassword: false,
+    superAdminLogin: false,
     tenantCode: rememberTenant ? tenantCode : '',
     username: rememberId ? username : '',
   };
@@ -18137,78 +18104,28 @@ function getLoginPreferenceSnapshot() {
 async function saveLoginPreferences() {
   const pref = getLoginPreferenceSnapshot();
   writeLocalJSON(LOGIN_PREF_KEY, pref);
-
-  if (!pref.rememberPassword) {
-    await securePasswordRemove();
-    return;
-  }
-
-  if (!state.securePasswordAvailable) {
-    $('#rememberPassword').checked = false;
-    writeLocalJSON(LOGIN_PREF_KEY, { ...pref, rememberPassword: false });
-    showToast('키체인 저장을 사용할 수 없어 비밀번호는 저장되지 않습니다.', 'info', 3000);
-    return;
-  }
-
-  const password = $('#password')?.value || '';
-  if (!password) {
-    await securePasswordRemove();
-    return;
-  }
-
-  await securePasswordSet({
-    tenantCode: getLoginTenantCode(),
-    username: $('#username')?.value.trim() || '',
-    password,
-  });
+  await securePasswordRemove();
 }
 
 async function loadLoginPreferences() {
   state.loadingLoginPrefs = true;
   refreshLoginFieldAvailability();
-  refreshSecurePasswordAvailability();
   renderRecentTenants();
 
   const pref = readLocalJSON(LOGIN_PREF_KEY, {});
   const rememberTenant = pref?.rememberTenant !== false;
   const rememberId = pref?.rememberId !== false;
-  const rememberPassword = Boolean(pref?.rememberPassword);
   const preferredTenantCodeRaw = String(pref?.tenantCode || '').trim();
-  const preferredTenantCode = preferredTenantCodeRaw.toUpperCase();
-  let superAdminLogin = Boolean(pref?.superAdminLogin);
-  if (superAdminLogin && preferredTenantCode !== 'MASTER') {
-    superAdminLogin = false;
-  }
 
   if ($('#rememberTenant')) $('#rememberTenant').checked = rememberTenant;
   if ($('#rememberId')) $('#rememberId').checked = rememberId;
-  if ($('#rememberPassword')) $('#rememberPassword').checked = rememberPassword;
-  applySuperAdminLoginMode(superAdminLogin, { fromPreference: true });
 
   if (rememberTenant && preferredTenantCodeRaw && $('#tenantCode')) {
-    if (superAdminLogin) {
-      $('#tenantCode').value = 'MASTER';
-    } else {
-      $('#tenantCode').value = preferredTenantCodeRaw;
-      state.loginTenantBeforeSuperAdmin = preferredTenantCodeRaw;
-    }
+    $('#tenantCode').value = preferredTenantCodeRaw;
   }
 
   if (rememberId && pref?.username && $('#username')) {
     $('#username').value = pref.username;
-  }
-
-  if (rememberPassword && state.securePasswordAvailable) {
-    const secureData = await securePasswordGet();
-    if (secureData?.password && $('#password')) {
-      const tenantCode = getLoginTenantCode();
-      const username = $('#username')?.value.trim() || '';
-      const tenantMatch = !tenantCode || secureData.tenantCode === tenantCode;
-      const userMatch = !username || secureData.username === username;
-      if (tenantMatch && userMatch) {
-        $('#password').value = secureData.password;
-      }
-    }
   }
 
   state.loadingLoginPrefs = false;
@@ -19169,6 +19086,37 @@ function writeNoticeComposeDraftToFields() {
   if (pinnedInput instanceof HTMLInputElement) {
     pinnedInput.checked = Boolean(draft.isPinned);
   }
+}
+
+function focusNoticeComposeBodyInput({ placeAtEnd = false } = {}) {
+  const bodyInput = $('#noticesComposeBody');
+  if (!(bodyInput instanceof HTMLTextAreaElement)) return null;
+  bodyInput.focus({ preventScroll: false });
+  if (placeAtEnd) {
+    const end = String(bodyInput.value || '').length;
+    if (typeof bodyInput.setSelectionRange === 'function') {
+      bodyInput.setSelectionRange(end, end);
+    }
+  }
+  return bodyInput;
+}
+
+function insertNoticeComposeBodySnippet(snippet = '', { caretOffset = null } = {}) {
+  const bodyInput = focusNoticeComposeBodyInput();
+  if (!(bodyInput instanceof HTMLTextAreaElement)) return false;
+  const text = String(snippet || '');
+  const start = Number.isInteger(bodyInput.selectionStart) ? bodyInput.selectionStart : String(bodyInput.value || '').length;
+  const end = Number.isInteger(bodyInput.selectionEnd) ? bodyInput.selectionEnd : start;
+  const current = String(bodyInput.value || '');
+  const nextValue = `${current.slice(0, start)}${text}${current.slice(end)}`;
+  bodyInput.value = nextValue;
+  const nextCaret = Number.isInteger(caretOffset) ? start + caretOffset : start + text.length;
+  if (typeof bodyInput.setSelectionRange === 'function') {
+    bodyInput.setSelectionRange(nextCaret, nextCaret);
+  }
+  syncNoticeComposeDraftFromFields();
+  markNoticeComposeDraftDirty();
+  return true;
 }
 
 function setNoticeComposeCheckboxValue(inputId = '', checked = false) {
@@ -33519,22 +33467,16 @@ function renderNoticeComposeImageList() {
   const enabled = images.length > 0 || (imageToggle instanceof HTMLInputElement && imageToggle.checked);
   if (block instanceof HTMLElement) {
     block.classList.toggle('hidden', !enabled);
+    block.classList.toggle('is-empty', enabled && images.length === 0);
   }
   if (!(list instanceof HTMLElement)) return;
   list.innerHTML = '';
   if (!enabled) {
     renderNoticeComposeToolbar();
-    renderNoticeComposePreview();
     return;
   }
   if (!images.length) {
-    renderEmptyState(
-      list,
-      '이미지를 추가해 주세요.',
-      '클릭, 드래그 앤 드롭, 붙여넣기로 이미지를 넣으면 문서 안에 바로 이어집니다.',
-    );
     renderNoticeComposeToolbar();
-    renderNoticeComposePreview();
     return;
   }
   images.forEach((image, index) => {
@@ -33576,7 +33518,7 @@ function renderNoticeComposeImageList() {
     actions.className = 'notices-image-actions';
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
-    removeBtn.className = 'btn btn-secondary';
+    removeBtn.className = 'notices-editor-action';
     removeBtn.dataset.action = 'notices-image-remove';
     removeBtn.dataset.noticeImageIndex = String(index);
     removeBtn.textContent = '제거';
@@ -33586,7 +33528,6 @@ function renderNoticeComposeImageList() {
     list.appendChild(item);
   });
   renderNoticeComposeToolbar();
-  renderNoticeComposePreview();
 }
 
 function renderNoticeComposePollEditor() {
@@ -33602,7 +33543,6 @@ function renderNoticeComposePollEditor() {
   renderNoticeComposePollControls();
   if (!pollDraft.enabled) {
     renderNoticeComposeToolbar();
-    renderNoticeComposePreview();
     return;
   }
 
@@ -33628,7 +33568,7 @@ function renderNoticeComposePollEditor() {
     if (options.length > NOTICE_POLL_MIN_OPTIONS) {
       const removeBtn = document.createElement('button');
       removeBtn.type = 'button';
-      removeBtn.className = 'btn btn-secondary';
+      removeBtn.className = 'notices-editor-action';
       removeBtn.dataset.action = 'notices-poll-remove-option';
       removeBtn.dataset.noticePollOptionIndex = String(index);
       removeBtn.textContent = '제거';
@@ -33644,7 +33584,6 @@ function renderNoticeComposePollEditor() {
     addBtn.disabled = options.length >= NOTICE_POLL_MAX_OPTIONS;
   }
   renderNoticeComposeToolbar();
-  renderNoticeComposePreview();
 }
 
 function renderNoticeComposeTableEditor() {
@@ -33659,7 +33598,6 @@ function renderNoticeComposeTableEditor() {
   grid.innerHTML = '';
   if (!tableDraft.enabled) {
     renderNoticeComposeToolbar();
-    renderNoticeComposePreview();
     return;
   }
 
@@ -33704,7 +33642,6 @@ function renderNoticeComposeTableEditor() {
   table.appendChild(tbody);
   grid.appendChild(table);
   renderNoticeComposeToolbar();
-  renderNoticeComposePreview();
 }
 
 function renderNoticesCategoryTabs() {
@@ -57919,6 +57856,22 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'notices-insert-divider') {
+      const inserted = insertNoticeComposeBodySnippet('\n\n---\n\n', { caretOffset: 6 });
+      if (inserted) {
+        showToast('구분선을 본문에 추가했습니다.', 'success', 1800);
+      }
+      return;
+    }
+
+    if (action === 'notices-insert-link') {
+      const inserted = insertNoticeComposeBodySnippet('[링크 제목](https://)', { caretOffset: 6 });
+      if (inserted) {
+        showToast('링크 틀을 본문에 추가했습니다.', 'success', 1800);
+      }
+      return;
+    }
+
     if (action === 'notices-remove-image-block') {
       setNoticeComposeBlockEnabled('image', false, { clear: true });
       markNoticeComposeDraftDirty();
@@ -58118,11 +58071,11 @@ function bindUiEvents() {
       images.splice(index, 1);
       notices.composeDraft = {
         ...(notices.composeDraft || {}),
-        imagesEnabled: images.length > 0 ? Boolean(notices.composeDraft?.imagesEnabled) : false,
+        imagesEnabled: Boolean(notices.composeDraft?.imagesEnabled) || images.length > 0,
         images,
       };
       markNoticeComposeDraftDirty();
-      setNoticeComposeCheckboxValue('noticesComposeImagesEnabled', images.length > 0);
+      setNoticeComposeCheckboxValue('noticesComposeImagesEnabled', Boolean(notices.composeDraft?.imagesEnabled) || images.length > 0);
       renderNoticeComposeImageList();
       return;
     }
@@ -61783,21 +61736,6 @@ function bindUiEvents() {
 
     if (target.id === 'tenantCode') {
       queueTenantValidation({ immediate: true });
-      return;
-    }
-
-    if (target.id === 'rememberPassword') {
-      const checkbox = $('#rememberPassword');
-      if (checkbox?.checked && !state.securePasswordAvailable) {
-        checkbox.checked = false;
-        showToast('현재 환경에서는 키체인 저장을 지원하지 않습니다.', 'info', 2600);
-      }
-      updateLoginSubmitState();
-      return;
-    }
-
-    if (target.id === 'superAdminLoginMode') {
-      applySuperAdminLoginMode(target instanceof HTMLInputElement ? target.checked : false);
       return;
     }
 
