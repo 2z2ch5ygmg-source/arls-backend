@@ -18975,29 +18975,19 @@ function syncNoticeComposeDraftFromFields() {
   const summaryInput = $('#noticesComposeSummary');
   const bodyInput = $('#noticesComposeBody');
   const pollQuestionInput = $('#noticesComposePollQuestion');
-  const pollEnabledInput = $('#noticesComposePollEnabled');
   const pollSelectionModeInput = $('#noticesComposePollSelectionMode');
-  const pollAnonymousInput = $('#noticesComposePollAnonymous');
   const pollVisibilityInput = $('#noticesComposePollVisibility');
   const pollClosesAtInput = $('#noticesComposePollClosesAt');
-  const pollAllowChangeInput = $('#noticesComposePollAllowChange');
   const tableTitleInput = $('#noticesComposeTableTitle');
-  const tableEnabledInput = $('#noticesComposeTableEnabled');
-  const imagesEnabledInput = $('#noticesComposeImagesEnabled');
-  const pinnedInput = $('#noticesComposePinned');
   const nextPoll = cloneNoticePollDraft(notices.composeDraft?.poll);
   if (pollQuestionInput instanceof HTMLInputElement) {
     nextPoll.question = String(pollQuestionInput.value || '').trim();
   }
-  if (pollEnabledInput instanceof HTMLInputElement) {
-    nextPoll.enabled = Boolean(pollEnabledInput.checked);
-  }
+  nextPoll.enabled = Boolean(notices.composeDraft?.poll?.enabled);
   if (pollSelectionModeInput instanceof HTMLSelectElement) {
     nextPoll.allowMultiple = String(pollSelectionModeInput.value || '').trim() === 'multiple';
   }
-  if (pollAnonymousInput instanceof HTMLInputElement) {
-    nextPoll.isAnonymous = Boolean(pollAnonymousInput.checked);
-  }
+  nextPoll.isAnonymous = Boolean(notices.composeDraft?.poll?.isAnonymous);
   if (pollVisibilityInput instanceof HTMLSelectElement) {
     nextPoll.resultVisibility = normalizeNoticePollResultVisibility(pollVisibilityInput.value);
   }
@@ -19006,9 +18996,7 @@ function syncNoticeComposeDraftFromFields() {
       ? new Date(pollClosesAtInput.value).toISOString()
       : '';
   }
-  if (pollAllowChangeInput instanceof HTMLInputElement) {
-    nextPoll.allowChangeVote = Boolean(pollAllowChangeInput.checked);
-  }
+  nextPoll.allowChangeVote = Boolean(notices.composeDraft?.poll?.allowChangeVote);
   document.querySelectorAll('[data-notice-poll-option-index]').forEach((inputEl) => {
     if (!(inputEl instanceof HTMLInputElement)) return;
     const index = Math.max(0, Number.parseInt(inputEl.dataset.noticePollOptionIndex || '0', 10) || 0);
@@ -19025,13 +19013,9 @@ function syncNoticeComposeDraftFromFields() {
   if (tableTitleInput instanceof HTMLInputElement) {
     nextTable.title = String(tableTitleInput.value || '').trim();
   }
-  if (tableEnabledInput instanceof HTMLInputElement) {
-    nextTable.enabled = Boolean(tableEnabledInput.checked);
-  }
+  nextTable.enabled = Boolean(notices.composeDraft?.table?.enabled);
   const nextImages = cloneNoticeImageDrafts(notices.composeDraft?.images);
-  const imagesEnabled = imagesEnabledInput instanceof HTMLInputElement
-    ? Boolean(imagesEnabledInput.checked)
-    : Boolean(notices.composeDraft?.imagesEnabled);
+  const imagesEnabled = Boolean(notices.composeDraft?.imagesEnabled) || nextImages.length > 0;
   if (!imagesEnabled) {
     nextImages.length = 0;
   }
@@ -19046,7 +19030,7 @@ function syncNoticeComposeDraftFromFields() {
     images: nextImages,
     poll: nextPoll,
     table: nextTable,
-    isPinned: pinnedInput instanceof HTMLInputElement ? Boolean(pinnedInput.checked) : Boolean(notices.composeDraft?.isPinned),
+    isPinned: Boolean(notices.composeDraft?.isPinned),
   };
   renderNoticeComposePreview();
 }
@@ -19368,10 +19352,6 @@ async function saveNoticeDraft() {
       showToast('투표 선택지는 최소 2개 이상 입력해 주세요.', 'error', 2600);
       return null;
     }
-  }
-  if (!bodyBlocks.length || !bodyText) {
-    showToast('요약, 본문, 표 중 하나 이상을 채워 공지 내용을 구성해 주세요.', 'error', 2600);
-    return null;
   }
   const payload = await apiRequest(editingNoticeId ? `/notices/${encodeURIComponent(editingNoticeId)}` : '/notices', {
     method: editingNoticeId ? 'PATCH' : 'POST',
