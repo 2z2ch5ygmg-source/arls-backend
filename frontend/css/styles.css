@@ -21146,12 +21146,76 @@ button.attendance-status-special-card.active {
   border-top: 1px solid rgba(148, 163, 184, 0.16);
 }
 
+.notices-detail-block {
+  display: grid;
+  gap: 10px;
+}
+
+.notices-detail-block-title {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.42;
+  letter-spacing: -0.02em;
+  color: var(--ui-text-primary);
+}
+
+.notices-detail-lead {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.82;
+  color: var(--ui-text-primary);
+}
+
 .notices-detail-prose p {
   margin: 0;
   color: var(--ui-text-primary);
   font-size: 16px;
   line-height: 1.85;
   white-space: pre-wrap;
+}
+
+.notices-detail-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.notices-detail-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+}
+
+.notices-detail-table th,
+.notices-detail-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  border-right: 1px solid rgba(148, 163, 184, 0.16);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: left;
+  vertical-align: top;
+  white-space: pre-wrap;
+}
+
+.notices-detail-table th:last-child,
+.notices-detail-table td:last-child {
+  border-right: 0;
+}
+
+.notices-detail-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.notices-detail-table th {
+  background: rgba(248, 250, 252, 0.96);
+  color: var(--ui-text-primary);
+  font-weight: 700;
+}
+
+.notices-detail-table td {
+  color: var(--ui-text-secondary);
 }
 
 .notice-meta-tag {
@@ -21186,14 +21250,105 @@ button.attendance-status-special-card.active {
   align-items: start;
 }
 
+.notices-compose-block-card {
+  display: grid;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 22px;
+  background: rgba(248, 250, 252, 0.82);
+}
+
+.notices-subsection-head {
+  gap: 10px;
+}
+
+.notices-subsection-head h4 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.4;
+  letter-spacing: -0.02em;
+  color: var(--ui-text-primary);
+}
+
 .notices-compose-card textarea {
-  min-height: 280px;
+  min-height: 220px;
   resize: vertical;
 }
 
 .notices-compose-rail {
   position: sticky;
   top: 16px;
+}
+
+.notices-table-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.notices-table-editor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notices-table-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.notices-compose-table-grid {
+  overflow-x: auto;
+}
+
+.notices-compose-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.notices-compose-table th,
+.notices-compose-table td {
+  padding: 0;
+  border-right: 1px solid rgba(148, 163, 184, 0.16);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.notices-compose-table th:last-child,
+.notices-compose-table td:last-child {
+  border-right: 0;
+}
+
+.notices-compose-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.notices-compose-table th {
+  background: rgba(248, 250, 252, 0.96);
+}
+
+.notices-compose-table-input {
+  width: 100%;
+  min-width: 120px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ui-text-primary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.notices-compose-table-input:focus {
+  outline: none;
+  background: rgba(255, 247, 237, 0.72);
 }
 
 .notices-compose-actions {
@@ -21208,6 +21363,15 @@ button.attendance-status-special-card.active {
 
   .notices-compose-rail {
     position: static;
+  }
+
+  .notices-table-editor-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .notices-table-editor-actions {
+    justify-content: flex-start;
   }
 }
 

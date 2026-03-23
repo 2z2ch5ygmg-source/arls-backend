@@ -1244,9 +1244,23 @@ function createInitialNoticesState() {
     composeDraft: {
       category: 'ops',
       title: '',
+      summaryText: '',
       bodyText: '',
+      table: createDefaultNoticeTableDraft(),
       isPinned: false,
     },
+  };
+}
+
+function createDefaultNoticeTableDraft() {
+  return {
+    enabled: false,
+    title: '',
+    columns: ['항목', '내용'],
+    rows: [
+      ['', ''],
+      ['', ''],
+    ],
   };
 }
 
@@ -18325,16 +18339,190 @@ function ensureNoticesState() {
   return state.notices;
 }
 
+function normalizeNoticeTableDraft(rawTable = null) {
+  const base = createDefaultNoticeTableDraft();
+  const columns = Array.isArray(rawTable?.columns)
+    ? rawTable.columns.map((item) => String(item || '').trim()).slice(0, 6)
+    : base.columns.slice();
+  const width = Math.max(1, Math.min(6, columns.length || base.columns.length));
+  const normalizedColumns = (columns.length ? columns : base.columns.slice(0, width)).map((item, index) => item || `항목 ${index + 1}`);
+  const rowsSource = Array.isArray(rawTable?.rows) ? rawTable.rows.slice(0, 20) : base.rows;
+  const rows = rowsSource
+    .map((row) => {
+      const source = Array.isArray(row) ? row : [];
+      return Array.from({ length: normalizedColumns.length }, (_, index) => String(source[index] || '').trim());
+    });
+  return {
+    enabled: Boolean(rawTable?.enabled),
+    title: String(rawTable?.title || '').trim(),
+    columns: normalizedColumns,
+    rows: rows.length ? rows : base.rows.map((row) => row.slice(0, normalizedColumns.length)),
+  };
+}
+
+function cloneNoticeTableDraft(rawTable = null) {
+  const normalized = normalizeNoticeTableDraft(rawTable);
+  return {
+    enabled: normalized.enabled,
+    title: normalized.title,
+    columns: normalized.columns.slice(),
+    rows: normalized.rows.map((row) => row.slice()),
+  };
+}
+
+function normalizeNoticeBodyBlocks(rawBlocks = null, fallbackBodyText = '') {
+  const blocksSource = Array.isArray(rawBlocks) ? rawBlocks : [];
+  const blocks = [];
+  blocksSource.forEach((block) => {
+    if (!block || typeof block !== 'object') return;
+    const kind = String(block.kind || '').trim().toLowerCase();
+    if (kind === 'paragraph') {
+      const text = String(block.text || '').trim();
+      if (!text) return;
+      const normalized = {
+        kind: 'paragraph',
+        variant: String(block.variant || '').trim().toLowerCase() === 'lead' ? 'lead' : 'body',
+        text,
+      };
+      const title = String(block.title || '').trim();
+      if (title) normalized.title = title;
+      blocks.push(normalized);
+      return;
+    }
+    if (kind === 'table') {
+      const table = normalizeNoticeTableDraft({
+        enabled: true,
+        title: String(block.title || '').trim(),
+        columns: Array.isArray(block.columns) ? block.columns : [],
+        rows: Array.isArray(block.rows) ? block.rows : [],
+      });
+      const hasTableContent = table.title
+        || table.columns.some((item) => String(item || '').trim())
+        || table.rows.some((row) => row.some((cell) => String(cell || '').trim()));
+      if (!hasTableContent) return;
+      blocks.push({
+        kind: 'table',
+        title: table.title,
+        columns: table.columns.slice(),
+        rows: table.rows.map((row) => row.slice()),
+      });
+    }
+  });
+  if (blocks.length) return blocks;
+  const fallback = String(fallbackBodyText || '').trim();
+  if (!fallback) return [];
+  return fallback
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((text) => ({ kind: 'paragraph', variant: 'body', text }));
+}
+
+function buildNoticeComposeDraftFromBlocks(row = {}) {
+  const blocks = normalizeNoticeBodyBlocks(row?.bodyBlocks, row?.bodyText);
+  const summaryParts = [];
+  const bodyParts = [];
+  let table = createDefaultNoticeTableDraft();
+  blocks.forEach((block) => {
+    if (block.kind === 'paragraph') {
+      if (block.variant === 'lead' && !summaryParts.length) {
+        summaryParts.push(String(block.text || '').trim());
+      } else {
+        bodyParts.push(String(block.text || '').trim());
+      }
+      return;
+    }
+    if (block.kind === 'table' && !table.enabled) {
+      table = normalizeNoticeTableDraft({
+        enabled: true,
+        title: String(block.title || '').trim(),
+        columns: Array.isArray(block.columns) ? block.columns : [],
+        rows: Array.isArray(block.rows) ? block.rows : [],
+      });
+    }
+  });
+  return {
+    category: normalizeNoticeCategory(row?.category || 'ops') === 'all'
+      ? 'ops'
+      : normalizeNoticeCategory(row?.category || 'ops'),
+    title: String(row?.title || '').trim(),
+    summaryText: summaryParts.join('\n\n'),
+    bodyText: bodyParts.join('\n\n'),
+    table,
+    isPinned: Boolean(row?.isPinned),
+  };
+}
+
+function buildNoticeBodyBlocksFromDraft(draft = null) {
+  const summaryText = String(draft?.summaryText || '').trim();
+  const bodyText = String(draft?.bodyText || '').trim();
+  const table = normalizeNoticeTableDraft(draft?.table);
+  const baseTable = createDefaultNoticeTableDraft();
+  const blocks = [];
+  if (summaryText) {
+    blocks.push({ kind: 'paragraph', variant: 'lead', text: summaryText });
+  }
+  bodyText
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .forEach((text) => {
+      blocks.push({ kind: 'paragraph', variant: 'body', text });
+    });
+  const hasCustomColumns = table.columns.some((item, index) => String(item || '').trim() !== String(baseTable.columns[index] || '').trim());
+  const hasTableRows = table.rows.some((row) => row.some((cell) => String(cell || '').trim()));
+  const hasTableContent = Boolean(table.enabled && (table.title || hasCustomColumns || hasTableRows));
+  if (hasTableContent) {
+    const rows = table.rows
+      .map((row) => row.map((cell) => String(cell || '').trim()))
+      .filter((row) => row.some(Boolean));
+    blocks.push({
+      kind: 'table',
+      title: table.title,
+      columns: table.columns.slice(),
+      rows,
+    });
+  }
+  return blocks;
+}
+
+function buildNoticeBodyTextFromBlocks(blocks = []) {
+  const parts = [];
+  (Array.isArray(blocks) ? blocks : []).forEach((block) => {
+    if (!block || typeof block !== 'object') return;
+    if (block.kind === 'paragraph') {
+      const text = String(block.text || '').trim();
+      if (text) parts.push(text);
+      return;
+    }
+    if (block.kind === 'table') {
+      const title = String(block.title || '').trim();
+      if (title) parts.push(title);
+      const columns = Array.isArray(block.columns) ? block.columns.map((item) => String(item || '').trim()).filter(Boolean) : [];
+      if (columns.length) parts.push(columns.join(' | '));
+      const rows = Array.isArray(block.rows) ? block.rows : [];
+      rows.forEach((row) => {
+        if (!Array.isArray(row)) return;
+        const line = row.map((cell) => String(cell || '').trim()).filter(Boolean).join(' | ');
+        if (line) parts.push(line);
+      });
+    }
+  });
+  return parts.join('\n\n').trim();
+}
+
 function normalizeNoticeRecord(row = {}) {
   const publishedAt = String(row?.published_at || '').trim();
   const createdAt = String(row?.created_at || '').trim();
   const updatedAt = String(row?.updated_at || '').trim();
   const bodyText = String(row?.body_text || '').trim();
+  const bodyBlocks = normalizeNoticeBodyBlocks(row?.body_blocks, bodyText);
   return {
     id: String(row?.id || '').trim(),
     category: normalizeNoticeCategory(row?.category || 'ops'),
     title: String(row?.title || '').trim() || '-',
     bodyText,
+    bodyBlocks,
     bodyPreview: String(row?.body_preview || '').trim() || bodyText.split(/\n+/).map((item) => item.trim()).find(Boolean) || '',
     isPinned: Boolean(row?.is_pinned),
     publishedAt,
@@ -18351,7 +18539,9 @@ function resetNoticeComposeDraft(category = 'ops') {
   notices.composeDraft = {
     category: normalizeNoticeCategory(category) === 'all' ? 'ops' : normalizeNoticeCategory(category),
     title: '',
+    summaryText: '',
     bodyText: '',
+    table: createDefaultNoticeTableDraft(),
     isPinned: false,
   };
 }
@@ -18360,28 +18550,33 @@ function fillNoticeComposeDraftFromRow(row = null) {
   const notices = ensureNoticesState();
   const normalizedRow = row && typeof row === 'object' ? row : null;
   notices.composeSourceNoticeId = String(normalizedRow?.id || '').trim();
-  notices.composeDraft = {
-    category: normalizeNoticeCategory(normalizedRow?.category || 'ops') === 'all'
-      ? 'ops'
-      : normalizeNoticeCategory(normalizedRow?.category || 'ops'),
-    title: String(normalizedRow?.title || '').trim(),
-    bodyText: String(normalizedRow?.bodyText || '').trim(),
-    isPinned: Boolean(normalizedRow?.isPinned),
-  };
+  notices.composeDraft = buildNoticeComposeDraftFromBlocks(normalizedRow || {});
 }
 
 function syncNoticeComposeDraftFromFields() {
   const notices = ensureNoticesState();
   const categorySelect = $('#noticesComposeCategory');
   const titleInput = $('#noticesComposeTitle');
+  const summaryInput = $('#noticesComposeSummary');
   const bodyInput = $('#noticesComposeBody');
+  const tableTitleInput = $('#noticesComposeTableTitle');
+  const tableEnabledInput = $('#noticesComposeTableEnabled');
   const pinnedInput = $('#noticesComposePinned');
+  const nextTable = cloneNoticeTableDraft(notices.composeDraft?.table);
+  if (tableTitleInput instanceof HTMLInputElement) {
+    nextTable.title = String(tableTitleInput.value || '').trim();
+  }
+  if (tableEnabledInput instanceof HTMLInputElement) {
+    nextTable.enabled = Boolean(tableEnabledInput.checked);
+  }
   notices.composeDraft = {
     category: categorySelect instanceof HTMLSelectElement
       ? (normalizeNoticeCategory(categorySelect.value) === 'all' ? 'ops' : normalizeNoticeCategory(categorySelect.value))
       : (normalizeNoticeCategory(notices.composeDraft?.category || 'ops') === 'all' ? 'ops' : normalizeNoticeCategory(notices.composeDraft?.category || 'ops')),
     title: titleInput instanceof HTMLInputElement ? String(titleInput.value || '') : String(notices.composeDraft?.title || ''),
+    summaryText: summaryInput instanceof HTMLTextAreaElement ? String(summaryInput.value || '') : String(notices.composeDraft?.summaryText || ''),
     bodyText: bodyInput instanceof HTMLTextAreaElement ? String(bodyInput.value || '') : String(notices.composeDraft?.bodyText || ''),
+    table: nextTable,
     isPinned: pinnedInput instanceof HTMLInputElement ? Boolean(pinnedInput.checked) : Boolean(notices.composeDraft?.isPinned),
   };
 }
@@ -18391,7 +18586,10 @@ function writeNoticeComposeDraftToFields() {
   const draft = notices.composeDraft || {};
   const categorySelect = $('#noticesComposeCategory');
   const titleInput = $('#noticesComposeTitle');
+  const summaryInput = $('#noticesComposeSummary');
   const bodyInput = $('#noticesComposeBody');
+  const tableTitleInput = $('#noticesComposeTableTitle');
+  const tableEnabledInput = $('#noticesComposeTableEnabled');
   const pinnedInput = $('#noticesComposePinned');
   if (categorySelect instanceof HTMLSelectElement) {
     const nextCategory = normalizeNoticeCategory(draft.category || notices.category || 'ops');
@@ -18400,8 +18598,17 @@ function writeNoticeComposeDraftToFields() {
   if (titleInput instanceof HTMLInputElement) {
     titleInput.value = String(draft.title || '');
   }
+  if (summaryInput instanceof HTMLTextAreaElement) {
+    summaryInput.value = String(draft.summaryText || '');
+  }
   if (bodyInput instanceof HTMLTextAreaElement) {
     bodyInput.value = String(draft.bodyText || '');
+  }
+  if (tableTitleInput instanceof HTMLInputElement) {
+    tableTitleInput.value = String(draft.table?.title || '');
+  }
+  if (tableEnabledInput instanceof HTMLInputElement) {
+    tableEnabledInput.checked = Boolean(draft.table?.enabled);
   }
   if (pinnedInput instanceof HTMLInputElement) {
     pinnedInput.checked = Boolean(draft.isPinned);
@@ -18445,7 +18652,8 @@ async function saveNoticeDraft() {
   const draft = notices.composeDraft || {};
   const category = normalizeNoticeCategory(draft.category || 'ops');
   const title = String(draft.title || '').trim();
-  const bodyText = String(draft.bodyText || '').trim();
+  const bodyBlocks = buildNoticeBodyBlocksFromDraft(draft);
+  const bodyText = buildNoticeBodyTextFromBlocks(bodyBlocks);
   const editingNoticeId = notices.mode === NOTICE_VIEW_MODE_COMPOSE
     ? String(notices.selectedNoticeId || '').trim()
     : '';
@@ -18453,8 +18661,8 @@ async function saveNoticeDraft() {
     showToast('공지 제목을 입력해 주세요.', 'error', 2600);
     return null;
   }
-  if (!bodyText) {
-    showToast('공지 본문을 입력해 주세요.', 'error', 2600);
+  if (!bodyBlocks.length || !bodyText) {
+    showToast('요약, 본문, 표 중 하나 이상을 채워 공지 내용을 구성해 주세요.', 'error', 2600);
     return null;
   }
   const payload = await apiRequest(editingNoticeId ? `/notices/${encodeURIComponent(editingNoticeId)}` : '/notices', {
@@ -18463,6 +18671,7 @@ async function saveNoticeDraft() {
       category: category === 'all' ? 'ops' : category,
       title,
       body_text: bodyText,
+      body_blocks: bodyBlocks,
       is_pinned: Boolean(draft.isPinned),
     },
   });
@@ -32177,23 +32386,126 @@ function createNoticeListRow(item) {
 function renderNoticeDetailBody(target, item) {
   if (!(target instanceof HTMLElement)) return;
   target.innerHTML = '';
-  const fragments = String(item?.bodyText || '')
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean);
-  if (!fragments.length) {
+  const blocks = normalizeNoticeBodyBlocks(item?.bodyBlocks, item?.bodyText);
+  if (!blocks.length) {
     renderEmptyState(target, '공지 본문이 없습니다.');
     return;
   }
 
   const prose = document.createElement('div');
   prose.className = 'notices-detail-prose';
-  fragments.forEach((block) => {
-    const paragraph = document.createElement('p');
-    paragraph.textContent = block;
-    prose.appendChild(paragraph);
+  blocks.forEach((block) => {
+    if (block.kind === 'paragraph') {
+      const section = document.createElement('section');
+      section.className = 'notices-detail-block';
+      if (block.title) {
+        const heading = document.createElement('h4');
+        heading.className = 'notices-detail-block-title';
+        heading.textContent = block.title;
+        section.appendChild(heading);
+      }
+      const paragraph = document.createElement(block.variant === 'lead' ? 'p' : 'p');
+      paragraph.className = block.variant === 'lead' ? 'notices-detail-lead' : '';
+      paragraph.textContent = String(block.text || '').trim();
+      section.appendChild(paragraph);
+      prose.appendChild(section);
+      return;
+    }
+    if (block.kind === 'table') {
+      const section = document.createElement('section');
+      section.className = 'notices-detail-block';
+      if (block.title) {
+        const heading = document.createElement('h4');
+        heading.className = 'notices-detail-block-title';
+        heading.textContent = String(block.title || '').trim();
+        section.appendChild(heading);
+      }
+      const wrap = document.createElement('div');
+      wrap.className = 'notices-detail-table-wrap';
+      const table = document.createElement('table');
+      table.className = 'notices-detail-table';
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+      (Array.isArray(block.columns) ? block.columns : []).forEach((column) => {
+        const th = document.createElement('th');
+        th.scope = 'col';
+        th.textContent = String(column || '').trim() || '-';
+        headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      (Array.isArray(block.rows) ? block.rows : []).forEach((row) => {
+        if (!Array.isArray(row)) return;
+        const tr = document.createElement('tr');
+        row.forEach((cell) => {
+          const td = document.createElement('td');
+          td.textContent = String(cell || '').trim() || '-';
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      section.appendChild(wrap);
+      prose.appendChild(section);
+    }
   });
   target.appendChild(prose);
+}
+
+function renderNoticeComposeTableEditor() {
+  const grid = $('#noticesComposeTableGrid');
+  const panel = $('#noticesComposeTablePanel');
+  if (!(grid instanceof HTMLElement)) return;
+  const notices = ensureNoticesState();
+  const tableDraft = cloneNoticeTableDraft(notices.composeDraft?.table);
+  if (panel instanceof HTMLElement) {
+    panel.classList.toggle('hidden', !tableDraft.enabled);
+  }
+  grid.innerHTML = '';
+  if (!tableDraft.enabled) return;
+
+  const table = document.createElement('table');
+  table.className = 'notices-compose-table';
+
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  tableDraft.columns.forEach((column, index) => {
+    const th = document.createElement('th');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'notices-compose-table-input';
+    input.value = String(column || '');
+    input.placeholder = `열 ${index + 1}`;
+    input.dataset.noticeTableField = 'header';
+    input.dataset.noticeTableCol = String(index);
+    th.appendChild(input);
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  tableDraft.rows.forEach((row, rowIndex) => {
+    const tr = document.createElement('tr');
+    row.forEach((cell, colIndex) => {
+      const td = document.createElement('td');
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'notices-compose-table-input';
+      input.value = String(cell || '');
+      input.placeholder = `행 ${rowIndex + 1}`;
+      input.dataset.noticeTableField = 'cell';
+      input.dataset.noticeTableRow = String(rowIndex);
+      input.dataset.noticeTableCol = String(colIndex);
+      td.appendChild(input);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  grid.appendChild(table);
 }
 
 function renderNoticesCategoryTabs() {
@@ -32339,8 +32651,8 @@ function renderNoticesComposePanel() {
   }
   if (hintEl) {
     hintEl.textContent = editing
-      ? '카테고리, 제목, 본문을 수정하면 기존 공지가 즉시 갱신됩니다.'
-      : '카테고리, 제목, 본문을 입력해 즉시 공지로 발행합니다. 표, 이미지, 투표는 다음 단계에서 추가됩니다.';
+      ? '요약, 본문 문단, 표 블록을 정리하면 기존 공지가 즉시 갱신됩니다.'
+      : '요약 안내와 본문 문단을 먼저 쓰고, 필요한 경우 표 블록까지 붙여 문서형 공지로 발행합니다.';
   }
   if (pinnedHintEl) {
     pinnedHintEl.textContent = `상단고정은 최대 ${NOTICE_PINNED_LIMIT}개까지만 유지됩니다. 오래된 고정 공지는 자동으로 내려갑니다.`;
@@ -32359,10 +32671,16 @@ function renderNoticesComposePanel() {
   if (!notices.composeDraft || typeof notices.composeDraft !== 'object') {
     resetNoticeComposeDraft(notices.category);
   }
-  if (!String(notices.composeDraft?.title || '').trim() && !String(notices.composeDraft?.bodyText || '').trim() && normalizeNoticeCategory(notices.composeDraft?.category || 'all') === 'all') {
+  if (
+    !String(notices.composeDraft?.title || '').trim()
+    && !String(notices.composeDraft?.summaryText || '').trim()
+    && !String(notices.composeDraft?.bodyText || '').trim()
+    && normalizeNoticeCategory(notices.composeDraft?.category || 'all') === 'all'
+  ) {
     resetNoticeComposeDraft(notices.category);
   }
   writeNoticeComposeDraftToFields();
+  renderNoticeComposeTableEditor();
 }
 
 function renderNoticesView() {
@@ -55294,8 +55612,33 @@ function bindUiEvents() {
       return;
     }
 
-    if (target.id === 'noticesComposeTitle' || target.id === 'noticesComposeBody') {
+    if (
+      target.id === 'noticesComposeTitle'
+      || target.id === 'noticesComposeSummary'
+      || target.id === 'noticesComposeBody'
+      || target.id === 'noticesComposeTableTitle'
+    ) {
       syncNoticeComposeDraftFromFields();
+      return;
+    }
+
+    if (target instanceof HTMLInputElement && target.dataset.noticeTableField) {
+      const notices = ensureNoticesState();
+      const table = cloneNoticeTableDraft(notices.composeDraft?.table);
+      const colIndex = Math.max(0, Number.parseInt(target.dataset.noticeTableCol || '0', 10) || 0);
+      if (target.dataset.noticeTableField === 'header') {
+        table.columns[colIndex] = String(target.value || '');
+      } else {
+        const rowIndex = Math.max(0, Number.parseInt(target.dataset.noticeTableRow || '0', 10) || 0);
+        if (!Array.isArray(table.rows[rowIndex])) {
+          table.rows[rowIndex] = Array.from({ length: table.columns.length }, () => '');
+        }
+        table.rows[rowIndex][colIndex] = String(target.value || '');
+      }
+      notices.composeDraft = {
+        ...(notices.composeDraft || {}),
+        table,
+      };
       return;
     }
 
@@ -56266,6 +56609,46 @@ function bindUiEvents() {
           }));
         },
       });
+      return;
+    }
+
+    if (action === 'notices-table-add-column' || action === 'notices-table-remove-column' || action === 'notices-table-add-row' || action === 'notices-table-remove-row') {
+      const notices = ensureNoticesState();
+      const table = cloneNoticeTableDraft(notices.composeDraft?.table);
+      table.enabled = true;
+      if (action === 'notices-table-add-column') {
+        if (table.columns.length >= 6) {
+          showToast('표 열은 최대 6개까지 추가할 수 있습니다.', 'info', 2200);
+          return;
+        }
+        table.columns.push(`항목 ${table.columns.length + 1}`);
+        table.rows = table.rows.map((row) => [...row, '']);
+      } else if (action === 'notices-table-remove-column') {
+        if (table.columns.length <= 1) {
+          showToast('표 열은 최소 1개 이상 유지해야 합니다.', 'info', 2200);
+          return;
+        }
+        table.columns.pop();
+        table.rows = table.rows.map((row) => row.slice(0, table.columns.length));
+      } else if (action === 'notices-table-add-row') {
+        if (table.rows.length >= 20) {
+          showToast('표 행은 최대 20개까지 추가할 수 있습니다.', 'info', 2200);
+          return;
+        }
+        table.rows.push(Array.from({ length: table.columns.length }, () => ''));
+      } else if (action === 'notices-table-remove-row') {
+        if (table.rows.length <= 1) {
+          showToast('표 행은 최소 1개 이상 유지해야 합니다.', 'info', 2200);
+          return;
+        }
+        table.rows.pop();
+      }
+      notices.composeDraft = {
+        ...(notices.composeDraft || {}),
+        table,
+      };
+      writeNoticeComposeDraftToFields();
+      renderNoticeComposeTableEditor();
       return;
     }
 
@@ -58959,8 +59342,11 @@ function bindUiEvents() {
       return;
     }
 
-    if (target.id === 'noticesComposeCategory' || target.id === 'noticesComposePinned') {
+    if (target.id === 'noticesComposeCategory' || target.id === 'noticesComposePinned' || target.id === 'noticesComposeTableEnabled') {
       syncNoticeComposeDraftFromFields();
+      if (target.id === 'noticesComposeTableEnabled') {
+        renderNoticeComposeTableEditor();
+      }
       return;
     }
 

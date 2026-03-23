@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -19,6 +20,7 @@ from ...utils.tenant_context import resolve_scoped_tenant
 router = APIRouter(prefix="/notices", tags=["notices"], dependencies=[Depends(apply_rate_limit)])
 
 NOTICE_CATEGORY_VALUES = {"ops", "attendance", "schedule", "hr", "system", "event"}
+NOTICE_BODY_BLOCK_KIND_VALUES = {"paragraph", "table"}
 PINNED_LIMIT = 3
 
 
@@ -44,6 +46,135 @@ def _extract_notice_preview(body_text: str | None) -> str | None:
     return f"{raw[:117].rstrip()}..."
 
 
+def _normalize_notice_body_blocks(
+    raw_blocks: Any,
+    *,
+    fallback_body_text: str | None = None,
+) -> list[dict[str, Any]]:
+    blocks_source: list[Any] = []
+    if isinstance(raw_blocks, str):
+        try:
+            parsed = json.loads(raw_blocks)
+        except json.JSONDecodeError:
+            parsed = []
+        if isinstance(parsed, list):
+            blocks_source = parsed
+    elif isinstance(raw_blocks, list):
+        blocks_source = raw_blocks
+
+    normalized_blocks: list[dict[str, Any]] = []
+    for block in blocks_source:
+        if hasattr(block, "model_dump"):
+            block = block.model_dump()
+        if not isinstance(block, dict):
+            continue
+        kind = str(block.get("kind") or "").strip().lower()
+        if kind not in NOTICE_BODY_BLOCK_KIND_VALUES:
+            continue
+        if kind == "paragraph":
+            text = str(block.get("text") or "").strip()
+            if not text:
+                continue
+            variant = str(block.get("variant") or "").strip().lower()
+            normalized: dict[str, Any] = {
+                "kind": "paragraph",
+                "variant": "lead" if variant == "lead" else "body",
+                "text": text[:4000],
+            }
+            title = str(block.get("title") or "").strip()
+            if title:
+                normalized["title"] = title[:120]
+            normalized_blocks.append(normalized)
+            continue
+
+        title = str(block.get("title") or "").strip()[:120]
+        raw_columns = block.get("columns")
+        raw_rows = block.get("rows")
+        columns = []
+        if isinstance(raw_columns, list):
+            columns = [str(item or "").strip()[:80] for item in raw_columns[:6]]
+        rows_source = raw_rows if isinstance(raw_rows, list) else []
+        width = min(
+            max(
+                len(columns),
+                max((len(row) for row in rows_source if isinstance(row, list)), default=0),
+            ),
+            6,
+        )
+        if width <= 0:
+            continue
+        if not columns:
+            columns = [f"항목 {index + 1}" for index in range(width)]
+        elif len(columns) < width:
+            columns = columns + [f"항목 {index + 1}" for index in range(len(columns), width)]
+        else:
+            columns = columns[:width]
+
+        rows: list[list[str]] = []
+        for row in rows_source[:20]:
+            if not isinstance(row, list):
+                continue
+            normalized_row = [str(row[index] or "").strip()[:400] if index < len(row) else "" for index in range(width)]
+            if any(normalized_row):
+                rows.append(normalized_row)
+
+        if not rows and not any(columns) and not title:
+            continue
+        normalized = {
+            "kind": "table",
+            "columns": columns,
+            "rows": rows,
+        }
+        if title:
+            normalized["title"] = title
+        normalized_blocks.append(normalized)
+
+    fallback = str(fallback_body_text or "").strip()
+    if normalized_blocks:
+        return normalized_blocks
+    if fallback:
+        return [{"kind": "paragraph", "variant": "body", "text": fallback[:4000]}]
+    return []
+
+
+def _flatten_notice_body_text(
+    body_blocks: list[dict[str, Any]] | None,
+    *,
+    fallback_body_text: str | None = None,
+) -> str:
+    blocks = body_blocks or []
+    if not blocks:
+        return str(fallback_body_text or "").strip()
+
+    chunks: list[str] = []
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        kind = str(block.get("kind") or "").strip().lower()
+        if kind == "paragraph":
+            text = str(block.get("text") or "").strip()
+            if text:
+                chunks.append(text)
+            continue
+        if kind == "table":
+            title = str(block.get("title") or "").strip()
+            columns = [str(item or "").strip() for item in (block.get("columns") or []) if str(item or "").strip()]
+            rows = block.get("rows") if isinstance(block.get("rows"), list) else []
+            if title:
+                chunks.append(title)
+            if columns:
+                chunks.append(" | ".join(columns))
+            for row in rows:
+                if isinstance(row, list):
+                    line = " | ".join(str(cell or "").strip() for cell in row if str(cell or "").strip())
+                    if line:
+                        chunks.append(line)
+    flattened = "\n\n".join(chunk for chunk in chunks if chunk)
+    if flattened:
+        return flattened[:20000]
+    return str(fallback_body_text or "").strip()[:20000]
+
+
 def _map_notice_summary(row: dict[str, Any]) -> NoticeSummaryOut:
     return NoticeSummaryOut(
         id=row["id"],
@@ -59,12 +190,15 @@ def _map_notice_summary(row: dict[str, Any]) -> NoticeSummaryOut:
 
 
 def _map_notice_detail(row: dict[str, Any]) -> NoticeDetailOut:
+    body_blocks = _normalize_notice_body_blocks(row.get("body_blocks"), fallback_body_text=row.get("body_text"))
+    body_text = _flatten_notice_body_text(body_blocks, fallback_body_text=row.get("body_text"))
     return NoticeDetailOut(
         id=row["id"],
         category=str(row.get("category") or "ops").strip() or "ops",
         title=str(row.get("title") or "").strip() or "-",
-        body_text=str(row.get("body_text") or "").strip(),
-        body_preview=_extract_notice_preview(row.get("body_text")),
+        body_text=body_text,
+        body_blocks=body_blocks,
+        body_preview=_extract_notice_preview(body_text),
         is_pinned=bool(row.get("is_pinned")),
         published_at=row["published_at"],
         created_at=row["created_at"],
@@ -81,6 +215,7 @@ def _fetch_notice_row(conn, *, tenant_id: str, notice_id: str) -> dict[str, Any]
                    n.category,
                    n.title,
                    n.body_text,
+                   n.body_blocks,
                    n.is_pinned,
                    n.published_at,
                    n.created_at,
@@ -277,6 +412,8 @@ def create_notice(
     )
     tenant_id = str(tenant.get("id") or "").strip()
     actor_id = str(user.get("id") or "").strip()
+    body_blocks = _normalize_notice_body_blocks(payload.body_blocks, fallback_body_text=payload.body_text)
+    body_text = _flatten_notice_body_text(body_blocks, fallback_body_text=payload.body_text)
 
     with conn.cursor() as cur:
         cur.execute(
@@ -286,18 +423,20 @@ def create_notice(
                 category,
                 title,
                 body_text,
+                body_blocks,
                 is_pinned,
                 created_by,
                 updated_by
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s)
             RETURNING id
             """,
             (
                 tenant_id,
                 payload.category,
                 payload.title,
-                payload.body_text,
+                body_text,
+                json.dumps(body_blocks, ensure_ascii=False),
                 bool(payload.is_pinned),
                 actor_id,
                 actor_id,
@@ -334,6 +473,8 @@ def update_notice(
     )
     tenant_id = str(tenant.get("id") or "").strip()
     actor_id = str(user.get("id") or "").strip()
+    body_blocks = _normalize_notice_body_blocks(payload.body_blocks, fallback_body_text=payload.body_text)
+    body_text = _flatten_notice_body_text(body_blocks, fallback_body_text=payload.body_text)
     if not _fetch_notice_row(conn, tenant_id=tenant_id, notice_id=notice_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -347,6 +488,7 @@ def update_notice(
             SET category = %s,
                 title = %s,
                 body_text = %s,
+                body_blocks = %s::jsonb,
                 is_pinned = %s,
                 updated_at = timezone('utc', now()),
                 updated_by = %s
@@ -356,7 +498,8 @@ def update_notice(
             (
                 payload.category,
                 payload.title,
-                payload.body_text,
+                body_text,
+                json.dumps(body_blocks, ensure_ascii=False),
                 bool(payload.is_pinned),
                 actor_id,
                 tenant_id,

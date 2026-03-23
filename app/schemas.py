@@ -1658,12 +1658,70 @@ class InAppNotificationListOut(BaseModel):
 
 
 NOTICE_CATEGORY_LITERAL = Literal["ops", "attendance", "schedule", "hr", "system", "event"]
+NOTICE_BODY_BLOCK_KIND_LITERAL = Literal["paragraph", "table"]
+NOTICE_BODY_PARAGRAPH_VARIANT_LITERAL = Literal["lead", "body"]
+
+
+class NoticeBodyBlock(BaseModel):
+    kind: NOTICE_BODY_BLOCK_KIND_LITERAL
+    variant: Optional[NOTICE_BODY_PARAGRAPH_VARIANT_LITERAL] = None
+    title: Optional[str] = Field(default=None, max_length=120)
+    text: Optional[str] = Field(default=None, max_length=4000)
+    columns: list[str] = Field(default_factory=list, max_length=6)
+    rows: list[list[str]] = Field(default_factory=list, max_length=20)
+
+    @field_validator("title", "text", mode="before")
+    @classmethod
+    def _trim_notice_block_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+    @field_validator("columns", mode="before")
+    @classmethod
+    def _normalize_notice_block_columns(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, (list, tuple)):
+            return [str(item or "").strip() for item in value][:6]
+        return []
+
+    @field_validator("rows", mode="before")
+    @classmethod
+    def _normalize_notice_block_rows(cls, value: Any) -> list[list[str]]:
+        if value is None:
+            return []
+        if not isinstance(value, (list, tuple)):
+            return []
+        rows: list[list[str]] = []
+        for row in value[:20]:
+            if isinstance(row, (list, tuple)):
+                rows.append([str(cell or "").strip() for cell in row][:6])
+        return rows
+
+    @model_validator(mode="after")
+    def _validate_notice_body_block(self):
+        if self.kind == "paragraph":
+            if not self.text:
+                raise ValueError("paragraph text is required")
+            if self.variant is None:
+                self.variant = "body"
+            self.columns = []
+            self.rows = []
+            return self
+        if not self.columns and not self.rows:
+            raise ValueError("table columns or rows are required")
+        self.variant = None
+        self.text = None
+        return self
 
 
 class NoticeCreateIn(BaseModel):
     category: NOTICE_CATEGORY_LITERAL
     title: str = Field(min_length=1, max_length=160)
     body_text: str = Field(min_length=1, max_length=20000)
+    body_blocks: list[NoticeBodyBlock] = Field(default_factory=list)
     is_pinned: bool = False
 
     @field_validator("title", "body_text", mode="before")
@@ -1693,6 +1751,7 @@ class NoticeSummaryOut(BaseModel):
 
 class NoticeDetailOut(NoticeSummaryOut):
     body_text: str
+    body_blocks: list[NoticeBodyBlock] = Field(default_factory=list)
 
 
 class NoticeListOut(BaseModel):
