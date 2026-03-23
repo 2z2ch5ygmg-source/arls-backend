@@ -1,11 +1,18 @@
 {
-  "name": "RG ARLS",
-  "short_name": "RG ARLS",
+  "name": "Sentrix HR",
+  "short_name": "Sentrix HR",
   "start_url": "/?api=https://rg-arls-backend.azurewebsites.net",
   "display": "standalone",
   "background_color": "#eef2ff",
-  "theme_color": "#0055ff",
+  "theme_color": "#f97316",
   "description": "출퇴근/휴가/스케줄 관리 PWA",
   "lang": "ko-KR",
-  "icons": []
+  "icons": [
+    {
+      "src": "assets/sentrix-hr-favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }

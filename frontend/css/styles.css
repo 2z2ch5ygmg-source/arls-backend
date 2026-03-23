@@ -1051,17 +1051,26 @@ body:has(#authView:not(.hidden)) #app {
 #authView .choice-row input[type='checkbox'] {
   appearance: none;
   -webkit-appearance: none;
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  flex: 0 0 16px;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
   margin: 0;
+  padding: 0;
   border: 1.5px solid #cad3df;
-  border-radius: 7px;
+  border-radius: 4px;
   background: #ffffff;
   box-shadow:
-    0 8px 18px rgba(17, 24, 39, 0.06),
+    0 4px 10px rgba(17, 24, 39, 0.06),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  display: grid;
+  display: inline-grid;
   place-items: center;
+  align-self: center;
+  vertical-align: middle;
+  line-height: 0;
   transition:
     border-color 0.18s ease,
     background-color 0.18s ease,
@@ -1071,10 +1080,10 @@ body:has(#authView:not(.hidden)) #app {
 
 #authView .choice-row input[type='checkbox']::after {
   content: '';
-  width: 9px;
-  height: 5px;
-  border-left: 2px solid #ffffff;
-  border-bottom: 2px solid #ffffff;
+  width: 7px;
+  height: 4px;
+  border-left: 1.8px solid #ffffff;
+  border-bottom: 1.8px solid #ffffff;
   transform: rotate(-45deg) translate(0, -1px) scale(0.82);
   opacity: 0;
   transition:
@@ -1090,7 +1099,7 @@ body:has(#authView:not(.hidden)) #app {
 #authView .choice-row input[type='checkbox']:checked {
   border-color: #ff6b2c;
   background: linear-gradient(135deg, #ff6b2c, #ff8b3d);
-  box-shadow: 0 10px 20px rgba(255, 107, 44, 0.22);
+  box-shadow: 0 6px 14px rgba(255, 107, 44, 0.22);
 }
 
 #authView .choice-row input[type='checkbox']:checked::after {
