@@ -1237,6 +1237,8 @@ function createInitialNoticesState() {
     homeLoading: false,
     error: '',
     fetchedAt: 0,
+    loadedListCategory: '',
+    loadedDetailNoticeId: '',
     composeDraft: {
       category: 'ops',
       title: '',
@@ -18459,6 +18461,7 @@ async function loadNoticeListState({ force = false } = {}) {
       limit: 80,
     });
     notices.fetchedAt = Date.now();
+    notices.loadedListCategory = normalizeNoticeCategory(notices.category || 'all');
     return notices.rows;
   } catch (error) {
     notices.rows = [];
@@ -18478,6 +18481,7 @@ async function loadNoticeDetailState(noticeId = ensureNoticesState().selectedNot
   renderNoticesView();
   try {
     notices.selectedRow = targetId ? await fetchNoticeDetailRow(targetId) : null;
+    notices.loadedDetailNoticeId = targetId;
     return notices.selectedRow;
   } catch (error) {
     notices.selectedRow = null;
@@ -32281,6 +32285,39 @@ function renderNoticesView() {
   if (composePanel) composePanel.classList.toggle('hidden', notices.mode !== NOTICE_VIEW_MODE_COMPOSE || !canManageNotices());
 }
 
+function shouldReloadNoticesOnCacheHit() {
+  const notices = ensureNoticesState();
+  if (notices.mode === NOTICE_VIEW_MODE_DETAIL) {
+    const selectedNoticeId = String(notices.selectedNoticeId || '').trim();
+    const loadedDetailNoticeId = String(notices.loadedDetailNoticeId || '').trim();
+    const selectedRowId = String(notices.selectedRow?.id || '').trim();
+    return Boolean(
+      selectedNoticeId
+      && (
+        notices.detailLoading
+        || loadedDetailNoticeId !== selectedNoticeId
+        || selectedRowId !== selectedNoticeId
+      )
+    );
+  }
+  if (notices.mode === NOTICE_VIEW_MODE_LIST) {
+    const targetCategory = normalizeNoticeCategory(notices.category || 'all');
+    const loadedListCategory = normalizeNoticeCategory(notices.loadedListCategory || '');
+    return Boolean(notices.loading || loadedListCategory !== targetCategory);
+  }
+  return false;
+}
+
+function handleNoticesCacheHit() {
+  if (shouldReloadNoticesOnCacheHit()) {
+    loadNoticesViewPresenter().catch((error) => {
+      console.error('[RG ARLS] notices cache-hit reload failed', error);
+    });
+    return;
+  }
+  renderNoticesView();
+}
+
 async function loadNoticesViewPresenter() {
   const contextReady = await ensureNoticesTenantContext();
   if (!contextReady) {
@@ -33375,9 +33412,7 @@ const VIEW_PRESENTERS = {
   notices: {
     loadingMessage: '공지사항 화면을 준비하는 중입니다...',
     errorMessage: '공지사항 화면을 준비하지 못했습니다.',
-    onCacheHit: () => {
-      renderNoticesView();
-    },
+    onCacheHit: handleNoticesCacheHit,
     load: loadNoticesViewPresenter,
   },
   hr: {
