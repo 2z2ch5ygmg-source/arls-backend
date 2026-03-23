@@ -19019,6 +19019,17 @@ function fillNoticeComposeDraftFromRow(row = null) {
   notices.composeDraft = buildNoticeComposeDraftFromBlocks(normalizedRow || {});
 }
 
+function isNoticeComposeTextField(target) {
+  const field = target instanceof HTMLElement ? target : null;
+  if (!field) return false;
+  const id = String(field.id || '').trim();
+  return id === 'noticesComposeTitle'
+    || id === 'noticesComposeSummary'
+    || id === 'noticesComposeBody'
+    || id === 'noticesComposePollQuestion'
+    || id === 'noticesComposeTableTitle';
+}
+
 function syncNoticeComposeDraftFromFields() {
   const notices = ensureNoticesState();
   const categorySelect = $('#noticesComposeCategory');
@@ -19083,6 +19094,15 @@ function syncNoticeComposeDraftFromFields() {
     table: nextTable,
     isPinned: Boolean(notices.composeDraft?.isPinned),
   };
+}
+
+async function flushNoticeComposePendingFieldState() {
+  const activeEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  if (isNoticeComposeTextField(activeEl) && typeof activeEl.blur === 'function') {
+    activeEl.blur();
+    await waitForNextFrame();
+  }
+  syncNoticeComposeDraftFromFields();
 }
 
 function writeNoticeComposeDraftToFields() {
@@ -19379,7 +19399,7 @@ async function saveNoticeDraft() {
     throw new Error('공지 작성 권한이 없습니다.');
   }
   const notices = ensureNoticesState();
-  syncNoticeComposeDraftFromFields();
+  await flushNoticeComposePendingFieldState();
   const draft = notices.composeDraft || {};
   const category = normalizeNoticeCategory(draft.category || 'ops');
   const title = String(draft.title || '').trim();
@@ -56812,13 +56832,7 @@ function bindUiEvents() {
       return;
     }
 
-    if (
-      target.id === 'noticesComposeTitle'
-      || target.id === 'noticesComposeSummary'
-      || target.id === 'noticesComposeBody'
-      || target.id === 'noticesComposePollQuestion'
-      || target.id === 'noticesComposeTableTitle'
-    ) {
+    if (isNoticeComposeTextField(target)) {
       syncNoticeComposeDraftFromFields();
       markNoticeComposeDraftDirty();
       return;
@@ -62185,3 +62199,10 @@ if (document.readyState === 'loading') {
 } else {
   initializeApp().catch((err) => console.error('[RG ARLS] initializeApp failed', err));
 }
+
+document.addEventListener('compositionend', (event) => {
+  const target = event.target;
+  if (!isNoticeComposeTextField(target)) return;
+  syncNoticeComposeDraftFromFields();
+  markNoticeComposeDraftDirty();
+});

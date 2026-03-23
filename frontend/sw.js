@@ -1,4 +1,4 @@
-const SW_VERSION = 'rg-arls-sw-v20260323-notice-layout-tune-v2';
+const SW_VERSION = 'rg-arls-sw-v20260323-notice-title-ime-fix-v1';
 const SHELL_CACHE = `${SW_VERSION}-shell`;
 const STATIC_CACHE = `${SW_VERSION}-static`;
 const ACTIVE_CACHES = new Set([SHELL_CACHE, STATIC_CACHE]);
