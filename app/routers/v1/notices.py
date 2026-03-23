@@ -5,7 +5,14 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
-from ...schemas import NoticeCreateIn, NoticeDetailOut, NoticeListOut, NoticeSummaryOut
+from ...schemas import (
+    NoticeCreateIn,
+    NoticeDeleteOut,
+    NoticeDetailOut,
+    NoticeListOut,
+    NoticeSummaryOut,
+    NoticeUpdateIn,
+)
 from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, normalize_role
 from ...utils.tenant_context import resolve_scoped_tenant
 
@@ -92,6 +99,55 @@ def _fetch_notice_row(conn, *, tenant_id: str, notice_id: str) -> dict[str, Any]
     return dict(row) if row else None
 
 
+def _fetch_notice_rows(
+    conn,
+    *,
+    tenant_id: str,
+    category: str = "all",
+    query: str = "",
+    limit: int = 80,
+) -> list[dict[str, Any]]:
+    normalized_category = _normalize_notice_category(category)
+    normalized_query = str(query or "").strip()
+    search_like = f"%{normalized_query}%"
+    sql = """
+        SELECT n.id,
+               n.category,
+               n.title,
+               n.body_text,
+               n.is_pinned,
+               n.published_at,
+               n.created_at,
+               n.updated_at,
+               COALESCE(u.full_name, u.username, '-') AS created_by_name
+        FROM notices n
+        LEFT JOIN arls_users u
+          ON u.id = n.created_by
+        WHERE n.tenant_id = %s
+    """
+    params: list[Any] = [tenant_id]
+    if normalized_category != "all":
+        sql += " AND n.category = %s"
+        params.append(normalized_category)
+    if normalized_query:
+        sql += """
+            AND (
+              n.title ILIKE %s
+              OR n.body_text ILIKE %s
+            )
+        """
+        params.extend([search_like, search_like])
+    sql += """
+        ORDER BY n.is_pinned DESC, n.published_at DESC, n.created_at DESC, n.id DESC
+        LIMIT %s
+    """
+    params.append(int(limit))
+
+    with conn.cursor() as cur:
+        cur.execute(sql, tuple(params))
+        return [dict(row) for row in (cur.fetchall() or [])]
+
+
 def _enforce_pinned_limit(conn, *, tenant_id: str, actor_id: str) -> None:
     with conn.cursor() as cur:
         cur.execute(
@@ -161,6 +217,7 @@ def list_notice_home_teaser(
 @router.get("", response_model=NoticeListOut)
 def list_notices(
     category: str = Query(default="all"),
+    q: str = Query(default="", max_length=120),
     limit: int = Query(default=80, ge=1, le=200),
     conn=Depends(get_db_conn),
     user=Depends(get_current_user),
@@ -172,53 +229,13 @@ def list_notices(
         require_dev_context=True,
     )
     tenant_id = str(tenant.get("id") or "").strip()
-    normalized_category = _normalize_notice_category(category)
-
-    with conn.cursor() as cur:
-        if normalized_category == "all":
-            cur.execute(
-                """
-                SELECT n.id,
-                       n.category,
-                       n.title,
-                       n.body_text,
-                       n.is_pinned,
-                       n.published_at,
-                       n.created_at,
-                       n.updated_at,
-                       COALESCE(u.full_name, u.username, '-') AS created_by_name
-                FROM notices n
-                LEFT JOIN arls_users u
-                  ON u.id = n.created_by
-                WHERE n.tenant_id = %s
-                ORDER BY n.is_pinned DESC, n.published_at DESC, n.created_at DESC, n.id DESC
-                LIMIT %s
-                """,
-                (tenant_id, int(limit)),
-            )
-        else:
-            cur.execute(
-                """
-                SELECT n.id,
-                       n.category,
-                       n.title,
-                       n.body_text,
-                       n.is_pinned,
-                       n.published_at,
-                       n.created_at,
-                       n.updated_at,
-                       COALESCE(u.full_name, u.username, '-') AS created_by_name
-                FROM notices n
-                LEFT JOIN arls_users u
-                  ON u.id = n.created_by
-                WHERE n.tenant_id = %s
-                  AND n.category = %s
-                ORDER BY n.is_pinned DESC, n.published_at DESC, n.created_at DESC, n.id DESC
-                LIMIT %s
-                """,
-                (tenant_id, normalized_category, int(limit)),
-            )
-        rows = [dict(row) for row in (cur.fetchall() or [])]
+    rows = _fetch_notice_rows(
+        conn,
+        tenant_id=tenant_id,
+        category=category,
+        query=q,
+        limit=limit,
+    )
 
     return NoticeListOut(items=[_map_notice_summary(row) for row in rows])
 
@@ -299,3 +316,94 @@ def create_notice(
             detail={"error": "NOTICE_CREATE_FAILED", "message": "공지 저장에 실패했습니다."},
         )
     return _map_notice_detail(row)
+
+
+@router.patch("/{notice_id}", response_model=NoticeDetailOut)
+def update_notice(
+    notice_id: str,
+    payload: NoticeUpdateIn,
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    _ensure_notice_manage_permission(user)
+    tenant = resolve_scoped_tenant(
+        conn,
+        user,
+        header_tenant_id=user.get("active_tenant_id"),
+        require_dev_context=True,
+    )
+    tenant_id = str(tenant.get("id") or "").strip()
+    actor_id = str(user.get("id") or "").strip()
+    if not _fetch_notice_row(conn, tenant_id=tenant_id, notice_id=notice_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "NOT_FOUND", "message": "공지사항을 찾을 수 없습니다."},
+        )
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE notices
+            SET category = %s,
+                title = %s,
+                body_text = %s,
+                is_pinned = %s,
+                updated_at = timezone('utc', now()),
+                updated_by = %s
+            WHERE tenant_id = %s
+              AND id = %s
+            """,
+            (
+                payload.category,
+                payload.title,
+                payload.body_text,
+                bool(payload.is_pinned),
+                actor_id,
+                tenant_id,
+                notice_id,
+            ),
+        )
+
+    if payload.is_pinned:
+        _enforce_pinned_limit(conn, tenant_id=tenant_id, actor_id=actor_id)
+
+    row = _fetch_notice_row(conn, tenant_id=tenant_id, notice_id=notice_id)
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error": "NOTICE_UPDATE_FAILED", "message": "공지 수정에 실패했습니다."},
+        )
+    return _map_notice_detail(row)
+
+
+@router.delete("/{notice_id}", response_model=NoticeDeleteOut)
+def delete_notice(
+    notice_id: str,
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    _ensure_notice_manage_permission(user)
+    tenant = resolve_scoped_tenant(
+        conn,
+        user,
+        header_tenant_id=user.get("active_tenant_id"),
+        require_dev_context=True,
+    )
+    tenant_id = str(tenant.get("id") or "").strip()
+    if not _fetch_notice_row(conn, tenant_id=tenant_id, notice_id=notice_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "NOT_FOUND", "message": "공지사항을 찾을 수 없습니다."},
+        )
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM notices
+            WHERE tenant_id = %s
+              AND id = %s
+            """,
+            (tenant_id, notice_id),
+        )
+
+    return NoticeDeleteOut(deleted=True, id=notice_id)

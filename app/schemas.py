@@ -1675,6 +1675,10 @@ class NoticeCreateIn(BaseModel):
         return normalized
 
 
+class NoticeUpdateIn(NoticeCreateIn):
+    pass
+
+
 class NoticeSummaryOut(BaseModel):
     id: UUID
     category: NOTICE_CATEGORY_LITERAL
@@ -1693,6 +1697,11 @@ class NoticeDetailOut(NoticeSummaryOut):
 
 class NoticeListOut(BaseModel):
     items: list[NoticeSummaryOut] = Field(default_factory=list)
+
+
+class NoticeDeleteOut(BaseModel):
+    deleted: bool = True
+    id: UUID
 
 
 class FinanceSubmissionStatusOut(BaseModel):

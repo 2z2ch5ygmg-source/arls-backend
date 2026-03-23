@@ -1238,7 +1238,9 @@ function createInitialNoticesState() {
     error: '',
     fetchedAt: 0,
     loadedListCategory: '',
+    loadedListSearch: '',
     loadedDetailNoticeId: '',
+    composeSourceNoticeId: '',
     composeDraft: {
       category: 'ops',
       title: '',
@@ -18300,6 +18302,10 @@ function normalizeNoticeCategory(value = '') {
   return NOTICE_CATEGORY_OPTIONS.some((item) => item.value === normalized) ? normalized : 'all';
 }
 
+function normalizeNoticeSearch(value = '') {
+  return String(value || '').trim().slice(0, 120);
+}
+
 function normalizeNoticeViewMode(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'new' || normalized === 'compose' || normalized === 'edit') return NOTICE_VIEW_MODE_COMPOSE;
@@ -18341,11 +18347,26 @@ function normalizeNoticeRecord(row = {}) {
 
 function resetNoticeComposeDraft(category = 'ops') {
   const notices = ensureNoticesState();
+  notices.composeSourceNoticeId = '';
   notices.composeDraft = {
     category: normalizeNoticeCategory(category) === 'all' ? 'ops' : normalizeNoticeCategory(category),
     title: '',
     bodyText: '',
     isPinned: false,
+  };
+}
+
+function fillNoticeComposeDraftFromRow(row = null) {
+  const notices = ensureNoticesState();
+  const normalizedRow = row && typeof row === 'object' ? row : null;
+  notices.composeSourceNoticeId = String(normalizedRow?.id || '').trim();
+  notices.composeDraft = {
+    category: normalizeNoticeCategory(normalizedRow?.category || 'ops') === 'all'
+      ? 'ops'
+      : normalizeNoticeCategory(normalizedRow?.category || 'ops'),
+    title: String(normalizedRow?.title || '').trim(),
+    bodyText: String(normalizedRow?.bodyText || '').trim(),
+    isPinned: Boolean(normalizedRow?.isPinned),
   };
 }
 
@@ -18387,11 +18408,15 @@ function writeNoticeComposeDraftToFields() {
   }
 }
 
-async function fetchNoticesRows({ category = 'all', limit = 80 } = {}) {
+async function fetchNoticesRows({ category = 'all', search = '', limit = 80 } = {}) {
   const params = new URLSearchParams();
   const normalizedCategory = normalizeNoticeCategory(category);
+  const normalizedSearch = normalizeNoticeSearch(search);
   if (normalizedCategory !== 'all') {
     params.set('category', normalizedCategory);
+  }
+  if (normalizedSearch) {
+    params.set('q', normalizedSearch);
   }
   params.set('limit', String(limit));
   const payload = await apiRequest(`/notices?${params.toString()}`);
@@ -18414,13 +18439,16 @@ async function fetchHomeNoticeRows({ limit = NOTICE_HOME_TEASER_LIMIT } = {}) {
   return rows.map((row) => normalizeNoticeRecord(row));
 }
 
-async function publishNoticeDraft() {
+async function saveNoticeDraft() {
   const notices = ensureNoticesState();
   syncNoticeComposeDraftFromFields();
   const draft = notices.composeDraft || {};
   const category = normalizeNoticeCategory(draft.category || 'ops');
   const title = String(draft.title || '').trim();
   const bodyText = String(draft.bodyText || '').trim();
+  const editingNoticeId = notices.mode === NOTICE_VIEW_MODE_COMPOSE
+    ? String(notices.selectedNoticeId || '').trim()
+    : '';
   if (!title) {
     showToast('공지 제목을 입력해 주세요.', 'error', 2600);
     return null;
@@ -18429,8 +18457,8 @@ async function publishNoticeDraft() {
     showToast('공지 본문을 입력해 주세요.', 'error', 2600);
     return null;
   }
-  const payload = await apiRequest('/notices', {
-    method: 'POST',
+  const payload = await apiRequest(editingNoticeId ? `/notices/${encodeURIComponent(editingNoticeId)}` : '/notices', {
+    method: editingNoticeId ? 'PATCH' : 'POST',
     body: {
       category: category === 'all' ? 'ops' : category,
       title,
@@ -18439,6 +18467,15 @@ async function publishNoticeDraft() {
     },
   });
   return normalizeNoticeRecord(payload || {});
+}
+
+async function deleteNoticeRecord(noticeId = '') {
+  const targetId = String(noticeId || '').trim();
+  if (!targetId) return null;
+  const payload = await apiRequest(`/notices/${encodeURIComponent(targetId)}`, {
+    method: 'DELETE',
+  });
+  return payload || null;
 }
 
 async function ensureNoticesTenantContext() {
@@ -18458,10 +18495,12 @@ async function loadNoticeListState({ force = false } = {}) {
   try {
     notices.rows = await fetchNoticesRows({
       category: notices.category,
+      search: notices.search,
       limit: 80,
     });
     notices.fetchedAt = Date.now();
     notices.loadedListCategory = normalizeNoticeCategory(notices.category || 'all');
+    notices.loadedListSearch = normalizeNoticeSearch(notices.search || '');
     return notices.rows;
   } catch (error) {
     notices.rows = [];
@@ -18523,14 +18562,22 @@ function buildNoticesRoute({
   mode = ensureNoticesState().mode,
   noticeId = ensureNoticesState().selectedNoticeId,
   category = ensureNoticesState().category,
+  search = ensureNoticesState().search,
 } = {}) {
   const params = new URLSearchParams();
   const normalizedCategory = normalizeNoticeCategory(category);
   const normalizedMode = normalizeNoticeViewMode(mode);
   const selectedNoticeId = String(noticeId || '').trim();
+  const normalizedSearch = normalizeNoticeSearch(search);
   if (normalizedCategory !== 'all') params.set('category', normalizedCategory);
+  if (normalizedSearch) params.set('q', normalizedSearch);
   if (normalizedMode === NOTICE_VIEW_MODE_COMPOSE && canManageNotices()) {
-    params.set('mode', 'new');
+    if (selectedNoticeId) {
+      params.set('mode', 'edit');
+      params.set('notice', selectedNoticeId);
+    } else {
+      params.set('mode', 'new');
+    }
   } else if (selectedNoticeId) {
     params.set('notice', selectedNoticeId);
   }
@@ -18543,6 +18590,7 @@ function applyNoticesRouteStateFromQuery(routePath = '', params = new URLSearchP
   if (route !== ROUTE_FEATURE_NOTICES) return;
   const notices = ensureNoticesState();
   notices.category = normalizeNoticeCategory(params.get('category') || 'all');
+  notices.search = normalizeNoticeSearch(params.get('q') || '');
   notices.selectedNoticeId = String(params.get('notice') || '').trim();
   if (String(params.get('mode') || '').trim() && canManageNotices()) {
     notices.mode = normalizeNoticeViewMode(params.get('mode') || '');
@@ -18554,6 +18602,28 @@ function applyNoticesRouteStateFromQuery(routePath = '', params = new URLSearchP
   if (!notices.selectedNoticeId) {
     notices.selectedRow = null;
   }
+}
+
+function applyNoticesSearchRoute(search = '', { replace = false } = {}) {
+  const notices = ensureNoticesState();
+  notices.search = normalizeNoticeSearch(search);
+  notices.mode = NOTICE_VIEW_MODE_LIST;
+  notices.selectedNoticeId = '';
+  notices.selectedRow = null;
+  notices.composeSourceNoticeId = '';
+  notices.loadedListCategory = '';
+  notices.loadedListSearch = '';
+  runActionSafely(
+    navigateToRoute(
+      buildNoticesRoute({
+        mode: NOTICE_VIEW_MODE_LIST,
+        category: notices.category,
+        search: notices.search,
+      }),
+      { replace },
+    ),
+    '공지 검색 조건을 적용하지 못했습니다.',
+  );
 }
 
 function setOpsViewTab(value = '', { syncRoute = false } = {}) {
@@ -32142,6 +32212,20 @@ function renderNoticesCategoryTabs() {
   });
 }
 
+function renderNoticesSearchControls() {
+  const notices = ensureNoticesState();
+  const searchInput = $('#noticesSearchInput');
+  const clearBtn = $('#noticesSearchClearBtn');
+  if (searchInput instanceof HTMLInputElement) {
+    if (searchInput.value !== notices.search) {
+      searchInput.value = notices.search;
+    }
+  }
+  if (clearBtn instanceof HTMLElement) {
+    clearBtn.classList.toggle('hidden', !String(notices.search || '').trim());
+  }
+}
+
 function renderNoticesListPanel() {
   const notices = ensureNoticesState();
   const list = $('#noticesList');
@@ -32158,9 +32242,14 @@ function renderNoticesListPanel() {
     } else if (notices.error) {
       metaEl.textContent = notices.error;
     } else {
+      const searchSuffix = String(notices.search || '').trim()
+        ? ` · 검색어 "${notices.search}"`
+        : '';
       metaEl.textContent = notices.rows.length
-        ? `등록된 공지 ${notices.rows.length}건`
-        : '아직 등록된 공지가 없습니다.';
+        ? `등록된 공지 ${notices.rows.length}건${searchSuffix}`
+        : String(notices.search || '').trim()
+          ? `검색 결과가 없습니다.${searchSuffix}`
+          : '아직 등록된 공지가 없습니다.';
     }
   }
   if (!list) return;
@@ -32179,11 +32268,15 @@ function renderNoticesListPanel() {
     list,
     notices.error
       ? '공지 목록을 다시 불러오지 못했습니다.'
+      : String(notices.search || '').trim()
+      ? '검색 조건에 맞는 공지가 없습니다.'
       : canManageNotices()
       ? '첫 공지를 등록하면 홈 상단 티저와 공지 목록에 바로 반영됩니다.'
       : '새 공지가 등록되면 카테고리, 제목, 날짜 형식으로 이 목록에서 확인할 수 있습니다.',
     notices.error
       ? notices.error
+      : String(notices.search || '').trim()
+      ? '카테고리를 바꾸거나 검색어를 지우고 다시 확인해 주세요.'
       : canManageNotices()
       ? `상단고정은 최대 ${NOTICE_PINNED_LIMIT}개까지 유지됩니다.`
       : `최근 ${Math.round(NOTICE_NEW_BADGE_WINDOW_HOURS / 24)}일 이내 공지는 새 배지로 구분됩니다.`,
@@ -32238,11 +32331,22 @@ function renderNoticesComposePanel() {
   const hintEl = $('#noticesComposeHint');
   const pinnedHintEl = $('#noticesComposePinnedHint');
   const categorySelect = $('#noticesComposeCategory');
+  const titleEl = $('#noticesComposePanelTitle');
+  const publishBtn = $('#noticesPublishBtn');
+  const editing = notices.mode === NOTICE_VIEW_MODE_COMPOSE && Boolean(String(notices.selectedNoticeId || '').trim());
+  if (titleEl) {
+    titleEl.textContent = editing ? '공지 수정' : '공지 작성';
+  }
   if (hintEl) {
-    hintEl.textContent = '카테고리, 제목, 본문을 입력해 즉시 공지로 발행합니다. 표, 이미지, 투표는 다음 단계에서 추가됩니다.';
+    hintEl.textContent = editing
+      ? '카테고리, 제목, 본문을 수정하면 기존 공지가 즉시 갱신됩니다.'
+      : '카테고리, 제목, 본문을 입력해 즉시 공지로 발행합니다. 표, 이미지, 투표는 다음 단계에서 추가됩니다.';
   }
   if (pinnedHintEl) {
     pinnedHintEl.textContent = `상단고정은 최대 ${NOTICE_PINNED_LIMIT}개까지만 유지됩니다. 오래된 고정 공지는 자동으로 내려갑니다.`;
+  }
+  if (publishBtn instanceof HTMLButtonElement) {
+    publishBtn.textContent = editing ? '수정 저장' : '발행';
   }
   if (categorySelect instanceof HTMLSelectElement && !categorySelect.options.length) {
     NOTICE_CATEGORY_OPTIONS.filter((item) => item.value !== 'all').forEach((item) => {
@@ -32265,6 +32369,8 @@ function renderNoticesView() {
   const notices = ensureNoticesState();
   const subtitle = $('#noticesViewSubtitle');
   const createBtn = $('#noticesCreateBtn');
+  const editBtn = $('#noticesDetailEditBtn');
+  const deleteBtn = $('#noticesDetailDeleteBtn');
   const listPanel = $('#noticesListPanel');
   const detailPanel = $('#noticesDetailPanel');
   const composePanel = $('#noticesComposePanel');
@@ -32276,7 +32382,14 @@ function renderNoticesView() {
   if (createBtn instanceof HTMLButtonElement) {
     createBtn.classList.toggle('hidden', !canManageNotices());
   }
+  if (editBtn instanceof HTMLButtonElement) {
+    editBtn.classList.toggle('hidden', !canManageNotices() || notices.mode !== NOTICE_VIEW_MODE_DETAIL || !notices.selectedRow);
+  }
+  if (deleteBtn instanceof HTMLButtonElement) {
+    deleteBtn.classList.toggle('hidden', !canManageNotices() || notices.mode !== NOTICE_VIEW_MODE_DETAIL || !notices.selectedRow);
+  }
   renderNoticesCategoryTabs();
+  renderNoticesSearchControls();
   renderNoticesListPanel();
   renderNoticesDetailPanel();
   renderNoticesComposePanel();
@@ -32303,7 +32416,14 @@ function shouldReloadNoticesOnCacheHit() {
   if (notices.mode === NOTICE_VIEW_MODE_LIST) {
     const targetCategory = normalizeNoticeCategory(notices.category || 'all');
     const loadedListCategory = normalizeNoticeCategory(notices.loadedListCategory || '');
-    return Boolean(notices.loading || loadedListCategory !== targetCategory);
+    const targetSearch = normalizeNoticeSearch(notices.search || '');
+    const loadedListSearch = normalizeNoticeSearch(notices.loadedListSearch || '');
+    return Boolean(notices.loading || loadedListCategory !== targetCategory || loadedListSearch !== targetSearch);
+  }
+  if (notices.mode === NOTICE_VIEW_MODE_COMPOSE && String(notices.selectedNoticeId || '').trim()) {
+    const composeNoticeId = String(notices.composeSourceNoticeId || '').trim();
+    const targetNoticeId = String(notices.selectedNoticeId || '').trim();
+    return Boolean(!composeNoticeId || composeNoticeId !== targetNoticeId);
   }
   return false;
 }
@@ -32330,6 +32450,19 @@ async function loadNoticesViewPresenter() {
   if (notices.mode === NOTICE_VIEW_MODE_DETAIL && notices.selectedNoticeId) {
     try {
       await loadNoticeDetailState(notices.selectedNoticeId);
+    } catch {
+      // renderNoticesView handles error state
+    }
+  } else if (notices.mode === NOTICE_VIEW_MODE_COMPOSE && notices.selectedNoticeId && canManageNotices()) {
+    try {
+      if (String(notices.composeSourceNoticeId || '').trim() !== String(notices.selectedNoticeId || '').trim()) {
+        const row = await loadNoticeDetailState(notices.selectedNoticeId);
+        if (row) {
+          fillNoticeComposeDraftFromRow(row);
+        }
+      } else {
+        renderNoticesView();
+      }
     } catch {
       // renderNoticesView handles error state
     }
@@ -55049,6 +55182,12 @@ function bindUiEvents() {
       runActionSafely(onLeaveWorkspaceSubmit(event), '휴가 신청 처리 중 오류가 발생했습니다.');
       return;
     }
+    if (form.id === 'noticesSearchForm') {
+      event.preventDefault();
+      const searchInput = $('#noticesSearchInput');
+      applyNoticesSearchRoute(searchInput instanceof HTMLInputElement ? searchInput.value : '');
+      return;
+    }
     if (form.id === 'correctionForm') {
       event.preventDefault();
       runActionSafely(onCorrectionRequestSubmit(event), '정정 요청 처리 중 오류가 발생했습니다.');
@@ -55157,6 +55296,13 @@ function bindUiEvents() {
 
     if (target.id === 'noticesComposeTitle' || target.id === 'noticesComposeBody') {
       syncNoticeComposeDraftFromFields();
+      return;
+    }
+
+    if (target.id === 'noticesSearchInput') {
+      const notices = ensureNoticesState();
+      notices.search = target instanceof HTMLInputElement ? normalizeNoticeSearch(target.value) : '';
+      renderNoticesSearchControls();
       return;
     }
   }, { signal });
@@ -55973,11 +56119,16 @@ function bindUiEvents() {
         showToast('공지 작성 권한이 없습니다.', 'error');
         return;
       }
-      resetNoticeComposeDraft(ensureNoticesState().category);
+      const notices = ensureNoticesState();
+      notices.selectedNoticeId = '';
+      notices.selectedRow = null;
+      notices.loadedDetailNoticeId = '';
+      resetNoticeComposeDraft(notices.category);
       runActionSafely(
         navigateToRoute(buildNoticesRoute({
           mode: NOTICE_VIEW_MODE_COMPOSE,
-          category: ensureNoticesState().category,
+          category: notices.category,
+          search: notices.search,
         })),
         '공지 작성 화면을 열지 못했습니다.',
       );
@@ -55989,10 +56140,13 @@ function bindUiEvents() {
       notices.mode = NOTICE_VIEW_MODE_LIST;
       notices.selectedNoticeId = '';
       notices.selectedRow = null;
+      notices.loadedDetailNoticeId = '';
+      notices.composeSourceNoticeId = '';
       runActionSafely(
         navigateToRoute(buildNoticesRoute({
           mode: NOTICE_VIEW_MODE_LIST,
-          category: ensureNoticesState().category,
+          category: notices.category,
+          search: notices.search,
         })),
         '공지 목록으로 돌아가지 못했습니다.',
       );
@@ -56006,8 +56160,15 @@ function bindUiEvents() {
       notices.mode = NOTICE_VIEW_MODE_LIST;
       notices.selectedNoticeId = '';
       notices.selectedRow = null;
+      notices.loadedDetailNoticeId = '';
+      notices.composeSourceNoticeId = '';
+      notices.loadedListCategory = '';
       runActionSafely(
-        navigateToRoute(buildNoticesRoute({ mode: NOTICE_VIEW_MODE_LIST, category })),
+        navigateToRoute(buildNoticesRoute({
+          mode: NOTICE_VIEW_MODE_LIST,
+          category,
+          search: notices.search,
+        })),
         '공지 카테고리를 전환하지 못했습니다.',
       );
       return;
@@ -56024,10 +56185,87 @@ function bindUiEvents() {
       notices.selectedNoticeId = noticeId;
       notices.mode = NOTICE_VIEW_MODE_DETAIL;
       notices.selectedRow = null;
+      notices.composeSourceNoticeId = '';
       runActionSafely(
-        navigateToRoute(buildNoticesRoute({ noticeId, category, mode: NOTICE_VIEW_MODE_DETAIL })),
+        navigateToRoute(buildNoticesRoute({
+          noticeId,
+          category,
+          mode: NOTICE_VIEW_MODE_DETAIL,
+          search: notices.search,
+        })),
         '공지 상세를 열지 못했습니다.',
       );
+      return;
+    }
+
+    if (action === 'notices-search-clear') {
+      applyNoticesSearchRoute('', { replace: true });
+      return;
+    }
+
+    if (action === 'notices-open-edit') {
+      if (!canManageNotices()) {
+        showToast('공지 수정 권한이 없습니다.', 'error');
+        return;
+      }
+      const notices = ensureNoticesState();
+      const selected = notices.selectedRow;
+      const noticeId = String(selected?.id || notices.selectedNoticeId || '').trim();
+      if (!noticeId || !selected) {
+        showToast('수정할 공지를 찾지 못했습니다.', 'error', 2200);
+        return;
+      }
+      fillNoticeComposeDraftFromRow(selected);
+      notices.selectedNoticeId = noticeId;
+      notices.mode = NOTICE_VIEW_MODE_COMPOSE;
+      runActionSafely(
+        navigateToRoute(buildNoticesRoute({
+          mode: NOTICE_VIEW_MODE_COMPOSE,
+          noticeId,
+          category: selected.category || notices.category,
+          search: notices.search,
+        })),
+        '공지 수정 화면을 열지 못했습니다.',
+      );
+      return;
+    }
+
+    if (action === 'notices-delete') {
+      if (!canManageNotices()) {
+        showToast('공지 삭제 권한이 없습니다.', 'error');
+        return;
+      }
+      const notices = ensureNoticesState();
+      const selected = notices.selectedRow;
+      const noticeId = String(selected?.id || notices.selectedNoticeId || '').trim();
+      const title = String(selected?.title || '').trim() || '선택 공지';
+      if (!noticeId) {
+        showToast('삭제할 공지를 찾지 못했습니다.', 'error', 2200);
+        return;
+      }
+      openConfirmDialog({
+        title: '공지 삭제',
+        message: `"${title}" 공지를 삭제하시겠습니까? 삭제 후에는 홈 티저와 목록에서 즉시 사라집니다.`,
+        acceptLabel: '공지 삭제',
+        acceptVariant: 'btn-destructive',
+        triggerEl: actionEl,
+        onAccept: async () => {
+          await deleteNoticeRecord(noticeId);
+          notices.selectedNoticeId = '';
+          notices.selectedRow = null;
+          notices.loadedDetailNoticeId = '';
+          notices.loadedListCategory = '';
+          notices.loadedListSearch = '';
+          notices.composeSourceNoticeId = '';
+          await loadHomeNoticeTeaser({ force: true });
+          showToast('공지를 삭제했습니다.', 'success', 2200);
+          await navigateToRoute(buildNoticesRoute({
+            mode: NOTICE_VIEW_MODE_LIST,
+            category: notices.category,
+            search: notices.search,
+          }));
+        },
+      });
       return;
     }
 
@@ -56037,22 +56275,27 @@ function bindUiEvents() {
         return;
       }
       runWithBusy(async () => {
-        const created = await publishNoticeDraft();
-        if (!created) return;
         const notices = ensureNoticesState();
-        notices.category = normalizeNoticeCategory(created.category || notices.category || 'all');
-        notices.selectedNoticeId = created.id;
-        notices.selectedRow = created;
+        const editingNoticeId = String(notices.selectedNoticeId || '').trim();
+        const saved = await saveNoticeDraft();
+        if (!saved) return;
+        notices.category = normalizeNoticeCategory(saved.category || notices.category || 'all');
+        notices.selectedNoticeId = saved.id;
+        notices.selectedRow = saved;
         notices.mode = NOTICE_VIEW_MODE_DETAIL;
-        resetNoticeComposeDraft(created.category || 'ops');
+        notices.loadedDetailNoticeId = saved.id;
+        resetNoticeComposeDraft(saved.category || 'ops');
+        notices.loadedListCategory = '';
+        notices.loadedListSearch = '';
         await loadHomeNoticeTeaser({ force: true });
-        showToast('공지를 발행했습니다.', 'success', 2200);
+        showToast(editingNoticeId ? '공지를 수정했습니다.' : '공지를 발행했습니다.', 'success', 2200);
         await navigateToRoute(buildNoticesRoute({
-          noticeId: created.id,
-          category: created.category,
+          noticeId: saved.id,
+          category: saved.category,
           mode: NOTICE_VIEW_MODE_DETAIL,
+          search: notices.search,
         }));
-      }, '발행 중...');
+      }, '저장 중...');
       return;
     }
 

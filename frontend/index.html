@@ -24,7 +24,7 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%23f97316'/%3E%3Ctext x='24' y='31' text-anchor='middle' font-size='22' fill='white' font-family='Arial,sans-serif'%3ERG%3C/text%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="css/styles.css?v=20260323-notices-phase1-v2" />
+    <link rel="stylesheet" href="css/styles.css?v=20260323-notices-phase2-v1" />
   </head>
   <body>
     <div id="app">
@@ -2982,6 +2982,12 @@
             </div>
             <div class="workspace-tabbar-row notices-toolbar-row">
               <div id="noticesCategoryTabs" class="workspace-tabs" aria-label="공지 카테고리"></div>
+              <form id="noticesSearchForm" class="notices-search-form" role="search">
+                <label class="sr-only" for="noticesSearchInput">공지 검색</label>
+                <input id="noticesSearchInput" type="search" placeholder="제목 또는 본문 검색" />
+                <button class="btn btn-secondary" type="submit">검색</button>
+                <button id="noticesSearchClearBtn" class="btn btn-ghost hidden" type="button" data-action="notices-search-clear">지우기</button>
+              </form>
             </div>
 
             <div id="noticesListPanel" class="notices-panel">
@@ -3003,7 +3009,11 @@
                     <h3 id="noticesDetailTitle">공지 상세</h3>
                     <p id="noticesDetailMeta" class="muted">선택한 공지를 준비하는 중입니다.</p>
                   </div>
-                  <button class="btn btn-secondary" type="button" data-action="notices-go-list">목록으로</button>
+                  <div class="notices-detail-actions">
+                    <button id="noticesDetailEditBtn" class="btn btn-secondary hidden" type="button" data-action="notices-open-edit">수정</button>
+                    <button id="noticesDetailDeleteBtn" class="btn btn-secondary hidden" type="button" data-action="notices-delete">삭제</button>
+                    <button class="btn btn-secondary" type="button" data-action="notices-go-list">목록으로</button>
+                  </div>
                 </div>
                 <div id="noticesDetailBody" class="notices-detail-body"></div>
               </article>
@@ -3014,7 +3024,7 @@
                 <article class="module-card stack notices-compose-card">
                   <div class="notices-section-head">
                     <div>
-                      <h3>공지 작성</h3>
+                      <h3 id="noticesComposePanelTitle">공지 작성</h3>
                       <p id="noticesComposeHint" class="muted">작성 워크스페이스를 준비하는 중입니다.</p>
                     </div>
                     <button class="btn btn-secondary" type="button" data-action="notices-go-list">목록으로</button>
@@ -5259,7 +5269,7 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260323-notices-phase1-v2"></script>
+    <script src="config.js?v=20260323-notices-phase2-v1"></script>
     <script>
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
@@ -5512,7 +5522,7 @@
         });
 
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=20260323-notices-phase1-v2', { updateViaCache: 'none' })
+          navigator.serviceWorker.register('./sw.js?v=20260323-notices-phase2-v1', { updateViaCache: 'none' })
             .then((registration) => {
               registration.update().catch(() => {});
 
