@@ -431,6 +431,29 @@ h3 {
   margin-left: auto;
 }
 
+.topbar-bell-btn {
+  width: 34px;
+  min-height: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.topbar-bell-btn:hover {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.topbar-bell-art {
+  display: block;
+  width: 22px;
+  height: 22px;
+  background: center / contain no-repeat url('../assets/topbar-bell-icon.svg');
+}
+
 .dev-tenant-context-bar {
   margin-bottom: var(--space-8);
   padding: 10px 12px;
@@ -502,6 +525,11 @@ h3 {
   justify-content: center;
   font-size: 1.1rem;
   line-height: 1;
+}
+
+.topbar-bell-btn .notif-badge {
+  top: -1px;
+  right: -3px;
 }
 
 .hamburgerBtn {
