@@ -21725,8 +21725,8 @@ button.attendance-status-special-card.active {
 #view-notices {
   display: grid;
   gap: 18px;
-  --notices-list-width: min(860px, calc(100% - 72px));
-  --notices-doc-width: min(760px, calc(100% - 72px));
+  --notices-list-width: min(820px, calc(100% - 96px));
+  --notices-doc-width: min(740px, calc(100% - 96px));
 }
 
 #view-notices.panel.card {
@@ -21734,6 +21734,11 @@ button.attendance-status-special-card.active {
   border: none;
   box-shadow: none;
   padding: 0;
+}
+
+.notices-workspace-head {
+  width: var(--notices-list-width);
+  margin-inline: auto;
 }
 
 .notices-workspace-head .workspace-head-actions {
@@ -21949,6 +21954,16 @@ button.attendance-status-special-card.active {
   display: grid;
   gap: 0;
   padding: 24px 0 12px;
+}
+
+.notices-compose-panel {
+  width: min(1180px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 28px 32px 24px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.04);
 }
 
 .notices-detail-body {
@@ -22306,15 +22321,11 @@ button.attendance-status-special-card.active {
 
 .notices-command-link {
   min-height: 34px;
-  padding: 0 10px;
+  padding-left: 0;
+  padding-right: 0;
   border-radius: 999px;
   font-size: 13px;
   line-height: 1;
-}
-
-.notices-command-link {
-  padding-left: 0;
-  padding-right: 0;
 }
 
 .notices-command-publish {
@@ -22353,15 +22364,6 @@ button.attendance-status-special-card.active {
   line-height: 1.4;
   font-weight: 700;
   letter-spacing: 0.02em;
-}
-
-.notices-compose-setting-meta {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--ui-text-secondary);
-  justify-self: end;
-  text-align: right;
 }
 
 .notices-compose-settings-panel .input-field select {
@@ -22555,9 +22557,55 @@ button.attendance-status-special-card.active {
   color: #c2410c;
 }
 
-.notices-compose-inline-blocks {
+.notices-table-picker {
   display: grid;
-  gap: 0;
+  gap: 12px;
+  width: fit-content;
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.notices-table-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notices-table-picker-head strong {
+  color: var(--ui-text-primary);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.notices-table-picker-head span {
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.notices-table-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 18px);
+  gap: 6px;
+}
+
+.notices-table-picker-cell {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 4px;
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.notices-table-picker-cell.is-active {
+  border-color: rgba(249, 115, 22, 0.42);
+  background: rgba(255, 237, 213, 0.96);
 }
 
 .notices-compose-inline-block {
@@ -22587,6 +22635,12 @@ button.attendance-status-special-card.active {
   line-height: 1.4;
   font-weight: 700;
   letter-spacing: 0.04em;
+}
+
+.notices-compose-inline-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
 }
 
 .notices-inline-remove {
@@ -22817,6 +22871,33 @@ button.attendance-status-special-card.active {
   background: transparent;
 }
 
+.notices-compose-poll-summary {
+  display: grid;
+  gap: 12px;
+}
+
+.notices-compose-poll-question {
+  color: var(--ui-text-primary);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.notices-compose-poll-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notices-compose-poll-preview-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ui-text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
 .notices-poll-option-list {
   display: grid;
   gap: 0;
@@ -22897,9 +22978,65 @@ button.attendance-status-special-card.active {
   line-height: 1.45;
 }
 
+.notices-compose-poll-modal {
+  position: fixed;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1600;
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  display: grid;
+  gap: 0;
+  padding: 24px;
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.18);
+}
+
+.notices-compose-poll-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.notices-compose-poll-modal-head h3 {
+  margin: 0;
+  color: var(--ui-text-primary);
+  font-size: 22px;
+  line-height: 1.25;
+  letter-spacing: -0.03em;
+}
+
+.notices-compose-poll-modal-head .muted {
+  margin: 8px 0 0;
+}
+
+.notices-compose-poll-modal-body {
+  display: grid;
+  gap: 16px;
+  padding-top: 16px;
+}
+
+.notices-compose-setting-cluster-modal {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.notices-compose-poll-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 16px;
+  margin-top: 18px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
 @media (max-width: 1199px) {
   .notices-compose-settings-panel,
-  .notices-compose-setting-cluster {
+  .notices-compose-setting-cluster,
+  .notices-compose-setting-cluster-modal {
     grid-template-columns: 1fr;
   }
 
@@ -22975,7 +23112,9 @@ button.attendance-status-special-card.active {
   .notices-poll-head,
   .notices-poll-actions,
   .notices-compose-commandbar,
-  .notices-compose-toggle-row {
+  .notices-compose-toggle-row,
+  .notices-compose-poll-modal-head,
+  .notices-compose-poll-modal-actions {
     flex-direction: column;
     align-items: stretch;
   }
@@ -22993,6 +23132,11 @@ button.attendance-status-special-card.active {
   .notices-compose-settings-panel {
     padding-left: 0;
     padding-right: 0;
+  }
+
+  .notices-compose-panel {
+    width: calc(100% - 24px);
+    padding: 22px 16px 20px;
   }
 
   .notices-compose-settings-panel {

@@ -25,7 +25,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="assets/sentrix-hr-favicon-v4-16.png?v=20260323-sentrix-browser-brand-v4" />
     <link rel="shortcut icon" href="assets/sentrix-hr-favicon-v4.ico?v=20260323-sentrix-browser-brand-v4" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/sentrix-hr-favicon-v4-180.png?v=20260323-sentrix-browser-brand-v4" />
-    <link rel="stylesheet" href="css/styles.css?v=20260323-notices-phase6-v1" />
+    <link rel="stylesheet" href="css/styles.css?v=20260323-notices-compose-modal-v2" />
   </head>
   <body>
     <div id="app">
@@ -3135,6 +3135,14 @@
                       </button>
                     </div>
 
+                <div id="noticesComposeTablePicker" class="notices-table-picker hidden" aria-label="표 삽입">
+                  <div class="notices-table-picker-head">
+                    <strong>표 삽입</strong>
+                    <span id="noticesComposeTablePickerLabel">2 x 2 표</span>
+                  </div>
+                  <div id="noticesComposeTablePickerGrid" class="notices-table-picker-grid" role="grid" aria-label="표 크기 선택"></div>
+                </div>
+
                 <div id="noticesComposeDocumentFlow" class="notices-compose-document-flow">
                   <section id="noticesComposeBodyBlock" class="notices-compose-inline-block notices-compose-text-block" data-notice-inline-kind="body">
                     <label class="sr-only" for="noticesComposeBody">본문 문단</label>
@@ -3159,65 +3167,13 @@
                   <section id="noticesComposePollBlock" class="notices-compose-inline-block hidden" aria-label="투표 블록" data-notice-inline-kind="poll">
                     <div class="notices-compose-inline-meta">
                       <span class="notices-compose-inline-kind">투표</span>
-                      <button type="button" class="notices-inline-remove" data-action="notices-remove-poll-block">삭제</button>
+                      <div class="notices-compose-inline-actions">
+                        <button type="button" class="notices-inline-remove" data-action="notices-edit-poll-block">편집</button>
+                        <button type="button" class="notices-inline-remove" data-action="notices-remove-poll-block">삭제</button>
+                      </div>
                     </div>
-                    <div id="noticesComposePollPanel" class="notices-poll-panel">
-                      <label class="input-field notices-compose-inline-input-field" for="noticesComposePollQuestion">
-                        <span class="sr-only">질문</span>
-                        <input id="noticesComposePollQuestion" type="text" placeholder="예: 이번 주 야간 근무 희망 여부를 알려주세요." />
-                      </label>
-
-                          <div class="notices-compose-setting-cluster">
-                            <div class="notices-compose-setting-field">
-                              <span class="notices-compose-setting-label">선택 방식</span>
-                              <div class="notices-segmented-control" role="group" aria-label="투표 선택 방식">
-                                <button type="button" class="notices-segmented-option" data-action="notices-set-poll-mode" data-value="single">단일 선택</button>
-                                <button type="button" class="notices-segmented-option" data-action="notices-set-poll-mode" data-value="multiple">복수 선택</button>
-                              </div>
-                              <select id="noticesComposePollSelectionMode" hidden>
-                                <option value="single">단일 선택</option>
-                                <option value="multiple">복수 선택</option>
-                              </select>
-                            </div>
-
-                            <label class="input-field notices-compose-setting-field" for="noticesComposePollVisibility">
-                              <span>결과 공개</span>
-                              <select id="noticesComposePollVisibility">
-                                <option value="always">즉시 공개</option>
-                                <option value="after_close">마감 후 공개</option>
-                              </select>
-                            </label>
-
-                            <label class="input-field notices-compose-setting-field" for="noticesComposePollClosesAt">
-                              <span>마감 시각</span>
-                              <input id="noticesComposePollClosesAt" type="datetime-local" />
-                            </label>
-                          </div>
-
-                          <div class="notices-compose-toggle-stack">
-                            <div class="notices-compose-toggle-row">
-                              <div class="notices-compose-toggle-copy">
-                                <strong>익명</strong>
-                              </div>
-                              <button type="button" id="noticesComposePollAnonymousToggle" class="notices-switch-button" data-action="notices-toggle-poll-anonymous" aria-pressed="false">익명</button>
-                            </div>
-
-                            <div class="notices-compose-toggle-row">
-                              <div class="notices-compose-toggle-copy">
-                                <strong>재투표 허용</strong>
-                              </div>
-                              <button type="button" id="noticesComposePollAllowChangeToggle" class="notices-switch-button" data-action="notices-toggle-poll-allow-change" aria-pressed="false">허용 안 함</button>
-                            </div>
-                          </div>
-
-                          <div class="notices-poll-editor-head">
-                            <strong>선택지</strong>
-                            <button id="noticesComposePollAddOptionBtn" class="notices-editor-action" type="button" data-action="notices-poll-add-option">선택지 추가</button>
-                          </div>
-
-                          <ul id="noticesComposePollOptionList" class="notices-poll-option-list"></ul>
-                        </div>
-                      </section>
+                    <div id="noticesComposePollPanel" class="notices-poll-panel"></div>
+                  </section>
 
                   <section id="noticesComposeTableBlock" class="notices-compose-inline-block hidden" aria-label="표 블록" data-notice-inline-kind="table">
                     <div class="notices-compose-inline-meta">
@@ -5411,6 +5367,77 @@
           <button class="btn btn-primary" id="confirmAcceptBtn" type="button" data-action="confirm-accept">확인</button>
         </div>
       </section>
+      <div id="noticesPollModalBackdrop" class="sheet-backdrop hidden" data-action="notices-poll-modal-close"></div>
+      <section id="noticesPollModal" class="notices-compose-poll-modal hidden" role="dialog" aria-modal="true" aria-labelledby="noticesPollModalTitle">
+        <div class="notices-compose-poll-modal-head">
+          <div>
+            <h3 id="noticesPollModalTitle">투표 설정</h3>
+            <p class="muted">질문과 선택지를 정리한 뒤 문서 안에 투표를 넣습니다.</p>
+          </div>
+          <button type="button" class="btn btn-ghost" data-action="notices-poll-modal-close">닫기</button>
+        </div>
+        <div class="notices-compose-poll-modal-body">
+          <label class="input-field notices-compose-inline-input-field" for="noticesComposePollModalQuestion">
+            <span>질문</span>
+            <input id="noticesComposePollModalQuestion" type="text" placeholder="예: 이번 주 야간 근무 희망 여부를 알려주세요." />
+          </label>
+
+          <div class="notices-compose-setting-cluster notices-compose-setting-cluster-modal">
+            <div class="notices-compose-setting-field">
+              <span class="notices-compose-setting-label">선택 방식</span>
+              <div class="notices-segmented-control" role="group" aria-label="투표 선택 방식">
+                <button type="button" class="notices-segmented-option" data-action="notices-set-poll-modal-mode" data-value="single">단일 선택</button>
+                <button type="button" class="notices-segmented-option" data-action="notices-set-poll-modal-mode" data-value="multiple">복수 선택</button>
+              </div>
+            </div>
+
+            <label class="input-field notices-compose-setting-field" for="noticesComposePollModalVisibility">
+              <span>결과 공개</span>
+              <select id="noticesComposePollModalVisibility">
+                <option value="always">즉시 공개</option>
+                <option value="after_close">마감 후 공개</option>
+              </select>
+            </label>
+
+            <label class="input-field notices-compose-setting-field" for="noticesComposePollModalClosesAt">
+              <span>마감 시각</span>
+              <input id="noticesComposePollModalClosesAt" type="datetime-local" />
+            </label>
+          </div>
+
+          <div class="notices-compose-toggle-stack">
+            <div class="notices-compose-toggle-row">
+              <div class="notices-compose-toggle-copy">
+                <strong>익명</strong>
+              </div>
+              <button type="button" id="noticesComposePollModalAnonymousToggle" class="notices-switch-button" data-action="notices-toggle-poll-modal-anonymous" aria-pressed="false">
+                <span class="notices-switch-track" aria-hidden="true"></span>
+                <span class="notices-switch-copy">익명 ON</span>
+              </button>
+            </div>
+
+            <div class="notices-compose-toggle-row">
+              <div class="notices-compose-toggle-copy">
+                <strong>재투표 허용</strong>
+              </div>
+              <button type="button" id="noticesComposePollModalAllowChangeToggle" class="notices-switch-button" data-action="notices-toggle-poll-modal-allow-change" aria-pressed="false">
+                <span class="notices-switch-track" aria-hidden="true"></span>
+                <span class="notices-switch-copy">허용 안 함</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="notices-poll-editor-head">
+            <strong>선택지</strong>
+            <button id="noticesComposePollModalAddOptionBtn" class="notices-editor-action" type="button" data-action="notices-poll-modal-add-option">선택지 추가</button>
+          </div>
+          <ul id="noticesComposePollModalOptionList" class="notices-poll-option-list"></ul>
+        </div>
+        <div class="notices-compose-poll-modal-actions">
+          <button type="button" class="btn btn-ghost" data-action="notices-poll-modal-close">취소</button>
+          <button type="button" class="btn btn-primary" data-action="notices-poll-modal-save">투표 넣기</button>
+        </div>
+      </section>
       <div id="taskProgressBackdrop" class="task-progress-backdrop hidden"></div>
       <section id="taskProgressModal" class="task-progress-modal hidden" role="dialog" aria-modal="true" aria-live="polite" aria-hidden="true" aria-labelledby="taskProgressTitle" aria-describedby="taskProgressDetail">
         <div class="task-progress-visual" aria-hidden="true">
@@ -5448,7 +5475,7 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260323-notices-phase6-v1"></script>
+    <script src="config.js?v=20260323-notices-compose-modal-v2"></script>
     <script>
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
@@ -5701,7 +5728,7 @@
         });
 
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=20260323-notices-phase6-v1', { updateViaCache: 'none' })
+          navigator.serviceWorker.register('./sw.js?v=20260323-notices-compose-modal-v2', { updateViaCache: 'none' })
             .then((registration) => {
               registration.update().catch(() => {});
 

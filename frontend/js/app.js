@@ -421,6 +421,8 @@ const ROUTE_NOTIFICATIONS = '/notifications';
 const NOTICE_PINNED_LIMIT = 3;
 const NOTICE_HOME_TEASER_LIMIT = 5;
 const NOTICE_NEW_BADGE_WINDOW_HOURS = 72;
+const NOTICE_TABLE_PICKER_MAX_ROWS = 6;
+const NOTICE_TABLE_PICKER_MAX_COLS = 6;
 const NOTICE_POLL_MAX_OPTIONS = 10;
 const NOTICE_POLL_MIN_OPTIONS = 2;
 const NOTICE_COMPOSE_DRAFT_STORAGE_PREFIX = 'arls_notice_compose_draft_v1';
@@ -1255,6 +1257,12 @@ function createInitialNoticesState() {
     composeAutosaveTimer: 0,
     draftSavedAt: '',
     draftStorageMessage: '',
+    composeTablePickerOpen: false,
+    composeTablePickerRows: 2,
+    composeTablePickerCols: 2,
+    composePollModalOpen: false,
+    composePollModalDraft: createDefaultNoticePollDraft(),
+    composePollModalTriggerEl: null,
     composeDraft: {
       category: 'ops',
       title: '',
@@ -1324,6 +1332,21 @@ function createDefaultNoticeImageDraft() {
     imageSrc: '',
     caption: '',
   };
+}
+
+function createNoticeTableColumns(count = 2) {
+  const length = Math.max(1, Number.parseInt(String(count || 2), 10) || 2);
+  const base = createDefaultNoticeTableDraft().columns;
+  return Array.from({ length }, (_, index) => {
+    if (length === 2 && base[index]) return base[index];
+    return `열 ${index + 1}`;
+  });
+}
+
+function createNoticeTableRows(rowCount = 2, colCount = 2) {
+  const rows = Math.max(1, Number.parseInt(String(rowCount || 2), 10) || 2);
+  const cols = Math.max(1, Number.parseInt(String(colCount || 2), 10) || 2);
+  return Array.from({ length: rows }, () => Array.from({ length: cols }, () => ''));
 }
 
 const NOTICE_COMPOSE_OPTIONAL_BLOCK_KINDS = ['image', 'table', 'poll'];
@@ -9819,6 +9842,7 @@ function isModalToastContext() {
   const overlaySelectors = [
     '#sheetBackdrop',
     '#confirmBackdrop',
+    '#noticesPollModalBackdrop',
     '#requestsUnifiedDetailBackdrop',
     '#leaveWorkspaceDetailBackdrop',
     '#attendanceAdminDrawerBackdrop',
@@ -19112,7 +19136,6 @@ function isNoticeComposeTextField(target) {
   const id = String(field.id || '').trim();
   return id === 'noticesComposeTitle'
     || id === 'noticesComposeBody'
-    || id === 'noticesComposePollQuestion'
     || id === 'noticesComposeTableTitle';
 }
 
@@ -19121,41 +19144,7 @@ function syncNoticeComposeDraftFromFields() {
   const categorySelect = $('#noticesComposeCategory');
   const titleInput = $('#noticesComposeTitle');
   const bodyInput = $('#noticesComposeBody');
-  const pollQuestionInput = $('#noticesComposePollQuestion');
-  const pollSelectionModeInput = $('#noticesComposePollSelectionMode');
-  const pollVisibilityInput = $('#noticesComposePollVisibility');
-  const pollClosesAtInput = $('#noticesComposePollClosesAt');
   const tableTitleInput = $('#noticesComposeTableTitle');
-  const nextPoll = cloneNoticePollDraft(notices.composeDraft?.poll);
-  if (pollQuestionInput instanceof HTMLInputElement) {
-    nextPoll.question = String(pollQuestionInput.value || '').trim();
-  }
-  nextPoll.enabled = Boolean(notices.composeDraft?.poll?.enabled);
-  if (pollSelectionModeInput instanceof HTMLSelectElement) {
-    nextPoll.allowMultiple = String(pollSelectionModeInput.value || '').trim() === 'multiple';
-  }
-  nextPoll.isAnonymous = Boolean(notices.composeDraft?.poll?.isAnonymous);
-  if (pollVisibilityInput instanceof HTMLSelectElement) {
-    nextPoll.resultVisibility = normalizeNoticePollResultVisibility(pollVisibilityInput.value);
-  }
-  if (pollClosesAtInput instanceof HTMLInputElement) {
-    nextPoll.closesAt = String(pollClosesAtInput.value || '').trim()
-      ? new Date(pollClosesAtInput.value).toISOString()
-      : '';
-  }
-  nextPoll.allowChangeVote = Boolean(notices.composeDraft?.poll?.allowChangeVote);
-  document.querySelectorAll('[data-notice-poll-option-index]').forEach((inputEl) => {
-    if (!(inputEl instanceof HTMLInputElement)) return;
-    const index = Math.max(0, Number.parseInt(inputEl.dataset.noticePollOptionIndex || '0', 10) || 0);
-    if (!nextPoll.options[index]) {
-      nextPoll.options[index] = createDefaultNoticePollOptionDraft(index);
-    }
-    nextPoll.options[index] = {
-      ...nextPoll.options[index],
-      label: String(inputEl.value || '').trim(),
-      index,
-    };
-  });
   const nextTable = cloneNoticeTableDraft(notices.composeDraft?.table);
   if (tableTitleInput instanceof HTMLInputElement) {
     nextTable.title = String(tableTitleInput.value || '').trim();
@@ -19176,7 +19165,7 @@ function syncNoticeComposeDraftFromFields() {
     blockOrder: normalizeNoticeComposeBlockOrder(notices.composeDraft?.blockOrder, notices.composeDraft),
     imagesEnabled,
     images: nextImages,
-    poll: nextPoll,
+    poll: cloneNoticePollDraft(notices.composeDraft?.poll),
     table: nextTable,
     isPinned: Boolean(notices.composeDraft?.isPinned),
   };
@@ -19197,10 +19186,6 @@ function writeNoticeComposeDraftToFields() {
   const categorySelect = $('#noticesComposeCategory');
   const titleInput = $('#noticesComposeTitle');
   const bodyInput = $('#noticesComposeBody');
-  const pollQuestionInput = $('#noticesComposePollQuestion');
-  const pollSelectionModeInput = $('#noticesComposePollSelectionMode');
-  const pollVisibilityInput = $('#noticesComposePollVisibility');
-  const pollClosesAtInput = $('#noticesComposePollClosesAt');
   const tableTitleInput = $('#noticesComposeTableTitle');
   if (categorySelect instanceof HTMLSelectElement) {
     const nextCategory = normalizeNoticeCategory(draft.category || notices.category || 'ops');
@@ -19211,18 +19196,6 @@ function writeNoticeComposeDraftToFields() {
   }
   if (bodyInput instanceof HTMLTextAreaElement) {
     bodyInput.value = String(draft.bodyText || '');
-  }
-  if (pollQuestionInput instanceof HTMLInputElement) {
-    pollQuestionInput.value = String(draft.poll?.question || '');
-  }
-  if (pollSelectionModeInput instanceof HTMLSelectElement) {
-    pollSelectionModeInput.value = Boolean(draft.poll?.allowMultiple) ? 'multiple' : 'single';
-  }
-  if (pollVisibilityInput instanceof HTMLSelectElement) {
-    pollVisibilityInput.value = normalizeNoticePollResultVisibility(draft.poll?.resultVisibility || 'always');
-  }
-  if (pollClosesAtInput instanceof HTMLInputElement) {
-    pollClosesAtInput.value = formatNoticePollDateTimeInputValue(draft.poll?.closesAt || '');
   }
   if (tableTitleInput instanceof HTMLInputElement) {
     tableTitleInput.value = String(draft.table?.title || '');
@@ -19401,6 +19374,80 @@ function renderNoticeComposeToolbar() {
   });
 }
 
+function closeNoticeComposeTablePicker() {
+  const notices = ensureNoticesState();
+  notices.composeTablePickerOpen = false;
+  renderNoticeComposeTablePicker();
+}
+
+function renderNoticeComposeTablePicker() {
+  const notices = ensureNoticesState();
+  const picker = $('#noticesComposeTablePicker');
+  const label = $('#noticesComposeTablePickerLabel');
+  const grid = $('#noticesComposeTablePickerGrid');
+  if (picker instanceof HTMLElement) {
+    picker.classList.toggle('hidden', !notices.composeTablePickerOpen);
+  }
+  if (label instanceof HTMLElement) {
+    label.textContent = `${notices.composeTablePickerRows} x ${notices.composeTablePickerCols} 표`;
+  }
+  if (!(grid instanceof HTMLElement)) return;
+  grid.innerHTML = '';
+  for (let row = 1; row <= NOTICE_TABLE_PICKER_MAX_ROWS; row += 1) {
+    for (let col = 1; col <= NOTICE_TABLE_PICKER_MAX_COLS; col += 1) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'notices-table-picker-cell';
+      if (row <= notices.composeTablePickerRows && col <= notices.composeTablePickerCols) {
+        button.classList.add('is-active');
+      }
+      button.dataset.action = 'notices-table-picker-select';
+      button.dataset.noticeTablePickerRows = String(row);
+      button.dataset.noticeTablePickerCols = String(col);
+      button.setAttribute('aria-label', `${row}행 ${col}열 표 넣기`);
+      grid.appendChild(button);
+    }
+  }
+}
+
+function openNoticeComposeTablePicker() {
+  const notices = ensureNoticesState();
+  const tableDraft = cloneNoticeTableDraft(notices.composeDraft?.table);
+  notices.composeTablePickerRows = Math.max(1, Math.min(NOTICE_TABLE_PICKER_MAX_ROWS, tableDraft.rows.length || 2));
+  notices.composeTablePickerCols = Math.max(1, Math.min(NOTICE_TABLE_PICKER_MAX_COLS, tableDraft.columns.length || 2));
+  notices.composeTablePickerOpen = true;
+  renderNoticeComposeTablePicker();
+}
+
+function applyNoticeComposeTablePreset(rows = 2, cols = 2) {
+  const notices = ensureNoticesState();
+  const rowCount = Math.max(1, Math.min(NOTICE_TABLE_PICKER_MAX_ROWS, Number.parseInt(String(rows), 10) || 2));
+  const colCount = Math.max(1, Math.min(NOTICE_TABLE_PICKER_MAX_COLS, Number.parseInt(String(cols), 10) || 2));
+  const table = cloneNoticeTableDraft(notices.composeDraft?.table);
+  table.enabled = true;
+  table.hasHeader = true;
+  table.columns = createNoticeTableColumns(colCount);
+  table.rows = createNoticeTableRows(rowCount, colCount);
+  notices.composeDraft = {
+    ...(notices.composeDraft || {}),
+    table,
+    blockOrder: insertNoticeComposeBlockIntoOrder('table', {
+      ...(notices.composeDraft || {}),
+      table,
+    }),
+  };
+  notices.composeTablePickerRows = rowCount;
+  notices.composeTablePickerCols = colCount;
+  notices.composeTablePickerOpen = false;
+  markNoticeComposeDraftDirty();
+  writeNoticeComposeDraftToFields();
+  renderNoticeComposeTableEditor();
+  const firstCell = document.querySelector('[data-notice-table-field="header"][data-notice-table-col="0"]');
+  if (firstCell instanceof HTMLInputElement) {
+    firstCell.focus({ preventScroll: false });
+  }
+}
+
 function renderNoticeComposeDocumentFlow() {
   const notices = ensureNoticesState();
   const flow = $('#noticesComposeDocumentFlow');
@@ -19433,30 +19480,186 @@ function renderNoticeComposeDocumentFlow() {
   flow.replaceChildren(...orderedNodes);
 }
 
-function renderNoticeComposePollControls() {
+function updateNoticeComposePollModalDraft(mutator) {
   const notices = ensureNoticesState();
-  const pollDraft = cloneNoticePollDraft(notices.composeDraft?.poll);
-  document.querySelectorAll('[data-action="notices-set-poll-mode"]').forEach((button) => {
+  const base = cloneNoticePollDraft(notices.composePollModalDraft || notices.composeDraft?.poll);
+  notices.composePollModalDraft = cloneNoticePollDraft({
+    ...(typeof mutator === 'function' ? mutator(base) || base : base),
+    enabled: true,
+  });
+}
+
+function renderNoticeComposePollModal() {
+  const notices = ensureNoticesState();
+  const modal = $('#noticesPollModal');
+  const backdrop = $('#noticesPollModalBackdrop');
+  const pollDraft = cloneNoticePollDraft(notices.composePollModalDraft);
+  if (modal instanceof HTMLElement) {
+    modal.classList.toggle('hidden', !notices.composePollModalOpen);
+  }
+  if (backdrop instanceof HTMLElement) {
+    backdrop.classList.toggle('hidden', !notices.composePollModalOpen);
+  }
+  if (!notices.composePollModalOpen) {
+    syncBodyScrollLocks();
+    return;
+  }
+
+  const questionInput = $('#noticesComposePollModalQuestion');
+  if (questionInput instanceof HTMLInputElement) {
+    questionInput.value = String(pollDraft.question || '');
+  }
+  const visibilitySelect = $('#noticesComposePollModalVisibility');
+  if (visibilitySelect instanceof HTMLSelectElement) {
+    visibilitySelect.value = normalizeNoticePollResultVisibility(pollDraft.resultVisibility || 'always');
+  }
+  const closesAtInput = $('#noticesComposePollModalClosesAt');
+  if (closesAtInput instanceof HTMLInputElement) {
+    closesAtInput.value = formatNoticePollDateTimeInputValue(pollDraft.closesAt || '');
+  }
+  document.querySelectorAll('[data-action="notices-set-poll-modal-mode"]').forEach((button) => {
     if (!(button instanceof HTMLButtonElement)) return;
     const value = String(button.dataset.value || '').trim().toLowerCase();
     const active = value === (pollDraft.allowMultiple ? 'multiple' : 'single');
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
-  const anonymousBtn = $('#noticesComposePollAnonymousToggle');
+  const anonymousBtn = $('#noticesComposePollModalAnonymousToggle');
   if (anonymousBtn instanceof HTMLButtonElement) {
     const active = Boolean(pollDraft.isAnonymous);
     anonymousBtn.classList.toggle('is-active', active);
-    anonymousBtn.textContent = active ? '익명 ON' : '익명 OFF';
     anonymousBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    const copy = anonymousBtn.querySelector('.notices-switch-copy');
+    if (copy instanceof HTMLElement) {
+      copy.textContent = active ? '익명 ON' : '익명 OFF';
+    }
   }
-  const allowChangeBtn = $('#noticesComposePollAllowChangeToggle');
+  const allowChangeBtn = $('#noticesComposePollModalAllowChangeToggle');
   if (allowChangeBtn instanceof HTMLButtonElement) {
     const active = Boolean(pollDraft.allowChangeVote);
     allowChangeBtn.classList.toggle('is-active', active);
-    allowChangeBtn.textContent = active ? '재투표 허용' : '재투표 잠금';
     allowChangeBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    const copy = allowChangeBtn.querySelector('.notices-switch-copy');
+    if (copy instanceof HTMLElement) {
+      copy.textContent = active ? '허용' : '허용 안 함';
+    }
   }
+  const optionList = $('#noticesComposePollModalOptionList');
+  if (optionList instanceof HTMLElement) {
+    optionList.innerHTML = '';
+    pollDraft.options.forEach((option, index) => {
+      const item = document.createElement('li');
+      item.className = 'notices-poll-option-item';
+
+      const label = document.createElement('label');
+      label.className = 'input-field notices-compose-inline-input-field';
+      const labelText = document.createElement('span');
+      labelText.className = 'sr-only';
+      labelText.textContent = `선택지 ${index + 1}`;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = `선택지 ${index + 1}`;
+      input.value = String(option.label || '').trim();
+      input.dataset.noticePollModalOptionIndex = String(index);
+      label.append(labelText, input);
+      item.appendChild(label);
+
+      if (pollDraft.options.length > NOTICE_POLL_MIN_OPTIONS) {
+        const actions = document.createElement('div');
+        actions.className = 'notices-poll-option-actions';
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'notices-editor-action';
+        removeBtn.dataset.action = 'notices-poll-modal-remove-option';
+        removeBtn.dataset.noticePollModalOptionIndex = String(index);
+        removeBtn.textContent = '제거';
+        actions.appendChild(removeBtn);
+        item.appendChild(actions);
+      }
+      optionList.appendChild(item);
+    });
+  }
+  const addBtn = $('#noticesComposePollModalAddOptionBtn');
+  if (addBtn instanceof HTMLButtonElement) {
+    addBtn.disabled = pollDraft.options.length >= NOTICE_POLL_MAX_OPTIONS;
+  }
+  syncBodyScrollLocks();
+}
+
+function openNoticeComposePollModal(triggerEl = null) {
+  const notices = ensureNoticesState();
+  notices.composePollModalOpen = true;
+  notices.composePollModalTriggerEl = triggerEl instanceof HTMLElement ? triggerEl : null;
+  notices.composePollModalDraft = cloneNoticePollDraft({
+    ...(notices.composeDraft?.poll || {}),
+    enabled: true,
+  });
+  renderNoticeComposePollModal();
+  const questionInput = $('#noticesComposePollModalQuestion');
+  if (questionInput instanceof HTMLInputElement) {
+    window.requestAnimationFrame(() => {
+      questionInput.focus();
+      questionInput.select();
+    });
+  }
+}
+
+function closeNoticeComposePollModal({ restoreFocus = true } = {}) {
+  const notices = ensureNoticesState();
+  const triggerEl = notices.composePollModalTriggerEl;
+  notices.composePollModalOpen = false;
+  notices.composePollModalTriggerEl = null;
+  renderNoticeComposePollModal();
+  if (restoreFocus && triggerEl instanceof HTMLElement) {
+    window.requestAnimationFrame(() => triggerEl.focus());
+  }
+}
+
+function saveNoticeComposePollModal() {
+  const notices = ensureNoticesState();
+  const pollDraft = cloneNoticePollDraft(notices.composePollModalDraft);
+  const question = String(pollDraft.question || '').trim();
+  const filledOptions = pollDraft.options
+    .map((option, index) => ({
+      ...option,
+      label: String(option.label || '').trim(),
+      index,
+    }))
+    .filter((option) => option.label);
+
+  if (!question) {
+    showToast('투표 질문을 입력해 주세요.', 'error', 2200);
+    const questionInput = $('#noticesComposePollModalQuestion');
+    if (questionInput instanceof HTMLInputElement) {
+      questionInput.focus();
+    }
+    return;
+  }
+
+  if (filledOptions.length < NOTICE_POLL_MIN_OPTIONS) {
+    showToast('선택지는 최소 2개 이상 입력해 주세요.', 'error', 2200);
+    return;
+  }
+
+  const nextPoll = cloneNoticePollDraft({
+    ...pollDraft,
+    enabled: true,
+    question,
+    options: filledOptions,
+  });
+
+  notices.composeDraft = {
+    ...(notices.composeDraft || {}),
+    poll: nextPoll,
+    blockOrder: insertNoticeComposeBlockIntoOrder('poll', {
+      ...(notices.composeDraft || {}),
+      poll: nextPoll,
+    }),
+  };
+  markNoticeComposeDraftDirty();
+  writeNoticeComposeDraftToFields();
+  renderNoticeComposePollEditor();
+  closeNoticeComposePollModal();
 }
 
 async function fetchNoticesRows({ category = 'all', search = '', limit = 80 } = {}) {
@@ -29559,10 +29762,11 @@ function syncBodyScrollLocks() {
   const drawerVisible = !($('#sideDrawer')?.classList.contains('hidden') ?? true);
   const sheetVisible = !($('#appSheet')?.classList.contains('hidden') ?? true);
   const confirmVisible = !($('#confirmDialog')?.classList.contains('hidden') ?? true);
+  const noticesPollModalVisible = !($('#noticesPollModal')?.classList.contains('hidden') ?? true);
   const taskProgressVisible = !($('#taskProgressModal')?.classList.contains('hidden') ?? true);
 
   document.body.classList.toggle('drawer-open', drawerVisible);
-  document.body.classList.toggle('sheet-open', sheetVisible || confirmVisible || taskProgressVisible);
+  document.body.classList.toggle('sheet-open', sheetVisible || confirmVisible || noticesPollModalVisible || taskProgressVisible);
 }
 
 function isDrawerSubmenuExpanded(menuId = '') {
@@ -33697,60 +33901,57 @@ function renderNoticeComposeImageList() {
 
 function renderNoticeComposePollEditor() {
   const block = $('#noticesComposePollBlock');
-  const list = $('#noticesComposePollOptionList');
+  const panel = $('#noticesComposePollPanel');
   const notices = ensureNoticesState();
   const pollDraft = cloneNoticePollDraft(notices.composeDraft?.poll);
   if (block instanceof HTMLElement) {
     block.classList.toggle('hidden', !pollDraft.enabled);
   }
-  if (!(list instanceof HTMLElement)) return;
-  list.innerHTML = '';
-  renderNoticeComposePollControls();
+  if (!(panel instanceof HTMLElement)) return;
+  panel.innerHTML = '';
   if (!pollDraft.enabled) {
     renderNoticeComposeToolbar();
     renderNoticeComposeDocumentFlow();
     return;
   }
 
-  const options = pollDraft.options.length
-    ? pollDraft.options
-    : normalizeNoticePollOptionDrafts(null);
-  options.forEach((option, index) => {
-    const item = document.createElement('li');
-    item.className = 'notices-poll-option-item';
+  const card = document.createElement('div');
+  card.className = 'notices-compose-poll-summary';
 
-    const label = document.createElement('label');
-    label.className = 'input-field notices-compose-inline-input-field';
-    const labelText = document.createElement('span');
-    labelText.className = 'sr-only';
-    labelText.textContent = `선택지 ${index + 1}`;
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.placeholder = `선택지 ${index + 1}`;
-    input.value = String(option.label || '').trim();
-    input.dataset.noticePollOptionIndex = String(index);
-    label.append(labelText, input);
+  const question = document.createElement('strong');
+  question.className = 'notices-compose-poll-question';
+  question.textContent = String(pollDraft.question || '').trim() || '질문을 입력해 주세요.';
+  card.appendChild(question);
 
-    const actions = document.createElement('div');
-    actions.className = 'notices-poll-option-actions';
-    if (options.length > NOTICE_POLL_MIN_OPTIONS) {
-      const removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.className = 'notices-editor-action';
-      removeBtn.dataset.action = 'notices-poll-remove-option';
-      removeBtn.dataset.noticePollOptionIndex = String(index);
-      removeBtn.textContent = '제거';
-      actions.appendChild(removeBtn);
-    }
-
-    item.append(label, actions);
-    list.appendChild(item);
+  const tags = document.createElement('div');
+  tags.className = 'notices-compose-poll-tags';
+  buildNoticePollMetaTags(pollDraft).forEach((tag) => {
+    const tagEl = document.createElement('span');
+    tagEl.className = `notice-meta-tag notice-meta-tag-${tag.tone}`;
+    tagEl.textContent = tag.label;
+    tags.appendChild(tagEl);
   });
-
-  const addBtn = $('#noticesComposePollAddOptionBtn');
-  if (addBtn instanceof HTMLButtonElement) {
-    addBtn.disabled = options.length >= NOTICE_POLL_MAX_OPTIONS;
+  if (tags.childNodes.length) {
+    card.appendChild(tags);
   }
+
+  const optionList = document.createElement('ul');
+  optionList.className = 'notices-compose-poll-preview-list';
+  pollDraft.options
+    .map((option) => String(option.label || '').trim())
+    .filter(Boolean)
+    .forEach((labelText) => {
+      const item = document.createElement('li');
+      item.textContent = labelText;
+      optionList.appendChild(item);
+    });
+  if (!optionList.childNodes.length) {
+    const item = document.createElement('li');
+    item.textContent = '선택지 2개 이상을 설정해 주세요.';
+    optionList.appendChild(item);
+  }
+  card.appendChild(optionList);
+  panel.appendChild(card);
   renderNoticeComposeToolbar();
   renderNoticeComposeDocumentFlow();
 }
@@ -34008,6 +34209,8 @@ function renderNoticesComposePanel() {
   writeNoticeComposeDraftToFields();
   renderNoticeComposeSettingsPanel();
   renderNoticeComposeToolbar();
+  renderNoticeComposeTablePicker();
+  renderNoticeComposePollModal();
   renderNoticeComposeImageList();
   renderNoticeComposePollEditor();
   renderNoticeComposeTableEditor();
@@ -57006,23 +57209,28 @@ function bindUiEvents() {
       return;
     }
 
-    if (target instanceof HTMLInputElement && target.dataset.noticePollOptionIndex) {
-      const notices = ensureNoticesState();
-      const poll = cloneNoticePollDraft(notices.composeDraft?.poll);
-      const index = Math.max(0, Number.parseInt(target.dataset.noticePollOptionIndex || '0', 10) || 0);
-      if (!poll.options[index]) {
-        poll.options[index] = createDefaultNoticePollOptionDraft(index);
-      }
-      poll.options[index] = {
-        ...poll.options[index],
-        label: String(target.value || ''),
-        index,
-      };
-      notices.composeDraft = {
-        ...(notices.composeDraft || {}),
-        poll,
-      };
-      markNoticeComposeDraftDirty();
+    if (target.id === 'noticesComposePollModalQuestion') {
+      updateNoticeComposePollModalDraft((poll) => ({
+        ...poll,
+        question: String(target instanceof HTMLInputElement ? target.value : '').trim(),
+      }));
+      return;
+    }
+
+    if (target instanceof HTMLInputElement && target.dataset.noticePollModalOptionIndex) {
+      const index = Math.max(0, Number.parseInt(target.dataset.noticePollModalOptionIndex || '0', 10) || 0);
+      updateNoticeComposePollModalDraft((poll) => {
+        const next = cloneNoticePollDraft(poll);
+        if (!next.options[index]) {
+          next.options[index] = createDefaultNoticePollOptionDraft(index);
+        }
+        next.options[index] = {
+          ...next.options[index],
+          label: String(target.value || ''),
+          index,
+        };
+        return next;
+      });
       return;
     }
 
@@ -57093,12 +57301,43 @@ function bindUiEvents() {
     }
   }, { signal });
 
+  document.addEventListener('mouseover', (event) => {
+    if (!isNoticesComposeActive()) return;
+    const cell = event.target instanceof Element
+      ? event.target.closest('[data-notice-table-picker-rows][data-notice-table-picker-cols]')
+      : null;
+    if (!(cell instanceof HTMLElement)) return;
+    const notices = ensureNoticesState();
+    if (!notices.composeTablePickerOpen) return;
+    const rows = Math.max(
+      1,
+      Math.min(NOTICE_TABLE_PICKER_MAX_ROWS, Number.parseInt(String(cell.dataset.noticeTablePickerRows || '2'), 10) || 2),
+    );
+    const cols = Math.max(
+      1,
+      Math.min(NOTICE_TABLE_PICKER_MAX_COLS, Number.parseInt(String(cell.dataset.noticeTablePickerCols || '2'), 10) || 2),
+    );
+    if (rows === notices.composeTablePickerRows && cols === notices.composeTablePickerCols) return;
+    notices.composeTablePickerRows = rows;
+    notices.composeTablePickerCols = cols;
+    renderNoticeComposeTablePicker();
+  }, { signal });
+
   document.addEventListener('click', (event) => {
     if (window.__RG_ARLS_HANDLERS_BOUND__ !== true) return;
 
     const actionEl = event.target instanceof Element ? event.target.closest('[data-action]') : null;
     const action = actionEl?.dataset?.action || '';
     if (!action) {
+      const notices = ensureNoticesState();
+      if (
+        notices.composeTablePickerOpen
+        && event.target instanceof Element
+        && !event.target.closest('#noticesComposeTablePicker')
+        && !event.target.closest('#noticesComposeInsertTableBtn')
+      ) {
+        closeNoticeComposeTablePicker();
+      }
       if (event.target instanceof Element && !event.target.closest('#scheduleActionMenuRow .schedule-action-dropdown-wrap')) {
         closeScheduleActionDropdowns();
       }
@@ -58068,13 +58307,9 @@ function bindUiEvents() {
     }
 
     if (action === 'notices-insert-image-block') {
-      setNoticeComposeBlockEnabled('image', true);
-      markNoticeComposeDraftDirty();
-      writeNoticeComposeDraftToFields();
-      renderNoticeComposeImageList();
-      const dropzone = $('#noticesComposeImageDropzone');
-      if (dropzone instanceof HTMLElement) {
-        dropzone.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      const input = $('#noticesComposeImageInput');
+      if (input instanceof HTMLInputElement) {
+        input.click();
       }
       return;
     }
@@ -58104,14 +58339,22 @@ function bindUiEvents() {
     }
 
     if (action === 'notices-insert-poll-block') {
-      setNoticeComposeBlockEnabled('poll', true);
-      markNoticeComposeDraftDirty();
-      writeNoticeComposeDraftToFields();
-      renderNoticeComposePollEditor();
-      const pollQuestion = $('#noticesComposePollQuestion');
-      if (pollQuestion instanceof HTMLInputElement) {
-        pollQuestion.focus({ preventScroll: false });
-      }
+      openNoticeComposePollModal(actionEl);
+      return;
+    }
+
+    if (action === 'notices-edit-poll-block') {
+      openNoticeComposePollModal(actionEl);
+      return;
+    }
+
+    if (action === 'notices-poll-modal-close') {
+      closeNoticeComposePollModal();
+      return;
+    }
+
+    if (action === 'notices-poll-modal-save') {
+      saveNoticeComposePollModal();
       return;
     }
 
@@ -58124,19 +58367,15 @@ function bindUiEvents() {
     }
 
     if (action === 'notices-insert-table-block') {
-      setNoticeComposeBlockEnabled('table', true);
-      markNoticeComposeDraftDirty();
-      writeNoticeComposeDraftToFields();
-      renderNoticeComposeTableEditor();
-      const tableFirstCell = document.querySelector('[data-notice-table-field="header"][data-notice-table-col="0"]');
-      if (tableFirstCell instanceof HTMLInputElement) {
-        tableFirstCell.focus({ preventScroll: false });
-      } else {
-        const tableTitle = $('#noticesComposeTableTitle');
-        if (tableTitle instanceof HTMLInputElement) {
-          tableTitle.focus({ preventScroll: false });
-        }
-      }
+      openNoticeComposeTablePicker();
+      return;
+    }
+
+    if (action === 'notices-table-picker-select') {
+      applyNoticeComposeTablePreset(
+        actionEl.dataset.noticeTablePickerRows,
+        actionEl.dataset.noticeTablePickerCols,
+      );
       return;
     }
 
@@ -58148,55 +58387,31 @@ function bindUiEvents() {
       return;
     }
 
-    if (action === 'notices-set-poll-mode') {
+    if (action === 'notices-set-poll-modal-mode') {
       const nextMode = String(actionEl.dataset.value || '').trim().toLowerCase() === 'multiple' ? 'multiple' : 'single';
-      setNoticeComposeSelectValue('noticesComposePollSelectionMode', nextMode);
-      const notices = ensureNoticesState();
-      notices.composeDraft = {
-        ...(notices.composeDraft || {}),
-        poll: {
-          ...cloneNoticePollDraft(notices.composeDraft?.poll),
-          enabled: true,
-          allowMultiple: nextMode === 'multiple',
-        },
-      };
-      markNoticeComposeDraftDirty();
-      writeNoticeComposeDraftToFields();
-      renderNoticeComposePollEditor();
+      updateNoticeComposePollModalDraft((poll) => ({
+        ...poll,
+        allowMultiple: nextMode === 'multiple',
+      }));
+      renderNoticeComposePollModal();
       return;
     }
 
-    if (action === 'notices-toggle-poll-anonymous') {
-      const notices = ensureNoticesState();
-      const nextAnonymous = !Boolean(notices.composeDraft?.poll?.isAnonymous);
-      notices.composeDraft = {
-        ...(notices.composeDraft || {}),
-        poll: {
-          ...cloneNoticePollDraft(notices.composeDraft?.poll),
-          enabled: true,
-          isAnonymous: nextAnonymous,
-        },
-      };
-      markNoticeComposeDraftDirty();
-      writeNoticeComposeDraftToFields();
-      renderNoticeComposePollEditor();
+    if (action === 'notices-toggle-poll-modal-anonymous') {
+      updateNoticeComposePollModalDraft((poll) => ({
+        ...poll,
+        isAnonymous: !Boolean(poll.isAnonymous),
+      }));
+      renderNoticeComposePollModal();
       return;
     }
 
-    if (action === 'notices-toggle-poll-allow-change') {
-      const notices = ensureNoticesState();
-      const nextAllowChange = !Boolean(notices.composeDraft?.poll?.allowChangeVote);
-      notices.composeDraft = {
-        ...(notices.composeDraft || {}),
-        poll: {
-          ...cloneNoticePollDraft(notices.composeDraft?.poll),
-          enabled: true,
-          allowChangeVote: nextAllowChange,
-        },
-      };
-      markNoticeComposeDraftDirty();
-      writeNoticeComposeDraftToFields();
-      renderNoticeComposePollEditor();
+    if (action === 'notices-toggle-poll-modal-allow-change') {
+      updateNoticeComposePollModalDraft((poll) => ({
+        ...poll,
+        allowChangeVote: !Boolean(poll.allowChangeVote),
+      }));
+      renderNoticeComposePollModal();
       return;
     }
 
@@ -58313,44 +58528,38 @@ function bindUiEvents() {
       return;
     }
 
-    if (action === 'notices-poll-add-option') {
+    if (action === 'notices-poll-modal-add-option') {
       const notices = ensureNoticesState();
-      const poll = cloneNoticePollDraft(notices.composeDraft?.poll);
-      poll.enabled = true;
-      if (poll.options.length >= NOTICE_POLL_MAX_OPTIONS) {
+      if ((notices.composePollModalDraft?.options || []).length >= NOTICE_POLL_MAX_OPTIONS) {
         showToast('투표 선택지는 최대 10개까지 추가할 수 있습니다.', 'info', 2200);
         return;
       }
-      poll.options.push(createDefaultNoticePollOptionDraft(poll.options.length));
-      notices.composeDraft = {
-        ...(notices.composeDraft || {}),
-        poll,
-      };
-      markNoticeComposeDraftDirty();
-      renderNoticeComposePollEditor();
+      updateNoticeComposePollModalDraft((poll) => {
+        const next = cloneNoticePollDraft(poll);
+        next.options.push(createDefaultNoticePollOptionDraft(next.options.length));
+        return next;
+      });
+      renderNoticeComposePollModal();
       return;
     }
 
-    if (action === 'notices-poll-remove-option') {
+    if (action === 'notices-poll-modal-remove-option') {
+      const index = Math.max(0, Number.parseInt(actionEl.dataset.noticePollModalOptionIndex || '0', 10) || 0);
       const notices = ensureNoticesState();
-      const poll = cloneNoticePollDraft(notices.composeDraft?.poll);
-      const index = Math.max(0, Number.parseInt(actionEl.dataset.noticePollOptionIndex || '0', 10) || 0);
-      if (poll.options.length <= NOTICE_POLL_MIN_OPTIONS) {
+      if ((notices.composePollModalDraft?.options || []).length <= NOTICE_POLL_MIN_OPTIONS) {
         showToast('투표 선택지는 최소 2개 이상 유지해야 합니다.', 'info', 2200);
         return;
       }
-      if (!poll.options[index]) return;
-      poll.options.splice(index, 1);
-      poll.options = poll.options.map((item, optionIndex) => ({
-        ...item,
-        index: optionIndex,
-      }));
-      notices.composeDraft = {
-        ...(notices.composeDraft || {}),
-        poll,
-      };
-      markNoticeComposeDraftDirty();
-      renderNoticeComposePollEditor();
+      updateNoticeComposePollModalDraft((poll) => {
+        const next = cloneNoticePollDraft(poll);
+        next.options.splice(index, 1);
+        next.options = next.options.map((item, optionIndex) => ({
+          ...item,
+          index: optionIndex,
+        }));
+        return next;
+      });
+      renderNoticeComposePollModal();
       return;
     }
 
@@ -61073,18 +61282,25 @@ function bindUiEvents() {
 
     if (
       target.id === 'noticesComposeCategory'
-      || target.id === 'noticesComposePollSelectionMode'
-      || target.id === 'noticesComposePollVisibility'
-      || target.id === 'noticesComposePollClosesAt'
+      || target.id === 'noticesComposePollModalVisibility'
+      || target.id === 'noticesComposePollModalClosesAt'
     ) {
       syncNoticeComposeDraftFromFields();
       markNoticeComposeDraftDirty();
       if (
-        target.id === 'noticesComposePollSelectionMode'
-        || target.id === 'noticesComposePollVisibility'
-        || target.id === 'noticesComposePollClosesAt'
+        target.id === 'noticesComposePollModalVisibility'
+        || target.id === 'noticesComposePollModalClosesAt'
       ) {
-        renderNoticeComposePollEditor();
+        updateNoticeComposePollModalDraft((poll) => ({
+          ...poll,
+          resultVisibility: target.id === 'noticesComposePollModalVisibility'
+            ? normalizeNoticePollResultVisibility(target instanceof HTMLSelectElement ? target.value : poll.resultVisibility)
+            : poll.resultVisibility,
+          closesAt: target.id === 'noticesComposePollModalClosesAt'
+            ? String(target instanceof HTMLInputElement ? target.value : poll.closesAt || '').trim()
+            : poll.closesAt,
+        }));
+        renderNoticeComposePollModal();
       }
       return;
     }
