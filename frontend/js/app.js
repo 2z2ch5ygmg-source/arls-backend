@@ -5739,12 +5739,34 @@ async function loadHomeManagerOrgSummary({ force = false } = {}) {
       ? state.employeeAdmin.rows
       : [];
     if (can('employees') && (!employeeRows.length || force)) {
-      const tenantHeader = String(getTenantIdForScopedAdminApi() || state.user?.tenant_id || '').trim();
-      employeeRows = await fetchPagedApiRows('/employees', {
-        headers: tenantHeader ? { 'X-Tenant-Id': tenantHeader } : null,
-        pageLimit: 500,
-        maxPages: 20,
-      });
+      const navRole = getNavigationRole();
+      if (navRole === 'DEV') {
+        const tenantCode = String(
+          state.uiContext?.activeTenantCode
+          || getTenantCodeForScopedAdminApi()
+          || state.user?.tenant_code
+          || '',
+        ).trim().toUpperCase();
+        const params = new URLSearchParams();
+        if (tenantCode && tenantCode !== 'ALL') {
+          params.set('tenant_code', tenantCode);
+        }
+        employeeRows = await fetchPagedApiRows(
+          params.toString() ? `/dev/employees?${params.toString()}` : '/dev/employees',
+          {
+            headers: {},
+            pageLimit: 500,
+            maxPages: 40,
+          },
+        );
+      } else {
+        const tenantHeader = String(getTenantIdForScopedAdminApi() || state.user?.tenant_id || '').trim();
+        employeeRows = await fetchPagedApiRows('/employees', {
+          headers: tenantHeader ? { 'X-Tenant-Id': tenantHeader } : null,
+          pageLimit: 500,
+          maxPages: 20,
+        });
+      }
       state.employeeAdmin.rows = Array.isArray(employeeRows)
         ? employeeRows.map((row, index) => ({ ...row, __sourceIndex: index }))
         : [];
@@ -40272,22 +40294,35 @@ async function loadEmployees({ preferCache = true, skipNetworkWhenCached = false
   try {
     const fetchStartedAt = getPerfNowMs();
     const tenantSelection = getEmployeeTenantFilterSelection();
-    const isDevAllTenants = getNavigationRole() === 'DEV' && tenantSelection.isAll;
+    const isDevRole = getNavigationRole() === 'DEV';
+    const isDevAllTenants = isDevRole && tenantSelection.isAll;
     const { tenantCode: siteTenantCodeFilter } = getEmployeeSiteFilterScope();
     const include = getEmployeeIncludeFilters();
     const params = new URLSearchParams();
     if (include.includeInactive) params.set('include_inactive', 'true');
     if (include.includeDeleted) params.set('include_deleted', 'true');
     // Keep the employee directory source tenant-wide so the site filter stays purely client-side.
-    // Otherwise a previously selected site can shrink the cached dataset and hide other sites until a hard refresh.
-    if (isDevAllTenants && siteTenantCodeFilter) {
-      params.set('tenant_code', siteTenantCodeFilter);
+    // For DEV, always use /dev/employees and scope it by tenant_code when a specific tenant is selected.
+    const devTenantCodeFilter = String(
+      isDevAllTenants
+        ? (siteTenantCodeFilter || '')
+        : (
+          tenantSelection.tenantCode
+          || siteTenantCodeFilter
+          || state.uiContext?.activeTenantCode
+          || getTenantCodeForScopedAdminApi()
+          || state.user?.tenant_code
+          || ''
+        ),
+    ).trim().toUpperCase();
+    if (isDevRole && devTenantCodeFilter && devTenantCodeFilter !== 'ALL') {
+      params.set('tenant_code', devTenantCodeFilter);
     }
     const employeesPath = params.toString()
-      ? `${isDevAllTenants ? '/dev/employees' : '/employees'}?${params.toString()}`
-      : (isDevAllTenants ? '/dev/employees' : '/employees');
+      ? `${isDevRole ? '/dev/employees' : '/employees'}?${params.toString()}`
+      : (isDevRole ? '/dev/employees' : '/employees');
 
-    if (isDevAllTenants) {
+    if (isDevRole) {
       const employees = await fetchPagedApiRows(employeesPath, {
         headers: {},
         pageLimit: 500,

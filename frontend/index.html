@@ -3050,16 +3050,6 @@
             </div>
 
             <div id="noticesComposePanel" class="notices-panel notices-compose-panel hidden">
-              <div class="notices-compose-commandbar">
-                <div class="notices-compose-commandcopy">
-                  <h3 id="noticesComposePanelTitle">공지사항</h3>
-                  <p id="noticesComposeHint" class="muted">새 공지</p>
-                </div>
-                <div class="notices-compose-commandgroup notices-compose-commandgroup-right">
-                  <button id="noticesPublishBtn" class="btn btn-primary notices-command-publish" type="button" data-action="notices-publish">발행</button>
-                </div>
-              </div>
-
               <section id="noticesComposeSettingsPanel" class="notices-compose-settings-panel" aria-label="게시 설정">
                 <label class="input-field notices-compose-setting-field notices-compose-setting-field-compact" for="noticesComposeCategory">
                   <span>카테고리</span>
@@ -3075,9 +3065,8 @@
                     <span class="notices-compose-setting-caption">최대 3개</span>
                   </div>
                 </div>
-                <div class="notices-compose-setting-field notices-compose-setting-field-status" aria-live="polite">
-                  <span class="notices-compose-setting-label">발행 상태</span>
-                  <p id="noticesComposeDraftMeta" class="notices-compose-setting-status">자동 저장 전입니다.</p>
+                <div class="notices-compose-setting-field notices-compose-setting-field-actions">
+                  <button id="noticesPublishBtn" class="btn btn-primary notices-command-publish" type="button" data-action="notices-publish">발행</button>
                 </div>
               </section>
 
