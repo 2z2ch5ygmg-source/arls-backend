@@ -33529,6 +33529,7 @@ function renderNoticesView() {
   if (readonlyPill instanceof HTMLElement) {
     readonlyPill.classList.toggle('hidden', canManageNotices());
   }
+  setViewRuntimeHint('notices', String(notices.manageAccessHint || '').trim(), 'info');
   if (createBtn instanceof HTMLButtonElement) {
     createBtn.classList.toggle('hidden', !canManageNotices());
   }
