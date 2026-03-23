@@ -21725,8 +21725,8 @@ button.attendance-status-special-card.active {
 #view-notices {
   display: grid;
   gap: 18px;
-  --notices-list-width: min(calc(100% - clamp(220px, 18vw, 520px)), 980px);
-  --notices-doc-width: min(calc(100% - clamp(300px, 24vw, 720px)), 760px);
+  --notices-list-width: min(860px, calc(100% - 72px));
+  --notices-doc-width: min(760px, calc(100% - 72px));
 }
 
 #view-notices.panel.card {
@@ -21955,16 +21955,6 @@ button.attendance-status-special-card.active {
   display: grid;
   gap: 12px;
   min-height: 240px;
-}
-
-.notices-detail-card {
-  display: grid;
-  gap: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
 }
 
 .notices-detail-panel > .notices-section-head,
@@ -22314,8 +22304,7 @@ button.attendance-status-special-card.active {
   text-align: right;
 }
 
-.notices-command-link,
-.notices-command-btn {
+.notices-command-link {
   min-height: 34px;
   padding: 0 10px;
   border-radius: 999px;
@@ -22341,33 +22330,6 @@ button.attendance-status-special-card.active {
   align-items: center;
   padding: 10px 0 14px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-}
-
-.notices-compose-settings-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.notices-compose-settings-head h4 {
-  margin: 0;
-  font-size: 15px;
-  line-height: 1.4;
-  color: var(--ui-text-primary);
-}
-
-.notices-compose-settings-head .muted {
-  margin-top: 4px;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.notices-compose-settings-grid {
-  display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(280px, 1fr);
-  gap: 16px;
-  align-items: end;
 }
 
 .notices-compose-setting-field {
@@ -22937,7 +22899,6 @@ button.attendance-status-special-card.active {
 
 @media (max-width: 1199px) {
   .notices-compose-settings-panel,
-  .notices-compose-settings-grid,
   .notices-compose-setting-cluster {
     grid-template-columns: 1fr;
   }

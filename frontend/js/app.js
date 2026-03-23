@@ -33894,29 +33894,6 @@ function renderNoticesSearchControls() {
 function renderNoticesListPanel() {
   const notices = ensureNoticesState();
   const list = $('#noticesList');
-  const titleEl = $('#noticesListTitle');
-  const metaEl = $('#noticesListMeta');
-  if (titleEl) {
-    titleEl.textContent = notices.category === 'all'
-      ? '전체 공지'
-      : `${getNoticeCategoryLabel(notices.category)} 공지`;
-  }
-  if (metaEl) {
-    if (notices.loading) {
-      metaEl.textContent = '공지 목록을 불러오는 중입니다.';
-    } else if (notices.error) {
-      metaEl.textContent = notices.error;
-    } else {
-      const searchSuffix = String(notices.search || '').trim()
-        ? ` · 검색어 "${notices.search}"`
-        : '';
-      metaEl.textContent = notices.rows.length
-        ? `등록된 공지 ${notices.rows.length}건${searchSuffix}`
-        : String(notices.search || '').trim()
-          ? `검색 결과가 없습니다.${searchSuffix}`
-          : '아직 등록된 공지가 없습니다.';
-    }
-  }
   if (!list) return;
   if (notices.loading) {
     renderSkeleton(list, 4);
