@@ -1307,6 +1307,7 @@ function createDefaultNoticeTableDraft() {
   return {
     enabled: false,
     title: '',
+    hasHeader: true,
     columns: ['항목', '내용'],
     rows: [
       ['', ''],
@@ -18071,7 +18072,24 @@ function togglePasswordVisibility() {
   if (!passwordEl || !btn || passwordEl.disabled) return;
   const isHidden = passwordEl.type === 'password';
   passwordEl.type = isHidden ? 'text' : 'password';
-  btn.textContent = isHidden ? '숨김' : '보기';
+  btn.innerHTML = isHidden
+    ? `
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M2.4 2.4 17.6 17.6"></path>
+        <path d="M8.8 4.95A8.5 8.5 0 0 1 10 4.8c5.2 0 8.2 5.2 8.2 5.2a14.7 14.7 0 0 1-2.66 3.19"></path>
+        <path d="M12.25 12.24A2.6 2.6 0 0 1 7.76 7.75"></path>
+        <path d="M5.02 5.03C2.92 6.4 1.8 10 1.8 10s3 5.2 8.2 5.2a8.8 8.8 0 0 0 4.97-1.48"></path>
+      </svg>
+    `
+    : `
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M1.8 10s3-5.2 8.2-5.2 8.2 5.2 8.2 5.2-3 5.2-8.2 5.2S1.8 10 1.8 10Z"></path>
+        <circle cx="10" cy="10" r="2.6"></circle>
+      </svg>
+    `;
+  btn.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+  btn.setAttribute('aria-label', isHidden ? '비밀번호 숨기기' : '비밀번호 보기');
+  btn.setAttribute('title', isHidden ? '비밀번호 숨기기' : '비밀번호 보기');
 }
 
 function getLoginPreferenceSnapshot() {
@@ -18572,6 +18590,7 @@ function normalizeNoticeTableDraft(rawTable = null) {
   return {
     enabled: Boolean(rawTable?.enabled),
     title: String(rawTable?.title || '').trim(),
+    hasHeader: rawTable?.hasHeader ?? rawTable?.has_header ?? base.hasHeader,
     columns: normalizedColumns,
     rows: rows.length ? rows : base.rows.map((row) => row.slice(0, normalizedColumns.length)),
   };
@@ -18582,6 +18601,7 @@ function cloneNoticeTableDraft(rawTable = null) {
   return {
     enabled: normalized.enabled,
     title: normalized.title,
+    hasHeader: Boolean(normalized.hasHeader),
     columns: normalized.columns.slice(),
     rows: normalized.rows.map((row) => row.slice()),
   };
@@ -18656,6 +18676,7 @@ function normalizeNoticeBodyBlocks(rawBlocks = null, fallbackBodyText = '') {
       const table = normalizeNoticeTableDraft({
         enabled: true,
         title: String(block.title || '').trim(),
+        hasHeader: block.hasHeader ?? block.has_header ?? true,
         columns: Array.isArray(block.columns) ? block.columns : [],
         rows: Array.isArray(block.rows) ? block.rows : [],
       });
@@ -18749,6 +18770,7 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
       table = normalizeNoticeTableDraft({
         enabled: true,
         title: String(block.title || '').trim(),
+        hasHeader: block.hasHeader ?? block.has_header ?? true,
         columns: Array.isArray(block.columns) ? block.columns : [],
         rows: Array.isArray(block.rows) ? block.rows : [],
       });
@@ -18828,6 +18850,7 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
     blocks.push({
       kind: 'table',
       title: table.title,
+      has_header: Boolean(table.hasHeader),
       columns: table.columns.slice(),
       rows,
     });
@@ -33350,17 +33373,29 @@ function renderNoticeDetailBody(target, item) {
       wrap.className = 'notices-detail-table-wrap';
       const table = document.createElement('table');
       table.className = 'notices-detail-table';
-      const thead = document.createElement('thead');
-      const headerRow = document.createElement('tr');
-      (Array.isArray(block.columns) ? block.columns : []).forEach((column) => {
-        const th = document.createElement('th');
-        th.scope = 'col';
-        th.textContent = String(column || '').trim() || '-';
-        headerRow.appendChild(th);
-      });
-      thead.appendChild(headerRow);
-      table.appendChild(thead);
+      const hasHeader = block.hasHeader ?? block.has_header ?? true;
+      if (hasHeader) {
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        (Array.isArray(block.columns) ? block.columns : []).forEach((column) => {
+          const th = document.createElement('th');
+          th.scope = 'col';
+          th.textContent = String(column || '').trim() || '-';
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+      }
       const tbody = document.createElement('tbody');
+      if (!hasHeader) {
+        const columnsAsRow = document.createElement('tr');
+        (Array.isArray(block.columns) ? block.columns : []).forEach((column) => {
+          const td = document.createElement('td');
+          td.textContent = String(column || '').trim() || '-';
+          columnsAsRow.appendChild(td);
+        });
+        tbody.appendChild(columnsAsRow);
+      }
       (Array.isArray(block.rows) ? block.rows : []).forEach((row) => {
         if (!Array.isArray(row)) return;
         const tr = document.createElement('tr');
@@ -33496,21 +33531,20 @@ function renderNoticeComposeImageList() {
     meta.className = 'notices-image-meta';
     const name = document.createElement('strong');
     name.textContent = String(image.fileName || `이미지 ${index + 1}`).trim();
-    const sub = document.createElement('p');
-    sub.className = 'muted';
-    sub.textContent = `첨부 ${index + 1}`;
-    meta.append(name, sub);
+    meta.append(name);
 
     const label = document.createElement('label');
-    label.className = 'input-field';
-    label.textContent = '캡션';
+    label.className = 'input-field notices-compose-inline-input-field';
+    const labelText = document.createElement('span');
+    labelText.className = 'sr-only';
+    labelText.textContent = '캡션';
     const input = document.createElement('input');
     input.type = 'text';
     input.value = String(image.caption || '');
-    input.placeholder = '이미지 아래에 표시할 설명을 입력하세요.';
+    input.placeholder = '캡션을 입력하세요.';
     input.dataset.noticeImageIndex = String(index);
     input.dataset.noticeImageField = 'caption';
-    label.appendChild(input);
+    label.append(labelText, input);
 
     fields.append(meta, label);
 
@@ -33603,25 +33637,42 @@ function renderNoticeComposeTableEditor() {
 
   const table = document.createElement('table');
   table.className = 'notices-compose-table';
-
-  const thead = document.createElement('thead');
-  const headRow = document.createElement('tr');
-  tableDraft.columns.forEach((column, index) => {
-    const th = document.createElement('th');
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'notices-compose-table-input';
-    input.value = String(column || '');
-    input.placeholder = `열 ${index + 1}`;
-    input.dataset.noticeTableField = 'header';
-    input.dataset.noticeTableCol = String(index);
-    th.appendChild(input);
-    headRow.appendChild(th);
-  });
-  thead.appendChild(headRow);
-  table.appendChild(thead);
+  if (tableDraft.hasHeader) {
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    tableDraft.columns.forEach((column, index) => {
+      const th = document.createElement('th');
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'notices-compose-table-input';
+      input.value = String(column || '');
+      input.placeholder = `열 ${index + 1}`;
+      input.dataset.noticeTableField = 'header';
+      input.dataset.noticeTableCol = String(index);
+      th.appendChild(input);
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+  }
 
   const tbody = document.createElement('tbody');
+  if (!tableDraft.hasHeader) {
+    const firstRow = document.createElement('tr');
+    tableDraft.columns.forEach((column, index) => {
+      const td = document.createElement('td');
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'notices-compose-table-input';
+      input.value = String(column || '');
+      input.placeholder = `열 ${index + 1}`;
+      input.dataset.noticeTableField = 'header';
+      input.dataset.noticeTableCol = String(index);
+      td.appendChild(input);
+      firstRow.appendChild(td);
+    });
+    tbody.appendChild(firstRow);
+  }
   tableDraft.rows.forEach((row, rowIndex) => {
     const tr = document.createElement('tr');
     row.forEach((cell, colIndex) => {
@@ -33641,6 +33692,11 @@ function renderNoticeComposeTableEditor() {
   });
   table.appendChild(tbody);
   grid.appendChild(table);
+  document.querySelectorAll('[data-action="notices-table-toggle-header"]').forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) return;
+    button.textContent = tableDraft.hasHeader ? '헤더 ON' : '헤더 OFF';
+    button.classList.toggle('is-active', Boolean(tableDraft.hasHeader));
+  });
   renderNoticeComposeToolbar();
 }
 
@@ -57893,9 +57949,14 @@ function bindUiEvents() {
       markNoticeComposeDraftDirty();
       writeNoticeComposeDraftToFields();
       renderNoticeComposeTableEditor();
-      const tableTitle = $('#noticesComposeTableTitle');
-      if (tableTitle instanceof HTMLInputElement) {
-        tableTitle.focus({ preventScroll: false });
+      const tableFirstCell = document.querySelector('[data-notice-table-field="header"][data-notice-table-col="0"]');
+      if (tableFirstCell instanceof HTMLInputElement) {
+        tableFirstCell.focus({ preventScroll: false });
+      } else {
+        const tableTitle = $('#noticesComposeTableTitle');
+        if (tableTitle instanceof HTMLInputElement) {
+          tableTitle.focus({ preventScroll: false });
+        }
       }
       return;
     }
@@ -58002,11 +58063,19 @@ function bindUiEvents() {
       return;
     }
 
-    if (action === 'notices-table-add-column' || action === 'notices-table-remove-column' || action === 'notices-table-add-row' || action === 'notices-table-remove-row') {
+    if (
+      action === 'notices-table-add-column'
+      || action === 'notices-table-remove-column'
+      || action === 'notices-table-add-row'
+      || action === 'notices-table-remove-row'
+      || action === 'notices-table-toggle-header'
+    ) {
       const notices = ensureNoticesState();
       const table = cloneNoticeTableDraft(notices.composeDraft?.table);
       table.enabled = true;
-      if (action === 'notices-table-add-column') {
+      if (action === 'notices-table-toggle-header') {
+        table.hasHeader = !Boolean(table.hasHeader);
+      } else if (action === 'notices-table-add-column') {
         if (table.columns.length >= 6) {
           showToast('표 열은 최대 6개까지 추가할 수 있습니다.', 'info', 2200);
           return;

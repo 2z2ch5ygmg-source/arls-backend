@@ -51,7 +51,6 @@
                 <img class="auth-logo-mark" src="assets/sentrix-hr-mark.png" alt="Sentrix HR 로고" />
                 <div class="auth-brand-copy">
                   <img class="auth-wordmark" src="assets/sentrix-hr-wordmark.png" alt="Sentrix HR" />
-                  <h1>로그인</h1>
                   <p class="auth-intro">테넌트 코드와 계정 정보를 입력해 근무 운영 화면으로 바로 이동하세요.</p>
                 </div>
               </div>
@@ -82,7 +81,12 @@
                   <span class="auth-field-label">비밀번호</span>
                   <div class="password-wrap auth-password-wrap">
                     <input id="password" type="password" autocomplete="current-password" placeholder="비밀번호" required disabled />
-                    <button id="togglePasswordBtn" class="btn btn-secondary password-toggle" type="button" data-action="toggle-password-visibility" aria-label="비밀번호 표시 전환">보기</button>
+                    <button id="togglePasswordBtn" class="btn btn-secondary password-toggle" type="button" data-action="toggle-password-visibility" aria-label="비밀번호 보기" aria-pressed="false" title="비밀번호 보기">
+                      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M1.8 10s3-5.2 8.2-5.2 8.2 5.2 8.2 5.2-3 5.2-8.2 5.2S1.8 10 1.8 10Z"></path>
+                        <circle cx="10" cy="10" r="2.6"></circle>
+                      </svg>
+                    </button>
                   </div>
                   <span id="passwordError" class="input-error hidden"></span>
                 </label>
