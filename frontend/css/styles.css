@@ -21798,8 +21798,8 @@ button.attendance-status-special-card.active {
 }
 
 .notices-workspace-head {
-  width: var(--notices-list-width);
-  margin-inline: auto;
+  width: 100%;
+  margin-inline: 0;
 }
 
 .notices-workspace-head .workspace-head-actions {
@@ -21930,14 +21930,20 @@ button.attendance-status-special-card.active {
 
 .notices-list-panel {
   display: grid;
-  padding: 24px 0 6px;
-  justify-items: center;
+  width: var(--notices-list-width);
+  margin-inline: auto;
+  padding: 18px 24px 10px;
+  justify-items: stretch;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.04);
 }
 
 .notices-list-rows {
-  width: var(--notices-list-width);
-  margin-inline: auto;
-  justify-self: center;
+  width: 100%;
+  margin-inline: 0;
+  justify-self: stretch;
 }
 
 .notices-list-rows {
@@ -21963,8 +21969,8 @@ button.attendance-status-special-card.active {
 }
 
 .notices-list-button {
-  width: min(760px, calc(100% - 56px));
-  margin-inline: auto;
+  width: 100%;
+  margin-inline: 0;
   border: none;
   background: transparent;
   display: grid;
@@ -22011,6 +22017,20 @@ button.attendance-status-special-card.active {
   line-height: 1.42;
   letter-spacing: -0.03em;
   color: var(--ui-text-primary);
+}
+
+:root[data-ui-theme='dark'] .notices-list-panel {
+  border-color: var(--ui-border-subtle);
+  background: rgba(27, 32, 40, 0.96);
+  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.24);
+}
+
+:root[data-ui-theme='dark'] .notices-list-rows {
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+
+:root[data-ui-theme='dark'] .notices-list-item {
+  border-bottom-color: rgba(255, 255, 255, 0.12) !important;
 }
 
 .notices-detail-panel,
@@ -23163,7 +23183,7 @@ button.attendance-status-special-card.active {
     gap: 8px;
   }
 
-  .notices-list-rows,
+  .notices-list-panel,
   .notices-toolbar-row,
   .notices-detail-panel > .notices-section-head,
   .notices-detail-panel > .notices-detail-body,
@@ -23171,6 +23191,15 @@ button.attendance-status-special-card.active {
   .notices-compose-settings-panel,
   .notices-compose-document {
     width: calc(100% - 40px);
+  }
+
+  .notices-list-panel {
+    padding: 16px 18px 8px;
+    border-radius: 24px;
+  }
+
+  .notices-list-rows {
+    width: 100%;
   }
 
   .notices-poll-head,
