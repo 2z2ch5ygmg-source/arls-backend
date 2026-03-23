@@ -1258,6 +1258,7 @@ function createInitialNoticesState() {
       title: '',
       summaryText: '',
       bodyText: '',
+      blockOrder: [],
       imagesEnabled: false,
       images: [],
       poll: createDefaultNoticePollDraft(),
@@ -1322,6 +1323,8 @@ function createDefaultNoticeImageDraft() {
     caption: '',
   };
 }
+
+const NOTICE_COMPOSE_OPTIONAL_BLOCK_KINDS = ['image', 'table', 'poll'];
 
 function createInitialTaskProgressState() {
   return {
@@ -18428,6 +18431,7 @@ function clearNoticeComposeDraftStorage({ noticeId = '' } = {}) {
 
 function buildSerializableNoticeComposeDraft(draft = null) {
   const normalizedDraft = draft && typeof draft === 'object' ? draft : {};
+  const blockOrder = normalizeNoticeComposeBlockOrder(normalizedDraft.blockOrder, normalizedDraft);
   return {
     category: normalizeNoticeCategory(normalizedDraft.category || 'ops') === 'all'
       ? 'ops'
@@ -18435,6 +18439,7 @@ function buildSerializableNoticeComposeDraft(draft = null) {
     title: String(normalizedDraft.title || ''),
     summaryText: String(normalizedDraft.summaryText || ''),
     bodyText: String(normalizedDraft.bodyText || ''),
+    blockOrder,
     imagesEnabled: Boolean(normalizedDraft.imagesEnabled),
     images: cloneNoticeImageDrafts(normalizedDraft.images),
     poll: cloneNoticePollDraft(normalizedDraft.poll),
@@ -18445,6 +18450,12 @@ function buildSerializableNoticeComposeDraft(draft = null) {
 
 function normalizeSavedNoticeComposeDraft(raw = null, fallbackCategory = 'ops') {
   const source = raw && typeof raw === 'object' ? raw : {};
+  const draftLike = {
+    imagesEnabled: Boolean(source.imagesEnabled),
+    images: cloneNoticeImageDrafts(source.images),
+    poll: cloneNoticePollDraft(source.poll),
+    table: cloneNoticeTableDraft(source.table),
+  };
   return {
     category: normalizeNoticeCategory(source.category || fallbackCategory || 'ops') === 'all'
       ? 'ops'
@@ -18452,10 +18463,11 @@ function normalizeSavedNoticeComposeDraft(raw = null, fallbackCategory = 'ops') 
     title: String(source.title || ''),
     summaryText: String(source.summaryText || ''),
     bodyText: String(source.bodyText || ''),
-    imagesEnabled: Boolean(source.imagesEnabled) || normalizeNoticeImageDrafts(source.images).length > 0,
-    images: cloneNoticeImageDrafts(source.images),
-    poll: cloneNoticePollDraft(source.poll),
-    table: cloneNoticeTableDraft(source.table),
+    blockOrder: normalizeNoticeComposeBlockOrder(source.blockOrder, draftLike),
+    imagesEnabled: draftLike.imagesEnabled || draftLike.images.length > 0,
+    images: draftLike.images,
+    poll: draftLike.poll,
+    table: draftLike.table,
     isPinned: Boolean(source.isPinned),
   };
 }
@@ -18722,6 +18734,39 @@ function cloneNoticeImageDrafts(rawImages = null) {
   }));
 }
 
+function isNoticeComposeBlockEnabled(kind = '', draft = null) {
+  const normalizedKind = String(kind || '').trim().toLowerCase();
+  const source = draft && typeof draft === 'object' ? draft : {};
+  if (normalizedKind === 'image') {
+    return Boolean(source.imagesEnabled) || normalizeNoticeImageDrafts(source.images).length > 0;
+  }
+  if (normalizedKind === 'poll') {
+    return Boolean(source.poll?.enabled);
+  }
+  if (normalizedKind === 'table') {
+    return Boolean(source.table?.enabled);
+  }
+  return false;
+}
+
+function normalizeNoticeComposeBlockOrder(rawOrder = null, draft = null) {
+  const source = Array.isArray(rawOrder) ? rawOrder : [];
+  const normalized = [];
+  source.forEach((kind) => {
+    const value = String(kind || '').trim().toLowerCase();
+    if (!NOTICE_COMPOSE_OPTIONAL_BLOCK_KINDS.includes(value)) return;
+    if (normalized.includes(value)) return;
+    normalized.push(value);
+  });
+  NOTICE_COMPOSE_OPTIONAL_BLOCK_KINDS.forEach((kind) => {
+    if (!isNoticeComposeBlockEnabled(kind, draft)) return;
+    if (!normalized.includes(kind)) {
+      normalized.push(kind);
+    }
+  });
+  return normalized;
+}
+
 function normalizeNoticeBodyBlocks(rawBlocks = null, fallbackBodyText = '') {
   const blocksSource = Array.isArray(rawBlocks) ? rawBlocks : [];
   const blocks = [];
@@ -18825,6 +18870,7 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
   const summaryParts = [];
   const bodyParts = [];
   const images = [];
+  const blockOrder = [];
   let poll = createDefaultNoticePollDraft();
   let table = createDefaultNoticeTableDraft();
   blocks.forEach((block) => {
@@ -18837,6 +18883,9 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
       return;
     }
     if (block.kind === 'image') {
+      if (!blockOrder.includes('image')) {
+        blockOrder.push('image');
+      }
       images.push({
         attachmentId: String(block.attachmentId || '').trim(),
         fileName: String(block.fileName || '').trim(),
@@ -18846,6 +18895,9 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
       return;
     }
     if (block.kind === 'poll' && !poll.enabled) {
+      if (!blockOrder.includes('poll')) {
+        blockOrder.push('poll');
+      }
       poll = normalizeNoticePollDraft({
         enabled: true,
         ...(block.poll || {}),
@@ -18853,6 +18905,9 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
       return;
     }
     if (block.kind === 'table' && !table.enabled) {
+      if (!blockOrder.includes('table')) {
+        blockOrder.push('table');
+      }
       table = normalizeNoticeTableDraft({
         enabled: true,
         title: String(block.title || '').trim(),
@@ -18869,6 +18924,12 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
     title: String(row?.title || '').trim(),
     summaryText: summaryParts.join('\n\n'),
     bodyText: bodyParts.join('\n\n'),
+    blockOrder: normalizeNoticeComposeBlockOrder(blockOrder, {
+      imagesEnabled: images.length > 0,
+      images,
+      poll,
+      table,
+    }),
     imagesEnabled: images.length > 0,
     images: images.length ? images : [],
     poll,
@@ -18884,6 +18945,12 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
   const poll = normalizeNoticePollDraft(draft?.poll);
   const table = normalizeNoticeTableDraft(draft?.table);
   const baseTable = createDefaultNoticeTableDraft();
+  const blockOrder = normalizeNoticeComposeBlockOrder(draft?.blockOrder, {
+    imagesEnabled: Boolean(draft?.imagesEnabled),
+    images,
+    poll,
+    table,
+  });
   const blocks = [];
   if (summaryText) {
     blocks.push({ kind: 'paragraph', variant: 'lead', text: summaryText });
@@ -18895,15 +18962,6 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
     .forEach((text) => {
       blocks.push({ kind: 'paragraph', variant: 'body', text });
     });
-  images.forEach((image) => {
-    blocks.push({
-      kind: 'image',
-      attachment_id: image.attachmentId,
-      file_name: image.fileName,
-      caption: image.caption,
-      image_src: image.imageSrc,
-    });
-  });
   const pollOptions = poll.options
     .map((item) => ({
       option_id: String(item.optionId || '').trim(),
@@ -18911,36 +18969,56 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
     }))
     .filter((item) => item.label)
     .slice(0, NOTICE_POLL_MAX_OPTIONS);
-  if (poll.enabled && String(poll.question || '').trim() && pollOptions.length >= NOTICE_POLL_MIN_OPTIONS) {
-    blocks.push({
-      kind: 'poll',
-      poll: {
-        poll_id: String(poll.pollId || '').trim(),
-        question: String(poll.question || '').trim(),
-        options: pollOptions,
-        allow_multiple: Boolean(poll.allowMultiple),
-        is_anonymous: Boolean(poll.isAnonymous),
-        result_visibility: normalizeNoticePollResultVisibility(poll.resultVisibility),
-        closes_at: String(poll.closesAt || '').trim() || null,
-        allow_change_vote: Boolean(poll.allowChangeVote),
-      },
-    });
-  }
   const hasCustomColumns = table.columns.some((item, index) => String(item || '').trim() !== String(baseTable.columns[index] || '').trim());
   const hasTableRows = table.rows.some((row) => row.some((cell) => String(cell || '').trim()));
   const hasTableContent = Boolean(table.enabled && (table.title || hasCustomColumns || hasTableRows));
-  if (hasTableContent) {
-    const rows = table.rows
-      .map((row) => row.map((cell) => String(cell || '').trim()))
-      .filter((row) => row.some(Boolean));
-    blocks.push({
-      kind: 'table',
-      title: table.title,
-      has_header: Boolean(table.hasHeader),
-      columns: table.columns.slice(),
-      rows,
-    });
-  }
+  const optionalBlockFactories = {
+    image: () => {
+      images.forEach((image) => {
+        blocks.push({
+          kind: 'image',
+          attachment_id: image.attachmentId,
+          file_name: image.fileName,
+          caption: image.caption,
+          image_src: image.imageSrc,
+        });
+      });
+    },
+    poll: () => {
+      if (poll.enabled && String(poll.question || '').trim() && pollOptions.length >= NOTICE_POLL_MIN_OPTIONS) {
+        blocks.push({
+          kind: 'poll',
+          poll: {
+            poll_id: String(poll.pollId || '').trim(),
+            question: String(poll.question || '').trim(),
+            options: pollOptions,
+            allow_multiple: Boolean(poll.allowMultiple),
+            is_anonymous: Boolean(poll.isAnonymous),
+            result_visibility: normalizeNoticePollResultVisibility(poll.resultVisibility),
+            closes_at: String(poll.closesAt || '').trim() || null,
+            allow_change_vote: Boolean(poll.allowChangeVote),
+          },
+        });
+      }
+    },
+    table: () => {
+      if (hasTableContent) {
+        const rows = table.rows
+          .map((row) => row.map((cell) => String(cell || '').trim()))
+          .filter((row) => row.some(Boolean));
+        blocks.push({
+          kind: 'table',
+          title: table.title,
+          has_header: Boolean(table.hasHeader),
+          columns: table.columns.slice(),
+          rows,
+        });
+      }
+    },
+  };
+  blockOrder.forEach((kind) => {
+    optionalBlockFactories[kind]?.();
+  });
   return blocks;
 }
 
@@ -19015,13 +19093,14 @@ function resetNoticeComposeDraft(category = 'ops') {
     category: normalizeNoticeCategory(category) === 'all' ? 'ops' : normalizeNoticeCategory(category),
     title: '',
     summaryText: '',
-      bodyText: '',
-      imagesEnabled: false,
-      images: [],
-      poll: createDefaultNoticePollDraft(),
-      table: createDefaultNoticeTableDraft(),
-      isPinned: false,
-    };
+    bodyText: '',
+    blockOrder: [],
+    imagesEnabled: false,
+    images: [],
+    poll: createDefaultNoticePollDraft(),
+    table: createDefaultNoticeTableDraft(),
+    isPinned: false,
+  };
 }
 
 function fillNoticeComposeDraftFromRow(row = null) {
@@ -19103,6 +19182,7 @@ function syncNoticeComposeDraftFromFields() {
     title: titleInput instanceof HTMLInputElement ? String(titleInput.value || '') : String(notices.composeDraft?.title || ''),
     summaryText: summaryInput instanceof HTMLTextAreaElement ? String(summaryInput.value || '') : String(notices.composeDraft?.summaryText || ''),
     bodyText: bodyInput instanceof HTMLTextAreaElement ? String(bodyInput.value || '') : String(notices.composeDraft?.bodyText || ''),
+    blockOrder: normalizeNoticeComposeBlockOrder(notices.composeDraft?.blockOrder, notices.composeDraft),
     imagesEnabled,
     images: nextImages,
     poll: nextPoll,
@@ -19128,16 +19208,10 @@ function writeNoticeComposeDraftToFields() {
   const summaryInput = $('#noticesComposeSummary');
   const bodyInput = $('#noticesComposeBody');
   const pollQuestionInput = $('#noticesComposePollQuestion');
-  const pollEnabledInput = $('#noticesComposePollEnabled');
   const pollSelectionModeInput = $('#noticesComposePollSelectionMode');
-  const pollAnonymousInput = $('#noticesComposePollAnonymous');
   const pollVisibilityInput = $('#noticesComposePollVisibility');
   const pollClosesAtInput = $('#noticesComposePollClosesAt');
-  const pollAllowChangeInput = $('#noticesComposePollAllowChange');
   const tableTitleInput = $('#noticesComposeTableTitle');
-  const tableEnabledInput = $('#noticesComposeTableEnabled');
-  const imagesEnabledInput = $('#noticesComposeImagesEnabled');
-  const pinnedInput = $('#noticesComposePinned');
   if (categorySelect instanceof HTMLSelectElement) {
     const nextCategory = normalizeNoticeCategory(draft.category || notices.category || 'ops');
     categorySelect.value = nextCategory === 'all' ? 'ops' : nextCategory;
@@ -19154,14 +19228,8 @@ function writeNoticeComposeDraftToFields() {
   if (pollQuestionInput instanceof HTMLInputElement) {
     pollQuestionInput.value = String(draft.poll?.question || '');
   }
-  if (pollEnabledInput instanceof HTMLInputElement) {
-    pollEnabledInput.checked = Boolean(draft.poll?.enabled);
-  }
   if (pollSelectionModeInput instanceof HTMLSelectElement) {
     pollSelectionModeInput.value = Boolean(draft.poll?.allowMultiple) ? 'multiple' : 'single';
-  }
-  if (pollAnonymousInput instanceof HTMLInputElement) {
-    pollAnonymousInput.checked = draft.poll?.isAnonymous ?? true;
   }
   if (pollVisibilityInput instanceof HTMLSelectElement) {
     pollVisibilityInput.value = normalizeNoticePollResultVisibility(draft.poll?.resultVisibility || 'always');
@@ -19169,20 +19237,8 @@ function writeNoticeComposeDraftToFields() {
   if (pollClosesAtInput instanceof HTMLInputElement) {
     pollClosesAtInput.value = formatNoticePollDateTimeInputValue(draft.poll?.closesAt || '');
   }
-  if (pollAllowChangeInput instanceof HTMLInputElement) {
-    pollAllowChangeInput.checked = Boolean(draft.poll?.allowChangeVote);
-  }
   if (tableTitleInput instanceof HTMLInputElement) {
     tableTitleInput.value = String(draft.table?.title || '');
-  }
-  if (tableEnabledInput instanceof HTMLInputElement) {
-    tableEnabledInput.checked = Boolean(draft.table?.enabled);
-  }
-  if (imagesEnabledInput instanceof HTMLInputElement) {
-    imagesEnabledInput.checked = Boolean(draft.imagesEnabled) || (Array.isArray(draft.images) && draft.images.length > 0);
-  }
-  if (pinnedInput instanceof HTMLInputElement) {
-    pinnedInput.checked = Boolean(draft.isPinned);
   }
 }
 
@@ -19231,6 +19287,44 @@ function setNoticeComposeSelectValue(inputId = '', value = '') {
   }
 }
 
+function resolveNoticeComposeActiveBlockKind() {
+  const activeEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const blockEl = activeEl?.closest?.('[data-notice-inline-kind]');
+  const blockKind = String(blockEl?.dataset?.noticeInlineKind || '').trim().toLowerCase();
+  if (blockKind === 'body') return 'body';
+  if (NOTICE_COMPOSE_OPTIONAL_BLOCK_KINDS.includes(blockKind)) return blockKind;
+  return 'body';
+}
+
+function getNoticeComposeInsertionOrder(draft = null) {
+  return normalizeNoticeComposeBlockOrder(draft?.blockOrder, draft);
+}
+
+function insertNoticeComposeBlockIntoOrder(kind = '', draft = null) {
+  const normalizedKind = String(kind || '').trim().toLowerCase();
+  const source = draft && typeof draft === 'object' ? draft : {};
+  const order = getNoticeComposeInsertionOrder(source);
+  if (!NOTICE_COMPOSE_OPTIONAL_BLOCK_KINDS.includes(normalizedKind)) {
+    return order;
+  }
+  if (order.includes(normalizedKind)) {
+    return order;
+  }
+  const anchorKind = resolveNoticeComposeActiveBlockKind();
+  const nextOrder = order.slice();
+  if (anchorKind === 'body') {
+    nextOrder.unshift(normalizedKind);
+    return nextOrder;
+  }
+  const anchorIndex = nextOrder.indexOf(anchorKind);
+  if (anchorIndex === -1) {
+    nextOrder.push(normalizedKind);
+    return nextOrder;
+  }
+  nextOrder.splice(anchorIndex + 1, 0, normalizedKind);
+  return nextOrder;
+}
+
 function setNoticeComposeBlockEnabled(kind = '', enabled = true, { clear = false } = {}) {
   const notices = ensureNoticesState();
   const draft = notices.composeDraft && typeof notices.composeDraft === 'object'
@@ -19248,8 +19342,10 @@ function setNoticeComposeBlockEnabled(kind = '', enabled = true, { clear = false
     if (!enabled && clear) {
       nextDraft.images = [];
     }
+    nextDraft.blockOrder = enabled
+      ? insertNoticeComposeBlockIntoOrder('image', nextDraft)
+      : getNoticeComposeInsertionOrder(nextDraft).filter((item) => item !== 'image');
     notices.composeDraft = nextDraft;
-    setNoticeComposeCheckboxValue('noticesComposeImagesEnabled', nextDraft.imagesEnabled);
     return;
   }
   if (normalizedKind === 'poll') {
@@ -19257,8 +19353,10 @@ function setNoticeComposeBlockEnabled(kind = '', enabled = true, { clear = false
     if (!enabled && clear) {
       nextDraft.poll = createDefaultNoticePollDraft();
     }
+    nextDraft.blockOrder = enabled
+      ? insertNoticeComposeBlockIntoOrder('poll', nextDraft)
+      : getNoticeComposeInsertionOrder(nextDraft).filter((item) => item !== 'poll');
     notices.composeDraft = nextDraft;
-    setNoticeComposeCheckboxValue('noticesComposePollEnabled', nextDraft.poll.enabled);
     return;
   }
   if (normalizedKind === 'table') {
@@ -19266,8 +19364,10 @@ function setNoticeComposeBlockEnabled(kind = '', enabled = true, { clear = false
     if (!enabled && clear) {
       nextDraft.table = createDefaultNoticeTableDraft();
     }
+    nextDraft.blockOrder = enabled
+      ? insertNoticeComposeBlockIntoOrder('table', nextDraft)
+      : getNoticeComposeInsertionOrder(nextDraft).filter((item) => item !== 'table');
     notices.composeDraft = nextDraft;
-    setNoticeComposeCheckboxValue('noticesComposeTableEnabled', nextDraft.table.enabled);
   }
 }
 
@@ -19312,6 +19412,38 @@ function renderNoticeComposeToolbar() {
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
+}
+
+function renderNoticeComposeDocumentFlow() {
+  const notices = ensureNoticesState();
+  const flow = $('#noticesComposeDocumentFlow');
+  const bodyBlock = $('#noticesComposeBodyBlock');
+  const imageBlock = $('#noticesComposeImageBlock');
+  const tableBlock = $('#noticesComposeTableBlock');
+  const pollBlock = $('#noticesComposePollBlock');
+  if (!(flow instanceof HTMLElement) || !(bodyBlock instanceof HTMLElement)) return;
+
+  const order = getNoticeComposeInsertionOrder(notices.composeDraft);
+  const blockMap = {
+    image: imageBlock,
+    table: tableBlock,
+    poll: pollBlock,
+  };
+
+  const orderedNodes = [bodyBlock];
+  order.forEach((kind) => {
+    const el = blockMap[kind];
+    if (!(el instanceof HTMLElement)) return;
+    orderedNodes.push(el);
+  });
+  NOTICE_COMPOSE_OPTIONAL_BLOCK_KINDS.forEach((kind) => {
+    const el = blockMap[kind];
+    if (!(el instanceof HTMLElement)) return;
+    if (!orderedNodes.includes(el)) {
+      orderedNodes.push(el);
+    }
+  });
+  flow.replaceChildren(...orderedNodes);
 }
 
 function renderNoticeComposePollControls() {
@@ -19425,14 +19557,11 @@ async function appendNoticeImages(files = []) {
   }
   notices.composeDraft = {
     ...(notices.composeDraft || {}),
+    blockOrder: insertNoticeComposeBlockIntoOrder('image', notices.composeDraft || {}),
     imagesEnabled: existingImages.length > 0 || Boolean(notices.composeDraft?.imagesEnabled),
     images: existingImages,
   };
   markNoticeComposeDraftDirty();
-  const imagesEnabledInput = $('#noticesComposeImagesEnabled');
-  if (imagesEnabledInput instanceof HTMLInputElement) {
-    imagesEnabledInput.checked = existingImages.length > 0;
-  }
   const imageInput = $('#noticesComposeImageInput');
   if (imageInput instanceof HTMLInputElement) {
     imageInput.value = '';
@@ -33506,8 +33635,7 @@ function renderNoticeComposeImageList() {
   const block = $('#noticesComposeImageBlock');
   const notices = ensureNoticesState();
   const images = cloneNoticeImageDrafts(notices.composeDraft?.images);
-  const imageToggle = $('#noticesComposeImagesEnabled');
-  const enabled = images.length > 0 || (imageToggle instanceof HTMLInputElement && imageToggle.checked);
+  const enabled = isNoticeComposeBlockEnabled('image', notices.composeDraft);
   if (block instanceof HTMLElement) {
     block.classList.toggle('hidden', !enabled);
     block.classList.toggle('is-empty', enabled && images.length === 0);
@@ -33516,10 +33644,12 @@ function renderNoticeComposeImageList() {
   list.innerHTML = '';
   if (!enabled) {
     renderNoticeComposeToolbar();
+    renderNoticeComposeDocumentFlow();
     return;
   }
   if (!images.length) {
     renderNoticeComposeToolbar();
+    renderNoticeComposeDocumentFlow();
     return;
   }
   images.forEach((image, index) => {
@@ -33570,6 +33700,7 @@ function renderNoticeComposeImageList() {
     list.appendChild(item);
   });
   renderNoticeComposeToolbar();
+  renderNoticeComposeDocumentFlow();
 }
 
 function renderNoticeComposePollEditor() {
@@ -33585,6 +33716,7 @@ function renderNoticeComposePollEditor() {
   renderNoticeComposePollControls();
   if (!pollDraft.enabled) {
     renderNoticeComposeToolbar();
+    renderNoticeComposeDocumentFlow();
     return;
   }
 
@@ -33628,6 +33760,7 @@ function renderNoticeComposePollEditor() {
     addBtn.disabled = options.length >= NOTICE_POLL_MAX_OPTIONS;
   }
   renderNoticeComposeToolbar();
+  renderNoticeComposeDocumentFlow();
 }
 
 function renderNoticeComposeTableEditor() {
@@ -33642,6 +33775,7 @@ function renderNoticeComposeTableEditor() {
   grid.innerHTML = '';
   if (!tableDraft.enabled) {
     renderNoticeComposeToolbar();
+    renderNoticeComposeDocumentFlow();
     return;
   }
 
@@ -33708,6 +33842,7 @@ function renderNoticeComposeTableEditor() {
     button.classList.toggle('is-active', Boolean(tableDraft.hasHeader));
   });
   renderNoticeComposeToolbar();
+  renderNoticeComposeDocumentFlow();
 }
 
 function renderNoticesCategoryTabs() {
@@ -33884,6 +34019,7 @@ function renderNoticesComposePanel() {
   renderNoticeComposeImageList();
   renderNoticeComposePollEditor();
   renderNoticeComposeTableEditor();
+  renderNoticeComposeDocumentFlow();
 }
 
 function renderNoticesView() {
@@ -57902,7 +58038,6 @@ function bindUiEvents() {
         ...(notices.composeDraft || {}),
         isPinned: nextPinned,
       };
-      setNoticeComposeCheckboxValue('noticesComposePinned', nextPinned);
       markNoticeComposeDraftDirty();
       writeNoticeComposeDraftToFields();
       renderNoticeComposeSettingsPanel();
@@ -58019,7 +58154,6 @@ function bindUiEvents() {
           isAnonymous: nextAnonymous,
         },
       };
-      setNoticeComposeCheckboxValue('noticesComposePollAnonymous', nextAnonymous);
       markNoticeComposeDraftDirty();
       writeNoticeComposeDraftToFields();
       renderNoticeComposePollEditor();
@@ -58037,7 +58171,6 @@ function bindUiEvents() {
           allowChangeVote: nextAllowChange,
         },
       };
-      setNoticeComposeCheckboxValue('noticesComposePollAllowChange', nextAllowChange);
       markNoticeComposeDraftDirty();
       writeNoticeComposeDraftToFields();
       renderNoticeComposePollEditor();
@@ -58153,7 +58286,6 @@ function bindUiEvents() {
         images,
       };
       markNoticeComposeDraftDirty();
-      setNoticeComposeCheckboxValue('noticesComposeImagesEnabled', Boolean(notices.composeDraft?.imagesEnabled) || images.length > 0);
       renderNoticeComposeImageList();
       return;
     }
@@ -60918,31 +61050,16 @@ function bindUiEvents() {
 
     if (
       target.id === 'noticesComposeCategory'
-      || target.id === 'noticesComposePinned'
-      || target.id === 'noticesComposeTableEnabled'
-      || target.id === 'noticesComposeImagesEnabled'
-      || target.id === 'noticesComposePollEnabled'
       || target.id === 'noticesComposePollSelectionMode'
-      || target.id === 'noticesComposePollAnonymous'
       || target.id === 'noticesComposePollVisibility'
       || target.id === 'noticesComposePollClosesAt'
-      || target.id === 'noticesComposePollAllowChange'
     ) {
       syncNoticeComposeDraftFromFields();
       markNoticeComposeDraftDirty();
-      if (target.id === 'noticesComposeTableEnabled') {
-        renderNoticeComposeTableEditor();
-      }
-      if (target.id === 'noticesComposeImagesEnabled') {
-        renderNoticeComposeImageList();
-      }
       if (
-        target.id === 'noticesComposePollEnabled'
-        || target.id === 'noticesComposePollSelectionMode'
-        || target.id === 'noticesComposePollAnonymous'
+        target.id === 'noticesComposePollSelectionMode'
         || target.id === 'noticesComposePollVisibility'
         || target.id === 'noticesComposePollClosesAt'
-        || target.id === 'noticesComposePollAllowChange'
       ) {
         renderNoticeComposePollEditor();
       }

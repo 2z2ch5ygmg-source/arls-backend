@@ -21866,9 +21866,9 @@ button.attendance-status-special-card.active {
 }
 
 .notices-detail-card .notices-section-head h3 {
-  font-size: clamp(24px, 2.25vw, 34px);
-  line-height: 1.18;
-  letter-spacing: -0.05em;
+  font-size: clamp(22px, 2vw, 30px);
+  line-height: 1.2;
+  letter-spacing: -0.04em;
 }
 
 .notices-detail-card .notices-section-head .muted {
@@ -21894,7 +21894,7 @@ button.attendance-status-special-card.active {
 
 .notices-detail-prose {
   display: grid;
-  gap: 18px;
+  gap: 20px;
   padding-top: 18px;
   border-top: 1px solid rgba(148, 163, 184, 0.16);
 }
@@ -22379,6 +22379,11 @@ button.attendance-status-special-card.active {
   margin-inline: auto;
 }
 
+.notices-compose-document-flow {
+  display: grid;
+  gap: 0;
+}
+
 .notices-compose-title-input,
 .notices-compose-summary-input {
   width: 100%;
@@ -22505,9 +22510,15 @@ button.attendance-status-special-card.active {
 
 .notices-compose-inline-block {
   display: grid;
-  gap: 10px;
-  padding: 14px 0 0;
+  gap: 12px;
+  padding: 16px 0 0;
   border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.notices-compose-text-block {
+  gap: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 
 .notices-compose-inline-meta {
@@ -22520,7 +22531,7 @@ button.attendance-status-special-card.active {
 
 .notices-compose-inline-kind {
   color: var(--ui-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -22553,7 +22564,7 @@ button.attendance-status-special-card.active {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 0 10px;
+  padding: 6px 0 8px;
   border: 0;
   border-bottom: 1px dashed rgba(249, 115, 22, 0.28);
   border-radius: 0;
@@ -22749,6 +22760,11 @@ button.attendance-status-special-card.active {
   letter-spacing: 0.03em;
 }
 
+.notices-poll-panel .input-field,
+.notices-table-panel .input-field {
+  background: transparent;
+}
+
 .notices-poll-option-list {
   display: grid;
   gap: 0;
@@ -22780,7 +22796,7 @@ button.attendance-status-special-card.active {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px 12px;
 }
 
 .notices-compose-table-grid {
