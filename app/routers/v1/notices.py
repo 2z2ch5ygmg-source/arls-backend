@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import base64
 import json
+import mimetypes
 from typing import Any
+import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
 from ...schemas import (
+    NoticeAttachmentOut,
     NoticeCreateIn,
     NoticeDeleteOut,
     NoticeDetailOut,
@@ -20,8 +24,10 @@ from ...utils.tenant_context import resolve_scoped_tenant
 router = APIRouter(prefix="/notices", tags=["notices"], dependencies=[Depends(apply_rate_limit)])
 
 NOTICE_CATEGORY_VALUES = {"ops", "attendance", "schedule", "hr", "system", "event"}
-NOTICE_BODY_BLOCK_KIND_VALUES = {"paragraph", "table"}
+NOTICE_BODY_BLOCK_KIND_VALUES = {"paragraph", "image", "table"}
 PINNED_LIMIT = 3
+NOTICE_IMAGE_MIME_PREFIX = "image/"
+NOTICE_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024
 
 
 def _normalize_notice_category(value: str | None) -> str:
@@ -46,10 +52,41 @@ def _extract_notice_preview(body_text: str | None) -> str | None:
     return f"{raw[:117].rstrip()}..."
 
 
+def _build_notice_attachment_data_url(mime_type: str | None, raw_bytes: bytes | None) -> str | None:
+    payload = bytes(raw_bytes or b"")
+    normalized_mime = str(mime_type or "").strip().lower()
+    if not payload or not normalized_mime.startswith(NOTICE_IMAGE_MIME_PREFIX):
+        return None
+    encoded = base64.b64encode(payload).decode("ascii")
+    return f"data:{normalized_mime};base64,{encoded}"
+
+
+def _fetch_notice_attachment_rows(conn, *, tenant_id: str, attachment_ids: list[str]) -> dict[str, dict[str, Any]]:
+    normalized_ids = [str(item or "").strip() for item in attachment_ids if str(item or "").strip()]
+    if not normalized_ids:
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id,
+                   file_name,
+                   mime_type,
+                   raw_bytes
+            FROM notice_attachments
+            WHERE tenant_id = %s
+              AND id = ANY(%s)
+            """,
+            (tenant_id, normalized_ids),
+        )
+        rows = cur.fetchall() or []
+    return {str(row.get("id") or "").strip(): dict(row) for row in rows}
+
+
 def _normalize_notice_body_blocks(
     raw_blocks: Any,
     *,
     fallback_body_text: str | None = None,
+    attachment_rows: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     blocks_source: list[Any] = []
     if isinstance(raw_blocks, str):
@@ -84,6 +121,33 @@ def _normalize_notice_body_blocks(
             title = str(block.get("title") or "").strip()
             if title:
                 normalized["title"] = title[:120]
+            normalized_blocks.append(normalized)
+            continue
+        if kind == "image":
+            attachment_id = str(block.get("attachment_id") or "").strip()
+            image_src = str(block.get("image_src") or "").strip()
+            attachment_row = attachment_rows.get(attachment_id) if isinstance(attachment_rows, dict) else None
+            if not image_src and attachment_row:
+                image_src = str(_build_notice_attachment_data_url(attachment_row.get("mime_type"), attachment_row.get("raw_bytes")) or "").strip()
+            if not attachment_id and not image_src:
+                continue
+            normalized = {
+                "kind": "image",
+            }
+            if attachment_id:
+                normalized["attachment_id"] = attachment_id
+            file_name = str(
+                block.get("file_name")
+                or ((attachment_row or {}).get("file_name"))
+                or ""
+            ).strip()
+            if file_name:
+                normalized["file_name"] = file_name[:200]
+            caption = str(block.get("caption") or "").strip()
+            if caption:
+                normalized["caption"] = caption[:240]
+            if image_src:
+                normalized["image_src"] = image_src
             normalized_blocks.append(normalized)
             continue
 
@@ -169,10 +233,38 @@ def _flatten_notice_body_text(
                     line = " | ".join(str(cell or "").strip() for cell in row if str(cell or "").strip())
                     if line:
                         chunks.append(line)
+            continue
+        if kind == "image":
+            caption = str(block.get("caption") or "").strip()
+            if caption:
+                chunks.append(caption)
     flattened = "\n\n".join(chunk for chunk in chunks if chunk)
     if flattened:
         return flattened[:20000]
     return str(fallback_body_text or "").strip()[:20000]
+
+
+def _extract_notice_attachment_ids(raw_blocks: Any) -> list[str]:
+    blocks_source = raw_blocks
+    if isinstance(raw_blocks, str):
+        try:
+            blocks_source = json.loads(raw_blocks)
+        except json.JSONDecodeError:
+            blocks_source = []
+    if not isinstance(blocks_source, list):
+        return []
+    ids: list[str] = []
+    for block in blocks_source:
+        if hasattr(block, "model_dump"):
+            block = block.model_dump()
+        if not isinstance(block, dict):
+            continue
+        if str(block.get("kind") or "").strip().lower() != "image":
+            continue
+        attachment_id = str(block.get("attachment_id") or "").strip()
+        if attachment_id:
+            ids.append(attachment_id)
+    return ids
 
 
 def _map_notice_summary(row: dict[str, Any]) -> NoticeSummaryOut:
@@ -189,8 +281,12 @@ def _map_notice_summary(row: dict[str, Any]) -> NoticeSummaryOut:
     )
 
 
-def _map_notice_detail(row: dict[str, Any]) -> NoticeDetailOut:
-    body_blocks = _normalize_notice_body_blocks(row.get("body_blocks"), fallback_body_text=row.get("body_text"))
+def _map_notice_detail(row: dict[str, Any], *, attachment_rows: dict[str, dict[str, Any]] | None = None) -> NoticeDetailOut:
+    body_blocks = _normalize_notice_body_blocks(
+        row.get("body_blocks"),
+        fallback_body_text=row.get("body_text"),
+        attachment_rows=attachment_rows,
+    )
     body_text = _flatten_notice_body_text(body_blocks, fallback_body_text=row.get("body_text"))
     return NoticeDetailOut(
         id=row["id"],
@@ -375,6 +471,80 @@ def list_notices(
     return NoticeListOut(items=[_map_notice_summary(row) for row in rows])
 
 
+@router.post("/attachments", response_model=NoticeAttachmentOut, status_code=status.HTTP_201_CREATED)
+async def upload_notice_attachment(
+    file: UploadFile | None = File(default=None),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    _ensure_notice_manage_permission(user)
+    tenant = resolve_scoped_tenant(
+        conn,
+        user,
+        header_tenant_id=user.get("active_tenant_id"),
+        require_dev_context=True,
+    )
+    tenant_id = str(tenant.get("id") or "").strip()
+    actor_id = str(user.get("id") or "").strip()
+
+    if file is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "VALIDATION_ERROR", "message": "이미지 파일을 선택해 주세요."},
+        )
+
+    file_name = str(file.filename or "notice-image").strip() or "notice-image"
+    mime_type = str(file.content_type or mimetypes.guess_type(file_name)[0] or "").strip().lower()
+    if not mime_type.startswith(NOTICE_IMAGE_MIME_PREFIX):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "VALIDATION_ERROR", "message": "이미지 파일만 첨부할 수 있습니다."},
+        )
+
+    raw_bytes = await file.read()
+    if not raw_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "VALIDATION_ERROR", "message": "비어 있는 이미지는 업로드할 수 없습니다."},
+        )
+    if len(raw_bytes) > NOTICE_ATTACHMENT_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "VALIDATION_ERROR", "message": "이미지 크기는 5MB 이하만 업로드할 수 있습니다."},
+        )
+
+    attachment_id = str(uuid.uuid4())
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO notice_attachments (
+                id,
+                tenant_id,
+                file_name,
+                mime_type,
+                raw_bytes,
+                created_by
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (attachment_id, tenant_id, file_name[:200], mime_type, raw_bytes, actor_id),
+        )
+
+    image_src = _build_notice_attachment_data_url(mime_type, raw_bytes)
+    if not image_src:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error": "NOTICE_ATTACHMENT_FAILED", "message": "이미지 변환에 실패했습니다."},
+        )
+
+    return NoticeAttachmentOut(
+        id=attachment_id,
+        file_name=file_name[:200],
+        mime_type=mime_type,
+        image_src=image_src,
+    )
+
+
 @router.get("/{notice_id}", response_model=NoticeDetailOut)
 def get_notice_detail(
     notice_id: str,
@@ -394,7 +564,12 @@ def get_notice_detail(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "NOT_FOUND", "message": "공지사항을 찾을 수 없습니다."},
         )
-    return _map_notice_detail(row)
+    attachment_rows = _fetch_notice_attachment_rows(
+        conn,
+        tenant_id=tenant_id,
+        attachment_ids=_extract_notice_attachment_ids(row.get("body_blocks")),
+    )
+    return _map_notice_detail(row, attachment_rows=attachment_rows)
 
 
 @router.post("", response_model=NoticeDetailOut, status_code=status.HTTP_201_CREATED)
@@ -454,7 +629,12 @@ def create_notice(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "NOTICE_CREATE_FAILED", "message": "공지 저장에 실패했습니다."},
         )
-    return _map_notice_detail(row)
+    attachment_rows = _fetch_notice_attachment_rows(
+        conn,
+        tenant_id=tenant_id,
+        attachment_ids=_extract_notice_attachment_ids(row.get("body_blocks")),
+    )
+    return _map_notice_detail(row, attachment_rows=attachment_rows)
 
 
 @router.patch("/{notice_id}", response_model=NoticeDetailOut)
@@ -516,7 +696,12 @@ def update_notice(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "NOTICE_UPDATE_FAILED", "message": "공지 수정에 실패했습니다."},
         )
-    return _map_notice_detail(row)
+    attachment_rows = _fetch_notice_attachment_rows(
+        conn,
+        tenant_id=tenant_id,
+        attachment_ids=_extract_notice_attachment_ids(row.get("body_blocks")),
+    )
+    return _map_notice_detail(row, attachment_rows=attachment_rows)
 
 
 @router.delete("/{notice_id}", response_model=NoticeDeleteOut)

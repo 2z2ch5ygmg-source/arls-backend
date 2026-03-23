@@ -1246,6 +1246,8 @@ function createInitialNoticesState() {
       title: '',
       summaryText: '',
       bodyText: '',
+      imagesEnabled: false,
+      images: [],
       table: createDefaultNoticeTableDraft(),
       isPinned: false,
     },
@@ -1261,6 +1263,15 @@ function createDefaultNoticeTableDraft() {
       ['', ''],
       ['', ''],
     ],
+  };
+}
+
+function createDefaultNoticeImageDraft() {
+  return {
+    attachmentId: '',
+    fileName: '',
+    imageSrc: '',
+    caption: '',
   };
 }
 
@@ -18339,6 +18350,14 @@ function ensureNoticesState() {
   return state.notices;
 }
 
+function isNoticesComposeActive() {
+  const notices = ensureNoticesState();
+  if (normalizeCurrentRoute(routeState.current) !== ROUTE_FEATURE_NOTICES) return false;
+  if (notices.mode !== NOTICE_VIEW_MODE_COMPOSE || !canManageNotices()) return false;
+  const panel = $('#noticesComposePanel');
+  return panel instanceof HTMLElement && !panel.classList.contains('hidden');
+}
+
 function normalizeNoticeTableDraft(rawTable = null) {
   const base = createDefaultNoticeTableDraft();
   const columns = Array.isArray(rawTable?.columns)
@@ -18370,6 +18389,36 @@ function cloneNoticeTableDraft(rawTable = null) {
   };
 }
 
+function normalizeNoticeImageDrafts(rawImages = null) {
+  if (!Array.isArray(rawImages)) return [];
+  return rawImages
+    .map((item) => {
+      const source = item && typeof item === 'object' ? item : {};
+      const attachmentId = String(source.attachmentId || source.attachment_id || '').trim();
+      const fileName = String(source.fileName || source.file_name || '').trim();
+      const imageSrc = String(source.imageSrc || source.image_src || '').trim();
+      const caption = String(source.caption || '').trim();
+      if (!attachmentId && !imageSrc) return null;
+      return {
+        attachmentId,
+        fileName,
+        imageSrc,
+        caption,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
+function cloneNoticeImageDrafts(rawImages = null) {
+  return normalizeNoticeImageDrafts(rawImages).map((item) => ({
+    attachmentId: item.attachmentId,
+    fileName: item.fileName,
+    imageSrc: item.imageSrc,
+    caption: item.caption,
+  }));
+}
+
 function normalizeNoticeBodyBlocks(rawBlocks = null, fallbackBodyText = '') {
   const blocksSource = Array.isArray(rawBlocks) ? rawBlocks : [];
   const blocks = [];
@@ -18386,6 +18435,22 @@ function normalizeNoticeBodyBlocks(rawBlocks = null, fallbackBodyText = '') {
       };
       const title = String(block.title || '').trim();
       if (title) normalized.title = title;
+      blocks.push(normalized);
+      return;
+    }
+    if (kind === 'image') {
+      const attachmentId = String(block.attachment_id || block.attachmentId || '').trim();
+      const imageSrc = String(block.image_src || block.imageSrc || '').trim();
+      if (!attachmentId && !imageSrc) return;
+      const normalized = {
+        kind: 'image',
+        attachmentId,
+        imageSrc,
+      };
+      const fileName = String(block.file_name || block.fileName || '').trim();
+      const caption = String(block.caption || '').trim();
+      if (fileName) normalized.fileName = fileName;
+      if (caption) normalized.caption = caption;
       blocks.push(normalized);
       return;
     }
@@ -18422,6 +18487,7 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
   const blocks = normalizeNoticeBodyBlocks(row?.bodyBlocks, row?.bodyText);
   const summaryParts = [];
   const bodyParts = [];
+  const images = [];
   let table = createDefaultNoticeTableDraft();
   blocks.forEach((block) => {
     if (block.kind === 'paragraph') {
@@ -18430,6 +18496,15 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
       } else {
         bodyParts.push(String(block.text || '').trim());
       }
+      return;
+    }
+    if (block.kind === 'image') {
+      images.push({
+        attachmentId: String(block.attachmentId || '').trim(),
+        fileName: String(block.fileName || '').trim(),
+        imageSrc: String(block.imageSrc || '').trim(),
+        caption: String(block.caption || '').trim(),
+      });
       return;
     }
     if (block.kind === 'table' && !table.enabled) {
@@ -18448,6 +18523,8 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
     title: String(row?.title || '').trim(),
     summaryText: summaryParts.join('\n\n'),
     bodyText: bodyParts.join('\n\n'),
+    imagesEnabled: images.length > 0,
+    images: images.length ? images : [],
     table,
     isPinned: Boolean(row?.isPinned),
   };
@@ -18456,6 +18533,7 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
 function buildNoticeBodyBlocksFromDraft(draft = null) {
   const summaryText = String(draft?.summaryText || '').trim();
   const bodyText = String(draft?.bodyText || '').trim();
+  const images = normalizeNoticeImageDrafts(draft?.images);
   const table = normalizeNoticeTableDraft(draft?.table);
   const baseTable = createDefaultNoticeTableDraft();
   const blocks = [];
@@ -18469,6 +18547,15 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
     .forEach((text) => {
       blocks.push({ kind: 'paragraph', variant: 'body', text });
     });
+  images.forEach((image) => {
+    blocks.push({
+      kind: 'image',
+      attachment_id: image.attachmentId,
+      file_name: image.fileName,
+      caption: image.caption,
+      image_src: image.imageSrc,
+    });
+  });
   const hasCustomColumns = table.columns.some((item, index) => String(item || '').trim() !== String(baseTable.columns[index] || '').trim());
   const hasTableRows = table.rows.some((row) => row.some((cell) => String(cell || '').trim()));
   const hasTableContent = Boolean(table.enabled && (table.title || hasCustomColumns || hasTableRows));
@@ -18507,6 +18594,10 @@ function buildNoticeBodyTextFromBlocks(blocks = []) {
         if (line) parts.push(line);
       });
     }
+    if (block.kind === 'image') {
+      const caption = String(block.caption || '').trim();
+      if (caption) parts.push(caption);
+    }
   });
   return parts.join('\n\n').trim();
 }
@@ -18541,6 +18632,8 @@ function resetNoticeComposeDraft(category = 'ops') {
     title: '',
     summaryText: '',
     bodyText: '',
+    imagesEnabled: false,
+    images: [],
     table: createDefaultNoticeTableDraft(),
     isPinned: false,
   };
@@ -18561,6 +18654,7 @@ function syncNoticeComposeDraftFromFields() {
   const bodyInput = $('#noticesComposeBody');
   const tableTitleInput = $('#noticesComposeTableTitle');
   const tableEnabledInput = $('#noticesComposeTableEnabled');
+  const imagesEnabledInput = $('#noticesComposeImagesEnabled');
   const pinnedInput = $('#noticesComposePinned');
   const nextTable = cloneNoticeTableDraft(notices.composeDraft?.table);
   if (tableTitleInput instanceof HTMLInputElement) {
@@ -18569,6 +18663,13 @@ function syncNoticeComposeDraftFromFields() {
   if (tableEnabledInput instanceof HTMLInputElement) {
     nextTable.enabled = Boolean(tableEnabledInput.checked);
   }
+  const nextImages = cloneNoticeImageDrafts(notices.composeDraft?.images);
+  const imagesEnabled = imagesEnabledInput instanceof HTMLInputElement
+    ? Boolean(imagesEnabledInput.checked)
+    : Boolean(notices.composeDraft?.imagesEnabled);
+  if (!imagesEnabled) {
+    nextImages.length = 0;
+  }
   notices.composeDraft = {
     category: categorySelect instanceof HTMLSelectElement
       ? (normalizeNoticeCategory(categorySelect.value) === 'all' ? 'ops' : normalizeNoticeCategory(categorySelect.value))
@@ -18576,6 +18677,8 @@ function syncNoticeComposeDraftFromFields() {
     title: titleInput instanceof HTMLInputElement ? String(titleInput.value || '') : String(notices.composeDraft?.title || ''),
     summaryText: summaryInput instanceof HTMLTextAreaElement ? String(summaryInput.value || '') : String(notices.composeDraft?.summaryText || ''),
     bodyText: bodyInput instanceof HTMLTextAreaElement ? String(bodyInput.value || '') : String(notices.composeDraft?.bodyText || ''),
+    imagesEnabled,
+    images: nextImages,
     table: nextTable,
     isPinned: pinnedInput instanceof HTMLInputElement ? Boolean(pinnedInput.checked) : Boolean(notices.composeDraft?.isPinned),
   };
@@ -18590,6 +18693,7 @@ function writeNoticeComposeDraftToFields() {
   const bodyInput = $('#noticesComposeBody');
   const tableTitleInput = $('#noticesComposeTableTitle');
   const tableEnabledInput = $('#noticesComposeTableEnabled');
+  const imagesEnabledInput = $('#noticesComposeImagesEnabled');
   const pinnedInput = $('#noticesComposePinned');
   if (categorySelect instanceof HTMLSelectElement) {
     const nextCategory = normalizeNoticeCategory(draft.category || notices.category || 'ops');
@@ -18609,6 +18713,9 @@ function writeNoticeComposeDraftToFields() {
   }
   if (tableEnabledInput instanceof HTMLInputElement) {
     tableEnabledInput.checked = Boolean(draft.table?.enabled);
+  }
+  if (imagesEnabledInput instanceof HTMLInputElement) {
+    imagesEnabledInput.checked = Boolean(draft.imagesEnabled) || (Array.isArray(draft.images) && draft.images.length > 0);
   }
   if (pinnedInput instanceof HTMLInputElement) {
     pinnedInput.checked = Boolean(draft.isPinned);
@@ -18644,6 +18751,61 @@ async function fetchHomeNoticeRows({ limit = NOTICE_HOME_TEASER_LIMIT } = {}) {
   const payload = await apiRequest(`/notices/home-teaser?${params.toString()}`);
   const rows = Array.isArray(payload?.items) ? payload.items : [];
   return rows.map((row) => normalizeNoticeRecord(row));
+}
+
+async function uploadNoticeImageFile(file) {
+  if (!(file instanceof File)) {
+    throw new Error('이미지 파일을 다시 선택해 주세요.');
+  }
+  const formData = new FormData();
+  formData.append('file', file);
+  const payload = await apiRequest('/notices/attachments', {
+    method: 'POST',
+    body: formData,
+  });
+  return {
+    attachmentId: String(payload?.id || '').trim(),
+    fileName: String(payload?.file_name || file.name || '').trim(),
+    imageSrc: String(payload?.image_src || '').trim(),
+    caption: '',
+  };
+}
+
+async function appendNoticeImages(files = []) {
+  const notices = ensureNoticesState();
+  const existingImages = cloneNoticeImageDrafts(notices.composeDraft?.images);
+  const fileRows = Array.from(files).filter((file) => file instanceof File);
+  if (!fileRows.length) return;
+  if (existingImages.length >= 6) {
+    showToast('이미지는 최대 6장까지만 첨부할 수 있습니다.', 'info', 2200);
+    return;
+  }
+  const available = fileRows.slice(0, Math.max(0, 6 - existingImages.length));
+  for (const file of available) {
+    if (!String(file.type || '').startsWith('image/')) {
+      showToast('이미지 파일만 첨부할 수 있습니다.', 'error', 2200);
+      continue;
+    }
+    const uploaded = await uploadNoticeImageFile(file);
+    if (!uploaded?.attachmentId && !uploaded?.imageSrc) {
+      continue;
+    }
+    existingImages.push(uploaded);
+  }
+  notices.composeDraft = {
+    ...(notices.composeDraft || {}),
+    imagesEnabled: existingImages.length > 0 || Boolean(notices.composeDraft?.imagesEnabled),
+    images: existingImages,
+  };
+  const imagesEnabledInput = $('#noticesComposeImagesEnabled');
+  if (imagesEnabledInput instanceof HTMLInputElement) {
+    imagesEnabledInput.checked = existingImages.length > 0;
+  }
+  const imageInput = $('#noticesComposeImageInput');
+  if (imageInput instanceof HTMLInputElement) {
+    imageInput.value = '';
+  }
+  renderNoticeComposeImageList();
 }
 
 async function saveNoticeDraft() {
@@ -32411,6 +32573,28 @@ function renderNoticeDetailBody(target, item) {
       prose.appendChild(section);
       return;
     }
+    if (block.kind === 'image') {
+      const section = document.createElement('section');
+      section.className = 'notices-detail-block';
+      const wrap = document.createElement('figure');
+      wrap.className = 'notices-detail-image-wrap';
+      const img = document.createElement('img');
+      img.className = 'notices-detail-image';
+      img.loading = 'lazy';
+      img.alt = String(block.caption || block.fileName || '공지 이미지').trim() || '공지 이미지';
+      img.src = String(block.imageSrc || '').trim();
+      wrap.appendChild(img);
+      const captionText = String(block.caption || '').trim();
+      if (captionText) {
+        const caption = document.createElement('figcaption');
+        caption.className = 'notices-detail-image-caption';
+        caption.textContent = captionText;
+        wrap.appendChild(caption);
+      }
+      section.appendChild(wrap);
+      prose.appendChild(section);
+      return;
+    }
     if (block.kind === 'table') {
       const section = document.createElement('section');
       section.className = 'notices-detail-block';
@@ -32452,6 +32636,77 @@ function renderNoticeDetailBody(target, item) {
     }
   });
   target.appendChild(prose);
+}
+
+function renderNoticeComposeImageList() {
+  const list = $('#noticesComposeImageList');
+  const panel = $('#noticesComposeImagesPanel');
+  const notices = ensureNoticesState();
+  const images = cloneNoticeImageDrafts(notices.composeDraft?.images);
+  const imageToggle = $('#noticesComposeImagesEnabled');
+  const enabled = images.length > 0 || (imageToggle instanceof HTMLInputElement && imageToggle.checked);
+  if (panel instanceof HTMLElement) {
+    panel.classList.toggle('hidden', !enabled);
+  }
+  if (!(list instanceof HTMLElement)) return;
+  list.innerHTML = '';
+  if (!enabled) return;
+  if (!images.length) {
+    renderEmptyState(
+      list,
+      '아직 첨부된 이미지가 없습니다.',
+      '클릭, 드래그 앤 드롭, 붙여넣기로 이미지를 추가하면 상세 본문 아래에 바로 렌더됩니다.',
+    );
+    return;
+  }
+  images.forEach((image, index) => {
+    const item = document.createElement('li');
+    item.className = 'notices-image-item';
+
+    const preview = document.createElement('img');
+    preview.className = 'notices-image-preview';
+    preview.loading = 'lazy';
+    preview.alt = String(image.caption || image.fileName || `공지 이미지 ${index + 1}`).trim() || `공지 이미지 ${index + 1}`;
+    preview.src = String(image.imageSrc || '').trim();
+
+    const fields = document.createElement('div');
+    fields.className = 'notices-image-fields';
+
+    const meta = document.createElement('div');
+    meta.className = 'notices-image-meta';
+    const name = document.createElement('strong');
+    name.textContent = String(image.fileName || `이미지 ${index + 1}`).trim();
+    const sub = document.createElement('p');
+    sub.className = 'muted';
+    sub.textContent = `첨부 ${index + 1}`;
+    meta.append(name, sub);
+
+    const label = document.createElement('label');
+    label.className = 'input-field';
+    label.textContent = '캡션';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = String(image.caption || '');
+    input.placeholder = '이미지 아래에 표시할 설명을 입력하세요.';
+    input.dataset.noticeImageIndex = String(index);
+    input.dataset.noticeImageField = 'caption';
+    label.appendChild(input);
+
+    fields.append(meta, label);
+
+    const actions = document.createElement('div');
+    actions.className = 'notices-image-actions';
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'btn btn-secondary';
+    removeBtn.dataset.action = 'notices-image-remove';
+    removeBtn.dataset.noticeImageIndex = String(index);
+    removeBtn.textContent = '제거';
+    actions.appendChild(removeBtn);
+
+    item.append(preview, fields, actions);
+    list.appendChild(item);
+  });
 }
 
 function renderNoticeComposeTableEditor() {
@@ -32651,8 +32906,8 @@ function renderNoticesComposePanel() {
   }
   if (hintEl) {
     hintEl.textContent = editing
-      ? '요약, 본문 문단, 표 블록을 정리하면 기존 공지가 즉시 갱신됩니다.'
-      : '요약 안내와 본문 문단을 먼저 쓰고, 필요한 경우 표 블록까지 붙여 문서형 공지로 발행합니다.';
+      ? '요약, 본문 문단, 이미지, 표 블록을 정리하면 기존 공지가 즉시 갱신됩니다.'
+      : '요약 안내와 본문 문단을 먼저 쓰고, 필요한 경우 이미지와 표 블록까지 붙여 문서형 공지로 발행합니다.';
   }
   if (pinnedHintEl) {
     pinnedHintEl.textContent = `상단고정은 최대 ${NOTICE_PINNED_LIMIT}개까지만 유지됩니다. 오래된 고정 공지는 자동으로 내려갑니다.`;
@@ -32675,11 +32930,13 @@ function renderNoticesComposePanel() {
     !String(notices.composeDraft?.title || '').trim()
     && !String(notices.composeDraft?.summaryText || '').trim()
     && !String(notices.composeDraft?.bodyText || '').trim()
+    && !normalizeNoticeImageDrafts(notices.composeDraft?.images).length
     && normalizeNoticeCategory(notices.composeDraft?.category || 'all') === 'all'
   ) {
     resetNoticeComposeDraft(notices.category);
   }
   writeNoticeComposeDraftToFields();
+  renderNoticeComposeImageList();
   renderNoticeComposeTableEditor();
 }
 
@@ -55642,11 +55899,89 @@ function bindUiEvents() {
       return;
     }
 
+    if (target instanceof HTMLInputElement && target.dataset.noticeImageField === 'caption') {
+      const notices = ensureNoticesState();
+      const index = Math.max(0, Number.parseInt(target.dataset.noticeImageIndex || '0', 10) || 0);
+      const images = cloneNoticeImageDrafts(notices.composeDraft?.images);
+      if (images[index]) {
+        images[index].caption = String(target.value || '');
+        notices.composeDraft = {
+          ...(notices.composeDraft || {}),
+          images,
+        };
+      }
+      return;
+    }
+
     if (target.id === 'noticesSearchInput') {
       const notices = ensureNoticesState();
       notices.search = target instanceof HTMLInputElement ? normalizeNoticeSearch(target.value) : '';
       renderNoticesSearchControls();
       return;
+    }
+
+    if (target.id === 'noticesComposeImageInput') {
+      const files = target instanceof HTMLInputElement && target.files ? Array.from(target.files) : [];
+      runWithBusy(async () => {
+        await appendNoticeImages(files);
+      }, '이미지 업로드 중...');
+      return;
+    }
+  }, { signal });
+
+  document.addEventListener('paste', (event) => {
+    if (!isNoticesComposeActive()) return;
+    const items = Array.from(event.clipboardData?.items || []);
+    const files = items
+      .filter((item) => item.kind === 'file' && String(item.type || '').startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((file) => file instanceof File);
+    if (!files.length) return;
+    event.preventDefault();
+    runWithBusy(async () => {
+      await appendNoticeImages(files);
+    }, '이미지 업로드 중...');
+  }, { signal });
+
+  document.addEventListener('dragover', (event) => {
+    if (!isNoticesComposeActive()) return;
+    const dropzone = $('#noticesComposeImageDropzone');
+    if (!(dropzone instanceof HTMLElement)) return;
+    const hasImage = Array.from(event.dataTransfer?.items || []).some((item) => String(item.type || '').startsWith('image/'));
+    if (!hasImage) return;
+    event.preventDefault();
+    dropzone.classList.add('is-dragover');
+  }, { signal });
+
+  document.addEventListener('dragleave', () => {
+    const dropzone = $('#noticesComposeImageDropzone');
+    if (dropzone instanceof HTMLElement) {
+      dropzone.classList.remove('is-dragover');
+    }
+  }, { signal });
+
+  document.addEventListener('drop', (event) => {
+    const dropzone = $('#noticesComposeImageDropzone');
+    if (dropzone instanceof HTMLElement) {
+      dropzone.classList.remove('is-dragover');
+    }
+    if (!isNoticesComposeActive()) return;
+    const files = Array.from(event.dataTransfer?.files || []).filter((file) => file instanceof File && String(file.type || '').startsWith('image/'));
+    if (!files.length) return;
+    event.preventDefault();
+    runWithBusy(async () => {
+      await appendNoticeImages(files);
+    }, '이미지 업로드 중...');
+  }, { signal });
+
+  document.addEventListener('keydown', (event) => {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (!target || target.id !== 'noticesComposeImageDropzone') return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    const input = $('#noticesComposeImageInput');
+    if (input instanceof HTMLInputElement) {
+      input.click();
     }
   }, { signal });
 
@@ -56649,6 +56984,33 @@ function bindUiEvents() {
       };
       writeNoticeComposeDraftToFields();
       renderNoticeComposeTableEditor();
+      return;
+    }
+
+    if (action === 'notices-image-pick') {
+      const input = $('#noticesComposeImageInput');
+      if (input instanceof HTMLInputElement) {
+        input.click();
+      }
+      return;
+    }
+
+    if (action === 'notices-image-remove') {
+      const notices = ensureNoticesState();
+      const index = Math.max(0, Number.parseInt(actionEl.dataset.noticeImageIndex || '0', 10) || 0);
+      const images = cloneNoticeImageDrafts(notices.composeDraft?.images);
+      if (!images[index]) return;
+      images.splice(index, 1);
+      notices.composeDraft = {
+        ...(notices.composeDraft || {}),
+        imagesEnabled: images.length > 0 ? Boolean(notices.composeDraft?.imagesEnabled) : false,
+        images,
+      };
+      const toggle = $('#noticesComposeImagesEnabled');
+      if (toggle instanceof HTMLInputElement) {
+        toggle.checked = images.length > 0;
+      }
+      renderNoticeComposeImageList();
       return;
     }
 
@@ -59342,10 +59704,13 @@ function bindUiEvents() {
       return;
     }
 
-    if (target.id === 'noticesComposeCategory' || target.id === 'noticesComposePinned' || target.id === 'noticesComposeTableEnabled') {
+    if (target.id === 'noticesComposeCategory' || target.id === 'noticesComposePinned' || target.id === 'noticesComposeTableEnabled' || target.id === 'noticesComposeImagesEnabled') {
       syncNoticeComposeDraftFromFields();
       if (target.id === 'noticesComposeTableEnabled') {
         renderNoticeComposeTableEditor();
+      }
+      if (target.id === 'noticesComposeImagesEnabled') {
+        renderNoticeComposeImageList();
       }
       return;
     }

@@ -1658,7 +1658,7 @@ class InAppNotificationListOut(BaseModel):
 
 
 NOTICE_CATEGORY_LITERAL = Literal["ops", "attendance", "schedule", "hr", "system", "event"]
-NOTICE_BODY_BLOCK_KIND_LITERAL = Literal["paragraph", "table"]
+NOTICE_BODY_BLOCK_KIND_LITERAL = Literal["paragraph", "image", "table"]
 NOTICE_BODY_PARAGRAPH_VARIANT_LITERAL = Literal["lead", "body"]
 
 
@@ -1667,10 +1667,14 @@ class NoticeBodyBlock(BaseModel):
     variant: Optional[NOTICE_BODY_PARAGRAPH_VARIANT_LITERAL] = None
     title: Optional[str] = Field(default=None, max_length=120)
     text: Optional[str] = Field(default=None, max_length=4000)
+    attachment_id: Optional[str] = Field(default=None, max_length=64)
+    file_name: Optional[str] = Field(default=None, max_length=200)
+    caption: Optional[str] = Field(default=None, max_length=240)
+    image_src: Optional[str] = Field(default=None, max_length=5000000)
     columns: list[str] = Field(default_factory=list, max_length=6)
     rows: list[list[str]] = Field(default_factory=list, max_length=20)
 
-    @field_validator("title", "text", mode="before")
+    @field_validator("title", "text", "attachment_id", "file_name", "caption", mode="before")
     @classmethod
     def _trim_notice_block_text(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
@@ -1707,6 +1711,18 @@ class NoticeBodyBlock(BaseModel):
                 raise ValueError("paragraph text is required")
             if self.variant is None:
                 self.variant = "body"
+            self.attachment_id = None
+            self.file_name = None
+            self.caption = None
+            self.image_src = None
+            self.columns = []
+            self.rows = []
+            return self
+        if self.kind == "image":
+            if not self.attachment_id and not self.image_src:
+                raise ValueError("image attachment_id is required")
+            self.variant = None
+            self.text = None
             self.columns = []
             self.rows = []
             return self
@@ -1714,6 +1730,10 @@ class NoticeBodyBlock(BaseModel):
             raise ValueError("table columns or rows are required")
         self.variant = None
         self.text = None
+        self.attachment_id = None
+        self.file_name = None
+        self.caption = None
+        self.image_src = None
         return self
 
 
@@ -1761,6 +1781,13 @@ class NoticeListOut(BaseModel):
 class NoticeDeleteOut(BaseModel):
     deleted: bool = True
     id: UUID
+
+
+class NoticeAttachmentOut(BaseModel):
+    id: UUID
+    file_name: str
+    mime_type: str
+    image_src: str
 
 
 class FinanceSubmissionStatusOut(BaseModel):
