@@ -815,6 +815,10 @@ function createInitialRequestsWorkspaceState() {
 function createInitialEmployeeAdminState() {
   return {
     rows: [],
+    rowsSource: '',
+    rowsScopeKey: '',
+    rowsTenantWide: false,
+    siteFilterRecoveryKey: '',
     selectedEmployeeId: '',
     searchQuery: '',
     sortKey: '',
@@ -3871,6 +3875,10 @@ function clearListCaches({ clearStorage = true, resetFilters = true } = {}) {
   state.siteCatalog = [];
   state.home.sites = [];
   state.employeeAdmin.rows = [];
+  state.employeeAdmin.rowsSource = '';
+  state.employeeAdmin.rowsScopeKey = '';
+  state.employeeAdmin.rowsTenantWide = false;
+  state.employeeAdmin.siteFilterRecoveryKey = '';
   state.employeeAdmin.siteRows = [];
   state.employeeAdmin.siteRowsScopeKey = '';
   if (resetFilters) {
@@ -5740,6 +5748,10 @@ async function loadHomeManagerOrgSummary({ force = false } = {}) {
       state.employeeAdmin.rows = Array.isArray(employeeRows)
         ? employeeRows.map((row, index) => ({ ...row, __sourceIndex: index }))
         : [];
+      state.employeeAdmin.rowsSource = 'home-summary';
+      state.employeeAdmin.rowsScopeKey = '';
+      state.employeeAdmin.rowsTenantWide = false;
+      state.employeeAdmin.siteFilterRecoveryKey = '';
     }
 
     let siteRows = Array.isArray(state.siteCatalog) && state.siteCatalog.length
@@ -36170,6 +36182,67 @@ function getEmployeeIncludeFilters() {
   };
 }
 
+function getEmployeeRowsScopeKey() {
+  const tenantSelection = getEmployeeTenantFilterSelection();
+  const navRole = getNavigationRole();
+  const isDevAllTenants = navRole === 'DEV' && tenantSelection.isAll;
+  const include = getEmployeeIncludeFilters();
+  const scopeTenant = String(
+    (isDevAllTenants ? 'ALL' : (tenantSelection.tenantId || getTenantIdForScopedAdminApi() || state.user?.tenant_id))
+    || '',
+  ).trim();
+  return [
+    scopeTenant || 'none',
+    include.includeInactive ? 'inactive:1' : 'inactive:0',
+    include.includeDeleted ? 'deleted:1' : 'deleted:0',
+    isDevAllTenants ? 'mode:dev-all' : 'mode:tenant',
+  ].join('|');
+}
+
+function markEmployeeRowsCache({ source = '', scopeKey = '', tenantWide = false } = {}) {
+  state.employeeAdmin.rowsSource = String(source || '').trim();
+  state.employeeAdmin.rowsScopeKey = String(scopeKey || getEmployeeRowsScopeKey()).trim();
+  state.employeeAdmin.rowsTenantWide = Boolean(tenantWide);
+  state.employeeAdmin.siteFilterRecoveryKey = '';
+}
+
+function isEmployeeRowsCacheTrustedForCurrentDirectory() {
+  return Boolean(
+    Array.isArray(state.employeeAdmin?.rows)
+      && state.employeeAdmin.rows.length
+      && state.employeeAdmin.rowsSource === 'directory'
+      && state.employeeAdmin.rowsTenantWide
+      && String(state.employeeAdmin.rowsScopeKey || '').trim() === getEmployeeRowsScopeKey()
+  );
+}
+
+function shouldRecoverEmployeeRowsForSelectedSite(filteredRows = []) {
+  const rows = Array.isArray(state.employeeAdmin?.rows) ? state.employeeAdmin.rows : [];
+  const siteCode = getEmployeeSiteFilterCode();
+  if (!siteCode) return false;
+  if (!rows.length) return false;
+  if (Array.isArray(filteredRows) && filteredRows.length) return false;
+  if (isEmployeeRowsCacheTrustedForCurrentDirectory()) return false;
+  const siteRows = Array.isArray(state.employeeAdmin?.siteRows) ? state.employeeAdmin.siteRows : [];
+  const hasSelectedSite = siteRows.some((site) => String(site?.site_code || '').trim().toUpperCase() === siteCode);
+  if (!hasSelectedSite) return false;
+  const recoveryKey = `${getEmployeeRowsScopeKey()}|site:${siteCode}`;
+  if (String(state.employeeAdmin?.siteFilterRecoveryKey || '').trim() === recoveryKey) return false;
+  return true;
+}
+
+async function maybeRecoverEmployeeRowsForSelectedSite(filteredRows = []) {
+  if (!shouldRecoverEmployeeRowsForSelectedSite(filteredRows)) return false;
+  const siteCode = getEmployeeSiteFilterCode();
+  state.employeeAdmin.siteFilterRecoveryKey = `${getEmployeeRowsScopeKey()}|site:${siteCode}`;
+  try {
+    await loadEmployees({ preferCache: false, skipNetworkWhenCached: false });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function normalizeEmployeeSortDirection(direction = '') {
   const normalized = String(direction || '').trim().toLowerCase();
   return normalized === 'asc' || normalized === 'desc' ? normalized : '';
@@ -39123,6 +39196,9 @@ function renderEmployeeListRows(rows = [], { emptyTitle = '등록된 직원이 �
 
 function renderEmployeesFromCache() {
   const filtered = getFilteredEmployeeRows();
+  if (!filtered.length) {
+    void maybeRecoverEmployeeRowsForSelectedSite(filtered);
+  }
   const emptyState = getEmployeeEmptyStateCopy();
   const desktopCard = $('#employeeDesktopTableCard');
   const mobileList = $('#employeeList');
@@ -40167,6 +40243,7 @@ async function loadEmployees({ preferCache = true, skipNetworkWhenCached = false
   const perfRoute = normalizeRoutePath(state.currentRoute || ROUTE_ADMIN_EMPLOYEES);
   if (!target) return [];
   const hasCachedEmployees = preferCache && Array.isArray(state.employeeAdmin.rows) && state.employeeAdmin.rows.length > 0;
+  const canSkipNetworkWithCache = skipNetworkWhenCached && isEmployeeRowsCacheTrustedForCurrentDirectory();
   if (!can('employees')) {
     renderEmptyState(target, '직원 조회 권한이 없습니다.');
     renderEmployeeTableRows([]);
@@ -40185,7 +40262,7 @@ async function loadEmployees({ preferCache = true, skipNetworkWhenCached = false
         render_ms: getPerfNowMs() - cachedRenderStartedAt,
       },
     });
-    if (skipNetworkWhenCached) {
+    if (canSkipNetworkWithCache) {
       return state.employeeAdmin.rows;
     }
   } else {
@@ -40219,6 +40296,11 @@ async function loadEmployees({ preferCache = true, skipNetworkWhenCached = false
       state.employeeAdmin.rows = Array.isArray(employees)
         ? employees.map((row, index) => ({ ...row, __sourceIndex: index }))
         : [];
+      markEmployeeRowsCache({
+        source: 'directory',
+        scopeKey: getEmployeeRowsScopeKey(),
+        tenantWide: true,
+      });
       state.employeeAdmin.detailCache = new Map();
       const apiElapsedMs = getPerfNowMs() - fetchStartedAt;
       const renderStartedAt = getPerfNowMs();
@@ -40249,6 +40331,11 @@ async function loadEmployees({ preferCache = true, skipNetworkWhenCached = false
     state.employeeAdmin.rows = Array.isArray(employees)
       ? employees.map((row, index) => ({ ...row, __sourceIndex: index }))
       : [];
+    markEmployeeRowsCache({
+      source: 'directory',
+      scopeKey: getEmployeeRowsScopeKey(),
+      tenantWide: true,
+    });
     state.employeeAdmin.detailCache = new Map();
     const apiElapsedMs = getPerfNowMs() - fetchStartedAt;
     const renderStartedAt = getPerfNowMs();
@@ -40266,6 +40353,10 @@ async function loadEmployees({ preferCache = true, skipNetworkWhenCached = false
   } catch (err) {
     const code = String(err?.code || '').trim().toUpperCase();
     state.employeeAdmin.rows = [];
+    state.employeeAdmin.rowsSource = '';
+    state.employeeAdmin.rowsScopeKey = '';
+    state.employeeAdmin.rowsTenantWide = false;
+    state.employeeAdmin.siteFilterRecoveryKey = '';
     state.employeeAdmin.detailCache = new Map();
     renderEmptyState(target, '직원 목록을 불러오지 못했습니다.');
     renderEmployeeTableRows([]);
