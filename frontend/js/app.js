@@ -1250,6 +1250,7 @@ function createInitialNoticesState() {
     loadedDetailNoticeId: '',
     manageAccessHint: '',
     composeSourceNoticeId: '',
+    composeSettingsOpen: false,
     previewOpen: false,
     draftSavedAt: '',
     draftStorageMessage: '',
@@ -18939,6 +18940,7 @@ function normalizeNoticeRecord(row = {}) {
 function resetNoticeComposeDraft(category = 'ops') {
   const notices = ensureNoticesState();
   notices.composeSourceNoticeId = '';
+  notices.composeSettingsOpen = false;
   notices.previewOpen = false;
   notices.draftSavedAt = '';
   notices.draftStorageMessage = '';
@@ -18959,6 +18961,7 @@ function fillNoticeComposeDraftFromRow(row = null) {
   const notices = ensureNoticesState();
   const normalizedRow = row && typeof row === 'object' ? row : null;
   notices.composeSourceNoticeId = String(normalizedRow?.id || '').trim();
+  notices.composeSettingsOpen = false;
   notices.previewOpen = false;
   notices.draftSavedAt = '';
   notices.draftStorageMessage = '';
@@ -19111,6 +19114,128 @@ function writeNoticeComposeDraftToFields() {
   }
   if (pinnedInput instanceof HTMLInputElement) {
     pinnedInput.checked = Boolean(draft.isPinned);
+  }
+}
+
+function setNoticeComposeCheckboxValue(inputId = '', checked = false) {
+  const input = $(`#${String(inputId || '').trim()}`);
+  if (input instanceof HTMLInputElement) {
+    input.checked = Boolean(checked);
+  }
+}
+
+function setNoticeComposeSelectValue(inputId = '', value = '') {
+  const input = $(`#${String(inputId || '').trim()}`);
+  if (input instanceof HTMLSelectElement) {
+    input.value = String(value || '');
+  }
+}
+
+function setNoticeComposeBlockEnabled(kind = '', enabled = true, { clear = false } = {}) {
+  const notices = ensureNoticesState();
+  const draft = notices.composeDraft && typeof notices.composeDraft === 'object'
+    ? notices.composeDraft
+    : buildSerializableNoticeComposeDraft(null);
+  const nextDraft = {
+    ...draft,
+    images: cloneNoticeImageDrafts(draft.images),
+    poll: cloneNoticePollDraft(draft.poll),
+    table: cloneNoticeTableDraft(draft.table),
+  };
+  const normalizedKind = String(kind || '').trim().toLowerCase();
+  if (normalizedKind === 'image') {
+    nextDraft.imagesEnabled = Boolean(enabled);
+    if (!enabled && clear) {
+      nextDraft.images = [];
+    }
+    notices.composeDraft = nextDraft;
+    setNoticeComposeCheckboxValue('noticesComposeImagesEnabled', nextDraft.imagesEnabled);
+    return;
+  }
+  if (normalizedKind === 'poll') {
+    nextDraft.poll.enabled = Boolean(enabled);
+    if (!enabled && clear) {
+      nextDraft.poll = createDefaultNoticePollDraft();
+    }
+    notices.composeDraft = nextDraft;
+    setNoticeComposeCheckboxValue('noticesComposePollEnabled', nextDraft.poll.enabled);
+    return;
+  }
+  if (normalizedKind === 'table') {
+    nextDraft.table.enabled = Boolean(enabled);
+    if (!enabled && clear) {
+      nextDraft.table = createDefaultNoticeTableDraft();
+    }
+    notices.composeDraft = nextDraft;
+    setNoticeComposeCheckboxValue('noticesComposeTableEnabled', nextDraft.table.enabled);
+  }
+}
+
+function renderNoticeComposeSettingsPanel() {
+  const notices = ensureNoticesState();
+  const panel = $('#noticesComposeSettingsPanel');
+  const toggleBtn = $('#noticesComposeSettingsToggleBtn');
+  const draft = notices.composeDraft && typeof notices.composeDraft === 'object'
+    ? notices.composeDraft
+    : {};
+  if (panel instanceof HTMLElement) {
+    panel.classList.toggle('hidden', !Boolean(notices.composeSettingsOpen));
+  }
+  if (toggleBtn instanceof HTMLButtonElement) {
+    toggleBtn.setAttribute('aria-expanded', notices.composeSettingsOpen ? 'true' : 'false');
+    toggleBtn.textContent = notices.composeSettingsOpen ? '게시 설정 닫기' : '게시 설정';
+  }
+  document.querySelectorAll('[data-action="notices-set-pinned"]').forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) return;
+    const isPinnedTarget = String(button.dataset.value || '').trim().toLowerCase() === 'true';
+    const active = isPinnedTarget === Boolean(draft.isPinned);
+    button.classList.toggle('is-active', active);
+    button.classList.toggle('is-accent', isPinnedTarget);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+}
+
+function renderNoticeComposeToolbar() {
+  const notices = ensureNoticesState();
+  const draft = notices.composeDraft && typeof notices.composeDraft === 'object'
+    ? notices.composeDraft
+    : {};
+  const toolbarMap = [
+    { selector: '#noticesComposeInsertImageBtn', active: Boolean(draft.imagesEnabled) || normalizeNoticeImageDrafts(draft.images).length > 0 },
+    { selector: '#noticesComposeInsertPollBtn', active: Boolean(draft.poll?.enabled) },
+    { selector: '#noticesComposeInsertTableBtn', active: Boolean(draft.table?.enabled) },
+  ];
+  toolbarMap.forEach(({ selector, active }) => {
+    const button = $(selector);
+    if (!(button instanceof HTMLButtonElement)) return;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+}
+
+function renderNoticeComposePollControls() {
+  const notices = ensureNoticesState();
+  const pollDraft = cloneNoticePollDraft(notices.composeDraft?.poll);
+  document.querySelectorAll('[data-action="notices-set-poll-mode"]').forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) return;
+    const value = String(button.dataset.value || '').trim().toLowerCase();
+    const active = value === (pollDraft.allowMultiple ? 'multiple' : 'single');
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+  const anonymousBtn = $('#noticesComposePollAnonymousToggle');
+  if (anonymousBtn instanceof HTMLButtonElement) {
+    const active = Boolean(pollDraft.isAnonymous);
+    anonymousBtn.classList.toggle('is-active', active);
+    anonymousBtn.textContent = active ? '익명 ON' : '익명 OFF';
+    anonymousBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  }
+  const allowChangeBtn = $('#noticesComposePollAllowChangeToggle');
+  if (allowChangeBtn instanceof HTMLButtonElement) {
+    const active = Boolean(pollDraft.allowChangeVote);
+    allowChangeBtn.classList.toggle('is-active', active);
+    allowChangeBtn.textContent = active ? '재투표 허용' : '재투표 잠금';
+    allowChangeBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
   }
 }
 
@@ -33336,23 +33461,29 @@ function renderNoticeComposePreview() {
 
 function renderNoticeComposeImageList() {
   const list = $('#noticesComposeImageList');
-  const panel = $('#noticesComposeImagesPanel');
+  const block = $('#noticesComposeImageBlock');
   const notices = ensureNoticesState();
   const images = cloneNoticeImageDrafts(notices.composeDraft?.images);
   const imageToggle = $('#noticesComposeImagesEnabled');
   const enabled = images.length > 0 || (imageToggle instanceof HTMLInputElement && imageToggle.checked);
-  if (panel instanceof HTMLElement) {
-    panel.classList.toggle('hidden', !enabled);
+  if (block instanceof HTMLElement) {
+    block.classList.toggle('hidden', !enabled);
   }
   if (!(list instanceof HTMLElement)) return;
   list.innerHTML = '';
-  if (!enabled) return;
+  if (!enabled) {
+    renderNoticeComposeToolbar();
+    renderNoticeComposePreview();
+    return;
+  }
   if (!images.length) {
     renderEmptyState(
       list,
-      '아직 첨부된 이미지가 없습니다.',
-      '클릭, 드래그 앤 드롭, 붙여넣기로 이미지를 추가하면 상세 본문 아래에 바로 렌더됩니다.',
+      '이미지를 추가해 주세요.',
+      '클릭, 드래그 앤 드롭, 붙여넣기로 이미지를 넣으면 문서 안에 바로 이어집니다.',
     );
+    renderNoticeComposeToolbar();
+    renderNoticeComposePreview();
     return;
   }
   images.forEach((image, index) => {
@@ -33403,20 +33534,26 @@ function renderNoticeComposeImageList() {
     item.append(preview, fields, actions);
     list.appendChild(item);
   });
+  renderNoticeComposeToolbar();
   renderNoticeComposePreview();
 }
 
 function renderNoticeComposePollEditor() {
-  const panel = $('#noticesComposePollPanel');
+  const block = $('#noticesComposePollBlock');
   const list = $('#noticesComposePollOptionList');
   const notices = ensureNoticesState();
   const pollDraft = cloneNoticePollDraft(notices.composeDraft?.poll);
-  if (panel instanceof HTMLElement) {
-    panel.classList.toggle('hidden', !pollDraft.enabled);
+  if (block instanceof HTMLElement) {
+    block.classList.toggle('hidden', !pollDraft.enabled);
   }
   if (!(list instanceof HTMLElement)) return;
   list.innerHTML = '';
-  if (!pollDraft.enabled) return;
+  renderNoticeComposePollControls();
+  if (!pollDraft.enabled) {
+    renderNoticeComposeToolbar();
+    renderNoticeComposePreview();
+    return;
+  }
 
   const options = pollDraft.options.length
     ? pollDraft.options
@@ -33455,20 +33592,25 @@ function renderNoticeComposePollEditor() {
   if (addBtn instanceof HTMLButtonElement) {
     addBtn.disabled = options.length >= NOTICE_POLL_MAX_OPTIONS;
   }
+  renderNoticeComposeToolbar();
   renderNoticeComposePreview();
 }
 
 function renderNoticeComposeTableEditor() {
   const grid = $('#noticesComposeTableGrid');
-  const panel = $('#noticesComposeTablePanel');
+  const block = $('#noticesComposeTableBlock');
   if (!(grid instanceof HTMLElement)) return;
   const notices = ensureNoticesState();
   const tableDraft = cloneNoticeTableDraft(notices.composeDraft?.table);
-  if (panel instanceof HTMLElement) {
-    panel.classList.toggle('hidden', !tableDraft.enabled);
+  if (block instanceof HTMLElement) {
+    block.classList.toggle('hidden', !tableDraft.enabled);
   }
   grid.innerHTML = '';
-  if (!tableDraft.enabled) return;
+  if (!tableDraft.enabled) {
+    renderNoticeComposeToolbar();
+    renderNoticeComposePreview();
+    return;
+  }
 
   const table = document.createElement('table');
   table.className = 'notices-compose-table';
@@ -33510,6 +33652,7 @@ function renderNoticeComposeTableEditor() {
   });
   table.appendChild(tbody);
   grid.appendChild(table);
+  renderNoticeComposeToolbar();
   renderNoticeComposePreview();
 }
 
@@ -33658,8 +33801,8 @@ function renderNoticesComposePanel() {
   }
   if (hintEl) {
     hintEl.textContent = editing
-      ? '요약, 본문 문단, 이미지, 투표, 표 블록을 정리하면 기존 공지가 즉시 갱신됩니다.'
-      : '요약 안내와 본문 문단을 먼저 쓰고, 필요한 경우 이미지, 투표, 표 블록까지 붙여 문서형 공지로 발행합니다.';
+      ? '문서 내용을 정리하고 필요한 블록만 삽입해 기존 공지를 바로 갱신합니다.'
+      : '제목과 리드 문단을 먼저 쓰고, 필요한 블록만 삽입해 문서형 공지를 발행합니다.';
   }
   if (pinnedHintEl) {
     pinnedHintEl.textContent = `상단고정은 최대 ${NOTICE_PINNED_LIMIT}개까지만 유지됩니다. 오래된 고정 공지는 자동으로 내려갑니다.`;
@@ -33706,6 +33849,8 @@ function renderNoticesComposePanel() {
     resetNoticeComposeDraft(notices.category);
   }
   writeNoticeComposeDraftToFields();
+  renderNoticeComposeSettingsPanel();
+  renderNoticeComposeToolbar();
   renderNoticeComposeImageList();
   renderNoticeComposePollEditor();
   renderNoticeComposeTableEditor();
@@ -57726,6 +57871,142 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'notices-toggle-settings') {
+      const notices = ensureNoticesState();
+      notices.composeSettingsOpen = !Boolean(notices.composeSettingsOpen);
+      renderNoticesComposePanel();
+      return;
+    }
+
+    if (action === 'notices-set-pinned') {
+      const notices = ensureNoticesState();
+      const nextPinned = String(actionEl.dataset.value || '').trim().toLowerCase() === 'true';
+      notices.composeDraft = {
+        ...(notices.composeDraft || {}),
+        isPinned: nextPinned,
+      };
+      setNoticeComposeCheckboxValue('noticesComposePinned', nextPinned);
+      markNoticeComposeDraftDirty();
+      writeNoticeComposeDraftToFields();
+      renderNoticeComposeSettingsPanel();
+      renderNoticeComposePreview();
+      return;
+    }
+
+    if (action === 'notices-insert-image-block') {
+      setNoticeComposeBlockEnabled('image', true);
+      markNoticeComposeDraftDirty();
+      writeNoticeComposeDraftToFields();
+      renderNoticeComposeImageList();
+      const dropzone = $('#noticesComposeImageDropzone');
+      if (dropzone instanceof HTMLElement) {
+        dropzone.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+      return;
+    }
+
+    if (action === 'notices-remove-image-block') {
+      setNoticeComposeBlockEnabled('image', false, { clear: true });
+      markNoticeComposeDraftDirty();
+      writeNoticeComposeDraftToFields();
+      renderNoticeComposeImageList();
+      return;
+    }
+
+    if (action === 'notices-insert-poll-block') {
+      setNoticeComposeBlockEnabled('poll', true);
+      markNoticeComposeDraftDirty();
+      writeNoticeComposeDraftToFields();
+      renderNoticeComposePollEditor();
+      const pollQuestion = $('#noticesComposePollQuestion');
+      if (pollQuestion instanceof HTMLInputElement) {
+        pollQuestion.focus({ preventScroll: false });
+      }
+      return;
+    }
+
+    if (action === 'notices-remove-poll-block') {
+      setNoticeComposeBlockEnabled('poll', false, { clear: true });
+      markNoticeComposeDraftDirty();
+      writeNoticeComposeDraftToFields();
+      renderNoticeComposePollEditor();
+      return;
+    }
+
+    if (action === 'notices-insert-table-block') {
+      setNoticeComposeBlockEnabled('table', true);
+      markNoticeComposeDraftDirty();
+      writeNoticeComposeDraftToFields();
+      renderNoticeComposeTableEditor();
+      const tableTitle = $('#noticesComposeTableTitle');
+      if (tableTitle instanceof HTMLInputElement) {
+        tableTitle.focus({ preventScroll: false });
+      }
+      return;
+    }
+
+    if (action === 'notices-remove-table-block') {
+      setNoticeComposeBlockEnabled('table', false, { clear: true });
+      markNoticeComposeDraftDirty();
+      writeNoticeComposeDraftToFields();
+      renderNoticeComposeTableEditor();
+      return;
+    }
+
+    if (action === 'notices-set-poll-mode') {
+      const nextMode = String(actionEl.dataset.value || '').trim().toLowerCase() === 'multiple' ? 'multiple' : 'single';
+      setNoticeComposeSelectValue('noticesComposePollSelectionMode', nextMode);
+      const notices = ensureNoticesState();
+      notices.composeDraft = {
+        ...(notices.composeDraft || {}),
+        poll: {
+          ...cloneNoticePollDraft(notices.composeDraft?.poll),
+          enabled: true,
+          allowMultiple: nextMode === 'multiple',
+        },
+      };
+      markNoticeComposeDraftDirty();
+      writeNoticeComposeDraftToFields();
+      renderNoticeComposePollEditor();
+      return;
+    }
+
+    if (action === 'notices-toggle-poll-anonymous') {
+      const notices = ensureNoticesState();
+      const nextAnonymous = !Boolean(notices.composeDraft?.poll?.isAnonymous);
+      notices.composeDraft = {
+        ...(notices.composeDraft || {}),
+        poll: {
+          ...cloneNoticePollDraft(notices.composeDraft?.poll),
+          enabled: true,
+          isAnonymous: nextAnonymous,
+        },
+      };
+      setNoticeComposeCheckboxValue('noticesComposePollAnonymous', nextAnonymous);
+      markNoticeComposeDraftDirty();
+      writeNoticeComposeDraftToFields();
+      renderNoticeComposePollEditor();
+      return;
+    }
+
+    if (action === 'notices-toggle-poll-allow-change') {
+      const notices = ensureNoticesState();
+      const nextAllowChange = !Boolean(notices.composeDraft?.poll?.allowChangeVote);
+      notices.composeDraft = {
+        ...(notices.composeDraft || {}),
+        poll: {
+          ...cloneNoticePollDraft(notices.composeDraft?.poll),
+          enabled: true,
+          allowChangeVote: nextAllowChange,
+        },
+      };
+      setNoticeComposeCheckboxValue('noticesComposePollAllowChange', nextAllowChange);
+      markNoticeComposeDraftDirty();
+      writeNoticeComposeDraftToFields();
+      renderNoticeComposePollEditor();
+      return;
+    }
+
     if (action === 'notices-save-draft') {
       if (!canManageNotices()) {
         showToast('공지 작성 권한이 없습니다.', 'error');
@@ -57851,10 +58132,7 @@ function bindUiEvents() {
         images,
       };
       markNoticeComposeDraftDirty();
-      const toggle = $('#noticesComposeImagesEnabled');
-      if (toggle instanceof HTMLInputElement) {
-        toggle.checked = images.length > 0;
-      }
+      setNoticeComposeCheckboxValue('noticesComposeImagesEnabled', images.length > 0);
       renderNoticeComposeImageList();
       return;
     }
