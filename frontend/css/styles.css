@@ -21202,6 +21202,134 @@ button.attendance-status-special-card.active {
   line-height: 1.65;
 }
 
+.notices-detail-poll-block {
+  margin: 0;
+}
+
+.notices-poll-card {
+  display: grid;
+  gap: 16px;
+  padding: 20px 22px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 247, 237, 0.72), rgba(255, 255, 255, 0.98));
+}
+
+.notices-poll-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.notices-poll-title-wrap {
+  display: grid;
+  gap: 6px;
+}
+
+.notices-poll-eyebrow {
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.notices-poll-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.notices-poll-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.notices-poll-summary,
+.notices-poll-hint {
+  margin: 0;
+}
+
+.notices-poll-summary {
+  color: var(--ui-text-secondary);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.notices-poll-options {
+  display: grid;
+  gap: 10px;
+}
+
+.notices-poll-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 14px 16px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.notices-poll-option input {
+  margin-top: 4px;
+}
+
+.notices-poll-option-content {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.notices-poll-option-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.notices-poll-option-label {
+  color: var(--ui-text-primary);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.notices-poll-option-votes {
+  color: var(--ui-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.notices-poll-result-bar {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.92);
+}
+
+.notices-poll-result-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #fb923c, #f97316);
+}
+
+.notices-poll-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .notices-detail-table {
   width: 100%;
   min-width: 560px;
@@ -21310,6 +21438,53 @@ button.attendance-status-special-card.active {
 .notices-images-panel {
   display: grid;
   gap: 16px;
+}
+
+.notices-poll-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.notices-poll-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.notices-poll-toggle-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.notices-poll-editor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notices-poll-option-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notices-poll-option-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.notices-poll-option-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .notices-image-dropzone {
@@ -21478,6 +21653,10 @@ button.attendance-status-special-card.active {
     position: static;
   }
 
+  .notices-poll-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
   .notices-table-editor-head {
     flex-direction: column;
     align-items: stretch;
@@ -21530,5 +21709,19 @@ button.attendance-status-special-card.active {
   .notices-list-button {
     grid-template-columns: 1fr;
     gap: 8px;
+  }
+
+  .notices-poll-head,
+  .notices-poll-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .notices-poll-option {
+    grid-template-columns: 1fr;
+  }
+
+  .notices-poll-option-item {
+    grid-template-columns: 1fr;
   }
 }

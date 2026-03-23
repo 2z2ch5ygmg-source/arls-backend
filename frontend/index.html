@@ -24,7 +24,7 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%23f97316'/%3E%3Ctext x='24' y='31' text-anchor='middle' font-size='22' fill='white' font-family='Arial,sans-serif'%3ERG%3C/text%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="css/styles.css?v=20260323-notices-phase4-v1" />
+    <link rel="stylesheet" href="css/styles.css?v=20260323-notices-phase5-v1" />
   </head>
   <body>
     <div id="app">
@@ -3085,6 +3085,90 @@
                   <section class="notices-compose-block-card">
                     <div class="notices-section-head notices-subsection-head">
                       <div>
+                        <h4>투표 블록</h4>
+                        <p class="muted">공지 본문 안에서 바로 참여해야 하는 설문, 참석 확인, 의견 수집은 투표로 붙입니다.</p>
+                      </div>
+                    </div>
+
+                    <label class="settings-switch-row" for="noticesComposePollEnabled">
+                      <span class="settings-switch-copy">
+                        <strong>투표 포함</strong>
+                        <span>본문 흐름 안에서 바로 참여할 수 있는 투표를 함께 노출합니다.</span>
+                      </span>
+                      <span class="settings-switch-control">
+                        <input id="noticesComposePollEnabled" type="checkbox" />
+                        <span class="settings-switch-track" aria-hidden="true"></span>
+                      </span>
+                    </label>
+
+                    <div id="noticesComposePollPanel" class="notices-poll-panel hidden">
+                      <label class="input-field" for="noticesComposePollQuestion">
+                        질문
+                        <input id="noticesComposePollQuestion" type="text" placeholder="예: 이번 주 야간 근무 희망 여부를 알려주세요." />
+                      </label>
+
+                      <div class="notices-poll-settings-grid">
+                        <label class="input-field" for="noticesComposePollSelectionMode">
+                          선택 방식
+                          <select id="noticesComposePollSelectionMode">
+                            <option value="single">단일 선택</option>
+                            <option value="multiple">복수 선택</option>
+                          </select>
+                        </label>
+
+                        <label class="input-field" for="noticesComposePollVisibility">
+                          결과 공개
+                          <select id="noticesComposePollVisibility">
+                            <option value="always">즉시 공개</option>
+                            <option value="after_close">마감 후 공개</option>
+                          </select>
+                        </label>
+
+                        <label class="input-field" for="noticesComposePollClosesAt">
+                          마감 시각
+                          <input id="noticesComposePollClosesAt" type="datetime-local" />
+                        </label>
+                      </div>
+
+                      <div class="notices-poll-toggle-grid">
+                        <label class="settings-switch-row" for="noticesComposePollAnonymous">
+                          <span class="settings-switch-copy">
+                            <strong>익명 투표</strong>
+                            <span>응답자는 보이지 않고 집계만 노출합니다.</span>
+                          </span>
+                          <span class="settings-switch-control">
+                            <input id="noticesComposePollAnonymous" type="checkbox" />
+                            <span class="settings-switch-track" aria-hidden="true"></span>
+                          </span>
+                        </label>
+
+                        <label class="settings-switch-row" for="noticesComposePollAllowChange">
+                          <span class="settings-switch-copy">
+                            <strong>재투표 허용</strong>
+                            <span>마감 전에는 다시 제출해 선택을 바꿀 수 있습니다.</span>
+                          </span>
+                          <span class="settings-switch-control">
+                            <input id="noticesComposePollAllowChange" type="checkbox" />
+                            <span class="settings-switch-track" aria-hidden="true"></span>
+                          </span>
+                        </label>
+                      </div>
+
+                      <div class="notices-poll-editor-head">
+                        <div>
+                          <strong>선택지 편집</strong>
+                          <p class="muted">최소 2개, 최대 10개까지 구성할 수 있습니다.</p>
+                        </div>
+                        <button id="noticesComposePollAddOptionBtn" class="btn btn-secondary" type="button" data-action="notices-poll-add-option">선택지 추가</button>
+                      </div>
+
+                      <ul id="noticesComposePollOptionList" class="notices-poll-option-list"></ul>
+                    </div>
+                  </section>
+
+                  <section class="notices-compose-block-card">
+                    <div class="notices-section-head notices-subsection-head">
+                      <div>
                         <h4>표 블록</h4>
                         <p class="muted">근무 기준, 변경 사항, 적용 일자처럼 비교해서 읽어야 하는 정보만 표로 정리합니다.</p>
                       </div>
@@ -5348,7 +5432,7 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260323-notices-phase4-v1"></script>
+    <script src="config.js?v=20260323-notices-phase5-v1"></script>
     <script>
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
@@ -5601,7 +5685,7 @@
         });
 
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=20260323-notices-phase3-v1', { updateViaCache: 'none' })
+          navigator.serviceWorker.register('./sw.js?v=20260323-notices-phase5-v1', { updateViaCache: 'none' })
             .then((registration) => {
               registration.update().catch(() => {});
 

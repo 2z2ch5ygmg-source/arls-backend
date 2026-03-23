@@ -1658,8 +1658,78 @@ class InAppNotificationListOut(BaseModel):
 
 
 NOTICE_CATEGORY_LITERAL = Literal["ops", "attendance", "schedule", "hr", "system", "event"]
-NOTICE_BODY_BLOCK_KIND_LITERAL = Literal["paragraph", "image", "table"]
+NOTICE_BODY_BLOCK_KIND_LITERAL = Literal["paragraph", "image", "table", "poll"]
 NOTICE_BODY_PARAGRAPH_VARIANT_LITERAL = Literal["lead", "body"]
+NOTICE_POLL_RESULT_VISIBILITY_LITERAL = Literal["always", "after_close"]
+
+
+class NoticePollOption(BaseModel):
+    option_id: Optional[str] = Field(default=None, max_length=64)
+    label: str = Field(min_length=1, max_length=160)
+    vote_count: int = 0
+    vote_ratio: float = 0
+    selected: bool = False
+
+    @field_validator("option_id", "label", mode="before")
+    @classmethod
+    def _trim_notice_poll_option_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+
+class NoticePollBlock(BaseModel):
+    poll_id: Optional[str] = Field(default=None, max_length=64)
+    question: str = Field(min_length=1, max_length=240)
+    options: list[NoticePollOption] = Field(default_factory=list, min_length=2, max_length=10)
+    allow_multiple: bool = False
+    is_anonymous: bool = True
+    result_visibility: NOTICE_POLL_RESULT_VISIBILITY_LITERAL = "always"
+    closes_at: Optional[datetime] = None
+    allow_change_vote: bool = False
+    total_votes: int = 0
+    selected_option_ids: list[str] = Field(default_factory=list, max_length=10)
+    results_visible: bool = True
+    is_closed: bool = False
+    can_vote: bool = True
+    has_voted: bool = False
+
+    @field_validator("poll_id", "question", mode="before")
+    @classmethod
+    def _trim_notice_poll_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+    @field_validator("selected_option_ids", mode="before")
+    @classmethod
+    def _normalize_notice_poll_selected_option_ids(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, (list, tuple)):
+            return []
+        seen: set[str] = set()
+        rows: list[str] = []
+        for item in value:
+            normalized = str(item or "").strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            rows.append(normalized)
+        return rows[:10]
+
+    @model_validator(mode="after")
+    def _validate_notice_poll_block(self):
+        valid_options = [option for option in self.options if str(option.label or "").strip()]
+        if len(valid_options) < 2:
+            raise ValueError("notice poll requires at least two options")
+        self.options = valid_options[:10]
+        if not self.allow_multiple and len(self.selected_option_ids) > 1:
+            self.selected_option_ids = self.selected_option_ids[:1]
+        self.total_votes = max(0, int(self.total_votes or 0))
+        return self
 
 
 class NoticeBodyBlock(BaseModel):
@@ -1673,6 +1743,7 @@ class NoticeBodyBlock(BaseModel):
     image_src: Optional[str] = Field(default=None, max_length=5000000)
     columns: list[str] = Field(default_factory=list, max_length=6)
     rows: list[list[str]] = Field(default_factory=list, max_length=20)
+    poll: Optional[NoticePollBlock] = None
 
     @field_validator("title", "text", "attachment_id", "file_name", "caption", mode="before")
     @classmethod
@@ -1725,6 +1796,20 @@ class NoticeBodyBlock(BaseModel):
             self.text = None
             self.columns = []
             self.rows = []
+            self.poll = None
+            return self
+        if self.kind == "poll":
+            if self.poll is None:
+                raise ValueError("poll data is required")
+            self.variant = None
+            self.title = None
+            self.text = None
+            self.attachment_id = None
+            self.file_name = None
+            self.caption = None
+            self.image_src = None
+            self.columns = []
+            self.rows = []
             return self
         if not self.columns and not self.rows:
             raise ValueError("table columns or rows are required")
@@ -1734,6 +1819,7 @@ class NoticeBodyBlock(BaseModel):
         self.file_name = None
         self.caption = None
         self.image_src = None
+        self.poll = None
         return self
 
 
@@ -1781,6 +1867,27 @@ class NoticeListOut(BaseModel):
 class NoticeDeleteOut(BaseModel):
     deleted: bool = True
     id: UUID
+
+
+class NoticePollVoteIn(BaseModel):
+    option_ids: list[str] = Field(default_factory=list, min_length=1, max_length=10)
+
+    @field_validator("option_ids", mode="before")
+    @classmethod
+    def _normalize_notice_poll_vote_ids(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, (list, tuple)):
+            return []
+        rows: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            normalized = str(item or "").strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            rows.append(normalized)
+        return rows[:10]
 
 
 class NoticeAttachmentOut(BaseModel):

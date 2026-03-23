@@ -421,9 +421,15 @@ const ROUTE_NOTIFICATIONS = '/notifications';
 const NOTICE_PINNED_LIMIT = 3;
 const NOTICE_HOME_TEASER_LIMIT = 3;
 const NOTICE_NEW_BADGE_WINDOW_HOURS = 72;
+const NOTICE_POLL_MAX_OPTIONS = 10;
+const NOTICE_POLL_MIN_OPTIONS = 2;
 const NOTICE_VIEW_MODE_LIST = 'list';
 const NOTICE_VIEW_MODE_DETAIL = 'detail';
 const NOTICE_VIEW_MODE_COMPOSE = 'compose';
+const NOTICE_POLL_RESULT_VISIBILITY_OPTIONS = Object.freeze([
+  { value: 'always', label: '즉시 공개' },
+  { value: 'after_close', label: '마감 후 공개' },
+]);
 const NOTICE_CATEGORY_OPTIONS = Object.freeze([
   { value: 'all', label: '전체' },
   { value: 'ops', label: '운영' },
@@ -1235,6 +1241,7 @@ function createInitialNoticesState() {
     loading: false,
     detailLoading: false,
     homeLoading: false,
+    pollSubmittingId: '',
     error: '',
     fetchedAt: 0,
     loadedListCategory: '',
@@ -1248,9 +1255,44 @@ function createInitialNoticesState() {
       bodyText: '',
       imagesEnabled: false,
       images: [],
+      poll: createDefaultNoticePollDraft(),
       table: createDefaultNoticeTableDraft(),
       isPinned: false,
     },
+  };
+}
+
+function createDefaultNoticePollOptionDraft(index = 0) {
+  return {
+    optionId: '',
+    label: '',
+    index,
+    voteCount: 0,
+    voteRatio: 0,
+    selected: false,
+  };
+}
+
+function createDefaultNoticePollDraft() {
+  return {
+    enabled: false,
+    pollId: '',
+    question: '',
+    options: [
+      createDefaultNoticePollOptionDraft(0),
+      createDefaultNoticePollOptionDraft(1),
+    ],
+    allowMultiple: false,
+    isAnonymous: true,
+    resultVisibility: 'always',
+    closesAt: '',
+    allowChangeVote: false,
+    selectedOptionIds: [],
+    totalVotes: 0,
+    resultsVisible: true,
+    isClosed: false,
+    canVote: true,
+    hasVoted: false,
   };
 }
 
@@ -18358,6 +18400,105 @@ function isNoticesComposeActive() {
   return panel instanceof HTMLElement && !panel.classList.contains('hidden');
 }
 
+function normalizeNoticePollResultVisibility(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  return NOTICE_POLL_RESULT_VISIBILITY_OPTIONS.some((item) => item.value === normalized)
+    ? normalized
+    : 'always';
+}
+
+function normalizeNoticePollOptionDrafts(rawOptions = null) {
+  const base = createDefaultNoticePollDraft();
+  const source = Array.isArray(rawOptions) ? rawOptions : base.options;
+  const normalized = source
+    .map((item, index) => {
+      const option = item && typeof item === 'object' ? item : {};
+      const label = String(option.label || '').trim();
+      const optionId = String(option.optionId || option.option_id || option.id || '').trim();
+      return {
+        optionId,
+        label,
+        index,
+        voteCount: Math.max(0, Number.parseInt(String(option.voteCount ?? option.vote_count ?? 0), 10) || 0),
+        voteRatio: Math.max(0, Number(option.voteRatio ?? option.vote_ratio ?? 0) || 0),
+        selected: Boolean(option.selected),
+      };
+    })
+    .slice(0, NOTICE_POLL_MAX_OPTIONS);
+  while (normalized.length < NOTICE_POLL_MIN_OPTIONS) {
+    normalized.push(createDefaultNoticePollOptionDraft(normalized.length));
+  }
+  return normalized;
+}
+
+function normalizeNoticePollDraft(rawPoll = null) {
+  const base = createDefaultNoticePollDraft();
+  const source = rawPoll && typeof rawPoll === 'object' ? rawPoll : {};
+  const selectedOptionIds = Array.isArray(source.selectedOptionIds || source.selected_option_ids)
+    ? Array.from(new Set((source.selectedOptionIds || source.selected_option_ids).map((item) => String(item || '').trim()).filter(Boolean))).slice(0, NOTICE_POLL_MAX_OPTIONS)
+    : [];
+  return {
+    enabled: Boolean(source.enabled),
+    pollId: String(source.pollId || source.poll_id || '').trim(),
+    question: String(source.question || '').trim(),
+    options: normalizeNoticePollOptionDrafts(source.options),
+    allowMultiple: Boolean(source.allowMultiple ?? source.allow_multiple),
+    isAnonymous: source.isAnonymous ?? source.is_anonymous ?? base.isAnonymous,
+    resultVisibility: normalizeNoticePollResultVisibility(source.resultVisibility || source.result_visibility || base.resultVisibility),
+    closesAt: String(source.closesAt || source.closes_at || '').trim(),
+    allowChangeVote: Boolean(source.allowChangeVote ?? source.allow_change_vote),
+    selectedOptionIds,
+    totalVotes: Math.max(0, Number.parseInt(String(source.totalVotes ?? source.total_votes ?? 0), 10) || 0),
+    resultsVisible: source.resultsVisible ?? source.results_visible ?? base.resultsVisible,
+    isClosed: Boolean(source.isClosed ?? source.is_closed),
+    canVote: source.canVote ?? source.can_vote ?? base.canVote,
+    hasVoted: Boolean(source.hasVoted ?? source.has_voted),
+  };
+}
+
+function cloneNoticePollDraft(rawPoll = null) {
+  const normalized = normalizeNoticePollDraft(rawPoll);
+  return {
+    enabled: normalized.enabled,
+    pollId: normalized.pollId,
+    question: normalized.question,
+    options: normalized.options.map((item, index) => ({
+      optionId: String(item.optionId || '').trim(),
+      label: String(item.label || '').trim(),
+      index,
+      voteCount: Math.max(0, Number.parseInt(String(item.voteCount || 0), 10) || 0),
+      voteRatio: Math.max(0, Number(item.voteRatio || 0) || 0),
+      selected: Boolean(item.selected),
+    })),
+    allowMultiple: Boolean(normalized.allowMultiple),
+    isAnonymous: Boolean(normalized.isAnonymous),
+    resultVisibility: normalizeNoticePollResultVisibility(normalized.resultVisibility),
+    closesAt: String(normalized.closesAt || '').trim(),
+    allowChangeVote: Boolean(normalized.allowChangeVote),
+    selectedOptionIds: Array.isArray(normalized.selectedOptionIds) ? normalized.selectedOptionIds.slice() : [],
+    totalVotes: Math.max(0, Number.parseInt(String(normalized.totalVotes || 0), 10) || 0),
+    resultsVisible: Boolean(normalized.resultsVisible),
+    isClosed: Boolean(normalized.isClosed),
+    canVote: Boolean(normalized.canVote),
+    hasVoted: Boolean(normalized.hasVoted),
+  };
+}
+
+function formatNoticePollDateTimeInputValue(rawValue = '') {
+  const text = String(rawValue || '').trim();
+  if (!text) return '';
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const offset = parsed.getTimezoneOffset() * 60 * 1000;
+  return new Date(parsed.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function formatNoticePollMetaDate(rawValue = '') {
+  const text = String(rawValue || '').trim();
+  if (!text) return '';
+  return formatOpsDateTime(text) || formatDateLabel(text, '');
+}
+
 function normalizeNoticeTableDraft(rawTable = null) {
   const base = createDefaultNoticeTableDraft();
   const columns = Array.isArray(rawTable?.columns)
@@ -18471,6 +18612,38 @@ function normalizeNoticeBodyBlocks(rawBlocks = null, fallbackBodyText = '') {
         columns: table.columns.slice(),
         rows: table.rows.map((row) => row.slice()),
       });
+      return;
+    }
+    if (kind === 'poll') {
+      const poll = normalizeNoticePollDraft(block.poll);
+      const filledOptions = poll.options.filter((item) => String(item.label || '').trim());
+      if (!poll.question || filledOptions.length < NOTICE_POLL_MIN_OPTIONS) return;
+      blocks.push({
+        kind: 'poll',
+        poll: {
+          pollId: poll.pollId,
+          question: poll.question,
+          options: filledOptions.map((item, index) => ({
+            optionId: item.optionId,
+            label: item.label,
+            voteCount: Math.max(0, Number.parseInt(String(item.voteCount || item.vote_count || 0), 10) || 0),
+            voteRatio: Math.max(0, Number(item.voteRatio || item.vote_ratio || 0) || 0),
+            selected: Boolean(item.selected),
+            index,
+          })),
+          allowMultiple: Boolean(poll.allowMultiple),
+          isAnonymous: Boolean(poll.isAnonymous),
+          resultVisibility: normalizeNoticePollResultVisibility(poll.resultVisibility),
+          closesAt: String(poll.closesAt || '').trim(),
+          allowChangeVote: Boolean(poll.allowChangeVote),
+          selectedOptionIds: Array.isArray(poll.selectedOptionIds) ? poll.selectedOptionIds.slice() : [],
+          totalVotes: Math.max(0, Number.parseInt(String(poll.totalVotes || 0), 10) || 0),
+          resultsVisible: Boolean(poll.resultsVisible),
+          isClosed: Boolean(poll.isClosed),
+          canVote: Boolean(poll.canVote),
+          hasVoted: Boolean(poll.hasVoted),
+        },
+      });
     }
   });
   if (blocks.length) return blocks;
@@ -18488,6 +18661,7 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
   const summaryParts = [];
   const bodyParts = [];
   const images = [];
+  let poll = createDefaultNoticePollDraft();
   let table = createDefaultNoticeTableDraft();
   blocks.forEach((block) => {
     if (block.kind === 'paragraph') {
@@ -18504,6 +18678,13 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
         fileName: String(block.fileName || '').trim(),
         imageSrc: String(block.imageSrc || '').trim(),
         caption: String(block.caption || '').trim(),
+      });
+      return;
+    }
+    if (block.kind === 'poll' && !poll.enabled) {
+      poll = normalizeNoticePollDraft({
+        enabled: true,
+        ...(block.poll || {}),
       });
       return;
     }
@@ -18525,6 +18706,7 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
     bodyText: bodyParts.join('\n\n'),
     imagesEnabled: images.length > 0,
     images: images.length ? images : [],
+    poll,
     table,
     isPinned: Boolean(row?.isPinned),
   };
@@ -18534,6 +18716,7 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
   const summaryText = String(draft?.summaryText || '').trim();
   const bodyText = String(draft?.bodyText || '').trim();
   const images = normalizeNoticeImageDrafts(draft?.images);
+  const poll = normalizeNoticePollDraft(draft?.poll);
   const table = normalizeNoticeTableDraft(draft?.table);
   const baseTable = createDefaultNoticeTableDraft();
   const blocks = [];
@@ -18556,6 +18739,28 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
       image_src: image.imageSrc,
     });
   });
+  const pollOptions = poll.options
+    .map((item) => ({
+      option_id: String(item.optionId || '').trim(),
+      label: String(item.label || '').trim(),
+    }))
+    .filter((item) => item.label)
+    .slice(0, NOTICE_POLL_MAX_OPTIONS);
+  if (poll.enabled && String(poll.question || '').trim() && pollOptions.length >= NOTICE_POLL_MIN_OPTIONS) {
+    blocks.push({
+      kind: 'poll',
+      poll: {
+        poll_id: String(poll.pollId || '').trim(),
+        question: String(poll.question || '').trim(),
+        options: pollOptions,
+        allow_multiple: Boolean(poll.allowMultiple),
+        is_anonymous: Boolean(poll.isAnonymous),
+        result_visibility: normalizeNoticePollResultVisibility(poll.resultVisibility),
+        closes_at: String(poll.closesAt || '').trim() || null,
+        allow_change_vote: Boolean(poll.allowChangeVote),
+      },
+    });
+  }
   const hasCustomColumns = table.columns.some((item, index) => String(item || '').trim() !== String(baseTable.columns[index] || '').trim());
   const hasTableRows = table.rows.some((row) => row.some((cell) => String(cell || '').trim()));
   const hasTableContent = Boolean(table.enabled && (table.title || hasCustomColumns || hasTableRows));
@@ -18597,6 +18802,16 @@ function buildNoticeBodyTextFromBlocks(blocks = []) {
     if (block.kind === 'image') {
       const caption = String(block.caption || '').trim();
       if (caption) parts.push(caption);
+      return;
+    }
+    if (block.kind === 'poll') {
+      const pollQuestion = String(block.poll?.question || '').trim();
+      if (pollQuestion) parts.push(pollQuestion);
+      const pollOptions = Array.isArray(block.poll?.options) ? block.poll.options : [];
+      pollOptions.forEach((option) => {
+        const label = String(option?.label || '').trim();
+        if (label) parts.push(label);
+      });
     }
   });
   return parts.join('\n\n').trim();
@@ -18631,12 +18846,13 @@ function resetNoticeComposeDraft(category = 'ops') {
     category: normalizeNoticeCategory(category) === 'all' ? 'ops' : normalizeNoticeCategory(category),
     title: '',
     summaryText: '',
-    bodyText: '',
-    imagesEnabled: false,
-    images: [],
-    table: createDefaultNoticeTableDraft(),
-    isPinned: false,
-  };
+      bodyText: '',
+      imagesEnabled: false,
+      images: [],
+      poll: createDefaultNoticePollDraft(),
+      table: createDefaultNoticeTableDraft(),
+      isPinned: false,
+    };
 }
 
 function fillNoticeComposeDraftFromRow(row = null) {
@@ -18652,10 +18868,53 @@ function syncNoticeComposeDraftFromFields() {
   const titleInput = $('#noticesComposeTitle');
   const summaryInput = $('#noticesComposeSummary');
   const bodyInput = $('#noticesComposeBody');
+  const pollQuestionInput = $('#noticesComposePollQuestion');
+  const pollEnabledInput = $('#noticesComposePollEnabled');
+  const pollSelectionModeInput = $('#noticesComposePollSelectionMode');
+  const pollAnonymousInput = $('#noticesComposePollAnonymous');
+  const pollVisibilityInput = $('#noticesComposePollVisibility');
+  const pollClosesAtInput = $('#noticesComposePollClosesAt');
+  const pollAllowChangeInput = $('#noticesComposePollAllowChange');
   const tableTitleInput = $('#noticesComposeTableTitle');
   const tableEnabledInput = $('#noticesComposeTableEnabled');
   const imagesEnabledInput = $('#noticesComposeImagesEnabled');
   const pinnedInput = $('#noticesComposePinned');
+  const nextPoll = cloneNoticePollDraft(notices.composeDraft?.poll);
+  if (pollQuestionInput instanceof HTMLInputElement) {
+    nextPoll.question = String(pollQuestionInput.value || '').trim();
+  }
+  if (pollEnabledInput instanceof HTMLInputElement) {
+    nextPoll.enabled = Boolean(pollEnabledInput.checked);
+  }
+  if (pollSelectionModeInput instanceof HTMLSelectElement) {
+    nextPoll.allowMultiple = String(pollSelectionModeInput.value || '').trim() === 'multiple';
+  }
+  if (pollAnonymousInput instanceof HTMLInputElement) {
+    nextPoll.isAnonymous = Boolean(pollAnonymousInput.checked);
+  }
+  if (pollVisibilityInput instanceof HTMLSelectElement) {
+    nextPoll.resultVisibility = normalizeNoticePollResultVisibility(pollVisibilityInput.value);
+  }
+  if (pollClosesAtInput instanceof HTMLInputElement) {
+    nextPoll.closesAt = String(pollClosesAtInput.value || '').trim()
+      ? new Date(pollClosesAtInput.value).toISOString()
+      : '';
+  }
+  if (pollAllowChangeInput instanceof HTMLInputElement) {
+    nextPoll.allowChangeVote = Boolean(pollAllowChangeInput.checked);
+  }
+  document.querySelectorAll('[data-notice-poll-option-index]').forEach((inputEl) => {
+    if (!(inputEl instanceof HTMLInputElement)) return;
+    const index = Math.max(0, Number.parseInt(inputEl.dataset.noticePollOptionIndex || '0', 10) || 0);
+    if (!nextPoll.options[index]) {
+      nextPoll.options[index] = createDefaultNoticePollOptionDraft(index);
+    }
+    nextPoll.options[index] = {
+      ...nextPoll.options[index],
+      label: String(inputEl.value || '').trim(),
+      index,
+    };
+  });
   const nextTable = cloneNoticeTableDraft(notices.composeDraft?.table);
   if (tableTitleInput instanceof HTMLInputElement) {
     nextTable.title = String(tableTitleInput.value || '').trim();
@@ -18679,6 +18938,7 @@ function syncNoticeComposeDraftFromFields() {
     bodyText: bodyInput instanceof HTMLTextAreaElement ? String(bodyInput.value || '') : String(notices.composeDraft?.bodyText || ''),
     imagesEnabled,
     images: nextImages,
+    poll: nextPoll,
     table: nextTable,
     isPinned: pinnedInput instanceof HTMLInputElement ? Boolean(pinnedInput.checked) : Boolean(notices.composeDraft?.isPinned),
   };
@@ -18691,6 +18951,13 @@ function writeNoticeComposeDraftToFields() {
   const titleInput = $('#noticesComposeTitle');
   const summaryInput = $('#noticesComposeSummary');
   const bodyInput = $('#noticesComposeBody');
+  const pollQuestionInput = $('#noticesComposePollQuestion');
+  const pollEnabledInput = $('#noticesComposePollEnabled');
+  const pollSelectionModeInput = $('#noticesComposePollSelectionMode');
+  const pollAnonymousInput = $('#noticesComposePollAnonymous');
+  const pollVisibilityInput = $('#noticesComposePollVisibility');
+  const pollClosesAtInput = $('#noticesComposePollClosesAt');
+  const pollAllowChangeInput = $('#noticesComposePollAllowChange');
   const tableTitleInput = $('#noticesComposeTableTitle');
   const tableEnabledInput = $('#noticesComposeTableEnabled');
   const imagesEnabledInput = $('#noticesComposeImagesEnabled');
@@ -18707,6 +18974,27 @@ function writeNoticeComposeDraftToFields() {
   }
   if (bodyInput instanceof HTMLTextAreaElement) {
     bodyInput.value = String(draft.bodyText || '');
+  }
+  if (pollQuestionInput instanceof HTMLInputElement) {
+    pollQuestionInput.value = String(draft.poll?.question || '');
+  }
+  if (pollEnabledInput instanceof HTMLInputElement) {
+    pollEnabledInput.checked = Boolean(draft.poll?.enabled);
+  }
+  if (pollSelectionModeInput instanceof HTMLSelectElement) {
+    pollSelectionModeInput.value = Boolean(draft.poll?.allowMultiple) ? 'multiple' : 'single';
+  }
+  if (pollAnonymousInput instanceof HTMLInputElement) {
+    pollAnonymousInput.checked = draft.poll?.isAnonymous ?? true;
+  }
+  if (pollVisibilityInput instanceof HTMLSelectElement) {
+    pollVisibilityInput.value = normalizeNoticePollResultVisibility(draft.poll?.resultVisibility || 'always');
+  }
+  if (pollClosesAtInput instanceof HTMLInputElement) {
+    pollClosesAtInput.value = formatNoticePollDateTimeInputValue(draft.poll?.closesAt || '');
+  }
+  if (pollAllowChangeInput instanceof HTMLInputElement) {
+    pollAllowChangeInput.checked = Boolean(draft.poll?.allowChangeVote);
   }
   if (tableTitleInput instanceof HTMLInputElement) {
     tableTitleInput.value = String(draft.table?.title || '');
@@ -18751,6 +19039,16 @@ async function fetchHomeNoticeRows({ limit = NOTICE_HOME_TEASER_LIMIT } = {}) {
   const payload = await apiRequest(`/notices/home-teaser?${params.toString()}`);
   const rows = Array.isArray(payload?.items) ? payload.items : [];
   return rows.map((row) => normalizeNoticeRecord(row));
+}
+
+async function submitNoticePollVoteRequest(noticeId = '', pollId = '', optionIds = []) {
+  const payload = await apiRequest(`/notices/${encodeURIComponent(String(noticeId || '').trim())}/polls/${encodeURIComponent(String(pollId || '').trim())}/vote`, {
+    method: 'POST',
+    body: {
+      option_ids: Array.isArray(optionIds) ? optionIds : [],
+    },
+  });
+  return normalizeNoticeRecord(payload || {});
 }
 
 async function uploadNoticeImageFile(file) {
@@ -18814,6 +19112,7 @@ async function saveNoticeDraft() {
   const draft = notices.composeDraft || {};
   const category = normalizeNoticeCategory(draft.category || 'ops');
   const title = String(draft.title || '').trim();
+  const pollDraft = normalizeNoticePollDraft(draft.poll);
   const bodyBlocks = buildNoticeBodyBlocksFromDraft(draft);
   const bodyText = buildNoticeBodyTextFromBlocks(bodyBlocks);
   const editingNoticeId = notices.mode === NOTICE_VIEW_MODE_COMPOSE
@@ -18822,6 +19121,17 @@ async function saveNoticeDraft() {
   if (!title) {
     showToast('공지 제목을 입력해 주세요.', 'error', 2600);
     return null;
+  }
+  if (pollDraft.enabled) {
+    const filledPollOptions = pollDraft.options.filter((item) => String(item.label || '').trim());
+    if (!String(pollDraft.question || '').trim()) {
+      showToast('투표 질문을 입력해 주세요.', 'error', 2600);
+      return null;
+    }
+    if (filledPollOptions.length < NOTICE_POLL_MIN_OPTIONS) {
+      showToast('투표 선택지는 최소 2개 이상 입력해 주세요.', 'error', 2600);
+      return null;
+    }
   }
   if (!bodyBlocks.length || !bodyText) {
     showToast('요약, 본문, 표 중 하나 이상을 채워 공지 내용을 구성해 주세요.', 'error', 2600);
@@ -18847,6 +19157,27 @@ async function deleteNoticeRecord(noticeId = '') {
     method: 'DELETE',
   });
   return payload || null;
+}
+
+async function submitNoticePollVote(noticeId = '', pollId = '', optionIds = []) {
+  const notices = ensureNoticesState();
+  const targetPollId = String(pollId || '').trim();
+  if (!String(noticeId || '').trim() || !targetPollId) return null;
+  notices.pollSubmittingId = targetPollId;
+  renderNoticesView();
+  try {
+    const saved = await submitNoticePollVoteRequest(noticeId, targetPollId, optionIds);
+    notices.selectedRow = saved;
+    notices.selectedNoticeId = String(saved?.id || noticeId).trim();
+    notices.loadedDetailNoticeId = String(saved?.id || noticeId).trim();
+    showToast('투표를 반영했습니다.', 'success', 2200);
+    return saved;
+  } catch (error) {
+    throw error;
+  } finally {
+    notices.pollSubmittingId = '';
+    renderNoticesView();
+  }
 }
 
 async function ensureNoticesTenantContext() {
@@ -32545,6 +32876,169 @@ function createNoticeListRow(item) {
   return li;
 }
 
+function buildNoticePollMetaTags(poll = {}) {
+  const tags = [];
+  tags.push({
+    tone: 'neutral',
+    label: Boolean(poll.allowMultiple) ? '복수 선택' : '단일 선택',
+  });
+  tags.push({
+    tone: 'neutral',
+    label: Boolean(poll.isAnonymous) ? '익명' : '기명',
+  });
+  if (normalizeNoticePollResultVisibility(poll.resultVisibility || poll.result_visibility || 'always') === 'after_close') {
+    tags.push({ tone: 'neutral', label: '마감 후 공개' });
+  }
+  if (String(poll.closesAt || poll.closes_at || '').trim()) {
+    const closeLabel = formatNoticePollMetaDate(poll.closesAt || poll.closes_at || '');
+    if (closeLabel) {
+      tags.push({
+        tone: Boolean(poll.isClosed || poll.is_closed) ? 'neutral' : 'accent',
+        label: `${Boolean(poll.isClosed || poll.is_closed) ? '마감' : '마감 예정'} ${closeLabel}`,
+      });
+    }
+  }
+  return tags;
+}
+
+function createNoticePollBlock(item, poll = {}) {
+  const section = document.createElement('section');
+  section.className = 'notices-detail-block notices-detail-poll-block';
+  const card = document.createElement('div');
+  card.className = 'notices-poll-card';
+  card.dataset.noticePollId = String(poll.pollId || poll.poll_id || '').trim();
+
+  const head = document.createElement('div');
+  head.className = 'notices-poll-head';
+  const titleWrap = document.createElement('div');
+  titleWrap.className = 'notices-poll-title-wrap';
+  const eyebrow = document.createElement('span');
+  eyebrow.className = 'notices-poll-eyebrow';
+  eyebrow.textContent = '투표';
+  const title = document.createElement('h4');
+  title.className = 'notices-detail-block-title';
+  title.textContent = String(poll.question || '').trim() || '공지 투표';
+  titleWrap.append(eyebrow, title);
+  head.appendChild(titleWrap);
+
+  const meta = document.createElement('div');
+  meta.className = 'notices-poll-meta';
+  buildNoticePollMetaTags(poll).forEach((tag) => {
+    const tagEl = document.createElement('span');
+    tagEl.className = `notice-meta-tag notice-meta-tag-${tag.tone}`;
+    tagEl.textContent = tag.label;
+    meta.appendChild(tagEl);
+  });
+  if (meta.childNodes.length) {
+    head.appendChild(meta);
+  }
+  card.appendChild(head);
+
+  const summaryRow = document.createElement('div');
+  summaryRow.className = 'notices-poll-status-row';
+  const summary = document.createElement('p');
+  summary.className = 'notices-poll-summary';
+  if (poll.resultsVisible || poll.results_visible) {
+    summary.textContent = `참여 ${Math.max(0, Number.parseInt(String(poll.totalVotes || poll.total_votes || 0), 10) || 0)}명`;
+  } else if (poll.hasVoted || poll.has_voted) {
+    summary.textContent = '투표가 접수되었습니다. 결과는 마감 후 공개됩니다.';
+  } else {
+    summary.textContent = '결과는 마감 후 공개됩니다.';
+  }
+  summaryRow.appendChild(summary);
+  if (poll.hasVoted || poll.has_voted) {
+    const statePill = document.createElement('span');
+    statePill.className = 'status-pill status-pill-neutral';
+    statePill.textContent = '참여 완료';
+    summaryRow.appendChild(statePill);
+  }
+  card.appendChild(summaryRow);
+
+  const optionsWrap = document.createElement('div');
+  optionsWrap.className = 'notices-poll-options';
+  const inputType = Boolean(poll.allowMultiple || poll.allow_multiple) ? 'checkbox' : 'radio';
+  const selectedOptionIds = Array.isArray(poll.selectedOptionIds || poll.selected_option_ids)
+    ? (poll.selectedOptionIds || poll.selected_option_ids).map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+  (Array.isArray(poll.options) ? poll.options : []).forEach((option, index) => {
+    const optionId = String(option.optionId || option.option_id || '').trim();
+    if (!optionId) return;
+    const row = document.createElement('label');
+    row.className = 'notices-poll-option';
+    const input = document.createElement('input');
+    input.type = inputType;
+    input.name = `notice-poll-${String(poll.pollId || poll.poll_id || '').trim() || 'poll'}`;
+    input.value = optionId;
+    input.checked = selectedOptionIds.includes(optionId);
+    input.disabled = Boolean(poll.isClosed || poll.is_closed) || (!Boolean(poll.canVote || poll.can_vote) && !input.checked);
+    input.dataset.noticePollOptionId = optionId;
+    input.dataset.noticePollId = String(poll.pollId || poll.poll_id || '').trim();
+    row.appendChild(input);
+
+    const content = document.createElement('div');
+    content.className = 'notices-poll-option-content';
+    const labelRow = document.createElement('div');
+    labelRow.className = 'notices-poll-option-label-row';
+    const labelEl = document.createElement('strong');
+    labelEl.className = 'notices-poll-option-label';
+    labelEl.textContent = String(option.label || `선택지 ${index + 1}`).trim();
+    labelRow.appendChild(labelEl);
+    const countEl = document.createElement('span');
+    countEl.className = 'notices-poll-option-votes';
+    countEl.textContent = Boolean(poll.resultsVisible || poll.results_visible)
+      ? `${Math.max(0, Number.parseInt(String(option.voteCount || option.vote_count || 0), 10) || 0)}표`
+      : (input.checked ? '내 선택' : '');
+    labelRow.appendChild(countEl);
+    content.appendChild(labelRow);
+    if (poll.resultsVisible || poll.results_visible) {
+      const resultBar = document.createElement('div');
+      resultBar.className = 'notices-poll-result-bar';
+      const fill = document.createElement('span');
+      fill.className = 'notices-poll-result-fill';
+      const ratio = Math.max(0, Math.min(1, Number(option.voteRatio || option.vote_ratio || 0) || 0));
+      fill.style.width = `${Math.round(ratio * 100)}%`;
+      resultBar.appendChild(fill);
+      content.appendChild(resultBar);
+    }
+    row.appendChild(content);
+    optionsWrap.appendChild(row);
+  });
+  card.appendChild(optionsWrap);
+
+  const actionRow = document.createElement('div');
+  actionRow.className = 'notices-poll-actions';
+  const pollId = String(poll.pollId || poll.poll_id || '').trim();
+  if (Boolean(poll.canVote || poll.can_vote) && pollId && String(item?.id || '').trim()) {
+    const submitBtn = document.createElement('button');
+    submitBtn.type = 'button';
+    submitBtn.className = 'btn btn-primary';
+    submitBtn.dataset.action = 'notices-poll-submit';
+    submitBtn.dataset.noticeId = String(item.id || '').trim();
+    submitBtn.dataset.noticePollId = pollId;
+    submitBtn.disabled = ensureNoticesState().pollSubmittingId === pollId;
+    submitBtn.textContent = ensureNoticesState().pollSubmittingId === pollId
+      ? '제출 중...'
+      : ((poll.hasVoted || poll.has_voted) && (poll.allowChangeVote || poll.allow_change_vote) ? '다시 투표' : '투표하기');
+    actionRow.appendChild(submitBtn);
+  }
+  const hint = document.createElement('p');
+  hint.className = 'muted notices-poll-hint';
+  if ((poll.hasVoted || poll.has_voted) && (poll.allowChangeVote || poll.allow_change_vote) && !(poll.isClosed || poll.is_closed)) {
+    hint.textContent = '마감 전까지 다시 제출하면 선택을 변경할 수 있습니다.';
+  } else if (poll.isClosed || poll.is_closed) {
+    hint.textContent = '마감된 투표입니다.';
+  } else if (!(poll.resultsVisible || poll.results_visible)) {
+    hint.textContent = '결과는 마감 후 공개됩니다.';
+  } else {
+    hint.textContent = '선택 후 투표하기를 누르면 즉시 반영됩니다.';
+  }
+  actionRow.appendChild(hint);
+  card.appendChild(actionRow);
+
+  section.appendChild(card);
+  return section;
+}
+
 function renderNoticeDetailBody(target, item) {
   if (!(target instanceof HTMLElement)) return;
   target.innerHTML = '';
@@ -32593,6 +33087,10 @@ function renderNoticeDetailBody(target, item) {
       }
       section.appendChild(wrap);
       prose.appendChild(section);
+      return;
+    }
+    if (block.kind === 'poll') {
+      prose.appendChild(createNoticePollBlock(item, block.poll || {}));
       return;
     }
     if (block.kind === 'table') {
@@ -32707,6 +33205,57 @@ function renderNoticeComposeImageList() {
     item.append(preview, fields, actions);
     list.appendChild(item);
   });
+}
+
+function renderNoticeComposePollEditor() {
+  const panel = $('#noticesComposePollPanel');
+  const list = $('#noticesComposePollOptionList');
+  const notices = ensureNoticesState();
+  const pollDraft = cloneNoticePollDraft(notices.composeDraft?.poll);
+  if (panel instanceof HTMLElement) {
+    panel.classList.toggle('hidden', !pollDraft.enabled);
+  }
+  if (!(list instanceof HTMLElement)) return;
+  list.innerHTML = '';
+  if (!pollDraft.enabled) return;
+
+  const options = pollDraft.options.length
+    ? pollDraft.options
+    : normalizeNoticePollOptionDrafts(null);
+  options.forEach((option, index) => {
+    const item = document.createElement('li');
+    item.className = 'notices-poll-option-item';
+
+    const label = document.createElement('label');
+    label.className = 'input-field';
+    label.textContent = `선택지 ${index + 1}`;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = `선택지 ${index + 1} 내용을 입력하세요.`;
+    input.value = String(option.label || '').trim();
+    input.dataset.noticePollOptionIndex = String(index);
+    label.appendChild(input);
+
+    const actions = document.createElement('div');
+    actions.className = 'notices-poll-option-actions';
+    if (options.length > NOTICE_POLL_MIN_OPTIONS) {
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'btn btn-secondary';
+      removeBtn.dataset.action = 'notices-poll-remove-option';
+      removeBtn.dataset.noticePollOptionIndex = String(index);
+      removeBtn.textContent = '제거';
+      actions.appendChild(removeBtn);
+    }
+
+    item.append(label, actions);
+    list.appendChild(item);
+  });
+
+  const addBtn = $('#noticesComposePollAddOptionBtn');
+  if (addBtn instanceof HTMLButtonElement) {
+    addBtn.disabled = options.length >= NOTICE_POLL_MAX_OPTIONS;
+  }
 }
 
 function renderNoticeComposeTableEditor() {
@@ -32906,8 +33455,8 @@ function renderNoticesComposePanel() {
   }
   if (hintEl) {
     hintEl.textContent = editing
-      ? '요약, 본문 문단, 이미지, 표 블록을 정리하면 기존 공지가 즉시 갱신됩니다.'
-      : '요약 안내와 본문 문단을 먼저 쓰고, 필요한 경우 이미지와 표 블록까지 붙여 문서형 공지로 발행합니다.';
+      ? '요약, 본문 문단, 이미지, 투표, 표 블록을 정리하면 기존 공지가 즉시 갱신됩니다.'
+      : '요약 안내와 본문 문단을 먼저 쓰고, 필요한 경우 이미지, 투표, 표 블록까지 붙여 문서형 공지로 발행합니다.';
   }
   if (pinnedHintEl) {
     pinnedHintEl.textContent = `상단고정은 최대 ${NOTICE_PINNED_LIMIT}개까지만 유지됩니다. 오래된 고정 공지는 자동으로 내려갑니다.`;
@@ -32931,12 +33480,14 @@ function renderNoticesComposePanel() {
     && !String(notices.composeDraft?.summaryText || '').trim()
     && !String(notices.composeDraft?.bodyText || '').trim()
     && !normalizeNoticeImageDrafts(notices.composeDraft?.images).length
+    && !Boolean(notices.composeDraft?.poll?.enabled)
     && normalizeNoticeCategory(notices.composeDraft?.category || 'all') === 'all'
   ) {
     resetNoticeComposeDraft(notices.category);
   }
   writeNoticeComposeDraftToFields();
   renderNoticeComposeImageList();
+  renderNoticeComposePollEditor();
   renderNoticeComposeTableEditor();
 }
 
@@ -55878,6 +56429,7 @@ function bindUiEvents() {
       target.id === 'noticesComposeTitle'
       || target.id === 'noticesComposeSummary'
       || target.id === 'noticesComposeBody'
+      || target.id === 'noticesComposePollQuestion'
       || target.id === 'noticesComposeTableTitle'
     ) {
       syncNoticeComposeDraftFromFields();
@@ -55915,6 +56467,25 @@ function bindUiEvents() {
           images,
         };
       }
+      return;
+    }
+
+    if (target instanceof HTMLInputElement && target.dataset.noticePollOptionIndex) {
+      const notices = ensureNoticesState();
+      const poll = cloneNoticePollDraft(notices.composeDraft?.poll);
+      const index = Math.max(0, Number.parseInt(target.dataset.noticePollOptionIndex || '0', 10) || 0);
+      if (!poll.options[index]) {
+        poll.options[index] = createDefaultNoticePollOptionDraft(index);
+      }
+      poll.options[index] = {
+        ...poll.options[index],
+        label: String(target.value || ''),
+        index,
+      };
+      notices.composeDraft = {
+        ...(notices.composeDraft || {}),
+        poll,
+      };
       return;
     }
 
@@ -57010,6 +57581,67 @@ function bindUiEvents() {
         toggle.checked = images.length > 0;
       }
       renderNoticeComposeImageList();
+      return;
+    }
+
+    if (action === 'notices-poll-add-option') {
+      const notices = ensureNoticesState();
+      const poll = cloneNoticePollDraft(notices.composeDraft?.poll);
+      poll.enabled = true;
+      if (poll.options.length >= NOTICE_POLL_MAX_OPTIONS) {
+        showToast('투표 선택지는 최대 10개까지 추가할 수 있습니다.', 'info', 2200);
+        return;
+      }
+      poll.options.push(createDefaultNoticePollOptionDraft(poll.options.length));
+      notices.composeDraft = {
+        ...(notices.composeDraft || {}),
+        poll,
+      };
+      renderNoticeComposePollEditor();
+      return;
+    }
+
+    if (action === 'notices-poll-remove-option') {
+      const notices = ensureNoticesState();
+      const poll = cloneNoticePollDraft(notices.composeDraft?.poll);
+      const index = Math.max(0, Number.parseInt(actionEl.dataset.noticePollOptionIndex || '0', 10) || 0);
+      if (poll.options.length <= NOTICE_POLL_MIN_OPTIONS) {
+        showToast('투표 선택지는 최소 2개 이상 유지해야 합니다.', 'info', 2200);
+        return;
+      }
+      if (!poll.options[index]) return;
+      poll.options.splice(index, 1);
+      poll.options = poll.options.map((item, optionIndex) => ({
+        ...item,
+        index: optionIndex,
+      }));
+      notices.composeDraft = {
+        ...(notices.composeDraft || {}),
+        poll,
+      };
+      renderNoticeComposePollEditor();
+      return;
+    }
+
+    if (action === 'notices-poll-submit') {
+      const noticeId = String(actionEl.dataset.noticeId || '').trim();
+      const pollId = String(actionEl.dataset.noticePollId || '').trim();
+      if (!noticeId || !pollId) {
+        showToast('투표 정보를 찾지 못했습니다.', 'error', 2200);
+        return;
+      }
+      const card = actionEl.closest('.notices-poll-card');
+      const selectedOptionIds = Array.from(card?.querySelectorAll?.('input[data-notice-poll-option-id]:checked') || [])
+        .map((input) => String(input instanceof HTMLInputElement ? input.value : '').trim())
+        .filter(Boolean);
+      if (!selectedOptionIds.length) {
+        showToast('투표 항목을 선택해 주세요.', 'info', 2200);
+        return;
+      }
+      runActionSafely(
+        submitNoticePollVote(noticeId, pollId, selectedOptionIds),
+        '투표를 반영하지 못했습니다.',
+      );
       return;
     }
 
@@ -59703,13 +60335,34 @@ function bindUiEvents() {
       return;
     }
 
-    if (target.id === 'noticesComposeCategory' || target.id === 'noticesComposePinned' || target.id === 'noticesComposeTableEnabled' || target.id === 'noticesComposeImagesEnabled') {
+    if (
+      target.id === 'noticesComposeCategory'
+      || target.id === 'noticesComposePinned'
+      || target.id === 'noticesComposeTableEnabled'
+      || target.id === 'noticesComposeImagesEnabled'
+      || target.id === 'noticesComposePollEnabled'
+      || target.id === 'noticesComposePollSelectionMode'
+      || target.id === 'noticesComposePollAnonymous'
+      || target.id === 'noticesComposePollVisibility'
+      || target.id === 'noticesComposePollClosesAt'
+      || target.id === 'noticesComposePollAllowChange'
+    ) {
       syncNoticeComposeDraftFromFields();
       if (target.id === 'noticesComposeTableEnabled') {
         renderNoticeComposeTableEditor();
       }
       if (target.id === 'noticesComposeImagesEnabled') {
         renderNoticeComposeImageList();
+      }
+      if (
+        target.id === 'noticesComposePollEnabled'
+        || target.id === 'noticesComposePollSelectionMode'
+        || target.id === 'noticesComposePollAnonymous'
+        || target.id === 'noticesComposePollVisibility'
+        || target.id === 'noticesComposePollClosesAt'
+        || target.id === 'noticesComposePollAllowChange'
+      ) {
+        renderNoticeComposePollEditor();
       }
       return;
     }
