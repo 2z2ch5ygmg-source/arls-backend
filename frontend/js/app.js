@@ -19498,12 +19498,13 @@ function renderNoticeComposeDocumentFlow() {
     poll: pollBlock,
   };
 
-  const orderedNodes = [bodyBlock];
+  const orderedNodes = [];
   order.forEach((kind) => {
     const el = blockMap[kind];
     if (!(el instanceof HTMLElement)) return;
     orderedNodes.push(el);
   });
+  orderedNodes.push(bodyBlock);
   NOTICE_COMPOSE_OPTIONAL_BLOCK_KINDS.forEach((kind) => {
     const el = blockMap[kind];
     if (!(el instanceof HTMLElement)) return;
@@ -34205,18 +34206,9 @@ function renderNoticesDetailPanel() {
 
 function renderNoticesComposePanel() {
   const notices = ensureNoticesState();
-  const hintEl = $('#noticesComposeHint');
   const categorySelect = $('#noticesComposeCategory');
-  const titleEl = $('#noticesComposePanelTitle');
   const publishBtn = $('#noticesPublishBtn');
   const editing = notices.mode === NOTICE_VIEW_MODE_COMPOSE && Boolean(String(notices.selectedNoticeId || '').trim());
-  if (titleEl) {
-    titleEl.textContent = '공지사항';
-  }
-  if (hintEl) {
-    hintEl.textContent = editing ? '공지 수정' : '새 공지';
-  }
-  renderNoticeComposeDraftMeta();
   if (publishBtn instanceof HTMLButtonElement) {
     publishBtn.textContent = editing ? '수정 저장' : '발행';
   }

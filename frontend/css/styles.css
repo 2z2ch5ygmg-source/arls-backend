@@ -22420,10 +22420,11 @@ button.attendance-status-special-card.active {
 
 .notices-compose-settings-panel {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(200px, auto) minmax(220px, 1fr);
+  grid-template-columns: minmax(220px, 280px) minmax(200px, auto) max-content;
   gap: 12px 20px;
   align-items: center;
-  padding: 10px 0 14px;
+  justify-content: center;
+  padding: 2px 0 16px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
 }
 
@@ -22439,6 +22440,11 @@ button.attendance-status-special-card.active {
 
 .notices-compose-setting-field-inline {
   align-self: center;
+}
+
+.notices-compose-setting-field-actions {
+  align-self: end;
+  justify-self: end;
 }
 
 .notices-compose-setting-label,
@@ -22468,19 +22474,6 @@ button.attendance-status-special-card.active {
   color: var(--ui-text-secondary);
   font-size: 12px;
   line-height: 1.45;
-}
-
-.notices-compose-setting-field-status {
-  justify-self: end;
-  text-align: right;
-}
-
-.notices-compose-setting-status {
-  margin: 0;
-  color: var(--ui-text-primary);
-  font-size: 13px;
-  line-height: 1.5;
-  font-weight: 600;
 }
 
 .notices-segmented-control {
@@ -22523,7 +22516,7 @@ button.attendance-status-special-card.active {
 .notices-compose-document {
   display: grid;
   gap: 18px;
-  padding: 18px 0 0;
+  padding: 14px 0 0;
 }
 
 .notices-compose-document-flow {
@@ -22674,17 +22667,22 @@ button.attendance-status-special-card.active {
 
 .notices-table-picker-grid {
   display: grid;
-  grid-template-columns: repeat(6, 18px);
+  grid-template-columns: repeat(6, 22px);
+  grid-auto-rows: 22px;
   gap: 6px;
 }
 
 .notices-table-picker-cell {
-  width: 18px;
-  height: 18px;
+  display: block;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  aspect-ratio: 1 / 1;
   padding: 0;
   border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 4px;
+  border-radius: 6px;
   background: rgba(248, 250, 252, 0.9);
+  line-height: 0;
 }
 
 .notices-table-picker-cell.is-active {
@@ -23129,9 +23127,8 @@ button.attendance-status-special-card.active {
     text-align: left;
   }
 
-  .notices-compose-setting-field-status {
+  .notices-compose-setting-field-actions {
     justify-self: start;
-    text-align: left;
   }
 
   .notices-compose-commandgroup-right {
