@@ -1252,6 +1252,7 @@ function createInitialNoticesState() {
     composeSourceNoticeId: '',
     composeSettingsOpen: false,
     previewOpen: false,
+    composeAutosaveTimer: 0,
     draftSavedAt: '',
     draftStorageMessage: '',
     composeDraft: {
@@ -18454,13 +18455,43 @@ function restoreSavedNoticeComposeDraft({ noticeId = '', fallbackCategory = 'ops
   const notices = ensureNoticesState();
   notices.composeDraft = normalizeSavedNoticeComposeDraft(saved.draft, fallbackCategory);
   notices.draftSavedAt = String(saved.savedAt || '').trim();
-  notices.draftStorageMessage = '임시저장된 초안을 복원했습니다.';
-  notices.previewOpen = Boolean(saved.previewOpen);
+  notices.draftStorageMessage = '자동 저장된 초안을 복원했습니다.';
   return true;
 }
 
-function saveNoticeComposeDraftToStorage() {
+function renderNoticeComposeDraftMeta() {
   const notices = ensureNoticesState();
+  const draftMetaEl = $('#noticesComposeDraftMeta');
+  if (!(draftMetaEl instanceof HTMLElement)) return;
+  const savedAtLabel = notices.draftSavedAt
+    ? formatOpsDateTime(notices.draftSavedAt) || formatDateLabel(notices.draftSavedAt, '-')
+    : '';
+  if (String(notices.draftStorageMessage || '').trim() && savedAtLabel) {
+    draftMetaEl.textContent = `${String(notices.draftStorageMessage || '').trim()} · 마지막 저장 ${savedAtLabel}`;
+    return;
+  }
+  if (String(notices.draftStorageMessage || '').trim()) {
+    draftMetaEl.textContent = String(notices.draftStorageMessage || '').trim();
+    return;
+  }
+  if (savedAtLabel) {
+    draftMetaEl.textContent = `자동 저장됨 · ${savedAtLabel}`;
+    return;
+  }
+  draftMetaEl.textContent = '자동 저장 전입니다.';
+}
+
+function clearNoticeComposeAutosaveTimer() {
+  const notices = ensureNoticesState();
+  if (typeof notices.composeAutosaveTimer === 'number' && notices.composeAutosaveTimer) {
+    window.clearTimeout(notices.composeAutosaveTimer);
+  }
+  notices.composeAutosaveTimer = 0;
+}
+
+function saveNoticeComposeDraftToStorage({ message = '자동 저장됨' } = {}) {
+  const notices = ensureNoticesState();
+  clearNoticeComposeAutosaveTimer();
   syncNoticeComposeDraftFromFields();
   const noticeId = notices.mode === NOTICE_VIEW_MODE_COMPOSE ? String(notices.selectedNoticeId || '').trim() : '';
   const savedAt = new Date().toISOString();
@@ -18469,18 +18500,37 @@ function saveNoticeComposeDraftToStorage() {
     {
       version: 1,
       savedAt,
-      previewOpen: Boolean(notices.previewOpen),
       draft: buildSerializableNoticeComposeDraft(notices.composeDraft),
     },
   );
   notices.draftSavedAt = savedAt;
-  notices.draftStorageMessage = '임시저장했습니다.';
+  notices.draftStorageMessage = message;
+  renderNoticeComposeDraftMeta();
+}
+
+function scheduleNoticeComposeAutosave({ immediate = false } = {}) {
+  const notices = ensureNoticesState();
+  if (!canManageNotices()) return;
+  clearNoticeComposeAutosaveTimer();
+  const commit = () => {
+    saveNoticeComposeDraftToStorage({ message: '자동 저장됨' });
+  };
+  if (immediate) {
+    commit();
+    return;
+  }
+  notices.composeAutosaveTimer = window.setTimeout(() => {
+    commit();
+  }, 650);
 }
 
 function markNoticeComposeDraftDirty() {
   const notices = ensureNoticesState();
-  if (!String(notices.draftSavedAt || '').trim()) return;
-  notices.draftStorageMessage = '저장 후 변경됨';
+  notices.draftStorageMessage = '저장 중…';
+  renderNoticeComposeDraftMeta();
+  if (isNoticesComposeActive()) {
+    scheduleNoticeComposeAutosave();
+  }
 }
 
 function ensureNoticesState() {
@@ -18492,7 +18542,8 @@ function ensureNoticesState() {
 
 function isNoticesComposeActive() {
   const notices = ensureNoticesState();
-  if (normalizeCurrentRoute(routeState.current) !== ROUTE_FEATURE_NOTICES) return false;
+  const currentRoute = normalizeRoutePath(parseRouteCandidate(state.currentRoute || getCurrentRouteWithQuery() || '').path);
+  if (currentRoute !== ROUTE_FEATURE_NOTICES) return false;
   if (notices.mode !== NOTICE_VIEW_MODE_COMPOSE || !canManageNotices()) return false;
   const panel = $('#noticesComposePanel');
   return panel instanceof HTMLElement && !panel.classList.contains('hidden');
@@ -18940,8 +18991,7 @@ function normalizeNoticeRecord(row = {}) {
 function resetNoticeComposeDraft(category = 'ops') {
   const notices = ensureNoticesState();
   notices.composeSourceNoticeId = '';
-  notices.composeSettingsOpen = false;
-  notices.previewOpen = false;
+  clearNoticeComposeAutosaveTimer();
   notices.draftSavedAt = '';
   notices.draftStorageMessage = '';
   notices.composeDraft = {
@@ -18961,8 +19011,7 @@ function fillNoticeComposeDraftFromRow(row = null) {
   const notices = ensureNoticesState();
   const normalizedRow = row && typeof row === 'object' ? row : null;
   notices.composeSourceNoticeId = String(normalizedRow?.id || '').trim();
-  notices.composeSettingsOpen = false;
-  notices.previewOpen = false;
+  clearNoticeComposeAutosaveTimer();
   notices.draftSavedAt = '';
   notices.draftStorageMessage = '';
   notices.composeDraft = buildNoticeComposeDraftFromBlocks(normalizedRow || {});
@@ -19032,7 +19081,6 @@ function syncNoticeComposeDraftFromFields() {
     table: nextTable,
     isPinned: Boolean(notices.composeDraft?.isPinned),
   };
-  renderNoticeComposePreview();
 }
 
 function writeNoticeComposeDraftToFields() {
@@ -19158,25 +19206,19 @@ function setNoticeComposeBlockEnabled(kind = '', enabled = true, { clear = false
 function renderNoticeComposeSettingsPanel() {
   const notices = ensureNoticesState();
   const panel = $('#noticesComposeSettingsPanel');
-  const toggleBtn = $('#noticesComposeSettingsToggleBtn');
+  const pinnedToggle = $('#noticesComposePinnedToggle');
   const draft = notices.composeDraft && typeof notices.composeDraft === 'object'
     ? notices.composeDraft
     : {};
   if (panel instanceof HTMLElement) {
-    panel.classList.toggle('hidden', !Boolean(notices.composeSettingsOpen));
+    panel.classList.remove('hidden');
   }
-  if (toggleBtn instanceof HTMLButtonElement) {
-    toggleBtn.setAttribute('aria-expanded', notices.composeSettingsOpen ? 'true' : 'false');
-    toggleBtn.textContent = notices.composeSettingsOpen ? '게시 설정 닫기' : '게시 설정';
+  if (pinnedToggle instanceof HTMLButtonElement) {
+    const active = Boolean(draft.isPinned);
+    pinnedToggle.classList.toggle('is-active', active);
+    pinnedToggle.setAttribute('aria-pressed', active ? 'true' : 'false');
+    pinnedToggle.textContent = active ? '켜짐' : '꺼짐';
   }
-  document.querySelectorAll('[data-action="notices-set-pinned"]').forEach((button) => {
-    if (!(button instanceof HTMLButtonElement)) return;
-    const isPinnedTarget = String(button.dataset.value || '').trim().toLowerCase() === 'true';
-    const active = isPinnedTarget === Boolean(draft.isPinned);
-    button.classList.toggle('is-active', active);
-    button.classList.toggle('is-accent', isPinnedTarget);
-    button.setAttribute('aria-pressed', active ? 'true' : 'false');
-  });
 }
 
 function renderNoticeComposeToolbar() {
@@ -33770,42 +33812,22 @@ function renderNoticesComposePanel() {
   const notices = ensureNoticesState();
   const hintEl = $('#noticesComposeHint');
   const pinnedHintEl = $('#noticesComposePinnedHint');
-  const draftMetaEl = $('#noticesComposeDraftMeta');
   const categorySelect = $('#noticesComposeCategory');
   const titleEl = $('#noticesComposePanelTitle');
   const publishBtn = $('#noticesPublishBtn');
-  const previewBtn = $('#noticesPreviewToggleBtn');
   const editing = notices.mode === NOTICE_VIEW_MODE_COMPOSE && Boolean(String(notices.selectedNoticeId || '').trim());
   if (titleEl) {
-    titleEl.textContent = editing ? '공지 수정' : '공지 작성';
+    titleEl.textContent = '공지사항';
   }
   if (hintEl) {
-    hintEl.textContent = editing
-      ? '문서 내용을 정리하고 필요한 블록만 삽입해 기존 공지를 바로 갱신합니다.'
-      : '제목과 리드 문단을 먼저 쓰고, 필요한 블록만 삽입해 문서형 공지를 발행합니다.';
+    hintEl.textContent = editing ? '공지 수정' : '새 공지';
   }
   if (pinnedHintEl) {
-    pinnedHintEl.textContent = `상단고정은 최대 ${NOTICE_PINNED_LIMIT}개까지만 유지됩니다. 오래된 고정 공지는 자동으로 내려갑니다.`;
+    pinnedHintEl.textContent = `상단고정은 최대 ${NOTICE_PINNED_LIMIT}개까지만 유지됩니다.`;
   }
-  if (draftMetaEl) {
-    const savedAtLabel = notices.draftSavedAt ? formatOpsDateTime(notices.draftSavedAt) || formatDateLabel(notices.draftSavedAt, '-') : '';
-    if (String(notices.draftStorageMessage || '').trim() && savedAtLabel) {
-      draftMetaEl.textContent = `${String(notices.draftStorageMessage || '').trim()} · 마지막 저장 ${savedAtLabel}`;
-    } else if (String(notices.draftStorageMessage || '').trim()) {
-      draftMetaEl.textContent = String(notices.draftStorageMessage || '').trim();
-    } else if (savedAtLabel) {
-      draftMetaEl.textContent = `마지막 임시저장 ${savedAtLabel}`;
-    } else if (editing) {
-      draftMetaEl.textContent = '수정 중인 공지는 임시저장해 두고 다시 이어서 작성할 수 있습니다.';
-    } else {
-      draftMetaEl.textContent = '임시저장 전입니다. 발행 전 미리보기로 문서 흐름을 먼저 확인하세요.';
-    }
-  }
+  renderNoticeComposeDraftMeta();
   if (publishBtn instanceof HTMLButtonElement) {
     publishBtn.textContent = editing ? '수정 저장' : '발행';
-  }
-  if (previewBtn instanceof HTMLButtonElement) {
-    previewBtn.textContent = notices.previewOpen ? '미리보기 닫기' : '미리보기';
   }
   if (categorySelect instanceof HTMLSelectElement && !categorySelect.options.length) {
     NOTICE_CATEGORY_OPTIONS.filter((item) => item.value !== 'all').forEach((item) => {
@@ -33834,7 +33856,6 @@ function renderNoticesComposePanel() {
   renderNoticeComposeImageList();
   renderNoticeComposePollEditor();
   renderNoticeComposeTableEditor();
-  renderNoticeComposePreview();
 }
 
 function renderNoticesView() {
@@ -56793,8 +56814,8 @@ function bindUiEvents() {
       || target.id === 'noticesComposePollQuestion'
       || target.id === 'noticesComposeTableTitle'
     ) {
-      markNoticeComposeDraftDirty();
       syncNoticeComposeDraftFromFields();
+      markNoticeComposeDraftDirty();
       return;
     }
 
@@ -57851,16 +57872,11 @@ function bindUiEvents() {
       return;
     }
 
-    if (action === 'notices-toggle-settings') {
+    if (action === 'notices-toggle-pinned' || action === 'notices-set-pinned') {
       const notices = ensureNoticesState();
-      notices.composeSettingsOpen = !Boolean(notices.composeSettingsOpen);
-      renderNoticesComposePanel();
-      return;
-    }
-
-    if (action === 'notices-set-pinned') {
-      const notices = ensureNoticesState();
-      const nextPinned = String(actionEl.dataset.value || '').trim().toLowerCase() === 'true';
+      const nextPinned = action === 'notices-set-pinned'
+        ? String(actionEl.dataset.value || '').trim().toLowerCase() === 'true'
+        : !Boolean(notices.composeDraft?.isPinned);
       notices.composeDraft = {
         ...(notices.composeDraft || {}),
         isPinned: nextPinned,
@@ -57869,7 +57885,6 @@ function bindUiEvents() {
       markNoticeComposeDraftDirty();
       writeNoticeComposeDraftToFields();
       renderNoticeComposeSettingsPanel();
-      renderNoticeComposePreview();
       return;
     }
 
@@ -57984,30 +57999,6 @@ function bindUiEvents() {
       markNoticeComposeDraftDirty();
       writeNoticeComposeDraftToFields();
       renderNoticeComposePollEditor();
-      return;
-    }
-
-    if (action === 'notices-save-draft') {
-      if (!canManageNotices()) {
-        showToast('공지 작성 권한이 없습니다.', 'error');
-        return;
-      }
-      syncNoticeComposeDraftFromFields();
-      saveNoticeComposeDraftToStorage();
-      renderNoticesComposePanel();
-      showToast('임시저장했습니다.', 'success', 2200);
-      return;
-    }
-
-    if (action === 'notices-toggle-preview') {
-      if (!canManageNotices()) {
-        showToast('공지 작성 권한이 없습니다.', 'error');
-        return;
-      }
-      const notices = ensureNoticesState();
-      syncNoticeComposeDraftFromFields();
-      notices.previewOpen = !Boolean(notices.previewOpen);
-      renderNoticesComposePanel();
       return;
     }
 
@@ -58188,6 +58179,7 @@ function bindUiEvents() {
       runWithBusy(async () => {
         const notices = ensureNoticesState();
         const editingNoticeId = String(notices.selectedNoticeId || '').trim();
+        clearNoticeComposeAutosaveTimer();
         const saved = await saveNoticeDraft();
         if (!saved) return;
         notices.category = normalizeNoticeCategory(saved.category || notices.category || 'all');
@@ -60886,8 +60878,8 @@ function bindUiEvents() {
       || target.id === 'noticesComposePollClosesAt'
       || target.id === 'noticesComposePollAllowChange'
     ) {
-      markNoticeComposeDraftDirty();
       syncNoticeComposeDraftFromFields();
+      markNoticeComposeDraftDirty();
       if (target.id === 'noticesComposeTableEnabled') {
         renderNoticeComposeTableEditor();
       }

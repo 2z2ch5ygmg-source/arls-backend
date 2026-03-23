@@ -21446,24 +21446,24 @@ button.attendance-status-special-card.active {
 
 .notices-compose-commandbar {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
-  padding: 4px 0 18px;
+  gap: 16px 24px;
+  padding: 2px 0 18px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   flex-wrap: wrap;
 }
 
 .notices-compose-commandgroup {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: 14px;
   flex-wrap: wrap;
 }
 
 .notices-compose-commandgroup-right {
   margin-left: auto;
-  align-items: center;
+  align-items: flex-end;
 }
 
 .notices-compose-commandcopy {
@@ -21474,17 +21474,23 @@ button.attendance-status-special-card.active {
 
 .notices-compose-commandcopy h3 {
   margin: 0;
-  font-size: 24px;
-  line-height: 1.18;
+  font-size: 26px;
+  line-height: 1.14;
   letter-spacing: -0.03em;
   color: var(--ui-text-primary);
 }
 
-.notices-compose-commandcopy .muted,
-.notices-compose-draft-meta {
+.notices-compose-commandcopy .muted {
   margin: 0;
   font-size: 13px;
-  line-height: 1.55;
+  line-height: 1.45;
+}
+
+.notices-compose-draft-meta {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: right;
 }
 
 .notices-command-link,
@@ -21509,9 +21515,11 @@ button.attendance-status-special-card.active {
 
 .notices-compose-settings-panel {
   display: grid;
-  gap: 14px;
+  grid-template-columns: minmax(220px, 280px) auto minmax(220px, 1fr);
+  gap: 14px 18px;
+  align-items: end;
   margin: 0;
-  padding: 16px 0 4px;
+  padding: 14px 0 16px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
 }
 
@@ -21548,12 +21556,32 @@ button.attendance-status-special-card.active {
   min-width: 0;
 }
 
+.notices-compose-setting-field-compact {
+  max-width: 280px;
+}
+
+.notices-compose-setting-field-inline {
+  grid-template-columns: auto auto;
+  gap: 12px;
+  align-items: center;
+  align-self: end;
+}
+
 .notices-compose-setting-label,
 .notices-compose-setting-field > span {
   color: var(--ui-text-secondary);
   font-size: 12px;
   line-height: 1.4;
   font-weight: 700;
+}
+
+.notices-compose-setting-meta {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ui-text-secondary);
+  justify-self: end;
+  text-align: right;
 }
 
 .notices-segmented-control {
@@ -21596,7 +21624,7 @@ button.attendance-status-special-card.active {
 .notices-compose-document {
   display: grid;
   gap: 18px;
-  padding: 20px 0 0;
+  padding: 18px 0 0;
 }
 
 .notices-compose-title-input,
@@ -21633,6 +21661,13 @@ button.attendance-status-special-card.active {
   font-size: 16px;
   line-height: 1.75;
   resize: vertical;
+}
+
+.notices-compose-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .notices-compose-title-input:focus,
@@ -22034,9 +22069,15 @@ button.attendance-status-special-card.active {
 }
 
 @media (max-width: 1199px) {
+  .notices-compose-settings-panel,
   .notices-compose-settings-grid,
   .notices-compose-setting-cluster {
     grid-template-columns: 1fr;
+  }
+
+  .notices-compose-setting-meta {
+    justify-self: start;
+    text-align: left;
   }
 
   .notices-compose-commandgroup-right {

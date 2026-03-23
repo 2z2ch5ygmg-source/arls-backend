@@ -24,7 +24,7 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%23f97316'/%3E%3Ctext x='24' y='31' text-anchor='middle' font-size='22' fill='white' font-family='Arial,sans-serif'%3ERG%3C/text%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="css/styles.css?v=20260323-notices-phase0-v1" />
+    <link rel="stylesheet" href="css/styles.css?v=20260323-notices-phase1-v1" />
   </head>
   <body>
     <div id="app">
@@ -3021,43 +3021,27 @@
               <div class="notices-compose-shell">
                 <div class="notices-compose-canvas">
                   <div class="notices-compose-commandbar">
-                    <div class="notices-compose-commandgroup notices-compose-commandgroup-left">
-                      <button class="btn btn-ghost notices-command-link" type="button" data-action="notices-go-list">목록으로</button>
-                      <div class="notices-compose-commandcopy">
-                        <h3 id="noticesComposePanelTitle">공지 작성</h3>
-                        <p id="noticesComposeHint" class="muted">작성 워크스페이스를 준비하는 중입니다.</p>
-                      </div>
+                    <div class="notices-compose-commandcopy">
+                      <h3 id="noticesComposePanelTitle">공지사항</h3>
+                      <p id="noticesComposeHint" class="muted">새 공지</p>
                     </div>
                     <div class="notices-compose-commandgroup notices-compose-commandgroup-right">
-                      <p id="noticesComposeDraftMeta" class="muted notices-compose-draft-meta">임시저장 전입니다.</p>
-                      <button id="noticesDraftSaveBtn" class="btn btn-ghost notices-command-btn" type="button" data-action="notices-save-draft">임시저장</button>
-                      <button id="noticesPreviewToggleBtn" class="btn btn-ghost notices-command-btn" type="button" data-action="notices-toggle-preview">미리보기</button>
-                      <button id="noticesComposeSettingsToggleBtn" class="btn btn-ghost notices-command-btn" type="button" data-action="notices-toggle-settings" aria-expanded="false" aria-controls="noticesComposeSettingsPanel">게시 설정</button>
+                      <p id="noticesComposeDraftMeta" class="muted notices-compose-draft-meta">자동 저장 전입니다.</p>
                       <button id="noticesPublishBtn" class="btn btn-primary notices-command-publish" type="button" data-action="notices-publish">발행</button>
                     </div>
                   </div>
 
-                  <section id="noticesComposeSettingsPanel" class="notices-compose-settings-panel hidden" aria-label="게시 설정">
-                    <div class="notices-compose-settings-head">
-                      <div>
-                        <h4>게시 설정</h4>
-                        <p id="noticesComposePinnedHint" class="muted">상단고정 정책을 준비하는 중입니다.</p>
-                      </div>
+                  <section id="noticesComposeSettingsPanel" class="notices-compose-settings-panel" aria-label="게시 설정">
+                    <label class="input-field notices-compose-setting-field notices-compose-setting-field-compact" for="noticesComposeCategory">
+                      <span>카테고리</span>
+                      <select id="noticesComposeCategory"></select>
+                    </label>
+                    <div class="notices-compose-setting-field notices-compose-setting-field-inline">
+                      <span class="notices-compose-setting-label">상단고정</span>
+                      <button type="button" id="noticesComposePinnedToggle" class="notices-switch-button" data-action="notices-toggle-pinned" aria-pressed="false">꺼짐</button>
+                      <input id="noticesComposePinned" type="checkbox" hidden />
                     </div>
-                    <div class="notices-compose-settings-grid">
-                      <label class="input-field notices-compose-setting-field" for="noticesComposeCategory">
-                        <span>카테고리</span>
-                        <select id="noticesComposeCategory"></select>
-                      </label>
-                      <div class="notices-compose-setting-field">
-                        <span class="notices-compose-setting-label">상단 노출 방식</span>
-                        <div class="notices-segmented-control" role="group" aria-label="상단고정 설정">
-                          <button type="button" class="notices-segmented-option" data-action="notices-set-pinned" data-value="false">일반 노출</button>
-                          <button type="button" class="notices-segmented-option" data-action="notices-set-pinned" data-value="true">상단 고정</button>
-                        </div>
-                        <input id="noticesComposePinned" type="checkbox" hidden />
-                      </div>
-                    </div>
+                    <p id="noticesComposePinnedHint" class="muted notices-compose-setting-meta">상단고정은 최대 3개까지만 유지됩니다.</p>
                   </section>
 
                   <div class="notices-compose-document">
@@ -3210,21 +3194,13 @@
                         </div>
                       </section>
                     </div>
+
+                    <div class="notices-compose-footer">
+                      <button class="btn btn-ghost notices-command-link" type="button" data-action="notices-go-list">목록으로</button>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              <article id="noticesComposePreviewCard" class="module-card stack notices-compose-preview-card hidden">
-                <div class="notices-section-head">
-                  <div>
-                    <h3>미리보기</h3>
-                    <p id="noticesComposePreviewMeta" class="muted">발행 전 문서형 공지가 실제 상세처럼 렌더됩니다.</p>
-                  </div>
-                  <span class="status-pill status-pill-neutral">저장 전 확인</span>
-                </div>
-                <div id="noticesComposePreviewHead" class="notices-compose-preview-head"></div>
-                <div id="noticesComposePreviewBody" class="notices-detail-body notices-compose-preview-body"></div>
-              </article>
             </div>
           </section>
 
@@ -5423,7 +5399,7 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260323-notices-phase0-v1"></script>
+    <script src="config.js?v=20260323-notices-phase1-v1"></script>
     <script>
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
@@ -5676,7 +5652,7 @@
         });
 
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=20260323-notices-phase0-v1', { updateViaCache: 'none' })
+          navigator.serviceWorker.register('./sw.js?v=20260323-notices-phase1-v1', { updateViaCache: 'none' })
             .then((registration) => {
               registration.update().catch(() => {});
 
