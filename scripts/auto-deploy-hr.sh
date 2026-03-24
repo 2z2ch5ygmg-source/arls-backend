@@ -142,7 +142,10 @@ path_matches_allowed_patterns() {
 }
 
 attempt_git_push() {
-  local args=("$@")
+  local -a args=()
+  if [[ "$#" -gt 0 ]]; then
+    args=("$@")
+  fi
 
   if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     log "Git repo가 아니어서 commit/push를 건너뜁니다."
@@ -185,9 +188,15 @@ attempt_git_push() {
   fi
 
   local -a allowed_patterns=()
-  while IFS= read -r path; do
-    [[ -n "$path" ]] && allowed_patterns+=("$path")
-  done < <(build_allowed_git_patterns "${args[@]}")
+  if [[ "${#args[@]}" -gt 0 ]]; then
+    while IFS= read -r path; do
+      [[ -n "$path" ]] && allowed_patterns+=("$path")
+    done < <(build_allowed_git_patterns "${args[@]}")
+  else
+    while IFS= read -r path; do
+      [[ -n "$path" ]] && allowed_patterns+=("$path")
+    done < <(build_allowed_git_patterns)
+  fi
   local -a stageable_paths=()
   local -a blocked_paths=()
   local -a staged_paths=()
@@ -195,7 +204,7 @@ attempt_git_push() {
   local path
 
   for path in "${changed_paths[@]}"; do
-    if path_matches_allowed_patterns "$path" "${allowed_patterns[@]}"; then
+    if [[ "${#allowed_patterns[@]}" -gt 0 ]] && path_matches_allowed_patterns "$path" "${allowed_patterns[@]}"; then
       stageable_paths+=("$path")
     else
       blocked_paths+=("$path")
@@ -213,7 +222,7 @@ attempt_git_push() {
 
   if [[ "${#staged_paths[@]}" -gt 0 ]]; then
     for path in "${staged_paths[@]}"; do
-      if ! path_matches_allowed_patterns "$path" "${allowed_patterns[@]}"; then
+      if [[ "${#allowed_patterns[@]}" -eq 0 ]] || ! path_matches_allowed_patterns "$path" "${allowed_patterns[@]}"; then
         staged_blocked_paths+=("$path")
       fi
     done

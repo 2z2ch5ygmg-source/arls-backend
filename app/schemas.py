@@ -444,7 +444,10 @@ class EmployeeOut(BaseModel):
     site_name: Optional[str] = None
     company_code: str
     user_id: Optional[UUID] = None
+    username: Optional[str] = None
     user_role: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_deleted: Optional[bool] = None
     birth_date: Optional[date] = None
     address: Optional[str] = None
     hire_date: Optional[date] = None

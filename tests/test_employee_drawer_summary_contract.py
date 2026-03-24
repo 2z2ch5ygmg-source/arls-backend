@@ -6,6 +6,16 @@ from app.routers.v1 import employees
 
 
 class EmployeeDrawerSummaryContractTests(unittest.TestCase):
+    def test_drawer_account_link_status_requires_live_linked_user(self):
+        self.assertEqual(
+            employees._drawer_account_link_status(None, None, "01059387659"),
+            "미연결",
+        )
+        self.assertEqual(
+            employees._drawer_account_link_status("user-1", None, "01059387659"),
+            "연결됨",
+        )
+
     def test_fetch_employee_drawer_base_tolerates_missing_soft_delete_columns(self):
         employee_id = uuid.uuid4()
         captured: dict[str, object] = {}
@@ -176,6 +186,102 @@ class EmployeeDrawerSummaryContractTests(unittest.TestCase):
         self.assertEqual(employees._drawer_attendance_status_label("in", "out")[0], "정상")
         self.assertEqual(employees._drawer_attendance_status_label("in", None)[0], "퇴근 누락")
         self.assertEqual(employees._drawer_attendance_status_label(None, "out")[0], "출근 누락")
+
+    def test_list_employees_keeps_soc_role_separate_from_live_account_projection(self):
+        live_row = {
+            "id": uuid.uuid4(),
+            "tenant_id": uuid.uuid4(),
+            "employee_code": "R692-001",
+            "sequence_no": 1,
+            "full_name": "서성원",
+            "phone": "010-1111-2222",
+            "site_code": "R692",
+            "site_name": "Apple_가로수길",
+            "company_code": "CMP_R692",
+            "is_active": True,
+            "is_deleted": False,
+            "management_no_str": "1",
+            "gender": None,
+            "resident_no": None,
+            "birth_date": None,
+            "address": None,
+            "hire_date": date(2024, 11, 1),
+            "leave_date": None,
+            "guard_training_cert_no": None,
+            "note": None,
+            "roster_docx_attachment_id": None,
+            "photo_attachment_id": None,
+            "soc_login_id": None,
+            "soc_role": "Officer",
+            "user_id": None,
+            "username": None,
+            "user_role": None,
+        }
+
+        class FakeCursor:
+            def __init__(self, rows):
+                self.rows = rows
+                self.executed_sql: list[str] = []
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def execute(self, sql, params):
+                self.executed_sql.append(str(sql))
+
+            def fetchone(self):
+                return None
+
+            def fetchall(self):
+                return list(self.rows)
+
+        class FakeConn:
+            def __init__(self, rows):
+                self.rows = rows
+
+            def cursor(self):
+                return FakeCursor(self.rows)
+
+        original_resolve_tenant = employees._resolve_target_tenant
+        original_repair_scope = employees._repair_active_employee_rows_for_scope
+        original_table_column_exists = employees._table_column_exists
+        employees._resolve_target_tenant = lambda conn, user, tenant_code, tenant_id=None: {
+            "id": "tenant-1",
+            "tenant_code": "SRS_KOREA",
+            "tenant_name": "SRS Korea",
+        }
+        employees._repair_active_employee_rows_for_scope = lambda *args, **kwargs: 0
+        employees._table_column_exists = lambda conn, table, column: True
+        try:
+            payload = employees.list_employees(
+                site_id=None,
+                site_code=None,
+                q=None,
+                limit=50,
+                offset=0,
+                include_inactive=False,
+                include_deleted=False,
+                detail=False,
+                include_account=True,
+                tenant_code=None,
+                conn=FakeConn([live_row]),
+                user={"role": employees.ROLE_DEV},
+            )
+        finally:
+            employees._resolve_target_tenant = original_resolve_tenant
+            employees._repair_active_employee_rows_for_scope = original_repair_scope
+            employees._table_column_exists = original_table_column_exists
+
+        self.assertEqual(len(payload), 1)
+        self.assertIsNone(payload[0].user_id)
+        self.assertIsNone(payload[0].username)
+        self.assertIsNone(payload[0].user_role)
+        self.assertEqual(payload[0].soc_role, "Officer")
+        self.assertTrue(payload[0].is_active)
+        self.assertFalse(payload[0].is_deleted)
 
 
 if __name__ == "__main__":

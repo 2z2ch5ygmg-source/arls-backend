@@ -1011,7 +1011,7 @@ def _drawer_employment_status(*, is_active: bool, leave_date: date | None) -> st
 
 
 def _drawer_account_link_status(user_id: str | None, username: str | None, soc_login_id: str | None) -> str:
-    if _normalize_optional_text(user_id) or _normalize_optional_text(username) or _normalize_optional_text(soc_login_id):
+    if _normalize_optional_text(user_id) or _normalize_optional_text(username):
         return "연결됨"
     return "미연결"
 
@@ -2949,6 +2949,8 @@ def list_employees(
     has_employee_deleted = _table_column_exists(conn, "employees", "is_deleted")
     has_site_active = _table_column_exists(conn, "sites", "is_active")
     has_site_deleted = _table_column_exists(conn, "sites", "is_deleted")
+    employee_active_select_sql = "COALESCE(e.is_active, TRUE) AS is_active" if has_employee_active else "TRUE AS is_active"
+    employee_deleted_select_sql = "COALESCE(e.is_deleted, FALSE) AS is_deleted" if has_employee_deleted else "FALSE AS is_deleted"
 
     if has_employee_deleted and not include_deleted:
         clauses.append("COALESCE(e.is_deleted, FALSE) = FALSE")
@@ -2982,13 +2984,13 @@ def list_employees(
     params.extend([int(limit), int(offset)])
 
     account_join_sql = ""
-    account_select_sql = "NULL::uuid AS user_id, NULL::text AS user_role"
+    account_select_sql = "NULL::uuid AS user_id, NULL::text AS username, NULL::text AS user_role"
     if include_account:
-        account_select_sql = "u.id AS user_id, u.role AS user_role"
+        account_select_sql = "u.id AS user_id, u.username AS username, u.role AS user_role"
         account_join_sql = """
             LEFT JOIN (
                 SELECT DISTINCT ON (au.tenant_id, au.employee_id)
-                       au.tenant_id, au.employee_id, au.id, au.role
+                       au.tenant_id, au.employee_id, au.id, au.username, au.role
                 FROM arls_users au
                 WHERE COALESCE(au.is_active, TRUE) = TRUE
                   AND COALESCE(au.is_deleted, FALSE) = FALSE
@@ -3010,6 +3012,8 @@ def list_employees(
             SELECT e.id, e.tenant_id,
                    e.employee_code, e.sequence_no, e.full_name, e.phone,
                    s.site_code, s.site_name, COALESCE(c.company_code, '') AS company_code,
+                   {employee_active_select_sql},
+                   {employee_deleted_select_sql},
                    e.management_no_str, e.gender, e.resident_no, e.birth_date, e.address, e.hire_date, e.leave_date,
                    e.guard_training_cert_no, e.note, e.roster_docx_attachment_id, e.photo_attachment_id,
                    e.soc_login_id, e.soc_role,
@@ -3028,6 +3032,8 @@ def list_employees(
             SELECT e.id, e.tenant_id,
                    e.employee_code, e.sequence_no, e.full_name, e.phone,
                    s.site_code, s.site_name, COALESCE(c.company_code, '') AS company_code,
+                   {employee_active_select_sql},
+                   {employee_deleted_select_sql},
                    e.management_no_str,
                    NULL::text AS gender,
                    NULL::text AS resident_no,
@@ -3055,6 +3061,8 @@ def list_employees(
     with conn.cursor() as cur:
         cur.execute(
             select_sql.format(
+                employee_active_select_sql=employee_active_select_sql,
+                employee_deleted_select_sql=employee_deleted_select_sql,
                 account_select_sql=account_select_sql,
                 account_join_sql=account_join_sql,
                 where_sql=where_sql,
@@ -3069,12 +3077,11 @@ def list_employees(
     tenant_name_value = str(tenant.get("tenant_name") or "").strip() or None
     result: list[EmployeeOut] = []
     for row in rows:
-        resolved_user_role = row.get("user_role") or row.get("soc_role")
         payload = {
             **row,
             "tenant_code": tenant_code_value,
             "tenant_name": tenant_name_value,
-            "user_role": normalize_user_role(resolved_user_role) if resolved_user_role else None,
+            "user_role": normalize_user_role(row.get("user_role")) if row.get("user_role") else None,
         }
         result.append(EmployeeOut(**payload))
     return result

@@ -5748,6 +5748,7 @@ async function loadHomeManagerOrgSummary({ force = false } = {}) {
           || '',
         ).trim().toUpperCase();
         const params = new URLSearchParams();
+        params.set('include_account', 'true');
         if (tenantCode && tenantCode !== 'ALL') {
           params.set('tenant_code', tenantCode);
         }
@@ -5761,7 +5762,7 @@ async function loadHomeManagerOrgSummary({ force = false } = {}) {
         );
       } else {
         const tenantHeader = String(getTenantIdForScopedAdminApi() || state.user?.tenant_id || '').trim();
-        employeeRows = await fetchPagedApiRows('/employees', {
+        employeeRows = await fetchPagedApiRows('/employees?include_account=true', {
           headers: tenantHeader ? { 'X-Tenant-Id': tenantHeader } : null,
           pageLimit: 500,
           maxPages: 20,
@@ -36281,6 +36282,10 @@ function getEmployeeRoleLabel(item = {}) {
   return rawRole ? getRoleDisplayLabel(rawRole) : '계정 미연결';
 }
 
+function getEmployeeLinkedAccountUsername(item = {}) {
+  return String(item?.username || item?.linked_username || '').trim();
+}
+
 function getEmployeeEmploymentStatusMeta(item = {}) {
   const isDeleted = Boolean(item?.is_deleted);
   const hasLeaveDate = Boolean(String(item?.leave_date || '').trim());
@@ -36299,8 +36304,8 @@ function getEmployeeEmploymentStatusMeta(item = {}) {
 
 function getEmployeeAccountLinkageMeta(item = {}) {
   const hasAccount = Boolean(
-    String(item?.soc_login_id || item?.username || '').trim()
-    || String(item?.user_role || item?.soc_role || '').trim(),
+    String(item?.user_id || '').trim()
+    || getEmployeeLinkedAccountUsername(item),
   );
   return hasAccount
     ? { key: 'linked', label: '연결됨', className: 'status-pill status-pill-success' }
@@ -36772,7 +36777,7 @@ function buildEmployeeDesktopTableRow(item) {
   const roleLabel = getEmployeeRoleLabel(item);
   const employmentMeta = getEmployeeEmploymentStatusMeta(item);
   const accountMeta = getEmployeeAccountLinkageMeta(item);
-  const loginId = String(item.soc_login_id || item.username || '').trim();
+  const loginId = getEmployeeLinkedAccountUsername(item);
 
   appendStackCell({
     title: companyName,
@@ -37646,8 +37651,8 @@ function buildEmployeeDirectoryAccountFacts(detail = null, header = {}) {
   const overview = detail?.overview && typeof detail.overview === 'object' ? detail.overview : {};
   const workforceInfo = overview?.workforce_info && typeof overview.workforce_info === 'object' ? overview.workforce_info : {};
   const accountStatus = String(workforceInfo.account_link_status || header.account_link_status || getEmployeeAccountLinkageMeta(employee).label || '').trim();
-  const loginId = String(employee?.soc_login_id || employee?.username || '').trim();
-  const roleLabel = String(employee?.user_role || employee?.soc_role ? getRoleDisplayLabel(employee?.user_role || employee?.soc_role) : '').trim();
+  const loginId = getEmployeeLinkedAccountUsername(employee);
+  const roleLabel = String(employee?.user_role ? getRoleDisplayLabel(employee.user_role) : '').trim();
   const showLoginId = getNavigationRole() === 'DEV';
   const items = [
     {
@@ -40293,6 +40298,7 @@ async function loadEmployees({ preferCache = true, skipNetworkWhenCached = false
     const params = new URLSearchParams();
     if (include.includeInactive) params.set('include_inactive', 'true');
     if (include.includeDeleted) params.set('include_deleted', 'true');
+    params.set('include_account', 'true');
     // Keep the employee directory source tenant-wide so the site filter stays purely client-side.
     // For DEV, always use /dev/employees and scope it by tenant_code when a specific tenant is selected.
     const devTenantCodeFilter = String(

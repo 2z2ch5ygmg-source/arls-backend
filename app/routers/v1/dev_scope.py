@@ -136,6 +136,8 @@ def list_dev_employees(
     has_site_deleted = _table_column_exists(conn, "sites", "is_deleted")
     has_tenant_active = _table_column_exists(conn, "tenants", "is_active")
     has_tenant_deleted = _table_column_exists(conn, "tenants", "is_deleted")
+    employee_active_select_sql = "COALESCE(e.is_active, TRUE) AS is_active" if has_employee_active else "TRUE AS is_active"
+    employee_deleted_select_sql = "COALESCE(e.is_deleted, FALSE) AS is_deleted" if has_employee_deleted else "FALSE AS is_deleted"
 
     clauses: list[str] = []
     params: list = []
@@ -207,13 +209,13 @@ def list_dev_employees(
             )
 
     account_join_sql = ""
-    account_select_sql = "NULL::uuid AS user_id, NULL::text AS user_role"
+    account_select_sql = "NULL::uuid AS user_id, NULL::text AS username, NULL::text AS user_role"
     if include_account:
-        account_select_sql = "u.id AS user_id, u.role AS user_role"
+        account_select_sql = "u.id AS user_id, u.username AS username, u.role AS user_role"
         account_join_sql = """
             LEFT JOIN (
                 SELECT DISTINCT ON (au.tenant_id, au.employee_id)
-                       au.tenant_id, au.employee_id, au.id, au.role
+                       au.tenant_id, au.employee_id, au.id, au.username, au.role
                 FROM arls_users au
                 WHERE COALESCE(au.is_active, TRUE) = TRUE
                   AND COALESCE(au.is_deleted, FALSE) = FALSE
@@ -231,6 +233,8 @@ def list_dev_employees(
                    e.full_name, e.phone,
                    s.site_code, s.site_name,
                    COALESCE(c.company_code, '') AS company_code,
+                   {employee_active_select_sql},
+                   {employee_deleted_select_sql},
                    e.birth_date, e.address, e.hire_date, e.leave_date,
                    e.guard_training_cert_no, e.note,
                    e.roster_docx_attachment_id, e.photo_attachment_id,
