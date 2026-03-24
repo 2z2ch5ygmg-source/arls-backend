@@ -126,6 +126,7 @@ from ...services.apple_weekly_truth import (
     build_apple_weekly_truth_failure_contract,
     normalize_week_start,
 )
+from .employees import _repair_active_employee_rows_for_scope
 from ...services.push_notifications import send_push_notification_to_users
 from ...utils.permissions import can_manage_schedule, is_super_admin, normalize_role, normalize_user_role
 from ...utils.schema_introspection import table_column_exists
@@ -14128,6 +14129,130 @@ def get_sentrix_hq_apple_weekly_truth_bridge(
             debug_enabled=False,
         )
         return JSONResponse(status_code=503, content=failure_contract)
+
+
+@bridge_router.get("/employees/truth")
+def get_sentrix_hq_employee_truth_bridge(
+    tenant_code: str = Query(..., max_length=64),
+    site_code: str | None = Query(default=None, max_length=64),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_sentrix_bridge_token: str | None = Header(default=None, alias="X-Sentrix-Bridge-Token"),
+    conn=Depends(get_db_conn),
+):
+    bridge_token = str(x_sentrix_bridge_token or "").strip() or _extract_bearer_token(authorization)
+    _require_sentrix_support_bridge_token(bridge_token)
+    target_tenant = _resolve_sentrix_bridge_tenant(conn, tenant_code)
+    normalized_site_code = str(site_code or "").strip().upper()
+    try:
+        _repair_active_employee_rows_for_scope(
+            conn,
+            tenant_id=str(target_tenant.get("id") or "").strip(),
+            site_code=normalized_site_code or None,
+        )
+        has_employee_active = table_column_exists(conn, "employees", "is_active")
+        has_employee_deleted = table_column_exists(conn, "employees", "is_deleted")
+        has_site_active = table_column_exists(conn, "sites", "is_active")
+        has_site_deleted = table_column_exists(conn, "sites", "is_deleted")
+        has_user_deleted = table_column_exists(conn, "arls_users", "is_deleted")
+
+        clauses: list[str] = ["e.tenant_id = %s"]
+        params: list[Any] = [str(target_tenant.get("id") or "").strip()]
+        if normalized_site_code:
+            clauses.append("upper(COALESCE(s.site_code, '')) = upper(%s)")
+            params.append(normalized_site_code)
+        if has_employee_active:
+            clauses.append("COALESCE(e.is_active, TRUE) = TRUE")
+        if has_employee_deleted:
+            clauses.append("COALESCE(e.is_deleted, FALSE) = FALSE")
+        if has_site_active:
+            clauses.append("COALESCE(s.is_active, TRUE) = TRUE")
+        if has_site_deleted:
+            clauses.append("COALESCE(s.is_deleted, FALSE) = FALSE")
+
+        user_deleted_clause = "AND COALESCE(au.is_deleted, FALSE) = FALSE" if has_user_deleted else ""
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT
+                    e.id AS employee_id,
+                    COALESCE(e.canonical_employee_id, '') AS canonical_employee_id,
+                    COALESCE(e.employee_uuid, '') AS employee_uuid,
+                    COALESCE(e.employee_code, '') AS employee_code,
+                    COALESCE(e.full_name, '') AS full_name,
+                    COALESCE(e.phone, '') AS phone,
+                    s.id AS site_id,
+                    COALESCE(s.site_code, '') AS site_code,
+                    COALESCE(s.site_name, '') AS site_name,
+                    COALESCE(c.company_code, '') AS company_code,
+                    COALESCE(u.user_id::text, '') AS user_id,
+                    COALESCE(u.username, '') AS username,
+                    COALESCE(u.user_role, '') AS user_role,
+                    COALESCE(e.soc_role, '') AS soc_role
+                FROM employees e
+                JOIN sites s
+                  ON s.id = e.site_id
+                LEFT JOIN companies c
+                  ON c.id = s.company_id
+                JOIN (
+                    SELECT DISTINCT ON (au.tenant_id, au.employee_id)
+                           au.tenant_id,
+                           au.employee_id,
+                           au.id AS user_id,
+                           COALESCE(au.username, '') AS username,
+                           COALESCE(au.role, '') AS user_role
+                    FROM arls_users au
+                    WHERE au.tenant_id = %s
+                      AND COALESCE(au.is_active, TRUE) = TRUE
+                      {user_deleted_clause}
+                    ORDER BY au.tenant_id, au.employee_id,
+                             au.updated_at DESC NULLS LAST,
+                             au.created_at DESC NULLS LAST,
+                             au.id DESC
+                ) u
+                  ON u.tenant_id = e.tenant_id
+                 AND u.employee_id = e.id
+                WHERE {" AND ".join(clauses)}
+                ORDER BY COALESCE(s.site_code, ''), COALESCE(e.employee_code, ''), COALESCE(e.full_name, ''), e.id
+                """,
+                [str(target_tenant.get("id") or "").strip(), *params],
+            )
+            rows = cur.fetchall() or []
+        employees = [
+            {
+                "employee_id": str(row.get("employee_id") or "").strip(),
+                "canonical_employee_id": str(row.get("canonical_employee_id") or "").strip(),
+                "employee_uuid": str(row.get("employee_uuid") or "").strip(),
+                "employee_code": str(row.get("employee_code") or "").strip(),
+                "full_name": str(row.get("full_name") or "").strip(),
+                "phone": str(row.get("phone") or "").strip(),
+                "site_id": str(row.get("site_id") or "").strip(),
+                "site_code": str(row.get("site_code") or "").strip(),
+                "site_name": str(row.get("site_name") or "").strip(),
+                "company_code": str(row.get("company_code") or "").strip(),
+                "user_id": str(row.get("user_id") or "").strip(),
+                "username": str(row.get("username") or "").strip(),
+                "user_role": str(row.get("user_role") or "").strip(),
+                "soc_role": str(row.get("soc_role") or "").strip(),
+            }
+            for row in rows
+        ]
+        return {
+            "tenant_code": str(target_tenant.get("tenant_code") or "").strip().upper(),
+            "tenant_id": str(target_tenant.get("id") or "").strip(),
+            "site_code": normalized_site_code or None,
+            "count": len(employees),
+            "employees": employees,
+        }
+    except Exception as exc:
+        logger.exception(
+            "sentrix_hq_employee_truth_bridge_failed",
+            extra={
+                "tenant_code": str(target_tenant.get("tenant_code") or "").strip().upper(),
+                "site_code": normalized_site_code or None,
+            },
+            exc_info=exc,
+        )
+        raise HTTPException(status_code=503, detail="employee truth bridge failed") from exc
 
 
 @bridge_router.get("/artifact/download")

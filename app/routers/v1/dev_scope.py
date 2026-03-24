@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 
 from ...deps import apply_rate_limit, get_db_conn, require_roles
+from .employees import _repair_active_employee_rows_for_scope
 from ...utils.permissions import ROLE_DEV, normalize_user_role
 from ...utils.schema_introspection import table_column_exists
 
@@ -183,6 +184,27 @@ def list_dev_employees(
         params.extend([like, like, like, like, like, like, like])
 
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
+    resolved_tenant_id = None
+    if normalized_tenant_code:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id
+                FROM tenants
+                WHERE upper(tenant_code) = upper(%s)
+                LIMIT 1
+                """,
+                (normalized_tenant_code,),
+            )
+            tenant_row = cur.fetchone()
+        resolved_tenant_id = str((tenant_row or {}).get("id") or "").strip() or None
+        if resolved_tenant_id:
+            _repair_active_employee_rows_for_scope(
+                conn,
+                tenant_id=resolved_tenant_id,
+                site_code=normalized_site_code or None,
+            )
 
     account_join_sql = ""
     account_select_sql = "NULL::uuid AS user_id, NULL::text AS user_role"

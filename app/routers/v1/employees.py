@@ -398,6 +398,246 @@ def _format_employee_code(site_code: str, sequence_no: int) -> str:
     return f"{str(site_code or '').strip().upper()}-{int(sequence_no):03d}"
 
 
+def _normalized_employee_name_key(value: str | None) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip()).lower()
+
+
+def _repair_active_employee_rows_for_scope(
+    conn,
+    *,
+    tenant_id: str,
+    site_id: str | None = None,
+    site_code: str | None = None,
+) -> int:
+    normalized_site_id = str(site_id or "").strip()
+    normalized_site_code = str(site_code or "").strip()
+    if not normalized_site_id and normalized_site_code:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id
+                FROM sites
+                WHERE tenant_id = %s
+                  AND upper(site_code) = upper(%s)
+                LIMIT 1
+                """,
+                (tenant_id, normalized_site_code),
+            )
+            site_row = cur.fetchone()
+        normalized_site_id = str((site_row or {}).get("id") or "").strip()
+        if not normalized_site_id:
+            return 0
+
+    has_user_deleted = _table_column_exists(conn, "arls_users", "is_deleted")
+    has_employee_active = _table_column_exists(conn, "employees", "is_active")
+    has_employee_deleted = _table_column_exists(conn, "employees", "is_deleted")
+
+    user_clauses = [
+        "tenant_id = %s",
+        "COALESCE(is_active, TRUE) = TRUE",
+    ]
+    user_params: list[Any] = [tenant_id]
+    if has_user_deleted:
+        user_clauses.append("COALESCE(is_deleted, FALSE) = FALSE")
+    if normalized_site_id:
+        user_clauses.append("site_id = %s")
+        user_params.append(normalized_site_id)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT id, employee_id, full_name, phone, role, site_id
+            FROM arls_users
+            WHERE {" AND ".join(user_clauses)}
+            ORDER BY full_name, id
+            """,
+            tuple(user_params),
+        )
+        user_rows = cur.fetchall() or []
+
+    if not user_rows:
+        return 0
+
+    scoped_site_ids = {
+        str(row.get("site_id") or "").strip()
+        for row in user_rows
+        if str(row.get("site_id") or "").strip()
+    }
+    if normalized_site_id:
+        scoped_site_ids.add(normalized_site_id)
+    if not scoped_site_ids:
+        return 0
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT s.id, s.company_id, s.site_code
+            FROM sites s
+            WHERE s.tenant_id = %s
+              AND s.id = ANY(%s::uuid[])
+            """,
+            (tenant_id, list(scoped_site_ids)),
+        )
+        site_rows = cur.fetchall() or []
+
+    site_relations = {
+        str(row.get("id") or "").strip(): {
+            "company_id": row.get("company_id"),
+            "site_code": str(row.get("site_code") or "").strip(),
+        }
+        for row in site_rows
+        if str(row.get("id") or "").strip()
+    }
+
+    employee_clauses = ["tenant_id = %s", "site_id = ANY(%s::uuid[])"]
+    employee_params: list[Any] = [tenant_id, list(site_relations.keys())]
+    if has_employee_active:
+        employee_clauses.append("COALESCE(is_active, TRUE) = TRUE")
+    if has_employee_deleted:
+        employee_clauses.append("COALESCE(is_deleted, FALSE) = FALSE")
+
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT id, site_id, full_name
+            FROM employees
+            WHERE {" AND ".join(employee_clauses)}
+            ORDER BY full_name, id
+            """,
+            tuple(employee_params),
+        )
+        employee_rows = cur.fetchall() or []
+
+    employees_by_id: dict[str, dict[str, Any]] = {}
+    employees_by_site_and_name: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in employee_rows:
+        employee_id = str(row.get("id") or "").strip()
+        employee_site_id = str(row.get("site_id") or "").strip()
+        name_key = _normalized_employee_name_key(row.get("full_name"))
+        if not employee_id or not employee_site_id or not name_key:
+            continue
+        normalized_row = {
+            "id": row.get("id"),
+            "site_id": employee_site_id,
+            "full_name": str(row.get("full_name") or "").strip(),
+        }
+        employees_by_id[employee_id] = normalized_row
+        employees_by_site_and_name.setdefault((employee_site_id, name_key), []).append(normalized_row)
+
+    repaired = 0
+    for user_row in user_rows:
+        user_id = user_row.get("id")
+        user_site_id = str(user_row.get("site_id") or "").strip()
+        full_name = str(user_row.get("full_name") or "").strip()
+        if not user_id or not user_site_id or not full_name:
+            continue
+        if user_site_id not in site_relations:
+            continue
+
+        linked_employee_id = str(user_row.get("employee_id") or "").strip()
+        linked_row = employees_by_id.get(linked_employee_id)
+        if linked_row and linked_row.get("site_id") == user_site_id:
+            continue
+
+        name_key = _normalized_employee_name_key(full_name)
+        matched_rows = employees_by_site_and_name.get((user_site_id, name_key), [])
+        if len(matched_rows) == 1:
+            matched_row = matched_rows[0]
+            matched_employee_id = matched_row.get("id")
+            if str(matched_employee_id or "") != linked_employee_id:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE arls_users
+                        SET employee_id = %s,
+                            updated_at = timezone('utc', now())
+                        WHERE id = %s
+                        """,
+                        (matched_employee_id, user_id),
+                    )
+                repaired += 1
+            continue
+        if len(matched_rows) > 1:
+            continue
+
+        site_relation = site_relations.get(user_site_id)
+        resolved_site_code = str((site_relation or {}).get("site_code") or "").strip()
+        company_id = (site_relation or {}).get("company_id")
+        if not resolved_site_code:
+            continue
+
+        created_row: dict[str, Any] | None = None
+        for _ in range(8):
+            next_seq = _reserve_next_employee_sequence(conn, tenant_id, user_site_id)
+            employee_code = _format_employee_code(resolved_site_code, next_seq)
+            employee_id = uuid.uuid4()
+            employee_uuid = str(uuid.uuid4())
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO employees (
+                        id,
+                        employee_uuid,
+                        tenant_id,
+                        company_id,
+                        site_id,
+                        sequence_no,
+                        employee_code,
+                        full_name,
+                        phone,
+                        duty_role,
+                        soc_role,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, 'GUARD', %s,
+                        timezone('utc', now()), timezone('utc', now())
+                    )
+                    ON CONFLICT (tenant_id, employee_code) DO NOTHING
+                    RETURNING id, site_id, full_name
+                    """,
+                    (
+                        employee_id,
+                        employee_uuid,
+                        tenant_id,
+                        company_id,
+                        user_site_id,
+                        next_seq,
+                        employee_code,
+                        full_name,
+                        str(user_row.get("phone") or "").strip() or None,
+                        normalize_user_role(user_row.get("role")),
+                    ),
+                )
+                inserted = cur.fetchone()
+            if inserted:
+                created_row = {
+                    "id": inserted.get("id"),
+                    "site_id": str(inserted.get("site_id") or "").strip(),
+                    "full_name": str(inserted.get("full_name") or "").strip(),
+                }
+                break
+        if not created_row:
+            continue
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE arls_users
+                SET employee_id = %s,
+                    updated_at = timezone('utc', now())
+                WHERE id = %s
+                """,
+                (created_row["id"], user_id),
+            )
+        employees_by_id[str(created_row["id"])] = created_row
+        employees_by_site_and_name.setdefault((user_site_id, name_key), []).append(created_row)
+        repaired += 1
+
+    return repaired
+
+
 def _to_soc_sync_role(user_role: str | None, soc_role: str | None = None) -> str:
     candidates: list[str] = []
     if soc_role:
@@ -2757,6 +2997,13 @@ def list_employees(
               ON u.tenant_id = e.tenant_id
              AND u.employee_id = e.id
         """
+
+    _repair_active_employee_rows_for_scope(
+        conn,
+        tenant_id=tenant["id"],
+        site_id=effective_site_id or None,
+        site_code=effective_site_code or None,
+    )
 
     if detail:
         select_sql = """
