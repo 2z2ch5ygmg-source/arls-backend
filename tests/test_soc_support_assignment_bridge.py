@@ -1119,6 +1119,42 @@ class SocSupportAssignmentBridgeTests(unittest.TestCase):
         self.assertEqual(event.employee_code, "__SOC_OVERNIGHT__")
         self.assertEqual(event.site_code, "R692")
 
+    def test_employee_event_accepts_nested_identity_payload(self):
+        envelope = SocEventEnvelopeIn.model_validate(
+            {
+                "event_id": "soc-evt-employee-nested-1",
+                "event_type": "EMPLOYEE_UPDATED",
+                "occurred_at": "2026-03-18T00:00:00Z",
+                "ticket": {
+                    "id": 201,
+                    "tenant_id": "srs_korea",
+                    "site_id": "R692",
+                    "template_type": "직원정보",
+                    "status": "approved",
+                },
+                "template_fields": {
+                    "identity": {
+                        "tenant_code": "SRS_KOREA",
+                        "tenant_id": "tenant-1",
+                        "employee_code": "R692-0007",
+                        "site_code": "R692",
+                    },
+                    "employee": {
+                        "employee_code": "R692-0007",
+                        "name": "최유진",
+                        "site_code": "R692",
+                    },
+                },
+            }
+        )
+
+        event = _to_internal_soc_event(envelope)
+
+        self.assertEqual(event.event_type, "employee_updated")
+        self.assertEqual(event.employee_code, "R692-0007")
+        self.assertEqual(event.tenant_code, "SRS_KOREA")
+        self.assertEqual(event.site_code, "R692")
+
     @patch("app.routers.v1.integrations._resolve_employee_by_site_full_name")
     @patch("app.routers.v1.integrations._resolve_employee_by_external_key")
     def test_resolve_soc_targets_accepts_target_workers_only_for_retract(

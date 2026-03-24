@@ -6815,6 +6815,47 @@ button:disabled,
   background: rgba(255, 255, 255, 0.04);
 }
 
+:root[data-ui-theme='dark'] .schedule-upload-guidance-box,
+:root[data-ui-theme='dark'] .schedule-upload-guidance-box strong,
+:root[data-ui-theme='dark'] .schedule-upload-guidance-box p,
+:root[data-ui-theme='dark'] .schedule-upload-guidance-box ul,
+:root[data-ui-theme='dark'] .schedule-upload-guidance-box ol,
+:root[data-ui-theme='dark'] .schedule-upload-guidance-box li {
+  border-color: var(--state-warning-border);
+  background: var(--state-warning-bg);
+  color: var(--state-warning-text);
+}
+
+:root[data-ui-theme='dark'] .schedule-upload-error-box,
+:root[data-ui-theme='dark'] .schedule-upload-error-box strong,
+:root[data-ui-theme='dark'] .schedule-upload-error-box p,
+:root[data-ui-theme='dark'] .schedule-upload-error-box ul,
+:root[data-ui-theme='dark'] .schedule-upload-error-box ol,
+:root[data-ui-theme='dark'] .schedule-upload-error-box li {
+  border-color: var(--state-danger-border);
+  background: var(--state-danger-bg);
+  color: var(--state-danger-text);
+}
+
+:root[data-ui-theme='dark'] .schedule-upload-success-banner,
+:root[data-ui-theme='dark'] .schedule-upload-success-banner strong,
+:root[data-ui-theme='dark'] .schedule-upload-success-banner p {
+  border-color: var(--state-success-border);
+  background: var(--state-success-bg);
+  color: var(--state-success-text);
+}
+
+:root[data-ui-theme='dark'] .schedule-hq-site-row-disabled {
+  opacity: 0.8;
+  background: var(--state-inset-bg);
+}
+
+:root[data-ui-theme='dark'] #supportStatusHqPanel .support-status-hq-replace-note {
+  border-color: var(--state-warning-border);
+  background: var(--state-warning-bg);
+  color: var(--state-warning-text);
+}
+
 :root[data-ui-theme='dark'] .schedule-finance-tab.btn.active {
   background: rgba(249, 115, 22, 0.16);
 }
@@ -8637,6 +8678,10 @@ a:hover {
   gap: var(--space-12);
 }
 
+#view-reports.panel.card.view {
+  background: var(--bg-page);
+}
+
 #view-home > h2,
 #view-ops > h2,
 #view-requests > h2,
@@ -9937,9 +9982,9 @@ a:hover {
     position: sticky;
     top: 0;
     z-index: var(--ui-z-topbar);
-    min-height: calc(52px + var(--sat));
+    min-height: calc(56px + var(--sat));
     margin: 0;
-    padding: calc(var(--sat) + 6px) 12px 6px;
+    padding: calc(var(--sat) + 8px) 12px 8px;
     border-radius: 0;
     border: 0;
     border-bottom: 1px solid var(--ui-border-subtle);
@@ -10840,7 +10885,7 @@ a:hover {
 
 @media (min-width: 1024px) {
   :root {
-    --app-topbar-height: 44px;
+    --app-topbar-height: 56px;
     --desktop-shell-gap: 24px;
     --desktop-content-padding: 24px;
     --desktop-section-gap: 24px;

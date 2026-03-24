@@ -55,7 +55,7 @@ from ...schemas import (
     SocWorkTemplateQueryIn,
     SupportSheetWebhookIn,
 )
-from .employees import _post_employee_sync_to_soc
+from .employees import _post_employee_sync_to_soc, _to_soc_sync_role
 from .schedules import _fetch_schedule_templates, _format_schedule_template_row, _resolve_site_context_by_code
 from ...services.closing_overtime import apply_closing_overtime_from_checkout
 from ...services.p1_schedule import (
@@ -124,6 +124,37 @@ SOC_OVERTIME_EVENT_TYPES = {
     "ot_approved",
     "extra_work_approved",
 }
+SOC_EMPLOYEE_CREATED_EVENT_TYPES = {
+    "employee_created",
+    "employee_create",
+    "hr_employee_created",
+    "create_employee",
+}
+SOC_EMPLOYEE_UPDATED_EVENT_TYPES = {
+    "employee_updated",
+    "employee_update",
+    "employee_modified",
+    "employee_reactivated",
+    "employee_activated",
+    "employee_deactivated",
+    "employee_disabled",
+    "employee_enabled",
+    "hr_employee_updated",
+}
+SOC_EMPLOYEE_DELETED_EVENT_TYPES = {
+    "employee_deleted",
+    "employee_delete",
+    "employee_removed",
+    "employee_removed_from_site",
+    "employee_terminated",
+    "employee_termination",
+    "hr_employee_deleted",
+}
+SOC_EMPLOYEE_EVENT_TYPES = (
+    SOC_EMPLOYEE_CREATED_EVENT_TYPES
+    | SOC_EMPLOYEE_UPDATED_EVENT_TYPES
+    | SOC_EMPLOYEE_DELETED_EVENT_TYPES
+)
 SOC_SUPPORT_ASSIGNMENT_EVENT_TYPES = {
     "support_assignment_approved",
     "day_support_assignment_approved",
@@ -486,6 +517,578 @@ def _pick_from_mapping(data: dict[str, Any] | None, *keys: str) -> Any | None:
         if _canonical_key(str(key)) in key_set and value not in (None, ""):
             return value
     return None
+
+
+def _pick_from_mapping_raw(data: dict[str, Any] | None, *keys: str) -> tuple[Any | None, bool]:
+    if not isinstance(data, dict):
+        return None, False
+    target_keys = {_canonical_key(item) for item in keys}
+    for key, value in data.items():
+        if _canonical_key(str(key)) in target_keys:
+            return value, True
+    return None, False
+
+
+def _extract_soc_employee_payload(payload: SocEventIn) -> dict[str, Any]:
+    template_fields = payload.payload if isinstance(payload.payload, dict) else {}
+    for container_key in (
+        "employee",
+        "employee_info",
+        "employeeInfo",
+        "staff",
+        "person",
+        "member",
+        "target_employee",
+        "targetEmployee",
+    ):
+        raw, found = _pick_from_mapping_raw(template_fields, container_key)
+        if found and isinstance(raw, dict):
+            return raw
+
+    metadata = payload.metadata if isinstance(payload.metadata, dict) else {}
+    for container_key in ("employee", "employee_info", "employeeInfo", "staff", "person"):
+        raw, found = _pick_from_mapping_raw(metadata, container_key)
+        if found and isinstance(raw, dict):
+            return raw
+    return {}
+
+
+def _pick_from_soc_event(payload: SocEventIn, *keys: str) -> tuple[Any | None, bool]:
+    template_fields = payload.payload if isinstance(payload.payload, dict) else {}
+    metadata = payload.metadata if isinstance(payload.metadata, dict) else {}
+    employee_payload = _extract_soc_employee_payload(payload)
+
+    for source in (template_fields, metadata, employee_payload):
+        raw, found = _pick_from_mapping_raw(source, *keys)
+        if found:
+            return raw, True
+
+    fallback_map = {
+        _canonical_key("employee_code"): _as_text(payload.employee_code),
+        _canonical_key("site_code"): _as_text(payload.site_code),
+    }
+    for key in keys:
+        canonical = _canonical_key(key)
+        if canonical in fallback_map:
+            value = fallback_map[canonical]
+            return value, bool(value)
+    return None, False
+
+
+def _parse_boolish(value: Any) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        normalized_number = int(value)
+        if normalized_number == 1:
+            return True
+        if normalized_number == 0:
+            return False
+        return None
+
+    text = _as_text(value)
+    if not text:
+        return None
+    normalized = text.strip().lower()
+    if normalized in {
+        "1",
+        "true",
+        "t",
+        "y",
+        "yes",
+        "on",
+        "active",
+        "enabled",
+        "activate",
+        "activated",
+        "재직",
+        "재직중",
+        "사용",
+    }:
+        return True
+    if normalized in {
+        "0",
+        "false",
+        "f",
+        "n",
+        "no",
+        "off",
+        "inactive",
+        "deactivated",
+        "disabled",
+        "비활성",
+        "중지",
+        "해지",
+    }:
+        return False
+    return None
+
+
+def _pick_soc_text(payload: SocEventIn, *keys: str) -> tuple[str | None, bool]:
+    raw, found = _pick_from_soc_event(payload, *keys)
+    if not found:
+        return None, False
+    return _as_text(raw), True
+
+
+def _pick_soc_bool(payload: SocEventIn, *keys: str) -> tuple[bool | None, bool]:
+    raw, found = _pick_from_soc_event(payload, *keys)
+    if not found:
+        return None, False
+    return _parse_boolish(raw), True
+
+
+def _pick_soc_date(payload: SocEventIn, *keys: str) -> tuple[date | None, bool]:
+    raw, found = _pick_from_soc_event(payload, *keys)
+    if not found:
+        return None, False
+    return _as_date(raw), True
+
+
+def _resolve_soc_employee_event_action(payload: SocEventIn, event_type: str) -> tuple[str, bool | None]:
+    normalized = _normalize_event_type(event_type)
+
+    if normalized in {
+        "employee_deactivated",
+        "employee_disabled",
+    }:
+        return "UPSERT", False
+    if normalized in {
+        "employee_reactivated",
+        "employee_activated",
+        "employee_enabled",
+    }:
+        return "UPSERT", True
+
+    if normalized in SOC_EMPLOYEE_CREATED_EVENT_TYPES | SOC_EMPLOYEE_UPDATED_EVENT_TYPES:
+        action = "UPSERT"
+    elif normalized in SOC_EMPLOYEE_DELETED_EVENT_TYPES:
+        return "DELETE", None
+    else:
+        action = "UPSERT"
+
+    deleted_raw, has_deleted = _pick_from_soc_event(payload, "is_deleted", "deleted", "is_deleted_at_source")
+    if has_deleted and _parse_boolish(deleted_raw):
+        return "DELETE", None
+
+    status_raw, has_status = _pick_from_soc_event(payload, "status", "state", "employment_status", "employee_status")
+    if has_status:
+        status_text = _as_text(status_raw)
+        if status_text:
+            status_norm = status_text.lower()
+            if status_norm in {
+                "deleted",
+                "removed",
+                "terminate",
+                "terminated",
+                "퇴사",
+                "삭제",
+            }:
+                return "DELETE", None
+            if status_norm in {
+                "inactive",
+                "disabled",
+                "deactivated",
+                "inactive",
+                "비활성",
+            }:
+                return action, False
+            if status_norm in {"active", "enabled", "재직", "재직중"}:
+                return action, True
+
+    is_active_raw, has_is_active = _pick_from_soc_event(payload, "is_active", "active")
+    if has_is_active:
+        parsed = _parse_boolish(is_active_raw)
+        if parsed is not None:
+            return action, parsed
+
+    if normalized in SOC_EMPLOYEE_DELETED_EVENT_TYPES:
+        return "DELETE", None
+    return "UPSERT", None
+
+
+def _resolve_soc_employee_site(
+    conn,
+    tenant,
+    *,
+    site_id_text: str | None = None,
+    site_code_text: str | None = None,
+) -> dict[str, Any] | None:
+    if site_id_text:
+        return _resolve_site_by_id(conn, tenant["id"], site_id_text)
+    if site_code_text:
+        return _resolve_site_by_code(conn, tenant["id"], site_code_text)
+    return None
+
+
+def _apply_soc_employee_upsert(
+    conn,
+    *,
+    tenant,
+    payload: SocEventIn,
+    event_type: str,
+    resolved_site: dict[str, Any] | None,
+    action_is_active: bool | None,
+) -> dict[str, Any]:
+    site_id_text = _as_text(resolved_site.get("id") if isinstance(resolved_site, dict) else None)
+    if site_id_text and not isinstance(resolved_site, dict):
+        raise ValueError("site is required for employee sync")
+
+    employee_uuid_raw, has_employee_uuid = _pick_soc_text(payload, "employee_uuid", "employeeId", "employeeID")
+    if not has_employee_uuid:
+        employee_uuid_raw = str(uuid.uuid4())
+
+    employee_code = _as_text(payload.employee_code) or _as_text(_pick_from_mapping(payload.payload, "employee_code", "employeeCode"))
+    if not employee_code:
+        raise ValueError("employee_code is required for employee sync")
+
+    external_key, has_external_key = _pick_soc_text(payload, "external_employee_key", "externalEmployeeKey", "externalId", "external_id")
+    linked_employee_id, has_linked_employee_id = _pick_soc_text(payload, "linked_employee_id", "linkedEmployeeId")
+
+    existing = _resolve_employee(conn, tenant["id"], employee_code)
+    if not existing:
+        lookup_key = external_key or linked_employee_id
+        if lookup_key:
+            existing = _resolve_employee_by_external_key(
+                conn,
+                tenant_id=tenant["id"],
+                site_id=site_id_text,
+                external_key=lookup_key,
+            )
+
+    target_site = resolved_site
+    if existing and not target_site:
+        target_site = _resolve_site_by_id(conn, tenant["id"], str(existing.get("site_id") or ""))
+    if not target_site and not existing:
+        raise ValueError("site is required for employee create")
+    if not target_site:
+        raise ValueError("site is required for employee sync")
+
+    full_name, has_full_name = _pick_soc_text(
+        payload,
+        "full_name",
+        "name",
+        "employee_name",
+        "employeeName",
+        "username",
+        "display_name",
+        "displayName",
+    )
+    if not has_full_name and existing:
+        full_name = _as_text(existing.get("full_name"))
+    if not full_name:
+        full_name = _as_text(employee_code)
+
+    phone, has_phone = _pick_soc_text(payload, "phone", "mobile", "contact")
+    duty_role, has_duty_role = _pick_soc_text(payload, "duty_role", "dutyRole", "position")
+    gender, has_gender = _pick_soc_text(payload, "gender", "sex")
+    resident_no, has_resident_no = _pick_soc_text(payload, "resident_no", "residentNo")
+    birth_date, has_birth_date = _pick_soc_date(payload, "birth_date", "birthDate", "birth")
+    hire_date, has_hire_date = _pick_soc_date(payload, "hire_date", "hireDate", "employment_date")
+    leave_date, has_leave_date = _pick_soc_date(payload, "leave_date", "leaveDate", "resign_date")
+    management_no_str, has_management_no_str = _pick_soc_text(
+        payload,
+        "management_no_str",
+        "managementNo",
+        "managementNoStr",
+        "employee_no",
+    )
+    address, has_address = _pick_soc_text(payload, "address")
+    guard_training_cert_no, has_guard_training_cert_no = _pick_soc_text(payload, "guard_training_cert_no", "guardTrainingCertNo")
+    note, has_note = _pick_soc_text(payload, "note", "memo", "comment")
+    roster_docx_attachment_id, has_roster_docx_attachment_id = _pick_soc_text(payload, "roster_docx_attachment_id", "rosterDocxAttachmentId")
+    photo_attachment_id, has_photo_attachment_id = _pick_soc_text(payload, "photo_attachment_id", "photoAttachmentId")
+    soc_login_id, has_soc_login_id = _pick_soc_text(payload, "soc_login_id", "socLoginId", "username", "login_id")
+    role_value, has_role = _pick_soc_text(payload, "role", "employee_role", "user_role")
+    soc_role_value, has_soc_role = _pick_soc_text(payload, "soc_role", "socRole")
+    sequence_no_raw, has_sequence_no = _pick_soc_text(payload, "sequence_no", "sequenceNo")
+    sequence_no = _as_int(sequence_no_raw) if has_sequence_no else None
+
+    if has_soc_role or has_role:
+        user_role_value, normalized_soc_role = _to_soc_sync_role(
+            role_value,
+            soc_role_value,
+        )
+    else:
+        user_role_value = None
+        normalized_soc_role = None
+
+    duty_role_value = duty_role if has_duty_role else (str(existing.get("duty_role") or "") if existing else None)
+    if not duty_role_value:
+        duty_role_value = "GUARD"
+
+    employee_is_active = None
+    if action_is_active is not None:
+        employee_is_active = action_is_active
+    elif existing:
+        employee_is_active = existing.get("is_active")
+        if employee_is_active is None:
+            employee_is_active = True
+    else:
+        employee_is_active = True
+
+    now = datetime.now(timezone.utc)
+    if existing:
+        updates: list[str] = ["updated_at = timezone('utc', now())"]
+        values: list[Any] = []
+
+        def _append_update(column: str, value: Any, present: bool) -> None:
+            if present:
+                updates.append(f"{column} = %s")
+                values.append(value)
+
+        _append_update("employee_uuid", employee_uuid_raw, True)
+        _append_update("full_name", full_name, has_full_name)
+        _append_update("phone", phone, has_phone)
+        _append_update("company_id", target_site["company_id"], bool(target_site))
+        _append_update("site_id", target_site["id"], bool(target_site))
+        _append_update("duty_role", duty_role_value, has_duty_role or not bool(existing.get("duty_role")))
+        if has_sequence_no:
+            _append_update("sequence_no", sequence_no, True)
+        _append_update("soc_login_id", soc_login_id, has_soc_login_id)
+        _append_update("soc_role", normalized_soc_role, has_soc_role or has_role)
+        _append_update("employee_code", employee_code, bool(employee_code != str(existing.get("employee_code") or "")))
+        _append_update("gender", gender, has_gender)
+        _append_update("resident_no", resident_no, has_resident_no)
+        _append_update("birth_date", birth_date, has_birth_date)
+        _append_update("address", address, has_address)
+        _append_update("hire_date", hire_date, has_hire_date)
+        _append_update("leave_date", leave_date, has_leave_date)
+        _append_update("guard_training_cert_no", guard_training_cert_no, has_guard_training_cert_no)
+        _append_update("note", note, has_note)
+        _append_update("roster_docx_attachment_id", roster_docx_attachment_id, has_roster_docx_attachment_id)
+        _append_update("photo_attachment_id", photo_attachment_id, has_photo_attachment_id)
+        _append_update("external_employee_key", external_key, has_external_key)
+        _append_update("linked_employee_id", linked_employee_id, has_linked_employee_id)
+        _append_update("is_active", employee_is_active, action_is_active is not None)
+        _append_update("management_no_str", management_no_str, has_management_no_str)
+
+        if action_is_active is not None:
+            _append_update("is_active", employee_is_active, True)
+
+        if not has_sequence_no and existing and existing.get("sequence_no") is not None:
+            values.append(None)
+            updates.append("sequence_no = %s")
+
+        update_sql = ", ".join(updates)
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                UPDATE employees
+                SET {update_sql}
+                WHERE id = %s
+                RETURNING id, employee_code, full_name, employee_uuid, site_id, COALESCE(is_active, TRUE) AS is_active
+                """,
+                tuple(values + [str(existing["id"])]),
+            )
+            updated = cur.fetchone()
+        if not updated:
+            raise ValueError("failed to sync employee")
+        return {
+            "employee_action": "UPSERT",
+            "employee_code": str(updated.get("employee_code") or employee_code),
+            "employee_id": str(updated.get("id") or ""),
+            "is_active": bool(updated.get("is_active") if updated else bool(employee_is_active)),
+            "changed": True,
+            "sync_mode": "UPSERT",
+        }
+
+    insert_id = str(uuid.uuid4())
+    row = {
+        "id": insert_id,
+        "employee_uuid": employee_uuid_raw,
+        "tenant_id": tenant["id"],
+        "company_id": target_site["company_id"],
+        "site_id": target_site["id"],
+        "sequence_no": sequence_no,
+        "employee_code": employee_code,
+        "full_name": full_name,
+        "phone": phone,
+        "duty_role": duty_role_value,
+        "soc_role": normalized_soc_role,
+        "soc_login_id": soc_login_id,
+        "gender": gender,
+        "resident_no": resident_no,
+        "birth_date": birth_date,
+        "address": address,
+        "hire_date": hire_date,
+        "leave_date": leave_date,
+        "guard_training_cert_no": guard_training_cert_no,
+        "note": note,
+        "roster_docx_attachment_id": roster_docx_attachment_id,
+        "photo_attachment_id": photo_attachment_id,
+        "external_employee_key": external_key,
+        "linked_employee_id": linked_employee_id,
+        "is_active": employee_is_active,
+        "management_no_str": management_no_str,
+    }
+
+    if row["phone"] is None and has_phone is False:
+        row["phone"] = None
+
+    if row["sequence_no"] is None and has_sequence_no:
+        row["sequence_no"] = 0
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO employees (
+                id, employee_uuid, tenant_id, company_id, site_id, sequence_no, employee_code, full_name,
+                phone, duty_role, soc_role, soc_login_id, gender, resident_no,
+                birth_date, address, hire_date, leave_date, guard_training_cert_no,
+                management_no_str, note, roster_docx_attachment_id, photo_attachment_id,
+                external_employee_key, linked_employee_id, is_active, is_deleted,
+                created_at, updated_at
+            )
+            VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s, FALSE,
+                timezone('utc', now()), timezone('utc', now())
+            )
+            ON CONFLICT (tenant_id, employee_code) DO UPDATE
+            SET employee_uuid = EXCLUDED.employee_uuid,
+                company_id = EXCLUDED.company_id,
+                site_id = EXCLUDED.site_id,
+                full_name = COALESCE(EXCLUDED.full_name, employees.full_name),
+                phone = COALESCE(EXCLUDED.phone, employees.phone),
+                duty_role = COALESCE(EXCLUDED.duty_role, employees.duty_role),
+                soc_role = COALESCE(EXCLUDED.soc_role, employees.soc_role),
+                soc_login_id = COALESCE(EXCLUDED.soc_login_id, employees.soc_login_id),
+                gender = COALESCE(EXCLUDED.gender, employees.gender),
+                resident_no = COALESCE(EXCLUDED.resident_no, employees.resident_no),
+                birth_date = COALESCE(EXCLUDED.birth_date, employees.birth_date),
+                address = COALESCE(EXCLUDED.address, employees.address),
+                hire_date = COALESCE(EXCLUDED.hire_date, employees.hire_date),
+                leave_date = COALESCE(EXCLUDED.leave_date, employees.leave_date),
+                guard_training_cert_no = COALESCE(EXCLUDED.guard_training_cert_no, employees.guard_training_cert_no),
+                management_no_str = COALESCE(EXCLUDED.management_no_str, employees.management_no_str),
+                note = COALESCE(EXCLUDED.note, employees.note),
+                roster_docx_attachment_id = COALESCE(EXCLUDED.roster_docx_attachment_id, employees.roster_docx_attachment_id),
+                photo_attachment_id = COALESCE(EXCLUDED.photo_attachment_id, employees.photo_attachment_id),
+                external_employee_key = COALESCE(EXCLUDED.external_employee_key, employees.external_employee_key),
+                linked_employee_id = COALESCE(EXCLUDED.linked_employee_id, employees.linked_employee_id),
+                is_active = COALESCE(EXCLUDED.is_active, employees.is_active),
+                updated_at = timezone('utc', now())
+            RETURNING id, employee_code, full_name, employee_uuid, site_id, COALESCE(is_active, TRUE) AS is_active
+            """,
+            (
+                row["id"],
+                row["employee_uuid"],
+                row["tenant_id"],
+                row["company_id"],
+                row["site_id"],
+                row["sequence_no"],
+                row["employee_code"],
+                row["full_name"],
+                row["phone"],
+                row["duty_role"],
+                row["soc_role"],
+                row["soc_login_id"],
+                row["gender"],
+                row["resident_no"],
+                row["birth_date"],
+                row["address"],
+                row["hire_date"],
+                row["leave_date"],
+                row["guard_training_cert_no"],
+                row["management_no_str"],
+                row["note"],
+                row["roster_docx_attachment_id"],
+                row["photo_attachment_id"],
+                row["external_employee_key"],
+                row["linked_employee_id"],
+                row["is_active"],
+            ),
+        )
+        inserted = cur.fetchone()
+
+    if not inserted:
+        raise ValueError("failed to upsert employee")
+
+    return {
+        "employee_action": "UPSERT",
+        "employee_code": str(inserted.get("employee_code") or employee_code),
+        "employee_id": str(inserted.get("id") or ""),
+        "is_active": bool(inserted.get("is_active") if inserted else bool(employee_is_active)),
+        "changed": True,
+        "sync_mode": "UPSERT",
+    }
+
+
+def _delete_soc_employee(
+    conn,
+    *,
+    tenant,
+    payload: SocEventIn,
+    resolved_site: dict[str, Any] | None,
+) -> dict[str, Any]:
+    site_id_text = _as_text(resolved_site.get("id") if isinstance(resolved_site, dict) else None)
+    employee_code = _as_text(payload.employee_code)
+    external_key, has_external_key = _pick_soc_text(payload, "external_employee_key", "externalEmployeeKey", "externalId", "external_id")
+    linked_employee_id, has_linked_employee_id = _pick_soc_text(payload, "linked_employee_id", "linkedEmployeeId")
+
+    if not employee_code and not has_external_key and not has_linked_employee_id:
+        raise ValueError("employee_code is required for employee delete")
+
+    existing = _resolve_employee(conn, tenant["id"], employee_code) if employee_code else None
+    if not existing and has_external_key:
+        existing = _resolve_employee_by_external_key(
+            conn,
+            tenant_id=tenant["id"],
+            site_id=site_id_text,
+            external_key=external_key,
+        )
+    if not existing and has_linked_employee_id:
+        existing = _resolve_employee_by_external_key(
+            conn,
+            tenant_id=tenant["id"],
+            site_id=site_id_text,
+            external_key=linked_employee_id,
+        )
+
+    if not existing:
+        return {
+            "employee_action": "DELETE",
+            "employee_code": employee_code or (str(existing.get("employee_code") if existing else "")),
+            "employee_id": "",
+            "changed": False,
+            "sync_mode": "DELETE",
+            "reason": "employee not found",
+        }
+
+    employee_row_id = str(existing["id"])
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE arls_users
+            SET employee_id = NULL,
+                is_active = FALSE,
+                is_deleted = TRUE,
+                deleted_at = timezone('utc', now()),
+                updated_at = timezone('utc', now())
+            WHERE tenant_id = %s
+              AND COALESCE(is_deleted, FALSE) = FALSE
+              AND employee_id = %s
+            """,
+            (tenant["id"], employee_row_id),
+        )
+        cur.execute(
+            "DELETE FROM employees WHERE tenant_id = %s AND id = %s",
+            (tenant["id"], employee_row_id),
+        )
+
+    return {
+        "employee_action": "DELETE",
+        "employee_code": str(existing.get("employee_code") or employee_code),
+        "employee_id": employee_row_id,
+        "changed": True,
+        "sync_mode": "DELETE",
+    }
 
 
 def _is_support_assignment_retract_state(value: Any) -> bool:
@@ -870,18 +1473,64 @@ def _normalize_soc_webhook_event_type(value: str | None) -> str:
 def _to_internal_soc_event(payload: SocEventEnvelopeIn) -> SocEventIn:
     template_fields_raw = payload.template_fields if isinstance(payload.template_fields, dict) else {}
     template_fields = {str(key): value for key, value in template_fields_raw.items()}
+    identity_fields = (
+        template_fields.get("identity")
+        if isinstance(template_fields.get("identity"), dict)
+        else {}
+    )
+    employee_fields = (
+        template_fields.get("employee")
+        if isinstance(template_fields.get("employee"), dict)
+        else {}
+    )
+    site_fields = (
+        template_fields.get("site")
+        if isinstance(template_fields.get("site"), dict)
+        else {}
+    )
     ticket = payload.ticket
     canonical_event_type = _normalize_soc_webhook_event_type(payload.event_type)
 
     tenant_code = _as_text(ticket.tenant_id) or _as_text(
         _pick_from_mapping(template_fields, "tenant_code", "tenantCode", "tenant_id", "tenantId", "테넌트코드")
+        or _pick_from_mapping(identity_fields, "tenant_code", "tenantCode", "tenant_id", "tenantId")
     )
+    if not tenant_code:
+        tenant_code = _as_text(
+            _pick_from_mapping(
+                site_fields,
+                "tenant_code",
+                "tenantCode",
+                "tenant_id",
+                "tenantId",
+            )
+        )
     if not tenant_code:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ticket.tenant_id is required")
 
     employee_code = _as_text(
         _pick_from_mapping(
             template_fields,
+            "employee_code",
+            "employeeCode",
+            "emp_code",
+            "empCode",
+            "사번",
+            "직원코드",
+            "근무자코드",
+        )
+        or _pick_from_mapping(
+            identity_fields,
+            "employee_code",
+            "employeeCode",
+            "emp_code",
+            "empCode",
+            "사번",
+            "직원코드",
+            "근무자코드",
+        )
+        or _pick_from_mapping(
+            employee_fields,
             "employee_code",
             "employeeCode",
             "emp_code",
@@ -910,12 +1559,27 @@ def _to_internal_soc_event(payload: SocEventEnvelopeIn) -> SocEventIn:
 
     site_code = _as_text(ticket.site_id) or _as_text(
         _pick_from_mapping(template_fields, "site_code", "siteCode", "site_id", "siteId", "현장코드")
+        or _pick_from_mapping(identity_fields, "site_code", "siteCode", "site_id", "siteId")
+        or _pick_from_mapping(employee_fields, "site_code", "siteCode", "site_id", "siteId")
+        or _pick_from_mapping(site_fields, "site_code", "siteCode", "site_id", "siteId")
     )
+    if not site_code:
+        site_code = _as_text(
+            _pick_from_mapping(
+                identity_fields,
+                "site_code",
+                "siteCode",
+                "site_id",
+                "siteId",
+            )
+        )
     company_code = _as_text(
         _pick_from_mapping(template_fields, "company_code", "companyCode", "company_id", "companyId", "회사코드")
+        or _pick_from_mapping(identity_fields, "company_code", "companyCode", "company_id", "companyId")
     )
     work_date = _as_date(
         _pick_from_mapping(template_fields, "work_date", "workDate", "date", "근무일", "근무일자")
+        or _pick_from_mapping(employee_fields, "work_date", "workDate")
     )
     approved_minutes = _as_int(
         _pick_from_mapping(
@@ -3400,6 +4064,15 @@ def _apply_soc_event(conn, *, tenant, payload: SocEventIn, event_type: str) -> d
         or _as_text(_pick_from_mapping(template_fields, "site_code", "siteCode", "site_id", "siteId"))
     )
     site = _resolve_site_by_code(conn, tenant["id"], site_code_hint) if site_code_hint else None
+    employee_site_id_hint, _ = _pick_soc_text(payload, "site_id", "siteId")
+    if not site:
+        resolved_site = _resolve_soc_employee_site(
+            conn,
+            tenant,
+            site_id_text=employee_site_id_hint,
+            site_code_text=site_code_hint,
+        )
+        site = resolved_site
 
     if (
         event_type in SOC_LEAVE_EVENT_TYPES
@@ -3439,6 +4112,40 @@ def _apply_soc_event(conn, *, tenant, payload: SocEventIn, event_type: str) -> d
         "soc_overtime_enabled",
         "soc_closing_ot_enabled",
     )
+
+    if event_type in SOC_EMPLOYEE_EVENT_TYPES:
+        handlers_run.append("employee_sync")
+        action, action_is_active = _resolve_soc_employee_event_action(payload=payload, event_type=event_type)
+        employee_site = _resolve_soc_employee_site(
+            conn,
+            tenant,
+            site_id_text=employee_site_id_hint,
+            site_code_text=site_code_hint,
+        )
+        if employee_site:
+            site = employee_site
+            if not applied_changes.get("site_code"):
+                applied_changes["site_code"] = employee_site.get("site_code")
+        if action == "DELETE":
+            employee_result = _delete_soc_employee(
+                conn,
+                tenant=tenant,
+                payload=payload,
+                resolved_site=employee_site,
+            )
+            applied_changes["employee_sync"] = employee_result
+        else:
+            employee_result = _apply_soc_employee_upsert(
+                conn,
+                tenant=tenant,
+                payload=payload,
+                event_type=event_type,
+                resolved_site=employee_site,
+                action_is_active=action_is_active,
+            )
+            applied_changes["employee_sync"] = employee_result
+            if employee_result.get("employee_code"):
+                applied_changes["employee_code"] = employee_result.get("employee_code")
 
     if event_type in SOC_LEAVE_EVENT_TYPES:
         handlers_run.append("leave_override")

@@ -3010,13 +3010,6 @@ def list_employees(
              AND u.employee_id = e.id
         """
 
-    _repair_active_employee_rows_for_scope(
-        conn,
-        tenant_id=tenant["id"],
-        site_id=effective_site_id or None,
-        site_code=effective_site_code or None,
-    )
-
     if detail:
         select_sql = """
             SELECT e.id, e.tenant_id,

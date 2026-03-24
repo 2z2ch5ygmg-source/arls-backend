@@ -126,7 +126,6 @@ from ...services.apple_weekly_truth import (
     build_apple_weekly_truth_failure_contract,
     normalize_week_start,
 )
-from .employees import _repair_active_employee_rows_for_scope
 from ...services.push_notifications import send_push_notification_to_users
 from ...utils.permissions import can_manage_schedule, is_super_admin, normalize_role, normalize_user_role
 from ...utils.schema_introspection import table_column_exists
@@ -14144,11 +14143,6 @@ def get_sentrix_hq_employee_truth_bridge(
     target_tenant = _resolve_sentrix_bridge_tenant(conn, tenant_code)
     normalized_site_code = str(site_code or "").strip().upper()
     try:
-        _repair_active_employee_rows_for_scope(
-            conn,
-            tenant_id=str(target_tenant.get("id") or "").strip(),
-            site_code=normalized_site_code or None,
-        )
         has_employee_active = table_column_exists(conn, "employees", "is_active")
         has_employee_deleted = table_column_exists(conn, "employees", "is_deleted")
         has_site_active = table_column_exists(conn, "sites", "is_active")

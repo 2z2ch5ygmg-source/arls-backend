@@ -8707,6 +8707,7 @@ async function onReportsAppleRun({ retry = false, progressController = null } = 
 
 async function loadReportsViewPresenter() {
   if (!state.reports) state.reports = createInitialReportsState();
+  applyUiTheme(readStoredUiTheme());
   setReportsOwnerMonthValue(state.reports.month || state.schedule?.month || toMonthKey(new Date()), { syncInputs: true });
   applyAppleTenantScopedUiVisibility();
   renderReportsWorkspacePanels();
@@ -22253,12 +22254,14 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
       parsedParams.set('tab', getDefaultReportsViewTab());
     }
     route = ROUTE_REPORTS;
+    applyUiTheme(readStoredUiTheme());
   }
   if (route === ROUTE_SCHEDULE_REPORTS) {
     if (!parsedParams.get('tab')) {
       parsedParams.set('tab', 'finance');
     }
     route = ROUTE_REPORTS;
+    applyUiTheme(readStoredUiTheme());
   }
   if (
     route === ROUTE_ADMIN_EMPLOYEES_NEW
