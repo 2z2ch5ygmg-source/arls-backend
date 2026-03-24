@@ -9947,6 +9947,36 @@ function clearLoginFieldErrors() {
   clearLoginCredentialFailureFeedback();
 }
 
+function resetLoginPasswordFieldState() {
+  const passwordEl = $('#password');
+  const toggleBtn = $('#togglePasswordBtn');
+  if (passwordEl) {
+    passwordEl.value = '';
+    passwordEl.type = 'password';
+  }
+  if (toggleBtn) {
+    toggleBtn.setAttribute('aria-pressed', 'false');
+    toggleBtn.setAttribute('aria-label', '비밀번호 보기');
+    toggleBtn.setAttribute('title', '비밀번호 보기');
+    toggleBtn.innerHTML = `
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M1.8 10s3-5.2 8.2-5.2 8.2 5.2 8.2 5.2-3 5.2-8.2 5.2S1.8 10 1.8 10Z"></path>
+        <circle cx="10" cy="10" r="2.6"></circle>
+      </svg>
+    `;
+  }
+}
+
+function resetVisibleLoginFormState() {
+  const tenantEl = $('#tenantCode');
+  const usernameEl = $('#username');
+  if (tenantEl) tenantEl.value = '';
+  if (usernameEl) usernameEl.value = '';
+  resetLoginPasswordFieldState();
+  clearLoginFieldErrors();
+  setAuthMessage('');
+}
+
 function getLoginCredentialFeedbackElements() {
   const usernameInput = $('#username');
   const passwordInput = $('#password');
@@ -18251,6 +18281,16 @@ function getLoginPreferenceSnapshot() {
 async function saveLoginPreferences() {
   const pref = getLoginPreferenceSnapshot();
   writeLocalJSON(LOGIN_PREF_KEY, pref);
+  await securePasswordRemove();
+}
+
+async function clearSavedLoginPreferencesForLogout() {
+  const pref = getLoginPreferenceSnapshot();
+  writeLocalJSON(LOGIN_PREF_KEY, {
+    ...pref,
+    tenantCode: '',
+    username: '',
+  });
   await securePasswordRemove();
 }
 
@@ -30635,6 +30675,7 @@ function showAuthPanel() {
   updateRouteHash(ROUTE_LOGIN, { replace: true });
   closeConfirmDialog({ restoreFocus: false });
   closeDrawer();
+  resetVisibleLoginFormState();
   renderUserBadge();
   renderBrandArea();
   renderDevTenantContextBar();
@@ -54517,7 +54558,7 @@ async function onLoginSubmit(event) {
     state.pendingRouteAfterLogin = DEFAULT_AUTH_ROUTE;
     ensurePolling();
     restartScheduleLiveRefreshAfterAuth();
-    setAuthMessage('로그인 성공', 'success');
+    setAuthMessage('');
     clearLoginFieldErrors();
   } catch (err) {
     const message = normalizeAuthError(err);
@@ -58272,6 +58313,7 @@ function bindUiEvents() {
         acceptVariant: 'btn-destructive',
         triggerEl: actionEl,
         onAccept: async () => {
+          await clearSavedLoginPreferencesForLogout();
           clearSession();
           stopPolling();
           closeSheet();

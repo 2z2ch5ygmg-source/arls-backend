@@ -31,9 +31,16 @@
     <div id="app">
       <header class="topbar app-topbar">
         <button id="btnDrawerOpen" class="icon-btn hamburgerBtn hidden" type="button" data-action="open-drawer" aria-label="메뉴 열기">☰</button>
-        <div class="topbar-brand" aria-label="Sentrix HR">
+        <button
+          id="btnTopbarBrandHome"
+          class="topbar-brand topbar-brand-button"
+          type="button"
+          data-action="drawer-open-route"
+          data-route="/home"
+          aria-label="홈으로 이동"
+        >
           <span class="topbar-wordmark" role="img" aria-label="Sentrix HR"></span>
-        </div>
+        </button>
         <div class="topbar-actions">
           <div id="topbarSessionInfo" class="topbar-session-info hidden" aria-live="polite"></div>
           <button
@@ -77,7 +84,7 @@
               <form id="loginForm" class="stack auth-form" novalidate>
                 <label class="input-field auth-input-field" for="tenantCode">
                   <span class="auth-field-label">테넌트 코드</span>
-                  <input id="tenantCode" list="recentTenantList" autocomplete="organization" placeholder="예: SRS_KOREA" required />
+                  <input id="tenantCode" list="recentTenantList" autocomplete="organization" required />
                   <datalist id="recentTenantList"></datalist>
                   <span id="tenantHelper" class="input-helper">접속할 테넌트 코드를 입력해 주세요.</span>
                   <span id="tenantError" class="input-error hidden"></span>

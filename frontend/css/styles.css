@@ -209,8 +209,8 @@
   --app-topbar-border-width: 1px;
   --app-topbar-border-color: var(--ui-border-strong);
   --app-topbar-bg: var(--bg-surface);
-  --app-topbar-wordmark-width: 176px;
-  --app-topbar-wordmark-height: 18px;
+  --app-topbar-wordmark-width: 168px;
+  --app-topbar-wordmark-height: 17px;
   --app-topbar-icon-size: 42px;
 
   /* Dark tokens (prepared only; not applied yet) */
@@ -436,6 +436,14 @@ h3 {
   display: inline-flex;
   align-items: center;
   min-width: 0;
+}
+
+.topbar-brand-button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
 }
 
 .topbar-wordmark {
@@ -12192,8 +12200,8 @@ a:hover {
     --app-topbar-border-width: 1px;
     --app-topbar-border-color: var(--ui-border-strong);
     --app-topbar-bg: var(--bg-surface);
-    --app-topbar-wordmark-width: 204px;
-    --app-topbar-wordmark-height: 21px;
+    --app-topbar-wordmark-width: 196px;
+    --app-topbar-wordmark-height: 20px;
     --app-topbar-icon-size: 42px;
   }
 
@@ -22154,6 +22162,110 @@ button.attendance-status-special-card.active {
 
 :root[data-ui-theme='dark'] .notices-list-item {
   border-bottom-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+:root[data-ui-theme='dark'] .notices-compose-panel,
+:root[data-ui-theme='dark'] .notices-detail-table-wrap,
+:root[data-ui-theme='dark'] .notices-table-picker,
+:root[data-ui-theme='dark'] .notices-compose-table,
+:root[data-ui-theme='dark'] .notices-compose-poll-modal {
+  background: var(--bg-surface-elevated);
+  border-color: var(--ui-border-subtle);
+}
+
+:root[data-ui-theme='dark'] .notices-table-picker {
+  box-shadow: var(--shadow-card);
+}
+
+:root[data-ui-theme='dark'] .notices-table-picker-head strong,
+:root[data-ui-theme='dark'] .notices-table-picker-head span {
+  color: var(--ui-text-primary);
+}
+
+:root[data-ui-theme='dark'] .notices-table-picker-cell {
+  border-color: var(--ui-border-subtle);
+  background: var(--ui-bg-surface);
+}
+
+:root[data-ui-theme='dark'] .notices-table-picker-cell.is-active {
+  border-color: var(--ui-accent);
+  background: rgba(255, 122, 26, 0.18);
+}
+
+:root[data-ui-theme='dark'] .notices-compose-settings-panel .input-field select {
+  background: var(--ui-bg-surface);
+  color: var(--ui-text-primary);
+}
+
+:root[data-ui-theme='dark'] .notice-meta-tag {
+  border-color: var(--ui-border-subtle);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ui-text-secondary);
+}
+
+:root[data-ui-theme='dark'] .notice-meta-tag-neutral {
+  color: var(--ui-text-secondary);
+}
+
+:root[data-ui-theme='dark'] .notice-meta-tag-accent {
+  border-color: rgba(255, 122, 26, 0.28);
+  background: rgba(255, 122, 26, 0.16);
+  color: #ffb97a;
+}
+
+:root[data-ui-theme='dark'] .notices-segmented-control {
+  background: var(--ui-bg-surface);
+  border-color: var(--ui-border-subtle);
+}
+
+:root[data-ui-theme='dark'] .notices-segmented-option.is-active {
+  background: rgba(255, 122, 26, 0.16);
+  color: var(--ui-accent);
+  box-shadow: none;
+}
+
+:root[data-ui-theme='dark'] .notices-segmented-option.is-accent.is-active {
+  background: rgba(255, 122, 26, 0.24);
+  color: #ffd7b5;
+}
+
+:root[data-ui-theme='dark'] .notices-detail-table th,
+:root[data-ui-theme='dark'] .notices-compose-table th,
+:root[data-ui-theme='dark'] .notices-compose-poll-preview-list,
+:root[data-ui-theme='dark'] .notices-detail-table td,
+:root[data-ui-theme='dark'] .notices-compose-table td,
+:root[data-ui-theme='dark'] .notices-poll-result-bar {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--ui-text-primary);
+}
+
+:root[data-ui-theme='dark'] .notices-detail-table th,
+:root[data-ui-theme='dark'] .notices-compose-table th {
+  background: var(--ui-bg-surface);
+  color: var(--ui-text-primary);
+}
+
+:root[data-ui-theme='dark'] .notices-poll-result-bar {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+:root[data-ui-theme='dark'] .notices-detail-image,
+:root[data-ui-theme='dark'] .notices-image-preview {
+  background: var(--ui-bg-surface);
+  border-color: var(--ui-border-subtle);
+}
+
+:root[data-ui-theme='dark'] .notices-switch-track {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+:root[data-ui-theme='dark'] .notices-switch-track::after {
+  background: #f8fafc;
+  box-shadow: 0 1px 3px rgba(3, 7, 18, 0.45);
+}
+
+:root[data-ui-theme='dark'] .notices-compose-poll-modal {
+  box-shadow: var(--shadow-modal);
 }
 
 .notices-detail-panel,
