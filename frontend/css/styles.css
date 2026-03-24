@@ -444,6 +444,16 @@ h3 {
   padding: 0;
   margin: 0;
   cursor: pointer;
+  min-height: auto;
+  border-radius: 0;
+}
+
+.topbar-brand-button:hover,
+.topbar-brand-button:active,
+.topbar-brand-button:focus-visible {
+  background: transparent;
+  box-shadow: none;
+  outline: none;
 }
 
 .topbar-wordmark {
