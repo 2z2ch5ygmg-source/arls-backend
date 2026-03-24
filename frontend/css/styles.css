@@ -203,6 +203,7 @@
 
   --shadow-level-card: var(--shadow-card);
   --shadow-level-modal: var(--shadow-modal);
+  --app-topbar-height: 44px;
 
   /* Dark tokens (prepared only; not applied yet) */
   --dark-bg-base: #0f172a;
@@ -392,7 +393,7 @@ h3 {
   padding-right: var(--space-12);
   padding-bottom: var(--space-12);
   padding-left: var(--space-12);
-  min-height: calc(56px + var(--sat));
+  min-height: calc(var(--app-topbar-height) + var(--sat));
   margin-bottom: var(--space-8);
 }
 
@@ -1112,7 +1113,7 @@ body:has(#authView:not(.hidden)) #app {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  border: 1.5px solid #cad3df;
+  border: 1px solid #cad3df;
   border-radius: 4px;
   background: #ffffff;
   box-shadow:
@@ -1134,8 +1135,8 @@ body:has(#authView:not(.hidden)) #app {
   content: '';
   width: 7px;
   height: 4px;
-  border-left: 1.8px solid #ffffff;
-  border-bottom: 1.8px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-bottom: 1px solid #ffffff;
   transform: rotate(-45deg) translate(0, -1px) scale(0.82);
   opacity: 0;
   transition:
@@ -1860,7 +1861,7 @@ button:disabled,
   min-height: 44px;
   border-radius: var(--radius-8);
   border: 1px solid transparent;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   color: var(--text-secondary);
   background: transparent;
   width: 100%;
@@ -2621,7 +2622,7 @@ button:disabled,
   height: 120px;
   transform: translate(-50%, -50%);
   border-radius: 999px;
-  border: 2px dashed rgba(249, 115, 22, 0.5);
+  border: 1px dashed rgba(249, 115, 22, 0.5);
   background: rgba(249, 115, 22, 0.09);
 }
 
@@ -7488,7 +7489,7 @@ a:hover {
 
 .schedule-create-tab {
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
   font-size: 0.95rem;
@@ -7634,7 +7635,7 @@ a:hover {
   width: 4px;
   height: 9px;
   border: solid #fff;
-  border-width: 0 2px 2px 0;
+  border-width: 0 1px 1px 0;
   transform: rotate(45deg);
 }
 
@@ -8422,7 +8423,7 @@ a:hover {
     min-height: 36px;
     padding: 8px 12px;
     border: none;
-    border-bottom: 2px solid transparent;
+    border-bottom: 1px solid transparent;
     border-radius: 0;
     background: transparent;
     color: var(--text-secondary);
@@ -9519,7 +9520,7 @@ a:hover {
 
 @media (max-width: 1023px) {
   .topbar {
-    min-height: calc(56px + var(--sat));
+    min-height: calc(var(--app-topbar-height) + var(--sat));
     padding-top: calc(var(--sat) + 8px);
     padding-bottom: 8px;
     border-radius: var(--ui-radius-10);
@@ -9982,9 +9983,12 @@ a:hover {
     position: sticky;
     top: 0;
     z-index: var(--ui-z-topbar);
-    min-height: calc(56px + var(--sat));
+    min-height: calc(var(--app-topbar-height) + var(--sat));
     margin: 0;
-    padding: calc(var(--sat) + 8px) 12px 8px;
+    padding-top: calc(var(--sat));
+    padding-bottom: 0;
+    padding-right: 12px;
+    padding-left: 12px;
     border-radius: 0;
     border: 0;
     border-bottom: 1px solid var(--ui-border-subtle);
@@ -10134,7 +10138,7 @@ a:hover {
   .bottom-tab {
     min-height: 44px;
     border: 0;
-    border-bottom: 2px solid transparent;
+    border-bottom: 1px solid transparent;
     border-radius: 0;
     color: var(--ui-text-tertiary);
     font-size: var(--ui-text-11);
@@ -10671,7 +10675,7 @@ a:hover {
     font-size: 14px;
     font-weight: 600;
     color: var(--ui-text-secondary);
-    border-bottom: 2px solid transparent;
+    border-bottom: 1px solid transparent;
   }
 
   .desktop-secondary-tab.active {
@@ -10885,7 +10889,6 @@ a:hover {
 
 @media (min-width: 1024px) {
   :root {
-    --app-topbar-height: 56px;
     --desktop-shell-gap: 24px;
     --desktop-content-padding: 24px;
     --desktop-section-gap: 24px;
@@ -12935,7 +12938,7 @@ textarea::placeholder {
   height: 44px;
   padding: 0 18px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   border-radius: 0;
   background: transparent;
   color: var(--ui-text-secondary);
@@ -13002,7 +13005,7 @@ textarea::placeholder {
   min-height: 44px;
   padding: 0 18px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   border-radius: 0;
   background: transparent;
   color: var(--ui-text-secondary);
@@ -13074,7 +13077,7 @@ textarea::placeholder {
   background: none;
   overflow: visible;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   margin-bottom: -1px;
 }
 
@@ -14579,7 +14582,7 @@ textarea::placeholder {
   height: 44px;
   padding: 0 18px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   border-radius: 0;
   background: none;
   margin-bottom: -1px;
@@ -16036,7 +16039,7 @@ textarea::placeholder {
   min-height: 44px;
   padding: 0 14px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   background: none;
   color: var(--ui-text-secondary);
   font-size: var(--ui-type-body-sm-size);
@@ -19457,7 +19460,7 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .status-pill {
   min-height: 22px;
   padding: 0 9px;
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   background: #fff;
   font-size: 10px;
   line-height: 1;
