@@ -209,8 +209,8 @@
   --app-topbar-border-width: 1px;
   --app-topbar-border-color: var(--ui-border-strong);
   --app-topbar-bg: var(--bg-surface);
-  --app-topbar-wordmark-width: 184px;
-  --app-topbar-wordmark-height: 19px;
+  --app-topbar-wordmark-width: 176px;
+  --app-topbar-wordmark-height: 18px;
   --app-topbar-icon-size: 42px;
 
   /* Dark tokens (prepared only; not applied yet) */
@@ -12192,8 +12192,8 @@ a:hover {
     --app-topbar-border-width: 1px;
     --app-topbar-border-color: var(--ui-border-strong);
     --app-topbar-bg: var(--bg-surface);
-    --app-topbar-wordmark-width: 213px;
-    --app-topbar-wordmark-height: 22px;
+    --app-topbar-wordmark-width: 204px;
+    --app-topbar-wordmark-height: 21px;
     --app-topbar-icon-size: 42px;
   }
 
