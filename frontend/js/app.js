@@ -28850,38 +28850,154 @@ function syncWorkspaceRouteTabs() {
 }
 
 function renderDesktopTopContext() {
-  const contextEl = $('#desktopTopContext');
-  const userBtn = $('#btnUserMenu');
-  if (!state.user) {
+  const contextEl = $('#topbarSessionInfo');
+  const userBtn = $('#btnTopbarProfile');
+  const visible = Boolean(state.user) && isDesktopViewport();
+  if (!visible) {
     if (contextEl) {
       contextEl.textContent = '';
       contextEl.classList.add('hidden');
     }
     if (userBtn) {
+      userBtn.textContent = '내 정보';
       userBtn.classList.add('hidden');
+      userBtn.setAttribute('aria-label', '내 정보 열기');
     }
     renderDesktopGlobalSearch();
+    syncWorkspaceRouteTabs();
     return;
   }
 
-  const navRole = getNavigationRole();
-  const roleText = state.user ? getRoleDisplayLabel(state.user.role) : '-';
-  const tenantText = navRole === 'DEV'
-    ? `조회 테넌트 ${getWorkingTenantDisplayCode() || '미선택'}`
-    : `회사 ${String(state.user?.tenant_code || '').trim().toUpperCase() || '-'}`;
-  const viewTitle = getWorkspaceViewTitle(state.currentView || 'home');
+  const topbarMeta = resolveTopbarSessionMeta();
+  const userName = topbarMeta.userName;
+  const roleText = topbarMeta.roleText;
+  const siteText = topbarMeta.siteText;
+  const sessionText = [roleText, siteText].filter((value) => String(value || '').trim() && value !== '-').join(' · ');
 
   if (contextEl) {
-    contextEl.textContent = `${tenantText} · ${roleText} · ${viewTitle}`;
+    contextEl.textContent = sessionText || roleText || userName;
     contextEl.classList.remove('hidden');
   }
   if (userBtn) {
-    const userName = String(state.user?.full_name || state.user?.username || '사용자').trim();
-    userBtn.textContent = `${userName}`;
-    userBtn.classList.toggle('hidden', !isDesktopViewport());
+    userBtn.textContent = userName;
+    userBtn.classList.remove('hidden');
+    userBtn.setAttribute('aria-label', `${userName} 프로필 열기`);
   }
   renderDesktopGlobalSearch();
   syncWorkspaceRouteTabs();
+}
+
+function findSessionEmployeeDirectoryRow() {
+  const user = state.user;
+  if (!user || typeof user !== 'object') return null;
+  const rows = Array.isArray(state.employeeAdmin?.rows) ? state.employeeAdmin.rows : [];
+  if (!rows.length) return null;
+
+  const userId = String(user.id || '').trim();
+  const employeeId = String(user.employee_id || '').trim();
+  const employeeCode = String(user.employee_code || '').trim();
+  const username = String(user.username || '').trim().toLowerCase();
+
+  return rows.find((item) => {
+    const rowId = String(item?.id || '').trim();
+    const rowEmployeeId = String(item?.employee_id || '').trim();
+    const rowEmployeeCode = String(item?.employee_code || '').trim();
+    const rowUsername = String(item?.username || item?.linked_username || '').trim().toLowerCase();
+    return (
+      (employeeId && (rowId === employeeId || rowEmployeeId === employeeId))
+      || (userId && rowId === userId)
+      || (employeeCode && rowEmployeeCode === employeeCode)
+      || (username && rowUsername === username)
+    );
+  }) || null;
+}
+
+function findSessionEmployeeDirectoryDetail() {
+  const detailCache = state.employeeAdmin?.detailCache;
+  if (!(detailCache instanceof Map) || detailCache.size === 0) return null;
+  const user = state.user;
+  if (!user || typeof user !== 'object') return null;
+
+  const employeeId = String(user.employee_id || '').trim();
+  const employeeCode = String(user.employee_code || '').trim();
+  const username = String(user.username || '').trim().toLowerCase();
+
+  for (const detail of detailCache.values()) {
+    const employee = detail?.employee && typeof detail.employee === 'object' ? detail.employee : {};
+    const header = detail?.header && typeof detail.header === 'object' ? detail.header : {};
+    const detailEmployeeId = String(header.employee_id || employee.id || '').trim();
+    const detailEmployeeCode = String(header.employee_number || employee.employee_code || '').trim();
+    const detailUsername = String(employee.username || employee.linked_username || '').trim().toLowerCase();
+    if (
+      (employeeId && detailEmployeeId === employeeId)
+      || (employeeCode && detailEmployeeCode === employeeCode)
+      || (username && detailUsername === username)
+    ) {
+      return detail;
+    }
+  }
+  return null;
+}
+
+function resolveTopbarSessionMeta() {
+  const user = state.user && typeof state.user === 'object' ? state.user : {};
+  const employeeRow = findSessionEmployeeDirectoryRow();
+  const employeeDetail = findSessionEmployeeDirectoryDetail();
+  const headerPayload = employeeDetail ? getEmployeeDirectoryHeaderPayload(employeeDetail) : null;
+  const activeTenant = getActiveTenantContext();
+  const resolvedSiteCode = String(
+    headerPayload?.site_code
+    || employeeRow?.site_code
+    || user?.site_code
+    || '',
+  ).trim().toUpperCase();
+  const scopedSiteRows = Array.isArray(state.employeeAdmin?.siteRows) ? state.employeeAdmin.siteRows : [];
+  const matchedSiteRow = resolvedSiteCode
+    ? scopedSiteRows.find((site) => String(site?.site_code || '').trim().toUpperCase() === resolvedSiteCode) || null
+    : null;
+  const userName = String(
+    headerPayload?.employee_name
+    || employeeRow?.full_name
+    || employeeRow?.employee_name
+    || user?.full_name
+    || user?.username
+    || '사용자',
+  ).trim() || '사용자';
+  const roleText = String(
+    headerPayload?.role_display
+    || (employeeRow ? getEmployeeRoleLabel(employeeRow) : '')
+    || (user?.role ? getRoleDisplayLabel(user.role) : '')
+    || '-',
+  ).trim() || '-';
+  const siteText = String(
+    headerPayload?.site_display
+    || getEmployeeSiteDisplayLabel({
+      ...(matchedSiteRow || {}),
+      ...(employeeRow || {}),
+      ...(user || {}),
+      site_code: resolvedSiteCode || employeeRow?.site_code || user?.site_code || '',
+      site_name: String(
+        matchedSiteRow?.site_name
+        || headerPayload?.site_name
+        || employeeRow?.site_name
+        || user?.site_name
+        || '',
+      ).trim(),
+    })
+    || activeTenant?.name
+    || activeTenant?.code
+    || user?.tenant_name
+    || user?.tenant_code
+    || '-',
+  ).trim() || '-';
+
+  return {
+    userName,
+    roleText,
+    siteText,
+    employeeRow,
+    employeeDetail,
+  };
 }
 
 function renderProfileSummary() {
@@ -38096,6 +38212,7 @@ async function loadEmployeeDirectoryDetail(employeeId = '', { force = false } = 
     state.employeeAdmin.detailLoading = false;
     state.employeeAdmin.detailCache.set(cacheKey, detail);
     renderEmployeeDirectoryDrawer(detail);
+    renderDesktopTopContext();
     return detail;
   } catch (error) {
     if (Number(state.employeeAdmin.detailLoadSeq || 0) !== seq) return null;
@@ -38107,6 +38224,7 @@ async function loadEmployeeDirectoryDetail(employeeId = '', { force = false } = 
       drawerBody.appendChild(buildEmployeeDirectoryCompactEmpty('직원 상세를 불러오지 못했습니다.', state.employeeAdmin.detailError));
     }
     renderEmployeeDirectoryDetailActions({ employee });
+    renderDesktopTopContext();
     return null;
   }
 }
@@ -40341,6 +40459,7 @@ async function loadEmployees({ preferCache = true, skipNetworkWhenCached = false
       const apiElapsedMs = getPerfNowMs() - fetchStartedAt;
       const renderStartedAt = getPerfNowMs();
       renderEmployeesFromCache();
+      renderDesktopTopContext();
       refreshEmployeeBulkDeleteButtonState();
       markViewPerfStage('critical_ui_ready', {
         routePath: perfRoute,
@@ -40376,6 +40495,7 @@ async function loadEmployees({ preferCache = true, skipNetworkWhenCached = false
     const apiElapsedMs = getPerfNowMs() - fetchStartedAt;
     const renderStartedAt = getPerfNowMs();
     renderEmployeesFromCache();
+    renderDesktopTopContext();
     refreshEmployeeBulkDeleteButtonState();
     markViewPerfStage('critical_ui_ready', {
       routePath: perfRoute,
@@ -40396,6 +40516,7 @@ async function loadEmployees({ preferCache = true, skipNetworkWhenCached = false
     state.employeeAdmin.detailCache = new Map();
     renderEmptyState(target, '직원 목록을 불러오지 못했습니다.');
     renderEmployeeTableRows([]);
+    renderDesktopTopContext();
     refreshEmployeeBulkDeleteButtonState();
     if (code === 'TENANT_CONTEXT_REQUIRED' && getNavigationRole() === 'DEV') {
       showToast('상단 "조회 테넌트"에서 회사를 먼저 선택해 주세요.', 'info', 2800);
@@ -40435,9 +40556,11 @@ async function ensureEmployeeScopeSitesLoaded() {
       maxPages: 20,
     });
     state.employeeAdmin.siteRows = Array.isArray(rows) ? rows : [];
+    renderDesktopTopContext();
     return state.employeeAdmin.siteRows;
   } catch {
     state.employeeAdmin.siteRows = [];
+    renderDesktopTopContext();
     return [];
   }
 }
@@ -62619,6 +62742,10 @@ function bindUiEvents() {
     }
     handleBrowserRouteChange();
   }, { signal });
+
+  window.addEventListener('resize', () => {
+    renderDesktopTopContext();
+  }, { signal, passive: true });
 
   document.addEventListener('keydown', (event) => {
     const target = event.target instanceof HTMLElement ? event.target : null;

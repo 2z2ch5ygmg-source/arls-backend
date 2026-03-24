@@ -25,16 +25,25 @@
     <link rel="icon" type="image/png" sizes="16x16" href="assets/sentrix-hr-favicon-v4-16.png?v=20260323-sentrix-browser-brand-v4" />
     <link rel="shortcut icon" href="assets/sentrix-hr-favicon-v4.ico?v=20260323-sentrix-browser-brand-v4" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/sentrix-hr-favicon-v4-180.png?v=20260323-sentrix-browser-brand-v4" />
-    <link rel="stylesheet" href="css/styles.css?v=20260324-notices-compose-inline-v1" />
+    <link rel="stylesheet" href="css/styles.css?v=20260324-arls-wordmark-fix-01" />
   </head>
   <body>
     <div id="app">
       <header class="topbar app-topbar">
         <button id="btnDrawerOpen" class="icon-btn hamburgerBtn hidden" type="button" data-action="open-drawer" aria-label="메뉴 열기">☰</button>
-        <div class="topbar-brand" aria-label="Sentrix">
-          <span class="topbar-wordmark" role="img" aria-label="Sentrix"></span>
+        <div class="topbar-brand" aria-label="Sentrix HR">
+          <span class="topbar-wordmark" role="img" aria-label="Sentrix HR"></span>
         </div>
         <div class="topbar-actions">
+          <div id="topbarSessionInfo" class="topbar-session-info hidden" aria-live="polite"></div>
+          <button
+            id="btnTopbarProfile"
+            class="btn btn-secondary topbar-profile-btn hidden"
+            type="button"
+            data-action="drawer-open-route"
+            data-route="/profile"
+            aria-label="내 정보 열기"
+          >내 정보</button>
           <button id="btnNotifications" class="icon-btn ui-btn--ghost topbar-bell-btn hidden" type="button" data-action="open-notifications" aria-label="알림 열기">
             <span class="topbar-bell-art" aria-hidden="true"></span>
             <span id="notificationBadge" class="notif-badge hidden">0</span>
@@ -53,7 +62,7 @@
               <div class="auth-brand-lockup">
                 <span class="auth-logo-mark" role="img" aria-label="Sentrix HR 로고"></span>
                 <div class="auth-brand-copy">
-                  <span class="auth-wordmark" role="img" aria-label="Sentrix"></span>
+                  <span class="auth-wordmark" role="img" aria-label="Sentrix HR"></span>
                   <p class="auth-intro">테넌트 코드와 계정 정보를 입력해 근무 운영 화면으로 바로 이동하세요.</p>
                 </div>
               </div>

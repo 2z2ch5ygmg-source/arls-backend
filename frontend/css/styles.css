@@ -203,7 +203,15 @@
 
   --shadow-level-card: var(--shadow-card);
   --shadow-level-modal: var(--shadow-modal);
-  --app-topbar-height: 44px;
+  --app-topbar-height: 52px;
+  --app-topbar-padding-x: 10px;
+  --app-topbar-gap: 6px;
+  --app-topbar-border-width: 1px;
+  --app-topbar-border-color: var(--ui-border-strong);
+  --app-topbar-bg: var(--bg-surface);
+  --app-topbar-wordmark-width: 184px;
+  --app-topbar-wordmark-height: 19px;
+  --app-topbar-icon-size: 42px;
 
   /* Dark tokens (prepared only; not applied yet) */
   --dark-bg-base: #0f172a;
@@ -403,12 +411,25 @@ h3 {
   right: 0;
 }
 
-.app-topbar {
-  display: flex;
+.topbar.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--ui-z-topbar, 60);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-8);
-  border-color: var(--color-border-subtle);
-  background: var(--ui-bg-surface);
+  gap: var(--app-topbar-gap);
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--app-topbar-height);
+  min-height: var(--app-topbar-height);
+  margin-bottom: 0;
+  padding: 0 var(--app-topbar-padding-x);
+  border: 0;
+  border-bottom: var(--app-topbar-border-width) solid var(--app-topbar-border-color);
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--app-topbar-bg);
 }
 
 .topbar-brand {
@@ -419,9 +440,9 @@ h3 {
 
 .topbar-wordmark {
   display: block;
-  width: 156px;
-  height: 18px;
-  background: left center / contain no-repeat url('../assets/sentrix-wordmark-light.png');
+  width: var(--app-topbar-wordmark-width);
+  height: var(--app-topbar-wordmark-height);
+  background: left center / contain no-repeat url('../assets/sentrix-hr-wordmark.png?v=20260324-arls-wordmark-fix-01');
 }
 
 .topbar-actions {
@@ -430,18 +451,46 @@ h3 {
   gap: var(--space-8);
   justify-content: flex-end;
   margin-left: auto;
+  min-width: 0;
 }
 
-.topbar-bell-btn {
-  width: 34px;
+.topbar-session-info {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(40vw, 340px);
+  min-width: 0;
+}
+
+.topbar-profile-btn {
+  display: inline-flex;
+  align-items: center;
   min-height: 34px;
   height: 34px;
-  padding: 0;
-  border: 0;
-  background: transparent;
+  padding: 0 10px;
+  border-radius: 8px;
+  white-space: nowrap;
   box-shadow: none;
+  flex: 0 0 auto;
 }
 
+.topbar.app-topbar .icon-btn,
+.topbar-bell-btn {
+  width: var(--app-topbar-icon-size);
+  min-height: var(--app-topbar-icon-size);
+  height: var(--app-topbar-icon-size);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-secondary);
+}
+
+.topbar.app-topbar .icon-btn:hover,
 .topbar-bell-btn:hover {
   background: transparent;
   border-color: transparent;
@@ -450,8 +499,8 @@ h3 {
 
 .topbar-bell-art {
   display: block;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   background: center / contain no-repeat url('../assets/topbar-bell-icon.svg');
 }
 
@@ -538,8 +587,8 @@ h3 {
   border: none;
   outline: none;
   box-shadow: none;
-  padding: 8px;
-  border-radius: 10px;
+  padding: 0;
+  border-radius: 0;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -554,7 +603,7 @@ h3 {
 }
 
 .hamburgerBtn:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: transparent;
 }
 
 .hamburgerBtn:active {
@@ -902,9 +951,9 @@ body:has(#authView:not(.hidden)) #app {
 
 .auth-wordmark {
   width: min(100%, 332px);
-  aspect-ratio: 797 / 127;
+  aspect-ratio: 464 / 48;
   display: block;
-  background: center / contain no-repeat url('../assets/sentrix-wordmark-light.png');
+  background: center / contain no-repeat url('../assets/sentrix-hr-wordmark.png?v=20260324-arls-wordmark-fix-01');
 }
 
 .auth-brand-copy h1 {
@@ -1321,11 +1370,11 @@ body:has(#authView:not(.hidden)) #app {
 }
 
 :root[data-ui-theme='dark'] #authView .auth-wordmark {
-  background-image: url('../assets/sentrix-wordmark-dark.png');
+  background-image: url('../assets/sentrix-hr-wordmark-dark.png?v=20260324-arls-wordmark-fix-01');
 }
 
 :root[data-ui-theme='dark'] .topbar-wordmark {
-  background-image: url('../assets/sentrix-wordmark-dark.png');
+  background-image: url('../assets/sentrix-hr-wordmark-dark.png?v=20260324-arls-wordmark-fix-01');
 }
 
 :root[data-ui-theme='dark'] #authView .auth-intro,
@@ -8385,7 +8434,7 @@ a:hover {
     background: var(--ui-bg-canvas);
   }
 
-  .topbar {
+  .topbar:not(.app-topbar) {
     background: var(--ui-bg-surface);
     border-color: var(--border-subtle);
     border-radius: var(--radius-16);
@@ -9519,7 +9568,7 @@ a:hover {
 }
 
 @media (max-width: 1023px) {
-  .topbar {
+  .topbar:not(.app-topbar) {
     min-height: calc(var(--app-topbar-height) + var(--sat));
     padding-top: calc(var(--sat) + 8px);
     padding-bottom: 8px;
@@ -9980,7 +10029,7 @@ a:hover {
     padding: 0;
   }
 
-  .topbar {
+  .topbar:not(.app-topbar) {
     position: sticky;
     top: 0;
     z-index: var(--ui-z-topbar);
@@ -10632,7 +10681,7 @@ a:hover {
 }
 
 @media (min-width: 1024px) {
-  .topbar {
+  .topbar:not(.app-topbar) {
     min-height: var(--app-topbar-height);
     padding: 8px 16px;
     border: var(--ui-topbar-line-width) solid var(--ui-border-subtle);
@@ -11770,13 +11819,6 @@ a:hover {
 }
 
 @media (min-width: 1200px) {
-  .topbar.app-topbar {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 16px;
-  }
-
   .topbar-actions {
     display: inline-flex;
     align-items: center;
@@ -12144,27 +12186,23 @@ a:hover {
   }
 
   .topbar.app-topbar {
-    margin-bottom: 0;
-    box-sizing: border-box;
-    height: var(--app-topbar-height);
-    min-height: var(--app-topbar-height);
-    padding: 0 24px;
-    border-top: 0;
-    border-right: 0;
-    border-left: 0;
-    border-bottom: var(--ui-topbar-line-width) solid var(--ui-border-subtle);
-    border-radius: 0;
-    box-shadow: none;
-    background: var(--bg-surface);
+    --app-topbar-height: 58px;
+    --app-topbar-padding-x: 14px;
+    --app-topbar-gap: 10px;
+    --app-topbar-border-width: 1px;
+    --app-topbar-border-color: var(--ui-border-strong);
+    --app-topbar-bg: var(--bg-surface);
+    --app-topbar-wordmark-width: 213px;
+    --app-topbar-wordmark-height: 22px;
+    --app-topbar-icon-size: 42px;
+  }
+
+  .topbar-actions {
+    gap: 8px;
   }
 
   .topbar-brand {
     flex: 0 0 auto;
-  }
-
-  .topbar-wordmark {
-    width: 172px;
-    height: 20px;
   }
 
   #shell {
@@ -12306,8 +12344,12 @@ a:hover {
   }
 
   :root[data-ui-theme='dark'] .topbar.app-topbar {
-    background: #1b2028;
-    border-bottom-color: var(--ui-border-subtle);
+    --app-topbar-bg: #18202b;
+    --app-topbar-border-color: var(--ui-border-strong);
+  }
+
+  :root[data-ui-theme='dark'] .topbar-session-info {
+    color: #b8c2d0;
   }
 
   :root[data-ui-theme='dark'] .sentrix-brand-art-main {
@@ -13024,6 +13066,11 @@ textarea::placeholder {
 }
 
 @media (max-width: 1023px) {
+  .topbar-session-info,
+  .topbar-profile-btn {
+    display: none !important;
+  }
+
   .workspace-tabbar-row {
     align-items: stretch;
     flex-direction: column;
