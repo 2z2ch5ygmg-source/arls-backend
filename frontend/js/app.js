@@ -9947,36 +9947,6 @@ function clearLoginFieldErrors() {
   clearLoginCredentialFailureFeedback();
 }
 
-function resetLoginPasswordFieldState() {
-  const passwordEl = $('#password');
-  const toggleBtn = $('#togglePasswordBtn');
-  if (passwordEl) {
-    passwordEl.value = '';
-    passwordEl.type = 'password';
-  }
-  if (toggleBtn) {
-    toggleBtn.setAttribute('aria-pressed', 'false');
-    toggleBtn.setAttribute('aria-label', '비밀번호 보기');
-    toggleBtn.setAttribute('title', '비밀번호 보기');
-    toggleBtn.innerHTML = `
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-        <path d="M1.8 10s3-5.2 8.2-5.2 8.2 5.2 8.2 5.2-3 5.2-8.2 5.2S1.8 10 1.8 10Z"></path>
-        <circle cx="10" cy="10" r="2.6"></circle>
-      </svg>
-    `;
-  }
-}
-
-function resetVisibleLoginFormState() {
-  const tenantEl = $('#tenantCode');
-  const usernameEl = $('#username');
-  if (tenantEl) tenantEl.value = '';
-  if (usernameEl) usernameEl.value = '';
-  resetLoginPasswordFieldState();
-  clearLoginFieldErrors();
-  setAuthMessage('');
-}
-
 function getLoginCredentialFeedbackElements() {
   const usernameInput = $('#username');
   const passwordInput = $('#password');
@@ -18284,16 +18254,6 @@ async function saveLoginPreferences() {
   await securePasswordRemove();
 }
 
-async function clearSavedLoginPreferencesForLogout() {
-  const pref = getLoginPreferenceSnapshot();
-  writeLocalJSON(LOGIN_PREF_KEY, {
-    ...pref,
-    tenantCode: '',
-    username: '',
-  });
-  await securePasswordRemove();
-}
-
 async function loadLoginPreferences() {
   state.loadingLoginPrefs = true;
   refreshLoginFieldAvailability();
@@ -22223,7 +22183,8 @@ function applyAttendanceRouteStateFromQuery(routePath = '', parsedParams = new U
   if (!state.attendanceView) {
     state.attendanceView = createInitialAttendanceViewState();
   }
-  setAttendanceManagerTab(parsedParams.get('tab') || state.attendanceView.managerTab || 'status');
+  const requestedTab = parsedParams.has('tab') ? parsedParams.get('tab') : 'status';
+  setAttendanceManagerTab(requestedTab || 'status');
 }
 
 function applyReportsRouteStateFromQuery(routePath = '', parsedParams = new URLSearchParams()) {
@@ -30675,7 +30636,6 @@ function showAuthPanel() {
   updateRouteHash(ROUTE_LOGIN, { replace: true });
   closeConfirmDialog({ restoreFocus: false });
   closeDrawer();
-  resetVisibleLoginFormState();
   renderUserBadge();
   renderBrandArea();
   renderDevTenantContextBar();
@@ -35553,7 +35513,7 @@ async function loadOrgViewPresenter() {
 }
 
 async function loadAttendanceViewPresenter() {
-  await loadAttendanceView({ force: true });
+  await loadAttendanceView();
 }
 
 const VIEW_PRESENTERS = {
@@ -45519,6 +45479,7 @@ async function loadAttendanceManagerView({ force = false } = {}) {
   leaveParams.set('status', 'approved');
   leaveParams.set('limit', '300');
   if (tenantCode) leaveParams.set('tenant_code', tenantCode);
+  const shouldLoadOvertime = activeTab !== 'calendar';
 
   const [schedulesResult, leavesResult, pendingAttendanceResult] = await Promise.allSettled([
     Promise.all(months.map((month) => loadMonthlyScheduleRowsWithCache({ month, tenantCode, force }))).then((groups) => groups.flat()),
@@ -45533,30 +45494,9 @@ async function loadAttendanceManagerView({ force = false } = {}) {
   state.attendanceView.managerPendingAttendanceRequests = pendingAttendanceRequests;
   state.attendanceView.managerPendingCorrections = correctionRows;
 
-  if (activeTab !== 'status') {
-    const previewRows = buildAttendanceManagerRows({
-      records: [],
-      scheduleRows,
-      leaveRows,
-      overtimeRows: [],
-      pendingAttendanceRequests,
-      correctionRows,
-      recordEdits: state.attendanceView.managerRecordEdits || {},
-      rangeStart: start,
-      rangeEnd: end,
-    });
-    state.attendanceView.records = [];
-    state.attendanceView.overtimeRows = [];
-    state.attendanceView.managerRows = previewRows;
-    const previewScopedRows = getFilteredAttendanceManagerRows(previewRows, { applyStatus: false });
-    const previewFilteredRows = getFilteredAttendanceManagerRows(previewRows, { applyStatus: true });
-    renderAttendanceFilterMeta();
-    renderAttendanceManagerWorkspace({ rows: previewFilteredRows, scopedRows: previewScopedRows, loading: false });
-  }
-
   const [recordsResult, overtimeResult] = await Promise.allSettled([
     fetchAttendanceRecordsByDateKeys(dateKeys, { force }),
-    fetchAttendanceOvertimeByDateKeys(dateKeys, { tenantCode, force }),
+    shouldLoadOvertime ? fetchAttendanceOvertimeByDateKeys(dateKeys, { tenantCode, force }) : Promise.resolve([]),
   ]);
 
   if (recordsResult.status !== 'fulfilled') {
@@ -45570,7 +45510,9 @@ async function loadAttendanceManagerView({ force = false } = {}) {
   }
 
   const records = Array.isArray(recordsResult.value) ? recordsResult.value : [];
-  const overtimeRows = overtimeResult.status === 'fulfilled' && Array.isArray(overtimeResult.value) ? overtimeResult.value : [];
+  const overtimeRows = shouldLoadOvertime && overtimeResult.status === 'fulfilled' && Array.isArray(overtimeResult.value)
+    ? overtimeResult.value
+    : [];
   state.attendanceView.records = records;
   state.attendanceView.overtimeRows = overtimeRows;
 
@@ -45595,7 +45537,7 @@ async function loadAttendanceManagerView({ force = false } = {}) {
   if (pendingAttendanceResult.status === 'rejected') {
     showToast('정정 대기 데이터를 일부 불러오지 못했습니다.', 'info', 2200);
   }
-  if (overtimeResult.status === 'rejected') {
+  if (shouldLoadOvertime && overtimeResult.status === 'rejected') {
     showToast('OT 보조 데이터를 일부 불러오지 못했습니다. 출퇴근 기록은 계속 표시됩니다.', 'info', 2200);
   }
   return filteredRows;
@@ -54558,7 +54500,7 @@ async function onLoginSubmit(event) {
     state.pendingRouteAfterLogin = DEFAULT_AUTH_ROUTE;
     ensurePolling();
     restartScheduleLiveRefreshAfterAuth();
-    setAuthMessage('');
+    setAuthMessage('로그인 성공', 'success');
     clearLoginFieldErrors();
   } catch (err) {
     const message = normalizeAuthError(err);
@@ -58313,7 +58255,6 @@ function bindUiEvents() {
         acceptVariant: 'btn-destructive',
         triggerEl: actionEl,
         onAccept: async () => {
-          await clearSavedLoginPreferencesForLogout();
           clearSession();
           stopPolling();
           closeSheet();
