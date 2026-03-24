@@ -386,7 +386,7 @@ h3 {
   align-items: center;
   gap: var(--space-8);
   background: var(--ui-bg-surface);
-  border: 1px solid var(--border-subtle);
+  border: var(--ui-topbar-line-width) solid var(--border-subtle);
   border-radius: var(--radius-16);
   box-shadow: var(--shadow-card);
   padding-top: calc(var(--sat) + 8px);
@@ -9824,6 +9824,7 @@ a:hover {
   --ui-z-drawer: 400;
   --ui-z-toast: 520;
   --ui-z-startup: 1300;
+  --ui-topbar-line-width: 0.5px;
 }
 
 .ui-pageHeader {
@@ -9991,7 +9992,7 @@ a:hover {
     padding-left: 12px;
     border-radius: 0;
     border: 0;
-    border-bottom: 1px solid var(--ui-border-subtle);
+    border-bottom: var(--ui-topbar-line-width) solid var(--ui-border-subtle);
     box-shadow: none;
     background: var(--ui-bg-surface);
   }
@@ -10634,7 +10635,7 @@ a:hover {
   .topbar {
     min-height: var(--app-topbar-height);
     padding: 8px 16px;
-    border: 1px solid var(--ui-border-subtle);
+    border: var(--ui-topbar-line-width) solid var(--ui-border-subtle);
     border-radius: var(--ui-radius-md);
     box-shadow: none;
     background: var(--ui-bg-surface);
@@ -12151,7 +12152,7 @@ a:hover {
     border-top: 0;
     border-right: 0;
     border-left: 0;
-    border-bottom: 1px solid var(--ui-border-subtle);
+    border-bottom: var(--ui-topbar-line-width) solid var(--ui-border-subtle);
     border-radius: 0;
     box-shadow: none;
     background: var(--bg-surface);
