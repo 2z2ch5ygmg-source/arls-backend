@@ -66,6 +66,12 @@ USER_ROLE_ALIASES = {
     "l2": ROLE_VICE_SUPERVISOR,
 }
 
+SITE_SCOPED_MANAGER_ROLE_ALIASES = {
+    "branch_manager",
+    "branchmanager",
+    "site_manager",
+}
+
 ROLE_ENUM_BY_USER_ROLE = {
     ROLE_OFFICER: ROLE_ENUM_OFFICER,
     ROLE_VICE_SUPERVISOR: ROLE_ENUM_VICE_SUPERVISOR,
@@ -88,6 +94,24 @@ def normalize_user_role(user_role: str | None) -> str:
     normalized = normalized.replace("-", "_").replace(" ", "_")
     normalized = re.sub(r"_+", "_", normalized)
     return USER_ROLE_ALIASES.get(normalized, normalized)
+
+
+def normalize_role_source(user_role: str | None) -> str:
+    normalized = str(user_role or "").strip().lower()
+    if not normalized:
+        return ""
+    normalized = normalized.replace("-", "_").replace(" ", "_")
+    return re.sub(r"_+", "_", normalized)
+
+
+def is_site_scoped_manager_role(user_role: str | None) -> bool:
+    return normalize_role_source(user_role) in SITE_SCOPED_MANAGER_ROLE_ALIASES
+
+
+def is_site_scoped_manager_user(user: dict | None) -> bool:
+    if not isinstance(user, dict):
+        return False
+    return is_site_scoped_manager_role(user.get("role_source") or user.get("role"))
 
 
 def is_valid_user_role(user_role: str | None) -> bool:

@@ -9,7 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from .db import get_connection
 from .security import decode_token
-from .utils.permissions import normalize_role, normalize_user_role
+from .utils.permissions import normalize_role, normalize_role_source, normalize_user_role
 from .utils.tenant_context import normalize_tenant_identifier
 from .utils.guards import IDEMPOTENCY, RATE_LIMITER
 
@@ -138,6 +138,7 @@ def get_current_user(
         raise _unauthorized("계정을 찾을 수 없습니다.")
 
     result = dict(row)
+    result["role_source"] = normalize_role_source(result.get("role"))
     result["role"] = normalize_user_role(result.get("role"))
     _set_cached_user(token, result)
     result["active_tenant_id"] = normalize_tenant_identifier(x_tenant_id)

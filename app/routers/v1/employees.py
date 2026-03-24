@@ -43,7 +43,14 @@ from ...services.guard_roster_docx import (
 from ...services.sites_match_index import list_site_match_index_rows
 from ...utils.address_norm import normalize_address_text
 from ...utils.credential_norm import normalize_phone_identifier
-from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, ROLE_EMPLOYEE, normalize_role, normalize_user_role
+from ...utils.permissions import (
+    ROLE_BRANCH_MANAGER,
+    ROLE_DEV,
+    ROLE_EMPLOYEE,
+    is_site_scoped_manager_user,
+    normalize_role,
+    normalize_user_role,
+)
 from ...utils.schema_introspection import table_column_exists
 from ...utils.sql_debug import SQLPlaceholderMismatchError, exec_checked
 from ...utils.tenant_context import canonical_tenant_identifier, enforce_staff_site_scope, resolve_scoped_tenant
@@ -342,9 +349,12 @@ def _branch_manager_site_id(user: dict) -> str:
     return site_id
 
 
+def _is_site_scoped_branch_manager(user: dict) -> bool:
+    return normalize_role(user.get("role")) == ROLE_BRANCH_MANAGER and is_site_scoped_manager_user(user)
+
+
 def _assert_branch_manager_site_scope(user: dict, target_site_id: str | None):
-    actor_role = normalize_role(user.get("role"))
-    if actor_role != ROLE_BRANCH_MANAGER:
+    if not _is_site_scoped_branch_manager(user):
         return
     manager_site_id = _branch_manager_site_id(user)
     if str(target_site_id or "") != manager_site_id:
@@ -2900,7 +2910,7 @@ def list_employees(
 
     scoped_site_id = None
     scoped_site_code = None
-    if actor_role == ROLE_BRANCH_MANAGER:
+    if _is_site_scoped_branch_manager(user):
         scoped_site_id = _branch_manager_site_id(user)
         scoped_site_code = str(user.get("site_code") or "").strip()
         if normalized_site_id and normalized_site_id != scoped_site_id:
@@ -3127,11 +3137,12 @@ def create_employee(
     if actor_role not in (ROLE_DEV, ROLE_BRANCH_MANAGER):
         _raise_api_error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "forbidden")
 
+    is_site_scoped_branch_manager = _is_site_scoped_branch_manager(user)
     requested_tenant_id = "" if actor_role == ROLE_BRANCH_MANAGER else str(payload.tenant_id or "")
     tenant = _resolve_target_tenant(conn, user, tenant_code, requested_tenant_id)
     tenant_id = tenant["id"]
 
-    if actor_role == ROLE_BRANCH_MANAGER:
+    if is_site_scoped_branch_manager:
         scoped_site_id = _branch_manager_site_id(user)
         # 지점관리자는 tenant/site 스코프를 세션에서 강제 적용한다.
         # 요청 본문의 tenant/site/company 값은 신뢰하지 않는다.

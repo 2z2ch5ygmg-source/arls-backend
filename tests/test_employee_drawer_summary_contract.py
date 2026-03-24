@@ -2,6 +2,8 @@ import unittest
 import uuid
 from datetime import date, datetime, timezone
 
+from fastapi import HTTPException
+
 from app.routers.v1 import employees
 
 
@@ -282,6 +284,124 @@ class EmployeeDrawerSummaryContractTests(unittest.TestCase):
         self.assertEqual(payload[0].soc_role, "Officer")
         self.assertTrue(payload[0].is_active)
         self.assertFalse(payload[0].is_deleted)
+
+    def test_list_employees_does_not_site_scope_hq_admin(self):
+        live_row = {
+            "id": uuid.uuid4(),
+            "tenant_id": uuid.uuid4(),
+            "employee_code": "R692-001",
+            "sequence_no": 1,
+            "full_name": "서성원",
+            "phone": "010-1111-2222",
+            "site_code": "R692",
+            "site_name": "Apple_가로수길",
+            "company_code": "CMP_R692",
+            "is_active": True,
+            "is_deleted": False,
+            "management_no_str": "1",
+            "gender": None,
+            "resident_no": None,
+            "birth_date": None,
+            "address": None,
+            "hire_date": date(2024, 11, 1),
+            "leave_date": None,
+            "guard_training_cert_no": None,
+            "note": None,
+            "roster_docx_attachment_id": None,
+            "photo_attachment_id": None,
+            "soc_login_id": None,
+            "soc_role": "Officer",
+            "user_id": None,
+            "username": None,
+            "user_role": None,
+        }
+        captured_params: list[tuple[object, ...]] = []
+
+        class FakeCursor:
+            def __init__(self, rows):
+                self.rows = rows
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def execute(self, sql, params):
+                captured_params.append(tuple(params))
+
+            def fetchone(self):
+                return None
+
+            def fetchall(self):
+                return list(self.rows)
+
+        class FakeConn:
+            def __init__(self, rows):
+                self.rows = rows
+
+            def cursor(self):
+                return FakeCursor(self.rows)
+
+        original_resolve_tenant = employees._resolve_target_tenant
+        original_repair_scope = employees._repair_active_employee_rows_for_scope
+        original_table_column_exists = employees._table_column_exists
+        employees._resolve_target_tenant = lambda conn, user, tenant_code, tenant_id=None: {
+            "id": "tenant-1",
+            "tenant_code": "SRS_KOREA",
+            "tenant_name": "SRS Korea",
+        }
+        employees._repair_active_employee_rows_for_scope = lambda *args, **kwargs: 0
+        employees._table_column_exists = lambda conn, table, column: True
+        try:
+            payload = employees.list_employees(
+                site_id=None,
+                site_code=None,
+                q=None,
+                limit=50,
+                offset=0,
+                include_inactive=False,
+                include_deleted=False,
+                detail=False,
+                include_account=True,
+                tenant_code=None,
+                conn=FakeConn([live_row]),
+                user={
+                    "role": "hq_admin",
+                    "role_source": "hq_admin",
+                    "site_id": "site-garosugil",
+                    "site_code": "R692",
+                },
+            )
+        finally:
+            employees._resolve_target_tenant = original_resolve_tenant
+            employees._repair_active_employee_rows_for_scope = original_repair_scope
+            employees._table_column_exists = original_table_column_exists
+
+        self.assertEqual(len(payload), 1)
+        self.assertTrue(captured_params)
+        self.assertNotIn("site-garosugil", captured_params[-1])
+
+    def test_branch_manager_site_scope_helper_uses_raw_role_source(self):
+        employees._assert_branch_manager_site_scope(
+            {
+                "role": "hq_admin",
+                "role_source": "hq_admin",
+                "site_id": "site-garosugil",
+            },
+            "site-myeongdong",
+        )
+
+        with self.assertRaises(HTTPException) as exc_info:
+            employees._assert_branch_manager_site_scope(
+                {
+                    "role": "hq_admin",
+                    "role_source": "branch_manager",
+                    "site_id": "site-garosugil",
+                },
+                "site-myeongdong",
+            )
+        self.assertEqual(exc_info.exception.status_code, 403)
 
 
 if __name__ == "__main__":
