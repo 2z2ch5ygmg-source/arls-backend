@@ -5732,7 +5732,7 @@
         });
 
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=20260324-arls-topbar-parity-v2', { updateViaCache: 'none' })
+          navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
             .then((registration) => {
               registration.update().catch(() => {});
 
