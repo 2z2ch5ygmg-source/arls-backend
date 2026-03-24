@@ -419,7 +419,7 @@ const ROUTE_FEATURE_NOTICES = '/feature/notices';
 const ROUTE_FEATURE_AUDIT_LOGS = '/feature/audit-logs';
 const ROUTE_NOTIFICATIONS = '/notifications';
 const NOTICE_PINNED_LIMIT = 3;
-const NOTICE_HOME_TEASER_LIMIT = 5;
+const NOTICE_HOME_TEASER_LIMIT = 6;
 const NOTICE_NEW_BADGE_WINDOW_HOURS = 72;
 const NOTICE_TABLE_PICKER_MAX_ROWS = 6;
 const NOTICE_TABLE_PICKER_MAX_COLS = 6;
@@ -57426,6 +57426,16 @@ function bindUiEvents() {
     if (input instanceof HTMLInputElement) {
       input.click();
     }
+  }, { signal });
+
+  document.addEventListener('keydown', (event) => {
+    if (window.__RG_ARLS_HANDLERS_BOUND__ !== true) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (!(target instanceof HTMLElement)) return;
+    if (!target.matches('[data-keyboard-action="true"][data-action]')) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    target.click();
   }, { signal });
 
   document.addEventListener('mouseover', (event) => {

@@ -191,11 +191,9 @@
                     </article>
 
                     <article class="home-attendance-status-card">
-                      <div class="home-attendance-panel-head">
-                        <div class="home-attendance-panel-copy">
-                          <span class="home-attendance-card-label">현재 운영 상태</span>
-                          <strong id="homeManagerAttendanceStatusHeadline">집계 중</strong>
-                        </div>
+                      <div class="home-attendance-panel-head home-attendance-panel-head-compact">
+                        <span class="home-attendance-card-label">현재 운영 상태</span>
+                        <strong id="homeManagerAttendanceStatusHeadline" class="home-attendance-panel-headline">집계 중</strong>
                       </div>
                       <div class="home-attendance-status-rack">
                         <div class="home-mini-metric" data-tone="warn">
@@ -214,27 +212,26 @@
                     </article>
 
                     <article class="home-attendance-issue-card home-section-rail">
-                      <div class="home-attendance-issue-head">
-                        <div class="home-attendance-panel-copy">
-                          <span class="home-attendance-card-label">오늘 우선 확인</span>
-                          <strong id="homeManagerAttendanceIssueHeading">직원별 예외 preview</strong>
-                        </div>
+                      <div class="home-attendance-issue-head home-attendance-panel-head-compact">
+                        <span class="home-attendance-card-label">오늘 우선 확인</span>
+                        <strong id="homeManagerAttendanceIssueHeading" class="home-attendance-panel-headline">직원별 예외 preview</strong>
                       </div>
                       <ul id="homeManagerAttendanceIssueList" class="list compact-list home-dashboard-list-plain"></ul>
                     </article>
 
-                    <article class="home-attendance-notice-card home-section-rail">
-                      <div class="home-attendance-issue-head home-attendance-notice-head">
-                        <div class="home-attendance-panel-copy">
-                          <span class="home-attendance-card-label">공지사항</span>
-                        </div>
+                    <article
+                      class="home-attendance-notice-card home-section-rail home-notice-card-shell"
+                      data-action="drawer-open-route"
+                      data-route="/feature/notices"
+                      data-keyboard-action="true"
+                      tabindex="0"
+                      role="link"
+                      aria-label="공지사항 목록 열기"
+                    >
+                      <div class="home-attendance-notice-head">
+                        <span class="home-attendance-card-label">공지사항</span>
                       </div>
                       <ul id="homeManagerNoticeList" class="list compact-list home-notice-list"></ul>
-                      <div class="home-notice-footer">
-                        <button class="home-notice-more-link" type="button" data-action="drawer-open-route" data-route="/feature/notices" aria-label="공지사항 더보기">
-                          더보기
-                        </button>
-                      </div>
                     </article>
                   </div>
                 </article>

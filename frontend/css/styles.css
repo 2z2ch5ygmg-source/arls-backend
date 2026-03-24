@@ -21143,16 +21143,28 @@ button.attendance-status-special-card.active {
     minmax(240px, 0.9fr)
     minmax(320px, 1.08fr)
     minmax(280px, 0.96fr);
-  gap: 18px;
+  gap: 16px;
   align-items: stretch;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-notice-card {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 0;
-  min-height: 278px;
-  padding: 16px 0 0;
+  min-height: 256px;
+  padding: 14px 0 0;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-notice-card-shell:hover {
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-notice-card-shell:focus-visible {
+  border-color: rgba(249, 115, 22, 0.42);
+  box-shadow: var(--ui-focus-ring);
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-notice-list {
@@ -21161,6 +21173,8 @@ button.attendance-status-special-card.active {
   padding: 0;
   display: grid;
   gap: 0;
+  align-content: start;
+  min-height: 0;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-notice-list > .home-notice-item {
@@ -21183,23 +21197,25 @@ button.attendance-status-special-card.active {
   width: 100%;
   border: none;
   background: transparent;
-  padding: 12px 18px;
+  padding: 10px 18px;
   display: grid;
-  gap: 4px;
+  gap: 3px;
   text-align: left;
   cursor: pointer;
+  position: relative;
+  z-index: 1;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-notice-link:hover,
 #shell[data-shell-mode='manager'] #view-home .home-notice-link:focus-visible {
-  background: rgba(248, 250, 252, 0.58);
+  background: rgba(248, 250, 252, 0.72);
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-notice-meta-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-notice-meta-left {
@@ -21225,7 +21241,7 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-notice-title {
   font-size: 14px;
-  line-height: 1.32;
+  line-height: 1.28;
   letter-spacing: -0.02em;
   color: var(--ui-text-primary);
   display: -webkit-box;
@@ -21235,27 +21251,16 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-notice-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding: 10px 18px 14px;
-  border-top: 1px solid rgba(148, 163, 184, 0.24);
+  display: none;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-notice-more-link {
-  border: none;
-  background: transparent;
-  padding: 0;
-  color: var(--ui-text-secondary);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.4;
-  cursor: pointer;
+  display: none;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-notice-more-link:hover,
 #shell[data-shell-mode='manager'] #view-home .home-notice-more-link:focus-visible {
-  color: var(--ui-text-primary);
-  text-decoration: underline;
+  display: none;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card,
@@ -21266,9 +21271,9 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-requests-summary-card,
 #shell[data-shell-mode='manager'] #view-home .home-org-summary-card {
   border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 22px;
+  border-radius: 20px;
   background: rgba(255, 255, 255, 0.94);
-  padding: 20px 22px;
+  padding: 18px 20px;
   min-width: 0;
 }
 
@@ -21286,6 +21291,21 @@ button.attendance-status-special-card.active {
   gap: 6px;
 }
 
+#shell[data-shell-mode='manager'] #view-home .home-attendance-panel-head-compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-panel-headline {
+  max-width: 10ch;
+  font-size: clamp(24px, 2vw, 30px);
+  line-height: 1.04;
+  letter-spacing: -0.04em;
+  text-align: right;
+}
+
 #shell[data-shell-mode='manager'] #view-home .home-attendance-panel-copy strong,
 #shell[data-shell-mode='manager'] #view-home .home-request-summary-copy strong,
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-head .home-attendance-panel-copy strong {
@@ -21297,8 +21317,8 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card {
   display: grid;
   grid-template-rows: auto 1fr auto auto;
-  gap: 14px;
-  min-height: 278px;
+  gap: 12px;
+  min-height: 256px;
   background: linear-gradient(180deg, #ff923f 0%, #f97316 100%);
   border-color: rgba(249, 115, 22, 0.22);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
@@ -21312,7 +21332,7 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-visual {
   display: grid;
   place-items: center;
-  padding-top: 4px;
+  padding-top: 0;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-ring {
@@ -21356,13 +21376,14 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-attendance-status-card {
   display: grid;
   grid-template-rows: auto 1fr;
-  min-height: 278px;
+  gap: 10px;
+  min-height: 256px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98));
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-status-rack {
   grid-template-columns: 1fr;
-  margin-top: 8px;
+  margin-top: 0;
   border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
@@ -21370,9 +21391,9 @@ button.attendance-status-special-card.active {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: flex-end;
-  gap: 14px;
-  padding: 18px 18px 18px 18px;
+  align-items: center;
+  gap: 16px;
+  padding: 15px 0 15px 18px;
   border: none;
   border-right: none;
   border-bottom: 1px solid rgba(148, 163, 184, 0.14);
@@ -21391,19 +21412,22 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-mini-metric span {
-  max-width: 10ch;
-  line-height: 1.35;
+  max-width: none;
+  line-height: 1.25;
+  display: inline-flex;
+  align-items: center;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-mini-metric::before {
   content: '';
   position: absolute;
   left: 0;
-  top: 22px;
+  top: 50%;
   width: 8px;
   height: 8px;
   border-radius: 999px;
   background: #94a3b8;
+  transform: translateY(-50%);
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-mini-metric[data-tone='warn']::before {
@@ -21419,7 +21443,7 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-mini-metric strong {
-  font-size: 36px;
+  font-size: 34px;
   line-height: 0.96;
   letter-spacing: -0.05em;
 }
@@ -21427,18 +21451,21 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card {
   display: grid;
   grid-template-rows: auto 1fr;
-  min-height: 278px;
-  padding: 18px 0 0;
+  gap: 0;
+  min-height: 256px;
+  padding: 14px 0 0;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-head {
-  padding: 0 22px 8px;
-  min-height: 52px;
-  align-items: flex-start;
+  padding: 0 20px 6px;
+  min-height: 0;
+  align-items: start;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-notice-head {
   justify-content: flex-start;
+  padding: 0 20px 6px;
+  min-height: 0;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-notice-head .home-attendance-panel-copy {

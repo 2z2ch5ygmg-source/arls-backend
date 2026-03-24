@@ -992,7 +992,7 @@ def _enforce_pinned_limit(conn, *, tenant_id: str, actor_id: str) -> None:
 
 @router.get("/home-teaser", response_model=NoticeListOut)
 def list_notice_home_teaser(
-    limit: int = Query(default=3, ge=1, le=5),
+    limit: int = Query(default=6, ge=1, le=6),
     conn=Depends(get_db_conn),
     user=Depends(get_current_user),
 ):
