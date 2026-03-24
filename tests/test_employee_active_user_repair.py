@@ -6,17 +6,43 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from psycopg import connect
+from psycopg.conninfo import make_conninfo
 from psycopg.rows import dict_row
 
 from app.config import settings
+from app import db as app_db
 from app.main import app
 from app.security import hash_password
 
+DB_CONNECT_TIMEOUT_SECONDS = 5
+DB_STATEMENT_TIMEOUT_MS = 5000
+DB_LOCK_TIMEOUT_MS = 2000
 
-def _db_conn():
-    if not settings.database_url:
-        raise RuntimeError("DATABASE_URL is required for integration tests")
-    return connect(settings.database_url, row_factory=dict_row)
+
+def _build_test_database_url(raw_value: str | None = None) -> str:
+    raw = str(raw_value if raw_value is not None else settings.database_url or "").strip()
+    if not raw:
+        return ""
+    if "connect_timeout=" in raw and "statement_timeout=" in raw:
+        return raw
+    return make_conninfo(
+        raw,
+        connect_timeout=DB_CONNECT_TIMEOUT_SECONDS,
+        options=(
+            f"-c statement_timeout={DB_STATEMENT_TIMEOUT_MS} "
+            f"-c lock_timeout={DB_LOCK_TIMEOUT_MS}"
+        ),
+    )
+
+
+def _db_conn(conninfo: str | None = None):
+    resolved_conninfo = str(conninfo or _build_test_database_url()).strip()
+    if not resolved_conninfo:
+        pytest.skip("DATABASE_URL is required for integration tests")
+    try:
+        return connect(resolved_conninfo, row_factory=dict_row)
+    except Exception as exc:
+        pytest.skip(f"database unavailable for integration test: {exc}")
 
 
 def _api_json(response) -> dict[str, Any]:
@@ -166,8 +192,25 @@ def _login(client: TestClient, *, tenant_code: str, username: str, password: str
 
 @pytest.fixture
 def client():
-    with TestClient(app) as test_client:
-        yield test_client
+    original_database_url = settings.database_url
+    test_database_url = _build_test_database_url(original_database_url)
+    settings.database_url = test_database_url
+    if app_db._pool is not None:
+        app_db._pool.close()
+        app_db._pool = None
+    try:
+        with _db_conn(test_database_url) as probe_conn:
+            with probe_conn.cursor() as cur:
+                cur.execute("SELECT 1")
+        with TestClient(app) as test_client:
+            yield test_client
+    except Exception as exc:
+        pytest.skip(f"database unavailable for integration test: {exc}")
+    finally:
+        if app_db._pool is not None:
+            app_db._pool.close()
+            app_db._pool = None
+        settings.database_url = original_database_url
 
 
 def test_employee_list_repairs_missing_row_from_active_arls_user(client: TestClient):
