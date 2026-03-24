@@ -10632,7 +10632,7 @@ a:hover {
 
 @media (min-width: 1024px) {
   .topbar {
-    min-height: 56px;
+    min-height: var(--app-topbar-height);
     padding: 8px 16px;
     border: 1px solid var(--ui-border-subtle);
     border-radius: var(--ui-radius-md);
