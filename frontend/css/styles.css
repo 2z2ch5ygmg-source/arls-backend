@@ -421,7 +421,7 @@ h3 {
   display: block;
   width: 156px;
   height: 18px;
-  background: left center / contain no-repeat url('../assets/sentrix-hr-wordmark.png');
+  background: left center / contain no-repeat url('../assets/sentrix-wordmark-light.png');
 }
 
 .topbar-actions {
@@ -904,7 +904,7 @@ body:has(#authView:not(.hidden)) #app {
   width: min(100%, 332px);
   aspect-ratio: 797 / 127;
   display: block;
-  background: center / contain no-repeat url('../assets/sentrix-hr-wordmark.png');
+  background: center / contain no-repeat url('../assets/sentrix-wordmark-light.png');
 }
 
 .auth-brand-copy h1 {
@@ -1321,11 +1321,11 @@ body:has(#authView:not(.hidden)) #app {
 }
 
 :root[data-ui-theme='dark'] #authView .auth-wordmark {
-  background-image: url('../assets/sentrix-hr-wordmark-dark.png');
+  background-image: url('../assets/sentrix-wordmark-dark.png');
 }
 
 :root[data-ui-theme='dark'] .topbar-wordmark {
-  background-image: url('../assets/sentrix-hr-wordmark-dark.png');
+  background-image: url('../assets/sentrix-wordmark-dark.png');
 }
 
 :root[data-ui-theme='dark'] #authView .auth-intro,
