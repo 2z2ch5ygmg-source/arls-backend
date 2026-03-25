@@ -22106,6 +22106,22 @@ button.attendance-status-special-card.active {
   align-content: start;
 }
 
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card {
+  background: #ffffff;
+  background-image: none;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-distribution-card,
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-schedule-summary-card,
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-section-rail,
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-schedule-issue-rail {
+  background: transparent;
+  background-image: none;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+
 #shell[data-shell-mode='manager'] #view-home .home-schedule-issue-rail .home-attendance-panel-copy {
   padding-bottom: 8px;
 }
