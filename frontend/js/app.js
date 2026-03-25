@@ -5289,9 +5289,8 @@ function buildHomeAttendanceIssueRows() {
     const sourceRow = item?.row || {};
     return {
       employeeName: String(item?.employeeName || sourceRow?.employeeName || '직원').trim() || '직원',
-      primaryMeta: String(sourceRow?.dateLabel || item?.dateLabel || sourceRow?.siteName || item?.siteName || '현장 미지정').trim() || '현장 미지정',
-      secondaryMeta: String(item?.timeText || sourceRow?.timeText || item?.statusLabel || item?.label || '-').trim() || '-',
-      statusLabel: String(item?.label || item?.statusLabel || '확인 필요').trim() || '확인 필요',
+      dateLabel: String(sourceRow?.dateLabel || item?.dateLabel || sourceRow?.baseDateLabel || sourceRow?.baseDate || '-').trim() || '-',
+      statusLabel: String(item?.label || item?.statusLabel || sourceRow?.statusLabel || '출근 누락').trim() || '출근 누락',
       danger: Boolean(item?.danger),
     };
   });
@@ -5299,8 +5298,7 @@ function buildHomeAttendanceIssueRows() {
 
 function createHomeAttendanceIssueListRow({
   employeeName = '',
-  primaryMeta = '',
-  secondaryMeta = '',
+  dateLabel = '',
   statusLabel = '',
   danger = false,
 } = {}) {
@@ -5309,19 +5307,15 @@ function createHomeAttendanceIssueListRow({
   if (danger) li.classList.add('attendance-outside');
 
   const row = document.createElement('div');
-  row.className = 'home-attendance-issue-list-row';
+  row.className = 'home-attendance-issue-list-row is-compact';
 
   const nameEl = document.createElement('div');
   nameEl.className = 'home-attendance-issue-name';
   nameEl.textContent = String(employeeName || '-').trim() || '-';
 
-  const primaryEl = document.createElement('div');
-  primaryEl.className = 'home-attendance-issue-meta home-attendance-issue-meta-primary';
-  primaryEl.textContent = String(primaryMeta || '-').trim() || '-';
-
-  const secondaryEl = document.createElement('div');
-  secondaryEl.className = 'home-attendance-issue-meta home-attendance-issue-meta-secondary';
-  secondaryEl.textContent = String(secondaryMeta || '-').trim() || '-';
+  const dateEl = document.createElement('div');
+  dateEl.className = 'home-attendance-issue-meta home-attendance-issue-meta-primary';
+  dateEl.textContent = String(dateLabel || '-').trim() || '-';
 
   const statusEl = document.createElement('div');
   statusEl.className = `home-attendance-issue-status${danger ? ' is-danger' : ''}`;
@@ -5332,7 +5326,7 @@ function createHomeAttendanceIssueListRow({
   textEl.textContent = String(statusLabel || '').trim() || '확인 필요';
   statusEl.append(dotEl, textEl);
 
-  row.append(nameEl, primaryEl, secondaryEl, statusEl);
+  row.append(nameEl, dateEl, statusEl);
   li.appendChild(row);
   return li;
 }

@@ -21909,12 +21909,21 @@ button.attendance-status-special-card.active {
   min-height: 38px;
 }
 
+#shell[data-shell-mode='manager'] #view-home .home-attendance-issue-list-row.is-compact {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  min-height: 34px;
+}
+
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-name {
   min-width: 0;
   font-size: 16px;
   line-height: 1.24;
   font-weight: 700;
   color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-meta {
@@ -21923,6 +21932,11 @@ button.attendance-status-special-card.active {
   line-height: 1.35;
   color: #475569;
   white-space: nowrap;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-issue-list-row.is-compact .home-attendance-issue-meta {
+  font-size: 12px;
+  color: #64748b;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-meta-secondary {
@@ -21938,6 +21952,12 @@ button.attendance-status-special-card.active {
   font-weight: 600;
   color: #b91c1c;
   white-space: nowrap;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-issue-list-row.is-compact .home-attendance-issue-status {
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-status-dot {
@@ -21958,6 +21978,21 @@ button.attendance-status-special-card.active {
   font-size: 11px;
   font-weight: 800;
   color: #fff;
+}
+
+@media (max-width: 1440px) {
+  #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-list-row.is-compact {
+    gap: 8px;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-list-row.is-compact .home-attendance-issue-name {
+    font-size: 15px;
+  }
+
+  #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-list-row.is-compact .home-attendance-issue-meta,
+  #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-list-row.is-compact .home-attendance-issue-status {
+    font-size: 11px;
+  }
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card .empty-state,
