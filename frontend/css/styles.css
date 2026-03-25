@@ -23387,6 +23387,43 @@ button.attendance-status-special-card.active {
   min-height: 220px;
 }
 
+.notices-compose-text-block.is-flow-mode .notices-compose-editor-surface {
+  min-height: 0;
+  gap: 0;
+}
+
+.notices-compose-text-block.is-flow-mode .notices-compose-embedded-blocks {
+  display: grid;
+  gap: 18px;
+}
+
+.notices-compose-flow-block {
+  width: 100%;
+  max-width: 100%;
+}
+
+.notices-compose-flow-paragraph {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.notices-compose-flow-surface {
+  min-height: 0;
+  gap: 0;
+}
+
+.notices-compose-flow-textarea {
+  min-height: 88px;
+  height: auto;
+  padding-top: 0;
+  resize: none;
+  overflow: hidden;
+}
+
+.notices-compose-flow-table-block {
+  clear: both;
+}
+
 .notices-compose-footer {
   display: flex;
   justify-content: flex-end;
@@ -23553,6 +23590,18 @@ button.attendance-status-special-card.active {
 .notices-compose-inline-block-floating-right {
   float: right;
   margin-left: 24px;
+}
+
+.is-notice-compose-flow-dragging {
+  opacity: 0.72;
+}
+
+.notices-compose-flow-drop-before {
+  box-shadow: inset 0 3px 0 rgba(249, 115, 22, 0.92);
+}
+
+.notices-compose-flow-drop-after {
+  box-shadow: inset 0 -3px 0 rgba(249, 115, 22, 0.92);
 }
 
 .notices-compose-inline-meta {
@@ -23956,14 +24005,18 @@ body.notices-compose-dragging .notices-inline-drag-handle {
   position: relative;
   overflow: visible;
   min-height: 0;
+  width: 100%;
+  max-width: 100%;
   padding-right: 44px;
   padding-bottom: 44px;
   background: transparent;
+  box-sizing: border-box;
 }
 
 .notices-compose-table-shell {
   position: relative;
   width: 100%;
+  max-width: 100%;
 }
 
 .notices-compose-table {

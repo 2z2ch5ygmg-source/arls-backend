@@ -18678,13 +18678,19 @@ function clearNoticeComposeDraftStorage({ noticeId = '' } = {}) {
 function buildSerializableNoticeComposeDraft(draft = null) {
   const normalizedDraft = draft && typeof draft === 'object' ? draft : {};
   const blockOrder = normalizeNoticeComposeBlockOrder(normalizedDraft.blockOrder, normalizedDraft);
+  const composeContentBlocks = cloneNoticeComposeContentBlocks(
+    normalizedDraft.composeContentBlocks,
+    normalizedDraft.bodyText,
+    normalizedDraft.table,
+  );
   return {
     category: normalizeNoticeCategory(normalizedDraft.category || 'ops') === 'all'
       ? 'ops'
       : normalizeNoticeCategory(normalizedDraft.category || 'ops'),
     title: String(normalizedDraft.title || ''),
     summaryText: '',
-    bodyText: String(normalizedDraft.bodyText || ''),
+    bodyText: buildNoticeComposeBodyTextFromContentBlocks(composeContentBlocks),
+    composeContentBlocks,
     blockOrder,
     imagesEnabled: Boolean(normalizedDraft.imagesEnabled),
     images: cloneNoticeImageDrafts(normalizedDraft.images),
@@ -18708,9 +18714,18 @@ function normalizeSavedNoticeComposeDraft(raw = null, fallbackCategory = 'ops') 
       : normalizeNoticeCategory(source.category || fallbackCategory || 'ops'),
     title: String(source.title || ''),
     summaryText: '',
-    bodyText: [String(source.summaryText || '').trim(), String(source.bodyText || '').trim()]
+    bodyText: buildNoticeComposeBodyTextFromContentBlocks(
+      source.composeContentBlocks,
+    ) || [String(source.summaryText || '').trim(), String(source.bodyText || '').trim()]
       .filter(Boolean)
       .join('\n\n'),
+    composeContentBlocks: cloneNoticeComposeContentBlocks(
+      source.composeContentBlocks,
+      [String(source.summaryText || '').trim(), String(source.bodyText || '').trim()]
+        .filter(Boolean)
+        .join('\n\n'),
+      draftLike.table,
+    ),
     blockOrder: normalizeNoticeComposeBlockOrder(source.blockOrder, draftLike),
     imagesEnabled: draftLike.imagesEnabled || draftLike.images.length > 0,
     images: draftLike.images,
@@ -18975,6 +18990,154 @@ function cloneNoticeTableDraft(rawTable = null) {
   };
 }
 
+function createDefaultNoticeComposeContentBlocks() {
+  return [
+    { id: createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text: '' },
+  ];
+}
+
+function createNoticeComposeBlockId(kind = 'block') {
+  const normalizedKind = String(kind || 'block').trim().toLowerCase() || 'block';
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `notice-${normalizedKind}-${crypto.randomUUID()}`;
+  }
+  return `notice-${normalizedKind}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeNoticeComposeContentBlocks(rawBlocks = null, fallbackBodyText = '', legacyTable = null) {
+  const normalized = [];
+  if (Array.isArray(rawBlocks) && rawBlocks.length) {
+    rawBlocks.forEach((item) => {
+      const block = item && typeof item === 'object' ? item : {};
+      const blockId = String(block.id || '').trim() || createNoticeComposeBlockId(block.kind || 'block');
+      const kind = String(block.kind || '').trim().toLowerCase();
+      if (kind === 'paragraph') {
+        normalized.push({
+          id: blockId,
+          kind: 'paragraph',
+          text: String(block.text || '').replace(/\r\n/g, '\n'),
+        });
+        return;
+      }
+      if (kind === 'image' || kind === 'poll') {
+        normalized.push({ id: blockId, kind });
+        return;
+      }
+      if (kind === 'table') {
+        normalized.push({
+          id: blockId,
+          kind: 'table',
+          table: cloneNoticeTableDraft({
+            enabled: true,
+            ...(block.table && typeof block.table === 'object' ? block.table : block),
+          }),
+        });
+      }
+    });
+  }
+  if (!normalized.length) {
+    String(fallbackBodyText || '')
+      .split(/\n{2,}/)
+      .map((text) => text.trim())
+      .filter(Boolean)
+      .forEach((text) => {
+        normalized.push({ id: createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text });
+      });
+    const legacy = cloneNoticeTableDraft(legacyTable);
+    if (legacy.enabled) {
+      normalized.push({ id: createNoticeComposeBlockId('table'), kind: 'table', table: legacy });
+    }
+  }
+  if (!normalized.length) {
+    return createDefaultNoticeComposeContentBlocks();
+  }
+  if (!normalized.some((block) => block.kind === 'paragraph')) {
+    normalized.push({ kind: 'paragraph', text: '' });
+  }
+  return normalized;
+}
+
+function cloneNoticeComposeContentBlocks(rawBlocks = null, fallbackBodyText = '', legacyTable = null) {
+  return normalizeNoticeComposeContentBlocks(rawBlocks, fallbackBodyText, legacyTable).map((block) => {
+    if (block.kind === 'table') {
+      return {
+        id: String(block.id || '').trim() || createNoticeComposeBlockId('table'),
+        kind: 'table',
+        table: cloneNoticeTableDraft(block.table),
+      };
+    }
+    if (block.kind === 'paragraph') {
+      return {
+        id: String(block.id || '').trim() || createNoticeComposeBlockId('paragraph'),
+        kind: 'paragraph',
+        text: String(block.text || ''),
+      };
+    }
+    return {
+      id: String(block.id || '').trim() || createNoticeComposeBlockId(block.kind || 'block'),
+      kind: block.kind,
+    };
+  });
+}
+
+function buildNoticeComposeBodyTextFromContentBlocks(rawBlocks = null) {
+  return normalizeNoticeComposeContentBlocks(rawBlocks).filter((block) => block.kind === 'paragraph')
+    .map((block) => String(block.text || '').trim())
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function getNoticeComposeContentBlocks(draft = null) {
+  const source = draft && typeof draft === 'object' ? draft : {};
+  return cloneNoticeComposeContentBlocks(source.composeContentBlocks, source.bodyText, source.table);
+}
+
+function setNoticeComposeContentBlocks(nextBlocks = [], { markDirty = false, rerender = false } = {}) {
+  const notices = ensureNoticesState();
+  const composeDraft = notices.composeDraft && typeof notices.composeDraft === 'object'
+    ? notices.composeDraft
+    : buildSerializableNoticeComposeDraft(null);
+  const composeContentBlocks = cloneNoticeComposeContentBlocks(nextBlocks, composeDraft.bodyText, composeDraft.table);
+  const hasImageBlock = composeContentBlocks.some((block) => block.kind === 'image');
+  const hasPollBlock = composeContentBlocks.some((block) => block.kind === 'poll');
+  const tableBlocks = composeContentBlocks.filter((block) => block.kind === 'table');
+  const nextTable = tableBlocks.length
+    ? cloneNoticeTableDraft({
+      enabled: true,
+      ...(tableBlocks[0].table || {}),
+    })
+    : createDefaultNoticeTableDraft();
+  const blockOrder = normalizeNoticeComposeBlockOrder(
+    composeContentBlocks
+      .filter((block) => block.kind === 'image' || block.kind === 'poll' || block.kind === 'table')
+      .map((block) => block.kind),
+    {
+      ...composeDraft,
+      imagesEnabled: Boolean(composeDraft.imagesEnabled) || hasImageBlock,
+      poll: hasPollBlock ? cloneNoticePollDraft({ ...(composeDraft.poll || {}), enabled: true }) : cloneNoticePollDraft(composeDraft.poll),
+      table: nextTable,
+    },
+  );
+  notices.composeDraft = {
+    ...composeDraft,
+    bodyText: buildNoticeComposeBodyTextFromContentBlocks(composeContentBlocks),
+    composeContentBlocks,
+    blockOrder,
+    imagesEnabled: Boolean(composeDraft.imagesEnabled) || hasImageBlock,
+    poll: hasPollBlock ? cloneNoticePollDraft({ ...(composeDraft.poll || {}), enabled: true }) : cloneNoticePollDraft(composeDraft.poll),
+    table: nextTable,
+  };
+  if (markDirty) markNoticeComposeDraftDirty();
+  if (rerender) renderNoticeComposeDocumentFlow();
+}
+
+function resolveNoticeComposeActiveFlowIndex() {
+  const activeEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const blockEl = activeEl?.closest?.('[data-notice-compose-flow-index]');
+  if (!(blockEl instanceof HTMLElement)) return -1;
+  return Number.parseInt(String(blockEl.dataset.noticeComposeFlowIndex || '-1'), 10);
+}
+
 function normalizeNoticeComposeInlineLayout(rawLeft = 0, rawTop = 0, rawWidth = 0, rawHeight = 0) {
   const left = Number.parseInt(String(rawLeft || 0), 10);
   const top = Number.parseInt(String(rawTop || 0), 10);
@@ -19219,6 +19382,7 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
     title: String(row?.title || '').trim(),
     summaryText: '',
     bodyText: bodyParts.join('\n\n'),
+    composeContentBlocks: cloneNoticeComposeContentBlocks(blocks, bodyParts.join('\n\n'), table),
     blockOrder: normalizeNoticeComposeBlockOrder(blockOrder, {
       imagesEnabled: images.length > 0,
       images,
@@ -19234,27 +19398,23 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
 }
 
 function buildNoticeBodyBlocksFromDraft(draft = null) {
-  const bodyText = [String(draft?.summaryText || '').trim(), String(draft?.bodyText || '').trim()]
-    .filter(Boolean)
-    .join('\n\n');
+  const composeContentBlocks = cloneNoticeComposeContentBlocks(
+    draft?.composeContentBlocks,
+    [String(draft?.summaryText || '').trim(), String(draft?.bodyText || '').trim()]
+      .filter(Boolean)
+      .join('\n\n'),
+    draft?.table,
+  );
   const images = normalizeNoticeImageDrafts(draft?.images);
   const poll = normalizeNoticePollDraft(draft?.poll);
-  const table = normalizeNoticeTableDraft(draft?.table);
   const baseTable = createDefaultNoticeTableDraft();
   const blockOrder = normalizeNoticeComposeBlockOrder(draft?.blockOrder, {
     imagesEnabled: Boolean(draft?.imagesEnabled),
     images,
     poll,
-    table,
+    table: cloneNoticeTableDraft(draft?.table),
   });
   const blocks = [];
-  bodyText
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean)
-    .forEach((text) => {
-      blocks.push({ kind: 'paragraph', variant: 'body', text });
-    });
   const pollOptions = poll.options
     .map((item) => ({
       option_id: String(item.optionId || '').trim(),
@@ -19262,11 +19422,11 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
     }))
     .filter((item) => item.label)
     .slice(0, NOTICE_POLL_MAX_OPTIONS);
-  const hasCustomColumns = table.columns.some((item, index) => String(item || '').trim() !== String(baseTable.columns[index] || '').trim());
-  const hasTableRows = table.rows.some((row) => row.some((cell) => String(cell || '').trim()));
-  const hasTableContent = Boolean(table.enabled && (table.title || hasCustomColumns || hasTableRows));
+  let imageInserted = false;
+  let pollInserted = false;
   const optionalBlockFactories = {
     image: () => {
+      if (imageInserted) return;
       images.forEach((image) => {
         blocks.push({
           kind: 'image',
@@ -19276,8 +19436,10 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
           image_src: image.imageSrc,
         });
       });
+      imageInserted = true;
     },
     poll: () => {
+      if (pollInserted) return;
       if (poll.enabled && String(poll.question || '').trim() && pollOptions.length >= NOTICE_POLL_MIN_OPTIONS) {
         blocks.push({
           kind: 'poll',
@@ -19299,28 +19461,46 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
           },
         });
       }
+      pollInserted = true;
     },
-    table: () => {
+    table: (block = null) => {
+      const sourceTable = cloneNoticeTableDraft(block?.table);
+      const hasCustomColumns = sourceTable.columns.some((item, index) => String(item || '').trim() !== String(baseTable.columns[index] || '').trim());
+      const hasTableRows = sourceTable.rows.some((row) => row.some((cell) => String(cell || '').trim()));
+      const hasTableContent = Boolean(sourceTable.enabled && (sourceTable.title || hasCustomColumns || hasTableRows));
       if (hasTableContent) {
-        const rows = table.rows
+        const rows = sourceTable.rows
           .map((row) => row.map((cell) => String(cell || '').trim()))
           .filter((row) => row.some(Boolean));
         blocks.push({
           kind: 'table',
           title: '',
-          has_header: Boolean(table.hasHeader),
-          columns: table.columns.slice(),
+          has_header: Boolean(sourceTable.hasHeader),
+          columns: sourceTable.columns.slice(),
           rows,
           notice_compose_layout: {
-            left: table.layout.left,
-            top: table.layout.top,
-            width: table.layout.width,
-            height: table.layout.height,
+            left: 0,
+            top: 0,
+            width: 0,
+            height: 0,
           },
         });
       }
     },
   };
+  composeContentBlocks.forEach((block) => {
+    if (block.kind === 'paragraph') {
+      String(block.text || '')
+        .split(/\n{2,}/)
+        .map((paragraph) => paragraph.trim())
+        .filter(Boolean)
+        .forEach((text) => {
+          blocks.push({ kind: 'paragraph', variant: 'body', text });
+        });
+      return;
+    }
+    optionalBlockFactories[block.kind]?.(block);
+  });
   blockOrder.forEach((kind) => {
     optionalBlockFactories[kind]?.();
   });
@@ -19400,6 +19580,7 @@ function resetNoticeComposeDraft(category = 'ops') {
     title: '',
     summaryText: '',
     bodyText: '',
+    composeContentBlocks: createDefaultNoticeComposeContentBlocks(),
     blockOrder: [],
     imagesEnabled: false,
     images: [],
@@ -19425,17 +19606,87 @@ function isNoticeComposeTextField(target) {
   if (!field) return false;
   const id = String(field.id || '').trim();
   return id === 'noticesComposeTitle'
-    || id === 'noticesComposeBody';
+    || id === 'noticesComposeBody'
+    || field.dataset.noticeComposeParagraphInput === 'true';
+}
+
+function resizeNoticeComposeParagraphInput(textarea) {
+  if (!(textarea instanceof HTMLTextAreaElement)) return;
+  textarea.style.height = 'auto';
+  const nextHeight = Math.max(88, textarea.scrollHeight);
+  textarea.style.height = `${nextHeight}px`;
+}
+
+function syncNoticeComposeActiveBodyInput(activeInput = null) {
+  const paragraphInputs = Array.from(document.querySelectorAll('[data-notice-compose-paragraph-input="true"]'));
+  paragraphInputs.forEach((input) => {
+    if (!(input instanceof HTMLTextAreaElement)) return;
+    if (input === activeInput) {
+      input.id = 'noticesComposeBody';
+      input.classList.add('is-active-compose-paragraph');
+    } else if (input.id === 'noticesComposeBody') {
+      input.removeAttribute('id');
+      input.classList.remove('is-active-compose-paragraph');
+    } else {
+      input.classList.remove('is-active-compose-paragraph');
+    }
+  });
+}
+
+function readNoticeComposeContentBlocksFromDom() {
+  const notices = ensureNoticesState();
+  const currentBlocks = getNoticeComposeContentBlocks(notices.composeDraft);
+  const blockMap = new Map(currentBlocks.map((block) => [String(block.id || '').trim(), block]));
+  const flowBlocks = Array.from(document.querySelectorAll('[data-notice-compose-flow-index]'));
+  if (!flowBlocks.length) {
+    return currentBlocks;
+  }
+  const nextBlocks = [];
+  flowBlocks.forEach((blockEl) => {
+    if (!(blockEl instanceof HTMLElement)) return;
+    const kind = String(blockEl.dataset.noticeComposeFlowKind || '').trim().toLowerCase();
+    const blockId = String(blockEl.dataset.noticeComposeBlockId || '').trim();
+    const current = blockMap.get(blockId);
+    if (kind === 'paragraph') {
+      const input = blockEl.querySelector('[data-notice-compose-paragraph-input="true"]');
+      nextBlocks.push({
+        id: blockId || createNoticeComposeBlockId('paragraph'),
+        kind: 'paragraph',
+        text: input instanceof HTMLTextAreaElement ? String(input.value || '') : String(current?.text || ''),
+      });
+      return;
+    }
+    if (kind === 'table' && current?.kind === 'table') {
+      nextBlocks.push({
+        id: blockId || createNoticeComposeBlockId('table'),
+        kind: 'table',
+        table: cloneNoticeTableDraft(current.table),
+      });
+      return;
+    }
+    if ((kind === 'image' || kind === 'poll') && current?.kind === kind) {
+      nextBlocks.push({
+        id: blockId || createNoticeComposeBlockId(kind),
+        kind,
+      });
+    }
+  });
+  return cloneNoticeComposeContentBlocks(nextBlocks, notices.composeDraft?.bodyText, notices.composeDraft?.table);
 }
 
 function syncNoticeComposeDraftFromFields() {
   const notices = ensureNoticesState();
   const categorySelect = $('#noticesComposeCategory');
   const titleInput = $('#noticesComposeTitle');
-  const bodyInput = $('#noticesComposeBody');
-  const nextTable = cloneNoticeTableDraft(notices.composeDraft?.table);
+  const composeContentBlocks = readNoticeComposeContentBlocksFromDom();
+  const firstTableBlock = composeContentBlocks.find((block) => block.kind === 'table');
+  const nextTable = firstTableBlock
+    ? cloneNoticeTableDraft({
+      enabled: true,
+      ...(firstTableBlock.table || {}),
+    })
+    : createDefaultNoticeTableDraft();
   nextTable.title = '';
-  nextTable.enabled = Boolean(notices.composeDraft?.table?.enabled);
   const nextImages = cloneNoticeImageDrafts(notices.composeDraft?.images);
   const imagesEnabled = Boolean(notices.composeDraft?.imagesEnabled) || nextImages.length > 0;
   if (!imagesEnabled) {
@@ -19447,8 +19698,14 @@ function syncNoticeComposeDraftFromFields() {
       : (normalizeNoticeCategory(notices.composeDraft?.category || 'ops') === 'all' ? 'ops' : normalizeNoticeCategory(notices.composeDraft?.category || 'ops')),
     title: titleInput instanceof HTMLInputElement ? String(titleInput.value || '') : String(notices.composeDraft?.title || ''),
     summaryText: '',
-    bodyText: bodyInput instanceof HTMLTextAreaElement ? String(bodyInput.value || '') : String(notices.composeDraft?.bodyText || ''),
-    blockOrder: normalizeNoticeComposeBlockOrder(notices.composeDraft?.blockOrder, notices.composeDraft),
+    bodyText: buildNoticeComposeBodyTextFromContentBlocks(composeContentBlocks),
+    composeContentBlocks,
+    blockOrder: normalizeNoticeComposeBlockOrder(
+      composeContentBlocks
+        .filter((block) => block.kind === 'image' || block.kind === 'poll' || block.kind === 'table')
+        .map((block) => block.kind),
+      notices.composeDraft,
+    ),
     imagesEnabled,
     images: nextImages,
     poll: cloneNoticePollDraft(notices.composeDraft?.poll),
@@ -19471,7 +19728,6 @@ function writeNoticeComposeDraftToFields() {
   const draft = notices.composeDraft || {};
   const categorySelect = $('#noticesComposeCategory');
   const titleInput = $('#noticesComposeTitle');
-  const bodyInput = $('#noticesComposeBody');
   if (categorySelect instanceof HTMLSelectElement) {
     const nextCategory = normalizeNoticeCategory(draft.category || notices.category || 'ops');
     categorySelect.value = nextCategory === 'all' ? 'ops' : nextCategory;
@@ -19479,13 +19735,20 @@ function writeNoticeComposeDraftToFields() {
   if (titleInput instanceof HTMLInputElement) {
     titleInput.value = String(draft.title || '');
   }
-  if (bodyInput instanceof HTMLTextAreaElement) {
+  const bodyInput = $('#noticesComposeBody');
+  if (bodyInput instanceof HTMLTextAreaElement && !document.querySelector('[data-notice-compose-flow-index]')) {
     bodyInput.value = String(draft.bodyText || '');
   }
 }
 
 function focusNoticeComposeBodyInput({ placeAtEnd = false } = {}) {
-  const bodyInput = $('#noticesComposeBody');
+  let bodyInput = $('#noticesComposeBody');
+  if (!(bodyInput instanceof HTMLTextAreaElement)) {
+    bodyInput = document.querySelector('[data-notice-compose-paragraph-input="true"]');
+    if (bodyInput instanceof HTMLTextAreaElement) {
+      syncNoticeComposeActiveBodyInput(bodyInput);
+    }
+  }
   if (!(bodyInput instanceof HTMLTextAreaElement)) return null;
   bodyInput.focus({ preventScroll: false });
   if (placeAtEnd) {
@@ -19510,6 +19773,7 @@ function insertNoticeComposeBodySnippet(snippet = '', { caretOffset = null } = {
   if (typeof bodyInput.setSelectionRange === 'function') {
     bodyInput.setSelectionRange(nextCaret, nextCaret);
   }
+  resizeNoticeComposeParagraphInput(bodyInput);
   syncNoticeComposeDraftFromFields();
   markNoticeComposeDraftDirty();
   return true;
@@ -19606,6 +19870,10 @@ function setNoticeComposeBlockEnabled(kind = '', enabled = true, { clear = false
     if (!enabled && clear) {
       nextDraft.table = createDefaultNoticeTableDraft();
     }
+    const blocks = getNoticeComposeContentBlocks(nextDraft);
+    nextDraft.composeContentBlocks = enabled
+      ? blocks
+      : blocks.filter((block) => block.kind !== 'table');
     nextDraft.blockOrder = enabled
       ? insertNoticeComposeBlockIntoOrder('table', nextDraft)
       : getNoticeComposeInsertionOrder(nextDraft).filter((item) => item !== 'table');
@@ -19643,10 +19911,11 @@ function renderNoticeComposeToolbar() {
   const draft = notices.composeDraft && typeof notices.composeDraft === 'object'
     ? notices.composeDraft
     : {};
+  const composeContentBlocks = getNoticeComposeContentBlocks(draft);
   const toolbarMap = [
     { selector: '#noticesComposeInsertImageBtn', active: Boolean(draft.imagesEnabled) || normalizeNoticeImageDrafts(draft.images).length > 0 },
     { selector: '#noticesComposeInsertPollBtn', active: Boolean(draft.poll?.enabled) },
-    { selector: '#noticesComposeInsertTableBtn', active: Boolean(draft.table?.enabled) },
+    { selector: '#noticesComposeInsertTableBtn', active: composeContentBlocks.some((block) => block.kind === 'table') },
   ];
   toolbarMap.forEach(({ selector, active }) => {
     const button = $(selector);
@@ -19701,6 +19970,106 @@ function openNoticeComposeTablePicker() {
   renderNoticeComposeTablePicker();
 }
 
+function getNoticeComposeTableBlockIndex(blockId = '', draft = null) {
+  const blocks = getNoticeComposeContentBlocks(draft || ensureNoticesState().composeDraft);
+  const normalizedId = String(blockId || '').trim();
+  if (!normalizedId) return -1;
+  return blocks.findIndex((block) => block.kind === 'table' && String(block.id || '').trim() === normalizedId);
+}
+
+function updateNoticeComposeTableBlock(blockId = '', updater = null, { markDirty = true, rerender = true } = {}) {
+  const notices = ensureNoticesState();
+  const blocks = getNoticeComposeContentBlocks(notices.composeDraft);
+  const normalizedId = String(blockId || '').trim();
+  const nextBlocks = blocks.map((block) => {
+    if (block.kind !== 'table' || String(block.id || '').trim() !== normalizedId) {
+      return block;
+    }
+    const nextTable = cloneNoticeTableDraft(typeof updater === 'function' ? updater(block.table) : block.table);
+    nextTable.enabled = true;
+    return {
+      id: block.id,
+      kind: 'table',
+      table: nextTable,
+    };
+  });
+  setNoticeComposeContentBlocks(nextBlocks, { markDirty, rerender });
+}
+
+function removeNoticeComposeTableBlock(blockId = '', { markDirty = true, rerender = true } = {}) {
+  const notices = ensureNoticesState();
+  const normalizedId = String(blockId || '').trim();
+  const nextBlocks = getNoticeComposeContentBlocks(notices.composeDraft)
+    .filter((block) => !(block.kind === 'table' && String(block.id || '').trim() === normalizedId));
+  setNoticeComposeContentBlocks(nextBlocks, { markDirty, rerender });
+}
+
+function insertNoticeComposeTableBlock(tableDraft = null) {
+  const notices = ensureNoticesState();
+  const blocks = getNoticeComposeContentBlocks(notices.composeDraft);
+  const activeFlowIndex = resolveNoticeComposeActiveFlowIndex();
+  const activeInput = document.activeElement instanceof HTMLTextAreaElement
+    && document.activeElement.dataset.noticeComposeParagraphInput === 'true'
+    ? document.activeElement
+    : null;
+  const nextTable = cloneNoticeTableDraft(tableDraft);
+  nextTable.enabled = true;
+  const nextBlock = {
+    id: createNoticeComposeBlockId('table'),
+    kind: 'table',
+    table: nextTable,
+  };
+  const nextBlocks = [];
+  const activeBlock = activeFlowIndex >= 0 ? blocks[activeFlowIndex] : null;
+  if (activeBlock?.kind === 'paragraph' && activeInput instanceof HTMLTextAreaElement) {
+    const text = String(activeInput.value || '');
+    const selectionStart = Number.isInteger(activeInput.selectionStart) ? activeInput.selectionStart : text.length;
+    const selectionEnd = Number.isInteger(activeInput.selectionEnd) ? activeInput.selectionEnd : selectionStart;
+    const beforeText = text.slice(0, selectionStart);
+    const afterText = text.slice(selectionEnd);
+    blocks.forEach((block, index) => {
+      if (index !== activeFlowIndex) {
+        nextBlocks.push(block);
+        return;
+      }
+      if (beforeText.trim()) {
+        nextBlocks.push({ id: createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text: beforeText });
+      }
+      nextBlocks.push(nextBlock);
+      nextBlocks.push({
+        id: createNoticeComposeBlockId('paragraph'),
+        kind: 'paragraph',
+        text: afterText,
+      });
+    });
+  } else {
+    const insertIndex = activeFlowIndex >= 0 ? activeFlowIndex + 1 : blocks.length;
+    blocks.forEach((block, index) => {
+      if (index === insertIndex) {
+        nextBlocks.push(nextBlock);
+      }
+      nextBlocks.push(block);
+    });
+    if (insertIndex >= blocks.length) {
+      nextBlocks.push(nextBlock);
+    }
+    if (!nextBlocks.some((block) => block.kind === 'paragraph')) {
+      nextBlocks.push({ id: createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text: '' });
+    }
+  }
+  setNoticeComposeContentBlocks(nextBlocks, { markDirty: true, rerender: true });
+  notices.composeDraft = {
+    ...(notices.composeDraft || {}),
+    table: nextTable,
+  };
+  requestAnimationFrame(() => {
+    const firstCell = document.querySelector(`[data-notice-table-block-id="${nextBlock.id}"][data-notice-table-field="header"][data-notice-table-col="0"], [data-notice-table-block-id="${nextBlock.id}"][data-notice-table-field="cell"][data-notice-table-row="0"][data-notice-table-col="0"]`);
+    if (firstCell instanceof HTMLInputElement) {
+      firstCell.focus({ preventScroll: false });
+    }
+  });
+}
+
 function applyNoticeComposeTablePreset(rows = 2, cols = 2) {
   const notices = ensureNoticesState();
   const rowCount = Math.max(1, Math.min(NOTICE_TABLE_PICKER_MAX_ROWS, Number.parseInt(String(rows), 10) || 2));
@@ -19710,25 +20079,11 @@ function applyNoticeComposeTablePreset(rows = 2, cols = 2) {
   table.hasHeader = true;
   table.columns = createNoticeTableColumns(colCount);
   table.rows = createNoticeTableRows(rowCount, colCount);
-  notices.composeDraft = {
-    ...(notices.composeDraft || {}),
-    table,
-    blockOrder: insertNoticeComposeBlockIntoOrder('table', {
-      ...(notices.composeDraft || {}),
-      table,
-    }),
-  };
   notices.composeTablePickerRows = rowCount;
   notices.composeTablePickerCols = colCount;
   notices.composeTablePickerOpen = false;
   renderNoticeComposeTablePicker();
-  markNoticeComposeDraftDirty();
-  writeNoticeComposeDraftToFields();
-  renderNoticeComposeTableEditor();
-  const firstCell = document.querySelector('[data-notice-table-field="header"][data-notice-table-col="0"]');
-  if (firstCell instanceof HTMLInputElement) {
-    firstCell.focus({ preventScroll: false });
-  }
+  insertNoticeComposeTableBlock(table);
 }
 
 function getNoticeComposeLineSnapOffset(rawOffset = 0) {
@@ -19856,24 +20211,95 @@ function setNoticeComposeInlineLayout(kind = '', nextLayout = null, { rerender =
   }
 }
 
+function clearNoticeComposeFlowDropIndicators() {
+  document.querySelectorAll('.notices-compose-flow-drop-before, .notices-compose-flow-drop-after, .is-notice-compose-flow-dragging')
+    .forEach((element) => {
+      if (!(element instanceof HTMLElement)) return;
+      element.classList.remove('notices-compose-flow-drop-before', 'notices-compose-flow-drop-after', 'is-notice-compose-flow-dragging');
+    });
+}
+
+function resolveNoticeComposeFlowDropTarget(clientY = 0, draggedBlockId = '') {
+  const flowBlocks = Array.from(document.querySelectorAll('#noticesComposeEmbeddedBlocks [data-notice-compose-flow-index]'))
+    .filter((element) => element instanceof HTMLElement);
+  if (!flowBlocks.length) {
+    return { targetId: '', placement: 'after' };
+  }
+  let resolved = null;
+  flowBlocks.forEach((element) => {
+    if (!(element instanceof HTMLElement)) return;
+    const blockId = String(element.dataset.noticeComposeBlockId || '').trim();
+    if (blockId === String(draggedBlockId || '').trim()) return;
+    const rect = element.getBoundingClientRect();
+    const midpoint = rect.top + (rect.height / 2);
+    const placement = clientY <= midpoint ? 'before' : 'after';
+    if (!resolved) {
+      resolved = { targetId: blockId, placement, distance: Math.abs(clientY - midpoint), element };
+      return;
+    }
+    const distance = Math.abs(clientY - midpoint);
+    if (distance < resolved.distance) {
+      resolved = { targetId: blockId, placement, distance, element };
+    }
+  });
+  if (!resolved) {
+    return { targetId: '', placement: 'after' };
+  }
+  return {
+    targetId: resolved.targetId,
+    placement: resolved.placement,
+  };
+}
+
+function reorderNoticeComposeFlowBlock(blockId = '', targetId = '', placement = 'after') {
+  const notices = ensureNoticesState();
+  const normalizedBlockId = String(blockId || '').trim();
+  const normalizedTargetId = String(targetId || '').trim();
+  const blocks = getNoticeComposeContentBlocks(notices.composeDraft);
+  const fromIndex = blocks.findIndex((block) => String(block.id || '').trim() === normalizedBlockId);
+  const targetIndex = blocks.findIndex((block) => String(block.id || '').trim() === normalizedTargetId);
+  if (fromIndex === -1 || targetIndex === -1 || fromIndex === targetIndex) {
+    return false;
+  }
+  const nextBlocks = blocks.slice();
+  const [movedBlock] = nextBlocks.splice(fromIndex, 1);
+  let insertIndex = placement === 'before' ? targetIndex : targetIndex + 1;
+  if (fromIndex < insertIndex) {
+    insertIndex -= 1;
+  }
+  nextBlocks.splice(insertIndex, 0, movedBlock);
+  setNoticeComposeContentBlocks(nextBlocks, { markDirty: true, rerender: true });
+  return true;
+}
+
 function beginNoticeComposeInlinePointerSession(kind = '', sourceEvent = null, { mode = 'drag', direction = '' } = {}) {
   if (!(sourceEvent instanceof MouseEvent)) return;
   if (!isNoticesComposeActive()) return;
   const notices = ensureNoticesState();
   const normalizedKind = String(kind || '').trim().toLowerCase();
   if (normalizedKind !== 'table' && normalizedKind !== 'poll') return;
+  const blockEl = sourceEvent.target instanceof Element
+    ? sourceEvent.target.closest('[data-notice-compose-block-id]')
+    : null;
+  const blockId = blockEl instanceof HTMLElement ? String(blockEl.dataset.noticeComposeBlockId || '').trim() : '';
   const layout = normalizedKind === 'table'
     ? normalizeNoticeTableLayout(notices.composeDraft?.table?.layout || {})
     : normalizeNoticePollLayout(notices.composeDraft?.poll?.layout || {});
   noticeComposeDragState = {
+    blockId,
     kind: normalizedKind,
     mode: String(mode || 'drag').trim().toLowerCase(),
     direction: String(direction || '').trim().toLowerCase(),
     startX: sourceEvent.clientX,
     startY: sourceEvent.clientY,
     startLayout: { ...layout },
+    dropTargetId: '',
+    dropPlacement: 'after',
     didMove: false,
   };
+  if (normalizedKind === 'table' && blockEl instanceof HTMLElement) {
+    blockEl.classList.add('is-notice-compose-flow-dragging');
+  }
   document.body.classList.add('notices-compose-dragging');
   sourceEvent.preventDefault();
 }
@@ -19884,6 +20310,29 @@ function handleNoticeComposeInlinePointerMove(event) {
   const deltaX = Math.round(event.clientX - session.startX);
   const deltaY = Math.round(event.clientY - session.startY);
   if (!deltaX && !deltaY) return;
+
+  if (session.kind === 'table' && session.mode === 'drag') {
+    const dropTarget = resolveNoticeComposeFlowDropTarget(event.clientY, session.blockId);
+    clearNoticeComposeFlowDropIndicators();
+    const draggedBlock = document.querySelector(`[data-notice-compose-block-id="${session.blockId}"]`);
+    if (draggedBlock instanceof HTMLElement) {
+      draggedBlock.classList.add('is-notice-compose-flow-dragging');
+    }
+    if (dropTarget.targetId) {
+      const targetEl = document.querySelector(`[data-notice-compose-block-id="${dropTarget.targetId}"]`);
+      if (targetEl instanceof HTMLElement) {
+        targetEl.classList.add(
+          dropTarget.placement === 'before'
+            ? 'notices-compose-flow-drop-before'
+            : 'notices-compose-flow-drop-after',
+        );
+      }
+      session.dropTargetId = dropTarget.targetId;
+      session.dropPlacement = dropTarget.placement;
+      session.didMove = true;
+    }
+    return;
+  }
 
   if (session.kind === 'poll') {
     const nextTop = Math.max(NOTICE_COMPOSE_BLOCK_MIN_TOP_PX, session.startLayout.top + deltaY);
@@ -19951,9 +20400,21 @@ function handleNoticeComposeInlinePointerMove(event) {
 
 function finishNoticeComposeInlinePointerSession() {
   if (!noticeComposeDragState) return;
-  const shouldPersist = Boolean(noticeComposeDragState.didMove);
+  const session = noticeComposeDragState;
+  const shouldPersist = Boolean(session.didMove);
   noticeComposeDragState = null;
   document.body.classList.remove('notices-compose-dragging');
+  if (session.kind === 'table' && session.mode === 'drag') {
+    const didReorder = session.dropTargetId
+      ? reorderNoticeComposeFlowBlock(session.blockId, session.dropTargetId, session.dropPlacement)
+      : false;
+    clearNoticeComposeFlowDropIndicators();
+    if (!didReorder && shouldPersist) {
+      markNoticeComposeDraftDirty();
+    }
+    return;
+  }
+  clearNoticeComposeFlowDropIndicators();
   if (shouldPersist) {
     markNoticeComposeDraftDirty();
   }
@@ -19968,29 +20429,44 @@ function renderNoticeComposeDocumentFlow() {
   const tableBlock = $('#noticesComposeTableBlock');
   const pollBlock = $('#noticesComposePollBlock');
   if (!(flow instanceof HTMLElement) || !(bodyBlock instanceof HTMLElement) || !(embeddedBlocks instanceof HTMLElement)) return;
+  const legacyBodyInput = bodyBlock.querySelector('[data-notice-compose-legacy-body-input="true"], .notices-compose-editor-surface > textarea:not([data-notice-compose-paragraph-input])');
 
-  const order = getNoticeComposeInsertionOrder(notices.composeDraft);
-  const blockMap = {
-    image: imageBlock,
-    table: tableBlock,
-    poll: pollBlock,
-  };
-
+  const composeContentBlocks = getNoticeComposeContentBlocks(notices.composeDraft);
   const orderedNodes = [];
-  order.forEach((kind) => {
-    const el = blockMap[kind];
-    if (!(el instanceof HTMLElement)) return;
-    orderedNodes.push(el);
-  });
-  NOTICE_COMPOSE_OPTIONAL_BLOCK_KINDS.forEach((kind) => {
-    const el = blockMap[kind];
-    if (!(el instanceof HTMLElement)) return;
-    if (!orderedNodes.includes(el)) {
-      orderedNodes.push(el);
+  composeContentBlocks.forEach((block, index) => {
+    if (block.kind === 'paragraph') {
+      orderedNodes.push(createNoticeComposeParagraphBlockElement(block, index));
+      return;
+    }
+    if (block.kind === 'table') {
+      orderedNodes.push(createNoticeComposeTableBlockElement(block, index));
     }
   });
+
+  const order = getNoticeComposeInsertionOrder(notices.composeDraft).filter((kind) => kind === 'image' || kind === 'poll');
+  const fallbackOptionalKinds = order.length ? order : ['image', 'poll'];
+  fallbackOptionalKinds.forEach((kind) => {
+    const el = kind === 'image' ? imageBlock : pollBlock;
+    if (!(el instanceof HTMLElement)) return;
+    if (kind === 'image' && !Boolean(notices.composeDraft?.imagesEnabled)) return;
+    if (kind === 'poll' && !Boolean(notices.composeDraft?.poll?.enabled)) return;
+    const flowIndex = orderedNodes.length;
+    el.dataset.noticeComposeFlowIndex = String(flowIndex);
+    el.dataset.noticeComposeFlowKind = kind;
+    if (!String(el.dataset.noticeComposeBlockId || '').trim()) {
+      el.dataset.noticeComposeBlockId = createNoticeComposeBlockId(kind);
+    }
+    orderedNodes.push(el);
+  });
+
   flow.replaceChildren(bodyBlock);
   embeddedBlocks.replaceChildren(...orderedNodes);
+  bodyBlock.classList.add('is-flow-mode');
+  if (legacyBodyInput instanceof HTMLTextAreaElement) {
+    legacyBodyInput.dataset.noticeComposeLegacyBodyInput = 'true';
+    legacyBodyInput.classList.add('hidden');
+    legacyBodyInput.removeAttribute('id');
+  }
 
   const hasEmbeddedBlocks = orderedNodes.some((node) => node instanceof HTMLElement && !node.classList.contains('hidden'));
   bodyBlock.classList.toggle('has-embedded-blocks', hasEmbeddedBlocks);
@@ -19998,16 +20474,7 @@ function renderNoticeComposeDocumentFlow() {
   flow.style.paddingBottom = '';
   bodyBlock.style.marginTop = '';
   [imageBlock, tableBlock, pollBlock].forEach((block) => clearNoticeComposeInlineBlockStyles(block));
-
-  const tableLayout = normalizeNoticeTableLayout(notices.composeDraft?.table?.layout || {});
-  const pollLayout = normalizeNoticePollLayout(notices.composeDraft?.poll?.layout || {});
-  if (tableBlock instanceof HTMLElement && Boolean(notices.composeDraft?.table?.enabled)) {
-    applyNoticeComposeInlineBlockStyles(tableBlock, 'table', tableLayout);
-  }
-
-  if (pollBlock instanceof HTMLElement && Boolean(notices.composeDraft?.poll?.enabled)) {
-    applyNoticeComposeInlineBlockStyles(pollBlock, 'poll', pollLayout);
-  }
+  syncNoticeComposeActiveBodyInput(document.activeElement instanceof HTMLTextAreaElement ? document.activeElement : null);
 }
 
 function updateNoticeComposePollModalDraft(mutator) {
@@ -34616,22 +35083,7 @@ function renderNoticeComposePollEditor() {
   renderNoticeComposeDocumentFlow();
 }
 
-function renderNoticeComposeTableEditor() {
-  const grid = $('#noticesComposeTableGrid');
-  const block = $('#noticesComposeTableBlock');
-  if (!(grid instanceof HTMLElement)) return;
-  const notices = ensureNoticesState();
-  const tableDraft = cloneNoticeTableDraft(notices.composeDraft?.table);
-  if (block instanceof HTMLElement) {
-    block.classList.toggle('hidden', !tableDraft.enabled);
-  }
-  grid.innerHTML = '';
-  if (!tableDraft.enabled) {
-    renderNoticeComposeToolbar();
-    renderNoticeComposeDocumentFlow();
-    return;
-  }
-
+function buildNoticeComposeTableGridElement(tableDraft, blockId = '') {
   const table = document.createElement('table');
   table.className = 'notices-compose-table';
   if (tableDraft.hasHeader) {
@@ -34646,6 +35098,7 @@ function renderNoticeComposeTableEditor() {
       input.placeholder = `열 ${index + 1}`;
       input.dataset.noticeTableField = 'header';
       input.dataset.noticeTableCol = String(index);
+      input.dataset.noticeTableBlockId = blockId;
       th.appendChild(input);
       headRow.appendChild(th);
     });
@@ -34665,6 +35118,7 @@ function renderNoticeComposeTableEditor() {
       input.placeholder = `열 ${index + 1}`;
       input.dataset.noticeTableField = 'header';
       input.dataset.noticeTableCol = String(index);
+      input.dataset.noticeTableBlockId = blockId;
       td.appendChild(input);
       firstRow.appendChild(td);
     });
@@ -34682,12 +35136,14 @@ function renderNoticeComposeTableEditor() {
       input.dataset.noticeTableField = 'cell';
       input.dataset.noticeTableRow = String(rowIndex);
       input.dataset.noticeTableCol = String(colIndex);
+      input.dataset.noticeTableBlockId = blockId;
       td.appendChild(input);
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
+
   const shell = document.createElement('div');
   shell.className = 'notices-compose-table-shell';
   shell.appendChild(table);
@@ -34698,12 +35154,14 @@ function renderNoticeComposeTableEditor() {
   removeRowBtn.type = 'button';
   removeRowBtn.className = 'notices-compose-table-edge-button';
   removeRowBtn.dataset.action = 'notices-table-remove-row';
+  removeRowBtn.dataset.noticeTableBlockId = blockId;
   removeRowBtn.setAttribute('aria-label', '행 삭제');
   removeRowBtn.textContent = '-';
   const addRowBtn = document.createElement('button');
   addRowBtn.type = 'button';
   addRowBtn.className = 'notices-compose-table-edge-button';
   addRowBtn.dataset.action = 'notices-table-add-row';
+  addRowBtn.dataset.noticeTableBlockId = blockId;
   addRowBtn.setAttribute('aria-label', '행 추가');
   addRowBtn.textContent = '+';
   rowControls.append(removeRowBtn, addRowBtn);
@@ -34714,18 +35172,104 @@ function renderNoticeComposeTableEditor() {
   removeColumnBtn.type = 'button';
   removeColumnBtn.className = 'notices-compose-table-edge-button';
   removeColumnBtn.dataset.action = 'notices-table-remove-column';
+  removeColumnBtn.dataset.noticeTableBlockId = blockId;
   removeColumnBtn.setAttribute('aria-label', '열 삭제');
   removeColumnBtn.textContent = '-';
   const addColumnBtn = document.createElement('button');
   addColumnBtn.type = 'button';
   addColumnBtn.className = 'notices-compose-table-edge-button';
   addColumnBtn.dataset.action = 'notices-table-add-column';
+  addColumnBtn.dataset.noticeTableBlockId = blockId;
   addColumnBtn.setAttribute('aria-label', '열 추가');
   addColumnBtn.textContent = '+';
   columnControls.append(removeColumnBtn, addColumnBtn);
 
   shell.append(rowControls, columnControls);
-  grid.appendChild(shell);
+  return shell;
+}
+
+function createNoticeComposeParagraphBlockElement(block, index = 0) {
+  const section = document.createElement('section');
+  section.className = 'notices-compose-inline-block notices-compose-text-block notices-compose-flow-block notices-compose-flow-paragraph';
+  section.dataset.noticeInlineKind = 'body';
+  section.dataset.noticeComposeFlowIndex = String(index);
+  section.dataset.noticeComposeFlowKind = 'paragraph';
+  section.dataset.noticeComposeBlockId = String(block.id || '');
+
+  const surface = document.createElement('div');
+  surface.className = 'notices-compose-editor-surface notices-compose-flow-surface';
+  const textarea = document.createElement('textarea');
+  textarea.className = 'notices-compose-body-input notices-compose-flow-textarea';
+  textarea.rows = 3;
+  textarea.placeholder = '문단은 빈 줄로 구분합니다. 긴 안내, 절차, 유의사항을 순서대로 정리하세요.';
+  textarea.value = String(block.text || '');
+  textarea.dataset.noticeComposeParagraphInput = 'true';
+  textarea.dataset.noticeComposeBlockId = String(block.id || '');
+  if (index === 0) {
+    textarea.id = 'noticesComposeBody';
+  }
+  surface.appendChild(textarea);
+  section.appendChild(surface);
+  requestAnimationFrame(() => resizeNoticeComposeParagraphInput(textarea));
+  return section;
+}
+
+function createNoticeComposeTableBlockElement(block, index = 0) {
+  const tableDraft = cloneNoticeTableDraft({
+    enabled: true,
+    ...(block.table || {}),
+  });
+  const section = document.createElement('section');
+  section.className = 'notices-compose-inline-block notices-compose-flow-block notices-compose-flow-table-block';
+  section.setAttribute('aria-label', '표 블록');
+  section.dataset.noticeInlineKind = 'table';
+  section.dataset.noticeComposeFlowIndex = String(index);
+  section.dataset.noticeComposeFlowKind = 'table';
+  section.dataset.noticeComposeBlockId = String(block.id || '');
+
+  const meta = document.createElement('div');
+  meta.className = 'notices-compose-inline-meta';
+  const kind = document.createElement('span');
+  kind.className = 'notices-compose-inline-kind';
+  kind.textContent = '표';
+  const actions = document.createElement('div');
+  actions.className = 'notices-compose-inline-actions';
+  const moveBtn = document.createElement('button');
+  moveBtn.type = 'button';
+  moveBtn.className = 'notices-inline-drag-handle';
+  moveBtn.dataset.noticeInlineDragHandle = 'table';
+  moveBtn.dataset.noticeTableBlockId = String(block.id || '');
+  moveBtn.textContent = '이동';
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'notices-inline-remove';
+  removeBtn.dataset.action = 'notices-remove-table-block';
+  removeBtn.dataset.noticeTableBlockId = String(block.id || '');
+  removeBtn.textContent = '삭제';
+  actions.append(moveBtn, removeBtn);
+  meta.append(kind, actions);
+
+  const panel = document.createElement('div');
+  panel.className = 'notices-table-panel';
+  const grid = document.createElement('div');
+  grid.className = 'notices-compose-table-grid';
+  grid.dataset.noticeTableBlockId = String(block.id || '');
+  grid.appendChild(buildNoticeComposeTableGridElement(tableDraft, String(block.id || '')));
+  panel.appendChild(grid);
+
+  section.append(meta, panel);
+  return section;
+}
+
+function renderNoticeComposeTableEditor() {
+  const block = $('#noticesComposeTableBlock');
+  const grid = $('#noticesComposeTableGrid');
+  if (block instanceof HTMLElement) {
+    block.classList.add('hidden');
+  }
+  if (grid instanceof HTMLElement) {
+    grid.innerHTML = '';
+  }
   renderNoticeComposeToolbar();
   renderNoticeComposeDocumentFlow();
 }
@@ -57960,28 +58504,31 @@ function bindUiEvents() {
     }
 
     if (isNoticeComposeTextField(target)) {
+      if (target instanceof HTMLTextAreaElement && target.dataset.noticeComposeParagraphInput === 'true') {
+        syncNoticeComposeActiveBodyInput(target);
+        resizeNoticeComposeParagraphInput(target);
+      }
       syncNoticeComposeDraftFromFields();
       markNoticeComposeDraftDirty();
       return;
     }
 
     if (target instanceof HTMLInputElement && target.dataset.noticeTableField) {
-      const notices = ensureNoticesState();
-      const table = cloneNoticeTableDraft(notices.composeDraft?.table);
+      const blockId = String(target.dataset.noticeTableBlockId || '').trim();
       const colIndex = Math.max(0, Number.parseInt(target.dataset.noticeTableCol || '0', 10) || 0);
-      if (target.dataset.noticeTableField === 'header') {
-        table.columns[colIndex] = String(target.value || '');
-      } else {
-        const rowIndex = Math.max(0, Number.parseInt(target.dataset.noticeTableRow || '0', 10) || 0);
-        if (!Array.isArray(table.rows[rowIndex])) {
-          table.rows[rowIndex] = Array.from({ length: table.columns.length }, () => '');
+      updateNoticeComposeTableBlock(blockId, (table) => {
+        const nextTable = cloneNoticeTableDraft(table);
+        if (target.dataset.noticeTableField === 'header') {
+          nextTable.columns[colIndex] = String(target.value || '');
+        } else {
+          const rowIndex = Math.max(0, Number.parseInt(target.dataset.noticeTableRow || '0', 10) || 0);
+          if (!Array.isArray(nextTable.rows[rowIndex])) {
+            nextTable.rows[rowIndex] = Array.from({ length: nextTable.columns.length }, () => '');
+          }
+          nextTable.rows[rowIndex][colIndex] = String(target.value || '');
         }
-        table.rows[rowIndex][colIndex] = String(target.value || '');
-      }
-      notices.composeDraft = {
-        ...(notices.composeDraft || {}),
-        table,
-      };
+        return nextTable;
+      }, { markDirty: false, rerender: false });
       markNoticeComposeDraftDirty();
       return;
     }
@@ -58155,6 +58702,14 @@ function bindUiEvents() {
 
   document.addEventListener('mouseup', () => {
     finishNoticeComposeInlinePointerSession();
+  }, { signal });
+
+  document.addEventListener('focusin', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLTextAreaElement)) return;
+    if (target.dataset.noticeComposeParagraphInput !== 'true') return;
+    syncNoticeComposeActiveBodyInput(target);
+    resizeNoticeComposeParagraphInput(target);
   }, { signal });
 
   document.addEventListener('click', (event) => {
@@ -59220,10 +59775,15 @@ function bindUiEvents() {
     }
 
     if (action === 'notices-remove-table-block') {
-      setNoticeComposeBlockEnabled('table', false, { clear: true });
-      markNoticeComposeDraftDirty();
-      writeNoticeComposeDraftToFields();
-      renderNoticeComposeTableEditor();
+      const blockId = String(actionEl.dataset.noticeTableBlockId || '').trim();
+      if (blockId) {
+        removeNoticeComposeTableBlock(blockId, { markDirty: true, rerender: true });
+      } else {
+        setNoticeComposeBlockEnabled('table', false, { clear: true });
+        markNoticeComposeDraftDirty();
+        writeNoticeComposeDraftToFields();
+        renderNoticeComposeTableEditor();
+      }
       return;
     }
 
@@ -59283,45 +59843,43 @@ function bindUiEvents() {
       || action === 'notices-table-remove-row'
       || action === 'notices-table-toggle-header'
     ) {
-      const notices = ensureNoticesState();
-      const table = cloneNoticeTableDraft(notices.composeDraft?.table);
-      table.enabled = true;
+      const blockId = String(actionEl.dataset.noticeTableBlockId || '').trim();
+      const tableIndex = getNoticeComposeTableBlockIndex(blockId);
+      if (tableIndex === -1) {
+        return;
+      }
+      const currentBlocks = getNoticeComposeContentBlocks(ensureNoticesState().composeDraft);
+      const currentTable = cloneNoticeTableDraft(currentBlocks[tableIndex]?.table);
       if (action === 'notices-table-toggle-header') {
-        table.hasHeader = !Boolean(table.hasHeader);
+        currentTable.hasHeader = !Boolean(currentTable.hasHeader);
       } else if (action === 'notices-table-add-column') {
-        if (table.columns.length >= 6) {
+        if (currentTable.columns.length >= 6) {
           showToast('표 열은 최대 6개까지 추가할 수 있습니다.', 'info', 2200);
           return;
         }
-        table.columns.push(`항목 ${table.columns.length + 1}`);
-        table.rows = table.rows.map((row) => [...row, '']);
+        currentTable.columns.push(`항목 ${currentTable.columns.length + 1}`);
+        currentTable.rows = currentTable.rows.map((row) => [...row, '']);
       } else if (action === 'notices-table-remove-column') {
-        if (table.columns.length <= 1) {
+        if (currentTable.columns.length <= 1) {
           showToast('표 열은 최소 1개 이상 유지해야 합니다.', 'info', 2200);
           return;
         }
-        table.columns.pop();
-        table.rows = table.rows.map((row) => row.slice(0, table.columns.length));
+        currentTable.columns.pop();
+        currentTable.rows = currentTable.rows.map((row) => row.slice(0, currentTable.columns.length));
       } else if (action === 'notices-table-add-row') {
-        if (table.rows.length >= 20) {
+        if (currentTable.rows.length >= 20) {
           showToast('표 행은 최대 20개까지 추가할 수 있습니다.', 'info', 2200);
           return;
         }
-        table.rows.push(Array.from({ length: table.columns.length }, () => ''));
+        currentTable.rows.push(Array.from({ length: currentTable.columns.length }, () => ''));
       } else if (action === 'notices-table-remove-row') {
-        if (table.rows.length <= 1) {
+        if (currentTable.rows.length <= 1) {
           showToast('표 행은 최소 1개 이상 유지해야 합니다.', 'info', 2200);
           return;
         }
-        table.rows.pop();
+        currentTable.rows.pop();
       }
-      notices.composeDraft = {
-        ...(notices.composeDraft || {}),
-        table,
-      };
-      markNoticeComposeDraftDirty();
-      writeNoticeComposeDraftToFields();
-      renderNoticeComposeTableEditor();
+      updateNoticeComposeTableBlock(blockId, () => currentTable, { markDirty: true, rerender: true });
       return;
     }
 
