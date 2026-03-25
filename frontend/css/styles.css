@@ -22403,6 +22403,19 @@ button.attendance-status-special-card.active {
   box-shadow: none;
 }
 
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card {
+  background: rgba(17, 24, 39, 0.98);
+  background-image: none;
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-distribution-card,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-schedule-summary-card,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-section-rail,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-schedule-issue-rail {
+  background: transparent;
+  background-image: none;
+}
+
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-briefing-spotlight {
   background: linear-gradient(180deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.98));
 }
