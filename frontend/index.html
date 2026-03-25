@@ -171,12 +171,8 @@
                     <div class="home-manager-section-title">
                       <div>
                         <h3>출퇴근</h3>
-                        <p class="muted">예외와 후속 조치가 필요한 항목만 먼저 봅니다.</p>
                       </div>
                     </div>
-                    <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/attendance" aria-label="출퇴근 탭 열기">
-                      <span>출퇴근 보기</span>
-                    </button>
                   </div>
                   <div class="home-attendance-overview-grid">
                     <article class="home-attendance-rate-card">
@@ -202,7 +198,7 @@
                     <article class="home-attendance-status-card">
                       <div class="home-attendance-panel-head home-attendance-panel-head-compact">
                         <span class="home-attendance-card-label">현재 운영 상태</span>
-                        <strong id="homeManagerAttendanceStatusHeadline" class="home-attendance-panel-headline">집계 중</strong>
+                        <strong id="homeManagerAttendanceStatusHeadline" class="home-attendance-panel-headline" hidden></strong>
                       </div>
                       <div class="home-attendance-status-rack">
                         <div class="home-mini-metric" data-tone="warn">
@@ -255,19 +251,15 @@
                   <div class="home-manager-section-title">
                     <div>
                       <h3>오늘 스케줄</h3>
-                      <p class="muted">분포와 오늘 지정 상태를 한 보드에서 읽습니다.</p>
                     </div>
                   </div>
-                  <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/schedules/calendar" aria-label="오늘 스케줄 열기">
-                    <span>스케줄 보기</span>
-                  </button>
                 </div>
                 <div class="home-schedule-grid">
                   <article class="home-schedule-summary-card home-distribution-card">
                     <div class="home-distribution-metrics">
                       <div class="home-distribution-meta">
                         <span>오늘 운영 분포</span>
-                        <strong id="homeManagerScheduleDistributionMeta">집계 중</strong>
+                        <strong id="homeManagerScheduleDistributionMeta" hidden></strong>
                       </div>
                     </div>
                     <div class="home-distribution-bars">

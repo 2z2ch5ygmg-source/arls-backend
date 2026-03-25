@@ -5705,19 +5705,8 @@ function renderHomeManagerDashboard() {
 
   const attendanceStatusHeadlineEl = $('#homeManagerAttendanceStatusHeadline');
   if (attendanceStatusHeadlineEl instanceof HTMLElement) {
-    if (state.ops.loading) {
-      attendanceStatusHeadlineEl.textContent = '집계 중';
-    } else if (state.ops.error) {
-      attendanceStatusHeadlineEl.textContent = '데이터 확인 필요';
-    } else if (vacancyCount > 0) {
-      attendanceStatusHeadlineEl.textContent = `미출근 ${vacancyCount}명`;
-    } else if (attendanceIssues.length > 0) {
-      attendanceStatusHeadlineEl.textContent = `즉시 확인 ${attendanceIssues.length}건`;
-    } else if (leaveCount + overnightCount > 0) {
-      attendanceStatusHeadlineEl.textContent = `휴가·야간 ${leaveCount + overnightCount}건`;
-    } else {
-      attendanceStatusHeadlineEl.textContent = '안정적으로 진행 중';
-    }
+    attendanceStatusHeadlineEl.textContent = '';
+    attendanceStatusHeadlineEl.hidden = true;
   }
   setTextToSelectors(
     ['#homeManagerAttendanceIssueHeading'],
@@ -5747,12 +5736,11 @@ function renderHomeManagerDashboard() {
   setTextToSelectors(['#homeManagerScheduleWeekCount'], `${Number(scheduleSummary.weekScheduledCount || 0)}건`);
   setTextToSelectors(['#homeManagerScheduleSiteCount'], `${Number(scheduleSummary.siteCount || 0)}개`);
   setTextToSelectors(['#homeManagerScheduleVacancySites'], `${vacancySiteCount}개`);
-  setTextToSelectors(
-    ['#homeManagerScheduleDistributionMeta'],
-    state.ops.loading
-      ? '집계 중'
-      : `근무 ${Number(scheduleSummary.todayScheduledCount || 0)}명 · 결원 지점 ${vacancySiteCount}개`,
-  );
+  setTextToSelectors(['#homeManagerScheduleDistributionMeta'], '');
+  const scheduleDistributionMetaEl = $('#homeManagerScheduleDistributionMeta');
+  if (scheduleDistributionMetaEl instanceof HTMLElement) {
+    scheduleDistributionMetaEl.hidden = true;
+  }
   const scheduleBarValues = [
     Math.max(0, Number(scheduleSummary.todayScheduledCount || 0)),
     Math.max(0, Number(scheduleSummary.weekScheduledCount || 0)),
