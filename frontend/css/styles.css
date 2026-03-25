@@ -1,8 +1,10 @@
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap");
+
 :root {
   color-scheme: light;
 
   /* ===== UI 2026 semantic tokens ===== */
-  --ui-font-family: "Pretendard", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+  --ui-font-family: "Apple SD Gothic Neo", "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
 
   --ui-type-display-lg-size: 28px;
   --ui-type-display-lg-line: 32px;
@@ -332,6 +334,13 @@ body {
   background: var(--ui-bg-canvas);
   font-size: var(--ui-type-body-md-size);
   line-height: var(--ui-type-body-md-line);
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
 }
 
 body.sheet-open {
