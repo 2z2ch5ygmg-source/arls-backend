@@ -19702,6 +19702,7 @@ function applyNoticeComposeTablePreset(rows = 2, cols = 2) {
   notices.composeTablePickerRows = rowCount;
   notices.composeTablePickerCols = colCount;
   notices.composeTablePickerOpen = false;
+  renderNoticeComposeTablePicker();
   markNoticeComposeDraftDirty();
   writeNoticeComposeDraftToFields();
   renderNoticeComposeTableEditor();
@@ -19741,9 +19742,31 @@ function getNoticeComposeInlineExtraBottomPx(kind = '', rawLayout = null) {
 function clearNoticeComposeInlineBlockStyles(block) {
   if (!(block instanceof HTMLElement)) return;
   block.classList.remove('notices-compose-inline-block-floating');
+  block.classList.remove('notices-compose-inline-block-floating-left');
+  block.classList.remove('notices-compose-inline-block-floating-right');
   block.style.transform = '';
   block.style.width = '';
+  block.style.marginTop = '';
+  block.style.marginBottom = '';
   block.style.removeProperty('--notice-compose-block-height');
+}
+
+function getNoticeComposeTableRenderMetrics(rawLayout = null) {
+  const layout = normalizeNoticeTableLayout(rawLayout || {});
+  const flow = $('#noticesComposeDocumentFlow');
+  const flowWidth = flow instanceof HTMLElement
+    ? Math.max(NOTICE_COMPOSE_TABLE_MIN_WIDTH_PX, Math.round(flow.clientWidth))
+    : 1048;
+  const width = Math.max(
+    NOTICE_COMPOSE_TABLE_MIN_WIDTH_PX,
+    Math.min(layout.width, Math.max(NOTICE_COMPOSE_TABLE_MIN_WIDTH_PX, flowWidth - 80)),
+  );
+  const side = layout.left + (width / 2) >= (flowWidth / 2) ? 'right' : 'left';
+  return {
+    top: getNoticeComposeLineSnapOffset(layout.top),
+    width,
+    side,
+  };
 }
 
 function applyNoticeComposeInlineBlockStyles(block, kind = '', rawLayout = null) {
@@ -19752,6 +19775,21 @@ function applyNoticeComposeInlineBlockStyles(block, kind = '', rawLayout = null)
   const layout = normalizedKind === 'table'
     ? normalizeNoticeTableLayout(rawLayout || {})
     : normalizeNoticePollLayout(rawLayout || {});
+  if (normalizedKind === 'table') {
+    const metrics = getNoticeComposeTableRenderMetrics(layout);
+    block.classList.add('notices-compose-inline-block-floating');
+    block.classList.add(
+      metrics.side === 'right'
+        ? 'notices-compose-inline-block-floating-right'
+        : 'notices-compose-inline-block-floating-left',
+    );
+    block.style.transform = '';
+    block.style.width = `${metrics.width}px`;
+    block.style.marginTop = `${metrics.top}px`;
+    block.style.marginBottom = '18px';
+    block.style.removeProperty('--notice-compose-block-height');
+    return;
+  }
   block.classList.add('notices-compose-inline-block-floating');
   block.style.transform = normalizedKind === 'table'
     ? `translate(${layout.left}px, ${layout.top}px)`
@@ -19942,9 +19980,6 @@ function renderNoticeComposeDocumentFlow() {
 
   if (tableBlock instanceof HTMLElement && Boolean(notices.composeDraft?.table?.enabled)) {
     applyNoticeComposeInlineBlockStyles(tableBlock, 'table', tableLayout);
-    const reclaim = canReclaimBody ? getNoticeComposeInlineReclaimPx('table', tableLayout) : 0;
-    totalReclaim += reclaim;
-    extraBottom = Math.max(extraBottom, Math.max(0, tableLayout.top - reclaim));
   }
 
   if (pollBlock instanceof HTMLElement && Boolean(notices.composeDraft?.poll?.enabled)) {
@@ -34552,13 +34587,11 @@ function renderNoticeComposeTableEditor() {
     block.classList.toggle('hidden', !tableDraft.enabled);
   }
   grid.innerHTML = '';
-  grid.style.height = '';
   if (!tableDraft.enabled) {
     renderNoticeComposeToolbar();
     renderNoticeComposeDocumentFlow();
     return;
   }
-  grid.style.height = `${tableDraft.layout.height}px`;
 
   const table = document.createElement('table');
   table.className = 'notices-compose-table';
@@ -34619,15 +34652,40 @@ function renderNoticeComposeTableEditor() {
   const shell = document.createElement('div');
   shell.className = 'notices-compose-table-shell';
   shell.appendChild(table);
-  ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'].forEach((direction) => {
-    const handle = document.createElement('button');
-    handle.type = 'button';
-    handle.className = `notices-compose-table-resize-handle notices-compose-table-resize-handle-${direction}`;
-    handle.dataset.noticeInlineResize = 'table';
-    handle.dataset.noticeResizeDirection = direction;
-    handle.setAttribute('aria-label', `표 크기 조절 ${direction}`);
-    shell.appendChild(handle);
-  });
+
+  const rowControls = document.createElement('div');
+  rowControls.className = 'notices-compose-table-edge-controls notices-compose-table-edge-controls-rows';
+  const removeRowBtn = document.createElement('button');
+  removeRowBtn.type = 'button';
+  removeRowBtn.className = 'notices-compose-table-edge-button';
+  removeRowBtn.dataset.action = 'notices-table-remove-row';
+  removeRowBtn.setAttribute('aria-label', '행 삭제');
+  removeRowBtn.textContent = '-';
+  const addRowBtn = document.createElement('button');
+  addRowBtn.type = 'button';
+  addRowBtn.className = 'notices-compose-table-edge-button';
+  addRowBtn.dataset.action = 'notices-table-add-row';
+  addRowBtn.setAttribute('aria-label', '행 추가');
+  addRowBtn.textContent = '+';
+  rowControls.append(removeRowBtn, addRowBtn);
+
+  const columnControls = document.createElement('div');
+  columnControls.className = 'notices-compose-table-edge-controls notices-compose-table-edge-controls-columns';
+  const removeColumnBtn = document.createElement('button');
+  removeColumnBtn.type = 'button';
+  removeColumnBtn.className = 'notices-compose-table-edge-button';
+  removeColumnBtn.dataset.action = 'notices-table-remove-column';
+  removeColumnBtn.setAttribute('aria-label', '열 삭제');
+  removeColumnBtn.textContent = '-';
+  const addColumnBtn = document.createElement('button');
+  addColumnBtn.type = 'button';
+  addColumnBtn.className = 'notices-compose-table-edge-button';
+  addColumnBtn.dataset.action = 'notices-table-add-column';
+  addColumnBtn.setAttribute('aria-label', '열 추가');
+  addColumnBtn.textContent = '+';
+  columnControls.append(removeColumnBtn, addColumnBtn);
+
+  shell.append(rowControls, columnControls);
   grid.appendChild(shell);
   renderNoticeComposeToolbar();
   renderNoticeComposeDocumentFlow();

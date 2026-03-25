@@ -23118,8 +23118,7 @@ button.attendance-status-special-card.active {
 }
 
 .notices-compose-document-flow {
-  display: grid;
-  gap: 0;
+  display: flow-root;
   position: relative;
   overflow: visible;
 }
@@ -23308,6 +23307,16 @@ button.attendance-status-special-card.active {
 
 .notices-compose-inline-block-floating {
   z-index: 2;
+}
+
+.notices-compose-inline-block-floating-left {
+  float: left;
+  margin-right: 24px;
+}
+
+.notices-compose-inline-block-floating-right {
+  float: right;
+  margin-left: 24px;
 }
 
 .notices-compose-inline-meta {
@@ -23648,10 +23657,7 @@ body.notices-compose-dragging .notices-inline-drag-handle {
 }
 
 .notices-table-editor-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px 12px;
+  display: none;
 }
 
 .notices-table-end-actions {
@@ -23669,22 +23675,22 @@ body.notices-compose-dragging .notices-inline-drag-handle {
 
 .notices-compose-table-grid {
   position: relative;
-  overflow-x: auto;
-  overflow-y: auto;
-  min-height: var(--notice-compose-block-height, 240px);
-  background: rgba(255, 255, 255, 0.98);
+  overflow: visible;
+  min-height: 0;
+  padding-right: 44px;
+  padding-bottom: 44px;
+  background: transparent;
 }
 
 .notices-compose-table-shell {
   position: relative;
-  min-width: 100%;
-  height: 100%;
+  width: 100%;
 }
 
 .notices-compose-table {
   width: 100%;
-  min-width: 100%;
-  height: 100%;
+  min-width: 0;
+  height: auto;
   border-collapse: collapse;
   border: 0;
   border-top: 1px solid rgba(148, 163, 184, 0.14);
@@ -23715,7 +23721,7 @@ body.notices-compose-dragging .notices-inline-drag-handle {
 
 .notices-compose-table-input {
   width: 100%;
-  min-width: 120px;
+  min-width: 0;
   padding: 14px 16px;
   border: 0;
   border-radius: 0;
@@ -23726,16 +23732,7 @@ body.notices-compose-dragging .notices-inline-drag-handle {
 }
 
 .notices-compose-table-resize-handle {
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  min-height: 0;
-  padding: 0;
-  border: 1px solid rgba(249, 115, 22, 0.42);
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
-  z-index: 3;
+  display: none;
 }
 
 .notices-compose-table-resize-handle-n {
@@ -23784,6 +23781,48 @@ body.notices-compose-dragging .notices-inline-drag-handle {
   top: -6px;
   left: -6px;
   cursor: nwse-resize;
+}
+
+.notices-compose-table-edge-controls {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 4;
+}
+
+.notices-compose-table-edge-controls-rows {
+  top: 50%;
+  right: -40px;
+  transform: translateY(-50%);
+  flex-direction: column;
+}
+
+.notices-compose-table-edge-controls-columns {
+  left: 50%;
+  bottom: -40px;
+  transform: translateX(-50%);
+}
+
+.notices-compose-table-edge-button {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid rgba(249, 115, 22, 0.26);
+  border-radius: 999px;
+  background: #fff;
+  color: #f97316;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.notices-compose-table-edge-button:hover,
+.notices-compose-table-edge-button:focus-visible {
+  border-color: rgba(249, 115, 22, 0.52);
+  background: rgba(255, 247, 237, 0.98);
 }
 
 .notices-compose-poll-modal {
@@ -24007,5 +24046,30 @@ body.notices-compose-dragging .notices-inline-drag-handle {
   .notices-image-preview {
     width: 100%;
     height: 180px;
+  }
+
+  .notices-compose-inline-block-floating-left,
+  .notices-compose-inline-block-floating-right {
+    float: none;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .notices-compose-table-grid {
+    padding-right: 0;
+    padding-bottom: 88px;
+  }
+
+  .notices-compose-table-edge-controls-rows {
+    top: auto;
+    right: auto;
+    left: 50%;
+    bottom: -40px;
+    transform: translateX(-50%);
+    flex-direction: row;
+  }
+
+  .notices-compose-table-edge-controls-columns {
+    bottom: -80px;
   }
 }
