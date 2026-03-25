@@ -21513,6 +21513,31 @@ button.attendance-status-special-card.active {
   line-height: 1;
 }
 
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-status-card .home-mini-metric > :first-child {
+  color: rgba(226, 232, 240, 0.9);
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-name,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .list-row-title {
+  color: rgb(243, 247, 255);
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-meta-primary,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-meta-secondary,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .list-row-sub {
+  color: rgba(191, 203, 220, 0.88);
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-distribution-meta span {
+  color: rgba(191, 203, 220, 0.88);
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-distribution-meta strong,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-request-summary-copy,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-request-summary-copy > * {
+  color: rgb(243, 247, 255);
+}
+
 #shell[data-shell-mode='manager'] #view-home .home-notice-footer {
   display: none;
 }
