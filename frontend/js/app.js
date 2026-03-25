@@ -64215,13 +64215,18 @@ document.addEventListener('compositionend', (event) => {
         .replace(/'/g, '&#39;');
 
   function v2CurrentTab() {
-    const tab = v2Text(appState?.attendance?.tab, state?.attendanceView?.managerTab, 'status');
+    const tab = typeof getAttendanceManagerTab === 'function'
+      ? getAttendanceManagerTab()
+      : v2Text(state?.attendanceView?.managerTab, 'status');
     return typeof normalizeAttendanceManagerTab === 'function' ? normalizeAttendanceManagerTab(tab) : tab;
   }
 
   function v2UseManagerLayout() {
     const tab = v2CurrentTab();
-    return Boolean(appState?.attendance?.managerMode) && ['status', 'list', 'calendar'].includes(tab);
+    const managerMode = typeof canUseAttendanceManagerFilter === 'function'
+      ? canUseAttendanceManagerFilter()
+      : true;
+    return Boolean(managerMode) && ['status', 'list', 'calendar'].includes(tab);
   }
 
   function v2Array(value) {
