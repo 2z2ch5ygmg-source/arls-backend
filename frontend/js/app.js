@@ -19956,13 +19956,12 @@ function renderNoticeComposeDocumentFlow() {
     poll: pollBlock,
   };
 
-  const orderedNodes = [];
+  const orderedNodes = [bodyBlock];
   order.forEach((kind) => {
     const el = blockMap[kind];
     if (!(el instanceof HTMLElement)) return;
     orderedNodes.push(el);
   });
-  orderedNodes.push(bodyBlock);
   NOTICE_COMPOSE_OPTIONAL_BLOCK_KINDS.forEach((kind) => {
     const el = blockMap[kind];
     if (!(el instanceof HTMLElement)) return;
@@ -34962,10 +34961,8 @@ async function loadNoticesViewPresenter() {
       // renderNoticesView handles error state
     }
   } else if (notices.mode === NOTICE_VIEW_MODE_COMPOSE && canManageNotices()) {
-    restoreSavedNoticeComposeDraft({
-      noticeId: '',
-      fallbackCategory: notices.category || 'ops',
-    });
+    clearNoticeComposeDraftStorage({ noticeId: '' });
+    resetNoticeComposeDraft(notices.category || 'ops');
     renderNoticesView();
   } else if (notices.mode === NOTICE_VIEW_MODE_LIST) {
     try {
@@ -58940,11 +58937,8 @@ function bindUiEvents() {
       notices.selectedNoticeId = '';
       notices.selectedRow = null;
       notices.loadedDetailNoticeId = '';
+      clearNoticeComposeDraftStorage({ noticeId: '' });
       resetNoticeComposeDraft(notices.category);
-      restoreSavedNoticeComposeDraft({
-        noticeId: '',
-        fallbackCategory: notices.category || 'ops',
-      });
       runActionSafely(
         navigateToRoute(buildNoticesRoute({
           mode: NOTICE_VIEW_MODE_COMPOSE,
