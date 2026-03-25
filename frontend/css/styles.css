@@ -24331,6 +24331,56 @@ body.notices-compose-dragging .notices-inline-drag-handle {
   margin-top: -18px;
 }
 
+#shell[data-shell-mode='manager'] #view-home .home-distribution-card {
+  gap: 10px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-card .home-distribution-bars {
+  margin-top: -40px;
+  min-height: 210px;
+  gap: 10px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-card .home-distribution-bar {
+  padding: 0;
+  gap: 8px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-card .home-distribution-bar::after {
+  content: none;
+  display: none;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-card .home-distribution-bar-plot {
+  height: 156px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-schedule-summary-card {
+  min-height: 324px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card,
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card .home-requests-summary-card {
+  min-height: 324px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card .home-section-chevron {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ui-text-secondary);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card .home-section-chevron:hover,
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card .home-section-chevron:focus-visible {
+  background: transparent;
+  box-shadow: none;
+  color: var(--ui-text-primary);
+}
+
 #shell[data-shell-mode='manager'] #view-home #homeManagerScheduleList .list-row {
   align-items: center;
   min-height: 96px;
