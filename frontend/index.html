@@ -30,7 +30,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="assets/sentrix-hr-favicon-v4-16.png?v=20260323-sentrix-browser-brand-v4" />
     <link rel="shortcut icon" href="assets/sentrix-hr-favicon-v4.ico?v=20260323-sentrix-browser-brand-v4" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/sentrix-hr-favicon-v4-180.png?v=20260323-sentrix-browser-brand-v4" />
-    <link rel="stylesheet" href="css/styles.css?v=20260325-notice-editor-interleaved-block-flow-fix" />
+    <link rel="stylesheet" href="css/styles.css?v=20260325-notice-editor-true-inbody-block-insertion-fix" />
   </head>
   <body>
     <div id="app">
@@ -3190,7 +3190,9 @@
                   <div id="noticesComposeTablePickerGrid" class="notices-table-picker-grid" role="grid" aria-label="표 크기 선택"></div>
                 </div>
 
-                <div id="noticesComposeDocumentFlow" class="notices-compose-document-flow">
+                <div id="noticesComposeDocumentFlow" class="notices-compose-document-flow"></div>
+
+                <div id="noticesComposeLegacyBlocks" class="hidden" aria-hidden="true">
                   <section id="noticesComposeBodyBlock" class="notices-compose-inline-block notices-compose-text-block" data-notice-inline-kind="body">
                     <label class="sr-only" for="noticesComposeBody">본문 문단</label>
                     <div class="notices-compose-editor-surface">
@@ -5495,7 +5497,7 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260324-arls-topbar-parity-v1"></script>
+    <script src="config.js?v=20260325-notice-editor-true-inbody-block-insertion-fix"></script>
     <script>
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;

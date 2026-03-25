@@ -20497,7 +20497,7 @@ function clearNoticeComposeFlowDropIndicators() {
 }
 
 function resolveNoticeComposeFlowDropTarget(clientY = 0, draggedBlockId = '') {
-  const flowBlocks = Array.from(document.querySelectorAll('#noticesComposeEmbeddedBlocks [data-notice-compose-flow-index]'))
+  const flowBlocks = Array.from(document.querySelectorAll('#noticesComposeDocumentFlow [data-notice-compose-flow-index]'))
     .filter((element) => element instanceof HTMLElement);
   if (!flowBlocks.length) {
     return { targetId: '', placement: 'after' };
@@ -20687,13 +20687,27 @@ function finishNoticeComposeInlinePointerSession() {
 function renderNoticeComposeDocumentFlow() {
   const notices = ensureNoticesState();
   const flow = $('#noticesComposeDocumentFlow');
+  const legacyHost = $('#noticesComposeLegacyBlocks');
   const bodyBlock = $('#noticesComposeBodyBlock');
-  const embeddedBlocks = $('#noticesComposeEmbeddedBlocks');
   const imageBlock = $('#noticesComposeImageBlock');
   const tableBlock = $('#noticesComposeTableBlock');
   const pollBlock = $('#noticesComposePollBlock');
-  if (!(flow instanceof HTMLElement) || !(bodyBlock instanceof HTMLElement) || !(embeddedBlocks instanceof HTMLElement)) return;
-  const legacyBodyInput = bodyBlock.querySelector('[data-notice-compose-legacy-body-input="true"], .notices-compose-editor-surface > textarea:not([data-notice-compose-paragraph-input])');
+  if (!(flow instanceof HTMLElement) || !(legacyHost instanceof HTMLElement)) return;
+
+  [bodyBlock, imageBlock, tableBlock, pollBlock].forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    if (node.parentElement !== legacyHost) {
+      legacyHost.appendChild(node);
+    }
+  });
+  const legacyBodyInput = bodyBlock instanceof HTMLElement
+    ? bodyBlock.querySelector('textarea')
+    : null;
+  if (legacyBodyInput instanceof HTMLTextAreaElement) {
+    legacyBodyInput.dataset.noticeComposeLegacyBodyInput = 'true';
+    legacyBodyInput.classList.add('hidden');
+    legacyBodyInput.removeAttribute('id');
+  }
 
   const composeContentBlocks = getNoticeComposeContentBlocks(notices.composeDraft);
   const orderedNodes = [];
@@ -20714,10 +20728,9 @@ function renderNoticeComposeDocumentFlow() {
   const order = getNoticeComposeInsertionOrder(notices.composeDraft).filter((kind) => kind === 'image');
   const fallbackOptionalKinds = order.length ? order : ['image'];
   fallbackOptionalKinds.forEach((kind) => {
-    const el = kind === 'image' ? imageBlock : pollBlock;
+    const el = kind === 'image' ? imageBlock : null;
     if (!(el instanceof HTMLElement)) return;
     if (kind === 'image' && !Boolean(notices.composeDraft?.imagesEnabled)) return;
-    if (kind === 'poll' && !Boolean(notices.composeDraft?.poll?.enabled)) return;
     const flowIndex = orderedNodes.length;
     el.dataset.noticeComposeFlowIndex = String(flowIndex);
     el.dataset.noticeComposeFlowKind = kind;
@@ -20727,20 +20740,8 @@ function renderNoticeComposeDocumentFlow() {
     orderedNodes.push(el);
   });
 
-  flow.replaceChildren(bodyBlock);
-  embeddedBlocks.replaceChildren(...orderedNodes);
-  bodyBlock.classList.add('is-flow-mode');
-  if (legacyBodyInput instanceof HTMLTextAreaElement) {
-    legacyBodyInput.dataset.noticeComposeLegacyBodyInput = 'true';
-    legacyBodyInput.classList.add('hidden');
-    legacyBodyInput.removeAttribute('id');
-  }
-
-  const hasEmbeddedBlocks = orderedNodes.some((node) => node instanceof HTMLElement && !node.classList.contains('hidden'));
-  bodyBlock.classList.toggle('has-embedded-blocks', hasEmbeddedBlocks);
-
+  flow.replaceChildren(...orderedNodes);
   flow.style.paddingBottom = '';
-  bodyBlock.style.marginTop = '';
   [imageBlock, tableBlock, pollBlock].forEach((block) => clearNoticeComposeInlineBlockStyles(block));
   syncNoticeComposeActiveBodyInput(document.activeElement instanceof HTMLTextAreaElement ? document.activeElement : null);
 }

@@ -23331,7 +23331,9 @@ button.attendance-status-special-card.active {
 }
 
 .notices-compose-document-flow {
-  display: flow-root;
+  display: grid;
+  gap: 0;
+  align-content: start;
   position: relative;
   overflow: visible;
 }
@@ -23403,6 +23405,7 @@ button.attendance-status-special-card.active {
 }
 
 .notices-compose-flow-paragraph {
+  display: block;
   padding-top: 0;
   border-top: 0;
 }
@@ -23434,6 +23437,11 @@ button.attendance-status-special-card.active {
 .notices-compose-flow-table-block .notices-table-panel {
   overflow-x: auto;
   overflow-y: visible;
+}
+
+.notices-compose-flow-poll-block .notices-poll-card {
+  width: 100%;
+  max-width: 100%;
 }
 
 .notices-compose-footer {

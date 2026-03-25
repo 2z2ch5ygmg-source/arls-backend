@@ -1,5 +1,5 @@
 window.ENV_API_BASE = window.ENV_API_BASE || 'https://rg-arls-backend.azurewebsites.net';
-window.ENV_BUILD_ID = window.ENV_BUILD_ID || '20260325-notice-editor-interleaved-block-flow-fix';
+window.ENV_BUILD_ID = window.ENV_BUILD_ID || '20260325-notice-editor-true-inbody-block-insertion-fix';
 window.ENV_GOOGLE_MAPS_API_KEY = window.ENV_GOOGLE_MAPS_API_KEY || '';
 
 if (typeof window.__RG_ARLS_HANDLE_TAB_CLICK__ !== 'function') {
