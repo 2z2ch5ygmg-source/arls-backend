@@ -21532,6 +21532,10 @@ button.attendance-status-special-card.active {
   color: rgba(191, 203, 220, 0.88);
 }
 
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-distribution-bar > span {
+  color: rgba(191, 203, 220, 0.88);
+}
+
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-distribution-meta strong,
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-request-summary-copy,
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-request-summary-copy > * {
