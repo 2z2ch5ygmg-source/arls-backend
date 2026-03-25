@@ -24324,3 +24324,16 @@ body.notices-compose-dragging .notices-inline-drag-handle {
 #noticesDetailBody {
   padding: 0;
 }
+
+#shell[data-shell-mode='manager'] #view-home .home-distribution-card .home-distribution-bars {
+  margin-top: -18px;
+}
+
+#shell[data-shell-mode='manager'] #view-home #homeManagerScheduleList .list-row {
+  align-items: center;
+  min-height: 96px;
+}
+
+#shell[data-shell-mode='manager'] #view-home #homeManagerScheduleList .list-row-main {
+  align-content: center;
+}
