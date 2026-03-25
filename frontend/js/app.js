@@ -63941,6 +63941,7 @@ document.addEventListener('compositionend', (event) => {
       `;
     }
     const statusKey = v2StatusKey(row);
+    const hasRequest = v2HasRequest(row);
     return `
       <div class="attendance-v2-inspector-shell">
         <div class="attendance-v2-section-head">
@@ -63949,6 +63950,11 @@ document.addEventListener('compositionend', (event) => {
             <p>${escapeValue(v2Site(row))} · ${escapeValue(v2Date(row))}</p>
           </div>
           <span class="attendance-v2-status-chip is-${v2StatusTone(statusKey)}">${escapeValue(v2StatusLabel(row))}</span>
+        </div>
+        <div class="attendance-v2-inspector-actions">
+          <button type="button" class="attendance-v2-inspector-action is-primary" data-inspector-action="list" data-row-key="${escapeValue(attendanceStatusV2SelectedKey || '')}">리스트형에서 보기</button>
+          <button type="button" class="attendance-v2-inspector-action" data-inspector-action="calendar" data-row-key="${escapeValue(attendanceStatusV2SelectedKey || '')}">달력형에서 보기</button>
+          <button type="button" class="attendance-v2-inspector-action is-subtle" data-inspector-action="${hasRequest ? 'approvals' : 'correction'}" data-row-key="${escapeValue(attendanceStatusV2SelectedKey || '')}">${hasRequest ? '승인함 열기' : '정정 요청'}</button>
         </div>
         <div class="attendance-v2-detail-grid">
           <article class="attendance-v2-detail-card">
@@ -63974,6 +63980,126 @@ document.addEventListener('compositionend', (event) => {
         </section>
       </div>
     `;
+  }
+
+  function v2EmployeeCode(row) {
+    return v2Text(
+      row?.employeeCode,
+      row?.employee_code,
+      row?.employeeId,
+      row?.employee_id,
+      row?.worker_code,
+      row?.workerCode,
+    );
+  }
+
+  function v2SiteCode(row) {
+    return String(v2Text(
+      row?.siteCode,
+      row?.site_code,
+      row?.siteId,
+      row?.site_id,
+    ) || '').trim().toUpperCase();
+  }
+
+  function v2DateKey(row) {
+    return v2Text(
+      row?.workDate,
+      row?.work_date,
+      row?.recordDate,
+      row?.record_date,
+      row?.attendanceDate,
+      row?.attendance_date,
+      row?.date,
+    ) || getAttendanceActiveDate() || toLocalDateKey(new Date());
+  }
+
+  function v2HasRequest(row) {
+    const normalized = String(v2RequestLabel(row) || '').trim().replace(/\s+/g, '');
+    return Boolean(normalized && normalized !== '-' && !normalized.includes('없음'));
+  }
+
+  function v2PrimeAttendanceDrilldown(row, tab = 'list') {
+    if (!state.attendanceView) {
+      state.attendanceView = createInitialAttendanceViewState();
+    }
+    const dateKey = v2DateKey(row);
+    const employeeCode = v2EmployeeCode(row);
+    const siteCode = v2SiteCode(row);
+    state.attendanceView.date = dateKey;
+    state.attendanceView.rangeStart = dateKey;
+    state.attendanceView.rangeEnd = dateKey;
+    state.attendanceView.rangePreset = 'today';
+    state.attendanceView.calendarMonth = getMonthFromDateKey(dateKey) || state.attendanceView.calendarMonth || toMonthKey(new Date());
+    state.attendanceView.employeeCode = employeeCode;
+    state.attendanceView.siteCode = siteCode;
+    state.attendanceView.statusFilter = 'all';
+    state.attendanceView.managerSearchQuery = employeeCode ? '' : v2Name(row);
+    state.attendanceView.selectedManagerRowKey = attendanceStatusV2SelectedKey || '';
+    state.attendanceView.managerTab = normalizeAttendanceManagerTab(tab);
+  }
+
+  function v2PrimeCorrectionPrefill(row) {
+    const actualIn = v2ActualIn(row);
+    const actualOut = v2ActualOut(row);
+    const statusLabel = v2StatusLabel(row);
+    let correctionType = 'both';
+    if ((!actualIn || actualIn === '-') && actualOut && actualOut !== '-') {
+      correctionType = 'check_in';
+    } else if ((!actualOut || actualOut === '-') && actualIn && actualIn !== '-') {
+      correctionType = 'check_out';
+    }
+    state.correction.prefill = {
+      workDate: v2DateKey(row),
+      correctionType,
+      reason: `${statusLabel} 정정`,
+      originalIn: actualIn === '-' ? '' : actualIn,
+      originalOut: actualOut === '-' ? '' : actualOut,
+      requestedIn: '',
+      requestedOut: '',
+      memo: '',
+    };
+  }
+
+  function v2PrimeRequestsDrilldown(row) {
+    if (!state.requestsWorkspace) {
+      state.requestsWorkspace = createInitialRequestsWorkspaceState();
+    }
+    const dateKey = v2DateKey(row);
+    const siteCode = v2SiteCode(row);
+    state.requestsWorkspace.startDate = dateKey;
+    state.requestsWorkspace.endDate = dateKey;
+    state.requestsWorkspace.rangePreset = 'custom';
+    state.requestsWorkspace.siteFilter = siteCode || '';
+    state.requestsWorkspace.employeeQuery = v2Name(row);
+    state.requestsWorkspace.statusFilter = 'all';
+    state.requestsWorkspace.subTypeFilter = 'all';
+    state.requestsWorkspace.actorQuery = '';
+    state.requestsWorkspace.filtersInitialized = true;
+  }
+
+  async function v2HandleInspectorAction(action = '', row = null) {
+    if (!row) return;
+    const nextAction = String(action || '').trim().toLowerCase();
+    if (!nextAction) return;
+    if (nextAction === 'list' || nextAction === 'calendar') {
+      v2PrimeAttendanceDrilldown(row, nextAction);
+      await navigateToRoute(getAttendanceRouteWithTab(nextAction), { replace: true, silentDeniedModal: true });
+      return;
+    }
+    if (nextAction === 'approvals') {
+      v2PrimeRequestsDrilldown(row);
+      setManagerRequestsTab(REQUESTS_MANAGER_TAB_PENDING);
+      setRequestsTabView('approvals');
+      await navigateToRoute(`${ROUTE_REQUESTS}?section=${encodeURIComponent(REQUESTS_MANAGER_TAB_PENDING)}`, { replace: true, silentDeniedModal: true });
+      return;
+    }
+    if (nextAction === 'correction') {
+      v2PrimeRequestsDrilldown(row);
+      v2PrimeCorrectionPrefill(row);
+      await navigateToRoute(`${ROUTE_REQUESTS}?section=correction`, { replace: true, silentDeniedModal: true });
+      openRequestsCorrectionEntry();
+    }
   }
 
   function v2BindSelection(container) {
@@ -64005,6 +64131,19 @@ document.addEventListener('compositionend', (event) => {
         attendanceStatusV2FilterKey = 'all';
         attendanceStatusV2SelectedKey = null;
         rerender();
+      });
+    });
+    container.querySelectorAll('[data-inspector-action]').forEach((node) => {
+      node.addEventListener('click', async () => {
+        const selectedRow = v2ResolveSelectedRow(v2Array(attendanceStatusV2Payload?.scopedRows?.length ? attendanceStatusV2Payload.scopedRows : attendanceStatusV2Payload?.rows), v2QueueRows(v2Array(attendanceStatusV2Payload?.scopedRows?.length ? attendanceStatusV2Payload.scopedRows : attendanceStatusV2Payload?.rows).filter((row) => v2RowMatchesFilter(row, attendanceStatusV2FilterKey))));
+        try {
+          await v2HandleInspectorAction(node.getAttribute('data-inspector-action') || '', selectedRow);
+        } catch (error) {
+          console.error('[RG ARLS] attendance v2 inspector action failed', error);
+          if (typeof showToast === 'function') {
+            showToast('이동에 실패했습니다.', 'error', 2200);
+          }
+        }
       });
     });
   }
@@ -64053,5 +64192,6 @@ document.addEventListener('compositionend', (event) => {
     v2BindSelection(shell.summaryHost);
     v2BindSelection(shell.queueHost);
     v2BindSelection(shell.tableHost);
+    v2BindSelection(shell.inspectorHost);
   };
 })();

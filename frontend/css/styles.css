@@ -24866,6 +24866,44 @@ body.notices-compose-dragging .notices-inline-drag-handle {
   gap: 18px;
 }
 
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-inspector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-inspector-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(226, 232, 240, 0.96);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  transition: border-color 160ms ease, color 160ms ease, background-color 160ms ease;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-inspector-action:hover {
+  border-color: rgba(249, 115, 22, 0.34);
+  color: #c2410c;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-inspector-action.is-primary {
+  border-color: rgba(249, 115, 22, 0.18);
+  background: rgba(255, 247, 237, 0.98);
+  color: #c2410c;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-inspector-action.is-subtle {
+  color: #475569;
+}
+
 #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
