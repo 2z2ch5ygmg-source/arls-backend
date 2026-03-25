@@ -34214,7 +34214,11 @@ function buildNoticePollMetaTags(poll = {}) {
   return tags;
 }
 
-function createNoticePollBlock(item, poll = {}) {
+function createNoticePollBlock(item, poll = {}, options = {}) {
+  const previewOnly = Boolean(options && options.previewOnly);
+  const forceResultsVisible = Boolean(options && options.forceResultsVisible);
+  const showResults = forceResultsVisible || Boolean(poll.resultsVisible || poll.results_visible);
+  const totalVotes = Math.max(0, Number.parseInt(String(poll.totalVotes || poll.total_votes || 0), 10) || 0);
   const section = document.createElement('section');
   section.className = 'notices-detail-block notices-detail-poll-block';
   const card = document.createElement('div');
@@ -34248,15 +34252,9 @@ function createNoticePollBlock(item, poll = {}) {
   summaryRow.className = 'notices-poll-status-row';
   const summary = document.createElement('p');
   summary.className = 'notices-poll-summary';
-  if (poll.resultsVisible || poll.results_visible) {
-    summary.textContent = `참여 ${Math.max(0, Number.parseInt(String(poll.totalVotes || poll.total_votes || 0), 10) || 0)}명`;
-  } else if (poll.hasVoted || poll.has_voted) {
-    summary.textContent = '투표가 접수되었습니다. 결과는 마감 후 공개됩니다.';
-  } else {
-    summary.textContent = '결과는 마감 후 공개됩니다.';
-  }
+  summary.textContent = `참여 ${totalVotes}명`;
   summaryRow.appendChild(summary);
-  if (poll.hasVoted || poll.has_voted) {
+  if (!previewOnly && (poll.hasVoted || poll.has_voted)) {
     const statePill = document.createElement('span');
     statePill.className = 'status-pill status-pill-neutral';
     statePill.textContent = '참여 완료';
@@ -34295,21 +34293,19 @@ function createNoticePollBlock(item, poll = {}) {
     labelRow.appendChild(labelEl);
     const countEl = document.createElement('span');
     countEl.className = 'notices-poll-option-votes';
-    countEl.textContent = Boolean(poll.resultsVisible || poll.results_visible)
-      ? `${Math.max(0, Number.parseInt(String(option.voteCount || option.vote_count || 0), 10) || 0)}표`
+    const ratio = Math.max(0, Math.min(1, Number(option.voteRatio || option.vote_ratio || 0) || 0));
+    countEl.textContent = showResults
+      ? `${Math.round(ratio * 100)}%`
       : (input.checked ? '내 선택' : '');
     labelRow.appendChild(countEl);
     content.appendChild(labelRow);
-    if (poll.resultsVisible || poll.results_visible) {
-      const resultBar = document.createElement('div');
-      resultBar.className = 'notices-poll-result-bar';
-      const fill = document.createElement('span');
-      fill.className = 'notices-poll-result-fill';
-      const ratio = Math.max(0, Math.min(1, Number(option.voteRatio || option.vote_ratio || 0) || 0));
-      fill.style.width = `${Math.round(ratio * 100)}%`;
-      resultBar.appendChild(fill);
-      content.appendChild(resultBar);
-    }
+    const resultBar = document.createElement('div');
+    resultBar.className = 'notices-poll-result-bar';
+    const fill = document.createElement('span');
+    fill.className = 'notices-poll-result-fill';
+    fill.style.width = `${Math.round(ratio * 100)}%`;
+    resultBar.appendChild(fill);
+    content.appendChild(resultBar);
     row.appendChild(content);
     optionsWrap.appendChild(row);
   });
@@ -34318,7 +34314,7 @@ function createNoticePollBlock(item, poll = {}) {
   const actionRow = document.createElement('div');
   actionRow.className = 'notices-poll-actions';
   const pollId = String(poll.pollId || poll.poll_id || '').trim();
-  if (Boolean(poll.canVote || poll.can_vote) && pollId && String(item?.id || '').trim()) {
+  if (!previewOnly && Boolean(poll.canVote || poll.can_vote) && pollId && String(item?.id || '').trim()) {
     const submitBtn = document.createElement('button');
     submitBtn.type = 'button';
     submitBtn.className = 'btn btn-primary';
@@ -34339,13 +34335,15 @@ function createNoticePollBlock(item, poll = {}) {
   } else if (!(poll.resultsVisible || poll.results_visible)) {
     hintText = '결과는 마감 후 공개됩니다.';
   }
-  if (hintText) {
+  if (!previewOnly && hintText) {
     const hint = document.createElement('p');
     hint.className = 'muted notices-poll-hint';
     hint.textContent = hintText;
     actionRow.appendChild(hint);
   }
-  card.appendChild(actionRow);
+  if (actionRow.childNodes.length) {
+    card.appendChild(actionRow);
+  }
 
   section.appendChild(card);
   return section;
@@ -34549,45 +34547,33 @@ function renderNoticeComposePollEditor() {
     return;
   }
 
-  const card = document.createElement('div');
-  card.className = 'notices-compose-poll-summary';
-
-  const question = document.createElement('strong');
-  question.className = 'notices-compose-poll-question';
-  question.textContent = String(pollDraft.question || '').trim() || '질문을 입력해 주세요.';
-  card.appendChild(question);
-
-  const tags = document.createElement('div');
-  tags.className = 'notices-compose-poll-tags';
-  buildNoticePollMetaTags(pollDraft).forEach((tag) => {
-    const tagEl = document.createElement('span');
-    tagEl.className = `notice-meta-tag notice-meta-tag-${tag.tone}`;
-    tagEl.textContent = tag.label;
-    tags.appendChild(tagEl);
-  });
-  if (tags.childNodes.length) {
-    card.appendChild(tags);
+  const previewPoll = {
+    ...pollDraft,
+    pollId: String(pollDraft.pollId || 'compose-preview-poll').trim(),
+    canVote: false,
+    hasVoted: false,
+    totalVotes: Math.max(0, Number.parseInt(String(pollDraft.totalVotes || 0), 10) || 0),
+    resultsVisible: true,
+    options: pollDraft.options
+      .map((option) => {
+        const label = String(option.label || '').trim();
+        if (!label) return null;
+        return {
+          ...option,
+          label,
+          voteCount: Math.max(0, Number.parseInt(String(option.voteCount || 0), 10) || 0),
+          voteRatio: Math.max(0, Math.min(1, Number(option.voteRatio || 0) || 0)),
+        };
+      })
+      .filter(Boolean),
+  };
+  if (!previewPoll.options.length) {
+    previewPoll.options = [
+      { optionId: 'compose-option-1', label: '선택지 1', voteCount: 0, voteRatio: 0 },
+      { optionId: 'compose-option-2', label: '선택지 2', voteCount: 0, voteRatio: 0 },
+    ];
   }
-
-  const optionList = document.createElement('ul');
-  optionList.className = 'notices-compose-poll-preview-list';
-  pollDraft.options
-    .map((option) => String(option.label || '').trim())
-    .filter(Boolean)
-    .forEach((labelText) => {
-      const item = document.createElement('li');
-      item.className = 'notices-compose-poll-preview-item';
-      item.textContent = labelText;
-      optionList.appendChild(item);
-    });
-  if (!optionList.childNodes.length) {
-    const item = document.createElement('li');
-    item.className = 'notices-compose-poll-preview-item notices-compose-poll-preview-item-empty';
-    item.textContent = '선택지 2개 이상을 설정해 주세요.';
-    optionList.appendChild(item);
-  }
-  card.appendChild(optionList);
-  panel.appendChild(card);
+  panel.appendChild(createNoticePollBlock(null, previewPoll, { previewOnly: true, forceResultsVisible: true }));
   renderNoticeComposeToolbar();
   renderNoticeComposeDocumentFlow();
 }

@@ -22875,12 +22875,13 @@ button.attendance-status-special-card.active {
 .notices-poll-summary {
   color: var(--ui-text-secondary);
   font-size: 14px;
-  line-height: 1.65;
+  line-height: 1.55;
+  font-weight: 700;
 }
 
 .notices-poll-options {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .notices-poll-option {
@@ -22888,18 +22889,18 @@ button.attendance-status-special-card.active {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
   align-items: start;
-  padding: 12px 0;
-  border: 0;
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
-  background: transparent;
+  padding: 14px 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.88);
 }
 
 .notices-poll-option:first-child {
-  border-top: 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .notices-poll-option input {
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .notices-poll-option-content {
@@ -22919,18 +22920,19 @@ button.attendance-status-special-card.active {
   color: var(--ui-text-primary);
   font-size: 15px;
   line-height: 1.5;
+  font-weight: 700;
 }
 
 .notices-poll-option-votes {
   color: var(--ui-text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 
 .notices-poll-result-bar {
   position: relative;
   width: 100%;
-  height: 8px;
+  height: 10px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(226, 232, 240, 0.92);
@@ -22941,6 +22943,7 @@ button.attendance-status-special-card.active {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #fb923c, #f97316);
+  min-width: 0;
 }
 
 .notices-poll-actions {
