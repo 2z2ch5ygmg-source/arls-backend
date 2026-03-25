@@ -9071,7 +9071,20 @@ function syncUiThemeButtons(theme = state.uiTheme || 'light') {
     btn.classList.toggle('is-active', active);
     btn.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
+  syncTopbarThemeToggle(theme);
   renderProfileThemeState();
+}
+
+function syncTopbarThemeToggle(theme = state.uiTheme || 'light') {
+  const toggleBtn = $('#btnTopbarThemeToggle');
+  if (!(toggleBtn instanceof HTMLElement)) return;
+  const normalizedTheme = normalizeUiTheme(theme);
+  const nextTheme = normalizedTheme === 'dark' ? 'light' : 'dark';
+  const nextLabel = nextTheme === 'dark' ? '다크 모드로 전환' : '라이트 모드로 전환';
+  toggleBtn.dataset.theme = normalizedTheme;
+  toggleBtn.setAttribute('aria-pressed', normalizedTheme === 'dark' ? 'true' : 'false');
+  toggleBtn.setAttribute('aria-label', nextLabel);
+  toggleBtn.setAttribute('title', nextLabel);
 }
 
 function applyUiTheme(nextTheme = 'light', { persist = false } = {}) {
@@ -29270,6 +29283,7 @@ function syncWorkspaceRouteTabs() {
 function renderDesktopTopContext() {
   const contextEl = $('#topbarSessionInfo');
   const userBtn = $('#btnTopbarProfile');
+  const themeToggleBtn = $('#btnTopbarThemeToggle');
   const visible = Boolean(state.user) && isDesktopViewport();
   if (!visible) {
     if (contextEl) {
@@ -29277,9 +29291,12 @@ function renderDesktopTopContext() {
       contextEl.classList.add('hidden');
     }
     if (userBtn) {
-      userBtn.textContent = '내 정보';
       userBtn.classList.add('hidden');
       userBtn.setAttribute('aria-label', '내 정보 열기');
+      userBtn.setAttribute('title', '내 정보');
+    }
+    if (themeToggleBtn) {
+      themeToggleBtn.classList.add('hidden');
     }
     renderDesktopGlobalSearch();
     syncWorkspaceRouteTabs();
@@ -29297,9 +29314,13 @@ function renderDesktopTopContext() {
     contextEl.classList.remove('hidden');
   }
   if (userBtn) {
-    userBtn.textContent = userName;
     userBtn.classList.remove('hidden');
     userBtn.setAttribute('aria-label', `${userName} 프로필 열기`);
+    userBtn.setAttribute('title', `${userName} 프로필 열기`);
+  }
+  if (themeToggleBtn) {
+    themeToggleBtn.classList.remove('hidden');
+    syncTopbarThemeToggle(state.uiTheme || 'light');
   }
   renderDesktopGlobalSearch();
   syncWorkspaceRouteTabs();
@@ -58128,6 +58149,11 @@ function bindUiEvents() {
 
     if (action === 'ui-theme-set') {
       applyUiTheme(actionEl.dataset.theme || 'light', { persist: true });
+      return;
+    }
+
+    if (action === 'ui-theme-toggle') {
+      applyUiTheme(state.uiTheme === 'dark' ? 'light' : 'dark', { persist: true });
       return;
     }
 

@@ -46,12 +46,51 @@
           <div id="topbarSessionInfo" class="topbar-session-info hidden" aria-live="polite"></div>
           <button
             id="btnTopbarProfile"
-            class="btn btn-secondary topbar-profile-btn hidden"
+            class="icon-btn ui-btn--ghost topbar-profile-btn hidden"
             type="button"
             data-action="drawer-open-route"
             data-route="/profile"
             aria-label="내 정보 열기"
-          >내 정보</button>
+            title="내 정보"
+          >
+            <svg class="topbar-profile-art" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M18 19a6 6 0 0 0-12 0"></path>
+              <circle cx="12" cy="9" r="3.5"></circle>
+            </svg>
+            <span class="sr-only">내 정보</span>
+          </button>
+          <button
+            id="btnTopbarThemeToggle"
+            class="topbar-theme-toggle hidden"
+            type="button"
+            data-action="ui-theme-toggle"
+            aria-label="다크 모드로 전환"
+            aria-pressed="false"
+            title="화면 모드 전환"
+          >
+            <span class="topbar-theme-track" aria-hidden="true">
+              <span class="topbar-theme-icon topbar-theme-icon-sun">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <circle cx="12" cy="12" r="4.25"></circle>
+                  <path d="M12 2.5v2.25"></path>
+                  <path d="M12 19.25v2.25"></path>
+                  <path d="m4.93 4.93 1.6 1.6"></path>
+                  <path d="m17.47 17.47 1.6 1.6"></path>
+                  <path d="M2.5 12h2.25"></path>
+                  <path d="M19.25 12h2.25"></path>
+                  <path d="m4.93 19.07 1.6-1.6"></path>
+                  <path d="m17.47 6.53 1.6-1.6"></path>
+                </svg>
+              </span>
+              <span class="topbar-theme-icon topbar-theme-icon-moon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <path d="M20 14.2A7.8 7.8 0 1 1 9.8 4a6.2 6.2 0 0 0 10.2 10.2Z"></path>
+                </svg>
+              </span>
+              <span class="topbar-theme-thumb"></span>
+            </span>
+            <span class="sr-only">화면 모드 전환</span>
+          </button>
           <button id="btnNotifications" class="icon-btn ui-btn--ghost topbar-bell-btn hidden" type="button" data-action="open-notifications" aria-label="알림 열기">
             <span class="topbar-bell-art" aria-hidden="true"></span>
             <span id="notificationBadge" class="notif-badge hidden">0</span>
