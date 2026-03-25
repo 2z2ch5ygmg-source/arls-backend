@@ -22864,8 +22864,6 @@ button.attendance-status-special-card.active {
   gap: 14px;
   padding: 18px 0;
   border: 0;
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 0;
   background: transparent;
 }
