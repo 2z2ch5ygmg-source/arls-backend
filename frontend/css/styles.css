@@ -13083,30 +13083,23 @@ textarea::placeholder {
 
 /* Keep the accent rail on top-level drawer items only. */
 .drawer-subitem {
-  border-left: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 
 .drawer-subitem-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  display: block;
   font-weight: 500;
-}
-
-.drawer-subitem-label::before {
-  content: '';
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: 0.4;
-  flex: 0 0 5px;
 }
 
 .drawer-subitem.active,
 .desktop-sidebar .drawer-subitem.active {
   background: transparent;
   border-color: transparent;
+  box-shadow: none;
 }
 
 .drawer-subitem.active .drawer-subitem-label,
@@ -13115,9 +13108,9 @@ textarea::placeholder {
   font-weight: var(--ui-weight-semibold);
 }
 
-.drawer-subitem.active .drawer-subitem-label::before,
-.desktop-sidebar .drawer-subitem.active .drawer-subitem-label::before {
-  opacity: 1;
+.drawer-subitem:hover,
+.desktop-sidebar .drawer-subitem:hover {
+  background: transparent;
 }
 
 :root[data-ui-theme='dark'] .drawer-subitem.active,
@@ -24481,4 +24474,14 @@ body.notices-compose-dragging .notices-inline-drag-handle {
   background: transparent !important;
   background-color: transparent !important;
   box-shadow: none !important;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-schedule-grid {
+  align-items: start !important;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-schedule-issue-rail .home-dashboard-list-plain > li {
+  min-height: 74px !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
 }
