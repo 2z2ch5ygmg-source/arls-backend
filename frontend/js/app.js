@@ -5285,17 +5285,71 @@ function buildHomeManagerPointRows() {
 function buildHomeAttendanceIssueRows() {
   const dashboard = getHomeManagerDashboardState();
   const rows = Array.isArray(dashboard.attendanceIssues) ? dashboard.attendanceIssues : [];
-  if (!rows.length) {
-    return [{
-      title: '오늘 출퇴근 예외 없음',
-      subtitle: '현재 범위에서 먼저 확인할 예외가 없습니다.',
-    }];
+  return rows.slice(0, 4).map((item) => {
+    const sourceRow = item?.row || {};
+    return {
+      employeeName: String(item?.employeeName || sourceRow?.employeeName || '직원').trim() || '직원',
+      primaryMeta: String(sourceRow?.dateLabel || item?.dateLabel || sourceRow?.siteName || item?.siteName || '현장 미지정').trim() || '현장 미지정',
+      secondaryMeta: String(item?.timeText || sourceRow?.timeText || item?.statusLabel || item?.label || '-').trim() || '-',
+      statusLabel: String(item?.label || item?.statusLabel || '확인 필요').trim() || '확인 필요',
+      danger: Boolean(item?.danger),
+    };
+  });
+}
+
+function createHomeAttendanceIssueListRow({
+  employeeName = '',
+  primaryMeta = '',
+  secondaryMeta = '',
+  statusLabel = '',
+  danger = false,
+} = {}) {
+  const li = document.createElement('li');
+  li.className = 'content-fade-in';
+  if (danger) li.classList.add('attendance-outside');
+
+  const row = document.createElement('div');
+  row.className = 'home-attendance-issue-list-row';
+
+  const nameEl = document.createElement('div');
+  nameEl.className = 'home-attendance-issue-name';
+  nameEl.textContent = String(employeeName || '-').trim() || '-';
+
+  const primaryEl = document.createElement('div');
+  primaryEl.className = 'home-attendance-issue-meta home-attendance-issue-meta-primary';
+  primaryEl.textContent = String(primaryMeta || '-').trim() || '-';
+
+  const secondaryEl = document.createElement('div');
+  secondaryEl.className = 'home-attendance-issue-meta home-attendance-issue-meta-secondary';
+  secondaryEl.textContent = String(secondaryMeta || '-').trim() || '-';
+
+  const statusEl = document.createElement('div');
+  statusEl.className = `home-attendance-issue-status${danger ? ' is-danger' : ''}`;
+  const dotEl = document.createElement('span');
+  dotEl.className = 'home-attendance-issue-status-dot';
+  dotEl.setAttribute('aria-hidden', 'true');
+  const textEl = document.createElement('span');
+  textEl.textContent = String(statusLabel || '').trim() || '확인 필요';
+  statusEl.append(dotEl, textEl);
+
+  row.append(nameEl, primaryEl, secondaryEl, statusEl);
+  li.appendChild(row);
+  return li;
+}
+
+function renderHomeAttendanceIssueList(rows = []) {
+  const listEl = $('#homeManagerAttendanceIssueList');
+  if (!listEl) return;
+  clearList(listEl);
+  const items = Array.isArray(rows) ? rows : [];
+  if (!items.length) {
+    renderEmptyState(listEl, '오늘 출퇴근 예외 없음', '현재 범위에서 먼저 확인할 예외가 없습니다.');
+    listEl.querySelector('.empty-state')?.classList.add('home-compact-empty');
+    return;
   }
-  return rows.slice(0, 4).map((item) => ({
-    title: item.employeeName || '직원',
-    subtitle: `${item.statusLabel || '확인 필요'} · ${item.siteName || '현장 미지정'}`,
-    danger: Boolean(item.danger),
-  }));
+  items.forEach((row) => {
+    listEl.appendChild(createHomeAttendanceIssueListRow(row));
+  });
 }
 
 function buildHomeScheduleRows() {
@@ -5687,12 +5741,7 @@ function renderHomeManagerDashboard() {
   setTextToSelectors(['#homeManagerAttendanceReview'], String(attendanceIssues.length));
   setTextToSelectors(['#homeManagerAttendanceLeave'], String(leaveCount + overnightCount));
   setTextToSelectors(['#homeManagerAttendanceApprovals'], String(Number(dashboard.approvalPendingCount || 0)));
-  renderHomeDashboardList(
-    '#homeManagerAttendanceIssueList',
-    buildHomeAttendanceIssueRows(),
-    '오늘 출퇴근 예외가 없습니다.',
-    '현재 범위에서는 먼저 확인할 예외가 없습니다.',
-  );
+  renderHomeAttendanceIssueList(buildHomeAttendanceIssueRows());
 
   setTextToSelectors(['#homeManagerScheduleTodayCount'], `${Number(scheduleSummary.todayScheduledCount || 0)}명`);
   setTextToSelectors(['#homeManagerScheduleWeekCount'], `${Number(scheduleSummary.weekScheduledCount || 0)}건`);
