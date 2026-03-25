@@ -20526,6 +20526,39 @@ function applyNoticesSearchRoute(search = '', { replace = false, expanded = null
   );
 }
 
+function primeNoticesImmediateRouteState() {
+  const notices = ensureNoticesState();
+  const targetCategory = normalizeNoticeCategory(notices.category || 'all');
+  const targetSearch = normalizeNoticeSearch(notices.search || '');
+  const loadedListCategory = normalizeNoticeCategory(notices.loadedListCategory || '');
+  const loadedListSearch = normalizeNoticeSearch(notices.loadedListSearch || '');
+  if (notices.mode === NOTICE_VIEW_MODE_DETAIL) {
+    const targetId = String(notices.selectedNoticeId || '').trim();
+    if (!targetId) return;
+    const cachedRow = (Array.isArray(notices.rows) ? notices.rows : []).find(
+      (row) => String(row?.id || '').trim() === targetId,
+    );
+    if (cachedRow) {
+      notices.selectedRow = cachedRow;
+    }
+    notices.detailLoading = true;
+    notices.error = '';
+    return;
+  }
+  if (notices.mode === NOTICE_VIEW_MODE_LIST) {
+    const needsReload = (
+      !Array.isArray(notices.rows)
+      || !notices.rows.length
+      || loadedListCategory !== targetCategory
+      || loadedListSearch !== targetSearch
+    );
+    if (needsReload) {
+      notices.loading = true;
+      notices.error = '';
+    }
+  }
+}
+
 function setOpsViewTab(value = '', { syncRoute = false } = {}) {
   const next = normalizeOpsViewTab(value || state.ops?.viewTab || 'overview');
   state.ops.viewTab = next;
@@ -31250,13 +31283,13 @@ function resolveRequestedRouteCandidate() {
   return { requestedRoute, requestedRouteRaw };
 }
 
-function bootstrapSessionFromStorage() {
+function bootstrapSessionFromStorage(storedSession = loadSession()) {
   const { requestedRoute, requestedRouteRaw } = resolveRequestedRouteCandidate();
   if (requestedRoute && requestedRoute !== ROUTE_LOGIN && isKnownRoute(requestedRoute)) {
     state.pendingRouteAfterLogin = requestedRouteRaw;
   }
 
-  const stored = loadSession();
+  const stored = storedSession;
   if (!stored) return false;
 
   state.token = String(stored.token || '').trim();
@@ -33670,6 +33703,11 @@ function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad
 
   applyDesktopRouteLayout(state.currentRoute);
   renderDesktopTopContext();
+
+  if (targetView === 'notices') {
+    primeNoticesImmediateRouteState();
+    renderNoticesView();
+  }
 
   return loadViewData(targetView, {
     force: Boolean(forceLoad),
@@ -59017,7 +59055,11 @@ function bindUiEvents() {
       const notices = ensureNoticesState();
       notices.selectedNoticeId = noticeId;
       notices.mode = NOTICE_VIEW_MODE_DETAIL;
-      notices.selectedRow = null;
+      notices.selectedRow = (Array.isArray(notices.rows) ? notices.rows : []).find(
+        (row) => String(row?.id || '').trim() === noticeId,
+      ) || null;
+      notices.detailLoading = true;
+      notices.error = '';
       notices.composeSourceNoticeId = '';
       runActionSafely(
         navigateToRoute(buildNoticesRoute({
@@ -63336,8 +63378,9 @@ async function initializeApp() {
     refreshScheduleExportLink();
     setScheduleImportUI({ canApply: false, clearPreviewRows: true, clearApplyDetails: true });
 
-    const hasSnapshot = bootstrapSessionFromStorage();
-    if (!hasSnapshot) {
+    const storedSessionCandidate = loadSession();
+    const hasSnapshot = bootstrapSessionFromStorage(storedSessionCandidate);
+    if (!hasSnapshot && !storedSessionCandidate) {
       showAuthPanel();
     }
     loadLoginPreferences().catch((err) => {
