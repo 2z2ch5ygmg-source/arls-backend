@@ -25428,3 +25428,415 @@ body.notices-compose-dragging .notices-inline-drag-handle {
     border-top: 1px solid rgba(226, 232, 240, 0.88);
   }
 }
+
+/* attendance status v2 phase 5 */
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) {
+  --attendance-v2-surface: #ffffff;
+  --attendance-v2-surface-muted: #f8fafc;
+  --attendance-v2-surface-elevated: #ffffff;
+  --attendance-v2-border: rgba(226, 232, 240, 0.92);
+  --attendance-v2-border-strong: rgba(203, 213, 225, 0.96);
+  --attendance-v2-text: #0f172a;
+  --attendance-v2-text-subtle: #334155;
+  --attendance-v2-text-muted: #64748b;
+  --attendance-v2-hover: rgba(248, 250, 252, 0.92);
+  --attendance-v2-selected: rgba(255, 247, 237, 0.84);
+  --attendance-v2-focus: rgba(249, 115, 22, 0.36);
+}
+
+html[data-ui-theme='dark'] :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) {
+  --attendance-v2-surface: #0f172a;
+  --attendance-v2-surface-muted: #111c2d;
+  --attendance-v2-surface-elevated: #162033;
+  --attendance-v2-border: rgba(51, 65, 85, 0.82);
+  --attendance-v2-border-strong: rgba(71, 85, 105, 0.96);
+  --attendance-v2-text: #f3f7ff;
+  --attendance-v2-text-subtle: #dbe7f5;
+  --attendance-v2-text-muted: #94a3b8;
+  --attendance-v2-hover: rgba(30, 41, 59, 0.82);
+  --attendance-v2-selected: rgba(124, 45, 18, 0.34);
+  --attendance-v2-focus: rgba(249, 115, 22, 0.42);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-manager #attendanceStatusPanel,
+#attendanceManagerWorkspace.is-attendance-v2-manager #attendanceExceptionQueueCard,
+#attendanceManagerWorkspace.is-attendance-v2-manager #attendanceListPanel,
+#attendanceManagerWorkspace.is-attendance-v2-manager #attendanceAdminDetailPanel,
+#attendanceCalendarPanel.is-attendance-v2-calendar,
+#attendanceManagerWorkspace.is-attendance-v2-manager .attendance-v2-summary-strip,
+#attendanceManagerWorkspace.is-attendance-v2-manager .attendance-v2-detail-card,
+#attendanceManagerWorkspace.is-attendance-v2-manager .attendance-v2-note-panel,
+#attendanceCalendarPanel.is-attendance-v2-calendar .attendance-v2-summary-strip {
+  background: var(--attendance-v2-surface) !important;
+  border-color: var(--attendance-v2-border) !important;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-section-head h3,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-value,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-cell,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-table tbody td,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-detail-card strong {
+  color: var(--attendance-v2-text);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-section-head p,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-label,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-meta,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-cell.site,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-cell.schedule,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-cell.actual,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-cell.request,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-table thead th,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-table tbody td:nth-child(2),
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-table tbody td:nth-child(3),
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-table tbody td:nth-child(4),
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-table tbody td:nth-child(5),
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-table tbody td:nth-child(7),
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-table tbody td:nth-child(8),
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-detail-label,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-note-panel p,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-empty,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-empty-cell,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-calendar-loading {
+  color: var(--attendance-v2-text-muted);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item {
+  background: var(--attendance-v2-surface);
+  color: var(--attendance-v2-text);
+  transition: background-color 160ms ease, box-shadow 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: transparent;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-accent,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-danger,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-success,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-warning {
+  background: var(--attendance-v2-surface);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-accent::before {
+  background: #f97316;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-danger::before {
+  background: #ef4444;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-success::before {
+  background: #22c55e;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-warning::before {
+  background: #f59e0b;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item:hover {
+  background: var(--attendance-v2-hover);
+  transform: translateY(-1px);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-active {
+  background: var(--attendance-v2-surface);
+  box-shadow: inset 0 0 0 2px rgba(249, 115, 22, 0.96);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-progress {
+  background: color-mix(in srgb, var(--attendance-v2-border) 88%, transparent);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-table {
+  overflow-x: auto;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-head,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-body {
+  min-width: 860px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-body {
+  display: grid;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-queue-table,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-table-wrap {
+  border-top-color: var(--attendance-v2-border);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-queue-row,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-table tbody tr,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-inspector-action,
+#attendanceCalendarPanel.is-attendance-v2-calendar .attendance-calendar-cell {
+  transition: background-color 160ms ease, box-shadow 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-queue-row:hover,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-table tbody tr:hover {
+  background: var(--attendance-v2-hover);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-queue-row.is-selected,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-table tbody tr.is-selected {
+  background: var(--attendance-v2-selected);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item:focus-visible,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-queue-row:focus-visible,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-table tbody tr:focus-visible,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-inspector-action:focus-visible,
+#attendanceCalendarPanel.is-attendance-v2-calendar .attendance-calendar-cell:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--attendance-v2-focus);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item:focus-visible,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-inspector-action:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-empty {
+  min-height: 176px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--attendance-v2-border-strong);
+  border-radius: 18px;
+  background: var(--attendance-v2-surface-muted);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-empty.is-inspector {
+  background: var(--attendance-v2-surface-muted);
+  border-color: var(--attendance-v2-border-strong);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-detail-card,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-note-panel {
+  min-height: 88px;
+  background: var(--attendance-v2-surface-elevated);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-inspector-action {
+  border-color: var(--attendance-v2-border);
+  background: var(--attendance-v2-surface);
+  color: var(--attendance-v2-text-subtle);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-inspector-action:hover {
+  border-color: rgba(249, 115, 22, 0.44);
+  background: var(--attendance-v2-hover);
+  color: #c2410c;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-inspector-action.is-primary {
+  border-color: rgba(249, 115, 22, 0.22);
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+html[data-ui-theme='dark'] :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-inspector-action.is-primary {
+  background: rgba(249, 115, 22, 0.18);
+  color: #fdba74;
+}
+
+html[data-ui-theme='dark'] :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-status-chip.is-danger {
+  background: rgba(239, 68, 68, 0.16);
+  color: #fecaca;
+}
+
+html[data-ui-theme='dark'] :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-status-chip.is-warning {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fdba74;
+}
+
+html[data-ui-theme='dark'] :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-status-chip.is-success {
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
+}
+
+html[data-ui-theme='dark'] :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-status-chip.is-muted {
+  background: rgba(148, 163, 184, 0.14);
+  color: #cbd5e1;
+}
+
+html[data-ui-theme='dark'] :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-status-chip.is-neutral {
+  background: rgba(59, 130, 246, 0.16);
+  color: #bfdbfe;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-loading-stack {
+  display: grid;
+  gap: 12px;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-loading-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.2fr) minmax(110px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(100px, 0.8fr) minmax(100px, 0.8fr);
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--attendance-v2-border);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-loading-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--attendance-v2-border);
+  border-radius: 18px;
+  background: var(--attendance-v2-surface-muted);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-loading-table td {
+  padding: 14px;
+  border-bottom: 1px solid var(--attendance-v2-border);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-loading,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-strip.is-loading {
+  pointer-events: none;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-loading::before {
+  display: none;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-skeleton-line {
+  display: block;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(226, 232, 240, 0.74) 0%, rgba(241, 245, 249, 0.98) 50%, rgba(226, 232, 240, 0.74) 100%);
+  background-size: 200% 100%;
+  animation: attendance-v2-skeleton 1.3s linear infinite;
+}
+
+html[data-ui-theme='dark'] :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-skeleton-line {
+  background: linear-gradient(90deg, rgba(51, 65, 85, 0.84) 0%, rgba(71, 85, 105, 0.96) 50%, rgba(51, 65, 85, 0.84) 100%);
+  background-size: 200% 100%;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-skeleton-line.is-short {
+  width: 38%;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-skeleton-line.is-medium {
+  width: 64%;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-skeleton-line.is-wide {
+  width: 100%;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-skeleton-line.is-value {
+  width: 52%;
+  height: 28px;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-skeleton-line.is-chip {
+  width: 78%;
+  height: 24px;
+}
+
+#attendanceCalendarPanel.is-attendance-v2-calendar .attendance-calendar-loading {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--attendance-v2-border-strong);
+  border-radius: 18px;
+  background: var(--attendance-v2-surface-muted);
+}
+
+html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar .attendance-calendar-table th,
+html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar .attendance-calendar-table td {
+  border-color: var(--attendance-v2-border);
+}
+
+html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar .attendance-calendar-cell {
+  background: var(--attendance-v2-surface-elevated);
+  border-color: var(--attendance-v2-border);
+  color: var(--attendance-v2-text);
+}
+
+html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar .attendance-calendar-name-col strong,
+html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar .attendance-calendar-total-col,
+html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar .attendance-calendar-clock {
+  color: var(--attendance-v2-text);
+}
+
+html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar .attendance-calendar-name-col span,
+html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar .attendance-calendar-cell small,
+html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar .attendance-calendar-total-col,
+html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #attendanceCalendarScopeMeta {
+  color: var(--attendance-v2-text-muted);
+}
+
+#attendanceExportBtn {
+  transition: opacity 160ms ease, color 160ms ease, border-color 160ms ease, background-color 160ms ease;
+}
+
+#attendanceExportBtn:disabled {
+  opacity: 0.46;
+  cursor: not-allowed;
+}
+
+@keyframes attendance-v2-skeleton {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (max-width: 1200px) {
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-head,
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-row,
+  :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-loading-row {
+    grid-template-columns: minmax(140px, 1.2fr) minmax(110px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(100px, 0.8fr) minmax(100px, 0.8fr);
+  }
+
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-head span:nth-child(5),
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-head span:nth-child(6),
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-row .attendance-v2-cell.status,
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-row .attendance-v2-cell.request {
+    display: block !important;
+  }
+}
+
+@media (max-width: 900px) {
+  #attendanceManagerWorkspace.is-attendance-v2-manager #attendanceAdminDetailPanel {
+    position: static !important;
+    top: auto !important;
+  }
+
+  :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-strip {
+    grid-template-columns: 1fr;
+  }
+
+  :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item + .attendance-v2-summary-item {
+    border-left: 0 !important;
+    border-top: 1px solid var(--attendance-v2-border);
+  }
+
+  #attendanceManagerWorkspace.is-attendance-v2-manager .attendance-v2-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #attendanceManagerWorkspace.is-attendance-v2-status #attendanceStatusPanel,
+  #attendanceManagerWorkspace.is-attendance-v2-status #attendanceExceptionQueueCard,
+  #attendanceManagerWorkspace.is-attendance-v2-status #attendanceListPanel,
+  #attendanceManagerWorkspace.is-attendance-v2-manager #attendanceAdminDetailPanel,
+  #attendanceCalendarPanel.is-attendance-v2-calendar,
+  #attendanceManagerWorkspace.is-attendance-v2-list #attendanceListPanel {
+    padding: 20px !important;
+    border-radius: 20px !important;
+  }
+}

@@ -63820,7 +63820,7 @@ document.addEventListener('compositionend', (event) => {
     }
   }
 
-  function v2SummaryMarkup(summary) {
+  function v2SummaryMarkup(summary, loading = false) {
     const metrics = [
       { filterKey: 'all', label: '출근율', value: `${summary.rate}%`, meta: `${summary.complete} / ${summary.target}`, tone: 'accent', progress: summary.rate },
       { filterKey: 'target', label: '출근 대상', value: `${summary.target}`, meta: '기준 인원', tone: 'neutral' },
@@ -63830,6 +63830,26 @@ document.addEventListener('compositionend', (event) => {
       { filterKey: 'early', label: '조퇴', value: `${summary.early}`, meta: '퇴근 기록 확인', tone: 'warning' },
       { filterKey: 'correction', label: '정정 대기', value: `${summary.correction}`, meta: '승인 필요', tone: 'neutral' }
     ];
+    if (loading) {
+      return `
+        <div class="attendance-v2-section-head">
+          <div>
+            <h3>오늘 상태 요약</h3>
+            <p>필터 범위 안의 출퇴근 상태를 한 장의 운영 시트로 확인합니다.</p>
+          </div>
+          <span class="attendance-v2-inline-meta">집계 중</span>
+        </div>
+        <div class="attendance-v2-summary-strip is-loading" aria-hidden="true">
+          ${Array.from({ length: metrics.length }, () => `
+            <div class="attendance-v2-summary-item is-loading">
+              <span class="attendance-v2-skeleton-line is-short"></span>
+              <span class="attendance-v2-skeleton-line is-value"></span>
+              <span class="attendance-v2-skeleton-line is-wide"></span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
     return `
       <div class="attendance-v2-section-head">
         <div>
@@ -63864,7 +63884,18 @@ document.addEventListener('compositionend', (event) => {
           </div>
           <span class="attendance-v2-count-chip">불러오는 중</span>
         </div>
-        <div class="attendance-v2-empty">예외 목록을 불러오는 중입니다.</div>
+        <div class="attendance-v2-loading-stack" aria-hidden="true">
+          ${Array.from({ length: 4 }, () => `
+            <div class="attendance-v2-loading-row">
+              <span class="attendance-v2-skeleton-line is-medium"></span>
+              <span class="attendance-v2-skeleton-line is-medium"></span>
+              <span class="attendance-v2-skeleton-line is-wide"></span>
+              <span class="attendance-v2-skeleton-line is-wide"></span>
+              <span class="attendance-v2-skeleton-line is-chip"></span>
+              <span class="attendance-v2-skeleton-line is-medium"></span>
+            </div>
+          `).join('')}
+        </div>
       `;
     }
     return `
@@ -63918,7 +63949,31 @@ document.addEventListener('compositionend', (event) => {
           </div>
           <span class="attendance-v2-inline-meta">불러오는 중</span>
         </div>
-        <div class="attendance-v2-empty">기록 테이블을 불러오는 중입니다.</div>
+        <div class="attendance-v2-table-wrap is-loading" aria-hidden="true">
+          <table class="attendance-v2-table attendance-v2-loading-table">
+            <thead>
+              <tr>
+                <th>직원</th>
+                <th>현장</th>
+                <th>예정 근무</th>
+                <th>출근</th>
+                <th>퇴근</th>
+                <th>판정</th>
+                <th>관련 요청</th>
+                <th>기준일</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${Array.from({ length: 5 }, () => `
+                <tr class="attendance-v2-loading-table-row">
+                  ${Array.from({ length: 8 }, () => `
+                    <td><span class="attendance-v2-skeleton-line is-wide"></span></td>
+                  `).join('')}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
       `;
     }
     return `
@@ -63968,7 +64023,36 @@ document.addEventListener('compositionend', (event) => {
     `;
   }
 
-  function v2InspectorMarkup(row) {
+  function v2InspectorMarkup(row, { loading = false } = {}) {
+    if (loading) {
+      return `
+        <div class="attendance-v2-inspector-shell is-loading">
+          <div class="attendance-v2-section-head">
+            <div>
+              <h3>선택 상세</h3>
+              <p>예외 또는 기록을 선택하면 상세를 확인할 수 있습니다.</p>
+            </div>
+          </div>
+          <div class="attendance-v2-loading-card" aria-hidden="true">
+            <span class="attendance-v2-skeleton-line is-medium"></span>
+            <span class="attendance-v2-skeleton-line is-short"></span>
+          </div>
+          <div class="attendance-v2-detail-grid" aria-hidden="true">
+            ${Array.from({ length: 4 }, () => `
+              <article class="attendance-v2-loading-card">
+                <span class="attendance-v2-skeleton-line is-short"></span>
+                <span class="attendance-v2-skeleton-line is-medium"></span>
+              </article>
+            `).join('')}
+          </div>
+          <section class="attendance-v2-loading-card" aria-hidden="true">
+            <span class="attendance-v2-skeleton-line is-short"></span>
+            <span class="attendance-v2-skeleton-line is-wide"></span>
+            <span class="attendance-v2-skeleton-line is-wide"></span>
+          </section>
+        </div>
+      `;
+    }
     if (!row) {
       return `
         <div class="attendance-v2-inspector-shell">
@@ -64269,30 +64353,36 @@ document.addEventListener('compositionend', (event) => {
     }
 
     if (shell.summaryHost) {
-      shell.summaryHost.innerHTML = v2SummaryMarkup(summary);
+      shell.summaryHost.setAttribute('aria-busy', loading ? 'true' : 'false');
+      shell.summaryHost.innerHTML = v2SummaryMarkup(summary, loading);
       v2BindSelection(shell.summaryHost);
     }
 
     if (tab === 'status') {
       if (shell.queueHost) {
+        shell.queueHost.setAttribute('aria-busy', loading ? 'true' : 'false');
         shell.queueHost.innerHTML = v2QueueMarkup(queueRows, loading, attendanceStatusV2FilterKey);
         v2BindSelection(shell.queueHost);
       }
       if (shell.tableHost) {
+        shell.tableHost.setAttribute('aria-busy', loading ? 'true' : 'false');
         shell.tableHost.innerHTML = v2TableMarkup(filteredRows, loading, attendanceStatusV2FilterKey);
         v2BindSelection(shell.tableHost);
       }
       if (shell.inspectorHost) {
-        shell.inspectorHost.innerHTML = v2InspectorMarkup(selectedRow);
+        shell.inspectorHost.setAttribute('aria-busy', loading ? 'true' : 'false');
+        shell.inspectorHost.innerHTML = v2InspectorMarkup(selectedRow, { loading });
         v2BindSelection(shell.inspectorHost);
       }
     } else if (tab === 'list') {
       if (shell.tableHost) {
+        shell.tableHost.setAttribute('aria-busy', loading ? 'true' : 'false');
         shell.tableHost.innerHTML = v2TableMarkup(filteredRows, loading, attendanceStatusV2FilterKey);
         v2BindSelection(shell.tableHost);
       }
       if (shell.inspectorHost) {
-        shell.inspectorHost.innerHTML = v2InspectorMarkup(selectedRow);
+        shell.inspectorHost.setAttribute('aria-busy', loading ? 'true' : 'false');
+        shell.inspectorHost.innerHTML = v2InspectorMarkup(selectedRow, { loading });
         v2BindSelection(shell.inspectorHost);
       }
     } else if (tab === 'calendar') {
