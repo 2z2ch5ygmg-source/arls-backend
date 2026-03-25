@@ -1290,6 +1290,7 @@ function createInitialNoticesState() {
     composePollModalDraft: createDefaultNoticePollDraft(),
     composePollModalTriggerEl: null,
     composePollModalBlockId: '',
+    composeInsertionAnchor: null,
     composeDraft: {
       category: 'ops',
       title: '',
@@ -19105,6 +19106,29 @@ function cloneNoticeComposeContentBlocks(rawBlocks = null, fallbackBodyText = ''
   });
 }
 
+function splitNoticeComposeParagraphText(rawText = '') {
+  return String(rawText || '')
+    .split(/\n\s*\n+/)
+    .map((part) => String(part || '').trim())
+    .filter(Boolean);
+}
+
+function createNoticeComposeParagraphBlocksFromText(rawText = '', { firstBlockId = '', preserveEmpty = false } = {}) {
+  const parts = splitNoticeComposeParagraphText(rawText);
+  if (!parts.length) {
+    return preserveEmpty
+      ? [{ id: String(firstBlockId || '').trim() || createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text: '' }]
+      : [];
+  }
+  return parts.map((text, index) => ({
+    id: index === 0 && String(firstBlockId || '').trim()
+      ? String(firstBlockId || '').trim()
+      : createNoticeComposeBlockId('paragraph'),
+    kind: 'paragraph',
+    text,
+  }));
+}
+
 function buildNoticeComposeBodyTextFromContentBlocks(rawBlocks = null) {
   return normalizeNoticeComposeContentBlocks(rawBlocks).filter((block) => block.kind === 'paragraph')
     .map((block) => String(block.text || '').trim())
@@ -19168,6 +19192,150 @@ function resolveNoticeComposeActiveFlowIndex() {
   const blockEl = activeEl?.closest?.('[data-notice-compose-flow-index]');
   if (!(blockEl instanceof HTMLElement)) return -1;
   return Number.parseInt(String(blockEl.dataset.noticeComposeFlowIndex || '-1'), 10);
+}
+
+function setNoticeComposeInsertionAnchor(nextAnchor = null) {
+  const notices = ensureNoticesState();
+  if (!nextAnchor || typeof nextAnchor !== 'object') {
+    notices.composeInsertionAnchor = null;
+    return;
+  }
+  const blockId = String(nextAnchor.blockId || '').trim();
+  if (!blockId) {
+    notices.composeInsertionAnchor = null;
+    return;
+  }
+  const start = Math.max(0, Number.parseInt(String(nextAnchor.start || 0), 10) || 0);
+  const end = Math.max(start, Number.parseInt(String(nextAnchor.end ?? start), 10) || start);
+  notices.composeInsertionAnchor = { blockId, start, end };
+}
+
+function captureNoticeComposeInsertionAnchorFromInput(input = null) {
+  const target = input instanceof HTMLTextAreaElement
+    && input.dataset.noticeComposeParagraphInput === 'true'
+    ? input
+    : (
+      document.activeElement instanceof HTMLTextAreaElement
+      && document.activeElement.dataset.noticeComposeParagraphInput === 'true'
+        ? document.activeElement
+        : null
+    );
+  if (!(target instanceof HTMLTextAreaElement)) return null;
+  const blockId = String(target.dataset.noticeComposeBlockId || '').trim();
+  if (!blockId) return null;
+  const text = String(target.value || '');
+  const start = Number.isInteger(target.selectionStart) ? target.selectionStart : text.length;
+  const end = Number.isInteger(target.selectionEnd) ? target.selectionEnd : start;
+  setNoticeComposeInsertionAnchor({ blockId, start, end });
+  return ensureNoticesState().composeInsertionAnchor;
+}
+
+function resolveNoticeComposeInsertionContext(blocks = []) {
+  const activeInput = document.activeElement instanceof HTMLTextAreaElement
+    && document.activeElement.dataset.noticeComposeParagraphInput === 'true'
+    ? document.activeElement
+    : null;
+  if (activeInput instanceof HTMLTextAreaElement) {
+    const anchor = captureNoticeComposeInsertionAnchorFromInput(activeInput);
+    const blockId = String(anchor?.blockId || activeInput.dataset.noticeComposeBlockId || '').trim();
+    const blockIndex = blocks.findIndex((block) => String(block.id || '').trim() === blockId);
+    return {
+      blockId,
+      blockIndex,
+      selectionStart: anchor?.start ?? 0,
+      selectionEnd: anchor?.end ?? anchor?.start ?? 0,
+      text: String(activeInput.value || ''),
+    };
+  }
+  const notices = ensureNoticesState();
+  const storedAnchor = notices.composeInsertionAnchor && typeof notices.composeInsertionAnchor === 'object'
+    ? notices.composeInsertionAnchor
+    : null;
+  if (storedAnchor) {
+    const blockId = String(storedAnchor.blockId || '').trim();
+    const blockIndex = blocks.findIndex((block) => String(block.id || '').trim() === blockId);
+    if (blockIndex !== -1 && blocks[blockIndex]?.kind === 'paragraph') {
+      const text = String(blocks[blockIndex]?.text || '');
+      const selectionStart = Math.min(text.length, Math.max(0, Number.parseInt(String(storedAnchor.start || 0), 10) || 0));
+      const selectionEnd = Math.min(text.length, Math.max(selectionStart, Number.parseInt(String(storedAnchor.end ?? selectionStart), 10) || selectionStart));
+      return {
+        blockId,
+        blockIndex,
+        selectionStart,
+        selectionEnd,
+        text,
+      };
+    }
+  }
+  const activeFlowIndex = resolveNoticeComposeActiveFlowIndex();
+  const activeBlock = activeFlowIndex >= 0 ? blocks[activeFlowIndex] : null;
+  return {
+    blockId: String(activeBlock?.id || '').trim(),
+    blockIndex: activeFlowIndex,
+    selectionStart: null,
+    selectionEnd: null,
+    text: String(activeBlock?.text || ''),
+  };
+}
+
+function insertNoticeComposeFlowBlock(nextBlock = null) {
+  if (!nextBlock || typeof nextBlock !== 'object') return '';
+  const notices = ensureNoticesState();
+  const blocks = getNoticeComposeContentBlocks(notices.composeDraft);
+  const insertion = resolveNoticeComposeInsertionContext(blocks);
+  const currentBlock = insertion.blockIndex >= 0 ? blocks[insertion.blockIndex] : null;
+  const nextBlocks = [];
+
+  if (
+    currentBlock?.kind === 'paragraph'
+    && Number.isInteger(insertion.selectionStart)
+    && Number.isInteger(insertion.selectionEnd)
+  ) {
+    const text = String(insertion.text || currentBlock.text || '');
+    const beforeText = text.slice(0, insertion.selectionStart);
+    const afterText = text.slice(insertion.selectionEnd);
+    const beforeBlocks = createNoticeComposeParagraphBlocksFromText(beforeText, {
+      firstBlockId: String(currentBlock.id || '').trim(),
+      preserveEmpty: false,
+    });
+    const afterBlocks = createNoticeComposeParagraphBlocksFromText(afterText, {
+      firstBlockId: beforeBlocks.length ? '' : String(currentBlock.id || '').trim(),
+      preserveEmpty: false,
+    });
+    const fallbackAfterBlocks = afterBlocks.length
+      ? afterBlocks
+      : (
+        beforeBlocks.length
+          ? []
+          : [{ id: String(currentBlock.id || '').trim() || createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text: '' }]
+      );
+    blocks.forEach((block, index) => {
+      if (index !== insertion.blockIndex) {
+        nextBlocks.push(block);
+        return;
+      }
+      if (beforeBlocks.length) nextBlocks.push(...beforeBlocks);
+      nextBlocks.push(nextBlock);
+      if (fallbackAfterBlocks.length) nextBlocks.push(...fallbackAfterBlocks);
+    });
+  } else {
+    const insertIndex = insertion.blockIndex >= 0 ? insertion.blockIndex + 1 : blocks.length;
+    blocks.forEach((block, index) => {
+      if (index === insertIndex) {
+        nextBlocks.push(nextBlock);
+      }
+      nextBlocks.push(block);
+    });
+    if (insertIndex >= blocks.length) {
+      nextBlocks.push(nextBlock);
+    }
+    if (!nextBlocks.some((block) => block.kind === 'paragraph')) {
+      nextBlocks.push({ id: createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text: '' });
+    }
+  }
+
+  setNoticeComposeContentBlocks(nextBlocks, { markDirty: true, rerender: true });
+  return String(nextBlock.id || '').trim();
 }
 
 function normalizeNoticeComposeInlineLayout(rawLeft = 0, rawTop = 0, rawWidth = 0, rawHeight = 0) {
@@ -19632,6 +19800,7 @@ function resetNoticeComposeDraft(category = 'ops') {
   const notices = ensureNoticesState();
   notices.composeSourceNoticeId = '';
   notices.composePollModalBlockId = '';
+  notices.composeInsertionAnchor = null;
   clearNoticeComposeAutosaveTimer();
   resetNoticeComposeDragRegistry();
   notices.draftSavedAt = '';
@@ -19656,6 +19825,7 @@ function fillNoticeComposeDraftFromRow(row = null) {
   const normalizedRow = row && typeof row === 'object' ? row : null;
   notices.composeSourceNoticeId = String(normalizedRow?.id || '').trim();
   notices.composePollModalBlockId = '';
+  notices.composeInsertionAnchor = null;
   clearNoticeComposeAutosaveTimer();
   resetNoticeComposeDragRegistry();
   notices.draftSavedAt = '';
@@ -19711,11 +19881,14 @@ function readNoticeComposeContentBlocksFromDom() {
     const current = blockMap.get(blockId);
     if (kind === 'paragraph') {
       const input = blockEl.querySelector('[data-notice-compose-paragraph-input="true"]');
-      nextBlocks.push({
-        id: blockId || createNoticeComposeBlockId('paragraph'),
-        kind: 'paragraph',
-        text: input instanceof HTMLTextAreaElement ? String(input.value || '') : String(current?.text || ''),
-      });
+      const paragraphBlocks = createNoticeComposeParagraphBlocksFromText(
+        input instanceof HTMLTextAreaElement ? String(input.value || '') : String(current?.text || ''),
+        {
+          firstBlockId: blockId || createNoticeComposeBlockId('paragraph'),
+          preserveEmpty: true,
+        },
+      );
+      nextBlocks.push(...paragraphBlocks);
       return;
     }
     if (kind === 'table' && current?.kind === 'table') {
@@ -20121,12 +20294,6 @@ function removeNoticeComposePollBlock(blockId = '', { markDirty = true, rerender
 
 function insertNoticeComposeTableBlock(tableDraft = null) {
   const notices = ensureNoticesState();
-  const blocks = getNoticeComposeContentBlocks(notices.composeDraft);
-  const activeFlowIndex = resolveNoticeComposeActiveFlowIndex();
-  const activeInput = document.activeElement instanceof HTMLTextAreaElement
-    && document.activeElement.dataset.noticeComposeParagraphInput === 'true'
-    ? document.activeElement
-    : null;
   const nextTable = cloneNoticeTableDraft(tableDraft);
   nextTable.enabled = true;
   const nextBlock = {
@@ -20134,45 +20301,7 @@ function insertNoticeComposeTableBlock(tableDraft = null) {
     kind: 'table',
     table: nextTable,
   };
-  const nextBlocks = [];
-  const activeBlock = activeFlowIndex >= 0 ? blocks[activeFlowIndex] : null;
-  if (activeBlock?.kind === 'paragraph' && activeInput instanceof HTMLTextAreaElement) {
-    const text = String(activeInput.value || '');
-    const selectionStart = Number.isInteger(activeInput.selectionStart) ? activeInput.selectionStart : text.length;
-    const selectionEnd = Number.isInteger(activeInput.selectionEnd) ? activeInput.selectionEnd : selectionStart;
-    const beforeText = text.slice(0, selectionStart);
-    const afterText = text.slice(selectionEnd);
-    blocks.forEach((block, index) => {
-      if (index !== activeFlowIndex) {
-        nextBlocks.push(block);
-        return;
-      }
-      if (beforeText.trim()) {
-        nextBlocks.push({ id: createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text: beforeText });
-      }
-      nextBlocks.push(nextBlock);
-      nextBlocks.push({
-        id: createNoticeComposeBlockId('paragraph'),
-        kind: 'paragraph',
-        text: afterText,
-      });
-    });
-  } else {
-    const insertIndex = activeFlowIndex >= 0 ? activeFlowIndex + 1 : blocks.length;
-    blocks.forEach((block, index) => {
-      if (index === insertIndex) {
-        nextBlocks.push(nextBlock);
-      }
-      nextBlocks.push(block);
-    });
-    if (insertIndex >= blocks.length) {
-      nextBlocks.push(nextBlock);
-    }
-    if (!nextBlocks.some((block) => block.kind === 'paragraph')) {
-      nextBlocks.push({ id: createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text: '' });
-    }
-  }
-  setNoticeComposeContentBlocks(nextBlocks, { markDirty: true, rerender: true });
+  insertNoticeComposeFlowBlock(nextBlock);
   notices.composeDraft = {
     ...(notices.composeDraft || {}),
     table: nextTable,
@@ -20199,56 +20328,12 @@ function insertNoticeComposePollBlock(pollDraft = null, existingBlockId = '') {
     return normalizedBlockId;
   }
 
-  const blocks = getNoticeComposeContentBlocks(notices.composeDraft);
-  const activeFlowIndex = resolveNoticeComposeActiveFlowIndex();
-  const activeInput = document.activeElement instanceof HTMLTextAreaElement
-    && document.activeElement.dataset.noticeComposeParagraphInput === 'true'
-    ? document.activeElement
-    : null;
   const nextBlock = {
     id: createNoticeComposeBlockId('poll'),
     kind: 'poll',
     poll: nextPoll,
   };
-  const nextBlocks = [];
-  const activeBlock = activeFlowIndex >= 0 ? blocks[activeFlowIndex] : null;
-  if (activeBlock?.kind === 'paragraph' && activeInput instanceof HTMLTextAreaElement) {
-    const text = String(activeInput.value || '');
-    const selectionStart = Number.isInteger(activeInput.selectionStart) ? activeInput.selectionStart : text.length;
-    const selectionEnd = Number.isInteger(activeInput.selectionEnd) ? activeInput.selectionEnd : selectionStart;
-    const beforeText = text.slice(0, selectionStart);
-    const afterText = text.slice(selectionEnd);
-    blocks.forEach((block, index) => {
-      if (index !== activeFlowIndex) {
-        nextBlocks.push(block);
-        return;
-      }
-      if (beforeText.trim()) {
-        nextBlocks.push({ id: createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text: beforeText });
-      }
-      nextBlocks.push(nextBlock);
-      nextBlocks.push({
-        id: createNoticeComposeBlockId('paragraph'),
-        kind: 'paragraph',
-        text: afterText,
-      });
-    });
-  } else {
-    const insertIndex = activeFlowIndex >= 0 ? activeFlowIndex + 1 : blocks.length;
-    blocks.forEach((block, index) => {
-      if (index === insertIndex) {
-        nextBlocks.push(nextBlock);
-      }
-      nextBlocks.push(block);
-    });
-    if (insertIndex >= blocks.length) {
-      nextBlocks.push(nextBlock);
-    }
-    if (!nextBlocks.some((block) => block.kind === 'paragraph')) {
-      nextBlocks.push({ id: createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text: '' });
-    }
-  }
-  setNoticeComposeContentBlocks(nextBlocks, { markDirty: true, rerender: true });
+  insertNoticeComposeFlowBlock(nextBlock);
   notices.composeDraft = {
     ...(notices.composeDraft || {}),
     poll: nextPoll,
@@ -58733,6 +58818,7 @@ function bindUiEvents() {
       if (target instanceof HTMLTextAreaElement && target.dataset.noticeComposeParagraphInput === 'true') {
         syncNoticeComposeActiveBodyInput(target);
         resizeNoticeComposeParagraphInput(target);
+        captureNoticeComposeInsertionAnchorFromInput(target);
       }
       syncNoticeComposeDraftFromFields();
       markNoticeComposeDraftDirty();
@@ -58928,6 +59014,15 @@ function bindUiEvents() {
 
   document.addEventListener('mouseup', () => {
     finishNoticeComposeInlinePointerSession();
+    captureNoticeComposeInsertionAnchorFromInput();
+  }, { signal });
+
+  document.addEventListener('keyup', (event) => {
+    if (!isNoticesComposeActive()) return;
+    const target = event.target;
+    if (!(target instanceof HTMLTextAreaElement)) return;
+    if (target.dataset.noticeComposeParagraphInput !== 'true') return;
+    captureNoticeComposeInsertionAnchorFromInput(target);
   }, { signal });
 
   document.addEventListener('focusin', (event) => {
@@ -58936,6 +59031,7 @@ function bindUiEvents() {
     if (target.dataset.noticeComposeParagraphInput !== 'true') return;
     syncNoticeComposeActiveBodyInput(target);
     resizeNoticeComposeParagraphInput(target);
+    captureNoticeComposeInsertionAnchorFromInput(target);
   }, { signal });
 
   document.addEventListener('click', (event) => {

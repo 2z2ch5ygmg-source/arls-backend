@@ -23424,6 +23424,18 @@ button.attendance-status-special-card.active {
   clear: both;
 }
 
+.notices-compose-flow-table-block .notices-table-panel,
+.notices-compose-flow-table-block .notices-compose-table-grid,
+.notices-compose-flow-table-block .notices-compose-table-shell {
+  width: 100%;
+  max-width: 100%;
+}
+
+.notices-compose-flow-table-block .notices-table-panel {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
 .notices-compose-footer {
   display: flex;
   justify-content: flex-end;
@@ -23643,6 +23655,7 @@ button.attendance-status-special-card.active {
 }
 
 .notices-compose-flow-poll-block .notices-poll-card {
+  width: 100%;
   max-width: 100%;
   margin-top: 10px;
 }
