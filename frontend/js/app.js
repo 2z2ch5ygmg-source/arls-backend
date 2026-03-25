@@ -63417,6 +63417,7 @@ document.addEventListener('compositionend', (event) => {
   const legacyRenderAttendanceManagerWorkspace = renderAttendanceManagerWorkspace;
   let attendanceStatusV2Payload = { rows: [], scopedRows: [], loading: false };
   let attendanceStatusV2SelectedKey = null;
+  let attendanceStatusV2FilterKey = 'all';
 
   const escapeValue = typeof escapeHtml === 'function'
     ? escapeHtml
@@ -63512,6 +63513,10 @@ document.addEventListener('compositionend', (event) => {
     return `${v2ActualIn(row)} / ${v2ActualOut(row)}`;
   }
 
+  function v2HasActualRecord(value) {
+    return Boolean(v2Text(value)) && String(value).trim() !== '-';
+  }
+
   function v2RequestLabel(row) {
     if (row?.hasPendingRequest || row?.pendingCorrection || row?.needsApproval) return '검토 필요';
     const label = v2Text(row?.requestStatusLabel, row?.relatedRequestLabel, row?.requestLabel, row?.approvalStatusLabel);
@@ -63565,6 +63570,36 @@ document.addEventListener('compositionend', (event) => {
     if (/(출근.?전|upcoming|before)/.test(haystack)) return 'upcoming';
     if (/(정상|present|complete|clocked|완료)/.test(haystack)) return 'complete';
     return 'normal';
+  }
+
+  function v2StatusFacts(row) {
+    const key = v2StatusKey(row);
+    const labelHaystack = [
+      v2StatusLabel(row),
+      v2Schedule(row),
+      row?.shiftTypeLabel,
+      row?.workTypeLabel,
+      row?.dayTypeLabel
+    ].map((value) => String(value ?? '').toLowerCase()).join(' ');
+    const hasClockIn = v2HasActualRecord(v2ActualIn(row));
+    const hasClockOut = v2HasActualRecord(v2ActualOut(row));
+    const isLeaveLike = key === 'leave' || /(휴가|공휴일|holiday|leave|vacation)/.test(labelHaystack);
+    const isNonTarget = /(비근무|오프|off|일정없음|휴무|미배정)/.test(labelHaystack);
+    const isUpcoming = key === 'upcoming' || /(출근.?전|시작.?전|upcoming|before)/.test(labelHaystack);
+    const target = !isLeaveLike && !isNonTarget;
+    return {
+      key,
+      target,
+      hasClockIn,
+      hasClockOut,
+      complete: target && hasClockIn,
+      missing: key === 'missing',
+      late: key === 'late',
+      early: key === 'early',
+      correction: key === 'correction',
+      leave: isLeaveLike,
+      upcoming: isUpcoming
+    };
   }
 
   function v2StatusLabel(row) {
@@ -63621,16 +63656,20 @@ document.addEventListener('compositionend', (event) => {
       missing: 0,
       late: 0,
       early: 0,
-      correction: 0
+      correction: 0,
+      leave: 0
     };
     rows.forEach((row) => {
-      const key = v2StatusKey(row);
-      if (key === 'complete') summary.complete += 1;
-      if (key === 'missing') summary.missing += 1;
-      if (key === 'late') summary.late += 1;
-      if (key === 'early') summary.early += 1;
-      if (key === 'correction' || v2RequestLabel(row) === '검토 필요') summary.correction += 1;
+      const facts = v2StatusFacts(row);
+      if (!facts.target) summary.target -= 1;
+      if (facts.complete) summary.complete += 1;
+      if (facts.missing) summary.missing += 1;
+      if (facts.late) summary.late += 1;
+      if (facts.early) summary.early += 1;
+      if (facts.correction) summary.correction += 1;
+      if (facts.leave) summary.leave += 1;
     });
+    summary.target = Math.max(0, summary.target);
     const rate = summary.target ? Math.round((summary.complete / summary.target) * 100) : 0;
     return { ...summary, rate };
   }
@@ -63655,6 +63694,45 @@ document.addEventListener('compositionend', (event) => {
         if (leftPriority !== rightPriority) return leftPriority - rightPriority;
         return v2Name(left.row).localeCompare(v2Name(right.row), 'ko');
       });
+  }
+
+  function v2FilterLabel(filterKey) {
+    switch (filterKey) {
+      case 'target':
+        return '출근 대상';
+      case 'complete':
+        return '출근 완료';
+      case 'missing':
+        return '미출근';
+      case 'late':
+        return '지각';
+      case 'early':
+        return '조퇴';
+      case 'correction':
+        return '정정 대기';
+      default:
+        return '전체';
+    }
+  }
+
+  function v2RowMatchesFilter(row, filterKey) {
+    const facts = v2StatusFacts(row);
+    switch (filterKey) {
+      case 'target':
+        return facts.target;
+      case 'complete':
+        return facts.complete;
+      case 'missing':
+        return facts.missing;
+      case 'late':
+        return facts.late;
+      case 'early':
+        return facts.early;
+      case 'correction':
+        return facts.correction;
+      default:
+        return true;
+    }
   }
 
   function v2EnsureHost(containerId, hostId) {
@@ -63702,13 +63780,13 @@ document.addEventListener('compositionend', (event) => {
 
   function v2SummaryMarkup(summary) {
     const metrics = [
-      { label: '출근율', value: `${summary.rate}%`, meta: `${summary.complete} / ${summary.target}`, tone: 'accent', progress: summary.rate },
-      { label: '출근 대상', value: `${summary.target}`, meta: '기준 인원', tone: 'neutral' },
-      { label: '출근 완료', value: `${summary.complete}`, meta: '실제 기록 기준', tone: 'success' },
-      { label: '미출근', value: `${summary.missing}`, meta: '가장 먼저 확인', tone: 'danger' },
-      { label: '지각', value: `${summary.late}`, meta: '예외 발생', tone: 'warning' },
-      { label: '조퇴', value: `${summary.early}`, meta: '퇴근 기록 확인', tone: 'warning' },
-      { label: '정정 대기', value: `${summary.correction}`, meta: '승인 필요', tone: 'neutral' }
+      { filterKey: 'all', label: '출근율', value: `${summary.rate}%`, meta: `${summary.complete} / ${summary.target}`, tone: 'accent', progress: summary.rate },
+      { filterKey: 'target', label: '출근 대상', value: `${summary.target}`, meta: '기준 인원', tone: 'neutral' },
+      { filterKey: 'complete', label: '출근 완료', value: `${summary.complete}`, meta: '실제 기록 기준', tone: 'success' },
+      { filterKey: 'missing', label: '미출근', value: `${summary.missing}`, meta: '가장 먼저 확인', tone: 'danger' },
+      { filterKey: 'late', label: '지각', value: `${summary.late}`, meta: '예외 발생', tone: 'warning' },
+      { filterKey: 'early', label: '조퇴', value: `${summary.early}`, meta: '퇴근 기록 확인', tone: 'warning' },
+      { filterKey: 'correction', label: '정정 대기', value: `${summary.correction}`, meta: '승인 필요', tone: 'neutral' }
     ];
     return `
       <div class="attendance-v2-section-head">
@@ -63719,7 +63797,7 @@ document.addEventListener('compositionend', (event) => {
       </div>
       <div class="attendance-v2-summary-strip">
         ${metrics.map((metric) => `
-          <article class="attendance-v2-summary-item is-${metric.tone}">
+          <button type="button" class="attendance-v2-summary-item is-${metric.tone}${attendanceStatusV2FilterKey === metric.filterKey ? ' is-active' : ''}" data-filter-key="${escapeValue(metric.filterKey)}" aria-pressed="${attendanceStatusV2FilterKey === metric.filterKey ? 'true' : 'false'}">
             <span class="attendance-v2-summary-label">${escapeValue(metric.label)}</span>
             <strong class="attendance-v2-summary-value">${escapeValue(metric.value)}</strong>
             <span class="attendance-v2-summary-meta">${escapeValue(metric.meta)}</span>
@@ -63728,13 +63806,13 @@ document.addEventListener('compositionend', (event) => {
                 <span style="width:${Math.max(0, Math.min(100, metric.progress))}%"></span>
               </span>
             ` : ''}
-          </article>
+          </button>
         `).join('')}
       </div>
     `;
   }
 
-  function v2QueueMarkup(queueRows, loading) {
+  function v2QueueMarkup(queueRows, loading, filterKey) {
     if (loading) {
       return `
         <div class="attendance-v2-section-head">
@@ -63753,7 +63831,10 @@ document.addEventListener('compositionend', (event) => {
           <h3>우선 확인 예외</h3>
           <p>미출근, 지각, 조퇴, 정정 대기 순으로 우선순위를 정리합니다.</p>
         </div>
-        <span class="attendance-v2-count-chip">${queueRows.length}건</span>
+        <div class="attendance-v2-head-meta">
+          ${filterKey !== 'all' ? `<button type="button" class="attendance-v2-clear-filter" data-clear-filter="true">${escapeValue(v2FilterLabel(filterKey))} 해제</button>` : ''}
+          <span class="attendance-v2-count-chip">${queueRows.length}건</span>
+        </div>
       </div>
       ${queueRows.length ? `
         <div class="attendance-v2-queue-table">
@@ -63785,7 +63866,7 @@ document.addEventListener('compositionend', (event) => {
     `;
   }
 
-  function v2TableMarkup(rows, loading) {
+  function v2TableMarkup(rows, loading, filterKey) {
     if (loading) {
       return `
         <div class="attendance-v2-section-head">
@@ -63804,7 +63885,10 @@ document.addEventListener('compositionend', (event) => {
           <h3>전체 출퇴근 기록</h3>
           <p>선택한 범위의 실제 기록과 판정을 확인합니다.</p>
         </div>
-        <span class="attendance-v2-inline-meta">총 ${rows.length}명</span>
+        <div class="attendance-v2-head-meta">
+          ${filterKey !== 'all' ? `<span class="attendance-v2-inline-meta">${escapeValue(v2FilterLabel(filterKey))}</span>` : ''}
+          <span class="attendance-v2-inline-meta">총 ${rows.length}명</span>
+        </div>
       </div>
       <div class="attendance-v2-table-wrap">
         <table class="attendance-v2-table">
@@ -63908,6 +63992,21 @@ document.addEventListener('compositionend', (event) => {
         }
       });
     });
+    container.querySelectorAll('[data-filter-key]').forEach((node) => {
+      node.addEventListener('click', () => {
+        const nextKey = node.getAttribute('data-filter-key') || 'all';
+        attendanceStatusV2FilterKey = nextKey;
+        attendanceStatusV2SelectedKey = null;
+        rerender();
+      });
+    });
+    container.querySelectorAll('[data-clear-filter]').forEach((node) => {
+      node.addEventListener('click', () => {
+        attendanceStatusV2FilterKey = 'all';
+        attendanceStatusV2SelectedKey = null;
+        rerender();
+      });
+    });
   }
 
   function v2ResolveSelectedRow(rows, queueRows) {
@@ -63942,14 +64041,16 @@ document.addEventListener('compositionend', (event) => {
 
     const activeRows = scopedRows.length ? scopedRows : rows;
     const summary = v2BuildSummary(activeRows);
-    const queueRows = v2QueueRows(activeRows);
-    const selectedRow = v2ResolveSelectedRow(activeRows, queueRows);
+    const filteredRows = activeRows.filter((row) => v2RowMatchesFilter(row, attendanceStatusV2FilterKey));
+    const queueRows = v2QueueRows(filteredRows);
+    const selectedRow = v2ResolveSelectedRow(filteredRows, queueRows);
 
     shell.summaryHost.innerHTML = v2SummaryMarkup(summary);
-    shell.queueHost.innerHTML = v2QueueMarkup(queueRows, loading);
-    shell.tableHost.innerHTML = v2TableMarkup(activeRows, loading);
+    shell.queueHost.innerHTML = v2QueueMarkup(queueRows, loading, attendanceStatusV2FilterKey);
+    shell.tableHost.innerHTML = v2TableMarkup(filteredRows, loading, attendanceStatusV2FilterKey);
     shell.inspectorHost.innerHTML = v2InspectorMarkup(selectedRow);
 
+    v2BindSelection(shell.summaryHost);
     v2BindSelection(shell.queueHost);
     v2BindSelection(shell.tableHost);
   };
