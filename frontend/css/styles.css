@@ -22625,6 +22625,11 @@ button.attendance-status-special-card.active {
   margin-inline: auto;
 }
 
+.notices-compose-panel .notices-compose-settings-panel,
+.notices-compose-panel .notices-compose-document {
+  width: min(1048px, calc(100% - 24px));
+}
+
 .notices-detail-panel .notices-section-head {
   padding-bottom: 18px;
 }
@@ -22992,44 +22997,52 @@ button.attendance-status-special-card.active {
 }
 
 .notices-compose-settings-panel {
-  display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(200px, auto) max-content;
-  gap: 12px 20px;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 2px 0 16px;
+  justify-content: space-between;
+  gap: 16px 18px;
+  flex-wrap: wrap;
+  padding: 4px 0 22px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .notices-compose-setting-field {
-  display: grid;
-  gap: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
 }
 
 .notices-compose-setting-field-compact {
-  max-width: 280px;
+  max-width: none;
+  flex: 0 1 auto;
 }
 
 .notices-compose-setting-field-inline {
   align-self: center;
+  position: relative;
+  padding-left: 18px;
 }
 
 .notices-compose-setting-field-actions {
-  align-self: end;
-  justify-self: end;
+  align-self: center;
+  justify-self: auto;
+  margin-left: auto;
 }
 
 .notices-compose-setting-label,
 .notices-compose-setting-field > span {
   color: var(--ui-text-secondary);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.4;
   font-weight: 700;
   letter-spacing: 0.02em;
+  flex: 0 0 auto;
 }
 
 .notices-compose-settings-panel .input-field select {
+  width: 168px;
+  min-width: 168px;
   min-height: 42px;
   border-radius: 12px;
   background: rgba(248, 250, 252, 0.82);
@@ -23038,7 +23051,7 @@ button.attendance-status-special-card.active {
 .notices-compose-setting-switchrow {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 42px;
   flex-wrap: wrap;
 }
@@ -23047,6 +23060,18 @@ button.attendance-status-special-card.active {
   color: var(--ui-text-secondary);
   font-size: 12px;
   line-height: 1.45;
+  white-space: nowrap;
+}
+
+.notices-compose-setting-field-inline::before {
+  content: '/';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(100, 116, 139, 0.72);
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .notices-segmented-control {
@@ -23088,8 +23113,8 @@ button.attendance-status-special-card.active {
 
 .notices-compose-document {
   display: grid;
-  gap: 18px;
-  padding: 14px 0 0;
+  gap: 20px;
+  padding: 18px 0 0;
 }
 
 .notices-compose-document-flow {
@@ -23116,7 +23141,7 @@ button.attendance-status-special-card.active {
 }
 
 .notices-compose-body-input {
-  min-height: 320px;
+  min-height: 440px;
   padding: 10px 0 0;
   border: 0;
   border-radius: 0;
@@ -23933,6 +23958,7 @@ body.notices-compose-dragging .notices-inline-drag-handle {
   .notices-compose-settings-panel {
     margin-left: 0;
     margin-right: 0;
+    justify-content: flex-start;
   }
 
   .notices-compose-title-input {
@@ -23942,6 +23968,36 @@ body.notices-compose-dragging .notices-inline-drag-handle {
   .notices-compose-toggle-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .notices-compose-setting-field,
+  .notices-compose-setting-field-compact,
+  .notices-compose-setting-field-inline,
+  .notices-compose-setting-field-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .notices-compose-setting-field {
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .notices-compose-setting-field-inline {
+    padding-left: 0;
+  }
+
+  .notices-compose-setting-field-inline::before {
+    content: none;
+  }
+
+  .notices-compose-settings-panel .input-field select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .notices-compose-body-input {
+    min-height: 360px;
   }
 
   .notices-image-item {
