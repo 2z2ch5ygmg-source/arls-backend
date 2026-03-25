@@ -21649,7 +21649,10 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card,
-#shell[data-shell-mode='manager'] #view-home .home-attendance-status-card,
+#shell[data-shell-mode='manager'] #view-home .home-attendance-status-card {
+  min-height: 366px;
+}
+
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card,
 #shell[data-shell-mode='manager'] #view-home .home-attendance-notice-card {
   min-height: 320px;
