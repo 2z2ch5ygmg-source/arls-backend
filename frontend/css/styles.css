@@ -19635,21 +19635,20 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-section-icon-chip {
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
   color: #f97316;
-  background: rgba(249, 115, 22, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.08);
+  background: transparent;
+  box-shadow: none;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-section-icon-chip svg {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   display: block;
 }
 
@@ -20633,8 +20632,8 @@ button.attendance-status-special-card.active {
 
 :root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-section-icon-chip {
   color: #fbbf24;
-  background: rgba(251, 191, 36, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.14);
+  background: transparent;
+  box-shadow: none;
 }
 
 /* Manager home board refresh */
