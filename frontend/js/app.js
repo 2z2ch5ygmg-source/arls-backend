@@ -19272,9 +19272,9 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
             closes_at: String(poll.closesAt || '').trim() || null,
             allow_change_vote: Boolean(poll.allowChangeVote),
             notice_compose_layout: {
-              left: 0,
+              left: poll.layout.left,
               top: poll.layout.top,
-              width: 0,
+              width: poll.layout.width,
               height: poll.layout.height,
             },
           },
@@ -19751,16 +19751,21 @@ function clearNoticeComposeInlineBlockStyles(block) {
   block.style.removeProperty('--notice-compose-block-height');
 }
 
-function getNoticeComposeTableRenderMetrics(rawLayout = null) {
-  const layout = normalizeNoticeTableLayout(rawLayout || {});
+function getNoticeComposeInlineFloatMetrics(kind = '', rawLayout = null) {
+  const normalizedKind = String(kind || '').trim().toLowerCase();
+  const layout = normalizedKind === 'table'
+    ? normalizeNoticeTableLayout(rawLayout || {})
+    : normalizeNoticePollLayout(rawLayout || {});
   const flow = $('#noticesComposeDocumentFlow');
   const flowWidth = flow instanceof HTMLElement
     ? Math.max(NOTICE_COMPOSE_TABLE_MIN_WIDTH_PX, Math.round(flow.clientWidth))
     : 1048;
-  const width = Math.max(
-    NOTICE_COMPOSE_TABLE_MIN_WIDTH_PX,
-    Math.min(layout.width, Math.max(NOTICE_COMPOSE_TABLE_MIN_WIDTH_PX, flowWidth - 80)),
-  );
+  const minWidth = normalizedKind === 'table' ? NOTICE_COMPOSE_TABLE_MIN_WIDTH_PX : 320;
+  const preferredWidth = normalizedKind === 'table' ? layout.width : (layout.width || 380);
+  const maxWidth = normalizedKind === 'table'
+    ? Math.max(NOTICE_COMPOSE_TABLE_MIN_WIDTH_PX, flowWidth - 80)
+    : Math.max(320, Math.min(420, flowWidth - 96));
+  const width = Math.max(minWidth, Math.min(preferredWidth, maxWidth));
   const side = layout.left + (width / 2) >= (flowWidth / 2) ? 'right' : 'left';
   return {
     top: getNoticeComposeLineSnapOffset(layout.top),
@@ -19775,8 +19780,8 @@ function applyNoticeComposeInlineBlockStyles(block, kind = '', rawLayout = null)
   const layout = normalizedKind === 'table'
     ? normalizeNoticeTableLayout(rawLayout || {})
     : normalizeNoticePollLayout(rawLayout || {});
-  if (normalizedKind === 'table') {
-    const metrics = getNoticeComposeTableRenderMetrics(layout);
+  if (normalizedKind === 'table' || normalizedKind === 'poll') {
+    const metrics = getNoticeComposeInlineFloatMetrics(normalizedKind, layout);
     block.classList.add('notices-compose-inline-block-floating');
     block.classList.add(
       metrics.side === 'right'
@@ -19787,7 +19792,7 @@ function applyNoticeComposeInlineBlockStyles(block, kind = '', rawLayout = null)
     block.style.width = `${metrics.width}px`;
     block.style.marginTop = `${metrics.top}px`;
     block.style.marginBottom = '18px';
-    block.style.removeProperty('--notice-compose-block-height');
+    block.style.setProperty('--notice-compose-block-height', `${layout.height}px`);
     return;
   }
   block.classList.add('notices-compose-inline-block-floating');
@@ -19822,8 +19827,6 @@ function setNoticeComposeInlineLayout(kind = '', nextLayout = null, { rerender =
     poll.layout = normalizeNoticePollLayout({
       ...(poll.layout || {}),
       ...(nextLayout || {}),
-      left: 0,
-      width: 0,
     });
     notices.composeDraft = {
       ...(notices.composeDraft || {}),
@@ -19865,11 +19868,12 @@ function handleNoticeComposeInlinePointerMove(event) {
 
   if (session.kind === 'poll') {
     const nextTop = Math.max(NOTICE_COMPOSE_BLOCK_MIN_TOP_PX, session.startLayout.top + deltaY);
-    session.didMove = session.didMove || nextTop !== session.startLayout.top;
+    const nextLeft = Math.max(0, session.startLayout.left + deltaX);
+    session.didMove = session.didMove || nextTop !== session.startLayout.top || nextLeft !== session.startLayout.left;
     setNoticeComposeInlineLayout('poll', {
+      left: nextLeft,
       top: nextTop,
-      left: 0,
-      width: 0,
+      width: session.startLayout.width,
       height: session.startLayout.height,
     }, { rerender: true, markDirty: false });
     return;
@@ -19974,26 +19978,12 @@ function renderNoticeComposeDocumentFlow() {
 
   const tableLayout = normalizeNoticeTableLayout(notices.composeDraft?.table?.layout || {});
   const pollLayout = normalizeNoticePollLayout(notices.composeDraft?.poll?.layout || {});
-  const canReclaimBody = !isNoticeComposeBlockEnabled('image', notices.composeDraft);
-  let totalReclaim = 0;
-  let extraBottom = 0;
-
   if (tableBlock instanceof HTMLElement && Boolean(notices.composeDraft?.table?.enabled)) {
     applyNoticeComposeInlineBlockStyles(tableBlock, 'table', tableLayout);
   }
 
   if (pollBlock instanceof HTMLElement && Boolean(notices.composeDraft?.poll?.enabled)) {
     applyNoticeComposeInlineBlockStyles(pollBlock, 'poll', pollLayout);
-    const reclaim = canReclaimBody ? getNoticeComposeInlineReclaimPx('poll', pollLayout) : 0;
-    totalReclaim += reclaim;
-    extraBottom = Math.max(extraBottom, Math.max(0, pollLayout.top - reclaim));
-  }
-
-  if (totalReclaim > 0) {
-    bodyBlock.style.marginTop = `${-totalReclaim}px`;
-  }
-  if (extraBottom > 0) {
-    flow.style.paddingBottom = `${extraBottom + 24}px`;
   }
 }
 
@@ -34528,13 +34518,11 @@ function renderNoticeComposePollEditor() {
   }
   if (!(panel instanceof HTMLElement)) return;
   panel.innerHTML = '';
-  panel.style.height = '';
   if (!pollDraft.enabled) {
     renderNoticeComposeToolbar();
     renderNoticeComposeDocumentFlow();
     return;
   }
-  panel.style.height = `${Math.max(NOTICE_TABLE_COMPOSE_MIN_HEIGHT_PX, Number.parseInt(String(pollDraft.layout?.height || NOTICE_POLL_COMPOSE_DEFAULT_HEIGHT_PX), 10) || NOTICE_POLL_COMPOSE_DEFAULT_HEIGHT_PX)}px`;
 
   const card = document.createElement('div');
   card.className = 'notices-compose-poll-summary';
@@ -34563,11 +34551,13 @@ function renderNoticeComposePollEditor() {
     .filter(Boolean)
     .forEach((labelText) => {
       const item = document.createElement('li');
+      item.className = 'notices-compose-poll-preview-item';
       item.textContent = labelText;
       optionList.appendChild(item);
     });
   if (!optionList.childNodes.length) {
     const item = document.createElement('li');
+    item.className = 'notices-compose-poll-preview-item notices-compose-poll-preview-item-empty';
     item.textContent = '선택지 2개 이상을 설정해 주세요.';
     optionList.appendChild(item);
   }
