@@ -34262,7 +34262,7 @@ function createNoticePollBlock(item, poll = {}, options = {}) {
   summaryRow.appendChild(summary);
   if (!previewOnly && (poll.hasVoted || poll.has_voted)) {
     const statePill = document.createElement('span');
-    statePill.className = 'status-pill status-pill-neutral';
+    statePill.className = 'status-pill notices-poll-complete-pill';
     statePill.textContent = '참여 완료';
     summaryRow.appendChild(statePill);
   }

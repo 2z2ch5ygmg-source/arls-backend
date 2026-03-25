@@ -22917,6 +22917,11 @@ button.attendance-status-special-card.active {
   font-weight: 700;
 }
 
+.notices-poll-complete-pill {
+  background: #f97316;
+  color: #ffffff;
+}
+
 .notices-poll-options {
   display: grid;
   gap: 12px;
@@ -22928,13 +22933,14 @@ button.attendance-status-special-card.active {
   gap: 12px;
   align-items: start;
   padding: 14px 16px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1.5px solid rgba(100, 116, 139, 0.34);
   border-radius: 18px;
-  background: rgba(248, 250, 252, 0.88);
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
 }
 
 .notices-poll-option:first-child {
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  border-top: 1.5px solid rgba(100, 116, 139, 0.34);
 }
 
 .notices-poll-option input {
