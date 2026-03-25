@@ -21232,12 +21232,8 @@ button.attendance-status-special-card.active {
   background: transparent;
 }
 
-#shell[data-shell-mode='manager'] #view-home .home-notice-item {
-  border-top: 1px solid rgba(148, 163, 184, 0.24);
-}
-
-#shell[data-shell-mode='manager'] #view-home .home-notice-item:first-child {
-  border-top: none;
+#shell[data-shell-mode='manager'] #view-home .home-notice-list > .home-notice-item + .home-notice-item {
+  border-top: 1.5px solid rgba(148, 163, 184, 0.34);
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-notice-link {
@@ -21491,6 +21487,10 @@ button.attendance-status-special-card.active {
   background: #10b981;
 }
 
+#shell[data-shell-mode='manager'] #view-home .home-mini-metric[data-tone='accent']::before {
+  background: #7c3aed;
+}
+
 #shell[data-shell-mode='manager'] #view-home .home-mini-metric strong {
   font-size: 38px;
   line-height: 0.96;
@@ -21503,12 +21503,16 @@ button.attendance-status-special-card.active {
   gap: 0;
   min-height: 320px;
   padding: 14px 0 0;
+  background: rgba(255, 250, 245, 0.96);
+  border-color: rgba(249, 115, 22, 0.26);
+  box-shadow: 0 18px 34px rgba(249, 115, 22, 0.08);
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-head {
-  padding: 0 20px 6px;
+  padding: 10px 20px 12px;
   min-height: 0;
   align-items: start;
+  border-bottom: 1.5px solid rgba(249, 115, 22, 0.14);
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-notice-head {
@@ -21537,8 +21541,8 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain > li.attendance-outside {
-  box-shadow: inset 3px 0 0 #f97316;
-  background: linear-gradient(90deg, rgba(255, 247, 237, 0.9), rgba(255, 255, 255, 0) 52%);
+  box-shadow: inset 4px 0 0 #f97316;
+  background: rgba(255, 247, 237, 0.76);
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-dashboard-list-plain .list-row {
@@ -21561,6 +21565,17 @@ button.attendance-status-special-card.active {
   font-size: 14px;
   line-height: 1.55;
   color: var(--ui-text-secondary);
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card,
+#shell[data-shell-mode='manager'] #view-home .home-attendance-status-card,
+#shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card,
+#shell[data-shell-mode='manager'] #view-home .home-attendance-notice-card {
+  min-height: 360px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-hero-card {
+  display: none;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-dashboard-row-actions {

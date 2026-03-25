@@ -5686,6 +5686,7 @@ function renderHomeManagerDashboard() {
   setTextToSelectors(['#homeManagerAttendanceMissing'], String(vacancyCount));
   setTextToSelectors(['#homeManagerAttendanceReview'], String(attendanceIssues.length));
   setTextToSelectors(['#homeManagerAttendanceLeave'], String(leaveCount + overnightCount));
+  setTextToSelectors(['#homeManagerAttendanceApprovals'], String(Number(dashboard.approvalPendingCount || 0)));
   renderHomeDashboardList(
     '#homeManagerAttendanceIssueList',
     buildHomeAttendanceIssueRows(),
