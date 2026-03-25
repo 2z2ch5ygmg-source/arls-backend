@@ -34331,18 +34331,20 @@ function createNoticePollBlock(item, poll = {}) {
       : ((poll.hasVoted || poll.has_voted) && (poll.allowChangeVote || poll.allow_change_vote) ? '다시 투표' : '투표하기');
     actionRow.appendChild(submitBtn);
   }
-  const hint = document.createElement('p');
-  hint.className = 'muted notices-poll-hint';
+  let hintText = '';
   if ((poll.hasVoted || poll.has_voted) && (poll.allowChangeVote || poll.allow_change_vote) && !(poll.isClosed || poll.is_closed)) {
-    hint.textContent = '마감 전까지 다시 제출하면 선택을 변경할 수 있습니다.';
+    hintText = '마감 전까지 다시 제출하면 선택을 변경할 수 있습니다.';
   } else if (poll.isClosed || poll.is_closed) {
-    hint.textContent = '마감된 투표입니다.';
+    hintText = '마감된 투표입니다.';
   } else if (!(poll.resultsVisible || poll.results_visible)) {
-    hint.textContent = '결과는 마감 후 공개됩니다.';
-  } else {
-    hint.textContent = '선택 후 투표하기를 누르면 즉시 반영됩니다.';
+    hintText = '결과는 마감 후 공개됩니다.';
   }
-  actionRow.appendChild(hint);
+  if (hintText) {
+    const hint = document.createElement('p');
+    hint.className = 'muted notices-poll-hint';
+    hint.textContent = hintText;
+    actionRow.appendChild(hint);
+  }
   card.appendChild(actionRow);
 
   section.appendChild(card);
