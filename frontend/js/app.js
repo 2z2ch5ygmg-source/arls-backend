@@ -63410,3 +63410,547 @@ document.addEventListener('compositionend', (event) => {
   syncNoticeComposeDraftFromFields();
   markNoticeComposeDraftDirty();
 });
+
+(function installAttendanceStatusPhase1V2() {
+  if (typeof renderAttendanceManagerWorkspace !== 'function') return;
+
+  const legacyRenderAttendanceManagerWorkspace = renderAttendanceManagerWorkspace;
+  let attendanceStatusV2Payload = { rows: [], scopedRows: [], loading: false };
+  let attendanceStatusV2SelectedKey = null;
+
+  const escapeValue = typeof escapeHtml === 'function'
+    ? escapeHtml
+    : (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+  function v2UseStatusLayout() {
+    return Boolean(appState?.attendance?.managerMode) && String(appState?.attendance?.tab || 'status') === 'status';
+  }
+
+  function v2Array(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
+  function v2Text(...values) {
+    for (const value of values) {
+      if (value == null) continue;
+      const text = String(value).trim();
+      if (text) return text;
+    }
+    return '';
+  }
+
+  function v2RowKey(row, index) {
+    return v2Text(
+      row?.recordId,
+      row?.attendanceId,
+      row?.id,
+      row?.employeeRecordId,
+      row?.employeeId ? `${row.employeeId}:${row.baseDate || row.date || index}` : '',
+      row?.employeeCode ? `${row.employeeCode}:${row.baseDate || row.date || index}` : '',
+      `row-${index}`
+    );
+  }
+
+  function v2Name(row) {
+    return v2Text(row?.employeeName, row?.name, row?.employeeLabel, row?.displayName, '직원 미지정');
+  }
+
+  function v2Site(row) {
+    return v2Text(row?.siteName, row?.siteLabel, row?.branchName, row?.locationName, row?.siteCode, '-');
+  }
+
+  function v2Date(row) {
+    return v2Text(row?.baseDateLabel, row?.dateLabel, row?.workDateLabel, row?.attendanceDateLabel, row?.baseDate, row?.date, '-');
+  }
+
+  function v2Schedule(row) {
+    const direct = v2Text(
+      row?.scheduledLabel,
+      row?.scheduleLabel,
+      row?.expectedScheduleLabel,
+      row?.plannedHoursLabel,
+      row?.plannedWorkLabel,
+      row?.shiftLabel
+    );
+    if (direct) return direct;
+    const start = v2Text(row?.scheduledStartLabel, row?.expectedStartLabel, row?.scheduledStartTime, row?.expectedStartTime);
+    const end = v2Text(row?.scheduledEndLabel, row?.expectedEndLabel, row?.scheduledEndTime, row?.expectedEndTime);
+    if (start || end) return `${start || '-'}-${end || '-'}`;
+    return '-';
+  }
+
+  function v2ActualIn(row) {
+    return v2Text(
+      row?.actualClockInLabel,
+      row?.clockInLabel,
+      row?.checkInLabel,
+      row?.inLabel,
+      row?.actualInTime,
+      row?.clockInTime,
+      '-'
+    );
+  }
+
+  function v2ActualOut(row) {
+    return v2Text(
+      row?.actualClockOutLabel,
+      row?.clockOutLabel,
+      row?.checkOutLabel,
+      row?.outLabel,
+      row?.actualOutTime,
+      row?.clockOutTime,
+      '-'
+    );
+  }
+
+  function v2Actual(row) {
+    return `${v2ActualIn(row)} / ${v2ActualOut(row)}`;
+  }
+
+  function v2RequestLabel(row) {
+    if (row?.hasPendingRequest || row?.pendingCorrection || row?.needsApproval) return '검토 필요';
+    const label = v2Text(row?.requestStatusLabel, row?.relatedRequestLabel, row?.requestLabel, row?.approvalStatusLabel);
+    if (!label) return '요청 없음';
+    if (/없음|none/i.test(label)) return '요청 없음';
+    if (/대기|검토|요청|pending|review/i.test(label)) return '검토 필요';
+    return label;
+  }
+
+  function v2Reason(row) {
+    return v2Text(
+      row?.reasonLabel,
+      row?.exceptionReasonLabel,
+      row?.reviewReasonLabel,
+      row?.statusReasonLabel,
+      row?.memo,
+      row?.reviewMemo,
+      '판정 기준 정보가 없습니다.'
+    );
+  }
+
+  function v2StatusKey(row) {
+    const raw = [
+      row?.attendanceStatusKey,
+      row?.recordStatusKey,
+      row?.statusKey,
+      row?.status,
+      row?.attendanceStatus,
+      row?.judgementKey,
+      row?.judgement,
+      row?.exceptionKey,
+      row?.exceptionType,
+      row?.workState,
+      row?.state
+    ]
+      .map((value) => String(value ?? '').trim().toLowerCase())
+      .find(Boolean) || '';
+    const label = v2Text(
+      row?.attendanceStatusLabel,
+      row?.recordStatusLabel,
+      row?.statusLabel,
+      row?.judgementLabel,
+      row?.exceptionLabel
+    ).toLowerCase();
+    const haystack = `${raw} ${label}`;
+    if (/(미출근|absent|missing|not.?clock|no.?clock)/.test(haystack)) return 'missing';
+    if (/(지각|late|tardy)/.test(haystack)) return 'late';
+    if (/(조퇴|early)/.test(haystack)) return 'early';
+    if (/(정정|수정|review|correction|approval|승인 대기|검토)/.test(haystack)) return 'correction';
+    if (/(휴가|공휴일|holiday|leave|vacation)/.test(haystack)) return 'leave';
+    if (/(출근.?전|upcoming|before)/.test(haystack)) return 'upcoming';
+    if (/(정상|present|complete|clocked|완료)/.test(haystack)) return 'complete';
+    return 'normal';
+  }
+
+  function v2StatusLabel(row) {
+    const direct = v2Text(
+      row?.attendanceStatusLabel,
+      row?.recordStatusLabel,
+      row?.statusLabel,
+      row?.judgementLabel,
+      row?.exceptionLabel
+    );
+    if (direct) return direct;
+    switch (v2StatusKey(row)) {
+      case 'missing':
+        return '미출근';
+      case 'late':
+        return '지각';
+      case 'early':
+        return '조퇴';
+      case 'correction':
+        return '정정 대기';
+      case 'leave':
+        return '휴가';
+      case 'complete':
+        return '정상 출근';
+      case 'upcoming':
+        return '출근 전';
+      default:
+        return '확인 필요';
+    }
+  }
+
+  function v2StatusTone(key) {
+    switch (key) {
+      case 'missing':
+        return 'danger';
+      case 'late':
+      case 'early':
+      case 'correction':
+        return 'warning';
+      case 'complete':
+        return 'success';
+      case 'leave':
+      case 'upcoming':
+        return 'muted';
+      default:
+        return 'neutral';
+    }
+  }
+
+  function v2BuildSummary(rows) {
+    const summary = {
+      target: rows.length,
+      complete: 0,
+      missing: 0,
+      late: 0,
+      early: 0,
+      correction: 0
+    };
+    rows.forEach((row) => {
+      const key = v2StatusKey(row);
+      if (key === 'complete') summary.complete += 1;
+      if (key === 'missing') summary.missing += 1;
+      if (key === 'late') summary.late += 1;
+      if (key === 'early') summary.early += 1;
+      if (key === 'correction' || v2RequestLabel(row) === '검토 필요') summary.correction += 1;
+    });
+    const rate = summary.target ? Math.round((summary.complete / summary.target) * 100) : 0;
+    return { ...summary, rate };
+  }
+
+  function v2QueueRows(rows) {
+    const priority = {
+      missing: 0,
+      late: 1,
+      early: 2,
+      correction: 3,
+      normal: 4,
+      upcoming: 5,
+      leave: 6,
+      complete: 7
+    };
+    return rows
+      .map((row, index) => ({ row, index, key: v2StatusKey(row) }))
+      .filter((item) => ['missing', 'late', 'early', 'correction'].includes(item.key) || v2RequestLabel(item.row) === '검토 필요')
+      .sort((left, right) => {
+        const leftPriority = priority[left.key] ?? 99;
+        const rightPriority = priority[right.key] ?? 99;
+        if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+        return v2Name(left.row).localeCompare(v2Name(right.row), 'ko');
+      });
+  }
+
+  function v2EnsureHost(containerId, hostId) {
+    const container = document.getElementById(containerId);
+    if (!container) return null;
+    let host = document.getElementById(hostId);
+    if (!host) {
+      host = document.createElement('div');
+      host.id = hostId;
+      host.className = 'attendance-v2-host';
+      container.prepend(host);
+    } else if (host.parentNode !== container) {
+      container.prepend(host);
+    }
+    container.hidden = false;
+    container.removeAttribute('hidden');
+    return host;
+  }
+
+  function v2EnsureShell() {
+    const workspace = document.getElementById('attendanceManagerWorkspace');
+    if (!workspace) return null;
+    workspace.classList.add('is-attendance-v2-status');
+    const summaryHost = v2EnsureHost('attendanceStatusPanel', 'attendanceStatusV2SummaryHost');
+    const queueHost = v2EnsureHost('attendanceExceptionQueueCard', 'attendanceStatusV2QueueHost');
+    const tableHost = v2EnsureHost('attendanceListPanel', 'attendanceStatusV2TableHost');
+    const inspectorHost = v2EnsureHost('attendanceAdminDetailPanel', 'attendanceStatusV2InspectorHost');
+    const legacyRecord = document.getElementById('attendanceStatusRecordCard');
+    if (legacyRecord) {
+      legacyRecord.hidden = true;
+      legacyRecord.setAttribute('aria-hidden', 'true');
+    }
+    return { workspace, summaryHost, queueHost, tableHost, inspectorHost };
+  }
+
+  function v2TearDownShell() {
+    const workspace = document.getElementById('attendanceManagerWorkspace');
+    if (workspace) workspace.classList.remove('is-attendance-v2-status');
+    const legacyRecord = document.getElementById('attendanceStatusRecordCard');
+    if (legacyRecord) {
+      legacyRecord.hidden = false;
+      legacyRecord.removeAttribute('aria-hidden');
+    }
+  }
+
+  function v2SummaryMarkup(summary) {
+    const metrics = [
+      { label: '출근율', value: `${summary.rate}%`, meta: `${summary.complete} / ${summary.target}`, tone: 'accent', progress: summary.rate },
+      { label: '출근 대상', value: `${summary.target}`, meta: '기준 인원', tone: 'neutral' },
+      { label: '출근 완료', value: `${summary.complete}`, meta: '실제 기록 기준', tone: 'success' },
+      { label: '미출근', value: `${summary.missing}`, meta: '가장 먼저 확인', tone: 'danger' },
+      { label: '지각', value: `${summary.late}`, meta: '예외 발생', tone: 'warning' },
+      { label: '조퇴', value: `${summary.early}`, meta: '퇴근 기록 확인', tone: 'warning' },
+      { label: '정정 대기', value: `${summary.correction}`, meta: '승인 필요', tone: 'neutral' }
+    ];
+    return `
+      <div class="attendance-v2-section-head">
+        <div>
+          <h3>오늘 상태 요약</h3>
+          <p>필터 범위 안의 출퇴근 상태를 한 장의 운영 시트로 확인합니다.</p>
+        </div>
+      </div>
+      <div class="attendance-v2-summary-strip">
+        ${metrics.map((metric) => `
+          <article class="attendance-v2-summary-item is-${metric.tone}">
+            <span class="attendance-v2-summary-label">${escapeValue(metric.label)}</span>
+            <strong class="attendance-v2-summary-value">${escapeValue(metric.value)}</strong>
+            <span class="attendance-v2-summary-meta">${escapeValue(metric.meta)}</span>
+            ${metric.progress != null ? `
+              <span class="attendance-v2-summary-progress">
+                <span style="width:${Math.max(0, Math.min(100, metric.progress))}%"></span>
+              </span>
+            ` : ''}
+          </article>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function v2QueueMarkup(queueRows, loading) {
+    if (loading) {
+      return `
+        <div class="attendance-v2-section-head">
+          <div>
+            <h3>우선 확인 예외</h3>
+            <p>예외와 정정 대기 항목을 우선순위대로 정리합니다.</p>
+          </div>
+          <span class="attendance-v2-count-chip">불러오는 중</span>
+        </div>
+        <div class="attendance-v2-empty">예외 목록을 불러오는 중입니다.</div>
+      `;
+    }
+    return `
+      <div class="attendance-v2-section-head">
+        <div>
+          <h3>우선 확인 예외</h3>
+          <p>미출근, 지각, 조퇴, 정정 대기 순으로 우선순위를 정리합니다.</p>
+        </div>
+        <span class="attendance-v2-count-chip">${queueRows.length}건</span>
+      </div>
+      ${queueRows.length ? `
+        <div class="attendance-v2-queue-table">
+          <div class="attendance-v2-queue-head">
+            <span>직원</span>
+            <span>현장</span>
+            <span>예정 근무</span>
+            <span>실제 기록</span>
+            <span>판정</span>
+            <span>관련 요청</span>
+          </div>
+          <div class="attendance-v2-queue-body">
+            ${queueRows.map(({ row, index, key }) => {
+              const rowKey = v2RowKey(row, index);
+              return `
+                <button type="button" class="attendance-v2-queue-row${rowKey === attendanceStatusV2SelectedKey ? ' is-selected' : ''}" data-row-key="${escapeValue(rowKey)}">
+                  <span class="attendance-v2-cell name">${escapeValue(v2Name(row))}</span>
+                  <span class="attendance-v2-cell site">${escapeValue(v2Site(row))}</span>
+                  <span class="attendance-v2-cell schedule">${escapeValue(v2Schedule(row))}</span>
+                  <span class="attendance-v2-cell actual">${escapeValue(v2Actual(row))}</span>
+                  <span class="attendance-v2-cell status"><span class="attendance-v2-status-chip is-${v2StatusTone(key)}">${escapeValue(v2StatusLabel(row))}</span></span>
+                  <span class="attendance-v2-cell request">${escapeValue(v2RequestLabel(row))}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      ` : '<div class="attendance-v2-empty">우선 확인할 예외가 없습니다.</div>'}
+    `;
+  }
+
+  function v2TableMarkup(rows, loading) {
+    if (loading) {
+      return `
+        <div class="attendance-v2-section-head">
+          <div>
+            <h3>전체 출퇴근 기록</h3>
+            <p>선택한 범위의 실제 기록과 판정을 확인합니다.</p>
+          </div>
+          <span class="attendance-v2-inline-meta">불러오는 중</span>
+        </div>
+        <div class="attendance-v2-empty">기록 테이블을 불러오는 중입니다.</div>
+      `;
+    }
+    return `
+      <div class="attendance-v2-section-head">
+        <div>
+          <h3>전체 출퇴근 기록</h3>
+          <p>선택한 범위의 실제 기록과 판정을 확인합니다.</p>
+        </div>
+        <span class="attendance-v2-inline-meta">총 ${rows.length}명</span>
+      </div>
+      <div class="attendance-v2-table-wrap">
+        <table class="attendance-v2-table">
+          <thead>
+            <tr>
+              <th>직원</th>
+              <th>현장</th>
+              <th>예정 근무</th>
+              <th>출근</th>
+              <th>퇴근</th>
+              <th>판정</th>
+              <th>관련 요청</th>
+              <th>기준일</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.length ? rows.map((row, index) => {
+              const rowKey = v2RowKey(row, index);
+              return `
+                <tr class="${rowKey === attendanceStatusV2SelectedKey ? 'is-selected' : ''}" data-row-key="${escapeValue(rowKey)}" tabindex="0">
+                  <td>${escapeValue(v2Name(row))}</td>
+                  <td>${escapeValue(v2Site(row))}</td>
+                  <td>${escapeValue(v2Schedule(row))}</td>
+                  <td>${escapeValue(v2ActualIn(row))}</td>
+                  <td>${escapeValue(v2ActualOut(row))}</td>
+                  <td><span class="attendance-v2-status-chip is-${v2StatusTone(v2StatusKey(row))}">${escapeValue(v2StatusLabel(row))}</span></td>
+                  <td>${escapeValue(v2RequestLabel(row))}</td>
+                  <td>${escapeValue(v2Date(row))}</td>
+                </tr>
+              `;
+            }).join('') : '<tr><td colspan="8" class="attendance-v2-empty-cell">표시할 기록이 없습니다.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function v2InspectorMarkup(row) {
+    if (!row) {
+      return `
+        <div class="attendance-v2-inspector-shell">
+          <div class="attendance-v2-section-head">
+            <div>
+              <h3>선택 상세</h3>
+              <p>예외 또는 기록을 선택하면 상세를 확인할 수 있습니다.</p>
+            </div>
+          </div>
+          <div class="attendance-v2-empty is-inspector">현재 선택된 기록이 없습니다.</div>
+        </div>
+      `;
+    }
+    const statusKey = v2StatusKey(row);
+    return `
+      <div class="attendance-v2-inspector-shell">
+        <div class="attendance-v2-section-head">
+          <div>
+            <h3>${escapeValue(v2Name(row))}</h3>
+            <p>${escapeValue(v2Site(row))} · ${escapeValue(v2Date(row))}</p>
+          </div>
+          <span class="attendance-v2-status-chip is-${v2StatusTone(statusKey)}">${escapeValue(v2StatusLabel(row))}</span>
+        </div>
+        <div class="attendance-v2-detail-grid">
+          <article class="attendance-v2-detail-card">
+            <span class="attendance-v2-detail-label">예정 근무</span>
+            <strong>${escapeValue(v2Schedule(row))}</strong>
+          </article>
+          <article class="attendance-v2-detail-card">
+            <span class="attendance-v2-detail-label">실제 기록</span>
+            <strong>${escapeValue(v2Actual(row))}</strong>
+          </article>
+          <article class="attendance-v2-detail-card">
+            <span class="attendance-v2-detail-label">관련 요청</span>
+            <strong>${escapeValue(v2RequestLabel(row))}</strong>
+          </article>
+          <article class="attendance-v2-detail-card">
+            <span class="attendance-v2-detail-label">기준일</span>
+            <strong>${escapeValue(v2Date(row))}</strong>
+          </article>
+        </div>
+        <section class="attendance-v2-note-panel">
+          <span class="attendance-v2-detail-label">판별 포인트</span>
+          <p>${escapeValue(v2Reason(row))}</p>
+        </section>
+      </div>
+    `;
+  }
+
+  function v2BindSelection(container) {
+    if (!container) return;
+    const rerender = () => renderAttendanceManagerWorkspace(attendanceStatusV2Payload);
+    container.querySelectorAll('[data-row-key]').forEach((node) => {
+      const activate = () => {
+        attendanceStatusV2SelectedKey = node.getAttribute('data-row-key');
+        rerender();
+      };
+      node.addEventListener('click', activate);
+      node.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          activate();
+        }
+      });
+    });
+  }
+
+  function v2ResolveSelectedRow(rows, queueRows) {
+    const list = v2Array(rows);
+    const selected = list.find((row, index) => v2RowKey(row, index) === attendanceStatusV2SelectedKey);
+    if (selected) return selected;
+    if (queueRows.length) {
+      attendanceStatusV2SelectedKey = v2RowKey(queueRows[0].row, queueRows[0].index);
+      return queueRows[0].row;
+    }
+    if (list.length) {
+      attendanceStatusV2SelectedKey = v2RowKey(list[0], 0);
+      return list[0];
+    }
+    attendanceStatusV2SelectedKey = null;
+    return null;
+  }
+
+  renderAttendanceManagerWorkspace = function renderAttendanceManagerWorkspaceV2(payload = {}) {
+    if (!v2UseStatusLayout()) {
+      v2TearDownShell();
+      return legacyRenderAttendanceManagerWorkspace(payload);
+    }
+
+    const rows = v2Array(payload.rows);
+    const scopedRows = v2Array(payload.scopedRows);
+    const loading = Boolean(payload.loading);
+    attendanceStatusV2Payload = { rows, scopedRows, loading };
+
+    const shell = v2EnsureShell();
+    if (!shell) return legacyRenderAttendanceManagerWorkspace(payload);
+
+    const activeRows = scopedRows.length ? scopedRows : rows;
+    const summary = v2BuildSummary(activeRows);
+    const queueRows = v2QueueRows(activeRows);
+    const selectedRow = v2ResolveSelectedRow(activeRows, queueRows);
+
+    shell.summaryHost.innerHTML = v2SummaryMarkup(summary);
+    shell.queueHost.innerHTML = v2QueueMarkup(queueRows, loading);
+    shell.tableHost.innerHTML = v2TableMarkup(activeRows, loading);
+    shell.inspectorHost.innerHTML = v2InspectorMarkup(selectedRow);
+
+    v2BindSelection(shell.queueHost);
+    v2BindSelection(shell.tableHost);
+  };
+})();

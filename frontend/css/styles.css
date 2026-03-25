@@ -24489,3 +24489,424 @@ body.notices-compose-dragging .notices-inline-drag-handle {
   padding-top: 10px !important;
   padding-bottom: 10px !important;
 }
+
+/* attendance status v2 phase 1 */
+#attendanceManagerWorkspace.is-attendance-v2-status {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 360px !important;
+  gap: 24px !important;
+  align-items: start !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status #attendanceStatusPanel,
+#attendanceManagerWorkspace.is-attendance-v2-status #attendanceExceptionQueueCard,
+#attendanceManagerWorkspace.is-attendance-v2-status #attendanceListPanel,
+#attendanceManagerWorkspace.is-attendance-v2-status #attendanceAdminDetailPanel {
+  background: #ffffff !important;
+  background-image: none !important;
+  border: 1px solid rgba(226, 232, 240, 0.92) !important;
+  border-radius: 24px !important;
+  box-shadow: none !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status #attendanceStatusPanel {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  padding: 24px 28px !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status #attendanceExceptionQueueCard {
+  grid-column: 1 !important;
+  grid-row: 2 !important;
+  padding: 24px 28px !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status #attendanceListPanel {
+  grid-column: 1 !important;
+  grid-row: 3 !important;
+  padding: 24px 28px !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status #attendanceAdminDetailPanel {
+  grid-column: 2 !important;
+  grid-row: 1 / span 3 !important;
+  position: sticky !important;
+  top: 96px !important;
+  padding: 24px !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status #attendanceStatusRecordCard {
+  display: none !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status #attendanceStatusPanel > :not(#attendanceStatusV2SummaryHost),
+#attendanceManagerWorkspace.is-attendance-v2-status #attendanceExceptionQueueCard > :not(#attendanceStatusV2QueueHost),
+#attendanceManagerWorkspace.is-attendance-v2-status #attendanceListPanel > :not(#attendanceStatusV2TableHost),
+#attendanceManagerWorkspace.is-attendance-v2-status #attendanceAdminDetailPanel > :not(#attendanceStatusV2InspectorHost) {
+  display: none !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-host {
+  display: grid;
+  gap: 18px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-section-head h3 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-section-head p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border: 1px solid rgba(226, 232, 240, 0.88);
+  border-radius: 20px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-height: 116px;
+  padding: 18px 20px 16px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item + .attendance-v2-summary-item {
+  border-left: 1px solid rgba(226, 232, 240, 0.88);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-accent {
+  background: rgba(255, 247, 237, 0.72);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-danger {
+  background: rgba(254, 242, 242, 0.76);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-success {
+  background: rgba(240, 253, 244, 0.76);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-label {
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 700;
+  color: #64748b;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-value {
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-meta {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #475569;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-progress {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 14px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.88);
+  overflow: hidden;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #f97316;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-count-chip,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-inline-meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-table {
+  border-top: 1px solid rgba(226, 232, 240, 0.88);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-head,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.2fr) minmax(110px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(100px, 0.8fr) minmax(100px, 0.8fr);
+  gap: 14px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-head {
+  padding: 12px 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-row {
+  width: 100%;
+  padding: 16px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.82);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-row:last-child {
+  border-bottom: 0;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-row:hover,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-table tbody tr:hover {
+  background: rgba(248, 250, 252, 0.86);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-row.is-selected,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-table tbody tr.is-selected {
+  background: rgba(255, 247, 237, 0.82);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-cell {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #0f172a;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-cell.site,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-cell.schedule,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-cell.actual,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-cell.request {
+  color: #475569;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-cell.name {
+  font-weight: 700;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-status-chip.is-danger {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-status-chip.is-warning {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-status-chip.is-success {
+  background: #ecfdf3;
+  color: #15803d;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-status-chip.is-muted {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-status-chip.is-neutral {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-table-wrap {
+  border-top: 1px solid rgba(226, 232, 240, 0.88);
+  overflow-x: auto;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-table thead th {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.88);
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  text-align: left;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-table tbody tr {
+  cursor: pointer;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-table tbody td {
+  padding: 14px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.78);
+  font-size: 14px;
+  line-height: 1.45;
+  color: #0f172a;
+  vertical-align: middle;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-table tbody td:nth-child(2),
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-table tbody td:nth-child(3),
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-table tbody td:nth-child(4),
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-table tbody td:nth-child(5),
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-table tbody td:nth-child(7),
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-table tbody td:nth-child(8) {
+  color: #475569;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-empty,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-empty-cell {
+  padding: 24px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #64748b;
+  text-align: center;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-empty.is-inspector {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed rgba(226, 232, 240, 0.92);
+  border-radius: 18px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-inspector-shell {
+  display: grid;
+  gap: 18px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-detail-card,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-note-panel {
+  padding: 16px 18px;
+  border: 1px solid rgba(226, 232, 240, 0.88);
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-detail-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 700;
+  color: #64748b;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-detail-card strong {
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-note-panel p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #334155;
+}
+
+@media (max-width: 1440px) {
+  #attendanceManagerWorkspace.is-attendance-v2-status {
+    grid-template-columns: minmax(0, 1fr) 320px !important;
+  }
+
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item:nth-child(n + 5) {
+    border-top: 1px solid rgba(226, 232, 240, 0.88);
+  }
+
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item:nth-child(5) {
+    border-left: 0;
+  }
+}
+
+@media (max-width: 1200px) {
+  #attendanceManagerWorkspace.is-attendance-v2-status {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #attendanceManagerWorkspace.is-attendance-v2-status #attendanceAdminDetailPanel {
+    grid-column: 1 !important;
+    grid-row: 4 !important;
+    position: static !important;
+  }
+
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item:nth-child(odd) {
+    border-left: 0 !important;
+  }
+
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item:nth-child(n + 3) {
+    border-top: 1px solid rgba(226, 232, 240, 0.88);
+  }
+
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-head,
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-row {
+    grid-template-columns: minmax(120px, 1.1fr) minmax(100px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr);
+  }
+
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-head span:nth-child(5),
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-head span:nth-child(6),
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-row .attendance-v2-cell.status,
+  #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-queue-row .attendance-v2-cell.request {
+    display: none;
+  }
+}
