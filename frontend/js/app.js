@@ -34269,7 +34269,7 @@ function createNoticePollBlock(item, poll = {}, options = {}) {
     ? (poll.selectedOptionIds || poll.selected_option_ids).map((item) => String(item || '').trim()).filter(Boolean)
     : [];
   (Array.isArray(poll.options) ? poll.options : []).forEach((option, index) => {
-    const optionId = String(option.optionId || option.option_id || '').trim();
+    const optionId = String(option.optionId || option.option_id || '').trim() || (previewOnly ? `preview-option-${index + 1}` : '');
     if (!optionId) return;
     const row = document.createElement('label');
     row.className = 'notices-poll-option';
