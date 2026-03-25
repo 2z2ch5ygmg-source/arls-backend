@@ -19472,7 +19472,7 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
   });
   const blocks = [];
   let imageInserted = false;
-  let fallbackPollInserted = false;
+  let emittedPollCount = 0;
   const optionalBlockFactories = {
     image: () => {
       if (imageInserted) return;
@@ -19488,7 +19488,7 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
       imageInserted = true;
     },
     poll: (block = null) => {
-      if (!block && fallbackPollInserted) return;
+      if (!block && emittedPollCount > 0) return;
       const sourcePoll = normalizeNoticePollDraft({
         enabled: true,
         ...((block && typeof block === 'object' && block.poll) || poll),
@@ -19520,9 +19520,7 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
             },
           },
         });
-      }
-      if (!block) {
-        fallbackPollInserted = true;
+        emittedPollCount += 1;
       }
     },
     table: (block = null) => {
