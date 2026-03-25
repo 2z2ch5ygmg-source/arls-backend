@@ -5572,11 +5572,11 @@ function createHomeNoticeRailRow(item) {
     pinBadge.className = 'home-notice-pin-badge';
     pinBadge.setAttribute('aria-label', '상단고정');
     pinBadge.innerHTML = `
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12.2 3.2c.9.9.9 2.3 0 3.2l-1.1 1.1 2.5 2.5"></path>
-        <path d="M9.3 5.1 5.2 9.2"></path>
-        <path d="m13.6 10.1-3.7 3.7"></path>
-        <path d="M7.9 12.2 3.2 16.9"></path>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M10.8 2.4 13.6 5.2"></path>
+        <path d="M9.9 3.3 7.1 6.1"></path>
+        <path d="m11.6 6.9-2.5-2.5L4.2 9.3l2.5 2.5 4.9-4.9Z"></path>
+        <path d="m6.4 12.1-2.8 2.8"></path>
       </svg>
     `;
     titleLead.appendChild(pinBadge);

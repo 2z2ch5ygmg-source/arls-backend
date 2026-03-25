@@ -21480,9 +21480,9 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-notice-title-lead {
   display: flex;
   align-items: center;
-  gap: 6px;
   min-width: 0;
   flex: 1 1 auto;
+  position: relative;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-notice-title-tags {
@@ -21496,15 +21496,19 @@ button.attendance-status-special-card.active {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  position: absolute;
+  left: -18px;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  transform: translateY(-50%);
   color: #f97316;
   flex: 0 0 auto;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-notice-pin-badge svg {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-notice-fresh-tag {
