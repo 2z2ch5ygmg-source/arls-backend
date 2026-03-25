@@ -24456,7 +24456,7 @@ body.notices-compose-dragging .notices-inline-drag-handle {
 
 #shell[data-shell-mode='manager'] #view-home #homeManagerScheduleList .list-row {
   align-items: center;
-  min-height: 96px;
+  min-height: 72px;
 }
 
 #shell[data-shell-mode='manager'] #view-home #homeManagerScheduleList .list-row-main {
@@ -24464,13 +24464,14 @@ body.notices-compose-dragging .notices-inline-drag-handle {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-distribution-card {
-  gap: 10px !important;
+  gap: 4px !important;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-distribution-bars {
-  margin-top: -52px !important;
-  min-height: 196px !important;
+  margin-top: 0 !important;
+  min-height: 180px !important;
   gap: 10px !important;
+  align-items: center !important;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-distribution-bar {
@@ -24494,6 +24495,7 @@ body.notices-compose-dragging .notices-inline-drag-handle {
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-schedule-issue-rail {
   height: 316px !important;
+  padding-top: 0 !important;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card {
@@ -24520,9 +24522,18 @@ body.notices-compose-dragging .notices-inline-drag-handle {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-schedule-issue-rail .home-dashboard-list-plain > li {
-  min-height: 74px !important;
-  padding-top: 10px !important;
-  padding-bottom: 10px !important;
+  min-height: 60px !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-distribution-card .home-distribution-metrics {
+  min-height: 30px !important;
+  align-items: flex-start !important;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-schedule-issue-rail .home-attendance-panel-copy {
+  padding-bottom: 4px !important;
 }
 
 /* attendance status v2 phase 1 */
