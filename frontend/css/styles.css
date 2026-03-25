@@ -21603,7 +21603,8 @@ button.attendance-status-special-card.active {
   grid-template-rows: auto 1fr;
   gap: 8px;
   min-height: 320px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98));
+  background: #fff;
+  background-image: none;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-status-rack {
@@ -22111,6 +22112,12 @@ button.attendance-status-special-card.active {
 
 :root:not([data-ui-theme='dark']) #shell[data-shell-mode='manager'] #view-home .home-manager-section {
   background: #fff;
+  background-image: none;
+}
+
+:root:not([data-ui-theme='dark']) #shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card {
+  background: #fff;
+  background-image: none;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card {
@@ -22132,35 +22139,47 @@ button.attendance-status-special-card.active {
   grid-template-columns: 1fr;
   grid-template-rows: 1fr;
   min-height: 0;
+  flex: 1 1 auto;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-section-rail {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
+  position: relative;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] #homeManagerRequestList {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
   width: 100%;
   height: 100%;
+  margin: 0;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-dashboard-list-plain > li {
-  width: auto;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
   padding: 0;
   border-top: none;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-dashboard-list-plain .list-row {
+  display: grid;
+  place-items: center;
+  width: 100%;
   justify-content: center;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-dashboard-list-plain .list-row-main {
+  display: grid;
+  place-items: center;
   align-items: center;
 }
 
