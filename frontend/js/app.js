@@ -63428,8 +63428,14 @@ document.addEventListener('compositionend', (event) => {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 
-  function v2UseStatusLayout() {
-    return Boolean(appState?.attendance?.managerMode) && String(appState?.attendance?.tab || 'status') === 'status';
+  function v2CurrentTab() {
+    const tab = v2Text(appState?.attendance?.tab, state?.attendanceView?.managerTab, 'status');
+    return typeof normalizeAttendanceManagerTab === 'function' ? normalizeAttendanceManagerTab(tab) : tab;
+  }
+
+  function v2UseManagerLayout() {
+    const tab = v2CurrentTab();
+    return Boolean(appState?.attendance?.managerMode) && ['status', 'list', 'calendar'].includes(tab);
   }
 
   function v2Array(value) {
@@ -63447,6 +63453,7 @@ document.addEventListener('compositionend', (event) => {
 
   function v2RowKey(row, index) {
     return v2Text(
+      row?.key,
       row?.recordId,
       row?.attendanceId,
       row?.id,
@@ -63735,7 +63742,7 @@ document.addEventListener('compositionend', (event) => {
     }
   }
 
-  function v2EnsureHost(containerId, hostId) {
+  function v2EnsureHost(containerId, hostId, { prepend = false, beforeId = '' } = {}) {
     const container = document.getElementById(containerId);
     if (!container) return null;
     let host = document.getElementById(hostId);
@@ -63743,9 +63750,18 @@ document.addEventListener('compositionend', (event) => {
       host = document.createElement('div');
       host.id = hostId;
       host.className = 'attendance-v2-host';
-      container.prepend(host);
+    }
+    const beforeEl = beforeId ? document.getElementById(beforeId) : null;
+    if (beforeEl && beforeEl.parentNode === container) {
+      if (host.parentNode !== container || host.nextSibling !== beforeEl) {
+        container.insertBefore(host, beforeEl);
+      }
+    } else if (prepend) {
+      if (host.parentNode !== container || host !== container.firstElementChild) {
+        container.prepend(host);
+      }
     } else if (host.parentNode !== container) {
-      container.prepend(host);
+      container.appendChild(host);
     }
     container.hidden = false;
     container.removeAttribute('hidden');
@@ -63754,23 +63770,49 @@ document.addEventListener('compositionend', (event) => {
 
   function v2EnsureShell() {
     const workspace = document.getElementById('attendanceManagerWorkspace');
-    if (!workspace) return null;
-    workspace.classList.add('is-attendance-v2-status');
-    const summaryHost = v2EnsureHost('attendanceStatusPanel', 'attendanceStatusV2SummaryHost');
-    const queueHost = v2EnsureHost('attendanceExceptionQueueCard', 'attendanceStatusV2QueueHost');
-    const tableHost = v2EnsureHost('attendanceListPanel', 'attendanceStatusV2TableHost');
-    const inspectorHost = v2EnsureHost('attendanceAdminDetailPanel', 'attendanceStatusV2InspectorHost');
+    const calendarPanel = document.getElementById('attendanceCalendarPanel');
+    const tab = v2CurrentTab();
+    if (workspace) {
+      workspace.classList.add('is-attendance-v2-manager');
+      workspace.classList.toggle('is-attendance-v2-status', tab === 'status');
+      workspace.classList.toggle('is-attendance-v2-list', tab === 'list');
+    }
+    if (calendarPanel) {
+      calendarPanel.classList.toggle('is-attendance-v2-calendar', tab === 'calendar');
+    }
+    const summaryHost = tab === 'status'
+      ? v2EnsureHost('attendanceStatusPanel', 'attendanceStatusV2SummaryHost', { prepend: true })
+      : (tab === 'list'
+        ? v2EnsureHost('attendanceListPanel', 'attendanceListV2SummaryHost', { prepend: true })
+        : v2EnsureHost('attendanceCalendarPanel', 'attendanceCalendarV2SummaryHost', { beforeId: 'attendanceCalendarSummaryStrip' }));
+    const queueHost = tab === 'status'
+      ? v2EnsureHost('attendanceExceptionQueueCard', 'attendanceStatusV2QueueHost', { prepend: true })
+      : null;
+    const tableHost = tab === 'status' || tab === 'list'
+      ? v2EnsureHost('attendanceListPanel', 'attendanceStatusV2TableHost')
+      : null;
+    const inspectorHost = tab === 'status' || tab === 'list'
+      ? v2EnsureHost('attendanceAdminDetailPanel', 'attendanceStatusV2InspectorHost', { prepend: true })
+      : null;
     const legacyRecord = document.getElementById('attendanceStatusRecordCard');
     if (legacyRecord) {
       legacyRecord.hidden = true;
       legacyRecord.setAttribute('aria-hidden', 'true');
     }
-    return { workspace, summaryHost, queueHost, tableHost, inspectorHost };
+    return { workspace, summaryHost, queueHost, tableHost, inspectorHost, calendarPanel, tab };
   }
 
   function v2TearDownShell() {
     const workspace = document.getElementById('attendanceManagerWorkspace');
-    if (workspace) workspace.classList.remove('is-attendance-v2-status');
+    if (workspace) {
+      workspace.classList.remove('is-attendance-v2-manager');
+      workspace.classList.remove('is-attendance-v2-status');
+      workspace.classList.remove('is-attendance-v2-list');
+    }
+    const calendarPanel = document.getElementById('attendanceCalendarPanel');
+    if (calendarPanel) {
+      calendarPanel.classList.remove('is-attendance-v2-calendar');
+    }
     const legacyRecord = document.getElementById('attendanceStatusRecordCard');
     if (legacyRecord) {
       legacyRecord.hidden = false;
@@ -64119,6 +64161,9 @@ document.addEventListener('compositionend', (event) => {
     container.querySelectorAll('[data-row-key]').forEach((node) => {
       const activate = () => {
         attendanceStatusV2SelectedKey = node.getAttribute('data-row-key');
+        if (state.attendanceView) {
+          state.attendanceView.selectedManagerRowKey = attendanceStatusV2SelectedKey || '';
+        }
         rerender();
       };
       node.addEventListener('click', activate);
@@ -64161,22 +64206,38 @@ document.addEventListener('compositionend', (event) => {
 
   function v2ResolveSelectedRow(rows, queueRows) {
     const list = v2Array(rows);
-    const selected = list.find((row, index) => v2RowKey(row, index) === attendanceStatusV2SelectedKey);
-    if (selected) return selected;
+    const desiredKey = String(attendanceStatusV2SelectedKey || state.attendanceView?.selectedManagerRowKey || '').trim();
+    const selected = list.find((row, index) => v2RowKey(row, index) === desiredKey);
+    if (selected) {
+      attendanceStatusV2SelectedKey = desiredKey;
+      if (state.attendanceView) {
+        state.attendanceView.selectedManagerRowKey = attendanceStatusV2SelectedKey || '';
+      }
+      return selected;
+    }
     if (queueRows.length) {
       attendanceStatusV2SelectedKey = v2RowKey(queueRows[0].row, queueRows[0].index);
+      if (state.attendanceView) {
+        state.attendanceView.selectedManagerRowKey = attendanceStatusV2SelectedKey || '';
+      }
       return queueRows[0].row;
     }
     if (list.length) {
       attendanceStatusV2SelectedKey = v2RowKey(list[0], 0);
+      if (state.attendanceView) {
+        state.attendanceView.selectedManagerRowKey = attendanceStatusV2SelectedKey || '';
+      }
       return list[0];
     }
     attendanceStatusV2SelectedKey = null;
+    if (state.attendanceView) {
+      state.attendanceView.selectedManagerRowKey = '';
+    }
     return null;
   }
 
   renderAttendanceManagerWorkspace = function renderAttendanceManagerWorkspaceV2(payload = {}) {
-    if (!v2UseStatusLayout()) {
+    if (!v2UseManagerLayout()) {
       v2TearDownShell();
       return legacyRenderAttendanceManagerWorkspace(payload);
     }
@@ -64185,6 +64246,12 @@ document.addEventListener('compositionend', (event) => {
     const scopedRows = v2Array(payload.scopedRows);
     const loading = Boolean(payload.loading);
     attendanceStatusV2Payload = { rows, scopedRows, loading };
+    const tab = v2CurrentTab();
+
+    if (typeof renderAttendanceWorkspaceHeader === 'function') renderAttendanceWorkspaceHeader();
+    if (typeof renderAttendanceWorkspaceTabs === 'function') renderAttendanceWorkspaceTabs();
+    if (typeof renderAttendanceToolbarVisibility === 'function') renderAttendanceToolbarVisibility();
+    if (typeof renderAttendanceManagerPanelVisibility === 'function') renderAttendanceManagerPanelVisibility();
 
     const shell = v2EnsureShell();
     if (!shell) return legacyRenderAttendanceManagerWorkspace(payload);
@@ -64195,14 +64262,46 @@ document.addEventListener('compositionend', (event) => {
     const queueRows = v2QueueRows(filteredRows);
     const selectedRow = v2ResolveSelectedRow(filteredRows, queueRows);
 
-    shell.summaryHost.innerHTML = v2SummaryMarkup(summary);
-    shell.queueHost.innerHTML = v2QueueMarkup(queueRows, loading, attendanceStatusV2FilterKey);
-    shell.tableHost.innerHTML = v2TableMarkup(filteredRows, loading, attendanceStatusV2FilterKey);
-    shell.inspectorHost.innerHTML = v2InspectorMarkup(selectedRow);
+    if (state.attendanceView) {
+      state.attendanceView.managerSummary = summary;
+      state.attendanceView.managerExceptionRows = queueRows.map((item) => item.row);
+      state.attendanceView.selectedManagerRowKey = attendanceStatusV2SelectedKey || '';
+    }
 
-    v2BindSelection(shell.summaryHost);
-    v2BindSelection(shell.queueHost);
-    v2BindSelection(shell.tableHost);
-    v2BindSelection(shell.inspectorHost);
+    if (shell.summaryHost) {
+      shell.summaryHost.innerHTML = v2SummaryMarkup(summary);
+      v2BindSelection(shell.summaryHost);
+    }
+
+    if (tab === 'status') {
+      if (shell.queueHost) {
+        shell.queueHost.innerHTML = v2QueueMarkup(queueRows, loading, attendanceStatusV2FilterKey);
+        v2BindSelection(shell.queueHost);
+      }
+      if (shell.tableHost) {
+        shell.tableHost.innerHTML = v2TableMarkup(filteredRows, loading, attendanceStatusV2FilterKey);
+        v2BindSelection(shell.tableHost);
+      }
+      if (shell.inspectorHost) {
+        shell.inspectorHost.innerHTML = v2InspectorMarkup(selectedRow);
+        v2BindSelection(shell.inspectorHost);
+      }
+    } else if (tab === 'list') {
+      if (shell.tableHost) {
+        shell.tableHost.innerHTML = v2TableMarkup(filteredRows, loading, attendanceStatusV2FilterKey);
+        v2BindSelection(shell.tableHost);
+      }
+      if (shell.inspectorHost) {
+        shell.inspectorHost.innerHTML = v2InspectorMarkup(selectedRow);
+        v2BindSelection(shell.inspectorHost);
+      }
+    } else if (tab === 'calendar') {
+      renderAttendanceCalendarPanel(filteredRows, filteredRows, { loading });
+    }
+
+    const exportBtn = $('#attendanceExportBtn');
+    if (exportBtn instanceof HTMLButtonElement) {
+      exportBtn.disabled = !rows.length;
+    }
   };
 })();

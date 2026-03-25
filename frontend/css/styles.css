@@ -24994,3 +24994,437 @@ body.notices-compose-dragging .notices-inline-drag-handle {
     display: none;
   }
 }
+
+#attendanceManagerWorkspace.is-attendance-v2-manager #attendanceStatusPanel,
+#attendanceManagerWorkspace.is-attendance-v2-manager #attendanceExceptionQueueCard,
+#attendanceManagerWorkspace.is-attendance-v2-manager #attendanceListPanel,
+#attendanceManagerWorkspace.is-attendance-v2-manager #attendanceAdminDetailPanel,
+#attendanceCalendarPanel.is-attendance-v2-calendar {
+  background: #ffffff !important;
+  background-image: none !important;
+  border: 1px solid rgba(226, 232, 240, 0.92) !important;
+  border-radius: 24px !important;
+  box-shadow: none !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-manager #attendanceAdminDetailPanel > :not(#attendanceStatusV2InspectorHost) {
+  display: none !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list #attendanceStatusPanel,
+#attendanceManagerWorkspace.is-attendance-v2-list #attendanceExceptionQueueCard {
+  display: none !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list #attendanceListPanel {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  padding: 24px 28px !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list #attendanceAdminDetailPanel {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  position: sticky !important;
+  top: 96px !important;
+  padding: 24px !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list #attendanceListPanel > :not(#attendanceListV2SummaryHost):not(#attendanceStatusV2TableHost) {
+  display: none !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list #attendanceListV2SummaryHost {
+  margin-bottom: 18px;
+}
+
+#attendanceCalendarPanel.is-attendance-v2-calendar {
+  padding: 24px 28px !important;
+}
+
+#attendanceCalendarPanel.is-attendance-v2-calendar #attendanceCalendarSummaryStrip {
+  display: none !important;
+}
+
+#attendanceCalendarPanel.is-attendance-v2-calendar #attendanceCalendarV2SummaryHost {
+  display: grid;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-host {
+  display: grid;
+  gap: 18px;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-head-meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-section-head h3 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-section-head p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border: 1px solid rgba(226, 232, 240, 0.88);
+  border-radius: 20px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-height: 116px;
+  padding: 18px 20px 16px;
+  border: 0;
+  border-radius: 0;
+  width: 100%;
+  background-clip: padding-box;
+  text-align: left;
+  cursor: pointer;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item + .attendance-v2-summary-item {
+  border-left: 1px solid rgba(226, 232, 240, 0.88);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-accent {
+  background: rgba(255, 247, 237, 0.72);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-danger {
+  background: rgba(254, 242, 242, 0.76);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-success {
+  background: rgba(240, 253, 244, 0.76);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item:hover {
+  background-color: rgba(248, 250, 252, 0.92);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-accent:hover {
+  background-color: rgba(255, 247, 237, 0.9);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-danger:hover {
+  background-color: rgba(254, 242, 242, 0.9);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-success:hover {
+  background-color: rgba(240, 253, 244, 0.9);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-active {
+  box-shadow: inset 0 0 0 2px rgba(249, 115, 22, 0.96);
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-label {
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 700;
+  color: #64748b;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-value {
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-meta {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #475569;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-progress {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 14px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.88);
+  overflow: hidden;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #f97316;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-count-chip,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-inline-meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-clear-filter {
+  border: 0;
+  background: transparent;
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-table-wrap {
+  border-top: 1px solid rgba(226, 232, 240, 0.88);
+  overflow-x: auto;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-table thead th {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.88);
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  text-align: left;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-table tbody tr {
+  cursor: pointer;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-table tbody tr:hover {
+  background: rgba(248, 250, 252, 0.86);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-table tbody tr.is-selected {
+  background: rgba(255, 247, 237, 0.82);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-table tbody td {
+  padding: 14px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.78);
+  font-size: 14px;
+  line-height: 1.45;
+  color: #0f172a;
+  vertical-align: middle;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-table tbody td:nth-child(2),
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-table tbody td:nth-child(3),
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-table tbody td:nth-child(4),
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-table tbody td:nth-child(5),
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-table tbody td:nth-child(7),
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-table tbody td:nth-child(8) {
+  color: #475569;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-empty,
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-empty-cell {
+  padding: 24px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #64748b;
+  text-align: center;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-empty.is-inspector {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed rgba(226, 232, 240, 0.92);
+  border-radius: 18px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-inspector-shell {
+  display: grid;
+  gap: 18px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-inspector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-inspector-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(226, 232, 240, 0.96);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  transition: border-color 160ms ease, color 160ms ease, background-color 160ms ease;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-inspector-action:hover {
+  border-color: rgba(249, 115, 22, 0.34);
+  color: #c2410c;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-inspector-action.is-primary {
+  border-color: rgba(249, 115, 22, 0.18);
+  background: rgba(255, 247, 237, 0.98);
+  color: #c2410c;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-detail-card,
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-note-panel {
+  padding: 16px 18px;
+  border: 1px solid rgba(226, 232, 240, 0.88);
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-detail-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 700;
+  color: #64748b;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-detail-card strong {
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-status-chip.is-danger {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-status-chip.is-warning {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-status-chip.is-success {
+  background: #ecfdf3;
+  color: #15803d;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-status-chip.is-muted {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-status-chip.is-neutral {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-note-panel p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #334155;
+}
+
+@media (max-width: 1440px) {
+  :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item:nth-child(n + 5) {
+    border-top: 1px solid rgba(226, 232, 240, 0.88);
+  }
+
+  :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item:nth-child(5) {
+    border-left: 0;
+  }
+}
+
+@media (max-width: 1200px) {
+  #attendanceManagerWorkspace.is-attendance-v2-list {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #attendanceManagerWorkspace.is-attendance-v2-list #attendanceAdminDetailPanel {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    position: static !important;
+  }
+
+  :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item:nth-child(odd) {
+    border-left: 0 !important;
+  }
+
+  :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item:nth-child(n + 3) {
+    border-top: 1px solid rgba(226, 232, 240, 0.88);
+  }
+}
