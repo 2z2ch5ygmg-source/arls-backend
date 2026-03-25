@@ -13081,6 +13081,51 @@ textarea::placeholder {
   }
 }
 
+/* Keep the accent rail on top-level drawer items only. */
+.drawer-subitem {
+  border-left: 0;
+}
+
+.drawer-subitem-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.drawer-subitem-label::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.4;
+  flex: 0 0 5px;
+}
+
+.drawer-subitem.active,
+.desktop-sidebar .drawer-subitem.active {
+  background: transparent;
+  border-color: transparent;
+}
+
+.drawer-subitem.active .drawer-subitem-label,
+.desktop-sidebar .drawer-subitem.active .drawer-subitem-label {
+  color: var(--ui-accent);
+  font-weight: var(--ui-weight-semibold);
+}
+
+.drawer-subitem.active .drawer-subitem-label::before,
+.desktop-sidebar .drawer-subitem.active .drawer-subitem-label::before {
+  opacity: 1;
+}
+
+:root[data-ui-theme='dark'] .drawer-subitem.active,
+:root[data-ui-theme='dark'] .desktop-sidebar .drawer-subitem.active {
+  background: transparent;
+  color: var(--ui-accent);
+}
+
 /* Phase 2: Azure-style internal tab bars */
 .workspace-tabbar-row {
   display: flex;
@@ -24388,4 +24433,52 @@ body.notices-compose-dragging .notices-inline-drag-handle {
 
 #shell[data-shell-mode='manager'] #view-home #homeManagerScheduleList .list-row-main {
   align-content: center;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-distribution-card {
+  gap: 10px !important;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-distribution-bars {
+  margin-top: -52px !important;
+  min-height: 196px !important;
+  gap: 10px !important;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-distribution-bar {
+  padding: 0 !important;
+  gap: 8px !important;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-distribution-bar::after {
+  content: none !important;
+  display: none !important;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-distribution-bar-plot {
+  height: 148px !important;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-schedule-summary-card,
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-schedule-issue-rail {
+  min-height: 316px !important;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card {
+  min-height: 422px !important;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card .home-request-meter-card,
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card .home-requests-summary-card {
+  min-height: 316px !important;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card .home-section-chevron {
+  min-height: auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
 }
