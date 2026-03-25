@@ -19963,10 +19963,11 @@ function renderNoticeComposeDocumentFlow() {
   const notices = ensureNoticesState();
   const flow = $('#noticesComposeDocumentFlow');
   const bodyBlock = $('#noticesComposeBodyBlock');
+  const embeddedBlocks = $('#noticesComposeEmbeddedBlocks');
   const imageBlock = $('#noticesComposeImageBlock');
   const tableBlock = $('#noticesComposeTableBlock');
   const pollBlock = $('#noticesComposePollBlock');
-  if (!(flow instanceof HTMLElement) || !(bodyBlock instanceof HTMLElement)) return;
+  if (!(flow instanceof HTMLElement) || !(bodyBlock instanceof HTMLElement) || !(embeddedBlocks instanceof HTMLElement)) return;
 
   const order = getNoticeComposeInsertionOrder(notices.composeDraft);
   const blockMap = {
@@ -19975,7 +19976,7 @@ function renderNoticeComposeDocumentFlow() {
     poll: pollBlock,
   };
 
-  const orderedNodes = [bodyBlock];
+  const orderedNodes = [];
   order.forEach((kind) => {
     const el = blockMap[kind];
     if (!(el instanceof HTMLElement)) return;
@@ -19988,7 +19989,11 @@ function renderNoticeComposeDocumentFlow() {
       orderedNodes.push(el);
     }
   });
-  flow.replaceChildren(...orderedNodes);
+  flow.replaceChildren(bodyBlock);
+  embeddedBlocks.replaceChildren(...orderedNodes);
+
+  const hasEmbeddedBlocks = orderedNodes.some((node) => node instanceof HTMLElement && !node.classList.contains('hidden'));
+  bodyBlock.classList.toggle('has-embedded-blocks', hasEmbeddedBlocks);
 
   flow.style.paddingBottom = '';
   bodyBlock.style.marginTop = '';

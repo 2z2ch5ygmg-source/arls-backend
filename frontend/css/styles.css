@@ -23244,6 +23244,29 @@ button.attendance-status-special-card.active {
   resize: vertical;
 }
 
+.notices-compose-editor-surface {
+  display: grid;
+  gap: 18px;
+  min-height: 440px;
+}
+
+.notices-compose-embedded-blocks {
+  display: grid;
+  gap: 18px;
+}
+
+.notices-compose-embedded-blocks:empty {
+  display: none;
+}
+
+.notices-compose-text-block.has-embedded-blocks .notices-compose-editor-surface {
+  gap: 14px;
+}
+
+.notices-compose-text-block.has-embedded-blocks .notices-compose-body-input {
+  min-height: 220px;
+}
+
 .notices-compose-footer {
   display: flex;
   justify-content: flex-end;
