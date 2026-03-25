@@ -5547,18 +5547,6 @@ function createHomeNoticeRailRow(item) {
   categoryEl.className = 'home-notice-category';
   categoryEl.textContent = getNoticeCategoryLabel(item?.category || 'all');
   metaLeft.appendChild(categoryEl);
-
-  const tagsEl = document.createElement('div');
-  tagsEl.className = 'home-notice-tags';
-  createNoticeMetaTags(item).forEach((tag) => {
-    const tagEl = document.createElement('span');
-    tagEl.className = `notice-meta-tag notice-meta-tag-${tag.tone}`;
-    tagEl.textContent = tag.label;
-    tagsEl.appendChild(tagEl);
-  });
-  if (tagsEl.childElementCount) {
-    metaLeft.appendChild(tagsEl);
-  }
   metaRow.appendChild(metaLeft);
 
   const dateEl = document.createElement('time');
@@ -5571,7 +5559,38 @@ function createHomeNoticeRailRow(item) {
   titleEl.className = 'home-notice-title';
   titleEl.textContent = String(item?.title || '-').trim() || '-';
 
-  button.append(metaRow, titleEl);
+  const titleRow = document.createElement('div');
+  titleRow.className = 'home-notice-title-row';
+  titleRow.appendChild(titleEl);
+
+  const titleTags = document.createElement('div');
+  titleTags.className = 'home-notice-title-tags';
+
+  if (item?.isPinned) {
+    const pinBadge = document.createElement('span');
+    pinBadge.className = 'home-notice-pin-badge';
+    pinBadge.setAttribute('aria-label', '상단고정');
+    pinBadge.innerHTML = `
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12.6 2.8c-.7.7-.7 1.8 0 2.5l.2.2-2.9 3-3.2-3-.2-.2c-.7-.7-1.8-.7-2.5 0l-.3.3c-.3.3-.3.9 0 1.2l2 2-1.5 1.6c-.4.4-.4 1 0 1.4l4.4 4.2-1.3 2.2"></path>
+        <path d="M8.7 15.7 3.4 21"></path>
+      </svg>
+    `;
+    titleTags.appendChild(pinBadge);
+  }
+
+  if (item?.isFresh) {
+    const freshTag = document.createElement('span');
+    freshTag.className = 'notice-meta-tag notice-meta-tag-accent home-notice-fresh-tag';
+    freshTag.textContent = 'N';
+    titleTags.appendChild(freshTag);
+  }
+
+  if (titleTags.childElementCount) {
+    titleRow.appendChild(titleTags);
+  }
+
+  button.append(metaRow, titleRow);
   li.appendChild(button);
   return li;
 }
