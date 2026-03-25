@@ -5667,7 +5667,7 @@ function renderHomeManagerDashboard() {
   }
   setTextToSelectors(
     ['#homeManagerAttendanceIssueHeading'],
-    state.ops.loading ? '집계 중' : (attendanceIssues.length > 0 ? `직원별 예외 ${attendanceIssues.length}건` : '직원별 예외 없음'),
+    state.ops.loading ? '집계 중' : (attendanceIssues.length > 0 ? `예외 ${attendanceIssues.length}건` : '정상'),
   );
   const rateValueEl = $('#homeManagerAttendanceRateValue');
   if (rateValueEl instanceof HTMLElement) {
