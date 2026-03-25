@@ -24457,6 +24457,10 @@ body.notices-compose-dragging .notices-inline-drag-handle {
   min-height: 316px !important;
 }
 
+#shell[data-shell-mode='manager'] #view-home .home-manager-schedule-card .home-schedule-issue-rail {
+  height: 316px !important;
+}
+
 #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card {
   min-height: 422px !important;
 }
