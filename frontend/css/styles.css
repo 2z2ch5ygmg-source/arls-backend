@@ -447,6 +447,16 @@ h3 {
   min-width: 0;
 }
 
+.topbar-brand[data-action] {
+  cursor: pointer;
+}
+
+.topbar-brand[data-action]:focus-visible {
+  outline: 2px solid rgba(249, 115, 22, 0.55);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
 .topbar-wordmark {
   display: block;
   width: var(--app-topbar-wordmark-width);

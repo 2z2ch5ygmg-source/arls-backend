@@ -31,7 +31,15 @@
     <div id="app">
       <header class="topbar app-topbar">
         <button id="btnDrawerOpen" class="icon-btn hamburgerBtn hidden" type="button" data-action="open-drawer" aria-label="메뉴 열기">☰</button>
-        <div class="topbar-brand" aria-label="Sentrix HR">
+        <div
+          class="topbar-brand"
+          data-action="drawer-open-route"
+          data-route="/home"
+          data-keyboard-action="true"
+          tabindex="0"
+          role="link"
+          aria-label="Sentrix HR 홈으로 이동"
+        >
           <span class="topbar-wordmark" role="img" aria-label="Sentrix HR"></span>
         </div>
         <div class="topbar-actions">
