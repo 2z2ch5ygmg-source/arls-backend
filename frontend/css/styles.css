@@ -21383,6 +21383,11 @@ button.attendance-status-special-card.active {
   color: rgba(255, 247, 237, 0.92);
 }
 
+#shell[data-shell-mode='manager'] #view-home .home-attendance-rate-card .home-attendance-card-label {
+  font-size: 15px;
+  font-weight: 700;
+}
+
 #shell[data-shell-mode='manager'] #view-home .home-attendance-rate-visual {
   display: grid;
   place-items: center;
@@ -21438,7 +21443,7 @@ button.attendance-status-special-card.active {
 #shell[data-shell-mode='manager'] #view-home .home-attendance-status-rack {
   grid-template-columns: 1fr;
   margin-top: 0;
-  border-top: 1.5px solid rgba(148, 163, 184, 0.18);
+  border-top: none;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-mini-metric {
@@ -21593,6 +21598,10 @@ button.attendance-status-special-card.active {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card .home-dashboard-list-plain > li:first-child {
+  border-top: none;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card .home-dashboard-list-plain > li.attendance-outside {
