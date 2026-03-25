@@ -22231,6 +22231,8 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] {
   gap: 16px;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: stretch;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-requests-grid {
