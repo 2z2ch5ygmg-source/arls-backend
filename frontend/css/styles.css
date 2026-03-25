@@ -22346,7 +22346,7 @@ button.attendance-status-special-card.active {
 #view-notices {
   display: grid;
   gap: 18px;
-  --notices-list-width: min(820px, calc(100% - 96px));
+  --notices-list-width: min(1180px, calc(100% - 40px));
   --notices-doc-width: min(740px, calc(100% - 96px));
 }
 
@@ -22492,7 +22492,7 @@ button.attendance-status-special-card.active {
   display: grid;
   width: var(--notices-list-width);
   margin-inline: auto;
-  padding: 18px 24px 10px;
+  padding: 24px 32px 14px;
   justify-items: stretch;
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 28px;
@@ -22511,7 +22511,7 @@ button.attendance-status-special-card.active {
   margin: 0;
   padding: 0;
   min-height: 0;
-  border-top: 1px solid rgba(148, 163, 184, 0.24);
+  border-top: none;
   display: grid;
   gap: 0;
 }
@@ -22534,10 +22534,10 @@ button.attendance-status-special-card.active {
   border: none;
   background: transparent;
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) 92px;
-  gap: 16px;
+  grid-template-columns: 84px minmax(0, 1fr) 108px;
+  gap: 20px;
   align-items: center;
-  padding: 20px 0;
+  padding: 22px 0;
   text-align: left;
   cursor: pointer;
 }
@@ -22561,14 +22561,14 @@ button.attendance-status-special-card.active {
 
 .notices-list-main {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
 }
 
 .notices-list-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -22910,9 +22910,21 @@ button.attendance-status-special-card.active {
 }
 
 .notice-meta-tag-accent {
-  border-color: rgba(249, 115, 22, 0.22);
-  background: rgba(255, 247, 237, 0.96);
-  color: #c2410c;
+  border-color: #f97316;
+  background: #f97316;
+  color: #fff;
+}
+
+.notices-list-title-row .notice-meta-tag-accent {
+  min-width: 22px;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0;
 }
 
 .notices-compose-commandbar {
