@@ -5561,7 +5561,8 @@ function createHomeNoticeRailRow(item) {
 
   const titleRow = document.createElement('div');
   titleRow.className = 'home-notice-title-row';
-  titleRow.appendChild(titleEl);
+  const titleLead = document.createElement('div');
+  titleLead.className = 'home-notice-title-lead';
 
   const titleTags = document.createElement('div');
   titleTags.className = 'home-notice-title-tags';
@@ -5571,13 +5572,18 @@ function createHomeNoticeRailRow(item) {
     pinBadge.className = 'home-notice-pin-badge';
     pinBadge.setAttribute('aria-label', '상단고정');
     pinBadge.innerHTML = `
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12.6 2.8c-.7.7-.7 1.8 0 2.5l.2.2-2.9 3-3.2-3-.2-.2c-.7-.7-1.8-.7-2.5 0l-.3.3c-.3.3-.3.9 0 1.2l2 2-1.5 1.6c-.4.4-.4 1 0 1.4l4.4 4.2-1.3 2.2"></path>
-        <path d="M8.7 15.7 3.4 21"></path>
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12.2 3.2c.9.9.9 2.3 0 3.2l-1.1 1.1 2.5 2.5"></path>
+        <path d="M9.3 5.1 5.2 9.2"></path>
+        <path d="m13.6 10.1-3.7 3.7"></path>
+        <path d="M7.9 12.2 3.2 16.9"></path>
       </svg>
     `;
-    titleTags.appendChild(pinBadge);
+    titleLead.appendChild(pinBadge);
   }
+
+  titleLead.appendChild(titleEl);
+  titleRow.appendChild(titleLead);
 
   if (item?.isFresh) {
     const freshTag = document.createElement('span');
