@@ -22066,6 +22066,33 @@ button.attendance-status-special-card.active {
   background: rgba(30, 41, 59, 0.92);
 }
 
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-status-card .home-attendance-card-label,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card .home-attendance-card-label,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-notice-card .home-attendance-card-label {
+  color: #e2e8f0;
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-status-card .home-mini-metric {
+  background: transparent;
+  box-shadow: none;
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card .home-dashboard-list-plain > li,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-schedule-summary-card .home-dashboard-list-plain > li,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-requests-summary-card .home-dashboard-list-plain > li {
+  background: transparent;
+  background-image: none;
+  box-shadow: none;
+}
+
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card .home-dashboard-list-plain > li.attendance-outside,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-schedule-summary-card .home-dashboard-list-plain > li.attendance-outside,
+:root[data-ui-theme='dark'] #shell[data-shell-mode='manager'] #view-home .home-requests-summary-card .home-dashboard-list-plain > li.attendance-outside {
+  background: transparent;
+  background-image: none;
+  box-shadow: none;
+}
+
 #view-notices {
   display: grid;
   gap: 18px;
