@@ -44273,7 +44273,7 @@ function buildAttendanceManagerSummary(rows = []) {
   };
 }
 
-const ATTENDANCE_EXCEPTION_PREVIEW_LIMIT = 4;
+const ATTENDANCE_EXCEPTION_PREVIEW_LIMIT = 5;
 const ATTENDANCE_EXCEPTION_RULES = [
   {
     key: 'missing_in',
