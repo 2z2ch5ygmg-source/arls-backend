@@ -22109,6 +22109,71 @@ button.attendance-status-special-card.active {
   padding-left: 14px;
 }
 
+:root:not([data-ui-theme='dark']) #shell[data-shell-mode='manager'] #view-home .home-manager-section {
+  background: #fff;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card {
+  min-height: 476px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card .home-requests-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] {
+  gap: 16px;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-requests-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  min-height: 0;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-section-rail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] #homeManagerRequestList {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-dashboard-list-plain > li {
+  width: auto;
+  padding: 0;
+  border-top: none;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-dashboard-list-plain .list-row {
+  justify-content: center;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-dashboard-list-plain .list-row-main {
+  align-items: center;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-dashboard-list-plain .list-row-title {
+  font-size: 24px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+#shell[data-shell-mode='manager'] #view-home .home-manager-requests-card[data-compact='true'] .home-dashboard-row-actions {
+  display: none;
+}
+
 #shell[data-shell-mode='manager'] #view-home .home-manager-org-card[data-compact='true'] .home-dashboard-list-plain > li {
   padding-block: 14px;
 }
