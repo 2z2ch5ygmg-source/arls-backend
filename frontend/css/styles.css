@@ -23634,6 +23634,19 @@ button.attendance-status-special-card.active {
   justify-content: flex-end;
 }
 
+.notices-compose-flow-poll-block {
+  max-width: 100%;
+}
+
+.notices-compose-flow-poll-block .notices-compose-inline-kind {
+  display: none;
+}
+
+.notices-compose-flow-poll-block .notices-poll-card {
+  max-width: 100%;
+  margin-top: 10px;
+}
+
 .notices-inline-remove {
   min-height: 28px;
   padding: 0;

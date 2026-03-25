@@ -1289,6 +1289,7 @@ function createInitialNoticesState() {
     composePollModalOpen: false,
     composePollModalDraft: createDefaultNoticePollDraft(),
     composePollModalTriggerEl: null,
+    composePollModalBlockId: '',
     composeDraft: {
       category: 'ops',
       title: '',
@@ -18682,6 +18683,7 @@ function buildSerializableNoticeComposeDraft(draft = null) {
     normalizedDraft.composeContentBlocks,
     normalizedDraft.bodyText,
     normalizedDraft.table,
+    normalizedDraft.poll,
   );
   return {
     category: normalizeNoticeCategory(normalizedDraft.category || 'ops') === 'all'
@@ -18725,6 +18727,7 @@ function normalizeSavedNoticeComposeDraft(raw = null, fallbackCategory = 'ops') 
         .filter(Boolean)
         .join('\n\n'),
       draftLike.table,
+      draftLike.poll,
     ),
     blockOrder: normalizeNoticeComposeBlockOrder(source.blockOrder, draftLike),
     imagesEnabled: draftLike.imagesEnabled || draftLike.images.length > 0,
@@ -19004,7 +19007,7 @@ function createNoticeComposeBlockId(kind = 'block') {
   return `notice-${normalizedKind}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function normalizeNoticeComposeContentBlocks(rawBlocks = null, fallbackBodyText = '', legacyTable = null) {
+function normalizeNoticeComposeContentBlocks(rawBlocks = null, fallbackBodyText = '', legacyTable = null, legacyPoll = null) {
   const normalized = [];
   if (Array.isArray(rawBlocks) && rawBlocks.length) {
     rawBlocks.forEach((item) => {
@@ -19019,8 +19022,19 @@ function normalizeNoticeComposeContentBlocks(rawBlocks = null, fallbackBodyText 
         });
         return;
       }
-      if (kind === 'image' || kind === 'poll') {
+      if (kind === 'image') {
         normalized.push({ id: blockId, kind });
+        return;
+      }
+      if (kind === 'poll') {
+        normalized.push({
+          id: blockId,
+          kind: 'poll',
+          poll: cloneNoticePollDraft({
+            enabled: true,
+            ...(block.poll && typeof block.poll === 'object' ? block.poll : block),
+          }),
+        });
         return;
       }
       if (kind === 'table') {
@@ -19043,9 +19057,13 @@ function normalizeNoticeComposeContentBlocks(rawBlocks = null, fallbackBodyText 
       .forEach((text) => {
         normalized.push({ id: createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text });
       });
-    const legacy = cloneNoticeTableDraft(legacyTable);
-    if (legacy.enabled) {
-      normalized.push({ id: createNoticeComposeBlockId('table'), kind: 'table', table: legacy });
+    const legacyTableDraft = cloneNoticeTableDraft(legacyTable);
+    if (legacyTableDraft.enabled) {
+      normalized.push({ id: createNoticeComposeBlockId('table'), kind: 'table', table: legacyTableDraft });
+    }
+    const legacyPollDraft = cloneNoticePollDraft(legacyPoll);
+    if (legacyPollDraft.enabled && String(legacyPollDraft.question || '').trim()) {
+      normalized.push({ id: createNoticeComposeBlockId('poll'), kind: 'poll', poll: legacyPollDraft });
     }
   }
   if (!normalized.length) {
@@ -19057,13 +19075,20 @@ function normalizeNoticeComposeContentBlocks(rawBlocks = null, fallbackBodyText 
   return normalized;
 }
 
-function cloneNoticeComposeContentBlocks(rawBlocks = null, fallbackBodyText = '', legacyTable = null) {
-  return normalizeNoticeComposeContentBlocks(rawBlocks, fallbackBodyText, legacyTable).map((block) => {
+function cloneNoticeComposeContentBlocks(rawBlocks = null, fallbackBodyText = '', legacyTable = null, legacyPoll = null) {
+  return normalizeNoticeComposeContentBlocks(rawBlocks, fallbackBodyText, legacyTable, legacyPoll).map((block) => {
     if (block.kind === 'table') {
       return {
         id: String(block.id || '').trim() || createNoticeComposeBlockId('table'),
         kind: 'table',
         table: cloneNoticeTableDraft(block.table),
+      };
+    }
+    if (block.kind === 'poll') {
+      return {
+        id: String(block.id || '').trim() || createNoticeComposeBlockId('poll'),
+        kind: 'poll',
+        poll: cloneNoticePollDraft(block.poll),
       };
     }
     if (block.kind === 'paragraph') {
@@ -19089,7 +19114,7 @@ function buildNoticeComposeBodyTextFromContentBlocks(rawBlocks = null) {
 
 function getNoticeComposeContentBlocks(draft = null) {
   const source = draft && typeof draft === 'object' ? draft : {};
-  return cloneNoticeComposeContentBlocks(source.composeContentBlocks, source.bodyText, source.table);
+  return cloneNoticeComposeContentBlocks(source.composeContentBlocks, source.bodyText, source.table, source.poll);
 }
 
 function setNoticeComposeContentBlocks(nextBlocks = [], { markDirty = false, rerender = false } = {}) {
@@ -19097,10 +19122,17 @@ function setNoticeComposeContentBlocks(nextBlocks = [], { markDirty = false, rer
   const composeDraft = notices.composeDraft && typeof notices.composeDraft === 'object'
     ? notices.composeDraft
     : buildSerializableNoticeComposeDraft(null);
-  const composeContentBlocks = cloneNoticeComposeContentBlocks(nextBlocks, composeDraft.bodyText, composeDraft.table);
+  const composeContentBlocks = cloneNoticeComposeContentBlocks(nextBlocks, composeDraft.bodyText, composeDraft.table, composeDraft.poll);
   const hasImageBlock = composeContentBlocks.some((block) => block.kind === 'image');
-  const hasPollBlock = composeContentBlocks.some((block) => block.kind === 'poll');
+  const pollBlocks = composeContentBlocks.filter((block) => block.kind === 'poll');
+  const hasPollBlock = pollBlocks.length > 0;
   const tableBlocks = composeContentBlocks.filter((block) => block.kind === 'table');
+  const nextPoll = pollBlocks.length
+    ? cloneNoticePollDraft({
+      enabled: true,
+      ...(pollBlocks[0].poll || {}),
+    })
+    : createDefaultNoticePollDraft();
   const nextTable = tableBlocks.length
     ? cloneNoticeTableDraft({
       enabled: true,
@@ -19114,7 +19146,7 @@ function setNoticeComposeContentBlocks(nextBlocks = [], { markDirty = false, rer
     {
       ...composeDraft,
       imagesEnabled: Boolean(composeDraft.imagesEnabled) || hasImageBlock,
-      poll: hasPollBlock ? cloneNoticePollDraft({ ...(composeDraft.poll || {}), enabled: true }) : cloneNoticePollDraft(composeDraft.poll),
+      poll: nextPoll,
       table: nextTable,
     },
   );
@@ -19124,7 +19156,7 @@ function setNoticeComposeContentBlocks(nextBlocks = [], { markDirty = false, rer
     composeContentBlocks,
     blockOrder,
     imagesEnabled: Boolean(composeDraft.imagesEnabled) || hasImageBlock,
-    poll: hasPollBlock ? cloneNoticePollDraft({ ...(composeDraft.poll || {}), enabled: true }) : cloneNoticePollDraft(composeDraft.poll),
+    poll: nextPoll,
     table: nextTable,
   };
   if (markDirty) markNoticeComposeDraftDirty();
@@ -19334,9 +19366,15 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
   const blockOrder = [];
   let poll = createDefaultNoticePollDraft();
   let table = createDefaultNoticeTableDraft();
+  const composeBlocks = [];
   blocks.forEach((block) => {
     if (block.kind === 'paragraph') {
       bodyParts.push(String(block.text || '').trim());
+      composeBlocks.push({
+        id: createNoticeComposeBlockId('paragraph'),
+        kind: 'paragraph',
+        text: String(block.text || '').trim(),
+      });
       return;
     }
     if (block.kind === 'image') {
@@ -19349,29 +19387,46 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
         imageSrc: String(block.imageSrc || '').trim(),
         caption: String(block.caption || '').trim(),
       });
+      composeBlocks.push({ id: createNoticeComposeBlockId('image'), kind: 'image' });
       return;
     }
-    if (block.kind === 'poll' && !poll.enabled) {
+    if (block.kind === 'poll') {
       if (!blockOrder.includes('poll')) {
         blockOrder.push('poll');
       }
-      poll = normalizeNoticePollDraft({
+      const normalizedPoll = normalizeNoticePollDraft({
         enabled: true,
         ...(block.poll || {}),
       });
+      if (!poll.enabled) {
+        poll = cloneNoticePollDraft(normalizedPoll);
+      }
+      composeBlocks.push({
+        id: createNoticeComposeBlockId('poll'),
+        kind: 'poll',
+        poll: cloneNoticePollDraft(normalizedPoll),
+      });
       return;
     }
-    if (block.kind === 'table' && !table.enabled) {
+    if (block.kind === 'table') {
       if (!blockOrder.includes('table')) {
         blockOrder.push('table');
       }
-      table = normalizeNoticeTableDraft({
+      const normalizedTable = normalizeNoticeTableDraft({
         enabled: true,
         title: String(block.title || '').trim(),
         hasHeader: block.hasHeader ?? block.has_header ?? true,
         columns: Array.isArray(block.columns) ? block.columns : [],
         rows: Array.isArray(block.rows) ? block.rows : [],
         layout: block.noticeComposeLayout || block.notice_compose_layout || block.layout || {},
+      });
+      if (!table.enabled) {
+        table = cloneNoticeTableDraft(normalizedTable);
+      }
+      composeBlocks.push({
+        id: createNoticeComposeBlockId('table'),
+        kind: 'table',
+        table: cloneNoticeTableDraft(normalizedTable),
       });
     }
   });
@@ -19382,7 +19437,7 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
     title: String(row?.title || '').trim(),
     summaryText: '',
     bodyText: bodyParts.join('\n\n'),
-    composeContentBlocks: cloneNoticeComposeContentBlocks(blocks, bodyParts.join('\n\n'), table),
+    composeContentBlocks: cloneNoticeComposeContentBlocks(composeBlocks, bodyParts.join('\n\n'), table, poll),
     blockOrder: normalizeNoticeComposeBlockOrder(blockOrder, {
       imagesEnabled: images.length > 0,
       images,
@@ -19404,6 +19459,7 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
       .filter(Boolean)
       .join('\n\n'),
     draft?.table,
+    draft?.poll,
   );
   const images = normalizeNoticeImageDrafts(draft?.images);
   const poll = normalizeNoticePollDraft(draft?.poll);
@@ -19415,15 +19471,8 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
     table: cloneNoticeTableDraft(draft?.table),
   });
   const blocks = [];
-  const pollOptions = poll.options
-    .map((item) => ({
-      option_id: String(item.optionId || '').trim(),
-      label: String(item.label || '').trim(),
-    }))
-    .filter((item) => item.label)
-    .slice(0, NOTICE_POLL_MAX_OPTIONS);
   let imageInserted = false;
-  let pollInserted = false;
+  let fallbackPollInserted = false;
   const optionalBlockFactories = {
     image: () => {
       if (imageInserted) return;
@@ -19438,30 +19487,43 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
       });
       imageInserted = true;
     },
-    poll: () => {
-      if (pollInserted) return;
-      if (poll.enabled && String(poll.question || '').trim() && pollOptions.length >= NOTICE_POLL_MIN_OPTIONS) {
+    poll: (block = null) => {
+      if (!block && fallbackPollInserted) return;
+      const sourcePoll = normalizeNoticePollDraft({
+        enabled: true,
+        ...((block && typeof block === 'object' && block.poll) || poll),
+      });
+      const sourceOptions = sourcePoll.options
+        .map((item) => ({
+          option_id: String(item.optionId || '').trim(),
+          label: String(item.label || '').trim(),
+        }))
+        .filter((item) => item.label)
+        .slice(0, NOTICE_POLL_MAX_OPTIONS);
+      if (sourcePoll.enabled && String(sourcePoll.question || '').trim() && sourceOptions.length >= NOTICE_POLL_MIN_OPTIONS) {
         blocks.push({
           kind: 'poll',
           poll: {
-            poll_id: String(poll.pollId || '').trim(),
-            question: String(poll.question || '').trim(),
-            options: pollOptions,
+            poll_id: String(sourcePoll.pollId || '').trim(),
+            question: String(sourcePoll.question || '').trim(),
+            options: sourceOptions,
             allow_multiple: false,
             is_anonymous: false,
-            result_visibility: normalizeNoticePollResultVisibility(poll.resultVisibility),
-            closes_at: String(poll.closesAt || '').trim() || null,
-            allow_change_vote: Boolean(poll.allowChangeVote),
+            result_visibility: normalizeNoticePollResultVisibility(sourcePoll.resultVisibility),
+            closes_at: String(sourcePoll.closesAt || '').trim() || null,
+            allow_change_vote: Boolean(sourcePoll.allowChangeVote),
             notice_compose_layout: {
-              left: poll.layout.left,
-              top: poll.layout.top,
-              width: poll.layout.width,
-              height: poll.layout.height,
+              left: 0,
+              top: 0,
+              width: 0,
+              height: 0,
             },
           },
         });
       }
-      pollInserted = true;
+      if (!block) {
+        fallbackPollInserted = true;
+      }
     },
     table: (block = null) => {
       const sourceTable = cloneNoticeTableDraft(block?.table);
@@ -19571,6 +19633,7 @@ function normalizeNoticeRecord(row = {}) {
 function resetNoticeComposeDraft(category = 'ops') {
   const notices = ensureNoticesState();
   notices.composeSourceNoticeId = '';
+  notices.composePollModalBlockId = '';
   clearNoticeComposeAutosaveTimer();
   resetNoticeComposeDragRegistry();
   notices.draftSavedAt = '';
@@ -19594,6 +19657,7 @@ function fillNoticeComposeDraftFromRow(row = null) {
   const notices = ensureNoticesState();
   const normalizedRow = row && typeof row === 'object' ? row : null;
   notices.composeSourceNoticeId = String(normalizedRow?.id || '').trim();
+  notices.composePollModalBlockId = '';
   clearNoticeComposeAutosaveTimer();
   resetNoticeComposeDragRegistry();
   notices.draftSavedAt = '';
@@ -19664,14 +19728,22 @@ function readNoticeComposeContentBlocksFromDom() {
       });
       return;
     }
-    if ((kind === 'image' || kind === 'poll') && current?.kind === kind) {
+    if (kind === 'poll' && current?.kind === 'poll') {
+      nextBlocks.push({
+        id: blockId || createNoticeComposeBlockId('poll'),
+        kind,
+        poll: cloneNoticePollDraft(current.poll),
+      });
+      return;
+    }
+    if (kind === 'image' && current?.kind === kind) {
       nextBlocks.push({
         id: blockId || createNoticeComposeBlockId(kind),
         kind,
       });
     }
   });
-  return cloneNoticeComposeContentBlocks(nextBlocks, notices.composeDraft?.bodyText, notices.composeDraft?.table);
+  return cloneNoticeComposeContentBlocks(nextBlocks, notices.composeDraft?.bodyText, notices.composeDraft?.table, notices.composeDraft?.poll);
 }
 
 function syncNoticeComposeDraftFromFields() {
@@ -19679,7 +19751,14 @@ function syncNoticeComposeDraftFromFields() {
   const categorySelect = $('#noticesComposeCategory');
   const titleInput = $('#noticesComposeTitle');
   const composeContentBlocks = readNoticeComposeContentBlocksFromDom();
+  const firstPollBlock = composeContentBlocks.find((block) => block.kind === 'poll');
   const firstTableBlock = composeContentBlocks.find((block) => block.kind === 'table');
+  const nextPoll = firstPollBlock
+    ? cloneNoticePollDraft({
+      enabled: true,
+      ...(firstPollBlock.poll || {}),
+    })
+    : createDefaultNoticePollDraft();
   const nextTable = firstTableBlock
     ? cloneNoticeTableDraft({
       enabled: true,
@@ -19708,7 +19787,7 @@ function syncNoticeComposeDraftFromFields() {
     ),
     imagesEnabled,
     images: nextImages,
-    poll: cloneNoticePollDraft(notices.composeDraft?.poll),
+    poll: nextPoll,
     table: nextTable,
     isPinned: Boolean(notices.composeDraft?.isPinned),
   };
@@ -19859,6 +19938,10 @@ function setNoticeComposeBlockEnabled(kind = '', enabled = true, { clear = false
     if (!enabled && clear) {
       nextDraft.poll = createDefaultNoticePollDraft();
     }
+    const blocks = getNoticeComposeContentBlocks(nextDraft);
+    nextDraft.composeContentBlocks = enabled
+      ? blocks
+      : blocks.filter((block) => block.kind !== 'poll');
     nextDraft.blockOrder = enabled
       ? insertNoticeComposeBlockIntoOrder('poll', nextDraft)
       : getNoticeComposeInsertionOrder(nextDraft).filter((item) => item !== 'poll');
@@ -19977,6 +20060,13 @@ function getNoticeComposeTableBlockIndex(blockId = '', draft = null) {
   return blocks.findIndex((block) => block.kind === 'table' && String(block.id || '').trim() === normalizedId);
 }
 
+function getNoticeComposePollBlockIndex(blockId = '', draft = null) {
+  const blocks = getNoticeComposeContentBlocks(draft || ensureNoticesState().composeDraft);
+  const normalizedId = String(blockId || '').trim();
+  if (!normalizedId) return -1;
+  return blocks.findIndex((block) => block.kind === 'poll' && String(block.id || '').trim() === normalizedId);
+}
+
 function updateNoticeComposeTableBlock(blockId = '', updater = null, { markDirty = true, rerender = true } = {}) {
   const notices = ensureNoticesState();
   const blocks = getNoticeComposeContentBlocks(notices.composeDraft);
@@ -20001,6 +20091,33 @@ function removeNoticeComposeTableBlock(blockId = '', { markDirty = true, rerende
   const normalizedId = String(blockId || '').trim();
   const nextBlocks = getNoticeComposeContentBlocks(notices.composeDraft)
     .filter((block) => !(block.kind === 'table' && String(block.id || '').trim() === normalizedId));
+  setNoticeComposeContentBlocks(nextBlocks, { markDirty, rerender });
+}
+
+function updateNoticeComposePollBlock(blockId = '', updater = null, { markDirty = true, rerender = true } = {}) {
+  const notices = ensureNoticesState();
+  const blocks = getNoticeComposeContentBlocks(notices.composeDraft);
+  const normalizedId = String(blockId || '').trim();
+  const nextBlocks = blocks.map((block) => {
+    if (block.kind !== 'poll' || String(block.id || '').trim() !== normalizedId) {
+      return block;
+    }
+    const nextPoll = cloneNoticePollDraft(typeof updater === 'function' ? updater(block.poll) : block.poll);
+    nextPoll.enabled = true;
+    return {
+      id: block.id,
+      kind: 'poll',
+      poll: nextPoll,
+    };
+  });
+  setNoticeComposeContentBlocks(nextBlocks, { markDirty, rerender });
+}
+
+function removeNoticeComposePollBlock(blockId = '', { markDirty = true, rerender = true } = {}) {
+  const notices = ensureNoticesState();
+  const normalizedId = String(blockId || '').trim();
+  const nextBlocks = getNoticeComposeContentBlocks(notices.composeDraft)
+    .filter((block) => !(block.kind === 'poll' && String(block.id || '').trim() === normalizedId));
   setNoticeComposeContentBlocks(nextBlocks, { markDirty, rerender });
 }
 
@@ -20068,6 +20185,83 @@ function insertNoticeComposeTableBlock(tableDraft = null) {
       firstCell.focus({ preventScroll: false });
     }
   });
+}
+
+function insertNoticeComposePollBlock(pollDraft = null, existingBlockId = '') {
+  const notices = ensureNoticesState();
+  const nextPoll = cloneNoticePollDraft(pollDraft);
+  nextPoll.enabled = true;
+  const normalizedBlockId = String(existingBlockId || '').trim();
+  if (normalizedBlockId && getNoticeComposePollBlockIndex(normalizedBlockId, notices.composeDraft) !== -1) {
+    updateNoticeComposePollBlock(normalizedBlockId, () => nextPoll, { markDirty: true, rerender: true });
+    notices.composeDraft = {
+      ...(notices.composeDraft || {}),
+      poll: nextPoll,
+    };
+    return normalizedBlockId;
+  }
+
+  const blocks = getNoticeComposeContentBlocks(notices.composeDraft);
+  const activeFlowIndex = resolveNoticeComposeActiveFlowIndex();
+  const activeInput = document.activeElement instanceof HTMLTextAreaElement
+    && document.activeElement.dataset.noticeComposeParagraphInput === 'true'
+    ? document.activeElement
+    : null;
+  const nextBlock = {
+    id: createNoticeComposeBlockId('poll'),
+    kind: 'poll',
+    poll: nextPoll,
+  };
+  const nextBlocks = [];
+  const activeBlock = activeFlowIndex >= 0 ? blocks[activeFlowIndex] : null;
+  if (activeBlock?.kind === 'paragraph' && activeInput instanceof HTMLTextAreaElement) {
+    const text = String(activeInput.value || '');
+    const selectionStart = Number.isInteger(activeInput.selectionStart) ? activeInput.selectionStart : text.length;
+    const selectionEnd = Number.isInteger(activeInput.selectionEnd) ? activeInput.selectionEnd : selectionStart;
+    const beforeText = text.slice(0, selectionStart);
+    const afterText = text.slice(selectionEnd);
+    blocks.forEach((block, index) => {
+      if (index !== activeFlowIndex) {
+        nextBlocks.push(block);
+        return;
+      }
+      if (beforeText.trim()) {
+        nextBlocks.push({ id: createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text: beforeText });
+      }
+      nextBlocks.push(nextBlock);
+      nextBlocks.push({
+        id: createNoticeComposeBlockId('paragraph'),
+        kind: 'paragraph',
+        text: afterText,
+      });
+    });
+  } else {
+    const insertIndex = activeFlowIndex >= 0 ? activeFlowIndex + 1 : blocks.length;
+    blocks.forEach((block, index) => {
+      if (index === insertIndex) {
+        nextBlocks.push(nextBlock);
+      }
+      nextBlocks.push(block);
+    });
+    if (insertIndex >= blocks.length) {
+      nextBlocks.push(nextBlock);
+    }
+    if (!nextBlocks.some((block) => block.kind === 'paragraph')) {
+      nextBlocks.push({ id: createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text: '' });
+    }
+  }
+  setNoticeComposeContentBlocks(nextBlocks, { markDirty: true, rerender: true });
+  notices.composeDraft = {
+    ...(notices.composeDraft || {}),
+    poll: nextPoll,
+  };
+  requestAnimationFrame(() => {
+    const pollEl = document.querySelector(`[data-notice-poll-block-id="${nextBlock.id}"] .notices-poll-option input, [data-notice-poll-block-id="${nextBlock.id}"] .notices-poll-card`);
+    if (pollEl instanceof HTMLElement) {
+      pollEl.focus?.({ preventScroll: false });
+    }
+  });
+  return nextBlock.id;
 }
 
 function applyNoticeComposeTablePreset(rows = 2, cols = 2) {
@@ -20297,7 +20491,7 @@ function beginNoticeComposeInlinePointerSession(kind = '', sourceEvent = null, {
     dropPlacement: 'after',
     didMove: false,
   };
-  if (normalizedKind === 'table' && blockEl instanceof HTMLElement) {
+  if ((normalizedKind === 'table' || normalizedKind === 'poll') && blockEl instanceof HTMLElement) {
     blockEl.classList.add('is-notice-compose-flow-dragging');
   }
   document.body.classList.add('notices-compose-dragging');
@@ -20311,7 +20505,7 @@ function handleNoticeComposeInlinePointerMove(event) {
   const deltaY = Math.round(event.clientY - session.startY);
   if (!deltaX && !deltaY) return;
 
-  if (session.kind === 'table' && session.mode === 'drag') {
+  if ((session.kind === 'table' || session.kind === 'poll') && session.mode === 'drag') {
     const dropTarget = resolveNoticeComposeFlowDropTarget(event.clientY, session.blockId);
     clearNoticeComposeFlowDropIndicators();
     const draggedBlock = document.querySelector(`[data-notice-compose-block-id="${session.blockId}"]`);
@@ -20331,19 +20525,6 @@ function handleNoticeComposeInlinePointerMove(event) {
       session.dropPlacement = dropTarget.placement;
       session.didMove = true;
     }
-    return;
-  }
-
-  if (session.kind === 'poll') {
-    const nextTop = Math.max(NOTICE_COMPOSE_BLOCK_MIN_TOP_PX, session.startLayout.top + deltaY);
-    const nextLeft = Math.max(0, session.startLayout.left + deltaX);
-    session.didMove = session.didMove || nextTop !== session.startLayout.top || nextLeft !== session.startLayout.left;
-    setNoticeComposeInlineLayout('poll', {
-      left: nextLeft,
-      top: nextTop,
-      width: session.startLayout.width,
-      height: session.startLayout.height,
-    }, { rerender: true, markDirty: false });
     return;
   }
 
@@ -20404,7 +20585,7 @@ function finishNoticeComposeInlinePointerSession() {
   const shouldPersist = Boolean(session.didMove);
   noticeComposeDragState = null;
   document.body.classList.remove('notices-compose-dragging');
-  if (session.kind === 'table' && session.mode === 'drag') {
+  if ((session.kind === 'table' || session.kind === 'poll') && session.mode === 'drag') {
     const didReorder = session.dropTargetId
       ? reorderNoticeComposeFlowBlock(session.blockId, session.dropTargetId, session.dropPlacement)
       : false;
@@ -20438,13 +20619,17 @@ function renderNoticeComposeDocumentFlow() {
       orderedNodes.push(createNoticeComposeParagraphBlockElement(block, index));
       return;
     }
+    if (block.kind === 'poll') {
+      orderedNodes.push(createNoticeComposePollBlockElement(block, index));
+      return;
+    }
     if (block.kind === 'table') {
       orderedNodes.push(createNoticeComposeTableBlockElement(block, index));
     }
   });
 
-  const order = getNoticeComposeInsertionOrder(notices.composeDraft).filter((kind) => kind === 'image' || kind === 'poll');
-  const fallbackOptionalKinds = order.length ? order : ['image', 'poll'];
+  const order = getNoticeComposeInsertionOrder(notices.composeDraft).filter((kind) => kind === 'image');
+  const fallbackOptionalKinds = order.length ? order : ['image'];
   fallbackOptionalKinds.forEach((kind) => {
     const el = kind === 'image' ? imageBlock : pollBlock;
     if (!(el instanceof HTMLElement)) return;
@@ -20479,7 +20664,10 @@ function renderNoticeComposeDocumentFlow() {
 
 function updateNoticeComposePollModalDraft(mutator) {
   const notices = ensureNoticesState();
-  const base = cloneNoticePollDraft(notices.composePollModalDraft || notices.composeDraft?.poll);
+  const sourcePoll = String(notices.composePollModalBlockId || '').trim()
+    ? getNoticeComposeContentBlocks(notices.composeDraft).find((block) => block.kind === 'poll' && String(block.id || '').trim() === String(notices.composePollModalBlockId || '').trim())?.poll
+    : notices.composeDraft?.poll;
+  const base = cloneNoticePollDraft(notices.composePollModalDraft || sourcePoll);
   notices.composePollModalDraft = cloneNoticePollDraft({
     ...(typeof mutator === 'function' ? mutator(base) || base : base),
     enabled: true,
@@ -20568,10 +20756,20 @@ function renderNoticeComposePollModal() {
 
 function openNoticeComposePollModal(triggerEl = null) {
   const notices = ensureNoticesState();
+  const blockEl = triggerEl instanceof HTMLElement
+    ? triggerEl.closest('[data-notice-poll-block-id], [data-notice-compose-block-id][data-notice-compose-flow-kind="poll"]')
+    : null;
+  const blockId = blockEl instanceof HTMLElement
+    ? String(blockEl.dataset.noticePollBlockId || blockEl.dataset.noticeComposeBlockId || '').trim()
+    : '';
+  const pollBlock = blockId
+    ? getNoticeComposeContentBlocks(notices.composeDraft).find((block) => block.kind === 'poll' && String(block.id || '').trim() === blockId)
+    : null;
   notices.composePollModalOpen = true;
   notices.composePollModalTriggerEl = triggerEl instanceof HTMLElement ? triggerEl : null;
+  notices.composePollModalBlockId = blockId;
   notices.composePollModalDraft = cloneNoticePollDraft({
-    ...(notices.composeDraft?.poll || {}),
+    ...((pollBlock?.poll || notices.composeDraft?.poll) || {}),
     enabled: true,
   });
   renderNoticeComposePollModal();
@@ -20589,6 +20787,7 @@ function closeNoticeComposePollModal({ restoreFocus = true } = {}) {
   const triggerEl = notices.composePollModalTriggerEl;
   notices.composePollModalOpen = false;
   notices.composePollModalTriggerEl = null;
+  notices.composePollModalBlockId = '';
   renderNoticeComposePollModal();
   if (restoreFocus && triggerEl instanceof HTMLElement) {
     window.requestAnimationFrame(() => triggerEl.focus());
@@ -20629,16 +20828,8 @@ function saveNoticeComposePollModal() {
     allowMultiple: false,
     isAnonymous: false,
   });
-
-  notices.composeDraft = {
-    ...(notices.composeDraft || {}),
-    poll: nextPoll,
-    blockOrder: insertNoticeComposeBlockIntoOrder('poll', {
-      ...(notices.composeDraft || {}),
-      poll: nextPoll,
-    }),
-  };
-  markNoticeComposeDraftDirty();
+  const targetBlockId = String(notices.composePollModalBlockId || '').trim();
+  insertNoticeComposePollBlock(nextPoll, targetBlockId);
   writeNoticeComposeDraftToFields();
   renderNoticeComposePollEditor();
   closeNoticeComposePollModal();
@@ -35039,46 +35230,11 @@ function renderNoticeComposeImageList() {
 function renderNoticeComposePollEditor() {
   const block = $('#noticesComposePollBlock');
   const panel = $('#noticesComposePollPanel');
-  const notices = ensureNoticesState();
-  const pollDraft = cloneNoticePollDraft(notices.composeDraft?.poll);
   if (block instanceof HTMLElement) {
-    block.classList.toggle('hidden', !pollDraft.enabled);
+    block.classList.add('hidden');
   }
   if (!(panel instanceof HTMLElement)) return;
   panel.innerHTML = '';
-  if (!pollDraft.enabled) {
-    renderNoticeComposeToolbar();
-    renderNoticeComposeDocumentFlow();
-    return;
-  }
-
-  const previewPoll = {
-    ...pollDraft,
-    pollId: String(pollDraft.pollId || 'compose-preview-poll').trim(),
-    canVote: false,
-    hasVoted: false,
-    totalVotes: Math.max(0, Number.parseInt(String(pollDraft.totalVotes || 0), 10) || 0),
-    resultsVisible: true,
-    options: pollDraft.options
-      .map((option) => {
-        const label = String(option.label || '').trim();
-        if (!label) return null;
-        return {
-          ...option,
-          label,
-          voteCount: Math.max(0, Number.parseInt(String(option.voteCount || 0), 10) || 0),
-          voteRatio: Math.max(0, Math.min(1, Number(option.voteRatio || 0) || 0)),
-        };
-      })
-      .filter(Boolean),
-  };
-  if (!previewPoll.options.length) {
-    previewPoll.options = [
-      { optionId: 'compose-option-1', label: '선택지 1', voteCount: 0, voteRatio: 0 },
-      { optionId: 'compose-option-2', label: '선택지 2', voteCount: 0, voteRatio: 0 },
-    ];
-  }
-  panel.appendChild(createNoticePollBlock(null, previewPoll, { previewOnly: true, forceResultsVisible: true }));
   renderNoticeComposeToolbar();
   renderNoticeComposeDocumentFlow();
 }
@@ -35258,6 +35414,78 @@ function createNoticeComposeTableBlockElement(block, index = 0) {
   panel.appendChild(grid);
 
   section.append(meta, panel);
+  return section;
+}
+
+function createNoticeComposePollBlockElement(block, index = 0) {
+  const pollDraft = cloneNoticePollDraft({
+    enabled: true,
+    ...(block.poll || {}),
+  });
+  const previewPoll = {
+    ...pollDraft,
+    pollId: String(pollDraft.pollId || `compose-preview-poll-${String(block.id || '').trim() || index}`).trim(),
+    canVote: false,
+    hasVoted: false,
+    totalVotes: Math.max(0, Number.parseInt(String(pollDraft.totalVotes || 0), 10) || 0),
+    resultsVisible: true,
+    options: pollDraft.options
+      .map((option, optionIndex) => {
+        const label = String(option.label || '').trim();
+        if (!label) return null;
+        return {
+          ...option,
+          optionId: String(option.optionId || `compose-option-${optionIndex + 1}`).trim(),
+          label,
+          voteCount: Math.max(0, Number.parseInt(String(option.voteCount || 0), 10) || 0),
+          voteRatio: Math.max(0, Math.min(1, Number(option.voteRatio || 0) || 0)),
+        };
+      })
+      .filter(Boolean),
+  };
+  if (!previewPoll.options.length) {
+    previewPoll.options = [
+      { optionId: 'compose-option-1', label: '선택지 1', voteCount: 0, voteRatio: 0 },
+      { optionId: 'compose-option-2', label: '선택지 2', voteCount: 0, voteRatio: 0 },
+    ];
+  }
+  const section = createNoticePollBlock(null, previewPoll, { previewOnly: true, forceResultsVisible: true });
+  section.classList.add('notices-compose-inline-block', 'notices-compose-flow-block', 'notices-compose-flow-poll-block');
+  section.setAttribute('aria-label', '투표 블록');
+  section.dataset.noticeInlineKind = 'poll';
+  section.dataset.noticeComposeFlowIndex = String(index);
+  section.dataset.noticeComposeFlowKind = 'poll';
+  section.dataset.noticeComposeBlockId = String(block.id || '');
+  section.dataset.noticePollBlockId = String(block.id || '');
+
+  const meta = document.createElement('div');
+  meta.className = 'notices-compose-inline-meta';
+  const kind = document.createElement('span');
+  kind.className = 'notices-compose-inline-kind';
+  kind.textContent = '투표';
+  const actions = document.createElement('div');
+  actions.className = 'notices-compose-inline-actions';
+  const moveBtn = document.createElement('button');
+  moveBtn.type = 'button';
+  moveBtn.className = 'notices-inline-drag-handle';
+  moveBtn.dataset.noticeInlineDragHandle = 'poll';
+  moveBtn.dataset.noticePollBlockId = String(block.id || '');
+  moveBtn.textContent = '이동';
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'notices-editor-action';
+  editBtn.dataset.action = 'notices-edit-poll-block';
+  editBtn.dataset.noticePollBlockId = String(block.id || '');
+  editBtn.textContent = '편집';
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'notices-inline-remove';
+  removeBtn.dataset.action = 'notices-remove-poll-block';
+  removeBtn.dataset.noticePollBlockId = String(block.id || '');
+  removeBtn.textContent = '삭제';
+  actions.append(moveBtn, editBtn, removeBtn);
+  meta.append(kind, actions);
+  section.insertBefore(meta, section.firstChild);
   return section;
 }
 
@@ -59754,10 +59982,18 @@ function bindUiEvents() {
     }
 
     if (action === 'notices-remove-poll-block') {
-      setNoticeComposeBlockEnabled('poll', false, { clear: true });
-      markNoticeComposeDraftDirty();
-      writeNoticeComposeDraftToFields();
-      renderNoticeComposePollEditor();
+      const blockEl = actionEl.closest('[data-notice-poll-block-id], [data-notice-compose-block-id][data-notice-compose-flow-kind="poll"]');
+      const blockId = blockEl instanceof HTMLElement
+        ? String(blockEl.dataset.noticePollBlockId || blockEl.dataset.noticeComposeBlockId || '').trim()
+        : String(actionEl.dataset.noticePollBlockId || '').trim();
+      if (blockId) {
+        removeNoticeComposePollBlock(blockId, { markDirty: true, rerender: true });
+      } else {
+        setNoticeComposeBlockEnabled('poll', false, { clear: true });
+        markNoticeComposeDraftDirty();
+        writeNoticeComposeDraftToFields();
+        renderNoticeComposePollEditor();
+      }
       return;
     }
 
