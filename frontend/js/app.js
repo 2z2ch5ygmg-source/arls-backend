@@ -64015,7 +64015,15 @@ document.addEventListener('compositionend', (event) => {
   }
 
   function v2HasRequest(row) {
-    const normalized = String(v2RequestLabel(row) || '').trim().replace(/\s+/g, '');
+    const normalized = String(v2Text(
+      v2RequestLabel(row),
+      row?.requestLabel,
+      row?.request_label,
+      row?.requestStatus,
+      row?.request_status,
+      row?.approvalStatus,
+      row?.approval_status,
+    ) || '').trim().replace(/\s+/g, '');
     return Boolean(normalized && normalized !== '-' && !normalized.includes('없음'));
   }
 
@@ -64067,11 +64075,14 @@ document.addEventListener('compositionend', (event) => {
     }
     const dateKey = v2DateKey(row);
     const siteCode = v2SiteCode(row);
+    const employeeQuery = v2Name(row) === '직원 미지정'
+      ? (v2EmployeeCode(row) || '')
+      : v2Name(row);
     state.requestsWorkspace.startDate = dateKey;
     state.requestsWorkspace.endDate = dateKey;
     state.requestsWorkspace.rangePreset = 'custom';
     state.requestsWorkspace.siteFilter = siteCode || '';
-    state.requestsWorkspace.employeeQuery = v2Name(row);
+    state.requestsWorkspace.employeeQuery = employeeQuery;
     state.requestsWorkspace.statusFilter = 'all';
     state.requestsWorkspace.subTypeFilter = 'all';
     state.requestsWorkspace.actorQuery = '';
