@@ -3165,6 +3165,7 @@
                     <div class="notices-compose-inline-meta">
                       <span class="notices-compose-inline-kind">투표</span>
                       <div class="notices-compose-inline-actions">
+                        <button type="button" class="notices-inline-drag-handle" data-notice-inline-drag-handle="poll">이동</button>
                         <button type="button" class="notices-inline-remove" data-action="notices-edit-poll-block">편집</button>
                         <button type="button" class="notices-inline-remove" data-action="notices-remove-poll-block">삭제</button>
                       </div>
@@ -3175,27 +3176,26 @@
                   <section id="noticesComposeTableBlock" class="notices-compose-inline-block hidden" aria-label="표 블록" data-notice-inline-kind="table">
                     <div class="notices-compose-inline-meta">
                       <span class="notices-compose-inline-kind">표</span>
-                      <button type="button" class="notices-inline-remove" data-action="notices-remove-table-block">삭제</button>
+                      <div class="notices-compose-inline-actions">
+                        <button type="button" class="notices-inline-drag-handle" data-notice-inline-drag-handle="table">이동</button>
+                        <button type="button" class="notices-inline-remove" data-action="notices-remove-table-block">삭제</button>
+                      </div>
                     </div>
                     <div id="noticesComposeTablePanel" class="notices-table-panel">
-                      <label class="input-field notices-compose-inline-input-field" for="noticesComposeTableTitle">
-                        <span class="sr-only">표 제목</span>
-                        <input id="noticesComposeTableTitle" type="text" placeholder="예: 주요 변경 사항" />
-                      </label>
-
-                          <div class="notices-table-editor-head">
-                            <strong>표</strong>
-                            <div class="notices-table-editor-actions">
-                              <button class="notices-editor-action" type="button" data-action="notices-table-add-row">행 추가</button>
-                              <button class="notices-editor-action" type="button" data-action="notices-table-add-column">열 추가</button>
-                              <button class="notices-editor-action" type="button" data-action="notices-table-toggle-header">헤더 ON</button>
-                              <button class="notices-editor-action" type="button" data-action="notices-table-remove-column">열 제거</button>
-                              <button class="notices-editor-action" type="button" data-action="notices-table-remove-row">행 제거</button>
-                            </div>
-                          </div>
-
-                          <div id="noticesComposeTableGrid" class="notices-compose-table-grid"></div>
+                      <div id="noticesComposeTableGrid" class="notices-compose-table-grid"></div>
+                      <div class="notices-table-editor-actions">
+                        <div class="notices-table-end-actions">
+                          <span class="notices-table-end-actions-label">열</span>
+                          <button class="notices-editor-action" type="button" data-action="notices-table-remove-column" aria-label="열 삭제">-</button>
+                          <button class="notices-editor-action" type="button" data-action="notices-table-add-column" aria-label="열 추가">+</button>
                         </div>
+                        <div class="notices-table-end-actions">
+                          <span class="notices-table-end-actions-label">행</span>
+                          <button class="notices-editor-action" type="button" data-action="notices-table-remove-row" aria-label="행 삭제">-</button>
+                          <button class="notices-editor-action" type="button" data-action="notices-table-add-row" aria-label="행 추가">+</button>
+                        </div>
+                      </div>
+                    </div>
                   </section>
                 </div>
 
@@ -5380,14 +5380,6 @@
           </label>
 
           <div class="notices-compose-setting-cluster notices-compose-setting-cluster-modal">
-            <div class="notices-compose-setting-field">
-              <span class="notices-compose-setting-label">선택 방식</span>
-              <div class="notices-segmented-control" role="group" aria-label="투표 선택 방식">
-                <button type="button" class="notices-segmented-option" data-action="notices-set-poll-modal-mode" data-value="single">단일 선택</button>
-                <button type="button" class="notices-segmented-option" data-action="notices-set-poll-modal-mode" data-value="multiple">복수 선택</button>
-              </div>
-            </div>
-
             <label class="input-field notices-compose-setting-field" for="noticesComposePollModalVisibility">
               <span>결과 공개</span>
               <select id="noticesComposePollModalVisibility">
@@ -5403,16 +5395,6 @@
           </div>
 
           <div class="notices-compose-toggle-stack">
-            <div class="notices-compose-toggle-row">
-              <div class="notices-compose-toggle-copy">
-                <strong>익명</strong>
-              </div>
-              <button type="button" id="noticesComposePollModalAnonymousToggle" class="notices-switch-button" data-action="notices-toggle-poll-modal-anonymous" aria-pressed="false">
-                <span class="notices-switch-track" aria-hidden="true"></span>
-                <span class="notices-switch-copy">익명 ON</span>
-              </button>
-            </div>
-
             <div class="notices-compose-toggle-row">
               <div class="notices-compose-toggle-copy">
                 <strong>재투표 허용</strong>

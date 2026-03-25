@@ -425,6 +425,15 @@ const NOTICE_TABLE_PICKER_MAX_ROWS = 6;
 const NOTICE_TABLE_PICKER_MAX_COLS = 6;
 const NOTICE_POLL_MAX_OPTIONS = 10;
 const NOTICE_POLL_MIN_OPTIONS = 2;
+const NOTICE_TABLE_COMPOSE_MIN_WIDTH_PX = 560;
+const NOTICE_TABLE_COMPOSE_MIN_HEIGHT_PX = 160;
+const NOTICE_TABLE_COMPOSE_DEFAULT_WIDTH_PX = 720;
+const NOTICE_TABLE_COMPOSE_DEFAULT_HEIGHT_PX = 240;
+const NOTICE_POLL_COMPOSE_DEFAULT_HEIGHT_PX = 240;
+const NOTICE_COMPOSE_TABLE_MIN_WIDTH_PX = 360;
+const NOTICE_COMPOSE_BLOCK_MIN_TOP_PX = 0;
+const NOTICE_COMPOSE_TEXT_LINE_HEIGHT_PX = 28;
+const NOTICE_POLL_COMPOSE_DRAG_STEP_PX = 12;
 const NOTICE_COMPOSE_DRAFT_STORAGE_PREFIX = 'arls_notice_compose_draft_v1';
 const NOTICE_VIEW_MODE_LIST = 'list';
 const NOTICE_VIEW_MODE_DETAIL = 'detail';
@@ -433,6 +442,19 @@ const NOTICE_POLL_RESULT_VISIBILITY_OPTIONS = Object.freeze([
   { value: 'always', label: '즉시 공개' },
   { value: 'after_close', label: '마감 후 공개' },
 ]);
+const NOTICE_COMPOSE_FLOW_BODY_KIND = 'body';
+
+let noticeComposeDragState = null;
+const noticeComposeDragStateRegistry = {
+  hasBaseline: false,
+  baselinePollTop: 0,
+};
+
+function resetNoticeComposeDragRegistry() {
+  noticeComposeDragState = null;
+  noticeComposeDragStateRegistry.hasBaseline = false;
+  noticeComposeDragStateRegistry.baselinePollTop = 0;
+}
 const NOTICE_CATEGORY_OPTIONS = Object.freeze([
   { value: 'all', label: '전체' },
   { value: 'ops', label: '운영' },
@@ -1303,7 +1325,7 @@ function createDefaultNoticePollDraft() {
       createDefaultNoticePollOptionDraft(1),
     ],
     allowMultiple: false,
-    isAnonymous: true,
+    isAnonymous: false,
     resultVisibility: 'always',
     closesAt: '',
     allowChangeVote: false,
@@ -1313,6 +1335,26 @@ function createDefaultNoticePollDraft() {
     isClosed: false,
     canVote: true,
     hasVoted: false,
+    layout: {
+      left: 0,
+      top: 0,
+      width: 0,
+      height: NOTICE_POLL_COMPOSE_DEFAULT_HEIGHT_PX,
+    },
+  };
+}
+
+function normalizeNoticePollLayout(rawLayout = null) {
+  const base = createDefaultNoticePollDraft().layout;
+  const nextLeft = Number.parseInt(String(rawLayout?.left || 0), 10);
+  const nextTop = Number.parseInt(String(rawLayout?.top || 0), 10);
+  const nextHeight = Math.max(NOTICE_TABLE_COMPOSE_MIN_HEIGHT_PX, Math.max(0, Number.parseInt(String(rawLayout?.height || base.height || NOTICE_POLL_COMPOSE_DEFAULT_HEIGHT_PX), 10)));
+  const nextWidth = Math.max(0, Number.parseInt(String(rawLayout?.width || 0), 10) || 0);
+  return {
+    left: Number.isFinite(nextLeft) ? nextLeft : base.left,
+    top: Number.isFinite(nextTop) ? nextTop : base.top,
+    width: Math.max(0, nextWidth),
+    height: nextHeight,
   };
 }
 
@@ -1326,6 +1368,32 @@ function createDefaultNoticeTableDraft() {
       ['', ''],
       ['', ''],
     ],
+    layout: {
+      left: 0,
+      top: 0,
+      width: NOTICE_TABLE_COMPOSE_DEFAULT_WIDTH_PX,
+      height: NOTICE_TABLE_COMPOSE_DEFAULT_HEIGHT_PX,
+    },
+  };
+}
+
+function normalizeNoticeTableLayout(rawLayout = null) {
+  const base = createDefaultNoticeTableDraft().layout;
+  const nextLeft = Number.parseInt(String(rawLayout?.left || 0), 10);
+  const nextTop = Number.parseInt(String(rawLayout?.top || 0), 10);
+  const nextWidth = Math.max(
+    NOTICE_COMPOSE_TABLE_MIN_WIDTH_PX,
+    Math.min(1200, Math.max(0, Number.parseInt(String(rawLayout?.width || base.width || NOTICE_TABLE_COMPOSE_DEFAULT_WIDTH_PX), 10) || NOTICE_TABLE_COMPOSE_DEFAULT_WIDTH_PX)),
+  );
+  const nextHeight = Math.max(
+    NOTICE_TABLE_COMPOSE_MIN_HEIGHT_PX,
+    Math.max(0, Number.parseInt(String(rawLayout?.height || base.height || NOTICE_TABLE_COMPOSE_DEFAULT_HEIGHT_PX), 10) || NOTICE_TABLE_COMPOSE_DEFAULT_HEIGHT_PX),
+  );
+  return {
+    left: Number.isFinite(nextLeft) ? Math.max(0, nextLeft) : base.left,
+    top: Number.isFinite(nextTop) ? nextTop : base.top,
+    width: Number.isFinite(nextWidth) ? nextWidth : base.width,
+    height: Number.isFinite(nextHeight) ? nextHeight : base.height,
   };
 }
 
@@ -3932,6 +4000,71 @@ function clearListCaches({ clearStorage = true, resetFilters = true } = {}) {
   });
 }
 
+function clearEmployeeLiveProjectionCaches({ clearStorage = true } = {}) {
+  if (!state.employeeAdmin || typeof state.employeeAdmin !== 'object') {
+    state.employeeAdmin = createInitialEmployeeAdminState();
+  } else {
+    state.employeeAdmin.rows = [];
+    state.employeeAdmin.rowsSource = '';
+    state.employeeAdmin.rowsScopeKey = '';
+    state.employeeAdmin.rowsTenantWide = false;
+    state.employeeAdmin.siteFilterRecoveryKey = '';
+    state.employeeAdmin.siteRows = [];
+    state.employeeAdmin.siteRowsScopeKey = '';
+    state.employeeAdmin.detailEmployeeId = '';
+    state.employeeAdmin.detailTab = 'overview';
+    state.employeeAdmin.detailLoading = false;
+    state.employeeAdmin.detailError = '';
+    state.employeeAdmin.detailLoadSeq = 0;
+    state.employeeAdmin.detailCache = new Map();
+    state.employeeAdmin.detailDrawerOpen = false;
+    state.employeeAdmin.selectedEmployeeId = '';
+    state.employeeAdmin.detailTriggerEl = null;
+    if (state.employeeAdmin.tableVirtualState && typeof state.employeeAdmin.tableVirtualState === 'object') {
+      state.employeeAdmin.tableVirtualState.rows = [];
+      state.employeeAdmin.tableVirtualState.lastStart = -1;
+      state.employeeAdmin.tableVirtualState.lastEnd = -1;
+      state.employeeAdmin.tableVirtualState.lastLength = -1;
+      state.employeeAdmin.tableVirtualState.renderCount = 0;
+      state.employeeAdmin.tableVirtualState.windowRenderCount = 0;
+      state.employeeAdmin.tableVirtualState.rafId = 0;
+      state.employeeAdmin.tableVirtualState.scrollBound = false;
+    }
+  }
+
+  if (!state.attendanceView || typeof state.attendanceView !== 'object') {
+    state.attendanceView = createInitialAttendanceViewState();
+  } else {
+    state.attendanceView.employees = [];
+    state.attendanceView.sites = [];
+    state.attendanceView.employeeCode = '';
+    state.attendanceView.siteCode = '';
+  }
+
+  if (!state.schedule || typeof state.schedule !== 'object') {
+    state.schedule = createInitialScheduleState();
+  } else {
+    state.schedule.employees = [];
+    state.schedule.employeeFilter = '';
+    state.schedule.managerSearch = '';
+    state.schedule.employeeListChunkGeneration = Number(state.schedule.employeeListChunkGeneration || 0) + 1;
+    cancelScheduleEmployeeListChunkRender({ invalidateGeneration: false });
+  }
+
+  clearHeavyApiCache('schedule-create-employees:');
+  if (clearStorage) {
+    clearListCaches({ clearStorage: true, resetFilters: false });
+  }
+}
+
+async function refreshEmployeeProjection({ includeHomeSummary = false } = {}) {
+  clearEmployeeLiveProjectionCaches({ clearStorage: false });
+  await loadEmployees({ preferCache: false, skipNetworkWhenCached: false });
+  if (includeHomeSummary && isManagerShellRole()) {
+    await loadHomeManagerOrgSummary({ force: true });
+  }
+}
+
 async function loadMonthlyScheduleRowsWithCache({ month, tenantCode, force = false } = {}) {
   const normalizedMonth = normalizeMonthKey(month);
   if (!normalizedMonth) return [];
@@ -5158,20 +5291,11 @@ function buildHomeAttendanceIssueRows() {
       subtitle: '현재 범위에서 먼저 확인할 예외가 없습니다.',
     }];
   }
-  const visibleRows = rows.slice(0, 3).map((item) => ({
+  return rows.slice(0, 4).map((item) => ({
     title: item.employeeName || '직원',
     subtitle: `${item.statusLabel || '확인 필요'} · ${item.siteName || '현장 미지정'}`,
     danger: Boolean(item.danger),
   }));
-  if (rows.length > 3) {
-    visibleRows.push({
-      title: `외 ${rows.length - 3}건 더보기`,
-      subtitle: '남은 예외는 출퇴근 탭에서 이어서 확인하세요.',
-      actionLabel: '더보기',
-      route: ROUTE_ATTENDANCE,
-    });
-  }
-  return visibleRows;
 }
 
 function buildHomeScheduleRows() {
@@ -18531,6 +18655,7 @@ function restoreSavedNoticeComposeDraft({ noticeId = '', fallbackCategory = 'ops
   if (!saved || typeof saved !== 'object') return false;
   const notices = ensureNoticesState();
   notices.composeDraft = normalizeSavedNoticeComposeDraft(saved.draft, fallbackCategory);
+  resetNoticeComposeDragRegistry();
   notices.draftSavedAt = String(saved.savedAt || '').trim();
   notices.draftStorageMessage = '자동 저장된 초안을 복원했습니다.';
   return true;
@@ -18666,6 +18791,7 @@ function normalizeNoticePollOptionDrafts(rawOptions = null) {
 function normalizeNoticePollDraft(rawPoll = null) {
   const base = createDefaultNoticePollDraft();
   const source = rawPoll && typeof rawPoll === 'object' ? rawPoll : {};
+  const layout = normalizeNoticePollLayout(source.layout || source.noticeComposeLayout || source.notice_compose_layout || {});
   const selectedOptionIds = Array.isArray(source.selectedOptionIds || source.selected_option_ids)
     ? Array.from(new Set((source.selectedOptionIds || source.selected_option_ids).map((item) => String(item || '').trim()).filter(Boolean))).slice(0, NOTICE_POLL_MAX_OPTIONS)
     : [];
@@ -18685,6 +18811,7 @@ function normalizeNoticePollDraft(rawPoll = null) {
     isClosed: Boolean(source.isClosed ?? source.is_closed),
     canVote: source.canVote ?? source.can_vote ?? base.canVote,
     hasVoted: Boolean(source.hasVoted ?? source.has_voted),
+    layout: layout,
   };
 }
 
@@ -18713,6 +18840,12 @@ function cloneNoticePollDraft(rawPoll = null) {
     isClosed: Boolean(normalized.isClosed),
     canVote: Boolean(normalized.canVote),
     hasVoted: Boolean(normalized.hasVoted),
+    layout: {
+      left: Math.max(0, Number.parseInt(String(normalized.layout?.left || 0), 10) || 0),
+      top: Number.parseInt(String(normalized.layout?.top || 0), 10) || 0,
+      width: Math.max(0, Number.parseInt(String(normalized.layout?.width || 0), 10) || 0),
+      height: Math.max(0, Number.parseInt(String(normalized.layout?.height || 0), 10) || 0),
+    },
   };
 }
 
@@ -18733,6 +18866,7 @@ function formatNoticePollMetaDate(rawValue = '') {
 
 function normalizeNoticeTableDraft(rawTable = null) {
   const base = createDefaultNoticeTableDraft();
+  const layout = normalizeNoticeTableLayout(rawTable?.layout || rawTable?.noticeComposeLayout || rawTable?.notice_compose_layout || {});
   const columns = Array.isArray(rawTable?.columns)
     ? rawTable.columns.map((item) => String(item || '').trim()).slice(0, 6)
     : base.columns.slice();
@@ -18750,6 +18884,7 @@ function normalizeNoticeTableDraft(rawTable = null) {
     hasHeader: rawTable?.hasHeader ?? rawTable?.has_header ?? base.hasHeader,
     columns: normalizedColumns,
     rows: rows.length ? rows : base.rows.map((row) => row.slice(0, normalizedColumns.length)),
+    layout,
   };
 }
 
@@ -18761,6 +18896,25 @@ function cloneNoticeTableDraft(rawTable = null) {
     hasHeader: Boolean(normalized.hasHeader),
     columns: normalized.columns.slice(),
     rows: normalized.rows.map((row) => row.slice()),
+    layout: {
+      left: Math.max(0, Number.parseInt(String(normalized.layout?.left || 0), 10) || 0),
+      top: Number.parseInt(String(normalized.layout?.top || 0), 10) || 0,
+      width: Math.max(NOTICE_COMPOSE_TABLE_MIN_WIDTH_PX, Number.parseInt(String(normalized.layout?.width || NOTICE_TABLE_COMPOSE_DEFAULT_WIDTH_PX), 10) || NOTICE_TABLE_COMPOSE_DEFAULT_WIDTH_PX),
+      height: Math.max(NOTICE_TABLE_COMPOSE_MIN_HEIGHT_PX, Number.parseInt(String(normalized.layout?.height || 0), 10) || NOTICE_TABLE_COMPOSE_DEFAULT_HEIGHT_PX),
+    },
+  };
+}
+
+function normalizeNoticeComposeInlineLayout(rawLeft = 0, rawTop = 0, rawWidth = 0, rawHeight = 0) {
+  const left = Number.parseInt(String(rawLeft || 0), 10);
+  const top = Number.parseInt(String(rawTop || 0), 10);
+  const width = Number.parseInt(String(rawWidth || 0), 10);
+  const height = Number.parseInt(String(rawHeight || 0), 10);
+  return {
+    left: Number.isFinite(left) ? Math.max(0, left) : 0,
+    top: Number.isFinite(top) ? top : 0,
+    width: Number.isFinite(width) ? Math.max(0, width) : 0,
+    height: Number.isFinite(height) ? Math.max(0, height) : 0,
   };
 }
 
@@ -18869,9 +19023,9 @@ function normalizeNoticeBodyBlocks(rawBlocks = null, fallbackBodyText = '') {
         hasHeader: block.hasHeader ?? block.has_header ?? true,
         columns: Array.isArray(block.columns) ? block.columns : [],
         rows: Array.isArray(block.rows) ? block.rows : [],
+        layout: block.noticeComposeLayout || block.notice_compose_layout || block.layout || {},
       });
-      const hasTableContent = table.title
-        || table.columns.some((item) => String(item || '').trim())
+      const hasTableContent = table.columns.some((item) => String(item || '').trim())
         || table.rows.some((row) => row.some((cell) => String(cell || '').trim()));
       if (!hasTableContent) return;
       blocks.push({
@@ -18880,11 +19034,20 @@ function normalizeNoticeBodyBlocks(rawBlocks = null, fallbackBodyText = '') {
         hasHeader: Boolean(table.hasHeader),
         columns: table.columns.slice(),
         rows: table.rows.map((row) => row.slice()),
+        layout: {
+          left: table.layout.left,
+          top: table.layout.top,
+          width: table.layout.width,
+          height: table.layout.height,
+        },
       });
       return;
     }
     if (kind === 'poll') {
-      const poll = normalizeNoticePollDraft(block.poll);
+      const poll = normalizeNoticePollDraft({
+        ...(block.poll || {}),
+        layout: block.poll?.noticeComposeLayout || block.poll?.notice_compose_layout || block.poll?.layout || block.noticeComposeLayout || block.notice_compose_layout || block.layout || {},
+      });
       const filledOptions = poll.options.filter((item) => String(item.label || '').trim());
       if (!poll.question || filledOptions.length < NOTICE_POLL_MIN_OPTIONS) return;
       blocks.push({
@@ -18911,6 +19074,12 @@ function normalizeNoticeBodyBlocks(rawBlocks = null, fallbackBodyText = '') {
           isClosed: Boolean(poll.isClosed),
           canVote: Boolean(poll.canVote),
           hasVoted: Boolean(poll.hasVoted),
+          notice_compose_layout: {
+            left: poll.layout.left,
+            top: poll.layout.top,
+            width: poll.layout.width,
+            height: poll.layout.height,
+          },
         },
       });
     }
@@ -18969,6 +19138,7 @@ function buildNoticeComposeDraftFromBlocks(row = {}) {
         hasHeader: block.hasHeader ?? block.has_header ?? true,
         columns: Array.isArray(block.columns) ? block.columns : [],
         rows: Array.isArray(block.rows) ? block.rows : [],
+        layout: block.noticeComposeLayout || block.notice_compose_layout || block.layout || {},
       });
     }
   });
@@ -19045,11 +19215,17 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
             poll_id: String(poll.pollId || '').trim(),
             question: String(poll.question || '').trim(),
             options: pollOptions,
-            allow_multiple: Boolean(poll.allowMultiple),
-            is_anonymous: Boolean(poll.isAnonymous),
+            allow_multiple: false,
+            is_anonymous: false,
             result_visibility: normalizeNoticePollResultVisibility(poll.resultVisibility),
             closes_at: String(poll.closesAt || '').trim() || null,
             allow_change_vote: Boolean(poll.allowChangeVote),
+            notice_compose_layout: {
+              left: 0,
+              top: poll.layout.top,
+              width: 0,
+              height: poll.layout.height,
+            },
           },
         });
       }
@@ -19061,10 +19237,16 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
           .filter((row) => row.some(Boolean));
         blocks.push({
           kind: 'table',
-          title: table.title,
+          title: '',
           has_header: Boolean(table.hasHeader),
           columns: table.columns.slice(),
           rows,
+          notice_compose_layout: {
+            left: table.layout.left,
+            top: table.layout.top,
+            width: table.layout.width,
+            height: table.layout.height,
+          },
         });
       }
     },
@@ -19140,6 +19322,7 @@ function resetNoticeComposeDraft(category = 'ops') {
   const notices = ensureNoticesState();
   notices.composeSourceNoticeId = '';
   clearNoticeComposeAutosaveTimer();
+  resetNoticeComposeDragRegistry();
   notices.draftSavedAt = '';
   notices.draftStorageMessage = '';
   notices.composeDraft = {
@@ -19161,6 +19344,7 @@ function fillNoticeComposeDraftFromRow(row = null) {
   const normalizedRow = row && typeof row === 'object' ? row : null;
   notices.composeSourceNoticeId = String(normalizedRow?.id || '').trim();
   clearNoticeComposeAutosaveTimer();
+  resetNoticeComposeDragRegistry();
   notices.draftSavedAt = '';
   notices.draftStorageMessage = '';
   notices.composeDraft = buildNoticeComposeDraftFromBlocks(normalizedRow || {});
@@ -19171,8 +19355,7 @@ function isNoticeComposeTextField(target) {
   if (!field) return false;
   const id = String(field.id || '').trim();
   return id === 'noticesComposeTitle'
-    || id === 'noticesComposeBody'
-    || id === 'noticesComposeTableTitle';
+    || id === 'noticesComposeBody';
 }
 
 function syncNoticeComposeDraftFromFields() {
@@ -19180,11 +19363,8 @@ function syncNoticeComposeDraftFromFields() {
   const categorySelect = $('#noticesComposeCategory');
   const titleInput = $('#noticesComposeTitle');
   const bodyInput = $('#noticesComposeBody');
-  const tableTitleInput = $('#noticesComposeTableTitle');
   const nextTable = cloneNoticeTableDraft(notices.composeDraft?.table);
-  if (tableTitleInput instanceof HTMLInputElement) {
-    nextTable.title = String(tableTitleInput.value || '').trim();
-  }
+  nextTable.title = '';
   nextTable.enabled = Boolean(notices.composeDraft?.table?.enabled);
   const nextImages = cloneNoticeImageDrafts(notices.composeDraft?.images);
   const imagesEnabled = Boolean(notices.composeDraft?.imagesEnabled) || nextImages.length > 0;
@@ -19222,7 +19402,6 @@ function writeNoticeComposeDraftToFields() {
   const categorySelect = $('#noticesComposeCategory');
   const titleInput = $('#noticesComposeTitle');
   const bodyInput = $('#noticesComposeBody');
-  const tableTitleInput = $('#noticesComposeTableTitle');
   if (categorySelect instanceof HTMLSelectElement) {
     const nextCategory = normalizeNoticeCategory(draft.category || notices.category || 'ops');
     categorySelect.value = nextCategory === 'all' ? 'ops' : nextCategory;
@@ -19232,9 +19411,6 @@ function writeNoticeComposeDraftToFields() {
   }
   if (bodyInput instanceof HTMLTextAreaElement) {
     bodyInput.value = String(draft.bodyText || '');
-  }
-  if (tableTitleInput instanceof HTMLInputElement) {
-    tableTitleInput.value = String(draft.table?.title || '');
   }
 }
 
@@ -19484,6 +19660,193 @@ function applyNoticeComposeTablePreset(rows = 2, cols = 2) {
   }
 }
 
+function getNoticeComposeLineSnapOffset(rawOffset = 0) {
+  const offset = Math.max(0, Number.parseInt(String(rawOffset || 0), 10) || 0);
+  return Math.max(
+    0,
+    Math.floor((offset + (NOTICE_COMPOSE_TEXT_LINE_HEIGHT_PX / 2)) / NOTICE_COMPOSE_TEXT_LINE_HEIGHT_PX) * NOTICE_COMPOSE_TEXT_LINE_HEIGHT_PX,
+  );
+}
+
+function getNoticeComposeInlineReclaimPx(kind = '', rawLayout = null) {
+  const normalizedKind = String(kind || '').trim().toLowerCase();
+  const layout = normalizedKind === 'table'
+    ? normalizeNoticeTableLayout(rawLayout || {})
+    : normalizeNoticePollLayout(rawLayout || {});
+  const top = Math.max(0, Number.parseInt(String(layout.top || 0), 10) || 0);
+  const height = Math.max(0, Number.parseInt(String(layout.height || 0), 10) || 0);
+  if (normalizedKind === 'poll') {
+    return Math.min(height, getNoticeComposeLineSnapOffset(top));
+  }
+  return Math.min(height, top);
+}
+
+function getNoticeComposeInlineExtraBottomPx(kind = '', rawLayout = null) {
+  const reclaim = getNoticeComposeInlineReclaimPx(kind, rawLayout);
+  const top = Math.max(0, Number.parseInt(String(rawLayout?.top || 0), 10) || 0);
+  return Math.max(0, top - reclaim);
+}
+
+function clearNoticeComposeInlineBlockStyles(block) {
+  if (!(block instanceof HTMLElement)) return;
+  block.classList.remove('notices-compose-inline-block-floating');
+  block.style.transform = '';
+  block.style.width = '';
+  block.style.removeProperty('--notice-compose-block-height');
+}
+
+function applyNoticeComposeInlineBlockStyles(block, kind = '', rawLayout = null) {
+  if (!(block instanceof HTMLElement)) return;
+  const normalizedKind = String(kind || '').trim().toLowerCase();
+  const layout = normalizedKind === 'table'
+    ? normalizeNoticeTableLayout(rawLayout || {})
+    : normalizeNoticePollLayout(rawLayout || {});
+  block.classList.add('notices-compose-inline-block-floating');
+  block.style.transform = normalizedKind === 'table'
+    ? `translate(${layout.left}px, ${layout.top}px)`
+    : `translate(0px, ${layout.top}px)`;
+  block.style.width = normalizedKind === 'table' ? `${layout.width}px` : '';
+  block.style.setProperty('--notice-compose-block-height', `${layout.height}px`);
+}
+
+function setNoticeComposeInlineLayout(kind = '', nextLayout = null, { rerender = true, markDirty = false } = {}) {
+  const notices = ensureNoticesState();
+  const normalizedKind = String(kind || '').trim().toLowerCase();
+  if (normalizedKind === 'table') {
+    const table = cloneNoticeTableDraft(notices.composeDraft?.table);
+    table.enabled = true;
+    table.layout = normalizeNoticeTableLayout({
+      ...(table.layout || {}),
+      ...(nextLayout || {}),
+    });
+    notices.composeDraft = {
+      ...(notices.composeDraft || {}),
+      table,
+    };
+    if (rerender) renderNoticeComposeTableEditor();
+    if (markDirty) markNoticeComposeDraftDirty();
+    return;
+  }
+  if (normalizedKind === 'poll') {
+    const poll = cloneNoticePollDraft(notices.composeDraft?.poll);
+    poll.enabled = true;
+    poll.layout = normalizeNoticePollLayout({
+      ...(poll.layout || {}),
+      ...(nextLayout || {}),
+      left: 0,
+      width: 0,
+    });
+    notices.composeDraft = {
+      ...(notices.composeDraft || {}),
+      poll,
+    };
+    if (rerender) renderNoticeComposePollEditor();
+    if (markDirty) markNoticeComposeDraftDirty();
+  }
+}
+
+function beginNoticeComposeInlinePointerSession(kind = '', sourceEvent = null, { mode = 'drag', direction = '' } = {}) {
+  if (!(sourceEvent instanceof MouseEvent)) return;
+  if (!isNoticesComposeActive()) return;
+  const notices = ensureNoticesState();
+  const normalizedKind = String(kind || '').trim().toLowerCase();
+  if (normalizedKind !== 'table' && normalizedKind !== 'poll') return;
+  const layout = normalizedKind === 'table'
+    ? normalizeNoticeTableLayout(notices.composeDraft?.table?.layout || {})
+    : normalizeNoticePollLayout(notices.composeDraft?.poll?.layout || {});
+  noticeComposeDragState = {
+    kind: normalizedKind,
+    mode: String(mode || 'drag').trim().toLowerCase(),
+    direction: String(direction || '').trim().toLowerCase(),
+    startX: sourceEvent.clientX,
+    startY: sourceEvent.clientY,
+    startLayout: { ...layout },
+    didMove: false,
+  };
+  document.body.classList.add('notices-compose-dragging');
+  sourceEvent.preventDefault();
+}
+
+function handleNoticeComposeInlinePointerMove(event) {
+  if (!(event instanceof MouseEvent) || !noticeComposeDragState) return;
+  const session = noticeComposeDragState;
+  const deltaX = Math.round(event.clientX - session.startX);
+  const deltaY = Math.round(event.clientY - session.startY);
+  if (!deltaX && !deltaY) return;
+
+  if (session.kind === 'poll') {
+    const nextTop = Math.max(NOTICE_COMPOSE_BLOCK_MIN_TOP_PX, session.startLayout.top + deltaY);
+    session.didMove = session.didMove || nextTop !== session.startLayout.top;
+    setNoticeComposeInlineLayout('poll', {
+      top: nextTop,
+      left: 0,
+      width: 0,
+      height: session.startLayout.height,
+    }, { rerender: true, markDirty: false });
+    return;
+  }
+
+  if (session.kind !== 'table') return;
+  const nextLayout = {
+    left: session.startLayout.left,
+    top: session.startLayout.top,
+    width: session.startLayout.width,
+    height: session.startLayout.height,
+  };
+
+  if (session.mode === 'resize') {
+    if (session.direction.includes('e')) {
+      nextLayout.width = session.startLayout.width + deltaX;
+    }
+    if (session.direction.includes('s')) {
+      nextLayout.height = session.startLayout.height + deltaY;
+    }
+    if (session.direction.includes('w')) {
+      nextLayout.left = session.startLayout.left + deltaX;
+      nextLayout.width = session.startLayout.width - deltaX;
+    }
+    if (session.direction.includes('n')) {
+      nextLayout.top = session.startLayout.top + deltaY;
+      nextLayout.height = session.startLayout.height - deltaY;
+    }
+    if (nextLayout.width < NOTICE_COMPOSE_TABLE_MIN_WIDTH_PX) {
+      if (session.direction.includes('w')) {
+        nextLayout.left -= NOTICE_COMPOSE_TABLE_MIN_WIDTH_PX - nextLayout.width;
+      }
+      nextLayout.width = NOTICE_COMPOSE_TABLE_MIN_WIDTH_PX;
+    }
+    if (nextLayout.height < NOTICE_TABLE_COMPOSE_MIN_HEIGHT_PX) {
+      if (session.direction.includes('n')) {
+        nextLayout.top -= NOTICE_TABLE_COMPOSE_MIN_HEIGHT_PX - nextLayout.height;
+      }
+      nextLayout.height = NOTICE_TABLE_COMPOSE_MIN_HEIGHT_PX;
+    }
+    nextLayout.left = Math.max(0, nextLayout.left);
+    nextLayout.top = Math.max(NOTICE_COMPOSE_BLOCK_MIN_TOP_PX, nextLayout.top);
+  } else {
+    nextLayout.left = Math.max(0, session.startLayout.left + deltaX);
+    nextLayout.top = Math.max(NOTICE_COMPOSE_BLOCK_MIN_TOP_PX, session.startLayout.top + deltaY);
+  }
+
+  session.didMove = session.didMove
+    || nextLayout.left !== session.startLayout.left
+    || nextLayout.top !== session.startLayout.top
+    || nextLayout.width !== session.startLayout.width
+    || nextLayout.height !== session.startLayout.height;
+
+  setNoticeComposeInlineLayout('table', nextLayout, { rerender: true, markDirty: false });
+}
+
+function finishNoticeComposeInlinePointerSession() {
+  if (!noticeComposeDragState) return;
+  const shouldPersist = Boolean(noticeComposeDragState.didMove);
+  noticeComposeDragState = null;
+  document.body.classList.remove('notices-compose-dragging');
+  if (shouldPersist) {
+    markNoticeComposeDraftDirty();
+  }
+}
+
 function renderNoticeComposeDocumentFlow() {
   const notices = ensureNoticesState();
   const flow = $('#noticesComposeDocumentFlow');
@@ -19515,6 +19878,37 @@ function renderNoticeComposeDocumentFlow() {
     }
   });
   flow.replaceChildren(...orderedNodes);
+
+  flow.style.paddingBottom = '';
+  bodyBlock.style.marginTop = '';
+  [imageBlock, tableBlock, pollBlock].forEach((block) => clearNoticeComposeInlineBlockStyles(block));
+
+  const tableLayout = normalizeNoticeTableLayout(notices.composeDraft?.table?.layout || {});
+  const pollLayout = normalizeNoticePollLayout(notices.composeDraft?.poll?.layout || {});
+  const canReclaimBody = !isNoticeComposeBlockEnabled('image', notices.composeDraft);
+  let totalReclaim = 0;
+  let extraBottom = 0;
+
+  if (tableBlock instanceof HTMLElement && Boolean(notices.composeDraft?.table?.enabled)) {
+    applyNoticeComposeInlineBlockStyles(tableBlock, 'table', tableLayout);
+    const reclaim = canReclaimBody ? getNoticeComposeInlineReclaimPx('table', tableLayout) : 0;
+    totalReclaim += reclaim;
+    extraBottom = Math.max(extraBottom, Math.max(0, tableLayout.top - reclaim));
+  }
+
+  if (pollBlock instanceof HTMLElement && Boolean(notices.composeDraft?.poll?.enabled)) {
+    applyNoticeComposeInlineBlockStyles(pollBlock, 'poll', pollLayout);
+    const reclaim = canReclaimBody ? getNoticeComposeInlineReclaimPx('poll', pollLayout) : 0;
+    totalReclaim += reclaim;
+    extraBottom = Math.max(extraBottom, Math.max(0, pollLayout.top - reclaim));
+  }
+
+  if (totalReclaim > 0) {
+    bodyBlock.style.marginTop = `${-totalReclaim}px`;
+  }
+  if (extraBottom > 0) {
+    flow.style.paddingBottom = `${extraBottom + 24}px`;
+  }
 }
 
 function updateNoticeComposePollModalDraft(mutator) {
@@ -19553,23 +19947,6 @@ function renderNoticeComposePollModal() {
   const closesAtInput = $('#noticesComposePollModalClosesAt');
   if (closesAtInput instanceof HTMLInputElement) {
     closesAtInput.value = formatNoticePollDateTimeInputValue(pollDraft.closesAt || '');
-  }
-  document.querySelectorAll('[data-action="notices-set-poll-modal-mode"]').forEach((button) => {
-    if (!(button instanceof HTMLButtonElement)) return;
-    const value = String(button.dataset.value || '').trim().toLowerCase();
-    const active = value === (pollDraft.allowMultiple ? 'multiple' : 'single');
-    button.classList.toggle('is-active', active);
-    button.setAttribute('aria-pressed', active ? 'true' : 'false');
-  });
-  const anonymousBtn = $('#noticesComposePollModalAnonymousToggle');
-  if (anonymousBtn instanceof HTMLButtonElement) {
-    const active = Boolean(pollDraft.isAnonymous);
-    anonymousBtn.classList.toggle('is-active', active);
-    anonymousBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
-    const copy = anonymousBtn.querySelector('.notices-switch-copy');
-    if (copy instanceof HTMLElement) {
-      copy.textContent = active ? '익명 ON' : '익명 OFF';
-    }
   }
   const allowChangeBtn = $('#noticesComposePollModalAllowChangeToggle');
   if (allowChangeBtn instanceof HTMLButtonElement) {
@@ -19683,6 +20060,8 @@ function saveNoticeComposePollModal() {
     enabled: true,
     question,
     options: filledOptions,
+    allowMultiple: false,
+    isAnonymous: false,
   });
 
   notices.composeDraft = {
@@ -30524,6 +30903,7 @@ function clearSession() {
   state.approvalItemsById = new Map();
   state.leaveApprovalItemsById = new Map();
   state.approvalPullStartY = null;
+  clearEmployeeLiveProjectionCaches();
   state.sites = [];
   state.siteCatalog = [];
   state.siteAddressResults = [];
@@ -33712,14 +34092,6 @@ function createNoticeListRow(item) {
 
 function buildNoticePollMetaTags(poll = {}) {
   const tags = [];
-  tags.push({
-    tone: 'neutral',
-    label: Boolean(poll.allowMultiple) ? '복수 선택' : '단일 선택',
-  });
-  tags.push({
-    tone: 'neutral',
-    label: Boolean(poll.isAnonymous) ? '익명' : '기명',
-  });
   if (normalizeNoticePollResultVisibility(poll.resultVisibility || poll.result_visibility || 'always') === 'after_close') {
     tags.push({ tone: 'neutral', label: '마감 후 공개' });
   }
@@ -33746,13 +34118,10 @@ function createNoticePollBlock(item, poll = {}) {
   head.className = 'notices-poll-head';
   const titleWrap = document.createElement('div');
   titleWrap.className = 'notices-poll-title-wrap';
-  const eyebrow = document.createElement('span');
-  eyebrow.className = 'notices-poll-eyebrow';
-  eyebrow.textContent = '투표';
   const title = document.createElement('h4');
   title.className = 'notices-detail-block-title';
   title.textContent = String(poll.question || '').trim() || '공지 투표';
-  titleWrap.append(eyebrow, title);
+  titleWrap.appendChild(title);
   head.appendChild(titleWrap);
 
   const meta = document.createElement('div');
@@ -34065,11 +34434,13 @@ function renderNoticeComposePollEditor() {
   }
   if (!(panel instanceof HTMLElement)) return;
   panel.innerHTML = '';
+  panel.style.height = '';
   if (!pollDraft.enabled) {
     renderNoticeComposeToolbar();
     renderNoticeComposeDocumentFlow();
     return;
   }
+  panel.style.height = `${Math.max(NOTICE_TABLE_COMPOSE_MIN_HEIGHT_PX, Number.parseInt(String(pollDraft.layout?.height || NOTICE_POLL_COMPOSE_DEFAULT_HEIGHT_PX), 10) || NOTICE_POLL_COMPOSE_DEFAULT_HEIGHT_PX)}px`;
 
   const card = document.createElement('div');
   card.className = 'notices-compose-poll-summary';
@@ -34122,11 +34493,13 @@ function renderNoticeComposeTableEditor() {
     block.classList.toggle('hidden', !tableDraft.enabled);
   }
   grid.innerHTML = '';
+  grid.style.height = '';
   if (!tableDraft.enabled) {
     renderNoticeComposeToolbar();
     renderNoticeComposeDocumentFlow();
     return;
   }
+  grid.style.height = `${tableDraft.layout.height}px`;
 
   const table = document.createElement('table');
   table.className = 'notices-compose-table';
@@ -34184,12 +34557,19 @@ function renderNoticeComposeTableEditor() {
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
-  grid.appendChild(table);
-  document.querySelectorAll('[data-action="notices-table-toggle-header"]').forEach((button) => {
-    if (!(button instanceof HTMLButtonElement)) return;
-    button.textContent = tableDraft.hasHeader ? '헤더 ON' : '헤더 OFF';
-    button.classList.toggle('is-active', Boolean(tableDraft.hasHeader));
+  const shell = document.createElement('div');
+  shell.className = 'notices-compose-table-shell';
+  shell.appendChild(table);
+  ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'].forEach((direction) => {
+    const handle = document.createElement('button');
+    handle.type = 'button';
+    handle.className = `notices-compose-table-resize-handle notices-compose-table-resize-handle-${direction}`;
+    handle.dataset.noticeInlineResize = 'table';
+    handle.dataset.noticeResizeDirection = direction;
+    handle.setAttribute('aria-label', `표 크기 조절 ${direction}`);
+    shell.appendChild(handle);
   });
+  grid.appendChild(shell);
   renderNoticeComposeToolbar();
   renderNoticeComposeDocumentFlow();
 }
@@ -39227,12 +39607,12 @@ async function onGuardRosterImportCommit(progressController = null) {
     }
     showToast(`일괄 등록 완료 (생성 ${created}, 갱신 ${updated}, 실패 ${failedCount})`, failedCount ? 'info' : 'success', 3200);
     progressController?.update({
-      stageKey: 'commit_refresh',
-      progress: 92,
-      detail: '직원 목록과 등록 결과를 새로고침하고 있습니다.',
-    });
-    await loadEmployees();
-    if (failedCount === 0) {
+    stageKey: 'commit_refresh',
+    progress: 92,
+    detail: '직원 목록과 등록 결과를 새로고침하고 있습니다.',
+  });
+  await refreshEmployeeProjection({ includeHomeSummary: true });
+  if (failedCount === 0) {
       clearGuardRosterImportState({ clearInput: true, clearStatus: false });
     }
   } catch (err) {
@@ -40316,7 +40696,7 @@ async function onEmployeeDelete(employeeId = '') {
   if (String(state.employeeAdmin.selectedEmployeeId || '').trim() === String(target.id || '').trim()) {
     resetEmployeeForm();
   }
-  await loadEmployees();
+  await refreshEmployeeProjection();
 }
 
 function onEmployeeBulkDeleteBySite(triggerEl = null) {
@@ -40374,7 +40754,7 @@ function onEmployeeBulkDeleteBySite(triggerEl = null) {
       const deleted = Number(response?.deleted || 0);
       showToast(`현장 ${siteCode} 직원 ${deleted}명을 삭제했습니다.`, 'success', 2200);
       resetEmployeeForm();
-      await loadEmployees();
+      await refreshEmployeeProjection();
     },
   });
 }
@@ -49196,10 +49576,12 @@ function getScheduleCreateEmployeeSeedRows(siteCode = '') {
     ...(Array.isArray(state.schedule?.employees) ? state.schedule.employees : []),
   ];
   seedSources.forEach((item) => {
+    const employeeId = String(item?.employee_id || item?.id || '').trim();
     const employeeCode = String(item?.employee_code || '').trim();
     const rowSiteCode = String(item?.site_code || '').trim().toUpperCase();
-    if (!employeeCode || rowSiteCode !== normalizedSiteCode || deduped.has(employeeCode)) return;
-    deduped.set(employeeCode, {
+    const dedupeKey = employeeId;
+    if (!dedupeKey || rowSiteCode !== normalizedSiteCode || deduped.has(dedupeKey)) return;
+    deduped.set(dedupeKey, {
       employee_id: String(item?.employee_id || item?.id || '').trim(),
       employee_code: employeeCode,
       full_name: String(item?.full_name || item?.employee_name || '').trim(),
@@ -51298,10 +51680,13 @@ function normalizeScheduleEmployees(rows = []) {
   const list = Array.isArray(rows) ? rows : [];
   const map = new Map();
   list.forEach((item) => {
+    const employeeId = String(item?.employee_id || item?.id || '').trim();
     const employeeCode = String(item?.employee_code || '').trim();
-    if (!employeeCode) return;
-    if (map.has(employeeCode)) return;
-    map.set(employeeCode, {
+    const dedupeKey = employeeId || employeeCode;
+    if (!dedupeKey) return;
+    if (map.has(dedupeKey)) return;
+    map.set(dedupeKey, {
+      employee_id: employeeId,
       employee_code: employeeCode,
       full_name: String(item?.full_name || item?.employee_name || '').trim(),
       company_code: String(item?.company_code || '').trim(),
@@ -54027,7 +54412,12 @@ function handleScheduleLiveStreamEvent(rawEvent = '') {
       dataLines.push(String(line.slice(5) || '').trim());
     }
   });
-  if (eventName !== 'schedule_changed' || !dataLines.length) return;
+  if (
+    (eventName !== 'schedule_changed' && eventName !== 'employee_changed')
+    || !dataLines.length
+  ) {
+    return;
+  }
   let payload = null;
   try {
     payload = JSON.parse(dataLines.join('\n'));
@@ -54041,6 +54431,21 @@ function handleScheduleLiveStreamEvent(rawEvent = '') {
   const activeSiteCode = getScheduleLiveRefreshSiteCode();
   if (activeSiteCode && eventSiteCode && activeSiteCode !== eventSiteCode) return;
   if (!isScheduleLiveRefreshEnabled()) return;
+
+  if (eventName === 'employee_changed') {
+    const tenantCode = ensureScheduleTenantCode(getScheduleTenantValue());
+    if (tenantCode) {
+      clearHeavyApiCache(`schedule-create-employees:${tenantCode}:`);
+    }
+    invalidateScheduleCache();
+    void runActionSafely(
+      (async () => {
+        await refreshEmployeeProjection();
+      })(),
+      '직원 변경 반영에 실패했습니다.',
+    );
+  }
+
   state.scheduleLiveRefreshQueued = true;
   runActionSafely(triggerScheduleLiveRefreshFromEvent(), '스케줄 변경을 즉시 반영하지 못했습니다.');
 }
@@ -54692,7 +55097,7 @@ async function onEmployeeSubmit(event) {
       showToast(`직원 등록 완료: ${createdCode || '자동생성 번호'}`, 'success');
     }
 
-    await loadEmployees();
+    await refreshEmployeeProjection({ includeHomeSummary: true });
     resetEmployeeForm();
     if (isDesktopViewport()) {
       setEmployeeFormExpanded(false, { force: true });
@@ -57566,6 +57971,38 @@ function bindUiEvents() {
     renderNoticeComposeTablePicker();
   }, { signal });
 
+  document.addEventListener('mousedown', (event) => {
+    if (!isNoticesComposeActive() || event.button !== 0) return;
+    const resizeHandle = event.target instanceof Element
+      ? event.target.closest('[data-notice-inline-resize="table"][data-notice-resize-direction]')
+      : null;
+    if (resizeHandle instanceof HTMLElement) {
+      beginNoticeComposeInlinePointerSession('table', event, {
+        mode: 'resize',
+        direction: resizeHandle.dataset.noticeResizeDirection || 'se',
+      });
+      return;
+    }
+    const dragHandle = event.target instanceof Element
+      ? event.target.closest('[data-notice-inline-drag-handle]')
+      : null;
+    if (dragHandle instanceof HTMLElement) {
+      beginNoticeComposeInlinePointerSession(
+        String(dragHandle.dataset.noticeInlineDragHandle || '').trim().toLowerCase(),
+        event,
+        { mode: 'drag' },
+      );
+    }
+  }, { signal });
+
+  document.addEventListener('mousemove', (event) => {
+    handleNoticeComposeInlinePointerMove(event);
+  }, { signal });
+
+  document.addEventListener('mouseup', () => {
+    finishNoticeComposeInlinePointerSession();
+  }, { signal });
+
   document.addEventListener('click', (event) => {
     if (window.__RG_ARLS_HANDLERS_BOUND__ !== true) return;
 
@@ -58627,25 +59064,6 @@ function bindUiEvents() {
       markNoticeComposeDraftDirty();
       writeNoticeComposeDraftToFields();
       renderNoticeComposeTableEditor();
-      return;
-    }
-
-    if (action === 'notices-set-poll-modal-mode') {
-      const nextMode = String(actionEl.dataset.value || '').trim().toLowerCase() === 'multiple' ? 'multiple' : 'single';
-      updateNoticeComposePollModalDraft((poll) => ({
-        ...poll,
-        allowMultiple: nextMode === 'multiple',
-      }));
-      renderNoticeComposePollModal();
-      return;
-    }
-
-    if (action === 'notices-toggle-poll-modal-anonymous') {
-      updateNoticeComposePollModalDraft((poll) => ({
-        ...poll,
-        isAnonymous: !Boolean(poll.isAnonymous),
-      }));
-      renderNoticeComposePollModal();
       return;
     }
 
