@@ -20981,9 +20981,13 @@ function renderNoticeComposeDocumentFlow() {
     if (block.kind === 'paragraph') {
       const paragraphEl = createNoticeComposeParagraphBlockElement(block, index, {
         primarySurface: Boolean(primaryParagraphId && String(block.id || '').trim() === primaryParagraphId),
+        showPlaceholder: !streamHasEmbed,
       });
       if (streamHasEmbed) {
         paragraphEl.classList.add('is-stream-fragment');
+        if (!String(block.text || '').trim()) {
+          paragraphEl.classList.add('is-empty-fragment');
+        }
       }
       contentStream.appendChild(paragraphEl);
       return;
@@ -35713,6 +35717,7 @@ function buildNoticeComposeTableGridElement(tableDraft, blockId = '') {
 
 function createNoticeComposeParagraphBlockElement(block, index = 0, options = {}) {
   const isPrimarySurface = Boolean(options?.primarySurface);
+  const showPlaceholder = options?.showPlaceholder !== false;
   const section = document.createElement('section');
   section.className = 'notices-compose-inline-block notices-compose-text-block notices-compose-flow-block notices-compose-flow-paragraph';
   section.dataset.noticeInlineKind = 'body';
@@ -35729,7 +35734,9 @@ function createNoticeComposeParagraphBlockElement(block, index = 0, options = {}
   if (isPrimarySurface) {
     textarea.classList.add('is-primary-body-surface');
   }
-  textarea.placeholder = '문단은 빈 줄로 구분합니다. 긴 안내, 절차, 유의사항을 순서대로 정리하세요.';
+  textarea.placeholder = showPlaceholder
+    ? '문단은 빈 줄로 구분합니다. 긴 안내, 절차, 유의사항을 순서대로 정리하세요.'
+    : '';
   textarea.value = String(block.text || '');
   textarea.dataset.noticeComposeParagraphInput = 'true';
   textarea.dataset.noticeComposeBlockId = String(block.id || '');

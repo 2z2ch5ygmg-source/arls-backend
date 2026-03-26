@@ -23629,6 +23629,16 @@ button.attendance-status-special-card.active {
   min-height: 1lh;
 }
 
+.notices-compose-flow-stream.has-embed .notices-compose-flow-paragraph.is-empty-fragment .notices-compose-flow-textarea {
+  min-height: 1.2lh;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.notices-compose-flow-stream.has-embed .notices-compose-flow-paragraph.is-stream-fragment .notices-compose-flow-textarea::placeholder {
+  color: transparent;
+}
+
 .notices-compose-flow-table-block {
   clear: both;
 }
