@@ -19106,27 +19106,89 @@ function cloneNoticeComposeContentBlocks(rawBlocks = null, fallbackBodyText = ''
   });
 }
 
-function splitNoticeComposeParagraphText(rawText = '') {
-  return String(rawText || '')
-    .split(/\n\s*\n+/)
-    .map((part) => String(part || '').trim())
-    .filter(Boolean);
+function getNoticeComposeParagraphEntries(rawText = '') {
+  const text = String(rawText || '').replace(/\r\n/g, '\n');
+  const entries = [];
+  const matcher = /[^\n]+/g;
+  let match = matcher.exec(text);
+  while (match) {
+    const rawLine = String(match[0] || '');
+    const trimmed = rawLine.trim();
+    if (trimmed) {
+      entries.push({
+        text: trimmed,
+        start: match.index,
+        end: match.index + rawLine.length,
+      });
+    }
+    match = matcher.exec(text);
+  }
+  return { text, entries };
 }
 
-function createNoticeComposeParagraphBlocksFromText(rawText = '', { firstBlockId = '', preserveEmpty = false } = {}) {
-  const parts = splitNoticeComposeParagraphText(rawText);
-  if (!parts.length) {
-    return preserveEmpty
+function resolveNoticeComposeParagraphAnchor(entries = [], blocks = [], rawOffset = 0) {
+  if (!Array.isArray(blocks) || !blocks.length) return null;
+  if (!Array.isArray(entries) || !entries.length) {
+    return {
+      blockId: String(blocks[0]?.id || '').trim(),
+      start: 0,
+      end: 0,
+    };
+  }
+  const lastEntry = entries[entries.length - 1];
+  const maxOffset = Math.max(0, Number.parseInt(String(lastEntry?.end || 0), 10) || 0);
+  const offset = Math.max(0, Math.min(maxOffset, Number.parseInt(String(rawOffset || 0), 10) || 0));
+  let targetIndex = entries.findIndex((entry) => offset <= entry.end);
+  if (targetIndex === -1) {
+    targetIndex = entries.length - 1;
+  }
+  const targetEntry = entries[targetIndex] || entries[entries.length - 1];
+  const localOffset = offset < targetEntry.start
+    ? 0
+    : Math.min(String(targetEntry.text || '').length, Math.max(0, offset - targetEntry.start));
+  return {
+    blockId: String(blocks[targetIndex]?.id || blocks[0]?.id || '').trim(),
+    start: localOffset,
+    end: localOffset,
+  };
+}
+
+function buildNoticeComposeParagraphBundle(rawText = '', {
+  firstBlockId = '',
+  preserveEmpty = false,
+  anchorStart = null,
+  anchorEnd = null,
+} = {}) {
+  const { entries } = getNoticeComposeParagraphEntries(rawText);
+  if (!entries.length) {
+    const blocks = preserveEmpty
       ? [{ id: String(firstBlockId || '').trim() || createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text: '' }]
       : [];
+    const anchor = blocks.length
+      ? { blockId: String(blocks[0].id || '').trim(), start: 0, end: 0 }
+      : null;
+    return { blocks, anchor };
   }
-  return parts.map((text, index) => ({
+  const blocks = entries.map((entry, index) => ({
     id: index === 0 && String(firstBlockId || '').trim()
       ? String(firstBlockId || '').trim()
       : createNoticeComposeBlockId('paragraph'),
     kind: 'paragraph',
-    text,
+    text: entry.text,
   }));
+  const anchorOffset = Number.isInteger(anchorEnd) ? anchorEnd : anchorStart;
+  const anchor = Number.isInteger(anchorOffset)
+    ? resolveNoticeComposeParagraphAnchor(entries, blocks, anchorOffset)
+    : null;
+  return { blocks, anchor };
+}
+
+function splitNoticeComposeParagraphText(rawText = '') {
+  return getNoticeComposeParagraphEntries(rawText).entries.map((entry) => entry.text);
+}
+
+function createNoticeComposeParagraphBlocksFromText(rawText = '', { firstBlockId = '', preserveEmpty = false } = {}) {
+  return buildNoticeComposeParagraphBundle(rawText, { firstBlockId, preserveEmpty }).blocks;
 }
 
 function buildNoticeComposeBodyTextFromContentBlocks(rawBlocks = null) {
@@ -19869,6 +19931,10 @@ function readNoticeComposeContentBlocksFromDom() {
   const notices = ensureNoticesState();
   const currentBlocks = getNoticeComposeContentBlocks(notices.composeDraft);
   const blockMap = new Map(currentBlocks.map((block) => [String(block.id || '').trim(), block]));
+  const storedAnchor = notices.composeInsertionAnchor && typeof notices.composeInsertionAnchor === 'object'
+    ? notices.composeInsertionAnchor
+    : null;
+  let nextAnchor = null;
   const flowBlocks = Array.from(document.querySelectorAll('[data-notice-compose-flow-index]'));
   if (!flowBlocks.length) {
     return currentBlocks;
@@ -19881,14 +19947,21 @@ function readNoticeComposeContentBlocksFromDom() {
     const current = blockMap.get(blockId);
     if (kind === 'paragraph') {
       const input = blockEl.querySelector('[data-notice-compose-paragraph-input="true"]');
-      const paragraphBlocks = createNoticeComposeParagraphBlocksFromText(
-        input instanceof HTMLTextAreaElement ? String(input.value || '') : String(current?.text || ''),
-        {
-          firstBlockId: blockId || createNoticeComposeBlockId('paragraph'),
-          preserveEmpty: true,
-        },
-      );
-      nextBlocks.push(...paragraphBlocks);
+      const rawText = input instanceof HTMLTextAreaElement ? String(input.value || '') : String(current?.text || '');
+      const paragraphBundle = buildNoticeComposeParagraphBundle(rawText, {
+        firstBlockId: blockId || createNoticeComposeBlockId('paragraph'),
+        preserveEmpty: true,
+        anchorStart: storedAnchor && String(storedAnchor.blockId || '').trim() === blockId
+          ? storedAnchor.start
+          : null,
+        anchorEnd: storedAnchor && String(storedAnchor.blockId || '').trim() === blockId
+          ? storedAnchor.end
+          : null,
+      });
+      if (!nextAnchor && paragraphBundle.anchor && storedAnchor && String(storedAnchor.blockId || '').trim() === blockId) {
+        nextAnchor = paragraphBundle.anchor;
+      }
+      nextBlocks.push(...paragraphBundle.blocks);
       return;
     }
     if (kind === 'table' && current?.kind === 'table') {
@@ -19914,6 +19987,13 @@ function readNoticeComposeContentBlocksFromDom() {
       });
     }
   });
+  if (storedAnchor) {
+    if (nextAnchor && String(nextAnchor.blockId || '').trim()) {
+      notices.composeInsertionAnchor = nextAnchor;
+    } else if (!nextBlocks.some((block) => String(block.id || '').trim() === String(storedAnchor.blockId || '').trim())) {
+      notices.composeInsertionAnchor = null;
+    }
+  }
   return cloneNoticeComposeContentBlocks(nextBlocks, notices.composeDraft?.bodyText, notices.composeDraft?.table, notices.composeDraft?.poll);
 }
 
@@ -21458,8 +21538,8 @@ function renderShellMode() {
   const profileSubtitle = $('#profileViewSubtitle');
   if (profileSubtitle) {
     profileSubtitle.textContent = managerMode
-      ? '운영 설정과 연동값을 관리합니다.'
-      : '비밀번호와 알림을 관리합니다.';
+      ? '운영 상태와 연동 제어를 한곳에서 관리합니다.'
+      : '계정 상태와 알림 제어를 한곳에서 관리합니다.';
   }
 
   renderProfileWorkspaceSegments();

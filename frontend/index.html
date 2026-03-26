@@ -44,7 +44,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="assets/sentrix-hr-favicon-v4-16.png?v=20260323-sentrix-browser-brand-v4" />
     <link rel="shortcut icon" href="assets/sentrix-hr-favicon-v4.ico?v=20260323-sentrix-browser-brand-v4" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/sentrix-hr-favicon-v4-180.png?v=20260323-sentrix-browser-brand-v4" />
-    <link rel="stylesheet" href="css/styles.css?v=20260326-notice-editor-no-detached-table-section-fix" />
+    <link rel="stylesheet" href="css/styles.css?v=20260326-notice-editor-create-inbody-and-move-between-paragraphs-fix" />
   </head>
   <body>
     <div id="app">
@@ -3232,7 +3232,7 @@
             <div class="workspace-head profile-workspace-head">
               <div class="workspace-head-main">
                 <h2 id="profileViewTitle">내 정보</h2>
-                <p id="profileViewSubtitle" class="muted">비밀번호와 알림을 관리합니다.</p>
+                <p id="profileViewSubtitle" class="muted">계정 상태와 운영 제어를 한곳에서 관리합니다.</p>
               </div>
             </div>
             <div id="profileWorkspaceTabs" class="workspace-tabs profile-workspace-tabs">
@@ -3241,136 +3241,169 @@
             </div>
             <div id="profileSettingsPanel" class="profile-segment-panel" data-profile-segment-panel="settings">
               <div class="profile-settings-workspace">
-                <div class="profile-settings-main">
-                  <article id="profilePasswordCard" class="module-card stack profile-control-card shell-employee-only">
-                    <div class="profile-control-head">
-                      <div class="profile-control-title">
-                        <h3>계정 보안</h3>
-                        <p class="muted">계정 확인과 비밀번호 변경을 한곳에서 관리합니다.</p>
+                <section class="profile-command-stage">
+                  <header class="profile-identity-strip">
+                    <div class="profile-identity-main">
+                      <div class="profile-identity-mark" aria-hidden="true">SX</div>
+                      <div class="profile-identity-copy">
+                        <span class="profile-eyebrow">Security-Ops Identity</span>
+                        <h3>내 계정과 운영 설정</h3>
+                        <p class="muted">계정 상태를 먼저 읽고, 필요한 제어만 같은 화면에서 바로 조정합니다.</p>
                       </div>
+                    </div>
+                    <div class="profile-identity-side">
                       <span id="profileAccountRolePill" class="status-pill status-pill-neutral">직원</span>
+                      <p class="muted">변경 사항은 현재 세션과 운영 권한 범위에 즉시 반영됩니다.</p>
                     </div>
-                    <div class="profile-grid profile-account-grid shell-employee-only">
-                      <div class="profile-item"><span>이름</span><strong id="profileName">-</strong></div>
-                      <div class="profile-item"><span>아이디</span><strong id="profileUsername">-</strong></div>
-                      <div class="profile-item"><span>역할</span><strong id="profileRole">-</strong></div>
-                      <div class="profile-item"><span>소속</span><strong id="profileTenant">-</strong></div>
+                  </header>
+
+                  <div class="profile-fact-strip shell-employee-only">
+                    <div class="profile-fact">
+                      <span>이름</span>
+                      <strong id="profileName">-</strong>
                     </div>
-                    <form id="profilePasswordForm" class="profile-password-form">
-                      <label class="input-field" for="profileCurrentPassword">
-                        현재 비밀번호
-                        <input id="profileCurrentPassword" type="password" autocomplete="current-password" required />
-                      </label>
-                      <label class="input-field" for="profileNewPassword">
-                        새 비밀번호
-                        <input id="profileNewPassword" type="password" minlength="8" autocomplete="new-password" required />
-                        <span class="input-helper">최소 8자 이상</span>
-                      </label>
-                      <label class="input-field" for="profileNewPasswordConfirm">
-                        새 비밀번호 확인
-                        <input id="profileNewPasswordConfirm" type="password" minlength="8" autocomplete="new-password" required />
-                      </label>
-                      <div class="settings-section-footer">
-                        <p id="profilePasswordStatus" class="muted settings-section-status"></p>
-                        <button class="btn btn-primary" type="submit">비밀번호 변경</button>
-                      </div>
-                    </form>
-                  </article>
-
-                  <article class="module-card stack notification-settings-card profile-control-card shell-employee-only">
-                    <div class="profile-control-head">
-                      <div class="profile-control-title">
-                        <h3>알림</h3>
-                        <p class="muted">예약 알림과 권한 상태를 같은 화면에서 관리합니다.</p>
-                      </div>
-                      <div class="profile-control-pills">
-                        <span id="notificationPermissionPill" class="status-pill status-pill-warn">권한 확인 필요</span>
-                        <span id="notificationSchedulePill" class="status-pill status-pill-neutral">예약 대기</span>
-                      </div>
+                    <div class="profile-fact">
+                      <span>아이디</span>
+                      <strong id="profileUsername">-</strong>
                     </div>
-
-                    <div class="settings-switch-list">
-                      <label class="settings-switch-row" for="notifEnabled">
-                        <span class="settings-switch-copy">
-                          <strong>실시간 예약 알림</strong>
-                          <span>근무 시작과 퇴근 예정 알림을 자동으로 예약합니다.</span>
-                        </span>
-                        <span class="settings-switch-control">
-                          <input id="notifEnabled" type="checkbox" />
-                          <span class="settings-switch-track" aria-hidden="true"></span>
-                        </span>
-                      </label>
-
-                      <div class="settings-inline-grid notification-setting-grid">
-                        <label class="input-field" for="notifCheckInLead">
-                          근무 시작 전 알림
-                          <select id="notifCheckInLead">
-                            <option value="10">10분 전</option>
-                            <option value="30" selected>30분 전</option>
-                            <option value="60">60분 전</option>
-                          </select>
-                        </label>
-
-                        <label class="settings-switch-row settings-switch-row-compact" for="notifCheckOutEnabled">
-                          <span class="settings-switch-copy">
-                            <strong>퇴근 예정 알림</strong>
-                            <span>퇴근 예정 시각을 별도로 알려줍니다.</span>
-                          </span>
-                          <span class="settings-switch-control">
-                            <input id="notifCheckOutEnabled" type="checkbox" />
-                            <span class="settings-switch-track" aria-hidden="true"></span>
-                          </span>
-                        </label>
-
-                        <label class="input-field" for="notifCheckOutLead">
-                          퇴근 예정 전 알림
-                          <select id="notifCheckOutLead">
-                            <option value="10">10분 전</option>
-                            <option value="30" selected>30분 전</option>
-                            <option value="60">60분 전</option>
-                          </select>
-                        </label>
-                      </div>
+                    <div class="profile-fact">
+                      <span>역할</span>
+                      <strong id="profileRole">-</strong>
                     </div>
-
-                    <div class="settings-section-footer settings-section-footer-wrap">
-                      <div class="settings-section-status-block">
-                        <p id="notifStatus" class="muted settings-section-status">권한과 예약 상태를 확인합니다.</p>
-                        <p id="notifScheduledSummary" class="muted settings-section-meta"></p>
-                      </div>
-                      <div class="inline-actions settings-scoped-actions">
-                        <button class="btn btn-primary" type="button" id="notifPermissionBtn" data-action="notification-permission-flow">알림 권한 요청</button>
-                        <button class="btn btn-secondary" type="button" id="notifResyncBtn" data-action="notification-resync">지금 동기화</button>
-                        <button class="btn btn-secondary" type="button" id="notifOpenSettingsBtn" data-action="notification-open-settings">설정 열기</button>
-                      </div>
+                    <div class="profile-fact">
+                      <span>소속</span>
+                      <strong id="profileTenant">-</strong>
                     </div>
+                  </div>
 
-                    <div class="notification-push-card hidden" aria-hidden="true">
-                      <label class="settings-switch-row settings-switch-row-compact" for="notifPushApprovals">
-                        <span class="settings-switch-copy">
-                          <strong>승인 결과 푸시</strong>
-                          <span>원격 푸시 연결 시 승인/반려 결과를 받습니다.</span>
-                        </span>
-                        <span class="settings-switch-control">
-                          <input id="notifPushApprovals" type="checkbox" />
-                          <span class="settings-switch-track" aria-hidden="true"></span>
-                        </span>
-                      </label>
-                      <label class="settings-switch-row settings-switch-row-compact" for="notifPushSchedule">
-                        <span class="settings-switch-copy">
-                          <strong>스케줄 변경 푸시</strong>
-                          <span>원격 푸시 연결 시 스케줄 변경 내역을 받습니다.</span>
-                        </span>
-                        <span class="settings-switch-control">
-                          <input id="notifPushSchedule" type="checkbox" />
-                          <span class="settings-switch-track" aria-hidden="true"></span>
-                        </span>
-                      </label>
-                    </div>
-                  </article>
+                  <div class="profile-settings-columns">
+                    <div class="profile-settings-main">
+                      <article id="profilePasswordCard" class="profile-control-card profile-surface shell-employee-only">
+                        <div class="profile-control-head">
+                          <div class="profile-control-title">
+                            <span class="profile-section-kicker">Account Security</span>
+                            <h3>계정 보안</h3>
+                            <p class="muted">본인 확인 정보와 비밀번호를 분리하지 않고 한 흐름에서 관리합니다.</p>
+                          </div>
+                        </div>
+                        <form id="profilePasswordForm" class="profile-password-form">
+                          <label class="input-field" for="profileCurrentPassword">
+                            현재 비밀번호
+                            <input id="profileCurrentPassword" type="password" autocomplete="current-password" required />
+                          </label>
+                          <div class="settings-inline-grid profile-password-grid">
+                            <label class="input-field" for="profileNewPassword">
+                              새 비밀번호
+                              <input id="profileNewPassword" type="password" minlength="8" autocomplete="new-password" required />
+                              <span class="input-helper">최소 8자 이상</span>
+                            </label>
+                            <label class="input-field" for="profileNewPasswordConfirm">
+                              새 비밀번호 확인
+                              <input id="profileNewPasswordConfirm" type="password" minlength="8" autocomplete="new-password" required />
+                            </label>
+                          </div>
+                          <div class="settings-section-footer">
+                            <p id="profilePasswordStatus" class="muted settings-section-status"></p>
+                            <button class="btn btn-primary" type="submit">비밀번호 변경</button>
+                          </div>
+                        </form>
+                      </article>
 
-                  <div class="profile-manager-settings-shell shell-manager-only">
-                    <article id="integrationFlagsCard" class="module-card stack profile-control-card shell-manager-only">
+                      <article class="notification-settings-card profile-control-card profile-surface shell-employee-only">
+                        <div class="profile-control-head">
+                          <div class="profile-control-title">
+                            <span class="profile-section-kicker">Alert Control</span>
+                            <h3>알림</h3>
+                            <p class="muted">권한 상태와 예약 기준을 같은 운영 맥락에서 조정합니다.</p>
+                          </div>
+                          <div class="profile-control-pills">
+                            <span id="notificationPermissionPill" class="status-pill status-pill-warn">권한 확인 필요</span>
+                            <span id="notificationSchedulePill" class="status-pill status-pill-neutral">예약 대기</span>
+                          </div>
+                        </div>
+
+                        <div class="settings-switch-list">
+                          <label class="settings-switch-row" for="notifEnabled">
+                            <span class="settings-switch-copy">
+                              <strong>실시간 예약 알림</strong>
+                              <span>근무 시작과 퇴근 예정 알림을 자동으로 예약합니다.</span>
+                            </span>
+                            <span class="settings-switch-control">
+                              <input id="notifEnabled" type="checkbox" />
+                              <span class="settings-switch-track" aria-hidden="true"></span>
+                            </span>
+                          </label>
+
+                          <div class="settings-inline-grid notification-setting-grid">
+                            <label class="input-field" for="notifCheckInLead">
+                              근무 시작 전 알림
+                              <select id="notifCheckInLead">
+                                <option value="10">10분 전</option>
+                                <option value="30" selected>30분 전</option>
+                                <option value="60">60분 전</option>
+                              </select>
+                            </label>
+
+                            <label class="settings-switch-row settings-switch-row-compact" for="notifCheckOutEnabled">
+                              <span class="settings-switch-copy">
+                                <strong>퇴근 예정 알림</strong>
+                                <span>퇴근 예정 시각을 별도로 알려줍니다.</span>
+                              </span>
+                              <span class="settings-switch-control">
+                                <input id="notifCheckOutEnabled" type="checkbox" />
+                                <span class="settings-switch-track" aria-hidden="true"></span>
+                              </span>
+                            </label>
+
+                            <label class="input-field" for="notifCheckOutLead">
+                              퇴근 예정 전 알림
+                              <select id="notifCheckOutLead">
+                                <option value="10">10분 전</option>
+                                <option value="30" selected>30분 전</option>
+                                <option value="60">60분 전</option>
+                              </select>
+                            </label>
+                          </div>
+                        </div>
+
+                        <div class="settings-section-footer settings-section-footer-wrap">
+                          <div class="settings-section-status-block">
+                            <p id="notifStatus" class="muted settings-section-status">권한과 예약 상태를 확인합니다.</p>
+                            <p id="notifScheduledSummary" class="muted settings-section-meta"></p>
+                          </div>
+                          <div class="inline-actions settings-scoped-actions">
+                            <button class="btn btn-primary" type="button" id="notifPermissionBtn" data-action="notification-permission-flow">알림 권한 요청</button>
+                            <button class="btn btn-secondary" type="button" id="notifResyncBtn" data-action="notification-resync">지금 동기화</button>
+                            <button class="btn btn-secondary" type="button" id="notifOpenSettingsBtn" data-action="notification-open-settings">설정 열기</button>
+                          </div>
+                        </div>
+
+                        <div class="notification-push-card hidden" aria-hidden="true">
+                          <label class="settings-switch-row settings-switch-row-compact" for="notifPushApprovals">
+                            <span class="settings-switch-copy">
+                              <strong>승인 결과 푸시</strong>
+                              <span>원격 푸시 연결 시 승인/반려 결과를 받습니다.</span>
+                            </span>
+                            <span class="settings-switch-control">
+                              <input id="notifPushApprovals" type="checkbox" />
+                              <span class="settings-switch-track" aria-hidden="true"></span>
+                            </span>
+                          </label>
+                          <label class="settings-switch-row settings-switch-row-compact" for="notifPushSchedule">
+                            <span class="settings-switch-copy">
+                              <strong>스케줄 변경 푸시</strong>
+                              <span>원격 푸시 연결 시 스케줄 변경 내역을 받습니다.</span>
+                            </span>
+                            <span class="settings-switch-control">
+                              <input id="notifPushSchedule" type="checkbox" />
+                              <span class="settings-switch-track" aria-hidden="true"></span>
+                            </span>
+                          </label>
+                        </div>
+                      </article>
+
+                      <div class="profile-manager-settings-shell shell-manager-only">
+                        <article id="integrationFlagsCard" class="profile-control-card profile-surface shell-manager-only">
                       <div class="profile-control-head">
                         <div class="profile-control-title">
                           <h3>운영 플래그</h3>
@@ -3502,7 +3535,7 @@
                       </div>
                     </article>
 
-                    <article id="googleSheetProfileCard" class="module-card stack profile-control-card shell-manager-only">
+                        <article id="googleSheetProfileCard" class="profile-control-card profile-surface shell-manager-only">
                       <div class="profile-control-head">
                         <div class="profile-control-title">
                           <h3>구글 시트 프로필</h3>
@@ -3614,88 +3647,93 @@
                       </form>
                     </article>
 
-                    <article id="lockPolicyCard" class="module-card stack shell-manager-only">
+                        <article id="lockPolicyCard" class="profile-control-card profile-surface shell-manager-only">
+                          <div class="profile-control-head">
+                            <div class="profile-control-title">
+                              <span class="profile-section-kicker">Closing Policy</span>
+                              <h3>정산 잠금</h3>
+                              <p class="muted">기간 잠금 상태와 적용 범위를 빠르게 확인합니다.</p>
+                            </div>
+                            <span id="lockStatusPill" class="status-pill status-pill-warn">열림</span>
+                          </div>
+                          <div class="schedule-filter-row settings-inline-grid">
+                            <label class="input-field">
+                              마감 시작일
+                              <input id="lockPeriodStart" type="date" />
+                            </label>
+                            <label class="input-field">
+                              마감 종료일
+                              <input id="lockPeriodEnd" type="date" />
+                            </label>
+                          </div>
+                          <div class="settings-section-footer settings-section-footer-wrap">
+                            <p id="lockStatusSummary" class="muted settings-section-status">정산 마감 상태 표시 영역입니다.</p>
+                            <button class="btn btn-secondary" type="button" data-action="lock-open-settings">잠금 정책 열기</button>
+                          </div>
+                        </article>
+                      </div>
+                    </div>
+
+                    <aside id="profileSettingsStateRail" class="profile-settings-rail profile-surface">
                       <div class="profile-control-head">
                         <div class="profile-control-title">
-                          <h3>정산 잠금</h3>
-                          <p class="muted">기간 잠금 상태와 적용 범위를 간단히 확인합니다.</p>
+                          <span class="profile-section-kicker">Status Rail</span>
+                          <h3>현재 상태</h3>
+                          <p class="muted">지금 확인해야 할 값만 얇은 레일에 모읍니다.</p>
                         </div>
-                        <span id="lockStatusPill" class="status-pill status-pill-warn">열림</span>
                       </div>
-                      <div class="schedule-filter-row settings-inline-grid">
-                        <label class="input-field">
-                          마감 시작일
-                          <input id="lockPeriodStart" type="date" />
-                        </label>
-                        <label class="input-field">
-                          마감 종료일
-                          <input id="lockPeriodEnd" type="date" />
-                        </label>
+                      <div class="profile-settings-rail-grid">
+                        <div class="profile-settings-rail-item">
+                          <span>역할</span>
+                          <strong id="profileRailRoleValue">-</strong>
+                        </div>
+                        <div class="profile-settings-rail-item">
+                          <span>소속</span>
+                          <strong id="profileRailTenantValue">-</strong>
+                        </div>
+                        <div class="profile-settings-rail-item">
+                          <span>알림 권한</span>
+                          <strong id="profileRailNotificationValue">-</strong>
+                        </div>
+                        <div class="profile-settings-rail-item">
+                          <span>최근 동기화</span>
+                          <strong id="profileRailSyncValue">-</strong>
+                        </div>
+                        <div class="profile-settings-rail-item shell-manager-only">
+                          <span>플래그</span>
+                          <strong id="profileRailIntegrationValue">-</strong>
+                        </div>
+                        <div class="profile-settings-rail-item shell-manager-only">
+                          <span>활성 프로파일</span>
+                          <strong id="profileRailProfileValue">-</strong>
+                        </div>
+                        <div class="profile-settings-rail-item shell-manager-only">
+                          <span>잠금 상태</span>
+                          <strong id="profileRailLockValue">-</strong>
+                        </div>
                       </div>
-                      <div class="settings-section-footer settings-section-footer-wrap">
-                        <p id="lockStatusSummary" class="muted settings-section-status">정산 마감 상태 표시 영역입니다.</p>
-                        <button class="btn btn-secondary" type="button" data-action="lock-open-settings">잠금 정책 열기</button>
+                      <p id="profileRailStatusNote" class="muted profile-settings-rail-note">계정과 설정 상태를 확인 중입니다.</p>
+                      <div class="quick-actions profile-settings-rail-actions shell-employee-only">
+                        <button class="btn btn-secondary" type="button" data-action="open-notifications">알림함</button>
+                        <button class="btn btn-secondary" type="button" data-action="drawer-help">설정/도움말</button>
+                        <button class="btn btn-destructive" type="button" data-action="logout">로그아웃</button>
                       </div>
-                    </article>
+                      <div class="quick-actions profile-settings-rail-actions shell-manager-only">
+                        <button class="btn btn-secondary" type="button" data-action="open-notifications">알림함</button>
+                        <button class="btn btn-secondary" type="button" data-action="lock-open-settings">잠금 정책</button>
+                        <button class="btn btn-destructive" type="button" data-action="logout">로그아웃</button>
+                      </div>
+                    </aside>
                   </div>
-                </div>
-
-                <aside id="profileSettingsStateRail" class="module-card stack profile-settings-rail">
-                  <div class="profile-control-head">
-                    <div class="profile-control-title">
-                      <h3>현재 상태</h3>
-                      <p class="muted">지금 확인해야 할 값만 요약합니다.</p>
-                    </div>
-                  </div>
-                  <div class="profile-settings-rail-grid">
-                    <div class="profile-settings-rail-item">
-                      <span>역할</span>
-                      <strong id="profileRailRoleValue">-</strong>
-                    </div>
-                    <div class="profile-settings-rail-item">
-                      <span>소속</span>
-                      <strong id="profileRailTenantValue">-</strong>
-                    </div>
-                    <div class="profile-settings-rail-item">
-                      <span>알림 권한</span>
-                      <strong id="profileRailNotificationValue">-</strong>
-                    </div>
-                    <div class="profile-settings-rail-item">
-                      <span>최근 동기화</span>
-                      <strong id="profileRailSyncValue">-</strong>
-                    </div>
-                    <div class="profile-settings-rail-item shell-manager-only">
-                      <span>플래그</span>
-                      <strong id="profileRailIntegrationValue">-</strong>
-                    </div>
-                    <div class="profile-settings-rail-item shell-manager-only">
-                      <span>활성 프로파일</span>
-                      <strong id="profileRailProfileValue">-</strong>
-                    </div>
-                    <div class="profile-settings-rail-item shell-manager-only">
-                      <span>잠금 상태</span>
-                      <strong id="profileRailLockValue">-</strong>
-                    </div>
-                  </div>
-                  <p id="profileRailStatusNote" class="muted profile-settings-rail-note">계정과 설정 상태를 확인 중입니다.</p>
-                  <div class="quick-actions profile-settings-rail-actions shell-employee-only">
-                    <button class="btn btn-secondary" type="button" data-action="open-notifications">알림함</button>
-                    <button class="btn btn-secondary" type="button" data-action="drawer-help">설정/도움말</button>
-                    <button class="btn btn-destructive" type="button" data-action="logout">로그아웃</button>
-                  </div>
-                  <div class="quick-actions profile-settings-rail-actions shell-manager-only">
-                    <button class="btn btn-secondary" type="button" data-action="open-notifications">알림함</button>
-                    <button class="btn btn-secondary" type="button" data-action="lock-open-settings">잠금 정책</button>
-                    <button class="btn btn-destructive" type="button" data-action="logout">로그아웃</button>
-                  </div>
-                </aside>
+                </section>
               </div>
             </div>
-            <article id="profileThemePanel" class="module-card stack profile-segment-panel hidden" data-profile-segment-panel="theme">
+            <article id="profileThemePanel" class="profile-segment-panel hidden profile-theme-panel" data-profile-segment-panel="theme">
               <div class="profile-theme-shell">
-                <div class="profile-theme-main stack">
+                <div class="profile-theme-main">
                   <div class="profile-control-head">
                     <div class="profile-control-title">
+                      <span class="profile-section-kicker">Display Mode</span>
                       <h3>모드 변경</h3>
                       <p class="muted">업무 화면에 맞는 모드를 바로 바꿉니다.</p>
                     </div>
@@ -5476,7 +5514,7 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260326-notice-editor-no-detached-table-section-fix"></script>
+    <script src="config.js?v=20260326-notice-editor-create-inbody-and-move-between-paragraphs-fix"></script>
     <script>
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
