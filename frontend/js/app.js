@@ -14419,11 +14419,8 @@ function renderScheduleSupportHqWorkspace() {
 
   renderScheduleSupportArtifactMeta(artifactContext);
   if (userMetaGrid instanceof HTMLElement) {
-    renderSupportStatusHqMetaGrid(userMetaGrid, [
-      { label: '선택 지점', value: selectedSiteLabel },
-      { label: '대상 월', value: formatScheduleMonthTitle(context.month) },
-      { label: '기준 상태', value: uploadMeta ? getSupportStatusHqLatestStatusLabel(uploadMeta.latest_status || '') : (artifactContext.artifact_id ? '최신 기준 사용 가능' : 'source 대기') },
-    ]);
+    userMetaGrid.innerHTML = '';
+    userMetaGrid.hidden = true;
   }
   const uploadMetaItems = [
     { label: '파일명', value: String(uploadMeta?.file_name || workspace.uploadFileName || '선택 전').trim() || '선택 전' },
