@@ -13228,9 +13228,8 @@ function renderScheduleUploadWorkspace() {
       : '월간 업로드';
   }
   if (uploadHeaderText) {
-    uploadHeaderText.textContent = activeTopTab === SCHEDULE_TAB_HQ_UPLOAD
-      ? '지점별 제출본을 만들고 작성본 검토만 이어갑니다.'
-      : '지금 단계에서 필요한 작업만 보여줍니다.';
+    uploadHeaderText.textContent = '';
+    uploadHeaderText.classList.add('hidden');
   }
   renderScheduleImportMappingProfileSummary();
   renderScheduleUploadWorkflowSections();
@@ -13253,20 +13252,12 @@ function renderScheduleUploadWorkspace() {
   }
 
   if (permissionSummary) {
-    permissionSummary.textContent = isScheduleUploadTenantWideUser()
-      ? '현재 계정은 tenant 전체 지점을 선택할 수 있습니다.'
-      : '현재 계정은 본인 지점만 선택할 수 있습니다.';
+    permissionSummary.textContent = '';
+    permissionSummary.classList.add('hidden');
   }
   if (siteHint) {
-    if (uploadWorkspaceBooting) {
-      siteHint.textContent = '초기 상태를 준비하는 중입니다. 잠시 후 지점과 월을 선택할 수 있습니다.';
-    } else if (siteOptionsLoading) {
-      siteHint.textContent = '지점 목록을 불러오는 중입니다.';
-    } else {
-      siteHint.textContent = isScheduleUploadTenantWideUser()
-        ? '같은 tenant 안에서 업로드할 지점을 고를 수 있습니다.'
-        : `지점 범위가 ${getScheduleImportSiteLabel(state.user?.site_code || selectedSite)}로 고정됩니다.`;
-    }
+    siteHint.textContent = '';
+    siteHint.classList.add('hidden');
   }
   if (siteSelect instanceof HTMLSelectElement) {
     siteSelect.disabled = uploadWorkspaceBooting || siteOptionsLoading || uploadUi.analysisInFlight || supportHqBusy || !isScheduleUploadTenantWideUser();
@@ -50090,7 +50081,8 @@ function renderScheduleImportMappingProfileSummary() {
 
   badgeEl.className = readiness.badgeClass;
   badgeEl.textContent = readiness.label;
-  textEl.textContent = readiness.description;
+  textEl.textContent = '';
+  textEl.classList.add('hidden');
 
   if (metaGrid instanceof HTMLElement) {
     metaGrid.classList.toggle('hidden', !selectedProfile);
