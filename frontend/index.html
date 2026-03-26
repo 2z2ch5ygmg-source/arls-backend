@@ -17,6 +17,20 @@
         console.warn('[RG ARLS] ui theme bootstrap skipped', error);
       }
     </script>
+    <script>
+      try {
+        const nav = navigator;
+        const platform = String(nav.userAgentData?.platform || nav.platform || '').toLowerCase();
+        const ua = String(nav.userAgent || '').toLowerCase();
+        const touchPoints = Number(nav.maxTouchPoints || 0);
+        const isAppleMobile = /iphone|ipad|ipod/.test(ua);
+        const isAppleDesktop = platform.includes('mac') || ua.includes('macintosh') || (platform === 'macintel' && touchPoints > 1);
+        document.documentElement.dataset.platformFont = isAppleMobile || isAppleDesktop ? 'apple' : 'noto';
+      } catch (error) {
+        document.documentElement.dataset.platformFont = 'noto';
+        console.warn('[RG ARLS] platform font bootstrap skipped', error);
+      }
+    </script>
     <style>
       .hidden {
         display: none !important;
@@ -30,7 +44,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="assets/sentrix-hr-favicon-v4-16.png?v=20260323-sentrix-browser-brand-v4" />
     <link rel="shortcut icon" href="assets/sentrix-hr-favicon-v4.ico?v=20260323-sentrix-browser-brand-v4" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/sentrix-hr-favicon-v4-180.png?v=20260323-sentrix-browser-brand-v4" />
-    <link rel="stylesheet" href="css/styles.css?v=20260326-notice-editor-unified-body-block-model-fix" />
+    <link rel="stylesheet" href="css/styles.css?v=20260326-notice-editor-no-detached-table-section-fix" />
   </head>
   <body>
     <div id="app">
@@ -5462,7 +5476,7 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260326-notice-editor-unified-body-block-model-fix"></script>
+    <script src="config.js?v=20260326-notice-editor-no-detached-table-section-fix"></script>
     <script>
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;

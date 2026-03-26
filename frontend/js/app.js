@@ -35435,21 +35435,24 @@ function createNoticeComposeTableBlockElement(block, index = 0) {
     enabled: true,
     ...(block.table || {}),
   });
-  const section = document.createElement('section');
-  section.className = 'notices-compose-inline-block notices-compose-flow-block notices-compose-flow-table-block';
+  const section = document.createElement('div');
+  section.className = 'notices-compose-flow-block notices-compose-flow-embed-block notices-compose-flow-table-block';
   section.setAttribute('aria-label', '표 블록');
   section.dataset.noticeInlineKind = 'table';
   section.dataset.noticeComposeFlowIndex = String(index);
   section.dataset.noticeComposeFlowKind = 'table';
   section.dataset.noticeComposeBlockId = String(block.id || '');
 
-  const meta = document.createElement('div');
-  meta.className = 'notices-compose-inline-meta';
-  const kind = document.createElement('span');
-  kind.className = 'notices-compose-inline-kind';
-  kind.textContent = '표';
+  const panel = document.createElement('div');
+  panel.className = 'notices-table-panel';
+  const grid = document.createElement('div');
+  grid.className = 'notices-compose-table-grid';
+  grid.dataset.noticeTableBlockId = String(block.id || '');
+  grid.appendChild(buildNoticeComposeTableGridElement(tableDraft, String(block.id || '')));
+  panel.appendChild(grid);
+
   const actions = document.createElement('div');
-  actions.className = 'notices-compose-inline-actions';
+  actions.className = 'notices-compose-flow-block-actions';
   const moveBtn = document.createElement('button');
   moveBtn.type = 'button';
   moveBtn.className = 'notices-inline-drag-handle';
@@ -35463,17 +35466,8 @@ function createNoticeComposeTableBlockElement(block, index = 0) {
   removeBtn.dataset.noticeTableBlockId = String(block.id || '');
   removeBtn.textContent = '삭제';
   actions.append(moveBtn, removeBtn);
-  meta.append(kind, actions);
 
-  const panel = document.createElement('div');
-  panel.className = 'notices-table-panel';
-  const grid = document.createElement('div');
-  grid.className = 'notices-compose-table-grid';
-  grid.dataset.noticeTableBlockId = String(block.id || '');
-  grid.appendChild(buildNoticeComposeTableGridElement(tableDraft, String(block.id || '')));
-  panel.appendChild(grid);
-
-  section.append(meta, panel);
+  section.append(panel, actions);
   return section;
 }
 
@@ -35510,7 +35504,7 @@ function createNoticeComposePollBlockElement(block, index = 0) {
     ];
   }
   const section = createNoticePollBlock(null, previewPoll, { previewOnly: true, forceResultsVisible: true });
-  section.classList.add('notices-compose-inline-block', 'notices-compose-flow-block', 'notices-compose-flow-poll-block');
+  section.classList.add('notices-compose-flow-block', 'notices-compose-flow-embed-block', 'notices-compose-flow-poll-block');
   section.setAttribute('aria-label', '투표 블록');
   section.dataset.noticeInlineKind = 'poll';
   section.dataset.noticeComposeFlowIndex = String(index);
@@ -35518,13 +35512,8 @@ function createNoticeComposePollBlockElement(block, index = 0) {
   section.dataset.noticeComposeBlockId = String(block.id || '');
   section.dataset.noticePollBlockId = String(block.id || '');
 
-  const meta = document.createElement('div');
-  meta.className = 'notices-compose-inline-meta';
-  const kind = document.createElement('span');
-  kind.className = 'notices-compose-inline-kind';
-  kind.textContent = '투표';
   const actions = document.createElement('div');
-  actions.className = 'notices-compose-inline-actions';
+  actions.className = 'notices-compose-flow-block-actions';
   const moveBtn = document.createElement('button');
   moveBtn.type = 'button';
   moveBtn.className = 'notices-inline-drag-handle';
@@ -35544,8 +35533,7 @@ function createNoticeComposePollBlockElement(block, index = 0) {
   removeBtn.dataset.noticePollBlockId = String(block.id || '');
   removeBtn.textContent = '삭제';
   actions.append(moveBtn, editBtn, removeBtn);
-  meta.append(kind, actions);
-  section.insertBefore(meta, section.firstChild);
+  section.appendChild(actions);
   return section;
 }
 

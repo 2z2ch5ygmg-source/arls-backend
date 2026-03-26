@@ -4,7 +4,9 @@
   color-scheme: light;
 
   /* ===== UI 2026 semantic tokens ===== */
-  --ui-font-family: "Apple SD Gothic Neo", "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
+  --ui-font-family-default: "Noto Sans KR", "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
+  --ui-font-family-apple: "Apple SD Gothic Neo", -apple-system, BlinkMacSystemFont, "Noto Sans KR", "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
+  --ui-font-family: var(--ui-font-family-default);
 
   --ui-type-display-lg-size: 28px;
   --ui-type-display-lg-line: 32px;
@@ -226,6 +228,10 @@
   /* Safe area insets */
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
+}
+
+html[data-platform-font="apple"] {
+  --ui-font-family: var(--ui-font-family-apple);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23332,7 +23338,7 @@ button.attendance-status-special-card.active {
 
 .notices-compose-document-flow {
   display: grid;
-  gap: 0;
+  gap: 14px;
   align-content: start;
   position: relative;
   overflow: visible;
@@ -23404,6 +23410,12 @@ button.attendance-status-special-card.active {
   max-width: 100%;
 }
 
+.notices-compose-flow-embed-block {
+  position: relative;
+  padding: 0;
+  border-top: 0;
+}
+
 .notices-compose-flow-paragraph {
   display: block;
   padding-top: 0;
@@ -23442,6 +23454,7 @@ button.attendance-status-special-card.active {
 .notices-compose-flow-poll-block .notices-poll-card {
   width: 100%;
   max-width: 100%;
+  margin-top: 0;
 }
 
 .notices-compose-footer {
@@ -23585,8 +23598,8 @@ button.attendance-status-special-card.active {
 .notices-compose-inline-block {
   display: grid;
   gap: 12px;
-  padding: 16px 0 0;
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  padding: 0;
+  border-top: 0;
   position: relative;
   transition: transform 0.08s ease;
 }
@@ -23646,26 +23659,31 @@ button.attendance-status-special-card.active {
   gap: 14px;
 }
 
-#noticesComposePollBlock .notices-compose-inline-kind {
-  display: none;
-}
-
-#noticesComposePollBlock .notices-compose-inline-meta {
-  justify-content: flex-end;
-}
-
 .notices-compose-flow-poll-block {
   max-width: 100%;
 }
 
-.notices-compose-flow-poll-block .notices-compose-inline-kind {
-  display: none;
+.notices-compose-flow-block-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease, transform 0.14s ease;
 }
 
-.notices-compose-flow-poll-block .notices-poll-card {
-  width: 100%;
-  max-width: 100%;
-  margin-top: 10px;
+.notices-compose-flow-embed-block:hover .notices-compose-flow-block-actions,
+.notices-compose-flow-embed-block:focus-within .notices-compose-flow-block-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .notices-inline-remove {
