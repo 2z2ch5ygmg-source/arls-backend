@@ -12123,6 +12123,35 @@ a:hover {
   display: none;
 }
 
+#view-reports #reportsScopeHint,
+#view-reports .reports-wizard-head-copy .muted,
+#view-reports .reports-finance-stepper-copy .muted,
+#view-reports .reports-support-stepnav-copy .muted,
+#view-reports .reports-wizard-hero-copy .muted,
+#view-reports .reports-finance-hero-side .muted,
+#view-reports .reports-wizard-step-head .muted,
+#view-reports .reports-wizard-step-main > .muted {
+  display: none !important;
+}
+
+#view-reports .reports-wizard-head-copy,
+#view-reports .reports-finance-stepper-copy,
+#view-reports .reports-support-stepnav-copy,
+#view-reports .reports-wizard-hero-copy,
+#view-reports .reports-finance-hero-side,
+#view-reports .reports-wizard-step-head > div,
+#view-reports .reports-wizard-step-main {
+  gap: 2px;
+}
+
+#view-reports .reports-wizard-hero {
+  padding-block: 16px;
+}
+
+#view-reports .reports-wizard-step {
+  padding-block: 16px;
+}
+
 .reports-support-detail-actions {
   margin: 4px 0 8px;
 }
