@@ -22519,7 +22519,7 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-card .home-dashboard-list-plain > li {
   position: static;
-  padding: 11px 18px;
+  padding: 8px 18px;
   border-top: 1.5px solid rgba(148, 163, 184, 0.22);
   border-radius: 0;
   background: transparent;
@@ -22549,8 +22549,8 @@ button.attendance-status-special-card.active {
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-list-row.is-compact {
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 10px;
-  min-height: 34px;
+  gap: 8px;
+  min-height: 30px;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-name {
@@ -22573,7 +22573,7 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-list-row.is-compact .home-attendance-issue-meta {
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
 }
 
@@ -22593,14 +22593,14 @@ button.attendance-status-special-card.active {
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-list-row.is-compact .home-attendance-issue-status {
-  gap: 6px;
-  font-size: 12px;
+  gap: 5px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-status-dot {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   border-radius: 999px;
   background: #b91c1c;
   position: relative;
@@ -22620,7 +22620,7 @@ button.attendance-status-special-card.active {
 
 @media (max-width: 1440px) {
   #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-list-row.is-compact {
-    gap: 8px;
+    gap: 7px;
   }
 
   #shell[data-shell-mode='manager'] #view-home .home-attendance-issue-list-row.is-compact .home-attendance-issue-name {

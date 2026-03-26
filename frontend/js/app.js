@@ -5316,7 +5316,7 @@ function buildHomeManagerPointRows() {
 function buildHomeAttendanceIssueRows() {
   const dashboard = getHomeManagerDashboardState();
   const rows = Array.isArray(dashboard.attendanceIssues) ? dashboard.attendanceIssues : [];
-  return rows.slice(0, 4).map((item) => {
+  return rows.slice(0, 5).map((item) => {
     const sourceRow = item?.row || {};
     return {
       employeeName: String(item?.employeeName || sourceRow?.employeeName || '직원').trim() || '직원',
