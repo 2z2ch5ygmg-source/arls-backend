@@ -11904,6 +11904,225 @@ a:hover {
   color: #64748b;
 }
 
+.reports-finance-stepper {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.reports-finance-stepper-item,
+.reports-support-stepnav-item {
+  appearance: none;
+  border: 1px solid var(--ui-border-subtle);
+  background: var(--ui-bg-surface);
+  color: inherit;
+  border-radius: 16px;
+  padding: 14px 16px;
+  text-align: left;
+  display: grid;
+  gap: 10px;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.reports-finance-stepper-item:hover,
+.reports-support-stepnav-item:hover {
+  border-color: rgba(249, 115, 22, 0.24);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.reports-finance-stepper-item:focus-visible,
+.reports-support-stepnav-item:focus-visible {
+  outline: 2px solid rgba(249, 115, 22, 0.4);
+  outline-offset: 2px;
+}
+
+.reports-finance-stepper-item[disabled],
+.reports-support-stepnav-item[disabled] {
+  cursor: not-allowed;
+  opacity: 0.68;
+  box-shadow: none;
+}
+
+.reports-finance-stepper-item.is-current {
+  border-color: rgba(249, 115, 22, 0.34);
+  background: color-mix(in srgb, var(--ui-bg-surface) 92%, rgba(249, 115, 22, 0.16) 8%);
+  box-shadow: 0 14px 28px rgba(249, 115, 22, 0.12);
+}
+
+.reports-finance-stepper-item[data-step-state='complete'],
+.reports-support-stepnav-item[data-step-state='complete'] {
+  border-color: rgba(22, 163, 74, 0.22);
+  background: color-mix(in srgb, var(--ui-bg-surface) 94%, rgba(22, 163, 74, 0.12) 6%);
+}
+
+.reports-finance-stepper-item[data-step-state='blocked'],
+.reports-support-stepnav-item[data-step-state='blocked'] {
+  background: var(--ui-bg-surface-muted);
+}
+
+.reports-finance-stepper-index,
+.reports-support-stepnav-index {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  border: 1px solid var(--ui-border-subtle);
+  background: var(--ui-bg-surface-muted);
+  color: var(--ui-text-secondary);
+}
+
+.reports-finance-stepper-item.is-current .reports-finance-stepper-index,
+.reports-support-stepnav-item.is-current .reports-support-stepnav-index,
+.reports-finance-stepper-item[data-step-state='active'] .reports-finance-stepper-index,
+.reports-support-stepnav-item[data-step-state='active'] .reports-support-stepnav-index {
+  border-color: rgba(249, 115, 22, 0.3);
+  background: rgba(249, 115, 22, 0.1);
+  color: #c2410c;
+}
+
+.reports-finance-stepper-item[data-step-state='complete'] .reports-finance-stepper-index,
+.reports-support-stepnav-item[data-step-state='complete'] .reports-support-stepnav-index {
+  border-color: rgba(22, 163, 74, 0.24);
+  background: rgba(22, 163, 74, 0.1);
+  color: #15803d;
+}
+
+.reports-finance-stepper-copy,
+.reports-support-stepnav-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.reports-finance-stepper-label {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--ui-text-primary);
+}
+
+.reports-finance-stepper-copy .muted,
+.reports-support-stepnav-copy .muted {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.reports-finance-hero {
+  grid-template-columns: minmax(320px, 1fr) minmax(240px, 0.56fr);
+}
+
+.reports-finance-hero-side {
+  display: grid;
+  align-content: space-between;
+  gap: 14px;
+  min-height: 100%;
+}
+
+.reports-finance-hero-side .muted {
+  margin: 0;
+}
+
+.reports-finance-hero-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ui-text-secondary);
+}
+
+.reports-finance-hero-counter strong {
+  font-size: 14px;
+  color: var(--ui-text-primary);
+}
+
+.reports-finance-stage-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.reports-finance-stage-stack > .reports-wizard-step {
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 18px;
+  padding: 18px;
+  background: var(--ui-bg-surface);
+}
+
+.reports-finance-stage-stack > .reports-wizard-step.hidden {
+  display: none;
+}
+
+.reports-support-wizard-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.reports-support-sidebar {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.reports-support-sidebar-meta {
+  display: grid;
+  gap: 10px;
+}
+
+.reports-support-stepnav {
+  display: grid;
+  gap: 10px;
+}
+
+.reports-support-stepnav-item {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.reports-support-stepnav-item.is-current {
+  border-color: rgba(249, 115, 22, 0.34);
+  background: color-mix(in srgb, var(--ui-bg-surface) 92%, rgba(249, 115, 22, 0.16) 8%);
+  box-shadow: 0 14px 28px rgba(249, 115, 22, 0.12);
+}
+
+.reports-support-stepnav-copy strong {
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--ui-text-primary);
+}
+
+.reports-support-stage-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.reports-support-hero {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.reports-support-detail-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.reports-support-detail-stack > .reports-wizard-step {
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 18px;
+  padding: 18px;
+  background: var(--ui-bg-surface);
+}
+
+.reports-support-detail-stack > .reports-wizard-step.hidden {
+  display: none;
+}
+
 .reports-support-detail-actions {
   margin: 4px 0 8px;
 }
@@ -19944,6 +20163,24 @@ button.attendance-status-special-card.active {
   #view-reports .schedule-support-status-grid,
   #view-schedule .schedule-support-status-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reports-finance-stepper,
+  .reports-support-wizard-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .reports-support-stepnav-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .reports-support-stepnav-item .reports-wizard-step-pill {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .reports-finance-hero {
+    grid-template-columns: 1fr;
   }
 
   .reports-wizard-hero,

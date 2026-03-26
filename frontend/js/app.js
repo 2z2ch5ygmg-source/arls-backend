@@ -1215,6 +1215,8 @@ function createInitialReportsState() {
     tenantCode: '',
     loading: false,
     viewTab: 'finance',
+    financeStep: 'review',
+    supportStep: 'overview',
     month: toMonthKey(new Date()),
     appleStatus: null,
     appleLogs: [],
@@ -8657,6 +8659,57 @@ function setReportsWizardStep(rootSelector, pillSelector, {
   }
 }
 
+function normalizeReportsFinanceStep(step = '') {
+  const value = String(step || '').trim().toLowerCase();
+  return ['review', 'upload', 'final'].includes(value) ? value : 'review';
+}
+
+function normalizeReportsSupportStep(step = '') {
+  const value = String(step || '').trim().toLowerCase();
+  return ['overview', 'download', 'sentrix'].includes(value) ? value : 'overview';
+}
+
+function setReportsFinanceStep(step = '') {
+  if (!state.reports) state.reports = createInitialReportsState();
+  state.reports.financeStep = normalizeReportsFinanceStep(step);
+}
+
+function setReportsSupportStep(step = '') {
+  if (!state.reports) state.reports = createInitialReportsState();
+  state.reports.supportStep = normalizeReportsSupportStep(step);
+}
+
+function resolveReportsWizardSelection(requestedStep, stepStates, defaultStep, orderedSteps = []) {
+  const requested = String(requestedStep || '').trim();
+  const fallback = String(defaultStep || '').trim();
+  const isSelectable = (name) => Boolean(name) && stepStates?.[name] && stepStates[name].state !== 'blocked';
+  if (isSelectable(requested)) return requested;
+  if (isSelectable(fallback)) return fallback;
+  return orderedSteps.find((name) => stepStates?.[name]) || fallback || orderedSteps[0] || '';
+}
+
+function applyReportsWizardSectionSelection(sectionMap = {}, currentStep = '', stateMap = {}) {
+  Object.entries(sectionMap).forEach(([key, selector]) => {
+    const section = $(selector);
+    if (!(section instanceof HTMLElement)) return;
+    section.classList.toggle('hidden', key !== currentStep);
+    section.dataset.stepState = stateMap[key]?.state || 'idle';
+  });
+}
+
+function applyReportsWizardNavSelection(navMap = {}, currentStep = '', stateMap = {}) {
+  Object.entries(navMap).forEach(([key, selector]) => {
+    const button = $(selector);
+    if (!(button instanceof HTMLButtonElement)) return;
+    const stepState = stateMap[key]?.state || 'idle';
+    button.dataset.stepState = stepState;
+    button.classList.toggle('is-current', key === currentStep);
+    button.disabled = key !== currentStep && stepState === 'blocked';
+    button.setAttribute('aria-current', key === currentStep ? 'step' : 'false');
+    button.setAttribute('aria-disabled', button.disabled ? 'true' : 'false');
+  });
+}
+
 function renderReportsContextSummary() {
   const summary = $('#reportsCenterSummary');
   const pill = $('#reportsFreshnessPill');
@@ -8694,7 +8747,6 @@ function renderReportsSupportHandoffPanel() {
     : null;
   const pill = $('#reportsSupportStatePill');
   const text = $('#reportsSupportStatusText');
-  const statusGrid = $('#reportsSupportStatusGrid');
   const currentStage = $('#reportsSupportCurrentStage');
   const artifactLabel = $('#reportsSupportArtifactLabel');
   const artifactMeta = $('#reportsSupportArtifactMeta');
@@ -8706,12 +8758,67 @@ function renderReportsSupportHandoffPanel() {
   const copyBtn = $('#reportsSupportCopyArtifactBtn');
   const techDetails = $('#reportsSupportArtifactTechDetails');
   const refreshedAt = formatOpsDateTime(state.reports?.lastSyncedAt || '');
+  const supportStepStates = {};
+
+  const setSupportStep = (name, config) => {
+    supportStepStates[name] = config;
+    const navMap = {
+      overview: '#reportsSupportNavOverview',
+      download: '#reportsSupportNavDownload',
+      sentrix: '#reportsSupportNavSentrix',
+    };
+    const sectionMap = {
+      overview: '#reportsSupportStepOverview',
+      download: '#reportsSupportStepDownload',
+      sentrix: '#reportsSupportStepSentrix',
+    };
+    const pillMap = {
+      overview: '#reportsSupportOverviewStepPill',
+      download: '#reportsSupportDownloadStepPill',
+      sentrix: '#reportsSupportSentrixStepPill',
+    };
+    const hintMap = {
+      overview: '#reportsSupportOverviewStepHint',
+      download: '#reportsSupportDownloadStepHint',
+      sentrix: '#reportsSupportSentrixStepHint',
+    };
+    const section = $(sectionMap[name]);
+    if (section instanceof HTMLElement) section.dataset.stepState = config.state || 'idle';
+    const nav = $(navMap[name]);
+    if (nav instanceof HTMLElement) nav.dataset.stepState = config.state || 'idle';
+    const pillTarget = $(pillMap[name]);
+    if (pillTarget instanceof HTMLElement) {
+      pillTarget.className = `status-pill reports-wizard-step-pill reports-wizard-step-pill-${config.state || 'idle'}`;
+      pillTarget.textContent = String(config.text || '').trim() || '대기';
+    }
+    const hintTarget = $(hintMap[name]);
+    if (hintTarget instanceof HTMLElement) {
+      hintTarget.textContent = String(config.hint || '').trim();
+    }
+  };
+
+  const finalizeSupportSelection = (fallbackStep = 'overview') => {
+    const currentStep = resolveReportsWizardSelection(
+      normalizeReportsSupportStep(state.reports?.supportStep || fallbackStep),
+      supportStepStates,
+      fallbackStep,
+      ['overview', 'download', 'sentrix'],
+    );
+    setReportsSupportStep(currentStep);
+    applyReportsWizardNavSelection(
+      { overview: '#reportsSupportNavOverview', download: '#reportsSupportNavDownload', sentrix: '#reportsSupportNavSentrix' },
+      currentStep,
+      supportStepStates,
+    );
+    applyReportsWizardSectionSelection(
+      { overview: '#reportsSupportStepOverview', download: '#reportsSupportStepDownload', sentrix: '#reportsSupportStepSentrix' },
+      currentStep,
+      supportStepStates,
+    );
+  };
 
   if (techDetails instanceof HTMLElement) {
     techDetails.classList.toggle('hidden', !canSelectScheduleWorkflowTenant());
-  }
-  if (statusGrid instanceof HTMLElement) {
-    statusGrid.classList.toggle('hidden', !siteCode || !status);
   }
 
   const setBlockedReasons = (reasons = []) => {
@@ -8740,17 +8847,17 @@ function renderReportsSupportHandoffPanel() {
     if (deliveryMeta) deliveryMeta.textContent = 'Sentrix 제출 전';
     if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = true;
     if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = true;
-    setReportsWizardStep('#reportsSupportStepOverview', '#reportsSupportOverviewStepPill', {
+    setSupportStep('overview', {
       state: 'active',
       text: '지점 선택',
       hint: '지점을 먼저 고르면 전달 준비 상태를 확인할 수 있습니다.',
     });
-    setReportsWizardStep('#reportsSupportStepDownload', '#reportsSupportDownloadStepPill', {
+    setSupportStep('download', {
       state: 'idle',
       text: '대기',
       hint: '전달 기준이 준비되면 지원근무자용 시트를 다운로드할 수 있습니다.',
     });
-    setReportsWizardStep('#reportsSupportStepSentrix', '#reportsSupportSentrixStepPill', {
+    setSupportStep('sentrix', {
       state: 'idle',
       text: '대기',
       hint: 'artifact가 준비되면 Sentrix 전달 단계가 열립니다.',
@@ -8758,6 +8865,7 @@ function renderReportsSupportHandoffPanel() {
     if (copyBtn instanceof HTMLElement) copyBtn.classList.add('hidden');
     renderReportsSupportArtifactMeta(null);
     setBlockedReasons([]);
+    finalizeSupportSelection('overview');
     return;
   }
 
@@ -8767,17 +8875,17 @@ function renderReportsSupportHandoffPanel() {
     if (currentStage) currentStage.textContent = '상태 조회 중';
     if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = true;
     if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = true;
-    setReportsWizardStep('#reportsSupportStepOverview', '#reportsSupportOverviewStepPill', {
+    setSupportStep('overview', {
       state: 'active',
       text: '조회 중',
       hint: '지점별 전달 준비 상태를 불러오고 있습니다.',
     });
-    setReportsWizardStep('#reportsSupportStepDownload', '#reportsSupportDownloadStepPill', {
+    setSupportStep('download', {
       state: 'idle',
       text: '대기',
       hint: '상태 조회 후 다운로드 가능 여부를 판단합니다.',
     });
-    setReportsWizardStep('#reportsSupportStepSentrix', '#reportsSupportSentrixStepPill', {
+    setSupportStep('sentrix', {
       state: 'idle',
       text: '대기',
       hint: '상태 조회 후 Sentrix 전달 가능 여부를 안내합니다.',
@@ -8785,6 +8893,7 @@ function renderReportsSupportHandoffPanel() {
     if (copyBtn instanceof HTMLElement) copyBtn.classList.add('hidden');
     renderReportsSupportArtifactMeta(null);
     setBlockedReasons([]);
+    finalizeSupportSelection('overview');
     return;
   }
 
@@ -8821,27 +8930,28 @@ function renderReportsSupportHandoffPanel() {
     if (deliveryMeta) deliveryMeta.textContent = '전체 범위는 지점별 상태만 요약합니다.';
     if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = !canUseScheduleSupportRoundtripHq() || readySiteCount <= 0;
     if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = !canUseScheduleSupportRoundtripHq() || readySiteCount <= 0 || !artifactContext.artifact_id;
-    setReportsWizardStep('#reportsSupportStepOverview', '#reportsSupportOverviewStepPill', {
+    setSupportStep('overview', {
       state: readySiteCount > 0 ? 'complete' : 'active',
       text: readySiteCount > 0 ? '준비 확인' : '확인 필요',
       hint: readySiteCount > 0 ? '지점별 준비 수를 확인했습니다. 세부 업로드는 각 지점에서 진행합니다.' : '먼저 업로드가 준비된 지점을 확인해야 합니다.',
     });
-    setReportsWizardStep('#reportsSupportStepDownload', '#reportsSupportDownloadStepPill', {
+    setSupportStep('download', {
       state: canUseScheduleSupportRoundtripHq() && readySiteCount > 0 ? 'active' : 'blocked',
       text: canUseScheduleSupportRoundtripHq() && readySiteCount > 0 ? '다운로드 가능' : '잠금',
       hint: canUseScheduleSupportRoundtripHq()
         ? '전체 범위는 HQ용 시트를 준비할 수 있지만, 실제 전달은 지점별 확인이 필요합니다.'
-        : 'HQ Admin 이상 계정에서만 전달용 시트를 다운로드할 수 있습니다.',
+        : 'Supervisor 이상 계정에서만 전달용 시트를 다운로드할 수 있습니다.',
     });
-    setReportsWizardStep('#reportsSupportStepSentrix', '#reportsSupportSentrixStepPill', {
-      state: canUseScheduleSupportRoundtripHq() && readySiteCount > 0 && artifactContext.artifact_id ? 'active' : 'blocked',
-      text: canUseScheduleSupportRoundtripHq() && readySiteCount > 0 && artifactContext.artifact_id ? '진행 가능' : '대기',
-      hint: '전체 범위는 요약 확인 중심입니다. Sentrix 전달은 지점별 artifact 준비 여부를 함께 확인하세요.',
+    setSupportStep('sentrix', {
+      state: 'blocked',
+      text: '지점별 진행',
+      hint: '전체 범위에서는 지원근무 전달 준비만 확인하고, 실제 Sentrix 전달은 지점별로 진행합니다.',
     });
     if (copyBtn instanceof HTMLElement) {
       copyBtn.classList.toggle('hidden', !artifactContext.artifact_id || !canSelectScheduleWorkflowTenant());
     }
     setBlockedReasons(blockedReasons);
+    finalizeSupportSelection('overview');
     return;
   }
 
@@ -8856,12 +8966,10 @@ function renderReportsSupportHandoffPanel() {
   );
   if (currentStage) {
     currentStage.textContent = sourceMissing
-      ? '전달 준비 확인 필요'
+      ? '1단계 · 전달 준비 확인'
       : (!readyForHandoff
-        ? 'artifact 준비 대기'
-        : (!canUseScheduleSupportRoundtripHq()
-          ? 'HQ 전달 권한 확인'
-          : (mergeStale ? '재전달 필요' : 'Sentrix 전달 진행 가능')));
+        ? '1단계 · artifact 준비 대기'
+        : (mergeAvailable || mergeStale ? '3단계 · Sentrix 전달' : '2단계 · 시트 다운로드'));
   }
   if (artifactLabel) artifactLabel.textContent = readyForHandoff ? '준비됨' : '미생성';
   if (artifactMeta) {
@@ -8886,7 +8994,7 @@ function renderReportsSupportHandoffPanel() {
   if (sentrixBtn instanceof HTMLButtonElement) {
     sentrixBtn.disabled = !canUseScheduleSupportRoundtripHq() || !readyForHandoff || !artifactContext.artifact_id;
   }
-  setReportsWizardStep('#reportsSupportStepOverview', '#reportsSupportOverviewStepPill', {
+  setSupportStep('overview', {
     state: readyForHandoff ? 'complete' : 'active',
     text: readyForHandoff ? '준비 완료' : '확인 필요',
     hint: sourceMissing
@@ -8895,29 +9003,29 @@ function renderReportsSupportHandoffPanel() {
         ? `artifact 생성 ${formatOpsDateTime(artifactContext.generated_at)}`
         : 'artifact 생성 대기 상태입니다.'),
   });
-  setReportsWizardStep('#reportsSupportStepDownload', '#reportsSupportDownloadStepPill', {
+  setSupportStep('download', {
     state: canUseScheduleSupportRoundtripHq() && readyForHandoff ? 'active' : 'blocked',
     text: canUseScheduleSupportRoundtripHq() && readyForHandoff ? '다운로드 가능' : '잠금',
     hint: !readyForHandoff
       ? '전달 기준이 준비돼야 다운로드가 열립니다.'
       : (!canUseScheduleSupportRoundtripHq()
-        ? 'HQ Admin 이상 계정에서만 전달용 시트를 다운로드할 수 있습니다.'
+        ? 'Supervisor 이상 계정에서만 전달용 시트를 다운로드할 수 있습니다.'
         : '지원근무자용 시트를 내려받아 HQ 전달 파일을 준비합니다.'),
   });
-  setReportsWizardStep('#reportsSupportStepSentrix', '#reportsSupportSentrixStepPill', {
+  setSupportStep('sentrix', {
     state: canUseScheduleSupportRoundtripHq() && readyForHandoff && artifactContext.artifact_id
-      ? (mergeStale ? 'active' : 'complete')
+      ? (mergeStale || !mergeAvailable ? 'active' : 'complete')
       : 'blocked',
     text: canUseScheduleSupportRoundtripHq() && readyForHandoff && artifactContext.artifact_id
-      ? (mergeStale ? '재전달 필요' : '진행 가능')
+      ? (mergeStale ? '재전달 필요' : (mergeAvailable ? '전달 완료' : '진행 가능'))
       : '잠금',
     hint: !readyForHandoff
       ? 'artifact 준비가 완료돼야 Sentrix 전달이 가능합니다.'
       : (!canUseScheduleSupportRoundtripHq()
-        ? 'HQ Admin 이상 계정에서만 Sentrix 전달을 진행할 수 있습니다.'
+        ? 'Supervisor 이상 계정에서만 Sentrix 전달을 진행할 수 있습니다.'
         : (status.latest_hq_uploaded_at
           ? `최근 전달 ${formatOpsDateTime(status.latest_hq_uploaded_at)}`
-          : 'Sentrix 전달 화면으로 이어서 진입합니다.')),
+          : '준비가 끝났으니 Sentrix 전달 화면으로 넘어가세요.')),
   });
   if (copyBtn instanceof HTMLElement) {
     copyBtn.classList.toggle('hidden', !artifactContext.artifact_id || !canSelectScheduleWorkflowTenant());
@@ -8926,6 +9034,11 @@ function renderReportsSupportHandoffPanel() {
     techDetails.classList.toggle('hidden', !canSelectScheduleWorkflowTenant() || !artifactContext.artifact_id);
   }
   setBlockedReasons(blockedReasons);
+  finalizeSupportSelection(
+    !readyForHandoff
+      ? 'overview'
+      : ((mergeAvailable || mergeStale) ? 'sentrix' : 'download')
+  );
 }
 
 function renderReportsWorkspacePanels() {
@@ -15901,7 +16014,6 @@ function renderScheduleFinanceSubmissionStatus() {
   const selectedSite = getScheduleSupportSelectedSiteCode();
   const statePill = $('#scheduleFinanceStatePill');
   const statusText = $('#scheduleFinanceStatusText');
-  const statusGrid = $('#scheduleFinanceStatusGrid');
   const currentStage = $('#scheduleFinanceCurrentStage');
   const blockedList = $('#scheduleFinanceBlockedReasons');
   const reviewRevision = $('#scheduleFinanceReviewRevision');
@@ -15916,10 +16028,64 @@ function renderScheduleFinanceSubmissionStatus() {
   const applyBtn = $('#scheduleFinanceApplyBtn');
   const overallScope = selectedSite === 'ALL' || Boolean(status?.overall_scope);
   const refreshedAt = formatOpsDateTime(state.reports?.lastSyncedAt || '');
+  const financeStepStates = {};
 
-  if (statusGrid instanceof HTMLElement) {
-    statusGrid.classList.toggle('hidden', !selectedSite || !status);
-  }
+  const setFinanceStep = (name, config) => {
+    financeStepStates[name] = config;
+    const sectionMap = {
+      review: '#scheduleFinanceStepReview',
+      upload: '#scheduleFinanceStepUpload',
+      final: '#scheduleFinanceStepFinal',
+    };
+    const navMap = {
+      review: '#reportsFinanceNavReview',
+      upload: '#reportsFinanceNavUpload',
+      final: '#reportsFinanceNavFinal',
+    };
+    const pillMap = {
+      review: '#scheduleFinanceReviewStepPill',
+      upload: '#scheduleFinanceUploadStepPill',
+      final: '#scheduleFinanceFinalStepPill',
+    };
+    const hintMap = {
+      review: '#scheduleFinanceReviewMeta',
+      upload: '#scheduleFinanceFinalUploadMeta',
+      final: '#scheduleFinanceFinalDownloadMeta',
+    };
+    const section = $(sectionMap[name]);
+    if (section instanceof HTMLElement) section.dataset.stepState = config.state || 'idle';
+    const nav = $(navMap[name]);
+    if (nav instanceof HTMLElement) nav.dataset.stepState = config.state || 'idle';
+    const pill = $(pillMap[name]);
+    if (pill instanceof HTMLElement) {
+      pill.className = `status-pill reports-wizard-step-pill reports-wizard-step-pill-${config.state || 'idle'}`;
+      pill.textContent = String(config.text || '').trim() || '대기';
+    }
+    const hint = $(hintMap[name]);
+    if (hint instanceof HTMLElement) {
+      hint.textContent = String(config.hint || '').trim();
+    }
+  };
+
+  const finalizeFinanceSelection = (fallbackStep = 'review') => {
+    const currentStep = resolveReportsWizardSelection(
+      normalizeReportsFinanceStep(state.reports?.financeStep || fallbackStep),
+      financeStepStates,
+      fallbackStep,
+      ['review', 'upload', 'final'],
+    );
+    setReportsFinanceStep(currentStep);
+    applyReportsWizardNavSelection(
+      { review: '#reportsFinanceNavReview', upload: '#reportsFinanceNavUpload', final: '#reportsFinanceNavFinal' },
+      currentStep,
+      financeStepStates,
+    );
+    applyReportsWizardSectionSelection(
+      { review: '#scheduleFinanceStepReview', upload: '#scheduleFinanceStepUpload', final: '#scheduleFinanceStepFinal' },
+      currentStep,
+      financeStepStates,
+    );
+  };
 
   if (!selectedSite) {
     setReportsSummaryPill(statePill, '지점 선택', 'status-pill status-pill-neutral');
@@ -15935,17 +16101,17 @@ function renderScheduleFinanceSubmissionStatus() {
     if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
     if (applyBtn) applyBtn.disabled = true;
-    setReportsWizardStep('#scheduleFinanceStepReview', '#scheduleFinanceReviewStepPill', {
+    setFinanceStep('review', {
       state: 'active',
       text: '지점 선택',
       hint: '먼저 지점을 선택하면 1차 확인본 다운로드가 열립니다.',
     });
-    setReportsWizardStep('#scheduleFinanceStepUpload', '#scheduleFinanceUploadStepPill', {
+    setFinanceStep('upload', {
       state: 'idle',
       text: '대기',
       hint: '1차 확인본을 받은 뒤 Supervisor 계정으로 최종 업로드를 진행합니다.',
     });
-    setReportsWizardStep('#scheduleFinanceStepFinal', '#scheduleFinanceFinalStepPill', {
+    setFinanceStep('final', {
       state: 'idle',
       text: '대기',
       hint: '최종 업로드 반영 후 최종본 다운로드가 열립니다.',
@@ -15954,6 +16120,7 @@ function renderScheduleFinanceSubmissionStatus() {
       blockedList.innerHTML = '';
       blockedList.classList.add('hidden');
     }
+    finalizeFinanceSelection('review');
     renderScheduleFinanceProgress();
     return;
   }
@@ -15966,21 +16133,22 @@ function renderScheduleFinanceSubmissionStatus() {
     if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
     if (applyBtn) applyBtn.disabled = true;
-    setReportsWizardStep('#scheduleFinanceStepReview', '#scheduleFinanceReviewStepPill', {
+    setFinanceStep('review', {
       state: 'active',
       text: '조회 중',
       hint: '선택한 지점의 1차 확인본 상태를 불러오고 있습니다.',
     });
-    setReportsWizardStep('#scheduleFinanceStepUpload', '#scheduleFinanceUploadStepPill', {
+    setFinanceStep('upload', {
       state: 'idle',
       text: '대기',
       hint: '상태 조회 후 최종 업로드 가능 여부를 판단합니다.',
     });
-    setReportsWizardStep('#scheduleFinanceStepFinal', '#scheduleFinanceFinalStepPill', {
+    setFinanceStep('final', {
       state: 'idle',
       text: '대기',
       hint: '상태 조회 후 최종본 다운로드 가능 여부를 안내합니다.',
     });
+    finalizeFinanceSelection('review');
     renderScheduleFinanceProgress();
     return;
   }
@@ -16007,27 +16175,27 @@ function renderScheduleFinanceSubmissionStatus() {
     if (reviewMeta) reviewMeta.textContent = canDownloadOverallReview
       ? '전체 지점을 한 파일로 생성합니다.'
       : '다운로드 권한이 필요합니다.';
-    if (finalUploadState) finalUploadState.textContent = '잠금';
+    if (finalUploadState) finalUploadState.textContent = '단일 지점 필요';
     if (finalUploadMeta) finalUploadMeta.textContent = '단일 지점을 선택해야 업로드할 수 있습니다.';
-    if (finalDownloadState) finalDownloadState.textContent = '잠금';
-    if (finalDownloadMeta) finalDownloadMeta.textContent = '단일 지점을 선택해야 최종본을 다운로드할 수 있습니다.';
-    if (reviewBtn) reviewBtn.disabled = !canDownloadOverallReview;
+    if (finalDownloadState) finalDownloadState.textContent = '단일 지점 필요';
+    if (finalDownloadMeta) finalDownloadMeta.textContent = '단일 지점을 선택해야 최종본을 받을 수 있습니다.';
+    if (reviewBtn) reviewBtn.disabled = !canDownloadScheduleFinanceReview();
     if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
     if (applyBtn) applyBtn.disabled = true;
-    setReportsWizardStep('#scheduleFinanceStepReview', '#scheduleFinanceReviewStepPill', {
+    setFinanceStep('review', {
       state: canDownloadOverallReview ? 'active' : 'blocked',
       text: canDownloadOverallReview ? '다운로드 가능' : '권한 필요',
       hint: canDownloadOverallReview
         ? '전체 지점 기준 1차 확인본을 한 번에 내려받을 수 있습니다.'
         : '1차 확인본 다운로드 권한이 필요합니다.',
     });
-    setReportsWizardStep('#scheduleFinanceStepUpload', '#scheduleFinanceUploadStepPill', {
+    setFinanceStep('upload', {
       state: 'blocked',
       text: '단일 지점 필요',
       hint: '최종 업로드는 지점을 하나만 선택했을 때 진행할 수 있습니다.',
     });
-    setReportsWizardStep('#scheduleFinanceStepFinal', '#scheduleFinanceFinalStepPill', {
+    setFinanceStep('final', {
       state: 'blocked',
       text: '단일 지점 필요',
       hint: '2차 최종본 다운로드도 단일 지점에서만 가능합니다.',
@@ -16036,6 +16204,7 @@ function renderScheduleFinanceSubmissionStatus() {
       blockedList.innerHTML = '';
       blockedList.classList.add('hidden');
     }
+    finalizeFinanceSelection('review');
     renderScheduleFinanceProgress();
     return;
   }
@@ -16043,6 +16212,10 @@ function renderScheduleFinanceSubmissionStatus() {
   const phase = String(status.state || '').trim();
   const blockedReasons = Array.isArray(status.blocked_reasons) ? status.blocked_reasons.filter(Boolean) : [];
   const finalEnabled = Boolean(status.final_download_enabled) && !Boolean(status.final_upload_stale);
+  const canPreviewUpload = canUploadScheduleFinanceFinal()
+    && Boolean(selectedSite)
+    && Boolean(status.review_download_revision)
+    && !Boolean(status.final_upload_stale);
 
   setReportsSummaryPill(statePill, getScheduleFinanceStateLabel(phase), getScheduleFinanceStateClass(phase));
   setReportsSummaryMessage(
@@ -16108,15 +16281,10 @@ function renderScheduleFinanceSubmissionStatus() {
     }
   }
 
-  const canPreviewUpload = canUploadScheduleFinanceFinal()
-    && Boolean(selectedSite)
-    && Boolean(status.review_download_revision)
-    && !Boolean(status.final_upload_stale);
-
   if (reviewBtn) reviewBtn.disabled = !canDownloadScheduleFinanceReview();
   if (finalDownloadBtn) finalDownloadBtn.disabled = !canDownloadScheduleFinanceFinal() || !finalEnabled;
   if (previewBtn) previewBtn.disabled = !canPreviewUpload;
-  setReportsWizardStep('#scheduleFinanceStepReview', '#scheduleFinanceReviewStepPill', {
+  setFinanceStep('review', {
     state: status.review_download_revision ? 'complete' : (canDownloadScheduleFinanceReview() ? 'active' : 'blocked'),
     text: status.review_download_revision ? '준비 완료' : (canDownloadScheduleFinanceReview() ? '다운로드 가능' : '권한 필요'),
     hint: status.review_downloaded_at
@@ -16125,7 +16293,7 @@ function renderScheduleFinanceSubmissionStatus() {
         ? '먼저 1차 확인본을 내려받아 수정 기준 파일을 준비하세요.'
         : '1차 확인본 다운로드 권한이 필요합니다.'),
   });
-  setReportsWizardStep('#scheduleFinanceStepUpload', '#scheduleFinanceUploadStepPill', {
+  setFinanceStep('upload', {
     state: status.final_uploaded_at && !status.final_upload_stale
       ? 'complete'
       : (canPreviewUpload ? 'active' : 'blocked'),
@@ -16140,7 +16308,7 @@ function renderScheduleFinanceSubmissionStatus() {
           ? '파일을 선택한 뒤 미리보기로 검토하고 반영하세요.'
           : 'Supervisor 이상 중 업로드 권한이 있는 계정만 최종 업로드를 진행할 수 있습니다.')),
   });
-  setReportsWizardStep('#scheduleFinanceStepFinal', '#scheduleFinanceFinalStepPill', {
+  setFinanceStep('final', {
     state: finalEnabled
       ? (canDownloadScheduleFinanceFinal() ? 'active' : 'blocked')
       : 'blocked',
@@ -16153,6 +16321,11 @@ function renderScheduleFinanceSubmissionStatus() {
         ? '반영된 최종본을 내려받아 제출용 파일로 사용합니다.'
         : '최종 업로드 반영이 끝나야 다운로드가 열립니다.'),
   });
+  finalizeFinanceSelection(
+    !status.review_download_revision
+      ? 'review'
+      : (!status.final_uploaded_at || status.final_upload_stale ? 'upload' : 'final')
+  );
   renderScheduleFinanceProgress();
 }
 
@@ -59661,6 +59834,20 @@ function bindUiEvents() {
     if (action === 'reports-view-tab') {
       const nextTab = normalizeReportsViewTab(actionEl.dataset.tab || getDefaultReportsViewTab());
       setReportsViewTab(nextTab, { syncRoute: true });
+      return;
+    }
+
+    if (action === 'reports-finance-step-nav') {
+      const requestedStep = normalizeReportsFinanceStep(actionEl.dataset.step || 'review');
+      setReportsFinanceStep(requestedStep);
+      renderScheduleFinanceSubmissionStatus();
+      return;
+    }
+
+    if (action === 'reports-support-step-nav') {
+      const requestedStep = normalizeReportsSupportStep(actionEl.dataset.step || 'overview');
+      setReportsSupportStep(requestedStep);
+      renderReportsSupportHandoffPanel();
       return;
     }
 
