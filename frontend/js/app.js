@@ -19035,6 +19035,41 @@ function createNoticeComposeBlockId(kind = 'block') {
   return `notice-${normalizedKind}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function coalesceNoticeComposeParagraphRuns(rawBlocks = null) {
+  const source = Array.isArray(rawBlocks) ? rawBlocks : [];
+  const nextBlocks = [];
+  source.forEach((item) => {
+    const block = item && typeof item === 'object' ? item : null;
+    if (!block) return;
+    if (block.kind !== 'paragraph') {
+      nextBlocks.push(block);
+      return;
+    }
+    const text = String(block.text || '').replace(/\r\n/g, '\n');
+    const prev = nextBlocks[nextBlocks.length - 1];
+    if (prev?.kind === 'paragraph') {
+      const prevText = String(prev.text || '');
+      if (!prevText && !text) {
+        return;
+      }
+      if (!prevText) {
+        prev.text = text;
+        return;
+      }
+      if (!text) {
+        return;
+      }
+      prev.text = `${prevText}\n${text}`;
+      return;
+    }
+    nextBlocks.push({
+      ...block,
+      text,
+    });
+  });
+  return nextBlocks;
+}
+
 function normalizeNoticeComposeContentBlocks(rawBlocks = null, fallbackBodyText = '', legacyTable = null, legacyPoll = null) {
   const normalized = [];
   if (Array.isArray(rawBlocks) && rawBlocks.length) {
@@ -19097,10 +19132,11 @@ function normalizeNoticeComposeContentBlocks(rawBlocks = null, fallbackBodyText 
   if (!normalized.length) {
     return createDefaultNoticeComposeContentBlocks();
   }
-  if (!normalized.some((block) => block.kind === 'paragraph')) {
-    normalized.push({ kind: 'paragraph', text: '' });
+  const coalesced = coalesceNoticeComposeParagraphRuns(normalized);
+  if (!coalesced.some((block) => block.kind === 'paragraph')) {
+    coalesced.push({ kind: 'paragraph', text: '' });
   }
-  return normalized;
+  return coalesced;
 }
 
 function cloneNoticeComposeContentBlocks(rawBlocks = null, fallbackBodyText = '', legacyTable = null, legacyPoll = null) {
