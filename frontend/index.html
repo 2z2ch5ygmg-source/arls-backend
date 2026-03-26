@@ -3805,31 +3805,35 @@
                     <button class="btn btn-secondary" type="button" data-action="reports-open-schedule-upload">Excel 업로드 열기</button>
                   </div>
                 </div>
-                <nav class="reports-finance-stepper" aria-label="Finance 제출 단계">
-                  <button id="reportsFinanceNavReview" class="reports-finance-stepper-item" type="button" data-action="reports-finance-step-nav" data-step="review">
-                    <span class="reports-finance-stepper-index">1</span>
-                    <span class="reports-finance-stepper-copy">
-                      <span class="reports-finance-stepper-label">1차 확인본</span>
+                <nav class="reports-panel-stepper" aria-label="Finance 제출 단계">
+                  <div id="reportsFinanceNavScope" class="reports-panel-stepper-item" data-step="scope">
+                    <span class="reports-panel-stepper-index">1</span>
+                    <span class="reports-panel-stepper-copy">
+                      <span class="reports-panel-stepper-label">범위 선택</span>
+                      <strong id="scheduleFinanceScopeState">대기</strong>
+                    </span>
+                  </div>
+                  <div id="reportsFinanceNavReview" class="reports-panel-stepper-item" data-step="review">
+                    <span class="reports-panel-stepper-index">2</span>
+                    <span class="reports-panel-stepper-copy">
+                      <span class="reports-panel-stepper-label">1차 확인본</span>
                       <strong id="scheduleFinanceReviewRevision">대기</strong>
-                      <span id="scheduleFinanceReviewMeta" class="muted">지점 선택 후 다운로드</span>
                     </span>
-                  </button>
-                  <button id="reportsFinanceNavUpload" class="reports-finance-stepper-item" type="button" data-action="reports-finance-step-nav" data-step="upload">
-                    <span class="reports-finance-stepper-index">2</span>
-                    <span class="reports-finance-stepper-copy">
-                      <span class="reports-finance-stepper-label">최종 업로드</span>
+                  </div>
+                  <div id="reportsFinanceNavUpload" class="reports-panel-stepper-item" data-step="upload">
+                    <span class="reports-panel-stepper-index">3</span>
+                    <span class="reports-panel-stepper-copy">
+                      <span class="reports-panel-stepper-label">최종 업로드</span>
                       <strong id="scheduleFinanceFinalUploadState">대기</strong>
-                      <span id="scheduleFinanceFinalUploadMeta" class="muted">Supervisor 업로드 전</span>
                     </span>
-                  </button>
-                  <button id="reportsFinanceNavFinal" class="reports-finance-stepper-item" type="button" data-action="reports-finance-step-nav" data-step="final">
-                    <span class="reports-finance-stepper-index">3</span>
-                    <span class="reports-finance-stepper-copy">
-                      <span class="reports-finance-stepper-label">최종 다운로드</span>
+                  </div>
+                  <div id="reportsFinanceNavFinal" class="reports-panel-stepper-item" data-step="final">
+                    <span class="reports-panel-stepper-index">4</span>
+                    <span class="reports-panel-stepper-copy">
+                      <span class="reports-panel-stepper-label">최종 다운로드</span>
                       <strong id="scheduleFinanceFinalDownloadState">잠금</strong>
-                      <span id="scheduleFinanceFinalDownloadMeta" class="muted">최종 업로드 후 활성화</span>
                     </span>
-                  </button>
+                  </div>
                 </nav>
                 <section class="reports-wizard-hero reports-finance-hero">
                   <div class="reports-wizard-hero-copy">
@@ -3838,39 +3842,49 @@
                     <p id="scheduleFinanceStatusText" class="muted">대상 지점을 고르면 지금 필요한 제출 단계와 막힌 이유를 바로 보여줍니다.</p>
                   </div>
                   <div class="reports-finance-hero-side">
-                    <span class="reports-finance-hero-counter">3단계 제출 Wizard</span>
-                    <p class="muted">상단 stepper에서 진행 상태를 보고, 아래에서는 현재 단계 하나만 집중해서 완료합니다.</p>
+                    <span class="reports-finance-hero-counter"><strong id="scheduleFinanceCurrentCount">1 / 4</strong></span>
+                    <button class="btn btn-secondary" type="button" data-action="reports-open-schedule-upload">Excel 업로드 열기</button>
                   </div>
                 </section>
                 <ul id="scheduleFinanceBlockedReasons" class="list hidden"></ul>
                 <div class="reports-finance-stage-stack">
-                  <section id="scheduleFinanceStepReview" class="reports-wizard-step" data-step-state="idle">
+                  <section id="scheduleFinanceStepScope" class="reports-wizard-step" data-step-state="idle">
                     <div class="reports-wizard-step-index">1</div>
                     <div class="reports-wizard-step-main">
                       <div class="reports-wizard-step-head">
                         <div>
+                          <h4>범위 선택</h4>
+                        </div>
+                        <span id="scheduleFinanceScopeStepPill" class="status-pill status-pill-neutral">대기</span>
+                      </div>
+                      <div class="schedule-support-upload-actions reports-wizard-step-actions">
+                        <div class="list-row-sub">대상 월과 지점을 먼저 고르면 이후 단계가 순서대로 열립니다.</div>
+                      </div>
+                    </div>
+                  </section>
+                  <section id="scheduleFinanceStepReview" class="reports-wizard-step" data-step-state="idle">
+                    <div class="reports-wizard-step-index">2</div>
+                    <div class="reports-wizard-step-main">
+                      <div class="reports-wizard-step-head">
+                        <div>
                           <h4>1차 확인본 다운로드</h4>
-                          <p class="muted">먼저 Finance 검토본을 내려받아 수정할 기준 파일을 준비합니다.</p>
                         </div>
                         <span id="scheduleFinanceReviewStepPill" class="status-pill status-pill-neutral">대기</span>
                       </div>
-                      <p id="scheduleFinanceReviewStepHint" class="reports-wizard-step-hint muted">지점을 선택하면 1차 확인본을 바로 받을 수 있습니다.</p>
                       <div class="schedule-support-upload-actions reports-wizard-step-actions">
                         <button class="btn btn-secondary" type="button" id="scheduleFinanceReviewDownloadBtn" data-action="schedule-finance-review-download">1차 스케쥴 다운로드</button>
                       </div>
                     </div>
                   </section>
                   <section id="scheduleFinanceStepUpload" class="reports-wizard-step" data-step-state="idle">
-                    <div class="reports-wizard-step-index">2</div>
+                    <div class="reports-wizard-step-index">3</div>
                     <div class="reports-wizard-step-main">
                       <div class="reports-wizard-step-head">
                         <div>
                           <h4>Supervisor 최종 업로드</h4>
-                          <p class="muted">수정된 파일을 미리보기로 검토한 뒤 반영합니다.</p>
                         </div>
                         <span id="scheduleFinanceUploadStepPill" class="status-pill status-pill-neutral">대기</span>
                       </div>
-                      <p id="scheduleFinanceUploadStepHint" class="reports-wizard-step-hint muted">1차 확인본을 먼저 다운로드해야 최종 업로드가 열립니다.</p>
                       <input id="scheduleFinanceUploadFile" type="file" accept=".xlsx" />
                       <div class="schedule-support-upload-actions reports-wizard-step-actions">
                         <button class="btn btn-secondary" type="button" id="scheduleFinancePreviewBtn" data-action="schedule-finance-preview">최종 업로드 미리보기</button>
@@ -3879,21 +3893,23 @@
                     </div>
                   </section>
                   <section id="scheduleFinanceStepFinal" class="reports-wizard-step" data-step-state="idle">
-                    <div class="reports-wizard-step-index">3</div>
+                    <div class="reports-wizard-step-index">4</div>
                     <div class="reports-wizard-step-main">
                       <div class="reports-wizard-step-head">
                         <div>
                           <h4>2차 최종본 다운로드</h4>
-                          <p class="muted">최종 업로드 반영이 끝나면 제출용 최종본을 내려받습니다.</p>
                         </div>
                         <span id="scheduleFinanceFinalStepPill" class="status-pill status-pill-neutral">잠금</span>
                       </div>
-                      <p id="scheduleFinanceFinalStepHint" class="reports-wizard-step-hint muted">최종 업로드 반영 후 다운로드가 열립니다.</p>
                       <div class="schedule-support-upload-actions reports-wizard-step-actions">
                         <button class="btn btn-primary" type="button" id="scheduleFinanceFinalDownloadBtn" data-action="schedule-finance-final-download">2차 최종 스케쥴 다운로드</button>
                       </div>
                     </div>
                   </section>
+                </div>
+                <div class="reports-wizard-footer">
+                  <button class="btn btn-secondary" type="button" id="scheduleFinanceStepBackBtn" data-action="reports-finance-step-back">이전</button>
+                  <button class="btn btn-primary" type="button" id="scheduleFinanceStepNextBtn" data-action="reports-finance-step-next">다음</button>
                 </div>
                 <div id="scheduleFinanceProgress" class="task-progress-strip hidden" role="status" aria-live="polite">
                   <span id="scheduleFinanceProgressPill" class="status-pill status-pill-neutral">대기</span>
@@ -3950,47 +3966,37 @@
                     <span id="reportsSupportStatePill" class="status-pill status-pill-neutral hidden">상태 확인 대기</span>
                   </div>
                 </div>
+                <nav class="reports-panel-stepper" aria-label="지원근무 전달 단계">
+                  <div id="reportsSupportNavScope" class="reports-panel-stepper-item" data-step="scope">
+                    <span class="reports-panel-stepper-index">1</span>
+                    <span class="reports-panel-stepper-copy">
+                      <span class="reports-panel-stepper-label">범위 선택</span>
+                      <strong id="reportsSupportScopeState">대기</strong>
+                    </span>
+                  </div>
+                  <div id="reportsSupportNavOverview" class="reports-panel-stepper-item" data-step="overview">
+                    <span class="reports-panel-stepper-index">2</span>
+                    <span class="reports-panel-stepper-copy">
+                      <span class="reports-panel-stepper-label">준비 확인</span>
+                      <strong id="reportsSupportArtifactLabel">미생성</strong>
+                    </span>
+                  </div>
+                  <div id="reportsSupportNavDownload" class="reports-panel-stepper-item" data-step="download">
+                    <span class="reports-panel-stepper-index">3</span>
+                    <span class="reports-panel-stepper-copy">
+                      <span class="reports-panel-stepper-label">시트 다운로드</span>
+                      <strong id="reportsSupportDeliveryLabel">대기</strong>
+                    </span>
+                  </div>
+                  <div id="reportsSupportNavSentrix" class="reports-panel-stepper-item" data-step="sentrix">
+                    <span class="reports-panel-stepper-index">4</span>
+                    <span class="reports-panel-stepper-copy">
+                      <span class="reports-panel-stepper-label">Sentrix 전달</span>
+                      <strong id="reportsSupportSentrixNavState">대기</strong>
+                    </span>
+                  </div>
+                </nav>
                 <div class="reports-support-wizard-layout">
-                  <aside class="reports-support-sidebar" aria-label="지원근무 전달 단계">
-                    <div class="reports-support-sidebar-meta">
-                      <article id="reportsSupportArtifactCard" class="schedule-support-meta-card">
-                        <span class="schedule-support-meta-label">전달 기준</span>
-                        <strong id="reportsSupportArtifactLabel">미생성</strong>
-                        <span id="reportsSupportArtifactMeta" class="muted">source artifact 대기</span>
-                      </article>
-                      <article id="reportsSupportDeliveryCard" class="schedule-support-meta-card">
-                        <span class="schedule-support-meta-label">최근 전달</span>
-                        <strong id="reportsSupportDeliveryLabel">대기</strong>
-                        <span id="reportsSupportDeliveryMeta" class="muted">Sentrix 제출 전</span>
-                      </article>
-                    </div>
-                    <nav class="reports-support-stepnav">
-                      <button id="reportsSupportNavOverview" class="reports-support-stepnav-item" type="button" data-action="reports-support-step-nav" data-step="overview">
-                        <span class="reports-support-stepnav-index">1</span>
-                        <span class="reports-support-stepnav-copy">
-                          <strong>전달 준비 확인</strong>
-                          <span id="reportsSupportOverviewStepHint" class="muted">지점별 업로드와 artifact 준비 상태를 먼저 확인합니다.</span>
-                        </span>
-                        <span id="reportsSupportOverviewStepPill" class="status-pill status-pill-neutral">대기</span>
-                      </button>
-                      <button id="reportsSupportNavDownload" class="reports-support-stepnav-item" type="button" data-action="reports-support-step-nav" data-step="download">
-                        <span class="reports-support-stepnav-index">2</span>
-                        <span class="reports-support-stepnav-copy">
-                          <strong>지원근무자용 시트 다운로드</strong>
-                          <span id="reportsSupportDownloadStepHint" class="muted">준비된 산출물로 HQ 전달용 파일을 만듭니다.</span>
-                        </span>
-                        <span id="reportsSupportDownloadStepPill" class="status-pill status-pill-neutral">대기</span>
-                      </button>
-                      <button id="reportsSupportNavSentrix" class="reports-support-stepnav-item" type="button" data-action="reports-support-step-nav" data-step="sentrix">
-                        <span class="reports-support-stepnav-index">3</span>
-                        <span class="reports-support-stepnav-copy">
-                          <strong>Sentrix 전달</strong>
-                          <span id="reportsSupportSentrixStepHint" class="muted">준비된 artifact를 Sentrix 전달 화면으로 이어서 넘깁니다.</span>
-                        </span>
-                        <span id="reportsSupportSentrixStepPill" class="status-pill status-pill-neutral">대기</span>
-                      </button>
-                    </nav>
-                  </aside>
                   <div class="reports-support-stage-shell">
                     <section class="reports-wizard-hero reports-support-hero">
                       <div class="reports-wizard-hero-copy">
@@ -3998,17 +4004,46 @@
                         <strong id="reportsSupportCurrentStage">지점 선택 대기</strong>
                         <p id="reportsSupportStatusText" class="muted">대상 지점을 고르면 전달 준비 완료 여부와 다음 액션을 바로 안내합니다.</p>
                       </div>
+                      <div class="reports-finance-hero-side">
+                        <span class="reports-finance-hero-counter"><strong id="reportsSupportCurrentCount">1 / 4</strong></span>
+                      </div>
                     </section>
                     <ul id="reportsSupportBlockedReasons" class="list hidden"></ul>
+                    <div class="reports-support-sidebar-meta">
+                      <article id="reportsSupportArtifactCard" class="schedule-support-meta-card">
+                        <span class="schedule-support-meta-label">전달 기준</span>
+                        <strong id="reportsSupportArtifactLabelMirror">미생성</strong>
+                        <span id="reportsSupportArtifactMeta" class="muted">source artifact 대기</span>
+                      </article>
+                      <article id="reportsSupportDeliveryCard" class="schedule-support-meta-card">
+                        <span class="schedule-support-meta-label">최근 전달</span>
+                        <strong id="reportsSupportDeliveryLabelMirror">대기</strong>
+                        <span id="reportsSupportDeliveryMeta" class="muted">Sentrix 제출 전</span>
+                      </article>
+                    </div>
                     <div class="reports-support-detail-stack">
-                  <section id="reportsSupportStepOverview" class="reports-wizard-step" data-step-state="idle">
+                  <section id="reportsSupportStepScope" class="reports-wizard-step" data-step-state="idle">
                     <div class="reports-wizard-step-index">1</div>
                     <div class="reports-wizard-step-main">
                       <div class="reports-wizard-step-head">
                         <div>
-                          <h4>전달 준비 확인</h4>
-                          <p class="muted">먼저 지점별 업로드와 artifact 준비 상태를 확인합니다.</p>
+                          <h4>범위 선택</h4>
                         </div>
+                        <span id="reportsSupportScopeStepPill" class="status-pill status-pill-neutral">대기</span>
+                      </div>
+                      <div class="schedule-support-upload-actions reports-wizard-step-actions">
+                        <div class="list-row-sub">대상 월과 지점을 먼저 고르면 전달 준비 여부를 순서대로 진행할 수 있습니다.</div>
+                      </div>
+                    </div>
+                  </section>
+                  <section id="reportsSupportStepOverview" class="reports-wizard-step" data-step-state="idle">
+                    <div class="reports-wizard-step-index">2</div>
+                    <div class="reports-wizard-step-main">
+                      <div class="reports-wizard-step-head">
+                        <div>
+                          <h4>전달 준비 확인</h4>
+                        </div>
+                        <span id="reportsSupportOverviewStepPill" class="status-pill status-pill-neutral">대기</span>
                       </div>
                       <div class="schedule-support-upload-actions reports-wizard-step-actions">
                         <button class="btn btn-secondary" type="button" data-action="reports-support-open-schedule-hq-upload">지점별 업로드 확인 열기</button>
@@ -4016,13 +4051,13 @@
                     </div>
                   </section>
                   <section id="reportsSupportStepDownload" class="reports-wizard-step" data-step-state="idle">
-                    <div class="reports-wizard-step-index">2</div>
+                    <div class="reports-wizard-step-index">3</div>
                     <div class="reports-wizard-step-main">
                       <div class="reports-wizard-step-head">
                         <div>
                           <h4>지원근무자용 시트 다운로드</h4>
-                          <p class="muted">전달 가능한 산출물이 준비되면 HQ 전달용 파일을 내려받습니다.</p>
                         </div>
+                        <span id="reportsSupportDownloadStepPill" class="status-pill status-pill-neutral">대기</span>
                       </div>
                       <div class="schedule-support-upload-actions reports-wizard-step-actions">
                         <button class="btn btn-secondary" type="button" id="reportsSupportDownloadBtn" data-action="reports-support-download">지원근무자용 시트 다운로드</button>
@@ -4030,13 +4065,13 @@
                     </div>
                   </section>
                   <section id="reportsSupportStepSentrix" class="reports-wizard-step" data-step-state="idle">
-                    <div class="reports-wizard-step-index">3</div>
+                    <div class="reports-wizard-step-index">4</div>
                     <div class="reports-wizard-step-main">
                       <div class="reports-wizard-step-head">
                         <div>
                           <h4>Sentrix 전달</h4>
-                          <p class="muted">준비된 artifact를 Sentrix 전달 화면으로 이어서 넘깁니다.</p>
                         </div>
+                        <span id="reportsSupportSentrixStepPill" class="status-pill status-pill-neutral">대기</span>
                       </div>
                       <div class="schedule-support-upload-actions reports-wizard-step-actions">
                         <button class="btn btn-primary" type="button" id="reportsSupportOpenSentrixBtn" data-action="reports-support-open-sentrix">Sentrix에서 열기</button>
@@ -4045,6 +4080,10 @@
                   </section>
                     </div>
                   </div>
+                </div>
+                <div class="reports-wizard-footer">
+                  <button class="btn btn-secondary" type="button" id="reportsSupportStepBackBtn" data-action="reports-support-step-back">이전</button>
+                  <button class="btn btn-primary" type="button" id="reportsSupportStepNextBtn" data-action="reports-support-step-next">다음</button>
                 </div>
                 <details id="reportsSupportArtifactTechDetails" class="schedule-upload-tech-details hidden">
                   <summary>세부 정보</summary>

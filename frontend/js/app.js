@@ -8661,12 +8661,12 @@ function setReportsWizardStep(rootSelector, pillSelector, {
 
 function normalizeReportsFinanceStep(step = '') {
   const value = String(step || '').trim().toLowerCase();
-  return ['review', 'upload', 'final'].includes(value) ? value : 'review';
+  return ['scope', 'review', 'upload', 'final'].includes(value) ? value : 'scope';
 }
 
 function normalizeReportsSupportStep(step = '') {
   const value = String(step || '').trim().toLowerCase();
-  return ['overview', 'download', 'sentrix'].includes(value) ? value : 'overview';
+  return ['scope', 'overview', 'download', 'sentrix'].includes(value) ? value : 'scope';
 }
 
 function setReportsFinanceStep(step = '') {
@@ -8700,13 +8700,12 @@ function applyReportsWizardSectionSelection(sectionMap = {}, currentStep = '', s
 function applyReportsWizardNavSelection(navMap = {}, currentStep = '', stateMap = {}) {
   Object.entries(navMap).forEach(([key, selector]) => {
     const button = $(selector);
-    if (!(button instanceof HTMLButtonElement)) return;
+    if (!(button instanceof HTMLElement)) return;
     const stepState = stateMap[key]?.state || 'idle';
     button.dataset.stepState = stepState;
     button.classList.toggle('is-current', key === currentStep);
-    button.disabled = key !== currentStep && stepState === 'blocked';
     button.setAttribute('aria-current', key === currentStep ? 'step' : 'false');
-    button.setAttribute('aria-disabled', button.disabled ? 'true' : 'false');
+    button.setAttribute('aria-disabled', stepState === 'blocked' ? 'true' : 'false');
   });
 }
 
@@ -8746,41 +8745,46 @@ function renderReportsSupportHandoffPanel() {
     ? state.schedule.supportStatus
     : null;
   const pill = $('#reportsSupportStatePill');
-  const text = $('#reportsSupportStatusText');
+  const textEl = $('#reportsSupportStatusText');
   const currentStage = $('#reportsSupportCurrentStage');
   const artifactLabel = $('#reportsSupportArtifactLabel');
+  const artifactLabelMirror = $('#reportsSupportArtifactLabelMirror');
   const artifactMeta = $('#reportsSupportArtifactMeta');
   const deliveryLabel = $('#reportsSupportDeliveryLabel');
+  const deliveryLabelMirror = $('#reportsSupportDeliveryLabelMirror');
   const deliveryMeta = $('#reportsSupportDeliveryMeta');
+  const sentrixNavState = $('#reportsSupportSentrixNavState');
+  const scopeState = $('#reportsSupportScopeState');
+  const currentCount = $('#reportsSupportCurrentCount');
   const blockedList = $('#reportsSupportBlockedReasons');
   const downloadBtn = $('#reportsSupportDownloadBtn');
   const sentrixBtn = $('#reportsSupportOpenSentrixBtn');
   const copyBtn = $('#reportsSupportCopyArtifactBtn');
   const techDetails = $('#reportsSupportArtifactTechDetails');
-  const refreshedAt = formatOpsDateTime(state.reports?.lastSyncedAt || '');
+  const backBtn = $('#reportsSupportStepBackBtn');
+  const nextBtn = $('#reportsSupportStepNextBtn');
+  const order = ['scope', 'overview', 'download', 'sentrix'];
   const supportStepStates = {};
 
   const setSupportStep = (name, config) => {
     supportStepStates[name] = config;
     const navMap = {
+      scope: '#reportsSupportNavScope',
       overview: '#reportsSupportNavOverview',
       download: '#reportsSupportNavDownload',
       sentrix: '#reportsSupportNavSentrix',
     };
     const sectionMap = {
+      scope: '#reportsSupportStepScope',
       overview: '#reportsSupportStepOverview',
       download: '#reportsSupportStepDownload',
       sentrix: '#reportsSupportStepSentrix',
     };
     const pillMap = {
+      scope: '#reportsSupportScopeStepPill',
       overview: '#reportsSupportOverviewStepPill',
       download: '#reportsSupportDownloadStepPill',
       sentrix: '#reportsSupportSentrixStepPill',
-    };
-    const hintMap = {
-      overview: '#reportsSupportOverviewStepHint',
-      download: '#reportsSupportDownloadStepHint',
-      sentrix: '#reportsSupportSentrixStepHint',
     };
     const section = $(sectionMap[name]);
     if (section instanceof HTMLElement) section.dataset.stepState = config.state || 'idle';
@@ -8791,35 +8795,40 @@ function renderReportsSupportHandoffPanel() {
       pillTarget.className = `status-pill reports-wizard-step-pill reports-wizard-step-pill-${config.state || 'idle'}`;
       pillTarget.textContent = String(config.text || '').trim() || '대기';
     }
-    const hintTarget = $(hintMap[name]);
-    if (hintTarget instanceof HTMLElement) {
-      hintTarget.textContent = String(config.hint || '').trim();
-    }
   };
 
-  const finalizeSupportSelection = (fallbackStep = 'overview') => {
+  const finalizeSupportSelection = (fallbackStep = 'scope') => {
     const currentStep = resolveReportsWizardSelection(
       normalizeReportsSupportStep(state.reports?.supportStep || fallbackStep),
       supportStepStates,
       fallbackStep,
-      ['overview', 'download', 'sentrix'],
+      order,
     );
     setReportsSupportStep(currentStep);
     applyReportsWizardNavSelection(
-      { overview: '#reportsSupportNavOverview', download: '#reportsSupportNavDownload', sentrix: '#reportsSupportNavSentrix' },
+      { scope: '#reportsSupportNavScope', overview: '#reportsSupportNavOverview', download: '#reportsSupportNavDownload', sentrix: '#reportsSupportNavSentrix' },
       currentStep,
       supportStepStates,
     );
     applyReportsWizardSectionSelection(
-      { overview: '#reportsSupportStepOverview', download: '#reportsSupportStepDownload', sentrix: '#reportsSupportStepSentrix' },
+      { scope: '#reportsSupportStepScope', overview: '#reportsSupportStepOverview', download: '#reportsSupportStepDownload', sentrix: '#reportsSupportStepSentrix' },
       currentStep,
       supportStepStates,
     );
+    return currentStep;
   };
 
-  if (techDetails instanceof HTMLElement) {
-    techDetails.classList.toggle('hidden', !canSelectScheduleWorkflowTenant());
-  }
+  const applyFooterState = (currentStep, canAdvanceMap = {}) => {
+    const index = Math.max(0, order.indexOf(currentStep));
+    if (currentCount instanceof HTMLElement) currentCount.textContent = `${index + 1} / ${order.length}`;
+    if (backBtn instanceof HTMLButtonElement) backBtn.disabled = index <= 0;
+    if (nextBtn instanceof HTMLButtonElement) {
+      const nextStep = order[index + 1] || '';
+      const nextBlocked = nextStep ? supportStepStates[nextStep]?.state === 'blocked' : true;
+      nextBtn.textContent = index >= order.length - 1 ? '완료' : '다음';
+      nextBtn.disabled = index >= order.length - 1 || !canAdvanceMap[currentStep] || nextBlocked;
+    }
+  };
 
   const setBlockedReasons = (reasons = []) => {
     if (!(blockedList instanceof HTMLElement)) return;
@@ -8837,63 +8846,65 @@ function renderReportsSupportHandoffPanel() {
     });
   };
 
+  const setSupportMetaLabels = ({ artifact = '미생성', artifactInfo = '', delivery = '대기', deliveryInfo = '', sentrix = '대기' } = {}) => {
+    if (artifactLabel) artifactLabel.textContent = artifact;
+    if (artifactLabelMirror) artifactLabelMirror.textContent = artifact;
+    if (artifactMeta) artifactMeta.textContent = artifactInfo;
+    if (deliveryLabel) deliveryLabel.textContent = delivery;
+    if (deliveryLabelMirror) deliveryLabelMirror.textContent = delivery;
+    if (deliveryMeta) deliveryMeta.textContent = deliveryInfo;
+    if (sentrixNavState) sentrixNavState.textContent = sentrix;
+  };
+
+  const setStageTitle = (step) => {
+    const titles = {
+      scope: '1단계 · 범위 선택',
+      overview: '2단계 · 전달 준비 확인',
+      download: '3단계 · 시트 다운로드',
+      sentrix: '4단계 · Sentrix 전달',
+    };
+    if (currentStage) currentStage.textContent = titles[step] || '지원근무 전달';
+  };
+
+  if (techDetails instanceof HTMLElement) {
+    techDetails.classList.toggle('hidden', !canSelectScheduleWorkflowTenant());
+  }
+
   if (!siteCode) {
-    setReportsSummaryPill(pill, '', 'status-pill status-pill-neutral');
-    setReportsSummaryMessage(text, '먼저 대상 지점을 선택하면 전달 준비 상태와 다음 액션을 안내합니다.');
-    if (currentStage) currentStage.textContent = '지점 선택 대기';
-    if (artifactLabel) artifactLabel.textContent = '미생성';
-    if (artifactMeta) artifactMeta.textContent = 'source 업로드 전';
-    if (deliveryLabel) deliveryLabel.textContent = '대기';
-    if (deliveryMeta) deliveryMeta.textContent = 'Sentrix 제출 전';
+    setReportsSummaryPill(pill, '지점 선택', 'status-pill status-pill-neutral');
+    setReportsSummaryMessage(textEl, '');
+    setStageTitle('scope');
+    if (scopeState) scopeState.textContent = '입력 필요';
+    setSupportMetaLabels({ artifact: '미생성', artifactInfo: '', delivery: '대기', deliveryInfo: '', sentrix: '잠금' });
     if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = true;
     if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = true;
-    setSupportStep('overview', {
-      state: 'active',
-      text: '지점 선택',
-      hint: '지점을 먼저 고르면 전달 준비 상태를 확인할 수 있습니다.',
-    });
-    setSupportStep('download', {
-      state: 'idle',
-      text: '대기',
-      hint: '전달 기준이 준비되면 지원근무자용 시트를 다운로드할 수 있습니다.',
-    });
-    setSupportStep('sentrix', {
-      state: 'idle',
-      text: '대기',
-      hint: 'artifact가 준비되면 Sentrix 전달 단계가 열립니다.',
-    });
     if (copyBtn instanceof HTMLElement) copyBtn.classList.add('hidden');
     renderReportsSupportArtifactMeta(null);
+    setSupportStep('scope', { state: 'active', text: '입력 필요' });
+    setSupportStep('overview', { state: 'blocked', text: '잠금' });
+    setSupportStep('download', { state: 'blocked', text: '잠금' });
+    setSupportStep('sentrix', { state: 'blocked', text: '잠금' });
     setBlockedReasons([]);
-    finalizeSupportSelection('overview');
+    applyFooterState(finalizeSupportSelection('scope'), { scope: false, overview: false, download: false, sentrix: false });
     return;
   }
 
   if (!status) {
     setReportsSummaryPill(pill, '조회 중', 'status-pill status-pill-neutral');
-    setReportsSummaryMessage(text, '전달 상태를 확인하는 중입니다.');
-    if (currentStage) currentStage.textContent = '상태 조회 중';
+    setReportsSummaryMessage(textEl, '');
+    setStageTitle('overview');
+    if (scopeState) scopeState.textContent = '완료';
+    setSupportMetaLabels({ artifact: '조회 중', artifactInfo: '', delivery: '대기', deliveryInfo: '', sentrix: '잠금' });
     if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = true;
     if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = true;
-    setSupportStep('overview', {
-      state: 'active',
-      text: '조회 중',
-      hint: '지점별 전달 준비 상태를 불러오고 있습니다.',
-    });
-    setSupportStep('download', {
-      state: 'idle',
-      text: '대기',
-      hint: '상태 조회 후 다운로드 가능 여부를 판단합니다.',
-    });
-    setSupportStep('sentrix', {
-      state: 'idle',
-      text: '대기',
-      hint: '상태 조회 후 Sentrix 전달 가능 여부를 안내합니다.',
-    });
     if (copyBtn instanceof HTMLElement) copyBtn.classList.add('hidden');
     renderReportsSupportArtifactMeta(null);
+    setSupportStep('scope', { state: 'complete', text: '완료' });
+    setSupportStep('overview', { state: 'active', text: '조회 중' });
+    setSupportStep('download', { state: 'blocked', text: '잠금' });
+    setSupportStep('sentrix', { state: 'blocked', text: '잠금' });
     setBlockedReasons([]);
-    finalizeSupportSelection('overview');
+    applyFooterState(finalizeSupportSelection('overview'), { scope: true, overview: false, download: false, sentrix: false });
     return;
   }
 
@@ -8905,140 +8916,87 @@ function renderReportsSupportHandoffPanel() {
   const mergeStale = Boolean(status.hq_merge_stale) || sourceState === 'hq_merge_stale';
   const readyForHandoff = Boolean(artifactContext.artifact_id) && !sourceMissing;
   const blockedReasons = Array.isArray(status.blocked_reasons) ? status.blocked_reasons.filter(Boolean) : [];
+  const canHqFlow = canUseScheduleSupportRoundtripHq();
+  const totalSiteCount = Number(status.total_site_count || 0);
+  const readySiteCount = Number(status.ready_site_count || 0);
 
   renderReportsSupportArtifactMeta(artifactContext);
 
   if (overallScope) {
-    const totalSiteCount = Number(status.total_site_count || 0);
-    const readySiteCount = Number(status.ready_site_count || 0);
+    const canProceedDownload = canHqFlow && readySiteCount > 0;
     setReportsSummaryPill(
       pill,
       readySiteCount > 0 ? '전체 준비' : '전체 대기',
       readySiteCount > 0 ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral',
     );
-    setReportsSummaryMessage(
-      text,
-      [
-        totalSiteCount > 0 ? `준비 ${readySiteCount}/${totalSiteCount}` : '',
-        refreshedAt ? `마지막 갱신 ${refreshedAt}` : '',
-      ].filter(Boolean).join(' · '),
-    );
-    if (currentStage) currentStage.textContent = readySiteCount > 0 ? '지점별 전달 준비 확인' : '전체 범위 상태 확인';
-    if (artifactLabel) artifactLabel.textContent = readySiteCount > 0 ? `${readySiteCount}개 준비` : '미생성';
-    if (artifactMeta) artifactMeta.textContent = readySiteCount > 0 ? '세부 업로드는 지점별로 진행합니다.' : '업로드 전';
-    if (deliveryLabel) deliveryLabel.textContent = readySiteCount > 0 ? '지점별 확인 필요' : '대기';
-    if (deliveryMeta) deliveryMeta.textContent = '전체 범위는 지점별 상태만 요약합니다.';
-    if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = !canUseScheduleSupportRoundtripHq() || readySiteCount <= 0;
-    if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = !canUseScheduleSupportRoundtripHq() || readySiteCount <= 0 || !artifactContext.artifact_id;
-    setSupportStep('overview', {
-      state: readySiteCount > 0 ? 'complete' : 'active',
-      text: readySiteCount > 0 ? '준비 확인' : '확인 필요',
-      hint: readySiteCount > 0 ? '지점별 준비 수를 확인했습니다. 세부 업로드는 각 지점에서 진행합니다.' : '먼저 업로드가 준비된 지점을 확인해야 합니다.',
+    setReportsSummaryMessage(textEl, '');
+    setStageTitle(readySiteCount > 0 ? 'download' : 'overview');
+    if (scopeState) scopeState.textContent = '완료';
+    setSupportMetaLabels({
+      artifact: readySiteCount > 0 ? `${readySiteCount}개 준비` : '미생성',
+      artifactInfo: totalSiteCount > 0 ? `준비 ${readySiteCount}/${totalSiteCount}` : '',
+      delivery: canProceedDownload ? '다운로드 가능' : '대기',
+      deliveryInfo: '전체 범위는 Sentrix 전달 전 단계까지만 지원합니다.',
+      sentrix: '잠금',
     });
-    setSupportStep('download', {
-      state: canUseScheduleSupportRoundtripHq() && readySiteCount > 0 ? 'active' : 'blocked',
-      text: canUseScheduleSupportRoundtripHq() && readySiteCount > 0 ? '다운로드 가능' : '잠금',
-      hint: canUseScheduleSupportRoundtripHq()
-        ? '전체 범위는 HQ용 시트를 준비할 수 있지만, 실제 전달은 지점별 확인이 필요합니다.'
-        : 'Supervisor 이상 계정에서만 전달용 시트를 다운로드할 수 있습니다.',
-    });
-    setSupportStep('sentrix', {
-      state: 'blocked',
-      text: '지점별 진행',
-      hint: '전체 범위에서는 지원근무 전달 준비만 확인하고, 실제 Sentrix 전달은 지점별로 진행합니다.',
-    });
-    if (copyBtn instanceof HTMLElement) {
-      copyBtn.classList.toggle('hidden', !artifactContext.artifact_id || !canSelectScheduleWorkflowTenant());
-    }
+    if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = !canProceedDownload;
+    if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = true;
+    if (copyBtn instanceof HTMLElement) copyBtn.classList.toggle('hidden', !artifactContext.artifact_id || !canSelectScheduleWorkflowTenant());
+    setSupportStep('scope', { state: 'complete', text: '완료' });
+    setSupportStep('overview', { state: readySiteCount > 0 ? 'complete' : 'active', text: readySiteCount > 0 ? '준비 완료' : '확인 필요' });
+    setSupportStep('download', { state: canProceedDownload ? 'active' : 'blocked', text: canProceedDownload ? '다운로드 가능' : '잠금' });
+    setSupportStep('sentrix', { state: 'blocked', text: '잠금' });
     setBlockedReasons(blockedReasons);
-    finalizeSupportSelection('overview');
+    const currentStep = finalizeSupportSelection(readySiteCount > 0 ? 'download' : 'overview');
+    applyFooterState(currentStep, {
+      scope: true,
+      overview: readySiteCount > 0,
+      download: false,
+      sentrix: false,
+    });
     return;
   }
 
   setReportsSummaryPill(pill, getScheduleSupportRoundtripStateLabel(sourceState), getScheduleSupportRoundtripStateClass(sourceState, status));
-  setReportsSummaryMessage(
-    text,
-    [
-      sourceMissing ? '원본 업로드 필요' : '',
-      mergeStale ? '재전달 필요' : '',
-      refreshedAt ? `마지막 갱신 ${refreshedAt}` : '',
-    ].filter(Boolean).join(' · '),
-  );
-  if (currentStage) {
-    currentStage.textContent = sourceMissing
-      ? '1단계 · 전달 준비 확인'
-      : (!readyForHandoff
-        ? '1단계 · artifact 준비 대기'
-        : (mergeAvailable || mergeStale ? '3단계 · Sentrix 전달' : '2단계 · 시트 다운로드'));
-  }
-  if (artifactLabel) artifactLabel.textContent = readyForHandoff ? '준비됨' : '미생성';
-  if (artifactMeta) {
-    artifactMeta.textContent = artifactContext.generated_at
-      ? `생성 ${formatOpsDateTime(artifactContext.generated_at)}`
-      : '업로드 전';
-  }
-  if (deliveryLabel) {
-    deliveryLabel.textContent = mergeStale
-      ? '재전달 필요'
-      : (mergeAvailable ? '전달 이력 있음' : '전달 대기');
-  }
-  if (deliveryMeta) {
-    deliveryMeta.textContent = status.latest_hq_uploaded_at
-      ? `최근 전달 ${formatOpsDateTime(status.latest_hq_uploaded_at)}`
-      : '제출 전';
-  }
-
-  if (downloadBtn instanceof HTMLButtonElement) {
-    downloadBtn.disabled = !canUseScheduleSupportRoundtripHq() || !readyForHandoff;
-  }
-  if (sentrixBtn instanceof HTMLButtonElement) {
-    sentrixBtn.disabled = !canUseScheduleSupportRoundtripHq() || !readyForHandoff || !artifactContext.artifact_id;
-  }
-  setSupportStep('overview', {
-    state: readyForHandoff ? 'complete' : 'active',
-    text: readyForHandoff ? '준비 완료' : '확인 필요',
-    hint: sourceMissing
-      ? 'source 업로드가 먼저 필요합니다.'
-      : (artifactContext.generated_at
-        ? `artifact 생성 ${formatOpsDateTime(artifactContext.generated_at)}`
-        : 'artifact 생성 대기 상태입니다.'),
+  setReportsSummaryMessage(textEl, '');
+  setSupportMetaLabels({
+    artifact: readyForHandoff ? '준비됨' : '미생성',
+    artifactInfo: artifactContext.generated_at ? `생성 ${formatOpsDateTime(artifactContext.generated_at)}` : '업로드 전',
+    delivery: mergeStale ? '재전달 필요' : (mergeAvailable ? '전달 이력 있음' : '전달 대기'),
+    deliveryInfo: status.latest_hq_uploaded_at ? `최근 전달 ${formatOpsDateTime(status.latest_hq_uploaded_at)}` : '제출 전',
+    sentrix: canHqFlow && readyForHandoff && artifactContext.artifact_id ? (mergeAvailable && !mergeStale ? '완료' : '진행 가능') : '잠금',
   });
-  setSupportStep('download', {
-    state: canUseScheduleSupportRoundtripHq() && readyForHandoff ? 'active' : 'blocked',
-    text: canUseScheduleSupportRoundtripHq() && readyForHandoff ? '다운로드 가능' : '잠금',
-    hint: !readyForHandoff
-      ? '전달 기준이 준비돼야 다운로드가 열립니다.'
-      : (!canUseScheduleSupportRoundtripHq()
-        ? 'Supervisor 이상 계정에서만 전달용 시트를 다운로드할 수 있습니다.'
-        : '지원근무자용 시트를 내려받아 HQ 전달 파일을 준비합니다.'),
-  });
-  setSupportStep('sentrix', {
-    state: canUseScheduleSupportRoundtripHq() && readyForHandoff && artifactContext.artifact_id
-      ? (mergeStale || !mergeAvailable ? 'active' : 'complete')
-      : 'blocked',
-    text: canUseScheduleSupportRoundtripHq() && readyForHandoff && artifactContext.artifact_id
-      ? (mergeStale ? '재전달 필요' : (mergeAvailable ? '전달 완료' : '진행 가능'))
-      : '잠금',
-    hint: !readyForHandoff
-      ? 'artifact 준비가 완료돼야 Sentrix 전달이 가능합니다.'
-      : (!canUseScheduleSupportRoundtripHq()
-        ? 'Supervisor 이상 계정에서만 Sentrix 전달을 진행할 수 있습니다.'
-        : (status.latest_hq_uploaded_at
-          ? `최근 전달 ${formatOpsDateTime(status.latest_hq_uploaded_at)}`
-          : '준비가 끝났으니 Sentrix 전달 화면으로 넘어가세요.')),
-  });
-  if (copyBtn instanceof HTMLElement) {
-    copyBtn.classList.toggle('hidden', !artifactContext.artifact_id || !canSelectScheduleWorkflowTenant());
-  }
+  if (scopeState) scopeState.textContent = '완료';
+  if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = !canHqFlow || !readyForHandoff;
+  if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = !canHqFlow || !readyForHandoff || !artifactContext.artifact_id;
+  if (copyBtn instanceof HTMLElement) copyBtn.classList.toggle('hidden', !artifactContext.artifact_id || !canSelectScheduleWorkflowTenant());
   if (techDetails instanceof HTMLElement) {
     techDetails.classList.toggle('hidden', !canSelectScheduleWorkflowTenant() || !artifactContext.artifact_id);
   }
+  setSupportStep('scope', { state: 'complete', text: '완료' });
+  setSupportStep('overview', { state: readyForHandoff ? 'complete' : 'active', text: readyForHandoff ? '준비 완료' : '확인 필요' });
+  setSupportStep('download', { state: canHqFlow && readyForHandoff ? 'active' : 'blocked', text: canHqFlow && readyForHandoff ? '다운로드 가능' : '잠금' });
+  setSupportStep('sentrix', {
+    state: canHqFlow && readyForHandoff && artifactContext.artifact_id
+      ? (mergeAvailable && !mergeStale ? 'complete' : 'active')
+      : 'blocked',
+    text: canHqFlow && readyForHandoff && artifactContext.artifact_id
+      ? (mergeAvailable && !mergeStale ? '완료됨' : '진행 가능')
+      : '잠금',
+  });
   setBlockedReasons(blockedReasons);
-  finalizeSupportSelection(
+  const currentStep = finalizeSupportSelection(
     !readyForHandoff
       ? 'overview'
       : ((mergeAvailable || mergeStale) ? 'sentrix' : 'download')
   );
+  setStageTitle(currentStep);
+  applyFooterState(currentStep, {
+    scope: true,
+    overview: readyForHandoff,
+    download: canHqFlow && readyForHandoff,
+    sentrix: false,
+  });
 }
 
 function renderReportsWorkspacePanels() {
@@ -16008,7 +15966,7 @@ function renderScheduleFinanceSubmissionStatus() {
     return;
   }
 
-  const status = state.schedule.financeStatus && typeof state.schedule.financeStatus === 'object'
+  const status = state.schedule?.financeStatus && typeof state.schedule.financeStatus === 'object'
     ? state.schedule.financeStatus
     : null;
   const selectedSite = getScheduleSupportSelectedSiteCode();
@@ -16016,41 +15974,39 @@ function renderScheduleFinanceSubmissionStatus() {
   const statusText = $('#scheduleFinanceStatusText');
   const currentStage = $('#scheduleFinanceCurrentStage');
   const blockedList = $('#scheduleFinanceBlockedReasons');
+  const scopeState = $('#scheduleFinanceScopeState');
   const reviewRevision = $('#scheduleFinanceReviewRevision');
-  const reviewMeta = $('#scheduleFinanceReviewMeta');
   const finalUploadState = $('#scheduleFinanceFinalUploadState');
-  const finalUploadMeta = $('#scheduleFinanceFinalUploadMeta');
   const finalDownloadState = $('#scheduleFinanceFinalDownloadState');
-  const finalDownloadMeta = $('#scheduleFinanceFinalDownloadMeta');
+  const currentCount = $('#scheduleFinanceCurrentCount');
+  const backBtn = $('#scheduleFinanceStepBackBtn');
+  const nextBtn = $('#scheduleFinanceStepNextBtn');
   const reviewBtn = $('#scheduleFinanceReviewDownloadBtn');
   const finalDownloadBtn = $('#scheduleFinanceFinalDownloadBtn');
   const previewBtn = $('#scheduleFinancePreviewBtn');
   const applyBtn = $('#scheduleFinanceApplyBtn');
-  const overallScope = selectedSite === 'ALL' || Boolean(status?.overall_scope);
-  const refreshedAt = formatOpsDateTime(state.reports?.lastSyncedAt || '');
+  const order = ['scope', 'review', 'upload', 'final'];
   const financeStepStates = {};
 
   const setFinanceStep = (name, config) => {
     financeStepStates[name] = config;
     const sectionMap = {
+      scope: '#scheduleFinanceStepScope',
       review: '#scheduleFinanceStepReview',
       upload: '#scheduleFinanceStepUpload',
       final: '#scheduleFinanceStepFinal',
     };
     const navMap = {
+      scope: '#reportsFinanceNavScope',
       review: '#reportsFinanceNavReview',
       upload: '#reportsFinanceNavUpload',
       final: '#reportsFinanceNavFinal',
     };
     const pillMap = {
+      scope: '#scheduleFinanceScopeStepPill',
       review: '#scheduleFinanceReviewStepPill',
       upload: '#scheduleFinanceUploadStepPill',
       final: '#scheduleFinanceFinalStepPill',
-    };
-    const hintMap = {
-      review: '#scheduleFinanceReviewMeta',
-      upload: '#scheduleFinanceFinalUploadMeta',
-      final: '#scheduleFinanceFinalDownloadMeta',
     };
     const section = $(sectionMap[name]);
     if (section instanceof HTMLElement) section.dataset.stepState = config.state || 'idle';
@@ -16061,98 +16017,112 @@ function renderScheduleFinanceSubmissionStatus() {
       pill.className = `status-pill reports-wizard-step-pill reports-wizard-step-pill-${config.state || 'idle'}`;
       pill.textContent = String(config.text || '').trim() || '대기';
     }
-    const hint = $(hintMap[name]);
-    if (hint instanceof HTMLElement) {
-      hint.textContent = String(config.hint || '').trim();
-    }
   };
 
-  const finalizeFinanceSelection = (fallbackStep = 'review') => {
+  const finalizeFinanceSelection = (fallbackStep = 'scope') => {
     const currentStep = resolveReportsWizardSelection(
       normalizeReportsFinanceStep(state.reports?.financeStep || fallbackStep),
       financeStepStates,
       fallbackStep,
-      ['review', 'upload', 'final'],
+      order,
     );
     setReportsFinanceStep(currentStep);
     applyReportsWizardNavSelection(
-      { review: '#reportsFinanceNavReview', upload: '#reportsFinanceNavUpload', final: '#reportsFinanceNavFinal' },
+      { scope: '#reportsFinanceNavScope', review: '#reportsFinanceNavReview', upload: '#reportsFinanceNavUpload', final: '#reportsFinanceNavFinal' },
       currentStep,
       financeStepStates,
     );
     applyReportsWizardSectionSelection(
-      { review: '#scheduleFinanceStepReview', upload: '#scheduleFinanceStepUpload', final: '#scheduleFinanceStepFinal' },
+      { scope: '#scheduleFinanceStepScope', review: '#scheduleFinanceStepReview', upload: '#scheduleFinanceStepUpload', final: '#scheduleFinanceStepFinal' },
       currentStep,
       financeStepStates,
     );
+    return currentStep;
+  };
+
+  const applyFooterState = (currentStep, canAdvanceMap = {}) => {
+    const index = Math.max(0, order.indexOf(currentStep));
+    if (currentCount instanceof HTMLElement) currentCount.textContent = `${index + 1} / ${order.length}`;
+    if (backBtn instanceof HTMLButtonElement) backBtn.disabled = index <= 0;
+    if (nextBtn instanceof HTMLButtonElement) {
+      const nextStep = order[index + 1] || '';
+      const nextBlocked = nextStep ? financeStepStates[nextStep]?.state === 'blocked' : true;
+      nextBtn.textContent = index >= order.length - 1 ? '완료' : '다음';
+      nextBtn.disabled = index >= order.length - 1 || !canAdvanceMap[currentStep] || nextBlocked;
+    }
+  };
+
+  const setBlockedReasons = (reasons = []) => {
+    if (!(blockedList instanceof HTMLElement)) return;
+    blockedList.innerHTML = '';
+    const rows = Array.isArray(reasons) ? reasons.filter(Boolean) : [];
+    if (!rows.length) {
+      blockedList.classList.add('hidden');
+      return;
+    }
+    blockedList.classList.remove('hidden');
+    rows.forEach((reason) => {
+      const li = document.createElement('li');
+      li.textContent = String(reason || '').trim();
+      blockedList.appendChild(li);
+    });
+  };
+
+  const setStageTitle = (step) => {
+    const titles = {
+      scope: '1단계 · 범위 선택',
+      review: '2단계 · 1차 확인본',
+      upload: '3단계 · 최종 업로드',
+      final: '4단계 · 최종 다운로드',
+    };
+    if (currentStage) currentStage.textContent = titles[step] || 'Finance 제출';
   };
 
   if (!selectedSite) {
     setReportsSummaryPill(statePill, '지점 선택', 'status-pill status-pill-neutral');
-    setReportsSummaryMessage(statusText, '먼저 대상 지점을 선택하면 지금 필요한 제출 단계와 막힌 이유를 안내합니다.');
-    if (currentStage) currentStage.textContent = '지점 선택 대기';
+    setReportsSummaryMessage(statusText, '');
+    setStageTitle('scope');
+    if (scopeState) scopeState.textContent = '입력 필요';
     if (reviewRevision) reviewRevision.textContent = '대기';
-    if (reviewMeta) reviewMeta.textContent = '지점 선택 후 다운로드';
-    if (finalUploadState) finalUploadState.textContent = '대기';
-    if (finalUploadMeta) finalUploadMeta.textContent = 'Supervisor 업로드 전';
+    if (finalUploadState) finalUploadState.textContent = '잠금';
     if (finalDownloadState) finalDownloadState.textContent = '잠금';
-    if (finalDownloadMeta) finalDownloadMeta.textContent = '최종 업로드 후 활성화';
     if (reviewBtn) reviewBtn.disabled = true;
     if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
     if (applyBtn) applyBtn.disabled = true;
-    setFinanceStep('review', {
-      state: 'active',
-      text: '지점 선택',
-      hint: '먼저 지점을 선택하면 1차 확인본 다운로드가 열립니다.',
-    });
-    setFinanceStep('upload', {
-      state: 'idle',
-      text: '대기',
-      hint: '1차 확인본을 받은 뒤 Supervisor 계정으로 최종 업로드를 진행합니다.',
-    });
-    setFinanceStep('final', {
-      state: 'idle',
-      text: '대기',
-      hint: '최종 업로드 반영 후 최종본 다운로드가 열립니다.',
-    });
-    if (blockedList) {
-      blockedList.innerHTML = '';
-      blockedList.classList.add('hidden');
-    }
-    finalizeFinanceSelection('review');
+    setFinanceStep('scope', { state: 'active', text: '입력 필요' });
+    setFinanceStep('review', { state: 'blocked', text: '잠금' });
+    setFinanceStep('upload', { state: 'blocked', text: '잠금' });
+    setFinanceStep('final', { state: 'blocked', text: '잠금' });
+    setBlockedReasons([]);
+    applyFooterState(finalizeFinanceSelection('scope'), { scope: false, review: false, upload: false, final: false });
     renderScheduleFinanceProgress();
     return;
   }
 
   if (!status) {
     setReportsSummaryPill(statePill, '조회 중', 'status-pill status-pill-neutral');
-    setReportsSummaryMessage(statusText, 'Finance 제출 상태를 조회하는 중입니다.');
-    if (currentStage) currentStage.textContent = '상태 조회 중';
+    setReportsSummaryMessage(statusText, '');
+    setStageTitle('review');
+    if (scopeState) scopeState.textContent = '완료';
+    if (reviewRevision) reviewRevision.textContent = '조회 중';
+    if (finalUploadState) finalUploadState.textContent = '잠금';
+    if (finalDownloadState) finalDownloadState.textContent = '잠금';
     if (reviewBtn) reviewBtn.disabled = true;
     if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
     if (applyBtn) applyBtn.disabled = true;
-    setFinanceStep('review', {
-      state: 'active',
-      text: '조회 중',
-      hint: '선택한 지점의 1차 확인본 상태를 불러오고 있습니다.',
-    });
-    setFinanceStep('upload', {
-      state: 'idle',
-      text: '대기',
-      hint: '상태 조회 후 최종 업로드 가능 여부를 판단합니다.',
-    });
-    setFinanceStep('final', {
-      state: 'idle',
-      text: '대기',
-      hint: '상태 조회 후 최종본 다운로드 가능 여부를 안내합니다.',
-    });
-    finalizeFinanceSelection('review');
+    setFinanceStep('scope', { state: 'complete', text: '완료' });
+    setFinanceStep('review', { state: 'active', text: '조회 중' });
+    setFinanceStep('upload', { state: 'blocked', text: '잠금' });
+    setFinanceStep('final', { state: 'blocked', text: '잠금' });
+    setBlockedReasons([]);
+    applyFooterState(finalizeFinanceSelection('review'), { scope: true, review: false, upload: false, final: false });
     renderScheduleFinanceProgress();
     return;
   }
 
+  const overallScope = selectedSite === 'ALL' || Boolean(status.overall_scope);
   if (overallScope) {
     const canDownloadOverallReview = canDownloadScheduleFinanceReview();
     setReportsSummaryPill(
@@ -16160,51 +16130,22 @@ function renderScheduleFinanceSubmissionStatus() {
       canDownloadOverallReview ? '전체 1차 다운로드' : '전체 안내',
       canDownloadOverallReview ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral',
     );
-    setReportsSummaryMessage(
-      statusText,
-      canDownloadOverallReview
-        ? '전체 선택은 1차 확인본만 지원합니다.'
-        : '최종 업로드와 최종본 다운로드는 지점별로 진행합니다.',
-    );
-    if (currentStage) {
-      currentStage.textContent = canDownloadOverallReview
-        ? '1단계 · 전체 지점 1차 확인본 다운로드'
-        : '전체 지점 안내';
-    }
+    setReportsSummaryMessage(statusText, '');
+    setStageTitle('review');
+    if (scopeState) scopeState.textContent = '완료';
     if (reviewRevision) reviewRevision.textContent = canDownloadOverallReview ? '다운로드 가능' : '대기';
-    if (reviewMeta) reviewMeta.textContent = canDownloadOverallReview
-      ? '전체 지점을 한 파일로 생성합니다.'
-      : '다운로드 권한이 필요합니다.';
     if (finalUploadState) finalUploadState.textContent = '단일 지점 필요';
-    if (finalUploadMeta) finalUploadMeta.textContent = '단일 지점을 선택해야 업로드할 수 있습니다.';
     if (finalDownloadState) finalDownloadState.textContent = '단일 지점 필요';
-    if (finalDownloadMeta) finalDownloadMeta.textContent = '단일 지점을 선택해야 최종본을 받을 수 있습니다.';
-    if (reviewBtn) reviewBtn.disabled = !canDownloadScheduleFinanceReview();
+    if (reviewBtn) reviewBtn.disabled = !canDownloadOverallReview;
     if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
     if (applyBtn) applyBtn.disabled = true;
-    setFinanceStep('review', {
-      state: canDownloadOverallReview ? 'active' : 'blocked',
-      text: canDownloadOverallReview ? '다운로드 가능' : '권한 필요',
-      hint: canDownloadOverallReview
-        ? '전체 지점 기준 1차 확인본을 한 번에 내려받을 수 있습니다.'
-        : '1차 확인본 다운로드 권한이 필요합니다.',
-    });
-    setFinanceStep('upload', {
-      state: 'blocked',
-      text: '단일 지점 필요',
-      hint: '최종 업로드는 지점을 하나만 선택했을 때 진행할 수 있습니다.',
-    });
-    setFinanceStep('final', {
-      state: 'blocked',
-      text: '단일 지점 필요',
-      hint: '2차 최종본 다운로드도 단일 지점에서만 가능합니다.',
-    });
-    if (blockedList) {
-      blockedList.innerHTML = '';
-      blockedList.classList.add('hidden');
-    }
-    finalizeFinanceSelection('review');
+    setFinanceStep('scope', { state: 'complete', text: '완료' });
+    setFinanceStep('review', { state: canDownloadOverallReview ? 'active' : 'blocked', text: canDownloadOverallReview ? '다운로드 가능' : '잠금' });
+    setFinanceStep('upload', { state: 'blocked', text: '단일 지점 필요' });
+    setFinanceStep('final', { state: 'blocked', text: '단일 지점 필요' });
+    setBlockedReasons([]);
+    applyFooterState(finalizeFinanceSelection('review'), { scope: true, review: false, upload: false, final: false });
     renderScheduleFinanceProgress();
     return;
   }
@@ -16216,116 +16157,61 @@ function renderScheduleFinanceSubmissionStatus() {
     && Boolean(selectedSite)
     && Boolean(status.review_download_revision)
     && !Boolean(status.final_upload_stale);
+  const uploadApplied = Boolean(status.final_uploaded_at) && !Boolean(status.final_upload_stale);
 
   setReportsSummaryPill(statePill, getScheduleFinanceStateLabel(phase), getScheduleFinanceStateClass(phase));
-  setReportsSummaryMessage(
-    statusText,
-    [
-      status.final_upload_stale ? '최종본 다시 확인 필요' : '',
-      refreshedAt ? `마지막 갱신 ${refreshedAt}` : '',
-    ].filter(Boolean).join(' · '),
-  );
-  if (currentStage) {
-    currentStage.textContent = !status.review_download_revision
-      ? '1단계 · 1차 확인본 다운로드'
-      : (!status.final_uploaded_at || status.final_upload_stale
-        ? '2단계 · Supervisor 최종 업로드'
-        : (finalEnabled ? '3단계 · 2차 최종본 다운로드' : '최종본 잠금'));
-  }
+  setReportsSummaryMessage(statusText, '');
+  if (scopeState) scopeState.textContent = '완료';
   if (reviewRevision) {
     reviewRevision.textContent = status.review_download_revision
-      ? '준비됨'
+      ? '준비 완료'
       : (canDownloadScheduleFinanceReview() ? '다운로드 가능' : '대기');
-  }
-  if (reviewMeta) {
-    reviewMeta.textContent = status.review_downloaded_at
-      ? `최근 다운로드 ${formatOpsDateTime(status.review_downloaded_at)}`
-      : '1차 확인본 다운로드';
   }
   if (finalUploadState) {
     if (status.final_uploaded_at && status.final_upload_stale) {
       finalUploadState.textContent = '재업로드 필요';
     } else if (status.final_uploaded_at) {
-      finalUploadState.textContent = '완료';
+      finalUploadState.textContent = '반영 완료';
     } else if (status.review_download_revision) {
       finalUploadState.textContent = '업로드 대기';
     } else {
-      finalUploadState.textContent = '대기';
+      finalUploadState.textContent = '잠금';
     }
-  }
-  if (finalUploadMeta) {
-    finalUploadMeta.textContent = status.final_uploaded_at
-      ? `${formatOpsDateTime(status.final_uploaded_at)}${status.final_upload_stale ? ' · 다시 업로드 필요' : ''}`
-      : '업로드 전';
   }
   if (finalDownloadState) {
     finalDownloadState.textContent = finalEnabled ? '다운로드 가능' : '잠금';
-  }
-  if (finalDownloadMeta) {
-    finalDownloadMeta.textContent = status.final_upload_stale
-      ? '최신 기준으로 다시 업로드해야 합니다.'
-      : (finalEnabled ? '다운로드 가능' : '최종 업로드 후 활성화');
-  }
-
-  if (blockedList) {
-    blockedList.innerHTML = '';
-    if (!blockedReasons.length) {
-      blockedList.classList.add('hidden');
-    } else {
-      blockedList.classList.remove('hidden');
-      blockedReasons.forEach((reason) => {
-        const li = document.createElement('li');
-        li.textContent = String(reason || '').trim();
-        blockedList.appendChild(li);
-      });
-    }
   }
 
   if (reviewBtn) reviewBtn.disabled = !canDownloadScheduleFinanceReview();
   if (finalDownloadBtn) finalDownloadBtn.disabled = !canDownloadScheduleFinanceFinal() || !finalEnabled;
   if (previewBtn) previewBtn.disabled = !canPreviewUpload;
+  if (applyBtn) applyBtn.disabled = !state.schedule.financePreviewBatchId;
+  setFinanceStep('scope', { state: 'complete', text: '완료' });
   setFinanceStep('review', {
     state: status.review_download_revision ? 'complete' : (canDownloadScheduleFinanceReview() ? 'active' : 'blocked'),
-    text: status.review_download_revision ? '준비 완료' : (canDownloadScheduleFinanceReview() ? '다운로드 가능' : '권한 필요'),
-    hint: status.review_downloaded_at
-      ? `최근 다운로드 ${formatOpsDateTime(status.review_downloaded_at)}`
-      : (canDownloadScheduleFinanceReview()
-        ? '먼저 1차 확인본을 내려받아 수정 기준 파일을 준비하세요.'
-        : '1차 확인본 다운로드 권한이 필요합니다.'),
+    text: status.review_download_revision ? '준비 완료' : (canDownloadScheduleFinanceReview() ? '다운로드 가능' : '잠금'),
   });
   setFinanceStep('upload', {
-    state: status.final_uploaded_at && !status.final_upload_stale
-      ? 'complete'
-      : (canPreviewUpload ? 'active' : 'blocked'),
-    text: status.final_uploaded_at && !status.final_upload_stale
-      ? '반영 완료'
-      : (status.final_upload_stale ? '재업로드 필요' : (canPreviewUpload ? '진행 가능' : '잠금')),
-    hint: status.final_uploaded_at
-      ? `${formatOpsDateTime(status.final_uploaded_at)}${status.final_upload_stale ? ' · 최신 기준으로 다시 업로드해야 합니다.' : ' · 최종 업로드가 반영되었습니다.'}`
-      : (!status.review_download_revision
-        ? '1차 확인본을 먼저 내려받아야 최종 업로드가 열립니다.'
-        : (canUploadScheduleFinanceFinal()
-          ? '파일을 선택한 뒤 미리보기로 검토하고 반영하세요.'
-          : 'Supervisor 이상 중 업로드 권한이 있는 계정만 최종 업로드를 진행할 수 있습니다.')),
+    state: uploadApplied ? 'complete' : (canPreviewUpload ? 'active' : 'blocked'),
+    text: uploadApplied ? '반영 완료' : (status.final_upload_stale ? '재업로드 필요' : (canPreviewUpload ? '진행 가능' : '잠금')),
   });
   setFinanceStep('final', {
-    state: finalEnabled
-      ? (canDownloadScheduleFinanceFinal() ? 'active' : 'blocked')
-      : 'blocked',
-    text: finalEnabled
-      ? (canDownloadScheduleFinanceFinal() ? '다운로드 가능' : '권한 필요')
-      : '잠금',
-    hint: status.final_upload_stale
-      ? '최신 기준으로 다시 업로드해야 최종본 다운로드가 열립니다.'
-      : (finalEnabled
-        ? '반영된 최종본을 내려받아 제출용 파일로 사용합니다.'
-        : '최종 업로드 반영이 끝나야 다운로드가 열립니다.'),
+    state: finalEnabled ? (canDownloadScheduleFinanceFinal() ? 'active' : 'blocked') : 'blocked',
+    text: finalEnabled ? (canDownloadScheduleFinanceFinal() ? '다운로드 가능' : '권한 필요') : '잠금',
   });
-  finalizeFinanceSelection(
+  setBlockedReasons(blockedReasons);
+  const currentStep = finalizeFinanceSelection(
     !status.review_download_revision
       ? 'review'
-      : (!status.final_uploaded_at || status.final_upload_stale ? 'upload' : 'final')
+      : (!uploadApplied ? 'upload' : 'final')
   );
+  setStageTitle(currentStep);
+  applyFooterState(currentStep, {
+    scope: true,
+    review: Boolean(status.review_download_revision),
+    upload: uploadApplied,
+    final: false,
+  });
   renderScheduleFinanceProgress();
 }
 
@@ -59837,17 +59723,47 @@ function bindUiEvents() {
       return;
     }
 
-    if (action === 'reports-finance-step-nav') {
-      const requestedStep = normalizeReportsFinanceStep(actionEl.dataset.step || 'review');
-      setReportsFinanceStep(requestedStep);
-      renderScheduleFinanceSubmissionStatus();
+    if (action === 'reports-finance-step-back') {
+      const order = ['scope', 'review', 'upload', 'final'];
+      const current = normalizeReportsFinanceStep(state.reports?.financeStep || 'scope');
+      const index = order.indexOf(current);
+      if (index > 0) {
+        setReportsFinanceStep(order[index - 1]);
+        renderScheduleFinanceSubmissionStatus();
+      }
       return;
     }
 
-    if (action === 'reports-support-step-nav') {
-      const requestedStep = normalizeReportsSupportStep(actionEl.dataset.step || 'overview');
-      setReportsSupportStep(requestedStep);
-      renderReportsSupportHandoffPanel();
+    if (action === 'reports-finance-step-next') {
+      const order = ['scope', 'review', 'upload', 'final'];
+      const current = normalizeReportsFinanceStep(state.reports?.financeStep || 'scope');
+      const index = order.indexOf(current);
+      if (index >= 0 && index < order.length - 1) {
+        setReportsFinanceStep(order[index + 1]);
+        renderScheduleFinanceSubmissionStatus();
+      }
+      return;
+    }
+
+    if (action === 'reports-support-step-back') {
+      const order = ['scope', 'overview', 'download', 'sentrix'];
+      const current = normalizeReportsSupportStep(state.reports?.supportStep || 'scope');
+      const index = order.indexOf(current);
+      if (index > 0) {
+        setReportsSupportStep(order[index - 1]);
+        renderReportsSupportHandoffPanel();
+      }
+      return;
+    }
+
+    if (action === 'reports-support-step-next') {
+      const order = ['scope', 'overview', 'download', 'sentrix'];
+      const current = normalizeReportsSupportStep(state.reports?.supportStep || 'scope');
+      const index = order.indexOf(current);
+      if (index >= 0 && index < order.length - 1) {
+        setReportsSupportStep(order[index + 1]);
+        renderReportsSupportHandoffPanel();
+      }
       return;
     }
 
