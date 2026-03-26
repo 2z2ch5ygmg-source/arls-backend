@@ -774,6 +774,8 @@ function createInitialAttendanceViewState() {
     managerDrawerOpen: false,
     managerRecordEdits: {},
     managerPrefsLoaded: false,
+    managerLoading: false,
+    managerLoadSeq: 0,
     editingRowKey: '',
   };
 }
@@ -37463,6 +37465,66 @@ async function loadAttendanceViewPresenter() {
   await loadAttendanceView();
 }
 
+function renderAttendanceViewFromCache() {
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+
+  renderAttendanceLayoutMode();
+  renderAttendanceWorkspaceHeader();
+  renderAttendanceWorkspaceTabs();
+  renderAttendanceToolbarVisibility();
+  renderAttendanceManagerPanelVisibility();
+  syncAttendanceManagerFilterInputs();
+
+  if (canUseAttendanceManagerFilter()) {
+    renderAttendanceManagerFilterOptions();
+    renderAttendanceFilterMeta();
+    const managerRows = Array.isArray(state.attendanceView.managerRows) ? state.attendanceView.managerRows : [];
+    const scopedRows = getFilteredAttendanceManagerRows(managerRows, { applyStatus: false });
+    const filteredRows = getFilteredAttendanceManagerRows(managerRows, { applyStatus: true });
+    renderAttendanceManagerWorkspace({
+      rows: filteredRows,
+      scopedRows,
+      loading: Boolean(state.attendanceView.managerLoading) && !managerRows.length,
+    });
+    return;
+  }
+
+  const activeDate = setAttendanceActiveDate(state.attendanceView.date || toLocalDateKey(new Date()), { syncInput: true });
+  const records = Array.isArray(state.attendanceView.records) ? state.attendanceView.records : [];
+  const overtimeRows = Array.isArray(state.attendanceView.overtimeRows) ? state.attendanceView.overtimeRows : [];
+  const appleRows = Array.isArray(state.attendanceView.appleOvertimeRows) ? state.attendanceView.appleOvertimeRows : [];
+  const leaveRows = Array.isArray(state.attendanceView.leaveRows) ? state.attendanceView.leaveRows : [];
+  const scopedRecords = getScopedAttendanceRecords(records);
+  const scopedOvertimeRows = getScopedOvertimeRows(overtimeRows);
+  const scopedAppleRows = getScopedAppleOvertimeRows(appleRows);
+  const scopedLeaveRows = getScopedLeaveRows(leaveRows);
+  const summary = buildAttendanceSummaryPayload({
+    dateKey: activeDate,
+    scopedRecords,
+    scopedLeaves: scopedLeaveRows,
+  });
+  const timelineRows = buildAttendanceTimelineRows({
+    dateKey: activeDate,
+    scopedRecords,
+    scopedOvertimeRows,
+    scopedAppleRows,
+    summary,
+  });
+  const issues = buildAttendanceIssueRows(scopedRecords);
+  renderAttendanceSummary(summary);
+  renderAttendanceTimeline(timelineRows, { loading: false });
+  renderAttendanceIssues(issues, { loading: false });
+  renderAttendanceWorkspaceTableRows({
+    dateKey: activeDate,
+    scopedRecords,
+    scopedLeaves: scopedLeaveRows,
+  });
+  renderAttendanceFilterMeta();
+  renderAttendanceMobileSegments();
+}
+
 const VIEW_PRESENTERS = {
   home: {
     loadingMessage: '홈 데이터를 불러오는 중입니다...',
@@ -37521,6 +37583,9 @@ const VIEW_PRESENTERS = {
   attendance: {
     loadingMessage: '출퇴근 기록을 불러오는 중입니다...',
     errorMessage: '출퇴근 기록을 불러오지 못했습니다.',
+    onCacheHit: () => {
+      renderAttendanceViewFromCache();
+    },
     load: loadAttendanceViewPresenter,
   },
   schedule: {
@@ -47412,83 +47477,113 @@ async function onAttendanceCorrectionReview(requestId = '', nextStatus = 'approv
 
 async function loadAttendanceManagerView({ force = false } = {}) {
   ensureAttendanceManagerPreferencesLoaded();
-  renderAttendanceLayoutMode();
-  await ensureAttendanceFilterOptionsLoaded();
-  renderAttendanceManagerFilterOptions();
-  renderAttendanceFilterMeta();
-  renderAttendanceManagerWorkspace({ rows: [], scopedRows: [], loading: true });
-
-  const activeTab = getAttendanceManagerTab();
-  const { start, end } = getAttendanceManagerFetchRange();
-  const dateKeys = buildDateKeysBetween(start, end);
-  const months = buildMonthKeysBetween(start, end);
-  const tenantCode = getTenantCodeForScopedAdminApi();
-  const leaveParams = new URLSearchParams();
-  leaveParams.set('status', 'approved');
-  leaveParams.set('limit', '300');
-  if (tenantCode) leaveParams.set('tenant_code', tenantCode);
-  const shouldLoadOvertime = activeTab !== 'calendar';
-
-  const [schedulesResult, leavesResult, pendingAttendanceResult] = await Promise.allSettled([
-    Promise.all(months.map((month) => loadMonthlyScheduleRowsWithCache({ month, tenantCode, force }))).then((groups) => groups.flat()),
-    apiRequest(`/leaves?${leaveParams.toString()}`),
-    can('attendanceReview') ? fetchManagerAttendanceRequests(['pending']) : Promise.resolve([]),
-  ]);
-  const scheduleRows = schedulesResult.status === 'fulfilled' && Array.isArray(schedulesResult.value) ? schedulesResult.value : [];
-  const leaveRows = leavesResult.status === 'fulfilled' && Array.isArray(leavesResult.value) ? leavesResult.value : [];
-  const pendingAttendanceRequests = pendingAttendanceResult.status === 'fulfilled' && Array.isArray(pendingAttendanceResult.value) ? pendingAttendanceResult.value : [];
-  const correctionRows = can('attendanceReview') ? getCorrectionRowsByStatuses(['pending']) : [];
-  state.attendanceView.leaveRows = leaveRows;
-  state.attendanceView.managerPendingAttendanceRequests = pendingAttendanceRequests;
-  state.attendanceView.managerPendingCorrections = correctionRows;
-
-  const [recordsResult, overtimeResult] = await Promise.allSettled([
-    fetchAttendanceRecordsByDateKeys(dateKeys, { force }),
-    shouldLoadOvertime ? fetchAttendanceOvertimeByDateKeys(dateKeys, { tenantCode, force }) : Promise.resolve([]),
-  ]);
-
-  if (recordsResult.status !== 'fulfilled') {
-    const message = mapAttendanceErrorMessage(recordsResult.reason, '출퇴근 기록을 불러오지 못했습니다.');
-    const fallbackRows = Array.isArray(state.attendanceView.managerRows) ? state.attendanceView.managerRows : [];
-    const fallbackScopedRows = getFilteredAttendanceManagerRows(fallbackRows, { applyStatus: false });
-    const fallbackFilteredRows = getFilteredAttendanceManagerRows(fallbackRows, { applyStatus: true });
-    renderAttendanceManagerWorkspace({ rows: fallbackFilteredRows, scopedRows: fallbackScopedRows, loading: false });
-    showToast(message, 'error', 3200);
-    return fallbackFilteredRows;
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
   }
+  const loadSeq = Number(state.attendanceView.managerLoadSeq || 0) + 1;
+  state.attendanceView.managerLoadSeq = loadSeq;
+  state.attendanceView.managerLoading = true;
+  const isStaleLoad = () => (
+    !state.attendanceView
+    || loadSeq !== Number(state.attendanceView.managerLoadSeq || 0)
+  );
 
-  const records = Array.isArray(recordsResult.value) ? recordsResult.value : [];
-  const overtimeRows = shouldLoadOvertime && overtimeResult.status === 'fulfilled' && Array.isArray(overtimeResult.value)
-    ? overtimeResult.value
-    : [];
-  state.attendanceView.records = records;
-  state.attendanceView.overtimeRows = overtimeRows;
+  try {
+    renderAttendanceLayoutMode();
+    await ensureAttendanceFilterOptionsLoaded();
+    if (isStaleLoad()) {
+      return Array.isArray(state.attendanceView?.managerRows) ? state.attendanceView.managerRows : [];
+    }
+    renderAttendanceManagerFilterOptions();
+    renderAttendanceFilterMeta();
+    renderAttendanceManagerWorkspace({ rows: [], scopedRows: [], loading: true });
 
-  const managerRows = buildAttendanceManagerRows({
-    records,
-    scheduleRows,
-    leaveRows,
-    overtimeRows,
-    pendingAttendanceRequests,
-    correctionRows,
-    recordEdits: state.attendanceView.managerRecordEdits || {},
-    rangeStart: start,
-    rangeEnd: end,
-  });
-  state.attendanceView.managerRows = managerRows;
+    const activeTab = getAttendanceManagerTab();
+    const { start, end } = getAttendanceManagerFetchRange();
+    const dateKeys = buildDateKeysBetween(start, end);
+    const months = buildMonthKeysBetween(start, end);
+    const tenantCode = getTenantCodeForScopedAdminApi();
+    const leaveParams = new URLSearchParams();
+    leaveParams.set('status', 'approved');
+    leaveParams.set('limit', '300');
+    if (tenantCode) leaveParams.set('tenant_code', tenantCode);
+    const shouldLoadOvertime = activeTab !== 'calendar';
 
-  const scopedRows = getFilteredAttendanceManagerRows(managerRows, { applyStatus: false });
-  const filteredRows = getFilteredAttendanceManagerRows(managerRows, { applyStatus: true });
-  renderAttendanceFilterMeta();
-  renderAttendanceManagerWorkspace({ rows: filteredRows, scopedRows, loading: false });
+    const [schedulesResult, leavesResult, pendingAttendanceResult] = await Promise.allSettled([
+      Promise.all(months.map((month) => loadMonthlyScheduleRowsWithCache({ month, tenantCode, force }))).then((groups) => groups.flat()),
+      apiRequest(`/leaves?${leaveParams.toString()}`),
+      can('attendanceReview') ? fetchManagerAttendanceRequests(['pending']) : Promise.resolve([]),
+    ]);
+    if (isStaleLoad()) {
+      return Array.isArray(state.attendanceView?.managerRows) ? state.attendanceView.managerRows : [];
+    }
 
-  if (pendingAttendanceResult.status === 'rejected') {
-    showToast('정정 대기 데이터를 일부 불러오지 못했습니다.', 'info', 2200);
+    const scheduleRows = schedulesResult.status === 'fulfilled' && Array.isArray(schedulesResult.value) ? schedulesResult.value : [];
+    const leaveRows = leavesResult.status === 'fulfilled' && Array.isArray(leavesResult.value) ? leavesResult.value : [];
+    const pendingAttendanceRequests = pendingAttendanceResult.status === 'fulfilled' && Array.isArray(pendingAttendanceResult.value) ? pendingAttendanceResult.value : [];
+    const correctionRows = can('attendanceReview') ? getCorrectionRowsByStatuses(['pending']) : [];
+    state.attendanceView.leaveRows = leaveRows;
+    state.attendanceView.managerPendingAttendanceRequests = pendingAttendanceRequests;
+    state.attendanceView.managerPendingCorrections = correctionRows;
+
+    const [recordsResult, overtimeResult] = await Promise.allSettled([
+      fetchAttendanceRecordsByDateKeys(dateKeys, { force }),
+      shouldLoadOvertime ? fetchAttendanceOvertimeByDateKeys(dateKeys, { tenantCode, force }) : Promise.resolve([]),
+    ]);
+    if (isStaleLoad()) {
+      return Array.isArray(state.attendanceView?.managerRows) ? state.attendanceView.managerRows : [];
+    }
+
+    if (recordsResult.status !== 'fulfilled') {
+      const message = mapAttendanceErrorMessage(recordsResult.reason, '출퇴근 기록을 불러오지 못했습니다.');
+      const fallbackRows = Array.isArray(state.attendanceView.managerRows) ? state.attendanceView.managerRows : [];
+      const fallbackScopedRows = getFilteredAttendanceManagerRows(fallbackRows, { applyStatus: false });
+      const fallbackFilteredRows = getFilteredAttendanceManagerRows(fallbackRows, { applyStatus: true });
+      renderAttendanceManagerWorkspace({ rows: fallbackFilteredRows, scopedRows: fallbackScopedRows, loading: false });
+      showToast(message, 'error', 3200);
+      return fallbackFilteredRows;
+    }
+
+    const records = Array.isArray(recordsResult.value) ? recordsResult.value : [];
+    const overtimeRows = shouldLoadOvertime && overtimeResult.status === 'fulfilled' && Array.isArray(overtimeResult.value)
+      ? overtimeResult.value
+      : [];
+    state.attendanceView.records = records;
+    state.attendanceView.overtimeRows = overtimeRows;
+
+    const managerRows = buildAttendanceManagerRows({
+      records,
+      scheduleRows,
+      leaveRows,
+      overtimeRows,
+      pendingAttendanceRequests,
+      correctionRows,
+      recordEdits: state.attendanceView.managerRecordEdits || {},
+      rangeStart: start,
+      rangeEnd: end,
+    });
+    if (isStaleLoad()) {
+      return managerRows;
+    }
+    state.attendanceView.managerRows = managerRows;
+
+    const scopedRows = getFilteredAttendanceManagerRows(managerRows, { applyStatus: false });
+    const filteredRows = getFilteredAttendanceManagerRows(managerRows, { applyStatus: true });
+    renderAttendanceFilterMeta();
+    renderAttendanceManagerWorkspace({ rows: filteredRows, scopedRows, loading: false });
+
+    if (pendingAttendanceResult.status === 'rejected') {
+      showToast('정정 대기 데이터를 일부 불러오지 못했습니다.', 'info', 2200);
+    }
+    if (shouldLoadOvertime && overtimeResult.status === 'rejected') {
+      showToast('OT 보조 데이터를 일부 불러오지 못했습니다. 출퇴근 기록은 계속 표시됩니다.', 'info', 2200);
+    }
+    return filteredRows;
+  } finally {
+    if (!isStaleLoad()) {
+      state.attendanceView.managerLoading = false;
+    }
   }
-  if (shouldLoadOvertime && overtimeResult.status === 'rejected') {
-    showToast('OT 보조 데이터를 일부 불러오지 못했습니다. 출퇴근 기록은 계속 표시됩니다.', 'info', 2200);
-  }
-  return filteredRows;
 }
 
 async function loadAttendanceView({ force = false } = {}) {
@@ -61888,17 +61983,15 @@ function bindUiEvents() {
     }
 
     if (action === 'attendance-switch-tab') {
-      const nextTab = setAttendanceManagerTab(actionEl.dataset.tab || 'status');
-      syncAttendanceManagerFilterInputs();
-      renderAttendanceWorkspaceHeader();
-      renderAttendanceWorkspaceTabs();
-      renderAttendanceToolbarVisibility();
-      renderAttendanceManagerPanelVisibility();
-      navigateToRoute(getAttendanceRouteWithTab(nextTab), { replace: true, silentDeniedModal: true })
-        .catch((error) => {
-          console.error(error);
-          showToast(normalizeActionError(error, '출퇴근 탭 전환 중 오류가 발생했습니다.'), 'error', 2600);
-        });
+      const requestedTab = normalizeAttendanceManagerTab(actionEl.dataset.tab || 'status');
+      if (requestedTab === getAttendanceManagerTab()) {
+        return;
+      }
+      runWithBusy(async () => {
+        const nextTab = setAttendanceManagerTab(requestedTab);
+        syncAttendanceManagerFilterInputs();
+        await navigateToRoute(getAttendanceRouteWithTab(nextTab), { replace: true, silentDeniedModal: true });
+      }, '탭 전환 중...');
       return;
     }
 
