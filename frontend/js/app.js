@@ -8632,6 +8632,11 @@ function setReportsSummaryPill(target, text = '', className = 'status-pill statu
   return Boolean(normalized);
 }
 
+function isReportsPanelActive(panelName = '') {
+  const current = normalizeReportsViewTab(state.reports?.viewTab || getDefaultReportsViewTab());
+  return normalizeReportsViewTab(panelName) === current;
+}
+
 function setReportsWizardStep(rootSelector, pillSelector, {
   state = 'idle',
   text = '대기',
@@ -8679,7 +8684,7 @@ function renderReportsSupportHandoffPanel() {
   const panel = $('#reportsSupportCard');
   if (!(panel instanceof HTMLElement)) return;
 
-  const supportVisible = canViewReportsSupportTab();
+  const supportVisible = canViewReportsSupportTab() && isReportsPanelActive('support');
   panel.classList.toggle('hidden', !supportVisible);
   if (!supportVisible) return;
 
@@ -15883,7 +15888,7 @@ function renderScheduleFinanceSubmissionStatus() {
   const panel = $('#scheduleFinanceSubmissionPanel');
   if (!(panel instanceof HTMLElement)) return;
 
-  const financeVisible = canViewScheduleFinanceSubmission();
+  const financeVisible = canViewScheduleFinanceSubmission() && isReportsPanelActive('finance');
   panel.classList.toggle('hidden', !financeVisible);
   if (!financeVisible) {
     renderScheduleFinanceProgress();
