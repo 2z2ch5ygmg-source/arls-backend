@@ -10685,7 +10685,7 @@ const SCHEDULE_IMPORT_ISSUE_GROUPS = Object.freeze({
     guidance: '대상월과 workbook의 날짜 헤더를 다시 확인하세요.',
   },
   TEMPLATE_PROFILE_NOT_PREPARED: {
-    title: '매핑 프로필 미준비',
+    title: '근무 템플릿 미준비',
     description: 'tenant import mapping profile이 준비되지 않았습니다.',
     guidance: '엑셀 숫자값(예: 주간 10, 주간 12)을 ARLS 근무 템플릿 시간 범위와 먼저 연결하세요.',
   },
@@ -10733,7 +10733,7 @@ const SCHEDULE_IMPORT_CONTEXT_FIELD_LABELS = Object.freeze({
   file: '업로드 파일',
   site: '업로드 지점',
   month: '대상 월',
-  mapping_profile: '매핑 프로필',
+  mapping_profile: '근무 템플릿',
 });
 
 const SCHEDULE_IMPORT_PROGRESS_STAGES = Object.freeze([
@@ -12182,7 +12182,7 @@ function buildScheduleImportIssueGroups(preview = state.preview) {
       count: Number(item?.count || 0),
       title: meta.title,
       description: needsMappingHelp ? `${description} 필요한 매핑: ${missingMappingLabels.join(', ')}.` : description,
-      guidance: needsMappingHelp ? `${guidance} 근무 템플릿 탭에서 매핑 프로필을 설정한 뒤 다시 분석하세요.` : guidance,
+      guidance: needsMappingHelp ? `${guidance} 근무 템플릿 탭에서 근무 템플릿을 설정한 뒤 다시 분석하세요.` : guidance,
       examples: exampleRows.map((rowNo) => `행 ${rowNo}`),
       level: code === 'blocked_reason' ? 'warning' : 'neutral',
     };
@@ -12484,7 +12484,7 @@ function renderScheduleUploadApplyBar() {
 
 function getScheduleUploadWorkflowSections() {
   return [
-    { key: SCHEDULE_UPLOAD_WORKFLOW_MAPPING, label: '매핑 프로필 설정', selector: '#scheduleExcelWorkflowMappingSection' },
+    { key: SCHEDULE_UPLOAD_WORKFLOW_MAPPING, label: '근무 템플릿 설정', selector: '#scheduleExcelWorkflowMappingSection' },
     { key: SCHEDULE_UPLOAD_WORKFLOW_BASE, label: '기본 월간 근무표 업로드', selector: '#scheduleExcelWorkflowBaseSection' },
     { key: SCHEDULE_UPLOAD_WORKFLOW_EXPORT, label: 'HQ 제출용 추출', selector: '#scheduleExcelWorkflowExportSection' },
     { key: SCHEDULE_UPLOAD_WORKFLOW_HANDOFF, label: 'HQ 지원근무자 반영 업로드', selector: '#scheduleExcelWorkflowHandoffSection' },
@@ -12493,7 +12493,7 @@ function getScheduleUploadWorkflowSections() {
 
 function getScheduleBaseWizardSteps() {
   return [
-    { key: SCHEDULE_BASE_WIZARD_STEP_MAPPING, label: '1. 매핑 프로필 사전 설정' },
+    { key: SCHEDULE_BASE_WIZARD_STEP_MAPPING, label: '1. 근무 템플릿 사전 설정' },
     { key: SCHEDULE_BASE_WIZARD_STEP_CONTEXT, label: '2. 업로드 대상 선택' },
     { key: SCHEDULE_BASE_WIZARD_STEP_FILE, label: '3. 양식 다운로드 + 파일 업로드' },
     { key: SCHEDULE_BASE_WIZARD_STEP_REVIEW, label: '4. 반영 검토' },
@@ -12708,7 +12708,7 @@ function isUsefulScheduleGuideNextValue(value = '') {
     '대상 지점과 월 선택',
     '지점과 대상 월 선택',
     '파일 선택 후 분석 시작',
-    '매핑 프로필 선택 또는 생성',
+    '근무 템플릿 선택 또는 생성',
     '완료 지점 선택',
     '시트 다운로드 후 다음',
     '파일 선택 후 검토 시작',
@@ -12906,12 +12906,12 @@ function renderScheduleUploadGuidePanel() {
     setScheduleUploadGuidePanel({
       pillLabel: mappingReadiness.label,
       pillClass: mappingReadiness.badgeClass,
-      title: '매핑 프로필 확인',
+      title: '근무 템플릿 확인',
       text: mappingReadiness.ready
         ? '업로드 규칙이 준비되었습니다.'
         : '업로드에 사용할 규칙을 먼저 맞춰야 다음 단계로 넘어갑니다.',
       blocked: mappingReadiness.ready ? '없음' : mappingReadiness.description,
-      next: mappingReadiness.ready ? '대상 지점과 월 선택' : '매핑 프로필 선택 또는 생성',
+      next: mappingReadiness.ready ? '대상 지점과 월 선택' : '근무 템플릿 선택 또는 생성',
     });
     return;
   }
@@ -49973,7 +49973,7 @@ function getScheduleImportMappingProfileReadiness(profile = null) {
       label: templateDeleteNotice ? '재설정 필요' : '프로필 미선택',
       badgeClass: templateDeleteNotice ? 'status-pill status-pill-error' : 'status-pill status-pill-warn',
       ready: false,
-      description: templateDeleteNotice || '업로드 전에 사용할 매핑 프로필을 선택해 주세요.',
+      description: templateDeleteNotice || '업로드 전에 사용할 근무 템플릿을 선택해 주세요.',
       missingLabels: [],
       invalidEntries: [],
     };
@@ -49996,7 +49996,7 @@ function getScheduleImportMappingProfileReadiness(profile = null) {
       label: '재설정 필요',
       badgeClass: 'status-pill status-pill-error',
       ready: false,
-      description: templateDeleteNotice || '삭제된 템플릿 연결이 있어 매핑 프로필을 다시 설정해야 합니다.',
+      description: templateDeleteNotice || '삭제된 템플릿 연결이 있어 근무 템플릿을 다시 설정해야 합니다.',
       missingLabels,
       invalidEntries,
     };
@@ -50007,7 +50007,7 @@ function getScheduleImportMappingProfileReadiness(profile = null) {
       label: '비활성 프로필',
       badgeClass: 'status-pill status-pill-error',
       ready: false,
-      description: '선택한 프로필이 비활성 상태입니다. STEP 1의 매핑 프로필 관리에서 상태를 확인해 주세요.',
+      description: '선택한 프로필이 비활성 상태입니다. STEP 1의 근무 템플릿 관리에서 상태를 확인해 주세요.',
       missingLabels,
       invalidEntries,
     };
@@ -50021,7 +50021,7 @@ function getScheduleImportMappingProfileReadiness(profile = null) {
       description: missingLabels.length
         ? '현재 업로드 기준 필요한 매핑이 모두 준비되지 않았습니다.'
         : (deletedTemplateEntries.length
-          ? '삭제된 템플릿 연결이 있어 매핑 프로필을 다시 설정해야 합니다.'
+          ? '삭제된 템플릿 연결이 있어 근무 템플릿을 다시 설정해야 합니다.'
           : '선택한 프로필에 누락되거나 비활성 템플릿을 참조하는 규칙이 있습니다.'),
       missingLabels,
       invalidEntries,
@@ -50032,7 +50032,7 @@ function getScheduleImportMappingProfileReadiness(profile = null) {
     label: '준비 완료',
     badgeClass: 'status-pill status-pill-success',
     ready: true,
-    description: '선택한 매핑 프로필로 업로드를 계속 진행할 수 있습니다.',
+    description: '선택한 근무 템플릿으로 업로드를 계속 진행할 수 있습니다.',
     missingLabels,
     invalidEntries,
   };
@@ -50081,7 +50081,7 @@ function renderScheduleImportMappingProfileSummary() {
     profiles.forEach((profile) => {
       const option = document.createElement('option');
       option.value = String(profile?.profile_id || '').trim();
-      option.textContent = String(profile?.profile_name || '기본 월간 업로드 매핑').trim() || '기본 월간 업로드 매핑';
+      option.textContent = String(profile?.profile_name || '기본 월간 근무 템플릿').trim() || '기본 월간 근무 템플릿';
       selector.appendChild(option);
     });
     selector.value = selectedId;
@@ -50098,7 +50098,7 @@ function renderScheduleImportMappingProfileSummary() {
 
   if (nameEl instanceof HTMLElement) {
     nameEl.textContent = selectedProfile
-      ? (String(selectedProfile?.profile_name || '기본 월간 업로드 매핑').trim() || '기본 월간 업로드 매핑')
+      ? (String(selectedProfile?.profile_name || '기본 월간 근무 템플릿').trim() || '기본 월간 근무 템플릿')
       : '프로필 미선택';
   }
   if (scopeEl instanceof HTMLElement) {
@@ -50119,7 +50119,7 @@ function renderScheduleImportMappingProfileSummary() {
     if (!ruleSummaries.length) {
       const empty = document.createElement('p');
       empty.className = 'muted';
-      empty.textContent = '저장된 매핑 규칙이 없습니다. STEP 1의 매핑 프로필 관리에서 규칙을 추가해 주세요.';
+      empty.textContent = '저장된 매핑 규칙이 없습니다. STEP 1의 근무 템플릿 관리에서 규칙을 추가해 주세요.';
       summaryList.appendChild(empty);
     } else {
       ruleSummaries.forEach((item) => {
@@ -50161,7 +50161,7 @@ function renderScheduleImportMappingProfileManager() {
   const readiness = getScheduleImportMappingProfileReadiness(selectedProfile);
 
   if (manageBtn instanceof HTMLButtonElement) {
-    manageBtn.textContent = '매핑 프로필 생성';
+    manageBtn.textContent = '근무 템플릿 생성';
     manageBtn.dataset.profileMode = 'create';
     manageBtn.classList.toggle('hidden', !canManageProfiles);
     manageBtn.disabled = !canManageProfiles;
@@ -50172,7 +50172,7 @@ function renderScheduleImportMappingProfileManager() {
     tr.className = 'admin-table-empty-row';
     const td = document.createElement('td');
     td.colSpan = 8;
-    td.textContent = '등록된 매핑 프로필이 없습니다. 프로필 생성으로 월간 업로드 규칙을 먼저 준비하세요.';
+    td.textContent = '등록된 근무 템플릿이 없습니다. 템플릿 생성으로 월간 업로드 규칙을 먼저 준비하세요.';
     tr.appendChild(td);
     tableBody.appendChild(tr);
     if (statusEl) statusEl.textContent = '등록된 프로필이 없습니다.';
@@ -50186,7 +50186,7 @@ function renderScheduleImportMappingProfileManager() {
 
     const nameTd = document.createElement('td');
     nameTd.appendChild(createScheduleUploadStackCell(
-      String(profile?.profile_name || '기본 월간 업로드 매핑').trim() || '기본 월간 업로드 매핑',
+      String(profile?.profile_name || '기본 월간 근무 템플릿').trim() || '기본 월간 근무 템플릿',
       profileId ? `프로필 ID ${profileId}` : '',
     ));
     tr.appendChild(nameTd);
@@ -50247,7 +50247,7 @@ function renderScheduleImportMappingProfileManager() {
     deleteBtn.className = 'btn btn-destructive';
     deleteBtn.dataset.action = 'schedule-import-profile-delete';
     deleteBtn.dataset.profileId = profileId;
-    deleteBtn.dataset.profileName = String(profile?.profile_name || '기본 월간 업로드 매핑').trim() || '기본 월간 업로드 매핑';
+    deleteBtn.dataset.profileName = String(profile?.profile_name || '기본 월간 근무 템플릿').trim() || '기본 월간 근무 템플릿';
     deleteBtn.textContent = '삭제';
     deleteBtn.disabled = !canManageProfiles;
     actionsWrap.appendChild(deleteBtn);
@@ -50369,7 +50369,7 @@ function renderScheduleTemplateTable() {
     deleteBtn.dataset.templateId = templateId;
     deleteBtn.textContent = '삭제';
     if (usageCount > 0) {
-      deleteBtn.title = `삭제 시 연결된 매핑 프로필 ${usageCount}개가 비활성화됩니다.`;
+      deleteBtn.title = `삭제 시 연결된 근무 템플릿 ${usageCount}개가 비활성화됩니다.`;
     } else if (isActive) {
       deleteBtn.title = '활성 템플릿도 바로 삭제할 수 있습니다.';
     }
@@ -50380,7 +50380,7 @@ function renderScheduleTemplateTable() {
       const note = document.createElement('p');
       note.className = 'schedule-template-action-note';
       note.textContent = usageCount > 0
-        ? `삭제 시 연결된 매핑 프로필 ${usageCount}개가 비활성화됩니다.`
+        ? `삭제 시 연결된 근무 템플릿 ${usageCount}개가 비활성화됩니다.`
         : '활성 템플릿도 바로 삭제할 수 있습니다.';
       actionTd.appendChild(note);
     }
@@ -50575,7 +50575,7 @@ function createScheduleImportMappingEntryEditorRow(entry = {}, templateOptions =
 
 async function openScheduleImportMappingEditor(options = {}) {
   if (!canManageScheduleImportMappingProfile()) {
-    showToast('매핑 프로필 권한이 없습니다.', 'error');
+    showToast('근무 템플릿 권한이 없습니다.', 'error');
     return;
   }
   await Promise.allSettled([
@@ -50619,7 +50619,7 @@ async function openScheduleImportMappingEditor(options = {}) {
   profileNameField.textContent = '프로필명';
   const profileNameInput = document.createElement('input');
   profileNameInput.id = 'scheduleImportMappingProfileName';
-  profileNameInput.value = String(profile?.profile_name || '기본 월간 업로드 매핑').trim() || '기본 월간 업로드 매핑';
+  profileNameInput.value = String(profile?.profile_name || '기본 월간 근무 템플릿').trim() || '기본 월간 근무 템플릿';
   profileNameField.appendChild(profileNameInput);
   content.appendChild(profileNameField);
 
@@ -50672,7 +50672,7 @@ async function openScheduleImportMappingEditor(options = {}) {
   content.appendChild(addBtn);
 
   openSheet({
-    title: mode === 'create' ? '월간 업로드 매핑 프로필 생성' : '월간 업로드 매핑 프로필',
+    title: mode === 'create' ? '월간 업로드 근무 템플릿 생성' : '월간 업로드 근무 템플릿',
     contentNode: content,
     actions: [
       { label: '취소', variant: 'btn-secondary', action: 'sheet-close' },
@@ -50684,10 +50684,10 @@ async function openScheduleImportMappingEditor(options = {}) {
 
 async function onScheduleImportMappingSave() {
   if (!canManageScheduleImportMappingProfile()) {
-    showToast('매핑 프로필 권한이 없습니다.', 'error');
+    showToast('근무 템플릿 권한이 없습니다.', 'error');
     return;
   }
-  const profileName = String($('#scheduleImportMappingProfileName')?.value || '').trim() || '기본 월간 업로드 매핑';
+  const profileName = String($('#scheduleImportMappingProfileName')?.value || '').trim() || '기본 월간 근무 템플릿';
   const rows = Array.from(document.querySelectorAll('#scheduleImportMappingEntryList .schedule-mapping-entry-row'));
   const entries = [];
   const seen = new Set();
@@ -50737,17 +50737,17 @@ async function onScheduleImportMappingSave() {
   renderScheduleUploadWorkspace();
   invalidateScheduleImportAnalysis(['mapping_profile']);
   closeSheet();
-  showToast('월간 업로드 매핑 프로필을 저장했습니다.', 'success', 2600);
+  showToast('월간 업로드 근무 템플릿을 저장했습니다.', 'success', 2600);
 }
 
 async function onScheduleImportMappingDelete(profileId, profileName) {
   if (!canManageScheduleImportMappingProfile()) {
-    showToast('매핑 프로필 권한이 없습니다.', 'error');
+    showToast('근무 템플릿 권한이 없습니다.', 'error');
     return;
   }
   const normalizedProfileId = String(profileId || '').trim();
   if (!normalizedProfileId) {
-    showToast('삭제할 매핑 프로필을 찾을 수 없습니다.', 'error');
+    showToast('삭제할 근무 템플릿을 찾을 수 없습니다.', 'error');
     return;
   }
   const query = new URLSearchParams();
@@ -50767,7 +50767,7 @@ async function onScheduleImportMappingDelete(profileId, profileName) {
   renderScheduleTemplateTable();
   renderScheduleUploadWorkspace();
   invalidateScheduleImportAnalysis(['mapping_profile']);
-  showToast(`${String(profileName || '매핑 프로필').trim() || '매핑 프로필'}을(를) 삭제했습니다.`, 'success', 2400);
+  showToast(`${String(profileName || '근무 템플릿').trim() || '근무 템플릿'}을(를) 삭제했습니다.`, 'success', 2400);
 }
 
 async function refreshScheduleImportSiteOptions({ force = false } = {}) {
@@ -53009,7 +53009,7 @@ async function onScheduleTemplateDelete(templateId = '') {
     state.schedule.importMappingProfileFetchedAt = 0;
     state.schedule.importMappingSelectedProfileId = '';
     state.schedule.importMappingTemplateDeleteNotice = deactivatedCount > 0
-      ? (profileNotice || '템플릿이 삭제되어 매핑 프로필을 다시 설정해야 업로드를 진행할 수 있습니다.')
+      ? (profileNotice || '템플릿이 삭제되어 근무 템플릿을 다시 설정해야 업로드를 진행할 수 있습니다.')
       : '';
   }
   await Promise.allSettled([
@@ -53025,7 +53025,7 @@ async function onScheduleTemplateDelete(templateId = '') {
     .filter(Boolean);
   const message = [
     `${String(result?.template_name || '템플릿').trim() || '템플릿'}을(를) 삭제했습니다.`,
-    deactivatedCount > 0 ? `연결된 매핑 프로필 ${deactivatedCount}개 비활성화` : '',
+    deactivatedCount > 0 ? `연결된 근무 템플릿 ${deactivatedCount}개 비활성화` : '',
     profileNames.length ? profileNames.join(', ') : '',
   ].filter(Boolean).join(' · ');
   showToast(message, 'success', 3200);
@@ -62940,20 +62940,20 @@ function bindUiEvents() {
     if (action === 'schedule-import-profile-manage') {
       runActionSafely(
         openScheduleImportMappingEditor({ mode: actionEl.dataset.profileMode || 'edit' }),
-        '매핑 프로필 화면을 열지 못했습니다.',
+        '근무 템플릿 화면을 열지 못했습니다.',
       );
       return;
     }
 
     if (action === 'schedule-import-profile-delete') {
       const profileId = String(actionEl.dataset.profileId || '').trim();
-      const profileName = String(actionEl.dataset.profileName || '').trim() || '선택한 매핑 프로필';
+      const profileName = String(actionEl.dataset.profileName || '').trim() || '선택한 근무 템플릿';
       if (!profileId) {
-        showToast('삭제할 매핑 프로필을 찾을 수 없습니다.', 'error');
+        showToast('삭제할 근무 템플릿을 찾을 수 없습니다.', 'error');
         return;
       }
       openConfirmDialog({
-        title: '매핑 프로필 삭제',
+        title: '근무 템플릿 삭제',
         message: `${profileName}을(를) 삭제하시겠습니까? 이미 적용된 스케줄은 유지되지만 이후 업로드에는 다시 프로필을 선택해야 합니다.`,
         acceptLabel: '삭제',
         acceptVariant: 'btn-destructive',
@@ -63012,9 +63012,9 @@ function bindUiEvents() {
       const warningLines = [
         '삭제 후에는 이 템플릿을 복구할 수 없습니다.',
         usageCount > 0
-          ? `이 템플릿을 사용하는 매핑 프로필 ${usageCount}개가 자동으로 비활성화됩니다.`
-          : '연결된 매핑 프로필은 없습니다.',
-        '삭제된 템플릿을 참조하던 업로드는 매핑 프로필을 다시 설정할 때까지 계속 차단됩니다.',
+          ? `이 템플릿을 사용하는 근무 템플릿 ${usageCount}개가 자동으로 비활성화됩니다.`
+          : '연결된 근무 템플릿은 없습니다.',
+        '삭제된 템플릿을 참조하던 업로드는 근무 템플릿을 다시 설정할 때까지 계속 차단됩니다.',
       ];
       warningLines.forEach((text) => {
         const line = document.createElement('p');

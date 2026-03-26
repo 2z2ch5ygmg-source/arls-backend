@@ -2532,7 +2532,7 @@
             </section>
 
             <div id="scheduleBaseWizardProgress" class="schedule-wizard-progress" aria-label="기본 월간 업로드 단계">
-              <button class="schedule-wizard-step active" type="button" data-action="schedule-base-wizard-step" data-step="mapping">1. 매핑 프로필</button>
+              <button class="schedule-wizard-step active" type="button" data-action="schedule-base-wizard-step" data-step="mapping">1. 근무 템플릿</button>
               <button class="schedule-wizard-step" type="button" data-action="schedule-base-wizard-step" data-step="context">2. 대상 선택</button>
               <button class="schedule-wizard-step" type="button" data-action="schedule-base-wizard-step" data-step="file">3. 파일 준비</button>
               <button class="schedule-wizard-step" type="button" data-action="schedule-base-wizard-step" data-step="review">4. 반영 검토</button>
@@ -2550,58 +2550,40 @@
               <div class="schedule-upload-step-head">
                 <div>
                   <span class="schedule-upload-step-kicker">STEP 1</span>
-                  <h4>매핑 프로필 설정</h4>
+                  <h4>근무 템플릿 설정</h4>
                 </div>
               </div>
               <div class="schedule-template-mapping-summary">
                 <div class="schedule-template-mapping-summary-head">
-                  <strong>업로드에 사용할 매핑 프로필</strong>
+                  <strong>업로드에 사용할 근무 템플릿</strong>
                   <span id="scheduleTemplateMappingBadge" class="status-pill status-pill-warn">미설정</span>
                 </div>
                 <div class="schedule-mapping-profile-selector">
                   <label class="input-field">
-                    <span>매핑 프로필 선택</span>
+                    <span>근무 템플릿 선택</span>
                     <select id="scheduleImportMappingProfileSelect">
                       <option value="">프로필 선택</option>
                     </select>
                   </label>
-                  <button class="btn btn-secondary" type="button" data-action="schedule-open-template-profile-manager">매핑 프로필 관리</button>
-                </div>
-                <div id="scheduleTemplateMappingMetaGrid" class="schedule-mapping-profile-meta-grid">
-                  <article class="schedule-mapping-profile-meta-card">
-                    <span>선택 프로필</span>
-                    <strong id="scheduleTemplateMappingSelectedName">프로필 미선택</strong>
-                  </article>
-                  <article class="schedule-mapping-profile-meta-card">
-                    <span>적용 범위</span>
-                    <strong id="scheduleTemplateMappingSelectedScope">-</strong>
-                  </article>
-                  <article class="schedule-mapping-profile-meta-card">
-                    <span>상태</span>
-                    <strong id="scheduleTemplateMappingSelectedStatus">-</strong>
-                  </article>
-                  <article class="schedule-mapping-profile-meta-card">
-                    <span>마지막 수정일</span>
-                    <strong id="scheduleTemplateMappingSelectedUpdated">-</strong>
-                  </article>
+                  <button class="btn btn-secondary" type="button" data-action="schedule-open-template-profile-manager">근무 템플릿 관리</button>
                 </div>
                 <p id="scheduleTemplateMappingText" class="muted">업로드 파일의 값과 ARLS 근무 템플릿을 연결하면 다음 단계로 넘어갈 수 있습니다.</p>
                 <p id="scheduleTemplateMappingMissing" class="muted hidden"></p>
                 <div id="scheduleTemplateMappingSummaryList" class="schedule-mapping-rule-summary"></div>
               </div>
               <details id="scheduleImportProfileLibraryDetails" class="schedule-mapping-manager-details">
-                <summary>매핑 프로필 목록</summary>
+                <summary>근무 템플릿 목록</summary>
                 <div class="schedule-mapping-manager-card stack">
                   <div class="approval-head">
                     <div>
-                      <h4>매핑 프로필</h4>
+                      <h4>근무 템플릿</h4>
                       <p class="muted">업로드에 쓸 프로필을 만들거나 수정한 뒤 바로 다시 선택할 수 있습니다.</p>
                     </div>
                     <div class="quick-actions">
-                      <button class="btn btn-primary" type="button" id="scheduleImportProfileManageBtn" data-action="schedule-import-profile-manage" data-profile-mode="create">매핑 프로필 생성</button>
+                      <button class="btn btn-primary" type="button" id="scheduleImportProfileManageBtn" data-action="schedule-import-profile-manage" data-profile-mode="create">근무 템플릿 생성</button>
                     </div>
                   </div>
-                  <p id="scheduleTemplateProfileStatus" class="muted">매핑 프로필을 불러오는 중입니다.</p>
+                  <p id="scheduleTemplateProfileStatus" class="muted">근무 템플릿을 불러오는 중입니다.</p>
                   <div class="table-wrap">
                     <table class="admin-table">
                       <thead>
@@ -3029,7 +3011,7 @@
               <section class="schedule-template-owner-summary">
                 <div>
                   <strong>템플릿 관리만 이 화면에서 진행합니다.</strong>
-                  <p class="muted">매핑 프로필 연결은 Excel 업로드 STEP 1에서 이어집니다.</p>
+                  <p class="muted">근무 템플릿 연결은 Excel 업로드 STEP 1에서 이어집니다.</p>
                 </div>
                 <div class="schedule-template-owner-summary-actions">
                   <button class="btn btn-secondary" type="button" data-action="schedule-open-upload-mapping-step">업로드 STEP 1 열기</button>
@@ -3047,7 +3029,7 @@
                         <th>시간대</th>
                         <th>총시간</th>
                         <th>상태</th>
-                        <th>연결된 매핑 프로필 수</th>
+                        <th>연결된 근무 템플릿 수</th>
                         <th>마지막 수정일</th>
                         <th>작업</th>
                       </tr>
