@@ -65153,6 +65153,17 @@ document.addEventListener('compositionend', (event) => {
   }
 
   function v2StatusKey(row) {
+    if (row?.hasMissingIn) return 'missing';
+    if (row?.hasMissingOut) return 'missing_out';
+    if (row?.hasLate) return 'late';
+    if (row?.hasEarlyLeave) return 'early';
+    if (Number(row?.pendingCount || 0) > 0) return 'correction';
+    if (row?.hasLeave) return 'leave';
+    if (row?.scheduleRow && !row?.hasMissingIn && !v2HasActualRecord(v2ActualIn(row))) {
+      const processing = String(v2Text(row?.processingState, row?.statusLabel) || '').toLowerCase();
+      if (/(출근.?전|기록.?대기|upcoming|before)/.test(processing)) return 'upcoming';
+    }
+    if (v2HasActualRecord(v2ActualIn(row))) return 'complete';
     const raw = [
       row?.attendanceStatusKey,
       row?.recordStatusKey,
@@ -65190,6 +65201,7 @@ document.addEventListener('compositionend', (event) => {
     const key = v2StatusKey(row);
     const labelHaystack = [
       v2StatusLabel(row),
+      row?.processingState,
       v2Schedule(row),
       row?.shiftTypeLabel,
       row?.workTypeLabel,
@@ -65197,26 +65209,35 @@ document.addEventListener('compositionend', (event) => {
     ].map((value) => String(value ?? '').toLowerCase()).join(' ');
     const hasClockIn = v2HasActualRecord(v2ActualIn(row));
     const hasClockOut = v2HasActualRecord(v2ActualOut(row));
-    const isLeaveLike = key === 'leave' || /(휴가|공휴일|holiday|leave|vacation)/.test(labelHaystack);
+    const isLeaveLike = Boolean(row?.hasLeave) || key === 'leave' || /(휴가|공휴일|holiday|leave|vacation)/.test(labelHaystack);
     const isNonTarget = /(비근무|오프|off|일정없음|휴무|미배정)/.test(labelHaystack);
-    const isUpcoming = key === 'upcoming' || /(출근.?전|시작.?전|upcoming|before)/.test(labelHaystack);
-    const target = !isLeaveLike && !isNonTarget;
+    const isUpcoming = key === 'upcoming' || /(출근.?전|시작.?전|기록.?대기|upcoming|before)/.test(labelHaystack);
+    const target = Boolean(row?.scheduleRow) && !isLeaveLike && !isNonTarget;
+    const missing = Boolean(row?.hasMissingIn) || (target && !hasClockIn && !isUpcoming);
+    const complete = target && hasClockIn && !missing;
     return {
       key,
       target,
       hasClockIn,
       hasClockOut,
-      complete: target && hasClockIn,
-      missing: key === 'missing',
-      late: key === 'late',
-      early: key === 'early',
-      correction: key === 'correction',
+      complete,
+      missing,
+      late: Boolean(row?.hasLate) || key === 'late',
+      early: Boolean(row?.hasEarlyLeave) || key === 'early',
+      correction: Number(row?.pendingCount || 0) > 0 || key === 'correction',
       leave: isLeaveLike,
       upcoming: isUpcoming
     };
   }
 
   function v2StatusLabel(row) {
+    if (row?.hasMissingIn) return '출근 누락';
+    if (row?.hasMissingOut) return '퇴근 누락';
+    if (row?.hasLate) return '지각';
+    if (row?.hasEarlyLeave) return '조퇴';
+    if (Number(row?.pendingCount || 0) > 0) return '정정 대기';
+    if (row?.hasLeave) return '휴가';
+    if (v2HasActualRecord(v2ActualIn(row))) return '정상 출근';
     const direct = v2Text(
       row?.attendanceStatusLabel,
       row?.recordStatusLabel,
@@ -65248,6 +65269,7 @@ document.addEventListener('compositionend', (event) => {
   function v2StatusTone(key) {
     switch (key) {
       case 'missing':
+      case 'missing_out':
         return 'danger';
       case 'late':
       case 'early':
@@ -65265,7 +65287,7 @@ document.addEventListener('compositionend', (event) => {
 
   function v2BuildSummary(rows) {
     const summary = {
-      target: rows.length,
+      target: 0,
       complete: 0,
       missing: 0,
       late: 0,
@@ -65275,7 +65297,7 @@ document.addEventListener('compositionend', (event) => {
     };
     rows.forEach((row) => {
       const facts = v2StatusFacts(row);
-      if (!facts.target) summary.target -= 1;
+      if (facts.target) summary.target += 1;
       if (facts.complete) summary.complete += 1;
       if (facts.missing) summary.missing += 1;
       if (facts.late) summary.late += 1;
@@ -65288,20 +65310,24 @@ document.addEventListener('compositionend', (event) => {
     return { ...summary, rate };
   }
 
-  function v2QueueRows(rows) {
+  function v2QueueRows(rows, filterKey = 'all') {
     const priority = {
       missing: 0,
-      late: 1,
-      early: 2,
-      correction: 3,
-      normal: 4,
-      upcoming: 5,
-      leave: 6,
-      complete: 7
+      missing_out: 1,
+      late: 2,
+      early: 3,
+      correction: 4,
+      normal: 5,
+      upcoming: 6,
+      leave: 7,
+      complete: 8
     };
-    return rows
-      .map((row, index) => ({ row, index, key: v2StatusKey(row) }))
-      .filter((item) => ['missing', 'late', 'early', 'correction'].includes(item.key) || v2RequestLabel(item.row) === '검토 필요')
+    const mapped = (Array.isArray(rows) ? rows : [])
+      .map((row, index) => ({ row, index, key: v2StatusKey(row) }));
+    const source = filterKey === 'all'
+      ? mapped.filter((item) => ['missing', 'late', 'early', 'correction'].includes(item.key) || v2RequestLabel(item.row) === '검토 필요')
+      : mapped;
+    return source
       .sort((left, right) => {
         const leftPriority = priority[left.key] ?? 99;
         const rightPriority = priority[right.key] ?? 99;
@@ -65312,6 +65338,8 @@ document.addEventListener('compositionend', (event) => {
 
   function v2FilterLabel(filterKey) {
     switch (filterKey) {
+      case 'rate':
+        return '출근율';
       case 'target':
         return '출근 대상';
       case 'complete':
@@ -65332,6 +65360,8 @@ document.addEventListener('compositionend', (event) => {
   function v2RowMatchesFilter(row, filterKey) {
     const facts = v2StatusFacts(row);
     switch (filterKey) {
+      case 'rate':
+        return facts.target && !facts.complete;
       case 'target':
         return facts.target;
       case 'complete':
@@ -65429,8 +65459,8 @@ document.addEventListener('compositionend', (event) => {
 
   function v2SummaryMarkup(summary, loading = false) {
     const metrics = [
-      { filterKey: 'all', label: '출근율', value: `${summary.rate}%`, meta: `${summary.complete} / ${summary.target}`, tone: 'accent', progress: summary.rate },
-      { filterKey: 'target', label: '출근 대상', value: `${summary.target}`, meta: '기준 인원', tone: 'neutral' },
+      { filterKey: 'rate', label: '출근율', value: `${summary.rate}%`, meta: `${summary.complete} / ${summary.target}`, tone: 'accent', progress: summary.rate },
+      { filterKey: 'target', label: '출근 대상', value: `${summary.target}`, meta: '예정 근무 기준', tone: 'neutral' },
       { filterKey: 'complete', label: '출근 완료', value: `${summary.complete}`, meta: '실제 기록 기준', tone: 'success' },
       { filterKey: 'missing', label: '미출근', value: `${summary.missing}`, meta: '가장 먼저 확인', tone: 'danger' },
       { filterKey: 'late', label: '지각', value: `${summary.late}`, meta: '예외 발생', tone: 'warning' },
@@ -65482,11 +65512,16 @@ document.addEventListener('compositionend', (event) => {
   }
 
   function v2QueueMarkup(queueRows, loading, filterKey) {
+    const previewMode = filterKey !== 'all';
+    const title = previewMode ? `${v2FilterLabel(filterKey)} 미리보기` : '우선 확인 예외';
+    const description = previewMode
+      ? `${v2FilterLabel(filterKey)} 기준으로 먼저 볼 기록을 위쪽에 정리합니다.`
+      : '미출근, 지각, 조퇴, 정정 대기 순으로 우선순위를 정리합니다.';
     if (loading) {
       return `
         <div class="attendance-v2-section-head">
           <div>
-            <h3>우선 확인 예외</h3>
+            <h3>${escapeValue(title)}</h3>
             <p>예외와 정정 대기 항목을 우선순위대로 정리합니다.</p>
           </div>
           <span class="attendance-v2-count-chip">불러오는 중</span>
@@ -65508,8 +65543,8 @@ document.addEventListener('compositionend', (event) => {
     return `
       <div class="attendance-v2-section-head">
         <div>
-          <h3>우선 확인 예외</h3>
-          <p>미출근, 지각, 조퇴, 정정 대기 순으로 우선순위를 정리합니다.</p>
+          <h3>${escapeValue(title)}</h3>
+          <p>${escapeValue(description)}</p>
         </div>
         <div class="attendance-v2-head-meta">
           ${filterKey !== 'all' ? `<button type="button" class="attendance-v2-clear-filter" data-clear-filter="true">${escapeValue(v2FilterLabel(filterKey))} 해제</button>` : ''}
@@ -65542,7 +65577,7 @@ document.addEventListener('compositionend', (event) => {
             }).join('')}
           </div>
         </div>
-      ` : '<div class="attendance-v2-empty">우선 확인할 예외가 없습니다.</div>'}
+      ` : `<div class="attendance-v2-empty">${escapeValue(previewMode ? `${v2FilterLabel(filterKey)}에 해당하는 기록이 없습니다.` : '우선 확인할 예외가 없습니다.')}</div>`}
     `;
   }
 
@@ -65882,7 +65917,7 @@ document.addEventListener('compositionend', (event) => {
     });
     container.querySelectorAll('[data-inspector-action]').forEach((node) => {
       node.addEventListener('click', async () => {
-        const selectedRow = v2ResolveSelectedRow(v2Array(attendanceStatusV2Payload?.scopedRows?.length ? attendanceStatusV2Payload.scopedRows : attendanceStatusV2Payload?.rows), v2QueueRows(v2Array(attendanceStatusV2Payload?.scopedRows?.length ? attendanceStatusV2Payload.scopedRows : attendanceStatusV2Payload?.rows).filter((row) => v2RowMatchesFilter(row, attendanceStatusV2FilterKey))));
+        const selectedRow = v2ResolveSelectedRow(v2Array(attendanceStatusV2Payload?.scopedRows?.length ? attendanceStatusV2Payload.scopedRows : attendanceStatusV2Payload?.rows), v2QueueRows(v2Array(attendanceStatusV2Payload?.scopedRows?.length ? attendanceStatusV2Payload.scopedRows : attendanceStatusV2Payload?.rows).filter((row) => v2RowMatchesFilter(row, attendanceStatusV2FilterKey)), attendanceStatusV2FilterKey));
         try {
           await v2HandleInspectorAction(node.getAttribute('data-inspector-action') || '', selectedRow);
         } catch (error) {
@@ -65950,7 +65985,7 @@ document.addEventListener('compositionend', (event) => {
     const activeRows = scopedRows.length ? scopedRows : rows;
     const summary = v2BuildSummary(activeRows);
     const filteredRows = activeRows.filter((row) => v2RowMatchesFilter(row, attendanceStatusV2FilterKey));
-    const queueRows = v2QueueRows(filteredRows);
+    const queueRows = v2QueueRows(filteredRows, attendanceStatusV2FilterKey);
     const selectedRow = v2ResolveSelectedRow(filteredRows, queueRows);
 
     if (state.attendanceView) {

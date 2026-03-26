@@ -25471,6 +25471,14 @@ body.notices-compose-dragging .notices-inline-drag-handle {
   background: rgba(240, 253, 244, 0.76);
 }
 
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-warning {
+  background: rgba(255, 251, 235, 0.78);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-neutral {
+  background: rgba(248, 250, 252, 0.92);
+}
+
 #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item:hover {
   background-color: rgba(248, 250, 252, 0.92);
 }
@@ -25487,14 +25495,17 @@ body.notices-compose-dragging .notices-inline-drag-handle {
   background-color: rgba(240, 253, 244, 0.9);
 }
 
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-warning:hover {
+  background-color: rgba(255, 251, 235, 0.92);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-neutral:hover {
+  background-color: rgba(241, 245, 249, 0.96);
+}
+
 #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-active {
   box-shadow: none;
   background-color: rgba(255, 247, 237, 0.92);
-}
-
-#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-active::before {
-  opacity: 1;
-  background: #f97316;
 }
 
 #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-active .attendance-v2-summary-label {
@@ -26417,6 +26428,82 @@ html[data-ui-theme='dark'] :is(#attendanceManagerWorkspace.is-attendance-v2-mana
 :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-active {
   background: var(--attendance-v2-surface);
   box-shadow: inset 0 0 0 2px rgba(249, 115, 22, 0.96);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item {
+  background: #ffffff;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item::before {
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  border-radius: 0;
+  opacity: 1;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-accent::before {
+  background: #f97316;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-danger::before {
+  background: #ef4444;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-success::before {
+  background: #22c55e;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-warning::before {
+  background: #f59e0b;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-neutral::before {
+  background: #94a3b8;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-active {
+  box-shadow: none !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-accent.is-active {
+  background: rgba(255, 247, 237, 0.96);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-danger.is-active {
+  background: rgba(254, 242, 242, 0.98);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-success.is-active {
+  background: rgba(240, 253, 244, 0.98);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-warning.is-active {
+  background: rgba(255, 251, 235, 0.96);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-neutral.is-active {
+  background: rgba(241, 245, 249, 0.98);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-active .attendance-v2-summary-label {
+  color: #475569;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-active .attendance-v2-summary-value {
+  color: #0f172a;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-active .attendance-v2-summary-meta {
+  color: #64748b;
 }
 
 :is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-progress {
