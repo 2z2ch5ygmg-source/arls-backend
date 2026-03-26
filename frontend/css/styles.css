@@ -23504,7 +23504,7 @@ button.attendance-status-special-card.active {
 
 .notices-compose-document-flow {
   display: grid;
-  gap: 14px;
+  gap: 0;
   align-content: start;
   position: relative;
   overflow: visible;
@@ -23579,6 +23579,7 @@ button.attendance-status-special-card.active {
 .notices-compose-flow-embed-block {
   position: relative;
   padding: 0;
+  margin: 12px 0;
   border-top: 0;
 }
 
@@ -23586,6 +23587,7 @@ button.attendance-status-special-card.active {
   display: block;
   padding-top: 0;
   border-top: 0;
+  position: relative;
 }
 
 .notices-compose-flow-surface {
@@ -23640,6 +23642,10 @@ button.attendance-status-special-card.active {
 .notices-compose-table-input:focus {
   outline: none;
   box-shadow: var(--ui-focus-ring);
+}
+
+.notices-compose-flow-textarea:focus {
+  box-shadow: none;
 }
 
 .notices-compose-toolbar {
@@ -23806,6 +23812,19 @@ button.attendance-status-special-card.active {
 
 .notices-compose-flow-drop-after {
   box-shadow: inset 0 -3px 0 rgba(249, 115, 22, 0.92);
+}
+
+.notices-compose-flow-drop-inline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--notice-compose-drop-line-top, 0px);
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(249, 115, 22, 0.96);
+  pointer-events: none;
+  z-index: 3;
 }
 
 .notices-compose-inline-meta {

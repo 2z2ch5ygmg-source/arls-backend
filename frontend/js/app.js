@@ -20684,11 +20684,44 @@ function setNoticeComposeInlineLayout(kind = '', nextLayout = null, { rerender =
 }
 
 function clearNoticeComposeFlowDropIndicators() {
-  document.querySelectorAll('.notices-compose-flow-drop-before, .notices-compose-flow-drop-after, .is-notice-compose-flow-dragging')
+  document.querySelectorAll('.notices-compose-flow-drop-before, .notices-compose-flow-drop-after, .notices-compose-flow-drop-inline, .is-notice-compose-flow-dragging')
     .forEach((element) => {
       if (!(element instanceof HTMLElement)) return;
-      element.classList.remove('notices-compose-flow-drop-before', 'notices-compose-flow-drop-after', 'is-notice-compose-flow-dragging');
+      element.classList.remove('notices-compose-flow-drop-before', 'notices-compose-flow-drop-after', 'notices-compose-flow-drop-inline', 'is-notice-compose-flow-dragging');
+      element.style.removeProperty('--notice-compose-drop-line-top');
+      delete element.dataset.noticeComposeDropSplitOffset;
     });
+}
+
+function applyNoticeComposeFlowDropIndicator(targetEl = null, placement = 'after', splitOffset = null) {
+  if (!(targetEl instanceof HTMLElement)) return;
+  const kind = String(targetEl.dataset.noticeComposeFlowKind || '').trim().toLowerCase();
+  if (kind === 'paragraph' && Number.isInteger(splitOffset)) {
+    const input = targetEl.querySelector('[data-notice-compose-paragraph-input="true"]');
+    if (input instanceof HTMLTextAreaElement) {
+      const text = String(input.value || '');
+      const offsets = getNoticeComposeParagraphSplitOffsets(text);
+      const splitIndex = Math.max(0, offsets.findIndex((offset) => offset === splitOffset));
+      const styles = window.getComputedStyle(input);
+      const lineHeight = Math.max(18, Number.parseFloat(styles.lineHeight || '28') || 28);
+      const paddingTop = Number.parseFloat(styles.paddingTop || '0') || 0;
+      const inputRect = input.getBoundingClientRect();
+      const blockRect = targetEl.getBoundingClientRect();
+      const lineTop = Math.max(0, Math.min(
+        blockRect.height,
+        (inputRect.top - blockRect.top) + paddingTop + (splitIndex * lineHeight),
+      ));
+      targetEl.classList.add('notices-compose-flow-drop-inline');
+      targetEl.style.setProperty('--notice-compose-drop-line-top', `${lineTop}px`);
+      targetEl.dataset.noticeComposeDropSplitOffset = String(splitOffset);
+      return;
+    }
+  }
+  targetEl.classList.add(
+    placement === 'before'
+      ? 'notices-compose-flow-drop-before'
+      : 'notices-compose-flow-drop-after',
+  );
 }
 
 function resolveNoticeComposeFlowDropTarget(clientY = 0, draggedBlockId = '') {
@@ -20798,11 +20831,7 @@ function handleNoticeComposeInlinePointerMove(event) {
     if (dropTarget.targetId) {
       const targetEl = document.querySelector(`[data-notice-compose-block-id="${dropTarget.targetId}"]`);
       if (targetEl instanceof HTMLElement) {
-        targetEl.classList.add(
-          dropTarget.placement === 'before'
-            ? 'notices-compose-flow-drop-before'
-            : 'notices-compose-flow-drop-after',
-        );
+        applyNoticeComposeFlowDropIndicator(targetEl, dropTarget.placement, dropTarget.splitOffset);
       }
       session.dropTargetId = dropTarget.targetId;
       session.dropPlacement = dropTarget.placement;
