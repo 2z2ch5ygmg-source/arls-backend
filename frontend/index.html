@@ -3795,44 +3795,50 @@
             </div>
 
             <article id="scheduleFinanceSubmissionPanel" class="reports-finance-wizard-shell hidden" data-reports-panel="finance">
-                <span id="scheduleFinanceStatePill" class="status-pill status-pill-neutral hidden">상태 확인 대기</span>
-                <span id="scheduleFinanceCurrentStage" class="hidden">지점 선택 대기</span>
-                <p id="scheduleFinanceStatusText" class="hidden" aria-hidden="true"></p>
-                <span id="scheduleFinanceCurrentCount" class="hidden" aria-hidden="true">1 / 4</span>
+                <div class="reports-finance-state-cache hidden" aria-hidden="true">
+                  <span id="scheduleFinanceStatePill" class="status-pill status-pill-neutral hidden">상태 확인 대기</span>
+                  <span id="scheduleFinanceCurrentStage" class="hidden">지점 선택 대기</span>
+                  <p id="scheduleFinanceStatusText" class="hidden"></p>
+                  <span id="scheduleFinanceCurrentCount" class="hidden">1 / 4</span>
+                  <span id="scheduleFinanceScopeState" class="hidden">대기</span>
+                  <span id="scheduleFinanceReviewRevision" class="hidden">대기</span>
+                  <span id="scheduleFinanceFinalUploadState" class="hidden">대기</span>
+                  <span id="scheduleFinanceFinalDownloadState" class="hidden">잠금</span>
+                </div>
                 <div class="reports-finance-wizard-layout">
                   <aside class="reports-finance-step-rail" aria-label="Finance 제출 단계">
-                    <div id="reportsFinanceNavScope" class="reports-panel-stepper-item reports-finance-step-rail-item" data-step="scope">
-                      <span class="reports-panel-stepper-index">1</span>
-                      <span class="reports-panel-stepper-copy">
-                        <span class="reports-panel-stepper-label">범위 선택</span>
-                        <strong id="scheduleFinanceScopeState">대기</strong>
-                      </span>
-                    </div>
-                    <div id="reportsFinanceNavReview" class="reports-panel-stepper-item reports-finance-step-rail-item" data-step="review">
-                      <span class="reports-panel-stepper-index">2</span>
-                      <span class="reports-panel-stepper-copy">
-                        <span class="reports-panel-stepper-label">1차 확인본</span>
-                        <strong id="scheduleFinanceReviewRevision">대기</strong>
-                      </span>
-                    </div>
-                    <div id="reportsFinanceNavUpload" class="reports-panel-stepper-item reports-finance-step-rail-item" data-step="upload">
-                      <span class="reports-panel-stepper-index">3</span>
-                      <span class="reports-panel-stepper-copy">
-                        <span class="reports-panel-stepper-label">최종 업로드</span>
-                        <strong id="scheduleFinanceFinalUploadState">대기</strong>
-                      </span>
-                    </div>
-                    <div id="reportsFinanceNavFinal" class="reports-panel-stepper-item reports-finance-step-rail-item" data-step="final">
-                      <span class="reports-panel-stepper-index">4</span>
-                      <span class="reports-panel-stepper-copy">
-                        <span class="reports-panel-stepper-label">최종 다운로드</span>
-                        <strong id="scheduleFinanceFinalDownloadState">잠금</strong>
-                      </span>
-                    </div>
+                    <ol class="reports-finance-step-rail-list">
+                      <li id="reportsFinanceNavScope" class="reports-finance-step-rail-item" data-step="scope">
+                        <span class="reports-panel-stepper-index" aria-hidden="true">1</span>
+                        <span class="reports-panel-stepper-copy">
+                          <span class="reports-panel-stepper-label">범위 선택</span>
+                        </span>
+                      </li>
+                      <li id="reportsFinanceNavReview" class="reports-finance-step-rail-item" data-step="review">
+                        <span class="reports-panel-stepper-index" aria-hidden="true">2</span>
+                        <span class="reports-panel-stepper-copy">
+                          <span class="reports-panel-stepper-label">1차 확인본</span>
+                        </span>
+                      </li>
+                      <li id="reportsFinanceNavUpload" class="reports-finance-step-rail-item" data-step="upload">
+                        <span class="reports-panel-stepper-index" aria-hidden="true">3</span>
+                        <span class="reports-panel-stepper-copy">
+                          <span class="reports-panel-stepper-label">최종 업로드</span>
+                        </span>
+                      </li>
+                      <li id="reportsFinanceNavFinal" class="reports-finance-step-rail-item" data-step="final">
+                        <span class="reports-panel-stepper-index" aria-hidden="true">4</span>
+                        <span class="reports-panel-stepper-copy">
+                          <span class="reports-panel-stepper-label">최종 다운로드</span>
+                        </span>
+                      </li>
+                    </ol>
                   </aside>
                   <section class="reports-finance-main-canvas">
                     <div class="reports-finance-main-head">
-                      <h3>Finance 제출</h3>
+                      <div class="reports-finance-main-title-group">
+                        <h3>Finance 제출</h3>
+                      </div>
                       <div class="reports-finance-main-actions">
                         <button class="btn btn-secondary" type="button" data-action="reports-open-schedule-upload">Excel 업로드 열기</button>
                       </div>
