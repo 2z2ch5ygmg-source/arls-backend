@@ -25377,7 +25377,7 @@ body.notices-compose-dragging .notices-inline-drag-handle {
   display: none !important;
 }
 
-#attendanceManagerWorkspace.is-attendance-v2-status #attendanceStatusPanel > :not(#attendanceStatusV2SummaryHost),
+#attendanceManagerWorkspace.is-attendance-v2-status #attendanceManagerKpiRack,
 #attendanceManagerWorkspace.is-attendance-v2-status #attendanceExceptionQueueCard > :not(#attendanceStatusV2QueueHost),
 #attendanceManagerWorkspace.is-attendance-v2-status #attendanceListPanel > :not(#attendanceStatusV2TableHost),
 #attendanceManagerWorkspace.is-attendance-v2-status #attendanceAdminDetailPanel > :not(#attendanceStatusV2InspectorHost) {

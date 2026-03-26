@@ -46845,10 +46845,11 @@ function renderAttendanceToolbarVisibility() {
 function renderAttendanceManagerPanelVisibility() {
   const tab = getAttendanceManagerTab();
   const showWorkspace = tab === 'status' || tab === 'list';
+  const useV2ManagerLayout = typeof v2UseManagerLayout === 'function' ? v2UseManagerLayout() : false;
   toggleVisibility('#attendanceManagerWorkspace', showWorkspace);
   toggleVisibility('#attendanceStatusPanel', tab === 'status');
   toggleVisibility('#attendanceCalendarPanel', tab === 'calendar');
-  toggleVisibility('#attendanceListPanel', tab === 'list');
+  toggleVisibility('#attendanceListPanel', tab === 'list' || (useV2ManagerLayout && tab === 'status'));
   toggleVisibility('#attendanceAdminDetailPanel', showWorkspace);
 }
 
