@@ -1291,6 +1291,7 @@ function createInitialNoticesState() {
     composePollModalTriggerEl: null,
     composePollModalBlockId: '',
     composeInsertionAnchor: null,
+    composeInsertionAfterBlockId: '',
     composeDraft: {
       category: 'ops',
       title: '',
@@ -19106,61 +19107,15 @@ function cloneNoticeComposeContentBlocks(rawBlocks = null, fallbackBodyText = ''
   });
 }
 
-function getNoticeComposeParagraphEntries(rawText = '') {
-  const text = String(rawText || '').replace(/\r\n/g, '\n');
-  const entries = [];
-  const matcher = /[^\n]+/g;
-  let match = matcher.exec(text);
-  while (match) {
-    const rawLine = String(match[0] || '');
-    const trimmed = rawLine.trim();
-    if (trimmed) {
-      entries.push({
-        text: trimmed,
-        start: match.index,
-        end: match.index + rawLine.length,
-      });
-    }
-    match = matcher.exec(text);
-  }
-  return { text, entries };
-}
-
-function resolveNoticeComposeParagraphAnchor(entries = [], blocks = [], rawOffset = 0) {
-  if (!Array.isArray(blocks) || !blocks.length) return null;
-  if (!Array.isArray(entries) || !entries.length) {
-    return {
-      blockId: String(blocks[0]?.id || '').trim(),
-      start: 0,
-      end: 0,
-    };
-  }
-  const lastEntry = entries[entries.length - 1];
-  const maxOffset = Math.max(0, Number.parseInt(String(lastEntry?.end || 0), 10) || 0);
-  const offset = Math.max(0, Math.min(maxOffset, Number.parseInt(String(rawOffset || 0), 10) || 0));
-  let targetIndex = entries.findIndex((entry) => offset <= entry.end);
-  if (targetIndex === -1) {
-    targetIndex = entries.length - 1;
-  }
-  const targetEntry = entries[targetIndex] || entries[entries.length - 1];
-  const localOffset = offset < targetEntry.start
-    ? 0
-    : Math.min(String(targetEntry.text || '').length, Math.max(0, offset - targetEntry.start));
-  return {
-    blockId: String(blocks[targetIndex]?.id || blocks[0]?.id || '').trim(),
-    start: localOffset,
-    end: localOffset,
-  };
-}
-
 function buildNoticeComposeParagraphBundle(rawText = '', {
   firstBlockId = '',
   preserveEmpty = false,
   anchorStart = null,
   anchorEnd = null,
 } = {}) {
-  const { entries } = getNoticeComposeParagraphEntries(rawText);
-  if (!entries.length) {
+  const text = String(rawText || '').replace(/\r\n/g, '\n');
+  const normalizedText = text.replace(/^\n+|\n+$/g, '');
+  if (!normalizedText) {
     const blocks = preserveEmpty
       ? [{ id: String(firstBlockId || '').trim() || createNoticeComposeBlockId('paragraph'), kind: 'paragraph', text: '' }]
       : [];
@@ -19169,22 +19124,28 @@ function buildNoticeComposeParagraphBundle(rawText = '', {
       : null;
     return { blocks, anchor };
   }
-  const blocks = entries.map((entry, index) => ({
-    id: index === 0 && String(firstBlockId || '').trim()
-      ? String(firstBlockId || '').trim()
-      : createNoticeComposeBlockId('paragraph'),
+  const blockId = String(firstBlockId || '').trim() || createNoticeComposeBlockId('paragraph');
+  const blocks = [{
+    id: blockId,
     kind: 'paragraph',
-    text: entry.text,
-  }));
-  const anchorOffset = Number.isInteger(anchorEnd) ? anchorEnd : anchorStart;
-  const anchor = Number.isInteger(anchorOffset)
-    ? resolveNoticeComposeParagraphAnchor(entries, blocks, anchorOffset)
+    text: normalizedText,
+  }];
+  const maxOffset = normalizedText.length;
+  const rawAnchorStart = Number.isInteger(anchorStart) ? anchorStart : 0;
+  const rawAnchorEnd = Number.isInteger(anchorEnd) ? anchorEnd : rawAnchorStart;
+  const anchor = Number.isInteger(anchorStart) || Number.isInteger(anchorEnd)
+    ? {
+      blockId,
+      start: Math.max(0, Math.min(maxOffset, rawAnchorStart)),
+      end: Math.max(0, Math.min(maxOffset, rawAnchorEnd)),
+    }
     : null;
   return { blocks, anchor };
 }
 
 function splitNoticeComposeParagraphText(rawText = '') {
-  return getNoticeComposeParagraphEntries(rawText).entries.map((entry) => entry.text);
+  const text = String(rawText || '').replace(/\r\n/g, '\n').replace(/^\n+|\n+$/g, '');
+  return text ? [text] : [];
 }
 
 function createNoticeComposeParagraphBlocksFromText(rawText = '', { firstBlockId = '', preserveEmpty = false } = {}) {
@@ -19258,6 +19219,7 @@ function resolveNoticeComposeActiveFlowIndex() {
 
 function setNoticeComposeInsertionAnchor(nextAnchor = null) {
   const notices = ensureNoticesState();
+  notices.composeInsertionAfterBlockId = '';
   if (!nextAnchor || typeof nextAnchor !== 'object') {
     notices.composeInsertionAnchor = null;
     return;
@@ -19293,6 +19255,21 @@ function captureNoticeComposeInsertionAnchorFromInput(input = null) {
 }
 
 function resolveNoticeComposeInsertionContext(blocks = []) {
+  const notices = ensureNoticesState();
+  const afterBlockId = String(notices.composeInsertionAfterBlockId || '').trim();
+  if (afterBlockId) {
+    const afterIndex = blocks.findIndex((block) => String(block.id || '').trim() === afterBlockId);
+    if (afterIndex !== -1) {
+      return {
+        blockId: afterBlockId,
+        blockIndex: afterIndex,
+        selectionStart: null,
+        selectionEnd: null,
+        text: '',
+      };
+    }
+    notices.composeInsertionAfterBlockId = '';
+  }
   const activeInput = document.activeElement instanceof HTMLTextAreaElement
     && document.activeElement.dataset.noticeComposeParagraphInput === 'true'
     ? document.activeElement
@@ -19309,7 +19286,6 @@ function resolveNoticeComposeInsertionContext(blocks = []) {
       text: String(activeInput.value || ''),
     };
   }
-  const notices = ensureNoticesState();
   const storedAnchor = notices.composeInsertionAnchor && typeof notices.composeInsertionAnchor === 'object'
     ? notices.composeInsertionAnchor
     : null;
@@ -19331,6 +19307,22 @@ function resolveNoticeComposeInsertionContext(blocks = []) {
   }
   const activeFlowIndex = resolveNoticeComposeActiveFlowIndex();
   const activeBlock = activeFlowIndex >= 0 ? blocks[activeFlowIndex] : null;
+  if (!activeBlock) {
+    const lastParagraphIndex = [...blocks]
+      .map((block, index) => ({ block, index }))
+      .reverse()
+      .find((entry) => entry.block?.kind === 'paragraph');
+    if (lastParagraphIndex) {
+      const text = String(lastParagraphIndex.block.text || '');
+      return {
+        blockId: String(lastParagraphIndex.block.id || '').trim(),
+        blockIndex: lastParagraphIndex.index,
+        selectionStart: text.length,
+        selectionEnd: text.length,
+        text,
+      };
+    }
+  }
   return {
     blockId: String(activeBlock?.id || '').trim(),
     blockIndex: activeFlowIndex,
@@ -19397,7 +19389,91 @@ function insertNoticeComposeFlowBlock(nextBlock = null) {
   }
 
   setNoticeComposeContentBlocks(nextBlocks, { markDirty: true, rerender: true });
+  notices.composeInsertionAfterBlockId = String(nextBlock.id || '').trim();
   return String(nextBlock.id || '').trim();
+}
+
+function getNoticeComposeParagraphSplitOffsets(rawText = '') {
+  const text = String(rawText || '').replace(/\r\n/g, '\n');
+  const lines = text.split('\n');
+  const offsets = [0];
+  let cursor = 0;
+  lines.forEach((line, index) => {
+    cursor += String(line || '').length;
+    if (index < lines.length - 1) {
+      offsets.push(cursor);
+      cursor += 1;
+    }
+  });
+  offsets.push(text.length);
+  return Array.from(new Set(offsets)).sort((a, b) => a - b);
+}
+
+function resolveNoticeComposeParagraphSplitOffsetFromPoint(blockEl = null, clientY = 0) {
+  if (!(blockEl instanceof HTMLElement)) return null;
+  const input = blockEl.querySelector('[data-notice-compose-paragraph-input="true"]');
+  if (!(input instanceof HTMLTextAreaElement)) return null;
+  const text = String(input.value || '');
+  const offsets = getNoticeComposeParagraphSplitOffsets(text);
+  if (!offsets.length) return 0;
+  const rect = input.getBoundingClientRect();
+  const styles = window.getComputedStyle(input);
+  const lineHeight = Math.max(18, Number.parseFloat(styles.lineHeight || '28') || 28);
+  const paddingTop = Number.parseFloat(styles.paddingTop || '0') || 0;
+  const relativeY = Math.max(0, clientY - rect.top - paddingTop);
+  const lineIndex = Math.max(0, Math.min(offsets.length - 1, Math.round(relativeY / lineHeight)));
+  return offsets[lineIndex] ?? text.length;
+}
+
+function moveNoticeComposeFlowBlockToParagraphSplit(blockId = '', targetId = '', splitOffset = 0) {
+  const notices = ensureNoticesState();
+  const normalizedBlockId = String(blockId || '').trim();
+  const normalizedTargetId = String(targetId || '').trim();
+  const blocks = getNoticeComposeContentBlocks(notices.composeDraft);
+  const fromIndex = blocks.findIndex((block) => String(block.id || '').trim() === normalizedBlockId);
+  const targetIndex = blocks.findIndex((block) => String(block.id || '').trim() === normalizedTargetId);
+  if (fromIndex === -1 || targetIndex === -1 || fromIndex === targetIndex) return false;
+  const targetBlock = blocks[targetIndex];
+  if (targetBlock?.kind !== 'paragraph') {
+    return reorderNoticeComposeFlowBlock(normalizedBlockId, normalizedTargetId, 'after');
+  }
+  const nextBlocks = blocks.slice();
+  const [movedBlock] = nextBlocks.splice(fromIndex, 1);
+  const adjustedTargetIndex = nextBlocks.findIndex((block) => String(block.id || '').trim() === normalizedTargetId);
+  if (adjustedTargetIndex === -1) return false;
+  const adjustedTarget = nextBlocks[adjustedTargetIndex];
+  const text = String(adjustedTarget?.text || '');
+  const clampedOffset = Math.max(0, Math.min(text.length, Number.parseInt(String(splitOffset || 0), 10) || 0));
+  const beforeText = text.slice(0, clampedOffset);
+  const afterText = text.slice(clampedOffset);
+  const replacement = [];
+  if (beforeText.trim()) {
+    replacement.push({
+      id: String(adjustedTarget.id || '').trim() || createNoticeComposeBlockId('paragraph'),
+      kind: 'paragraph',
+      text: beforeText.replace(/\n+$/g, ''),
+    });
+  }
+  replacement.push(movedBlock);
+  if (afterText.trim()) {
+    replacement.push({
+      id: replacement.length && replacement[0]?.id === String(adjustedTarget.id || '').trim()
+        ? createNoticeComposeBlockId('paragraph')
+        : String(adjustedTarget.id || '').trim() || createNoticeComposeBlockId('paragraph'),
+      kind: 'paragraph',
+      text: afterText.replace(/^\n+/g, ''),
+    });
+  }
+  if (!replacement.some((block) => block.kind === 'paragraph')) {
+    replacement.push({
+      id: String(adjustedTarget.id || '').trim() || createNoticeComposeBlockId('paragraph'),
+      kind: 'paragraph',
+      text: '',
+    });
+  }
+  nextBlocks.splice(adjustedTargetIndex, 1, ...replacement);
+  setNoticeComposeContentBlocks(nextBlocks, { markDirty: true, rerender: true });
+  return true;
 }
 
 function normalizeNoticeComposeInlineLayout(rawLeft = 0, rawTop = 0, rawWidth = 0, rawHeight = 0) {
@@ -19863,6 +19939,7 @@ function resetNoticeComposeDraft(category = 'ops') {
   notices.composeSourceNoticeId = '';
   notices.composePollModalBlockId = '';
   notices.composeInsertionAnchor = null;
+  notices.composeInsertionAfterBlockId = '';
   clearNoticeComposeAutosaveTimer();
   resetNoticeComposeDragRegistry();
   notices.draftSavedAt = '';
@@ -19888,6 +19965,7 @@ function fillNoticeComposeDraftFromRow(row = null) {
   notices.composeSourceNoticeId = String(normalizedRow?.id || '').trim();
   notices.composePollModalBlockId = '';
   notices.composeInsertionAnchor = null;
+  notices.composeInsertionAfterBlockId = '';
   clearNoticeComposeAutosaveTimer();
   resetNoticeComposeDragRegistry();
   notices.draftSavedAt = '';
@@ -19993,6 +20071,10 @@ function readNoticeComposeContentBlocksFromDom() {
     } else if (!nextBlocks.some((block) => String(block.id || '').trim() === String(storedAnchor.blockId || '').trim())) {
       notices.composeInsertionAnchor = null;
     }
+  }
+  const afterBlockId = String(notices.composeInsertionAfterBlockId || '').trim();
+  if (afterBlockId && !nextBlocks.some((block) => String(block.id || '').trim() === afterBlockId)) {
+    notices.composeInsertionAfterBlockId = '';
   }
   return cloneNoticeComposeContentBlocks(nextBlocks, notices.composeDraft?.bodyText, notices.composeDraft?.table, notices.composeDraft?.poll);
 }
@@ -20605,6 +20687,10 @@ function resolveNoticeComposeFlowDropTarget(clientY = 0, draggedBlockId = '') {
   return {
     targetId: resolved.targetId,
     placement: resolved.placement,
+    splitOffset: resolved.element instanceof HTMLElement
+      && String(resolved.element.dataset.noticeComposeFlowKind || '').trim().toLowerCase() === 'paragraph'
+      ? resolveNoticeComposeParagraphSplitOffsetFromPoint(resolved.element, clientY)
+      : null,
   };
 }
 
@@ -20652,6 +20738,7 @@ function beginNoticeComposeInlinePointerSession(kind = '', sourceEvent = null, {
     startLayout: { ...layout },
     dropTargetId: '',
     dropPlacement: 'after',
+    dropSplitOffset: null,
     didMove: false,
   };
   if ((normalizedKind === 'table' || normalizedKind === 'poll') && blockEl instanceof HTMLElement) {
@@ -20686,6 +20773,7 @@ function handleNoticeComposeInlinePointerMove(event) {
       }
       session.dropTargetId = dropTarget.targetId;
       session.dropPlacement = dropTarget.placement;
+      session.dropSplitOffset = Number.isInteger(dropTarget.splitOffset) ? dropTarget.splitOffset : null;
       session.didMove = true;
     }
     return;
@@ -20749,8 +20837,18 @@ function finishNoticeComposeInlinePointerSession() {
   noticeComposeDragState = null;
   document.body.classList.remove('notices-compose-dragging');
   if ((session.kind === 'table' || session.kind === 'poll') && session.mode === 'drag') {
+    const dropTargetEl = session.dropTargetId
+      ? document.querySelector(`[data-notice-compose-block-id="${session.dropTargetId}"]`)
+      : null;
+    const dropKind = dropTargetEl instanceof HTMLElement
+      ? String(dropTargetEl.dataset.noticeComposeFlowKind || '').trim().toLowerCase()
+      : '';
     const didReorder = session.dropTargetId
-      ? reorderNoticeComposeFlowBlock(session.blockId, session.dropTargetId, session.dropPlacement)
+      ? (
+        dropKind === 'paragraph' && Number.isInteger(session.dropSplitOffset)
+          ? moveNoticeComposeFlowBlockToParagraphSplit(session.blockId, session.dropTargetId, session.dropSplitOffset)
+          : reorderNoticeComposeFlowBlock(session.blockId, session.dropTargetId, session.dropPlacement)
+      )
       : false;
     clearNoticeComposeFlowDropIndicators();
     if (!didReorder && shouldPersist) {
@@ -31961,17 +32059,28 @@ function showAuthPanel() {
   updateRouteHash(ROUTE_LOGIN, { replace: true });
   closeConfirmDialog({ restoreFocus: false });
   closeDrawer();
-  renderUserBadge();
-  renderBrandArea();
-  renderDevTenantContextBar();
-  renderTenantContextBadge();
-  renderMasterConsoleSummary();
-  renderNotificationBadge();
-  renderReminderSettings();
-  refreshSecurePasswordAvailability();
-  renderRecentTenants();
-  refreshLoginFieldAvailability();
-  updateLoginSubmitState();
+
+  const authUiRefreshSteps = [
+    ['renderUserBadge', () => renderUserBadge()],
+    ['renderBrandArea', () => renderBrandArea()],
+    ['renderDevTenantContextBar', () => renderDevTenantContextBar()],
+    ['renderTenantContextBadge', () => renderTenantContextBadge()],
+    ['renderMasterConsoleSummary', () => renderMasterConsoleSummary()],
+    ['renderNotificationBadge', () => renderNotificationBadge()],
+    ['renderReminderSettings', () => renderReminderSettings()],
+    ['refreshSecurePasswordAvailability', () => refreshSecurePasswordAvailability()],
+    ['renderRecentTenants', () => renderRecentTenants()],
+    ['refreshLoginFieldAvailability', () => refreshLoginFieldAvailability()],
+    ['updateLoginSubmitState', () => updateLoginSubmitState()],
+  ];
+  authUiRefreshSteps.forEach(([label, task]) => {
+    try {
+      task();
+    } catch (error) {
+      console.error(`[RG ARLS] showAuthPanel ${label} failed`, error);
+    }
+  });
+
   if ($('#tenantCode')?.value.trim()) {
     queueTenantValidation({ immediate: true });
   } else {
@@ -59023,6 +59132,11 @@ function bindUiEvents() {
 
   document.addEventListener('mousedown', (event) => {
     if (!isNoticesComposeActive() || event.button !== 0) return;
+    const actionEl = event.target instanceof Element ? event.target.closest('[data-action]') : null;
+    const action = String(actionEl?.dataset?.action || '').trim();
+    if (action === 'notices-insert-table-block' || action === 'notices-insert-poll-block') {
+      captureNoticeComposeInsertionAnchorFromInput();
+    }
     const resizeHandle = event.target instanceof Element
       ? event.target.closest('[data-notice-inline-resize="table"][data-notice-resize-direction]')
       : null;
