@@ -23510,6 +23510,19 @@ button.attendance-status-special-card.active {
   overflow: visible;
 }
 
+.notices-compose-flow-stream {
+  display: grid;
+  gap: 0;
+  align-content: start;
+  width: 100%;
+  min-width: 0;
+  position: relative;
+}
+
+.notices-compose-flow-stream.has-embed {
+  gap: 0;
+}
+
 .notices-compose-title-input {
   width: 100%;
   border: 0;
@@ -23579,7 +23592,7 @@ button.attendance-status-special-card.active {
 .notices-compose-flow-embed-block {
   position: relative;
   padding: 0;
-  margin: 12px 0;
+  margin: 8px 0;
   border-top: 0;
 }
 
@@ -23606,6 +23619,14 @@ button.attendance-status-special-card.active {
 
 .notices-compose-flow-textarea.is-primary-body-surface {
   min-height: 440px;
+}
+
+.notices-compose-flow-paragraph.is-stream-fragment .notices-compose-flow-textarea {
+  min-height: 0;
+}
+
+.notices-compose-flow-stream.has-embed .notices-compose-flow-paragraph.is-stream-fragment .notices-compose-flow-textarea {
+  min-height: 1lh;
 }
 
 .notices-compose-flow-table-block {

@@ -20935,21 +20935,34 @@ function renderNoticeComposeDocumentFlow() {
     ? String(composeContentBlocks[0].id || '').trim()
     : '';
   const orderedNodes = [];
+  const contentStream = document.createElement('div');
+  const streamHasEmbed = composeContentBlocks.some((block) => block.kind === 'table' || block.kind === 'poll');
+  contentStream.className = 'notices-compose-flow-stream';
+  if (streamHasEmbed) {
+    contentStream.classList.add('has-embed');
+  }
   composeContentBlocks.forEach((block, index) => {
     if (block.kind === 'paragraph') {
-      orderedNodes.push(createNoticeComposeParagraphBlockElement(block, index, {
+      const paragraphEl = createNoticeComposeParagraphBlockElement(block, index, {
         primarySurface: Boolean(primaryParagraphId && String(block.id || '').trim() === primaryParagraphId),
-      }));
+      });
+      if (streamHasEmbed) {
+        paragraphEl.classList.add('is-stream-fragment');
+      }
+      contentStream.appendChild(paragraphEl);
       return;
     }
     if (block.kind === 'poll') {
-      orderedNodes.push(createNoticeComposePollBlockElement(block, index));
+      contentStream.appendChild(createNoticeComposePollBlockElement(block, index));
       return;
     }
     if (block.kind === 'table') {
-      orderedNodes.push(createNoticeComposeTableBlockElement(block, index));
+      contentStream.appendChild(createNoticeComposeTableBlockElement(block, index));
     }
   });
+  if (contentStream.childNodes.length) {
+    orderedNodes.push(contentStream);
+  }
 
   const order = getNoticeComposeInsertionOrder(notices.composeDraft).filter((kind) => kind === 'image');
   const fallbackOptionalKinds = order.length ? order : ['image'];
