@@ -4138,7 +4138,7 @@ async function loadMonthlyScheduleRowsWithCache({ month, tenantCode, force = fal
 }
 
 const ATTENDANCE_MANAGER_FETCH_CONCURRENCY = 6;
-const ATTENDANCE_MANAGER_CALENDAR_FETCH_CONCURRENCY = 18;
+const ATTENDANCE_MANAGER_CALENDAR_FETCH_CONCURRENCY = 31;
 
 async function mapWithConcurrency(items = [], limit = ATTENDANCE_MANAGER_FETCH_CONCURRENCY, mapper = async (item) => item) {
   const list = Array.isArray(items) ? items : [];
@@ -4174,6 +4174,31 @@ async function fetchAttendanceOvertimeByDateKeys(dateKeys = [], { tenantCode = '
     return apiRequest(`/schedules/overtime-daily?${params.toString()}`);
   });
   return groups.flat();
+}
+
+function prefetchAttendanceCalendarRecordsInBackground({ force = false } = {}) {
+  if (!canUseAttendanceManagerFilter()) return;
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  const currentTab = getAttendanceManagerTab();
+  if (currentTab !== 'status') return;
+  const month = normalizeMonthKey(state.attendanceView.calendarMonth || '') || getMonthFromDateKey(getAttendanceActiveDate()) || toMonthKey(new Date());
+  const meta = getMonthMeta(month);
+  if (!meta) return;
+  const dateKeys = buildDateKeysBetween(
+    toLocalDateKey(meta.firstDate),
+    toLocalDateKey(new Date(meta.year, meta.monthIndex, meta.daysInMonth)),
+  );
+  if (!dateKeys.length) return;
+  Promise.resolve()
+    .then(() => fetchAttendanceRecordsByDateKeys(dateKeys, {
+      force,
+      concurrency: ATTENDANCE_MANAGER_CALENDAR_FETCH_CONCURRENCY,
+    }))
+    .catch((error) => {
+      console.error('[RG ARLS] attendance calendar prefetch failed', error);
+    });
 }
 
 async function loadMonthlyScheduleLiteWithCache({ month, tenantCode, force = false } = {}) {
@@ -47517,8 +47542,8 @@ async function loadAttendanceManagerView({ force = false } = {}) {
     const shouldLoadOvertime = activeTab !== 'calendar';
     const correctionRows = can('attendanceReview') ? getCorrectionRowsByStatuses(['pending']) : [];
 
-    const [liteSchedulesResult, leavesResult, recordsResult] = await Promise.allSettled([
-      Promise.all(months.map((month) => loadMonthlyScheduleLiteWithCache({ month, tenantCode, force }))),
+    const [schedulesResult, leavesResult, recordsResult] = await Promise.allSettled([
+      Promise.all(months.map((month) => loadMonthlyScheduleRowsWithCache({ month, tenantCode, force }))).then((groups) => groups.flat()),
       apiRequest(`/leaves?${leaveParams.toString()}`),
       fetchAttendanceRecordsByDateKeys(dateKeys, { force, concurrency: recordFetchConcurrency }),
     ]);
@@ -47536,10 +47561,9 @@ async function loadAttendanceManagerView({ force = false } = {}) {
       return fallbackFilteredRows;
     }
 
-    const liteBundles = liteSchedulesResult.status === 'fulfilled' && Array.isArray(liteSchedulesResult.value)
-      ? liteSchedulesResult.value
+    const scheduleRows = schedulesResult.status === 'fulfilled' && Array.isArray(schedulesResult.value)
+      ? schedulesResult.value
       : [];
-    const scheduleRows = liteBundles.flatMap((bundle) => normalizeScheduleRows(Array.isArray(bundle?.rows) ? bundle.rows : []));
     const leaveRows = leavesResult.status === 'fulfilled' && Array.isArray(leavesResult.value) ? leavesResult.value : [];
     const records = Array.isArray(recordsResult.value) ? recordsResult.value : [];
     state.attendanceView.leaveRows = leaveRows;
@@ -47569,10 +47593,11 @@ async function loadAttendanceManagerView({ force = false } = {}) {
     renderAttendanceFilterMeta();
     renderAttendanceManagerWorkspace({ rows: filteredRows, scopedRows, loading: false });
 
+    prefetchAttendanceCalendarRecordsInBackground({ force: false });
+
     Promise.resolve()
       .then(async () => {
-        const [fullSchedulesResult, pendingAttendanceResult, overtimeResult] = await Promise.allSettled([
-          Promise.all(months.map((month) => loadMonthlyScheduleRowsWithCache({ month, tenantCode, force }))).then((groups) => groups.flat()),
+        const [pendingAttendanceResult, overtimeResult] = await Promise.allSettled([
           can('attendanceReview') ? fetchManagerAttendanceRequests(['pending']) : Promise.resolve([]),
           shouldLoadOvertime
             ? fetchAttendanceOvertimeByDateKeys(dateKeys, { tenantCode, force, concurrency: recordFetchConcurrency })
@@ -47580,9 +47605,6 @@ async function loadAttendanceManagerView({ force = false } = {}) {
         ]);
         if (isStaleLoad()) return;
 
-        const hydratedScheduleRows = fullSchedulesResult.status === 'fulfilled' && Array.isArray(fullSchedulesResult.value) && fullSchedulesResult.value.length
-          ? fullSchedulesResult.value
-          : scheduleRows;
         const pendingAttendanceRequests = pendingAttendanceResult.status === 'fulfilled' && Array.isArray(pendingAttendanceResult.value)
           ? pendingAttendanceResult.value
           : [];
@@ -47595,7 +47617,7 @@ async function loadAttendanceManagerView({ force = false } = {}) {
 
         const hydratedRows = buildAttendanceManagerRows({
           records,
-          scheduleRows: hydratedScheduleRows,
+          scheduleRows,
           leaveRows,
           overtimeRows,
           pendingAttendanceRequests,
