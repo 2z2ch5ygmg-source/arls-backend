@@ -1,5 +1,5 @@
 window.ENV_API_BASE = window.ENV_API_BASE || 'https://rg-arls-backend.azurewebsites.net';
-window.ENV_BUILD_ID = window.ENV_BUILD_ID || '20260326-reports-wizard-linear-stepper-05';
+window.ENV_BUILD_ID = window.ENV_BUILD_ID || '20260326-reports-wizard-scope-inline-06';
 window.ENV_GOOGLE_MAPS_API_KEY = window.ENV_GOOGLE_MAPS_API_KEY || '';
 
 if (typeof window.__RG_ARLS_HANDLE_TAB_CLICK__ !== 'function') {

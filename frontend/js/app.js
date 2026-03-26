@@ -8669,6 +8669,17 @@ function normalizeReportsSupportStep(step = '') {
   return ['scope', 'overview', 'download', 'sentrix'].includes(value) ? value : 'scope';
 }
 
+function mountReportsCenterContext(targetSelector) {
+  const contextCard = $('#reportsCenterContextCard');
+  if (!(contextCard instanceof HTMLElement)) return;
+  const target = $(targetSelector);
+  if (!(target instanceof HTMLElement)) return;
+  if (contextCard.parentElement !== target) {
+    target.prepend(contextCard);
+  }
+  contextCard.classList.remove('hidden');
+}
+
 function setReportsFinanceStep(step = '') {
   if (!state.reports) state.reports = createInitialReportsState();
   state.reports.financeStep = normalizeReportsFinanceStep(step);
@@ -8739,6 +8750,7 @@ function renderReportsSupportHandoffPanel() {
   const supportVisible = canViewReportsSupportTab() && isReportsPanelActive('support');
   panel.classList.toggle('hidden', !supportVisible);
   if (!supportVisible) return;
+  mountReportsCenterContext('#reportsSupportScopeContextMount');
 
   const siteCode = getScheduleSupportSelectedSiteCode();
   const status = state.schedule?.supportStatus && typeof state.schedule.supportStatus === 'object'
@@ -15965,6 +15977,7 @@ function renderScheduleFinanceSubmissionStatus() {
     renderScheduleFinanceProgress();
     return;
   }
+  mountReportsCenterContext('#scheduleFinanceScopeContextMount');
 
   const status = state.schedule?.financeStatus && typeof state.schedule.financeStatus === 'object'
     ? state.schedule.financeStatus
