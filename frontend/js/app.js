@@ -12754,8 +12754,8 @@ function setScheduleUploadGuidePanel({
   }
   const normalizedText = String(text || '').trim();
   if (textEl instanceof HTMLElement) {
-    textEl.textContent = normalizedText;
-    textEl.classList.toggle('hidden', !isUsefulScheduleGuideTextValue(normalizedText));
+    textEl.textContent = '';
+    textEl.classList.add('hidden');
   }
   const blockedValue = String(blocked || '없음').trim() || '없음';
   if (blockedEl instanceof HTMLElement) {
@@ -13788,10 +13788,8 @@ function renderScheduleSupportHqSiteSelectionTable() {
     });
   }
   if (summary instanceof HTMLElement) {
-    const excludedCount = Math.max(sites.length - readySiteCodes.length, 0);
-    summary.textContent = selectedSiteCodes.length
-      ? `선택 ${selectedSiteCodes.length}개 지점 · 한 workbook 안에 지점별 시트로 생성됩니다.${excludedCount > 0 ? ` · 제외 ${excludedCount}개` : ''}`
-      : `선택한 지점이 없습니다.${excludedCount > 0 ? ` 업로드 대기/재업로드 필요 ${excludedCount}개는 제외됩니다.` : ''}`;
+    summary.textContent = '';
+    summary.classList.add('hidden');
   }
   if (downloadBtn instanceof HTMLButtonElement) {
     downloadBtn.disabled = !readySiteCodes.length || !selectedSiteCodes.length;
@@ -14415,21 +14413,8 @@ function renderScheduleSupportHqWorkspace() {
   }
 
   if (contractHint) {
-    if (!allowed) {
-      contractHint.textContent = '권한이 있어야 검토와 반영을 시작할 수 있습니다.';
-    } else if (!selectedSiteCodes.length) {
-      contractHint.textContent = '준비된 지점을 먼저 고르세요.';
-    } else if (workspace.loading) {
-      contractHint.textContent = '제출본 상태를 불러오는 중입니다.';
-    } else if (workspace.error) {
-      contractHint.textContent = String(workspace.error || '').trim();
-    } else if (!artifactContext.artifact_id) {
-      contractHint.textContent = '제출본 source가 아직 준비되지 않았습니다.';
-    } else if (selectedSiteCodes.length > 1) {
-      contractHint.textContent = `${selectedSiteCodes.length}개 지점을 한 workbook으로 묶어 진행합니다.`;
-    } else {
-      contractHint.textContent = `${selectedSiteLabel} 기준으로 검토합니다.`;
-    }
+    contractHint.textContent = '';
+    contractHint.classList.add('hidden');
   }
 
   renderScheduleSupportArtifactMeta(artifactContext);
@@ -15183,7 +15168,10 @@ function renderScheduleSupportRoundtripStatus() {
       statePill.className = 'status-pill status-pill-neutral';
       statePill.textContent = '지점 선택 필요';
     }
-    if (statusText) statusText.textContent = '업로드할 지점과 월을 먼저 고르세요.';
+    if (statusText) {
+      statusText.textContent = '';
+      statusText.classList.add('hidden');
+    }
     if (sourceRevision) sourceRevision.textContent = '없음';
     if (sourceMeta) sourceMeta.textContent = '지점 선택 후 확인';
     if (mergeState) mergeState.textContent = '대기';
@@ -15209,7 +15197,10 @@ function renderScheduleSupportRoundtripStatus() {
       statePill.className = 'status-pill status-pill-neutral';
       statePill.textContent = '조회 중';
     }
-    if (statusText) statusText.textContent = 'source 준비 상태와 최신 handoff 정보를 조회하는 중입니다.';
+    if (statusText) {
+      statusText.textContent = '';
+      statusText.classList.add('hidden');
+    }
     if (hqDownloadBtn) hqDownloadBtn.disabled = true;
     if (openSentrixBtn) openSentrixBtn.disabled = true;
     if (copyArtifactBtn) copyArtifactBtn.disabled = true;
@@ -15227,7 +15218,10 @@ function renderScheduleSupportRoundtripStatus() {
       statePill.className = readySiteCount > 0 ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral';
       statePill.textContent = '전체';
     }
-    if (statusText) statusText.textContent = `전체 ${readySiteCount}/${totalSiteCount || 0}개 지점 준비`;
+    if (statusText) {
+      statusText.textContent = '';
+      statusText.classList.add('hidden');
+    }
     if (sourceRevision) sourceRevision.textContent = `${readySiteCount}/${totalSiteCount || 0}개 준비`;
     if (sourceMeta) sourceMeta.textContent = '전체 지점 제출본 준비 상태';
     if (mergeState) mergeState.textContent = readySiteCount > 0 ? '검토 가능' : '대기';
@@ -15272,12 +15266,8 @@ function renderScheduleSupportRoundtripStatus() {
     statePill.textContent = sourceLabel;
   }
   if (statusText) {
-    statusText.textContent = sourceMissing
-      ? '제출본 source가 아직 없습니다.'
-      : [
-        `${formatScheduleMonthTitle(status.month || getScheduleMonthValue())} · ${selectedSite}`,
-        mergeStale ? '재검토 필요' : (mergeAvailable ? '최근 제출 이력 있음' : '작성본 업로드 대기'),
-      ].filter(Boolean).join(' · ');
+    statusText.textContent = '';
+    statusText.classList.add('hidden');
   }
   if (sourceRevision) {
     sourceRevision.textContent = artifactContext.artifact_id ? '준비됨' : '없음';

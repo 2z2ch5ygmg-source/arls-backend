@@ -1912,7 +1912,7 @@
                       <button id="supportStatusHqDownloadBtn" class="btn btn-primary" type="button" data-action="support-status-hq-download">workbook 다운로드</button>
                     </div>
                   </div>
-                  <p id="supportStatusHqContractHint" class="muted">다운로드 가능한 workbook 범위를 불러오는 중입니다.</p>
+                  <p id="supportStatusHqContractHint" class="muted hidden"></p>
                   <div id="supportStatusHqDownloadMeta" class="schedule-upload-file-meta"></div>
                 </section>
 
@@ -2489,7 +2489,7 @@
                 <span id="scheduleUploadGuidePill" class="status-pill status-pill-neutral">준비</span>
                 <div class="schedule-upload-guide-copy">
                   <strong id="scheduleUploadGuideTitle">업로드 준비</strong>
-                  <p id="scheduleUploadGuideText" class="muted">지금 필요한 작업만 먼저 안내합니다.</p>
+                  <p id="scheduleUploadGuideText" class="muted hidden"></p>
                 </div>
               </div>
               <div class="schedule-upload-guide-meta">
@@ -2784,7 +2784,7 @@
                 <div>
                   <span class="schedule-upload-step-kicker">STEP 3</span>
                   <h4>HQ 제출용 추출</h4>
-                  <p class="muted">준비된 지점만 골라 제출본을 만듭니다.</p>
+                  <p class="muted hidden"></p>
                 </div>
                 <span id="scheduleSupportStatePill" class="status-pill status-pill-neutral">원본 대기</span>
               </div>
@@ -2804,7 +2804,7 @@
                   <input id="scheduleHqMonth" type="month" />
                 </label>
               </div>
-              <p id="scheduleSupportStatusText" class="muted">월과 지점을 고정하면 제출본 준비 상태를 확인합니다.</p>
+              <p id="scheduleSupportStatusText" class="muted hidden"></p>
               <div id="scheduleSupportHqSuccessBanner" class="schedule-upload-success-banner hidden" role="status" aria-live="polite">
                 <div>
                   <strong id="scheduleSupportHqSuccessTitle">업로드가 완료되었습니다.</strong>
@@ -2818,7 +2818,7 @@
                   <div>
                     <span class="schedule-upload-step-kicker">대상 지점 선택</span>
                     <h4>지점 상태 확인</h4>
-                    <p class="muted">준비된 지점만 선택할 수 있습니다.</p>
+                    <p class="muted hidden"></p>
                   </div>
                   <div class="quick-actions">
                     <button class="btn btn-secondary" type="button" data-action="schedule-support-hq-select-ready">완료 지점 전체 선택</button>
@@ -2844,9 +2844,9 @@
                 <div class="approval-head">
                   <h3>HQ 제출용 추출</h3>
                 </div>
-                <p class="muted">선택 지점을 한 workbook으로 내려받습니다.</p>
+                <p class="muted hidden"></p>
                 <div class="schedule-support-upload-actions">
-                  <span id="scheduleSupportHqSelectionSummary" class="muted">선택한 지점이 없습니다.</span>
+                  <span id="scheduleSupportHqSelectionSummary" class="muted hidden"></span>
                   <button class="btn btn-secondary" type="button" id="scheduleSupportHqDownloadBtn" data-action="schedule-support-hq-download">시트 다운로드</button>
                   <button class="btn btn-primary" type="button" id="scheduleHqExportNextBtn" data-action="schedule-hq-wizard-next" data-next-step="upload">다음</button>
                 </div>
