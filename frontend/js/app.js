@@ -37453,7 +37453,6 @@ function renderAttendanceViewFromCache() {
   renderAttendanceWorkspaceHeader();
   renderAttendanceWorkspaceTabs();
   renderAttendanceToolbarVisibility();
-  renderAttendanceManagerPanelVisibility();
   syncAttendanceManagerFilterInputs();
 
   if (canUseAttendanceManagerFilter()) {
@@ -37470,6 +37469,7 @@ function renderAttendanceViewFromCache() {
     return;
   }
 
+  renderAttendanceManagerPanelVisibility();
   const activeDate = setAttendanceActiveDate(state.attendanceView.date || toLocalDateKey(new Date()), { syncInput: true });
   const records = Array.isArray(state.attendanceView.records) ? state.attendanceView.records : [];
   const overtimeRows = Array.isArray(state.attendanceView.overtimeRows) ? state.attendanceView.overtimeRows : [];
@@ -46890,6 +46890,16 @@ function renderAttendanceManagerPanelVisibility() {
   const tab = getAttendanceManagerTab();
   const showWorkspace = tab === 'status' || tab === 'list';
   const useV2ManagerLayout = typeof v2UseManagerLayout === 'function' ? v2UseManagerLayout() : false;
+  const workspace = $('#attendanceManagerWorkspace');
+  const calendarPanel = $('#attendanceCalendarPanel');
+  if (workspace instanceof HTMLElement) {
+    workspace.classList.toggle('is-attendance-v2-manager', useV2ManagerLayout);
+    workspace.classList.toggle('is-attendance-v2-status', useV2ManagerLayout && tab === 'status');
+    workspace.classList.toggle('is-attendance-v2-list', useV2ManagerLayout && tab === 'list');
+  }
+  if (calendarPanel instanceof HTMLElement) {
+    calendarPanel.classList.toggle('is-attendance-v2-calendar', useV2ManagerLayout && tab === 'calendar');
+  }
   toggleVisibility('#attendanceManagerWorkspace', showWorkspace);
   toggleVisibility('#attendanceStatusPanel', tab === 'status');
   toggleVisibility('#attendanceCalendarPanel', tab === 'calendar');
@@ -65972,10 +65982,10 @@ document.addEventListener('compositionend', (event) => {
     if (typeof renderAttendanceWorkspaceHeader === 'function') renderAttendanceWorkspaceHeader();
     if (typeof renderAttendanceWorkspaceTabs === 'function') renderAttendanceWorkspaceTabs();
     if (typeof renderAttendanceToolbarVisibility === 'function') renderAttendanceToolbarVisibility();
-    if (typeof renderAttendanceManagerPanelVisibility === 'function') renderAttendanceManagerPanelVisibility();
 
     const shell = v2EnsureShell();
     if (!shell) return legacyRenderAttendanceManagerWorkspace(payload);
+    if (typeof renderAttendanceManagerPanelVisibility === 'function') renderAttendanceManagerPanelVisibility();
 
     const activeRows = scopedRows.length ? scopedRows : rows;
     const summary = v2BuildSummary(activeRows);
