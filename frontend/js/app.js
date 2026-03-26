@@ -37440,6 +37440,7 @@ async function loadOrgViewPresenter() {
 }
 
 async function loadAttendanceViewPresenter() {
+  renderAttendanceViewFromCache();
   await loadAttendanceView();
 }
 
@@ -47468,6 +47469,17 @@ async function loadAttendanceManagerView({ force = false } = {}) {
 
   try {
     renderAttendanceLayoutMode();
+    renderAttendanceFilterMeta();
+    {
+      const cachedManagerRows = Array.isArray(state.attendanceView.managerRows) ? state.attendanceView.managerRows : [];
+      const cachedScopedRows = getFilteredAttendanceManagerRows(cachedManagerRows, { applyStatus: false });
+      const cachedFilteredRows = getFilteredAttendanceManagerRows(cachedManagerRows, { applyStatus: true });
+      renderAttendanceManagerWorkspace({
+        rows: cachedFilteredRows,
+        scopedRows: cachedScopedRows,
+        loading: true,
+      });
+    }
     await ensureAttendanceFilterOptionsLoaded();
     if (isStaleLoad()) {
       return Array.isArray(state.attendanceView?.managerRows) ? state.attendanceView.managerRows : [];
@@ -61966,11 +61978,15 @@ function bindUiEvents() {
       if (requestedTab === getAttendanceManagerTab()) {
         return;
       }
-      runWithBusy(async () => {
-        const nextTab = setAttendanceManagerTab(requestedTab);
-        syncAttendanceManagerFilterInputs();
-        await navigateToRoute(getAttendanceRouteWithTab(nextTab), { replace: true, silentDeniedModal: true });
-      }, '탭 전환 중...');
+      const nextTab = setAttendanceManagerTab(requestedTab);
+      syncAttendanceManagerFilterInputs();
+      updateRouteHash(getAttendanceRouteWithTab(nextTab), { replace: true });
+      renderAttendanceViewFromCache();
+      Promise.resolve()
+        .then(() => loadAttendanceView({ force: false }))
+        .catch((error) => {
+          console.error('[RG ARLS] attendance tab switch refresh failed', error);
+        });
       return;
     }
 
