@@ -20687,27 +20687,8 @@ function finishNoticeComposeInlinePointerSession() {
 function renderNoticeComposeDocumentFlow() {
   const notices = ensureNoticesState();
   const flow = $('#noticesComposeDocumentFlow');
-  const legacyHost = $('#noticesComposeLegacyBlocks');
-  const bodyBlock = $('#noticesComposeBodyBlock');
   const imageBlock = $('#noticesComposeImageBlock');
-  const tableBlock = $('#noticesComposeTableBlock');
-  const pollBlock = $('#noticesComposePollBlock');
-  if (!(flow instanceof HTMLElement) || !(legacyHost instanceof HTMLElement)) return;
-
-  [bodyBlock, imageBlock, tableBlock, pollBlock].forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    if (node.parentElement !== legacyHost) {
-      legacyHost.appendChild(node);
-    }
-  });
-  const legacyBodyInput = bodyBlock instanceof HTMLElement
-    ? bodyBlock.querySelector('textarea')
-    : null;
-  if (legacyBodyInput instanceof HTMLTextAreaElement) {
-    legacyBodyInput.dataset.noticeComposeLegacyBodyInput = 'true';
-    legacyBodyInput.classList.add('hidden');
-    legacyBodyInput.removeAttribute('id');
-  }
+  if (!(flow instanceof HTMLElement)) return;
 
   const composeContentBlocks = getNoticeComposeContentBlocks(notices.composeDraft);
   const orderedNodes = [];
@@ -20742,7 +20723,9 @@ function renderNoticeComposeDocumentFlow() {
 
   flow.replaceChildren(...orderedNodes);
   flow.style.paddingBottom = '';
-  [imageBlock, tableBlock, pollBlock].forEach((block) => clearNoticeComposeInlineBlockStyles(block));
+  if (imageBlock instanceof HTMLElement) {
+    clearNoticeComposeInlineBlockStyles(imageBlock);
+  }
   syncNoticeComposeActiveBodyInput(document.activeElement instanceof HTMLTextAreaElement ? document.activeElement : null);
 }
 
@@ -35312,13 +35295,6 @@ function renderNoticeComposeImageList() {
 }
 
 function renderNoticeComposePollEditor() {
-  const block = $('#noticesComposePollBlock');
-  const panel = $('#noticesComposePollPanel');
-  if (block instanceof HTMLElement) {
-    block.classList.add('hidden');
-  }
-  if (!(panel instanceof HTMLElement)) return;
-  panel.innerHTML = '';
   renderNoticeComposeToolbar();
   renderNoticeComposeDocumentFlow();
 }
@@ -35574,14 +35550,6 @@ function createNoticeComposePollBlockElement(block, index = 0) {
 }
 
 function renderNoticeComposeTableEditor() {
-  const block = $('#noticesComposeTableBlock');
-  const grid = $('#noticesComposeTableGrid');
-  if (block instanceof HTMLElement) {
-    block.classList.add('hidden');
-  }
-  if (grid instanceof HTMLElement) {
-    grid.innerHTML = '';
-  }
   renderNoticeComposeToolbar();
   renderNoticeComposeDocumentFlow();
 }
