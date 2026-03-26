@@ -26993,6 +26993,10 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 }
 
 /* 2026-03 reports wizard final override */
+#view-reports .reports-wizard-hero {
+  display: none !important;
+}
+
 #view-reports .reports-panel-stepper {
   gap: 10px;
 }
@@ -27003,6 +27007,13 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
   min-height: 72px;
   border-radius: 20px;
   cursor: default;
+}
+
+#view-reports .reports-panel-stepper-item.is-current {
+  border: 2px solid rgba(249, 115, 22, 0.72);
+  background: color-mix(in srgb, var(--ui-bg-surface) 95%, rgba(249, 115, 22, 0.14) 5%);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12);
+  z-index: 1;
 }
 
 #view-reports .reports-panel-stepper-item:hover,
@@ -27027,6 +27038,10 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 
 #view-reports .reports-panel-stepper-copy strong {
   display: none;
+}
+
+#view-reports .reports-panel-stepper-item.is-current .reports-panel-stepper-label {
+  color: #c2410c;
 }
 
 #view-reports .reports-panel-stepper-label {
