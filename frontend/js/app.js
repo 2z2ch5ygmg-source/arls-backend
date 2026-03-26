@@ -4138,6 +4138,7 @@ async function loadMonthlyScheduleRowsWithCache({ month, tenantCode, force = fal
 }
 
 const ATTENDANCE_MANAGER_FETCH_CONCURRENCY = 6;
+const ATTENDANCE_MANAGER_CALENDAR_FETCH_CONCURRENCY = 18;
 
 async function mapWithConcurrency(items = [], limit = ATTENDANCE_MANAGER_FETCH_CONCURRENCY, mapper = async (item) => item) {
   const list = Array.isArray(items) ? items : [];
@@ -4158,15 +4159,15 @@ async function mapWithConcurrency(items = [], limit = ATTENDANCE_MANAGER_FETCH_C
   return results;
 }
 
-async function fetchAttendanceRecordsByDateKeys(dateKeys = [], { force = false } = {}) {
-  const groups = await mapWithConcurrency(dateKeys, ATTENDANCE_MANAGER_FETCH_CONCURRENCY, (dateKey) => (
+async function fetchAttendanceRecordsByDateKeys(dateKeys = [], { force = false, concurrency = ATTENDANCE_MANAGER_FETCH_CONCURRENCY } = {}) {
+  const groups = await mapWithConcurrency(dateKeys, concurrency, (dateKey) => (
     getScheduleDataProvider().listAttendanceByDate({ date: dateKey, force })
   ));
   return groups.flat();
 }
 
-async function fetchAttendanceOvertimeByDateKeys(dateKeys = [], { tenantCode = '', force = false } = {}) {
-  const groups = await mapWithConcurrency(dateKeys, ATTENDANCE_MANAGER_FETCH_CONCURRENCY, (dateKey) => {
+async function fetchAttendanceOvertimeByDateKeys(dateKeys = [], { tenantCode = '', force = false, concurrency = ATTENDANCE_MANAGER_FETCH_CONCURRENCY } = {}) {
+  const groups = await mapWithConcurrency(dateKeys, concurrency, (dateKey) => {
     const params = new URLSearchParams();
     params.set('date', dateKey);
     if (tenantCode) params.set('tenant_code', tenantCode);
@@ -47490,45 +47491,36 @@ async function loadAttendanceManagerView({ force = false } = {}) {
         loading: true,
       });
     }
-    await ensureAttendanceFilterOptionsLoaded();
-    if (isStaleLoad()) {
-      return Array.isArray(state.attendanceView?.managerRows) ? state.attendanceView.managerRows : [];
-    }
-    renderAttendanceManagerFilterOptions();
-    renderAttendanceFilterMeta();
-    renderAttendanceManagerWorkspace({ rows: [], scopedRows: [], loading: true });
+    Promise.resolve()
+      .then(() => ensureAttendanceFilterOptionsLoaded())
+      .then(() => {
+        if (isStaleLoad()) return;
+        renderAttendanceManagerFilterOptions();
+        renderAttendanceFilterMeta();
+      })
+      .catch((error) => {
+        console.error('[RG ARLS] attendance filter options preload failed', error);
+      });
 
     const activeTab = getAttendanceManagerTab();
     const { start, end } = getAttendanceManagerFetchRange();
     const dateKeys = buildDateKeysBetween(start, end);
     const months = buildMonthKeysBetween(start, end);
     const tenantCode = getTenantCodeForScopedAdminApi();
+    const recordFetchConcurrency = activeTab === 'calendar'
+      ? ATTENDANCE_MANAGER_CALENDAR_FETCH_CONCURRENCY
+      : ATTENDANCE_MANAGER_FETCH_CONCURRENCY;
     const leaveParams = new URLSearchParams();
     leaveParams.set('status', 'approved');
     leaveParams.set('limit', '300');
     if (tenantCode) leaveParams.set('tenant_code', tenantCode);
     const shouldLoadOvertime = activeTab !== 'calendar';
-
-    const [schedulesResult, leavesResult, pendingAttendanceResult] = await Promise.allSettled([
-      Promise.all(months.map((month) => loadMonthlyScheduleRowsWithCache({ month, tenantCode, force }))).then((groups) => groups.flat()),
-      apiRequest(`/leaves?${leaveParams.toString()}`),
-      can('attendanceReview') ? fetchManagerAttendanceRequests(['pending']) : Promise.resolve([]),
-    ]);
-    if (isStaleLoad()) {
-      return Array.isArray(state.attendanceView?.managerRows) ? state.attendanceView.managerRows : [];
-    }
-
-    const scheduleRows = schedulesResult.status === 'fulfilled' && Array.isArray(schedulesResult.value) ? schedulesResult.value : [];
-    const leaveRows = leavesResult.status === 'fulfilled' && Array.isArray(leavesResult.value) ? leavesResult.value : [];
-    const pendingAttendanceRequests = pendingAttendanceResult.status === 'fulfilled' && Array.isArray(pendingAttendanceResult.value) ? pendingAttendanceResult.value : [];
     const correctionRows = can('attendanceReview') ? getCorrectionRowsByStatuses(['pending']) : [];
-    state.attendanceView.leaveRows = leaveRows;
-    state.attendanceView.managerPendingAttendanceRequests = pendingAttendanceRequests;
-    state.attendanceView.managerPendingCorrections = correctionRows;
 
-    const [recordsResult, overtimeResult] = await Promise.allSettled([
-      fetchAttendanceRecordsByDateKeys(dateKeys, { force }),
-      shouldLoadOvertime ? fetchAttendanceOvertimeByDateKeys(dateKeys, { tenantCode, force }) : Promise.resolve([]),
+    const [liteSchedulesResult, leavesResult, recordsResult] = await Promise.allSettled([
+      Promise.all(months.map((month) => loadMonthlyScheduleLiteWithCache({ month, tenantCode, force }))),
+      apiRequest(`/leaves?${leaveParams.toString()}`),
+      fetchAttendanceRecordsByDateKeys(dateKeys, { force, concurrency: recordFetchConcurrency }),
     ]);
     if (isStaleLoad()) {
       return Array.isArray(state.attendanceView?.managerRows) ? state.attendanceView.managerRows : [];
@@ -47544,19 +47536,24 @@ async function loadAttendanceManagerView({ force = false } = {}) {
       return fallbackFilteredRows;
     }
 
-    const records = Array.isArray(recordsResult.value) ? recordsResult.value : [];
-    const overtimeRows = shouldLoadOvertime && overtimeResult.status === 'fulfilled' && Array.isArray(overtimeResult.value)
-      ? overtimeResult.value
+    const liteBundles = liteSchedulesResult.status === 'fulfilled' && Array.isArray(liteSchedulesResult.value)
+      ? liteSchedulesResult.value
       : [];
+    const scheduleRows = liteBundles.flatMap((bundle) => normalizeScheduleRows(Array.isArray(bundle?.rows) ? bundle.rows : []));
+    const leaveRows = leavesResult.status === 'fulfilled' && Array.isArray(leavesResult.value) ? leavesResult.value : [];
+    const records = Array.isArray(recordsResult.value) ? recordsResult.value : [];
+    state.attendanceView.leaveRows = leaveRows;
     state.attendanceView.records = records;
-    state.attendanceView.overtimeRows = overtimeRows;
+    state.attendanceView.overtimeRows = [];
+    state.attendanceView.managerPendingAttendanceRequests = [];
+    state.attendanceView.managerPendingCorrections = correctionRows;
 
     const managerRows = buildAttendanceManagerRows({
       records,
       scheduleRows,
       leaveRows,
-      overtimeRows,
-      pendingAttendanceRequests,
+      overtimeRows: [],
+      pendingAttendanceRequests: [],
       correctionRows,
       recordEdits: state.attendanceView.managerRecordEdits || {},
       rangeStart: start,
@@ -47572,12 +47569,60 @@ async function loadAttendanceManagerView({ force = false } = {}) {
     renderAttendanceFilterMeta();
     renderAttendanceManagerWorkspace({ rows: filteredRows, scopedRows, loading: false });
 
-    if (pendingAttendanceResult.status === 'rejected') {
-      showToast('정정 대기 데이터를 일부 불러오지 못했습니다.', 'info', 2200);
-    }
-    if (shouldLoadOvertime && overtimeResult.status === 'rejected') {
-      showToast('OT 보조 데이터를 일부 불러오지 못했습니다. 출퇴근 기록은 계속 표시됩니다.', 'info', 2200);
-    }
+    Promise.resolve()
+      .then(async () => {
+        const [fullSchedulesResult, pendingAttendanceResult, overtimeResult] = await Promise.allSettled([
+          Promise.all(months.map((month) => loadMonthlyScheduleRowsWithCache({ month, tenantCode, force }))).then((groups) => groups.flat()),
+          can('attendanceReview') ? fetchManagerAttendanceRequests(['pending']) : Promise.resolve([]),
+          shouldLoadOvertime
+            ? fetchAttendanceOvertimeByDateKeys(dateKeys, { tenantCode, force, concurrency: recordFetchConcurrency })
+            : Promise.resolve([]),
+        ]);
+        if (isStaleLoad()) return;
+
+        const hydratedScheduleRows = fullSchedulesResult.status === 'fulfilled' && Array.isArray(fullSchedulesResult.value) && fullSchedulesResult.value.length
+          ? fullSchedulesResult.value
+          : scheduleRows;
+        const pendingAttendanceRequests = pendingAttendanceResult.status === 'fulfilled' && Array.isArray(pendingAttendanceResult.value)
+          ? pendingAttendanceResult.value
+          : [];
+        const overtimeRows = shouldLoadOvertime && overtimeResult.status === 'fulfilled' && Array.isArray(overtimeResult.value)
+          ? overtimeResult.value
+          : [];
+
+        state.attendanceView.overtimeRows = overtimeRows;
+        state.attendanceView.managerPendingAttendanceRequests = pendingAttendanceRequests;
+
+        const hydratedRows = buildAttendanceManagerRows({
+          records,
+          scheduleRows: hydratedScheduleRows,
+          leaveRows,
+          overtimeRows,
+          pendingAttendanceRequests,
+          correctionRows,
+          recordEdits: state.attendanceView.managerRecordEdits || {},
+          rangeStart: start,
+          rangeEnd: end,
+        });
+        if (isStaleLoad()) return;
+        state.attendanceView.managerRows = hydratedRows;
+
+        const hydratedScopedRows = getFilteredAttendanceManagerRows(hydratedRows, { applyStatus: false });
+        const hydratedFilteredRows = getFilteredAttendanceManagerRows(hydratedRows, { applyStatus: true });
+        renderAttendanceFilterMeta();
+        renderAttendanceManagerWorkspace({ rows: hydratedFilteredRows, scopedRows: hydratedScopedRows, loading: false });
+
+        if (pendingAttendanceResult.status === 'rejected') {
+          showToast('정정 대기 데이터를 일부 불러오지 못했습니다.', 'info', 2200);
+        }
+        if (shouldLoadOvertime && overtimeResult.status === 'rejected') {
+          showToast('OT 보조 데이터를 일부 불러오지 못했습니다. 출퇴근 기록은 계속 표시됩니다.', 'info', 2200);
+        }
+      })
+      .catch((error) => {
+        console.error('[RG ARLS] attendance manager background hydrate failed', error);
+      });
+
     return filteredRows;
   } finally {
     if (!isStaleLoad()) {
