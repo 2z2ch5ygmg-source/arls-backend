@@ -1696,6 +1696,32 @@ function showDebug() {
   );
 }
 
+const CRITICAL_BOOTSTRAP_SELECTORS = [
+  '#authView',
+  '#shell',
+  '#loginForm',
+  '#loginSubmitBtn',
+  '#topbarSessionInfo',
+  '#btnTopbarProfile',
+  '#btnTopbarThemeToggle',
+  '#btnNotifications',
+];
+
+function getMissingCriticalBootstrapSelectors() {
+  return CRITICAL_BOOTSTRAP_SELECTORS.filter((selector) => !document.querySelector(selector));
+}
+
+function reportCriticalBootstrapDomMismatch(context = 'unknown') {
+  const missingSelectors = getMissingCriticalBootstrapSelectors();
+  if (!missingSelectors.length) return false;
+  console.error('[RG ARLS] critical bootstrap DOM mismatch', {
+    context,
+    buildId: window.ENV_BUILD_ID || '(unset)',
+    missingSelectors,
+  });
+  return true;
+}
+
 function sanitizeDebugValue(key, value) {
   if (value === null || value === undefined) return value;
   const lowerKey = String(key || '').toLowerCase();
@@ -19831,27 +19857,33 @@ function buildNoticeBodyBlocksFromDraft(draft = null) {
     },
     table: (block = null) => {
       const sourceTable = cloneNoticeTableDraft(block?.table);
-      const hasCustomColumns = sourceTable.columns.some((item, index) => String(item || '').trim() !== String(baseTable.columns[index] || '').trim());
-      const hasTableRows = sourceTable.rows.some((row) => row.some((cell) => String(cell || '').trim()));
-      const hasTableContent = Boolean(sourceTable.enabled && (sourceTable.title || hasCustomColumns || hasTableRows));
-      if (hasTableContent) {
-        const rows = sourceTable.rows
-          .map((row) => row.map((cell) => String(cell || '').trim()))
-          .filter((row) => row.some(Boolean));
-        blocks.push({
-          kind: 'table',
-          title: '',
-          has_header: Boolean(sourceTable.hasHeader),
-          columns: sourceTable.columns.slice(),
-          rows,
-          notice_compose_layout: {
-            left: 0,
-            top: 0,
-            width: 0,
-            height: 0,
-          },
-        });
-      }
+      const rows = sourceTable.rows
+        .map((row) => row.map((cell) => String(cell || '').trim()))
+        .filter((row) => row.some(Boolean));
+      const normalizedColumns = sourceTable.columns.map((item) => String(item || '').trim());
+      const shouldPersistTable = Boolean(
+        block?.kind === 'table'
+        || (sourceTable.enabled && (
+          sourceTable.title
+          || normalizedColumns.some(Boolean)
+          || rows.length
+          || sourceTable.columns.some((item, index) => String(item || '').trim() !== String(baseTable.columns[index] || '').trim())
+        )),
+      );
+      if (!shouldPersistTable) return;
+      blocks.push({
+        kind: 'table',
+        title: '',
+        has_header: Boolean(sourceTable.hasHeader),
+        columns: normalizedColumns,
+        rows,
+        notice_compose_layout: {
+          left: 0,
+          top: 0,
+          width: 0,
+          height: 0,
+        },
+      });
     },
   };
   composeContentBlocks.forEach((block) => {
@@ -19985,7 +20017,8 @@ function isNoticeComposeTextField(target) {
 function resizeNoticeComposeParagraphInput(textarea) {
   if (!(textarea instanceof HTMLTextAreaElement)) return;
   textarea.style.height = 'auto';
-  const nextHeight = Math.max(88, textarea.scrollHeight);
+  const minHeight = textarea.dataset.noticeComposeSurfaceMode === 'primary' ? 440 : 40;
+  const nextHeight = Math.max(minHeight, textarea.scrollHeight);
   textarea.style.height = `${nextHeight}px`;
 }
 
@@ -20869,10 +20902,15 @@ function renderNoticeComposeDocumentFlow() {
   if (!(flow instanceof HTMLElement)) return;
 
   const composeContentBlocks = getNoticeComposeContentBlocks(notices.composeDraft);
+  const primaryParagraphId = composeContentBlocks.length === 1 && composeContentBlocks[0]?.kind === 'paragraph'
+    ? String(composeContentBlocks[0].id || '').trim()
+    : '';
   const orderedNodes = [];
   composeContentBlocks.forEach((block, index) => {
     if (block.kind === 'paragraph') {
-      orderedNodes.push(createNoticeComposeParagraphBlockElement(block, index));
+      orderedNodes.push(createNoticeComposeParagraphBlockElement(block, index, {
+        primarySurface: Boolean(primaryParagraphId && String(block.id || '').trim() === primaryParagraphId),
+      }));
       return;
     }
     if (block.kind === 'poll') {
@@ -32047,6 +32085,7 @@ function renderUserBadge() {
 
 function showAuthPanel() {
   setAuthStatus(AUTH_STATUS_UNAUTHENTICATED);
+  reportCriticalBootstrapDomMismatch('showAuthPanel');
   const authView = $('#authView');
   const shell = $('#shell');
   const menuBtn = $('#btnDrawerOpen');
@@ -32092,6 +32131,7 @@ function showShellPanel(options = {}) {
   if (!state.user) return;
   const deferSessionSideEffects = options?.deferSessionSideEffects === true;
   setAuthStatus(AUTH_STATUS_AUTHENTICATED);
+  reportCriticalBootstrapDomMismatch('showShellPanel');
 
   const authView = $('#authView');
   const shell = $('#shell');
@@ -35593,7 +35633,8 @@ function buildNoticeComposeTableGridElement(tableDraft, blockId = '') {
   return shell;
 }
 
-function createNoticeComposeParagraphBlockElement(block, index = 0) {
+function createNoticeComposeParagraphBlockElement(block, index = 0, options = {}) {
+  const isPrimarySurface = Boolean(options?.primarySurface);
   const section = document.createElement('section');
   section.className = 'notices-compose-inline-block notices-compose-text-block notices-compose-flow-block notices-compose-flow-paragraph';
   section.dataset.noticeInlineKind = 'body';
@@ -35605,7 +35646,11 @@ function createNoticeComposeParagraphBlockElement(block, index = 0) {
   surface.className = 'notices-compose-editor-surface notices-compose-flow-surface';
   const textarea = document.createElement('textarea');
   textarea.className = 'notices-compose-body-input notices-compose-flow-textarea';
-  textarea.rows = 3;
+  textarea.rows = isPrimarySurface ? 3 : 1;
+  textarea.dataset.noticeComposeSurfaceMode = isPrimarySurface ? 'primary' : 'inline';
+  if (isPrimarySurface) {
+    textarea.classList.add('is-primary-body-surface');
+  }
   textarea.placeholder = '문단은 빈 줄로 구분합니다. 긴 안내, 절차, 유의사항을 순서대로 정리하세요.';
   textarea.value = String(block.text || '');
   textarea.dataset.noticeComposeParagraphInput = 'true';
@@ -64372,6 +64417,7 @@ async function initializeApp() {
   state.initializing = true;
 
   try {
+    reportCriticalBootstrapDomMismatch('initializeApp:start');
     applyUiTheme(readStoredUiTheme());
     showDebug();
     getScheduleDataProvider();
@@ -64404,11 +64450,18 @@ async function initializeApp() {
     }
     updateLeaveFormState({ enforceHalfDayRange: true });
 
-    $('#scheduleMonth').value = month;
-    state.schedule.month = month;
-    renderScheduleMonthToolbar();
-    applyScheduleExportDateFromMonth(month);
-    refreshScheduleExportLink();
+    const scheduleMonthInput = $('#scheduleMonth');
+    if (scheduleMonthInput instanceof HTMLInputElement) {
+      scheduleMonthInput.value = month;
+      state.schedule.month = month;
+      renderScheduleMonthToolbar();
+      applyScheduleExportDateFromMonth(month);
+      refreshScheduleExportLink();
+    } else {
+      console.error('[RG ARLS] missing #scheduleMonth during bootstrap', {
+        buildId: window.ENV_BUILD_ID || '(unset)',
+      });
+    }
     setScheduleImportUI({ canApply: false, clearPreviewRows: true, clearApplyDetails: true });
 
     const storedSessionCandidate = loadSession();

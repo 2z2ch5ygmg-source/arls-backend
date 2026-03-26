@@ -23594,11 +23594,16 @@ button.attendance-status-special-card.active {
 }
 
 .notices-compose-flow-textarea {
-  min-height: 88px;
+  min-height: 40px;
   height: auto;
   padding-top: 0;
+  padding-bottom: 0;
   resize: none;
   overflow: hidden;
+}
+
+.notices-compose-flow-textarea.is-primary-body-surface {
+  min-height: 440px;
 }
 
 .notices-compose-flow-table-block {

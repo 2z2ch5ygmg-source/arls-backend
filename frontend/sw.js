@@ -1,4 +1,4 @@
-const SW_VERSION = 'rg-arls-sw-v20260324-topbar-parity-v1';
+const SW_VERSION = 'rg-arls-sw-v20260326-auth-bootstrap-dom-guard-01';
 const SHELL_CACHE = `${SW_VERSION}-shell`;
 const STATIC_CACHE = `${SW_VERSION}-static`;
 const ACTIVE_CACHES = new Set([SHELL_CACHE, STATIC_CACHE]);
