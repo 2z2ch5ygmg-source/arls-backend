@@ -3794,123 +3794,89 @@
               </div>
             </div>
 
-            <article id="scheduleFinanceSubmissionPanel" class="module-card stack reports-panel-shell hidden" data-reports-panel="finance">
-                <div class="reports-wizard-head">
-                  <div class="reports-wizard-head-copy">
-                    <h3>Finance 제출</h3>
-                    <p class="muted">처음 하는 사람도 1차 확인본부터 최종본 다운로드까지 순서대로 진행할 수 있도록 단계별로 안내합니다.</p>
-                  </div>
-                  <div class="reports-wizard-head-actions">
-                    <span id="scheduleFinanceStatePill" class="status-pill status-pill-neutral hidden">상태 확인 대기</span>
-                    <button class="btn btn-secondary" type="button" data-action="reports-open-schedule-upload">Excel 업로드 열기</button>
-                  </div>
-                </div>
-                <nav class="reports-panel-stepper" aria-label="Finance 제출 단계">
-                  <div id="reportsFinanceNavScope" class="reports-panel-stepper-item" data-step="scope">
-                    <span class="reports-panel-stepper-index">1</span>
-                    <span class="reports-panel-stepper-copy">
-                      <span class="reports-panel-stepper-label">범위 선택</span>
-                      <strong id="scheduleFinanceScopeState">대기</strong>
-                    </span>
-                  </div>
-                  <div id="reportsFinanceNavReview" class="reports-panel-stepper-item" data-step="review">
-                    <span class="reports-panel-stepper-index">2</span>
-                    <span class="reports-panel-stepper-copy">
-                      <span class="reports-panel-stepper-label">1차 확인본</span>
-                      <strong id="scheduleFinanceReviewRevision">대기</strong>
-                    </span>
-                  </div>
-                  <div id="reportsFinanceNavUpload" class="reports-panel-stepper-item" data-step="upload">
-                    <span class="reports-panel-stepper-index">3</span>
-                    <span class="reports-panel-stepper-copy">
-                      <span class="reports-panel-stepper-label">최종 업로드</span>
-                      <strong id="scheduleFinanceFinalUploadState">대기</strong>
-                    </span>
-                  </div>
-                  <div id="reportsFinanceNavFinal" class="reports-panel-stepper-item" data-step="final">
-                    <span class="reports-panel-stepper-index">4</span>
-                    <span class="reports-panel-stepper-copy">
-                      <span class="reports-panel-stepper-label">최종 다운로드</span>
-                      <strong id="scheduleFinanceFinalDownloadState">잠금</strong>
-                    </span>
-                  </div>
-                </nav>
-                <section class="reports-wizard-hero reports-finance-hero">
-                  <div class="reports-wizard-hero-copy">
-                    <span class="reports-wizard-eyebrow">현재 단계</span>
-                    <strong id="scheduleFinanceCurrentStage">지점 선택 대기</strong>
-                    <p id="scheduleFinanceStatusText" class="muted">대상 지점을 고르면 지금 필요한 제출 단계와 막힌 이유를 바로 보여줍니다.</p>
-                  </div>
-                  <div class="reports-finance-hero-side">
-                    <span class="reports-finance-hero-counter"><strong id="scheduleFinanceCurrentCount">1 / 4</strong></span>
-                    <button class="btn btn-secondary" type="button" data-action="reports-open-schedule-upload">Excel 업로드 열기</button>
-                  </div>
-                </section>
-                <ul id="scheduleFinanceBlockedReasons" class="list hidden"></ul>
-                <div class="reports-finance-stage-stack">
-                  <section id="scheduleFinanceStepScope" class="reports-wizard-step" data-step-state="idle">
-                    <div class="reports-wizard-step-index">1</div>
-                    <div class="reports-wizard-step-main">
-                      <div class="reports-wizard-step-head">
-                        <div>
+            <article id="scheduleFinanceSubmissionPanel" class="reports-finance-wizard-shell hidden" data-reports-panel="finance">
+                <span id="scheduleFinanceStatePill" class="status-pill status-pill-neutral hidden">상태 확인 대기</span>
+                <span id="scheduleFinanceCurrentStage" class="hidden">지점 선택 대기</span>
+                <p id="scheduleFinanceStatusText" class="hidden" aria-hidden="true"></p>
+                <span id="scheduleFinanceCurrentCount" class="hidden" aria-hidden="true">1 / 4</span>
+                <div class="reports-finance-wizard-layout">
+                  <aside class="reports-finance-step-rail" aria-label="Finance 제출 단계">
+                    <div id="reportsFinanceNavScope" class="reports-panel-stepper-item reports-finance-step-rail-item" data-step="scope">
+                      <span class="reports-panel-stepper-index">1</span>
+                      <span class="reports-panel-stepper-copy">
+                        <span class="reports-panel-stepper-label">범위 선택</span>
+                        <strong id="scheduleFinanceScopeState">대기</strong>
+                      </span>
+                    </div>
+                    <div id="reportsFinanceNavReview" class="reports-panel-stepper-item reports-finance-step-rail-item" data-step="review">
+                      <span class="reports-panel-stepper-index">2</span>
+                      <span class="reports-panel-stepper-copy">
+                        <span class="reports-panel-stepper-label">1차 확인본</span>
+                        <strong id="scheduleFinanceReviewRevision">대기</strong>
+                      </span>
+                    </div>
+                    <div id="reportsFinanceNavUpload" class="reports-panel-stepper-item reports-finance-step-rail-item" data-step="upload">
+                      <span class="reports-panel-stepper-index">3</span>
+                      <span class="reports-panel-stepper-copy">
+                        <span class="reports-panel-stepper-label">최종 업로드</span>
+                        <strong id="scheduleFinanceFinalUploadState">대기</strong>
+                      </span>
+                    </div>
+                    <div id="reportsFinanceNavFinal" class="reports-panel-stepper-item reports-finance-step-rail-item" data-step="final">
+                      <span class="reports-panel-stepper-index">4</span>
+                      <span class="reports-panel-stepper-copy">
+                        <span class="reports-panel-stepper-label">최종 다운로드</span>
+                        <strong id="scheduleFinanceFinalDownloadState">잠금</strong>
+                      </span>
+                    </div>
+                  </aside>
+                  <section class="reports-finance-main-canvas">
+                    <div class="reports-finance-main-head">
+                      <h3>Finance 제출</h3>
+                      <div class="reports-finance-main-actions">
+                        <button class="btn btn-secondary" type="button" data-action="reports-open-schedule-upload">Excel 업로드 열기</button>
+                      </div>
+                    </div>
+                    <ul id="scheduleFinanceBlockedReasons" class="list hidden reports-finance-blocked-list"></ul>
+                    <div class="reports-finance-content-canvas">
+                      <section id="scheduleFinanceStepScope" class="reports-wizard-step reports-finance-canvas-step" data-step-state="idle">
+                        <div class="reports-finance-step-head">
                           <h4>범위 선택</h4>
                         </div>
-                        <span id="scheduleFinanceScopeStepPill" class="status-pill status-pill-neutral">대기</span>
-                      </div>
-                      <div id="scheduleFinanceScopeContextMount"></div>
-                      <div class="schedule-support-upload-actions reports-wizard-step-actions">
-                        <div class="list-row-sub">대상 월과 지점을 먼저 고르면 이후 단계가 순서대로 열립니다.</div>
-                      </div>
-                    </div>
-                  </section>
-                  <section id="scheduleFinanceStepReview" class="reports-wizard-step" data-step-state="idle">
-                    <div class="reports-wizard-step-index">2</div>
-                    <div class="reports-wizard-step-main">
-                      <div class="reports-wizard-step-head">
-                        <div>
+                        <div id="scheduleFinanceScopeContextMount"></div>
+                      </section>
+                      <section id="scheduleFinanceStepReview" class="reports-wizard-step reports-finance-canvas-step" data-step-state="idle">
+                        <div class="reports-finance-step-head">
                           <h4>1차 확인본 다운로드</h4>
                         </div>
-                        <span id="scheduleFinanceReviewStepPill" class="status-pill status-pill-neutral">대기</span>
-                      </div>
-                      <div class="schedule-support-upload-actions reports-wizard-step-actions">
-                        <button class="btn btn-secondary" type="button" id="scheduleFinanceReviewDownloadBtn" data-action="schedule-finance-review-download">1차 스케쥴 다운로드</button>
-                      </div>
-                    </div>
-                  </section>
-                  <section id="scheduleFinanceStepUpload" class="reports-wizard-step" data-step-state="idle">
-                    <div class="reports-wizard-step-index">3</div>
-                    <div class="reports-wizard-step-main">
-                      <div class="reports-wizard-step-head">
-                        <div>
+                        <div class="schedule-support-upload-actions reports-wizard-step-actions">
+                          <button class="btn btn-secondary" type="button" id="scheduleFinanceReviewDownloadBtn" data-action="schedule-finance-review-download">1차 스케쥴 다운로드</button>
+                        </div>
+                      </section>
+                      <section id="scheduleFinanceStepUpload" class="reports-wizard-step reports-finance-canvas-step" data-step-state="idle">
+                        <div class="reports-finance-step-head">
                           <h4>Supervisor 최종 업로드</h4>
                         </div>
-                        <span id="scheduleFinanceUploadStepPill" class="status-pill status-pill-neutral">대기</span>
-                      </div>
-                      <input id="scheduleFinanceUploadFile" type="file" accept=".xlsx" />
-                      <div class="schedule-support-upload-actions reports-wizard-step-actions">
-                        <button class="btn btn-secondary" type="button" id="scheduleFinancePreviewBtn" data-action="schedule-finance-preview">최종 업로드 미리보기</button>
-                        <button class="btn btn-primary" type="button" id="scheduleFinanceApplyBtn" data-action="schedule-finance-apply">최종 업로드 반영</button>
-                      </div>
-                    </div>
-                  </section>
-                  <section id="scheduleFinanceStepFinal" class="reports-wizard-step" data-step-state="idle">
-                    <div class="reports-wizard-step-index">4</div>
-                    <div class="reports-wizard-step-main">
-                      <div class="reports-wizard-step-head">
-                        <div>
+                        <input id="scheduleFinanceUploadFile" type="file" accept=".xlsx" />
+                        <div class="schedule-support-upload-actions reports-wizard-step-actions">
+                          <button class="btn btn-secondary" type="button" id="scheduleFinancePreviewBtn" data-action="schedule-finance-preview">최종 업로드 미리보기</button>
+                          <button class="btn btn-primary" type="button" id="scheduleFinanceApplyBtn" data-action="schedule-finance-apply">최종 업로드 반영</button>
+                        </div>
+                      </section>
+                      <section id="scheduleFinanceStepFinal" class="reports-wizard-step reports-finance-canvas-step" data-step-state="idle">
+                        <div class="reports-finance-step-head">
                           <h4>2차 최종본 다운로드</h4>
                         </div>
-                        <span id="scheduleFinanceFinalStepPill" class="status-pill status-pill-neutral">잠금</span>
-                      </div>
-                      <div class="schedule-support-upload-actions reports-wizard-step-actions">
-                        <button class="btn btn-primary" type="button" id="scheduleFinanceFinalDownloadBtn" data-action="schedule-finance-final-download">2차 최종 스케쥴 다운로드</button>
-                      </div>
+                        <div class="schedule-support-upload-actions reports-wizard-step-actions">
+                          <button class="btn btn-primary" type="button" id="scheduleFinanceFinalDownloadBtn" data-action="schedule-finance-final-download">2차 최종 스케쥴 다운로드</button>
+                        </div>
+                      </section>
+                    </div>
+                    <div class="reports-wizard-footer">
+                      <button class="btn btn-secondary" type="button" id="scheduleFinanceStepBackBtn" data-action="reports-finance-step-back">이전</button>
+                      <button class="btn btn-primary" type="button" id="scheduleFinanceStepNextBtn" data-action="reports-finance-step-next">다음</button>
                     </div>
                   </section>
-                </div>
-                <div class="reports-wizard-footer">
-                  <button class="btn btn-secondary" type="button" id="scheduleFinanceStepBackBtn" data-action="reports-finance-step-back">이전</button>
-                  <button class="btn btn-primary" type="button" id="scheduleFinanceStepNextBtn" data-action="reports-finance-step-next">다음</button>
                 </div>
                 <div id="scheduleFinanceProgress" class="task-progress-strip hidden" role="status" aria-live="polite">
                   <span id="scheduleFinanceProgressPill" class="status-pill status-pill-neutral">대기</span>
