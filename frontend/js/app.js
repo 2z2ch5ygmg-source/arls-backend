@@ -8611,8 +8611,8 @@ function renderReportsScopeHint() {
   if (!hint) return;
   const tab = normalizeReportsViewTab(state.reports?.viewTab || getDefaultReportsViewTab());
   hint.textContent = tab === 'support'
-    ? '월과 지점 기준으로 지원근무 전달 준비 상태만 확인합니다.'
-    : '월과 지점 기준으로 Finance 제출 상태만 확인합니다.';
+    ? '지원근무 전달을 준비 확인 → 전달 파일 다운로드 → Sentrix 전달 순서로 진행합니다.'
+    : 'Finance 제출을 1차 확인본 → 최종 업로드 → 최종본 다운로드 순서로 진행합니다.';
 }
 
 function setReportsSummaryMessage(target, text = '') {
@@ -8630,6 +8630,26 @@ function setReportsSummaryPill(target, text = '', className = 'status-pill statu
   target.textContent = normalized;
   target.classList.toggle('hidden', !normalized);
   return Boolean(normalized);
+}
+
+function setReportsWizardStep(rootSelector, pillSelector, {
+  state = 'idle',
+  text = '대기',
+  hint = '',
+} = {}) {
+  const root = $(rootSelector);
+  const pill = $(pillSelector);
+  if (root instanceof HTMLElement) {
+    root.dataset.stepState = state;
+  }
+  if (pill instanceof HTMLElement) {
+    pill.className = `status-pill reports-wizard-step-pill reports-wizard-step-pill-${state}`;
+    pill.textContent = String(text || '').trim() || '대기';
+  }
+  const hintTarget = root instanceof HTMLElement ? root.querySelector('.reports-wizard-step-hint') : null;
+  if (hintTarget instanceof HTMLElement) {
+    hintTarget.textContent = String(hint || '').trim();
+  }
 }
 
 function renderReportsContextSummary() {
@@ -8670,6 +8690,7 @@ function renderReportsSupportHandoffPanel() {
   const pill = $('#reportsSupportStatePill');
   const text = $('#reportsSupportStatusText');
   const statusGrid = $('#reportsSupportStatusGrid');
+  const currentStage = $('#reportsSupportCurrentStage');
   const artifactLabel = $('#reportsSupportArtifactLabel');
   const artifactMeta = $('#reportsSupportArtifactMeta');
   const deliveryLabel = $('#reportsSupportDeliveryLabel');
@@ -8706,13 +8727,29 @@ function renderReportsSupportHandoffPanel() {
 
   if (!siteCode) {
     setReportsSummaryPill(pill, '', 'status-pill status-pill-neutral');
-    setReportsSummaryMessage(text, '');
+    setReportsSummaryMessage(text, '먼저 대상 지점을 선택하면 전달 준비 상태와 다음 액션을 안내합니다.');
+    if (currentStage) currentStage.textContent = '지점 선택 대기';
     if (artifactLabel) artifactLabel.textContent = '미생성';
     if (artifactMeta) artifactMeta.textContent = 'source 업로드 전';
     if (deliveryLabel) deliveryLabel.textContent = '대기';
     if (deliveryMeta) deliveryMeta.textContent = 'Sentrix 제출 전';
     if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = true;
     if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = true;
+    setReportsWizardStep('#reportsSupportStepOverview', '#reportsSupportOverviewStepPill', {
+      state: 'active',
+      text: '지점 선택',
+      hint: '지점을 먼저 고르면 전달 준비 상태를 확인할 수 있습니다.',
+    });
+    setReportsWizardStep('#reportsSupportStepDownload', '#reportsSupportDownloadStepPill', {
+      state: 'idle',
+      text: '대기',
+      hint: '전달 기준이 준비되면 지원근무자용 시트를 다운로드할 수 있습니다.',
+    });
+    setReportsWizardStep('#reportsSupportStepSentrix', '#reportsSupportSentrixStepPill', {
+      state: 'idle',
+      text: '대기',
+      hint: 'artifact가 준비되면 Sentrix 전달 단계가 열립니다.',
+    });
     if (copyBtn instanceof HTMLElement) copyBtn.classList.add('hidden');
     renderReportsSupportArtifactMeta(null);
     setBlockedReasons([]);
@@ -8722,8 +8759,24 @@ function renderReportsSupportHandoffPanel() {
   if (!status) {
     setReportsSummaryPill(pill, '조회 중', 'status-pill status-pill-neutral');
     setReportsSummaryMessage(text, '전달 상태를 확인하는 중입니다.');
+    if (currentStage) currentStage.textContent = '상태 조회 중';
     if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = true;
     if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = true;
+    setReportsWizardStep('#reportsSupportStepOverview', '#reportsSupportOverviewStepPill', {
+      state: 'active',
+      text: '조회 중',
+      hint: '지점별 전달 준비 상태를 불러오고 있습니다.',
+    });
+    setReportsWizardStep('#reportsSupportStepDownload', '#reportsSupportDownloadStepPill', {
+      state: 'idle',
+      text: '대기',
+      hint: '상태 조회 후 다운로드 가능 여부를 판단합니다.',
+    });
+    setReportsWizardStep('#reportsSupportStepSentrix', '#reportsSupportSentrixStepPill', {
+      state: 'idle',
+      text: '대기',
+      hint: '상태 조회 후 Sentrix 전달 가능 여부를 안내합니다.',
+    });
     if (copyBtn instanceof HTMLElement) copyBtn.classList.add('hidden');
     renderReportsSupportArtifactMeta(null);
     setBlockedReasons([]);
@@ -8756,12 +8809,30 @@ function renderReportsSupportHandoffPanel() {
         refreshedAt ? `마지막 갱신 ${refreshedAt}` : '',
       ].filter(Boolean).join(' · '),
     );
+    if (currentStage) currentStage.textContent = readySiteCount > 0 ? '지점별 전달 준비 확인' : '전체 범위 상태 확인';
     if (artifactLabel) artifactLabel.textContent = readySiteCount > 0 ? `${readySiteCount}개 준비` : '미생성';
     if (artifactMeta) artifactMeta.textContent = readySiteCount > 0 ? '세부 업로드는 지점별로 진행합니다.' : '업로드 전';
     if (deliveryLabel) deliveryLabel.textContent = readySiteCount > 0 ? '지점별 확인 필요' : '대기';
     if (deliveryMeta) deliveryMeta.textContent = '전체 범위는 지점별 상태만 요약합니다.';
     if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = !canUseScheduleSupportRoundtripHq() || readySiteCount <= 0;
     if (sentrixBtn instanceof HTMLButtonElement) sentrixBtn.disabled = !canUseScheduleSupportRoundtripHq() || readySiteCount <= 0 || !artifactContext.artifact_id;
+    setReportsWizardStep('#reportsSupportStepOverview', '#reportsSupportOverviewStepPill', {
+      state: readySiteCount > 0 ? 'complete' : 'active',
+      text: readySiteCount > 0 ? '준비 확인' : '확인 필요',
+      hint: readySiteCount > 0 ? '지점별 준비 수를 확인했습니다. 세부 업로드는 각 지점에서 진행합니다.' : '먼저 업로드가 준비된 지점을 확인해야 합니다.',
+    });
+    setReportsWizardStep('#reportsSupportStepDownload', '#reportsSupportDownloadStepPill', {
+      state: canUseScheduleSupportRoundtripHq() && readySiteCount > 0 ? 'active' : 'blocked',
+      text: canUseScheduleSupportRoundtripHq() && readySiteCount > 0 ? '다운로드 가능' : '잠금',
+      hint: canUseScheduleSupportRoundtripHq()
+        ? '전체 범위는 HQ용 시트를 준비할 수 있지만, 실제 전달은 지점별 확인이 필요합니다.'
+        : 'HQ Admin 이상 계정에서만 전달용 시트를 다운로드할 수 있습니다.',
+    });
+    setReportsWizardStep('#reportsSupportStepSentrix', '#reportsSupportSentrixStepPill', {
+      state: canUseScheduleSupportRoundtripHq() && readySiteCount > 0 && artifactContext.artifact_id ? 'active' : 'blocked',
+      text: canUseScheduleSupportRoundtripHq() && readySiteCount > 0 && artifactContext.artifact_id ? '진행 가능' : '대기',
+      hint: '전체 범위는 요약 확인 중심입니다. Sentrix 전달은 지점별 artifact 준비 여부를 함께 확인하세요.',
+    });
     if (copyBtn instanceof HTMLElement) {
       copyBtn.classList.toggle('hidden', !artifactContext.artifact_id || !canSelectScheduleWorkflowTenant());
     }
@@ -8778,6 +8849,15 @@ function renderReportsSupportHandoffPanel() {
       refreshedAt ? `마지막 갱신 ${refreshedAt}` : '',
     ].filter(Boolean).join(' · '),
   );
+  if (currentStage) {
+    currentStage.textContent = sourceMissing
+      ? '전달 준비 확인 필요'
+      : (!readyForHandoff
+        ? 'artifact 준비 대기'
+        : (!canUseScheduleSupportRoundtripHq()
+          ? 'HQ 전달 권한 확인'
+          : (mergeStale ? '재전달 필요' : 'Sentrix 전달 진행 가능')));
+  }
   if (artifactLabel) artifactLabel.textContent = readyForHandoff ? '준비됨' : '미생성';
   if (artifactMeta) {
     artifactMeta.textContent = artifactContext.generated_at
@@ -8801,6 +8881,39 @@ function renderReportsSupportHandoffPanel() {
   if (sentrixBtn instanceof HTMLButtonElement) {
     sentrixBtn.disabled = !canUseScheduleSupportRoundtripHq() || !readyForHandoff || !artifactContext.artifact_id;
   }
+  setReportsWizardStep('#reportsSupportStepOverview', '#reportsSupportOverviewStepPill', {
+    state: readyForHandoff ? 'complete' : 'active',
+    text: readyForHandoff ? '준비 완료' : '확인 필요',
+    hint: sourceMissing
+      ? 'source 업로드가 먼저 필요합니다.'
+      : (artifactContext.generated_at
+        ? `artifact 생성 ${formatOpsDateTime(artifactContext.generated_at)}`
+        : 'artifact 생성 대기 상태입니다.'),
+  });
+  setReportsWizardStep('#reportsSupportStepDownload', '#reportsSupportDownloadStepPill', {
+    state: canUseScheduleSupportRoundtripHq() && readyForHandoff ? 'active' : 'blocked',
+    text: canUseScheduleSupportRoundtripHq() && readyForHandoff ? '다운로드 가능' : '잠금',
+    hint: !readyForHandoff
+      ? '전달 기준이 준비돼야 다운로드가 열립니다.'
+      : (!canUseScheduleSupportRoundtripHq()
+        ? 'HQ Admin 이상 계정에서만 전달용 시트를 다운로드할 수 있습니다.'
+        : '지원근무자용 시트를 내려받아 HQ 전달 파일을 준비합니다.'),
+  });
+  setReportsWizardStep('#reportsSupportStepSentrix', '#reportsSupportSentrixStepPill', {
+    state: canUseScheduleSupportRoundtripHq() && readyForHandoff && artifactContext.artifact_id
+      ? (mergeStale ? 'active' : 'complete')
+      : 'blocked',
+    text: canUseScheduleSupportRoundtripHq() && readyForHandoff && artifactContext.artifact_id
+      ? (mergeStale ? '재전달 필요' : '진행 가능')
+      : '잠금',
+    hint: !readyForHandoff
+      ? 'artifact 준비가 완료돼야 Sentrix 전달이 가능합니다.'
+      : (!canUseScheduleSupportRoundtripHq()
+        ? 'HQ Admin 이상 계정에서만 Sentrix 전달을 진행할 수 있습니다.'
+        : (status.latest_hq_uploaded_at
+          ? `최근 전달 ${formatOpsDateTime(status.latest_hq_uploaded_at)}`
+          : 'Sentrix 전달 화면으로 이어서 진입합니다.')),
+  });
   if (copyBtn instanceof HTMLElement) {
     copyBtn.classList.toggle('hidden', !artifactContext.artifact_id || !canSelectScheduleWorkflowTenant());
   }
@@ -15777,17 +15890,6 @@ function renderScheduleFinanceSubmissionStatus() {
     return;
   }
 
-  const activeTab = normalizeScheduleFinanceTab(state.schedule.financeTab || SCHEDULE_FINANCE_TAB_DOWNLOAD);
-  state.schedule.financeTab = activeTab;
-  document.querySelectorAll('[data-action="schedule-finance-tab"]').forEach((button) => {
-    const isActive = normalizeScheduleFinanceTab(button?.dataset?.tab || '') === activeTab;
-    button.classList.toggle('active', isActive);
-    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-  });
-
-  toggleVisibility('#scheduleFinanceDownloadSection', activeTab === SCHEDULE_FINANCE_TAB_DOWNLOAD);
-  toggleVisibility('#scheduleFinanceUploadSection', activeTab === SCHEDULE_FINANCE_TAB_UPLOAD);
-
   const status = state.schedule.financeStatus && typeof state.schedule.financeStatus === 'object'
     ? state.schedule.financeStatus
     : null;
@@ -15795,6 +15897,7 @@ function renderScheduleFinanceSubmissionStatus() {
   const statePill = $('#scheduleFinanceStatePill');
   const statusText = $('#scheduleFinanceStatusText');
   const statusGrid = $('#scheduleFinanceStatusGrid');
+  const currentStage = $('#scheduleFinanceCurrentStage');
   const blockedList = $('#scheduleFinanceBlockedReasons');
   const reviewRevision = $('#scheduleFinanceReviewRevision');
   const reviewMeta = $('#scheduleFinanceReviewMeta');
@@ -15805,6 +15908,7 @@ function renderScheduleFinanceSubmissionStatus() {
   const reviewBtn = $('#scheduleFinanceReviewDownloadBtn');
   const finalDownloadBtn = $('#scheduleFinanceFinalDownloadBtn');
   const previewBtn = $('#scheduleFinancePreviewBtn');
+  const applyBtn = $('#scheduleFinanceApplyBtn');
   const overallScope = selectedSite === 'ALL' || Boolean(status?.overall_scope);
   const refreshedAt = formatOpsDateTime(state.reports?.lastSyncedAt || '');
 
@@ -15813,8 +15917,9 @@ function renderScheduleFinanceSubmissionStatus() {
   }
 
   if (!selectedSite) {
-    setReportsSummaryPill(statePill, '', 'status-pill status-pill-neutral');
-    setReportsSummaryMessage(statusText, '');
+    setReportsSummaryPill(statePill, '지점 선택', 'status-pill status-pill-neutral');
+    setReportsSummaryMessage(statusText, '먼저 대상 지점을 선택하면 지금 필요한 제출 단계와 막힌 이유를 안내합니다.');
+    if (currentStage) currentStage.textContent = '지점 선택 대기';
     if (reviewRevision) reviewRevision.textContent = '대기';
     if (reviewMeta) reviewMeta.textContent = '지점 선택 후 다운로드';
     if (finalUploadState) finalUploadState.textContent = '대기';
@@ -15824,6 +15929,22 @@ function renderScheduleFinanceSubmissionStatus() {
     if (reviewBtn) reviewBtn.disabled = true;
     if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
+    if (applyBtn) applyBtn.disabled = true;
+    setReportsWizardStep('#scheduleFinanceStepReview', '#scheduleFinanceReviewStepPill', {
+      state: 'active',
+      text: '지점 선택',
+      hint: '먼저 지점을 선택하면 1차 확인본 다운로드가 열립니다.',
+    });
+    setReportsWizardStep('#scheduleFinanceStepUpload', '#scheduleFinanceUploadStepPill', {
+      state: 'idle',
+      text: '대기',
+      hint: '1차 확인본을 받은 뒤 Supervisor 계정으로 최종 업로드를 진행합니다.',
+    });
+    setReportsWizardStep('#scheduleFinanceStepFinal', '#scheduleFinanceFinalStepPill', {
+      state: 'idle',
+      text: '대기',
+      hint: '최종 업로드 반영 후 최종본 다운로드가 열립니다.',
+    });
     if (blockedList) {
       blockedList.innerHTML = '';
       blockedList.classList.add('hidden');
@@ -15835,9 +15956,26 @@ function renderScheduleFinanceSubmissionStatus() {
   if (!status) {
     setReportsSummaryPill(statePill, '조회 중', 'status-pill status-pill-neutral');
     setReportsSummaryMessage(statusText, 'Finance 제출 상태를 조회하는 중입니다.');
+    if (currentStage) currentStage.textContent = '상태 조회 중';
     if (reviewBtn) reviewBtn.disabled = true;
     if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
+    if (applyBtn) applyBtn.disabled = true;
+    setReportsWizardStep('#scheduleFinanceStepReview', '#scheduleFinanceReviewStepPill', {
+      state: 'active',
+      text: '조회 중',
+      hint: '선택한 지점의 1차 확인본 상태를 불러오고 있습니다.',
+    });
+    setReportsWizardStep('#scheduleFinanceStepUpload', '#scheduleFinanceUploadStepPill', {
+      state: 'idle',
+      text: '대기',
+      hint: '상태 조회 후 최종 업로드 가능 여부를 판단합니다.',
+    });
+    setReportsWizardStep('#scheduleFinanceStepFinal', '#scheduleFinanceFinalStepPill', {
+      state: 'idle',
+      text: '대기',
+      hint: '상태 조회 후 최종본 다운로드 가능 여부를 안내합니다.',
+    });
     renderScheduleFinanceProgress();
     return;
   }
@@ -15855,6 +15993,11 @@ function renderScheduleFinanceSubmissionStatus() {
         ? '전체 선택은 1차 확인본만 지원합니다.'
         : '최종 업로드와 최종본 다운로드는 지점별로 진행합니다.',
     );
+    if (currentStage) {
+      currentStage.textContent = canDownloadOverallReview
+        ? '1단계 · 전체 지점 1차 확인본 다운로드'
+        : '전체 지점 안내';
+    }
     if (reviewRevision) reviewRevision.textContent = canDownloadOverallReview ? '다운로드 가능' : '대기';
     if (reviewMeta) reviewMeta.textContent = canDownloadOverallReview
       ? '전체 지점을 한 파일로 생성합니다.'
@@ -15866,6 +16009,24 @@ function renderScheduleFinanceSubmissionStatus() {
     if (reviewBtn) reviewBtn.disabled = !canDownloadOverallReview;
     if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
+    if (applyBtn) applyBtn.disabled = true;
+    setReportsWizardStep('#scheduleFinanceStepReview', '#scheduleFinanceReviewStepPill', {
+      state: canDownloadOverallReview ? 'active' : 'blocked',
+      text: canDownloadOverallReview ? '다운로드 가능' : '권한 필요',
+      hint: canDownloadOverallReview
+        ? '전체 지점 기준 1차 확인본을 한 번에 내려받을 수 있습니다.'
+        : '1차 확인본 다운로드 권한이 필요합니다.',
+    });
+    setReportsWizardStep('#scheduleFinanceStepUpload', '#scheduleFinanceUploadStepPill', {
+      state: 'blocked',
+      text: '단일 지점 필요',
+      hint: '최종 업로드는 지점을 하나만 선택했을 때 진행할 수 있습니다.',
+    });
+    setReportsWizardStep('#scheduleFinanceStepFinal', '#scheduleFinanceFinalStepPill', {
+      state: 'blocked',
+      text: '단일 지점 필요',
+      hint: '2차 최종본 다운로드도 단일 지점에서만 가능합니다.',
+    });
     if (blockedList) {
       blockedList.innerHTML = '';
       blockedList.classList.add('hidden');
@@ -15886,6 +16047,13 @@ function renderScheduleFinanceSubmissionStatus() {
       refreshedAt ? `마지막 갱신 ${refreshedAt}` : '',
     ].filter(Boolean).join(' · '),
   );
+  if (currentStage) {
+    currentStage.textContent = !status.review_download_revision
+      ? '1단계 · 1차 확인본 다운로드'
+      : (!status.final_uploaded_at || status.final_upload_stale
+        ? '2단계 · Supervisor 최종 업로드'
+        : (finalEnabled ? '3단계 · 2차 최종본 다운로드' : '최종본 잠금'));
+  }
   if (reviewRevision) {
     reviewRevision.textContent = status.review_download_revision
       ? '준비됨'
@@ -15943,6 +16111,43 @@ function renderScheduleFinanceSubmissionStatus() {
   if (reviewBtn) reviewBtn.disabled = !canDownloadScheduleFinanceReview();
   if (finalDownloadBtn) finalDownloadBtn.disabled = !canDownloadScheduleFinanceFinal() || !finalEnabled;
   if (previewBtn) previewBtn.disabled = !canPreviewUpload;
+  setReportsWizardStep('#scheduleFinanceStepReview', '#scheduleFinanceReviewStepPill', {
+    state: status.review_download_revision ? 'complete' : (canDownloadScheduleFinanceReview() ? 'active' : 'blocked'),
+    text: status.review_download_revision ? '준비 완료' : (canDownloadScheduleFinanceReview() ? '다운로드 가능' : '권한 필요'),
+    hint: status.review_downloaded_at
+      ? `최근 다운로드 ${formatOpsDateTime(status.review_downloaded_at)}`
+      : (canDownloadScheduleFinanceReview()
+        ? '먼저 1차 확인본을 내려받아 수정 기준 파일을 준비하세요.'
+        : '1차 확인본 다운로드 권한이 필요합니다.'),
+  });
+  setReportsWizardStep('#scheduleFinanceStepUpload', '#scheduleFinanceUploadStepPill', {
+    state: status.final_uploaded_at && !status.final_upload_stale
+      ? 'complete'
+      : (canPreviewUpload ? 'active' : 'blocked'),
+    text: status.final_uploaded_at && !status.final_upload_stale
+      ? '반영 완료'
+      : (status.final_upload_stale ? '재업로드 필요' : (canPreviewUpload ? '진행 가능' : '잠금')),
+    hint: status.final_uploaded_at
+      ? `${formatOpsDateTime(status.final_uploaded_at)}${status.final_upload_stale ? ' · 최신 기준으로 다시 업로드해야 합니다.' : ' · 최종 업로드가 반영되었습니다.'}`
+      : (!status.review_download_revision
+        ? '1차 확인본을 먼저 내려받아야 최종 업로드가 열립니다.'
+        : (canUploadScheduleFinanceFinal()
+          ? '파일을 선택한 뒤 미리보기로 검토하고 반영하세요.'
+          : 'Supervisor 이상 중 업로드 권한이 있는 계정만 최종 업로드를 진행할 수 있습니다.')),
+  });
+  setReportsWizardStep('#scheduleFinanceStepFinal', '#scheduleFinanceFinalStepPill', {
+    state: finalEnabled
+      ? (canDownloadScheduleFinanceFinal() ? 'active' : 'blocked')
+      : 'blocked',
+    text: finalEnabled
+      ? (canDownloadScheduleFinanceFinal() ? '다운로드 가능' : '권한 필요')
+      : '잠금',
+    hint: status.final_upload_stale
+      ? '최신 기준으로 다시 업로드해야 최종본 다운로드가 열립니다.'
+      : (finalEnabled
+        ? '반영된 최종본을 내려받아 제출용 파일로 사용합니다.'
+        : '최종 업로드 반영이 끝나야 다운로드가 열립니다.'),
+  });
   renderScheduleFinanceProgress();
 }
 
@@ -48920,6 +49125,15 @@ function canViewScheduleFinanceSubmission() {
     || role === 'vice_supervisor';
 }
 
+function canViewReportsWizardRole() {
+  if (getScheduleDataProvider().mode !== 'real') return false;
+  const role = normalizeRoleValue(state.user?.role || '');
+  return role === 'developer'
+    || role === 'hq_admin'
+    || role === 'supervisor'
+    || role === 'vice_supervisor';
+}
+
 function canDownloadScheduleFinanceReview() {
   if (getScheduleDataProvider().mode !== 'real') return false;
   const role = normalizeRoleValue(state.user?.role || '');
@@ -48943,13 +49157,15 @@ function canViewScheduleReportsWorkspace() {
 }
 
 function canViewReportsFinanceTab() {
-  return canViewScheduleFinanceSubmission();
+  return canViewReportsWizardRole() && canViewScheduleFinanceSubmission();
 }
 
 function canViewReportsSupportTab() {
-  return canUseScheduleSupportRoundtripSource()
+  return canViewReportsWizardRole() && (
+    canUseScheduleSupportRoundtripSource()
     || canUseScheduleSupportRoundtripHq()
-    || canUseScheduleSupportRoundtripFinalDownload();
+    || canUseScheduleSupportRoundtripFinalDownload()
+  );
 }
 
 function canViewReportsPackTab() {

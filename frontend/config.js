@@ -1,5 +1,5 @@
 window.ENV_API_BASE = window.ENV_API_BASE || 'https://rg-arls-backend.azurewebsites.net';
-window.ENV_BUILD_ID = window.ENV_BUILD_ID || '20260326-notice-compose-body-stream-embed-flow-03';
+window.ENV_BUILD_ID = window.ENV_BUILD_ID || '20260326-reports-wizard-redesign-01';
 window.ENV_GOOGLE_MAPS_API_KEY = window.ENV_GOOGLE_MAPS_API_KEY || '';
 
 if (typeof window.__RG_ARLS_HANDLE_TAB_CLICK__ !== 'function') {
