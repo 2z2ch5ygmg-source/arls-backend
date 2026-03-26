@@ -25442,6 +25442,19 @@ body.notices-compose-dragging .notices-inline-drag-handle {
   cursor: pointer;
 }
 
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 18px;
+  right: 18px;
+  height: 3px;
+  border-radius: 999px;
+  background: transparent;
+  opacity: 0;
+  transition: opacity 160ms ease, background-color 160ms ease;
+}
+
 #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item + .attendance-v2-summary-item {
   border-left: 1px solid rgba(226, 232, 240, 0.88);
 }
@@ -25475,7 +25488,25 @@ body.notices-compose-dragging .notices-inline-drag-handle {
 }
 
 #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-active {
-  box-shadow: inset 0 0 0 2px rgba(249, 115, 22, 0.96);
+  box-shadow: none;
+  background-color: rgba(255, 247, 237, 0.92);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-active::before {
+  opacity: 1;
+  background: #f97316;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-active .attendance-v2-summary-label {
+  color: #c2410c;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-active .attendance-v2-summary-value {
+  color: #111827;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-active .attendance-v2-summary-meta {
+  color: #9a3412;
 }
 
 #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-label {
