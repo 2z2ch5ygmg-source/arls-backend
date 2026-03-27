@@ -47031,10 +47031,12 @@ function renderAttendanceToolbarVisibility() {
 function renderAttendanceManagerPanelVisibility() {
   const tab = getAttendanceManagerTab();
   const showWorkspace = tab === 'status' || tab === 'list';
-  const useV2ManagerLayout = typeof v2UseManagerLayout === 'function' ? v2UseManagerLayout() : false;
   const v2ManagerReady = typeof window === 'undefined'
     ? true
     : window.__RG_ARLS_ATTENDANCE_V2_MANAGER_READY__ === true;
+  const useV2ManagerLayout = v2ManagerReady
+    && canUseAttendanceManagerFilter()
+    && ['status', 'list', 'calendar'].includes(tab);
   if (canUseAttendanceManagerFilter() && !v2ManagerReady) {
     toggleVisibility('#attendanceManagerWorkspace', false);
     toggleVisibility('#attendanceStatusPanel', false);
