@@ -27285,8 +27285,7 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
   color: #6b7280;
 }
 
-#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope input,
-#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope select {
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope input select {
   min-height: 56px;
 }
 
@@ -27917,8 +27916,7 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-content-canvas > .reports-finance-canvas-step,
-#view-reports #scheduleFinanceSubmissionPanel .reports-finance-content-canvas > .reports-finance-canvas-step.reports-wizard-step,
-#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope {
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-content-canvas > .reports-finance-canvas-step.reports-wizard-step {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) !important;
   gap: 10px !important;
@@ -27952,16 +27950,14 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
   gap: 16px !important;
 }
 
-#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope .input-field > span,
-#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope .field-label {
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope .input-field > span .field-label {
   margin-bottom: 7px !important;
   font-size: 12px !important;
   line-height: 1.4 !important;
   color: #64748b !important;
 }
 
-#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope input,
-#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope select {
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope input select {
   min-height: 56px !important;
 }
 
@@ -28078,8 +28074,7 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-content-canvas > .reports-finance-canvas-step,
-#view-reports #scheduleFinanceSubmissionPanel .reports-finance-content-canvas > .reports-finance-canvas-step.reports-wizard-step,
-#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope {
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-content-canvas > .reports-finance-canvas-step.reports-wizard-step {
   gap: 28px !important;
 }
 
@@ -28176,8 +28171,7 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
   gap: 10px !important;
 }
 
-#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope .input-field > span,
-#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope .field-label {
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope .input-field > span .field-label {
   margin-bottom: 0 !important;
   font-size: 12px !important;
   line-height: 1.4 !important;
@@ -28185,8 +28179,7 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
   color: #64748b !important;
 }
 
-#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope input,
-#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope select {
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceStepScope input select {
   min-height: 58px !important;
 }
 
