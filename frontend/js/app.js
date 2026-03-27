@@ -15998,6 +15998,11 @@ function renderScheduleFinanceSubmissionStatus() {
   const finalUploadState = $('#scheduleFinanceFinalUploadState');
   const finalDownloadState = $('#scheduleFinanceFinalDownloadState');
   const currentCount = $('#scheduleFinanceCurrentCount');
+  const overviewTitle = $('#scheduleFinanceOverviewTitle');
+  const overviewStagePill = $('#scheduleFinanceOverviewStagePill');
+  const overviewScope = $('#scheduleFinanceOverviewScope');
+  const overviewStage = $('#scheduleFinanceOverviewStage');
+  const overviewNext = $('#scheduleFinanceOverviewNext');
   const backBtn = $('#scheduleFinanceStepBackBtn');
   const nextBtn = $('#scheduleFinanceStepNextBtn');
   const reviewBtn = $('#scheduleFinanceReviewDownloadBtn');
@@ -16006,6 +16011,39 @@ function renderScheduleFinanceSubmissionStatus() {
   const applyBtn = $('#scheduleFinanceApplyBtn');
   const order = ['scope', 'review', 'upload', 'final'];
   const financeStepStates = {};
+  const monthTitle = formatScheduleMonthTitle(getScheduleMonthValue());
+  const selectedSiteLabel = (() => {
+    const siteSelect = $('#scheduleReportsSite');
+    if (siteSelect instanceof HTMLSelectElement && siteSelect.selectedOptions?.length) {
+      return String(siteSelect.selectedOptions[0]?.textContent || '').trim();
+    }
+    return '';
+  })();
+
+  const setFinanceOverview = ({
+    scope = '',
+    stage = '',
+    next = '',
+    pill = '',
+    pillClass = 'status-pill status-pill-neutral',
+  } = {}) => {
+    if (overviewTitle instanceof HTMLElement) {
+      overviewTitle.textContent = `${monthTitle} 제출 현황`;
+    }
+    if (overviewScope instanceof HTMLElement) {
+      overviewScope.textContent = scope || `${monthTitle} · 지점 선택 전`;
+    }
+    if (overviewStage instanceof HTMLElement) {
+      overviewStage.textContent = stage || '제출 현황 정리';
+    }
+    if (overviewNext instanceof HTMLElement) {
+      overviewNext.textContent = next || '대상 지점을 선택하세요';
+    }
+    if (overviewStagePill instanceof HTMLElement) {
+      overviewStagePill.className = pillClass;
+      overviewStagePill.textContent = pill || stage || '준비 중';
+    }
+  };
 
   const setFinanceStep = (name, config) => {
     financeStepStates[name] = config;
@@ -16089,13 +16127,23 @@ function renderScheduleFinanceSubmissionStatus() {
 
   const setStageTitle = (step) => {
     const titles = {
-      scope: '1단계 · 범위 선택',
+      scope: '1단계 · 제출 현황',
       review: '2단계 · 1차 확인본',
       upload: '3단계 · 최종 업로드',
       final: '4단계 · 최종 다운로드',
     };
     if (currentStage) currentStage.textContent = titles[step] || 'Finance 제출';
   };
+
+  setFinanceOverview({
+    scope: selectedSite
+      ? `${monthTitle} · ${(selectedSite === 'ALL' ? (selectedSiteLabel || '전체 지점') : (selectedSiteLabel || selectedSite))}`
+      : `${monthTitle} · 지점 선택 전`,
+    stage: selectedSite ? '제출 상태 확인' : '제출 현황 정리',
+    next: selectedSite ? '이번 달 제출 상태를 불러오는 중입니다.' : '대상 지점을 선택하세요',
+    pill: selectedSite ? '조회 중' : '준비 중',
+    pillClass: 'status-pill status-pill-neutral',
+  });
 
   if (!selectedSite) {
     setReportsSummaryPill(statePill, '지점 선택', 'status-pill status-pill-neutral');
@@ -16113,6 +16161,13 @@ function renderScheduleFinanceSubmissionStatus() {
     setFinanceStep('review', { state: 'blocked', text: '잠금' });
     setFinanceStep('upload', { state: 'blocked', text: '잠금' });
     setFinanceStep('final', { state: 'blocked', text: '잠금' });
+    setFinanceOverview({
+      scope: `${monthTitle} · 지점 선택 전`,
+      stage: '제출 현황 정리',
+      next: '대상 지점을 선택하세요',
+      pill: '준비 중',
+      pillClass: 'status-pill status-pill-neutral',
+    });
     setBlockedReasons([]);
     applyFooterState(finalizeFinanceSelection('scope'), { scope: false, review: false, upload: false, final: false });
     renderScheduleFinanceProgress();
@@ -16135,8 +16190,15 @@ function renderScheduleFinanceSubmissionStatus() {
     setFinanceStep('review', { state: 'active', text: '조회 중' });
     setFinanceStep('upload', { state: 'blocked', text: '잠금' });
     setFinanceStep('final', { state: 'blocked', text: '잠금' });
+    setFinanceOverview({
+      scope: `${monthTitle} · ${selectedSiteLabel || selectedSite}`,
+      stage: '제출 상태 확인',
+      next: '이번 달 제출 상태를 불러오는 중입니다.',
+      pill: '조회 중',
+      pillClass: 'status-pill status-pill-neutral',
+    });
     setBlockedReasons([]);
-    applyFooterState(finalizeFinanceSelection('review'), { scope: true, review: false, upload: false, final: false });
+    applyFooterState(finalizeFinanceSelection('scope'), { scope: true, review: false, upload: false, final: false });
     renderScheduleFinanceProgress();
     return;
   }
@@ -16220,11 +16282,34 @@ function renderScheduleFinanceSubmissionStatus() {
   });
   setBlockedReasons(blockedReasons);
   const currentStep = finalizeFinanceSelection(
-    !status.review_download_revision
-      ? 'review'
-      : (!uploadApplied ? 'upload' : 'final')
+    'scope'
   );
   setStageTitle(currentStep);
+  setFinanceOverview({
+    scope: `${monthTitle} · ${overallScope ? '전체 지점' : (selectedSiteLabel || selectedSite)}`,
+    stage: (
+      !status.review_download_revision
+        ? '1차 확인본 준비'
+        : (!uploadApplied ? '최종 업로드 진행' : (finalEnabled ? '최종본 다운로드' : '업로드 확인'))
+    ),
+    next: (
+      !status.review_download_revision
+        ? '1차 확인본을 내려받으세요'
+        : (!uploadApplied
+          ? (status.final_upload_stale ? '1차 확인본을 다시 내려받으세요' : '미리보기 후 최종 업로드를 반영하세요')
+          : (finalEnabled ? '2차 최종본을 내려받으세요' : '최종 다운로드 가능 여부를 확인하세요'))
+    ),
+    pill: (
+      !status.review_download_revision
+        ? '준비 완료'
+        : (!uploadApplied ? '진행 중' : (finalEnabled ? '다운로드 가능' : '확인 필요'))
+    ),
+    pillClass: (
+      !status.review_download_revision
+        ? 'status-pill status-pill-success'
+        : (finalEnabled ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral')
+    ),
+  });
   applyFooterState(currentStep, {
     scope: true,
     review: Boolean(status.review_download_revision),

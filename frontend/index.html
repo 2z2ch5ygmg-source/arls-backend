@@ -3783,7 +3783,7 @@
                       <li id="reportsFinanceNavScope" class="reports-finance-step-rail-item" data-step="scope">
                         <span class="reports-panel-stepper-index" aria-hidden="true">1</span>
                         <span class="reports-panel-stepper-copy">
-                          <span class="reports-panel-stepper-label">범위 선택</span>
+                          <span class="reports-panel-stepper-label">제출 현황</span>
                         </span>
                       </li>
                       <li id="reportsFinanceNavReview" class="reports-finance-step-rail-item" data-step="review">
@@ -3818,8 +3818,31 @@
                     <ul id="scheduleFinanceBlockedReasons" class="list hidden reports-finance-blocked-list"></ul>
                     <div class="reports-finance-content-canvas">
                       <section id="scheduleFinanceStepScope" class="reports-wizard-step reports-finance-canvas-step" data-step-state="idle">
+                        <div class="reports-finance-overview-shell">
+                          <div class="reports-finance-step-head reports-finance-overview-head">
+                            <div class="reports-finance-overview-copy">
+                              <span class="reports-finance-overview-kicker">이번 달 제출 현황</span>
+                              <h4 id="scheduleFinanceOverviewTitle">이번 달 제출 현황</h4>
+                            </div>
+                            <span id="scheduleFinanceOverviewStagePill" class="status-pill status-pill-neutral">준비 중</span>
+                          </div>
+                          <div class="reports-finance-overview-strip">
+                            <div class="reports-finance-overview-item">
+                              <span>대상 범위</span>
+                              <strong id="scheduleFinanceOverviewScope">지점 선택 전</strong>
+                            </div>
+                            <div class="reports-finance-overview-item">
+                              <span>현재 단계</span>
+                              <strong id="scheduleFinanceOverviewStage">제출 현황 정리</strong>
+                            </div>
+                            <div class="reports-finance-overview-item">
+                              <span>다음 작업</span>
+                              <strong id="scheduleFinanceOverviewNext">대상 지점을 선택하세요</strong>
+                            </div>
+                          </div>
+                        </div>
                         <div class="reports-finance-step-head">
-                          <h4>범위 선택</h4>
+                          <h4>범위와 대상 선택</h4>
                         </div>
                         <div id="scheduleFinanceScopeContextMount"></div>
                       </section>
