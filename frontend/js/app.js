@@ -44436,6 +44436,112 @@ function getAttendanceManagerEditStorageKey() {
   return `${ATTENDANCE_MANAGER_EDIT_KEY}:${getAttendanceManagerStorageScope()}`;
 }
 
+function getAttendanceManagerSnapshotStorageKey() {
+  return `rg-arls-attendance-manager-snapshot:${getAttendanceManagerStorageScope()}`;
+}
+
+function resolveAttendanceManagerSnapshotQueryKey(view = state.attendanceView) {
+  const currentView = view && typeof view === 'object' ? view : {};
+  const tab = normalizeAttendanceManagerTab(currentView.managerTab || 'status');
+  if (tab === 'calendar') {
+    return `calendar:${normalizeMonthKey(currentView.calendarMonth || '') || toMonthKey(new Date())}`;
+  }
+  if (tab === 'list') {
+    const start = normalizeAttendanceDate(currentView.rangeStart || '') || normalizeAttendanceDate(currentView.date || '') || toLocalDateKey(new Date());
+    const end = normalizeAttendanceDate(currentView.rangeEnd || '') || start;
+    return `list:${start}:${end}`;
+  }
+  const dateKey = normalizeAttendanceDate(currentView.date || '') || toLocalDateKey(new Date());
+  return `status:${dateKey}`;
+}
+
+function serializeAttendanceManagerRowForStorage(row = null) {
+  if (!row || typeof row !== 'object') return null;
+  return {
+    key: row.key,
+    dateKey: row.dateKey,
+    dateLabel: row.dateLabel,
+    employeeCode: row.employeeCode,
+    employeeName: row.employeeName,
+    companyName: row.companyName,
+    siteCode: row.siteCode,
+    siteName: row.siteName,
+    scheduledLabel: row.scheduledLabel,
+    scheduledSortValue: row.scheduledSortValue,
+    statusCode: row.statusCode,
+    statusLabel: row.statusLabel,
+    statusMeta: row.statusMeta,
+    checkInLabel: row.checkInLabel,
+    checkOutLabel: row.checkOutLabel,
+    workHours: row.workHours,
+    breakMinutes: row.breakMinutes,
+    breakLabel: row.breakLabel,
+    lateMinutesLabel: row.lateMinutesLabel,
+    earlyLeaveMinutesLabel: row.earlyLeaveMinutesLabel,
+    overtimeLabel: row.overtimeLabel,
+    overtimeSortValue: row.overtimeSortValue,
+    overtimeSourceLabel: row.overtimeSourceLabel,
+    distanceLabel: row.distanceLabel,
+    correctionState: row.correctionState,
+    processingState: row.processingState,
+    reviewRank: row.reviewRank,
+    pendingCount: row.pendingCount,
+    checkInCount: row.checkInCount,
+    checkOutCount: row.checkOutCount,
+    hasLeave: row.hasLeave,
+    hasMissingIn: row.hasMissingIn,
+    hasMissingOut: row.hasMissingOut,
+    hasLate: row.hasLate,
+    hasEarlyLeave: row.hasEarlyLeave,
+    hasLocationIssue: row.hasLocationIssue,
+    hasAttendanceWithoutSchedule: row.hasAttendanceWithoutSchedule,
+    lateMinutes: row.lateMinutes,
+    earlyLeaveMinutes: row.earlyLeaveMinutes,
+    isEdited: row.isEdited,
+    editNote: row.editNote,
+    scheduleRow: row.scheduleRow ? {
+      start_time: row.scheduleRow.start_time,
+      end_time: row.scheduleRow.end_time,
+      site_code: row.scheduleRow.site_code,
+      site_name: row.scheduleRow.site_name,
+      employee_name: row.scheduleRow.employee_name,
+      full_name: row.scheduleRow.full_name,
+    } : null,
+  };
+}
+
+function loadAttendanceManagerSnapshot() {
+  try {
+    const raw = localStorage.getItem(getAttendanceManagerSnapshotStorageKey());
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const savedAt = Number(parsed.savedAt || 0);
+    if (!Number.isFinite(savedAt) || (Date.now() - savedAt) > 900000) return null;
+    if (String(parsed.queryKey || '') !== resolveAttendanceManagerSnapshotQueryKey()) return null;
+    const rows = Array.isArray(parsed.rows)
+      ? parsed.rows.map((row) => serializeAttendanceManagerRowForStorage(row)).filter(Boolean)
+      : [];
+    return rows.length ? rows : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistAttendanceManagerSnapshot() {
+  if (!state.attendanceView) return;
+  try {
+    const rows = Array.isArray(state.attendanceView.managerRows) ? state.attendanceView.managerRows : [];
+    if (!rows.length) return;
+    const payload = {
+      savedAt: Date.now(),
+      queryKey: resolveAttendanceManagerSnapshotQueryKey(),
+      rows: rows.map((row) => serializeAttendanceManagerRowForStorage(row)).filter(Boolean),
+    };
+    localStorage.setItem(getAttendanceManagerSnapshotStorageKey(), JSON.stringify(payload));
+  } catch {}
+}
+
 function normalizeAttendanceThresholdMinutes(value = '') {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 10;
@@ -44510,6 +44616,10 @@ function ensureAttendanceManagerPreferencesLoaded() {
   state.attendanceView.lateThresholdMinutes = normalizeAttendanceThresholdMinutes(prefs.lateThresholdMinutes ?? state.attendanceView.lateThresholdMinutes);
   state.attendanceView.earlyLeaveThresholdMinutes = normalizeAttendanceThresholdMinutes(prefs.earlyLeaveThresholdMinutes ?? state.attendanceView.earlyLeaveThresholdMinutes);
   state.attendanceView.managerRecordEdits = loadAttendanceManagerRecordEdits();
+  const snapshotRows = loadAttendanceManagerSnapshot();
+  if (snapshotRows && !state.attendanceView.managerRows.length) {
+    state.attendanceView.managerRows = snapshotRows;
+  }
   state.attendanceView.managerPrefsLoaded = true;
 }
 
@@ -44831,8 +44941,11 @@ function canUseAttendanceManagerFilter() {
     || state.user?.defaultRole
     || '',
   );
-  return Boolean(can('attendance'))
-    && ['developer', 'hq_admin', 'supervisor', 'vice_supervisor'].includes(normalizedRole);
+  const roleAllowed = ['developer', 'hq_admin', 'supervisor', 'vice_supervisor'].includes(normalizedRole);
+  if (!roleAllowed) return false;
+  if (can('attendance')) return true;
+  const route = normalizeRoutePath(state.currentRoute || '');
+  return route === ROUTE_ATTENDANCE;
 }
 
 function formatAttendanceTime(rawValue = '') {
