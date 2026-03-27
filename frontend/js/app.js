@@ -47660,6 +47660,7 @@ async function loadAttendanceManagerView({ force = false } = {}) {
   if (!state.attendanceView) {
     state.attendanceView = createInitialAttendanceViewState();
   }
+  const initialCachedManagerRows = getAttendanceManagerRowsForCurrentQuery();
   const loadSeq = Number(state.attendanceView.managerLoadSeq || 0) + 1;
   state.attendanceView.managerLoadSeq = loadSeq;
   state.attendanceView.managerLoading = true;
@@ -47672,7 +47673,7 @@ async function loadAttendanceManagerView({ force = false } = {}) {
     renderAttendanceLayoutMode();
     renderAttendanceFilterMeta();
     {
-      const cachedManagerRows = getAttendanceManagerRowsForCurrentQuery();
+      const cachedManagerRows = initialCachedManagerRows;
       const cachedScopedRows = getFilteredAttendanceManagerRows(cachedManagerRows, { applyStatus: false });
       const cachedFilteredRows = getFilteredAttendanceManagerRows(cachedManagerRows, { applyStatus: true });
       renderAttendanceManagerWorkspace({
@@ -47709,11 +47710,48 @@ async function loadAttendanceManagerView({ force = false } = {}) {
     if (tenantCode) leaveParams.set('tenant_code', tenantCode);
     const shouldLoadOvertime = activeTab !== 'calendar';
     const correctionRows = can('attendanceReview') ? getCorrectionRowsByStatuses(['pending']) : [];
+    const schedulesPromise = Promise.all(
+      months.map((month) => loadMonthlyScheduleRowsWithCache({ month, tenantCode, force })),
+    ).then((groups) => groups.flat());
+    const leavesPromise = apiRequest(`/leaves?${leaveParams.toString()}`);
+    const recordsPromise = fetchAttendanceRecordsByDateKeys(dateKeys, { force, concurrency: recordFetchConcurrency });
+
+    if (activeTab === 'calendar' && !initialCachedManagerRows.length) {
+      schedulesPromise
+        .then((scheduleRows) => {
+          if (isStaleLoad()) return;
+          const provisionalRows = buildAttendanceManagerRows({
+            records: [],
+            scheduleRows,
+            leaveRows: [],
+            overtimeRows: [],
+            pendingAttendanceRequests: [],
+            correctionRows: [],
+            recordEdits: state.attendanceView.managerRecordEdits || {},
+            rangeStart: start,
+            rangeEnd: end,
+          });
+          if (isStaleLoad()) return;
+          state.attendanceView.managerRows = provisionalRows;
+          state.attendanceView.managerRowsQueryKey = managerRowsQueryKey;
+          const provisionalScopedRows = getFilteredAttendanceManagerRows(provisionalRows, { applyStatus: false });
+          const provisionalFilteredRows = getFilteredAttendanceManagerRows(provisionalRows, { applyStatus: true });
+          renderAttendanceFilterMeta();
+          renderAttendanceManagerWorkspace({
+            rows: provisionalFilteredRows,
+            scopedRows: provisionalScopedRows,
+            loading: false,
+          });
+        })
+        .catch((error) => {
+          console.error('[RG ARLS] attendance calendar schedule seed failed', error);
+        });
+    }
 
     const [schedulesResult, leavesResult, recordsResult] = await Promise.allSettled([
-      Promise.all(months.map((month) => loadMonthlyScheduleRowsWithCache({ month, tenantCode, force }))).then((groups) => groups.flat()),
-      apiRequest(`/leaves?${leaveParams.toString()}`),
-      fetchAttendanceRecordsByDateKeys(dateKeys, { force, concurrency: recordFetchConcurrency }),
+      schedulesPromise,
+      leavesPromise,
+      recordsPromise,
     ]);
     if (isStaleLoad()) {
       return Array.isArray(state.attendanceView?.managerRows) ? state.attendanceView.managerRows : [];
