@@ -47032,6 +47032,17 @@ function renderAttendanceManagerPanelVisibility() {
   const tab = getAttendanceManagerTab();
   const showWorkspace = tab === 'status' || tab === 'list';
   const useV2ManagerLayout = typeof v2UseManagerLayout === 'function' ? v2UseManagerLayout() : false;
+  const v2ManagerReady = typeof window === 'undefined'
+    ? true
+    : window.__RG_ARLS_ATTENDANCE_V2_MANAGER_READY__ === true;
+  if (canUseAttendanceManagerFilter() && !v2ManagerReady) {
+    toggleVisibility('#attendanceManagerWorkspace', false);
+    toggleVisibility('#attendanceStatusPanel', false);
+    toggleVisibility('#attendanceCalendarPanel', false);
+    toggleVisibility('#attendanceListPanel', false);
+    toggleVisibility('#attendanceAdminDetailPanel', false);
+    return;
+  }
   const workspace = $('#attendanceManagerWorkspace');
   const calendarPanel = $('#attendanceCalendarPanel');
   if (workspace instanceof HTMLElement) {
@@ -65202,6 +65213,9 @@ document.addEventListener('compositionend', (event) => {
 });
 
 (function installAttendanceStatusPhase1V2() {
+  if (typeof window !== 'undefined') {
+    window.__RG_ARLS_ATTENDANCE_V2_MANAGER_READY__ = false;
+  }
   if (typeof renderAttendanceManagerWorkspace !== 'function') return;
 
   const legacyRenderAttendanceManagerWorkspace = renderAttendanceManagerWorkspace;
@@ -66224,4 +66238,14 @@ document.addEventListener('compositionend', (event) => {
       exportBtn.disabled = !rows.length;
     }
   };
+
+  if (typeof window !== 'undefined') {
+    window.__RG_ARLS_ATTENDANCE_V2_MANAGER_READY__ = true;
+    const hashRoute = typeof normalizeRoutePath === 'function'
+      ? normalizeRoutePath(String(window.location?.hash || '').replace(/^#/, ''))
+      : '';
+    if (hashRoute === ROUTE_ATTENDANCE && typeof renderAttendanceViewFromCache === 'function') {
+      renderAttendanceViewFromCache();
+    }
+  }
 })();
