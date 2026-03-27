@@ -4390,7 +4390,7 @@ button:disabled,
 .master-company-toolbar-card {
   gap: 0;
   padding: 14px 16px;
-  border-radius: 14px;
+  border-radius: 16px;
 }
 
 .master-company-toolbar {
@@ -4442,8 +4442,8 @@ button:disabled,
 
 .master-company-table-card {
   gap: 14px;
-  padding: 16px 16px 0;
-  border-radius: 14px;
+  padding: 18px 18px 0;
+  border-radius: 16px;
 }
 
 .master-company-table-head {
@@ -9107,17 +9107,17 @@ a:hover {
 
 .organization-summary-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 10px;
 }
 
 .organization-summary-item {
   display: grid;
-  gap: 4px;
-  min-height: 70px;
-  padding: 12px 14px;
+  gap: 6px;
+  min-height: 84px;
+  padding: 14px 16px;
   border: 1px solid var(--ui-border-subtle);
-  border-radius: var(--ui-radius-10);
+  border-radius: 14px;
   background: var(--state-inset-bg);
 }
 
@@ -9146,13 +9146,14 @@ a:hover {
 
 .organization-summary-value {
   color: var(--ui-text-primary);
-  font-size: var(--ui-type-title-sm-size);
-  line-height: var(--ui-type-title-sm-line);
+  font-size: clamp(20px, 1.55vw, 26px);
+  line-height: 1.1;
   font-weight: var(--ui-weight-bold);
 }
 
 .organization-summary-meta {
   color: var(--ui-text-muted);
+  margin-top: auto;
 }
 
 #view-employees .employee-top-action-bar,
@@ -9160,28 +9161,10 @@ a:hover {
   margin-top: 0;
 }
 
-#view-org .organization-summary-strip {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-#view-org .organization-summary-item {
-  display: grid;
-  gap: 8px;
-  min-height: 132px;
-  padding: 18px 18px 16px;
-  border-radius: 14px;
-  background: var(--ui-bg-surface);
-  box-shadow: var(--ui-shadow-1);
-}
-
-#view-org .organization-summary-value {
-  font-size: clamp(28px, 1.9vw, 34px);
-  line-height: 1;
-}
-
-#view-org .organization-summary-meta {
-  margin-top: auto;
+#view-employees .organization-summary-strip,
+#view-org .organization-summary-strip,
+#view-dev-console .organization-summary-strip {
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
 }
 
 #view-org .site-console-toolbar {
@@ -9191,6 +9174,14 @@ a:hover {
   align-items: end;
   padding: 14px 16px;
   border-radius: 14px;
+}
+
+#view-employees .employee-console-topbar,
+#view-org .site-console-toolbar,
+#view-dev-console .master-company-toolbar-card {
+  border: 1px solid var(--ui-border-subtle);
+  background: var(--ui-bg-surface);
+  box-shadow: none;
 }
 
 #view-org .site-toolbar-field {
@@ -9242,8 +9233,8 @@ a:hover {
 
 #view-org .site-directory-table-card {
   gap: 14px;
-  padding: 16px 16px 0;
-  border-radius: 14px;
+  padding: 18px 18px 0;
+  border-radius: 16px;
 }
 
 #view-org .site-directory-table-head {
@@ -9351,7 +9342,6 @@ a:hover {
   gap: 16px;
   padding: 16px 18px;
   border-radius: 14px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.98));
 }
 
 #view-employees .employee-console-topbar-main {
@@ -9437,8 +9427,8 @@ a:hover {
 
 #view-employees .employee-directory-table-card {
   gap: 14px;
-  padding: 16px 16px 0;
-  border-radius: 14px;
+  padding: 18px 18px 0;
+  border-radius: 16px;
 }
 
 #view-employees .employee-directory-table-head {
@@ -12671,6 +12661,7 @@ a:hover {
   #view-org > #orgPermissionHint,
   #view-org > #siteSection,
   #view-dev-console > .system-workspace-head,
+  #view-dev-console > .organization-workspace-tabs,
   #view-dev-console > .system-workspace-tabs,
   #view-dev-console > #masterConsoleSummary,
   #view-dev-console > #masterConsoleStatus,
@@ -12696,14 +12687,24 @@ a:hover {
     grid-column: 1 / -1;
   }
 
+  #shell.desktop-route-employees-list #view-employees {
+    grid-template-columns: minmax(0, 1.28fr) minmax(320px, 0.88fr);
+  }
+
   #view-dev-console > #masterSectionDashboard .master-company-workspace {
     grid-template-columns: minmax(0, 1.12fr) minmax(320px, 0.88fr);
     align-items: start;
   }
 
   #shell.desktop-route-employees-list #view-employees > #employeeDesktopTableCard {
+    grid-column: 1 / 2;
     width: 100%;
     min-width: 0;
+  }
+
+  #shell.desktop-route-employees-list #view-employees > #employeeDirectoryDetailPanel {
+    grid-column: 2 / 3;
+    align-self: start;
   }
 
   #shell.desktop-route-employees-list #view-employees > #employeeDesktopTableCard .employee-table-wrap {
@@ -13693,7 +13694,7 @@ textarea::placeholder {
 }
 
 .organization-workspace-tabs {
-  display: none !important;
+  display: flex;
 }
 
 #view-schedule .schedule-workspace-tabs,
@@ -13702,6 +13703,7 @@ textarea::placeholder {
 #view-ops > .workspace-tabbar-row,
 #view-profile > #profileWorkspaceTabs,
 #view-hr > #hrWorkspaceSegments,
+#view-dev-console > .organization-workspace-tabs,
 #view-dev-console > .system-workspace-tabs {
   margin-top: 0;
 }
@@ -16001,13 +16003,32 @@ textarea::placeholder {
 }
 
 @media (min-width: 1024px) {
-  #shell.desktop-route-employees-new #employeeFormCard,
   #shell.desktop-route-sites-new #siteEditorCard,
   #masterSectionTenantCreate > .module-card {
     width: 100%;
     max-width: none;
     margin-left: 0;
     margin-right: 0;
+  }
+
+  #shell.desktop-route-employees-new #view-employees > .organization-workspace-head,
+  #shell.desktop-route-employees-new #view-employees > .organization-workspace-tabs,
+  #shell.desktop-route-employees-new #view-employees > #employeesPermissionHint,
+  #shell.desktop-route-employees-new #view-employees > #employeeFormCard {
+    width: 100%;
+    max-width: 1320px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  #shell.desktop-route-sites-new #view-org > .organization-workspace-head,
+  #shell.desktop-route-sites-new #view-org > .organization-workspace-tabs,
+  #shell.desktop-route-sites-new #view-org > #orgPermissionHint,
+  #shell.desktop-route-sites-new #view-org > #siteSection {
+    width: 100%;
+    max-width: 1320px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   #employeeForm > .registration-workspace,
@@ -17300,6 +17321,70 @@ textarea::placeholder {
 }
 
 @media (min-width: 1024px) {
+  #shell.desktop-route-employees-list #employeeDirectoryDetailBackdrop {
+    display: none !important;
+  }
+
+  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel.employee-directory-drawer {
+    position: sticky;
+    top: 84px;
+    right: auto;
+    width: auto;
+    height: auto;
+    max-height: calc(100dvh - 108px);
+    border: 1px solid var(--ui-border-subtle);
+    border-radius: 16px;
+    background: var(--ui-bg-surface);
+    box-shadow: none;
+    z-index: auto;
+    overflow: hidden;
+  }
+
+  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-head,
+  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-body,
+  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-actions {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-head {
+    padding-top: 14px;
+    padding-bottom: 12px;
+  }
+
+  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-body {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+
+  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-actions {
+    padding-top: 12px;
+    padding-bottom: 14px;
+    min-height: auto;
+    background: var(--ui-bg-surface);
+  }
+
+  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-head-actions {
+    display: none;
+  }
+
+  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    font-size: 16px;
+  }
+
+  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-title h3 {
+    font-size: var(--ui-type-title-md-size);
+    line-height: var(--ui-type-title-md-line);
+  }
+
+  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-detail-tabs {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
   #attendanceManagerShell {
     gap: 16px;
   }
@@ -27562,9 +27647,148 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 }
 
 #view-reports #scheduleFinanceStepReview .reports-wizard-step-actions,
-#view-reports #scheduleFinanceStepUpload .reports-wizard-step-actions,
-#view-reports #scheduleFinanceStepFinal .reports-wizard-step-actions {
+#view-reports #scheduleFinanceStepUpload .reports-wizard-step-actions {
   margin-top: 0;
+}
+
+#view-reports #financeDownloadPanel {
+  display: grid;
+  gap: 16px;
+  padding: 24px 28px 28px;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.03);
+}
+
+#view-reports #financeDownloadPanel.hidden {
+  display: none !important;
+}
+
+#view-reports .reports-finance-download-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: start;
+}
+
+#view-reports .reports-finance-download-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+#view-reports .reports-finance-download-copy h3 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.15;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+#view-reports .reports-finance-download-copy .muted {
+  margin: 8px 0 0;
+}
+
+#view-reports .reports-finance-download-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+#view-reports .reports-finance-download-actions .btn {
+  min-width: 172px;
+}
+
+#view-reports .reports-finance-download-context {
+  min-width: 220px;
+}
+
+#view-reports #financeDownloadHeaderContextMount #reportsCenterContextCard,
+#view-reports #reportsCenterContextCard.reports-center-context-card-inline {
+  margin: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-reports #financeDownloadHeaderContextMount .reports-center-context-grid,
+#view-reports #reportsCenterContextCard.reports-center-context-card-inline .reports-center-context-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+#view-reports #financeDownloadHeaderContextMount .schedule-reports-context-row,
+#view-reports #reportsCenterContextCard.reports-center-context-card-inline .schedule-reports-context-row,
+#view-reports #financeDownloadHeaderContextMount #reportsCenterSummary,
+#view-reports #reportsCenterContextCard.reports-center-context-card-inline #reportsCenterSummary {
+  display: none !important;
+}
+
+#view-reports #financeDownloadHeaderContextMount .input-field,
+#view-reports #reportsCenterContextCard.reports-center-context-card-inline .input-field {
+  gap: 8px;
+  max-width: 240px;
+}
+
+#view-reports #financeDownloadHeaderContextMount .input-field > span,
+#view-reports #reportsCenterContextCard.reports-center-context-card-inline .input-field > span {
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 700;
+  color: #6b7280;
+}
+
+#view-reports .reports-finance-download-table-wrap {
+  max-height: 580px;
+  border-radius: 16px;
+}
+
+#view-reports .reports-finance-download-table {
+  min-width: 980px;
+}
+
+#view-reports .reports-finance-download-table thead th {
+  white-space: nowrap;
+}
+
+#view-reports .reports-finance-download-row {
+  cursor: pointer;
+}
+
+#view-reports .reports-finance-download-row td {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+#view-reports .reports-finance-download-row.is-selected td {
+  background: rgba(249, 115, 22, 0.08);
+}
+
+#view-reports .reports-finance-download-row.is-selected td:first-child {
+  box-shadow: inset 3px 0 0 rgba(249, 115, 22, 0.9);
+}
+
+#view-reports .reports-finance-download-site-name,
+#view-reports .reports-finance-download-file-name {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+#view-reports .reports-finance-download-site-meta {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+#view-reports .reports-finance-download-table td:nth-child(3),
+#view-reports .reports-finance-download-table td:nth-child(4),
+#view-reports .reports-finance-download-table td:nth-child(6) {
+  white-space: nowrap;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-wizard-footer {

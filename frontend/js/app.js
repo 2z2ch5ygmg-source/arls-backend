@@ -355,6 +355,7 @@ const ROUTE_HOME = '/home';
 const ROUTE_OPS = '/ops';
 const ROUTE_SUPPORT_STATUS = '/ops/support-workers';
 const ROUTE_REPORTS = '/reports';
+const ROUTE_REPORTS_FINANCE_DOWNLOAD = '/reports/finance-download';
 const ROUTE_REPORTS_APPLE = '/reports/apple';
 const ROUTE_ATTENDANCE = '/attendance';
 const ROUTE_SCHEDULE = '/schedule';
@@ -478,6 +479,7 @@ const LEGACY_ROUTE_ALIASES = {
   '/ops': ROUTE_OPS,
   '/ops/support-workers': ROUTE_SUPPORT_STATUS,
   '/reports': ROUTE_REPORTS,
+  '/reports/finance-download': ROUTE_REPORTS_FINANCE_DOWNLOAD,
   '/reports/apple': ROUTE_REPORTS_APPLE,
   '/approvals': ROUTE_APPROVALS,
   '/admin/sites': ROUTE_ADMIN_SITES,
@@ -505,6 +507,7 @@ const DEV_TENANT_SCOPED_ROUTES = new Set([
   ROUTE_HOME,
   ROUTE_OPS,
   ROUTE_REPORTS,
+  ROUTE_REPORTS_FINANCE_DOWNLOAD,
   ROUTE_REPORTS_APPLE,
   ROUTE_APPROVALS,
   ROUTE_ADMIN_SCHEDULE_TOOLS,
@@ -1219,7 +1222,11 @@ function createInitialReportsState() {
     tenantCode: '',
     loading: false,
     viewTab: 'finance',
-    financeStep: 'review',
+    financeStep: 'scope',
+    financeDownloadWorkspace: null,
+    financeDownloadLoading: false,
+    financeDownloadError: '',
+    financeDownloadSelectedSiteCode: '',
     supportStep: 'overview',
     month: toMonthKey(new Date()),
     appleStatus: null,
@@ -8590,6 +8597,7 @@ function applyAppleTenantScopedUiVisibility() {
 function getReportsAvailableTabs() {
   const tabs = [];
   if (canViewReportsFinanceTab()) tabs.push('finance');
+  if (canViewReportsFinanceDownloadTab()) tabs.push('finance-download');
   return tabs.length ? tabs : ['finance'];
 }
 
@@ -8639,7 +8647,12 @@ function setReportsOwnerMonthValue(monthValue, { syncInputs = true } = {}) {
 function renderReportsScopeHint() {
   const hint = $('#reportsScopeHint');
   if (!hint) return;
-  hint.textContent = 'Finance 제출을 1차 확인본 → 최종 업로드 → 최종본 다운로드 순서로 진행합니다.';
+  const currentTab = normalizeReportsViewTab(state.reports?.viewTab || getDefaultReportsViewTab());
+  if (currentTab === 'finance-download') {
+    hint.textContent = 'HQ 전용 Finance 다운로드 작업공간에서 tenant 전체 지점의 최종 업로드 원본 파일을 확인합니다.';
+    return;
+  }
+  hint.textContent = 'Finance 제출을 제출 현황 → 1차 확인본 → 최종 업로드 순서로 진행합니다.';
 }
 
 function setReportsSummaryMessage(target, text = '') {
@@ -8686,7 +8699,7 @@ function setReportsWizardStep(rootSelector, pillSelector, {
 
 function normalizeReportsFinanceStep(step = '') {
   const value = String(step || '').trim().toLowerCase();
-  return ['scope', 'review', 'upload', 'final'].includes(value) ? value : 'scope';
+  return ['scope', 'review', 'upload'].includes(value) ? value : 'scope';
 }
 
 function normalizeReportsSupportStep(step = '') {
@@ -8708,6 +8721,11 @@ function mountReportsCenterContext(targetSelector) {
 function setReportsFinanceStep(step = '') {
   if (!state.reports) state.reports = createInitialReportsState();
   state.reports.financeStep = normalizeReportsFinanceStep(step);
+}
+
+function setReportsFinanceDownloadSelectedSiteCode(siteCode = '') {
+  if (!state.reports) state.reports = createInitialReportsState();
+  state.reports.financeDownloadSelectedSiteCode = String(siteCode || '').trim().toUpperCase();
 }
 
 function setReportsSupportStep(step = '') {
@@ -8753,6 +8771,173 @@ function renderReportsContextSummary() {
   setReportsSummaryPill(pill, '', 'status-pill status-pill-neutral');
   setReportsSummaryMessage(text, '');
   summary.classList.add('hidden');
+}
+
+function getReportsFinanceDownloadSelectedRow() {
+  if (!state.reports) state.reports = createInitialReportsState();
+  const workspace = state.reports.financeDownloadWorkspace && typeof state.reports.financeDownloadWorkspace === 'object'
+    ? state.reports.financeDownloadWorkspace
+    : null;
+  const rows = Array.isArray(workspace?.sites) ? workspace.sites : [];
+  const selectedSiteCode = String(state.reports.financeDownloadSelectedSiteCode || '').trim().toUpperCase();
+  if (!selectedSiteCode) return null;
+  return rows.find((row) => String(row?.site_code || '').trim().toUpperCase() === selectedSiteCode) || null;
+}
+
+function getReportsFinanceDownloadStatusPillClass(status = '') {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'uploaded') return 'status-pill status-pill-success';
+  if (normalized === 'stale' || normalized === 'review_required') return 'status-pill status-pill-warning';
+  return 'status-pill status-pill-neutral';
+}
+
+function getReportsFinanceDownloadAvailabilityPillClass(downloadEnabled = false) {
+  return downloadEnabled ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral';
+}
+
+function renderReportsFinanceDownloadWorkspace() {
+  const panel = $('#financeDownloadPanel');
+  if (!(panel instanceof HTMLElement)) return;
+
+  const financeDownloadVisible = canViewReportsFinanceDownloadTab() && isReportsPanelActive('finance-download');
+  panel.classList.toggle('hidden', !financeDownloadVisible);
+  if (!financeDownloadVisible) return;
+
+  mountReportsCenterContext('#financeDownloadHeaderContextMount');
+
+  if (!state.reports) state.reports = createInitialReportsState();
+  const workspace = state.reports.financeDownloadWorkspace && typeof state.reports.financeDownloadWorkspace === 'object'
+    ? state.reports.financeDownloadWorkspace
+    : null;
+  const rows = Array.isArray(workspace?.sites) ? workspace.sites : [];
+  const tableBody = $('#financeDownloadTableBody');
+  const summary = $('#financeDownloadSummary');
+  const selectionHint = $('#financeDownloadSelectionHint');
+  const downloadBtn = $('#financeDownloadPrimaryBtn');
+  const loading = Boolean(state.reports.financeDownloadLoading);
+  const errorMessage = String(state.reports.financeDownloadError || '').trim();
+  const selectedSiteCode = String(state.reports.financeDownloadSelectedSiteCode || '').trim().toUpperCase();
+  const hasSelectedSite = rows.some((row) => String(row?.site_code || '').trim().toUpperCase() === selectedSiteCode);
+  if (selectedSiteCode && !hasSelectedSite) {
+    setReportsFinanceDownloadSelectedSiteCode('');
+  }
+  const selectedRow = getReportsFinanceDownloadSelectedRow();
+
+  if (summary instanceof HTMLElement) {
+    if (workspace) {
+      summary.textContent = `총 ${Number(workspace.total_site_count || rows.length || 0)}개 지점 · 업로드 완료 ${Number(workspace.uploaded_site_count || 0)}개 · 다운로드 가능 ${Number(workspace.downloadable_site_count || 0)}개`;
+    } else if (loading) {
+      summary.textContent = '지점별 업로드 현황을 불러오는 중입니다.';
+    } else if (errorMessage) {
+      summary.textContent = errorMessage;
+    } else {
+      summary.textContent = '선택한 월 기준으로 tenant 전체 지점의 최종 업로드 상태를 확인합니다.';
+    }
+  }
+
+  if (selectionHint instanceof HTMLElement) {
+    if (errorMessage) {
+      selectionHint.textContent = errorMessage;
+    } else if (loading) {
+      selectionHint.textContent = '지점별 업로드 현황을 불러오는 중입니다.';
+    } else if (selectedRow?.download_enabled) {
+      selectionHint.textContent = `${String(selectedRow.site_name || selectedRow.site_code || '').trim()} 원본 파일을 그대로 다운로드할 수 있습니다.`;
+    } else if (selectedRow) {
+      selectionHint.textContent = `${String(selectedRow.site_name || selectedRow.site_code || '').trim()}는 ${String(selectedRow.download_blocked_reason || '다운로드 불가').trim()} 상태입니다.`;
+    } else {
+      selectionHint.textContent = '업로드 완료된 지점을 선택하면 원본 파일 다운로드가 활성화됩니다.';
+    }
+  }
+
+  if (downloadBtn instanceof HTMLButtonElement) {
+    downloadBtn.disabled = loading || !selectedRow || !Boolean(selectedRow.download_enabled);
+  }
+
+  if (!(tableBody instanceof HTMLElement)) return;
+  tableBody.innerHTML = '';
+
+  if (loading && !rows.length) {
+    const tr = document.createElement('tr');
+    tr.className = 'admin-table-empty-row';
+    const td = document.createElement('td');
+    td.colSpan = 6;
+    td.textContent = '지점별 업로드 현황을 불러오는 중입니다.';
+    tr.appendChild(td);
+    tableBody.appendChild(tr);
+    return;
+  }
+
+  if (errorMessage && !rows.length) {
+    const tr = document.createElement('tr');
+    tr.className = 'admin-table-empty-row';
+    const td = document.createElement('td');
+    td.colSpan = 6;
+    td.textContent = errorMessage;
+    tr.appendChild(td);
+    tableBody.appendChild(tr);
+    return;
+  }
+
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    tr.className = 'admin-table-empty-row';
+    const td = document.createElement('td');
+    td.colSpan = 6;
+    td.textContent = '표시할 지점이 없습니다.';
+    tr.appendChild(td);
+    tableBody.appendChild(tr);
+    return;
+  }
+
+  rows.forEach((row) => {
+    const siteCode = String(row?.site_code || '').trim().toUpperCase();
+    const isSelected = Boolean(siteCode) && siteCode === String(state.reports.financeDownloadSelectedSiteCode || '').trim().toUpperCase();
+    const tr = document.createElement('tr');
+    tr.className = `reports-finance-download-row${isSelected ? ' is-selected' : ''}`;
+    tr.dataset.action = 'reports-finance-download-select';
+    tr.dataset.siteCode = siteCode;
+    tr.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+    tr.tabIndex = 0;
+
+    const siteCell = document.createElement('td');
+    const siteMain = document.createElement('div');
+    siteMain.className = 'reports-finance-download-site-name';
+    siteMain.textContent = String(row?.site_name || siteCode || '-').trim() || '-';
+    const siteSub = document.createElement('div');
+    siteSub.className = 'reports-finance-download-site-meta';
+    siteSub.textContent = siteCode || '-';
+    siteCell.append(siteMain, siteSub);
+
+    const statusCell = document.createElement('td');
+    const statusPill = document.createElement('span');
+    statusPill.className = getReportsFinanceDownloadStatusPillClass(row?.status);
+    statusPill.textContent = String(row?.status_label || '미업로드').trim() || '미업로드';
+    statusCell.appendChild(statusPill);
+
+    const uploadedAtCell = document.createElement('td');
+    uploadedAtCell.textContent = row?.final_uploaded_at ? formatOpsDateTime(row.final_uploaded_at) : '-';
+
+    const uploadedByCell = document.createElement('td');
+    uploadedByCell.textContent = String(row?.final_uploaded_by || '-').trim() || '-';
+
+    const fileNameCell = document.createElement('td');
+    const fileNameMain = document.createElement('div');
+    fileNameMain.className = 'reports-finance-download-file-name';
+    fileNameMain.textContent = String(row?.active_final_filename || '-').trim() || '-';
+    fileNameCell.appendChild(fileNameMain);
+
+    const downloadCell = document.createElement('td');
+    const downloadPill = document.createElement('span');
+    downloadPill.className = getReportsFinanceDownloadAvailabilityPillClass(Boolean(row?.download_enabled));
+    downloadPill.textContent = row?.download_enabled ? '다운로드 가능' : '다운로드 불가';
+    if (!row?.download_enabled && row?.download_blocked_reason) {
+      downloadPill.title = String(row.download_blocked_reason || '').trim();
+    }
+    downloadCell.appendChild(downloadPill);
+
+    tr.append(siteCell, statusCell, uploadedAtCell, uploadedByCell, fileNameCell, downloadCell);
+    tableBody.appendChild(tr);
+  });
 }
 
 function renderReportsSupportArtifactMeta(context = null) {
@@ -9039,6 +9224,10 @@ function renderReportsSupportHandoffPanel() {
 function renderReportsWorkspacePanels() {
   const tabs = $('#reportsWorkspaceTabs');
   const tabbarRow = tabs?.closest('.workspace-tabbar-row');
+  const contextCard = $('#reportsCenterContextCard');
+  const contextSiteRow = contextCard instanceof HTMLElement
+    ? contextCard.querySelector('.schedule-reports-context-row')
+    : null;
   let tab = normalizeReportsViewTab(state.reports?.viewTab || getDefaultReportsViewTab());
   if (tab === 'support') tab = 'finance';
   if (!state.reports) state.reports = createInitialReportsState();
@@ -9063,8 +9252,18 @@ function renderReportsWorkspacePanels() {
     panel.classList.toggle('hidden', panelType !== tab);
   });
 
+  if (contextCard instanceof HTMLElement) {
+    contextCard.classList.toggle('reports-center-context-card-inline', tab === 'finance-download');
+  }
+  if (contextSiteRow instanceof HTMLElement) {
+    const hideReportsSiteSelector = tab === 'finance-download' || Boolean(getPinnedScheduleFinanceSiteCode());
+    contextSiteRow.classList.toggle('hidden', hideReportsSiteSelector);
+    contextSiteRow.setAttribute('aria-hidden', hideReportsSiteSelector ? 'true' : 'false');
+  }
+
   renderReportsScopeHint();
   renderScheduleFinanceSubmissionStatus();
+  renderReportsFinanceDownloadWorkspace();
   renderReportsContextSummary();
 }
 
@@ -9153,6 +9352,7 @@ async function loadReportsViewPresenter() {
   updateOpsAppleActionVisibility();
   await Promise.allSettled([
     canViewReportsFinanceTab() ? loadScheduleFinanceSubmissionStatus() : Promise.resolve(null),
+    canViewReportsFinanceDownloadTab() ? loadReportsFinanceDownloadWorkspace() : Promise.resolve(null),
     canViewReportsSupportTab() ? loadScheduleSupportRoundtripStatus() : Promise.resolve(null),
   ]);
   state.reports.lastSyncedAt = new Date().toISOString();
@@ -9168,6 +9368,7 @@ async function refreshReportsCenterData({ force = false } = {}) {
   }
   await Promise.allSettled([
     canViewReportsFinanceTab() ? loadScheduleFinanceSubmissionStatus() : Promise.resolve(null),
+    canViewReportsFinanceDownloadTab() ? loadReportsFinanceDownloadWorkspace({ force }) : Promise.resolve(null),
     canViewReportsSupportTab() ? loadScheduleSupportRoundtripStatus() : Promise.resolve(null),
   ]);
   state.reports.lastSyncedAt = new Date().toISOString();
@@ -9603,8 +9804,13 @@ function isDrawerItemActiveRoute(targetRouteRaw = '', currentRouteRaw = '') {
   const currentRoute = normalizeRoutePath(parseRouteCandidate(currentRouteRaw).path);
   if (!targetRoute || !currentRoute) return false;
   if (targetRoute === currentRoute) return true;
+  if (targetRoute === ROUTE_ADMIN_EMPLOYEES && (currentRoute === ROUTE_ADMIN_EMPLOYEES_NEW || currentRoute === ROUTE_ADMIN_EMPLOYEES_IMPORT)) return true;
+  if (targetRoute === ROUTE_ADMIN_SITES && (currentRoute === ROUTE_ADMIN_SITES_NEW || currentRoute === ROUTE_ADMIN_SITES_EDIT)) return true;
   if (targetRoute === ROUTE_OPS && currentRoute === ROUTE_SUPPORT_STATUS) return true;
-  if (targetRoute === ROUTE_REPORTS && (currentRoute === ROUTE_REPORTS_APPLE || currentRoute === ROUTE_SCHEDULE_REPORTS)) return true;
+  if (
+    targetRoute === ROUTE_REPORTS
+    && (currentRoute === ROUTE_REPORTS_APPLE || currentRoute === ROUTE_SCHEDULE_REPORTS || currentRoute === ROUTE_REPORTS_FINANCE_DOWNLOAD)
+  ) return true;
   if (isScheduleRoutePath(targetRoute) && isScheduleRoutePath(currentRoute)) {
     const targetIsReports = targetRoute === ROUTE_SCHEDULE_REPORTS;
     const currentIsReports = currentRoute === ROUTE_SCHEDULE_REPORTS;
@@ -9662,7 +9868,12 @@ function isDrawerItemActive(item = null, currentRouteRaw = '') {
   const reportsTabMatch = String(item.reportsTabMatch || '').trim().toLowerCase();
   if (reportsTabMatch) {
     const currentRoute = normalizeRoutePath(parseRouteCandidate(currentRouteRaw).path);
-    if (currentRoute === ROUTE_REPORTS || currentRoute === ROUTE_REPORTS_APPLE || currentRoute === ROUTE_SCHEDULE_REPORTS) {
+    if (
+      currentRoute === ROUTE_REPORTS
+      || currentRoute === ROUTE_REPORTS_APPLE
+      || currentRoute === ROUTE_SCHEDULE_REPORTS
+      || currentRoute === ROUTE_REPORTS_FINANCE_DOWNLOAD
+    ) {
       return normalizeReportsViewTab(state.reports?.viewTab || getDefaultReportsViewTab()) === normalizeReportsViewTab(reportsTabMatch);
     }
   }
@@ -9746,6 +9957,7 @@ const DRAWER_MENU_BY_ROLE = {
       icon: 'clipboard-list',
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
+        { id: 'reports-finance-download', title: 'Finance 다운로드', action: 'drawer-open-route', route: ROUTE_REPORTS_FINANCE_DOWNLOAD, reportsTabMatch: 'finance-download' },
       ],
     },
     { type: 'section', title: '내 정보' },
@@ -9803,6 +10015,7 @@ const DRAWER_MENU_BY_ROLE = {
       icon: 'clipboard-list',
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
+        { id: 'reports-finance-download', title: 'Finance 다운로드', action: 'drawer-open-route', route: ROUTE_REPORTS_FINANCE_DOWNLOAD, reportsTabMatch: 'finance-download' },
       ],
     },
     { type: 'section', title: '조직' },
@@ -9872,6 +10085,7 @@ const DRAWER_MENU_BY_ROLE = {
       icon: 'clipboard-list',
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
+        { id: 'reports-finance-download', title: 'Finance 다운로드', action: 'drawer-open-route', route: ROUTE_REPORTS_FINANCE_DOWNLOAD, reportsTabMatch: 'finance-download' },
       ],
     },
     { type: 'section', title: '조직' },
@@ -14987,6 +15201,7 @@ function getScheduleSupportSelectedSiteCode() {
   const currentRoute = normalizeRoutePath(state.currentRoute || '');
   const reportsViewActive = state.currentView === 'reports'
     || currentRoute === ROUTE_REPORTS
+    || currentRoute === ROUTE_REPORTS_FINANCE_DOWNLOAD
     || currentRoute === ROUTE_REPORTS_APPLE
     || currentRoute === ROUTE_SCHEDULE_REPORTS;
   if (reportsViewActive) {
@@ -15990,7 +16205,6 @@ function renderScheduleFinanceSubmissionStatus() {
   const scopeState = $('#scheduleFinanceScopeState');
   const reviewRevision = $('#scheduleFinanceReviewRevision');
   const finalUploadState = $('#scheduleFinanceFinalUploadState');
-  const finalDownloadState = $('#scheduleFinanceFinalDownloadState');
   const currentCount = $('#scheduleFinanceCurrentCount');
   const overviewTitle = $('#scheduleFinanceOverviewTitle');
   const overviewStagePill = $('#scheduleFinanceOverviewStagePill');
@@ -16000,10 +16214,9 @@ function renderScheduleFinanceSubmissionStatus() {
   const backBtn = $('#scheduleFinanceStepBackBtn');
   const nextBtn = $('#scheduleFinanceStepNextBtn');
   const reviewBtn = $('#scheduleFinanceReviewDownloadBtn');
-  const finalDownloadBtn = $('#scheduleFinanceFinalDownloadBtn');
   const previewBtn = $('#scheduleFinancePreviewBtn');
   const applyBtn = $('#scheduleFinanceApplyBtn');
-  const order = ['scope', 'review', 'upload', 'final'];
+  const order = ['scope', 'review', 'upload'];
   const financeStepStates = {};
   const monthTitle = formatScheduleMonthTitle(getScheduleMonthValue());
   const selectedSiteLabel = (() => {
@@ -16045,13 +16258,11 @@ function renderScheduleFinanceSubmissionStatus() {
       scope: '#scheduleFinanceStepScope',
       review: '#scheduleFinanceStepReview',
       upload: '#scheduleFinanceStepUpload',
-      final: '#scheduleFinanceStepFinal',
     };
     const navMap = {
       scope: '#reportsFinanceNavScope',
       review: '#reportsFinanceNavReview',
       upload: '#reportsFinanceNavUpload',
-      final: '#reportsFinanceNavFinal',
     };
     const pillMap = {
       scope: '#scheduleFinanceScopeStepPill',
@@ -16079,12 +16290,12 @@ function renderScheduleFinanceSubmissionStatus() {
     );
     setReportsFinanceStep(currentStep);
     applyReportsWizardNavSelection(
-      { scope: '#reportsFinanceNavScope', review: '#reportsFinanceNavReview', upload: '#reportsFinanceNavUpload', final: '#reportsFinanceNavFinal' },
+      { scope: '#reportsFinanceNavScope', review: '#reportsFinanceNavReview', upload: '#reportsFinanceNavUpload' },
       currentStep,
       financeStepStates,
     );
     applyReportsWizardSectionSelection(
-      { scope: '#scheduleFinanceStepScope', review: '#scheduleFinanceStepReview', upload: '#scheduleFinanceStepUpload', final: '#scheduleFinanceStepFinal' },
+      { scope: '#scheduleFinanceStepScope', review: '#scheduleFinanceStepReview', upload: '#scheduleFinanceStepUpload' },
       currentStep,
       financeStepStates,
     );
@@ -16124,7 +16335,6 @@ function renderScheduleFinanceSubmissionStatus() {
       scope: '1단계 · 제출 현황',
       review: '2단계 · 1차 확인본',
       upload: '3단계 · 최종 업로드',
-      final: '4단계 · 최종 다운로드',
     };
     if (currentStage) currentStage.textContent = titles[step] || 'Finance 제출';
   };
@@ -16146,15 +16356,12 @@ function renderScheduleFinanceSubmissionStatus() {
     if (scopeState) scopeState.textContent = '입력 필요';
     if (reviewRevision) reviewRevision.textContent = '대기';
     if (finalUploadState) finalUploadState.textContent = '잠금';
-    if (finalDownloadState) finalDownloadState.textContent = '잠금';
     if (reviewBtn) reviewBtn.disabled = true;
-    if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
     if (applyBtn) applyBtn.disabled = true;
     setFinanceStep('scope', { state: 'active', text: '입력 필요' });
     setFinanceStep('review', { state: 'blocked', text: '잠금' });
     setFinanceStep('upload', { state: 'blocked', text: '잠금' });
-    setFinanceStep('final', { state: 'blocked', text: '잠금' });
     setFinanceOverview({
       scope: `${monthTitle} · 지점 선택 전`,
       stage: '제출 현황 정리',
@@ -16163,7 +16370,7 @@ function renderScheduleFinanceSubmissionStatus() {
       pillClass: 'status-pill status-pill-neutral',
     });
     setBlockedReasons([]);
-    applyFooterState(finalizeFinanceSelection('scope'), { scope: false, review: false, upload: false, final: false });
+    applyFooterState(finalizeFinanceSelection('scope'), { scope: false, review: false, upload: false });
     renderScheduleFinanceProgress();
     return;
   }
@@ -16175,15 +16382,12 @@ function renderScheduleFinanceSubmissionStatus() {
     if (scopeState) scopeState.textContent = '완료';
     if (reviewRevision) reviewRevision.textContent = '조회 중';
     if (finalUploadState) finalUploadState.textContent = '잠금';
-    if (finalDownloadState) finalDownloadState.textContent = '잠금';
     if (reviewBtn) reviewBtn.disabled = true;
-    if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
     if (applyBtn) applyBtn.disabled = true;
     setFinanceStep('scope', { state: 'complete', text: '완료' });
     setFinanceStep('review', { state: 'active', text: '조회 중' });
     setFinanceStep('upload', { state: 'blocked', text: '잠금' });
-    setFinanceStep('final', { state: 'blocked', text: '잠금' });
     setFinanceOverview({
       scope: `${monthTitle} · ${selectedSiteLabel || selectedSite}`,
       stage: '제출 상태 확인',
@@ -16192,7 +16396,7 @@ function renderScheduleFinanceSubmissionStatus() {
       pillClass: 'status-pill status-pill-neutral',
     });
     setBlockedReasons([]);
-    applyFooterState(finalizeFinanceSelection('scope'), { scope: true, review: false, upload: false, final: false });
+    applyFooterState(finalizeFinanceSelection('scope'), { scope: true, review: false, upload: false });
     renderScheduleFinanceProgress();
     return;
   }
@@ -16210,24 +16414,20 @@ function renderScheduleFinanceSubmissionStatus() {
     if (scopeState) scopeState.textContent = '완료';
     if (reviewRevision) reviewRevision.textContent = canDownloadOverallReview ? '다운로드 가능' : '대기';
     if (finalUploadState) finalUploadState.textContent = '단일 지점 필요';
-    if (finalDownloadState) finalDownloadState.textContent = '단일 지점 필요';
     if (reviewBtn) reviewBtn.disabled = !canDownloadOverallReview;
-    if (finalDownloadBtn) finalDownloadBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
     if (applyBtn) applyBtn.disabled = true;
     setFinanceStep('scope', { state: 'complete', text: '완료' });
     setFinanceStep('review', { state: canDownloadOverallReview ? 'active' : 'blocked', text: canDownloadOverallReview ? '다운로드 가능' : '잠금' });
     setFinanceStep('upload', { state: 'blocked', text: '단일 지점 필요' });
-    setFinanceStep('final', { state: 'blocked', text: '단일 지점 필요' });
     setBlockedReasons([]);
-    applyFooterState(finalizeFinanceSelection('review'), { scope: true, review: false, upload: false, final: false });
+    applyFooterState(finalizeFinanceSelection('review'), { scope: true, review: false, upload: false });
     renderScheduleFinanceProgress();
     return;
   }
 
   const phase = String(status.state || '').trim();
   const blockedReasons = Array.isArray(status.blocked_reasons) ? status.blocked_reasons.filter(Boolean) : [];
-  const finalEnabled = Boolean(status.final_download_enabled) && !Boolean(status.final_upload_stale);
   const canPreviewUpload = canUploadScheduleFinanceFinal()
     && Boolean(selectedSite)
     && Boolean(status.review_download_revision)
@@ -16253,12 +16453,8 @@ function renderScheduleFinanceSubmissionStatus() {
       finalUploadState.textContent = '잠금';
     }
   }
-  if (finalDownloadState) {
-    finalDownloadState.textContent = finalEnabled ? '다운로드 가능' : '잠금';
-  }
 
   if (reviewBtn) reviewBtn.disabled = !canDownloadScheduleFinanceReview();
-  if (finalDownloadBtn) finalDownloadBtn.disabled = !canDownloadScheduleFinanceFinal() || !finalEnabled;
   if (previewBtn) previewBtn.disabled = !canPreviewUpload;
   if (applyBtn) applyBtn.disabled = !state.schedule.financePreviewBatchId;
   setFinanceStep('scope', { state: 'complete', text: '완료' });
@@ -16270,10 +16466,6 @@ function renderScheduleFinanceSubmissionStatus() {
     state: uploadApplied ? 'complete' : (canPreviewUpload ? 'active' : 'blocked'),
     text: uploadApplied ? '반영 완료' : (status.final_upload_stale ? '재업로드 필요' : (canPreviewUpload ? '진행 가능' : '잠금')),
   });
-  setFinanceStep('final', {
-    state: finalEnabled ? (canDownloadScheduleFinanceFinal() ? 'active' : 'blocked') : 'blocked',
-    text: finalEnabled ? (canDownloadScheduleFinanceFinal() ? '다운로드 가능' : '권한 필요') : '잠금',
-  });
   setBlockedReasons(blockedReasons);
   const currentStep = finalizeFinanceSelection(
     'scope'
@@ -16284,31 +16476,30 @@ function renderScheduleFinanceSubmissionStatus() {
     stage: (
       !status.review_download_revision
         ? '1차 확인본 준비'
-        : (!uploadApplied ? '최종 업로드 진행' : (finalEnabled ? '최종본 다운로드' : '업로드 확인'))
+        : (!uploadApplied ? '최종 업로드 진행' : '최종 업로드 완료')
     ),
     next: (
       !status.review_download_revision
         ? '1차 확인본을 내려받으세요'
         : (!uploadApplied
           ? (status.final_upload_stale ? '1차 확인본을 다시 내려받으세요' : '미리보기 후 최종 업로드를 반영하세요')
-          : (finalEnabled ? '2차 최종본을 내려받으세요' : '최종 다운로드 가능 여부를 확인하세요'))
+          : 'Finance 다운로드 탭에서 원본 파일을 내려받으세요')
     ),
     pill: (
       !status.review_download_revision
         ? '준비 완료'
-        : (!uploadApplied ? '진행 중' : (finalEnabled ? '다운로드 가능' : '확인 필요'))
+        : (!uploadApplied ? '진행 중' : '업로드 완료')
     ),
     pillClass: (
       !status.review_download_revision
         ? 'status-pill status-pill-success'
-        : (finalEnabled ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral')
+        : (uploadApplied ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral')
     ),
   });
   applyFooterState(currentStep, {
     scope: true,
     review: Boolean(status.review_download_revision),
     upload: uploadApplied,
-    final: false,
   });
   renderScheduleFinanceProgress();
 }
@@ -16343,6 +16534,92 @@ async function loadScheduleFinanceSubmissionStatus() {
   state.schedule.financeStatus = status && typeof status === 'object' ? status : null;
   renderScheduleFinanceSubmissionStatus();
   return state.schedule.financeStatus;
+}
+
+async function loadReportsFinanceDownloadWorkspace({ force = false } = {}) {
+  if (!canViewReportsFinanceDownloadTab()) {
+    if (!state.reports) state.reports = createInitialReportsState();
+    state.reports.financeDownloadWorkspace = null;
+    state.reports.financeDownloadLoading = false;
+    state.reports.financeDownloadError = '';
+    setReportsFinanceDownloadSelectedSiteCode('');
+    renderReportsFinanceDownloadWorkspace();
+    return null;
+  }
+
+  if (!state.reports) state.reports = createInitialReportsState();
+  const month = setReportsMonthValue(getReportsMonthValue(), { syncInput: true });
+  const tenantCode = String(getScheduleTenantValue() || '').trim().toUpperCase();
+  const cached = state.reports.financeDownloadWorkspace && typeof state.reports.financeDownloadWorkspace === 'object'
+    ? state.reports.financeDownloadWorkspace
+    : null;
+  if (
+    !force
+    && cached
+    && String(cached.month || '').trim() === month
+    && String(cached.tenant_code || '').trim().toUpperCase() === tenantCode
+  ) {
+    renderReportsFinanceDownloadWorkspace();
+    return cached;
+  }
+
+  state.reports.financeDownloadLoading = true;
+  state.reports.financeDownloadError = '';
+  renderReportsFinanceDownloadWorkspace();
+  try {
+    const params = new URLSearchParams();
+    params.set('month', month);
+    params.set('tenant_code', tenantCode);
+    const payload = await apiRequest(`/schedules/finance-submission/download-workspace?${params.toString()}`);
+    state.reports.financeDownloadWorkspace = payload && typeof payload === 'object' ? payload : null;
+    return state.reports.financeDownloadWorkspace;
+  } catch (error) {
+    state.reports.financeDownloadWorkspace = null;
+    state.reports.financeDownloadError = normalizeActionError(error, 'Finance 다운로드 현황을 불러오지 못했습니다.');
+    throw error;
+  } finally {
+    state.reports.financeDownloadLoading = false;
+    renderReportsFinanceDownloadWorkspace();
+  }
+}
+
+async function onReportsFinanceDownload(progressController = null) {
+  if (!canViewReportsFinanceDownloadTab()) {
+    showToast('Finance 다운로드 권한이 없습니다.', 'error');
+    return;
+  }
+  const selectedRow = getReportsFinanceDownloadSelectedRow();
+  if (!selectedRow) {
+    showToast('다운로드할 지점을 먼저 선택해 주세요.', 'error');
+    return;
+  }
+  if (!selectedRow.download_enabled) {
+    showToast(String(selectedRow.download_blocked_reason || '다운로드 가능 상태가 아닙니다.').trim(), 'error', 2600);
+    return;
+  }
+  const month = normalizeMonthKey(state.reports?.financeDownloadWorkspace?.month || getReportsMonthValue()) || getScheduleMonthValue();
+  const siteCode = String(selectedRow.site_code || '').trim().toUpperCase();
+  const params = new URLSearchParams();
+  params.set('month', month);
+  params.set('site_code', siteCode);
+  params.set('tenant_code', getScheduleTenantValue());
+  const fallbackGeneratedOn = (() => {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      year: '2-digit',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const parts = Object.fromEntries(formatter.formatToParts(new Date()).map((part) => [part.type, part.value]));
+    return `${parts.year || ''}${parts.month || ''}${parts.day || ''}`;
+  })();
+  await downloadAuthorizedFile({
+    requestUrl: `${state.activeApiBase}/schedules/finance-submission/final-excel?${params.toString()}`,
+    fallbackName: String(selectedRow.active_final_filename || '').trim()
+      || `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 근무표_${siteCode}_2차최종_${fallbackGeneratedOn}.xlsx`,
+    successMessage: 'Finance 자료를 다운로드했습니다.',
+    progressController,
+  });
 }
 
 async function onScheduleFinanceReviewDownload(progressController = null) {
@@ -19022,6 +19299,7 @@ function normalizeReportsViewTab(value = '') {
   const tab = String(value || '').trim().toLowerCase();
   const available = getReportsAvailableTabs();
   if (tab === 'finance' && available.includes('finance')) return 'finance';
+  if (tab === 'finance-download' && available.includes('finance-download')) return 'finance-download';
   if (tab === 'support' && available.includes('support')) return 'support';
   return available[0] || 'finance';
 }
@@ -21963,9 +22241,23 @@ function setReportsViewTab(value = '', { syncRoute = false } = {}) {
   if (!state.reports) state.reports = createInitialReportsState();
   state.reports.viewTab = next;
   renderReportsWorkspacePanels();
+  if (next === 'finance-download' && canViewReportsFinanceDownloadTab()) {
+    runActionSafely(loadReportsFinanceDownloadWorkspace(), 'Finance 다운로드 현황을 불러오지 못했습니다.');
+  }
   if (!syncRoute) return;
   const currentRoute = normalizeRoutePath(state.currentRoute || '');
-  if (currentRoute !== ROUTE_REPORTS && currentRoute !== ROUTE_REPORTS_APPLE && currentRoute !== ROUTE_SCHEDULE_REPORTS) return;
+  if (
+    currentRoute !== ROUTE_REPORTS
+    && currentRoute !== ROUTE_REPORTS_APPLE
+    && currentRoute !== ROUTE_SCHEDULE_REPORTS
+    && currentRoute !== ROUTE_REPORTS_FINANCE_DOWNLOAD
+  ) return;
+  if (next === 'finance-download' && canViewReportsFinanceDownloadTab()) {
+    state.currentRoute = ROUTE_REPORTS_FINANCE_DOWNLOAD;
+    state.lastAllowedRoute = ROUTE_REPORTS_FINANCE_DOWNLOAD;
+    updateRouteHash(ROUTE_REPORTS_FINANCE_DOWNLOAD, { replace: true });
+    return;
+  }
   const params = new URLSearchParams();
   if (next !== getDefaultReportsViewTab()) {
     params.set('tab', next);
@@ -23880,7 +24172,7 @@ function resolveViewForRoute(routePath = '') {
   if (route === ROUTE_HR) return 'hr';
   if (route === ROUTE_SUPPORT_STATUS) return 'support-status';
   if (route === ROUTE_OPS) return 'ops';
-  if (route === ROUTE_REPORTS || route === ROUTE_REPORTS_APPLE) return 'reports';
+  if (route === ROUTE_REPORTS || route === ROUTE_REPORTS_APPLE || route === ROUTE_REPORTS_FINANCE_DOWNLOAD) return 'reports';
   if (route === ROUTE_ATTENDANCE) return 'attendance';
   if (isScheduleRoutePath(route)) return 'schedule';
   if (route === ROUTE_REQUESTS || route === ROUTE_APPROVALS || route === ROUTE_REQUESTS_CORRECTION) return 'requests';
@@ -23901,6 +24193,7 @@ function isKnownRoute(routePath = '') {
     ROUTE_OPS,
     ROUTE_SUPPORT_STATUS,
     ROUTE_REPORTS,
+    ROUTE_REPORTS_FINANCE_DOWNLOAD,
     ROUTE_REPORTS_APPLE,
     ROUTE_ATTENDANCE,
     ROUTE_SCHEDULE,
@@ -23948,6 +24241,7 @@ function isRouteAllowed(routePath, perms = getRolePermissions(), navRole = getNa
   if (route === ROUTE_OPS) return isManagerShellRole(navRole);
   if (route === ROUTE_SUPPORT_STATUS) return isManagerShellRole(navRole);
   if (route === ROUTE_REPORTS) return canViewReportsCenter();
+  if (route === ROUTE_REPORTS_FINANCE_DOWNLOAD) return canViewReportsFinanceDownloadTab();
   if (route === ROUTE_REPORTS_APPLE) return canViewReportsPackTab() && isAppleReportPackEnabled();
   if (route === ROUTE_ATTENDANCE) return Boolean(perms.attendance || perms.attendanceWrite || perms.attendanceReview);
   if (
@@ -24093,8 +24387,15 @@ function applyAttendanceRouteStateFromQuery(routePath = '', parsedParams = new U
 
 function applyReportsRouteStateFromQuery(routePath = '', parsedParams = new URLSearchParams()) {
   const route = normalizeRoutePath(routePath);
-  if (route !== ROUTE_REPORTS && route !== ROUTE_REPORTS_APPLE && route !== ROUTE_SCHEDULE_REPORTS) return;
-  const fallbackTab = route === ROUTE_SCHEDULE_REPORTS ? 'finance' : getDefaultReportsViewTab();
+  if (
+    route !== ROUTE_REPORTS
+    && route !== ROUTE_REPORTS_APPLE
+    && route !== ROUTE_SCHEDULE_REPORTS
+    && route !== ROUTE_REPORTS_FINANCE_DOWNLOAD
+  ) return;
+  const fallbackTab = route === ROUTE_REPORTS_FINANCE_DOWNLOAD
+    ? 'finance-download'
+    : (route === ROUTE_SCHEDULE_REPORTS ? 'finance' : getDefaultReportsViewTab());
   setReportsViewTab(parsedParams.get('tab') || fallbackTab);
 }
 
@@ -24154,6 +24455,11 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
   const fallbackAuthedRoute = state.user ? resolvePostLoginDefaultRoute() : ROUTE_LOGIN;
   const requestedRoute = normalizeRoutePath(parsed.path) || fallbackAuthedRoute;
   let route = isKnownRoute(requestedRoute) ? requestedRoute : fallbackAuthedRoute;
+  const requestedReportsTab = String(parsedParams.get('tab') || '').trim().toLowerCase();
+  if (route === ROUTE_REPORTS && requestedReportsTab === 'finance-download') {
+    parsedParams.delete('tab');
+    route = ROUTE_REPORTS_FINANCE_DOWNLOAD;
+  }
   if (route === ROUTE_REPORTS_APPLE) {
     if (!parsedParams.get('tab')) {
       parsedParams.set('tab', getDefaultReportsViewTab());
@@ -24166,6 +24472,9 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
       parsedParams.set('tab', 'finance');
     }
     route = ROUTE_REPORTS;
+    applyUiTheme(readStoredUiTheme());
+  }
+  if (route === ROUTE_REPORTS_FINANCE_DOWNLOAD) {
     applyUiTheme(readStoredUiTheme());
   }
   if (
@@ -24309,7 +24618,7 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
     scrollToSelector('#lockPolicyCard');
   }
 
-  if (route === ROUTE_REPORTS) {
+  if (route === ROUTE_REPORTS || route === ROUTE_REPORTS_FINANCE_DOWNLOAD) {
     scrollToSelector('#view-reports');
   }
 
@@ -39260,6 +39569,11 @@ function renderOrganizationSummaryStrip(selector = '', items = []) {
 function renderEmployeeDirectorySummaryStrip(filteredRows = []) {
   const target = $('#employeeDirectorySummaryStrip');
   if (!(target instanceof HTMLElement)) return;
+  if (normalizeRoutePath(state.currentRoute || '') !== ROUTE_ADMIN_EMPLOYEES) {
+    target.innerHTML = '';
+    target.classList.add('hidden');
+    return;
+  }
   const rows = Array.isArray(filteredRows) ? filteredRows : [];
   const totalRows = Array.isArray(state.employeeAdmin?.rows) ? state.employeeAdmin.rows : [];
   const activeCount = rows.filter((item) => getEmployeeEmploymentStatusMeta(item).key === 'active').length;
@@ -39269,9 +39583,6 @@ function renderEmployeeDirectorySummaryStrip(filteredRows = []) {
   const uniqueSiteCount = new Set(
     rows.map((item) => String(item?.site_code || '').trim().toUpperCase()).filter(Boolean),
   ).size;
-  const activeRate = rows.length ? Math.round((activeCount / rows.length) * 100) : 0;
-  const linkedRate = rows.length ? Math.round((linkedCount / rows.length) * 100) : 0;
-  const siteFilterCode = getEmployeeSiteFilterCode();
   const roleCounts = Array.from(
     rows.reduce((map, item) => {
       const label = getEmployeeRoleLabel(item);
@@ -39281,106 +39592,33 @@ function renderEmployeeDirectorySummaryStrip(filteredRows = []) {
   )
     .sort((left, right) => Number(right[1] || 0) - Number(left[1] || 0))
     .slice(0, 3);
-
-  const buildMetricCard = ({ title = '', value = '', meta = '', details = [], percent = null, tone = '' } = {}) => {
-    const card = document.createElement('article');
-    card.className = 'employee-summary-card';
-    if (tone) {
-      card.dataset.tone = tone;
-    }
-
-    const head = document.createElement('div');
-    head.className = 'employee-summary-card-head';
-    const titleEl = document.createElement('span');
-    titleEl.className = 'employee-summary-card-title';
-    titleEl.textContent = title;
-    head.appendChild(titleEl);
-    if (Number.isFinite(Number(percent))) {
-      const ring = document.createElement('div');
-      ring.className = 'employee-summary-ring';
-      ring.style.setProperty('--employee-summary-ring-progress', `${Math.max(0, Math.min(100, Number(percent)))}%`);
-      const ringValue = document.createElement('strong');
-      ringValue.textContent = `${Math.round(Number(percent))}%`;
-      ring.appendChild(ringValue);
-      head.appendChild(ring);
-    }
-    card.appendChild(head);
-
-    const valueEl = document.createElement('strong');
-    valueEl.className = 'employee-summary-card-value';
-    valueEl.textContent = value;
-    card.appendChild(valueEl);
-
-    if (meta) {
-      const metaEl = document.createElement('p');
-      metaEl.className = 'employee-summary-card-meta';
-      metaEl.textContent = meta;
-      card.appendChild(metaEl);
-    }
-
-    if (Array.isArray(details) && details.length) {
-      const list = document.createElement('div');
-      list.className = 'employee-summary-card-list';
-      details.forEach((detail) => {
-        const row = document.createElement('div');
-        row.className = 'employee-summary-card-list-row';
-        const labelEl = document.createElement('span');
-        labelEl.textContent = String(detail?.label || '').trim();
-        const valueDetailEl = document.createElement('strong');
-        valueDetailEl.textContent = String(detail?.value || '').trim();
-        row.append(labelEl, valueDetailEl);
-        list.appendChild(row);
-      });
-      card.appendChild(list);
-    }
-    return card;
-  };
-
-  target.innerHTML = '';
-  target.classList.remove('hidden');
-  const fragment = document.createDocumentFragment();
-  fragment.appendChild(buildMetricCard({
-    title: '전체 직원',
-    value: `${rows.length}명`,
-    meta: rows.length === totalRows.length
-      ? `운영 현장 ${uniqueSiteCount}곳`
-      : `전체 ${totalRows.length}명 중 현재 조건 ${rows.length}명`,
-    details: [
-      { label: '선택 현장', value: siteFilterCode || '전체' },
-      { label: '표시 범위', value: uniqueSiteCount ? `${uniqueSiteCount}곳` : '0곳' },
-    ],
-  }));
-  fragment.appendChild(buildMetricCard({
-    title: '재직 현황',
-    value: `${activeCount}명`,
-    meta: rows.length ? `현재 조건 기준 재직 비율 ${activeRate}%` : '표시할 직원이 없습니다.',
-    percent: activeRate,
-    tone: activeCount > 0 ? 'success' : '',
-    details: [
-      { label: '재직중', value: `${activeCount}명` },
-      { label: '비활성/퇴직', value: `${inactiveCount}명` },
-    ],
-  }));
-  fragment.appendChild(buildMetricCard({
-    title: '계정 연결',
-    value: `${linkedCount}명`,
-    meta: rows.length ? `SOC 계정 연결 비율 ${linkedRate}%` : '표시할 직원이 없습니다.',
-    percent: linkedRate,
-    tone: unlinkedCount > 0 ? 'warn' : 'success',
-    details: [
-      { label: '연결됨', value: `${linkedCount}명` },
-      { label: '미연결', value: `${unlinkedCount}명` },
-    ],
-  }));
-  fragment.appendChild(buildMetricCard({
-    title: '역할 구성',
-    value: roleCounts.length ? String(roleCounts[0][0] || '-').trim() : '직원 없음',
-    meta: roleCounts.length ? `가장 많은 역할 ${roleCounts[0][1]}명` : '역할 구성이 없습니다.',
-    details: roleCounts.length
-      ? roleCounts.map(([label, count]) => ({ label, value: `${count}명` }))
-      : [{ label: '표시 결과', value: '0명' }],
-  }));
-  target.appendChild(fragment);
+  const primaryRole = roleCounts[0] || null;
+  renderOrganizationSummaryStrip('#employeeDirectorySummaryStrip', [
+    {
+      label: '조회 직원',
+      value: `${rows.length}명`,
+      meta: rows.length === totalRows.length
+        ? `운영 현장 ${uniqueSiteCount}곳`
+        : `전체 ${totalRows.length}명 중 ${rows.length}명`,
+    },
+    {
+      label: '재직 중',
+      value: `${activeCount}명`,
+      meta: `비활성/퇴직 ${inactiveCount}명`,
+      tone: activeCount > 0 ? 'success' : '',
+    },
+    {
+      label: '계정 연결',
+      value: `${linkedCount}명`,
+      meta: `미연결 ${unlinkedCount}명`,
+      tone: unlinkedCount > 0 ? 'warn' : 'success',
+    },
+    {
+      label: '주요 역할',
+      value: primaryRole ? String(primaryRole[0] || '-').trim() : '직원 없음',
+      meta: primaryRole ? `${primaryRole[1]}명 · 상위 역할` : '표시할 역할 구성이 없습니다.',
+    },
+  ]);
 }
 
 function syncEmployeeDirectorySelection() {
@@ -39411,21 +39649,28 @@ function getEmployeeDirectoryDetailActions() {
   return target instanceof HTMLElement ? target : null;
 }
 
+function isEmployeeDirectoryInlinePanelRoute() {
+  return isDesktopViewport() && normalizeRoutePath(state.currentRoute || '') === ROUTE_ADMIN_EMPLOYEES;
+}
+
 function setEmployeeDirectoryDrawerOpen(open = false) {
   const backdrop = getEmployeeDirectoryDetailBackdrop();
   const panel = getEmployeeDirectoryDetailPanel();
+  const inlineMode = isEmployeeDirectoryInlinePanelRoute();
   const shouldOpen = Boolean(open);
   state.employeeAdmin.detailDrawerOpen = shouldOpen;
-  if (backdrop) backdrop.classList.toggle('hidden', !shouldOpen);
+  if (backdrop) backdrop.classList.toggle('hidden', inlineMode || !shouldOpen);
   if (panel) {
-    if (!shouldOpen) {
+    const panelVisible = inlineMode || shouldOpen;
+    panel.classList.toggle('is-inline-rail', inlineMode);
+    if (!panelVisible) {
       moveFocusOutsideHiddenContainer(panel, state.employeeAdmin?.detailTriggerEl || null);
       panel.setAttribute('inert', '');
     } else {
       panel.removeAttribute('inert');
     }
-    panel.classList.toggle('hidden', !shouldOpen);
-    panel.setAttribute('aria-hidden', shouldOpen ? 'false' : 'true');
+    panel.classList.toggle('hidden', !panelVisible);
+    panel.setAttribute('aria-hidden', panelVisible ? 'false' : 'true');
   }
 }
 
@@ -39435,6 +39680,9 @@ function closeEmployeeDirectoryDetail({ clearSelection = true } = {}) {
   }
   state.employeeAdmin.detailTab = 'overview';
   state.employeeAdmin.detailError = '';
+  if (clearSelection) {
+    renderEmployeeDirectoryDrawer(null);
+  }
   setEmployeeDirectoryDrawerOpen(false);
   state.employeeAdmin.detailTriggerEl = null;
   syncEmployeeDirectorySelection();
@@ -40244,10 +40492,14 @@ function renderEmployeeDirectoryDetailActions(detail = null) {
 
 function renderEmployeeDirectoryDrawer(detail = null) {
   const body = getEmployeeDirectoryDetailBody();
+  const panel = getEmployeeDirectoryDetailPanel();
   if (!(body instanceof HTMLElement)) return;
 
   renderEmployeeDirectoryDetailTabs();
   renderEmployeeDirectoryHeader(detail);
+  if (panel) {
+    panel.classList.toggle('is-empty', !detail);
+  }
   if (!detail) {
     body.innerHTML = '';
     body.appendChild(buildEmployeeDirectoryCompactEmpty('직원을 선택해 주세요.', '목록에서 직원을 클릭하면 직원 개요와 최근 상태를 확인할 수 있습니다.'));
@@ -40342,7 +40594,7 @@ async function openEmployeeDirectoryDetail(employeeId = '', { force = false, tri
 
 function buildGuardRosterEmployeeCode(siteCode = '', managementNo = '') {
   const left = String(siteCode || '').trim();
-  const right = String(managementNo || '').trim();
+  const right = normalizeEmployeeManagementNo(managementNo);
   if (!left || !right) return '';
   return `${left}-${right}`;
 }
@@ -41846,6 +42098,15 @@ function normalizeResidentNoValue(value) {
 
 function normalizeEmployeePhoneCredential(value) {
   return String(value || '').replace(/\D+/g, '').trim();
+}
+
+function normalizeEmployeeManagementNo(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (/^\d+$/.test(text)) {
+    return text.replace(/^0+/, '') || '0';
+  }
+  return text;
 }
 
 function updateEmployeeAccountPreviewFromPhone() {
@@ -49672,10 +49933,12 @@ function canUploadScheduleFinanceFinal() {
   return role === 'developer' || role === 'supervisor';
 }
 
+function canViewReportsFinanceDownloadTab() {
+  return canUseScheduleSupportRoundtripHq();
+}
+
 function canDownloadScheduleFinanceFinal() {
-  if (getScheduleDataProvider().mode !== 'real') return false;
-  const role = normalizeRoleValue(state.user?.role || '');
-  return role === 'developer' || role === 'hq_admin' || role === 'supervisor';
+  return canViewReportsFinanceDownloadTab();
 }
 
 function canViewScheduleReportsWorkspace() {
@@ -49699,7 +49962,7 @@ function canViewReportsHistoryTab() {
 }
 
 function canViewReportsCenter() {
-  return canViewReportsFinanceTab();
+  return canViewReportsFinanceTab() || canViewReportsFinanceDownloadTab();
 }
 
 function canOpenScheduleUploadWorkspace() {
@@ -57035,7 +57298,7 @@ async function onEmployeeSubmit(event) {
       const text = String(value || '').trim();
       return text || null;
     };
-    const managementNoStr = String($('#empManagementNo')?.value || '').trim();
+    const managementNoStr = normalizeEmployeeManagementNo($('#empManagementNo')?.value || '');
     const birthDate = parseOptionalDate($('#empBirthDate')?.value);
     const genderValue = normalizeEmployeeGender($('#empGender')?.value || '');
     const residentNoValue = normalizeResidentNoValue($('#empResidentNo')?.value || '');
@@ -60204,7 +60467,7 @@ function bindUiEvents() {
     }
 
     if (action === 'reports-finance-step-back') {
-      const order = ['scope', 'review', 'upload', 'final'];
+      const order = ['scope', 'review', 'upload'];
       const current = normalizeReportsFinanceStep(state.reports?.financeStep || 'scope');
       const index = order.indexOf(current);
       if (index > 0) {
@@ -60215,7 +60478,7 @@ function bindUiEvents() {
     }
 
     if (action === 'reports-finance-step-next') {
-      const order = ['scope', 'review', 'upload', 'final'];
+      const order = ['scope', 'review', 'upload'];
       const current = normalizeReportsFinanceStep(state.reports?.financeStep || 'scope');
       const index = order.indexOf(current);
       if (index >= 0 && index < order.length - 1) {
@@ -60249,6 +60512,28 @@ function bindUiEvents() {
 
     if (action === 'reports-open-schedule-upload') {
       runActionSafely(navigateToRoute(ROUTE_SCHEDULE_UPLOAD), 'Excel 업로드 화면 이동에 실패했습니다.');
+      return;
+    }
+
+    if (action === 'reports-finance-download-select') {
+      const siteCode = String(actionEl.dataset.siteCode || '').trim().toUpperCase();
+      setReportsFinanceDownloadSelectedSiteCode(siteCode);
+      renderReportsFinanceDownloadWorkspace();
+      return;
+    }
+
+    if (action === 'reports-finance-download-run') {
+      runWithProgressTask((progressController) => onReportsFinanceDownload(progressController), {
+        busyLabel: 'Finance 자료 다운로드 중...',
+        fallbackMessage: 'Finance 자료 다운로드에 실패했습니다.',
+        progressOptions: {
+          title: 'Finance 원본 파일을 준비하고 있습니다',
+          detail: '최종 업로드 단계에서 저장된 원본 workbook을 브라우저로 전달하는 중입니다.',
+          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
+          tone: LONG_TASK_TONE_DOWNLOAD,
+          stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+        },
+      });
       return;
     }
 
@@ -63657,21 +63942,6 @@ function bindUiEvents() {
           revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           surfaceKey: LONG_TASK_SURFACE_SCHEDULE_FINANCE,
           stages: LONG_TASK_STAGES_FINANCE_APPLY,
-        },
-      });
-      return;
-    }
-
-    if (action === 'schedule-finance-final-download') {
-      runWithProgressTask((progressController) => onScheduleFinanceFinalDownload(progressController), {
-        busyLabel: '최종본 다운로드 중...',
-        fallbackMessage: 'Finance 최종본 다운로드에 실패했습니다.',
-        progressOptions: {
-          title: 'Finance 최종본을 준비하고 있습니다',
-          detail: '최종 업로드 기준 workbook을 생성해 브라우저에 전달하는 중입니다.',
-          revealMode: LONG_TASK_REVEAL_IMMEDIATE,
-          tone: LONG_TASK_TONE_DOWNLOAD,
-          stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
         },
       });
       return;
