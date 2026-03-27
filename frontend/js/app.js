@@ -1509,6 +1509,7 @@ const state = {
   siteEditorLookupLoading: false,
   siteDirectoryDetailId: '',
   siteDirectoryTriggerEl: null,
+  siteDirectoryDetailOpen: false,
   siteTenantFilterValue: '',
   siteSearchQuery: '',
   submitSiteBusy: false,
@@ -32325,6 +32326,7 @@ function applyDesktopRouteLayout(routePath = state.currentRoute) {
     'desktop-route-employees-new',
     'desktop-route-employees-import',
     'desktop-route-sites-list',
+    'desktop-route-sites-inline-rail',
     'desktop-route-sites-new',
   );
 
@@ -32345,6 +32347,9 @@ function applyDesktopRouteLayout(routePath = state.currentRoute) {
     shell.classList.add('desktop-route-sites-new');
   } else if (route === ROUTE_ADMIN_SITES) {
     shell.classList.add('desktop-route-sites-list');
+    if (isSiteDirectoryInlineRailViewport()) {
+      shell.classList.add('desktop-route-sites-inline-rail');
+    }
   }
 }
 
@@ -34546,6 +34551,11 @@ function getSiteDirectoryDetailPanel() {
   return target instanceof HTMLElement ? target : null;
 }
 
+function getSiteDirectoryDetailBackdrop() {
+  const target = $('#siteDirectoryDetailBackdrop');
+  return target instanceof HTMLElement ? target : null;
+}
+
 function getSiteDirectoryDetailBody() {
   const target = $('#siteDirectoryDetailBody');
   return target instanceof HTMLElement ? target : null;
@@ -34559,6 +34569,72 @@ function getSiteDirectoryDetailActions() {
 function getSiteDirectoryDetailBadges() {
   const target = $('#siteDirectoryDetailBadges');
   return target instanceof HTMLElement ? target : null;
+}
+
+let siteDirectoryDrawerHideTimer = 0;
+
+function isSiteDirectoryInlineRailViewport() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia('(min-width: 1760px)').matches;
+}
+
+function isSiteDirectoryInlinePanelRoute() {
+  return isDesktopViewport()
+    && normalizeRoutePath(state.currentRoute || '') === ROUTE_ADMIN_SITES
+    && isSiteDirectoryInlineRailViewport();
+}
+
+function setSiteDirectoryDetailOpen(open = false) {
+  const backdrop = getSiteDirectoryDetailBackdrop();
+  const panel = getSiteDirectoryDetailPanel();
+  const inlineMode = isSiteDirectoryInlinePanelRoute();
+  const shouldOpen = Boolean(open);
+  state.siteDirectoryDetailOpen = shouldOpen;
+  if (siteDirectoryDrawerHideTimer) {
+    window.clearTimeout(siteDirectoryDrawerHideTimer);
+    siteDirectoryDrawerHideTimer = 0;
+  }
+  if (backdrop) backdrop.classList.toggle('hidden', inlineMode || !shouldOpen);
+  if (!(panel instanceof HTMLElement)) return;
+  const panelVisible = inlineMode || shouldOpen;
+  panel.classList.toggle('is-inline-rail', inlineMode);
+  if (panelVisible) {
+    panel.classList.remove('hidden');
+    panel.removeAttribute('inert');
+    panel.setAttribute('aria-hidden', 'false');
+    if (inlineMode) {
+      panel.classList.add('is-open');
+    } else {
+      panel.classList.remove('is-open');
+      requestAnimationFrame(() => {
+        if (!isSiteDirectoryInlinePanelRoute() && state.siteDirectoryDetailOpen) {
+          panel.classList.add('is-open');
+        }
+      });
+    }
+  } else {
+    panel.classList.remove('is-open');
+    moveFocusOutsideHiddenContainer(panel, state.siteDirectoryTriggerEl || null);
+    panel.setAttribute('inert', '');
+    panel.setAttribute('aria-hidden', 'true');
+    siteDirectoryDrawerHideTimer = window.setTimeout(() => {
+      if (!isSiteDirectoryInlinePanelRoute() && !state.siteDirectoryDetailOpen) {
+        panel.classList.add('hidden');
+      }
+    }, 200);
+  }
+}
+
+function closeSiteDirectoryDetail({ clearSelection = true } = {}) {
+  if (clearSelection) {
+    state.siteDirectoryDetailId = '';
+  }
+  state.siteDirectoryDetailOpen = false;
+  setSiteDirectoryDetailOpen(false);
+  if (clearSelection) {
+    renderSiteCards(state.sites);
+  }
+  state.siteDirectoryTriggerEl = null;
 }
 
 function buildSiteDirectoryCompactEmpty(title = '지점을 선택해 주세요.', description = '') {
@@ -34897,7 +34973,9 @@ function openSiteDirectoryDetail(siteId = '', { triggerEl = null } = {}) {
   const normalizedId = String(siteId || '').trim();
   state.siteDirectoryTriggerEl = triggerEl instanceof HTMLElement ? triggerEl : null;
   state.siteDirectoryDetailId = normalizedId;
+  state.siteDirectoryDetailOpen = Boolean(normalizedId);
   renderSiteCards(state.sites);
+  setSiteDirectoryDetailOpen(Boolean(normalizedId));
 }
 
 async function navigateToEmployeesForSite(siteCode = '') {
@@ -34950,7 +35028,9 @@ function renderSiteCards(rows = []) {
       renderAdminTableEmptyState(tableBody, 6, emptyTitle);
     }
     state.siteDirectoryDetailId = '';
+    state.siteDirectoryDetailOpen = false;
     renderSiteDirectoryDetail(null);
+    setSiteDirectoryDetailOpen(false);
     renderSiteSortHeaders();
     markViewPerfStage('critical_ui_ready', {
       routePath: ROUTE_ADMIN_SITES,
@@ -35147,10 +35227,11 @@ function renderSiteCards(rows = []) {
   if (renderDesktop && tableBody) {
     const selectedId = String(state.siteDirectoryDetailId || '').trim();
     const selectedVisible = selectedId && sortedRows.some((item) => String(item?.id || '').trim() === selectedId);
-    if (sortedRows.length === 1 && !selectedId) {
+    if (sortedRows.length === 1 && !selectedId && isSiteDirectoryInlinePanelRoute()) {
       state.siteDirectoryDetailId = String(sortedRows[0]?.id || '').trim();
     } else if (selectedId && !selectedVisible) {
       state.siteDirectoryDetailId = '';
+      state.siteDirectoryDetailOpen = false;
     }
     const tableFragment = document.createDocumentFragment();
     sortedRows.forEach((item) => {
@@ -35158,11 +35239,14 @@ function renderSiteCards(rows = []) {
     });
     tableBody.appendChild(tableFragment);
     renderSiteDirectoryDetail(getSiteDirectorySiteById(state.siteDirectoryDetailId));
+    setSiteDirectoryDetailOpen(Boolean(String(state.siteDirectoryDetailId || '').trim()));
   }
 
   if (renderMobile && target) {
     state.siteDirectoryDetailId = '';
+    state.siteDirectoryDetailOpen = false;
     renderSiteDirectoryDetail(null);
+    setSiteDirectoryDetailOpen(false);
     if (sortedRows.length > 200) {
       renderChunkedNodes(target, sortedRows, buildSiteCardNode, { chunkSize: 50 });
     } else {
@@ -38580,6 +38664,8 @@ function applySiteRoutePresentation() {
   toggleVisibility('#siteCreateBtn', canWrite && !inSiteCreateRoute);
   if (inSiteCreateRoute) {
     state.siteDirectoryDetailId = '';
+    state.siteDirectoryDetailOpen = false;
+    setSiteDirectoryDetailOpen(false);
     renderSiteDirectoryDetail(null);
   }
 }
@@ -63273,6 +63359,11 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'site-directory-close') {
+      closeSiteDirectoryDetail();
+      return;
+    }
+
     if (action === 'site-editor-close') {
       closeSiteEditor();
       return;
@@ -65591,6 +65682,9 @@ function bindUiEvents() {
     applyDesktopRouteLayout(state.currentRoute);
     if (normalizeRoutePath(state.currentRoute || '') === ROUTE_ADMIN_EMPLOYEES) {
       setEmployeeDirectoryDrawerOpen(Boolean(state.employeeAdmin?.detailDrawerOpen));
+    }
+    if (normalizeRoutePath(state.currentRoute || '') === ROUTE_ADMIN_SITES) {
+      setSiteDirectoryDetailOpen(Boolean(state.siteDirectoryDetailOpen));
     }
     renderDesktopTopContext();
   }, { signal, passive: true });

@@ -5163,15 +5163,21 @@
                     <ul id="siteList" class="list"></ul>
                   </article>
                 </div>
-                <aside id="siteDirectoryDetailPanel" class="site-directory-detail-panel">
+                <div id="siteDirectoryDetailBackdrop" class="site-directory-detail-backdrop hidden" data-action="site-directory-close"></div>
+                <aside id="siteDirectoryDetailPanel" class="site-directory-detail-panel hidden" aria-hidden="true">
                   <div class="site-directory-detail-shell">
                     <div class="site-directory-detail-head">
-                      <span id="siteDirectoryDetailEyebrow" class="site-directory-detail-eyebrow">지점 선택</span>
-                      <div class="site-directory-detail-title-row">
-                        <h4 id="siteDirectoryDetailTitle">지점을 선택해 주세요</h4>
-                        <div id="siteDirectoryDetailBadges" class="site-directory-detail-badges"></div>
+                      <div class="site-directory-detail-head-main">
+                        <span id="siteDirectoryDetailEyebrow" class="site-directory-detail-eyebrow">지점 선택</span>
+                        <div class="site-directory-detail-title-row">
+                          <h4 id="siteDirectoryDetailTitle">지점을 선택해 주세요</h4>
+                          <div id="siteDirectoryDetailBadges" class="site-directory-detail-badges"></div>
+                        </div>
+                        <p id="siteDirectoryDetailSubtitle" class="muted">목록에서 지점을 선택하면 운영 기준과 수정 액션이 열립니다.</p>
                       </div>
-                      <p id="siteDirectoryDetailSubtitle" class="muted">목록에서 지점을 선택하면 운영 기준과 수정 액션이 열립니다.</p>
+                      <div class="site-directory-detail-head-actions">
+                        <button class="btn btn-icon" type="button" aria-label="닫기" data-action="site-directory-close">✕</button>
+                      </div>
                     </div>
                     <div id="siteDirectoryDetailBody" class="site-directory-detail-body"></div>
                     <div id="siteDirectoryDetailActions" class="site-directory-detail-actions hidden"></div>

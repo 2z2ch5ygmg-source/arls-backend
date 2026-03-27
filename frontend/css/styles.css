@@ -9540,24 +9540,65 @@ a:hover {
   min-width: 0;
 }
 
+#view-org .site-directory-detail-backdrop {
+  position: fixed;
+  inset: 44px 0 0 0;
+  background: rgba(15, 23, 42, 0.18);
+  z-index: 419;
+}
+
 #view-org .site-directory-detail-panel {
-  display: none;
+  position: fixed;
+  top: 44px;
+  right: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  width: min(540px, calc(100vw - 48px));
+  height: calc(100dvh - 44px);
+  border-left: 1px solid var(--ui-border-default);
+  background: var(--bg-surface-elevated);
+  box-shadow: var(--shadow-modal);
+  z-index: 420;
+  transform: translateX(100%);
+  transition: transform 0.2s ease;
+}
+
+#view-org .site-directory-detail-panel.is-open,
+#view-org .site-directory-detail-panel.is-inline-rail {
+  transform: translateX(0);
+}
+
+#view-org .site-directory-detail-panel.hidden {
+  display: none !important;
 }
 
 #view-org .site-directory-detail-shell {
   display: grid;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: var(--ui-radius-10);
-  background: var(--ui-bg-surface);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0;
+  min-height: 0;
+  height: 100%;
 }
 
 #view-org .site-directory-detail-head {
   display: grid;
-  gap: 6px;
-  padding-bottom: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 16px 18px 12px;
   border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-org .site-directory-detail-head-main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+#view-org .site-directory-detail-head-actions {
+  display: inline-flex;
+  align-items: flex-start;
+  justify-self: end;
+  gap: 8px;
 }
 
 #view-org .site-directory-detail-eyebrow {
@@ -9591,6 +9632,9 @@ a:hover {
 #view-org .site-directory-detail-body {
   display: grid;
   gap: 12px;
+  min-height: 0;
+  padding: 16px 18px;
+  overflow: auto;
 }
 
 #view-org .site-directory-section {
@@ -9683,8 +9727,9 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding-top: 10px;
+  padding: 14px 18px 18px;
   border-top: 1px solid var(--ui-border-subtle);
+  background: var(--bg-surface-elevated);
 }
 
 #view-org .site-directory-detail-actions.hidden {
@@ -9822,6 +9867,7 @@ a:hover {
     align-items: flex-start;
   }
 
+  #view-org .site-directory-detail-backdrop,
   #view-org .site-directory-detail-panel {
     display: none !important;
   }
@@ -9977,7 +10023,7 @@ a:hover {
   }
 
   #view-org #siteDirectoryWorkspace {
-    grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.92fr);
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
   }
 
@@ -9987,8 +10033,54 @@ a:hover {
 
   #view-org .site-directory-detail-panel {
     display: block;
+  }
+
+  #shell.desktop-route-sites-inline-rail #siteDirectoryDetailBackdrop {
+    display: none !important;
+  }
+
+  #shell.desktop-route-sites-inline-rail #view-org #siteDirectoryWorkspace {
+    grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.92fr);
+  }
+
+  #shell.desktop-route-sites-inline-rail #view-org .site-directory-detail-panel {
     position: sticky;
     top: 84px;
+    width: auto;
+    height: auto;
+    max-height: calc(100dvh - 108px);
+    border-left: 0;
+    background: transparent;
+    box-shadow: none;
+    z-index: auto;
+    transition: none;
+  }
+
+  #shell.desktop-route-sites-inline-rail #view-org .site-directory-detail-shell {
+    border: 1px solid var(--ui-border-subtle);
+    border-radius: var(--ui-radius-10);
+    background: var(--ui-bg-surface);
+    overflow: hidden;
+  }
+
+  #shell.desktop-route-sites-inline-rail #view-org .site-directory-detail-head,
+  #shell.desktop-route-sites-inline-rail #view-org .site-directory-detail-body,
+  #shell.desktop-route-sites-inline-rail #view-org .site-directory-detail-actions {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  #shell.desktop-route-sites-inline-rail #view-org .site-directory-detail-head {
+    padding-top: 14px;
+  }
+
+  #shell.desktop-route-sites-inline-rail #view-org .site-directory-detail-actions {
+    padding-bottom: 14px;
+    background: var(--ui-bg-surface);
+  }
+
+  #shell.desktop-route-sites-inline-rail #view-org .site-directory-detail-head-actions {
+    display: none;
   }
 
   #view-org #siteEditorCard form {
