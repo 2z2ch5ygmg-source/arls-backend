@@ -5278,8 +5278,9 @@ button:disabled,
 .schedule-month-nav {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-8);
-  flex-wrap: wrap;
+  gap: 10px;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .schedule-toolbar-view {
@@ -5298,25 +5299,37 @@ button:disabled,
 }
 
 .schedule-nav-arrow {
-  width: 42px;
-  min-width: 42px;
-  min-height: 42px;
+  width: 48px;
+  min-width: 48px;
+  min-height: 48px;
   padding: 0;
-  border: none;
-  background: transparent;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-12);
+  background: var(--ui-bg-surface);
   box-shadow: none;
-  font-size: 26px;
+  font-size: 28px;
   line-height: 1;
   color: var(--ui-text-primary);
+  flex: 0 0 auto;
+}
+
+.schedule-nav-arrow > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  transform: translateY(-1px);
 }
 
 .schedule-month-trigger {
-  min-height: 42px;
-  padding: 0 10px;
-  border: none;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-12);
   background: transparent;
   box-shadow: none;
   color: var(--ui-text-primary);
+  flex: 0 0 auto;
 }
 
 .schedule-month-title {
@@ -5324,6 +5337,22 @@ button:disabled,
   line-height: 24px;
   font-weight: 700;
   letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.schedule-month-nav-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(249, 115, 22, 0.12);
+  color: #c2410c;
+  font-size: var(--ui-type-label-sm-size);
+  line-height: var(--ui-type-label-sm-line);
+  font-weight: var(--ui-weight-semibold);
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .schedule-nav-arrow:hover,
@@ -5332,6 +5361,16 @@ button:disabled,
 .schedule-month-trigger:focus-visible {
   background: rgba(17, 24, 39, 0.05);
   box-shadow: none;
+}
+
+.schedule-nav-arrow:hover,
+.schedule-nav-arrow:focus-visible {
+  border-color: rgba(249, 115, 22, 0.28);
+}
+
+.schedule-nav-arrow:disabled {
+  opacity: 0.5;
+  cursor: wait;
 }
 
 .schedule-calendar-tools {
@@ -19273,6 +19312,12 @@ button.attendance-status-special-card.active {
     padding-top: 12px;
     border-left: 0;
     border-top: 1px solid var(--ui-border-subtle);
+  }
+}
+
+@media (max-width: 1023px) {
+  .schedule-month-nav {
+    flex-wrap: wrap;
   }
 }
 

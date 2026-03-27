@@ -977,6 +977,7 @@ function createInitialScheduleState() {
     employeeListChunkCancelled: false,
     employeeListChunkCancel: null,
     loadGeneration: 0,
+    monthNavBusyText: '',
     monthSwitchStartedAt: 0,
     mobileListInitialized: false,
     expandedDays: new Set(),
@@ -53446,6 +53447,18 @@ function renderScheduleMonthToolbar() {
     monthTitle.textContent = state.schedule.monthTitle;
   }
 
+  const monthNavStatus = $('#scheduleMonthNavStatus');
+  const monthNavBusyText = String(state.schedule?.monthNavBusyText || '').trim();
+  if (monthNavStatus) {
+    monthNavStatus.textContent = monthNavBusyText;
+    monthNavStatus.classList.toggle('hidden', !monthNavBusyText);
+  }
+  document.querySelectorAll('[data-action="schedule-prev-month"], [data-action="schedule-next-month"]').forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) return;
+    button.disabled = Boolean(monthNavBusyText);
+    button.setAttribute('aria-busy', monthNavBusyText ? 'true' : 'false');
+  });
+
   const mode = getScheduleViewModeValue();
   state.schedule.viewMode = mode;
   document.querySelectorAll('[data-action="schedule-set-view"]').forEach((button) => {
@@ -55258,11 +55271,18 @@ async function onScheduleShiftMonth(deltaMonths) {
   if (monthInput) monthInput.value = next;
   state.schedule.month = next;
   state.schedule.monthSwitchStartedAt = getPerfNowMs();
+  state.schedule.monthNavBusyText = step > 0 ? '다음 달 불러오는 중' : '이전 달 불러오는 중';
   state.schedule.desktopDrawerOpen = false;
   resetScheduleExpandedDays();
   cancelScheduleEmployeeListChunkRender();
   ensureScheduleSelectedDate();
-  await loadSchedule();
+  renderScheduleMonthToolbar();
+  try {
+    await loadSchedule();
+  } finally {
+    state.schedule.monthNavBusyText = '';
+    renderScheduleMonthToolbar();
+  }
 }
 
 function createScheduleSheetMetaRow(label, value) {
@@ -56243,6 +56263,7 @@ async function loadSchedule({ force = false, deferDetailHydration = false, backg
       state.schedule.lastPerf.monthSwitchMs = monthSwitchDetailReadyMs;
       state.schedule.lastPerf.monthSwitchHydrateDoneMs = monthSwitchDetailReadyMs;
       state.schedule.monthSwitchStartedAt = 0;
+      state.schedule.monthNavBusyText = '';
 
       markViewPerfStage('month_switch_detail_ready', {
         routePath: schedulePerfRoute,
@@ -56300,6 +56321,8 @@ async function loadSchedule({ force = false, deferDetailHydration = false, backg
     state.schedule.lastPerf.monthSwitchDetailReadyMs = 0;
     state.schedule.lastPerf.monthSwitchHydrateDoneMs = 0;
     state.schedule.monthSwitchStartedAt = 0;
+    state.schedule.monthNavBusyText = '';
+    renderScheduleMonthToolbar();
     renderScheduleCalendarMessage('스케줄 조회에 실패했습니다.');
     renderScheduleDetail();
     showToast(normalizeActionError(err, '스케줄 조회에 실패했습니다.'), 'error', 4500);
@@ -63414,12 +63437,12 @@ function bindUiEvents() {
     }
 
     if (action === 'schedule-prev-month') {
-      runWithBusy(() => onScheduleShiftMonth(-1), '이전 달 조회 중...');
+      runActionSafely(onScheduleShiftMonth(-1), '스케줄 월 조회 중 오류가 발생했습니다.');
       return;
     }
 
     if (action === 'schedule-next-month') {
-      runWithBusy(() => onScheduleShiftMonth(1), '다음 달 조회 중...');
+      runActionSafely(onScheduleShiftMonth(1), '스케줄 월 조회 중 오류가 발생했습니다.');
       return;
     }
 
@@ -64437,13 +64460,17 @@ function bindUiEvents() {
       applyScheduleExportDateFromMonth(target instanceof HTMLInputElement ? target.value : '');
       refreshScheduleExportLink();
       state.schedule.monthSwitchStartedAt = getPerfNowMs();
+      state.schedule.monthNavBusyText = '월간 일정 불러오는 중';
       state.schedule.desktopDrawerOpen = false;
       resetScheduleExpandedDays();
       resetScheduleSupportRoundtripPreview();
       resetScheduleFinancePreview();
       state.schedule.supportStatus = null;
       state.schedule.financeStatus = null;
-      runActionSafely(loadSchedule(), '스케줄 월 조회 중 오류가 발생했습니다.');
+      runActionSafely(loadSchedule(), '스케줄 월 조회 중 오류가 발생했습니다.').finally(() => {
+        state.schedule.monthNavBusyText = '';
+        renderScheduleMonthToolbar();
+      });
       if (state.schedule.hqTab === SCHEDULE_TAB_REPORTS) {
         runActionSafely(
           loadScheduleFinanceSubmissionStatus().then(() => {

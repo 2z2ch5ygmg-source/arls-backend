@@ -2375,11 +2375,16 @@
               <div class="schedule-ops-toolbar-main">
                 <div class="schedule-toolbar-primary">
                   <div class="schedule-month-nav">
-                    <button class="btn btn-secondary btn-icon schedule-nav-arrow" type="button" data-action="schedule-prev-month" aria-label="이전 달 스케줄 보기">‹</button>
+                    <button class="btn btn-secondary btn-icon schedule-nav-arrow" type="button" data-action="schedule-prev-month" aria-label="이전 달 스케줄 보기">
+                      <span aria-hidden="true">←</span>
+                    </button>
                     <button class="btn btn-secondary schedule-month-trigger" type="button" data-action="schedule-jump-today" aria-label="오늘 날짜로 이동">
                       <span id="scheduleMonthTitle" class="schedule-month-title">월간 일정</span>
                     </button>
-                    <button class="btn btn-secondary btn-icon schedule-nav-arrow" type="button" data-action="schedule-next-month" aria-label="다음 달 스케줄 보기">›</button>
+                    <button class="btn btn-secondary btn-icon schedule-nav-arrow" type="button" data-action="schedule-next-month" aria-label="다음 달 스케줄 보기">
+                      <span aria-hidden="true">→</span>
+                    </button>
+                    <span id="scheduleMonthNavStatus" class="schedule-month-nav-status hidden" aria-live="polite"></span>
                   </div>
                   <div class="schedule-toolbar-view">
                     <span class="schedule-toolbar-group-label">보기</span>
