@@ -47406,7 +47406,7 @@ function renderAttendanceManagerWorkspace({ rows = [], scopedRows = [], loading 
 function getAttendanceManagerRowByKey(recordKey = '') {
   const key = String(recordKey || '').trim();
   if (!key) return null;
-  const rows = Array.isArray(state.attendanceView?.managerRows) ? state.attendanceView.managerRows : [];
+  const rows = getAttendanceManagerRowsForCurrentQuery();
   return rows.find((row) => String(row?.key || '').trim() === key) || null;
 }
 
@@ -47549,7 +47549,7 @@ async function submitAttendanceEditSheet(recordKey = '') {
 }
 
 function openAttendanceManagerMobileDetailSheet(recordKey = '') {
-  const rows = Array.isArray(state.attendanceView?.managerRows) ? state.attendanceView.managerRows : [];
+  const rows = getAttendanceManagerRowsForCurrentQuery();
   const row = rows.find((item) => item.key === String(recordKey || '').trim()) || null;
   if (!row) return;
   const reviewPoints = [];
@@ -47597,7 +47597,7 @@ function csvEscape(value = '') {
 }
 
 function exportAttendanceManagerRows() {
-  const rows = getFilteredAttendanceManagerRows(state.attendanceView?.managerRows || [], { applyStatus: true });
+  const rows = getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: true });
   if (!rows.length) {
     showToast('내보낼 출퇴근 기록이 없습니다.', 'info', 2200);
     return;
@@ -47631,7 +47631,7 @@ function exportAttendanceManagerRows() {
 }
 
 async function onAttendanceOpenRelatedRequest(recordKey = '') {
-  const rows = Array.isArray(state.attendanceView?.managerRows) ? state.attendanceView.managerRows : [];
+  const rows = getAttendanceManagerRowsForCurrentQuery();
   const item = rows.find((row) => row.key === String(recordKey || '').trim()) || null;
   if (!item) {
     showToast('연결된 요청을 찾을 수 없습니다.', 'error', 2200);
@@ -62330,8 +62330,8 @@ function bindUiEvents() {
       syncAttendanceManagerFilterInputs();
       renderAttendanceFilterMeta();
       renderAttendanceManagerWorkspace({
-        rows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: true }),
-        scopedRows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: false }),
+        rows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: true }),
+        scopedRows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: false }),
         loading: false,
       });
       return;
@@ -62354,8 +62354,8 @@ function bindUiEvents() {
       }
       syncAttendanceManagerFilterInputs();
       renderAttendanceManagerWorkspace({
-        rows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: true }),
-        scopedRows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: false }),
+        rows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: true }),
+        scopedRows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: false }),
         loading: false,
       });
       return;
@@ -62432,8 +62432,8 @@ function bindUiEvents() {
         return;
       }
       renderAttendanceManagerWorkspace({
-        rows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: true }),
-        scopedRows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: false }),
+        rows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: true }),
+        scopedRows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: false }),
         loading: false,
       });
       return;
@@ -62457,8 +62457,8 @@ function bindUiEvents() {
       }
       state.attendanceView.managerDrawerOpen = false;
       renderAttendanceManagerWorkspace({
-        rows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: true }),
-        scopedRows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: false }),
+        rows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: true }),
+        scopedRows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: false }),
         loading: false,
       });
       return;
@@ -64468,8 +64468,8 @@ function bindUiEvents() {
       state.attendanceView.managerSearchQuery = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
       renderAttendanceFilterMeta();
       renderAttendanceManagerWorkspace({
-        rows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: true }),
-        scopedRows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: false }),
+        rows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: true }),
+        scopedRows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: false }),
         loading: false,
       });
       return;
@@ -64482,8 +64482,8 @@ function bindUiEvents() {
       applyAttendanceManagerSortControlValue(target instanceof HTMLSelectElement ? target.value : 'default');
       syncAttendanceManagerFilterInputs();
       renderAttendanceManagerWorkspace({
-        rows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: true }),
-        scopedRows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: false }),
+        rows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: true }),
+        scopedRows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: false }),
         loading: false,
       });
       return;
@@ -64895,8 +64895,8 @@ function bindUiEvents() {
       state.attendanceView.managerSearchQuery = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
       renderAttendanceFilterMeta();
       renderAttendanceManagerWorkspace({
-        rows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: true }),
-        scopedRows: getFilteredAttendanceManagerRows(state.attendanceView.managerRows || [], { applyStatus: false }),
+        rows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: true }),
+        scopedRows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: false }),
         loading: false,
       });
       return;
