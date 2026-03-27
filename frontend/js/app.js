@@ -764,6 +764,7 @@ function createInitialAttendanceViewState() {
     mobileSegment: 'timeline',
     timelineRows: [],
     managerRows: [],
+    managerRowsQueryKey: '',
     managerSummary: null,
     managerExceptionRows: [],
     managerPendingAttendanceRequests: [],
@@ -24007,6 +24008,9 @@ function applyAttendanceRouteStateFromQuery(routePath = '', parsedParams = new U
   }
   const requestedTab = parsedParams.has('tab') ? parsedParams.get('tab') : 'status';
   setAttendanceManagerTab(requestedTab || 'status');
+  if (!hasAttendanceManagerRowsForCurrentQuery()) {
+    clearAttendanceManagerRows();
+  }
 }
 
 function applyReportsRouteStateFromQuery(routePath = '', parsedParams = new URLSearchParams()) {
@@ -37484,7 +37488,7 @@ function renderAttendanceViewFromCache() {
   if (canUseAttendanceManagerFilter()) {
     renderAttendanceManagerFilterOptions();
     renderAttendanceFilterMeta();
-    const managerRows = Array.isArray(state.attendanceView.managerRows) ? state.attendanceView.managerRows : [];
+    const managerRows = getAttendanceManagerRowsForCurrentQuery();
     const scopedRows = getFilteredAttendanceManagerRows(managerRows, { applyStatus: false });
     const filteredRows = getFilteredAttendanceManagerRows(managerRows, { applyStatus: true });
     renderAttendanceManagerWorkspace({
@@ -44522,7 +44526,10 @@ function loadAttendanceManagerSnapshot() {
     const rows = Array.isArray(parsed.rows)
       ? parsed.rows.map((row) => serializeAttendanceManagerRowForStorage(row)).filter(Boolean)
       : [];
-    return rows.length ? rows : null;
+    return rows.length ? {
+      rows,
+      queryKey: String(parsed.queryKey || '').trim(),
+    } : null;
   } catch {
     return null;
   }
@@ -44616,11 +44623,40 @@ function ensureAttendanceManagerPreferencesLoaded() {
   state.attendanceView.lateThresholdMinutes = normalizeAttendanceThresholdMinutes(prefs.lateThresholdMinutes ?? state.attendanceView.lateThresholdMinutes);
   state.attendanceView.earlyLeaveThresholdMinutes = normalizeAttendanceThresholdMinutes(prefs.earlyLeaveThresholdMinutes ?? state.attendanceView.earlyLeaveThresholdMinutes);
   state.attendanceView.managerRecordEdits = loadAttendanceManagerRecordEdits();
-  const snapshotRows = loadAttendanceManagerSnapshot();
-  if (snapshotRows && !state.attendanceView.managerRows.length) {
-    state.attendanceView.managerRows = snapshotRows;
+  const snapshot = loadAttendanceManagerSnapshot();
+  if (snapshot && !state.attendanceView.managerRows.length) {
+    state.attendanceView.managerRows = Array.isArray(snapshot.rows) ? snapshot.rows : [];
+    state.attendanceView.managerRowsQueryKey = String(snapshot.queryKey || '').trim();
   }
   state.attendanceView.managerPrefsLoaded = true;
+}
+
+function clearAttendanceManagerRows() {
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  state.attendanceView.managerRows = [];
+  state.attendanceView.managerRowsQueryKey = '';
+  state.attendanceView.managerSummary = null;
+  state.attendanceView.managerExceptionRows = [];
+  state.attendanceView.selectedManagerRowKey = '';
+}
+
+function hasAttendanceManagerRowsForCurrentQuery() {
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  const rows = Array.isArray(state.attendanceView.managerRows) ? state.attendanceView.managerRows : [];
+  if (!rows.length) return false;
+  const currentQueryKey = resolveAttendanceManagerSnapshotQueryKey();
+  const storedQueryKey = String(state.attendanceView.managerRowsQueryKey || '').trim();
+  return Boolean(currentQueryKey) && storedQueryKey === currentQueryKey;
+}
+
+function getAttendanceManagerRowsForCurrentQuery() {
+  return hasAttendanceManagerRowsForCurrentQuery()
+    ? (Array.isArray(state.attendanceView?.managerRows) ? state.attendanceView.managerRows : [])
+    : [];
 }
 
 function normalizeAttendanceRangePreset(value = '') {
@@ -47636,7 +47672,7 @@ async function loadAttendanceManagerView({ force = false } = {}) {
     renderAttendanceLayoutMode();
     renderAttendanceFilterMeta();
     {
-      const cachedManagerRows = Array.isArray(state.attendanceView.managerRows) ? state.attendanceView.managerRows : [];
+      const cachedManagerRows = getAttendanceManagerRowsForCurrentQuery();
       const cachedScopedRows = getFilteredAttendanceManagerRows(cachedManagerRows, { applyStatus: false });
       const cachedFilteredRows = getFilteredAttendanceManagerRows(cachedManagerRows, { applyStatus: true });
       renderAttendanceManagerWorkspace({
@@ -47658,6 +47694,9 @@ async function loadAttendanceManagerView({ force = false } = {}) {
 
     const activeTab = getAttendanceManagerTab();
     const { start, end } = getAttendanceManagerFetchRange();
+    const managerRowsQueryKey = activeTab === 'calendar'
+      ? `calendar:${normalizeMonthKey(state.attendanceView?.calendarMonth || '') || toMonthKey(new Date())}`
+      : (activeTab === 'list' ? `list:${start}:${end}` : `status:${start}`);
     const dateKeys = buildDateKeysBetween(start, end);
     const months = buildMonthKeysBetween(start, end);
     const tenantCode = getTenantCodeForScopedAdminApi();
@@ -47716,6 +47755,7 @@ async function loadAttendanceManagerView({ force = false } = {}) {
       return managerRows;
     }
     state.attendanceView.managerRows = managerRows;
+    state.attendanceView.managerRowsQueryKey = managerRowsQueryKey;
 
     const scopedRows = getFilteredAttendanceManagerRows(managerRows, { applyStatus: false });
     const filteredRows = getFilteredAttendanceManagerRows(managerRows, { applyStatus: true });
@@ -47757,6 +47797,7 @@ async function loadAttendanceManagerView({ force = false } = {}) {
         });
         if (isStaleLoad()) return;
         state.attendanceView.managerRows = hydratedRows;
+        state.attendanceView.managerRowsQueryKey = managerRowsQueryKey;
 
         const hydratedScopedRows = getFilteredAttendanceManagerRows(hydratedRows, { applyStatus: false });
         const hydratedFilteredRows = getFilteredAttendanceManagerRows(hydratedRows, { applyStatus: true });
