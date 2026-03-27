@@ -12675,19 +12675,19 @@ a:hover {
     grid-column: 1 / -1;
   }
 
-  #shell.desktop-route-employees-list #view-employees > #employeeDirectorySummaryStrip,
-  #shell.desktop-route-employees-list #view-employees > #employeeTopActionBar,
-  #shell.desktop-route-employees-list #view-employees > #employeeToolbar,
-  #shell.desktop-route-employees-list #view-employees > #employeeDesktopTableCard {
+  #shell.desktop-route-employees-inline-rail #view-employees > #employeeDirectorySummaryStrip,
+  #shell.desktop-route-employees-inline-rail #view-employees > #employeeTopActionBar,
+  #shell.desktop-route-employees-inline-rail #view-employees > #employeeToolbar,
+  #shell.desktop-route-employees-inline-rail #view-employees > #employeeDesktopTableCard {
     grid-column: 1 / -1;
   }
 
-  #shell.desktop-route-employees-list #view-employees > #devUserAdminCard,
-  #shell.desktop-route-employees-list #view-employees > #devTenantAdminCard {
+  #shell.desktop-route-employees-inline-rail #view-employees > #devUserAdminCard,
+  #shell.desktop-route-employees-inline-rail #view-employees > #devTenantAdminCard {
     grid-column: 1 / -1;
   }
 
-  #shell.desktop-route-employees-list #view-employees {
+  #shell.desktop-route-employees-inline-rail #view-employees {
     grid-template-columns: minmax(0, 1.28fr) minmax(320px, 0.88fr);
   }
 
@@ -12696,18 +12696,18 @@ a:hover {
     align-items: start;
   }
 
-  #shell.desktop-route-employees-list #view-employees > #employeeDesktopTableCard {
+  #shell.desktop-route-employees-inline-rail #view-employees > #employeeDesktopTableCard {
     grid-column: 1 / 2;
     width: 100%;
     min-width: 0;
   }
 
-  #shell.desktop-route-employees-list #view-employees > #employeeDirectoryDetailPanel {
+  #shell.desktop-route-employees-inline-rail #view-employees > #employeeDirectoryDetailPanel {
     grid-column: 2 / 3;
     align-self: start;
   }
 
-  #shell.desktop-route-employees-list #view-employees > #employeeDesktopTableCard .employee-table-wrap {
+  #shell.desktop-route-employees-inline-rail #view-employees > #employeeDesktopTableCard .employee-table-wrap {
     width: 100%;
   }
 
@@ -16835,6 +16835,17 @@ textarea::placeholder {
   background: var(--bg-surface-elevated);
   box-shadow: var(--shadow-modal);
   z-index: 420;
+  transform: translateX(100%);
+  transition: transform 0.2s ease;
+}
+
+.employee-directory-drawer.is-open,
+.employee-directory-drawer.is-inline-rail {
+  transform: translateX(0);
+}
+
+.employee-directory-drawer.hidden {
+  display: none;
 }
 
 .employee-directory-drawer-head {
@@ -17321,11 +17332,11 @@ textarea::placeholder {
 }
 
 @media (min-width: 1024px) {
-  #shell.desktop-route-employees-list #employeeDirectoryDetailBackdrop {
+  #shell.desktop-route-employees-inline-rail #employeeDirectoryDetailBackdrop {
     display: none !important;
   }
 
-  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel.employee-directory-drawer {
+  #shell.desktop-route-employees-inline-rail #employeeDirectoryDetailPanel.employee-directory-drawer {
     position: sticky;
     top: 84px;
     right: auto;
@@ -17338,49 +17349,50 @@ textarea::placeholder {
     box-shadow: none;
     z-index: auto;
     overflow: hidden;
+    transition: none;
   }
 
-  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-head,
-  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-body,
-  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-actions {
+  #shell.desktop-route-employees-inline-rail #employeeDirectoryDetailPanel .employee-directory-drawer-head,
+  #shell.desktop-route-employees-inline-rail #employeeDirectoryDetailPanel .employee-directory-drawer-body,
+  #shell.desktop-route-employees-inline-rail #employeeDirectoryDetailPanel .employee-directory-drawer-actions {
     padding-left: 14px;
     padding-right: 14px;
   }
 
-  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-head {
+  #shell.desktop-route-employees-inline-rail #employeeDirectoryDetailPanel .employee-directory-drawer-head {
     padding-top: 14px;
     padding-bottom: 12px;
   }
 
-  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-body {
+  #shell.desktop-route-employees-inline-rail #employeeDirectoryDetailPanel .employee-directory-drawer-body {
     padding-top: 14px;
     padding-bottom: 14px;
   }
 
-  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-actions {
+  #shell.desktop-route-employees-inline-rail #employeeDirectoryDetailPanel .employee-directory-drawer-actions {
     padding-top: 12px;
     padding-bottom: 14px;
     min-height: auto;
     background: var(--ui-bg-surface);
   }
 
-  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-head-actions {
+  #shell.desktop-route-employees-inline-rail #employeeDirectoryDetailPanel .employee-directory-drawer-head-actions {
     display: none;
   }
 
-  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-avatar {
+  #shell.desktop-route-employees-inline-rail #employeeDirectoryDetailPanel .employee-directory-drawer-avatar {
     width: 44px;
     height: 44px;
     border-radius: 12px;
     font-size: 16px;
   }
 
-  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-drawer-title h3 {
+  #shell.desktop-route-employees-inline-rail #employeeDirectoryDetailPanel .employee-directory-drawer-title h3 {
     font-size: var(--ui-type-title-md-size);
     line-height: var(--ui-type-title-md-line);
   }
 
-  #shell.desktop-route-employees-list #employeeDirectoryDetailPanel .employee-directory-detail-tabs {
+  #shell.desktop-route-employees-inline-rail #employeeDirectoryDetailPanel .employee-directory-detail-tabs {
     padding-left: 14px;
     padding-right: 14px;
   }

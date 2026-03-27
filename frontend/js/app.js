@@ -32321,6 +32321,7 @@ function applyDesktopRouteLayout(routePath = state.currentRoute) {
   if (!shell) return;
   shell.classList.remove(
     'desktop-route-employees-list',
+    'desktop-route-employees-inline-rail',
     'desktop-route-employees-new',
     'desktop-route-employees-import',
     'desktop-route-sites-list',
@@ -32335,6 +32336,9 @@ function applyDesktopRouteLayout(routePath = state.currentRoute) {
     shell.classList.add('desktop-route-employees-new');
   } else if (route === ROUTE_ADMIN_EMPLOYEES) {
     shell.classList.add('desktop-route-employees-list');
+    if (isEmployeeDirectoryInlineRailViewport()) {
+      shell.classList.add('desktop-route-employees-inline-rail');
+    }
   }
 
   if (route === ROUTE_ADMIN_SITES_NEW || route === ROUTE_ADMIN_SITES_EDIT) {
@@ -39649,8 +39653,17 @@ function getEmployeeDirectoryDetailActions() {
   return target instanceof HTMLElement ? target : null;
 }
 
+let employeeDirectoryDrawerHideTimer = 0;
+
 function isEmployeeDirectoryInlinePanelRoute() {
-  return isDesktopViewport() && normalizeRoutePath(state.currentRoute || '') === ROUTE_ADMIN_EMPLOYEES;
+  return isDesktopViewport()
+    && normalizeRoutePath(state.currentRoute || '') === ROUTE_ADMIN_EMPLOYEES
+    && isEmployeeDirectoryInlineRailViewport();
+}
+
+function isEmployeeDirectoryInlineRailViewport() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia('(min-width: 1760px)').matches;
 }
 
 function setEmployeeDirectoryDrawerOpen(open = false) {
@@ -39659,18 +39672,39 @@ function setEmployeeDirectoryDrawerOpen(open = false) {
   const inlineMode = isEmployeeDirectoryInlinePanelRoute();
   const shouldOpen = Boolean(open);
   state.employeeAdmin.detailDrawerOpen = shouldOpen;
+  if (employeeDirectoryDrawerHideTimer) {
+    window.clearTimeout(employeeDirectoryDrawerHideTimer);
+    employeeDirectoryDrawerHideTimer = 0;
+  }
   if (backdrop) backdrop.classList.toggle('hidden', inlineMode || !shouldOpen);
   if (panel) {
     const panelVisible = inlineMode || shouldOpen;
     panel.classList.toggle('is-inline-rail', inlineMode);
-    if (!panelVisible) {
+    if (panelVisible) {
+      panel.classList.remove('hidden');
+      panel.removeAttribute('inert');
+      panel.setAttribute('aria-hidden', 'false');
+      if (inlineMode) {
+        panel.classList.add('is-open');
+      } else {
+        panel.classList.remove('is-open');
+        requestAnimationFrame(() => {
+          if (!isEmployeeDirectoryInlinePanelRoute() && state.employeeAdmin?.detailDrawerOpen) {
+            panel.classList.add('is-open');
+          }
+        });
+      }
+    } else {
+      panel.classList.remove('is-open');
       moveFocusOutsideHiddenContainer(panel, state.employeeAdmin?.detailTriggerEl || null);
       panel.setAttribute('inert', '');
-    } else {
-      panel.removeAttribute('inert');
+      panel.setAttribute('aria-hidden', 'true');
+      employeeDirectoryDrawerHideTimer = window.setTimeout(() => {
+        if (!isEmployeeDirectoryInlinePanelRoute() && !state.employeeAdmin?.detailDrawerOpen) {
+          panel.classList.add('hidden');
+        }
+      }, 200);
     }
-    panel.classList.toggle('hidden', !panelVisible);
-    panel.setAttribute('aria-hidden', panelVisible ? 'false' : 'true');
   }
 }
 
@@ -65554,6 +65588,10 @@ function bindUiEvents() {
   }, { signal });
 
   window.addEventListener('resize', () => {
+    applyDesktopRouteLayout(state.currentRoute);
+    if (normalizeRoutePath(state.currentRoute || '') === ROUTE_ADMIN_EMPLOYEES) {
+      setEmployeeDirectoryDrawerOpen(Boolean(state.employeeAdmin?.detailDrawerOpen));
+    }
     renderDesktopTopContext();
   }, { signal, passive: true });
 
