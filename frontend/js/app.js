@@ -44945,7 +44945,10 @@ function canUseAttendanceManagerFilter() {
   if (!roleAllowed) return false;
   if (can('attendance')) return true;
   const route = normalizeRoutePath(state.currentRoute || '');
-  return route === ROUTE_ATTENDANCE;
+  const hashRoute = typeof window !== 'undefined'
+    ? normalizeRoutePath(String(window.location?.hash || '').replace(/^#/, ''))
+    : '';
+  return route === ROUTE_ATTENDANCE || hashRoute === ROUTE_ATTENDANCE;
 }
 
 function formatAttendanceTime(rawValue = '') {
