@@ -2679,7 +2679,6 @@ function renderEmptyState(target, text = '표시할 데이터가 없습니다.',
   const box = document.createElement('div');
   box.className = 'empty-state';
   box.innerHTML = `
-    <div class="empty-state-icon" aria-hidden="true">□</div>
     <div class="empty-state-title">데이터 없음</div>
     <div class="empty-state-description">${text}</div>
     ${ctaText ? `<div class="empty-state-meta">${ctaText}</div>` : ''}

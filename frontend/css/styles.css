@@ -7146,14 +7146,30 @@ a:hover {
 }
 
 .empty-state {
-  border: 1px dashed var(--state-empty-border);
-  border-radius: var(--radius-16);
-  background: var(--state-empty-bg);
-  padding: var(--space-16);
-  text-align: center;
+  position: relative;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-10);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(247, 250, 252, 0.92));
+  padding: 14px 16px 14px 18px;
+  text-align: left;
   color: var(--text-secondary);
   display: grid;
-  gap: var(--space-8);
+  gap: 4px;
+  align-content: start;
+  min-height: 72px;
+  overflow: hidden;
+}
+
+.empty-state::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.46);
 }
 
 .empty-state-icon {
@@ -13321,11 +13337,17 @@ textarea::placeholder {
 
 .empty-state-title {
   color: var(--ui-text-primary);
+  letter-spacing: -0.02em;
 }
 
 .empty-state-description,
 .empty-state-meta {
   color: var(--ui-text-secondary);
+  max-width: 56ch;
+}
+
+.empty-state-meta {
+  margin-top: 2px;
 }
 
 .inline-status {
@@ -15021,10 +15043,20 @@ textarea::placeholder {
 
 #view-requests .requests-compact-empty,
 #view-requests .empty-state {
-  min-height: 72px;
-  padding: 10px 12px;
-  background: var(--bg-surface-muted);
-  border: 1px solid var(--ui-border-subtle);
+  min-height: 64px;
+  padding: 12px 14px 12px 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-requests .requests-compact-empty::before,
+#view-requests .empty-state::before {
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  background: rgba(255, 122, 26, 0.18);
 }
 
 #view-requests #requestsUnifiedDetailBackdrop {
@@ -15314,8 +15346,8 @@ textarea::placeholder {
 
 #view-requests .requests-compact-empty,
 #view-requests .empty-state {
-  min-height: 56px;
-  padding: 8px 10px;
+  min-height: 60px;
+  padding: 10px 12px 10px 18px;
 }
 
 #view-requests .requests-compact-empty .empty-state-icon,
