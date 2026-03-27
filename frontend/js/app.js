@@ -6586,11 +6586,11 @@ async function onOpsOpenAttendance(focus = 'scheduled') {
 }
 
 async function onOpsOpenOvernightReport() {
-  const targetRoute = `${ROUTE_REPORTS}?tab=support`;
+  const targetRoute = ROUTE_SCHEDULE_HQ_UPLOAD;
   const moved = await navigateToRoute(targetRoute);
   if (!moved) return;
-  scrollToSelector('#view-reports');
-  showToast('보고 > 지원근무 전달로 이동했습니다.', 'info', 2200);
+  scrollToSelector('#scheduleHqUploadPanel');
+  showToast('스케줄 > 지점별 업로드 확인으로 이동했습니다.', 'info', 2200);
 }
 
 function buildOpsRetryScope() {
@@ -8589,7 +8589,6 @@ function applyAppleTenantScopedUiVisibility() {
 function getReportsAvailableTabs() {
   const tabs = [];
   if (canViewReportsFinanceTab()) tabs.push('finance');
-  if (canViewReportsSupportTab()) tabs.push('support');
   return tabs.length ? tabs : ['finance'];
 }
 
@@ -8639,10 +8638,7 @@ function setReportsOwnerMonthValue(monthValue, { syncInputs = true } = {}) {
 function renderReportsScopeHint() {
   const hint = $('#reportsScopeHint');
   if (!hint) return;
-  const tab = normalizeReportsViewTab(state.reports?.viewTab || getDefaultReportsViewTab());
-  hint.textContent = tab === 'support'
-    ? '지원근무 전달을 준비 확인 → 전달 파일 다운로드 → Sentrix 전달 순서로 진행합니다.'
-    : 'Finance 제출을 1차 확인본 → 최종 업로드 → 최종본 다운로드 순서로 진행합니다.';
+  hint.textContent = 'Finance 제출을 1차 확인본 → 최종 업로드 → 최종본 다운로드 순서로 진행합니다.';
 }
 
 function setReportsSummaryMessage(target, text = '') {
@@ -9043,6 +9039,7 @@ function renderReportsWorkspacePanels() {
   const tabs = $('#reportsWorkspaceTabs');
   const tabbarRow = tabs?.closest('.workspace-tabbar-row');
   let tab = normalizeReportsViewTab(state.reports?.viewTab || getDefaultReportsViewTab());
+  if (tab === 'support') tab = 'finance';
   if (!state.reports) state.reports = createInitialReportsState();
   state.reports.viewTab = tab;
 
@@ -9067,7 +9064,6 @@ function renderReportsWorkspacePanels() {
 
   renderReportsScopeHint();
   renderScheduleFinanceSubmissionStatus();
-  renderReportsSupportHandoffPanel();
   renderReportsContextSummary();
 }
 
@@ -9749,7 +9745,6 @@ const DRAWER_MENU_BY_ROLE = {
       icon: 'clipboard-list',
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
-        { id: 'reports-support', title: '지원근무 전달', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=support`, reportsTabMatch: 'support' },
       ],
     },
     { type: 'section', title: '내 정보' },
@@ -9807,7 +9802,6 @@ const DRAWER_MENU_BY_ROLE = {
       icon: 'clipboard-list',
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
-        { id: 'reports-support', title: '지원근무 전달', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=support`, reportsTabMatch: 'support' },
       ],
     },
     { type: 'section', title: '조직' },
@@ -9877,7 +9871,6 @@ const DRAWER_MENU_BY_ROLE = {
       icon: 'clipboard-list',
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
-        { id: 'reports-support', title: '지원근무 전달', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=support`, reportsTabMatch: 'support' },
       ],
     },
     { type: 'section', title: '조직' },
@@ -30682,7 +30675,7 @@ function getDesktopGlobalSearchItems() {
     items.splice(2, 0, { label: '지원근무자 현황', route: ROUTE_SUPPORT_STATUS, hint: '지원 배정 현황', keywords: ['지원근무', '지원근무자', 'support', '주간', '야간', 'sentrix'] });
     items.splice(7, 0,
       { label: 'Excel 업로드', route: ROUTE_SCHEDULE_UPLOAD, hint: '근무표 업로드', keywords: ['엑셀', '업로드', '근무표', 'wizard'] },
-      { label: '보고', route: ROUTE_REPORTS, hint: 'Finance 제출 / 지원근무 전달', keywords: ['보고', 'finance', '제출', 'handoff', '지원근무'] },
+      { label: '보고', route: ROUTE_REPORTS, hint: 'Finance 제출', keywords: ['보고', 'finance', '제출'] },
     );
     items.push(
       { label: '조직', route: ROUTE_ADMIN_EMPLOYEES, hint: '직원/지점 운영', keywords: ['조직', '직원', '지점', '현장'] },
@@ -49693,11 +49686,7 @@ function canViewReportsFinanceTab() {
 }
 
 function canViewReportsSupportTab() {
-  return canViewReportsWizardRole() && (
-    canUseScheduleSupportRoundtripSource()
-    || canUseScheduleSupportRoundtripHq()
-    || canUseScheduleSupportRoundtripFinalDownload()
-  );
+  return false;
 }
 
 function canViewReportsPackTab() {
@@ -49709,8 +49698,7 @@ function canViewReportsHistoryTab() {
 }
 
 function canViewReportsCenter() {
-  return canViewReportsFinanceTab()
-    || canViewReportsSupportTab();
+  return canViewReportsFinanceTab();
 }
 
 function canOpenScheduleUploadWorkspace() {
@@ -49981,7 +49969,7 @@ function renderScheduleHqTabs() {
   }
   if (workspaceDescription) {
     if (reportsOwnerVisible) {
-      workspaceDescription.textContent = 'Finance 제출 상태와 전달 결과를 확인하는 보고 워크스페이스입니다.';
+      workspaceDescription.textContent = 'Finance 제출 상태를 확인하는 보고 워크스페이스입니다.';
     } else if (activeTab === SCHEDULE_TAB_HQ_UPLOAD) {
       workspaceDescription.textContent = '지점별 제출본을 만들고 HQ 작성본을 검토하는 흐름입니다.';
     } else if (activeTab === SCHEDULE_TAB_UPLOAD) {
