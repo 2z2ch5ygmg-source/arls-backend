@@ -23965,8 +23965,9 @@ function renderShellMode() {
   const profileSubtitle = $('#profileViewSubtitle');
   if (profileSubtitle) {
     profileSubtitle.textContent = managerMode
-      ? '운영 상태와 연동 제어를 한곳에서 관리합니다.'
+      ? ''
       : '계정 상태와 알림 제어를 한곳에서 관리합니다.';
+    profileSubtitle.classList.toggle('hidden', managerMode);
   }
 
   renderProfileWorkspaceSegments();
@@ -33009,8 +33010,8 @@ function renderProfileSettingsRail() {
       noteValue.textContent = '로그인 후 설정을 확인할 수 있습니다.';
     } else if (canManageIntegrations()) {
       noteValue.textContent = selectedProfile?.profile_name
-        ? '활성 프로파일과 플래그를 확인한 뒤 저장하면 바로 운영에 반영됩니다.'
-        : '먼저 활성 프로파일과 플래그 상태를 확인한 뒤 저장하세요.';
+        ? '활성 링크와 잠금 상태를 확인한 뒤 필요한 설정만 조정하세요.'
+        : '먼저 활성 링크를 선택한 뒤 필요한 운영 설정만 조정하세요.';
     } else if (!state.reminder.available) {
       noteValue.textContent = '현재 기기에서는 예약 알림을 지원하지 않습니다.';
     } else if (isReminderPermissionDenied()) {
@@ -34010,7 +34011,7 @@ function renderLockPolicySkeleton() {
   const canLockManage = (navRole === 'DEV' || navRole === 'BRANCH_MANAGER') && can('schedule');
   const isLockRoute = normalizeRoutePath(state.currentRoute || '') === ROUTE_ADMIN_REPORTS_LOCK;
   const isProfileRoute = normalizeRoutePath(state.currentRoute || '') === ROUTE_PROFILE;
-  card.classList.toggle('hidden', !canLockManage || (!isLockRoute && !isProfileRoute));
+  card.classList.toggle('hidden', !canLockManage || !isLockRoute);
   if (!canLockManage || (!isLockRoute && !isProfileRoute)) {
     renderProfileSettingsRail();
     return;
@@ -34028,7 +34029,9 @@ function renderLockPolicySkeleton() {
 
   pill.className = 'status-pill status-pill-warn';
   pill.textContent = '열림';
-  summary.textContent = '잠금 정책은 별도 화면에서 이어서 관리합니다. 이 카드에서는 현재 기간과 상태만 먼저 확인합니다.';
+  summary.textContent = isLockRoute
+    ? '기간 잠금 상태와 적용 범위를 확인한 뒤 저장합니다.'
+    : '잠금 정책은 별도 화면에서 이어서 관리합니다.';
   renderProfileSettingsRail();
 }
 
