@@ -10045,9 +10045,9 @@ function renderReportsFinanceDownloadWorkspace() {
 
   if (selectionHint instanceof HTMLElement) {
     if (errorMessage) {
-      selectionHint.textContent = errorMessage;
+      selectionHint.textContent = '';
     } else if (loading) {
-      selectionHint.textContent = '업로드 현황을 불러오는 중입니다.';
+      selectionHint.textContent = '';
     } else if (downloadableSelectedRows.length && !blockedSelectedRows.length) {
       selectionHint.textContent = downloadableSelectedRows.length > 1
         ? `선택 ${downloadableSelectedRows.length}개 지점 원본 다운로드 가능`
@@ -17614,9 +17614,9 @@ function renderScheduleFinanceSubmissionStatus() {
   }
   if (overviewSelectionHint instanceof HTMLElement) {
     if (overviewError) {
-      overviewSelectionHint.textContent = overviewError;
+      overviewSelectionHint.textContent = '';
     } else if (overviewLoading) {
-      overviewSelectionHint.textContent = '제출 상태를 불러오는 중입니다.';
+      overviewSelectionHint.textContent = '';
     } else if (selectedOverviewRow) {
       overviewSelectionHint.textContent = ownSiteCode
         ? `${String(selectedOverviewRow.site_name || selectedOverviewRow.site_code || '').trim()} 자동 선택`
@@ -55016,15 +55016,15 @@ function renderScheduleHqTabs() {
   }
   if (workspaceDescription) {
     if (reportsOwnerVisible) {
-      workspaceDescription.textContent = 'Finance 제출 상태를 확인하는 보고 워크스페이스입니다.';
+      workspaceDescription.textContent = 'Finance 제출 작업면';
     } else if (activeTab === SCHEDULE_TAB_HQ_UPLOAD) {
-      workspaceDescription.textContent = '지점별 제출본을 만들고 HQ 작성본을 검토하는 흐름입니다.';
+      workspaceDescription.textContent = '지원근무자 HQ 업로드';
     } else if (activeTab === SCHEDULE_TAB_UPLOAD) {
-      workspaceDescription.textContent = '월간 업로드를 단계별로 준비하고 검토하는 흐름입니다.';
+      workspaceDescription.textContent = '월간 업로드 작업면';
     } else if (activeTab === SCHEDULE_TAB_TEMPLATES) {
-      workspaceDescription.textContent = '근무 템플릿을 관리하는 라이브러리입니다.';
+      workspaceDescription.textContent = '근무 템플릿 라이브러리';
     } else {
-      workspaceDescription.textContent = '월간 배치를 보고 날짜별 상세를 바로 확인합니다.';
+      workspaceDescription.textContent = '월간 배치 기준 작업면';
     }
   }
   if (workspaceHelpButton instanceof HTMLElement) {
