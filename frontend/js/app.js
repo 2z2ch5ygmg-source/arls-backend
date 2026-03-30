@@ -367,6 +367,11 @@ const ROUTE_SCHEDULE_UPLOAD = '/schedules/upload';
 const ROUTE_SCHEDULE_HQ_UPLOAD = '/schedules/hq-upload';
 const ROUTE_SCHEDULE_TEMPLATES = '/schedules/templates';
 const ROUTE_SCHEDULE_REPORTS = '/schedules/reports';
+const ROUTE_CALENDAR_WEEK = '/calendar/week';
+const ROUTE_CALENDAR_MONTH = '/calendar/month';
+const ROUTE_CALENDAR_AGENDA = '/calendar/agenda';
+const ROUTE_CALENDAR_BOOKING_LINKS = '/calendar/booking-links';
+const ROUTE_CALENDAR_PUBLIC_BOOKING = '/calendar/public-booking';
 const ROUTE_REQUESTS = '/requests';
 const ROUTE_HR = '/hr';
 const ROUTE_PROFILE = '/profile';
@@ -697,6 +702,12 @@ function createInitialHomeState() {
     briefing: null,
     briefingLoading: false,
     briefingError: '',
+    activePanels: {
+      hq: 'schedule',
+      supervisor: 'self',
+      vice: 'site',
+      officer: 'week',
+    },
     sites: [],
     selectedSiteCode: '',
     position: null,
@@ -1015,6 +1026,50 @@ function createInitialScheduleState() {
       detailRenderMs: 0,
     },
     usingMockProvider: false,
+  };
+}
+
+function createInitialCalendarState() {
+  const today = toLocalDateKey(new Date());
+  return {
+    viewTab: 'week',
+    anchorDate: today,
+    selectedDate: today,
+    workspace: null,
+    loading: false,
+    error: '',
+    selectedContainerId: '',
+    selectedEventId: '',
+    selectedDetailTab: 'details',
+    draftEvent: null,
+    saving: false,
+    deleting: false,
+    saveError: '',
+    availability: null,
+    availabilityKey: '',
+    availabilityLoading: false,
+    availabilityError: '',
+    selectedBookingLinkId: '',
+    draftBookingLink: null,
+    bookingLinkSaving: false,
+    bookingLinkDeleting: false,
+    bookingLinkError: '',
+    selectedSyncConnectionId: '',
+    draftSyncConnection: null,
+    syncConnectionSaving: false,
+    syncConnectionDeleting: false,
+    syncConnectionRunning: false,
+    syncConnectionError: '',
+    bookingDetailMode: 'booking',
+    publicBooking: null,
+    publicBookingSlug: '',
+    publicBookingLoading: false,
+    publicBookingError: '',
+    publicBookingSubmitting: false,
+    publicBookingSuccess: null,
+    selectedPublicSlot: '',
+    publicBookingDraft: null,
+    publicBookingDraftSlug: '',
   };
 }
 
@@ -1560,6 +1615,7 @@ const state = {
   employeeAdmin: createInitialEmployeeAdminState(),
   correction: createInitialCorrectionState(),
   schedule: createInitialScheduleState(),
+  calendar: createInitialCalendarState(),
   ops: createInitialOpsState(),
   supportStatus: createInitialSupportStatusState(),
   reports: createInitialReportsState(),
@@ -2705,6 +2761,22 @@ function renderEmptyState(target, text = '표시할 데이터가 없습니다.',
     <div class="empty-state-title">데이터 없음</div>
     <div class="empty-state-description">${text}</div>
     ${ctaText ? `<div class="empty-state-meta">${ctaText}</div>` : ''}
+  `;
+  li.appendChild(box);
+  target.appendChild(li);
+}
+
+function renderCompactListEmpty(target, text = '표시할 데이터가 없습니다.', metaText = '') {
+  if (!target) return;
+  target.innerHTML = '';
+  setAriaBusy(target, false);
+  const li = document.createElement('li');
+  li.className = 'content-fade-in';
+  const box = document.createElement('div');
+  box.className = 'requests-inline-empty';
+  box.innerHTML = `
+    <strong>${text}</strong>
+    ${metaText ? `<span>${metaText}</span>` : ''}
   `;
   li.appendChild(box);
   target.appendChild(li);
@@ -4696,24 +4768,24 @@ function getHomeRoleHeadingCopy(audience = resolveHomeAudience(), briefing = sta
   if (audience === 'hq') {
     return {
       title: `${name}님, 안녕하세요`,
-      subtitle: `${dateLabel} · 오늘 운영 분석 브리핑`,
+      subtitle: `${dateLabel} · 오늘 운영 브리핑`,
     };
   }
   if (audience === 'supervisor') {
     return {
       title: '오늘 지점 브리핑',
-      subtitle: `${String(briefing?.scope_label || '').trim() || '본인 지점'} · 팀 운영과 내 근무를 함께 확인합니다.`,
+      subtitle: `${String(briefing?.scope_label || '').trim() || '본인 지점'} · 팀 운영 요약`,
     };
   }
   if (audience === 'vice') {
     return {
       title: '오늘 근무 + 현장 준비도',
-      subtitle: `${String(briefing?.scope_label || '').trim() || '본인 지점'} · count 중심으로 readiness를 확인합니다.`,
+      subtitle: `${String(briefing?.scope_label || '').trim() || '본인 지점'} · 준비도 중심`,
     };
   }
   return {
     title: '오늘 근무',
-    subtitle: `${dateLabel} · 내 근무와 요청 현황을 먼저 확인합니다.`,
+    subtitle: `${dateLabel} · 오늘 근무와 요청`,
   };
 }
 
@@ -4721,6 +4793,13 @@ function clampHomePercent(value = 0) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
   return Math.min(100, Math.max(0, Math.round(numeric)));
+}
+
+function parseHomeCountValue(rawValue = 0) {
+  const text = String(rawValue ?? '').trim();
+  if (!text) return 0;
+  const matched = text.replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
+  return matched ? Number(matched[0]) : 0;
 }
 
 function getHomePersonalStatusPercent(status = '') {
@@ -4791,6 +4870,34 @@ function buildHomeRingHeroHtml({ title = '', percent = 0, valueLabel = '', meta 
   `;
 }
 
+function buildHomeColumnChartHtml(items = []) {
+  const rows = (Array.isArray(items) ? items : []).filter(Boolean).slice(0, 6);
+  if (!rows.length) return '';
+  const normalizedRows = rows.map((item) => ({
+    label: String(item?.label || item?.title || '-').trim() || '-',
+    value: parseHomeCountValue(item?.value),
+    valueLabel: String(item?.valueLabel || item?.value || '0').trim() || '0',
+    tone: String(item?.tone || 'neutral').trim() || 'neutral',
+  }));
+  const maxValue = Math.max(...normalizedRows.map((item) => item.value), 1);
+  return `
+    <div class="home-column-chart" role="img" aria-label="오늘 스케줄 분포">
+      ${normalizedRows.map((item) => {
+        const ratio = clampHomePercent((item.value / maxValue) * 100);
+        return `
+          <article class="home-column-chart-item">
+            <strong>${escapeHomeHtml(item.valueLabel)}</strong>
+            <div class="home-column-chart-track">
+              <span class="home-column-chart-fill home-column-chart-fill-${escapeHomeHtml(item.tone)}" style="height:${Math.max(ratio, item.value > 0 ? 26 : 6)}%"></span>
+            </div>
+            <span>${escapeHomeHtml(item.label)}</span>
+          </article>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
 function buildHomeBriefingStripHtml(items = []) {
   const rows = (Array.isArray(items) ? items : []).filter(Boolean);
   if (!rows.length) return '';
@@ -4803,6 +4910,88 @@ function buildHomeBriefingStripHtml(items = []) {
           ${String(item.meta || '').trim() ? `<span class="home-briefing-chip-meta">${escapeHomeHtml(item.meta || '')}</span>` : ''}
         </article>
       `).join('')}
+    </section>
+  `;
+}
+
+function getDefaultHomePanelForAudience(audience = 'officer') {
+  if (audience === 'hq') return 'schedule';
+  if (audience === 'supervisor') return 'self';
+  if (audience === 'vice') return 'site';
+  return 'week';
+}
+
+function getHomeActivePanel(audience = resolveHomeAudience(), panels = []) {
+  const validKeys = (Array.isArray(panels) ? panels : [])
+    .map((panel) => String(panel?.key || '').trim())
+    .filter(Boolean);
+  const fallback = validKeys[0] || getDefaultHomePanelForAudience(audience);
+  const current = String(state.home?.activePanels?.[audience] || '').trim();
+  if (current && validKeys.includes(current)) {
+    return current;
+  }
+  if (!state.home) {
+    state.home = createInitialHomeState();
+  }
+  state.home.activePanels = {
+    ...(state.home.activePanels || {}),
+    [audience]: fallback,
+  };
+  return fallback;
+}
+
+function setHomeActivePanel(audience = resolveHomeAudience(), panelKey = '') {
+  const normalizedAudience = String(audience || resolveHomeAudience()).trim().toLowerCase() || 'officer';
+  const normalizedKey = String(panelKey || '').trim();
+  if (!normalizedKey) return;
+  if (!state.home) {
+    state.home = createInitialHomeState();
+  }
+  state.home.activePanels = {
+    ...(state.home.activePanels || {}),
+    [normalizedAudience]: normalizedKey,
+  };
+}
+
+function buildHomeDeckTabsHtml(audience = resolveHomeAudience(), panels = [], activeKey = '') {
+  const items = (Array.isArray(panels) ? panels : []).filter((panel) => panel && panel.key);
+  if (!items.length) return '';
+  return `
+    <div class="workspace-tabs home-deck-tabs" role="tablist" aria-label="홈 세부 패널">
+      ${items.map((panel) => {
+        const panelKey = String(panel.key || '').trim();
+        const isActive = panelKey === activeKey;
+        return `
+          <button
+            class="workspace-tab${isActive ? ' active' : ''}"
+            type="button"
+            role="tab"
+            aria-selected="${isActive ? 'true' : 'false'}"
+            data-action="home-panel-tab"
+            data-audience="${escapeHomeHtml(audience)}"
+            data-panel="${escapeHomeHtml(panelKey)}"
+          >${escapeHomeHtml(panel.label || panelKey)}</button>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function buildHomeDeckHtml({ audience = resolveHomeAudience(), title = '', subtitle = '', panels = [] } = {}) {
+  const items = (Array.isArray(panels) ? panels : []).filter((panel) => panel && panel.key && panel.html);
+  if (!items.length) return '';
+  const activeKey = getHomeActivePanel(audience, items);
+  const activePanel = items.find((panel) => String(panel.key || '').trim() === activeKey) || items[0];
+  return `
+    <section class="home-deck" aria-label="${escapeHomeHtml(title || '세부 패널')}">
+      <div class="home-deck-head">
+        <div class="home-deck-heading">
+          ${String(title || '').trim() ? `<h3>${escapeHomeHtml(title || '')}</h3>` : ''}
+          ${String(subtitle || '').trim() ? `<p class="muted">${escapeHomeHtml(subtitle || '')}</p>` : ''}
+        </div>
+        ${buildHomeDeckTabsHtml(audience, items, activeKey)}
+      </div>
+      <div class="home-deck-panel">${activePanel?.html || ''}</div>
     </section>
   `;
 }
@@ -4866,7 +5055,7 @@ function buildHomeSelfCardHtml({ audience = 'officer', briefing = null } = {}) {
   const siteMeta = String(briefing?.scope_label || '').trim() || '본인 범위';
   const requestSummary = briefing?.request_summary || {};
   const todayLabel = formatHomeStatusLabel(personal?.today_status || 'NONE');
-  const statusPercent = getHomePersonalStatusPercent(personal?.today_status || 'NONE');
+  const requestPendingCount = Number(requestSummary?.total_pending_count || 0);
   return `
     <article class="module-card home-role-card home-role-card--self home-self-card-analytics">
       <div class="home-role-card-head">
@@ -4918,15 +5107,25 @@ function buildHomeSelfCardHtml({ audience = 'officer', briefing = null } = {}) {
           <p id="homeActionHint" class="muted" role="status" aria-live="polite"></p>
         </div>
         <div class="home-self-secondary">
-          ${buildHomeRingHeroHtml({
-            title: '오늘 근무 상태',
-            percent: statusPercent,
-            valueLabel: todayLabel,
-            meta: personal?.site_name || personal?.site_code || '-',
-            footer: personal?.next_shift_label || '다음 일정 미정',
-            tone: 'orange',
-            size: 'sm',
-          })}
+          <section class="home-self-status-panel">
+            <span class="home-self-status-kicker">오늘 근무 상태</span>
+            <strong class="home-self-status-value">${escapeHomeHtml(todayLabel)}</strong>
+            <span class="home-self-status-meta">${escapeHomeHtml(personal?.site_name || personal?.site_code || '-')}</span>
+            <div class="home-self-status-grid">
+              <article class="home-self-status-item">
+                <span>다음 일정</span>
+                <strong>${escapeHomeHtml(personal?.next_shift_label || '-')}</strong>
+              </article>
+              <article class="home-self-status-item">
+                <span>내 요청</span>
+                <strong>${escapeHomeHtml(`${requestPendingCount}건`)}</strong>
+              </article>
+              <article class="home-self-status-item">
+                <span>범위</span>
+                <strong>${escapeHomeHtml(siteMeta)}</strong>
+              </article>
+            </div>
+          </section>
           <div class="home-card-head home-status-head">
             <h4>오늘 요약</h4>
             <div class="home-status-pill-group">
@@ -4962,35 +5161,42 @@ function buildHomeSelfCardHtml({ audience = 'officer', briefing = null } = {}) {
 
 function buildHomeWeekCardHtml({ briefing = null, title = '이번 주 일정' } = {}) {
   const weekSummary = briefing?.week_summary || {};
-  const totalDays = Math.max(1, Number(weekSummary?.scheduled_days || 0) + Number(weekSummary?.off_days || 0));
-  const workedRatio = clampHomePercent((Number(weekSummary?.worked_days || 0) / totalDays) * 100);
   return `
-    <article class="module-card home-role-card home-role-card--week">
+    <article class="module-card home-role-card home-role-card--week home-deck-card">
       <div class="home-role-card-head">
         <div>
           <h3>${escapeHomeHtml(title)}</h3>
-          <p class="muted">${escapeHomeHtml(`${weekSummary?.start_date || '-'} ~ ${weekSummary?.end_date || '-'}`)}</p>
         </div>
         <button class="btn btn-secondary" type="button" data-action="home-refresh-week" aria-label="이번 주 근무현황 새로고침">새로고침</button>
       </div>
       <div class="home-week-card-top">
-        ${buildHomeRingHeroHtml({
-          title: '주간 진행률',
-          percent: workedRatio,
-          valueLabel: `${Number(weekSummary?.worked_days || 0)}일 근무`,
-          meta: `예정 ${Number(weekSummary?.scheduled_days || 0)}일`,
-          footer: `휴무 ${Number(weekSummary?.off_days || 0)}일`,
-          tone: 'teal',
-          size: 'sm',
-        })}
         ${buildHomeMetricTilesHtml([
           { label: '예정', value: `${Number(weekSummary?.scheduled_days || 0)}일`, meta: '주간 근무', tone: 'neutral' },
           { label: '근무', value: `${Number(weekSummary?.worked_days || 0)}일`, meta: '실제 기록', tone: 'teal' },
           { label: '휴무', value: `${Number(weekSummary?.off_days || 0)}일`, meta: '비근무', tone: 'neutral' },
         ], { compact: true })}
+        <p class="home-week-range">${escapeHomeHtml(`${weekSummary?.start_date || '-'} ~ ${weekSummary?.end_date || '-'}`)}</p>
       </div>
-      <div id="homeWeekStrip" class="home-week-strip" aria-live="polite" aria-busy="false"></div>
+      <div class="home-card-scroll home-week-scroll">
+        <div id="homeWeekStrip" class="home-week-strip" aria-live="polite" aria-busy="false"></div>
+      </div>
     </article>
+  `;
+}
+
+function buildHomeModuleSummaryBand(items = []) {
+  const normalized = (Array.isArray(items) ? items : []).filter((item) => item && item.label);
+  if (!normalized.length) return '';
+  return `
+    <div class="home-module-summary-band">
+      ${normalized.map((item) => `
+        <article class="home-module-summary-item" data-tone="${escapeHomeHtml(item.tone || 'neutral')}">
+          <span>${escapeHomeHtml(item.label || '')}</span>
+          <strong>${escapeHomeHtml(item.value || '0')}</strong>
+          ${String(item.meta || '').trim() ? `<small>${escapeHomeHtml(item.meta || '')}</small>` : ''}
+        </article>
+      `).join('')}
+    </div>
   `;
 }
 
@@ -5003,11 +5209,6 @@ function buildHomeRequestCardHtml({ briefing = null, title = '내 요청·문서
   const actionAttrs = allowQueueRoute
     ? 'data-action="drawer-open-route" data-route="/requests"'
     : 'data-action="switch-view" data-view="requests"';
-  const breakdown = [
-    { label: '휴가 승인', value: leavePending, valueLabel: `${leavePending}건`, max: Math.max(total, 1), tone: leavePending > 0 ? 'orange' : 'neutral', meta: leavePending > 0 ? '승인 대기' : '정상' },
-    { label: '출퇴근·정정', value: attendancePending, valueLabel: `${attendancePending}건`, max: Math.max(total, 1), tone: attendancePending > 0 ? 'slate' : 'neutral', meta: attendancePending > 0 ? '검토 필요' : '정상' },
-    { label: '미확인 알림', value: unread, valueLabel: `${unread}건`, max: Math.max(Math.max(total, unread), 1), tone: unread > 0 ? 'teal' : 'neutral', meta: unread > 0 ? '확인 필요' : '정상' },
-  ];
   const priorityRows = [];
   if (leavePending > 0) {
     priorityRows.push({ title: '휴가 승인', subtitle: `승인 대기 ${leavePending}건`, value: `${leavePending}건`, pill_label: '대기', pill_tone: 'warn' });
@@ -5019,41 +5220,254 @@ function buildHomeRequestCardHtml({ briefing = null, title = '내 요청·문서
     priorityRows.push({ title: '미확인 알림', subtitle: '알림 센터 확인 필요', value: `${unread}건`, pill_label: '알림', pill_tone: 'neutral' });
   }
   return `
-    <article class="module-card home-role-card home-role-card--requests">
+    <article class="module-card home-role-card home-role-card--requests home-deck-card">
       <div class="home-role-card-head">
         <div>
           <h3>${escapeHomeHtml(title)}</h3>
-          <p class="muted">${allowQueueRoute ? '승인 큐와 미확인 알림을 한 번에 정리합니다.' : '내 요청과 알림 상태를 요약합니다.'}</p>
         </div>
         <button class="btn btn-secondary" type="button" ${actionAttrs}>열기</button>
       </div>
-      <div class="home-request-hero">
-        <div class="home-request-hero-main">
-          <span>처리 큐</span>
-          <strong>${escapeHomeHtml(String(total))}건</strong>
-        </div>
-        <span class="${getHomeBriefingToneClass(total > 0 ? 'warn' : 'success')}">${escapeHomeHtml(total > 0 ? '대기' : '정상')}</span>
+      ${buildHomeModuleSummaryBand([
+        { label: '처리 큐', value: `${total}건`, meta: total > 0 ? '확인 필요' : '정상', tone: total > 0 ? 'warn' : 'neutral' },
+        { label: '휴가 승인', value: `${leavePending}건`, meta: leavePending > 0 ? '승인 대기' : '정상', tone: leavePending > 0 ? 'warn' : 'neutral' },
+        { label: '출퇴근·정정', value: `${attendancePending}건`, meta: attendancePending > 0 ? '검토 필요' : '정상', tone: attendancePending > 0 ? 'warn' : 'neutral' },
+        { label: '미확인 알림', value: `${unread}건`, meta: unread > 0 ? '읽지 않음' : '정상', tone: unread > 0 ? 'warn' : 'neutral' },
+      ])}
+      <div class="home-card-scroll">
+        ${buildHomeListRowsHtml(priorityRows, {
+          emptyTitle: '지금 확인할 요청이 없습니다.',
+          emptyMeta: '새 요청이 생기면 이 영역에 바로 표시됩니다.',
+        })}
       </div>
-      ${buildHomeProgressRowsHtml(breakdown)}
-      ${buildHomeListRowsHtml(priorityRows, {
-        emptyTitle: '지금 확인할 요청이 없습니다.',
-      })}
     </article>
   `;
 }
 
 function buildHomeNoticeCardHtml({ briefing = null } = {}) {
   return `
-    <article class="module-card home-role-card home-role-card--notices">
+    <article class="module-card home-role-card home-role-card--notices home-deck-card home-deck-card-simple">
       <div class="home-role-card-head">
         <div>
           <h3>공지사항</h3>
-          <p class="muted">${escapeHomeHtml(getHomeLatestNoticeMeta(briefing))}</p>
         </div>
         <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/feature/notices">공지 보기</button>
       </div>
-      ${buildHomeNoticeRowsHtml(briefing?.notice_rows || [])}
+      <div class="home-card-scroll">
+        ${buildHomeNoticeRowsHtml(briefing?.notice_rows || [])}
+      </div>
     </article>
+  `;
+}
+
+function buildHomeScheduleCardHtml({ briefing = null, ops = null, requestSummary = null } = {}) {
+  const normalizedOps = ops || briefing?.ops_summary || {};
+  const normalizedRequest = requestSummary || briefing?.request_summary || briefing?.approval_summary || {};
+  const vacancySiteCount = Number(normalizedOps?.vacancy_site_count || 0);
+  const missingCount = Number(normalizedOps?.missing_count || 0);
+  const siteCount = Number(normalizedOps?.site_count || 0);
+  const pendingApprovalCount = Number(normalizedRequest?.total_pending_count || normalizedOps?.pending_approval_count || 0);
+  return `
+    <article class="module-card home-role-card home-role-card--schedule home-deck-card">
+      <div class="home-role-card-head">
+        <div>
+          <h3>오늘 스케줄</h3>
+        </div>
+        <button class="btn btn-secondary" type="button" data-action="switch-view" data-view="schedule">스케줄 보기</button>
+      </div>
+      ${buildHomeModuleSummaryBand([
+        { label: '결원 지점', value: `${vacancySiteCount}곳`, meta: missingCount > 0 ? '즉시 조정 필요' : '정상', tone: vacancySiteCount > 0 ? 'warn' : 'neutral' },
+        { label: '승인 대기', value: `${pendingApprovalCount}건`, meta: '휴가·출퇴근 요청', tone: pendingApprovalCount > 0 ? 'warn' : 'neutral' },
+        { label: '운영 지점', value: `${siteCount}곳`, meta: '오늘 기준', tone: 'neutral' },
+      ])}
+      <div class="home-card-scroll">
+        ${buildHomeListRowsHtml(briefing?.schedule_risk_rows || [], {
+          emptyTitle: '스케줄 리스크가 없습니다.',
+          emptyMeta: '결원이나 조정 이슈가 생기면 여기서 먼저 확인합니다.',
+        })}
+      </div>
+    </article>
+  `;
+}
+
+function buildHomeScheduleAnalyticsCardHtml({ briefing = null, ops = null, requestSummary = null } = {}) {
+  const normalizedOps = ops || briefing?.ops_summary || {};
+  const normalizedRequest = requestSummary || briefing?.request_summary || briefing?.approval_summary || {};
+  const vacancySiteCount = Number(normalizedOps?.vacancy_site_count || 0);
+  const missingCount = Number(normalizedOps?.missing_count || 0);
+  const rawRiskRows = Array.isArray(briefing?.schedule_risk_rows) ? briefing.schedule_risk_rows : [];
+  const chartRows = rawRiskRows.slice(0, 6).map((row, index) => ({
+    label: row?.title || `항목 ${index + 1}`,
+    value: parseHomeCountValue(row?.value),
+    valueLabel: row?.value || '0',
+    tone:
+      row?.pill_tone === 'success'
+        ? 'teal'
+        : row?.pill_tone === 'danger'
+          ? 'danger'
+          : row?.pill_tone === 'warn'
+            ? 'orange'
+            : index === 0
+              ? 'orange'
+              : index === 1
+                ? 'slate'
+                : 'neutral',
+  }));
+  const riskTotal = chartRows.reduce((sum, row) => sum + Number(row.value || 0), 0);
+  const focusRows = rawRiskRows.slice(0, 4);
+  return `
+    <article class="module-card home-role-card home-role-card--schedule-analytics">
+      <div class="home-role-card-head">
+        <div>
+          <h3>오늘 스케줄</h3>
+        </div>
+        <button class="btn btn-secondary" type="button" data-action="switch-view" data-view="schedule">스케줄 보기</button>
+      </div>
+      <div class="home-schedule-board">
+        <div class="home-schedule-board-main">
+          <div class="home-schedule-board-lead">
+            <span>오늘 조정 필요</span>
+            <strong>${escapeHomeHtml(`${riskTotal}건`)}</strong>
+            <small>${escapeHomeHtml(`운영 지점 ${Number(normalizedOps?.site_count || 0)} · 결원 ${Number(normalizedOps?.vacancy_site_count || 0)} · 승인 ${Number(normalizedRequest?.total_pending_count || 0)}`)}</small>
+          </div>
+          ${buildHomeColumnChartHtml(chartRows)}
+        </div>
+        <div class="home-schedule-board-side">
+          <div class="home-schedule-board-stats">
+            ${buildHomeMetricTilesHtml([
+              { label: '운영 지점', value: `${Number(normalizedOps?.site_count || 0)}곳`, meta: '오늘 기준', tone: 'neutral' },
+              { label: '결원 지점', value: `${vacancySiteCount}곳`, meta: missingCount > 0 ? '즉시 확인' : '정상', tone: vacancySiteCount > 0 ? 'warn' : 'neutral' },
+              { label: '승인 대기', value: `${Number(normalizedRequest?.total_pending_count || 0)}건`, meta: '휴가·출퇴근 요청', tone: Number(normalizedRequest?.total_pending_count || 0) > 0 ? 'warn' : 'neutral' },
+            ], { compact: true })}
+          </div>
+          <div class="home-card-scroll">
+            ${buildHomeListRowsHtml(focusRows, {
+              emptyTitle: '스케줄 리스크가 없습니다.',
+            })}
+          </div>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function buildHomeOrgCardHtml({ briefing = null } = {}) {
+  return `
+    <article class="module-card home-role-card home-role-card--org home-deck-card home-deck-card-simple">
+      <div class="home-role-card-head">
+        <div>
+          <h3>조직 이슈</h3>
+        </div>
+        <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/branch/employees">조직 보기</button>
+      </div>
+      <div class="home-card-scroll">
+        ${buildHomeListRowsHtml(briefing?.org_issue_rows || [], {
+          emptyTitle: '조직 이슈가 없습니다.',
+        })}
+      </div>
+    </article>
+  `;
+}
+
+function buildHomeSiteReadinessCardHtml({ briefing = null } = {}) {
+  const readiness = briefing?.site_readiness_summary || {};
+  const readinessRows = [
+    {
+      title: '출근 완료',
+      subtitle: `예정 ${Number(readiness?.scheduled_count || 0)}명 기준`,
+      value: `${Number(readiness?.present_count || 0)}명`,
+      pill_label: Number(readiness?.present_count || 0) > 0 ? '진행' : '대기',
+      pill_tone: Number(readiness?.present_count || 0) > 0 ? 'success' : 'neutral',
+    },
+    {
+      title: '미출근',
+      subtitle: '확인 필요',
+      value: `${Number(readiness?.missing_count || 0)}건`,
+      pill_label: Number(readiness?.missing_count || 0) > 0 ? '확인' : '정상',
+      pill_tone: Number(readiness?.missing_count || 0) > 0 ? 'warn' : 'success',
+    },
+    {
+      title: '요청 대기',
+      subtitle: '휴가·출퇴근',
+      value: `${Number(readiness?.pending_request_count || 0)}건`,
+      pill_label: Number(readiness?.pending_request_count || 0) > 0 ? '대기' : '정상',
+      pill_tone: Number(readiness?.pending_request_count || 0) > 0 ? 'warn' : 'success',
+    },
+    {
+      title: '준비도 경고',
+      subtitle: '현장 이슈',
+      value: `${Number(readiness?.readiness_issue_count || 0)}건`,
+      pill_label: Number(readiness?.readiness_issue_count || 0) > 0 ? '주의' : '정상',
+      pill_tone: Number(readiness?.readiness_issue_count || 0) > 0 ? 'warn' : 'success',
+    },
+  ];
+  return `
+    <article class="module-card home-role-card home-role-card--site home-deck-card">
+      <div class="home-role-card-head">
+        <div>
+          <h3>현장 준비도</h3>
+        </div>
+        <span class="${getHomeBriefingToneClass(Number(readiness?.readiness_issue_count || 0) > 0 ? 'warn' : 'success')}">${escapeHomeHtml(readiness?.site_code || 'SITE')}</span>
+      </div>
+      ${buildHomeMetricTilesHtml([
+        { label: '출근 완료', value: `${Number(readiness?.present_count || 0)}명`, meta: `예정 ${Number(readiness?.scheduled_count || 0)}명`, tone: 'teal' },
+        { label: '미출근', value: `${Number(readiness?.missing_count || 0)}건`, meta: '확인 필요', tone: Number(readiness?.missing_count || 0) > 0 ? 'warn' : 'neutral' },
+        { label: '요청 대기', value: `${Number(readiness?.pending_request_count || 0)}건`, meta: '처리 대기', tone: Number(readiness?.pending_request_count || 0) > 0 ? 'warn' : 'neutral' },
+        { label: '준비도 경고', value: `${Number(readiness?.readiness_issue_count || 0)}건`, meta: '총 경고', tone: Number(readiness?.readiness_issue_count || 0) > 0 ? 'warn' : 'neutral' },
+      ], { compact: true })}
+      <div class="home-card-scroll">
+        ${buildHomeListRowsHtml(readinessRows, {
+          emptyTitle: '현장 준비도 정보가 없습니다.',
+        })}
+      </div>
+    </article>
+  `;
+}
+
+function buildHomeSupervisorHeroCardHtml({ briefing = null } = {}) {
+  const site = briefing?.site_summary || {};
+  const attendanceRate = clampHomePercent((Number(site?.present_count || 0) / Math.max(1, Number(site?.scheduled_count || 0))) * 100);
+  return `
+    <section class="module-card home-analytics-hero home-analytics-hero-staff">
+      <div class="home-analytics-hero-main">
+        <div class="home-role-card-head">
+          <div>
+            <h3 class="home-analytics-hero-title">지점 운영 상태</h3>
+          </div>
+          <span class="${getHomeBriefingToneClass(Number(site?.schedule_gap_count || 0) > 0 ? 'warn' : 'success')}">${escapeHomeHtml(site?.site_code || 'SITE')}</span>
+        </div>
+        <div class="home-analytics-hero-body">
+          <section class="home-spotlight-card">
+            <span class="home-spotlight-kicker">지점 출근율</span>
+            <strong class="home-spotlight-value">${attendanceRate}%</strong>
+            <span class="home-spotlight-meta">${escapeHomeHtml(`${Number(site?.present_count || 0)} / ${Number(site?.scheduled_count || 0)}명 출근`)}</span>
+            <div class="home-spotlight-tags">
+              <span class="${getHomeBriefingToneClass(Number(site?.missing_count || 0) > 0 ? 'warn' : 'success')}">미출근 ${escapeHomeHtml(`${Number(site?.missing_count || 0)}건`)}</span>
+              <span class="${getHomeBriefingToneClass(Number(site?.pending_request_count || 0) > 0 ? 'warn' : 'neutral')}">요청 ${escapeHomeHtml(`${Number(site?.pending_request_count || 0)}건`)}</span>
+            </div>
+          </section>
+          <div class="home-analytics-hero-summary">
+            ${buildHomeMetricTilesHtml([
+              { label: '미출근', value: `${Number(site?.missing_count || 0)}건`, meta: '출근 누락', tone: Number(site?.missing_count || 0) > 0 ? 'warn' : 'neutral' },
+              { label: '요청 대기', value: `${Number(site?.pending_request_count || 0)}건`, meta: '휴가·출퇴근', tone: Number(site?.pending_request_count || 0) > 0 ? 'warn' : 'neutral' },
+              { label: '휴가·야간', value: `${Number(site?.leave_or_night_count || 0)}명`, meta: '운영 영향', tone: 'neutral' },
+              { label: '배정 공백', value: `${Number(site?.schedule_gap_count || 0)}건`, meta: '스케줄 리스크', tone: Number(site?.schedule_gap_count || 0) > 0 ? 'warn' : 'neutral' },
+            ])}
+          </div>
+        </div>
+      </div>
+      <aside class="home-analytics-hero-side">
+        <div class="home-role-card-head">
+          <div>
+            <h4>팀 즉시 확인</h4>
+          </div>
+        </div>
+        <div class="home-card-scroll">
+          ${buildHomeListRowsHtml(briefing?.team_attention_rows || [], {
+            emptyTitle: '팀 즉시 확인 항목이 없습니다.',
+          })}
+        </div>
+      </aside>
+    </section>
   `;
 }
 
@@ -5075,93 +5489,67 @@ function buildHomeHqSurfaceHtml(briefing = null) {
   const missingCount = Number(ops?.missing_count || 0);
   const pendingApprovalCount = Number(requestSummary?.total_pending_count || ops?.pending_approval_count || 0);
   const vacancySiteCount = Number(ops?.vacancy_site_count || 0);
-  const strip = buildHomeBriefingStripHtml([
-    { label: '운영 범위', value: `${Number(ops?.site_count || 0)}개 지점`, meta: `${scheduledCount}명 기준` },
-    { label: '즉시 조치', value: `${Number(ops?.issue_count || 0)}건`, meta: `출근 누락 ${missingCount} · 승인 대기 ${pendingApprovalCount}` },
-    { label: '최근 공지', value: getHomeLatestNoticeMeta(briefing), meta: `${Array.isArray(briefing?.notice_rows) ? briefing.notice_rows.length : 0}건 게시` },
-  ]);
+  const issueCount = Number(ops?.issue_count || 0);
+  const focusTone = missingCount > 0 || vacancySiteCount > 0 || pendingApprovalCount > 0 ? 'warn' : 'neutral';
+  const focusRows = Array.isArray(briefing?.attendance_issue_rows) && briefing.attendance_issue_rows.length
+    ? briefing.attendance_issue_rows
+    : (Array.isArray(briefing?.schedule_risk_rows) ? briefing.schedule_risk_rows : []);
+  const secondaryCards = [
+    { key: 'requests', html: buildHomeRequestCardHtml({ briefing, title: '요청·승인', allowQueueRoute: true }) },
+    { key: 'schedule', html: buildHomeScheduleCardHtml({ briefing, ops, requestSummary }) },
+    { key: 'notices', html: buildHomeNoticeCardHtml({ briefing }) },
+  ];
+  if (Array.isArray(briefing?.org_issue_rows) && briefing.org_issue_rows.length) {
+    secondaryCards.push({ key: 'org', html: buildHomeOrgCardHtml({ briefing }) });
+  }
   return `
-    <div class="home-role-root home-role-root-hq home-analytics-root home-analytics-root-hq">
-      ${strip}
-      <section class="module-card home-analytics-hero">
-        <div class="home-analytics-hero-main">
-          <div class="home-role-card-head">
-            <div>
-              <h3 class="home-analytics-hero-title">출퇴근 브리핑</h3>
-              <p class="muted">${escapeHomeHtml(`${scheduledCount}명 기준 · 오늘 핵심 지표를 먼저 봅니다.`)}</p>
+    <div class="home-role-root home-role-root-hq home-analytics-root home-analytics-root-hq home-role-root-hq-refined">
+      <div class="home-stage home-stage-hq-refined">
+        <section class="module-card home-hq-focus-card" data-tone="${escapeHomeHtml(focusTone)}">
+          <div class="home-hq-focus-head">
+            <div class="home-hq-focus-copy">
+              <span class="home-hq-focus-kicker">오늘 운영 포커스</span>
+              <h3>즉시 확인 ${escapeHomeHtml(`${issueCount}건`)}</h3>
+              <p>${escapeHomeHtml(`출근 누락 ${missingCount} · 승인 대기 ${pendingApprovalCount} · 결원 지점 ${vacancySiteCount}`)}</p>
             </div>
-            <button class="btn btn-secondary" type="button" data-action="switch-view" data-view="attendance">출퇴근 보기</button>
+            <button class="btn btn-primary" type="button" data-action="switch-view" data-view="attendance">출퇴근 보기</button>
           </div>
-          <div class="home-analytics-hero-body">
-            ${buildHomeRingHeroHtml({
-              title: '오늘 출근율',
-              percent: ops?.attendance_rate || 0,
-              valueLabel: `${presentCount} / ${scheduledCount}명`,
-              meta: '예정 인원 기준',
-              footer: `미출근 ${missingCount}건`,
-              tone: 'orange',
-            })}
-            <div class="home-analytics-hero-summary">
-              ${buildHomeMetricTilesHtml([
-                { label: '출근 완료', value: `${presentCount}명`, meta: `예정 ${scheduledCount}명`, tone: 'teal' },
-                { label: '미출근', value: `${missingCount}건`, meta: missingCount > 0 ? '즉시 확인' : '정상', tone: missingCount > 0 ? 'warn' : 'neutral' },
-                { label: '승인 대기', value: `${pendingApprovalCount}건`, meta: '요청·승인 큐', tone: pendingApprovalCount > 0 ? 'warn' : 'neutral' },
-                { label: '결원 지점', value: `${vacancySiteCount}곳`, meta: `${Number(ops?.site_count || 0)}개 지점 중`, tone: vacancySiteCount > 0 ? 'warn' : 'neutral' },
-              ])}
-              ${buildHomeProgressRowsHtml([
-                { label: '출근 완료', value: presentCount, valueLabel: `${presentCount}명`, max: Math.max(scheduledCount, 1), meta: `${clampHomePercent((presentCount / Math.max(scheduledCount, 1)) * 100)}%`, tone: 'teal' },
-                { label: '미출근', value: missingCount, valueLabel: `${missingCount}건`, max: Math.max(scheduledCount, 1), meta: `${clampHomePercent((missingCount / Math.max(scheduledCount, 1)) * 100)}%`, tone: 'orange' },
-                { label: '승인 대기', value: pendingApprovalCount, valueLabel: `${pendingApprovalCount}건`, max: Math.max(Math.max(pendingApprovalCount, vacancySiteCount), 1), meta: '승인 큐', tone: 'slate' },
-                { label: '결원 지점', value: vacancySiteCount, valueLabel: `${vacancySiteCount}곳`, max: Math.max(Number(ops?.site_count || 0), 1), meta: `${Number(ops?.site_count || 0)}개 지점`, tone: 'orange' },
-              ])}
+          <div class="home-hq-focus-metrics">
+            <article class="home-hq-focus-metric">
+              <span>출근 완료</span>
+              <strong>${escapeHomeHtml(`${presentCount}명`)}</strong>
+              <small>${escapeHomeHtml(`예정 ${scheduledCount}명`)}</small>
+            </article>
+            <article class="home-hq-focus-metric">
+              <span>즉시 확인</span>
+              <strong>${escapeHomeHtml(`${missingCount + vacancySiteCount}건`)}</strong>
+              <small>${escapeHomeHtml(missingCount + vacancySiteCount > 0 ? '출근·배정 우선' : '정상')}</small>
+            </article>
+            <article class="home-hq-focus-metric">
+              <span>승인 대기</span>
+              <strong>${escapeHomeHtml(`${pendingApprovalCount}건`)}</strong>
+              <small>${escapeHomeHtml(`운영 지점 ${Number(ops?.site_count || 0)}곳`)}</small>
+            </article>
+          </div>
+          <div class="home-hq-focus-queue">
+            <div class="home-role-card-head">
+              <div>
+                <h4>우선 확인</h4>
+              </div>
             </div>
-          </div>
-        </div>
-        <aside class="home-analytics-hero-side">
-          <div class="home-role-card-head">
-            <div>
-              <h4>즉시 확인</h4>
-              <p class="muted">이름 기준으로 바로 확인할 예외입니다.</p>
+            <div class="home-card-scroll">
+              ${buildHomeListRowsHtml(focusRows, {
+                emptyTitle: '지금 바로 확인할 운영 이슈가 없습니다.',
+              })}
             </div>
           </div>
-          ${buildHomeListRowsHtml(briefing?.attendance_issue_rows || [], {
-            emptyTitle: '지금 바로 확인할 출퇴근 예외가 없습니다.',
-          })}
-        </aside>
-      </section>
-      <div class="home-role-grid home-role-grid-hq home-analytics-grid-hq">
-        <article class="module-card home-role-card home-role-card--schedule">
-          <div class="home-role-card-head">
-            <div>
-              <h3>오늘 스케줄</h3>
-              <p class="muted">결원·리더·마감 상태만 모아 봅니다.</p>
-            </div>
-            <button class="btn btn-secondary" type="button" data-action="switch-view" data-view="schedule">스케줄 보기</button>
+        </section>
+        ${secondaryCards.map((card) => `
+          <div class="home-hq-secondary-slot home-hq-secondary-slot--${escapeHomeHtml(card.key)}">
+            ${card.html}
           </div>
-          ${buildHomeMetricTilesHtml([
-            { label: '결원 지점', value: `${vacancySiteCount}곳`, meta: missingCount > 0 ? '즉시 조정 필요' : '정상', tone: vacancySiteCount > 0 ? 'warn' : 'neutral' },
-            { label: '승인 대기', value: `${pendingApprovalCount}건`, meta: '출퇴근/휴가 요청', tone: pendingApprovalCount > 0 ? 'warn' : 'neutral' },
-            { label: '운영 지점', value: `${Number(ops?.site_count || 0)}곳`, meta: '오늘 기준', tone: 'neutral' },
-          ], { compact: true })}
-          ${buildHomeListRowsHtml(briefing?.schedule_risk_rows || [], {
-            emptyTitle: '스케줄 리스크가 없습니다.',
-          })}
-        </article>
-        ${buildHomeRequestCardHtml({ briefing, title: '요청·승인', allowQueueRoute: true })}
-        ${buildHomeNoticeCardHtml({ briefing })}
+        `).join('')}
       </div>
-      ${(Array.isArray(briefing?.org_issue_rows) && briefing.org_issue_rows.length) ? `
-        <article class="module-card home-role-card home-role-card--org">
-          <div class="home-role-card-head">
-            <div>
-              <h3>조직 이슈</h3>
-              <p class="muted">직원·지점 쪽에서 같이 확인할 항목입니다.</p>
-            </div>
-            <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/branch/employees">조직 보기</button>
-          </div>
-          ${buildHomeListRowsHtml(briefing.org_issue_rows)}
-        </article>
-      ` : ''}
     </div>
   `;
 }
@@ -5173,55 +5561,23 @@ function buildHomeSupervisorSurfaceHtml(briefing = null) {
     { label: '즉시 확인', value: `${Array.isArray(briefing?.team_attention_rows) ? briefing.team_attention_rows.length : 0}건`, meta: `미출근 ${Number(site?.missing_count || 0)} · 요청 ${Number(site?.pending_request_count || 0)}` },
     { label: '내 상태', value: formatHomeStatusLabel(briefing?.personal_summary?.today_status || 'NONE'), meta: getHomeNextShiftMeta(briefing) },
   ]);
+  const panels = [
+    { key: 'self', label: '나의 근무', html: buildHomeSelfCardHtml({ audience: 'supervisor', briefing }) },
+    { key: 'week', label: '이번 주', html: buildHomeWeekCardHtml({ briefing, title: '이번 주 일정' }) },
+    { key: 'requests', label: '내 요청', html: buildHomeRequestCardHtml({ briefing, title: '내 요청·문서' }) },
+    { key: 'notices', label: '공지', html: buildHomeNoticeCardHtml({ briefing }) },
+  ];
   return `
     <div class="home-role-root home-role-root-supervisor home-analytics-root">
       ${strip}
-      <section class="module-card home-analytics-hero home-analytics-hero-staff">
-        <div class="home-analytics-hero-main">
-          <div class="home-role-card-head">
-            <div>
-              <h3 class="home-analytics-hero-title">지점 운영 상태</h3>
-              <p class="muted">${escapeHomeHtml(site?.site_name || site?.site_code || '지점')}</p>
-            </div>
-            <span class="${getHomeBriefingToneClass(Number(site?.schedule_gap_count || 0) > 0 ? 'warn' : 'success')}">${escapeHomeHtml(site?.site_code || 'SITE')}</span>
-          </div>
-          <div class="home-analytics-hero-body">
-            ${buildHomeRingHeroHtml({
-              title: '지점 출근율',
-              percent: clampHomePercent((Number(site?.present_count || 0) / Math.max(1, Number(site?.scheduled_count || 0))) * 100),
-              valueLabel: `${Number(site?.present_count || 0)} / ${Number(site?.scheduled_count || 0)}명`,
-              meta: site?.site_name || site?.site_code || '-',
-              footer: `미출근 ${Number(site?.missing_count || 0)}건`,
-              tone: 'orange',
-              size: 'sm',
-            })}
-            <div class="home-analytics-hero-summary">
-              ${buildHomeMetricTilesHtml([
-                { label: '미출근', value: `${Number(site?.missing_count || 0)}건`, meta: '출근 누락', tone: Number(site?.missing_count || 0) > 0 ? 'warn' : 'neutral' },
-                { label: '요청 대기', value: `${Number(site?.pending_request_count || 0)}건`, meta: '휴가/출퇴근', tone: Number(site?.pending_request_count || 0) > 0 ? 'warn' : 'neutral' },
-                { label: '휴가·야간', value: `${Number(site?.leave_or_night_count || 0)}명`, meta: '운영 영향', tone: 'neutral' },
-                { label: '배정 공백', value: `${Number(site?.schedule_gap_count || 0)}건`, meta: '스케줄 리스크', tone: Number(site?.schedule_gap_count || 0) > 0 ? 'warn' : 'neutral' },
-              ])}
-            </div>
-          </div>
-        </div>
-        <aside class="home-analytics-hero-side">
-          <div class="home-role-card-head">
-            <div>
-              <h4>팀 즉시 확인</h4>
-              <p class="muted">Supervisor까지만 이름을 표시합니다.</p>
-            </div>
-          </div>
-          ${buildHomeListRowsHtml(briefing?.team_attention_rows || [], {
-            emptyTitle: '팀 즉시 확인 항목이 없습니다.',
-          })}
-        </aside>
-      </section>
-      <div class="home-role-grid home-role-grid-staff">
-        ${buildHomeSelfCardHtml({ audience: 'supervisor', briefing })}
-        ${buildHomeWeekCardHtml({ briefing, title: '이번 주 일정' })}
-        ${buildHomeRequestCardHtml({ briefing, title: '내 요청·문서' })}
-        ${buildHomeNoticeCardHtml({ briefing })}
+      <div class="home-stage home-stage-staff">
+        ${buildHomeSupervisorHeroCardHtml({ briefing })}
+        ${buildHomeDeckHtml({
+          audience: 'supervisor',
+          title: '',
+          subtitle: '',
+          panels,
+        })}
       </div>
     </div>
   `;
@@ -5234,39 +5590,23 @@ function buildHomeViceSurfaceHtml(briefing = null) {
     { label: '준비도 경고', value: `${Number(readiness?.readiness_issue_count || 0)}건`, meta: `미출근 ${Number(readiness?.missing_count || 0)} · 요청 ${Number(readiness?.pending_request_count || 0)}` },
     { label: '내 상태', value: formatHomeStatusLabel(briefing?.personal_summary?.today_status || 'NONE'), meta: getHomeNextShiftMeta(briefing) },
   ]);
+  const panels = [
+    { key: 'site', label: '현장 준비도', html: buildHomeSiteReadinessCardHtml({ briefing }) },
+    { key: 'week', label: '이번 주', html: buildHomeWeekCardHtml({ briefing, title: '이번 주 일정' }) },
+    { key: 'requests', label: '내 요청', html: buildHomeRequestCardHtml({ briefing, title: '내 요청' }) },
+    { key: 'notices', label: '공지', html: buildHomeNoticeCardHtml({ briefing }) },
+  ];
   return `
     <div class="home-role-root home-role-root-vice home-analytics-root">
       ${strip}
-      <div class="home-role-grid home-role-grid-staff">
+      <div class="home-stage home-stage-staff">
         ${buildHomeSelfCardHtml({ audience: 'vice', briefing })}
-        <article class="module-card home-role-card home-role-card--site">
-          <div class="home-role-card-head">
-            <div>
-              <h3>현장 상태 요약</h3>
-              <p class="muted">팀원 이름 없이 준비도만 확인합니다.</p>
-            </div>
-            <span class="${getHomeBriefingToneClass(Number(readiness?.readiness_issue_count || 0) > 0 ? 'warn' : 'success')}">${escapeHomeHtml(readiness?.site_code || 'SITE')}</span>
-          </div>
-          <div class="home-week-card-top">
-            ${buildHomeRingHeroHtml({
-              title: '현장 준비도',
-              percent: clampHomePercent((Number(readiness?.present_count || 0) / Math.max(1, Number(readiness?.scheduled_count || 0))) * 100),
-              valueLabel: `${Number(readiness?.present_count || 0)} / ${Number(readiness?.scheduled_count || 0)}명`,
-              meta: readiness?.site_name || readiness?.site_code || '-',
-              footer: `경고 ${Number(readiness?.readiness_issue_count || 0)}건`,
-              tone: 'orange',
-              size: 'sm',
-            })}
-            ${buildHomeMetricTilesHtml([
-              { label: '미출근', value: `${Number(readiness?.missing_count || 0)}건`, meta: '확인 필요', tone: Number(readiness?.missing_count || 0) > 0 ? 'warn' : 'neutral' },
-              { label: '요청 대기', value: `${Number(readiness?.pending_request_count || 0)}건`, meta: '처리 대기', tone: Number(readiness?.pending_request_count || 0) > 0 ? 'warn' : 'neutral' },
-              { label: '준비도', value: `${Number(readiness?.readiness_issue_count || 0)}건`, meta: '총 경고', tone: Number(readiness?.readiness_issue_count || 0) > 0 ? 'warn' : 'neutral' },
-            ], { compact: true })}
-          </div>
-        </article>
-        ${buildHomeWeekCardHtml({ briefing, title: '이번 주 일정' })}
-        ${buildHomeRequestCardHtml({ briefing, title: '내 요청' })}
-        ${buildHomeNoticeCardHtml({ briefing })}
+        ${buildHomeDeckHtml({
+          audience: 'vice',
+          title: '',
+          subtitle: '',
+          panels,
+        })}
       </div>
     </div>
   `;
@@ -5278,14 +5618,22 @@ function buildHomeOfficerSurfaceHtml(briefing = null) {
     { label: '근무 현장', value: String(briefing?.personal_summary?.site_code || '미정').trim() || '미정', meta: String(briefing?.personal_summary?.site_name || '현장 미지정').trim() || '현장 미지정' },
     { label: '다음 일정', value: getHomeNextShiftMeta(briefing), meta: '주간 일정과 함께 확인합니다.' },
   ]);
+  const panels = [
+    { key: 'week', label: '이번 주', html: buildHomeWeekCardHtml({ briefing, title: '이번 주 일정' }) },
+    { key: 'requests', label: '내 요청', html: buildHomeRequestCardHtml({ briefing, title: '내 요청·문서' }) },
+    { key: 'notices', label: '공지', html: buildHomeNoticeCardHtml({ briefing }) },
+  ];
   return `
     <div class="home-role-root home-role-root-officer home-analytics-root">
       ${strip}
-      <div class="home-role-grid home-role-grid-staff home-role-grid-staff-compact">
+      <div class="home-stage home-stage-staff">
         ${buildHomeSelfCardHtml({ audience: 'officer', briefing })}
-        ${buildHomeWeekCardHtml({ briefing, title: '이번 주 일정' })}
-        ${buildHomeRequestCardHtml({ briefing, title: '내 요청·문서' })}
-        ${buildHomeNoticeCardHtml({ briefing })}
+        ${buildHomeDeckHtml({
+          audience: 'officer',
+          title: '',
+          subtitle: '',
+          panels,
+        })}
       </div>
     </div>
   `;
@@ -6393,8 +6741,7 @@ function renderHomeNoticeRail() {
     return;
   }
   if (!rows.length) {
-    renderEmptyState(listEl, '등록된 공지가 없습니다.', '공지사항 탭에서 새 공지를 등록하면 이 영역에 바로 반영됩니다.');
-    listEl.querySelector('.empty-state')?.classList.add('home-compact-empty');
+    renderCompactListEmpty(listEl, '등록된 공지가 없습니다.', '새 공지가 생기면 이 영역에 바로 표시됩니다.');
     return;
   }
   rows.forEach((item) => {
@@ -9688,11 +10035,11 @@ function renderReportsFinanceDownloadWorkspace() {
         ? `${baseSummary} · 선택 ${selectedRows.length}개`
         : baseSummary;
     } else if (loading) {
-      summary.textContent = '지점별 업로드 현황을 불러오는 중입니다.';
+      summary.textContent = '업로드 현황을 불러오는 중입니다.';
     } else if (errorMessage) {
       summary.textContent = errorMessage;
     } else {
-      summary.textContent = '선택한 월 기준으로 tenant 전체 지점의 최종 업로드 상태를 확인합니다.';
+      summary.textContent = '대상 월 기준 최종 업로드 상태';
     }
   }
 
@@ -9700,15 +10047,15 @@ function renderReportsFinanceDownloadWorkspace() {
     if (errorMessage) {
       selectionHint.textContent = errorMessage;
     } else if (loading) {
-      selectionHint.textContent = '지점별 업로드 현황을 불러오는 중입니다.';
+      selectionHint.textContent = '업로드 현황을 불러오는 중입니다.';
     } else if (downloadableSelectedRows.length && !blockedSelectedRows.length) {
       selectionHint.textContent = downloadableSelectedRows.length > 1
-        ? `선택한 ${downloadableSelectedRows.length}개 지점의 원본 파일을 순차 다운로드합니다.`
-        : `${String(downloadableSelectedRows[0].site_name || downloadableSelectedRows[0].site_code || '').trim()} 원본 파일을 그대로 다운로드할 수 있습니다.`;
+        ? `선택 ${downloadableSelectedRows.length}개 지점 원본 다운로드 가능`
+        : `${String(downloadableSelectedRows[0].site_name || downloadableSelectedRows[0].site_code || '').trim()} 원본 다운로드 가능`;
     } else if (selectedRows.length) {
-      selectionHint.textContent = `선택 ${selectedRows.length}개 중 다운로드 가능 ${downloadableSelectedRows.length}개 · 불가 ${blockedSelectedRows.length}개`;
+      selectionHint.textContent = `선택 ${selectedRows.length}개 · 가능 ${downloadableSelectedRows.length}개 · 불가 ${blockedSelectedRows.length}개`;
     } else {
-      selectionHint.textContent = '업로드 완료된 지점을 여러 개 선택하면 원본 파일을 순차 다운로드할 수 있습니다.';
+      selectionHint.textContent = '다운로드할 지점을 선택하세요.';
     }
   }
 
@@ -9736,7 +10083,7 @@ function renderReportsFinanceDownloadWorkspace() {
     tr.className = 'admin-table-empty-row';
     const td = document.createElement('td');
     td.colSpan = 7;
-    td.textContent = '지점별 업로드 현황을 불러오는 중입니다.';
+    td.textContent = '업로드 현황을 불러오는 중입니다.';
     tr.appendChild(td);
     tableBody.appendChild(tr);
     return;
@@ -9758,7 +10105,7 @@ function renderReportsFinanceDownloadWorkspace() {
     tr.className = 'admin-table-empty-row';
     const td = document.createElement('td');
     td.colSpan = 7;
-    td.textContent = '표시할 지점이 없습니다.';
+    td.textContent = '표시할 다운로드 대상이 없습니다.';
     tr.appendChild(td);
     tableBody.appendChild(tr);
     return;
@@ -10577,6 +10924,11 @@ const ROLE_PERMISSIONS = {
     leaveReview: true,
     leaveWrite: true,
     scheduleWrite: true,
+    calendar: true,
+    calendarCreate: true,
+    calendarSharedManage: true,
+    calendarBookingManage: true,
+    calendarSyncManage: true,
     employeeWrite: true,
     tenantManage: true,
     userManage: true,
@@ -10597,6 +10949,11 @@ const ROLE_PERMISSIONS = {
     leaveReview: true,
     leaveWrite: true,
     scheduleWrite: true,
+    calendar: true,
+    calendarCreate: true,
+    calendarSharedManage: true,
+    calendarBookingManage: true,
+    calendarSyncManage: true,
     employeeWrite: true,
     tenantManage: false,
     userManage: false,
@@ -10617,6 +10974,11 @@ const ROLE_PERMISSIONS = {
     leaveReview: false,
     leaveWrite: true,
     scheduleWrite: false,
+    calendar: true,
+    calendarCreate: true,
+    calendarSharedManage: false,
+    calendarBookingManage: true,
+    calendarSyncManage: false,
     employeeWrite: false,
     tenantManage: false,
     userManage: false,
@@ -10637,6 +10999,11 @@ const ROLE_PERMISSIONS = {
     leaveReview: false,
     leaveWrite: true,
     scheduleWrite: false,
+    calendar: true,
+    calendarCreate: true,
+    calendarSharedManage: false,
+    calendarBookingManage: true,
+    calendarSyncManage: false,
     employeeWrite: false,
     tenantManage: false,
     userManage: false,
@@ -10657,6 +11024,11 @@ const ROLE_PERMISSIONS = {
     leaveReview: false,
     leaveWrite: true,
     scheduleWrite: false,
+    calendar: true,
+    calendarCreate: true,
+    calendarSharedManage: false,
+    calendarBookingManage: false,
+    calendarSyncManage: false,
     employeeWrite: false,
     tenantManage: false,
     userManage: false,
@@ -10719,6 +11091,7 @@ function isDrawerItemActiveRoute(targetRouteRaw = '', currentRouteRaw = '') {
     targetRoute === ROUTE_REPORTS
     && (currentRoute === ROUTE_REPORTS_APPLE || currentRoute === ROUTE_SCHEDULE_REPORTS || currentRoute === ROUTE_REPORTS_FINANCE_DOWNLOAD)
   ) return true;
+  if (isCalendarRoutePath(targetRoute) && isCalendarRoutePath(currentRoute)) return true;
   if (isScheduleRoutePath(targetRoute) && isScheduleRoutePath(currentRoute)) {
     const targetIsReports = targetRoute === ROUTE_SCHEDULE_REPORTS;
     const currentIsReports = currentRoute === ROUTE_SCHEDULE_REPORTS;
@@ -10760,6 +11133,13 @@ function isDrawerScheduleSectionActive(section = '', currentRouteRaw = '') {
   return false;
 }
 
+function isDrawerCalendarSectionActive(section = '', currentRouteRaw = '') {
+  const normalized = normalizeCalendarViewTab(section);
+  const currentRoute = normalizeRoutePath(parseRouteCandidate(currentRouteRaw).path);
+  if (!isCalendarRoutePath(currentRoute)) return false;
+  return resolveCalendarTabFromRoutePath(currentRoute) === normalized;
+}
+
 function isDrawerAttendanceSectionActive(section = '', currentRouteRaw = '') {
   const normalized = normalizeAttendanceManagerTab(section);
   const currentRoute = normalizeRoutePath(parseRouteCandidate(currentRouteRaw).path);
@@ -10798,6 +11178,10 @@ function isDrawerItemActive(item = null, currentRouteRaw = '') {
   if (scheduleSectionMatch) {
     return isDrawerScheduleSectionActive(scheduleSectionMatch, currentRouteRaw);
   }
+  const calendarSectionMatch = String(item.calendarSectionMatch || '').trim().toLowerCase();
+  if (calendarSectionMatch) {
+    return isDrawerCalendarSectionActive(calendarSectionMatch, currentRouteRaw);
+  }
   return Boolean(item?.route) && isDrawerItemActiveRoute(item.route, currentRouteRaw);
 }
 
@@ -10811,6 +11195,20 @@ const DRAWER_MENU_BY_ROLE = {
     { id: 'requests', title: '요청', action: 'drawer-open-route', route: ROUTE_REQUESTS, icon: 'clipboard-list' },
     { id: 'hr', title: '문서', action: 'drawer-open-route', route: ROUTE_HR, icon: 'file-text' },
     { id: 'schedule', title: '스케줄', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, icon: 'calendar-days' },
+    {
+      id: 'calendar',
+      title: '캘린더',
+      action: 'drawer-open-route',
+      route: ROUTE_CALENDAR_WEEK,
+      icon: 'calendar-range',
+      calendarSectionMatch: 'week',
+      children: [
+        { id: 'calendar-week', title: '주간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_WEEK, calendarSectionMatch: 'week' },
+        { id: 'calendar-month', title: '월간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_MONTH, calendarSectionMatch: 'month' },
+        { id: 'calendar-agenda', title: '아젠다', action: 'drawer-open-route', route: ROUTE_CALENDAR_AGENDA, calendarSectionMatch: 'agenda' },
+        { id: 'calendar-booking', title: '예약 링크', action: 'drawer-open-route', route: ROUTE_CALENDAR_BOOKING_LINKS, calendarSectionMatch: 'booking-links' },
+      ],
+    },
     { type: 'section', title: '내 정보' },
     { id: 'settings', title: '내 정보', action: 'drawer-open-route', route: ROUTE_PROFILE, icon: 'settings' },
   ],
@@ -10845,6 +11243,20 @@ const DRAWER_MENU_BY_ROLE = {
     },
     { id: 'hr', title: '문서', action: 'drawer-open-route', route: ROUTE_HR, icon: 'file-text' },
     {
+      id: 'calendar',
+      title: '캘린더',
+      action: 'drawer-open-route',
+      route: ROUTE_CALENDAR_WEEK,
+      icon: 'calendar-range',
+      calendarSectionMatch: 'week',
+      children: [
+        { id: 'calendar-week', title: '주간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_WEEK, calendarSectionMatch: 'week' },
+        { id: 'calendar-month', title: '월간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_MONTH, calendarSectionMatch: 'month' },
+        { id: 'calendar-agenda', title: '아젠다', action: 'drawer-open-route', route: ROUTE_CALENDAR_AGENDA, calendarSectionMatch: 'agenda' },
+        { id: 'calendar-booking', title: '예약 링크', action: 'drawer-open-route', route: ROUTE_CALENDAR_BOOKING_LINKS, calendarSectionMatch: 'booking-links' },
+      ],
+    },
+    {
       id: 'schedule',
       title: '스케줄',
       action: 'drawer-open-route',
@@ -10852,8 +11264,7 @@ const DRAWER_MENU_BY_ROLE = {
       icon: 'calendar-days',
       scheduleSectionMatch: 'calendar',
       children: [
-        { id: 'schedule-calendar', title: '월간 캘린더', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
-        { id: 'schedule-upload', title: 'Excel 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+        { id: 'schedule-calendar', title: '월간 근무표', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
         { id: 'schedule-templates', title: '근무 템플릿', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
       ],
     },
@@ -10866,6 +11277,7 @@ const DRAWER_MENU_BY_ROLE = {
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
         { id: 'reports-finance-download', title: 'Finance 다운로드', action: 'drawer-open-route', route: ROUTE_REPORTS_FINANCE_DOWNLOAD, reportsTabMatch: 'finance-download' },
+        { id: 'schedule-upload', title: 'Excel 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
       ],
     },
     { type: 'section', title: '내 정보' },
@@ -10907,10 +11319,22 @@ const DRAWER_MENU_BY_ROLE = {
       icon: 'calendar-days',
       scheduleSectionMatch: 'calendar',
       children: [
-        { id: 'schedule-calendar', title: '월간 캘린더', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
-        { id: 'schedule-upload', title: 'Excel 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
-        { id: 'schedule-hq-upload', title: '지원근무자 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
+        { id: 'schedule-calendar', title: '월간 근무표', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
         { id: 'schedule-templates', title: '근무 템플릿', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
+      ],
+    },
+    {
+      id: 'calendar',
+      title: '캘린더',
+      action: 'drawer-open-route',
+      route: ROUTE_CALENDAR_WEEK,
+      icon: 'calendar-range',
+      calendarSectionMatch: 'week',
+      children: [
+        { id: 'calendar-week', title: '주간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_WEEK, calendarSectionMatch: 'week' },
+        { id: 'calendar-month', title: '월간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_MONTH, calendarSectionMatch: 'month' },
+        { id: 'calendar-agenda', title: '아젠다', action: 'drawer-open-route', route: ROUTE_CALENDAR_AGENDA, calendarSectionMatch: 'agenda' },
+        { id: 'calendar-booking', title: '예약 링크', action: 'drawer-open-route', route: ROUTE_CALENDAR_BOOKING_LINKS, calendarSectionMatch: 'booking-links' },
       ],
     },
     {
@@ -10922,6 +11346,8 @@ const DRAWER_MENU_BY_ROLE = {
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
         { id: 'reports-finance-download', title: 'Finance 다운로드', action: 'drawer-open-route', route: ROUTE_REPORTS_FINANCE_DOWNLOAD, reportsTabMatch: 'finance-download' },
+        { id: 'schedule-upload', title: 'Excel 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+        { id: 'schedule-hq-upload', title: '지원근무자 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
       ],
     },
     { type: 'section', title: '조직' },
@@ -10975,10 +11401,22 @@ const DRAWER_MENU_BY_ROLE = {
       icon: 'calendar-days',
       scheduleSectionMatch: 'calendar',
       children: [
-        { id: 'schedule-calendar', title: '월간 캘린더', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
-        { id: 'schedule-upload', title: 'Excel 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
-        { id: 'schedule-hq-upload', title: '지원근무자 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
+        { id: 'schedule-calendar', title: '월간 근무표', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
         { id: 'schedule-templates', title: '근무 템플릿', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
+      ],
+    },
+    {
+      id: 'calendar',
+      title: '캘린더',
+      action: 'drawer-open-route',
+      route: ROUTE_CALENDAR_WEEK,
+      icon: 'calendar-range',
+      calendarSectionMatch: 'week',
+      children: [
+        { id: 'calendar-week', title: '주간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_WEEK, calendarSectionMatch: 'week' },
+        { id: 'calendar-month', title: '월간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_MONTH, calendarSectionMatch: 'month' },
+        { id: 'calendar-agenda', title: '아젠다', action: 'drawer-open-route', route: ROUTE_CALENDAR_AGENDA, calendarSectionMatch: 'agenda' },
+        { id: 'calendar-booking', title: '예약 링크', action: 'drawer-open-route', route: ROUTE_CALENDAR_BOOKING_LINKS, calendarSectionMatch: 'booking-links' },
       ],
     },
     {
@@ -10990,6 +11428,8 @@ const DRAWER_MENU_BY_ROLE = {
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
         { id: 'reports-finance-download', title: 'Finance 다운로드', action: 'drawer-open-route', route: ROUTE_REPORTS_FINANCE_DOWNLOAD, reportsTabMatch: 'finance-download' },
+        { id: 'schedule-upload', title: 'Excel 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+        { id: 'schedule-hq-upload', title: '지원근무자 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
       ],
     },
     { type: 'section', title: '조직' },
@@ -17132,7 +17572,6 @@ function renderScheduleFinanceSubmissionStatus() {
     ? Boolean(overviewWorkspace.tenant_wide)
     : !ownSiteCode;
 
-  const overviewDescription = $('#scheduleFinanceOverviewDescription');
   const overviewSummary = $('#scheduleFinanceOverviewSummary');
   const overviewMonthLabel = $('#scheduleFinanceOverviewMonthLabel');
   const overviewScopeLabel = $('#scheduleFinanceOverviewScopeLabel');
@@ -17141,22 +17580,17 @@ function renderScheduleFinanceSubmissionStatus() {
   const overviewStartBtn = $('#scheduleFinanceOverviewStartBtn');
   const overviewTableBody = $('#scheduleFinanceOverviewTableBody');
 
-  if (overviewDescription instanceof HTMLElement) {
-    overviewDescription.textContent = tenantWide
-      ? '지점별 제출 상태를 확인하고 제출할 지점을 선택하세요.'
-      : '나의 제출 상태를 확인하고 제출을 시작하세요.';
-  }
   if (overviewSummary instanceof HTMLElement) {
     if (overviewWorkspace) {
       overviewSummary.textContent = tenantWide
-        ? `총 ${Number(overviewWorkspace.total_site_count || overviewRows.length || 0)}개 지점 · 제출 진행 ${Number(overviewWorkspace.submitted_site_count || 0)}개 · 확인본 완료 ${Number(overviewWorkspace.review_ready_site_count || 0)}개 · 최종 업로드 완료 ${Number(overviewWorkspace.final_uploaded_site_count || 0)}개`
-        : '본인 지점 기준 제출 상태를 확인한 뒤 제출 workflow를 시작할 수 있습니다.';
+        ? `총 ${Number(overviewWorkspace.total_site_count || overviewRows.length || 0)}개 지점 · 제출 ${Number(overviewWorkspace.submitted_site_count || 0)} · 1차 확인 ${Number(overviewWorkspace.review_ready_site_count || 0)} · 최종 업로드 ${Number(overviewWorkspace.final_uploaded_site_count || 0)}`
+        : '본인 지점 기준 제출 상태를 확인합니다.';
     } else if (overviewLoading) {
-      overviewSummary.textContent = '지점별 Finance 제출 상태를 불러오는 중입니다.';
+      overviewSummary.textContent = '제출 상태를 불러오는 중입니다.';
     } else if (overviewError) {
       overviewSummary.textContent = overviewError;
     } else {
-      overviewSummary.textContent = '선택한 월 기준 Finance 제출 상태를 확인합니다.';
+      overviewSummary.textContent = '대상 월 기준 제출 상태';
     }
   }
   if (overviewMonthLabel instanceof HTMLElement) {
@@ -17182,13 +17616,13 @@ function renderScheduleFinanceSubmissionStatus() {
     if (overviewError) {
       overviewSelectionHint.textContent = overviewError;
     } else if (overviewLoading) {
-      overviewSelectionHint.textContent = '지점별 제출 상태를 불러오는 중입니다.';
+      overviewSelectionHint.textContent = '제출 상태를 불러오는 중입니다.';
     } else if (selectedOverviewRow) {
       overviewSelectionHint.textContent = ownSiteCode
-        ? `${String(selectedOverviewRow.site_name || selectedOverviewRow.site_code || '').trim()}이 자동 선택되어 있습니다.`
-        : `${String(selectedOverviewRow.site_name || selectedOverviewRow.site_code || '').trim()} 선택됨 · ${selectedOverviewRow.submission_status_label} / ${selectedOverviewRow.review_status_label} / ${selectedOverviewRow.final_status_label}`;
+        ? `${String(selectedOverviewRow.site_name || selectedOverviewRow.site_code || '').trim()} 자동 선택`
+        : `${String(selectedOverviewRow.site_name || selectedOverviewRow.site_code || '').trim()} · ${selectedOverviewRow.submission_status_label} / ${selectedOverviewRow.review_status_label} / ${selectedOverviewRow.final_status_label}`;
     } else if (tenantWide) {
-      overviewSelectionHint.textContent = '체크박스를 선택하면 제출 시작하기가 활성화됩니다.';
+      overviewSelectionHint.textContent = '제출할 지점을 선택하세요.';
     } else {
       overviewSelectionHint.textContent = '본인 지점이 자동 선택되면 바로 제출을 시작할 수 있습니다.';
     }
@@ -17203,7 +17637,7 @@ function renderScheduleFinanceSubmissionStatus() {
     if (overviewLoading && !overviewRows.length) {
       const tr = document.createElement('tr');
       tr.className = 'admin-table-empty-row';
-      tr.innerHTML = '<td colspan="8">제출 현황을 불러오는 중입니다.</td>';
+      tr.innerHTML = '<td colspan="8">제출 상태를 불러오는 중입니다.</td>';
       overviewTableBody.appendChild(tr);
     } else if (overviewError && !overviewRows.length) {
       const tr = document.createElement('tr');
@@ -17213,7 +17647,7 @@ function renderScheduleFinanceSubmissionStatus() {
     } else if (!overviewRows.length) {
       const tr = document.createElement('tr');
       tr.className = 'admin-table-empty-row';
-      tr.innerHTML = '<td colspan="8">표시할 지점이 없습니다.</td>';
+      tr.innerHTML = '<td colspan="8">표시할 제출 대상이 없습니다.</td>';
       overviewTableBody.appendChild(tr);
     } else {
       overviewRows.forEach((row) => {
@@ -24198,20 +24632,29 @@ function renderRequestsToolbarSummary() {
   const workspace = ensureRequestsWorkspaceState();
   const countEl = $('#requestsToolbarScopeCount');
   const statsEl = $('#requestsToolbarQuickStats');
+  const segment = normalizeRequestsTabView(state.requestsTabView);
   const rows = Array.isArray(workspace.activeRows) ? workspace.activeRows : [];
   const pendingCount = rows.filter((item) => requestsRowMatchesStatusFilter(item, 'pending')).length;
   const approvedToday = rows.filter((item) => ['approved', 'issued', 'success'].includes(String(item.status || '').toLowerCase()) && toLocalDateKey(new Date(item.updatedAt || item.requestedAt || 0)) === toLocalDateKey(new Date())).length;
   const rejectedToday = rows.filter((item) => ['rejected', 'failed', 'fail'].includes(String(item.status || '').toLowerCase()) && toLocalDateKey(new Date(item.updatedAt || item.requestedAt || 0)) === toLocalDateKey(new Date())).length;
+  const createdToday = rows.filter((item) => toLocalDateKey(new Date(item.requestedAt || item.createdAt || 0)) === toLocalDateKey(new Date())).length;
+  const completedCount = rows.filter((item) => requestsRowMatchesStatusFilter(item, 'completed')).length;
+  const issuedCount = rows.filter((item) => ['issued', 'generating', 'requested'].includes(String(item.status || '').toLowerCase())).length;
+  const statsBySegment = segment === 'documents'
+    ? [`전체 ${rows.length}건`, `발급 대기 ${issuedCount}건`, `오늘 신규 ${createdToday}건`]
+    : segment === 'approvals'
+      ? [`전체 ${rows.length}건`, `대기 ${pendingCount}건`, `처리 ${completedCount}건`, `오늘 신규 ${createdToday}건`]
+      : [`전체 ${rows.length}건`, `오늘 승인 ${approvedToday}건`, `오늘 반려 ${rejectedToday}건`];
   if (countEl) {
-    countEl.textContent = `대기 ${pendingCount}건`;
+    countEl.textContent = segment === 'documents'
+      ? '문서 센터'
+      : segment === 'approvals'
+        ? '승인 큐'
+        : `대기 ${pendingCount}건`;
   }
   if (statsEl) {
     statsEl.innerHTML = '';
-    [
-      `전체 ${rows.length}건`,
-      `오늘 승인 ${approvedToday}건`,
-      `오늘 반려 ${rejectedToday}건`,
-    ].forEach((label) => {
+    statsBySegment.forEach((label) => {
       const span = document.createElement('span');
       span.className = 'requests-toolbar-stat';
       span.textContent = label;
@@ -24222,6 +24665,7 @@ function renderRequestsToolbarSummary() {
 
 function renderRequestsFilterBar() {
   const workspace = ensureRequestsWorkspaceFilters();
+  const segment = normalizeRequestsTabView(state.requestsTabView);
   const startInput = $('#requestsFilterStartDate');
   const endInput = $('#requestsFilterEndDate');
   const siteSelect = $('#requestsSiteFilter');
@@ -24237,6 +24681,32 @@ function renderRequestsFilterBar() {
   if (subTypeSelect instanceof HTMLSelectElement) subTypeSelect.value = String(workspace.subTypeFilter || 'all').trim() || 'all';
   if (actorInput instanceof HTMLInputElement) actorInput.value = String(workspace.actorQuery || '');
   if (sortSelect instanceof HTMLSelectElement) sortSelect.value = getRequestsWorkspaceSortControlValue();
+
+  const root = $('#view-requests');
+  if (root instanceof HTMLElement) {
+    root.dataset.requestsSegment = segment;
+  }
+  const dateCluster = document.querySelector('#requestsFilterBar .requests-filter-cluster-date');
+  const coreCluster = document.querySelector('#requestsFilterBar .requests-filter-cluster-core');
+  const searchCluster = document.querySelector('#requestsFilterBar .requests-filter-cluster-search');
+  const actorField = actorInput instanceof HTMLElement ? actorInput.closest('.input-field') : null;
+  const subtypeField = subTypeSelect instanceof HTMLElement ? subTypeSelect.closest('.input-field') : null;
+  const compactFilterMode = segment === 'documents' || segment === 'approvals';
+  if (dateCluster instanceof HTMLElement) {
+    dateCluster.classList.toggle('is-compact', compactFilterMode);
+  }
+  if (coreCluster instanceof HTMLElement) {
+    coreCluster.classList.toggle('is-compact', compactFilterMode);
+  }
+  if (searchCluster instanceof HTMLElement) {
+    searchCluster.classList.toggle('is-compact', compactFilterMode);
+  }
+  if (actorField instanceof HTMLElement) {
+    actorField.classList.toggle('hidden', segment === 'documents');
+  }
+  if (subtypeField instanceof HTMLElement) {
+    subtypeField.classList.toggle('hidden', segment === 'approvals');
+  }
 
   document.querySelectorAll('#requestsFilterBar [data-action="requests-range"]').forEach((button) => {
     const preset = String(button?.dataset?.range || '').trim().toLowerCase();
@@ -24442,7 +24912,7 @@ function renderRequestsWorkspaceListRows() {
   if (!rows.length) {
     workspace.detailKey = '';
     workspace.drawerOpen = false;
-    renderEmptyState(list, '조건에 맞는 요청이 없습니다.', '필터를 조정하거나 새 요청을 등록해 주세요.');
+    renderCompactListEmpty(list, '조건에 맞는 요청이 없습니다.', '필터를 조정하거나 새 요청을 등록해 주세요.');
     renderRequestsSortHeaders();
     return;
   }
@@ -24456,6 +24926,7 @@ function renderRequestsWorkspaceListRows() {
 function renderRequestsPriorityQueue() {
   const workspace = ensureRequestsWorkspaceState();
   const list = $('#requestsPriorityQueueList');
+  const card = $('#requestsPriorityQueueCard');
   const hint = $('#requestsPriorityQueueHint');
   const meta = $('#requestsPriorityQueueMeta');
   if (!list) return;
@@ -24473,8 +24944,13 @@ function renderRequestsPriorityQueue() {
     meta.classList.toggle('hidden', hiddenCount <= 0);
   }
   if (!rows.length) {
-    renderEmptyState(list, '우선 처리 요청이 없습니다.', '새 대기 건이 생기면 여기에 먼저 표시됩니다.');
+    if (card instanceof HTMLElement) {
+      card.classList.add('hidden');
+    }
     return;
+  }
+  if (card instanceof HTMLElement) {
+    card.classList.remove('hidden');
   }
   rows.forEach((item) => {
     list.appendChild(createRequestsPriorityRow(item));
@@ -25136,6 +25612,46 @@ function isScheduleRoutePath(routePath = '') {
     || route === ROUTE_ADMIN_SCHEDULE_TOOLS;
 }
 
+function normalizeCalendarViewTab(value = 'week') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'month') return 'month';
+  if (normalized === 'agenda') return 'agenda';
+  if (normalized === 'booking-links' || normalized === 'booking' || normalized === 'links') return 'booking-links';
+  return 'week';
+}
+
+function resolveCalendarPublicSlugFromRoute(routeWithQuery = '') {
+  const parsed = parseRouteCandidate(routeWithQuery || getCurrentRouteWithQuery());
+  const route = normalizeRoutePath(parsed.path);
+  if (route !== ROUTE_CALENDAR_PUBLIC_BOOKING) return '';
+  return String(new URLSearchParams(parsed.query || '').get('slug') || '').trim();
+}
+
+function isCalendarRoutePath(routePath = '') {
+  const route = normalizeRoutePath(routePath);
+  return route === ROUTE_CALENDAR_WEEK
+    || route === ROUTE_CALENDAR_MONTH
+    || route === ROUTE_CALENDAR_AGENDA
+    || route === ROUTE_CALENDAR_BOOKING_LINKS
+    || route === ROUTE_CALENDAR_PUBLIC_BOOKING;
+}
+
+function resolveCalendarTabFromRoutePath(routePath = '') {
+  const route = normalizeRoutePath(routePath);
+  if (route === ROUTE_CALENDAR_MONTH) return 'month';
+  if (route === ROUTE_CALENDAR_AGENDA) return 'agenda';
+  if (route === ROUTE_CALENDAR_BOOKING_LINKS) return 'booking-links';
+  return route === ROUTE_CALENDAR_WEEK ? 'week' : '';
+}
+
+function getCalendarTabRoute(tab = state.calendar?.viewTab || 'week') {
+  const normalized = normalizeCalendarViewTab(tab);
+  if (normalized === 'month') return ROUTE_CALENDAR_MONTH;
+  if (normalized === 'agenda') return ROUTE_CALENDAR_AGENDA;
+  if (normalized === 'booking-links') return ROUTE_CALENDAR_BOOKING_LINKS;
+  return ROUTE_CALENDAR_WEEK;
+}
+
 function getScheduleTabRoute(tab = '') {
   const normalizedTab = normalizeScheduleHqTab(tab);
   if (normalizedTab === SCHEDULE_TAB_LIST) return ROUTE_SCHEDULE_LIST;
@@ -25247,6 +25763,11 @@ function getTenantByCode(tenantCode = '') {
 function resolveRouteForView(viewName = '') {
   const raw = String(viewName || '').trim().toLowerCase();
   if (raw === 'attendance') return getAttendanceRouteWithTab();
+  if (raw === 'calendar') return getCalendarTabRoute(state.calendar?.viewTab || 'week');
+  if (raw === 'calendar-public') {
+    const slug = String(state.calendar?.publicBookingSlug || '').trim();
+    return slug ? `${ROUTE_CALENDAR_PUBLIC_BOOKING}?slug=${encodeURIComponent(slug)}` : ROUTE_CALENDAR_PUBLIC_BOOKING;
+  }
   if (raw === 'hr') return ROUTE_HR;
   if (raw === 'leave') return `${ROUTE_REQUESTS}?section=leave`;
   if (raw === 'notices') return buildNoticesRoute();
@@ -25278,6 +25799,8 @@ function resolveViewForRoute(routePath = '') {
   if (route === ROUTE_OPS) return 'ops';
   if (route === ROUTE_REPORTS || route === ROUTE_REPORTS_APPLE || route === ROUTE_REPORTS_FINANCE_DOWNLOAD) return 'reports';
   if (route === ROUTE_ATTENDANCE) return 'attendance';
+  if (route === ROUTE_CALENDAR_PUBLIC_BOOKING) return 'calendar-public';
+  if (isCalendarRoutePath(route)) return 'calendar';
   if (isScheduleRoutePath(route)) return 'schedule';
   if (route === ROUTE_REQUESTS || route === ROUTE_APPROVALS || route === ROUTE_REQUESTS_CORRECTION) return 'requests';
   if (route === ROUTE_PROFILE || route === ROUTE_NOTIFICATIONS) return 'profile';
@@ -25300,6 +25823,11 @@ function isKnownRoute(routePath = '') {
     ROUTE_REPORTS_FINANCE_DOWNLOAD,
     ROUTE_REPORTS_APPLE,
     ROUTE_ATTENDANCE,
+    ROUTE_CALENDAR_WEEK,
+    ROUTE_CALENDAR_MONTH,
+    ROUTE_CALENDAR_AGENDA,
+    ROUTE_CALENDAR_BOOKING_LINKS,
+    ROUTE_CALENDAR_PUBLIC_BOOKING,
     ROUTE_SCHEDULE,
     ROUTE_SCHEDULE_CALENDAR,
     ROUTE_SCHEDULE_LIST,
@@ -25339,6 +25867,7 @@ function isRouteAllowed(routePath, perms = getRolePermissions(), navRole = getNa
   const route = normalizeRoutePath(routePath);
   if (parseMasterRoute(route)) return isMasterDeveloperAccount();
   if (route === ROUTE_LOGIN) return true;
+  if (route === ROUTE_CALENDAR_PUBLIC_BOOKING) return true;
   if (!state.user || !state.token) return false;
   if (route === ROUTE_HOME || route === ROUTE_PROFILE || route === ROUTE_NOTIFICATIONS) return true;
   if (route === ROUTE_HR) return true;
@@ -25348,6 +25877,7 @@ function isRouteAllowed(routePath, perms = getRolePermissions(), navRole = getNa
   if (route === ROUTE_REPORTS_FINANCE_DOWNLOAD) return canViewReportsFinanceDownloadTab();
   if (route === ROUTE_REPORTS_APPLE) return canViewReportsPackTab() && isAppleReportPackEnabled();
   if (route === ROUTE_ATTENDANCE) return Boolean(perms.attendance || perms.attendanceWrite || perms.attendanceReview);
+  if (isCalendarRoutePath(route)) return Boolean(perms.calendar);
   if (
     route === ROUTE_SCHEDULE
     || route === ROUTE_SCHEDULE_CALENDAR
@@ -25384,6 +25914,7 @@ function resolveFallbackRoute(perms = getRolePermissions(), navRole = getNavigat
     ROUTE_ATTENDANCE,
     ROUTE_REQUESTS,
     ROUTE_HR,
+    ROUTE_CALENDAR_WEEK,
     ROUTE_SCHEDULE_CALENDAR,
     ROUTE_PROFILE,
     (navRole === 'DEV' || navRole === 'BRANCH_MANAGER') ? ROUTE_ADMIN_SITES : '',
@@ -25588,6 +26119,16 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
     route = ROUTE_ADMIN_EMPLOYEES_IMPORT;
   }
   if (state.authStatus === AUTH_STATUS_BOOTING) {
+    if (route === ROUTE_CALENDAR_PUBLIC_BOOKING) {
+      state.calendar.publicBookingSlug = String(parsedParams.get('slug') || '').trim();
+      state.currentRoute = route;
+      const normalizedQuery = parsedParams.toString();
+      updateRouteHash(normalizedQuery ? `${route}?${normalizedQuery}` : route, { replace: true });
+      showView('calendar-public', { skipRouteSync: true, replaceRoute: true }).catch((error) => {
+        console.error('[RG ARLS] public booking bootstrap route failed', error);
+      });
+      return true;
+    }
     if (route !== ROUTE_LOGIN && isKnownRoute(route)) {
       state.pendingRouteAfterLogin = parsed.query ? `${route}?${parsed.query}` : route;
     }
@@ -25605,6 +26146,16 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
       return true;
     }
     showAuthPanel();
+    return true;
+  }
+
+  if (route === ROUTE_CALENDAR_PUBLIC_BOOKING) {
+    state.calendar.publicBookingSlug = String(parsedParams.get('slug') || '').trim();
+    state.currentRoute = route;
+    state.lastAllowedRoute = state.user ? route : state.lastAllowedRoute;
+    const normalizedQuery = parsedParams.toString();
+    updateRouteHash(normalizedQuery ? `${route}?${normalizedQuery}` : route, { replace });
+    await showView('calendar-public', { skipRouteSync: true, replaceRoute: replace });
     return true;
   }
 
@@ -25784,6 +26335,7 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
 
 function isViewAllowed(view, perms = getRolePermissions()) {
   const raw = String(view || '').trim().toLowerCase();
+  if (raw === 'calendar-public') return true;
   if (raw === 'attendance-check') return Boolean(perms.attendanceWrite);
   if (raw === 'attendance') return Boolean(perms.attendance || perms.attendanceWrite || perms.attendanceReview);
   if (raw === 'leave') return Boolean(perms.leave || perms.leaveWrite || perms.leaveReview);
@@ -25791,6 +26343,7 @@ function isViewAllowed(view, perms = getRolePermissions()) {
   if (raw === 'ops') return isManagerShellRole(getNavigationRole());
   if (raw === 'support-status') return isManagerShellRole(getNavigationRole());
   if (raw === 'reports') return canViewReportsCenter();
+  if (raw === 'calendar') return Boolean(perms.calendar);
   const target = mapLegacyViewName(view);
   if (target === 'dev-console') return Boolean(perms.tenantManage);
   if (target === 'home' || target === 'profile') return true;
@@ -28516,8 +29069,7 @@ function renderLeaveWorkspaceRequestRows({ loading = false, errorMessage = '' } 
   }
   clearList(list);
   if (errorMessage) {
-    renderEmptyState(list, errorMessage, '필터를 확인한 뒤 다시 시도해 주세요.');
-    list.querySelector('.empty-state')?.classList.add('requests-compact-empty');
+    renderCompactListEmpty(list, errorMessage, '필터를 확인한 뒤 다시 시도해 주세요.');
     if (countEl) countEl.textContent = '0건';
     if (hintEl) hintEl.textContent = '휴가 요청을 불러오지 못했습니다.';
     return;
@@ -28530,8 +29082,7 @@ function renderLeaveWorkspaceRequestRows({ loading = false, errorMessage = '' } 
       : '내 휴가 요청 이력을 확인하고 상태를 추적합니다.';
   }
   if (!rows.length) {
-    renderEmptyState(list, '조건에 맞는 휴가 요청이 없습니다.', '필터를 조정하거나 새 휴가를 신청해 주세요.');
-    list.querySelector('.empty-state')?.classList.add('requests-compact-empty');
+    renderCompactListEmpty(list, '조건에 맞는 휴가 요청이 없습니다.', '필터를 조정하거나 새 휴가를 신청해 주세요.');
     state.leaveView.workspaceSelectedRequestId = '';
     state.leaveView.workspaceDrawerOpen = false;
     renderLeaveWorkspaceDetailPanel();
@@ -28889,6 +29440,10 @@ function applyLeaveWorkspaceQuickType(leaveType = 'annual', reasonPreset = '') {
 
 function renderLeaveManagementWorkspace({ loading = false, errorMessage = '' } = {}) {
   if (!$('#leaveWorkspaceDesktop')) return;
+  const root = $('#view-requests');
+  if (root instanceof HTMLElement) {
+    root.dataset.requestsSegment = 'leave';
+  }
   renderLeaveWorkspaceTabs();
   renderLeavePolicySection();
   syncLeaveWorkspaceComposerForm();
@@ -32072,6 +32627,7 @@ function getWorkspaceViewTitle(viewName = state.currentView || 'home') {
   if (view === 'ops') return '운영';
   if (view === 'support-status') return '지원근무자 현황';
   if (view === 'attendance' || view === 'attendance-check') return '출퇴근';
+  if (view === 'calendar') return '캘린더';
   if (view === 'requests' || view === 'checkin-request') return managerMode ? '요청·승인' : '요청';
   if (view === 'hr') return '문서';
   if (view === 'schedule') return '스케줄';
@@ -32087,9 +32643,10 @@ function getDesktopGlobalSearchItems() {
   const items = [
     { label: '홈', route: ROUTE_HOME, hint: '오늘 브리핑', keywords: ['대시보드', 'today', 'home', '브리핑'] },
     { label: '출퇴근', route: ROUTE_ATTENDANCE, hint: '기록/예외 스캔', keywords: ['근태', 'attendance', '타임시트', '예외'] },
+    { label: '캘린더', route: ROUTE_CALENDAR_WEEK, hint: '협업 일정', keywords: ['캘린더', 'calendar', 'week', 'agenda', 'booking'] },
     { label: role === 'EMPLOYEE' ? '요청' : '요청·승인', route: ROUTE_REQUESTS, hint: '요청 inbox', keywords: ['요청', '승인', '휴가', '예외', 'inbox'] },
     { label: '문서', route: ROUTE_HR, hint: '문서 센터', keywords: ['문서', '재직증명서', 'hr'] },
-    { label: '스케줄', route: ROUTE_SCHEDULE_CALENDAR, hint: '월간 캘린더', keywords: ['스케줄', '일정', 'calendar', '캘린더'] },
+    { label: '스케줄', route: ROUTE_SCHEDULE_CALENDAR, hint: '월간 근무표', keywords: ['스케줄', '일정', 'calendar', '캘린더', '근무표'] },
     { label: role === 'EMPLOYEE' ? '내 정보' : '설정', route: ROUTE_PROFILE, hint: '계정/연동 설정', keywords: ['설정', '프로필', '알림', '보안', '연동'] },
   ];
 
@@ -32827,7 +33384,7 @@ function renderGoogleSheetProfileLibrary() {
   const activeCount = rows.filter((profile) => Boolean(profile?.is_active)).length;
 
   if (!rows.length) {
-    renderEmptyState(list, '등록된 링크가 없습니다.', '새 링크를 추가하면 이 목록에 바로 나타납니다.');
+    renderCompactListEmpty(list, '등록된 링크가 없습니다.', '새 링크를 추가하면 이 목록에 바로 나타납니다.');
     if (meta) meta.textContent = '등록된 링크 0건';
     return;
   }
@@ -34113,6 +34670,7 @@ function clearSession() {
   }
   state.correction = createInitialCorrectionState();
   state.schedule = createInitialScheduleState();
+  state.calendar = createInitialCalendarState();
   state.ops = createInitialOpsState();
   state.supportStatus = createInitialSupportStatusState();
   state.reminder = createInitialReminderState();
@@ -34242,6 +34800,7 @@ function showAuthPanel() {
   if (shell) shell.classList.add('hidden');
   if (menuBtn) menuBtn.classList.add('hidden');
   if (notifBtn) notifBtn.classList.add('hidden');
+  document.body.classList.remove('calendar-public-shell');
   state.currentRoute = ROUTE_LOGIN;
   updateRouteHash(ROUTE_LOGIN, { replace: true });
   closeConfirmDialog({ restoreFocus: false });
@@ -34289,6 +34848,7 @@ function showShellPanel(options = {}) {
   if (shell) shell.classList.remove('hidden');
   if (menuBtn) menuBtn.classList.remove('hidden');
   if (notifBtn) notifBtn.classList.remove('hidden');
+  document.body.classList.remove('calendar-public-shell');
   closeConfirmDialog({ restoreFocus: false });
 
   if (!deferSessionSideEffects && getNavigationRole() === 'DEV') {
@@ -34370,6 +34930,27 @@ function showShellPanel(options = {}) {
   applyRoleUI();
 }
 
+function showPublicShellPanel() {
+  reportCriticalBootstrapDomMismatch('showPublicShellPanel');
+  const authView = $('#authView');
+  const shell = $('#shell');
+  const menuBtn = $('#btnDrawerOpen');
+  const notifBtn = $('#btnNotifications');
+  const topProfileBtn = $('#btnTopbarProfile');
+  const topThemeBtn = $('#btnTopbarThemeToggle');
+  if (authView) authView.classList.add('hidden');
+  if (shell) shell.classList.remove('hidden');
+  if (menuBtn) menuBtn.classList.add('hidden');
+  if (notifBtn) notifBtn.classList.add('hidden');
+  if (topProfileBtn) topProfileBtn.classList.add('hidden');
+  if (topThemeBtn) topThemeBtn.classList.remove('hidden');
+  document.body.classList.add('calendar-public-shell');
+  closeConfirmDialog({ restoreFocus: false });
+  closeDrawer();
+  renderDrawerMenu();
+  renderDesktopTopContext();
+}
+
 function resolveRequestedRouteCandidate() {
   const routeFromUrl = parseRouteFromLocation();
   const requestedRoute = normalizeRoutePath(routeFromUrl.path);
@@ -34413,6 +34994,13 @@ async function hydrateSession({ background = false } = {}) {
 
   const stored = loadSession();
   if (!stored) {
+    if (requestedRoute === ROUTE_CALENDAR_PUBLIC_BOOKING) {
+      state.calendar.publicBookingSlug = String(new URLSearchParams(parseRouteCandidate(requestedRouteRaw || requestedRoute).query || '').get('slug') || '').trim();
+      setAuthStatus(AUTH_STATUS_UNAUTHENTICATED);
+      showPublicShellPanel();
+      await navigateToRoute(requestedRouteRaw || requestedRoute, { replace: true, silentDeniedModal: true });
+      return true;
+    }
     clearSession();
     showAuthPanel();
     return false;
@@ -36870,12 +37458,17 @@ function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad
   if (previousView === 'schedule' && targetView !== 'schedule') {
     cancelScheduleEmployeeListChunkRender();
   }
-  ['home', 'attendance-check', 'ops', 'support-status', 'reports', 'checkin-request', 'requests', 'notices', 'hr', 'attendance', 'schedule', 'profile', 'roadmap', 'dev-console', 'employees', 'org'].forEach((view) => {
+  ['home', 'attendance-check', 'ops', 'support-status', 'reports', 'checkin-request', 'requests', 'notices', 'hr', 'attendance', 'calendar', 'calendar-public', 'schedule', 'profile', 'roadmap', 'dev-console', 'employees', 'org'].forEach((view) => {
     const panel = $(`#view-${view}`);
     if (!panel) return;
     const isTarget = view === targetView;
     panel.classList.toggle('hidden', !isTarget);
   });
+  if (targetView === 'calendar-public') {
+    showPublicShellPanel();
+  } else if (state.user) {
+    showShellPanel({ deferSessionSideEffects: true });
+  }
   markViewActivated(targetView);
   renderWorkMobileSegments();
   renderAttendanceMobileSegments();
@@ -36995,6 +37588,13 @@ function setViewLoading(name, loading) {
 
 async function loadHomeViewPresenter() {
   state.home.audience = resolveHomeAudience();
+  if (!state.home.briefing) {
+    const cached = readCachedHomeBriefing(state.home.audience);
+    if (cached) {
+      state.home.briefing = cached;
+      state.home.audience = String(cached?.audience || state.home.audience).trim().toLowerCase() || state.home.audience;
+    }
+  }
   renderHomeAudienceSurface();
   renderHomePolicySkeleton();
   renderHomeWorkStatusCard();
@@ -37090,11 +37690,28 @@ function setRequestsWorkspaceRows(rows = []) {
 }
 
 function renderRequestsWorkspaceView() {
+  const segment = normalizeRequestsTabView(state.requestsTabView);
+  const workspace = ensureRequestsWorkspaceState();
+  const showPriorityQueue = segment === 'exceptions' || segment === 'correction';
+  const showKpiStrip = segment === 'exceptions' || segment === 'correction';
+  const root = $('#view-requests');
+  if (root instanceof HTMLElement) {
+    root.dataset.requestsSegment = segment;
+  }
   renderRequestsWorkspaceSegments();
   renderRequestsSecondaryTabs();
+  toggleVisibility('#requestsPriorityQueueCard', showPriorityQueue);
+  toggleVisibility('#requestsKpiStrip', showKpiStrip);
   renderRequestsFilterBar();
-  renderRequestsWorkspaceKpis();
-  renderRequestsPriorityQueue();
+  if (showKpiStrip) {
+    renderRequestsWorkspaceKpis();
+  }
+  if (showPriorityQueue) {
+    renderRequestsPriorityQueue();
+  } else {
+    workspace.activePriorityRows = [];
+    workspace.priorityOverflowCount = 0;
+  }
   renderRequestsWorkspaceListRows();
   renderRequestsWorkspaceDetailPanel();
   syncRequestsWorkspaceSelection();
@@ -38121,7 +38738,7 @@ function renderNoticesListPanel() {
     });
     return;
   }
-  renderEmptyState(
+  renderCompactListEmpty(
     list,
     notices.error
       ? '공지 목록을 다시 불러오지 못했습니다.'
@@ -39297,6 +39914,2583 @@ async function uploadHrDocumentTemplate() {
   }
 }
 
+function ensureCalendarWorkspaceState() {
+  if (!state.calendar || typeof state.calendar !== 'object') {
+    state.calendar = createInitialCalendarState();
+  }
+  return state.calendar;
+}
+
+function getCalendarWorkspacePath(viewTab = 'week', anchorDate = '') {
+  const calendarState = ensureCalendarWorkspaceState();
+  const params = new URLSearchParams();
+  params.set('view', normalizeCalendarViewTab(viewTab));
+  const normalizedDate = normalizeAttendanceDate(anchorDate || '') || toLocalDateKey(new Date());
+  params.set('date', normalizedDate);
+  if (String(calendarState.selectedContainerId || '').trim()) {
+    params.set('container_id', String(calendarState.selectedContainerId || '').trim());
+  }
+  if (String(calendarState.selectedEventId || '').trim()) {
+    params.set('event_id', String(calendarState.selectedEventId || '').trim());
+  }
+  return appendTenantCodeQuery(`/calendar/workspace?${params.toString()}`, getTenantCodeForScopedAdminApi());
+}
+
+function parseCalendarDateKey(dateKey = '') {
+  const normalized = normalizeAttendanceDate(dateKey);
+  if (!normalized) return new Date();
+  const [year, month, day] = normalized.split('-').map((value) => Number(value || 0));
+  if (!year || !month || !day) return new Date();
+  return new Date(year, month - 1, day);
+}
+
+function formatCalendarDayHeading(dateKey = '') {
+  const date = parseCalendarDateKey(dateKey);
+  return date.toLocaleDateString('ko-KR', {
+    month: 'numeric',
+    day: 'numeric',
+    weekday: 'short',
+  });
+}
+
+function getCalendarDateKeyFromValue(value = '') {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return toLocalDateKey(date);
+}
+
+function formatCalendarDateTimeInputValue(value = '') {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function parseCalendarDateTimeInputValue(value = '') {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '';
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString();
+}
+
+function formatCalendarTimeLabel(value = '') {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+function formatCalendarEventTime(event = null) {
+  if (!event) return '';
+  if (event.is_all_day) return '종일';
+  return `${formatCalendarTimeLabel(event.starts_at)} - ${formatCalendarTimeLabel(event.ends_at)}`;
+}
+
+function formatCalendarLongDateLabel(dateKey = '') {
+  const date = parseCalendarDateKey(dateKey);
+  return date.toLocaleDateString('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+  });
+}
+
+function getCalendarSelectedContainer(workspace) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const containers = Array.isArray(workspace?.containers) ? workspace.containers : [];
+  const selectedId = String(calendarState.selectedContainerId || workspace?.selected_container_id || '').trim();
+  return containers.find((item) => String(item?.id || '').trim() === selectedId) || containers[0] || null;
+}
+
+function getCalendarSelectedBookingLink(workspace) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const links = Array.isArray(workspace?.booking_links) ? workspace.booking_links : [];
+  const selectedId = String(calendarState.selectedBookingLinkId || '').trim();
+  return links.find((item) => String(item?.id || '').trim() === selectedId) || links[0] || null;
+}
+
+function getCalendarSelectedSyncConnection(workspace) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const rows = Array.isArray(workspace?.sync_connections) ? workspace.sync_connections : [];
+  const selectedId = String(calendarState.selectedSyncConnectionId || '').trim();
+  return rows.find((item) => String(item?.id || '').trim() === selectedId) || rows[0] || null;
+}
+
+function normalizeCalendarSyncConnectionDraft(source = {}) {
+  return {
+    id: String(source?.id || '').trim(),
+    provider: String(source?.provider || 'google').trim().toLowerCase() || 'google',
+    access_scope: String(source?.access_scope || 'read_write').trim().toLowerCase() || 'read_write',
+    account_email: String(source?.account_email || '').trim(),
+    account_label: String(source?.account_label || '').trim(),
+    default_container_id: String(source?.default_container_id || '').trim(),
+    default_container_label: String(source?.default_container_label || '').trim(),
+    selected_external_calendars: Array.isArray(source?.selected_external_calendars)
+      ? source.selected_external_calendars.map((item) => String(item || '').trim()).filter(Boolean)
+      : [],
+    sync_state: String(source?.sync_state || 'pending').trim().toLowerCase() || 'pending',
+    last_synced_at: String(source?.last_synced_at || '').trim(),
+    last_sync_error: String(source?.last_sync_error || '').trim(),
+  };
+}
+
+function createCalendarSyncConnectionDraft(workspace, selectedContainerId = '') {
+  return normalizeCalendarSyncConnectionDraft({
+    provider: 'google',
+    access_scope: 'read_write',
+    account_email: '',
+    account_label: '',
+    default_container_id: String(selectedContainerId || getCalendarSelectedContainer(workspace)?.id || workspace?.selected_container_id || '').trim(),
+    selected_external_calendars: ['primary'],
+    sync_state: 'pending',
+    last_synced_at: '',
+    last_sync_error: '',
+  });
+}
+
+function getCalendarActiveSyncConnectionEditor(workspace) {
+  const calendarState = ensureCalendarWorkspaceState();
+  if (calendarState.draftSyncConnection && typeof calendarState.draftSyncConnection === 'object') {
+    return normalizeCalendarSyncConnectionDraft(calendarState.draftSyncConnection);
+  }
+  const selected = getCalendarSelectedSyncConnection(workspace);
+  if (!selected) return null;
+  return normalizeCalendarSyncConnectionDraft(selected);
+}
+
+function getCalendarSyncConnectionsRequestPath(syncConnectionId = '') {
+  const key = String(syncConnectionId || '').trim();
+  const path = key ? `/calendar/sync-connections/${encodeURIComponent(key)}` : '/calendar/sync-connections';
+  return appendTenantCodeQuery(path, getTenantCodeForScopedAdminApi());
+}
+
+function getCalendarSyncConnectionRunPath(syncConnectionId = '') {
+  const key = String(syncConnectionId || '').trim();
+  const path = `/calendar/sync-connections/${encodeURIComponent(key)}/sync`;
+  return appendTenantCodeQuery(path, getTenantCodeForScopedAdminApi());
+}
+
+function normalizeCalendarBookingQuestionDraft(question = {}, index = 0) {
+  const label = String(question?.label || '').trim();
+  return {
+    key: String(question?.key || `question_${index + 1}`).trim() || `question_${index + 1}`,
+    label,
+    answer_type: String(question?.answer_type || 'short_text').trim().toLowerCase() || 'short_text',
+    required: question?.required !== false,
+    options: Array.isArray(question?.options)
+      ? question.options.map((item) => String(item || '').trim()).filter(Boolean)
+      : [],
+  };
+}
+
+function normalizeCalendarCustomFieldDraft(field = {}, index = 0) {
+  const label = String(field?.label || '').trim();
+  const key = String(field?.key || `field_${index + 1}`).trim() || `field_${index + 1}`;
+  const fieldType = String(field?.field_type || 'text').trim().toLowerCase();
+  return {
+    key,
+    label,
+    value: String(field?.value || '').trim(),
+    field_type: ['text', 'number', 'select'].includes(fieldType) ? fieldType : 'text',
+  };
+}
+
+function getCalendarBookingAssignmentModeLabel(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'collective') return '모든 호스트 공동 참석';
+  if (normalized === 'round_robin') return '라운드 로빈 배정';
+  return '단일 호스트';
+}
+
+function getCalendarBookingApprovalPolicyLabel(value = '') {
+  return String(value || '').trim().toLowerCase() === 'manual' ? '수동 승인' : '즉시 확정';
+}
+
+function createCalendarBookingLinkDraft(workspace, selectedContainerId = '') {
+  const selectedContainer = getCalendarSelectedContainer(workspace);
+  const containerId = String(selectedContainerId || selectedContainer?.id || workspace?.selected_container_id || '').trim();
+  return {
+    id: '',
+    container_id: containerId,
+    title: '',
+    description: '',
+    is_public: true,
+    approval_required: false,
+    approval_policy: 'instant',
+    assignment_mode: 'single_host',
+    booking_window_days: 14,
+    buffer_before_minutes: 0,
+    buffer_after_minutes: 0,
+    duration_minutes: 30,
+    availability_start_time: '09:00',
+    availability_end_time: '18:00',
+    expires_at: '',
+    host_notes: '',
+    intake_questions: [],
+    slug: '',
+    owner_label: '',
+  };
+}
+
+function getCalendarActiveBookingLinkEditor(workspace) {
+  const calendarState = ensureCalendarWorkspaceState();
+  if (calendarState.draftBookingLink && typeof calendarState.draftBookingLink === 'object') {
+    const draft = calendarState.draftBookingLink;
+    return {
+      ...draft,
+      approval_policy: String(draft?.approval_policy || (draft?.approval_required ? 'manual' : 'instant')).trim().toLowerCase() || 'instant',
+      assignment_mode: String(draft?.assignment_mode || 'single_host').trim().toLowerCase() || 'single_host',
+      intake_questions: Array.isArray(draft.intake_questions)
+        ? draft.intake_questions.map((item, index) => normalizeCalendarBookingQuestionDraft(item, index))
+        : [],
+    };
+  }
+  const selected = getCalendarSelectedBookingLink(workspace);
+  if (!selected) return null;
+  return {
+    ...selected,
+    approval_policy: String(selected?.approval_policy || (selected?.approval_required ? 'manual' : 'instant')).trim().toLowerCase() || 'instant',
+    assignment_mode: String(selected?.assignment_mode || 'single_host').trim().toLowerCase() || 'single_host',
+    intake_questions: Array.isArray(selected.intake_questions)
+      ? selected.intake_questions.map((item, index) => normalizeCalendarBookingQuestionDraft(item, index))
+      : [],
+  };
+}
+
+function getCalendarBookingLinksRequestPath(bookingLinkId = '') {
+  const key = String(bookingLinkId || '').trim();
+  const path = key ? `/calendar/booking-links/${encodeURIComponent(key)}` : '/calendar/booking-links';
+  return appendTenantCodeQuery(path, getTenantCodeForScopedAdminApi());
+}
+
+function getCalendarPublicBookingRequestPath(slug = '') {
+  return `/calendar/booking-links/${encodeURIComponent(String(slug || '').trim())}/public`;
+}
+
+function getCalendarPublicBookingSubmitPath(slug = '') {
+  return `/calendar/booking-links/${encodeURIComponent(String(slug || '').trim())}/book`;
+}
+
+function createCalendarPublicBookingDraft(booking = {}) {
+  const questions = Array.isArray(booking?.intake_questions) ? booking.intake_questions : [];
+  return {
+    guest_name: '',
+    guest_email: '',
+    title: '',
+    note: '',
+    answers: questions.reduce((acc, question, index) => {
+      const key = String(question?.key || `question_${index + 1}`).trim() || `question_${index + 1}`;
+      acc[key] = '';
+      return acc;
+    }, {}),
+  };
+}
+
+function normalizeCalendarPublicBookingDraft(booking = {}, draft = null) {
+  const base = createCalendarPublicBookingDraft(booking);
+  const current = draft && typeof draft === 'object' ? draft : {};
+  const answers = { ...base.answers };
+  Object.keys(answers).forEach((key) => {
+    answers[key] = String(current?.answers?.[key] || '').trim();
+  });
+  return {
+    guest_name: String(current?.guest_name || '').trim(),
+    guest_email: String(current?.guest_email || '').trim(),
+    title: String(current?.title || '').trim(),
+    note: String(current?.note || '').trim(),
+    answers,
+  };
+}
+
+function snapshotCalendarBookingLinkDraftFromDom(workspace) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const editorLink = getCalendarActiveBookingLinkEditor(workspace);
+  if (!workspace || !editorLink) return;
+  try {
+    const payload = collectCalendarBookingLinkPayloadFromDom(workspace);
+    calendarState.draftBookingLink = {
+      ...editorLink,
+      ...payload,
+      id: String(editorLink?.id || '').trim(),
+      slug: String(editorLink?.slug || '').trim(),
+      owner_label: String(editorLink?.owner_label || '').trim(),
+      intake_questions: Array.isArray(payload?.intake_questions)
+        ? payload.intake_questions.map((item, index) => normalizeCalendarBookingQuestionDraft(item, index))
+        : [],
+    };
+  } catch (_error) {
+    // 현재 draft를 유지합니다.
+  }
+}
+
+function snapshotCalendarPublicBookingDraftFromDom(booking = null) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const activeBooking = booking || calendarState.publicBooking;
+  if (!activeBooking) return;
+  const draft = normalizeCalendarPublicBookingDraft(activeBooking, calendarState.publicBookingDraft);
+  const guestNameInput = $('#calendarPublicGuestNameInput');
+  const guestEmailInput = $('#calendarPublicGuestEmailInput');
+  const titleInput = $('#calendarPublicTitleInput');
+  const noteInput = $('#calendarPublicNoteInput');
+  if (guestNameInput) draft.guest_name = String(guestNameInput.value || '').trim();
+  if (guestEmailInput) draft.guest_email = String(guestEmailInput.value || '').trim();
+  if (titleInput) draft.title = String(titleInput.value || '').trim();
+  if (noteInput) draft.note = String(noteInput.value || '').trim();
+  Array.from(document.querySelectorAll('[data-calendar-public-answer]')).forEach((field) => {
+    const key = String(field.getAttribute('data-calendar-public-answer') || '').trim();
+    if (!key) return;
+    draft.answers[key] = String(field.value || '').trim();
+  });
+  calendarState.publicBookingDraft = draft;
+  calendarState.publicBookingDraftSlug = String(activeBooking?.slug || '').trim();
+}
+
+function getCalendarSelectedEvent(workspace) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const events = Array.isArray(workspace?.events) ? workspace.events : [];
+  const selectedId = String(calendarState.selectedEventId || workspace?.selected_event?.id || '').trim();
+  if (selectedId) {
+    const matched = events.find((item) => String(item?.id || '').trim() === selectedId);
+    if (matched) return matched;
+  }
+  const selectedDate = String(calendarState.selectedDate || workspace?.selected_date || '').trim();
+  return events.find((item) => getCalendarDateKeyFromValue(item?.starts_at) === selectedDate) || workspace?.selected_event || null;
+}
+
+function groupCalendarEventsByDate(events = []) {
+  return (Array.isArray(events) ? events : []).reduce((acc, event) => {
+    const key = getCalendarDateKeyFromValue(event?.starts_at);
+    if (!key) return acc;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(event);
+    acc[key].sort((left, right) => new Date(left?.starts_at || 0) - new Date(right?.starts_at || 0));
+    return acc;
+  }, {});
+}
+
+function toCalendarEditableEvent(source = {}, fallbackContainerId = '', fallbackDate = '') {
+  const startsAt = source?.starts_at || parseCalendarDateTimeInputValue(`${fallbackDate}T09:00`);
+  const endsAt = source?.ends_at || parseCalendarDateTimeInputValue(`${fallbackDate}T10:00`);
+  const notes = Array.isArray(source?.notes) ? source.notes : [];
+  const sharedNote = notes.find((item) => String(item?.note_type || '').trim() === 'shared')?.body || source?.shared_note || '';
+  const privateMemo = notes.find((item) => String(item?.note_type || '').trim() === 'private')?.body || source?.private_memo || '';
+  const actionItems = Array.isArray(source?.action_items) ? source.action_items.map((item) => String(item?.body || '').trim()).filter(Boolean) : Array.isArray(source?.action_items_text) ? source.action_items_text : [];
+  const comments = Array.isArray(source?.comments) ? source.comments : [];
+  const customFields = Array.isArray(source?.custom_fields)
+    ? source.custom_fields.map((item, index) => normalizeCalendarCustomFieldDraft(item, index))
+    : Array.isArray(source?.custom_fields_draft)
+      ? source.custom_fields_draft.map((item, index) => normalizeCalendarCustomFieldDraft(item, index))
+      : [];
+  return {
+    id: String(source?.id || '').trim(),
+    container_id: String(source?.container_id || fallbackContainerId || '').trim(),
+    title: String(source?.title || '').trim(),
+    starts_at: startsAt,
+    ends_at: endsAt,
+    timezone: String(source?.timezone || 'Asia/Seoul').trim() || 'Asia/Seoul',
+    is_all_day: Boolean(source?.is_all_day),
+    recurrence_rule: String(source?.recurrence_rule || '').trim(),
+    availability_status: String(source?.availability_status || 'busy').trim() || 'busy',
+    visibility: String(source?.visibility || 'private').trim() || 'private',
+    location: String(source?.location || '').trim(),
+    conferencing_provider: String(source?.conferencing_provider || '').trim(),
+    conferencing_url: String(source?.conferencing_url || '').trim(),
+    description: String(source?.description || '').trim(),
+    resource_id: String(source?.resource_id || '').trim(),
+    resource_label: String(source?.resource_label || '').trim(),
+    attendees: Array.isArray(source?.attendees) ? source.attendees : [],
+    reminders: Array.isArray(source?.reminders) ? source.reminders : [],
+    shared_note: String(sharedNote || '').trim(),
+    private_memo: String(privateMemo || '').trim(),
+    action_items_text: actionItems,
+    comments,
+    custom_fields_draft: customFields,
+  };
+}
+
+function createCalendarDraftEvent(workspace, selectedContainerId = '', selectedDate = '') {
+  const fallbackDate = normalizeAttendanceDate(selectedDate || workspace?.selected_date || '') || toLocalDateKey(new Date());
+  return toCalendarEditableEvent({}, selectedContainerId || workspace?.selected_container_id || '', fallbackDate);
+}
+
+function getCalendarActiveEditorEvent(workspace) {
+  const calendarState = ensureCalendarWorkspaceState();
+  if (calendarState.draftEvent) {
+    return toCalendarEditableEvent(
+      calendarState.draftEvent,
+      calendarState.draftEvent.container_id || workspace?.selected_container_id || '',
+      calendarState.selectedDate || workspace?.selected_date || toLocalDateKey(new Date()),
+    );
+  }
+  const selectedEvent = getCalendarSelectedEvent(workspace);
+  if (!selectedEvent) return null;
+  return toCalendarEditableEvent(
+    selectedEvent,
+    selectedEvent.container_id || workspace?.selected_container_id || '',
+    getCalendarDateKeyFromValue(selectedEvent.starts_at) || workspace?.selected_date || toLocalDateKey(new Date()),
+  );
+}
+
+function getCalendarScopeTypeLabel(scopeType = '') {
+  const normalized = String(scopeType || '').trim().toLowerCase();
+  if (normalized === 'shared') return '공유';
+  if (normalized === 'team') return '팀';
+  return '개인';
+}
+
+function escapeCalendarHtml(value = '') {
+  return typeof escapeHomeHtml === 'function'
+    ? escapeHomeHtml(value)
+    : String(value ?? '');
+}
+
+function escapeHtml(value = '') {
+  return escapeCalendarHtml(value);
+}
+
+function getCalendarRecurrencePresetFromRule(rule = '') {
+  const normalized = String(rule || '').trim().toUpperCase();
+  if (!normalized) return 'none';
+  if (normalized.includes('FREQ=DAILY')) return 'daily';
+  if (normalized.includes('FREQ=WEEKLY') && normalized.includes('INTERVAL=2')) return 'biweekly';
+  if (normalized.includes('FREQ=WEEKLY')) return 'weekly';
+  if (normalized.includes('FREQ=MONTHLY')) return 'monthly';
+  return 'none';
+}
+
+function buildCalendarRecurrenceRuleFromPreset(preset = '', startsAt = '') {
+  const normalized = String(preset || 'none').trim().toLowerCase();
+  if (!startsAt || normalized === 'none') return '';
+  const startDate = new Date(startsAt);
+  const weekdayMap = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+  const byDay = weekdayMap[startDate.getUTCDay()] || 'MO';
+  if (normalized === 'daily') return 'FREQ=DAILY';
+  if (normalized === 'weekly') return `FREQ=WEEKLY;BYDAY=${byDay}`;
+  if (normalized === 'biweekly') return `FREQ=WEEKLY;INTERVAL=2;BYDAY=${byDay}`;
+  if (normalized === 'monthly') return `FREQ=MONTHLY;BYMONTHDAY=${startDate.getUTCDate()}`;
+  return '';
+}
+
+function getCalendarAvailabilityRequestPath(query = {}) {
+  const params = new URLSearchParams();
+  if (query.date) params.set('date', String(query.date));
+  if (query.starts_at) params.set('starts_at', String(query.starts_at));
+  if (query.ends_at) params.set('ends_at', String(query.ends_at));
+  if (query.resource_id) params.set('resource_id', String(query.resource_id));
+  if (query.event_id) params.set('event_id', String(query.event_id));
+  (Array.isArray(query.attendee_user_ids) ? query.attendee_user_ids : []).forEach((value) => params.append('attendee_user_ids', String(value)));
+  (Array.isArray(query.attendee_employee_ids) ? query.attendee_employee_ids : []).forEach((value) => params.append('attendee_employee_ids', String(value)));
+  (Array.isArray(query.attendee_emails) ? query.attendee_emails : []).forEach((value) => params.append('attendee_emails', String(value)));
+  return appendTenantCodeQuery(`/calendar/availability?${params.toString()}`, getTenantCodeForScopedAdminApi());
+}
+
+function buildCalendarAvailabilityKey(query = {}) {
+  return JSON.stringify({
+    date: query.date || '',
+    starts_at: query.starts_at || '',
+    ends_at: query.ends_at || '',
+    resource_id: query.resource_id || '',
+    event_id: query.event_id || '',
+    attendee_user_ids: Array.isArray(query.attendee_user_ids) ? [...query.attendee_user_ids].sort() : [],
+    attendee_employee_ids: Array.isArray(query.attendee_employee_ids) ? [...query.attendee_employee_ids].sort() : [],
+    attendee_emails: Array.isArray(query.attendee_emails) ? [...query.attendee_emails].sort() : [],
+  });
+}
+
+function renderCalendarWorkspaceTabs() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const activeTab = normalizeCalendarViewTab(calendarState.viewTab || resolveCalendarTabFromRoutePath(state.currentRoute || '') || 'week');
+  const tabs = $('#calendarWorkspaceTabs');
+  if (tabs) {
+    tabs.querySelectorAll('[data-action="calendar-set-view"]').forEach((button) => {
+      const isActive = normalizeCalendarViewTab(button.dataset.tab || '') === activeTab;
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+  }
+  const workspace = calendarState.workspace || null;
+  const titleEl = $('#calendarViewTitle');
+  const subtitleEl = $('#calendarViewSubtitle');
+  if (titleEl) titleEl.textContent = '캘린더';
+  if (subtitleEl) {
+    subtitleEl.textContent = workspace
+      ? `${workspace.role_label || 'ARLS'} · ${workspace.scope_label || '일정 범위'} · ${workspace.range_label || ''}`.replace(/\s+·\s*$/, '')
+      : '개인 일정, 팀 일정, 예약 링크를 한 공간에서 관리합니다.';
+  }
+}
+
+function renderCalendarMiniMonth(days = [], selectedDate = '') {
+  const weekLabels = ['일', '월', '화', '수', '목', '금', '토'];
+  return `
+    <div class="calendar-mini-month">
+      <div class="calendar-mini-month-weekdays">${weekLabels.map((label) => `<span>${label}</span>`).join('')}</div>
+      <div class="calendar-mini-month-grid">
+        ${(Array.isArray(days) ? days : []).map((row) => {
+          const classes = [
+            'calendar-mini-month-cell',
+            row?.in_month ? '' : 'is-outside',
+            row?.is_today ? 'is-today' : '',
+            (row?.is_selected || String(row?.date || '') === String(selectedDate || '')) ? 'is-selected' : '',
+          ].filter(Boolean).join(' ');
+          return `<button class="${classes}" type="button" data-action="calendar-select-date" data-date="${escapeHtml(String(row?.date || ''))}">${Number(row?.day || 0)}</button>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderCalendarContainerGroups(containers = [], selectedContainerId = '') {
+  const groups = [
+    { key: 'personal', label: '내 캘린더' },
+    { key: 'team', label: '팀 캘린더' },
+    { key: 'shared', label: '공유 캘린더' },
+  ];
+  return groups.map((group) => {
+    const rows = (Array.isArray(containers) ? containers : []).filter((item) => String(item?.scope_type || '').trim().toLowerCase() === group.key);
+    if (!rows.length) return '';
+    return `
+      <div class="calendar-container-group">
+        <div class="calendar-sidebar-card-label">${group.label}</div>
+        <div class="calendar-container-list">
+          ${rows.map((item) => {
+            const isSelected = String(item?.id || '').trim() === String(selectedContainerId || '').trim();
+            return `
+              <button class="calendar-container-row ${isSelected ? 'is-selected' : ''}" type="button" data-action="calendar-select-container" data-container-id="${escapeHtml(String(item?.id || ''))}">
+                <span class="calendar-container-swatch" style="--calendar-swatch:${escapeHtml(String(item?.color || '#ff7a1a'))}"></span>
+                <span class="calendar-container-copy">
+                  <strong>${escapeHtml(String(item?.name || '캘린더'))}</strong>
+                  <span>${escapeHtml(String(item?.owner_label || item?.badge_label || getCalendarScopeTypeLabel(item?.scope_type || '')))}</span>
+                </span>
+                <span class="calendar-container-badge">${escapeHtml(String(item?.badge_label || getCalendarScopeTypeLabel(item?.scope_type || '')))}</span>
+              </button>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function buildCalendarWeekDateKeys(anchorDate = '') {
+  const base = parseCalendarDateKey(anchorDate);
+  const day = base.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const start = new Date(base);
+  start.setDate(base.getDate() + diffToMonday);
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return toLocalDateKey(date);
+  });
+}
+
+function getCalendarContainerMetaById(workspace, containerId = '') {
+  const key = String(containerId || '').trim();
+  if (!key) return null;
+  const rows = Array.isArray(workspace?.containers) ? workspace.containers : [];
+  return rows.find((item) => String(item?.id || '').trim() === key) || null;
+}
+
+function getCalendarEventSourceBadge(workspace, event = null) {
+  const container = getCalendarContainerMetaById(workspace, event?.container_id || '');
+  if (!container) return '';
+  const provider = String(container?.provider || 'arls').trim().toLowerCase();
+  if (provider === 'arls') return '';
+  return provider === 'outlook' ? 'Outlook Sync' : 'Google Sync';
+}
+
+function isCalendarEventReadOnly(workspace, event = null) {
+  const container = getCalendarContainerMetaById(workspace, event?.container_id || '');
+  if (!container) return false;
+  const provider = String(container?.provider || 'arls').trim().toLowerCase();
+  const permission = String(container?.permission || 'view_only').trim().toLowerCase();
+  return provider !== 'arls' || !['owner', 'edit'].includes(permission);
+}
+
+function renderCalendarEventCard(workspace, event, { compact = false, selected = false } = {}) {
+  if (!event) return '';
+  const sourceBadge = getCalendarEventSourceBadge(workspace, event);
+  const readOnly = isCalendarEventReadOnly(workspace, event);
+  return `
+    <button
+      class="calendar-event-card ${compact ? 'is-compact' : ''} ${selected ? 'is-selected' : ''} ${readOnly ? 'is-readonly' : ''}"
+      type="button"
+      data-action="calendar-select-event"
+      data-event-id="${escapeHtml(String(event?.id || ''))}">
+      <span class="calendar-event-time">${escapeHtml(formatCalendarEventTime(event))}</span>
+      <strong>${escapeHtml(String(event?.title || '일정'))}</strong>
+      ${sourceBadge || readOnly ? `
+        <span class="calendar-event-badges">
+          ${sourceBadge ? `<span class="calendar-inline-chip source-badge">${escapeHtml(sourceBadge)}</span>` : ''}
+          ${readOnly ? '<span class="calendar-inline-chip readonly-badge">읽기 전용</span>' : ''}
+        </span>
+      ` : ''}
+      <span class="calendar-event-meta">${escapeHtml(String(event?.location || event?.conferencing_provider || '세부 정보'))}</span>
+    </button>
+  `;
+}
+
+function renderCalendarWeekShell(workspace, selectedContainer) {
+  const weekKeys = buildCalendarWeekDateKeys(workspace?.anchor_date || workspace?.selected_date || toLocalDateKey(new Date()));
+  const eventsByDate = groupCalendarEventsByDate(workspace?.events || []);
+  const selectedEventId = String(ensureCalendarWorkspaceState().selectedEventId || workspace?.selected_event?.id || '').trim();
+  return `
+    <div class="calendar-center-card calendar-week-shell">
+      <div class="calendar-center-toolbar">
+        <div>
+          <span class="calendar-eyebrow">Week</span>
+          <h3>${escapeHtml(String(workspace?.range_label || '주간 보기'))}</h3>
+          <p>${escapeHtml(String(selectedContainer?.name || '캘린더'))} 일정을 시간순으로 확인합니다.</p>
+        </div>
+        <div class="calendar-center-toolbar-meta">
+          <span class="calendar-inline-chip">${escapeHtml(String(workspace?.scope_label || '일정 범위'))}</span>
+          <span class="calendar-inline-chip">${escapeHtml(String(selectedContainer?.name || '캘린더 선택'))}</span>
+          <button class="btn btn-primary" type="button" data-action="calendar-new-event">일정 추가</button>
+        </div>
+      </div>
+      <div class="calendar-day-chip-row">
+        ${weekKeys.map((dateKey) => {
+          const selected = String(workspace?.selected_date || '') === dateKey;
+          return `<button class="calendar-day-chip ${selected ? 'is-selected' : ''}" type="button" data-action="calendar-select-date" data-date="${escapeHtml(dateKey)}">${escapeHtml(formatCalendarDayHeading(dateKey))}</button>`;
+        }).join('')}
+      </div>
+      <div class="calendar-week-grid">
+        ${weekKeys.map((dateKey) => {
+          const rows = Array.isArray(eventsByDate[dateKey]) ? eventsByDate[dateKey] : [];
+          return `
+          <div class="calendar-week-column ${String(workspace?.selected_date || '') === dateKey ? 'is-selected' : ''}">
+            <div class="calendar-week-column-head">${escapeHtml(formatCalendarDayHeading(dateKey))}</div>
+            <div class="calendar-week-column-body">
+              ${rows.length ? rows.map((event) => renderCalendarEventCard(workspace, event, {
+                selected: String(event?.id || '') === selectedEventId,
+              })).join('') : '<div class="calendar-week-empty">등록된 일정이 없습니다.</div>'}
+            </div>
+          </div>
+        `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderCalendarMonthShell(workspace, selectedContainer) {
+  const days = Array.isArray(workspace?.mini_month_days) ? workspace.mini_month_days : [];
+  const eventsByDate = groupCalendarEventsByDate(workspace?.events || []);
+  const selectedEventId = String(ensureCalendarWorkspaceState().selectedEventId || workspace?.selected_event?.id || '').trim();
+  return `
+    <div class="calendar-center-card calendar-month-shell">
+      <div class="calendar-center-toolbar">
+        <div>
+          <span class="calendar-eyebrow">Month</span>
+          <h3>${escapeHtml(String(workspace?.range_label || '월간 보기'))}</h3>
+          <p>월간 흐름과 일정 밀집도를 한눈에 확인합니다.</p>
+        </div>
+        <div class="calendar-center-toolbar-meta">
+          <span class="calendar-inline-chip">${escapeHtml(String(selectedContainer?.name || '캘린더'))}</span>
+          <button class="btn btn-primary" type="button" data-action="calendar-new-event">일정 추가</button>
+        </div>
+      </div>
+      <div class="calendar-month-grid">
+        ${days.map((row) => {
+          const dayEvents = Array.isArray(eventsByDate[row?.date]) ? eventsByDate[row?.date] : [];
+          const classes = [
+            'calendar-month-cell',
+            row?.in_month ? '' : 'is-outside',
+            row?.is_today ? 'is-today' : '',
+            row?.is_selected ? 'is-selected' : '',
+          ].filter(Boolean).join(' ');
+          return `
+            <button class="${classes}" type="button" data-action="calendar-select-date" data-date="${escapeHtml(String(row?.date || ''))}">
+              <span class="calendar-month-cell-day">${Number(row?.day || 0)}</span>
+              <span class="calendar-month-cell-copy">${dayEvents.length ? `${dayEvents.length}개 일정` : '일정 없음'}</span>
+              <span class="calendar-month-event-list">
+                ${dayEvents.slice(0, 3).map((event) => `
+                  <span class="calendar-month-event-pill ${String(event?.id || '') === selectedEventId ? 'is-selected' : ''}">
+                    ${escapeHtml(String(event?.title || '일정'))}
+                  </span>
+                `).join('')}
+                ${dayEvents.length > 3 ? `<span class="calendar-month-more">+${dayEvents.length - 3}</span>` : ''}
+              </span>
+            </button>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderCalendarAgendaShell(workspace, selectedContainer) {
+  const groups = Object.entries(groupCalendarEventsByDate(workspace?.events || []));
+  const selectedEventId = String(ensureCalendarWorkspaceState().selectedEventId || workspace?.selected_event?.id || '').trim();
+  return `
+    <div class="calendar-center-card calendar-agenda-shell">
+      <div class="calendar-center-toolbar">
+        <div>
+          <span class="calendar-eyebrow">Agenda</span>
+          <h3>${escapeHtml(String(workspace?.range_label || '아젠다'))}</h3>
+          <p>${escapeHtml(String(selectedContainer?.name || '캘린더'))} 기준으로 upcoming timeline을 확인합니다.</p>
+        </div>
+        <div class="calendar-center-toolbar-meta">
+          <button class="btn btn-primary" type="button" data-action="calendar-new-event">일정 추가</button>
+        </div>
+      </div>
+      <div class="calendar-agenda-list">
+        ${groups.length ? groups.map(([dateKey, rows]) => `
+          <div class="calendar-agenda-group">
+            <div class="calendar-agenda-group-head">
+              <strong>${escapeHtml(formatCalendarLongDateLabel(dateKey))}</strong>
+              <span>${rows.length}개 일정</span>
+            </div>
+            <div class="calendar-agenda-group-list">
+              ${(Array.isArray(rows) ? rows : []).map((event) => renderCalendarEventCard(workspace, event, {
+                selected: String(event?.id || '') === selectedEventId,
+              })).join('')}
+            </div>
+          </div>
+        `).join('') : '<div class="calendar-empty-state">다가오는 일정이 없습니다.</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderCalendarBookingQuestionRows(editorLink) {
+  const questions = Array.isArray(editorLink?.intake_questions) ? editorLink.intake_questions : [];
+  if (!questions.length) {
+    return '<div class="calendar-empty-inline">추가 질문이 없습니다.</div>';
+  }
+  return `
+    <div class="calendar-booking-question-list">
+      ${questions.map((question, index) => `
+        <div class="calendar-booking-question-row" data-calendar-booking-question-row data-question-index="${index}">
+          <label class="calendar-form-field">
+            <span>질문</span>
+            <input type="text" data-calendar-booking-question-label value="${escapeHtml(String(question?.label || ''))}" placeholder="예: 참석 목적" />
+          </label>
+          <label class="calendar-form-field">
+            <span>유형</span>
+            <select data-calendar-booking-question-type>
+              <option value="short_text" ${String(question?.answer_type || '') === 'short_text' ? 'selected' : ''}>짧은 텍스트</option>
+              <option value="long_text" ${String(question?.answer_type || '') === 'long_text' ? 'selected' : ''}>긴 텍스트</option>
+              <option value="select" ${String(question?.answer_type || '') === 'select' ? 'selected' : ''}>선택형</option>
+            </select>
+          </label>
+          <label class="calendar-check-row calendar-booking-required">
+            <input type="checkbox" data-calendar-booking-question-required ${question?.required !== false ? 'checked' : ''} />
+            <span>필수 응답</span>
+          </label>
+          <label class="calendar-form-field calendar-form-field-full">
+            <span>선택지</span>
+            <input type="text" data-calendar-booking-question-options value="${escapeHtml((Array.isArray(question?.options) ? question.options : []).join(', '))}" placeholder="선택형일 때만, 쉼표로 구분" />
+          </label>
+          <button class="btn btn-secondary calendar-question-remove" type="button" data-action="calendar-remove-booking-question" data-question-index="${index}">질문 삭제</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderCalendarBookingLinksShell(workspace) {
+  const links = Array.isArray(workspace?.booking_links) ? workspace.booking_links : [];
+  const syncConnections = Array.isArray(workspace?.sync_connections) ? workspace.sync_connections : [];
+  const calendarState = ensureCalendarWorkspaceState();
+  const selectedId = String(calendarState.selectedBookingLinkId || '').trim();
+  const selectedSyncId = String(calendarState.selectedSyncConnectionId || '').trim();
+  const canManage = Boolean(workspace?.capabilities?.can_manage_booking_links);
+  const canManageSync = Boolean(workspace?.capabilities?.can_manage_sync);
+  return `
+    <div class="calendar-center-card calendar-booking-shell">
+      <div class="calendar-center-toolbar">
+        <div>
+          <span class="calendar-eyebrow">예약 링크</span>
+          <h3>공개 예약 링크</h3>
+          <p>외부 게스트가 로그인 없이 예약할 수 있는 링크를 만들고 관리합니다.</p>
+        </div>
+        <div class="calendar-center-toolbar-meta">
+          ${canManage ? '<button class="btn btn-primary" type="button" data-action="calendar-new-booking-link">예약 링크 만들기</button>' : ''}
+        </div>
+      </div>
+      <div class="calendar-booking-stack">
+        ${links.length ? links.map((item) => `
+          <article class="calendar-booking-card ${String(item?.id || '') === selectedId ? 'is-selected' : ''}">
+            <span class="calendar-card-tone tone-orange"></span>
+            <button class="calendar-booking-select" type="button" data-action="calendar-select-booking-link" data-booking-link-id="${escapeHtml(String(item?.id || ''))}">
+              <div class="calendar-booking-copy">
+                <strong>${escapeHtml(String(item?.title || '예약 링크'))}</strong>
+                <p>${escapeHtml(String(item?.description || item?.slug || 'slug'))}</p>
+                <div class="calendar-booking-badges">
+                  <span class="calendar-inline-chip">${escapeHtml(getCalendarBookingApprovalPolicyLabel(item?.approval_policy || (item?.approval_required ? 'manual' : 'instant')))}</span>
+                  <span class="calendar-inline-chip">${escapeHtml(getCalendarBookingAssignmentModeLabel(item?.assignment_mode || 'single_host'))}</span>
+                  <span class="calendar-inline-chip">${Number(item?.duration_minutes || 0)}분</span>
+                  <span class="calendar-inline-chip">${Number(item?.booking_window_days || 0)}일 창</span>
+                </div>
+              </div>
+            </button>
+            <div class="calendar-booking-meta">
+              <span>${escapeHtml(String(item?.slug || 'slug'))}</span>
+              ${item?.is_public ? `<button class="btn btn-secondary" type="button" data-action="calendar-open-public-booking" data-slug="${escapeHtml(String(item?.slug || ''))}">공개 보기</button>` : '<span>비공개</span>'}
+            </div>
+          </article>
+        `).join('') : `
+          <article class="calendar-booking-card empty">
+            <span class="calendar-card-tone tone-blue"></span>
+            <div class="calendar-booking-copy">
+              <strong>예약 링크가 없습니다.</strong>
+              <p>${canManage ? '새 예약 링크를 만들어 외부 예약 흐름을 시작하세요.' : '현재 역할에서는 링크를 생성할 수 없습니다.'}</p>
+            </div>
+          </article>
+        `}
+      </div>
+      <div class="calendar-sync-card">
+        <div class="calendar-booking-question-head">
+          <strong>외부 연동</strong>
+          ${canManageSync ? '<button class="btn btn-secondary" type="button" data-action="calendar-new-sync-connection">연동 추가</button>' : ''}
+        </div>
+        ${syncConnections.length ? syncConnections.map((item) => `
+          <article class="calendar-sync-row ${String(item?.id || '') === selectedSyncId ? 'is-selected' : ''}">
+            <button class="calendar-sync-select" type="button" data-action="calendar-select-sync-connection" data-sync-connection-id="${escapeHtml(String(item?.id || ''))}">
+              <div class="calendar-sync-copy">
+                <strong>${escapeHtml(String(item?.provider || 'sync').toUpperCase())}</strong>
+                <span>${escapeHtml(String(item?.account_label || item?.account_email || '연결 대기'))}</span>
+              </div>
+              <div class="calendar-sync-meta">
+                <em class="calendar-sync-state state-${escapeHtml(String(item?.sync_state || 'pending'))}">${escapeHtml(getCalendarSyncStateLabel(item?.sync_state || 'pending'))}</em>
+                <span>${escapeHtml(item?.last_synced_at ? `${formatProfileStatusDateTime(item.last_synced_at)} 동기화` : '최근 동기화 없음')}</span>
+              </div>
+            </button>
+          </article>
+        `).join('') : '<div class="calendar-empty-inline">연결된 외부 캘린더가 없습니다.</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderCalendarBookingLinkEditor(workspace, selectedContainer) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const editorLink = getCalendarActiveBookingLinkEditor(workspace);
+  const containers = Array.isArray(workspace?.containers) ? workspace.containers : [];
+  const canManage = Boolean(workspace?.capabilities?.can_manage_booking_links);
+  if (!editorLink) {
+    return `
+      <div class="calendar-detail-panel">
+        <div class="calendar-detail-empty">
+          <strong>예약 링크를 선택하세요</strong>
+          <p>왼쪽 목록에서 링크를 고르거나 새 예약 링크 만들기를 눌러 시작할 수 있습니다.</p>
+          ${canManage ? '<button class="btn btn-primary" type="button" data-action="calendar-new-booking-link">예약 링크 만들기</button>' : ''}
+        </div>
+      </div>
+    `;
+  }
+  const title = String(editorLink?.title || '').trim() || '새 예약 링크';
+  return `
+    <div class="calendar-detail-panel">
+      <div class="calendar-detail-scroller">
+        <div class="calendar-detail-summary">
+          <span class="calendar-card-tone tone-orange"></span>
+          <div>
+            <strong>${escapeHtml(title)}</strong>
+            <p>${editorLink?.slug ? `공개 링크: ${escapeHtml(String(editorLink.slug))}` : '예약 링크 기본 설정을 입력하세요.'}</p>
+          </div>
+        </div>
+        <div class="calendar-detail-form calendar-booking-editor">
+          <label class="calendar-form-field">
+            <span>링크 제목</span>
+            <input id="calendarBookingLinkTitleInput" type="text" value="${escapeHtml(String(editorLink?.title || ''))}" placeholder="예: 고객 온보딩 미팅" />
+          </label>
+          <label class="calendar-form-field">
+            <span>캘린더</span>
+            <select id="calendarBookingLinkContainerSelect">
+              ${containers.map((container) => `
+                <option value="${escapeHtml(String(container?.id || ''))}" ${String(container?.id || '') === String(editorLink?.container_id || selectedContainer?.id || '').trim() ? 'selected' : ''}>
+                  ${escapeHtml(String(container?.name || '캘린더'))}
+                </option>
+              `).join('')}
+            </select>
+          </label>
+          <label class="calendar-form-field calendar-form-field-full">
+            <span>설명</span>
+            <textarea id="calendarBookingLinkDescriptionInput" rows="3" placeholder="예약 페이지 상단에 노출됩니다.">${escapeHtml(String(editorLink?.description || ''))}</textarea>
+          </label>
+          <label class="calendar-check-row">
+            <input id="calendarBookingLinkPublicToggle" type="checkbox" ${editorLink?.is_public !== false ? 'checked' : ''} />
+            <span>공개 링크로 사용</span>
+          </label>
+          <label class="calendar-form-field">
+            <span>배정 방식</span>
+            <select id="calendarBookingLinkAssignmentModeInput">
+              <option value="single_host" ${String(editorLink?.assignment_mode || 'single_host') === 'single_host' ? 'selected' : ''}>단일 호스트</option>
+              <option value="collective" ${String(editorLink?.assignment_mode || '') === 'collective' ? 'selected' : ''}>모든 호스트 공동 참석</option>
+              <option value="round_robin" ${String(editorLink?.assignment_mode || '') === 'round_robin' ? 'selected' : ''}>라운드 로빈 배정</option>
+            </select>
+          </label>
+          <label class="calendar-form-field">
+            <span>승인 정책</span>
+            <select id="calendarBookingLinkApprovalPolicyInput">
+              <option value="instant" ${String(editorLink?.approval_policy || (editorLink?.approval_required ? 'manual' : 'instant')) === 'instant' ? 'selected' : ''}>즉시 확정</option>
+              <option value="manual" ${String(editorLink?.approval_policy || (editorLink?.approval_required ? 'manual' : 'instant')) === 'manual' ? 'selected' : ''}>수동 승인</option>
+            </select>
+          </label>
+          <label class="calendar-form-field">
+            <span>예약 허용 기간(일)</span>
+            <input id="calendarBookingLinkWindowInput" type="number" min="1" max="90" value="${escapeHtml(String(editorLink?.booking_window_days ?? 14))}" />
+          </label>
+          <label class="calendar-form-field">
+            <span>일정 길이(분)</span>
+            <input id="calendarBookingLinkDurationInput" type="number" min="15" max="240" step="15" value="${escapeHtml(String(editorLink?.duration_minutes ?? 30))}" />
+          </label>
+          <label class="calendar-form-field">
+            <span>시작 시간</span>
+            <input id="calendarBookingLinkStartInput" type="time" value="${escapeHtml(String(editorLink?.availability_start_time || '09:00'))}" />
+          </label>
+          <label class="calendar-form-field">
+            <span>종료 시간</span>
+            <input id="calendarBookingLinkEndInput" type="time" value="${escapeHtml(String(editorLink?.availability_end_time || '18:00'))}" />
+          </label>
+          <label class="calendar-form-field">
+            <span>전 버퍼(분)</span>
+            <input id="calendarBookingLinkBufferBeforeInput" type="number" min="0" max="180" value="${escapeHtml(String(editorLink?.buffer_before_minutes ?? 0))}" />
+          </label>
+          <label class="calendar-form-field">
+            <span>후 버퍼(분)</span>
+            <input id="calendarBookingLinkBufferAfterInput" type="number" min="0" max="180" value="${escapeHtml(String(editorLink?.buffer_after_minutes ?? 0))}" />
+          </label>
+          <label class="calendar-form-field">
+            <span>만료 시점</span>
+            <input id="calendarBookingLinkExpiresInput" type="datetime-local" value="${escapeHtml(formatCalendarDateTimeInputValue(editorLink?.expires_at || ''))}" />
+          </label>
+          <label class="calendar-form-field calendar-form-field-full">
+            <span>호스트 메모</span>
+            <textarea id="calendarBookingLinkHostNotesInput" rows="3" placeholder="예약 후 내부에만 남길 메모">${escapeHtml(String(editorLink?.host_notes || ''))}</textarea>
+          </label>
+        </div>
+        <div class="calendar-booking-question-head">
+          <strong>질문 폼</strong>
+          ${canManage ? '<button class="btn btn-secondary" type="button" data-action="calendar-add-booking-question">질문 추가</button>' : ''}
+        </div>
+        ${renderCalendarBookingQuestionRows(editorLink)}
+        ${calendarState.bookingLinkError ? `<div class="calendar-empty-inline is-error">${escapeHtml(calendarState.bookingLinkError)}</div>` : ''}
+      </div>
+      <div class="calendar-detail-actions">
+        <div class="calendar-detail-actions-left">
+          ${editorLink?.id ? '<button class="btn btn-secondary" type="button" data-action="calendar-delete-booking-link">삭제</button>' : '<span></span>'}
+          ${editorLink?.slug ? `<button class="btn btn-secondary" type="button" data-action="calendar-open-public-booking" data-slug="${escapeHtml(String(editorLink.slug || ''))}">공개 보기</button>` : ''}
+        </div>
+        ${canManage ? `<button class="btn btn-primary" type="button" data-action="calendar-save-booking-link">${calendarState.bookingLinkSaving ? '저장 중...' : '저장'}</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function getCalendarSyncStateLabel(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'connected') return '연결됨';
+  if (normalized === 'error') return '오류';
+  return '대기';
+}
+
+function renderCalendarSyncConnectionEditor(workspace, selectedContainer) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const editorSync = getCalendarActiveSyncConnectionEditor(workspace);
+  const containers = Array.isArray(workspace?.containers) ? workspace.containers : [];
+  const canManageSync = Boolean(workspace?.capabilities?.can_manage_sync);
+  if (!editorSync) {
+    return `
+      <div class="calendar-detail-panel">
+        <div class="calendar-detail-empty">
+          <strong>외부 연동을 선택하세요</strong>
+          <p>왼쪽 외부 연동 목록에서 연결을 고르거나 새 연동을 추가해 시작할 수 있습니다.</p>
+          ${canManageSync ? '<button class="btn btn-primary" type="button" data-action="calendar-new-sync-connection">연동 추가</button>' : ''}
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="calendar-detail-panel">
+      <div class="calendar-detail-scroller">
+        <div class="calendar-detail-summary">
+          <span class="calendar-card-tone tone-blue"></span>
+          <div>
+            <strong>${escapeHtml(String(editorSync?.provider || 'sync').toUpperCase())} 연동</strong>
+            <p>${escapeHtml(String(editorSync?.account_label || editorSync?.account_email || '연동 계정을 입력하세요.'))}</p>
+          </div>
+        </div>
+        <div class="calendar-detail-form calendar-sync-editor">
+          <label class="calendar-form-field">
+            <span>Provider</span>
+            <select id="calendarSyncProviderInput">
+              <option value="google" ${editorSync?.provider === 'google' ? 'selected' : ''}>Google</option>
+              <option value="outlook" ${editorSync?.provider === 'outlook' ? 'selected' : ''}>Outlook</option>
+            </select>
+          </label>
+          <label class="calendar-form-field">
+            <span>접근 범위</span>
+            <select id="calendarSyncScopeInput">
+              <option value="read" ${editorSync?.access_scope === 'read' ? 'selected' : ''}>Read only</option>
+              <option value="read_write" ${editorSync?.access_scope !== 'read' ? 'selected' : ''}>Read & Write</option>
+            </select>
+          </label>
+          <label class="calendar-form-field">
+            <span>계정 이메일</span>
+            <input id="calendarSyncEmailInput" type="email" value="${escapeHtml(String(editorSync?.account_email || ''))}" placeholder="calendar@example.com" />
+          </label>
+          <label class="calendar-form-field">
+            <span>계정 라벨</span>
+            <input id="calendarSyncLabelInput" type="text" value="${escapeHtml(String(editorSync?.account_label || ''))}" placeholder="예: HQ Google Calendar" />
+          </label>
+          <label class="calendar-form-field calendar-form-field-full">
+            <span>기본 캘린더</span>
+            <select id="calendarSyncDefaultContainerSelect">
+              <option value="">선택 안 함</option>
+              ${containers.map((container) => `
+                <option value="${escapeHtml(String(container?.id || ''))}" ${String(container?.id || '') === String(editorSync?.default_container_id || selectedContainer?.id || '').trim() ? 'selected' : ''}>
+                  ${escapeHtml(String(container?.name || '캘린더'))}
+                </option>
+              `).join('')}
+            </select>
+          </label>
+          <label class="calendar-form-field calendar-form-field-full">
+            <span>외부 캘린더 선택</span>
+            <input id="calendarSyncCalendarsInput" type="text" value="${escapeHtml((Array.isArray(editorSync?.selected_external_calendars) ? editorSync.selected_external_calendars : []).join(', '))}" placeholder="예: primary, team, shared-room" />
+          </label>
+          <div class="calendar-sync-status-grid">
+            <div>
+              <span>상태</span>
+              <strong>${escapeHtml(getCalendarSyncStateLabel(editorSync?.sync_state || 'pending'))}</strong>
+            </div>
+            <div>
+              <span>최근 동기화</span>
+              <strong>${escapeHtml(editorSync?.last_synced_at ? formatProfileStatusDateTime(editorSync.last_synced_at) : '기록 없음')}</strong>
+            </div>
+          </div>
+          ${editorSync?.last_sync_error ? `<div class="calendar-empty-inline is-error">${escapeHtml(String(editorSync.last_sync_error || ''))}</div>` : ''}
+          ${calendarState.syncConnectionError ? `<div class="calendar-empty-inline is-error">${escapeHtml(calendarState.syncConnectionError)}</div>` : ''}
+        </div>
+      </div>
+      <div class="calendar-detail-actions">
+        <div class="calendar-detail-actions-left">
+          ${editorSync?.id ? '<button class="btn btn-secondary" type="button" data-action="calendar-delete-sync-connection">삭제</button>' : '<span></span>'}
+          ${editorSync?.id ? `<button class="btn btn-secondary" type="button" data-action="calendar-run-sync-connection">${calendarState.syncConnectionRunning ? '동기화 중...' : '지금 동기화'}</button>` : ''}
+        </div>
+        ${canManageSync ? `<button class="btn btn-primary" type="button" data-action="calendar-save-sync-connection">${calendarState.syncConnectionSaving ? '저장 중...' : '저장'}</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function renderCalendarCenterSurface(workspace, selectedContainer) {
+  const activeTab = normalizeCalendarViewTab(ensureCalendarWorkspaceState().viewTab || workspace?.view || 'week');
+  if (activeTab === 'month') return renderCalendarMonthShell(workspace, selectedContainer);
+  if (activeTab === 'agenda') return renderCalendarAgendaShell(workspace, selectedContainer);
+  if (activeTab === 'booking-links') return renderCalendarBookingLinksShell(workspace);
+  return renderCalendarWeekShell(workspace, selectedContainer);
+}
+
+function renderCalendarReminderCheckboxes(reminders = []) {
+  const selectedPreset = new Set(
+    (Array.isArray(reminders) ? reminders : [])
+      .map((item) => Number(item?.minutes_before))
+      .filter((value) => Number.isFinite(value))
+  );
+  const customReminder = (Array.isArray(reminders) ? reminders : []).find((item) => {
+    const minutes = Number(item?.minutes_before);
+    return Number.isFinite(minutes) && ![10, 30, 60].includes(minutes);
+  });
+  return `
+    <div class="calendar-reminder-toggle-list">
+      ${[60, 30, 10].map((minutes) => `
+        <label class="calendar-check-row">
+          <input type="checkbox" data-calendar-reminder-preset="${minutes}" ${selectedPreset.has(minutes) ? 'checked' : ''} />
+          <span>${minutes}분 전</span>
+        </label>
+      `).join('')}
+    </div>
+    <label class="calendar-form-field">
+      <span>직접 설정(분)</span>
+      <input id="calendarReminderCustomInput" type="number" min="0" max="10080" value="${escapeHtml(customReminder?.minutes_before ?? '')}" placeholder="예: 120" />
+    </label>
+  `;
+}
+
+function renderCalendarAttendeeOptions(workspace, editorEvent, { readOnly = false } = {}) {
+  const selectedKeys = new Set(
+    (Array.isArray(editorEvent?.attendees) ? editorEvent.attendees : []).map((row) => String(row?.user_id || row?.employee_id || row?.email || '').trim())
+  );
+  const rows = Array.isArray(workspace?.attendee_options) ? workspace.attendee_options : [];
+  if (!rows.length) {
+    return '<div class="calendar-empty-inline">선택 가능한 참석자가 없습니다.</div>';
+  }
+  return `
+    <div class="calendar-attendee-list">
+      ${rows.map((row) => {
+        const optionKey = String(row?.user_id || row?.employee_id || row?.email || '').trim();
+        const checked = selectedKeys.has(optionKey);
+        return `
+          <label class="calendar-attendee-row">
+            <input
+              type="checkbox"
+              data-calendar-attendee-option
+              data-user-id="${escapeHtml(String(row?.user_id || ''))}"
+              data-employee-id="${escapeHtml(String(row?.employee_id || ''))}"
+              data-email="${escapeHtml(String(row?.email || ''))}"
+              data-display-name="${escapeHtml(String(row?.display_name || ''))}"
+              ${checked ? 'checked' : ''}
+              ${readOnly ? 'disabled' : ''} />
+            <span class="calendar-attendee-copy">
+              <strong>${escapeHtml(String(row?.display_name || '참석자'))}</strong>
+              <span>${escapeHtml(String(row?.subtitle || row?.email || ''))}</span>
+            </span>
+          </label>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function getCalendarResourceLabel(workspace, resourceId = '') {
+  const key = String(resourceId || '').trim();
+  if (!key) return '';
+  const row = (Array.isArray(workspace?.resources) ? workspace.resources : []).find((item) => String(item?.id || '').trim() === key);
+  return String(row?.resource_name || row?.site_label || '').trim();
+}
+
+function collectCalendarAvailabilityQueryState(workspace) {
+  const editorEvent = getCalendarActiveEditorEvent(workspace);
+  if (!workspace || !editorEvent) return null;
+  const attendeeInputs = Array.from(document.querySelectorAll('[data-calendar-attendee-option]'));
+  const attendees = attendeeInputs.length
+    ? attendeeInputs
+      .filter((input) => input.checked)
+      .map((input) => ({
+        user_id: String(input.getAttribute('data-user-id') || '').trim(),
+        employee_id: String(input.getAttribute('data-employee-id') || '').trim(),
+        email: String(input.getAttribute('data-email') || '').trim(),
+      }))
+    : (Array.isArray(editorEvent.attendees) ? editorEvent.attendees : []).map((row) => ({
+      user_id: String(row?.user_id || '').trim(),
+      employee_id: String(row?.employee_id || '').trim(),
+      email: String(row?.email || '').trim(),
+    }));
+  const resourceId = String($('#calendarResourceSelect')?.value || editorEvent.resource_id || '').trim();
+  const startsAt = String(editorEvent.starts_at || '').trim();
+  const endsAt = String(editorEvent.ends_at || '').trim();
+  if (!startsAt || !endsAt) return null;
+  return {
+    date: getCalendarDateKeyFromValue(startsAt) || String(workspace?.selected_date || '').trim(),
+    starts_at: startsAt,
+    ends_at: endsAt,
+    event_id: String(editorEvent.id || '').trim(),
+    resource_id: resourceId,
+    attendee_user_ids: attendees.map((row) => String(row.user_id || '').trim()).filter(Boolean),
+    attendee_employee_ids: attendees.map((row) => String(row.employee_id || '').trim()).filter(Boolean),
+    attendee_emails: attendees.map((row) => String(row.email || '').trim()).filter(Boolean),
+  };
+}
+
+async function loadCalendarAvailability({ force = false } = {}) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const workspace = calendarState.workspace;
+  const query = collectCalendarAvailabilityQueryState(workspace);
+  if (!workspace || !query) {
+    calendarState.availability = null;
+    calendarState.availabilityKey = '';
+    calendarState.availabilityLoading = false;
+    calendarState.availabilityError = '';
+    return null;
+  }
+  const queryKey = buildCalendarAvailabilityKey(query);
+  if (!force && calendarState.availabilityKey === queryKey && (calendarState.availability || calendarState.availabilityLoading || calendarState.availabilityError)) {
+    return calendarState.availability;
+  }
+  if (!query.resource_id && !query.attendee_user_ids.length && !query.attendee_employee_ids.length && !query.attendee_emails.length) {
+    calendarState.availability = null;
+    calendarState.availabilityKey = queryKey;
+    calendarState.availabilityLoading = false;
+    calendarState.availabilityError = '';
+    renderCalendarWorkspace();
+    return null;
+  }
+  calendarState.availabilityLoading = true;
+  calendarState.availabilityError = '';
+  calendarState.availabilityKey = queryKey;
+  renderCalendarWorkspace();
+  try {
+    const payload = await apiRequest(getCalendarAvailabilityRequestPath(query), { force });
+    calendarState.availability = payload || null;
+    calendarState.availabilityError = '';
+    return payload;
+  } catch (error) {
+    calendarState.availability = null;
+    calendarState.availabilityError = normalizeActionError(error, '가능 시간 계산에 실패했습니다.');
+    throw error;
+  } finally {
+    calendarState.availabilityLoading = false;
+    renderCalendarWorkspace();
+  }
+}
+
+function applyCalendarSuggestedSlot(startsAt = '', endsAt = '') {
+  const calendarState = ensureCalendarWorkspaceState();
+  const workspace = calendarState.workspace;
+  const editorEvent = getCalendarActiveEditorEvent(workspace);
+  if (!workspace || !editorEvent || !startsAt || !endsAt) return;
+  calendarState.draftEvent = {
+    ...editorEvent,
+    starts_at: startsAt,
+    ends_at: endsAt,
+  };
+  const dateKey = getCalendarDateKeyFromValue(startsAt);
+  if (dateKey) {
+    calendarState.selectedDate = dateKey;
+    calendarState.anchorDate = dateKey;
+  }
+  renderCalendarWorkspace();
+}
+
+function applyCalendarTemplate(templateCode = '') {
+  const calendarState = ensureCalendarWorkspaceState();
+  const workspace = calendarState.workspace;
+  if (!workspace) return;
+  const template = (Array.isArray(workspace.templates) ? workspace.templates : []).find((item) => String(item?.code || '').trim() === String(templateCode || '').trim());
+  if (!template) return;
+  if (!calendarState.draftEvent && !getCalendarActiveEditorEvent(workspace)) {
+    startCalendarDraft();
+  }
+  const activeWorkspace = ensureCalendarWorkspaceState().workspace || workspace;
+  const editorEvent = getCalendarActiveEditorEvent(activeWorkspace);
+  if (!editorEvent) return;
+  const nextStart = String(editorEvent.starts_at || parseCalendarDateTimeInputValue(`${calendarState.selectedDate || workspace.selected_date || toLocalDateKey(new Date())}T09:00`)).trim();
+  const nextEnd = new Date(new Date(nextStart).getTime() + (Number(template.duration_minutes || 30) * 60000)).toISOString();
+  calendarState.draftEvent = {
+    ...editorEvent,
+    title: String(template.title_template || editorEvent.title || '').trim(),
+    conferencing_provider: String(template.conferencing_provider || editorEvent.conferencing_provider || '').trim(),
+    visibility: String(template.visibility || editorEvent.visibility || 'private').trim() || 'private',
+    recurrence_rule: buildCalendarRecurrenceRuleFromPreset(template.recurrence_preset || 'none', nextStart),
+    starts_at: nextStart,
+    ends_at: nextEnd,
+    reminders: (Array.isArray(template.reminder_minutes) ? template.reminder_minutes : [])
+      .map((minutes) => Number(minutes))
+      .filter((minutes) => Number.isFinite(minutes) && minutes > 0)
+      .map((minutes) => ({ channel: 'in_app', minutes_before: minutes })),
+  };
+  calendarState.selectedDetailTab = 'details';
+  renderCalendarWorkspace();
+}
+
+function renderCalendarSchedulingAssistant(workspace, editorEvent, { readOnly = false } = {}) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const availability = calendarState.availability;
+  const resources = Array.isArray(workspace?.resources) ? workspace.resources : [];
+  const resourceId = String(editorEvent?.resource_id || '').trim();
+  const suggestions = Array.isArray(availability?.suggested_slots) ? availability.suggested_slots : [];
+  const lanes = Array.isArray(availability?.lanes) ? availability.lanes : [];
+  return `
+    <section class="calendar-scheduler-card">
+      <div class="calendar-scheduler-head">
+        <div>
+          <strong>Scheduling Assistant</strong>
+          <span>${escapeHtml(String(availability?.working_hours_label || '09:00-18:00'))}</span>
+        </div>
+        <button class="btn btn-secondary" type="button" data-action="calendar-refresh-availability" ${readOnly ? 'disabled' : ''}>${calendarState.availabilityLoading ? '계산 중...' : '추천 시간 새로고침'}</button>
+      </div>
+      <div class="calendar-scheduler-grid">
+        <label class="calendar-form-field calendar-resource-select">
+          <span>회의실 / 리소스</span>
+          <select id="calendarResourceSelect" ${readOnly ? 'disabled' : ''}>
+            <option value="">선택 안 함</option>
+            ${resources.map((row) => `
+              <option value="${escapeHtml(String(row?.id || ''))}" ${String(row?.id || '') === resourceId ? 'selected' : ''}>
+                ${escapeHtml(String(row?.resource_name || '리소스'))}${row?.site_label ? ` · ${escapeHtml(String(row.site_label))}` : ''}
+              </option>
+            `).join('')}
+          </select>
+        </label>
+        <div class="calendar-suggestion-list">
+          ${calendarState.availabilityLoading
+            ? '<div class="calendar-empty-inline">가능 시간을 계산하고 있습니다.</div>'
+            : calendarState.availabilityError
+              ? `<div class="calendar-empty-inline">${escapeHtml(calendarState.availabilityError)}</div>`
+              : suggestions.length
+                ? suggestions.map((slot) => `
+                  <button class="calendar-suggestion-card" type="button" data-action="calendar-apply-suggested-slot" data-starts-at="${escapeHtml(String(slot?.starts_at || ''))}" data-ends-at="${escapeHtml(String(slot?.ends_at || ''))}" ${readOnly ? 'disabled' : ''}>
+                    <strong>${escapeHtml(String(slot?.label || '추천 시간'))}</strong>
+                    <span>참석자 ${Number(slot?.attendee_match_count || 0)}/${Number(slot?.attendee_total_count || 0)} · ${slot?.resource_ready ? '리소스 가능' : '리소스 확인 필요'}</span>
+                  </button>
+                `).join('')
+                : '<div class="calendar-empty-inline">참석자나 회의실을 선택하면 추천 시간이 나타납니다.</div>'}
+        </div>
+      </div>
+      <div class="calendar-availability-lanes">
+        ${lanes.length
+          ? lanes.map((lane) => `
+            <div class="calendar-availability-lane">
+              <div class="calendar-availability-lane-head">
+                <strong>${escapeHtml(String(lane?.lane_label || '참석자'))}</strong>
+                <span>${lane?.lane_type === 'resource' ? '리소스' : '참석자'}</span>
+              </div>
+              <div class="calendar-availability-slot-list">
+                ${Array.isArray(lane?.slots) && lane.slots.length
+                  ? lane.slots.map((slot) => `
+                    <span class="calendar-busy-slot">${escapeHtml(formatCalendarEventTime(slot))} · ${escapeHtml(String(slot?.title || 'busy'))}</span>
+                  `).join('')
+                  : '<span class="calendar-empty-inline">겹치는 일정 없음</span>'}
+              </div>
+            </div>
+          `).join('')
+          : ''}
+      </div>
+    </section>
+  `;
+}
+
+function renderCalendarDetailDrawer(workspace, selectedContainer) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const activeTab = String(calendarState.selectedDetailTab || 'details').trim().toLowerCase();
+  const editorEvent = getCalendarActiveEditorEvent(workspace);
+  const canEdit = Boolean(workspace?.capabilities?.can_create);
+  if (!editorEvent) {
+    return `
+      <div class="calendar-detail-panel">
+        <div class="calendar-detail-empty">
+          <strong>이벤트를 선택하세요</strong>
+          <p>주간, 월간, 아젠다에서 일정을 고르거나 새 일정 추가를 눌러 편집을 시작할 수 있습니다.</p>
+          ${canEdit ? '<button class="btn btn-primary" type="button" data-action="calendar-new-event">새 일정 추가</button>' : ''}
+        </div>
+      </div>
+    `;
+  }
+  const headerTitle = editorEvent.id ? editorEvent.title || '일정 상세' : '새 일정';
+  const sourceBadge = getCalendarEventSourceBadge(workspace, editorEvent);
+  const readOnly = isCalendarEventReadOnly(workspace, editorEvent);
+  const canSave = canEdit && !readOnly;
+  const readOnlyAttr = readOnly ? 'readonly' : '';
+  const disabledAttr = readOnly ? 'disabled' : '';
+  const summaryBadges = `
+    ${sourceBadge ? `<span class="calendar-inline-chip source-badge">${escapeHtml(sourceBadge)}</span>` : ''}
+    ${readOnly ? '<span class="calendar-inline-chip readonly-badge">읽기 전용</span>' : ''}
+  `;
+  const footerActions = `
+    <div class="calendar-detail-actions">
+      ${canSave && editorEvent.id ? '<button class="btn btn-secondary" type="button" data-action="calendar-delete-event">삭제</button>' : '<span></span>'}
+      ${canSave
+        ? `<button class="btn btn-primary" type="button" data-action="calendar-save-event">${calendarState.saving ? '저장 중...' : '저장'}</button>`
+        : '<span class="calendar-detail-readonly-note">외부 연동 또는 읽기 전용 일정은 이곳에서 수정할 수 없습니다.</span>'}
+    </div>
+  `;
+  if (activeTab === 'attendees') {
+    return `
+      <div class="calendar-detail-panel">
+        <div class="calendar-detail-scroller">
+          <div class="calendar-detail-summary">
+            <span class="calendar-card-tone tone-blue"></span>
+            <div>
+              <strong>${escapeHtml(headerTitle)}</strong>
+              <p>참석자와 가능한 시간을 함께 조율합니다.</p>
+              ${summaryBadges ? `<div class="calendar-event-badges">${summaryBadges}</div>` : ''}
+            </div>
+          </div>
+          ${renderCalendarSchedulingAssistant(workspace, editorEvent, { readOnly })}
+          ${renderCalendarAttendeeOptions(workspace, editorEvent, { readOnly })}
+        </div>
+        ${footerActions}
+      </div>
+    `;
+  }
+  if (activeTab === 'reminders') {
+    return `
+      <div class="calendar-detail-panel">
+        <div class="calendar-detail-scroller">
+          <div class="calendar-detail-summary">
+            <span class="calendar-card-tone tone-orange"></span>
+            <div>
+              <strong>${escapeHtml(headerTitle)}</strong>
+              <p>일정별 알림을 여러 개 설정합니다.</p>
+              ${summaryBadges ? `<div class="calendar-event-badges">${summaryBadges}</div>` : ''}
+            </div>
+          </div>
+          <div class="calendar-detail-form">
+            ${renderCalendarReminderCheckboxes(editorEvent.reminders)}
+          </div>
+        </div>
+        ${footerActions}
+      </div>
+    `;
+  }
+  if (activeTab === 'notes') {
+    const customFields = Array.isArray(editorEvent.custom_fields_draft) ? editorEvent.custom_fields_draft : [];
+    const comments = Array.isArray(editorEvent.comments) ? editorEvent.comments : [];
+    return `
+      <div class="calendar-detail-panel">
+        <div class="calendar-detail-scroller">
+          <div class="calendar-detail-summary">
+            <span class="calendar-card-tone tone-slate"></span>
+            <div>
+              <strong>${escapeHtml(headerTitle)}</strong>
+              <p>공유 메모와 개인 메모, 액션 아이템을 분리합니다.</p>
+              ${summaryBadges ? `<div class="calendar-event-badges">${summaryBadges}</div>` : ''}
+            </div>
+          </div>
+          <div class="calendar-detail-form">
+            <div class="calendar-notes-section">
+              <div class="calendar-booking-question-head">
+                <strong>메모</strong>
+              </div>
+              <label class="calendar-form-field">
+                <span>Shared Notes</span>
+                <textarea id="calendarSharedNoteInput" rows="5" placeholder="팀과 공유할 메모" ${readOnly ? 'readonly' : ''}>${escapeHtml(editorEvent.shared_note || '')}</textarea>
+              </label>
+              <label class="calendar-form-field">
+                <span>Private Memo</span>
+                <textarea id="calendarPrivateMemoInput" rows="4" placeholder="개인 메모" ${readOnly ? 'readonly' : ''}>${escapeHtml(editorEvent.private_memo || '')}</textarea>
+              </label>
+              <label class="calendar-form-field">
+                <span>Action Items</span>
+                <textarea id="calendarActionItemsInput" rows="4" placeholder="한 줄에 하나씩 입력" ${readOnly ? 'readonly' : ''}>${escapeHtml((editorEvent.action_items_text || []).join('\n'))}</textarea>
+              </label>
+            </div>
+            <div class="calendar-notes-section">
+              <div class="calendar-booking-question-head">
+                <strong>커스텀 필드</strong>
+                ${canSave ? '<button class="btn btn-secondary" type="button" data-action="calendar-add-custom-field">필드 추가</button>' : ''}
+              </div>
+              <div class="calendar-custom-field-list">
+                ${customFields.length ? customFields.map((field, index) => `
+                  <div class="calendar-custom-field-row" data-calendar-custom-field-row data-field-index="${index}" data-field-key="${escapeHtml(String(field?.key || `field_${index + 1}`))}">
+                    <label class="calendar-form-field">
+                      <span>라벨</span>
+                      <input type="text" data-calendar-custom-field-label value="${escapeHtml(String(field?.label || ''))}" placeholder="예: 프로젝트" ${readOnlyAttr} />
+                    </label>
+                    <label class="calendar-form-field">
+                      <span>유형</span>
+                      <select data-calendar-custom-field-type ${disabledAttr}>
+                        <option value="text" ${String(field?.field_type || 'text') === 'text' ? 'selected' : ''}>텍스트</option>
+                        <option value="number" ${String(field?.field_type || '') === 'number' ? 'selected' : ''}>숫자</option>
+                        <option value="select" ${String(field?.field_type || '') === 'select' ? 'selected' : ''}>선택형</option>
+                      </select>
+                    </label>
+                    <label class="calendar-form-field calendar-form-field-full">
+                      <span>값</span>
+                      <input type="text" data-calendar-custom-field-value value="${escapeHtml(String(field?.value || ''))}" placeholder="필드 값 입력" ${readOnlyAttr} />
+                    </label>
+                    ${canSave ? `<button class="btn btn-secondary calendar-question-remove" type="button" data-action="calendar-remove-custom-field" data-field-index="${index}">필드 삭제</button>` : ''}
+                  </div>
+                `).join('') : '<div class="calendar-empty-inline">등록된 커스텀 필드가 없습니다.</div>'}
+              </div>
+            </div>
+            <div class="calendar-notes-section">
+              <div class="calendar-booking-question-head">
+                <strong>댓글</strong>
+              </div>
+              <div class="calendar-comment-thread">
+                ${comments.length ? comments.map((comment) => `
+                  <article class="calendar-comment-row ${comment?.is_internal ? 'is-internal' : ''}">
+                    <div class="calendar-comment-meta">
+                      <strong>${escapeHtml(String(comment?.author_label || '작성자'))}</strong>
+                      <span>${escapeHtml(formatProfileStatusDateTime(comment?.created_at || ''))}</span>
+                    </div>
+                    <p>${escapeHtml(String(comment?.body || ''))}</p>
+                    ${comment?.is_internal ? '<em class="calendar-inline-chip readonly-badge">내부 메모</em>' : ''}
+                  </article>
+                `).join('') : '<div class="calendar-empty-inline">등록된 댓글이 없습니다.</div>'}
+              </div>
+              ${canSave ? `
+                <div class="calendar-comment-compose">
+                  <label class="calendar-form-field calendar-form-field-full">
+                    <span>새 댓글</span>
+                    <textarea id="calendarCommentBodyInput" rows="3" placeholder="일정에 대한 메모나 진행 상황을 남기세요."></textarea>
+                  </label>
+                  <label class="calendar-check-row">
+                    <input id="calendarCommentInternalToggle" type="checkbox" />
+                    <span>내부 메모로 저장</span>
+                  </label>
+                  <div class="calendar-comment-actions">
+                    <button class="btn btn-secondary" type="button" data-action="calendar-post-comment">댓글 남기기</button>
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+        ${footerActions}
+      </div>
+    `;
+  }
+  return `
+    <div class="calendar-detail-panel">
+      <div class="calendar-detail-scroller">
+        <div class="calendar-detail-summary">
+          <span class="calendar-card-tone tone-orange"></span>
+          <div>
+            <strong>${escapeHtml(headerTitle)}</strong>
+            <p>${escapeHtml(formatCalendarLongDateLabel(getCalendarDateKeyFromValue(editorEvent.starts_at) || workspace?.selected_date || ''))}</p>
+            ${summaryBadges ? `<div class="calendar-event-badges">${summaryBadges}</div>` : ''}
+          </div>
+        </div>
+        <div class="calendar-detail-form">
+          <div class="calendar-form-grid">
+            <label class="calendar-form-field calendar-form-field-full">
+              <span>제목</span>
+              <input id="calendarTitleInput" type="text" value="${escapeHtml(editorEvent.title || '')}" placeholder="일정 제목" ${readOnlyAttr} />
+            </label>
+            <label class="calendar-form-field">
+              <span>시작</span>
+              <input id="calendarStartsAtInput" type="datetime-local" value="${escapeHtml(formatCalendarDateTimeInputValue(editorEvent.starts_at))}" ${disabledAttr} />
+            </label>
+            <label class="calendar-form-field">
+              <span>종료</span>
+              <input id="calendarEndsAtInput" type="datetime-local" value="${escapeHtml(formatCalendarDateTimeInputValue(editorEvent.ends_at))}" ${disabledAttr} />
+            </label>
+            <label class="calendar-form-field">
+              <span>반복</span>
+              <select id="calendarRecurrenceInput" ${disabledAttr}>
+                <option value="none" ${getCalendarRecurrencePresetFromRule(editorEvent.recurrence_rule) === 'none' ? 'selected' : ''}>반복 안 함</option>
+                <option value="daily" ${getCalendarRecurrencePresetFromRule(editorEvent.recurrence_rule) === 'daily' ? 'selected' : ''}>매일</option>
+                <option value="weekly" ${getCalendarRecurrencePresetFromRule(editorEvent.recurrence_rule) === 'weekly' ? 'selected' : ''}>매주</option>
+                <option value="biweekly" ${getCalendarRecurrencePresetFromRule(editorEvent.recurrence_rule) === 'biweekly' ? 'selected' : ''}>격주</option>
+                <option value="monthly" ${getCalendarRecurrencePresetFromRule(editorEvent.recurrence_rule) === 'monthly' ? 'selected' : ''}>매월</option>
+              </select>
+            </label>
+            <label class="calendar-form-field">
+              <span>가용 상태</span>
+              <select id="calendarAvailabilityInput" ${disabledAttr}>
+                <option value="busy" ${editorEvent.availability_status === 'busy' ? 'selected' : ''}>Busy</option>
+                <option value="free" ${editorEvent.availability_status === 'free' ? 'selected' : ''}>Free</option>
+              </select>
+            </label>
+            <label class="calendar-form-field">
+              <span>공개 범위</span>
+              <select id="calendarVisibilityInput" ${disabledAttr}>
+                <option value="private" ${editorEvent.visibility === 'private' ? 'selected' : ''}>Private</option>
+                <option value="team" ${editorEvent.visibility === 'team' ? 'selected' : ''}>Team</option>
+                <option value="shared" ${editorEvent.visibility === 'shared' ? 'selected' : ''}>Shared</option>
+              </select>
+            </label>
+            <label class="calendar-form-field">
+              <span>회의실</span>
+              <input id="calendarResourceLabelInput" type="text" value="${escapeHtml(editorEvent.resource_label || getCalendarResourceLabel(workspace, editorEvent.resource_id) || '')}" placeholder="Attendees 탭에서 선택" readonly />
+            </label>
+            <label class="calendar-form-field calendar-form-field-full">
+              <span>장소</span>
+              <input id="calendarLocationInput" type="text" value="${escapeHtml(editorEvent.location || '')}" placeholder="장소 입력" ${readOnlyAttr} />
+            </label>
+            <label class="calendar-form-field">
+              <span>화상회의</span>
+              <input id="calendarConferencingProviderInput" type="text" value="${escapeHtml(editorEvent.conferencing_provider || '')}" placeholder="Google Meet / Teams" ${readOnlyAttr} />
+            </label>
+            <label class="calendar-form-field">
+              <span>링크</span>
+              <input id="calendarConferencingUrlInput" type="url" value="${escapeHtml(editorEvent.conferencing_url || '')}" placeholder="https://..." ${readOnlyAttr} />
+            </label>
+            <label class="calendar-form-field calendar-form-field-full">
+              <span>설명</span>
+              <textarea id="calendarDescriptionInput" rows="5" placeholder="일정 설명" ${readOnly ? 'readonly' : ''}>${escapeHtml(editorEvent.description || '')}</textarea>
+            </label>
+          </div>
+        </div>
+      </div>
+      ${footerActions}
+    </div>
+  `;
+}
+
+function collectCalendarEventPayloadFromDom(workspace) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const editorEvent = getCalendarActiveEditorEvent(workspace);
+  if (!editorEvent) {
+    throw new Error('저장할 일정이 없습니다.');
+  }
+  const selectedContainer = getCalendarSelectedContainer(workspace);
+  const title = String($('#calendarTitleInput')?.value || editorEvent.title || '').trim();
+  const startsAt = parseCalendarDateTimeInputValue($('#calendarStartsAtInput')?.value || '') || String(editorEvent.starts_at || '').trim();
+  const endsAt = parseCalendarDateTimeInputValue($('#calendarEndsAtInput')?.value || '') || String(editorEvent.ends_at || '').trim();
+  if (!title) {
+    throw new Error('일정 제목을 입력해 주세요.');
+  }
+  if (!startsAt || !endsAt) {
+    throw new Error('시작과 종료 시간을 입력해 주세요.');
+  }
+  const attendeeInputs = Array.from(document.querySelectorAll('[data-calendar-attendee-option]'));
+  const attendees = attendeeInputs.length
+    ? attendeeInputs
+      .filter((input) => input.checked)
+      .map((input) => ({
+        user_id: String(input.getAttribute('data-user-id') || '').trim() || null,
+        employee_id: String(input.getAttribute('data-employee-id') || '').trim() || null,
+        email: String(input.getAttribute('data-email') || '').trim() || null,
+        display_name: String(input.getAttribute('data-display-name') || '').trim() || null,
+        is_required: true,
+      }))
+    : (Array.isArray(editorEvent.attendees) ? editorEvent.attendees : []);
+  const reminderInputs = Array.from(document.querySelectorAll('[data-calendar-reminder-preset]'));
+  const reminders = reminderInputs.length
+    ? reminderInputs
+      .filter((input) => input.checked)
+      .map((input) => ({
+        channel: 'in_app',
+        minutes_before: Number(input.getAttribute('data-calendar-reminder-preset') || 0),
+      }))
+      .filter((row) => Number.isFinite(row.minutes_before) && row.minutes_before > 0)
+    : (Array.isArray(editorEvent.reminders) ? [...editorEvent.reminders] : []);
+  const customReminder = Number($('#calendarReminderCustomInput')?.value || NaN);
+  if (Number.isFinite(customReminder) && customReminder > 0) {
+    reminders.push({ channel: 'in_app', minutes_before: customReminder });
+  }
+  const sharedNote = String($('#calendarSharedNoteInput')?.value || editorEvent.shared_note || '').trim();
+  const privateMemo = String($('#calendarPrivateMemoInput')?.value || editorEvent.private_memo || '').trim();
+  const actionItems = String(
+    $('#calendarActionItemsInput')?.value
+      || (Array.isArray(editorEvent.action_items_text) ? editorEvent.action_items_text.join('\n') : '')
+  )
+    .split('\n')
+    .map((row) => row.trim())
+    .filter(Boolean);
+  const customFields = Array.from(document.querySelectorAll('[data-calendar-custom-field-row]')).map((row, index) => normalizeCalendarCustomFieldDraft({
+    key: row.getAttribute('data-field-key') || `field_${index + 1}`,
+    label: row.querySelector('[data-calendar-custom-field-label]')?.value || '',
+    value: row.querySelector('[data-calendar-custom-field-value]')?.value || '',
+    field_type: row.querySelector('[data-calendar-custom-field-type]')?.value || 'text',
+  }, index)).filter((row) => row.label);
+  calendarState.saveError = '';
+  return {
+    container_id: String(editorEvent.container_id || selectedContainer?.id || workspace?.selected_container_id || '').trim(),
+    title,
+    starts_at: startsAt,
+    ends_at: endsAt,
+    timezone: 'Asia/Seoul',
+    is_all_day: false,
+    recurrence_rule: buildCalendarRecurrenceRuleFromPreset(
+      String($('#calendarRecurrenceInput')?.value || getCalendarRecurrencePresetFromRule(editorEvent.recurrence_rule) || 'none').trim(),
+      startsAt,
+    ),
+    availability_status: String($('#calendarAvailabilityInput')?.value || editorEvent.availability_status || 'busy').trim() || 'busy',
+    visibility: String($('#calendarVisibilityInput')?.value || editorEvent.visibility || 'private').trim() || 'private',
+    location: String($('#calendarLocationInput')?.value || editorEvent.location || '').trim(),
+    conferencing_provider: String($('#calendarConferencingProviderInput')?.value || editorEvent.conferencing_provider || '').trim(),
+    conferencing_url: String($('#calendarConferencingUrlInput')?.value || editorEvent.conferencing_url || '').trim(),
+    description: String($('#calendarDescriptionInput')?.value || editorEvent.description || '').trim(),
+    resource_id: String($('#calendarResourceSelect')?.value || editorEvent.resource_id || '').trim() || null,
+    attendees: attendees.length ? attendees : (Array.isArray(editorEvent.attendees) ? editorEvent.attendees : []),
+    reminders: reminders.length ? reminders : (Array.isArray(editorEvent.reminders) ? editorEvent.reminders : []),
+    shared_note: sharedNote,
+    private_memo: privateMemo,
+    action_items: actionItems,
+    custom_fields: customFields.length ? customFields : (Array.isArray(editorEvent.custom_fields_draft) ? editorEvent.custom_fields_draft : []),
+  };
+}
+
+function snapshotCalendarEditorStateFromDom(workspace) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const editorEvent = getCalendarActiveEditorEvent(workspace);
+  if (!workspace || !editorEvent) return;
+  const nextDraft = {
+    ...editorEvent,
+    attendees: Array.isArray(editorEvent.attendees) ? [...editorEvent.attendees] : [],
+    reminders: Array.isArray(editorEvent.reminders) ? [...editorEvent.reminders] : [],
+    action_items_text: Array.isArray(editorEvent.action_items_text) ? [...editorEvent.action_items_text] : [],
+    comments: Array.isArray(editorEvent.comments) ? [...editorEvent.comments] : [],
+    custom_fields_draft: Array.isArray(editorEvent.custom_fields_draft)
+      ? editorEvent.custom_fields_draft.map((field, index) => normalizeCalendarCustomFieldDraft(field, index))
+      : [],
+  };
+
+  const titleInput = $('#calendarTitleInput');
+  if (titleInput) nextDraft.title = String(titleInput.value || '').trim();
+
+  const startsAtInput = $('#calendarStartsAtInput');
+  if (startsAtInput) {
+    const parsed = parseCalendarDateTimeInputValue(startsAtInput.value || '');
+    if (parsed) nextDraft.starts_at = parsed;
+  }
+
+  const endsAtInput = $('#calendarEndsAtInput');
+  if (endsAtInput) {
+    const parsed = parseCalendarDateTimeInputValue(endsAtInput.value || '');
+    if (parsed) nextDraft.ends_at = parsed;
+  }
+
+  const recurrenceInput = $('#calendarRecurrenceInput');
+  if (recurrenceInput) {
+    nextDraft.recurrence_rule = buildCalendarRecurrenceRuleFromPreset(String(recurrenceInput.value || 'none').trim(), nextDraft.starts_at);
+  }
+
+  const availabilityInput = $('#calendarAvailabilityInput');
+  if (availabilityInput) nextDraft.availability_status = String(availabilityInput.value || 'busy').trim() || 'busy';
+
+  const visibilityInput = $('#calendarVisibilityInput');
+  if (visibilityInput) nextDraft.visibility = String(visibilityInput.value || 'private').trim() || 'private';
+
+  const locationInput = $('#calendarLocationInput');
+  if (locationInput) nextDraft.location = String(locationInput.value || '').trim();
+
+  const conferencingProviderInput = $('#calendarConferencingProviderInput');
+  if (conferencingProviderInput) nextDraft.conferencing_provider = String(conferencingProviderInput.value || '').trim();
+
+  const conferencingUrlInput = $('#calendarConferencingUrlInput');
+  if (conferencingUrlInput) nextDraft.conferencing_url = String(conferencingUrlInput.value || '').trim();
+
+  const descriptionInput = $('#calendarDescriptionInput');
+  if (descriptionInput) nextDraft.description = String(descriptionInput.value || '').trim();
+
+  const resourceSelect = $('#calendarResourceSelect');
+  if (resourceSelect) {
+    nextDraft.resource_id = String(resourceSelect.value || '').trim();
+    nextDraft.resource_label = getCalendarResourceLabel(workspace, nextDraft.resource_id);
+  }
+
+  const attendeeInputs = Array.from(document.querySelectorAll('[data-calendar-attendee-option]'));
+  if (attendeeInputs.length) {
+    nextDraft.attendees = attendeeInputs
+      .filter((input) => input.checked)
+      .map((input) => ({
+        user_id: String(input.getAttribute('data-user-id') || '').trim() || null,
+        employee_id: String(input.getAttribute('data-employee-id') || '').trim() || null,
+        email: String(input.getAttribute('data-email') || '').trim() || null,
+        display_name: String(input.getAttribute('data-display-name') || '').trim() || null,
+        is_required: true,
+      }));
+  }
+
+  const reminderInputs = Array.from(document.querySelectorAll('[data-calendar-reminder-preset]'));
+  if (reminderInputs.length) {
+    const reminders = reminderInputs
+      .filter((input) => input.checked)
+      .map((input) => ({
+        channel: 'in_app',
+        minutes_before: Number(input.getAttribute('data-calendar-reminder-preset') || 0),
+      }))
+      .filter((row) => Number.isFinite(row.minutes_before) && row.minutes_before > 0);
+    const customReminder = Number($('#calendarReminderCustomInput')?.value || 0);
+    if (Number.isFinite(customReminder) && customReminder > 0) {
+      reminders.push({ channel: 'in_app', minutes_before: customReminder });
+    }
+    nextDraft.reminders = reminders;
+  }
+
+  const sharedNoteInput = $('#calendarSharedNoteInput');
+  if (sharedNoteInput) nextDraft.shared_note = String(sharedNoteInput.value || '').trim();
+
+  const privateMemoInput = $('#calendarPrivateMemoInput');
+  if (privateMemoInput) nextDraft.private_memo = String(privateMemoInput.value || '').trim();
+
+  const actionItemsInput = $('#calendarActionItemsInput');
+  if (actionItemsInput) {
+    nextDraft.action_items_text = String(actionItemsInput.value || '')
+      .split('\n')
+      .map((row) => row.trim())
+      .filter(Boolean);
+  }
+
+  const customFieldRows = Array.from(document.querySelectorAll('[data-calendar-custom-field-row]'));
+  if (customFieldRows.length) {
+    nextDraft.custom_fields_draft = customFieldRows.map((row, index) => normalizeCalendarCustomFieldDraft({
+      key: row.getAttribute('data-field-key') || `field_${index + 1}`,
+      label: row.querySelector('[data-calendar-custom-field-label]')?.value || '',
+      value: row.querySelector('[data-calendar-custom-field-value]')?.value || '',
+      field_type: row.querySelector('[data-calendar-custom-field-type]')?.value || 'text',
+    }, index)).filter((row) => row.label);
+  }
+
+  calendarState.draftEvent = nextDraft;
+}
+
+function getCalendarEventRequestPath(eventId = '') {
+  const path = eventId
+    ? `/calendar/events/${encodeURIComponent(String(eventId || '').trim())}`
+    : '/calendar/events';
+  return appendTenantCodeQuery(path, getTenantCodeForScopedAdminApi());
+}
+
+function getCalendarEventCommentsRequestPath(eventId = '') {
+  const path = `/calendar/events/${encodeURIComponent(String(eventId || '').trim())}/comments`;
+  return appendTenantCodeQuery(path, getTenantCodeForScopedAdminApi());
+}
+
+async function saveCalendarEventFromUi() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const workspace = calendarState.workspace;
+  if (!workspace) return;
+  const editorEvent = getCalendarActiveEditorEvent(workspace);
+  if (!editorEvent) return;
+  const payload = collectCalendarEventPayloadFromDom(workspace);
+  calendarState.saving = true;
+  calendarState.saveError = '';
+  renderCalendarWorkspace();
+  try {
+    const method = editorEvent.id ? 'PATCH' : 'POST';
+    const path = getCalendarEventRequestPath(editorEvent.id);
+    const saved = await apiRequest(path, {
+      method,
+      body: payload,
+    });
+    const savedDateKey = getCalendarDateKeyFromValue(saved?.starts_at || payload?.starts_at || '');
+    calendarState.selectedEventId = String(saved?.id || '').trim();
+    if (savedDateKey) {
+      calendarState.selectedDate = savedDateKey;
+      calendarState.anchorDate = savedDateKey;
+    }
+    calendarState.draftEvent = null;
+    await loadCalendarWorkspace({ force: true });
+    showToast(editorEvent.id ? '일정이 수정되었습니다.' : '일정을 추가했습니다.', 'success', 2200);
+  } finally {
+    calendarState.saving = false;
+    renderCalendarWorkspace();
+  }
+}
+
+async function deleteSelectedCalendarEvent() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const eventId = String(calendarState.selectedEventId || '').trim();
+  if (!eventId) return;
+  if (!window.confirm('선택한 일정을 삭제할까요?')) return;
+  calendarState.deleting = true;
+  renderCalendarWorkspace();
+  try {
+    await apiRequest(getCalendarEventRequestPath(eventId), {
+      method: 'DELETE',
+    });
+    calendarState.selectedEventId = '';
+    calendarState.draftEvent = null;
+    await loadCalendarWorkspace({ force: true });
+    showToast('일정을 삭제했습니다.', 'success', 2200);
+  } finally {
+    calendarState.deleting = false;
+    renderCalendarWorkspace();
+  }
+}
+
+async function postCalendarEventCommentFromUi() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const workspace = calendarState.workspace;
+  const editorEvent = getCalendarActiveEditorEvent(workspace);
+  const eventId = String(editorEvent?.id || '').trim();
+  if (!workspace || !eventId) {
+    throw new Error('댓글을 남길 일정을 먼저 선택해 주세요.');
+  }
+  const body = String($('#calendarCommentBodyInput')?.value || '').trim();
+  if (!body) {
+    throw new Error('댓글 내용을 입력해 주세요.');
+  }
+  const isInternal = Boolean($('#calendarCommentInternalToggle')?.checked);
+  calendarState.saving = true;
+  calendarState.saveError = '';
+  renderCalendarWorkspace();
+  try {
+    const saved = await apiRequest(getCalendarEventCommentsRequestPath(eventId), {
+      method: 'POST',
+      body: {
+        body,
+        is_internal: isInternal,
+      },
+    });
+    calendarState.selectedEventId = String(saved?.id || eventId).trim();
+    calendarState.draftEvent = null;
+    await loadCalendarWorkspace({ force: true });
+    ensureCalendarWorkspaceState().selectedDetailTab = 'notes';
+    showToast('댓글을 남겼습니다.', 'success', 2200);
+  } finally {
+    calendarState.saving = false;
+    renderCalendarWorkspace();
+  }
+}
+
+function startCalendarDraft() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const workspace = calendarState.workspace;
+  if (!workspace) return;
+  const selectedContainer = getCalendarSelectedContainer(workspace);
+  calendarState.draftEvent = createCalendarDraftEvent(
+    workspace,
+    String(selectedContainer?.id || workspace?.selected_container_id || '').trim(),
+    calendarState.selectedDate || workspace?.selected_date || toLocalDateKey(new Date()),
+  );
+  calendarState.selectedEventId = '';
+  calendarState.selectedDetailTab = 'details';
+  renderCalendarWorkspace();
+}
+
+function collectCalendarBookingLinkPayloadFromDom(workspace) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const editorLink = getCalendarActiveBookingLinkEditor(workspace);
+  if (!editorLink) {
+    throw new Error('저장할 예약 링크가 없습니다.');
+  }
+  const containerId = String($('#calendarBookingLinkContainerSelect')?.value || editorLink.container_id || '').trim();
+  const title = String($('#calendarBookingLinkTitleInput')?.value || editorLink.title || '').trim();
+  if (!containerId) {
+    throw new Error('연결할 캘린더를 선택해 주세요.');
+  }
+  if (!title) {
+    throw new Error('예약 링크 제목을 입력해 주세요.');
+  }
+  const questionRows = Array.from(document.querySelectorAll('[data-calendar-booking-question-row]'));
+  const intakeQuestions = questionRows.map((row, index) => {
+    const label = String(row.querySelector('[data-calendar-booking-question-label]')?.value || '').trim();
+    const answerType = String(row.querySelector('[data-calendar-booking-question-type]')?.value || 'short_text').trim().toLowerCase();
+    const required = Boolean(row.querySelector('[data-calendar-booking-question-required]')?.checked);
+    const options = String(row.querySelector('[data-calendar-booking-question-options]')?.value || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    return normalizeCalendarBookingQuestionDraft({
+      key: String(editorLink?.intake_questions?.[index]?.key || `question_${index + 1}`),
+      label,
+      answer_type: answerType,
+      required,
+      options,
+    }, index);
+  }).filter((question) => question.label);
+  const expiresAtRaw = String($('#calendarBookingLinkExpiresInput')?.value || '').trim();
+  calendarState.bookingLinkError = '';
+  return {
+    container_id: containerId,
+    title,
+    description: String($('#calendarBookingLinkDescriptionInput')?.value || editorLink.description || '').trim() || null,
+    is_public: Boolean($('#calendarBookingLinkPublicToggle')?.checked),
+    approval_policy: String($('#calendarBookingLinkApprovalPolicyInput')?.value || editorLink.approval_policy || (editorLink.approval_required ? 'manual' : 'instant')).trim().toLowerCase() || 'instant',
+    approval_required: String($('#calendarBookingLinkApprovalPolicyInput')?.value || editorLink.approval_policy || (editorLink.approval_required ? 'manual' : 'instant')).trim().toLowerCase() === 'manual',
+    assignment_mode: String($('#calendarBookingLinkAssignmentModeInput')?.value || editorLink.assignment_mode || 'single_host').trim().toLowerCase() || 'single_host',
+    booking_window_days: Number($('#calendarBookingLinkWindowInput')?.value || editorLink.booking_window_days || 14),
+    buffer_before_minutes: Number($('#calendarBookingLinkBufferBeforeInput')?.value || editorLink.buffer_before_minutes || 0),
+    buffer_after_minutes: Number($('#calendarBookingLinkBufferAfterInput')?.value || editorLink.buffer_after_minutes || 0),
+    duration_minutes: Number($('#calendarBookingLinkDurationInput')?.value || editorLink.duration_minutes || 30),
+    availability_start_time: String($('#calendarBookingLinkStartInput')?.value || editorLink.availability_start_time || '09:00').trim() || '09:00',
+    availability_end_time: String($('#calendarBookingLinkEndInput')?.value || editorLink.availability_end_time || '18:00').trim() || '18:00',
+    expires_at: expiresAtRaw ? parseCalendarDateTimeInputValue(expiresAtRaw) : null,
+    host_notes: String($('#calendarBookingLinkHostNotesInput')?.value || editorLink.host_notes || '').trim() || null,
+    intake_questions: intakeQuestions,
+  };
+}
+
+function collectCalendarSyncConnectionPayloadFromDom(workspace) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const editorSync = getCalendarActiveSyncConnectionEditor(workspace);
+  if (!editorSync) {
+    throw new Error('저장할 외부 연동이 없습니다.');
+  }
+  const provider = String($('#calendarSyncProviderInput')?.value || editorSync.provider || 'google').trim().toLowerCase() || 'google';
+  const accessScope = String($('#calendarSyncScopeInput')?.value || editorSync.access_scope || 'read_write').trim().toLowerCase() || 'read_write';
+  const accountEmail = String($('#calendarSyncEmailInput')?.value || editorSync.account_email || '').trim();
+  const accountLabel = String($('#calendarSyncLabelInput')?.value || editorSync.account_label || '').trim();
+  const defaultContainerId = String($('#calendarSyncDefaultContainerSelect')?.value || editorSync.default_container_id || '').trim();
+  const selectedExternalCalendars = String($('#calendarSyncCalendarsInput')?.value || '').split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (!accountEmail && !accountLabel) {
+    throw new Error('계정 이메일 또는 계정 라벨을 입력해 주세요.');
+  }
+  calendarState.syncConnectionError = '';
+  return {
+    provider,
+    access_scope: accessScope,
+    account_email: accountEmail || null,
+    account_label: accountLabel || null,
+    default_container_id: defaultContainerId || null,
+    selected_external_calendars: selectedExternalCalendars,
+  };
+}
+
+function snapshotCalendarSyncConnectionDraftFromDom(workspace) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const editorSync = getCalendarActiveSyncConnectionEditor(workspace);
+  if (!workspace || !editorSync) return;
+  try {
+    const payload = collectCalendarSyncConnectionPayloadFromDom(workspace);
+    calendarState.draftSyncConnection = {
+      ...editorSync,
+      ...payload,
+      id: String(editorSync?.id || '').trim(),
+      sync_state: String(editorSync?.sync_state || 'pending').trim(),
+      last_synced_at: String(editorSync?.last_synced_at || '').trim(),
+      last_sync_error: String(editorSync?.last_sync_error || '').trim(),
+    };
+  } catch (_error) {
+    // 현재 draft를 유지합니다.
+  }
+}
+
+async function saveCalendarBookingLinkFromUi() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const workspace = calendarState.workspace;
+  if (!workspace) return;
+  const editorLink = getCalendarActiveBookingLinkEditor(workspace);
+  if (!editorLink) return;
+  const payload = collectCalendarBookingLinkPayloadFromDom(workspace);
+  calendarState.bookingLinkSaving = true;
+  calendarState.bookingLinkError = '';
+  renderCalendarWorkspace();
+  try {
+    const method = editorLink.id ? 'PATCH' : 'POST';
+    const saved = await apiRequest(getCalendarBookingLinksRequestPath(editorLink.id), {
+      method,
+      body: payload,
+    });
+    calendarState.selectedBookingLinkId = String(saved?.id || '').trim();
+    calendarState.draftBookingLink = null;
+    await loadCalendarWorkspace({ force: true });
+    showToast(editorLink.id ? '예약 링크를 수정했습니다.' : '예약 링크를 만들었습니다.', 'success', 2200);
+  } catch (error) {
+    calendarState.bookingLinkError = normalizeActionError(error, '예약 링크를 저장하지 못했습니다.');
+    throw error;
+  } finally {
+    calendarState.bookingLinkSaving = false;
+    renderCalendarWorkspace();
+  }
+}
+
+async function deleteSelectedCalendarBookingLink() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const workspace = calendarState.workspace;
+  const editorLink = getCalendarActiveBookingLinkEditor(workspace);
+  const bookingLinkId = String(editorLink?.id || '').trim();
+  if (!bookingLinkId) return;
+  if (!window.confirm('선택한 예약 링크를 삭제할까요?')) return;
+  calendarState.bookingLinkDeleting = true;
+  calendarState.bookingLinkError = '';
+  renderCalendarWorkspace();
+  try {
+    await apiRequest(getCalendarBookingLinksRequestPath(bookingLinkId), { method: 'DELETE' });
+    calendarState.selectedBookingLinkId = '';
+    calendarState.draftBookingLink = null;
+    await loadCalendarWorkspace({ force: true });
+    showToast('예약 링크를 삭제했습니다.', 'success', 2200);
+  } finally {
+    calendarState.bookingLinkDeleting = false;
+    renderCalendarWorkspace();
+  }
+}
+
+async function saveCalendarSyncConnectionFromUi() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const workspace = calendarState.workspace;
+  if (!workspace) return;
+  const editorSync = getCalendarActiveSyncConnectionEditor(workspace);
+  if (!editorSync) return;
+  const payload = collectCalendarSyncConnectionPayloadFromDom(workspace);
+  calendarState.syncConnectionSaving = true;
+  calendarState.syncConnectionError = '';
+  renderCalendarWorkspace();
+  try {
+    const method = editorSync.id ? 'PATCH' : 'POST';
+    const saved = await apiRequest(getCalendarSyncConnectionsRequestPath(editorSync.id), {
+      method,
+      body: payload,
+    });
+    calendarState.selectedSyncConnectionId = String(saved?.id || '').trim();
+    calendarState.draftSyncConnection = null;
+    calendarState.bookingDetailMode = 'sync';
+    await loadCalendarWorkspace({ force: true });
+    showToast(editorSync.id ? '외부 연동을 수정했습니다.' : '외부 연동을 추가했습니다.', 'success', 2200);
+  } catch (error) {
+    calendarState.syncConnectionError = normalizeActionError(error, '외부 연동을 저장하지 못했습니다.');
+    throw error;
+  } finally {
+    calendarState.syncConnectionSaving = false;
+    renderCalendarWorkspace();
+  }
+}
+
+async function deleteSelectedCalendarSyncConnection() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const workspace = calendarState.workspace;
+  const editorSync = getCalendarActiveSyncConnectionEditor(workspace);
+  const syncConnectionId = String(editorSync?.id || '').trim();
+  if (!syncConnectionId) return;
+  if (!window.confirm('선택한 외부 연동을 삭제할까요?')) return;
+  calendarState.syncConnectionDeleting = true;
+  calendarState.syncConnectionError = '';
+  renderCalendarWorkspace();
+  try {
+    await apiRequest(getCalendarSyncConnectionsRequestPath(syncConnectionId), { method: 'DELETE' });
+    calendarState.selectedSyncConnectionId = '';
+    calendarState.draftSyncConnection = null;
+    await loadCalendarWorkspace({ force: true });
+    showToast('외부 연동을 삭제했습니다.', 'success', 2200);
+  } finally {
+    calendarState.syncConnectionDeleting = false;
+    renderCalendarWorkspace();
+  }
+}
+
+async function runCalendarSyncConnectionFromUi() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const workspace = calendarState.workspace;
+  const editorSync = getCalendarActiveSyncConnectionEditor(workspace);
+  const syncConnectionId = String(editorSync?.id || '').trim();
+  if (!syncConnectionId) return;
+  calendarState.syncConnectionRunning = true;
+  calendarState.syncConnectionError = '';
+  renderCalendarWorkspace();
+  try {
+    const saved = await apiRequest(getCalendarSyncConnectionRunPath(syncConnectionId), { method: 'POST' });
+    calendarState.selectedSyncConnectionId = String(saved?.id || syncConnectionId).trim();
+    calendarState.draftSyncConnection = null;
+    await loadCalendarWorkspace({ force: true });
+    showToast('외부 캘린더를 동기화했습니다.', 'success', 2200);
+  } catch (error) {
+    calendarState.syncConnectionError = normalizeActionError(error, '외부 캘린더를 동기화하지 못했습니다.');
+    throw error;
+  } finally {
+    calendarState.syncConnectionRunning = false;
+    renderCalendarWorkspace();
+  }
+}
+
+function startCalendarBookingLinkDraft() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const workspace = calendarState.workspace;
+  if (!workspace) return;
+  calendarState.selectedBookingLinkId = '';
+  calendarState.draftBookingLink = createCalendarBookingLinkDraft(
+    workspace,
+    String(getCalendarSelectedContainer(workspace)?.id || workspace?.selected_container_id || '').trim(),
+  );
+  calendarState.bookingDetailMode = 'booking';
+  renderCalendarWorkspace();
+}
+
+function startCalendarSyncConnectionDraft() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const workspace = calendarState.workspace;
+  if (!workspace) return;
+  calendarState.selectedSyncConnectionId = '';
+  calendarState.draftSyncConnection = createCalendarSyncConnectionDraft(
+    workspace,
+    String(getCalendarSelectedContainer(workspace)?.id || workspace?.selected_container_id || '').trim(),
+  );
+  calendarState.bookingDetailMode = 'sync';
+  renderCalendarWorkspace();
+}
+
+function renderCalendarPublicBookingPage() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const root = $('#calendarPublicRoot');
+  if (!root) return;
+  if (calendarState.publicBookingLoading && !calendarState.publicBooking) {
+    root.innerHTML = '<div class="calendar-status-panel">예약 링크를 준비하는 중입니다...</div>';
+    return;
+  }
+  if (calendarState.publicBookingError && !calendarState.publicBooking) {
+    root.innerHTML = `<div class="calendar-status-panel is-error">${escapeHtml(String(calendarState.publicBookingError || '예약 링크를 불러오지 못했습니다.'))}</div>`;
+    return;
+  }
+  const booking = calendarState.publicBooking;
+  if (!booking) {
+    root.innerHTML = '<div class="calendar-status-panel">예약 링크를 찾을 수 없습니다.</div>';
+    return;
+  }
+  const draft = normalizeCalendarPublicBookingDraft(booking, calendarState.publicBookingDraft);
+  const slots = Array.isArray(booking?.slots) ? booking.slots : [];
+  const selectedSlot = String(calendarState.selectedPublicSlot || '').trim();
+  const success = calendarState.publicBookingSuccess;
+  root.innerHTML = `
+    <div class="calendar-public-shell-layout">
+      <section class="calendar-public-card calendar-public-summary">
+        <span class="calendar-eyebrow">Public Booking</span>
+        <h2>${escapeHtml(String(booking?.title || '예약 링크'))}</h2>
+        <p>${escapeHtml(String(booking?.description || '원하는 시간을 고른 뒤 연락처를 입력해 예약을 완료하세요.'))}</p>
+        <div class="calendar-public-meta">
+          <span class="calendar-inline-chip">${escapeHtml(String(booking?.owner_label || '호스트'))}</span>
+          <span class="calendar-inline-chip">${escapeHtml(getCalendarBookingApprovalPolicyLabel(booking?.approval_policy || (booking?.approval_required ? 'manual' : 'instant')))}</span>
+          <span class="calendar-inline-chip">${escapeHtml(getCalendarBookingAssignmentModeLabel(booking?.assignment_mode || 'single_host'))}</span>
+          <span class="calendar-inline-chip">${Number(booking?.duration_minutes || 0)}분</span>
+        </div>
+        <div class="calendar-public-slot-list">
+          ${slots.length ? slots.map((slot) => `
+            <button class="calendar-public-slot ${String(slot?.starts_at || '') === selectedSlot ? 'is-selected' : ''}" type="button" data-action="calendar-select-public-slot" data-starts-at="${escapeHtml(String(slot?.starts_at || ''))}">
+              <strong>${escapeHtml(String(slot?.label || '추천 시간'))}</strong>
+              <span>${escapeHtml(String(slot?.date_label || formatCalendarLongDateLabel(getCalendarDateKeyFromValue(slot?.starts_at))))}</span>
+            </button>
+          `).join('') : '<div class="calendar-empty-inline">예약 가능한 시간이 없습니다.</div>'}
+        </div>
+      </section>
+      <section class="calendar-public-card">
+        ${success ? `
+          <div class="calendar-public-success">
+            <strong>예약이 접수되었습니다.</strong>
+            <p>${escapeHtml(formatCalendarLongDateLabel(getCalendarDateKeyFromValue(success?.starts_at || '')))} ${escapeHtml(formatCalendarTimeLabel(success?.starts_at || ''))} ${success?.approval_policy === 'manual' ? '일정이 승인 대기 상태로 접수되었습니다.' : '일정으로 반영되었습니다.'}</p>
+            <button class="btn btn-secondary" type="button" data-action="calendar-open-public-booking" data-slug="${escapeHtml(String(calendarState.publicBookingSlug || ''))}">다시 보기</button>
+          </div>
+        ` : `
+          <div class="calendar-booking-question-head">
+            <strong>예약 정보</strong>
+          </div>
+          <div class="calendar-public-form">
+            <label class="calendar-form-field">
+              <span>이름</span>
+              <input id="calendarPublicGuestNameInput" type="text" placeholder="이름" value="${escapeHtml(String(draft?.guest_name || ''))}" />
+            </label>
+            <label class="calendar-form-field">
+              <span>이메일</span>
+              <input id="calendarPublicGuestEmailInput" type="email" placeholder="email@example.com" value="${escapeHtml(String(draft?.guest_email || ''))}" />
+            </label>
+            <label class="calendar-form-field">
+              <span>일정 제목</span>
+              <input id="calendarPublicTitleInput" type="text" placeholder="예: 제품 데모 미팅" value="${escapeHtml(String(draft?.title || ''))}" />
+            </label>
+            <label class="calendar-form-field calendar-form-field-full">
+              <span>메모</span>
+              <textarea id="calendarPublicNoteInput" rows="3" placeholder="필요한 내용을 남겨 주세요.">${escapeHtml(String(draft?.note || ''))}</textarea>
+            </label>
+            ${(Array.isArray(booking?.intake_questions) ? booking.intake_questions : []).map((question, index) => `
+              <label class="calendar-form-field calendar-form-field-full">
+                <span>${escapeHtml(String(question?.label || `질문 ${index + 1}`))}${question?.required !== false ? ' *' : ''}</span>
+                ${String(question?.answer_type || 'short_text') === 'long_text'
+                  ? `<textarea data-calendar-public-answer="${escapeHtml(String(question?.key || `question_${index + 1}`))}" rows="3">${escapeHtml(String(draft?.answers?.[String(question?.key || `question_${index + 1}`)] || ''))}</textarea>`
+                  : String(question?.answer_type || 'short_text') === 'select'
+                    ? `<select data-calendar-public-answer="${escapeHtml(String(question?.key || `question_${index + 1}`))}"><option value="">선택</option>${(Array.isArray(question?.options) ? question.options : []).map((option) => `<option value="${escapeHtml(String(option || ''))}" ${String(draft?.answers?.[String(question?.key || `question_${index + 1}`)] || '') === String(option || '') ? 'selected' : ''}>${escapeHtml(String(option || ''))}</option>`).join('')}</select>`
+                    : `<input type="text" data-calendar-public-answer="${escapeHtml(String(question?.key || `question_${index + 1}`))}" value="${escapeHtml(String(draft?.answers?.[String(question?.key || `question_${index + 1}`)] || ''))}" />`}
+              </label>
+            `).join('')}
+            ${calendarState.publicBookingError ? `<div class="calendar-empty-inline is-error">${escapeHtml(String(calendarState.publicBookingError || ''))}</div>` : ''}
+          </div>
+          <div class="calendar-detail-actions">
+            <span class="calendar-inline-chip">${selectedSlot ? '시간 선택 완료' : '시간을 먼저 선택하세요'}</span>
+            <button class="btn btn-primary" type="button" data-action="calendar-submit-public-booking" ${selectedSlot ? '' : 'disabled'}>${calendarState.publicBookingSubmitting ? '예약 중...' : '예약하기'}</button>
+          </div>
+        `}
+      </section>
+    </div>
+  `;
+}
+
+async function submitCalendarPublicBookingFromUi() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const booking = calendarState.publicBooking;
+  const slug = String(calendarState.publicBookingSlug || booking?.slug || '').trim();
+  if (!booking || !slug) {
+    throw new Error('예약 링크를 찾을 수 없습니다.');
+  }
+  snapshotCalendarPublicBookingDraftFromDom(booking);
+  const draft = normalizeCalendarPublicBookingDraft(booking, calendarState.publicBookingDraft);
+  const selectedSlot = String(calendarState.selectedPublicSlot || '').trim();
+  if (!selectedSlot) {
+    throw new Error('예약 시간을 먼저 선택해 주세요.');
+  }
+  if (!draft.guest_name) {
+    throw new Error('이름을 입력해 주세요.');
+  }
+  if (!draft.guest_email) {
+    throw new Error('이메일을 입력해 주세요.');
+  }
+  const questions = Array.isArray(booking?.intake_questions) ? booking.intake_questions : [];
+  for (let index = 0; index < questions.length; index += 1) {
+    const question = questions[index];
+    const key = String(question?.key || `question_${index + 1}`).trim() || `question_${index + 1}`;
+    if (question?.required !== false && !String(draft.answers?.[key] || '').trim()) {
+      throw new Error(`${String(question?.label || '추가 질문')} 항목을 입력해 주세요.`);
+    }
+  }
+  calendarState.publicBookingSubmitting = true;
+  calendarState.publicBookingError = '';
+  renderCalendarPublicBookingPage();
+  try {
+    const payload = {
+      guest_name: draft.guest_name,
+      guest_email: draft.guest_email,
+      starts_at: selectedSlot,
+      title: draft.title || null,
+      note: draft.note || null,
+      answers: draft.answers,
+    };
+    const submitted = await apiRequest(getCalendarPublicBookingSubmitPath(slug), {
+      method: 'POST',
+      body: payload,
+    });
+    calendarState.publicBookingSuccess = submitted || null;
+    calendarState.publicBookingError = '';
+    showToast('예약이 접수되었습니다.', 'success', 2200);
+    renderCalendarPublicBookingPage();
+    return submitted;
+  } catch (error) {
+    calendarState.publicBookingError = normalizeActionError(error, '예약을 완료하지 못했습니다.');
+    renderCalendarPublicBookingPage();
+    throw error;
+  } finally {
+    calendarState.publicBookingSubmitting = false;
+    renderCalendarPublicBookingPage();
+  }
+}
+
+async function loadCalendarPublicBooking({ force = false } = {}) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const routeSlug = resolveCalendarPublicSlugFromRoute(getCurrentRouteWithQuery ? getCurrentRouteWithQuery() : state.currentRoute || '');
+  const slug = String(calendarState.publicBookingSlug || routeSlug || '').trim();
+  calendarState.publicBookingSlug = slug;
+  calendarState.publicBookingLoading = true;
+  calendarState.publicBookingError = '';
+  renderCalendarPublicBookingPage();
+  try {
+    if (!slug) {
+      throw new Error('예약 링크가 지정되지 않았습니다.');
+    }
+    const payload = await apiRequest(getCalendarPublicBookingRequestPath(slug), { force });
+    const slotKeys = new Set((Array.isArray(payload?.slots) ? payload.slots : []).map((item) => String(item?.starts_at || '').trim()));
+    const currentSelectedSlot = String(calendarState.selectedPublicSlot || '').trim();
+    calendarState.publicBooking = payload || null;
+    calendarState.publicBookingSuccess = null;
+    calendarState.selectedPublicSlot = slotKeys.has(currentSelectedSlot)
+      ? currentSelectedSlot
+      : String(payload?.slots?.[0]?.starts_at || '').trim();
+    if (String(calendarState.publicBookingDraftSlug || '').trim() !== slug) {
+      calendarState.publicBookingDraft = createCalendarPublicBookingDraft(payload);
+      calendarState.publicBookingDraftSlug = slug;
+    } else {
+      calendarState.publicBookingDraft = normalizeCalendarPublicBookingDraft(payload, calendarState.publicBookingDraft);
+    }
+    calendarState.publicBookingError = '';
+    renderCalendarPublicBookingPage();
+    return payload;
+  } catch (error) {
+    calendarState.publicBooking = null;
+    calendarState.publicBookingSuccess = null;
+    calendarState.publicBookingDraft = null;
+    calendarState.publicBookingDraftSlug = '';
+    calendarState.selectedPublicSlot = '';
+    calendarState.publicBookingError = normalizeActionError(error, '예약 링크를 불러오지 못했습니다.');
+    renderCalendarPublicBookingPage();
+    throw error;
+  } finally {
+    calendarState.publicBookingLoading = false;
+    renderCalendarPublicBookingPage();
+  }
+}
+
+async function loadCalendarPublicBookingPresenter() {
+  renderCalendarPublicBookingPage();
+  return loadCalendarPublicBooking({ force: false });
+}
+
+function renderCalendarWorkspace() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const root = $('#calendarWorkspaceRoot');
+  if (!root) return;
+  renderCalendarWorkspaceTabs();
+  const workspace = calendarState.workspace || null;
+  if (calendarState.loading && !workspace) {
+    root.innerHTML = `
+      <div class="calendar-shell is-loading">
+        <aside class="calendar-shell-sidebar">
+          <div class="calendar-sidebar-card calendar-loading-card"></div>
+          <div class="calendar-sidebar-card calendar-loading-card"></div>
+        </aside>
+        <section class="calendar-shell-main">
+          <div class="calendar-center-card calendar-loading-card"></div>
+        </section>
+        <aside class="calendar-shell-detail">
+          <div class="calendar-center-card calendar-loading-card"></div>
+        </aside>
+      </div>
+    `;
+    return;
+  }
+  if (calendarState.error && !workspace) {
+    root.innerHTML = `<div class="calendar-status-panel is-error">${escapeHtml(String(calendarState.error || '캘린더를 불러오지 못했습니다.'))}</div>`;
+    return;
+  }
+  if (!workspace) {
+    root.innerHTML = '<div class="calendar-status-panel">캘린더 초기 구조를 준비하지 못했습니다.</div>';
+    return;
+  }
+  const containers = Array.isArray(workspace.containers) ? workspace.containers : [];
+  const selectedContainer = getCalendarSelectedContainer(workspace);
+  const selectedContainerId = String(selectedContainer?.id || workspace.selected_container_id || '').trim();
+  const bookingLinks = Array.isArray(workspace.booking_links) ? workspace.booking_links : [];
+  const syncConnections = Array.isArray(workspace.sync_connections) ? workspace.sync_connections : [];
+  const templates = Array.isArray(workspace.templates) ? workspace.templates : [];
+  const bookingManageLabel = workspace.capabilities?.can_manage_booking_links ? '생성 가능' : '읽기 전용';
+  const activeTab = normalizeCalendarViewTab(calendarState.viewTab || workspace?.view || 'week');
+  const bookingDetailMode = activeTab === 'booking-links';
+  const bookingPanelMode = calendarState.bookingDetailMode === 'sync' ? 'sync' : 'booking';
+  root.innerHTML = `
+    <div class="calendar-shell">
+      <aside class="calendar-shell-sidebar">
+        <section class="calendar-sidebar-card">
+          <div class="calendar-sidebar-card-head">
+            <div>
+              <span class="calendar-sidebar-card-label">미니 월</span>
+              <strong>${escapeHtml(String(workspace.range_label || '캘린더'))}</strong>
+            </div>
+          </div>
+          ${renderCalendarMiniMonth(workspace.mini_month_days || [], calendarState.selectedDate || workspace.selected_date)}
+        </section>
+        <section class="calendar-sidebar-card">
+          <div class="calendar-sidebar-card-head">
+            <div>
+              <span class="calendar-sidebar-card-label">캘린더 목록</span>
+              <strong>${containers.length}개 연결</strong>
+            </div>
+            <span class="calendar-inline-chip">${escapeHtml(String(workspace.role_label || 'Role'))}</span>
+          </div>
+          ${renderCalendarContainerGroups(containers, selectedContainerId)}
+        </section>
+        <section class="calendar-sidebar-card">
+          <div class="calendar-sidebar-card-head">
+            <div>
+              <span class="calendar-sidebar-card-label">예약 링크</span>
+              <strong>${bookingLinks.length}개</strong>
+            </div>
+            <span class="calendar-inline-chip">${escapeHtml(bookingManageLabel)}</span>
+          </div>
+          <div class="calendar-sidebar-meta">
+            <div><span>외부 예약</span><strong>${bookingLinks.length}</strong></div>
+            <div><span>동기화 연결</span><strong>${syncConnections.length}</strong></div>
+          </div>
+        </section>
+        <section class="calendar-sidebar-card">
+          <div class="calendar-sidebar-card-head">
+            <div>
+              <span class="calendar-sidebar-card-label">미팅 템플릿</span>
+              <strong>${templates.length}개</strong>
+            </div>
+          </div>
+          <div class="calendar-template-list">
+            ${templates.map((item) => `
+              <button class="calendar-template-row" type="button" data-action="calendar-apply-template" data-template-code="${escapeHtml(String(item?.code || ''))}">
+                <strong>${escapeHtml(String(item?.label || '템플릿'))}</strong>
+                <span>${escapeHtml(String(item?.description || ''))}</span>
+              </button>
+            `).join('') || '<div class="calendar-empty-inline">템플릿이 없습니다.</div>'}
+          </div>
+        </section>
+      </aside>
+      <section class="calendar-shell-main">
+        ${renderCalendarCenterSurface(workspace, selectedContainer)}
+      </section>
+      <aside class="calendar-shell-detail">
+        ${bookingDetailMode ? '' : `
+          <div class="calendar-detail-tabs">
+            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'details' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="details">Details</button>
+            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'attendees' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="attendees">Attendees</button>
+            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'reminders' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="reminders">Reminders</button>
+            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'notes' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="notes">Notes</button>
+          </div>
+        `}
+        ${bookingDetailMode
+          ? (bookingPanelMode === 'sync'
+            ? renderCalendarSyncConnectionEditor(workspace, selectedContainer)
+            : renderCalendarBookingLinkEditor(workspace, selectedContainer))
+          : renderCalendarDetailDrawer(workspace, selectedContainer)}
+      </aside>
+    </div>
+  `;
+}
+
+async function loadCalendarWorkspace({ force = false } = {}) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const routeView = resolveCalendarTabFromRoutePath(state.currentRoute || '');
+  const requestedView = normalizeCalendarViewTab(routeView || calendarState.viewTab || 'week');
+  const requestedDate = normalizeAttendanceDate(calendarState.anchorDate || calendarState.selectedDate || '') || toLocalDateKey(new Date());
+  calendarState.loading = true;
+  calendarState.viewTab = requestedView;
+  calendarState.anchorDate = requestedDate;
+  calendarState.error = '';
+  renderCalendarWorkspace();
+  try {
+    const payload = await apiRequest(getCalendarWorkspacePath(requestedView, requestedDate), {
+      force,
+    });
+    calendarState.workspace = payload || null;
+    calendarState.error = '';
+    calendarState.viewTab = normalizeCalendarViewTab(payload?.view || requestedView);
+    calendarState.anchorDate = normalizeAttendanceDate(payload?.anchor_date || requestedDate) || requestedDate;
+    calendarState.selectedDate = normalizeAttendanceDate(payload?.selected_date || calendarState.anchorDate) || calendarState.anchorDate;
+    const containerRows = Array.isArray(payload?.containers) ? payload.containers : [];
+    const containerIds = new Set(containerRows.map((item) => String(item?.id || '').trim()).filter(Boolean));
+    const preferredContainerId = String(payload?.selected_container_id || calendarState.selectedContainerId || '').trim();
+    calendarState.selectedContainerId = containerIds.has(preferredContainerId)
+      ? preferredContainerId
+      : String(containerRows?.[0]?.id || '').trim();
+    const payloadEvents = Array.isArray(payload?.events) ? payload.events : [];
+    const eventIds = new Set(payloadEvents.map((item) => String(item?.id || '').trim()));
+    const selectedDateMatch = payloadEvents.find((item) => (
+      getCalendarDateKeyFromValue(item?.starts_at) === String(calendarState.selectedDate || '').trim()
+    ));
+    const preferredEventId = String(calendarState.selectedEventId || payload?.selected_event?.id || '').trim();
+    calendarState.selectedEventId = eventIds.has(preferredEventId)
+      ? preferredEventId
+      : String(selectedDateMatch?.id || payload?.selected_event?.id || '').trim();
+    if (calendarState.draftEvent && calendarState.selectedContainerId !== String(calendarState.draftEvent.container_id || '').trim()) {
+      calendarState.draftEvent = null;
+    }
+    const bookingLinks = Array.isArray(payload?.booking_links) ? payload.booking_links : [];
+    const bookingLinkIds = new Set(bookingLinks.map((item) => String(item?.id || '').trim()).filter(Boolean));
+    const preferredBookingLinkId = String(calendarState.selectedBookingLinkId || payload?.selected_booking_link_id || '').trim();
+    calendarState.selectedBookingLinkId = bookingLinkIds.has(preferredBookingLinkId)
+      ? preferredBookingLinkId
+      : String(bookingLinks?.[0]?.id || '').trim();
+    if (calendarState.draftBookingLink && typeof calendarState.draftBookingLink === 'object') {
+      const draftBookingLinkId = String(calendarState.draftBookingLink.id || '').trim();
+      const draftBookingContainerId = String(calendarState.draftBookingLink.container_id || '').trim();
+      if (draftBookingLinkId && !bookingLinkIds.has(draftBookingLinkId)) {
+        calendarState.draftBookingLink = null;
+      } else if (!containerIds.has(draftBookingContainerId)) {
+        calendarState.draftBookingLink = null;
+      } else {
+        calendarState.draftBookingLink = {
+          ...calendarState.draftBookingLink,
+          container_id: draftBookingContainerId || calendarState.selectedContainerId,
+        };
+      }
+    }
+    calendarState.bookingLinkError = '';
+    const syncConnections = Array.isArray(payload?.sync_connections) ? payload.sync_connections : [];
+    const syncConnectionIds = new Set(syncConnections.map((item) => String(item?.id || '').trim()).filter(Boolean));
+    const preferredSyncConnectionId = String(calendarState.selectedSyncConnectionId || '').trim();
+    calendarState.selectedSyncConnectionId = syncConnectionIds.has(preferredSyncConnectionId)
+      ? preferredSyncConnectionId
+      : String(syncConnections?.[0]?.id || '').trim();
+    if (calendarState.draftSyncConnection && typeof calendarState.draftSyncConnection === 'object') {
+      const draftSyncConnectionId = String(calendarState.draftSyncConnection.id || '').trim();
+      const draftSyncContainerId = String(calendarState.draftSyncConnection.default_container_id || '').trim();
+      if (draftSyncConnectionId && !syncConnectionIds.has(draftSyncConnectionId)) {
+        calendarState.draftSyncConnection = null;
+      } else if (draftSyncContainerId && !containerIds.has(draftSyncContainerId)) {
+        calendarState.draftSyncConnection = {
+          ...calendarState.draftSyncConnection,
+          default_container_id: calendarState.selectedContainerId,
+        };
+      }
+    }
+    if (calendarState.bookingDetailMode === 'sync' && !calendarState.selectedSyncConnectionId && !calendarState.draftSyncConnection) {
+      calendarState.bookingDetailMode = 'booking';
+    }
+    calendarState.syncConnectionError = '';
+    if (!calendarState.draftEvent && !calendarState.selectedEventId) {
+      calendarState.availability = null;
+      calendarState.availabilityKey = '';
+      calendarState.availabilityError = '';
+      calendarState.availabilityLoading = false;
+    }
+    renderCalendarWorkspace();
+    return payload;
+  } catch (error) {
+    calendarState.error = normalizeActionError(error, '캘린더 데이터를 불러오지 못했습니다.');
+    renderCalendarWorkspace();
+    throw error;
+  } finally {
+    calendarState.loading = false;
+    renderCalendarWorkspace();
+  }
+}
+
+async function loadCalendarViewPresenter() {
+  const calendarState = ensureCalendarWorkspaceState();
+  calendarState.viewTab = normalizeCalendarViewTab(resolveCalendarTabFromRoutePath(state.currentRoute || '') || calendarState.viewTab || 'week');
+  renderCalendarWorkspace();
+  return loadCalendarWorkspace({ force: false });
+}
+
 async function loadOrgViewPresenter() {
   const isDevRole = getNavigationRole() === 'DEV';
   const includeInactiveToggle = $('#siteIncludeInactive');
@@ -39505,6 +42699,22 @@ const VIEW_PRESENTERS = {
       });
     },
     load: loadScheduleViewPresenter,
+  },
+  calendar: {
+    loadingMessage: '캘린더를 준비하는 중입니다...',
+    errorMessage: '캘린더 데이터를 불러오지 못했습니다.',
+    onCacheHit: () => {
+      renderCalendarWorkspace();
+    },
+    load: loadCalendarViewPresenter,
+  },
+  'calendar-public': {
+    loadingMessage: '예약 링크를 준비하는 중입니다...',
+    errorMessage: '예약 링크를 불러오지 못했습니다.',
+    onCacheHit: () => {
+      renderCalendarPublicBookingPage();
+    },
+    load: loadCalendarPublicBookingPresenter,
   },
   profile: {
     loadingMessage: '프로필/알림 설정을 불러오는 중입니다...',
@@ -40878,30 +44088,14 @@ function buildEmployeeDesktopTableRow(item) {
 
   const actionsTd = document.createElement('td');
   actionsTd.className = 'actions-cell';
-  if (can('employeeWrite')) {
-    const actions = document.createElement('div');
-    actions.className = 'employee-table-actions';
-
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'btn btn-secondary';
-    editBtn.dataset.action = 'employee-edit';
-    editBtn.dataset.employeeId = String(item.id || '');
-    editBtn.textContent = '수정';
-    actions.appendChild(editBtn);
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'btn btn-destructive';
-    deleteBtn.dataset.action = 'employee-delete';
-    deleteBtn.dataset.employeeId = String(item.id || '');
-    deleteBtn.textContent = '삭제';
-    actions.appendChild(deleteBtn);
-
-    actionsTd.appendChild(actions);
-  } else {
-    actionsTd.textContent = '-';
-  }
+  const openBtn = document.createElement('button');
+  openBtn.type = 'button';
+  openBtn.className = 'btn btn-ghost employee-row-open-btn';
+  openBtn.dataset.action = 'employee-open-detail';
+  openBtn.dataset.employeeId = String(item.id || '');
+  openBtn.textContent = '상세';
+  openBtn.setAttribute('aria-label', `${fullName} 상세 열기`);
+  actionsTd.appendChild(openBtn);
   tr.appendChild(actionsTd);
   return tr;
 }
@@ -41195,54 +44389,30 @@ function renderEmployeeDirectorySummaryStrip(filteredRows = []) {
       return map;
     }, new Map()),
   );
-  const roleCounts = roleCountsRaw
-    .sort((left, right) => Number(right[1] || 0) - Number(left[1] || 0))
-    .slice(0, 3);
-  const roleMixRows = roleCounts.length
-    ? roleCounts.slice(0, 2).map(([label, count], index) => ({
-      label: index === 0 ? '주요 역할' : '다음 역할',
-      value: `${String(label || '-').trim() || '-'} ${count}명`,
-    }))
-    : [{ label: '역할 구성', value: '직원 없음' }];
   const linkedRate = rows.length ? formatOrganizationSummaryPercent(linkedCount, rows.length) : '0%';
   renderOrganizationSummaryStrip('#employeeDirectorySummaryStrip', [
     {
-      label: '디렉터리 범위',
+      label: '표시 인원',
       value: `${rows.length}명`,
-      meta: rows.length === totalRows.length
-        ? `현재 범위에서 운영 현장 ${uniqueSiteCount}곳`
-        : `전체 ${totalRows.length}명 중 ${rows.length}명 표시`,
+      meta: rows.length === totalRows.length ? `전체 범위` : `전체 ${totalRows.length}명 중 ${rows.length}명`,
       layout: 'lead',
-      rows: [
-        { label: '현장 범위', value: `${uniqueSiteCount}곳` },
-        { label: '역할 유형', value: `${roleCountsRaw.length}종` },
-      ],
     },
     {
-      label: '재직 상태',
+      label: '재직중',
       value: `${activeCount}명 재직`,
-      meta: rows.length ? `재직 비율 ${formatOrganizationSummaryPercent(activeCount, rows.length)}` : '직원 데이터가 없습니다.',
+      meta: rows.length ? `비활성 ${inactiveCount}명 · 퇴직/삭제 ${retiredDeletedCount}명` : '직원 데이터 없음',
       tone: rows.length && retiredDeletedCount === 0 && inactiveCount === 0 ? 'success' : (activeCount > 0 ? 'warn' : ''),
-      rows: [
-        { label: '비활성', value: `${inactiveCount}명` },
-        { label: '퇴직·삭제', value: `${retiredDeletedCount}명` },
-      ],
-      segments: [
-        { label: '재직', value: activeCount, tone: 'success' },
-        { label: '비활성', value: inactiveCount, tone: 'warn' },
-        { label: '퇴직/삭제', value: retiredDeletedCount, tone: 'danger' },
-      ],
     },
     {
-      label: '계정 · 역할',
-      value: `${linkedRate} 연결`,
-      meta: unlinkedCount > 0 ? `미연결 ${unlinkedCount}명` : '전원 계정 연결',
+      label: '계정 연결',
+      value: `${linkedCount}명`,
+      meta: unlinkedCount > 0 ? `미연결 ${unlinkedCount}명 · 연결률 ${linkedRate}` : `연결률 ${linkedRate}`,
       tone: rows.length && unlinkedCount === 0 ? 'success' : (linkedCount > 0 ? 'warn' : ''),
-      rows: roleMixRows,
-      segments: [
-        { label: '연결', value: linkedCount, tone: 'success' },
-        { label: '미연결', value: unlinkedCount, tone: 'warn' },
-      ],
+    },
+    {
+      label: '운영 현장',
+      value: `${uniqueSiteCount}곳`,
+      meta: roleCountsRaw.length ? `역할 ${roleCountsRaw.length}종` : '역할 데이터 없음',
     },
   ]);
 }
@@ -42121,6 +45291,17 @@ function renderEmployeeDirectoryDetailActions(detail = null) {
     editBtn.dataset.employeeId = employeeId;
     editBtn.textContent = '직원 수정';
     fragment.appendChild(editBtn);
+    visibleActionCount += 1;
+  }
+
+  if (Boolean(capability.can_edit_profile ?? can('employeeWrite'))) {
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'btn btn-destructive';
+    deleteBtn.dataset.action = 'employee-delete';
+    deleteBtn.dataset.employeeId = employeeId;
+    deleteBtn.textContent = '직원 삭제';
+    fragment.appendChild(deleteBtn);
     visibleActionCount += 1;
   }
 
@@ -43313,28 +46494,18 @@ function renderEmployeeListRows(rows = [], { emptyTitle = '등록된 직원이 �
     main.appendChild(subEl);
     row.appendChild(main);
 
-    if (can('employeeWrite')) {
-      const actions = document.createElement('div');
-      actions.className = 'dev-admin-actions';
+    const actions = document.createElement('div');
+    actions.className = 'dev-admin-actions';
 
-      const editBtn = document.createElement('button');
-      editBtn.type = 'button';
-      editBtn.className = 'btn btn-secondary';
-      editBtn.dataset.action = 'employee-edit';
-      editBtn.dataset.employeeId = String(item.id || '');
-      editBtn.textContent = '수정';
-      actions.appendChild(editBtn);
+    const detailBtn = document.createElement('button');
+    detailBtn.type = 'button';
+    detailBtn.className = 'btn btn-ghost';
+    detailBtn.dataset.action = 'employee-open-detail';
+    detailBtn.dataset.employeeId = String(item.id || '');
+    detailBtn.textContent = '상세';
+    actions.appendChild(detailBtn);
 
-      const deleteBtn = document.createElement('button');
-      deleteBtn.type = 'button';
-      deleteBtn.className = 'btn btn-destructive';
-      deleteBtn.dataset.action = 'employee-delete';
-      deleteBtn.dataset.employeeId = String(item.id || '');
-      deleteBtn.textContent = '삭제';
-      actions.appendChild(deleteBtn);
-
-      row.appendChild(actions);
-    }
+    row.appendChild(actions);
 
     li.appendChild(row);
     return li;
@@ -51542,7 +54713,7 @@ function canDownloadScheduleFinanceReview() {
 function canUploadScheduleFinanceFinal() {
   if (getScheduleDataProvider().mode !== 'real') return false;
   const role = normalizeRoleValue(state.user?.role || '');
-  return role === 'developer' || role === 'supervisor';
+  return role === 'developer' || role === 'hq_admin' || role === 'supervisor';
 }
 
 function canViewReportsFinanceDownloadTab() {
@@ -56378,7 +59549,7 @@ function renderScheduleManagerHints() {
   if (selectedEmployee) {
     selectedHint.textContent = `선택됨: ${selectedEmployee.employee_code} · ${selectedEmployee.full_name || '이름 없음'}`;
   } else {
-    selectedHint.textContent = '직원을 선택하면 월간 캘린더가 해당 직원 기준으로 조회됩니다.';
+    selectedHint.textContent = '직원을 선택하면 월간 근무표가 해당 직원 기준으로 조회됩니다.';
   }
 
   managerHint.textContent = state.schedule.usingMockProvider
@@ -61626,6 +64797,23 @@ function bindUiEvents() {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
 
+    if (target.closest('.calendar-shell-detail')) {
+      snapshotCalendarEditorStateFromDom(ensureCalendarWorkspaceState().workspace);
+      if (
+        target.id === 'calendarTitleInput'
+        || target.id === 'calendarLocationInput'
+        || target.id === 'calendarConferencingProviderInput'
+        || target.id === 'calendarConferencingUrlInput'
+        || target.id === 'calendarDescriptionInput'
+        || target.id === 'calendarSharedNoteInput'
+        || target.id === 'calendarPrivateMemoInput'
+        || target.id === 'calendarActionItemsInput'
+      ) {
+        return;
+      }
+      return;
+    }
+
     if (target.id === 'tenantCode') {
       clearLoginFieldErrors();
       queueTenantValidation();
@@ -63657,6 +66845,15 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'home-panel-tab') {
+      const audience = String(actionEl.dataset.audience || resolveHomeAudience()).trim().toLowerCase() || resolveHomeAudience();
+      const panel = String(actionEl.dataset.panel || '').trim();
+      if (!panel) return;
+      setHomeActivePanel(audience, panel);
+      renderHomeAudienceSurface();
+      return;
+    }
+
     if (action === 'home-select-site') {
       applyHomeSelectedSite(actionEl.dataset.siteCode, {
         announce: true,
@@ -65471,6 +68668,279 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'calendar-set-view') {
+      const nextTab = normalizeCalendarViewTab(actionEl.dataset.tab || '');
+      const calendarState = ensureCalendarWorkspaceState();
+      calendarState.viewTab = nextTab;
+      runActionSafely(navigateToRoute(getCalendarTabRoute(nextTab)), '캘린더 보기를 전환하지 못했습니다.');
+      return;
+    }
+
+    if (action === 'calendar-select-container') {
+      const calendarState = ensureCalendarWorkspaceState();
+      calendarState.selectedContainerId = String(actionEl.dataset.containerId || '').trim();
+      calendarState.selectedEventId = '';
+      calendarState.draftEvent = null;
+      loadCalendarWorkspace({ force: true }).catch((error) => {
+        console.error('[RG ARLS] calendar container change failed', error);
+      });
+      return;
+    }
+
+    if (action === 'calendar-select-date') {
+      const dateKey = normalizeAttendanceDate(actionEl.dataset.date || '');
+      if (!dateKey) return;
+      const calendarState = ensureCalendarWorkspaceState();
+      calendarState.anchorDate = dateKey;
+      calendarState.selectedDate = dateKey;
+      calendarState.selectedEventId = '';
+      calendarState.draftEvent = null;
+      loadCalendarWorkspace({ force: true }).catch((error) => {
+        console.error('[RG ARLS] calendar date change failed', error);
+      });
+      return;
+    }
+
+    if (action === 'calendar-select-event') {
+      const calendarState = ensureCalendarWorkspaceState();
+      const nextEventId = String(actionEl.dataset.eventId || '').trim();
+      calendarState.selectedEventId = nextEventId;
+      const workspace = calendarState.workspace;
+      const selectedEvent = Array.isArray(workspace?.events)
+        ? workspace.events.find((item) => String(item?.id || '').trim() === nextEventId)
+        : null;
+      const selectedDateKey = getCalendarDateKeyFromValue(selectedEvent?.starts_at || '');
+      if (selectedDateKey) {
+        calendarState.selectedDate = selectedDateKey;
+        if (calendarState.viewTab !== 'agenda') {
+          calendarState.anchorDate = selectedDateKey;
+        }
+      }
+      calendarState.draftEvent = null;
+      renderCalendarWorkspace();
+      return;
+    }
+
+    if (action === 'calendar-new-event') {
+      startCalendarDraft();
+      return;
+    }
+
+    if (action === 'calendar-apply-template') {
+      applyCalendarTemplate(actionEl.dataset.templateCode || '');
+      return;
+    }
+
+    if (action === 'calendar-save-event') {
+      runActionSafely(saveCalendarEventFromUi(), '일정을 저장하지 못했습니다.');
+      return;
+    }
+
+    if (action === 'calendar-delete-event') {
+      runActionSafely(deleteSelectedCalendarEvent(), '일정을 삭제하지 못했습니다.');
+      return;
+    }
+
+    if (action === 'calendar-select-booking-link') {
+      const calendarState = ensureCalendarWorkspaceState();
+      calendarState.selectedBookingLinkId = String(actionEl.dataset.bookingLinkId || '').trim();
+      calendarState.draftBookingLink = null;
+      calendarState.bookingLinkError = '';
+      calendarState.bookingDetailMode = 'booking';
+      renderCalendarWorkspace();
+      return;
+    }
+
+    if (action === 'calendar-select-sync-connection') {
+      const calendarState = ensureCalendarWorkspaceState();
+      calendarState.selectedSyncConnectionId = String(actionEl.dataset.syncConnectionId || '').trim();
+      calendarState.draftSyncConnection = null;
+      calendarState.syncConnectionError = '';
+      calendarState.bookingDetailMode = 'sync';
+      renderCalendarWorkspace();
+      return;
+    }
+
+    if (action === 'calendar-new-booking-link') {
+      const calendarState = ensureCalendarWorkspaceState();
+      if (calendarState.workspace) {
+        snapshotCalendarBookingLinkDraftFromDom(calendarState.workspace);
+      }
+      startCalendarBookingLinkDraft();
+      return;
+    }
+
+    if (action === 'calendar-new-sync-connection') {
+      const calendarState = ensureCalendarWorkspaceState();
+      if (calendarState.workspace) {
+        snapshotCalendarSyncConnectionDraftFromDom(calendarState.workspace);
+      }
+      startCalendarSyncConnectionDraft();
+      return;
+    }
+
+    if (action === 'calendar-save-booking-link') {
+      runActionSafely(saveCalendarBookingLinkFromUi(), '예약 링크를 저장하지 못했습니다.');
+      return;
+    }
+
+    if (action === 'calendar-delete-booking-link') {
+      runActionSafely(deleteSelectedCalendarBookingLink(), '예약 링크를 삭제하지 못했습니다.');
+      return;
+    }
+
+    if (action === 'calendar-save-sync-connection') {
+      runActionSafely(saveCalendarSyncConnectionFromUi(), '외부 연동을 저장하지 못했습니다.');
+      return;
+    }
+
+    if (action === 'calendar-delete-sync-connection') {
+      runActionSafely(deleteSelectedCalendarSyncConnection(), '외부 연동을 삭제하지 못했습니다.');
+      return;
+    }
+
+    if (action === 'calendar-run-sync-connection') {
+      runActionSafely(runCalendarSyncConnectionFromUi(), '외부 캘린더를 동기화하지 못했습니다.');
+      return;
+    }
+
+    if (action === 'calendar-open-public-booking') {
+      const calendarState = ensureCalendarWorkspaceState();
+      const slug = String(actionEl.dataset.slug || calendarState.publicBookingSlug || '').trim();
+      if (!slug) return;
+      calendarState.publicBookingSlug = slug;
+      calendarState.publicBookingSuccess = null;
+      const route = `${ROUTE_CALENDAR_PUBLIC_BOOKING}?slug=${encodeURIComponent(slug)}`;
+      if (state.currentView === 'calendar-public') {
+        runActionSafely((async () => {
+          await navigateToRoute(route);
+          await loadCalendarPublicBooking({ force: true });
+        })(), '공개 예약 페이지를 열지 못했습니다.');
+      } else {
+        runActionSafely(navigateToRoute(route), '공개 예약 페이지를 열지 못했습니다.');
+      }
+      return;
+    }
+
+    if (action === 'calendar-add-booking-question') {
+      const calendarState = ensureCalendarWorkspaceState();
+      const workspace = calendarState.workspace;
+      if (!workspace) return;
+      snapshotCalendarBookingLinkDraftFromDom(workspace);
+      const editorLink = getCalendarActiveBookingLinkEditor(workspace);
+      if (!editorLink) return;
+      const nextQuestions = Array.isArray(editorLink.intake_questions)
+        ? editorLink.intake_questions.map((item, index) => normalizeCalendarBookingQuestionDraft(item, index))
+        : [];
+      nextQuestions.push(normalizeCalendarBookingQuestionDraft({}, nextQuestions.length));
+      calendarState.draftBookingLink = {
+        ...editorLink,
+        intake_questions: nextQuestions,
+      };
+      renderCalendarWorkspace();
+      return;
+    }
+
+    if (action === 'calendar-add-custom-field') {
+      const calendarState = ensureCalendarWorkspaceState();
+      const workspace = calendarState.workspace;
+      if (!workspace) return;
+      snapshotCalendarEditorStateFromDom(workspace);
+      const editorEvent = getCalendarActiveEditorEvent(workspace);
+      if (!editorEvent) return;
+      const nextFields = Array.isArray(editorEvent.custom_fields_draft)
+        ? editorEvent.custom_fields_draft.map((item, index) => normalizeCalendarCustomFieldDraft(item, index))
+        : [];
+      nextFields.push(normalizeCalendarCustomFieldDraft({}, nextFields.length));
+      calendarState.draftEvent = {
+        ...editorEvent,
+        custom_fields_draft: nextFields,
+      };
+      calendarState.selectedDetailTab = 'notes';
+      renderCalendarWorkspace();
+      return;
+    }
+
+    if (action === 'calendar-remove-custom-field') {
+      const calendarState = ensureCalendarWorkspaceState();
+      const workspace = calendarState.workspace;
+      if (!workspace) return;
+      snapshotCalendarEditorStateFromDom(workspace);
+      const editorEvent = getCalendarActiveEditorEvent(workspace);
+      if (!editorEvent) return;
+      const removeIndex = Number(actionEl.dataset.fieldIndex || -1);
+      const nextFields = (Array.isArray(editorEvent.custom_fields_draft) ? editorEvent.custom_fields_draft : [])
+        .filter((_, index) => index !== removeIndex)
+        .map((item, index) => normalizeCalendarCustomFieldDraft(item, index));
+      calendarState.draftEvent = {
+        ...editorEvent,
+        custom_fields_draft: nextFields,
+      };
+      calendarState.selectedDetailTab = 'notes';
+      renderCalendarWorkspace();
+      return;
+    }
+
+    if (action === 'calendar-remove-booking-question') {
+      const calendarState = ensureCalendarWorkspaceState();
+      const workspace = calendarState.workspace;
+      if (!workspace) return;
+      snapshotCalendarBookingLinkDraftFromDom(workspace);
+      const editorLink = getCalendarActiveBookingLinkEditor(workspace);
+      if (!editorLink) return;
+      const removeIndex = Number(actionEl.dataset.questionIndex || -1);
+      const nextQuestions = (Array.isArray(editorLink.intake_questions) ? editorLink.intake_questions : [])
+        .filter((_, index) => index !== removeIndex)
+        .map((item, index) => normalizeCalendarBookingQuestionDraft(item, index));
+      calendarState.draftBookingLink = {
+        ...editorLink,
+        intake_questions: nextQuestions,
+      };
+      renderCalendarWorkspace();
+      return;
+    }
+
+    if (action === 'calendar-post-comment') {
+      runActionSafely(postCalendarEventCommentFromUi(), '댓글을 남기지 못했습니다.');
+      return;
+    }
+
+    if (action === 'calendar-select-public-slot') {
+      const calendarState = ensureCalendarWorkspaceState();
+      snapshotCalendarPublicBookingDraftFromDom(calendarState.publicBooking);
+      calendarState.selectedPublicSlot = String(actionEl.dataset.startsAt || '').trim();
+      calendarState.publicBookingError = '';
+      renderCalendarPublicBookingPage();
+      return;
+    }
+
+    if (action === 'calendar-submit-public-booking') {
+      runActionSafely(submitCalendarPublicBookingFromUi(), '공개 예약을 접수하지 못했습니다.');
+      return;
+    }
+
+    if (action === 'calendar-detail-tab') {
+      const calendarState = ensureCalendarWorkspaceState();
+      snapshotCalendarEditorStateFromDom(calendarState.workspace);
+      calendarState.selectedDetailTab = String(actionEl.dataset.tab || 'details').trim().toLowerCase() || 'details';
+      renderCalendarWorkspace();
+      if (calendarState.selectedDetailTab === 'attendees') {
+        runActionSafely(loadCalendarAvailability({ force: true }), '가능 시간을 불러오지 못했습니다.');
+      }
+      return;
+    }
+
+    if (action === 'calendar-refresh-availability') {
+      runActionSafely(loadCalendarAvailability({ force: true }), '가능 시간을 불러오지 못했습니다.');
+      return;
+    }
+
+    if (action === 'calendar-apply-suggested-slot') {
+      applyCalendarSuggestedSlot(actionEl.dataset.startsAt || '', actionEl.dataset.endsAt || '');
+      runActionSafely(loadCalendarAvailability({ force: true }), '가능 시간을 다시 계산하지 못했습니다.');
+      return;
+    }
+
     if (action === 'schedule-select-employee') {
       onScheduleSelectEmployee(actionEl.dataset.employeeCode);
       return;
@@ -65970,6 +69440,21 @@ function bindUiEvents() {
     if (window.__RG_ARLS_HANDLERS_BOUND__ !== true) return;
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
+
+    if (target.closest('.calendar-shell-detail')) {
+      snapshotCalendarEditorStateFromDom(ensureCalendarWorkspaceState().workspace);
+      if (
+        target.id === 'calendarStartsAtInput'
+        || target.id === 'calendarEndsAtInput'
+        || target.id === 'calendarResourceSelect'
+        || target.id === 'calendarRecurrenceInput'
+        || target.hasAttribute('data-calendar-attendee-option')
+      ) {
+        runActionSafely(loadCalendarAvailability({ force: true }), '가능 시간을 불러오지 못했습니다.');
+      }
+      return;
+    }
+
     if (target.closest('#masterTenantCreateForm')) {
       syncMasterTenantCreateRail();
     }
@@ -67358,7 +70843,12 @@ async function initializeApp() {
 
     const storedSessionCandidate = loadSession();
     const hasSnapshot = bootstrapSessionFromStorage(storedSessionCandidate);
-    if (!hasSnapshot && !storedSessionCandidate) {
+    const { requestedRoute, requestedRouteRaw } = resolveRequestedRouteCandidate();
+    if (!hasSnapshot && !storedSessionCandidate && requestedRoute === ROUTE_CALENDAR_PUBLIC_BOOKING) {
+      state.calendar.publicBookingSlug = String(new URLSearchParams(parseRouteCandidate(requestedRouteRaw || requestedRoute).query || '').get('slug') || '').trim();
+      showPublicShellPanel();
+      await navigateToRoute(requestedRouteRaw || requestedRoute, { replace: true, silentDeniedModal: true });
+    } else if (!hasSnapshot && !storedSessionCandidate) {
       showAuthPanel();
     }
     loadLoginPreferences().catch((err) => {
