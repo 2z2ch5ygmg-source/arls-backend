@@ -40,6 +40,10 @@ from ...db import (
 from ...realtime import schedule_event_bus
 from ...schemas import (
     AppleDaytimeShiftOut,
+    FinanceDownloadWorkspaceOut,
+    FinanceDownloadWorkspaceSiteOut,
+    FinanceSubmissionOverviewOut,
+    FinanceSubmissionOverviewSiteOut,
     ImportPreviewIssueLocationOut,
     ImportPreviewIssueOut,
     ScheduleBulkCreateIn,
@@ -1046,8 +1050,12 @@ def _can_upload_finance_final(user: dict | None) -> bool:
     return _finance_submission_normalize_role(user) in {"developer", "supervisor"}
 
 
+def _can_view_finance_download_workspace(user: dict | None) -> bool:
+    return _finance_submission_normalize_role(user) in {"developer", "hq_admin"}
+
+
 def _can_download_finance_final(user: dict | None) -> bool:
-    return _finance_submission_normalize_role(user) in {"developer", "hq_admin", "supervisor"}
+    return _can_view_finance_download_workspace(user)
 
 
 def _build_schedule_overlap_range(start_time: object, end_time: object) -> tuple[int, int] | None:
@@ -13630,27 +13638,12 @@ def _ensure_finance_submission_state(
         return cur.fetchone()
 
 
-def _sync_finance_submission_state(
-    conn,
+def _derive_finance_submission_state_after_refresh(
+    current_row: dict[str, Any] | None,
     *,
-    target_tenant: dict,
-    site_row: dict,
-    month_key: str,
-) -> tuple[dict[str, Any], str]:
-    current_revision = _build_schedule_export_revision(
-        conn,
-        tenant_id=str(target_tenant["id"]),
-        site_id=str(site_row["id"]),
-        site_code=str(site_row["site_code"]),
-        month_key=month_key,
-    )
-    state_row = _ensure_finance_submission_state(
-        conn,
-        tenant_id=str(target_tenant["id"]),
-        site_id=str(site_row["id"]),
-        site_code=str(site_row["site_code"]),
-        month_key=month_key,
-    )
+    current_revision: str,
+) -> dict[str, Any]:
+    state_row = dict(current_row or {})
     next_state = str(state_row.get("state") or "review_download_ready").strip() or "review_download_ready"
     final_upload_stale = bool(state_row.get("final_upload_stale"))
     final_download_enabled = bool(state_row.get("final_download_enabled"))
@@ -13683,6 +13676,24 @@ def _sync_finance_submission_state(
         if review_download_revision and review_download_revision != current_revision:
             blocked_reasons.append("현재 review download는 최신 assembled revision 기준이 아니어서 다시 내려받아야 합니다.")
 
+    return {
+        "state": next_state,
+        "final_upload_stale": final_upload_stale,
+        "final_download_enabled": final_download_enabled,
+        "blocked_reasons": blocked_reasons,
+    }
+
+
+def _refresh_finance_submission_state_row(
+    conn,
+    *,
+    state_row: dict[str, Any],
+    current_revision: str,
+) -> dict[str, Any]:
+    derived = _derive_finance_submission_state_after_refresh(
+        state_row,
+        current_revision=current_revision,
+    )
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -13696,19 +13707,48 @@ def _sync_finance_submission_state(
             """,
             (
                 current_revision,
-                next_state,
-                final_upload_stale,
-                final_download_enabled,
+                derived["state"],
+                derived["final_upload_stale"],
+                derived["final_download_enabled"],
                 state_row["id"],
             ),
         )
-    state_row = _get_finance_submission_state(
+    refreshed_row = _get_finance_submission_state(
+        conn,
+        tenant_id=str(state_row.get("tenant_id") or "").strip(),
+        site_id=str(state_row.get("site_id") or "").strip(),
+        month_key=str(state_row.get("month_key") or "").strip(),
+    ) or dict(state_row)
+    refreshed_row["_derived_blocked_reasons"] = list(derived["blocked_reasons"])
+    return refreshed_row
+
+
+def _sync_finance_submission_state(
+    conn,
+    *,
+    target_tenant: dict,
+    site_row: dict,
+    month_key: str,
+) -> tuple[dict[str, Any], str]:
+    current_revision = _build_schedule_export_revision(
         conn,
         tenant_id=str(target_tenant["id"]),
         site_id=str(site_row["id"]),
+        site_code=str(site_row["site_code"]),
         month_key=month_key,
-    ) or state_row
-    state_row["_derived_blocked_reasons"] = blocked_reasons
+    )
+    state_row = _ensure_finance_submission_state(
+        conn,
+        tenant_id=str(target_tenant["id"]),
+        site_id=str(site_row["id"]),
+        site_code=str(site_row["site_code"]),
+        month_key=month_key,
+    )
+    state_row = _refresh_finance_submission_state_row(
+        conn,
+        state_row=state_row,
+        current_revision=current_revision,
+    )
     return state_row, current_revision
 
 
@@ -13745,6 +13785,366 @@ def _build_finance_submission_status_payload(
         final_uploaded_by=str(state_row.get("final_uploaded_by_username") or state_row.get("final_uploaded_by") or "").strip() or None,
         last_event=str(state_row.get("last_event") or "").strip() or None,
         blocked_reasons=blocked_reasons,
+    )
+
+
+def _build_finance_submission_overview_site_payload(
+    *,
+    site_row: dict[str, Any],
+    month_key: str,
+    active_state: dict[str, Any] | None = None,
+) -> FinanceSubmissionOverviewSiteOut:
+    state_row = dict(active_state or {})
+    review_download_revision = str(state_row.get("review_download_revision") or "").strip()
+    final_uploaded_at = state_row.get("final_uploaded_at")
+    final_upload_stale = bool(state_row.get("final_upload_stale"))
+    conflict_required = bool(state_row.get("conflict_required"))
+
+    if final_uploaded_at and not final_upload_stale and not conflict_required:
+        submission_status = "complete"
+        submission_status_label = "제출 완료"
+    elif final_upload_stale or conflict_required:
+        submission_status = "attention"
+        submission_status_label = "확인 필요"
+    elif review_download_revision or final_uploaded_at:
+        submission_status = "in_progress"
+        submission_status_label = "제출 진행"
+    else:
+        submission_status = "not_started"
+        submission_status_label = "제출 전"
+
+    if review_download_revision:
+        review_status = "downloaded"
+        review_status_label = "다운로드 완료"
+    else:
+        review_status = "pending"
+        review_status_label = "미다운로드"
+
+    if final_uploaded_at and final_upload_stale:
+        final_status = "stale"
+        final_status_label = "재업로드 필요"
+    elif final_uploaded_at and conflict_required:
+        final_status = "review_required"
+        final_status_label = "검토 필요"
+    elif final_uploaded_at:
+        final_status = "uploaded"
+        final_status_label = "업로드 완료"
+    elif review_download_revision:
+        final_status = "waiting_upload"
+        final_status_label = "업로드 대기"
+    else:
+        final_status = "not_uploaded"
+        final_status_label = "미업로드"
+
+    blocked_reason = None
+    if final_upload_stale:
+        blocked_reason = "최신 revision 기준 재업로드 필요"
+    elif conflict_required:
+        blocked_reason = "차단 이슈 확인 필요"
+
+    last_updated_at = (
+        state_row.get("updated_at")
+        or final_uploaded_at
+        or state_row.get("review_downloaded_at")
+    )
+
+    return FinanceSubmissionOverviewSiteOut(
+        site_code=str(site_row.get("site_code") or "").strip(),
+        site_name=str(site_row.get("site_name") or "").strip(),
+        month=month_key,
+        submission_status=submission_status,
+        submission_status_label=submission_status_label,
+        review_status=review_status,
+        review_status_label=review_status_label,
+        final_status=final_status,
+        final_status_label=final_status_label,
+        last_updated_at=last_updated_at,
+        blocked_reason=blocked_reason,
+    )
+
+
+def _build_finance_submission_overview_payload(
+    conn,
+    *,
+    target_tenant: dict[str, Any],
+    user: dict[str, Any],
+    month_key: str,
+) -> FinanceSubmissionOverviewOut:
+    tenant_id = str(target_tenant.get("id") or "").strip()
+    scoped_site_code = _resolve_scoped_schedule_site_code(user)
+    if scoped_site_code:
+        site_row = _resolve_site_context_by_code(
+            conn,
+            tenant_id=tenant_id,
+            site_code=scoped_site_code,
+        )
+        site_rows = [site_row] if site_row else []
+    else:
+        site_rows = _list_finance_download_workspace_sites(conn, tenant_id=tenant_id)
+
+    state_rows_by_site_id = _list_finance_submission_states_for_workspace(
+        conn,
+        tenant_id=tenant_id,
+        month_key=month_key,
+    )
+    site_payloads = [
+        _build_finance_submission_overview_site_payload(
+            site_row=site_row,
+            month_key=month_key,
+            active_state=state_rows_by_site_id.get(str(site_row.get("id") or "").strip()),
+        )
+        for site_row in site_rows
+    ]
+    submitted_count = sum(1 for row in site_payloads if row.submission_status != "not_started")
+    review_ready_count = sum(1 for row in site_payloads if row.review_status == "downloaded")
+    final_uploaded_count = sum(1 for row in site_payloads if row.final_status == "uploaded")
+    return FinanceSubmissionOverviewOut(
+        tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
+        tenant_name=str(target_tenant.get("tenant_name") or "").strip() or None,
+        month=month_key,
+        actor_role=_finance_submission_normalize_role(user),
+        scope_label="본인 지점" if scoped_site_code else "전체 지점",
+        tenant_wide=not bool(scoped_site_code),
+        total_site_count=len(site_payloads),
+        submitted_site_count=submitted_count,
+        review_ready_site_count=review_ready_count,
+        final_uploaded_site_count=final_uploaded_count,
+        generated_at=datetime.now(timezone.utc),
+        sites=site_payloads,
+    )
+
+
+def _list_finance_download_workspace_sites(
+    conn,
+    *,
+    tenant_id: str,
+) -> list[dict[str, Any]]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, site_code, site_name
+            FROM sites
+            WHERE tenant_id = %s
+              AND COALESCE(is_active, TRUE) = TRUE
+            ORDER BY site_name ASC, site_code ASC
+            """,
+            (tenant_id,),
+        )
+        return [dict(row) for row in (cur.fetchall() or [])]
+
+
+def _list_finance_submission_states_for_workspace(
+    conn,
+    *,
+    tenant_id: str,
+    month_key: str,
+) -> dict[str, dict[str, Any]]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT fss.*,
+                   review_user.username AS review_downloaded_by_username,
+                   final_user.username AS final_uploaded_by_username
+            FROM schedule_finance_submission_states fss
+            LEFT JOIN arls_users review_user ON review_user.id = fss.review_downloaded_by
+            LEFT JOIN arls_users final_user ON final_user.id = fss.final_uploaded_by
+            WHERE fss.tenant_id = %s
+              AND fss.month_key = %s
+            """,
+            (tenant_id, month_key),
+        )
+        rows = [dict(row) for row in (cur.fetchall() or [])]
+    return {
+        str(row.get("site_id") or "").strip(): row
+        for row in rows
+        if str(row.get("site_id") or "").strip()
+    }
+
+
+def _list_finance_submission_batch_filenames(
+    conn,
+    *,
+    tenant_id: str,
+    batch_ids: list[str],
+) -> dict[str, str]:
+    normalized_ids = [
+        str(batch_id or "").strip()
+        for batch_id in (batch_ids or [])
+        if str(batch_id or "").strip()
+    ]
+    if not normalized_ids:
+        return {}
+    placeholders = ", ".join(["%s"] * len(normalized_ids))
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT id, filename
+            FROM schedule_finance_submission_batches
+            WHERE tenant_id = %s
+              AND id IN ({placeholders})
+            """,
+            [tenant_id, *normalized_ids],
+        )
+        rows = [dict(row) for row in (cur.fetchall() or [])]
+    return {
+        str(row.get("id") or "").strip(): str(row.get("filename") or "").strip()
+        for row in rows
+        if str(row.get("id") or "").strip()
+    }
+
+
+def _build_finance_download_workspace_site_payload(
+    conn,
+    *,
+    target_tenant: dict[str, Any],
+    site_row: dict[str, Any],
+    month_key: str,
+    active_state: dict[str, Any] | None = None,
+    active_batch_filename: str | None = None,
+) -> FinanceDownloadWorkspaceSiteOut:
+    tenant_id = str(target_tenant.get("id") or "").strip()
+    existing_state = dict(active_state or {})
+    if not existing_state:
+        existing_state = _get_finance_submission_state(
+            conn,
+            tenant_id=tenant_id,
+            site_id=str(site_row.get("id") or "").strip(),
+            month_key=month_key,
+        ) or {}
+        if existing_state:
+            current_revision = _build_schedule_export_revision(
+                conn,
+                tenant_id=tenant_id,
+                site_id=str(site_row.get("id") or "").strip(),
+                site_code=str(site_row.get("site_code") or "").strip(),
+                month_key=month_key,
+            )
+            existing_state = _refresh_finance_submission_state_row(
+                conn,
+                state_row=existing_state,
+                current_revision=current_revision,
+            )
+    active_state = dict(existing_state or {})
+
+    blocked_reasons = [
+        str(item).strip()
+        for item in (active_state.get("_derived_blocked_reasons") or [])
+        if str(item).strip()
+    ]
+    active_final_batch_id = str(active_state.get("active_final_batch_id") or "").strip()
+    uploaded = bool(active_final_batch_id and active_state.get("final_uploaded_at"))
+    final_upload_stale = bool(active_state.get("final_upload_stale"))
+    conflict_required = bool(active_state.get("conflict_required"))
+    download_enabled = bool(
+        uploaded
+        and active_final_batch_id
+        and active_state.get("final_download_enabled")
+        and not final_upload_stale
+    )
+
+    filename = str(active_state.get("active_final_filename") or "").strip() or None
+    if not filename:
+        filename = str(active_batch_filename or "").strip() or None
+    if not filename and active_final_batch_id:
+        active_batch = _get_finance_submission_batch(
+            conn,
+            batch_id=active_final_batch_id,
+            tenant_id=tenant_id,
+        ) or {}
+        filename = str(active_batch.get("filename") or "").strip() or None
+
+    if uploaded and final_upload_stale:
+        status = "stale"
+        status_label = "재업로드 필요"
+    elif uploaded and conflict_required:
+        status = "review_required"
+        status_label = "검토 필요"
+    elif uploaded:
+        status = "uploaded"
+        status_label = "업로드 완료"
+    else:
+        status = "not_uploaded"
+        status_label = "미업로드"
+
+    if download_enabled:
+        blocked_reason = None
+    elif blocked_reasons:
+        blocked_reason = blocked_reasons[0]
+    elif not uploaded:
+        blocked_reason = "업로드된 파일 없음"
+    elif final_upload_stale:
+        blocked_reason = "최신 revision 기준 재업로드 필요"
+    elif conflict_required:
+        blocked_reason = "차단 이슈 확인 필요"
+    else:
+        blocked_reason = "다운로드 가능 상태가 아닙니다."
+
+    return FinanceDownloadWorkspaceSiteOut(
+        site_code=str(site_row.get("site_code") or "").strip(),
+        site_name=str(site_row.get("site_name") or "").strip(),
+        uploaded=uploaded,
+        status=status,
+        status_label=status_label,
+        final_uploaded_at=active_state.get("final_uploaded_at") if uploaded else None,
+        final_uploaded_by=str(
+            active_state.get("final_uploaded_by_username")
+            or active_state.get("final_uploaded_by")
+            or ""
+        ).strip() or None,
+        active_final_filename=filename,
+        download_enabled=download_enabled,
+        download_blocked_reason=blocked_reason,
+    )
+
+
+def _build_finance_download_workspace_payload(
+    conn,
+    *,
+    target_tenant: dict[str, Any],
+    user: dict[str, Any] | None = None,
+    month_key: str,
+) -> FinanceDownloadWorkspaceOut:
+    tenant_id = str(target_tenant.get("id") or "").strip()
+    site_rows = _list_finance_download_workspace_sites(conn, tenant_id=tenant_id)
+    state_by_site_id = _list_finance_submission_states_for_workspace(
+        conn,
+        tenant_id=tenant_id,
+        month_key=month_key,
+    )
+    missing_filename_batch_ids = [
+        str(state_row.get("active_final_batch_id") or "").strip()
+        for state_row in state_by_site_id.values()
+        if str(state_row.get("active_final_batch_id") or "").strip()
+        and not str(state_row.get("active_final_filename") or "").strip()
+    ]
+    batch_filename_by_id = _list_finance_submission_batch_filenames(
+        conn,
+        tenant_id=tenant_id,
+        batch_ids=missing_filename_batch_ids,
+    )
+    payload_rows = [
+        _build_finance_download_workspace_site_payload(
+            conn,
+            target_tenant=target_tenant,
+            site_row=site_row,
+            month_key=month_key,
+            active_state=state_by_site_id.get(str(site_row.get("id") or "").strip()),
+            active_batch_filename=batch_filename_by_id.get(
+                str(dict(state_by_site_id.get(str(site_row.get("id") or "").strip()) or {}).get("active_final_batch_id") or "").strip()
+            ),
+        )
+        for site_row in site_rows
+    ]
+    return FinanceDownloadWorkspaceOut(
+        tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
+        tenant_name=str(target_tenant.get("tenant_name") or target_tenant.get("name") or "").strip() or None,
+        actor_role=_finance_submission_normalize_role(user) or None,
+        month=month_key,
+        total_site_count=len(payload_rows),
+        uploaded_site_count=sum(1 for row in payload_rows if row.uploaded),
+        downloadable_site_count=sum(1 for row in payload_rows if row.download_enabled),
+        generated_at=datetime.now(timezone.utc),
+        sites=payload_rows,
     )
 
 
@@ -14145,6 +14545,10 @@ def get_sentrix_hq_employee_truth_bridge(
     try:
         has_employee_active = table_column_exists(conn, "employees", "is_active")
         has_employee_deleted = table_column_exists(conn, "employees", "is_deleted")
+        has_employee_canonical_id = table_column_exists(conn, "employees", "canonical_employee_id")
+        has_employee_uuid = table_column_exists(conn, "employees", "employee_uuid")
+        has_employee_code = table_column_exists(conn, "employees", "employee_code")
+        has_employee_soc_role = table_column_exists(conn, "employees", "soc_role")
         has_site_active = table_column_exists(conn, "sites", "is_active")
         has_site_deleted = table_column_exists(conn, "sites", "is_deleted")
         has_user_deleted = table_column_exists(conn, "arls_users", "is_deleted")
@@ -14164,14 +14568,28 @@ def get_sentrix_hq_employee_truth_bridge(
             clauses.append("COALESCE(s.is_deleted, FALSE) = FALSE")
 
         user_deleted_clause = "AND COALESCE(au.is_deleted, FALSE) = FALSE" if has_user_deleted else ""
+        canonical_identity_candidates: list[str] = []
+        if has_employee_canonical_id:
+            canonical_identity_candidates.append("NULLIF(TRIM(COALESCE(e.canonical_employee_id::text, '')), '')")
+        if has_employee_uuid:
+            canonical_identity_candidates.append("NULLIF(TRIM(COALESCE(e.employee_uuid::text, '')), '')")
+        if has_employee_code:
+            canonical_identity_candidates.append("NULLIF(TRIM(COALESCE(e.employee_code::text, '')), '')")
+        canonical_identity_candidates.append("NULLIF(TRIM(COALESCE(e.id::text, '')), '')")
+        canonical_employee_id_select_sql = (
+            f"COALESCE({', '.join(canonical_identity_candidates)}, '') AS canonical_employee_id"
+        )
+        employee_uuid_select_sql = "COALESCE(e.employee_uuid::text, '') AS employee_uuid" if has_employee_uuid else "'' AS employee_uuid"
+        employee_code_select_sql = "COALESCE(e.employee_code::text, '') AS employee_code" if has_employee_code else "'' AS employee_code"
+        soc_role_select_sql = "COALESCE(e.soc_role, '') AS soc_role" if has_employee_soc_role else "'' AS soc_role"
         with conn.cursor() as cur:
             cur.execute(
                 f"""
                 SELECT
                     e.id AS employee_id,
-                    COALESCE(e.canonical_employee_id, '') AS canonical_employee_id,
-                    COALESCE(e.employee_uuid, '') AS employee_uuid,
-                    COALESCE(e.employee_code, '') AS employee_code,
+                    {canonical_employee_id_select_sql},
+                    {employee_uuid_select_sql},
+                    {employee_code_select_sql},
                     COALESCE(e.full_name, '') AS full_name,
                     COALESCE(e.phone, '') AS phone,
                     s.id AS site_id,
@@ -14181,7 +14599,7 @@ def get_sentrix_hq_employee_truth_bridge(
                     COALESCE(u.user_id::text, '') AS user_id,
                     COALESCE(u.username, '') AS username,
                     COALESCE(u.user_role, '') AS user_role,
-                    COALESCE(e.soc_role, '') AS soc_role
+                    {soc_role_select_sql}
                 FROM employees e
                 JOIN sites s
                   ON s.id = e.site_id
@@ -14897,10 +15315,11 @@ def get_finance_submission_status(
         raise HTTPException(status_code=403, detail="forbidden")
     _month_bounds(month)
     target_tenant = _resolve_target_tenant(conn, user, tenant_code)
+    resolved_site_code = _resolve_scoped_schedule_site_code(user, request_site_code=site_code)
     site_row = _resolve_site_context_by_code(
         conn,
         tenant_id=str(target_tenant["id"]),
-        site_code=str(site_code).strip(),
+        site_code=resolved_site_code or str(site_code).strip(),
     )
     if not site_row:
         raise HTTPException(status_code=404, detail="site not found")
@@ -14908,6 +15327,44 @@ def get_finance_submission_status(
         conn,
         target_tenant=target_tenant,
         site_row=site_row,
+        month_key=month,
+    )
+
+
+@router.get("/finance-submission/overview-workspace", response_model=FinanceSubmissionOverviewOut)
+def get_finance_submission_overview_workspace(
+    month: str = Query(..., description="YYYY-MM"),
+    tenant_code: str | None = Query(default=None, max_length=64),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    if not _can_view_finance_submission(user):
+        raise HTTPException(status_code=403, detail="forbidden")
+    _month_bounds(month)
+    target_tenant = _resolve_target_tenant(conn, user, tenant_code)
+    return _build_finance_submission_overview_payload(
+        conn,
+        target_tenant=target_tenant,
+        user=user,
+        month_key=month,
+    )
+
+
+@router.get("/finance-submission/download-workspace", response_model=FinanceDownloadWorkspaceOut)
+def get_finance_download_workspace(
+    month: str = Query(..., description="YYYY-MM"),
+    tenant_code: str | None = Query(default=None, max_length=64),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    if not _can_view_finance_download_workspace(user):
+        raise HTTPException(status_code=403, detail="forbidden")
+    _month_bounds(month)
+    target_tenant = _resolve_target_tenant(conn, user, tenant_code)
+    return _build_finance_download_workspace_payload(
+        conn,
+        target_tenant=target_tenant,
+        user=user,
         month_key=month,
     )
 
@@ -14924,7 +15381,7 @@ def download_finance_review_excel(
         raise HTTPException(status_code=403, detail="forbidden")
     _month_bounds(month)
     target_tenant = _resolve_target_tenant(conn, user, tenant_code)
-    normalized_site_code = str(site_code or "").strip()
+    normalized_site_code = _resolve_scoped_schedule_site_code(user, request_site_code=site_code) or str(site_code or "").strip()
     export_all_sites = normalized_site_code.lower() == "all"
 
     if export_all_sites:
@@ -15072,10 +15529,11 @@ def preview_finance_final_upload(
         raise HTTPException(status_code=400, detail="month is required")
     _month_bounds(str(month).strip())
     target_tenant = _resolve_target_tenant(conn, user, tenant_code)
+    resolved_site_code = _resolve_scoped_schedule_site_code(user, request_site_code=site_code) or str(site_code).strip()
     site_row = _resolve_site_context_by_code(
         conn,
         tenant_id=str(target_tenant["id"]),
-        site_code=str(site_code).strip(),
+        site_code=resolved_site_code,
     )
     if not site_row:
         raise HTTPException(status_code=404, detail="site not found")
@@ -15092,7 +15550,7 @@ def preview_finance_final_upload(
     file.file = BytesIO(raw_bytes)
     preview_result = preview_import(
         file=file,
-        site_code=str(site_code).strip(),
+        site_code=resolved_site_code,
         month=str(month).strip(),
         tenant_code=tenant_code,
         conn=conn,
@@ -15164,6 +15622,10 @@ def apply_finance_final_upload(
     )
     if not finance_batch:
         raise HTTPException(status_code=404, detail="finance submission batch not found")
+    _resolve_scoped_schedule_site_code(
+        user,
+        request_site_code=str(finance_batch.get("site_code") or "").strip(),
+    )
     site_row = _resolve_site_context_by_code(
         conn,
         tenant_id=str(target_tenant["id"]),
@@ -15324,10 +15786,11 @@ def download_finance_final_excel(
         raise HTTPException(status_code=403, detail="forbidden")
     _month_bounds(month)
     target_tenant = _resolve_target_tenant(conn, user, tenant_code)
+    resolved_site_code = _resolve_scoped_schedule_site_code(user, request_site_code=site_code)
     site_row = _resolve_site_context_by_code(
         conn,
         tenant_id=str(target_tenant["id"]),
-        site_code=str(site_code).strip(),
+        site_code=resolved_site_code or str(site_code).strip(),
     )
     if not site_row:
         raise HTTPException(status_code=404, detail="site not found")

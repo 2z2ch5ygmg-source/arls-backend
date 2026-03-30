@@ -8,6 +8,7 @@ from zipfile import BadZipFile, ZipFile
 
 from docx import Document
 from ..utils.address_norm import normalize_address_text
+from ..utils.employee_identity import build_canonical_employee_code
 
 DATE_PATTERN = re.compile(r"(?P<year>\d{2,4})\s*[./-]\s*(?P<month>\d{1,2})\s*[./-]\s*(?P<day>\d{1,2})")
 PHONE_PATTERN = re.compile(r"(01[016789])[-\s]?(\d{3,4})[-\s]?(\d{4})")
@@ -448,8 +449,4 @@ def match_site_candidates(
 
 
 def build_employee_code_from_management_no(site_code: str, management_no: str) -> str:
-    left = _clean_text(site_code)
-    right = _clean_text(management_no)
-    if not left or not right:
-        return ""
-    return f"{left}-{right}"
+    return build_canonical_employee_code(_clean_text(site_code), _clean_text(management_no))

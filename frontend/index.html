@@ -230,353 +230,7 @@
                 <p id="homeViewSubtitle" class="muted">오늘 운영 상태를 위에서 아래로 읽는 브리핑 대시보드입니다.</p>
               </div>
             </div>
-            <div class="home-stack">
-              <div class="shell-manager-only home-manager-top-grid">
-                <article class="module-card stack shell-manager-only home-manager-section home-manager-attendance-card">
-                  <div class="home-manager-section-head">
-                    <div class="home-manager-section-title">
-                      <div>
-                        <div class="home-section-heading">
-                          <span class="home-section-icon-chip" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                              <path d="M7 3.5v3"></path>
-                              <path d="M17 3.5v3"></path>
-                              <rect x="4" y="5.5" width="16" height="14.5" rx="3"></rect>
-                              <path d="M4 10h16"></path>
-                              <path d="M9.25 14.25 11 16l4-4"></path>
-                            </svg>
-                          </span>
-                          <h3>출퇴근</h3>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="home-attendance-overview-grid">
-                    <article class="home-attendance-rate-card">
-                      <div class="home-attendance-panel-head">
-                        <span class="home-attendance-card-label">오늘 출근율</span>
-                      </div>
-                      <div class="home-attendance-rate-visual">
-                        <div id="homeManagerAttendanceRateRing" class="home-attendance-rate-ring">
-                          <div class="home-attendance-rate-core">
-                            <strong id="homeManagerAttendanceRateValue">-</strong>
-                            <span id="homeManagerAttendanceRateCaption">집계 대기</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="home-progress-track home-attendance-rate-track">
-                        <span id="homeManagerAttendanceRateBar" class="home-progress-fill home-attendance-rate-fill"></span>
-                      </div>
-                      <div class="home-attendance-rate-foot">
-                        <span id="homeManagerAttendanceRateMeta">출근 완료 0 / 예정 0</span>
-                      </div>
-                    </article>
-
-                    <article class="home-attendance-status-card">
-                      <div class="home-attendance-panel-head home-attendance-panel-head-compact">
-                        <span class="home-attendance-card-label">현재 운영 상태</span>
-                        <strong id="homeManagerAttendanceStatusHeadline" class="home-attendance-panel-headline" hidden></strong>
-                      </div>
-                      <div class="home-attendance-status-rack">
-                        <div class="home-mini-metric" data-tone="warn">
-                          <span>미출근</span>
-                          <strong id="homeManagerAttendanceMissing">-</strong>
-                        </div>
-                        <div class="home-mini-metric" data-tone="neutral">
-                          <span>즉시 확인</span>
-                          <strong id="homeManagerAttendanceReview">-</strong>
-                        </div>
-                        <div class="home-mini-metric" data-tone="success">
-                          <span>휴가·야간</span>
-                          <strong id="homeManagerAttendanceLeave">-</strong>
-                        </div>
-                        <div class="home-mini-metric" data-tone="accent">
-                          <span>요청·승인</span>
-                          <strong id="homeManagerAttendanceApprovals">-</strong>
-                        </div>
-                      </div>
-                    </article>
-
-                    <article class="home-attendance-issue-card home-section-rail">
-                      <div class="home-attendance-issue-head home-attendance-panel-head-compact">
-                        <span class="home-attendance-card-label">오늘 우선 확인</span>
-                        <strong id="homeManagerAttendanceIssueHeading" class="home-attendance-panel-headline">직원별 예외 preview</strong>
-                      </div>
-                      <ul id="homeManagerAttendanceIssueList" class="list compact-list home-dashboard-list-plain"></ul>
-                    </article>
-
-                    <article
-                      class="home-attendance-notice-card home-section-rail home-notice-card-shell"
-                      data-action="drawer-open-route"
-                      data-route="/feature/notices"
-                      data-keyboard-action="true"
-                      tabindex="0"
-                      role="link"
-                      aria-label="공지사항 목록 열기"
-                    >
-                      <div class="home-attendance-notice-head">
-                        <span class="home-attendance-card-label">공지사항</span>
-                      </div>
-                      <ul id="homeManagerNoticeList" class="list compact-list home-notice-list"></ul>
-                    </article>
-                  </div>
-                </article>
-              </div>
-
-              <article class="module-card stack shell-manager-only home-manager-section home-manager-schedule-card">
-                <div class="home-manager-section-head">
-                  <div class="home-manager-section-title">
-                    <div>
-                      <div class="home-section-heading">
-                        <span class="home-section-icon-chip" aria-hidden="true">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                            <path d="M7 3.5v3"></path>
-                            <path d="M17 3.5v3"></path>
-                            <rect x="4" y="5.5" width="16" height="14.5" rx="3"></rect>
-                            <path d="M4 10h16"></path>
-                            <path d="M8 14h3"></path>
-                            <path d="M13 14h3"></path>
-                            <path d="M8 17h3"></path>
-                          </svg>
-                        </span>
-                        <h3>오늘 스케줄</h3>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div class="home-schedule-grid">
-                  <article class="home-schedule-summary-card home-distribution-card">
-                    <div class="home-distribution-metrics">
-                      <div class="home-distribution-meta">
-                        <span>오늘 운영 분포</span>
-                        <strong id="homeManagerScheduleDistributionMeta" hidden></strong>
-                      </div>
-                    </div>
-                    <div class="home-distribution-bars">
-                      <div class="home-distribution-bar">
-                        <strong id="homeManagerScheduleTodayCount">-</strong>
-                        <div class="home-distribution-bar-plot">
-                          <span id="homeManagerScheduleBarToday" class="home-distribution-bar-fill"></span>
-                        </div>
-                        <span>오늘 근무</span>
-                      </div>
-                      <div class="home-distribution-bar">
-                        <strong id="homeManagerScheduleWeekCount">-</strong>
-                        <div class="home-distribution-bar-plot">
-                          <span id="homeManagerScheduleBarWeek" class="home-distribution-bar-fill"></span>
-                        </div>
-                        <span>이번주 배정</span>
-                      </div>
-                      <div class="home-distribution-bar">
-                        <strong id="homeManagerScheduleSiteCount">-</strong>
-                        <div class="home-distribution-bar-plot">
-                          <span id="homeManagerScheduleBarSites" class="home-distribution-bar-fill"></span>
-                        </div>
-                        <span>근무 현장</span>
-                      </div>
-                      <div class="home-distribution-bar">
-                        <strong id="homeManagerScheduleVacancySites">-</strong>
-                        <div class="home-distribution-bar-plot">
-                          <span id="homeManagerScheduleBarVacancy" class="home-distribution-bar-fill"></span>
-                        </div>
-                        <span>결원 지점</span>
-                      </div>
-                    </div>
-                  </article>
-                  <article class="home-schedule-summary-card home-section-rail home-schedule-issue-rail">
-                    <div class="home-attendance-panel-copy">
-                      <span class="home-attendance-card-label">오늘 지정 상태</span>
-                    </div>
-                    <ul id="homeManagerScheduleList" class="list compact-list home-dashboard-list-plain"></ul>
-                  </article>
-                </div>
-              </article>
-
-              <article class="module-card stack shell-manager-only home-manager-section home-manager-requests-card">
-                <div class="home-manager-section-head">
-                  <div class="home-manager-section-title">
-                    <div>
-                      <div class="home-section-heading">
-                        <span class="home-section-icon-chip" aria-hidden="true">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                            <rect x="4" y="4.5" width="16" height="15" rx="3"></rect>
-                            <path d="M8 9.5h8"></path>
-                            <path d="M8 13.5h5"></path>
-                            <path d="m15.25 16 1.5 1.5 2.5-3"></path>
-                          </svg>
-                        </span>
-                        <h3>요청·승인</h3>
-                      </div>
-                      <p class="muted">대기 큐만 짧게 보여주고, 정상일 때는 더 작게 접습니다.</p>
-                    </div>
-                  </div>
-                  <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/requests" aria-label="요청·승인 탭 열기">
-                    <span>요청 보기</span>
-                  </button>
-                </div>
-                <div class="home-requests-grid">
-                  <article class="home-requests-summary-card home-request-meter-card">
-                    <div class="home-request-summary-head">
-                      <div class="home-request-summary-copy">
-                        <span class="home-attendance-card-label">처리 큐</span>
-                        <strong id="homeManagerRequestHeadline">처리 대기 없음</strong>
-                      </div>
-                      <span id="homeManagerRequestStatusTag" class="home-status-tag home-status-tag-success">정상</span>
-                    </div>
-                    <div class="home-request-meter-list">
-                      <div class="home-request-meter">
-                        <span>휴가 대기</span>
-                        <strong id="homeManagerRequestLeaveCount">-</strong>
-                      </div>
-                      <div class="home-request-meter">
-                        <span>출퇴근 검토</span>
-                        <strong id="homeManagerRequestAttendanceCount">-</strong>
-                      </div>
-                      <div class="home-request-meter">
-                        <span>미확인 알림</span>
-                        <strong id="homeManagerRequestUnreadCount">-</strong>
-                      </div>
-                    </div>
-                  </article>
-                  <article class="home-requests-summary-card home-section-rail">
-                    <ul id="homeManagerRequestList" class="list compact-list home-dashboard-list-plain"></ul>
-                  </article>
-                </div>
-              </article>
-
-              <article id="homeManagerOrgCard" class="module-card stack shell-manager-only home-manager-section home-manager-org-card hidden">
-                <div class="home-manager-section-head">
-                  <div class="home-manager-section-title">
-                    <div>
-                      <h3>조직 운영</h3>
-                      <p class="muted">조치가 필요한 조직 이슈만 teaser로 노출합니다.</p>
-                    </div>
-                  </div>
-                  <button class="home-section-chevron" type="button" data-action="drawer-open-route" data-route="/branch/employees" aria-label="조직 탭 열기">
-                    <span>조직 보기</span>
-                  </button>
-                </div>
-                <div class="home-org-grid">
-                  <article class="home-org-summary-card home-section-rail">
-                    <ul id="homeManagerOrgIssueList" class="list compact-list home-dashboard-list-plain"></ul>
-                  </article>
-                </div>
-              </article>
-
-              <article class="module-card home-today-card">
-                <div class="shell-employee-only">
-                  <div class="home-card-head">
-                    <h3>오늘 근무 / 출퇴근</h3>
-                    <button class="btn btn-secondary home-map-btn" type="button" data-action="home-map" aria-label="선택한 현장를 지도에서 보기">지도에서 보기</button>
-                  </div>
-                  <div class="input-field home-site-picker">
-                    <span>근무 현장</span>
-                    <button
-                      id="homeSitePickerBtn"
-                      class="btn btn-secondary home-site-picker-btn"
-                      type="button"
-                      data-action="home-open-site-picker"
-                      aria-haspopup="dialog"
-                      aria-expanded="false"
-                      aria-label="근무 현장 선택"
-                    >
-                      현장 선택
-                    </button>
-                    <p id="homeSelectedSiteMeta" class="muted">선택된 현장 없음</p>
-                    <select id="homeSiteSelect" class="home-site-select-native" aria-hidden="true" tabindex="-1"></select>
-                  </div>
-                  <div id="homeGeoSkeleton" class="home-geo-skeleton hidden"></div>
-                  <div class="home-geo-status">
-                    <p id="homeGeoStatusText">현재 위치 확인 중...</p>
-                    <span id="homeGeoStatusPill" class="status-pill status-pill-warn">확인 중</span>
-                  </div>
-                  <p id="homeGeoMeta" class="muted" role="status" aria-live="polite"></p>
-                  <div class="home-cta-grid">
-                    <button class="btn btn-primary" type="button" data-action="home-attendance-toggle" id="homeAttendanceToggleBtn" aria-label="출근 또는 퇴근 처리">출근하기</button>
-                    <button class="btn btn-primary hidden" type="button" data-action="home-check-in-request" id="homeCheckInRequestBtn" aria-label="예외 출근 요청 작성">출근요청</button>
-                  </div>
-                  <button class="btn btn-secondary" type="button" data-action="home-refresh-location" id="homeRefreshLocationBtn" aria-label="현재 위치 다시 확인">위치 다시 확인</button>
-                  <div id="homeLocationPermissionCard" class="home-permission-card hidden">
-                    <strong>위치 권한이 필요합니다.</strong>
-                    <p class="muted">설정에서 위치 접근을 허용해야 지오펜스 출근이 가능합니다.</p>
-                    <button class="btn btn-secondary" type="button" data-action="home-open-settings">설정 열기</button>
-                  </div>
-                  <p id="homeActionHint" class="muted" role="status" aria-live="polite"></p>
-                </div>
-              </article>
-
-              <article id="homeMobileQuickActionsCard" class="module-card stack home-mobile-actions">
-                <div class="approval-head">
-                  <h3>우선 작업</h3>
-                  <span class="status-pill status-pill-neutral">오늘 업무</span>
-                </div>
-                <div class="quick-actions home-mobile-quick-grid">
-                  <button class="btn btn-secondary" type="button" data-action="home-mobile-open-exception">예외 요청</button>
-                  <button class="btn btn-secondary" type="button" data-action="home-mobile-open-schedule">일정 보기</button>
-                </div>
-              </article>
-
-              <article class="module-card home-status-card shell-employee-only">
-                <div class="home-card-head home-status-head">
-                  <h3>오늘 근무 요약</h3>
-                  <div class="home-status-pill-group">
-                    <span id="homeAutoCheckoutBadge" class="status-pill status-pill-neutral hidden">자동 퇴근 처리</span>
-                    <span id="homeWorkStatusPill" class="status-pill status-pill-warn">확인 중</span>
-                  </div>
-                </div>
-                <div class="home-summary-grid">
-                  <div class="home-summary-item">
-                    <span>오늘 날짜</span>
-                    <strong id="homeTodayDate">-</strong>
-                  </div>
-                  <div class="home-summary-item">
-                    <span>근무 현장</span>
-                    <strong id="homeTodaySite">-</strong>
-                  </div>
-                  <div class="home-summary-item">
-                    <span>근무 시간</span>
-                    <strong id="homeTodayShiftTime">-</strong>
-                  </div>
-                </div>
-                <p id="homeWorkStatusText" class="muted">출근 상태를 확인 중입니다.</p>
-              </article>
-
-              <article class="module-card home-week-card shell-employee-only">
-                <div class="home-card-head">
-                  <h3>이번 주 요약 (7일)</h3>
-                  <button class="btn btn-secondary" type="button" data-action="home-refresh-week" aria-label="이번 주 근무현황 새로고침">새로고침</button>
-                </div>
-                <div id="homeWeekStrip" class="home-week-strip" aria-live="polite" aria-busy="false"></div>
-              </article>
-
-              <article class="module-card stack shell-employee-only home-task-queue">
-                <div class="approval-head">
-                  <h3>진행 중 요청/문서</h3>
-                  <span class="status-pill status-pill-neutral">우선순위</span>
-                </div>
-                <ul class="list">
-                  <li>
-                    <div class="list-row">
-                      <div class="list-row-main">
-                        <div class="list-row-title">출근/퇴근 상태 확인</div>
-                        <div class="list-row-sub">오늘 근무 상태와 지오펜스 판정을 먼저 확인합니다.</div>
-                      </div>
-                      <button class="btn btn-secondary" type="button" data-action="switch-view" data-view="attendance">열기</button>
-                    </div>
-                  </li>
-                  <li>
-                    <div class="list-row">
-                      <div class="list-row-main">
-                        <div class="list-row-title">진행 중 요청 확인</div>
-                        <div class="list-row-sub">출근 예외/휴가 요청 처리 상태를 확인합니다.</div>
-                      </div>
-                      <button class="btn btn-secondary" type="button" data-action="switch-view" data-view="requests">열기</button>
-                    </div>
-                  </li>
-                </ul>
-              </article>
-
-            </div>
+            <div id="homeAudienceSurface" class="home-audience-surface" aria-live="polite"></div>
           </section>
 
           <section id="view-attendance-check" class="panel card view hidden">
@@ -632,7 +286,6 @@
                 <button class="btn btn-secondary workspace-tab active" type="button" data-action="ops-view-tab" data-tab="overview">개요</button>
                 <button class="btn btn-secondary workspace-tab" type="button" data-action="ops-view-tab" data-tab="soc">SOC</button>
                 <button class="btn btn-secondary workspace-tab" type="button" data-action="ops-view-tab" data-tab="sheets">사이트 동기화</button>
-                <button class="btn btn-secondary workspace-tab" type="button" data-action="ops-view-tab" data-tab="logs">작업 로그</button>
               </div>
               <div class="workspace-tabbar-actions">
                 <button class="btn btn-secondary" type="button" data-action="refresh-ops-summary">상태 새로고침</button>
@@ -719,7 +372,7 @@
                       <span class="ops-action-title">SOC 상태</span>
                       <span class="ops-action-sub">최근 이벤트와 재시도 대상 확인</span>
                     </button>
-                    <button class="ops-action-item" type="button" data-action="ops-view-tab" data-tab="logs">
+                    <button class="ops-action-item" type="button" data-action="ops-view-logs" data-target="all">
                       <span class="ops-action-title">작업 로그</span>
                       <span class="ops-action-sub">최근 실행 기록과 오류 확인</span>
                     </button>
@@ -750,7 +403,7 @@
                     </div>
                     <span id="opsOverviewSheetsStatusPill" class="status-pill status-pill-warn">확인 중</span>
                   </button>
-                  <button class="ops-execution-row" type="button" data-action="ops-view-tab" data-tab="logs">
+                  <button class="ops-execution-row" type="button" data-action="ops-view-logs" data-target="excel">
                     <div class="list-row-main">
                       <div class="list-row-title">엑셀 업로드 상태</div>
                       <div id="opsOverviewExcelMeta" class="list-row-sub">최근 실행 기록을 확인 중입니다.</div>
@@ -871,32 +524,6 @@
               </div>
             </article>
 
-            <article id="opsLogsPanel" class="module-card stack hidden" data-ops-panel="logs">
-              <div class="ops-log-head">
-                <div class="ops-log-head-copy">
-                  <h3>작업 로그</h3>
-                  <p id="opsLogsSummaryMeta" class="muted">최근 실행 이력과 오류 메시지를 한 곳에서 확인합니다.</p>
-                </div>
-                <div class="ops-log-count-strip">
-                  <div class="ops-log-count-chip">
-                    <span>전체</span>
-                    <strong id="opsLogsTotalCount">0</strong>
-                  </div>
-                  <div class="ops-log-count-chip">
-                    <span>실패</span>
-                    <strong id="opsLogsFailureCount">0</strong>
-                  </div>
-                </div>
-              </div>
-              <div class="ops-log-layout">
-                <ul id="opsLogList" class="list"></ul>
-                <aside class="ops-log-detail">
-                  <h3>로그 상세</h3>
-                  <p id="opsLogDetailTitle">항목 선택</p>
-                  <p id="opsLogDetailBody" class="muted">로그를 선택하면 상세를 확인할 수 있습니다.</p>
-                </aside>
-              </div>
-            </article>
           </section>
 
           <section id="view-checkin-request" class="panel card view hidden">
@@ -2006,7 +1633,6 @@
             <div class="workspace-head attendance-workspace-head">
               <div class="workspace-head-main">
                 <h2>출퇴근</h2>
-                <p id="attendanceWorkspaceSubtitle" class="muted">오늘 출근 상태와 바로 확인할 예외를 먼저 봅니다.</p>
               </div>
               <div class="workspace-head-actions">
                 <button class="btn btn-secondary" type="button" data-action="attendance-go-correction" id="attendanceCorrectionBtn">요청·승인</button>
@@ -2024,112 +1650,121 @@
 
               <section id="attendanceOpsToolbar" class="attendance-ops-toolbar">
                 <div class="attendance-ops-toolbar-main">
-                  <div id="attendanceToolbarStatusFields" class="attendance-ops-toolbar-group attendance-toolbar-view">
-                    <label class="input-field attendance-ops-field">
-                      <span>조회일</span>
-                      <input id="attendanceStatusDateInput" type="date" />
-                    </label>
-                    <div class="attendance-range-presets">
-                      <button class="btn btn-secondary active" type="button" data-action="attendance-status-preset" data-range="today">오늘</button>
-                      <button class="btn btn-secondary" type="button" data-action="attendance-status-preset" data-range="yesterday">어제</button>
+                  <section class="attendance-filter-cluster attendance-filter-cluster-period">
+                    <div id="attendanceToolbarStatusFields" class="attendance-ops-toolbar-group attendance-toolbar-view">
+                      <label class="input-field attendance-ops-field">
+                        <span>조회일</span>
+                        <input id="attendanceStatusDateInput" type="date" />
+                      </label>
+                      <div class="attendance-range-presets">
+                        <button class="btn btn-secondary active" type="button" data-action="attendance-status-preset" data-range="today">오늘</button>
+                        <button class="btn btn-secondary" type="button" data-action="attendance-status-preset" data-range="yesterday">어제</button>
+                      </div>
                     </div>
-                  </div>
 
-                  <div id="attendanceToolbarCalendarFields" class="attendance-ops-toolbar-group attendance-toolbar-view hidden">
-                    <label class="input-field attendance-ops-field attendance-ops-field-month">
-                      <span>기준 월</span>
-                      <input id="attendanceCalendarMonthInput" type="month" />
-                    </label>
-                    <div class="attendance-month-nav">
-                      <button class="btn btn-secondary" type="button" data-action="attendance-calendar-shift" data-direction="-1">이전 월</button>
-                      <button class="btn btn-secondary" type="button" data-action="attendance-calendar-shift" data-direction="1">다음 월</button>
+                    <div id="attendanceToolbarCalendarFields" class="attendance-ops-toolbar-group attendance-toolbar-view hidden">
+                      <label class="input-field attendance-ops-field attendance-ops-field-month">
+                        <span>기준 월</span>
+                        <input id="attendanceCalendarMonthInput" type="month" />
+                      </label>
+                      <div class="attendance-month-nav">
+                        <button class="btn btn-secondary" type="button" data-action="attendance-calendar-shift" data-direction="-1">이전 월</button>
+                        <button class="btn btn-secondary" type="button" data-action="attendance-calendar-shift" data-direction="1">다음 월</button>
+                      </div>
                     </div>
-                  </div>
 
-                  <div id="attendanceToolbarListFields" class="attendance-ops-toolbar-group attendance-toolbar-view hidden attendance-ops-toolbar-range">
-                    <label class="input-field attendance-ops-field">
-                      <span>시작일</span>
-                      <input id="attendanceRangeStartInput" type="date" />
-                    </label>
-                    <label class="input-field attendance-ops-field">
-                      <span>종료일</span>
-                      <input id="attendanceRangeEndInput" type="date" />
-                    </label>
-                    <div class="attendance-range-presets">
-                      <button class="btn btn-secondary active" type="button" data-action="attendance-range-preset" data-range="today">오늘</button>
-                      <button class="btn btn-secondary" type="button" data-action="attendance-range-preset" data-range="yesterday">어제</button>
-                      <button class="btn btn-secondary" type="button" data-action="attendance-range-preset" data-range="week">이번 주</button>
-                      <button class="btn btn-secondary" type="button" data-action="attendance-range-preset" data-range="month">이번 달</button>
+                    <div id="attendanceToolbarListFields" class="attendance-ops-toolbar-group attendance-toolbar-view hidden attendance-ops-toolbar-range">
+                      <label class="input-field attendance-ops-field">
+                        <span>시작일</span>
+                        <input id="attendanceRangeStartInput" type="date" />
+                      </label>
+                      <label class="input-field attendance-ops-field">
+                        <span>종료일</span>
+                        <input id="attendanceRangeEndInput" type="date" />
+                      </label>
+                      <div class="attendance-range-presets">
+                        <button class="btn btn-secondary active" type="button" data-action="attendance-range-preset" data-range="today">오늘</button>
+                        <button class="btn btn-secondary" type="button" data-action="attendance-range-preset" data-range="yesterday">어제</button>
+                        <button class="btn btn-secondary" type="button" data-action="attendance-range-preset" data-range="week">이번 주</button>
+                        <button class="btn btn-secondary" type="button" data-action="attendance-range-preset" data-range="month">이번 달</button>
+                      </div>
                     </div>
-                  </div>
+                  </section>
 
-                  <div class="attendance-ops-toolbar-group attendance-ops-toolbar-filters attendance-ops-toolbar-shared">
-                    <label class="input-field attendance-ops-field">
-                      <span>현장</span>
-                      <select id="attendanceSiteSelect">
-                        <option value="">전체 현장</option>
-                      </select>
-                    </label>
-                    <label class="input-field attendance-ops-field">
-                      <span>직원</span>
-                      <select id="attendanceEmployeeSelect">
-                        <option value="">전체 직원</option>
-                      </select>
-                    </label>
-                    <label class="input-field attendance-ops-field">
-                      <span>상태</span>
-                      <select id="attendanceStatusSelect">
-                        <option value="all">전체</option>
-                        <option value="normal">정상</option>
-                        <option value="late">지각</option>
-                        <option value="early_leave">조퇴</option>
-                        <option value="missing_in">미출근</option>
-                        <option value="missing_out">미퇴근</option>
-                        <option value="leave">휴가</option>
-                        <option value="correction_pending">정정대기</option>
-                      </select>
-                    </label>
-                    <label class="input-field attendance-ops-field">
-                      <span>검색</span>
-                      <input id="attendanceSearchInput" type="search" placeholder="직원/현장/회사 검색" />
-                    </label>
-                    <label id="attendanceLateThresholdField" class="input-field attendance-ops-field hidden">
-                      <span>지각 표시 범위</span>
-                      <select id="attendanceLateThresholdSelect">
-                        <option value="0">즉시 표시</option>
-                        <option value="5">5분</option>
-                        <option value="10" selected>10분</option>
-                        <option value="15">15분</option>
-                        <option value="30">30분</option>
-                      </select>
-                    </label>
-                    <label id="attendanceEarlyThresholdField" class="input-field attendance-ops-field hidden">
-                      <span>조퇴 표시 범위</span>
-                      <select id="attendanceEarlyThresholdSelect">
-                        <option value="0">즉시 표시</option>
-                        <option value="5">5분</option>
-                        <option value="10" selected>10분</option>
-                        <option value="15">15분</option>
-                        <option value="30">30분</option>
-                      </select>
-                    </label>
-                    <label id="attendanceSortField" class="input-field attendance-ops-field attendance-ops-sort hidden">
-                      <span>정렬</span>
-                      <select id="attendanceSortSelect">
-                        <option value="default">기본순</option>
-                        <option value="date_desc">최신일자순</option>
-                        <option value="date_asc">오래된일자순</option>
-                        <option value="employee_asc">이름순</option>
-                        <option value="site_asc">현장순</option>
-                        <option value="status_asc">상태순</option>
-                        <option value="late_desc">지각 많은 순</option>
-                        <option value="overtime_desc">OT 많은 순</option>
-                      </select>
-                    </label>
-                  </div>
+                  <section class="attendance-filter-cluster attendance-filter-cluster-shared">
+                    <div class="attendance-ops-toolbar-group attendance-ops-toolbar-filters attendance-ops-toolbar-shared">
+                      <label class="input-field attendance-ops-field">
+                        <span>현장</span>
+                        <select id="attendanceSiteSelect">
+                          <option value="">전체 현장</option>
+                        </select>
+                      </label>
+                      <label class="input-field attendance-ops-field">
+                        <span>직원</span>
+                        <select id="attendanceEmployeeSelect">
+                          <option value="">전체 직원</option>
+                        </select>
+                      </label>
+                      <label class="input-field attendance-ops-field">
+                        <span>상태</span>
+                        <select id="attendanceStatusSelect">
+                          <option value="all">전체</option>
+                          <option value="normal">정상</option>
+                          <option value="late">지각</option>
+                          <option value="early_leave">조퇴</option>
+                          <option value="missing_in">미출근</option>
+                          <option value="missing_out">미퇴근</option>
+                          <option value="leave">휴가</option>
+                          <option value="correction_pending">정정대기</option>
+                        </select>
+                      </label>
+                      <label class="input-field attendance-ops-field">
+                        <span>검색</span>
+                        <input id="attendanceSearchInput" type="search" placeholder="직원/현장/회사 검색" />
+                      </label>
+                    </div>
+                  </section>
+
+                  <section id="attendanceToolbarOptionsCluster" class="attendance-filter-cluster attendance-filter-cluster-options hidden">
+                    <div class="attendance-ops-toolbar-group attendance-ops-toolbar-options">
+                      <label id="attendanceLateThresholdField" class="input-field attendance-ops-field hidden">
+                        <span>지각 표시 범위</span>
+                        <select id="attendanceLateThresholdSelect">
+                          <option value="0">즉시 표시</option>
+                          <option value="5">5분</option>
+                          <option value="10" selected>10분</option>
+                          <option value="15">15분</option>
+                          <option value="30">30분</option>
+                        </select>
+                      </label>
+                      <label id="attendanceEarlyThresholdField" class="input-field attendance-ops-field hidden">
+                        <span>조퇴 표시 범위</span>
+                        <select id="attendanceEarlyThresholdSelect">
+                          <option value="0">즉시 표시</option>
+                          <option value="5">5분</option>
+                          <option value="10" selected>10분</option>
+                          <option value="15">15분</option>
+                          <option value="30">30분</option>
+                        </select>
+                      </label>
+                      <label id="attendanceSortField" class="input-field attendance-ops-field attendance-ops-sort hidden">
+                        <span>정렬</span>
+                        <select id="attendanceSortSelect">
+                          <option value="default">기본순</option>
+                          <option value="date_desc">최신일자순</option>
+                          <option value="date_asc">오래된일자순</option>
+                          <option value="employee_asc">이름순</option>
+                          <option value="site_asc">현장순</option>
+                          <option value="status_asc">상태순</option>
+                          <option value="late_desc">지각 많은 순</option>
+                          <option value="overtime_desc">OT 많은 순</option>
+                        </select>
+                      </label>
+                    </div>
+                  </section>
                 </div>
                 <div class="attendance-ops-toolbar-footer">
-                  <p id="attendanceFilterMeta" class="muted hidden"></p>
+                  <button id="attendanceFilterResetBtn" class="btn btn-secondary btn-sm" type="button" data-action="attendance-filter-reset">필터 초기화</button>
                 </div>
               </section>
 
@@ -2140,7 +1775,6 @@
                       <div class="attendance-kpi-head">
                         <div class="requests-heading-block">
                           <h3>출퇴근 현황</h3>
-                          <p id="attendanceManagerKpiMeta" class="muted">오늘 출근율과 바로 확인할 예외를 먼저 봅니다.</p>
                         </div>
                         <div id="attendanceManagerSecondaryKpiStrip" class="attendance-kpi-secondary" aria-live="polite"></div>
                       </div>
@@ -2171,7 +1805,6 @@
                           <div class="attendance-exception-heading">
                             <div class="requests-heading-block">
                               <h3>우선 확인 예외</h3>
-                              <p id="attendanceExceptionHint" class="muted hidden">먼저 열어봐야 할 기록만 상단에 모았습니다.</p>
                             </div>
                           </div>
                           <span id="attendanceExceptionCountPill" class="status-pill status-pill-warn">0건</span>
@@ -2184,7 +1817,6 @@
                         <div class="approval-head attendance-grid-head">
                           <div class="requests-heading-block">
                             <h3>출근인원 근무상태</h3>
-                            <p id="attendanceStatusRecordHint" class="muted">오늘 범위에서 직원별 실제 시각과 판별 상태를 보여줍니다.</p>
                           </div>
                           <div class="attendance-grid-head-actions">
                             <p id="attendanceStatusRecordMeta" class="muted hidden"></p>
@@ -2200,7 +1832,6 @@
                       <div class="approval-head attendance-grid-head">
                         <div class="requests-heading-block">
                           <h3>출퇴근 기록 목록</h3>
-                          <p class="muted">기간, 상태, 지각/조퇴 기준으로 검색하고 행을 선택해 우측 패널에서 수정합니다.</p>
                         </div>
                         <div class="attendance-grid-head-actions">
                           <p id="attendanceRecordTableMeta" class="muted hidden"></p>
@@ -2234,7 +1865,6 @@
                     <div class="attendance-admin-detail-panel-title">
                       <span class="attendance-admin-detail-panel-eyebrow">선택한 기록</span>
                       <h3 id="attendanceAdminDrawerTitle">기록을 선택하세요</h3>
-                      <p id="attendanceAdminDrawerMeta" class="muted">예외 큐나 기록 리스트에서 대상을 선택하면 우측 상세가 갱신됩니다.</p>
                     </div>
                   </div>
                   <div class="attendance-admin-detail-panel-body">
@@ -2266,7 +1896,6 @@
                 <div class="approval-head attendance-grid-head">
                   <div class="requests-heading-block">
                     <h3>월간 출퇴근 기록</h3>
-                    <p id="attendanceCalendarMeta" class="muted">직원별 월간 기록을 비교하고 누락된 기록을 바로 수정합니다.</p>
                   </div>
                   <div class="attendance-grid-head-actions">
                     <p id="attendanceCalendarScopeMeta" class="muted hidden"></p>
@@ -2291,7 +1920,6 @@
                   </label>
                   <button class="btn btn-secondary" type="button" data-action="attendance-refresh">새로고침</button>
                 </div>
-                <p id="attendanceEmployeeFilterMeta" class="muted">필터: 본인 기록</p>
               </article>
 
               <article class="module-card stack attendance-summary-card">
@@ -2305,7 +1933,6 @@
                   <div class="profile-item"><span>근무시간</span><strong id="attendanceSummaryWorkHours">-</strong></div>
                   <div class="profile-item"><span>근무지</span><strong id="attendanceSummarySite">-</strong></div>
                 </div>
-                <p id="attendanceSummaryHint" class="muted">일자별 출퇴근 상태를 확인하세요.</p>
               </article>
 
               <article id="attendanceDesktopWorkspace" class="module-card stack attendance-desktop-workspace">
@@ -2333,7 +1960,6 @@
                     <div><span>요청 이력</span><strong id="attendanceDetailRequest">-</strong></div>
                     <div><span>정정 가능</span><strong id="attendanceDetailCorrection">-</strong></div>
                   </div>
-                  <p id="attendanceDetailHint" class="muted">행을 선택하면 상세가 표시됩니다.</p>
                 </aside>
               </article>
 
@@ -2342,7 +1968,6 @@
                   <h3>타임라인</h3>
                   <span class="status-pill status-pill-neutral">읽기 전용</span>
                 </div>
-                <p id="attendanceTimelineHint" class="muted">출근/퇴근/OT/휴무 이벤트를 시간순으로 표시합니다.</p>
                 <ul id="attendanceTimelineList" class="list" aria-live="polite" aria-busy="false"></ul>
               </article>
             </div>
@@ -2367,7 +1992,7 @@
             <div id="scheduleHqTabs" class="workspace-tabs schedule-workspace-tabs">
               <button class="btn btn-secondary workspace-tab active" type="button" data-action="schedule-hq-tab" data-tab="calendar">월간 캘린더</button>
               <button class="btn btn-secondary workspace-tab" type="button" data-action="schedule-hq-tab" data-tab="upload">Excel 업로드</button>
-              <button class="btn btn-secondary workspace-tab hidden" type="button" data-action="schedule-hq-tab" data-tab="hq-upload">지점별 업로드 확인</button>
+              <button class="btn btn-secondary workspace-tab hidden" type="button" data-action="schedule-hq-tab" data-tab="hq-upload">지원근무자 업로드</button>
               <button class="btn btn-secondary workspace-tab shell-manager-only hidden" type="button" data-action="schedule-hq-tab" data-tab="templates">근무 템플릿</button>
               <button class="btn btn-secondary workspace-tab hidden" type="button" data-action="schedule-hq-tab" data-tab="reports">Finance 제출</button>
             </div>
@@ -2978,7 +2603,7 @@
                   <button class="btn btn-primary" type="button" data-action="drawer-open-route" data-route="/reports?tab=finance">보고 열기</button>
                 </div>
               </div>
-              <p class="muted">스케줄 탭에서는 월간 캘린더, Excel 업로드, 지점별 업로드 확인, 근무 템플릿 owner 화면만 유지합니다.</p>
+              <p class="muted">스케줄 탭에서는 월간 캘린더, Excel 업로드, 지원근무자 업로드, 근무 템플릿 owner 화면만 유지합니다.</p>
             </section>
             </div>
 
@@ -3194,6 +2819,7 @@
             </div>
             <div id="profileWorkspaceTabs" class="workspace-tabs profile-workspace-tabs">
               <button class="btn btn-secondary workspace-tab active" type="button" data-action="profile-workspace-segment" data-segment="settings">기본 설정</button>
+              <button class="btn btn-secondary workspace-tab hidden" type="button" data-action="profile-workspace-segment" data-segment="logs">작업 로그</button>
               <button class="btn btn-secondary workspace-tab" type="button" data-action="profile-workspace-segment" data-segment="theme">모드 변경</button>
             </div>
             <div id="profileSettingsPanel" class="profile-segment-panel" data-profile-segment-panel="settings">
@@ -3495,113 +3121,192 @@
                         <article id="googleSheetProfileCard" class="profile-control-card profile-surface shell-manager-only">
                       <div class="profile-control-head">
                         <div class="profile-control-title">
-                          <h3>구글 시트 프로필</h3>
-                          <p class="muted">범위, 연동 대상, 활성 상태만 묶어 관리합니다.</p>
+                          <h3>구글 시트 링크</h3>
+                          <p class="muted">등록된 링크와 즉시 동기화 흐름을 한곳에서 나눠 관리합니다.</p>
                         </div>
                         <div class="profile-control-actions">
                           <button class="btn btn-secondary" type="button" data-action="google-profile-refresh">새로고침</button>
                         </div>
                       </div>
-                      <div class="settings-profile-selector-row">
-                        <label class="input-field settings-span-full" for="gsProfileSelect">
-                          기존 프로파일
-                          <select id="gsProfileSelect">
-                            <option value="">선택하세요</option>
-                          </select>
-                        </label>
+
+                      <div id="googleSheetWorkspaceTabs" class="workspace-tabs profile-google-workspace-tabs" role="tablist" aria-label="구글 시트 링크 워크스페이스">
+                        <button class="btn btn-secondary workspace-tab active" type="button" data-action="profile-settings-google-tab" data-tab="links">등록된 링크</button>
+                        <button class="btn btn-secondary workspace-tab" type="button" data-action="profile-settings-google-tab" data-tab="sync">동기화 시작하기</button>
                       </div>
-                      <form id="googleSheetProfileForm" class="settings-profile-form">
-                        <section class="settings-form-group settings-span-full">
-                          <div class="settings-form-group-head">
-                            <h4>범위</h4>
-                            <p class="muted">이 프로파일이 적용될 회사와 범위를 정합니다.</p>
+
+                      <section id="googleSheetLinksPanel" class="profile-google-panel" data-profile-google-tab-panel="links">
+                        <div class="profile-google-links-layout">
+                          <div class="profile-google-links-library">
+                            <div class="profile-google-links-head">
+                              <div>
+                                <h4>등록된 링크</h4>
+                                <p class="muted">저장된 링크만 먼저 확인하고, 필요한 링크를 골라 수정합니다.</p>
+                              </div>
+                              <button class="btn btn-secondary" type="button" data-action="google-profile-new">새 링크</button>
+                            </div>
+                            <ul id="googleSheetProfileLibrary" class="list profile-google-profile-list"></ul>
+                            <p id="googleSheetProfileLibraryMeta" class="muted settings-section-meta">등록된 링크를 불러오는 중입니다.</p>
                           </div>
-                          <div class="settings-profile-subgrid">
-                            <label class="input-field settings-span-full" for="gsTenantCode">
-                              대상 회사 번호
-                              <input id="gsTenantCode" placeholder="예: T001" />
-                            </label>
-                            <label class="input-field" for="gsProfileName">
-                              프로파일명
-                              <input id="gsProfileName" placeholder="예: 기본-메인" required />
-                            </label>
-                            <label class="input-field" for="gsProfileScope">
-                              프로파일 범위
-                              <select id="gsProfileScope">
-                                <option value="PAYROLL_LEAVE_OVERTIME" selected>내부 급여용 (휴무/초과근무)</option>
-                                <option value="APPLE_OVERNIGHT">전용 보고용 (야간근무)</option>
-                                <option value="APPLE_DAYTIME">전용 보고용 (주간근무)</option>
-                                <option value="APPLE_OT">전용 보고용 (초과근무)</option>
-                                <option value="APPLE_TOTAL_LATE">전용 보고용 (총근무/지각)</option>
-                                <option value="DUTY_LOG">근무상황기록부</option>
-                                <option value="SUPPORT_ASSIGNMENT">지원근무자 (시트→DB)</option>
-                              </select>
-                            </label>
-                            <label class="input-field" for="gsProfileType">
-                              프로파일 타입
-                              <select id="gsProfileType">
-                                <option value="KEY_ROW" selected>키 기준 행</option>
-                                <option value="NAMED_RANGE">이름 지정 범위</option>
-                              </select>
-                            </label>
-                            <label class="input-field settings-span-full" for="gsProfileSiteCodes">
-                              대상 현장 번호
-                              <input id="gsProfileSiteCodes" placeholder="예: S001,S002" />
-                              <span class="input-helper">비우면 회사 전체에 적용합니다.</span>
-                            </label>
+
+                          <div class="profile-google-links-editor">
+                            <div class="settings-profile-selector-row">
+                              <label class="input-field settings-span-full" for="gsProfileSelect">
+                                선택한 링크
+                                <select id="gsProfileSelect">
+                                  <option value="">새 링크 작성</option>
+                                </select>
+                              </label>
+                            </div>
+                            <form id="googleSheetProfileForm" class="settings-profile-form">
+                              <section class="settings-form-group settings-span-full">
+                                <div class="settings-form-group-head">
+                                  <h4>범위</h4>
+                                  <p class="muted">이 링크가 적용될 회사와 범위를 정합니다.</p>
+                                </div>
+                                <div class="settings-profile-subgrid">
+                                  <label class="input-field settings-span-full" for="gsTenantCode">
+                                    대상 회사 번호
+                                    <input id="gsTenantCode" placeholder="예: T001" />
+                                  </label>
+                                  <label class="input-field" for="gsProfileName">
+                                    링크명
+                                    <input id="gsProfileName" placeholder="예: 기본-메인" required />
+                                  </label>
+                                  <label class="input-field" for="gsProfileScope">
+                                    링크 범위
+                                    <select id="gsProfileScope">
+                                      <option value="PAYROLL_LEAVE_OVERTIME" selected>내부 급여용 (휴무/초과근무)</option>
+                                      <option value="APPLE_OVERNIGHT">전용 보고용 (야간근무)</option>
+                                      <option value="APPLE_DAYTIME">전용 보고용 (주간근무)</option>
+                                      <option value="APPLE_OT">전용 보고용 (초과근무)</option>
+                                      <option value="APPLE_TOTAL_LATE">전용 보고용 (총근무/지각)</option>
+                                      <option value="DUTY_LOG">근무상황기록부</option>
+                                      <option value="SUPPORT_ASSIGNMENT">지원근무자 (시트→DB)</option>
+                                    </select>
+                                  </label>
+                                  <label class="input-field" for="gsProfileType">
+                                    링크 타입
+                                    <select id="gsProfileType">
+                                      <option value="KEY_ROW" selected>키 기준 행</option>
+                                      <option value="NAMED_RANGE">이름 지정 범위</option>
+                                    </select>
+                                  </label>
+                                  <label class="input-field settings-span-full" for="gsProfileSiteCodes">
+                                    대상 현장 번호
+                                    <input id="gsProfileSiteCodes" placeholder="예: S001,S002" />
+                                    <span class="input-helper">비우면 회사 전체에 적용합니다.</span>
+                                  </label>
+                                </div>
+                              </section>
+                              <section class="settings-form-group settings-span-full">
+                                <div class="settings-form-group-head">
+                                  <h4>연동 대상</h4>
+                                  <p class="muted">시트와 시트명만 정확히 맞추면 됩니다.</p>
+                                </div>
+                                <div class="settings-profile-subgrid">
+                                  <label class="input-field settings-span-full" for="gsSpreadsheetId">
+                                    스프레드시트 ID
+                                    <input id="gsSpreadsheetId" placeholder="구글 스프레드시트 ID" />
+                                  </label>
+                                  <label class="input-field" for="gsWorksheetSchedule">
+                                    스케줄 시트명
+                                    <input id="gsWorksheetSchedule" placeholder="예: 스케줄" />
+                                  </label>
+                                  <label class="input-field" for="gsWorksheetOvertime">
+                                    초과근무 시트명
+                                    <input id="gsWorksheetOvertime" placeholder="예: 초과근무" />
+                                  </label>
+                                  <label class="input-field settings-span-full" for="gsWorksheetOvernight">
+                                    야간근무 시트명
+                                    <input id="gsWorksheetOvernight" placeholder="예: 야간근무" />
+                                  </label>
+                                </div>
+                              </section>
+                              <section class="settings-form-group settings-span-full">
+                                <div class="settings-form-group-head">
+                                  <h4>활성화</h4>
+                                  <p class="muted">실제 전송 경로와 활성 상태를 결정합니다.</p>
+                                </div>
+                                <div class="settings-profile-subgrid">
+                                  <label class="input-field settings-span-full" for="gsWebhookUrl">
+                                    웹훅 주소
+                                    <input id="gsWebhookUrl" placeholder="https://..." />
+                                  </label>
+                                  <label class="settings-switch-row settings-span-full" for="gsProfileIsActive">
+                                    <span class="settings-switch-copy">
+                                      <strong>활성 링크로 사용</strong>
+                                      <span>저장 후 이 링크를 기본 동기화 대상으로 사용합니다.</span>
+                                    </span>
+                                    <span class="settings-switch-control">
+                                      <input id="gsProfileIsActive" type="checkbox" checked />
+                                      <span class="settings-switch-track" aria-hidden="true"></span>
+                                    </span>
+                                  </label>
+                                </div>
+                              </section>
+                              <div class="settings-section-footer settings-span-full">
+                                <div class="settings-section-status-block">
+                                  <p id="googleSheetProfileStatus" class="muted settings-section-status"></p>
+                                  <p class="muted settings-section-meta">등록된 링크만 관리하는 화면입니다. 동기화는 별도 탭에서 시작합니다.</p>
+                                </div>
+                                <button class="btn btn-primary" type="submit">링크 저장</button>
+                              </div>
+                            </form>
                           </div>
-                        </section>
-                        <section class="settings-form-group settings-span-full">
-                          <div class="settings-form-group-head">
-                            <h4>연동 대상</h4>
-                            <p class="muted">시트와 시트명만 정확히 맞추면 됩니다.</p>
-                          </div>
-                          <div class="settings-profile-subgrid">
-                            <label class="input-field settings-span-full" for="gsSpreadsheetId">
-                              스프레드시트 ID
-                              <input id="gsSpreadsheetId" placeholder="구글 스프레드시트 ID" />
-                            </label>
-                            <label class="input-field" for="gsWorksheetSchedule">
-                              스케줄 시트명
-                              <input id="gsWorksheetSchedule" placeholder="예: 스케줄" />
-                            </label>
-                            <label class="input-field" for="gsWorksheetOvertime">
-                              초과근무 시트명
-                              <input id="gsWorksheetOvertime" placeholder="예: 초과근무" />
-                            </label>
-                            <label class="input-field settings-span-full" for="gsWorksheetOvernight">
-                              야간근무 시트명
-                              <input id="gsWorksheetOvernight" placeholder="예: 야간근무" />
-                            </label>
-                          </div>
-                        </section>
-                        <section class="settings-form-group settings-span-full">
-                          <div class="settings-form-group-head">
-                            <h4>활성화</h4>
-                            <p class="muted">실제 전송 경로와 활성 상태를 결정합니다.</p>
-                          </div>
-                          <div class="settings-profile-subgrid">
-                            <label class="input-field settings-span-full" for="gsWebhookUrl">
-                              웹훅 주소
-                              <input id="gsWebhookUrl" placeholder="https://..." />
-                            </label>
-                            <label class="settings-switch-row settings-span-full" for="gsProfileIsActive">
-                              <span class="settings-switch-copy">
-                                <strong>활성 프로파일로 사용</strong>
-                                <span>저장 후 이 프로파일을 기본 동기화 대상으로 사용합니다.</span>
-                              </span>
-                              <span class="settings-switch-control">
-                                <input id="gsProfileIsActive" type="checkbox" checked />
-                                <span class="settings-switch-track" aria-hidden="true"></span>
-                              </span>
-                            </label>
-                          </div>
-                        </section>
-                        <div class="settings-section-footer settings-span-full">
-                          <p id="googleSheetProfileStatus" class="muted settings-section-status"></p>
-                          <button class="btn btn-primary" type="submit">프로파일 저장</button>
                         </div>
-                      </form>
+                      </section>
+
+                      <section id="googleSheetSyncPanel" class="profile-google-panel hidden" data-profile-google-tab-panel="sync">
+                        <div class="profile-google-sync-shell">
+                          <div class="profile-google-sync-head">
+                            <div>
+                              <h4>동기화 시작하기</h4>
+                              <p class="muted">등록된 링크를 먼저 선택한 뒤, 기간을 확인하고 바로 동기화를 시작합니다.</p>
+                            </div>
+                            <button class="btn btn-secondary" type="button" data-action="profile-open-sheet-logs">작업 로그 보기</button>
+                          </div>
+
+                          <div class="settings-inline-grid profile-google-sync-criteria">
+                            <label class="input-field settings-span-full" for="gsSyncProfileSelect">
+                              동기화 링크 선택
+                              <select id="gsSyncProfileSelect">
+                                <option value="">등록된 링크 선택</option>
+                              </select>
+                            </label>
+                            <label class="input-field" for="gsSyncStartDate">
+                              시작일
+                              <input id="gsSyncStartDate" type="date" />
+                            </label>
+                            <label class="input-field" for="gsSyncEndDate">
+                              종료일
+                              <input id="gsSyncEndDate" type="date" />
+                            </label>
+                          </div>
+
+                          <div class="profile-google-sync-summary" aria-label="동기화 대상 요약">
+                            <article class="profile-google-sync-summary-card">
+                              <span>선택 링크</span>
+                              <strong id="googleSheetSyncSelectedName">링크 선택 전</strong>
+                            </article>
+                            <article class="profile-google-sync-summary-card">
+                              <span>적용 범위</span>
+                              <strong id="googleSheetSyncSelectedScope">-</strong>
+                            </article>
+                            <article class="profile-google-sync-summary-card">
+                              <span>현장 범위</span>
+                              <strong id="googleSheetSyncSelectedSites">전체</strong>
+                            </article>
+                          </div>
+
+                          <div class="settings-section-footer">
+                            <div class="settings-section-status-block">
+                              <p id="googleSheetSyncStatus" class="muted settings-section-status">동기화를 시작할 링크를 선택해 주세요.</p>
+                              <p class="muted settings-section-meta">이 탭은 링크 선택부터 시작합니다. 저장된 링크 외에는 실행되지 않습니다.</p>
+                            </div>
+                            <button id="googleSheetSyncStartBtn" class="btn btn-primary" type="button" data-action="google-profile-sync">동기화 시작하기</button>
+                          </div>
+                        </div>
+                      </section>
                     </article>
 
                         <article id="lockPolicyCard" class="profile-control-card profile-surface shell-manager-only">
@@ -3685,6 +3390,56 @@
                 </section>
               </div>
             </div>
+            <article id="profileLogsPanel" class="profile-segment-panel hidden profile-logs-panel" data-profile-segment-panel="logs">
+              <div class="profile-logs-shell">
+                <div class="profile-control-head profile-logs-head">
+                  <div class="profile-control-title">
+                    <span class="profile-section-kicker">Operations Trace</span>
+                    <h3>작업 로그</h3>
+                    <p class="muted">SOC, 사이트 동기화, 엑셀 업로드 실행 이력을 한 화면에서 확인합니다.</p>
+                  </div>
+                  <div class="workspace-head-actions">
+                    <button class="btn btn-secondary" type="button" data-action="refresh-ops-automation">새로고침</button>
+                  </div>
+                </div>
+
+                <div class="profile-logs-toolbar">
+                  <div class="workspace-tabs profile-logs-target-tabs" role="tablist" aria-label="작업 로그 범위">
+                    <button class="btn btn-secondary workspace-tab active" type="button" data-action="profile-logs-target" data-target="all">전체</button>
+                    <button class="btn btn-secondary workspace-tab" type="button" data-action="profile-logs-target" data-target="soc">SOC</button>
+                    <button class="btn btn-secondary workspace-tab" type="button" data-action="profile-logs-target" data-target="sheets">사이트 동기화</button>
+                    <button class="btn btn-secondary workspace-tab" type="button" data-action="profile-logs-target" data-target="excel">엑셀 업로드</button>
+                  </div>
+                  <p id="profileLogsScopeMeta" class="muted">최근 실행 이력과 실패 로그를 확인합니다.</p>
+                </div>
+
+                <div class="ops-log-head">
+                  <div class="ops-log-head-copy">
+                    <h3>실행 이력</h3>
+                    <p id="opsLogsSummaryMeta" class="muted">최근 실행 이력과 오류 메시지를 한 곳에서 확인합니다.</p>
+                  </div>
+                  <div class="ops-log-count-strip">
+                    <div class="ops-log-count-chip">
+                      <span>전체</span>
+                      <strong id="opsLogsTotalCount">0</strong>
+                    </div>
+                    <div class="ops-log-count-chip">
+                      <span>실패</span>
+                      <strong id="opsLogsFailureCount">0</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="ops-log-layout">
+                  <ul id="opsLogList" class="list"></ul>
+                  <aside class="ops-log-detail">
+                    <h3>로그 상세</h3>
+                    <p id="opsLogDetailTitle">항목 선택</p>
+                    <p id="opsLogDetailBody" class="muted">로그를 선택하면 상세를 확인할 수 있습니다.</p>
+                  </aside>
+                </div>
+              </div>
+            </article>
             <article id="profileThemePanel" class="profile-segment-panel hidden profile-theme-panel" data-profile-segment-panel="theme">
               <div class="profile-theme-shell">
                 <div class="profile-theme-main">
@@ -3761,94 +3516,151 @@
                   <span id="scheduleFinanceReviewRevision" class="hidden">대기</span>
                   <span id="scheduleFinanceFinalUploadState" class="hidden">대기</span>
                 </div>
-                <div class="reports-finance-wizard-layout">
-                  <aside class="reports-finance-step-rail" aria-label="Finance 제출 단계">
-                    <ol class="reports-finance-step-rail-list">
-                      <li id="reportsFinanceNavScope" class="reports-finance-step-rail-item" data-step="scope">
-                        <span class="reports-panel-stepper-index" aria-hidden="true">1</span>
-                        <span class="reports-panel-stepper-copy">
-                          <span class="reports-panel-stepper-label">제출 현황</span>
-                        </span>
-                      </li>
-                      <li id="reportsFinanceNavReview" class="reports-finance-step-rail-item" data-step="review">
-                        <span class="reports-panel-stepper-index" aria-hidden="true">2</span>
-                        <span class="reports-panel-stepper-copy">
-                          <span class="reports-panel-stepper-label">1차 확인본</span>
-                        </span>
-                      </li>
-                      <li id="reportsFinanceNavUpload" class="reports-finance-step-rail-item" data-step="upload">
-                        <span class="reports-panel-stepper-index" aria-hidden="true">3</span>
-                        <span class="reports-panel-stepper-copy">
-                          <span class="reports-panel-stepper-label">최종 업로드</span>
-                        </span>
-                      </li>
-                    </ol>
-                  </aside>
-                  <section class="reports-finance-main-canvas">
-                    <div class="reports-finance-main-head">
-                      <div class="reports-finance-main-title-group">
+                <section id="scheduleFinanceOverviewView" class="reports-finance-overview-view">
+                  <div class="reports-finance-download-header reports-finance-submit-header">
+                    <div class="reports-finance-download-title-row">
+                      <div class="reports-finance-download-copy">
                         <h3>Finance 제출</h3>
+                        <p id="scheduleFinanceOverviewDescription" class="muted">나의 제출 상태를 확인하고 제출을 시작하세요.</p>
+                        <p id="scheduleFinanceOverviewSummary" class="muted">선택한 월 기준 제출 상태를 확인합니다.</p>
                       </div>
-                      <div class="reports-finance-main-actions">
-                        <button class="btn btn-secondary" type="button" data-action="reports-open-schedule-upload">Excel 업로드 열기</button>
+                    </div>
+                    <div class="reports-finance-download-actions reports-finance-submit-actions">
+                      <label class="input-field reports-finance-submit-month-field">
+                        <span>대상 월</span>
+                        <input id="scheduleFinanceOverviewMonth" type="month" />
+                      </label>
+                    </div>
+                  </div>
+                  <div class="reports-finance-submit-summary-bar">
+                    <div class="reports-finance-submit-summary-item">
+                      <span>대상 월</span>
+                      <strong id="scheduleFinanceOverviewMonthLabel">-</strong>
+                    </div>
+                    <div class="reports-finance-submit-summary-item">
+                      <span>조회 범위</span>
+                      <strong id="scheduleFinanceOverviewScopeLabel">-</strong>
+                    </div>
+                    <div class="reports-finance-submit-summary-item">
+                      <span>현재 상태 요약</span>
+                      <strong id="scheduleFinanceOverviewStatusSummary">-</strong>
+                    </div>
+                  </div>
+                  <p id="scheduleFinanceOverviewSelectionHint" class="muted reports-finance-submit-selection-hint">표에서 제출 대상을 확인한 뒤 시작할 수 있습니다.</p>
+                  <div class="reports-finance-download-table-wrap reports-finance-submit-table-wrap">
+                    <table class="admin-table reports-finance-download-table reports-finance-submit-table">
+                      <thead>
+                        <tr>
+                          <th class="reports-finance-submit-select-col">선택</th>
+                          <th>지점명</th>
+                          <th>대상 월</th>
+                          <th>제출 현황</th>
+                          <th>1차 확인본 상태</th>
+                          <th>최종 업로드 상태</th>
+                          <th>마지막 갱신</th>
+                          <th>비고</th>
+                        </tr>
+                      </thead>
+                      <tbody id="scheduleFinanceOverviewTableBody">
+                        <tr class="admin-table-empty-row">
+                          <td colspan="8">제출 현황을 불러오는 중입니다.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="reports-finance-overview-footer">
+                    <button class="btn btn-primary" type="button" id="scheduleFinanceOverviewStartBtn" data-action="reports-finance-overview-start">제출 시작하기</button>
+                  </div>
+                </section>
+
+                <section id="scheduleFinanceWizardView" class="reports-finance-wizard-view hidden">
+                  <div class="reports-finance-wizard-layout">
+                    <aside class="reports-finance-step-rail" aria-label="Finance 제출 단계">
+                      <ol class="reports-finance-step-rail-list">
+                        <li id="reportsFinanceNavScope" class="reports-finance-step-rail-item" data-step="scope">
+                          <span class="reports-panel-stepper-index" aria-hidden="true">1</span>
+                          <span class="reports-panel-stepper-copy">
+                            <span class="reports-panel-stepper-label">제출 현황</span>
+                          </span>
+                        </li>
+                        <li id="reportsFinanceNavReview" class="reports-finance-step-rail-item" data-step="review">
+                          <span class="reports-panel-stepper-index" aria-hidden="true">2</span>
+                          <span class="reports-panel-stepper-copy">
+                            <span class="reports-panel-stepper-label">1차 확인본</span>
+                          </span>
+                        </li>
+                        <li id="reportsFinanceNavUpload" class="reports-finance-step-rail-item" data-step="upload">
+                          <span class="reports-panel-stepper-index" aria-hidden="true">3</span>
+                          <span class="reports-panel-stepper-copy">
+                            <span class="reports-panel-stepper-label">최종 업로드</span>
+                          </span>
+                        </li>
+                      </ol>
+                    </aside>
+                    <section class="reports-finance-main-canvas">
+                      <div class="reports-finance-main-head">
+                        <div class="reports-finance-main-title-group">
+                          <h3>Finance 제출</h3>
+                        </div>
+                        <div class="reports-finance-main-actions">
+                          <button class="btn btn-secondary" type="button" data-action="reports-finance-back-overview">상태확인으로 돌아가기</button>
+                          <button class="btn btn-secondary" type="button" data-action="reports-open-schedule-upload">Excel 업로드 열기</button>
+                        </div>
                       </div>
-                    </div>
-                    <ul id="scheduleFinanceBlockedReasons" class="list hidden reports-finance-blocked-list"></ul>
-                    <div class="reports-finance-content-canvas">
-                      <section id="scheduleFinanceStepScope" class="reports-wizard-step reports-finance-canvas-step" data-step-state="idle">
-                        <div class="reports-finance-overview-shell">
-                          <div class="reports-finance-step-head reports-finance-overview-head">
-                            <div class="reports-finance-overview-copy">
-                              <span class="reports-finance-overview-kicker">이번 달 제출 현황</span>
-                              <h4 id="scheduleFinanceOverviewTitle">이번 달 제출 현황</h4>
-                            </div>
-                            <span id="scheduleFinanceOverviewStagePill" class="status-pill status-pill-neutral">준비 중</span>
+                      <div class="reports-finance-submit-summary-bar reports-finance-wizard-context-bar">
+                        <div class="reports-finance-submit-summary-item">
+                          <span>대상 월</span>
+                          <strong id="scheduleFinanceWizardMonthLabel">-</strong>
+                        </div>
+                        <div class="reports-finance-submit-summary-item">
+                          <span>선택 지점</span>
+                          <strong id="scheduleFinanceWizardSiteLabel">-</strong>
+                        </div>
+                        <div class="reports-finance-submit-summary-item">
+                          <span>권한 범위</span>
+                          <strong id="scheduleFinanceWizardRoleLabel">-</strong>
+                        </div>
+                      </div>
+                      <ul id="scheduleFinanceBlockedReasons" class="list hidden reports-finance-blocked-list"></ul>
+                      <div class="reports-finance-content-canvas">
+                        <section id="scheduleFinanceStepScope" class="reports-wizard-step reports-finance-canvas-step" data-step-state="idle">
+                          <div class="reports-finance-step-head">
+                            <h4>제출 현황</h4>
+                            <p class="muted">선택한 지점 기준 현재 Finance 제출 상태를 확인하고 다음 단계로 이동하세요.</p>
                           </div>
-                          <div class="reports-finance-overview-strip">
-                            <div class="reports-finance-overview-item">
-                              <span>대상 범위</span>
-                              <strong id="scheduleFinanceOverviewScope">지점 선택 전</strong>
-                            </div>
-                            <div class="reports-finance-overview-item">
-                              <span>현재 단계</span>
-                              <strong id="scheduleFinanceOverviewStage">제출 현황 정리</strong>
-                            </div>
-                            <div class="reports-finance-overview-item">
-                              <span>다음 작업</span>
-                              <strong id="scheduleFinanceOverviewNext">대상 지점을 선택하세요</strong>
-                            </div>
+                          <div id="scheduleFinanceWizardGuidance" class="reports-finance-guidance-note">
+                            선택한 지점의 제출 상태를 불러오는 중입니다.
                           </div>
-                        </div>
-                        <div class="reports-finance-step-head">
-                          <h4>범위와 대상 선택</h4>
-                        </div>
-                        <div id="scheduleFinanceScopeContextMount"></div>
-                      </section>
-                      <section id="scheduleFinanceStepReview" class="reports-wizard-step reports-finance-canvas-step" data-step-state="idle">
-                        <div class="reports-finance-step-head">
-                          <h4>1차 확인본 다운로드</h4>
-                        </div>
-                        <div class="schedule-support-upload-actions reports-wizard-step-actions">
-                          <button class="btn btn-secondary" type="button" id="scheduleFinanceReviewDownloadBtn" data-action="schedule-finance-review-download">1차 스케쥴 다운로드</button>
-                        </div>
-                      </section>
-                      <section id="scheduleFinanceStepUpload" class="reports-wizard-step reports-finance-canvas-step" data-step-state="idle">
-                        <div class="reports-finance-step-head">
-                          <h4>Supervisor 최종 업로드</h4>
-                        </div>
-                        <input id="scheduleFinanceUploadFile" type="file" accept=".xlsx" />
-                        <div class="schedule-support-upload-actions reports-wizard-step-actions">
-                          <button class="btn btn-secondary" type="button" id="scheduleFinancePreviewBtn" data-action="schedule-finance-preview">최종 업로드 미리보기</button>
-                          <button class="btn btn-primary" type="button" id="scheduleFinanceApplyBtn" data-action="schedule-finance-apply">최종 업로드 반영</button>
-                        </div>
-                      </section>
-                    </div>
-                    <div class="reports-wizard-footer">
-                      <button class="btn btn-secondary" type="button" id="scheduleFinanceStepBackBtn" data-action="reports-finance-step-back">이전</button>
-                      <button class="btn btn-primary" type="button" id="scheduleFinanceStepNextBtn" data-action="reports-finance-step-next">다음</button>
-                    </div>
-                  </section>
-                </div>
+                        </section>
+                        <section id="scheduleFinanceStepReview" class="reports-wizard-step reports-finance-canvas-step" data-step-state="idle">
+                          <div class="reports-finance-step-head">
+                            <h4>1차 확인본 다운로드</h4>
+                          </div>
+                          <div class="schedule-support-upload-actions reports-wizard-step-actions">
+                            <button class="btn btn-secondary" type="button" id="scheduleFinanceReviewDownloadBtn" data-action="schedule-finance-review-download">1차 스케쥴 다운로드</button>
+                          </div>
+                          <p id="scheduleFinanceReviewGuide" class="reports-finance-step-note">
+                            먼저 1차 확인본을 다운로드한 뒤 파일을 확인하세요.
+                          </p>
+                        </section>
+                        <section id="scheduleFinanceStepUpload" class="reports-wizard-step reports-finance-canvas-step" data-step-state="idle">
+                          <div class="reports-finance-step-head">
+                            <h4>Supervisor 최종 업로드</h4>
+                          </div>
+                          <input id="scheduleFinanceUploadFile" type="file" accept=".xlsx" />
+                          <div class="schedule-support-upload-actions reports-wizard-step-actions">
+                            <button class="btn btn-secondary" type="button" id="scheduleFinancePreviewBtn" data-action="schedule-finance-preview">최종 업로드 미리보기</button>
+                            <button class="btn btn-primary" type="button" id="scheduleFinanceApplyBtn" data-action="schedule-finance-apply">최종 업로드 반영</button>
+                          </div>
+                        </section>
+                      </div>
+                      <div class="reports-wizard-footer">
+                        <button class="btn btn-secondary" type="button" id="scheduleFinanceStepBackBtn" data-action="reports-finance-step-back">이전</button>
+                        <button class="btn btn-primary" type="button" id="scheduleFinanceStepNextBtn" data-action="reports-finance-step-next">다음</button>
+                      </div>
+                    </section>
+                  </div>
+                </section>
                 <div id="scheduleFinanceProgress" class="task-progress-strip hidden" role="status" aria-live="polite">
                   <span id="scheduleFinanceProgressPill" class="status-pill status-pill-neutral">대기</span>
                   <div class="task-progress-main">
@@ -3915,6 +3727,9 @@
                 <table class="admin-table reports-finance-download-table">
                   <thead>
                     <tr>
+                      <th class="reports-finance-download-select-col">
+                        <input id="financeDownloadSelectAllToggle" type="checkbox" data-action="reports-finance-download-select-all" aria-label="다운로드 가능 지점 전체 선택" />
+                      </th>
                       <th>사이트명</th>
                       <th>상태</th>
                       <th>최종 업로드 일시</th>
@@ -3925,7 +3740,7 @@
                   </thead>
                   <tbody id="financeDownloadTableBody">
                     <tr class="admin-table-empty-row">
-                      <td colspan="6">지점별 업로드 현황을 불러오는 중입니다.</td>
+                      <td colspan="7">지점별 업로드 현황을 불러오는 중입니다.</td>
                     </tr>
                   </tbody>
                 </table>

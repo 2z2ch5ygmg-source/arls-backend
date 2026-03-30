@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 
 from ...deps import apply_rate_limit, get_db_conn, require_roles
+from ...utils.employee_identity import build_employee_directory_identity_key, build_canonical_employee_code, extract_management_no_from_employee_code, normalize_employee_code, normalize_management_no
 from ...utils.permissions import ROLE_DEV, normalize_user_role
 from ...utils.schema_introspection import table_column_exists
 
@@ -29,6 +30,65 @@ def _build_exact_match_clause(column_sql: str, value: str, params: list) -> str:
         return f"{column_sql} = %s"
     params.extend(variants)
     return f"{column_sql} IN ({', '.join(['%s'] * len(variants))})"
+
+
+def _employee_directory_row_rank(row: dict) -> tuple[int, int, int, int, int, str]:
+    site_code = str(row.get("site_code") or "").strip().upper()
+    employee_code = str(row.get("employee_code") or "").strip().upper()
+    management_no = normalize_management_no(
+        row.get("management_no_str")
+        or extract_management_no_from_employee_code(employee_code, site_code=site_code)
+    )
+    canonical_code = build_canonical_employee_code(site_code, management_no) if site_code and management_no else ""
+    linked_account = int(
+        bool(str(row.get("user_id") or "").strip() or str(row.get("username") or "").strip())
+    )
+    active = int(row.get("is_active") is not False and not bool(row.get("is_deleted")))
+    exact_canonical_code = int(bool(canonical_code) and employee_code == canonical_code)
+    completeness = sum(
+        1
+        for value in (
+            row.get("management_no_str"),
+            row.get("phone"),
+            row.get("hire_date"),
+            row.get("birth_date"),
+            row.get("address"),
+            row.get("guard_training_cert_no"),
+            row.get("soc_role"),
+            row.get("photo_attachment_id"),
+            row.get("roster_docx_attachment_id"),
+        )
+        if str(value or "").strip()
+    )
+    shorter_code_bonus = -len(employee_code or "")
+    employee_id = str(row.get("id") or "").strip()
+    return (
+        linked_account,
+        active,
+        exact_canonical_code,
+        completeness,
+        shorter_code_bonus,
+        employee_id,
+    )
+
+
+def _collapse_employee_directory_rows(rows: list[dict]) -> list[dict]:
+    deduped: dict[str, dict] = {}
+    for raw_row in rows:
+        row = dict(raw_row or {})
+        key = build_employee_directory_identity_key(row)
+        current = deduped.get(key)
+        if current is None or _employee_directory_row_rank(row) > _employee_directory_row_rank(current):
+            deduped[key] = row
+
+    return sorted(
+        deduped.values(),
+        key=lambda item: (
+            str(item.get("tenant_code") or "").strip().upper(),
+            normalize_employee_code(item.get("employee_code"), site_code=item.get("site_code")),
+            str(item.get("employee_code") or "").strip().upper(),
+        ),
+    )
 
 
 @router.get("/sites")
@@ -245,7 +305,7 @@ def list_dev_employees(
             """,
             tuple(params + [int(limit), int(offset)]),
         )
-        rows = cur.fetchall() or []
+        rows = _collapse_employee_directory_rows([dict(row) for row in (cur.fetchall() or [])])
 
     normalized_rows: list[dict] = []
     for row in rows:

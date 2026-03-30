@@ -66,7 +66,9 @@ def _tenant_employee(conn, tenant_id: str, tenant_code: str, employee_code: str)
             SELECT e.id, e.site_id
             FROM employees e
             JOIN tenants t ON t.id = e.tenant_id
-            WHERE e.tenant_id = %s AND t.tenant_code = %s AND e.employee_code = %s
+            WHERE e.tenant_id = %s
+              AND upper(trim(t.tenant_code)) = upper(trim(%s))
+              AND e.employee_code = %s
             """,
             (tenant_id, tenant_code, employee_code),
         )
@@ -180,10 +182,12 @@ def create_record(
     if not can_post_attendance(user["role"]):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
-    if payload.tenant_code != user["tenant_code"] and not is_super_admin(user["role"]):
+    requested_tenant_code = str(payload.tenant_code or "").strip().upper()
+    actor_tenant_code = str(user.get("tenant_code") or "").strip().upper()
+    if requested_tenant_code != actor_tenant_code and not is_super_admin(user["role"]):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="tenant mismatch")
 
-    emp = _tenant_employee(conn, user["tenant_id"], payload.tenant_code, payload.employee_code)
+    emp = _tenant_employee(conn, user["tenant_id"], requested_tenant_code, payload.employee_code)
     if not emp:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="employee not found")
 

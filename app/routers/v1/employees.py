@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
+from psycopg import sql
 from psycopg.errors import ForeignKeyViolation
 import requests
 
@@ -43,6 +44,13 @@ from ...services.guard_roster_docx import (
 from ...services.sites_match_index import list_site_match_index_rows
 from ...utils.address_norm import normalize_address_text
 from ...utils.credential_norm import normalize_phone_identifier
+from ...utils.employee_identity import (
+    build_canonical_employee_code,
+    build_employee_directory_identity_key,
+    extract_management_no_from_employee_code,
+    normalize_employee_code,
+    normalize_management_no,
+)
 from ...utils.permissions import (
     ROLE_BRANCH_MANAGER,
     ROLE_DEV,
@@ -106,6 +114,29 @@ NAME_GENDER_PATTERN = re.compile(r"^\s*(?P<name>.+?)\s*[（(]\s*(?P<gender>남�
 
 GUARD_ROSTER_IMPORT_MAX_FILES = 30
 GUARD_ROSTER_IMPORT_SITE_MATCH_THRESHOLD = 0.60
+EMPLOYEE_PURGE_TABLES: tuple[tuple[str, str], ...] = (
+    ("sentrix_support_schedule_materializations", "employee_id"),
+    ("schedule_support_roundtrip_assignments", "employee_id"),
+    ("schedule_support_roundtrip_rows", "employee_id"),
+    ("support_assignment", "employee_id"),
+    ("site_daily_closing_ot", "employee_id"),
+    ("apple_overnight_reports", "employee_id"),
+    ("soc_overtime_approvals", "employee_id"),
+    ("late_shift_log", "employee_id"),
+    ("apple_late_shift", "employee_id"),
+    ("document_requests", "employee_id"),
+    ("attendance_requests", "employee_id"),
+    ("leave_requests", "employee_id"),
+    ("monthly_schedules", "employee_id"),
+    ("attendance_records", "employee_id"),
+)
+EMPLOYEE_LINKED_USER_PURGE_TABLES: tuple[tuple[str, str], ...] = (
+    ("push_devices", "user_id"),
+    ("in_app_notifications", "user_id"),
+    ("notice_poll_votes", "user_id"),
+    ("api_idempotency_keys", "user_id"),
+)
+_SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _table_column_exists(conn, table_name: str, column_name: str) -> bool:
@@ -266,7 +297,7 @@ def _find_site_relation_by_code(conn, tenant_id: str, site_code: str) -> dict[st
 
 
 def _ensure_management_no(value: str | None) -> str:
-    normalized = _normalize_roster_text(value)
+    normalized = normalize_management_no(_normalize_roster_text(value))
     if not normalized:
         _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "management_no is required")
     return normalized
@@ -404,8 +435,217 @@ def _reset_site_sequence_if_empty(conn, tenant_id, site_id):
             )
 
 
+def _safe_sql_identifier(value: str) -> str:
+    normalized = str(value or "").strip()
+    if not _SAFE_IDENTIFIER_RE.fullmatch(normalized):
+        raise ValueError(f"unsafe sql identifier: {value!r}")
+    return normalized
+
+
+def _delete_tenant_scoped_rows_by_values(
+    conn,
+    *,
+    table_name: str,
+    column_name: str,
+    tenant_id: str,
+    values: list[str] | tuple[str, ...],
+) -> int:
+    normalized_table = _safe_sql_identifier(table_name)
+    normalized_column = _safe_sql_identifier(column_name)
+    scoped_values = [str(value or "").strip() for value in values if str(value or "").strip()]
+    if not scoped_values:
+        return 0
+    if not _table_column_exists(conn, normalized_table, "tenant_id") or not _table_column_exists(
+        conn, normalized_table, normalized_column
+    ):
+        return 0
+
+    query = sql.SQL(
+        """
+        DELETE FROM {}
+        WHERE tenant_id = %s
+          AND {}::text = ANY(%s::text[])
+        """
+    ).format(sql.Identifier(normalized_table), sql.Identifier(normalized_column))
+    with conn.cursor() as cur:
+        cur.execute(query, (tenant_id, scoped_values))
+        return int(cur.rowcount or 0)
+
+
+def _fetch_linked_user_rows_for_employee(conn, *, tenant_id: str, employee_id: str) -> list[dict[str, Any]]:
+    if not employee_id:
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, username, role,
+                   COALESCE(is_active, FALSE) AS is_active,
+                   COALESCE(is_deleted, FALSE) AS is_deleted
+            FROM arls_users
+            WHERE tenant_id = %s
+              AND employee_id = %s
+            ORDER BY COALESCE(is_deleted, FALSE) ASC,
+                     updated_at DESC NULLS LAST,
+                     created_at DESC NULLS LAST
+            """,
+            (tenant_id, employee_id),
+        )
+        return cur.fetchall() or []
+
+
+def _purge_employee_related_rows(
+    conn,
+    *,
+    tenant_id: str,
+    employee_id: str,
+    linked_user_ids: list[str] | tuple[str, ...] | None = None,
+) -> dict[str, int]:
+    deleted_counts: dict[str, int] = {}
+
+    for table_name, column_name in EMPLOYEE_PURGE_TABLES:
+        deleted = _delete_tenant_scoped_rows_by_values(
+            conn,
+            table_name=table_name,
+            column_name=column_name,
+            tenant_id=tenant_id,
+            values=[employee_id],
+        )
+        if deleted:
+            deleted_counts[table_name] = deleted
+
+    normalized_user_ids = [str(value or "").strip() for value in (linked_user_ids or []) if str(value or "").strip()]
+    if normalized_user_ids:
+        for table_name, column_name in EMPLOYEE_LINKED_USER_PURGE_TABLES:
+            deleted = _delete_tenant_scoped_rows_by_values(
+                conn,
+                table_name=table_name,
+                column_name=column_name,
+                tenant_id=tenant_id,
+                values=normalized_user_ids,
+            )
+            if deleted:
+                deleted_counts[table_name] = deleted
+
+    return deleted_counts
+
+
 def _format_employee_code(site_code: str, sequence_no: int) -> str:
     return f"{str(site_code or '').strip().upper()}-{int(sequence_no):03d}"
+
+
+def _lookup_employee_by_management_identity(
+    conn,
+    *,
+    tenant_id: str,
+    site_id: str,
+    site_code: str,
+    management_no: str,
+    exclude_employee_id: str | None = None,
+) -> dict[str, Any] | None:
+    normalized_management_no = normalize_management_no(management_no)
+    normalized_site_code = str(site_code or "").strip().upper()
+    if not normalized_management_no or not site_id or not normalized_site_code:
+        return None
+
+    has_employee_management_no = _table_column_exists(conn, "employees", "management_no_str")
+    has_employee_active = _table_column_exists(conn, "employees", "is_active")
+    has_employee_deleted = _table_column_exists(conn, "employees", "is_deleted")
+    order_clauses = []
+    if has_employee_deleted:
+        order_clauses.append("COALESCE(is_deleted, FALSE) ASC")
+    if has_employee_active:
+        order_clauses.append("COALESCE(is_active, TRUE) DESC")
+    order_clauses.extend(["created_at ASC NULLS LAST", "id ASC"])
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT id,
+                   tenant_id,
+                   site_id,
+                   employee_code,
+                   {"COALESCE(management_no_str, '') AS management_no_str" if has_employee_management_no else "'' AS management_no_str"},
+                   COALESCE(full_name, '') AS full_name,
+                   COALESCE(phone, '') AS phone
+            FROM employees
+            WHERE tenant_id = %s
+              AND site_id = %s
+            ORDER BY {", ".join(order_clauses)}
+            """,
+            (tenant_id, site_id),
+        )
+        rows = cur.fetchall() or []
+
+    for row in rows:
+        employee_id = str(row.get("id") or "").strip()
+        if exclude_employee_id and employee_id == str(exclude_employee_id).strip():
+            continue
+        row_management_no = normalize_management_no(
+            row.get("management_no_str")
+            or extract_management_no_from_employee_code(row.get("employee_code"), site_code=normalized_site_code)
+        )
+        if row_management_no == normalized_management_no:
+            return row
+    return None
+
+
+def _employee_directory_row_rank(row: dict[str, Any]) -> tuple[int, int, int, int, int, str]:
+    site_code = str(row.get("site_code") or "").strip().upper()
+    employee_code = str(row.get("employee_code") or "").strip().upper()
+    management_no = normalize_management_no(
+        row.get("management_no_str")
+        or row.get("management_no")
+        or extract_management_no_from_employee_code(employee_code, site_code=site_code)
+    )
+    canonical_code = build_canonical_employee_code(site_code, management_no) if site_code and management_no else ""
+    linked_account = int(
+        bool(str(row.get("user_id") or "").strip() or str(row.get("username") or "").strip())
+    )
+    active = int(row.get("is_active") is not False and not bool(row.get("is_deleted")))
+    exact_canonical_code = int(bool(canonical_code) and employee_code == canonical_code)
+    completeness = sum(
+        1
+        for value in (
+            row.get("management_no_str"),
+            row.get("phone"),
+            row.get("hire_date"),
+            row.get("birth_date"),
+            row.get("address"),
+            row.get("guard_training_cert_no"),
+            row.get("soc_role"),
+            row.get("photo_attachment_id"),
+            row.get("roster_docx_attachment_id"),
+        )
+        if str(value or "").strip()
+    )
+    shorter_code_bonus = -len(employee_code or "")
+    employee_id = str(row.get("id") or "").strip()
+    return (
+        linked_account,
+        active,
+        exact_canonical_code,
+        completeness,
+        shorter_code_bonus,
+        employee_id,
+    )
+
+
+def _collapse_employee_directory_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: dict[str, dict[str, Any]] = {}
+    for raw_row in rows:
+        row = dict(raw_row or {})
+        key = build_employee_directory_identity_key(row)
+        current = deduped.get(key)
+        if current is None or _employee_directory_row_rank(row) > _employee_directory_row_rank(current):
+            deduped[key] = row
+
+    return sorted(
+        deduped.values(),
+        key=lambda item: (
+            str(item.get("tenant_code") or "").strip().upper(),
+            normalize_employee_code(item.get("employee_code"), site_code=item.get("site_code")),
+            str(item.get("employee_code") or "").strip().upper(),
+        ),
+    )
 
 
 def _normalized_employee_name_key(value: str | None) -> str:
@@ -1985,6 +2225,7 @@ def _upsert_guard_roster_employee(
     site_code = str(site_relation.get("site_code") or "").strip().upper()
     company_code = str(site_relation.get("company_code") or "").strip().upper()
     employee_code = _normalize_roster_text(item.employee_code) or build_employee_code_from_management_no(site_code, management_no)
+    employee_code = normalize_employee_code(employee_code, site_code=site_code)
     if not employee_code:
         _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "employee_code generation failed")
 
@@ -2012,23 +2253,31 @@ def _upsert_guard_roster_employee(
     user_has_must_change_password = _table_column_exists(conn, "arls_users", "must_change_password")
 
     with conn.cursor() as cur:
-        exec_checked(
-            cur,
-            """
-            SELECT id, employee_uuid, employee_code, full_name, phone, birth_date, hire_date,
-                   leave_date, address, management_no_str, gender, resident_no,
-                   roster_docx_attachment_id, photo_attachment_id,
-                   guard_training_cert_no, note, soc_login_id, soc_role,
-                   username, password_hash, must_change_password, role
-            FROM employees
-            WHERE tenant_id = %s
-              AND upper(employee_code) = upper(%s)
-            LIMIT 1
-            """,
-            (tenant_id, employee_code),
-            stage="guard_roster.employees_lookup",
+        existing = _lookup_employee_by_management_identity(
+            conn,
+            tenant_id=tenant_id,
+            site_id=str(site_relation["site_id"]),
+            site_code=site_code,
+            management_no=management_no,
         )
-        existing = cur.fetchone()
+        if existing is None:
+            exec_checked(
+                cur,
+                """
+                SELECT id, employee_uuid, employee_code, full_name, phone, birth_date, hire_date,
+                       leave_date, address, management_no_str, gender, resident_no,
+                       roster_docx_attachment_id, photo_attachment_id,
+                       guard_training_cert_no, note, soc_login_id, soc_role,
+                       username, password_hash, must_change_password, role
+                FROM employees
+                WHERE tenant_id = %s
+                  AND upper(employee_code) = upper(%s)
+                LIMIT 1
+                """,
+                (tenant_id, employee_code),
+                stage="guard_roster.employees_lookup",
+            )
+            existing = cur.fetchone()
 
         birth_date = _parse_roster_date(item.birthdate)
         hire_date = _parse_roster_date(item.hire_date)
@@ -2523,7 +2772,7 @@ async def import_guard_roster_docx(
             item_status = "NEEDS_SITE_PICK"
             item_message = "자동매칭 점수 부족(수동 선택 필요)"
 
-        management_no_str = str(parsed.get("management_no_str") or parsed.get("management_no") or "")
+        management_no_str = normalize_management_no(str(parsed.get("management_no_str") or parsed.get("management_no") or ""))
         candidate_items = []
         for candidate in list(match_result.get("candidates") or []):
             candidate_site_code = str(candidate.get("site_code") or candidate.get("site_id") or "").strip()
@@ -3076,6 +3325,7 @@ def list_employees(
             tuple(params),
         )
         rows = cur.fetchall()
+    rows = _collapse_employee_directory_rows([dict(row) for row in (rows or [])])
     tenant_code_value = str(tenant.get("tenant_code") or "").strip().upper() or None
     tenant_name_value = str(tenant.get("tenant_name") or "").strip() or None
     result: list[EmployeeOut] = []
@@ -3156,7 +3406,7 @@ def create_employee(
 
     full_name_text = str(payload.full_name or "").strip()
     normalized_soc_role = _normalize_soc_role(payload.soc_role, required=True)
-    management_no_str = _normalize_optional_text(payload.management_no_str)
+    management_no_str = normalize_management_no(_normalize_optional_text(payload.management_no_str))
     normalized_gender = _normalize_employee_gender(payload.gender)
     normalized_resident_no = _normalize_resident_no(payload.resident_no)
     address_text = _normalize_optional_text(payload.address)
@@ -3209,17 +3459,14 @@ def create_employee(
         if not generated_employee_code:
             _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "management_no_str is invalid")
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT 1
-                FROM employees
-                WHERE tenant_id = %s
-                  AND upper(employee_code) = upper(%s)
-                LIMIT 1
-                """,
-                (tenant_id, generated_employee_code),
+            existing_identity_row = _lookup_employee_by_management_identity(
+                conn,
+                tenant_id=tenant_id,
+                site_id=str(site_id),
+                site_code=resolved_site_code,
+                management_no=management_no_str,
             )
-            if cur.fetchone():
+            if existing_identity_row:
                 _raise_api_error(status.HTTP_409_CONFLICT, "EMPLOYEE_CODE_CONFLICT", "employee_code already exists")
 
             cur.execute(
@@ -3616,25 +3863,22 @@ def update_employee(
         if not site_company:
             _raise_api_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "INTERNAL", "site/company not found")
 
-        management_no_value = _normalize_optional_text(payload.management_no_str)
+        management_no_value = normalize_management_no(_normalize_optional_text(payload.management_no_str))
         resolved_management_no = management_no_value or _normalize_optional_text(current.get("management_no_str"))
         next_employee_code = str(current.get("employee_code") or "").strip()
         if management_no_value:
             next_employee_code = build_employee_code_from_management_no(site_company["site_code"], management_no_value)
             if not next_employee_code:
                 _raise_api_error(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "management_no_str is invalid")
-            cur.execute(
-                """
-                SELECT 1
-                FROM employees
-                WHERE tenant_id = %s
-                  AND id <> %s
-                  AND upper(employee_code) = upper(%s)
-                LIMIT 1
-                """,
-                (tenant_id, str(employee_id), next_employee_code),
+            existing_identity_row = _lookup_employee_by_management_identity(
+                conn,
+                tenant_id=tenant_id,
+                site_id=str(current.get("site_id") or "").strip(),
+                site_code=str(site_company.get("site_code") or "").strip(),
+                management_no=management_no_value,
+                exclude_employee_id=str(employee_id),
             )
-            if cur.fetchone():
+            if existing_identity_row:
                 _raise_api_error(status.HTTP_409_CONFLICT, "EMPLOYEE_CODE_CONFLICT", "employee_code already exists")
 
         resolved_address = (
@@ -3869,7 +4113,8 @@ def bulk_delete_employees_by_site(
             """
             SELECT COALESCE(employee_uuid::text, '') AS employee_uuid,
                    COALESCE(employee_code, '') AS employee_code,
-                   COALESCE(full_name, '') AS full_name
+                   COALESCE(full_name, '') AS full_name,
+                   id
             FROM employees
             WHERE tenant_id = %s
               AND site_id = %s
@@ -3878,6 +4123,21 @@ def bulk_delete_employees_by_site(
             (tenant_id, site_row["id"]),
         )
         employee_rows = cur.fetchall() or []
+        employee_ids = [str(row.get("id") or "").strip() for row in employee_rows if str(row.get("id") or "").strip()]
+
+        linked_user_rows_by_employee: dict[str, list[dict[str, Any]]] = {}
+        for employee_id_text in employee_ids:
+            linked_user_rows_by_employee[employee_id_text] = _fetch_linked_user_rows_for_employee(
+                conn,
+                tenant_id=tenant_id,
+                employee_id=employee_id_text,
+            )
+            _purge_employee_related_rows(
+                conn,
+                tenant_id=tenant_id,
+                employee_id=employee_id_text,
+                linked_user_ids=[str(row.get("id") or "").strip() for row in linked_user_rows_by_employee[employee_id_text]],
+            )
 
         cur.execute(
             """
@@ -3986,7 +4246,7 @@ def delete_employee(
                    COALESCE(s.site_code, '') AS site_code
             FROM employees e
             LEFT JOIN sites s ON s.id = e.site_id
-            WHERE id = %s
+            WHERE e.id = %s
               AND e.tenant_id = %s
             LIMIT 1
             """,
@@ -3996,6 +4256,13 @@ def delete_employee(
         if not target:
             _raise_api_error(status.HTTP_404_NOT_FOUND, "EMPLOYEE_NOT_FOUND", "employee not found")
         _assert_branch_manager_site_scope(user, target["site_id"])
+        linked_user_rows = _fetch_linked_user_rows_for_employee(conn, tenant_id=tenant_id, employee_id=str(employee_id))
+        _purge_employee_related_rows(
+            conn,
+            tenant_id=tenant_id,
+            employee_id=str(employee_id),
+            linked_user_ids=[str(row.get("id") or "").strip() for row in linked_user_rows],
+        )
 
         cur.execute(
             """

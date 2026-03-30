@@ -1872,6 +1872,100 @@ class NoticeListOut(BaseModel):
     items: list[NoticeSummaryOut] = Field(default_factory=list)
 
 
+HOME_BRIEFING_AUDIENCE_LITERAL = Literal["hq", "supervisor", "vice", "officer"]
+HOME_BRIEFING_TONE_LITERAL = Literal["neutral", "info", "warn", "success", "error", "accent"]
+
+
+class HomeBriefingListRowOut(BaseModel):
+    title: str
+    subtitle: Optional[str] = None
+    value: Optional[str] = None
+    pill_label: Optional[str] = None
+    pill_tone: HOME_BRIEFING_TONE_LITERAL = "neutral"
+
+
+class HomeBriefingOpsSummaryOut(BaseModel):
+    attendance_rate: int = 0
+    scheduled_count: int = 0
+    present_count: int = 0
+    missing_count: int = 0
+    issue_count: int = 0
+    pending_approval_count: int = 0
+    vacancy_site_count: int = 0
+    site_count: int = 0
+
+
+class HomeBriefingRequestSummaryOut(BaseModel):
+    total_pending_count: int = 0
+    leave_pending_count: int = 0
+    attendance_pending_count: int = 0
+    correction_pending_count: int = 0
+    unread_count: int = 0
+
+
+class HomeBriefingSiteSummaryOut(BaseModel):
+    site_code: Optional[str] = None
+    site_name: Optional[str] = None
+    scheduled_count: int = 0
+    present_count: int = 0
+    missing_count: int = 0
+    pending_request_count: int = 0
+    leave_or_night_count: int = 0
+    schedule_gap_count: int = 0
+
+
+class HomeBriefingSiteReadinessOut(BaseModel):
+    site_code: Optional[str] = None
+    site_name: Optional[str] = None
+    scheduled_count: int = 0
+    present_count: int = 0
+    missing_count: int = 0
+    pending_request_count: int = 0
+    readiness_issue_count: int = 0
+
+
+class HomeBriefingPersonalSummaryOut(BaseModel):
+    employee_name: Optional[str] = None
+    site_code: Optional[str] = None
+    site_name: Optional[str] = None
+    today_status: str = "NONE"
+    button_mode: Optional[str] = None
+    check_in_at: Optional[datetime] = None
+    check_out_at: Optional[datetime] = None
+    auto_checkout: bool = False
+    next_shift_label: Optional[str] = None
+    pending_leave_count: int = 0
+    pending_attendance_count: int = 0
+    unread_count: int = 0
+
+
+class HomeBriefingWeekSummaryOut(BaseModel):
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    scheduled_days: int = 0
+    worked_days: int = 0
+    off_days: int = 0
+
+
+class HomeBriefingOut(BaseModel):
+    audience: HOME_BRIEFING_AUDIENCE_LITERAL
+    date: str
+    role_label: str
+    scope_label: str
+    notice_rows: list[NoticeSummaryOut] = Field(default_factory=list)
+    ops_summary: Optional[HomeBriefingOpsSummaryOut] = None
+    attendance_issue_rows: list[HomeBriefingListRowOut] = Field(default_factory=list)
+    schedule_risk_rows: list[HomeBriefingListRowOut] = Field(default_factory=list)
+    approval_summary: Optional[HomeBriefingRequestSummaryOut] = None
+    org_issue_rows: list[HomeBriefingListRowOut] = Field(default_factory=list)
+    site_summary: Optional[HomeBriefingSiteSummaryOut] = None
+    team_attention_rows: list[HomeBriefingListRowOut] = Field(default_factory=list)
+    site_readiness_summary: Optional[HomeBriefingSiteReadinessOut] = None
+    personal_summary: Optional[HomeBriefingPersonalSummaryOut] = None
+    week_summary: Optional[HomeBriefingWeekSummaryOut] = None
+    request_summary: Optional[HomeBriefingRequestSummaryOut] = None
+
+
 class NoticeDeleteOut(BaseModel):
     deleted: bool = True
     id: UUID
@@ -1924,6 +2018,60 @@ class FinanceSubmissionStatusOut(BaseModel):
     final_uploaded_by: Optional[str] = None
     last_event: Optional[str] = None
     blocked_reasons: list[str] = Field(default_factory=list)
+
+
+class FinanceSubmissionOverviewSiteOut(BaseModel):
+    site_code: str
+    site_name: str
+    month: str
+    submission_status: str = "not_started"
+    submission_status_label: str = "제출 전"
+    review_status: str = "pending"
+    review_status_label: str = "미다운로드"
+    final_status: str = "not_uploaded"
+    final_status_label: str = "미업로드"
+    last_updated_at: Optional[datetime] = None
+    blocked_reason: Optional[str] = None
+
+
+class FinanceSubmissionOverviewOut(BaseModel):
+    tenant_code: str
+    month: str
+    tenant_name: Optional[str] = None
+    actor_role: Optional[str] = None
+    scope_label: Optional[str] = None
+    tenant_wide: bool = False
+    total_site_count: int = 0
+    submitted_site_count: int = 0
+    review_ready_site_count: int = 0
+    final_uploaded_site_count: int = 0
+    generated_at: Optional[datetime] = None
+    sites: list[FinanceSubmissionOverviewSiteOut] = Field(default_factory=list)
+
+
+class FinanceDownloadWorkspaceSiteOut(BaseModel):
+    site_code: str
+    site_name: str
+    uploaded: bool = False
+    status: str = "not_uploaded"
+    status_label: str = "미업로드"
+    final_uploaded_at: Optional[datetime] = None
+    final_uploaded_by: Optional[str] = None
+    active_final_filename: Optional[str] = None
+    download_enabled: bool = False
+    download_blocked_reason: Optional[str] = None
+
+
+class FinanceDownloadWorkspaceOut(BaseModel):
+    tenant_code: str
+    month: str
+    tenant_name: Optional[str] = None
+    actor_role: Optional[str] = None
+    total_site_count: int = 0
+    uploaded_site_count: int = 0
+    downloadable_site_count: int = 0
+    generated_at: Optional[datetime] = None
+    sites: list[FinanceDownloadWorkspaceSiteOut] = Field(default_factory=list)
 
 
 class FinanceSubmissionPreviewOut(BaseModel):

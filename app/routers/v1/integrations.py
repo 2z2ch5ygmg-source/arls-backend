@@ -75,6 +75,7 @@ from ...services.p1_schedule import (
     upsert_pending_apple_daytime_ot_from_checkout,
 )
 from ...utils.schema_introspection import table_column_exists
+from ...utils.employee_identity import extract_management_no_from_employee_code, normalize_employee_code, normalize_management_no
 from ...utils.permissions import normalize_role
 from ...utils.tenant_context import canonical_tenant_identifier, fetch_tenant_row_any, resolve_scoped_tenant
 
@@ -450,7 +451,7 @@ def _publish_schedule_realtime_event(
     event_uid: str,
     row: dict[str, Any] | None = None,
 ) -> None:
-    if event_type not in SOC_SCHEDULE_REALTIME_EVENT_TYPES:
+    if event_type not in (SOC_SCHEDULE_REALTIME_EVENT_TYPES | SOC_EMPLOYEE_EVENT_TYPES):
         return
     tenant_id = str((tenant or {}).get("id") or "").strip()
     if not tenant_id:
@@ -470,11 +471,37 @@ def _publish_schedule_realtime_event(
     if not month:
         return
 
+    event_payload = {
+        "tenant_id": tenant_id,
+        "tenant_code": str((tenant or {}).get("tenant_code") or payload.tenant_code or "").strip(),
+    }
+
+    employee_event = event_type in SOC_EMPLOYEE_EVENT_TYPES
     site_code = ""
     if isinstance(applied_changes, dict):
         site_code = str(applied_changes.get("site_code") or "").strip().upper()
     if not site_code:
         site_code = str(payload.site_code or "").strip().upper()
+    if not site_code and isinstance(applied_changes, dict):
+        employee_sync = applied_changes.get("employee_sync") or {}
+        if isinstance(employee_sync, dict):
+            site_code = str(employee_sync.get("site_code") or "").strip().upper()
+    event_payload["site_code"] = site_code
+
+    employee_id = ""
+    if isinstance(applied_changes, dict):
+        employee_sync = applied_changes.get("employee_sync") or {}
+        if isinstance(employee_sync, dict):
+            employee_id = str(employee_sync.get("employee_id") or "").strip()
+    event_payload["employee_id"] = employee_id
+
+    event_name = "schedule_changed"
+    if employee_event:
+        event_name = "employee_changed"
+
+    if employee_event and isinstance(applied_changes, dict):
+        event_payload["employee_code"] = str(applied_changes.get("employee_code") or "").strip()
+        event_payload["employee_sync"] = employee_sync
 
     _emit_soc_timing(
         "[SCHEDULE][REALTIME_PUBLISH] tenant=%s site=%s month=%s event_type=%s event_uid=%s",
@@ -486,10 +513,8 @@ def _publish_schedule_realtime_event(
     )
     schedule_event_bus.publish(
         {
-            "type": "schedule_changed",
-            "tenant_id": tenant_id,
-            "tenant_code": str((tenant or {}).get("tenant_code") or payload.tenant_code or "").strip(),
-            "site_code": site_code,
+            "type": event_name,
+            **event_payload,
             "month": month,
             "work_date": work_date_text,
             "event_type": event_type,
@@ -737,26 +762,26 @@ def _apply_soc_employee_upsert(
         raise ValueError("site is required for employee sync")
 
     employee_uuid_raw, has_employee_uuid = _pick_soc_text(payload, "employee_uuid", "employeeId", "employeeID")
-    if not has_employee_uuid:
-        employee_uuid_raw = str(uuid.uuid4())
+    employee_uuid_text = str(employee_uuid_raw or "").strip()
 
     employee_code = _as_text(payload.employee_code) or _as_text(_pick_from_mapping(payload.payload, "employee_code", "employeeCode"))
+    employee_code = normalize_employee_code(employee_code)
     if not employee_code:
         raise ValueError("employee_code is required for employee sync")
 
     external_key, has_external_key = _pick_soc_text(payload, "external_employee_key", "externalEmployeeKey", "externalId", "external_id")
     linked_employee_id, has_linked_employee_id = _pick_soc_text(payload, "linked_employee_id", "linkedEmployeeId")
 
-    existing = _resolve_employee(conn, tenant["id"], employee_code)
-    if not existing:
-        lookup_key = external_key or linked_employee_id
-        if lookup_key:
-            existing = _resolve_employee_by_external_key(
-                conn,
-                tenant_id=tenant["id"],
-                site_id=site_id_text,
-                external_key=lookup_key,
-            )
+    existing = _resolve_employee_for_soc_sync(
+        conn,
+        tenant_id=tenant["id"],
+        employee_uuid=employee_uuid_text,
+        employee_code=employee_code,
+        external_key=external_key or "",
+        linked_employee_id=linked_employee_id or "",
+        site_id=site_id_text,
+        has_employee_uuid=has_employee_uuid and bool(employee_uuid_text),
+    )
 
     target_site = resolved_site
     if existing and not target_site:
@@ -765,6 +790,7 @@ def _apply_soc_employee_upsert(
         raise ValueError("site is required for employee create")
     if not target_site:
         raise ValueError("site is required for employee sync")
+    employee_code = normalize_employee_code(employee_code, site_code=str(target_site.get("site_code") or ""))
 
     full_name, has_full_name = _pick_soc_text(
         payload,
@@ -795,6 +821,12 @@ def _apply_soc_employee_upsert(
         "managementNoStr",
         "employee_no",
     )
+    management_no_str = normalize_management_no(management_no_str)
+    if not management_no_str:
+        management_no_str = extract_management_no_from_employee_code(
+            employee_code,
+            site_code=str(target_site.get("site_code") or ""),
+        )
     address, has_address = _pick_soc_text(payload, "address")
     guard_training_cert_no, has_guard_training_cert_no = _pick_soc_text(payload, "guard_training_cert_no", "guardTrainingCertNo")
     note, has_note = _pick_soc_text(payload, "note", "memo", "comment")
@@ -839,7 +871,11 @@ def _apply_soc_employee_upsert(
                 updates.append(f"{column} = %s")
                 values.append(value)
 
-        _append_update("employee_uuid", employee_uuid_raw, True)
+        _append_update(
+            "employee_uuid",
+            employee_uuid_text,
+            has_employee_uuid and bool(employee_uuid_text),
+        )
         _append_update("full_name", full_name, has_full_name)
         _append_update("phone", phone, has_phone)
         _append_update("company_id", target_site["company_id"], bool(target_site))
@@ -898,7 +934,7 @@ def _apply_soc_employee_upsert(
     insert_id = str(uuid.uuid4())
     row = {
         "id": insert_id,
-        "employee_uuid": employee_uuid_raw,
+        "employee_uuid": employee_uuid_text or str(uuid.uuid4()),
         "tenant_id": tenant["id"],
         "company_id": target_site["company_id"],
         "site_id": target_site["id"],
@@ -1029,27 +1065,24 @@ def _delete_soc_employee(
 ) -> dict[str, Any]:
     site_id_text = _as_text(resolved_site.get("id") if isinstance(resolved_site, dict) else None)
     employee_code = _as_text(payload.employee_code)
+    employee_uuid_raw, has_employee_uuid = _pick_soc_text(payload, "employee_uuid", "employeeId", "employeeID")
+    employee_uuid = str(employee_uuid_raw or "").strip()
     external_key, has_external_key = _pick_soc_text(payload, "external_employee_key", "externalEmployeeKey", "externalId", "external_id")
     linked_employee_id, has_linked_employee_id = _pick_soc_text(payload, "linked_employee_id", "linkedEmployeeId")
 
-    if not employee_code and not has_external_key and not has_linked_employee_id:
+    if not employee_code and not has_external_key and not has_linked_employee_id and not (has_employee_uuid and employee_uuid):
         raise ValueError("employee_code is required for employee delete")
 
-    existing = _resolve_employee(conn, tenant["id"], employee_code) if employee_code else None
-    if not existing and has_external_key:
-        existing = _resolve_employee_by_external_key(
-            conn,
-            tenant_id=tenant["id"],
-            site_id=site_id_text,
-            external_key=external_key,
-        )
-    if not existing and has_linked_employee_id:
-        existing = _resolve_employee_by_external_key(
-            conn,
-            tenant_id=tenant["id"],
-            site_id=site_id_text,
-            external_key=linked_employee_id,
-        )
+    existing = _resolve_employee_for_soc_sync(
+        conn,
+        tenant_id=tenant["id"],
+        employee_uuid=employee_uuid,
+        employee_code=employee_code or "",
+        external_key=external_key or "",
+        linked_employee_id=linked_employee_id or "",
+        site_id=site_id_text,
+        has_employee_uuid=has_employee_uuid and bool(employee_uuid),
+    )
 
     if not existing:
         return {
@@ -1769,20 +1802,126 @@ def _resolve_target_tenant(conn, user: dict, tenant_code: str | None):
     )
 
 
-def _resolve_employee(conn, tenant_id, employee_code: str):
+def _resolve_employee(conn, tenant_id: str, employee_code: str, site_id: str | None = None):
+    normalized_employee_code = normalize_employee_code(employee_code)
+    normalized_management_no = extract_management_no_from_employee_code(normalized_employee_code)
+    if not normalized_employee_code and not normalized_management_no:
+        return None
+
+    has_employee_management_no = table_column_exists(conn, "employees", "management_no_str")
     with conn.cursor() as cur:
+        scope_sql = "WHERE tenant_id = %s"
+        params: list[Any] = [tenant_id]
+        if site_id:
+            scope_sql += " AND site_id = %s"
+            params.append(site_id)
+        cur.execute(
+            f"""
+            SELECT id, tenant_id, company_id, site_id, employee_code, full_name,
+                   external_employee_key, linked_employee_id,
+                   {"COALESCE(management_no_str, '') AS management_no_str" if has_employee_management_no else "'' AS management_no_str"}
+            FROM employees
+            {scope_sql}
+            ORDER BY created_at ASC NULLS LAST, id ASC
+            """,
+            tuple(params),
+        )
+        rows = cur.fetchall() or []
+
+    for row in rows:
+        row_employee_code = normalize_employee_code(row.get("employee_code"))
+        row_management_no = normalize_management_no(
+            row.get("management_no_str")
+            or extract_management_no_from_employee_code(row.get("employee_code"))
+        )
+        if row_employee_code == normalized_employee_code:
+            return row
+        if normalized_management_no and row_management_no == normalized_management_no:
+            return row
+    return None
+
+
+def _resolve_employee_by_uuid(
+    conn,
+    *,
+    tenant_id,
+    employee_uuid: str,
+    site_id: str | None = None,
+):
+    uuid_text = str(employee_uuid or "").strip()
+    if not uuid_text:
+        return None
+
+    with conn.cursor() as cur:
+        if site_id:
+            cur.execute(
+                """
+                SELECT id, tenant_id, company_id, site_id, employee_code, full_name,
+                       external_employee_key, linked_employee_id
+                FROM employees
+                WHERE tenant_id = %s
+                  AND site_id = %s
+                  AND employee_uuid = %s
+                LIMIT 1
+                """,
+                (tenant_id, site_id, uuid_text),
+            )
+            matched = cur.fetchone()
+            if matched:
+                return matched
+
         cur.execute(
             """
             SELECT id, tenant_id, company_id, site_id, employee_code, full_name,
                    external_employee_key, linked_employee_id
             FROM employees
             WHERE tenant_id = %s
-              AND employee_code = %s
+              AND employee_uuid = %s
             LIMIT 1
             """,
-            (tenant_id, employee_code),
+            (tenant_id, uuid_text),
         )
         return cur.fetchone()
+
+
+def _resolve_employee_for_soc_sync(
+    conn,
+    *,
+    tenant_id: str,
+    employee_uuid: str,
+    employee_code: str,
+    external_key: str,
+    linked_employee_id: str,
+    site_id: str | None,
+    has_employee_uuid: bool,
+) -> dict[str, Any] | None:
+    if has_employee_uuid and employee_uuid:
+        existing = _resolve_employee_by_uuid(conn, tenant_id=tenant_id, employee_uuid=employee_uuid, site_id=site_id)
+        if existing:
+            return existing
+
+    existing = _resolve_employee(conn, tenant_id, employee_code, site_id=site_id) if employee_code else None
+    if existing:
+        return existing
+
+    if external_key:
+        existing = _resolve_employee_by_external_key(
+            conn,
+            tenant_id=tenant_id,
+            site_id=site_id,
+            external_key=external_key,
+        )
+        if existing:
+            return existing
+
+    if linked_employee_id:
+        existing = _resolve_employee_by_external_key(
+            conn,
+            tenant_id=tenant_id,
+            site_id=site_id,
+            external_key=linked_employee_id,
+        )
+    return existing
 
 
 def _resolve_employee_by_external_key(conn, *, tenant_id, site_id, external_key: str):
@@ -4255,7 +4394,12 @@ def _apply_soc_event(conn, *, tenant, payload: SocEventIn, event_type: str) -> d
         or event_type in SOC_CLOSING_EVENT_TYPES
     )
     if attendance_or_closing_event:
-        employee = _resolve_employee(conn, tenant["id"], payload.employee_code)
+        employee = _resolve_employee(
+            conn,
+            tenant["id"],
+            payload.employee_code,
+            site_id=str((site or {}).get("id") or "").strip() or None,
+        )
         if not employee:
             raise ValueError("EMPLOYEE_NOT_FOUND")
         applied_changes["employee_code"] = employee["employee_code"]

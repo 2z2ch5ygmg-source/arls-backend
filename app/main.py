@@ -32,6 +32,7 @@ from .routers import (
     dev_scope_router,
     employees_router,
     hr_documents_router,
+    home_router,
     integrations_router,
     leaves_router,
     me_router,
@@ -349,6 +350,7 @@ app.include_router(admin_soc_router, prefix="/api/v1")
 app.include_router(admin_reset_router, prefix="/api/v1")
 app.include_router(admin_tenants_router, prefix="/api/v1")
 app.include_router(hr_documents_router, prefix="/api/v1")
+app.include_router(home_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(notices_router, prefix="/api/v1")
 app.include_router(push_router, prefix="/api/v1")

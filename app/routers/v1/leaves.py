@@ -154,7 +154,7 @@ def _fetch_leave_out(conn, leave_id, tenant_id=None, for_update: bool = False):
                 f"""
                 SELECT id
                 FROM leave_requests
-                WHERE {" AND ".join(clauses)}
+                WHERE {" AND ".join(clause.replace("lr.", "") for clause in clauses)}
                 FOR UPDATE
                 """,
                 tuple(params),
