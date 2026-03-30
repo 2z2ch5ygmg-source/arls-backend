@@ -1966,6 +1966,569 @@ class HomeBriefingOut(BaseModel):
     request_summary: Optional[HomeBriefingRequestSummaryOut] = None
 
 
+CALENDAR_AUDIENCE_LITERAL = Literal["hq", "supervisor", "vice", "officer"]
+CALENDAR_VIEW_LITERAL = Literal["week", "month", "agenda", "booking-links"]
+CALENDAR_PERMISSION_LITERAL = Literal["view_only", "free_busy_only", "edit", "owner"]
+
+
+class CalendarCapabilityOut(BaseModel):
+    can_view: bool = True
+    can_create: bool = False
+    can_manage_shared: bool = False
+    can_manage_booking_links: bool = False
+    can_manage_sync: bool = False
+
+
+class CalendarMiniMonthDayOut(BaseModel):
+    date: str
+    day: int
+    in_month: bool = True
+    is_today: bool = False
+    is_selected: bool = False
+
+
+class CalendarContainerOut(BaseModel):
+    id: UUID
+    scope_type: str
+    name: str
+    color: str = "#ff7a1a"
+    provider: str = "arls"
+    permission: CALENDAR_PERMISSION_LITERAL = "view_only"
+    is_default: bool = False
+    is_system: bool = False
+    badge_label: Optional[str] = None
+    owner_label: Optional[str] = None
+
+
+class CalendarReminderOut(BaseModel):
+    id: UUID
+    channel: str = "in_app"
+    minutes_before: Optional[int] = None
+    absolute_trigger_at: Optional[datetime] = None
+    snoozed_until: Optional[datetime] = None
+
+
+class CalendarNoteOut(BaseModel):
+    id: UUID
+    note_type: str = "shared"
+    body: str = ""
+    author_label: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+
+class CalendarCommentOut(BaseModel):
+    id: UUID
+    body: str = ""
+    author_label: Optional[str] = None
+    is_internal: bool = False
+    created_at: Optional[datetime] = None
+
+
+class CalendarCommentIn(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+    is_internal: bool = False
+
+    @field_validator("body", mode="before")
+    @classmethod
+    def _trim_calendar_comment_body(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+
+class CalendarActionItemOut(BaseModel):
+    id: UUID
+    body: str
+    state: str = "open"
+    assignee_label: Optional[str] = None
+    due_at: Optional[datetime] = None
+
+
+class CalendarAttachmentOut(BaseModel):
+    id: UUID
+    label: str
+    url: str
+    mime_type: Optional[str] = None
+    size_bytes: Optional[int] = None
+
+
+class CalendarAttendeeOut(BaseModel):
+    id: UUID
+    display_name: str
+    email: Optional[str] = None
+    user_id: Optional[UUID] = None
+    employee_id: Optional[UUID] = None
+    is_required: bool = True
+    is_organizer: bool = False
+    rsvp_status: str = "needs_action"
+
+
+class CalendarAttendeeOptionOut(BaseModel):
+    user_id: Optional[UUID] = None
+    employee_id: Optional[UUID] = None
+    display_name: str
+    subtitle: Optional[str] = None
+    email: Optional[str] = None
+
+
+class CalendarResourceOut(BaseModel):
+    id: UUID
+    resource_code: str
+    resource_name: str
+    resource_type: str = "room"
+    capacity: Optional[int] = None
+    site_label: Optional[str] = None
+
+
+class CalendarBusySlotOut(BaseModel):
+    starts_at: datetime
+    ends_at: datetime
+    title: Optional[str] = None
+    status: str = "busy"
+
+
+class CalendarAvailabilityLaneOut(BaseModel):
+    lane_key: str
+    lane_label: str
+    lane_type: str = "attendee"
+    slots: list[CalendarBusySlotOut] = Field(default_factory=list)
+
+
+class CalendarSuggestedSlotOut(BaseModel):
+    starts_at: datetime
+    ends_at: datetime
+    label: str
+    attendee_match_count: int = 0
+    attendee_total_count: int = 0
+    resource_ready: bool = True
+
+
+class CalendarAvailabilityOut(BaseModel):
+    timezone: str = "Asia/Seoul"
+    working_hours_label: str = "09:00-18:00"
+    range_start: datetime
+    range_end: datetime
+    lanes: list[CalendarAvailabilityLaneOut] = Field(default_factory=list)
+    suggested_slots: list[CalendarSuggestedSlotOut] = Field(default_factory=list)
+
+
+class CalendarCustomFieldRowOut(BaseModel):
+    key: str
+    label: str
+    value: str = ""
+    field_type: str = "text"
+
+
+class CalendarCustomFieldRowIn(BaseModel):
+    key: Optional[str] = Field(default=None, max_length=64)
+    label: str = Field(min_length=1, max_length=120)
+    value: str = Field(default="", max_length=1000)
+    field_type: str = Field(default="text", max_length=32)
+
+    @field_validator("key", "label", "value", "field_type", mode="before")
+    @classmethod
+    def _trim_calendar_custom_field_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+    @field_validator("field_type")
+    @classmethod
+    def _normalize_calendar_custom_field_type(cls, value: Optional[str]) -> str:
+        normalized = str(value or "text").strip().lower()
+        if normalized not in {"text", "number", "select"}:
+            return "text"
+        return normalized
+
+
+class CalendarEventOut(BaseModel):
+    id: UUID
+    container_id: UUID
+    title: str
+    starts_at: datetime
+    ends_at: datetime
+    timezone: str = "Asia/Seoul"
+    is_all_day: bool = False
+    recurrence_rule: Optional[str] = None
+    availability_status: str = "busy"
+    visibility: str = "private"
+    location: Optional[str] = None
+    conferencing_provider: Optional[str] = None
+    conferencing_url: Optional[str] = None
+    description: Optional[str] = None
+    resource_id: Optional[UUID] = None
+    resource_label: Optional[str] = None
+    status: str = "confirmed"
+    attendees: list[CalendarAttendeeOut] = Field(default_factory=list)
+    reminders: list[CalendarReminderOut] = Field(default_factory=list)
+    notes: list[CalendarNoteOut] = Field(default_factory=list)
+    comments: list[CalendarCommentOut] = Field(default_factory=list)
+    action_items: list[CalendarActionItemOut] = Field(default_factory=list)
+    attachments: list[CalendarAttachmentOut] = Field(default_factory=list)
+    custom_fields: list[CalendarCustomFieldRowOut] = Field(default_factory=list)
+
+
+class CalendarBookingLinkOut(BaseModel):
+    id: UUID
+    container_id: Optional[UUID] = None
+    slug: str
+    title: str
+    description: Optional[str] = None
+    approval_required: bool = False
+    approval_policy: str = "instant"
+    assignment_mode: str = "single_host"
+    is_public: bool = True
+    booking_window_days: int = 14
+    buffer_before_minutes: int = 0
+    buffer_after_minutes: int = 0
+    duration_minutes: int = 30
+    availability_start_time: str = "09:00"
+    availability_end_time: str = "18:00"
+    expires_at: Optional[datetime] = None
+    host_notes: Optional[str] = None
+    intake_questions: list["CalendarBookingQuestionOut"] = Field(default_factory=list)
+    owner_label: Optional[str] = None
+
+
+class CalendarBookingQuestionOut(BaseModel):
+    key: str
+    label: str
+    answer_type: str = "short_text"
+    required: bool = True
+    options: list[str] = Field(default_factory=list)
+
+
+class CalendarBookingQuestionIn(BaseModel):
+    key: Optional[str] = Field(default=None, max_length=64)
+    label: str = Field(min_length=1, max_length=160)
+    answer_type: str = Field(default="short_text", max_length=32)
+    required: bool = True
+    options: list[str] = Field(default_factory=list, max_length=12)
+
+    @field_validator("key", "label", "answer_type", mode="before")
+    @classmethod
+    def _trim_calendar_booking_question_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+    @field_validator("answer_type")
+    @classmethod
+    def _normalize_calendar_booking_answer_type(cls, value: str) -> str:
+        normalized = str(value or "short_text").strip().lower()
+        if normalized not in {"short_text", "long_text", "select"}:
+            raise ValueError("answer_type must be short_text, long_text, or select")
+        return normalized
+
+    @field_validator("options", mode="before")
+    @classmethod
+    def _normalize_calendar_booking_options(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, (list, tuple)):
+            return []
+        rows: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            normalized = str(item or "").strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            rows.append(normalized)
+        return rows[:12]
+
+
+class CalendarBookingLinkCreateIn(BaseModel):
+    container_id: UUID
+    title: str = Field(min_length=1, max_length=160)
+    description: Optional[str] = Field(default=None, max_length=4000)
+    is_public: bool = True
+    approval_required: bool = False
+    approval_policy: str = Field(default="instant", max_length=32)
+    assignment_mode: str = Field(default="single_host", max_length=32)
+    booking_window_days: int = Field(default=14, ge=1, le=90)
+    buffer_before_minutes: int = Field(default=0, ge=0, le=180)
+    buffer_after_minutes: int = Field(default=0, ge=0, le=180)
+    duration_minutes: int = Field(default=30, ge=15, le=240)
+    availability_start_time: str = Field(default="09:00", max_length=5)
+    availability_end_time: str = Field(default="18:00", max_length=5)
+    expires_at: Optional[datetime] = None
+    host_notes: Optional[str] = Field(default=None, max_length=4000)
+    intake_questions: list[CalendarBookingQuestionIn] = Field(default_factory=list, max_length=8)
+
+    @field_validator(
+        "title",
+        "description",
+        "availability_start_time",
+        "availability_end_time",
+        "host_notes",
+        mode="before",
+    )
+    @classmethod
+    def _trim_calendar_booking_link_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+    @field_validator("availability_start_time", "availability_end_time")
+    @classmethod
+    def _validate_calendar_booking_time_text(cls, value: str) -> str:
+        normalized = str(value or "").strip()
+        if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", normalized):
+            raise ValueError("availability time must be HH:MM")
+        return normalized
+
+    @field_validator("approval_policy")
+    @classmethod
+    def _normalize_calendar_booking_approval_policy(cls, value: str) -> str:
+        normalized = str(value or "instant").strip().lower()
+        if normalized not in {"instant", "manual"}:
+            raise ValueError("approval_policy must be instant or manual")
+        return normalized
+
+    @field_validator("assignment_mode")
+    @classmethod
+    def _normalize_calendar_booking_assignment_mode(cls, value: str) -> str:
+        normalized = str(value or "single_host").strip().lower()
+        if normalized not in {"single_host", "collective", "round_robin"}:
+            raise ValueError("assignment_mode must be single_host, collective, or round_robin")
+        return normalized
+
+    @model_validator(mode="after")
+    def _validate_calendar_booking_window(self):
+        if self.approval_required:
+            self.approval_policy = "manual"
+        self.approval_required = self.approval_policy == "manual"
+        if self.availability_start_time >= self.availability_end_time:
+            raise ValueError("availability_end_time must be later than availability_start_time")
+        return self
+
+
+class CalendarBookingLinkUpdateIn(CalendarBookingLinkCreateIn):
+    pass
+
+
+class CalendarBookingSlotOut(BaseModel):
+    starts_at: datetime
+    ends_at: datetime
+    label: str
+    date_label: Optional[str] = None
+
+
+class CalendarBookingLinkPublicOut(BaseModel):
+    slug: str
+    title: str
+    description: Optional[str] = None
+    owner_label: Optional[str] = None
+    approval_required: bool = False
+    approval_policy: str = "instant"
+    assignment_mode: str = "single_host"
+    booking_window_days: int = 14
+    buffer_before_minutes: int = 0
+    buffer_after_minutes: int = 0
+    duration_minutes: int = 30
+    availability_start_time: str = "09:00"
+    availability_end_time: str = "18:00"
+    expires_at: Optional[datetime] = None
+    intake_questions: list[CalendarBookingQuestionOut] = Field(default_factory=list)
+    slots: list[CalendarBookingSlotOut] = Field(default_factory=list)
+
+
+class CalendarPublicBookingSubmitIn(BaseModel):
+    guest_name: str = Field(min_length=1, max_length=120)
+    guest_email: str = Field(min_length=3, max_length=255)
+    starts_at: datetime
+    title: Optional[str] = Field(default=None, max_length=160)
+    note: Optional[str] = Field(default=None, max_length=4000)
+    answers: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("guest_name", "guest_email", "title", "note", mode="before")
+    @classmethod
+    def _trim_calendar_public_booking_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+    @field_validator("guest_email")
+    @classmethod
+    def _normalize_calendar_public_booking_email(cls, value: str) -> str:
+        normalized = str(value or "").strip().lower()
+        if "@" not in normalized:
+            raise ValueError("guest_email must be a valid email")
+        return normalized
+
+    @field_validator("answers", mode="before")
+    @classmethod
+    def _normalize_calendar_public_booking_answers(cls, value: Any) -> dict[str, str]:
+        if not isinstance(value, dict):
+            return {}
+        rows: dict[str, str] = {}
+        for key, item in value.items():
+            normalized_key = str(key or "").strip()
+            normalized_value = str(item or "").strip()
+            if not normalized_key:
+                continue
+            rows[normalized_key] = normalized_value
+        return rows
+
+
+class CalendarPublicBookingSubmitOut(BaseModel):
+    event_id: UUID
+    status: str = "confirmed"
+    starts_at: datetime
+    ends_at: datetime
+    approval_required: bool = False
+    approval_policy: str = "instant"
+
+
+class CalendarSyncConnectionUpsertIn(BaseModel):
+    provider: str = Field(default="google", max_length=32)
+    access_scope: str = Field(default="read_write", max_length=32)
+    account_email: Optional[str] = Field(default=None, max_length=255)
+    account_label: Optional[str] = Field(default=None, max_length=160)
+    default_container_id: Optional[UUID] = None
+    selected_external_calendars: list[str] = Field(default_factory=list, max_length=16)
+
+    @field_validator("provider", "access_scope", "account_email", "account_label", mode="before")
+    @classmethod
+    def _trim_calendar_sync_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+    @field_validator("provider")
+    @classmethod
+    def _normalize_calendar_sync_provider(cls, value: str) -> str:
+        normalized = str(value or "google").strip().lower()
+        if normalized not in {"google", "outlook"}:
+            raise ValueError("provider must be google or outlook")
+        return normalized
+
+    @field_validator("access_scope")
+    @classmethod
+    def _normalize_calendar_sync_scope(cls, value: str) -> str:
+        normalized = str(value or "read_write").strip().lower()
+        if normalized not in {"read", "read_write"}:
+            raise ValueError("access_scope must be read or read_write")
+        return normalized
+
+    @field_validator("account_email")
+    @classmethod
+    def _normalize_calendar_sync_email(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip().lower()
+        if normalized and "@" not in normalized:
+            raise ValueError("account_email must be a valid email")
+        return normalized or None
+
+    @field_validator("selected_external_calendars", mode="before")
+    @classmethod
+    def _normalize_calendar_sync_selected_calendars(cls, value: Any) -> list[str]:
+        if not isinstance(value, (list, tuple)):
+            return []
+        rows: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            normalized = str(item or "").strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            rows.append(normalized)
+        return rows[:16]
+
+
+class CalendarSyncConnectionOut(BaseModel):
+    id: UUID
+    provider: str
+    access_scope: str = "read"
+    account_email: Optional[str] = None
+    account_label: Optional[str] = None
+    default_container_id: Optional[UUID] = None
+    default_container_label: Optional[str] = None
+    selected_external_calendars: list[str] = Field(default_factory=list)
+    sync_state: str = "disconnected"
+    last_synced_at: Optional[datetime] = None
+    last_sync_error: Optional[str] = None
+
+
+class CalendarTemplateOut(BaseModel):
+    code: str
+    label: str
+    description: str
+    duration_minutes: int = 30
+    reminder_minutes: list[int] = Field(default_factory=list)
+    conferencing_provider: Optional[str] = None
+    visibility: str = "private"
+    recurrence_preset: str = "none"
+    title_template: Optional[str] = None
+
+
+class CalendarWorkspaceOut(BaseModel):
+    audience: CALENDAR_AUDIENCE_LITERAL
+    view: CALENDAR_VIEW_LITERAL
+    date: str
+    anchor_date: str
+    selected_date: str
+    range_label: str
+    role_label: str
+    scope_label: str
+    capabilities: CalendarCapabilityOut
+    mini_month_days: list[CalendarMiniMonthDayOut] = Field(default_factory=list)
+    containers: list[CalendarContainerOut] = Field(default_factory=list)
+    selected_container_id: Optional[UUID] = None
+    booking_links: list[CalendarBookingLinkOut] = Field(default_factory=list)
+    templates: list[CalendarTemplateOut] = Field(default_factory=list)
+    sync_connections: list[CalendarSyncConnectionOut] = Field(default_factory=list)
+    attendee_options: list[CalendarAttendeeOptionOut] = Field(default_factory=list)
+    resources: list[CalendarResourceOut] = Field(default_factory=list)
+    events: list[CalendarEventOut] = Field(default_factory=list)
+    selected_event: Optional[CalendarEventOut] = None
+
+
+class CalendarAttendeeIn(BaseModel):
+    user_id: Optional[UUID] = None
+    employee_id: Optional[UUID] = None
+    email: Optional[str] = None
+    display_name: Optional[str] = None
+    is_required: bool = True
+
+
+class CalendarReminderIn(BaseModel):
+    channel: str = Field(default="in_app", max_length=32)
+    minutes_before: Optional[int] = Field(default=None, ge=0, le=10080)
+    absolute_trigger_at: Optional[datetime] = None
+
+
+class CalendarEventUpsertIn(BaseModel):
+    container_id: UUID
+    title: str = Field(min_length=1, max_length=200)
+    starts_at: datetime
+    ends_at: datetime
+    timezone: str = Field(default="Asia/Seoul", max_length=64)
+    is_all_day: bool = False
+    recurrence_rule: Optional[str] = Field(default=None, max_length=255)
+    availability_status: str = Field(default="busy", max_length=32)
+    visibility: str = Field(default="private", max_length=32)
+    location: Optional[str] = Field(default=None, max_length=255)
+    conferencing_provider: Optional[str] = Field(default=None, max_length=64)
+    conferencing_url: Optional[str] = Field(default=None, max_length=500)
+    description: Optional[str] = Field(default=None, max_length=4000)
+    resource_id: Optional[UUID] = None
+    attendees: list[CalendarAttendeeIn] = Field(default_factory=list)
+    reminders: list[CalendarReminderIn] = Field(default_factory=list)
+    shared_note: Optional[str] = Field(default=None, max_length=8000)
+    private_memo: Optional[str] = Field(default=None, max_length=8000)
+    action_items: list[str] = Field(default_factory=list, max_length=20)
+    custom_fields: list[CalendarCustomFieldRowIn] = Field(default_factory=list, max_length=12)
+
+
 class NoticeDeleteOut(BaseModel):
     deleted: bool = True
     id: UUID

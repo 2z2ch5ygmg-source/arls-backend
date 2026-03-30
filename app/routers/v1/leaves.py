@@ -1,11 +1,23 @@
 from __future__ import annotations
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
 from ...schemas import LeaveRequestCreate, LeaveRequestOut, LeaveRequestReview
+from ...services.approval_engine import (
+    create_leave_request_approval_adapter,
+    sync_legacy_approval_status,
+)
+from ...services.leave_ledger import (
+    compute_employee_leave_balance_summary,
+    list_holiday_calendar_entries,
+    list_leave_blackout_rules,
+    list_leave_policies,
+    sync_leave_request_ledger,
+)
 from ...utils.permissions import (
     ROLE_BRANCH_MANAGER,
     can_request_leave,
@@ -14,6 +26,7 @@ from ...utils.permissions import (
 )
 
 router = APIRouter(prefix="/leaves", tags=["leaves"], dependencies=[Depends(apply_rate_limit)])
+logger = logging.getLogger(__name__)
 
 ALLOWED_LEAVE_STATUSES = {"pending", "approved", "rejected", "cancelled"}
 SITE_SCOPED_REVIEW_ROLES = {ROLE_BRANCH_MANAGER}
@@ -46,6 +59,19 @@ def _lookup_emp(conn, tenant_id, employee_code):
             WHERE tenant_id = %s AND employee_code = %s
             """,
             (tenant_id, employee_code),
+        )
+        return cur.fetchone()
+
+
+def _lookup_emp_by_id(conn, tenant_id, employee_id):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, site_id, employee_code
+            FROM employees
+            WHERE tenant_id = %s AND id = %s
+            """,
+            (tenant_id, employee_id),
         )
         return cur.fetchone()
 
@@ -97,6 +123,28 @@ def _resolve_user_scope_site_id(conn, user) -> str | None:
             if row and row.get("site_id"):
                 return str(row["site_id"])
     return None
+
+
+def _resolve_leave_balance_employee(conn, *, tenant_id: str, user: dict, employee_code: str | None):
+    employee_id = str(user.get("employee_id") or "").strip()
+    if employee_code:
+        emp = _lookup_emp(conn, tenant_id, employee_code)
+        if not emp:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="employee not found")
+        if employee_id and str(emp.get("id") or "") != employee_id and not can_review_leave_request(user["role"]) and not is_super_admin(user["role"]):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="employee mismatch")
+        if user["role"] in SITE_SCOPED_REVIEW_ROLES:
+            scoped_site_id = _resolve_user_scope_site_id(conn, user)
+            if scoped_site_id and str(emp.get("site_id") or "") != scoped_site_id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+        return emp
+
+    if employee_id:
+        emp = _lookup_emp_by_id(conn, tenant_id, employee_id)
+        if emp:
+            return emp
+
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="employee_code is required")
 
 
 def _normalize_attachment_names(values) -> list[str]:
@@ -239,6 +287,106 @@ def list_leaves(
     return [_row_to_out(row) for row in rows]
 
 
+@router.get("/balance")
+def get_leave_balance(
+    employee_code: str | None = Query(default=None),
+    year: int | None = Query(default=None, ge=2000, le=2100),
+    tenant_code: str | None = Query(default=None),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    tenant = _resolve_target_tenant(conn, user, tenant_code)
+    employee = _resolve_leave_balance_employee(conn, tenant_id=str(tenant["id"]), user=user, employee_code=employee_code)
+    summary = compute_employee_leave_balance_summary(
+        conn,
+        tenant_id=str(tenant["id"]),
+        employee_id=str(employee["id"]),
+        grant_year=year,
+        actor_user_id=str(user.get("id") or "").strip() or None,
+    )
+    return {
+        "employee_code": employee.get("employee_code"),
+        "year": summary["year"],
+        "policy_key": summary["policy_key"],
+        "policy_name": summary["policy_name"],
+        "granted_days": summary["granted_days"],
+        "used_days": summary["used_days"],
+        "remaining_days": summary["remaining_days"],
+        "restored_days": summary["restored_days"],
+    }
+
+
+@router.get("/policies")
+def get_leave_policies(
+    tenant_code: str | None = Query(default=None),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    tenant = _resolve_target_tenant(conn, user, tenant_code)
+    return {
+        "items": list_leave_policies(
+            conn,
+            tenant_id=str(tenant["id"]),
+            actor_user_id=str(user.get("id") or "").strip() or None,
+        )
+    }
+
+
+@router.get("/holiday-calendar")
+def get_leave_holiday_calendar(
+    year: int | None = Query(default=None, ge=2000, le=2100),
+    tenant_code: str | None = Query(default=None),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    tenant = _resolve_target_tenant(conn, user, tenant_code)
+    return {
+        "items": list_holiday_calendar_entries(
+            conn,
+            tenant_id=str(tenant["id"]),
+            year=year,
+        )
+    }
+
+
+@router.get("/blackout-rules")
+def get_leave_blackout_rules(
+    year: int | None = Query(default=None, ge=2000, le=2100),
+    month: int | None = Query(default=None, ge=1, le=12),
+    site_code: str | None = Query(default=None),
+    tenant_code: str | None = Query(default=None),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    tenant = _resolve_target_tenant(conn, user, tenant_code)
+    site_id = None
+    if site_code:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id
+                FROM sites
+                WHERE tenant_id = %s
+                  AND site_code = %s
+                LIMIT 1
+                """,
+                (str(tenant["id"]), site_code),
+            )
+            row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="site not found")
+        site_id = str(row.get("id") or "").strip() or None
+    return {
+        "items": list_leave_blackout_rules(
+            conn,
+            tenant_id=str(tenant["id"]),
+            site_id=site_id,
+            year=year,
+            month=month,
+        )
+    }
+
+
 @router.post("", response_model=LeaveRequestOut)
 def create_leave(payload: LeaveRequestCreate, conn=Depends(get_db_conn), user=Depends(get_current_user)):
     if not can_request_leave(user["role"]):
@@ -280,6 +428,10 @@ def create_leave(payload: LeaveRequestCreate, conn=Depends(get_db_conn), user=De
     row = _fetch_leave_out(conn, request_id, tenant_id)
     if not row:
         raise HTTPException(status_code=500, detail="failed to create leave")
+    try:
+        create_leave_request_approval_adapter(conn, leave_row=row, actor_user=user)
+    except Exception as exc:  # pragma: no cover - adapter must never break legacy flow
+        logger.exception("[APPROVAL][LEAVE] failed to mirror leave request id=%s", request_id, exc_info=exc)
     return _row_to_out(row)
 
 
@@ -442,6 +594,27 @@ def cancel_leave(
     updated = _fetch_leave_out(conn, leave_id, tenant_scope)
     if not updated:
         raise HTTPException(status_code=500, detail="leave request update failed")
+    try:
+        sync_legacy_approval_status(
+            conn,
+            tenant_id=str(updated.get("tenant_id") or user.get("tenant_id") or ""),
+            legacy_source_type="leave_request",
+            legacy_source_id=str(leave_id),
+            status_value="cancelled",
+            actor_user_id=str(user.get("id") or "").strip() or None,
+            actor_role=str(user.get("role") or "").strip() or None,
+        )
+    except Exception as exc:  # pragma: no cover - adapter must never break legacy flow
+        logger.exception("[APPROVAL][LEAVE] failed to sync cancellation id=%s", leave_id, exc_info=exc)
+    try:
+        sync_leave_request_ledger(
+            conn,
+            leave_row=updated,
+            actor_user_id=str(user.get("id") or "").strip() or None,
+            actor_role=str(user.get("role") or "").strip() or None,
+        )
+    except Exception as exc:  # pragma: no cover - ledger sync must never break legacy flow
+        logger.exception("[LEAVE][LEDGER] failed to sync cancellation id=%s", leave_id, exc_info=exc)
     return _row_to_out(updated)
 
 
@@ -488,4 +661,26 @@ def review_leave(
     updated = _fetch_leave_out(conn, leave_id, tenant_scope)
     if not updated:
         raise HTTPException(status_code=500, detail="leave request update failed")
+    try:
+        sync_legacy_approval_status(
+            conn,
+            tenant_id=str(updated.get("tenant_id") or user.get("tenant_id") or ""),
+            legacy_source_type="leave_request",
+            legacy_source_id=str(leave_id),
+            status_value=str(payload.status or "").strip().lower(),
+            actor_user_id=str(user.get("id") or "").strip() or None,
+            actor_role=str(user.get("role") or "").strip() or None,
+            comment_text=payload.review_note,
+        )
+    except Exception as exc:  # pragma: no cover - adapter must never break legacy flow
+        logger.exception("[APPROVAL][LEAVE] failed to sync review id=%s", leave_id, exc_info=exc)
+    try:
+        sync_leave_request_ledger(
+            conn,
+            leave_row=updated,
+            actor_user_id=str(user.get("id") or "").strip() or None,
+            actor_role=str(user.get("role") or "").strip() or None,
+        )
+    except Exception as exc:  # pragma: no cover - ledger sync must never break legacy flow
+        logger.exception("[LEAVE][LEDGER] failed to sync review id=%s", leave_id, exc_info=exc)
     return _row_to_out(updated)

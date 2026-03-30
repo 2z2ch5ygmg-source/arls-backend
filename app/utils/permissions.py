@@ -194,3 +194,28 @@ def can_manage_leave(user_role: str) -> bool:
 
 def can_manage_schedule(user_role: str) -> bool:
     return normalize_role(user_role) in SUPERVISOR_ROLES
+
+
+def can_view_calendar(user_role: str | None) -> bool:
+    return normalize_user_role(user_role) in ALL_USER_ROLES
+
+
+def can_create_calendar_event(user_role: str | None) -> bool:
+    return normalize_user_role(user_role) in ALL_USER_ROLES
+
+
+def can_manage_calendar_shared(user_role: str | None) -> bool:
+    return normalize_user_role(user_role) in {ROLE_DEVELOPER, ROLE_HQ_ADMIN}
+
+
+def can_manage_calendar_booking_links(user_role: str | None) -> bool:
+    return normalize_user_role(user_role) in {
+        ROLE_DEVELOPER,
+        ROLE_HQ_ADMIN,
+        ROLE_SUPERVISOR,
+        ROLE_VICE_SUPERVISOR,
+    }
+
+
+def can_manage_calendar_sync(user_role: str | None) -> bool:
+    return normalize_user_role(user_role) in {ROLE_DEVELOPER, ROLE_HQ_ADMIN}

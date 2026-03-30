@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
 from ...schemas import AttendanceRequestCreate, AttendanceRequestOut, AttendanceRequestReview
+from ...services.approval_engine import (
+    create_attendance_request_approval_adapter,
+    sync_legacy_approval_status,
+)
 from ...services.closing_overtime import apply_closing_overtime_from_checkout
 from ...utils.permissions import (
     ROLE_BRANCH_MANAGER,
@@ -20,6 +25,7 @@ router = APIRouter(
     tags=["attendance-requests"],
     dependencies=[Depends(apply_rate_limit)],
 )
+logger = logging.getLogger(__name__)
 
 ALLOWED_REQUEST_STATUSES = {"pending", "approved", "rejected", "cancelled"}
 SITE_SCOPED_REVIEW_ROLES = {ROLE_BRANCH_MANAGER}
@@ -246,6 +252,10 @@ def create_attendance_request(
     row = _fetch_request_out(conn, request_id, tenant_id)
     if not row:
         raise HTTPException(status_code=500, detail="failed to create request")
+    try:
+        create_attendance_request_approval_adapter(conn, request_row=row, actor_user=user)
+    except Exception as exc:  # pragma: no cover - adapter must never break legacy flow
+        logger.exception("[APPROVAL][ATTENDANCE] failed to mirror request id=%s", request_id, exc_info=exc)
     return _row_to_out(row)
 
 
@@ -462,6 +472,18 @@ def cancel_attendance_request(
     updated = _fetch_request_out(conn, request_id, tenant_scope)
     if not updated:
         raise HTTPException(status_code=500, detail="request update failed")
+    try:
+        sync_legacy_approval_status(
+            conn,
+            tenant_id=str(updated.get("tenant_id") or user.get("tenant_id") or ""),
+            legacy_source_type="attendance_request",
+            legacy_source_id=str(request_id),
+            status_value="cancelled",
+            actor_user_id=str(user.get("id") or "").strip() or None,
+            actor_role=str(user.get("role") or "").strip() or None,
+        )
+    except Exception as exc:  # pragma: no cover - adapter must never break legacy flow
+        logger.exception("[APPROVAL][ATTENDANCE] failed to sync cancellation id=%s", request_id, exc_info=exc)
     return _row_to_out(updated)
 
 
@@ -572,4 +594,17 @@ def review_attendance_request(
     updated = _fetch_request_out(conn, request_id, tenant_scope)
     if not updated:
         raise HTTPException(status_code=500, detail="request update failed")
+    try:
+        sync_legacy_approval_status(
+            conn,
+            tenant_id=str(updated.get("tenant_id") or user.get("tenant_id") or ""),
+            legacy_source_type="attendance_request",
+            legacy_source_id=str(request_id),
+            status_value=str(payload.status or "").strip().lower(),
+            actor_user_id=str(user.get("id") or "").strip() or None,
+            actor_role=str(user.get("role") or "").strip() or None,
+            comment_text=payload.review_note,
+        )
+    except Exception as exc:  # pragma: no cover - adapter must never break legacy flow
+        logger.exception("[APPROVAL][ATTENDANCE] failed to sync review id=%s", request_id, exc_info=exc)
     return _row_to_out(updated)

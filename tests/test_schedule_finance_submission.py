@@ -53,7 +53,7 @@ class ScheduleFinanceSubmissionHelpersTests(unittest.TestCase):
 
         self.assertTrue(_can_upload_finance_final(supervisor))
         self.assertTrue(_can_upload_finance_final(developer))
-        self.assertFalse(_can_upload_finance_final(hq))
+        self.assertTrue(_can_upload_finance_final(hq))
         self.assertFalse(_can_upload_finance_final(vice))
 
         self.assertTrue(_can_view_finance_download_workspace(hq))

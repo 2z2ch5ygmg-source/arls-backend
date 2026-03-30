@@ -41,6 +41,7 @@ from ...services.guard_roster_docx import (
     parse_guard_roster_docx,
     select_site_match_query_text,
 )
+from ...services.leave_ledger import compute_employee_leave_balance_summary
 from ...services.sites_match_index import list_site_match_index_rows
 from ...utils.address_norm import normalize_address_text
 from ...utils.credential_norm import normalize_phone_identifier
@@ -1631,6 +1632,9 @@ def _fetch_drawer_leave_request_section(
 
     recent_leave_entries: list[EmployeeDrawerLeaveEntryOut] = []
     leave_used_days = 0.0
+    leave_remaining_days = None
+    leave_remaining_state = "unavailable"
+    leave_remaining_message = "연차 잔여일 데이터를 불러올 수 없습니다"
     half_day_count = 0
     leave_pending_count = 0
     if _table_exists(conn, "leave_requests"):
@@ -1679,6 +1683,20 @@ def _fetch_drawer_leave_request_section(
                 leave_used_days += _drawer_leave_duration_days(start_date, end_date, row.get("half_day_slot"))
                 if row.get("half_day_slot"):
                     half_day_count += 1
+
+    try:
+        balance_summary = compute_employee_leave_balance_summary(
+            conn,
+            tenant_id=tenant_id,
+            employee_id=employee_id,
+            grant_year=today_kst.year,
+        )
+        leave_used_days = float(balance_summary.get("used_days") or 0)
+        leave_remaining_days = float(balance_summary.get("remaining_days") or 0)
+        leave_remaining_state = "ok"
+        leave_remaining_message = None
+    except Exception:
+        logger.exception("employee drawer leave balance summary failed employee_id=%s", employee_id)
 
     request_counts = {"total": 0, "pending": 0, "approved": 0, "rejected": 0}
     recent_request_entries: list[EmployeeDrawerRequestEntryOut] = []
@@ -1760,9 +1778,9 @@ def _fetch_drawer_leave_request_section(
         empty_message=None if has_any_leave_or_request else "휴가 또는 요청 이력이 없습니다",
         leave_used_days=_drawer_metric(round(leave_used_days, 1)),
         leave_remaining_days=_drawer_metric(
-            None,
-            state="unavailable",
-            empty_message="연차 잔여일 데이터를 불러올 수 없습니다",
+            round(leave_remaining_days, 1) if leave_remaining_days is not None else None,
+            state=leave_remaining_state,
+            empty_message=leave_remaining_message,
         ),
         half_day_count=_drawer_metric(half_day_count),
         leave_pending_count=_drawer_metric(leave_pending_count),
@@ -1933,11 +1951,7 @@ def _build_employee_drawer_summary_payload(
             if next_schedule_summary
             else _drawer_metric(None, state="empty", empty_message="다가오는 일정이 없습니다")
         ),
-        annual_leave_remaining_days=_drawer_metric(
-            None,
-            state="unavailable",
-            empty_message="연차 잔여일 데이터를 불러올 수 없습니다",
-        ),
+        annual_leave_remaining_days=leave_request_section.leave_remaining_days,
         pending_request_count=_drawer_metric(pending_request_total),
         workforce_info=EmployeeDrawerWorkforceInfoOut(
             company_name=_normalize_optional_text(employee_row.get("company_name")),

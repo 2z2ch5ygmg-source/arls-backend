@@ -1047,7 +1047,7 @@ def _can_download_finance_review(user: dict | None) -> bool:
 
 
 def _can_upload_finance_final(user: dict | None) -> bool:
-    return _finance_submission_normalize_role(user) in {"developer", "supervisor"}
+    return _finance_submission_normalize_role(user) in {"developer", "hq_admin", "supervisor"}
 
 
 def _can_view_finance_download_workspace(user: dict | None) -> bool:

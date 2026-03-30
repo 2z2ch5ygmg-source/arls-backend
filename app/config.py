@@ -113,6 +113,14 @@ class Settings:
     google_sheets_service_account_json = _load_service_account_json()
     google_places_api_key = os.getenv("GOOGLE_PLACES_API_KEY", "").strip()
 
+    attachment_storage_backend = os.getenv("ATTACHMENT_STORAGE_BACKEND", "database").strip().lower() or "database"
+    attachment_blob_connection_string = os.getenv("ATTACHMENT_BLOB_CONNECTION_STRING", "").strip()
+    attachment_blob_container = os.getenv("ATTACHMENT_BLOB_CONTAINER", "").strip()
+    attachment_blob_base_url = os.getenv("ATTACHMENT_BLOB_BASE_URL", "").strip().rstrip("/")
+    rt_gateway_public_url = os.getenv("RT_GATEWAY_PUBLIC_URL", "").strip().rstrip("/")
+    media_sfu_public_url = os.getenv("MEDIA_SFU_PUBLIC_URL", "").strip().rstrip("/")
+    coturn_server_uris = _env_csv("COTURN_SERVER_URIS", "")
+
     mail_enabled = _env_bool("MAIL_ENABLED", "false")
     smtp_host = os.getenv("SMTP_HOST", "").strip()
     smtp_port = int(os.getenv("SMTP_PORT", "587"))

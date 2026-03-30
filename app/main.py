@@ -22,19 +22,24 @@ from .routers import (
     admin_soc_router,
     admin_reset_router,
     admin_tenants_router,
+    approvals_router,
     apple_weekly_truth_router,
     attendance_router,
     attendance_requests_router,
     auth_router,
     auth_public_router,
+    certificates_router,
     companies_router,
     debug_router,
     dev_scope_router,
     employees_router,
+    groupware_foundation_router,
     hr_documents_router,
     home_router,
+    calendar_router,
     integrations_router,
     leaves_router,
+    mail_router,
     me_router,
     master_reset_router,
     master_tenants_router,
@@ -328,6 +333,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 app.include_router(auth_public_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(me_router, prefix="/api/v1")
+app.include_router(approvals_router, prefix="/api/v1")
+app.include_router(certificates_router, prefix="/api/v1")
 app.include_router(tenants_router, prefix="/api/v1")
 app.include_router(companies_router, prefix="/api/v1")
 app.include_router(sites_router, prefix="/api/v1")
@@ -337,6 +344,7 @@ app.include_router(attendance_requests_router, prefix="/api/v1")
 app.include_router(debug_router, prefix="/api/v1")
 app.include_router(dev_scope_router, prefix="/api/v1")
 app.include_router(leaves_router, prefix="/api/v1")
+app.include_router(mail_router, prefix="/api/v1")
 app.include_router(schedules_router, prefix="/api/v1")
 app.include_router(schedules_bridge_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
@@ -350,7 +358,9 @@ app.include_router(admin_soc_router, prefix="/api/v1")
 app.include_router(admin_reset_router, prefix="/api/v1")
 app.include_router(admin_tenants_router, prefix="/api/v1")
 app.include_router(hr_documents_router, prefix="/api/v1")
+app.include_router(groupware_foundation_router, prefix="/api/v1")
 app.include_router(home_router, prefix="/api/v1")
+app.include_router(calendar_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(notices_router, prefix="/api/v1")
 app.include_router(push_router, prefix="/api/v1")
