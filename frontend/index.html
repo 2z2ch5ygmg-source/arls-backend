@@ -2114,6 +2114,25 @@
             </aside>
 
             <div id="scheduleUploadPanel" class="stack schedule-tab-panel hidden schedule-upload-workspace">
+            <div class="schedule-upload-wizard-layout">
+            <aside class="schedule-upload-step-rail" aria-label="업로드 단계">
+            <div id="scheduleBaseWizardProgress" class="schedule-wizard-progress" aria-label="기본 월간 업로드 단계">
+              <button class="schedule-wizard-step active" type="button" data-action="schedule-base-wizard-step" data-step="mapping" data-step-index="1">근무 템플릿</button>
+              <button class="schedule-wizard-step" type="button" data-action="schedule-base-wizard-step" data-step="context" data-step-index="2">대상 선택</button>
+              <button class="schedule-wizard-step" type="button" data-action="schedule-base-wizard-step" data-step="file" data-step-index="3">파일 준비</button>
+              <button class="schedule-wizard-step" type="button" data-action="schedule-base-wizard-step" data-step="review" data-step-index="4">반영 검토</button>
+              <button class="schedule-wizard-step" type="button" data-action="schedule-base-wizard-step" data-step="apply" data-step-index="5">적용 완료</button>
+            </div>
+
+            <div id="scheduleHqWizardProgress" class="schedule-wizard-progress hidden" aria-label="HQ 지원근무 업로드 단계">
+              <button class="schedule-wizard-step active" type="button" data-action="schedule-hq-wizard-step" data-step="export" data-step-index="1">제출용 추출</button>
+              <button class="schedule-wizard-step" type="button" data-action="schedule-hq-wizard-step" data-step="upload" data-step-index="2">작성본 업로드</button>
+              <button class="schedule-wizard-step" type="button" data-action="schedule-hq-wizard-step" data-step="preview" data-step-index="3">미리보기</button>
+              <button class="schedule-wizard-step" type="button" data-action="schedule-hq-wizard-step" data-step="complete" data-step-index="4">업로드 완료</button>
+            </div>
+            </aside>
+
+            <section class="schedule-upload-main-canvas">
             <header class="schedule-upload-header">
               <div>
                 <h3 id="scheduleUploadHeaderTitle">월간 업로드</h3>
@@ -2147,21 +2166,6 @@
                 <strong id="scheduleExcelWorkflowContextStage" class="schedule-excel-context-value">-</strong>
               </article>
             </section>
-
-            <div id="scheduleBaseWizardProgress" class="schedule-wizard-progress" aria-label="기본 월간 업로드 단계">
-              <button class="schedule-wizard-step active" type="button" data-action="schedule-base-wizard-step" data-step="mapping">1. 근무 템플릿</button>
-              <button class="schedule-wizard-step" type="button" data-action="schedule-base-wizard-step" data-step="context">2. 대상 선택</button>
-              <button class="schedule-wizard-step" type="button" data-action="schedule-base-wizard-step" data-step="file">3. 파일 준비</button>
-              <button class="schedule-wizard-step" type="button" data-action="schedule-base-wizard-step" data-step="review">4. 반영 검토</button>
-              <button class="schedule-wizard-step" type="button" data-action="schedule-base-wizard-step" data-step="apply">5. 적용</button>
-            </div>
-
-            <div id="scheduleHqWizardProgress" class="schedule-wizard-progress hidden" aria-label="HQ 지원근무 업로드 단계">
-              <button class="schedule-wizard-step active" type="button" data-action="schedule-hq-wizard-step" data-step="export">3. HQ 제출용 추출</button>
-              <button class="schedule-wizard-step" type="button" data-action="schedule-hq-wizard-step" data-step="upload">4. HQ 작성본 업로드</button>
-              <button class="schedule-wizard-step" type="button" data-action="schedule-hq-wizard-step" data-step="preview">5. 업로드 미리보기</button>
-              <button class="schedule-wizard-step" type="button" data-action="schedule-hq-wizard-step" data-step="complete">6. 업로드 진행 / 완료</button>
-            </div>
 
             <section id="scheduleExcelWorkflowMappingSection" class="schedule-upload-step schedule-excel-workflow-section">
               <div class="schedule-upload-step-head">
@@ -2399,8 +2403,8 @@
             <section id="scheduleExcelWorkflowExportSection" class="schedule-upload-step schedule-excel-workflow-section">
               <div class="schedule-upload-step-head">
                 <div>
-                  <span class="schedule-upload-step-kicker">STEP 3</span>
-                  <h4>HQ 제출용 추출</h4>
+                  <span id="scheduleHqStageKicker" class="schedule-upload-step-kicker">STEP 1</span>
+                  <h4 id="scheduleHqStageTitle">제출용 추출</h4>
                   <p class="muted hidden"></p>
                 </div>
                 <span id="scheduleSupportStatePill" class="status-pill status-pill-neutral">원본 대기</span>
@@ -2433,7 +2437,6 @@
               <section class="schedule-upload-step schedule-hq-site-selection-shell">
                 <div class="schedule-upload-step-head">
                   <div>
-                    <span class="schedule-upload-step-kicker">대상 지점 선택</span>
                     <h4>지점 상태 확인</h4>
                     <p class="muted hidden"></p>
                   </div>
@@ -2473,8 +2476,8 @@
             <section id="scheduleExcelWorkflowHandoffSection" class="schedule-upload-step schedule-excel-workflow-section">
               <div class="schedule-upload-step-head">
                 <div>
-                  <span class="schedule-upload-step-kicker">STEP 4</span>
-                  <h4>HQ 작성본 업로드</h4>
+                  <span id="scheduleHqHandoffKicker" class="schedule-upload-step-kicker">STEP 2</span>
+                  <h4 id="scheduleHqHandoffTitle">작성본 업로드</h4>
                   <p class="muted">작성본을 올리고 검토 후 반영합니다.</p>
                 </div>
               </div>
@@ -2596,6 +2599,7 @@
               <p id="scheduleSupportHqApplyResult" class="muted">반영 결과가 여기에 표시됩니다.</p>
               <ul id="scheduleSupportHqApplyDetails" class="list hidden"></ul>
               </div>
+            </section>
             </section>
             </div>
 
@@ -3209,19 +3213,24 @@
                                       <option value="SUPPORT_ASSIGNMENT">지원근무자 (시트→DB)</option>
                                     </select>
                                   </label>
-                                  <label class="input-field" for="gsProfileType">
-                                    링크 타입
-                                    <select id="gsProfileType">
-                                      <option value="KEY_ROW" selected>키 기준 행</option>
-                                      <option value="NAMED_RANGE">이름 지정 범위</option>
-                                    </select>
-                                  </label>
-                                  <label class="input-field settings-span-full" for="gsProfileSiteCodes">
-                                    대상 현장 번호
-                                    <input id="gsProfileSiteCodes" placeholder="예: S001,S002" />
-                                    <span class="input-helper">비우면 회사 전체에 적용합니다.</span>
-                                  </label>
                                 </div>
+                                <details class="settings-advanced-group settings-span-full">
+                                  <summary>고급 범위</summary>
+                                  <div class="settings-profile-subgrid settings-profile-subgrid-advanced">
+                                    <label class="input-field" for="gsProfileType">
+                                      링크 타입
+                                      <select id="gsProfileType">
+                                        <option value="KEY_ROW" selected>키 기준 행</option>
+                                        <option value="NAMED_RANGE">이름 지정 범위</option>
+                                      </select>
+                                    </label>
+                                    <label class="input-field settings-span-full" for="gsProfileSiteCodes">
+                                      대상 현장 번호
+                                      <input id="gsProfileSiteCodes" placeholder="예: S001,S002" />
+                                      <span class="input-helper">비우면 회사 전체에 적용합니다.</span>
+                                    </label>
+                                  </div>
+                                </details>
                               </section>
                               <section class="settings-form-group settings-span-full">
                                 <div class="settings-form-group-head">
@@ -3236,25 +3245,26 @@
                                     스케줄 시트명
                                     <input id="gsWorksheetSchedule" placeholder="예: 스케줄" />
                                   </label>
-                                  <label class="input-field" for="gsWorksheetOvertime">
-                                    초과근무 시트명
-                                    <input id="gsWorksheetOvertime" placeholder="예: 초과근무" />
-                                  </label>
-                                  <label class="input-field settings-span-full" for="gsWorksheetOvernight">
-                                    야간근무 시트명
-                                    <input id="gsWorksheetOvernight" placeholder="예: 야간근무" />
-                                  </label>
                                 </div>
+                                <details class="settings-advanced-group settings-span-full">
+                                  <summary>추가 시트명</summary>
+                                  <div class="settings-profile-subgrid settings-profile-subgrid-advanced">
+                                    <label class="input-field" for="gsWorksheetOvertime">
+                                      초과근무 시트명
+                                      <input id="gsWorksheetOvertime" placeholder="예: 초과근무" />
+                                    </label>
+                                    <label class="input-field settings-span-full" for="gsWorksheetOvernight">
+                                      야간근무 시트명
+                                      <input id="gsWorksheetOvernight" placeholder="예: 야간근무" />
+                                    </label>
+                                  </div>
+                                </details>
                               </section>
                               <section class="settings-form-group settings-span-full">
                                 <div class="settings-form-group-head">
                                   <h4>활성화</h4>
                                 </div>
                                 <div class="settings-profile-subgrid">
-                                  <label class="input-field settings-span-full" for="gsWebhookUrl">
-                                    웹훅 주소
-                                    <input id="gsWebhookUrl" placeholder="https://..." />
-                                  </label>
                                   <label class="settings-switch-row settings-span-full" for="gsProfileIsActive">
                                     <span class="settings-switch-copy">
                                       <strong>활성 링크로 사용</strong>
@@ -3266,6 +3276,15 @@
                                     </span>
                                   </label>
                                 </div>
+                                <details class="settings-advanced-group settings-span-full">
+                                  <summary>고급 연동</summary>
+                                  <div class="settings-profile-subgrid settings-profile-subgrid-advanced">
+                                    <label class="input-field settings-span-full" for="gsWebhookUrl">
+                                      웹훅 주소
+                                      <input id="gsWebhookUrl" placeholder="https://..." />
+                                    </label>
+                                  </div>
+                                </details>
                               </section>
                               <div class="settings-section-footer settings-span-full">
                                 <div class="settings-section-status-block">

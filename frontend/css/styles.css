@@ -5905,12 +5905,44 @@ button:disabled,
 }
 
 .schedule-upload-workspace {
-  gap: 12px;
+  gap: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  background: var(--ui-bg-surface);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.schedule-upload-wizard-layout {
+  display: grid;
+  grid-template-columns: 224px minmax(0, 1fr);
+  min-height: 560px;
+}
+
+.schedule-upload-step-rail {
+  padding: 28px 0 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  border-right: 1px solid rgba(226, 232, 240, 0.92);
+}
+
+.schedule-upload-main-canvas {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  align-content: start;
 }
 
 .schedule-upload-header {
   display: grid;
   gap: 6px;
+  padding: 22px 28px 12px;
+}
+
+.schedule-upload-header h3 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.18;
+  font-weight: 800;
 }
 
 .schedule-upload-guide-panel {
@@ -5983,43 +6015,62 @@ button:disabled,
 }
 
 .schedule-excel-context-strip {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+  position: static;
+  top: auto;
+  z-index: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px;
-  padding: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 0 28px;
+  padding: 0;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-16);
-  background: var(--bg-surface-muted);
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.84);
   box-shadow: none;
-  backdrop-filter: blur(8px);
+  backdrop-filter: none;
 }
 
 .schedule-excel-context-card {
   display: grid;
   gap: 4px;
   min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-12);
-  background: var(--bg-surface-elevated);
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.schedule-excel-context-card:nth-child(n + 4) {
+  display: none;
+}
+
+.schedule-excel-context-card:not(:last-child) {
+  border-right: 1px solid var(--border-subtle);
 }
 
 .schedule-excel-context-label {
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  font-weight: 700;
   color: var(--text-secondary);
 }
 
 .schedule-excel-context-value {
   min-width: 0;
   color: var(--text-primary);
-  font-size: var(--ui-type-body-md-size);
-  line-height: var(--ui-type-body-md-line);
+  font-size: 0.98rem;
+  line-height: 1.4;
+  font-weight: 700;
   white-space: normal;
   word-break: break-word;
+}
+
+.schedule-hq-site-selection-shell > .schedule-upload-step-head {
+  align-items: center;
+}
+
+.schedule-hq-site-selection-shell > .schedule-upload-step-head h4 {
+  margin: 0;
 }
 
 .schedule-upload-owner-tabs {
@@ -6040,60 +6091,111 @@ button:disabled,
 }
 
 .schedule-excel-workflow-section {
-  scroll-margin-top: 92px;
+  scroll-margin-top: 28px;
+  display: grid;
+  gap: 12px;
+  padding: 12px 28px 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  align-content: start;
 }
 
 .schedule-excel-workflow-section-active {
-  border-color: rgba(249, 115, 22, 0.32);
-  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.12);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .schedule-upload-stage-shell {
   gap: 12px;
+  align-content: start;
 }
 
 .schedule-wizard-progress {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 8px;
+  position: relative;
+  gap: 18px;
   border: 0;
 }
 
+.schedule-wizard-progress::before {
+  content: '';
+  position: absolute;
+  left: 63px;
+  top: 14px;
+  bottom: 14px;
+  width: 1px;
+  background: rgba(203, 213, 225, 0.88);
+}
+
 .schedule-wizard-step {
+  position: relative;
   display: inline-flex;
+  width: 100%;
   align-items: center;
   justify-content: flex-start;
-  min-height: 52px;
+  min-height: 54px;
   min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-12);
-  background: var(--bg-surface-muted);
+  padding: 0 32px 0 98px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--text-secondary);
-  font-size: var(--ui-type-body-sm-size);
-  line-height: 18px;
+  font-size: 16px;
+  line-height: 1.35;
   text-align: left;
-  font-weight: var(--ui-weight-semibold);
+  font-weight: 700;
   box-shadow: none;
   white-space: normal;
   word-break: keep-all;
 }
 
+.schedule-wizard-step::before {
+  content: attr(data-step-index);
+  position: absolute;
+  left: 48px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid rgba(203, 213, 225, 0.94);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .schedule-wizard-step:hover,
 .schedule-wizard-step:focus-visible {
-  border-color: rgba(249, 115, 22, 0.32);
-  color: var(--text-primary);
+  border-color: transparent;
+  color: #111827;
 }
 
 .schedule-wizard-step.active {
-  border-color: rgba(249, 115, 22, 0.42);
-  background: rgba(255, 244, 236, 0.94);
-  color: var(--brand-orange-strong);
+  border-color: transparent;
+  background: transparent;
+  color: #111827;
+}
+
+.schedule-wizard-step.active::before {
+  border-color: rgba(249, 115, 22, 0.94);
+  background: #fff7ed;
+  color: #c2410c;
+  box-shadow: 0 0 0 5px rgba(249, 115, 22, 0.12);
 }
 
 .schedule-wizard-step.is-complete {
-  border-color: rgba(22, 163, 74, 0.26);
-  background: rgba(236, 253, 243, 0.92);
+  border-color: transparent;
+  background: transparent;
+  color: #111827;
+}
+
+.schedule-wizard-step.is-complete::before {
+  border-color: rgba(34, 197, 94, 0.28);
+  background: rgba(34, 197, 94, 0.12);
   color: var(--state-success-text);
 }
 
@@ -6104,33 +6206,38 @@ button:disabled,
 
 .schedule-upload-step {
   display: grid;
-  gap: 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-16);
-  background: var(--bg-surface-elevated);
-  padding: 16px;
+  gap: 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  align-content: start;
 }
 
 .schedule-upload-step-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
+  display: grid;
+  gap: 4px;
+  align-content: start;
 }
 
 .schedule-upload-step-head p {
   margin: 4px 0 0;
 }
 
+.schedule-upload-step-head > div {
+  display: grid;
+  gap: 4px;
+}
+
 .schedule-upload-step-kicker {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  padding: 0 10px;
+  min-height: 20px;
+  padding: 0 8px;
   border-radius: 999px;
   background: rgba(249, 115, 22, 0.12);
   color: var(--brand-orange);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
 }
@@ -6141,9 +6248,9 @@ button:disabled,
 }
 
 .schedule-upload-step h4 {
-  font-size: var(--ui-type-section-md-size);
-  line-height: var(--ui-type-section-md-line);
-  font-weight: var(--ui-weight-semibold);
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 700;
 }
 
 .schedule-upload-template-card h5 {
@@ -6215,7 +6322,7 @@ button:disabled,
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(180px, 240px) minmax(180px, 220px);
   gap: 12px;
-  align-items: start;
+  align-items: end;
 }
 
 .schedule-upload-file-form {
@@ -6238,6 +6345,9 @@ button:disabled,
   justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
+  margin-top: 0;
+  padding-top: 14px;
+  border-top: 1px solid rgba(226, 232, 240, 0.92);
 }
 
 .schedule-upload-progress,
@@ -6472,6 +6582,7 @@ button:disabled,
 
 .schedule-hq-site-selection-shell {
   gap: 12px;
+  padding: 0;
 }
 
 .schedule-hq-site-matrix-wrap {
@@ -6485,8 +6596,55 @@ button:disabled,
   min-width: 760px;
 }
 
+.schedule-hq-site-matrix thead th:first-child,
 .schedule-hq-site-matrix tbody tr td:first-child {
   width: 72px;
+  min-width: 72px;
+  text-align: center;
+  vertical-align: middle;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.schedule-hq-site-matrix input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  display: inline-grid;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid rgba(148, 163, 184, 0.9);
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.schedule-hq-site-matrix input[type='checkbox']::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1.5px;
+  width: 4px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  transform-origin: center;
+  transition: transform 140ms ease;
+}
+
+.schedule-hq-site-matrix input[type='checkbox']:checked {
+  border-color: #ea580c;
+  background: #f97316;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14);
+}
+
+.schedule-hq-site-matrix input[type='checkbox']:checked::after {
+  transform: rotate(45deg) scale(1);
 }
 
 .schedule-hq-site-row-disabled {
@@ -6496,6 +6654,7 @@ button:disabled,
 
 .schedule-hq-site-row-disabled input[type='checkbox'] {
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .schedule-upload-guidance-box,
@@ -6509,7 +6668,7 @@ button:disabled,
 
 .schedule-upload-guidance-box {
   border: 1px solid rgba(249, 115, 22, 0.14);
-  background: rgba(255, 250, 245, 0.92);
+  background: rgba(248, 250, 252, 0.96);
 }
 
 .schedule-upload-guidance-box strong,
@@ -6571,8 +6730,8 @@ button:disabled,
   gap: 6px;
   padding: 18px;
   border: 1px dashed var(--border-subtle);
-  border-radius: var(--radius-12);
-  background: var(--bg-surface-muted);
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.96);
 }
 
 .schedule-upload-placeholder strong {
@@ -6817,6 +6976,16 @@ button:disabled,
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 6px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(226, 232, 240, 0.92);
+}
+
+.schedule-support-upload-actions > .muted,
+.schedule-support-upload-actions > span {
+  margin-right: auto;
 }
 
 .schedule-support-shortcut-grid {
@@ -6853,6 +7022,84 @@ button:disabled,
   margin: 0;
   color: var(--text-primary);
   word-break: break-all;
+}
+
+@media (max-width: 1180px) {
+  .schedule-upload-wizard-layout {
+    grid-template-columns: 132px minmax(0, 1fr);
+  }
+
+  .schedule-excel-context-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-left: 24px;
+    margin-right: 24px;
+  }
+
+  .schedule-upload-header,
+  .schedule-excel-workflow-section {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .schedule-upload-context-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .schedule-upload-workspace {
+    border-radius: 18px;
+  }
+
+  .schedule-upload-wizard-layout {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: auto;
+  }
+
+  .schedule-upload-step-rail {
+    padding: 18px 18px 0;
+    border-right: 0;
+  }
+
+  .schedule-wizard-progress::before {
+    display: none;
+  }
+
+  .schedule-wizard-step {
+    min-height: 44px;
+    padding: 0 0 0 44px;
+    font-size: 14px;
+  }
+
+  .schedule-wizard-step::before {
+    left: 0;
+    width: 28px;
+    height: 28px;
+  }
+
+  .schedule-upload-header,
+  .schedule-excel-workflow-section {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .schedule-excel-context-strip {
+    grid-template-columns: minmax(0, 1fr);
+    margin-left: 18px;
+    margin-right: 18px;
+  }
+
+  .schedule-excel-context-card:not(:last-child) {
+    border-right: 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .schedule-upload-context-grid,
+  .schedule-hq-context-grid,
+  .schedule-upload-template-grid,
+  .schedule-upload-file-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .schedule-finance-tabs {
@@ -28887,6 +29134,26 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
   padding-inline: 12px;
 }
 
+#view-schedule.schedule-reportlike-shell .schedule-page-head {
+  align-items: flex-start;
+  padding-bottom: 10px;
+}
+
+#view-schedule.schedule-reportlike-shell #scheduleWorkspaceDescription {
+  margin-top: 4px;
+  color: var(--ui-text-muted);
+}
+
+#view-schedule .schedule-workspace-tabs.schedule-workspace-tabs-reportlike {
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+#view-schedule .schedule-workspace-tabs.schedule-workspace-tabs-reportlike .workspace-tab {
+  min-height: 36px;
+  padding-inline: 18px;
+}
+
 #view-schedule .schedule-ops-toolbar {
   gap: 10px;
   padding: 14px 16px 12px;
@@ -35823,8 +36090,8 @@ body.calendar-public-shell #view-calendar-public {
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-header {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) auto !important;
-  gap: 18px !important;
-  align-items: end !important;
+  gap: 14px !important;
+  align-items: start !important;
 }
 
 #view-reports .reports-finance-download-copy h3 {
@@ -35833,9 +36100,14 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #view-reports .reports-finance-download-copy .muted {
-  margin-top: 6px !important;
+  margin-top: 4px !important;
   font-size: 13px !important;
   line-height: 1.55 !important;
+}
+
+#view-reports .reports-finance-download-actions {
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-actions {
@@ -35863,11 +36135,12 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #view-reports .reports-finance-inline-meta {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  gap: 12px !important;
-  margin-top: 10px !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-items: start !important;
+  justify-content: initial !important;
+  gap: 4px !important;
+  margin-top: 8px !important;
 }
 
 #view-reports .reports-finance-inline-meta .muted {
@@ -35876,16 +36149,37 @@ body.calendar-public-shell #view-calendar-public {
   line-height: 1.5 !important;
 }
 
+#view-reports .reports-finance-download-meta {
+  padding-inline: 0 !important;
+}
+
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-table-wrap,
 #view-reports .reports-finance-download-table-wrap {
   margin-top: 12px !important;
   border-radius: 14px !important;
 }
 
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-table th:first-child,
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-table td:first-child {
+  width: 72px !important;
+  min-width: 72px !important;
+  text-align: center !important;
+}
+
+#view-reports .reports-finance-download-table thead th:first-child,
+#view-reports .reports-finance-download-table tbody td:first-child,
+#view-reports .reports-finance-submit-table thead th:first-child,
+#view-reports .reports-finance-submit-table tbody td:first-child {
+  padding-left: 10px !important;
+  padding-right: 10px !important;
+  vertical-align: middle !important;
+}
+
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-row td,
 #view-reports .reports-finance-download-row td {
-  padding-top: 10px !important;
-  padding-bottom: 10px !important;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+  vertical-align: middle !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-row.is-selected td,
@@ -35912,6 +36206,8 @@ body.calendar-public-shell #view-calendar-public {
   appearance: none !important;
   -webkit-appearance: none !important;
   position: relative !important;
+  display: inline-grid !important;
+  place-content: center !important;
   width: 18px !important;
   height: 18px !important;
   margin: 0 !important;
@@ -35919,6 +36215,7 @@ body.calendar-public-shell #view-calendar-public {
   border-radius: 5px !important;
   background: #fff !important;
   cursor: pointer !important;
+  vertical-align: middle !important;
   transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease !important;
 }
 
@@ -35949,6 +36246,16 @@ body.calendar-public-shell #view-calendar-public {
   transform: rotate(45deg) scale(1) !important;
 }
 
+#view-reports .reports-finance-download-site-name {
+  line-height: 1.28 !important;
+}
+
+#view-reports .reports-finance-download-site-meta {
+  margin-top: 4px !important;
+  font-size: 11.5px !important;
+  line-height: 1.35 !important;
+}
+
 @media (max-width: 860px) {
   #view-reports .reports-finance-download-header,
   #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-header {
@@ -35959,4 +36266,285 @@ body.calendar-public-shell #view-calendar-public {
     flex-direction: column !important;
     align-items: flex-start !important;
   }
+}
+
+/* ===== Phase 6 final pass: home / settings / notices / requests / attendance ===== */
+.topbar-session-info,
+.drawer-role {
+  font-size: 12px !important;
+  line-height: 18px !important;
+}
+
+#view-home .home-inline-tone {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--ui-text-secondary);
+}
+
+#view-home .home-inline-tone::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ui-border-strong);
+}
+
+#view-home .home-inline-tone.is-warn,
+#view-home .home-inline-tone.is-danger {
+  color: var(--ui-accent);
+}
+
+#view-home .home-inline-tone.is-warn::before,
+#view-home .home-inline-tone.is-danger::before {
+  background: var(--ui-accent);
+}
+
+#view-home .home-inline-tone.is-success {
+  color: #15803d;
+}
+
+#view-home .home-inline-tone.is-success::before {
+  background: #16a34a;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-metric span,
+#view-home .home-role-root-hq-refined .home-hq-focus-metric small,
+#view-home .home-schedule-board-lead span,
+#view-home .home-schedule-board-lead small,
+#view-home .home-column-chart-item > span,
+#view-home .home-ring-meta span,
+#view-home .home-metric-tile small,
+#view-home .home-progress-row small,
+#view-home .home-request-kpi-meta,
+#view-home .home-request-kpi-meta small,
+#view-home .home-request-breakdown-copy small,
+#view-home .home-week-range,
+#view-home .home-self-status-kicker,
+#view-home .home-self-status-item span,
+#view-home .home-spotlight-kicker,
+#view-home .home-spotlight-tags span,
+#view-home .home-module-summary-item small,
+#view-home .home-deck-heading .muted {
+  font-size: 12px !important;
+  line-height: 18px !important;
+}
+
+#view-home .home-spotlight-tags span {
+  min-height: 24px !important;
+  padding: 0 8px !important;
+}
+
+#view-profile .profile-command-stage {
+  gap: 14px !important;
+}
+
+#view-profile .profile-settings-rail {
+  gap: 10px !important;
+}
+
+#view-profile .profile-control-title h3,
+#view-profile .settings-flag-group-head h4,
+#view-profile .settings-form-group-head h4 {
+  font-size: 17px !important;
+  line-height: 24px !important;
+}
+
+#view-profile #integrationFlagsCard .settings-flag-groups {
+  gap: 14px !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+#view-profile #integrationFlagsCard .settings-flag-group {
+  padding-top: 0 !important;
+}
+
+#view-profile #googleSheetProfileCard .profile-google-workspace-tabs {
+  margin-top: 4px !important;
+  border-bottom-color: var(--ui-border-subtle) !important;
+}
+
+#view-profile #googleSheetProfileCard .profile-google-links-layout {
+  gap: 18px !important;
+}
+
+#view-profile #googleSheetProfileCard .settings-profile-selector-row {
+  align-items: end !important;
+}
+
+#view-profile #googleSheetProfileCard .settings-advanced-group {
+  display: grid;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+#view-profile #googleSheetProfileCard .settings-advanced-group summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 700;
+  color: var(--ui-text-secondary);
+}
+
+#view-profile #googleSheetProfileCard .settings-advanced-group summary::-webkit-details-marker {
+  display: none;
+}
+
+#view-profile #googleSheetProfileCard .settings-advanced-group summary::after {
+  content: '보기';
+  color: var(--ui-accent);
+}
+
+#view-profile #googleSheetProfileCard .settings-advanced-group[open] summary::after {
+  content: '접기';
+}
+
+#view-profile #googleSheetProfileCard .settings-profile-subgrid-advanced {
+  padding-top: 2px;
+}
+
+#view-profile .profile-google-sync-summary {
+  display: none !important;
+}
+
+#view-notices .notices-toolbar-row {
+  gap: 10px !important;
+}
+
+@media (min-width: 721px) {
+  #view-notices .notices-search-form {
+    display: grid !important;
+    grid-template-columns: minmax(240px, 280px) !important;
+  }
+
+  #view-notices .notices-search-input-wrap,
+  #view-notices .notices-search-form.is-expanded .notices-search-input-wrap {
+    width: min(280px, 30vw) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    transform: none !important;
+  }
+
+  #view-notices .notices-search-toggle {
+    display: none !important;
+  }
+}
+
+#view-notices .notices-list-rows .requests-inline-empty {
+  min-height: 96px !important;
+  padding: 18px 0 12px !important;
+}
+
+#view-requests[data-requests-segment='documents'] .requests-inline-empty,
+#view-requests[data-requests-segment='approvals'] .requests-inline-empty,
+#view-requests[data-requests-segment='leave'] .requests-inline-empty {
+  min-height: 56px !important;
+  padding: 8px 0 0 !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-strip,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-strip {
+  border-radius: 16px !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item {
+  min-height: 96px !important;
+  padding: 14px 16px 12px !important;
+  background: #ffffff !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-accent,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-danger,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-success,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-warning,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-item.is-neutral,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-accent,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-danger,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-success,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-warning,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-item.is-neutral {
+  background: #ffffff !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-summary-meta,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-summary-meta {
+  font-size: 12px !important;
+  line-height: 18px !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-count-chip,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-inline-meta,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-count-chip,
+:is(#attendanceManagerWorkspace.is-attendance-v2-manager, #attendanceCalendarPanel.is-attendance-v2-calendar) .attendance-v2-inline-meta {
+  min-height: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--ui-text-secondary) !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  font-weight: 600 !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-status-text,
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-status-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--ui-text-secondary);
+  white-space: nowrap;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-status-dot,
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-status-text.is-danger,
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-status-text.is-danger {
+  color: #dc2626;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-status-text.is-warning,
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-status-text.is-warning {
+  color: var(--ui-accent);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-status-text.is-success,
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-status-text.is-success {
+  color: #15803d;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-status-text.is-muted,
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-status-text.is-muted {
+  color: var(--ui-text-tertiary);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-status-text.is-neutral,
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-status-text.is-neutral {
+  color: var(--ui-text-secondary);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-empty,
+#attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-empty-cell,
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-empty,
+#attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-empty-cell {
+  padding: 16px 0 !important;
 }

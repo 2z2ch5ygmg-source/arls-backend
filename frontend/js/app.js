@@ -5016,7 +5016,7 @@ function buildHomeListRowsHtml(rows = [], { emptyTitle = '표시할 항목이 �
           </div>
           <div class="home-role-list-side">
             ${String(row?.value || '').trim() ? `<em>${escapeHomeHtml(row?.value || '')}</em>` : ''}
-            ${String(row?.pill_label || '').trim() ? `<span class="${getHomeBriefingToneClass(row?.pill_tone || 'neutral')}">${escapeHomeHtml(row?.pill_label || '')}</span>` : ''}
+            ${String(row?.pill_label || '').trim() ? `<span class="home-inline-tone is-${escapeHomeHtml(row?.pill_tone || 'neutral')}">${escapeHomeHtml(row?.pill_label || '')}</span>` : ''}
           </div>
         </li>
       `).join('')}
@@ -5228,15 +5228,15 @@ function buildHomeRequestCardHtml({ briefing = null, title = '내 요청·문서
         <button class="btn btn-secondary" type="button" ${actionAttrs}>열기</button>
       </div>
       ${buildHomeModuleSummaryBand([
-        { label: '처리 큐', value: `${total}건`, meta: total > 0 ? '확인 필요' : '정상', tone: total > 0 ? 'warn' : 'neutral' },
-        { label: '휴가 승인', value: `${leavePending}건`, meta: leavePending > 0 ? '승인 대기' : '정상', tone: leavePending > 0 ? 'warn' : 'neutral' },
-        { label: '출퇴근·정정', value: `${attendancePending}건`, meta: attendancePending > 0 ? '검토 필요' : '정상', tone: attendancePending > 0 ? 'warn' : 'neutral' },
-        { label: '미확인 알림', value: `${unread}건`, meta: unread > 0 ? '읽지 않음' : '정상', tone: unread > 0 ? 'warn' : 'neutral' },
+        { label: '처리 큐', value: `${total}건`, meta: total > 0 ? '확인 필요' : '문제 없음', tone: total > 0 ? 'warn' : 'neutral' },
+        { label: '휴가 승인', value: `${leavePending}건`, meta: leavePending > 0 ? '대기' : '문제 없음', tone: leavePending > 0 ? 'warn' : 'neutral' },
+        { label: '출퇴근·정정', value: `${attendancePending}건`, meta: attendancePending > 0 ? '검토 필요' : '문제 없음', tone: attendancePending > 0 ? 'warn' : 'neutral' },
+        { label: '미확인 알림', value: `${unread}건`, meta: unread > 0 ? '읽지 않음' : '문제 없음', tone: unread > 0 ? 'warn' : 'neutral' },
       ])}
       <div class="home-card-scroll">
         ${buildHomeListRowsHtml(priorityRows, {
           emptyTitle: '지금 확인할 요청이 없습니다.',
-          emptyMeta: '새 요청이 생기면 이 영역에 바로 표시됩니다.',
+          emptyMeta: '새 요청이 생기면 여기에 표시됩니다.',
         })}
       </div>
     </article>
@@ -5275,14 +5275,14 @@ function buildHomeScheduleCardHtml({ briefing = null, ops = null, requestSummary
         <button class="btn btn-secondary" type="button" data-action="switch-view" data-view="schedule">스케줄 보기</button>
       </div>
       ${buildHomeModuleSummaryBand([
-        { label: '결원 지점', value: `${vacancySiteCount}곳`, meta: missingCount > 0 ? '즉시 조정 필요' : '정상', tone: vacancySiteCount > 0 ? 'warn' : 'neutral' },
+        { label: '결원 지점', value: `${vacancySiteCount}곳`, meta: missingCount > 0 ? '즉시 조정' : '문제 없음', tone: vacancySiteCount > 0 ? 'warn' : 'neutral' },
         { label: '승인 대기', value: `${pendingApprovalCount}건`, meta: '휴가·출퇴근 요청', tone: pendingApprovalCount > 0 ? 'warn' : 'neutral' },
         { label: '운영 지점', value: `${siteCount}곳`, meta: '오늘 기준', tone: 'neutral' },
       ])}
       <div class="home-card-scroll">
         ${buildHomeListRowsHtml(briefing?.schedule_risk_rows || [], {
           emptyTitle: '스케줄 리스크가 없습니다.',
-          emptyMeta: '결원이나 조정 이슈가 생기면 여기서 먼저 확인합니다.',
+          emptyMeta: '결원이나 조정 이슈가 생기면 여기에 표시됩니다.',
         })}
       </div>
     </article>
@@ -5510,7 +5510,7 @@ function buildHomeHqSurfaceHtml(briefing = null) {
             <div class="home-hq-focus-copy">
               <span class="home-hq-focus-kicker">오늘 운영 포커스</span>
               <h3>즉시 확인 ${escapeHomeHtml(`${issueCount}건`)}</h3>
-              <p>${escapeHomeHtml(`출근 누락 ${missingCount} · 승인 대기 ${pendingApprovalCount} · 결원 지점 ${vacancySiteCount}`)}</p>
+              <p>${escapeHomeHtml(`미출근 ${missingCount} · 승인 ${pendingApprovalCount} · 결원 ${vacancySiteCount}`)}</p>
             </div>
             <button class="btn btn-primary" type="button" data-action="switch-view" data-view="attendance">출퇴근 보기</button>
           </div>
@@ -5523,12 +5523,12 @@ function buildHomeHqSurfaceHtml(briefing = null) {
             <article class="home-hq-focus-metric">
               <span>즉시 확인</span>
               <strong>${escapeHomeHtml(`${missingCount + vacancySiteCount}건`)}</strong>
-              <small>${escapeHomeHtml(missingCount + vacancySiteCount > 0 ? '출근·배정 우선' : '정상')}</small>
+              <small>${escapeHomeHtml(missingCount + vacancySiteCount > 0 ? '미출근·결원' : '문제 없음')}</small>
             </article>
             <article class="home-hq-focus-metric">
               <span>승인 대기</span>
               <strong>${escapeHomeHtml(`${pendingApprovalCount}건`)}</strong>
-              <small>${escapeHomeHtml(`운영 지점 ${Number(ops?.site_count || 0)}곳`)}</small>
+              <small>${escapeHomeHtml(`운영 현장 ${Number(ops?.site_count || 0)}곳`)}</small>
             </article>
           </div>
           <div class="home-hq-focus-queue">
@@ -14202,39 +14202,36 @@ function renderScheduleUploadWorkflowContext() {
     stepLabel = getScheduleHqWizardSteps().find((item) => item.key === getScheduleHqWizardStep())?.label || '-';
     siteLabel = hqContext.selectedSiteCodes.length > 1
       ? `${hqContext.selectedSiteCodes.length}개 지점`
-      : getScheduleImportSiteLabel(hqContext.siteCode);
+      : (getScheduleImportSiteLabel(hqContext.siteCode) || '지점 선택');
     monthLabel = formatScheduleMonthTitle(hqContext.month);
   } else {
     fileName = String($('#scheduleImportFile')?.files?.[0]?.name || '파일 선택 전').trim() || '파일 선택 전';
     revision = String(state.preview?.metadata?.template_version || state.preview?.metadata?.export_revision || '-').trim() || '-';
     stepLabel = getScheduleBaseWizardSteps().find((item) => item.key === getScheduleBaseWizardStep())?.label || '-';
   }
+  const compactStepLabel = String(stepLabel || '')
+    .replace(/^\d+\.\s*/, '')
+    .trim() || '-';
   setTextContentIfPresent('#scheduleExcelWorkflowContextTenant', tenantLabel, '테넌트 확인');
   setTextContentIfPresent('#scheduleExcelWorkflowContextSite', siteLabel, '지점 선택');
   setTextContentIfPresent('#scheduleExcelWorkflowContextMonth', monthLabel, '월 선택');
   setTextContentIfPresent('#scheduleExcelWorkflowContextFile', fileName, '파일 선택 전');
   setTextContentIfPresent('#scheduleExcelWorkflowContextRevision', revision, '-');
-  setTextContentIfPresent('#scheduleExcelWorkflowContextStage', stepLabel, '-');
+  setTextContentIfPresent('#scheduleExcelWorkflowContextStage', compactStepLabel, '-');
   const baseStep = getScheduleBaseWizardStep();
   const hqStep = getScheduleHqWizardStep();
-  const showTenant = canSelectScheduleWorkflowTenant();
-  const showSite = mode === SCHEDULE_UPLOAD_MODE_HQ
-    ? hqStep !== SCHEDULE_HQ_WIZARD_STEP_EXPORT && !isNonInformativeScheduleMetaValue(siteLabel)
-    : (baseStep === SCHEDULE_BASE_WIZARD_STEP_REVIEW || baseStep === SCHEDULE_BASE_WIZARD_STEP_APPLY)
-      && !isNonInformativeScheduleMetaValue(siteLabel);
-  const showMonth = mode === SCHEDULE_UPLOAD_MODE_HQ
-    ? hqStep !== SCHEDULE_HQ_WIZARD_STEP_EXPORT && !isNonInformativeScheduleMetaValue(monthLabel)
-    : (baseStep === SCHEDULE_BASE_WIZARD_STEP_REVIEW || baseStep === SCHEDULE_BASE_WIZARD_STEP_APPLY)
-      && !isNonInformativeScheduleMetaValue(monthLabel);
-  const showFile = !isNonInformativeScheduleMetaValue(fileName);
-  const showRevision = getNavigationRole() === 'DEV' && !isNonInformativeScheduleMetaValue(revision);
+  const showTenant = false;
+  const showSite = true;
+  const showMonth = true;
+  const showFile = false;
+  const showRevision = false;
   const visibleCards = [
     toggleScheduleUploadContextCard('#scheduleExcelWorkflowContextTenant', showTenant),
     toggleScheduleUploadContextCard('#scheduleExcelWorkflowContextSite', showSite),
     toggleScheduleUploadContextCard('#scheduleExcelWorkflowContextMonth', showMonth),
     toggleScheduleUploadContextCard('#scheduleExcelWorkflowContextFile', showFile),
     toggleScheduleUploadContextCard('#scheduleExcelWorkflowContextRevision', showRevision),
-    toggleScheduleUploadContextCard('#scheduleExcelWorkflowContextStage', false),
+    toggleScheduleUploadContextCard('#scheduleExcelWorkflowContextStage', true),
   ].filter(Boolean).length;
   const contextStrip = $('#scheduleExcelWorkflowContextStrip');
   if (contextStrip instanceof HTMLElement) {
@@ -14642,6 +14639,21 @@ function renderScheduleBaseWizardPages() {
 
 function renderScheduleHqWizardPages() {
   const step = getScheduleHqWizardStep();
+  const stageKickerEl = $('#scheduleHqStageKicker');
+  const stageTitleEl = $('#scheduleHqStageTitle');
+  const handoffKickerEl = $('#scheduleHqHandoffKicker');
+  const handoffTitleEl = $('#scheduleHqHandoffTitle');
+  const stageMetaByStep = {
+    [SCHEDULE_HQ_WIZARD_STEP_EXPORT]: { kicker: 'STEP 1', title: '제출용 추출' },
+    [SCHEDULE_HQ_WIZARD_STEP_UPLOAD]: { kicker: 'STEP 2', title: '작성본 업로드' },
+    [SCHEDULE_HQ_WIZARD_STEP_PREVIEW]: { kicker: 'STEP 3', title: '미리보기' },
+    [SCHEDULE_HQ_WIZARD_STEP_COMPLETE]: { kicker: 'STEP 4', title: '업로드 완료' },
+  };
+  const stageMeta = stageMetaByStep[step] || stageMetaByStep[SCHEDULE_HQ_WIZARD_STEP_EXPORT];
+  if (stageKickerEl instanceof HTMLElement) stageKickerEl.textContent = stageMeta.kicker;
+  if (stageTitleEl instanceof HTMLElement) stageTitleEl.textContent = stageMeta.title;
+  if (handoffKickerEl instanceof HTMLElement) handoffKickerEl.textContent = stageMeta.kicker;
+  if (handoffTitleEl instanceof HTMLElement) handoffTitleEl.textContent = stageMeta.title;
   toggleVisibility('#scheduleExcelWorkflowExportSection', step === SCHEDULE_HQ_WIZARD_STEP_EXPORT);
   toggleVisibility('#scheduleExcelWorkflowHandoffSection', step !== SCHEDULE_HQ_WIZARD_STEP_EXPORT);
   toggleVisibility('#scheduleSupportUploadSection', step === SCHEDULE_HQ_WIZARD_STEP_UPLOAD);
@@ -14803,7 +14815,7 @@ function renderScheduleUploadWorkspace() {
   if (uploadHeaderTitle) {
     uploadHeaderTitle.textContent = activeTopTab === SCHEDULE_TAB_HQ_UPLOAD
       ? '지원근무자 업로드'
-      : '월간 업로드';
+      : 'Excel 업로드';
   }
   if (uploadHeaderText) {
     uploadHeaderText.textContent = '';
@@ -24912,7 +24924,7 @@ function renderRequestsWorkspaceListRows() {
   if (!rows.length) {
     workspace.detailKey = '';
     workspace.drawerOpen = false;
-    renderCompactListEmpty(list, '조건에 맞는 요청이 없습니다.', '필터를 조정하거나 새 요청을 등록해 주세요.');
+    renderCompactListEmpty(list, '조건에 맞는 요청이 없습니다.', '필터를 다시 확인해 주세요.');
     renderRequestsSortHeaders();
     return;
   }
@@ -29069,7 +29081,7 @@ function renderLeaveWorkspaceRequestRows({ loading = false, errorMessage = '' } 
   }
   clearList(list);
   if (errorMessage) {
-    renderCompactListEmpty(list, errorMessage, '필터를 확인한 뒤 다시 시도해 주세요.');
+    renderCompactListEmpty(list, errorMessage, '잠시 후 다시 시도해 주세요.');
     if (countEl) countEl.textContent = '0건';
     if (hintEl) hintEl.textContent = '휴가 요청을 불러오지 못했습니다.';
     return;
@@ -29082,7 +29094,7 @@ function renderLeaveWorkspaceRequestRows({ loading = false, errorMessage = '' } 
       : '내 휴가 요청 이력을 확인하고 상태를 추적합니다.';
   }
   if (!rows.length) {
-    renderCompactListEmpty(list, '조건에 맞는 휴가 요청이 없습니다.', '필터를 조정하거나 새 휴가를 신청해 주세요.');
+    renderCompactListEmpty(list, '조건에 맞는 휴가 요청이 없습니다.', '필터를 다시 확인해 주세요.');
     state.leaveView.workspaceSelectedRequestId = '';
     state.leaveView.workspaceDrawerOpen = false;
     renderLeaveWorkspaceDetailPanel();
@@ -38745,15 +38757,15 @@ function renderNoticesListPanel() {
       : String(notices.search || '').trim()
       ? '검색 조건에 맞는 공지가 없습니다.'
       : canManageNotices()
-      ? '첫 공지를 등록하면 홈 상단 티저와 공지 목록에 바로 반영됩니다.'
-      : '새 공지가 등록되면 카테고리, 제목, 날짜 형식으로 이 목록에서 확인할 수 있습니다.',
+      ? '등록된 공지가 없습니다.'
+      : '표시할 공지가 없습니다.',
     notices.error
       ? notices.error
       : String(notices.search || '').trim()
-      ? '카테고리를 바꾸거나 검색어를 지우고 다시 확인해 주세요.'
+      ? '검색어를 조정해 주세요.'
       : canManageNotices()
-      ? `상단고정은 최대 ${NOTICE_PINNED_LIMIT}개까지 유지됩니다.`
-      : `최근 ${Math.round(NOTICE_NEW_BADGE_WINDOW_HOURS / 24)}일 이내 공지는 새 배지로 구분됩니다.`,
+      ? ''
+      : '',
   );
 }
 
@@ -40317,6 +40329,11 @@ function toCalendarEditableEvent(source = {}, fallbackContainerId = '', fallback
     action_items_text: actionItems,
     comments,
     custom_fields_draft: customFields,
+    comment_draft_body: String(source?.comment_draft_body || '').trim(),
+    comment_draft_is_internal: Boolean(source?.comment_draft_is_internal),
+    source_provider: String(source?.source_provider || '').trim(),
+    source_badge: String(source?.source_badge || '').trim(),
+    is_read_only: Boolean(source?.is_read_only),
   };
 }
 
@@ -40504,6 +40521,12 @@ function getCalendarContainerMetaById(workspace, containerId = '') {
 }
 
 function getCalendarEventSourceBadge(workspace, event = null) {
+  const explicitBadge = String(event?.source_badge || '').trim();
+  if (explicitBadge) return explicitBadge;
+  const explicitProvider = String(event?.source_provider || '').trim().toLowerCase();
+  if (explicitProvider) {
+    return explicitProvider === 'outlook' ? 'Outlook Sync' : 'Google Sync';
+  }
   const container = getCalendarContainerMetaById(workspace, event?.container_id || '');
   if (!container) return '';
   const provider = String(container?.provider || 'arls').trim().toLowerCase();
@@ -40512,6 +40535,7 @@ function getCalendarEventSourceBadge(workspace, event = null) {
 }
 
 function isCalendarEventReadOnly(workspace, event = null) {
+  if (event?.is_read_only === true) return true;
   const container = getCalendarContainerMetaById(workspace, event?.container_id || '');
   if (!container) return false;
   const provider = String(container?.provider || 'arls').trim().toLowerCase();
@@ -41408,10 +41432,10 @@ function renderCalendarDetailDrawer(workspace, selectedContainer) {
                 <div class="calendar-comment-compose">
                   <label class="calendar-form-field calendar-form-field-full">
                     <span>새 댓글</span>
-                    <textarea id="calendarCommentBodyInput" rows="3" placeholder="일정에 대한 메모나 진행 상황을 남기세요."></textarea>
+                    <textarea id="calendarCommentBodyInput" rows="3" placeholder="일정에 대한 메모나 진행 상황을 남기세요.">${escapeHtml(String(editorEvent.comment_draft_body || ''))}</textarea>
                   </label>
                   <label class="calendar-check-row">
-                    <input id="calendarCommentInternalToggle" type="checkbox" />
+                    <input id="calendarCommentInternalToggle" type="checkbox" ${editorEvent.comment_draft_is_internal ? 'checked' : ''} />
                     <span>내부 메모로 저장</span>
                   </label>
                   <div class="calendar-comment-actions">
@@ -41602,6 +41626,8 @@ function snapshotCalendarEditorStateFromDom(workspace) {
     custom_fields_draft: Array.isArray(editorEvent.custom_fields_draft)
       ? editorEvent.custom_fields_draft.map((field, index) => normalizeCalendarCustomFieldDraft(field, index))
       : [],
+    comment_draft_body: String(editorEvent.comment_draft_body || '').trim(),
+    comment_draft_is_internal: Boolean(editorEvent.comment_draft_is_internal),
   };
 
   const titleInput = $('#calendarTitleInput');
@@ -41699,6 +41725,16 @@ function snapshotCalendarEditorStateFromDom(workspace) {
       value: row.querySelector('[data-calendar-custom-field-value]')?.value || '',
       field_type: row.querySelector('[data-calendar-custom-field-type]')?.value || 'text',
     }, index)).filter((row) => row.label);
+  }
+
+  const commentBodyInput = $('#calendarCommentBodyInput');
+  if (commentBodyInput) {
+    nextDraft.comment_draft_body = String(commentBodyInput.value || '').trim();
+  }
+
+  const commentInternalToggle = $('#calendarCommentInternalToggle');
+  if (commentInternalToggle) {
+    nextDraft.comment_draft_is_internal = Boolean(commentInternalToggle.checked);
   }
 
   calendarState.draftEvent = nextDraft;
@@ -55002,6 +55038,7 @@ function renderScheduleHqTabs() {
   const workspaceTitle = $('#scheduleWorkspaceTitle');
   const workspaceDescription = $('#scheduleWorkspaceDescription');
   const workspaceHelpButton = $('#scheduleWorkspaceHelpButton');
+  const scheduleView = $('#view-schedule');
   bootstrapScheduleTabPanelRefs();
 
   const canOpenTemplateTab = isScheduleTemplateTabVisible();
@@ -55011,12 +55048,18 @@ function renderScheduleHqTabs() {
   const activeTab = getScheduleActiveTopTab();
   state.schedule.hqTab = activeTab;
   const reportsOwnerVisible = isScheduleReportsOwnerTab(activeTab);
+  const uploadReportLikeVisible = activeTab === SCHEDULE_TAB_UPLOAD || activeTab === SCHEDULE_TAB_HQ_UPLOAD;
+  const reportStyledVisible = reportsOwnerVisible || uploadReportLikeVisible;
   if (workspaceTitle) {
-    workspaceTitle.textContent = reportsOwnerVisible ? '보고' : '근무일정';
+    workspaceTitle.textContent = reportStyledVisible ? '보고' : '근무일정';
   }
   if (workspaceDescription) {
     if (reportsOwnerVisible) {
       workspaceDescription.textContent = 'Finance 제출 작업면';
+    } else if (uploadReportLikeVisible && activeTab === SCHEDULE_TAB_HQ_UPLOAD) {
+      workspaceDescription.textContent = '지원근무자 업로드';
+    } else if (uploadReportLikeVisible) {
+      workspaceDescription.textContent = 'Excel 업로드';
     } else if (activeTab === SCHEDULE_TAB_HQ_UPLOAD) {
       workspaceDescription.textContent = '지원근무자 HQ 업로드';
     } else if (activeTab === SCHEDULE_TAB_UPLOAD) {
@@ -55028,7 +55071,11 @@ function renderScheduleHqTabs() {
     }
   }
   if (workspaceHelpButton instanceof HTMLElement) {
-    workspaceHelpButton.setAttribute('aria-label', reportsOwnerVisible ? '보고 도움말' : '근무일정 도움말');
+    workspaceHelpButton.setAttribute('aria-label', reportStyledVisible ? '보고 도움말' : '근무일정 도움말');
+    workspaceHelpButton.classList.toggle('hidden', uploadReportLikeVisible);
+  }
+  if (scheduleView instanceof HTMLElement) {
+    scheduleView.classList.toggle('schedule-reportlike-shell', uploadReportLikeVisible);
   }
   if (activeTab === SCHEDULE_TAB_LIST) {
     state.schedule.viewMode = SCHEDULE_VIEW_MODE_LIST;
@@ -55038,6 +55085,7 @@ function renderScheduleHqTabs() {
 
   if (tabWrap instanceof HTMLElement) {
     tabWrap.classList.remove('hidden');
+    tabWrap.classList.toggle('schedule-workspace-tabs-reportlike', uploadReportLikeVisible);
     const uiActiveTab = activeTab === SCHEDULE_TAB_LIST ? SCHEDULE_TAB_CALENDAR : activeTab;
     tabWrap.querySelectorAll('[data-action="schedule-hq-tab"]').forEach((button) => {
       const tab = normalizeScheduleHqTab(button?.dataset?.tab || '');
@@ -55047,7 +55095,9 @@ function renderScheduleHqTabs() {
       const isReportsTab = tab === SCHEDULE_TAB_REPORTS;
       const isCalendarTab = tab === SCHEDULE_TAB_CALENDAR;
       const isScheduleOwnerTab = isCalendarTab || isTemplateTab || isUploadTab || isHqUploadTab;
-      const groupHidden = reportsOwnerVisible ? isScheduleOwnerTab : isReportsTab;
+      const groupHidden = uploadReportLikeVisible
+        ? (!isUploadTab && !isHqUploadTab)
+        : (reportsOwnerVisible ? isScheduleOwnerTab : isReportsTab);
       button.classList.toggle(
         'hidden',
         groupHidden
@@ -71154,6 +71204,15 @@ document.addEventListener('compositionend', (event) => {
     }
   }
 
+  function v2StatusInlineMarkup(key, label) {
+    return `
+      <span class="attendance-v2-status-text is-${escapeValue(v2StatusTone(key))}">
+        <span class="attendance-v2-status-dot" aria-hidden="true"></span>
+        <span>${escapeValue(label)}</span>
+      </span>
+    `;
+  }
+
   function v2BuildSummary(rows) {
     const summary = {
       target: 0,
@@ -71402,7 +71461,7 @@ document.addEventListener('compositionend', (event) => {
         <h3>${escapeValue(title)}</h3>
         <div class="attendance-v2-head-meta">
           ${filterKey !== 'all' ? `<button type="button" class="attendance-v2-clear-filter" data-clear-filter="true">${escapeValue(v2FilterLabel(filterKey))} 해제</button>` : ''}
-          <span class="attendance-v2-count-chip">${queueRows.length}건</span>
+          <span class="attendance-v2-inline-meta">총 ${queueRows.length}건</span>
         </div>
       </div>
       ${queueRows.length ? `
@@ -71424,14 +71483,14 @@ document.addEventListener('compositionend', (event) => {
                   <span class="attendance-v2-cell site">${escapeValue(v2Site(row))}</span>
                   <span class="attendance-v2-cell schedule">${escapeValue(v2Schedule(row))}</span>
                   <span class="attendance-v2-cell actual">${escapeValue(v2Actual(row))}</span>
-                  <span class="attendance-v2-cell status"><span class="attendance-v2-status-chip is-${v2StatusTone(key)}">${escapeValue(v2StatusLabel(row))}</span></span>
+                  <span class="attendance-v2-cell status">${v2StatusInlineMarkup(key, v2StatusLabel(row))}</span>
                   <span class="attendance-v2-cell request">${escapeValue(v2RequestLabel(row))}</span>
                 </button>
               `;
             }).join('')}
           </div>
         </div>
-      ` : `<div class="attendance-v2-empty">${escapeValue(previewMode ? `${v2FilterLabel(filterKey)}에 해당하는 기록이 없습니다.` : '우선 확인할 예외가 없습니다.')}</div>`}
+      ` : `<div class="attendance-v2-empty">${escapeValue(previewMode ? `${v2FilterLabel(filterKey)} 기록이 없습니다.` : '우선 확인 예외가 없습니다.')}</div>`}
     `;
   }
 
@@ -71501,12 +71560,12 @@ document.addEventListener('compositionend', (event) => {
                   <td>${escapeValue(v2Schedule(row))}</td>
                   <td>${escapeValue(v2ActualIn(row))}</td>
                   <td>${escapeValue(v2ActualOut(row))}</td>
-                  <td><span class="attendance-v2-status-chip is-${v2StatusTone(v2StatusKey(row))}">${escapeValue(v2StatusLabel(row))}</span></td>
+                  <td>${v2StatusInlineMarkup(v2StatusKey(row), v2StatusLabel(row))}</td>
                   <td>${escapeValue(v2RequestLabel(row))}</td>
                   <td>${escapeValue(v2Date(row))}</td>
                 </tr>
               `;
-            }).join('') : '<tr><td colspan="8" class="attendance-v2-empty-cell">표시할 기록이 없습니다.</td></tr>'}
+            }).join('') : '<tr><td colspan="8" class="attendance-v2-empty-cell">기록이 없습니다.</td></tr>'}
           </tbody>
         </table>
       </div>
@@ -71559,7 +71618,7 @@ document.addEventListener('compositionend', (event) => {
             <h3>${escapeValue(v2Name(row))}</h3>
             <span class="attendance-v2-inline-meta">${escapeValue(v2Site(row))} · ${escapeValue(v2Date(row))}</span>
           </div>
-          <span class="attendance-v2-status-chip is-${v2StatusTone(statusKey)}">${escapeValue(v2StatusLabel(row))}</span>
+          ${v2StatusInlineMarkup(statusKey, v2StatusLabel(row))}
         </div>
         <div class="attendance-v2-inspector-actions">
           <button type="button" class="attendance-v2-inspector-action is-primary" data-inspector-action="list" data-row-key="${escapeValue(attendanceStatusV2SelectedKey || '')}">리스트형에서 보기</button>
