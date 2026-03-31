@@ -35487,16 +35487,18 @@ body.calendar-public-shell #view-calendar-public {
 
 /* ===== Phase 3.7 final refinement against live Daou home + approval ===== */
 #view-home .home-role-root-hq-refined .home-stage-hq-refined {
-  grid-template-columns: minmax(360px, 1.14fr) minmax(280px, 0.9fr) minmax(260px, 0.9fr);
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
   grid-template-areas:
-    "focus requests schedule"
-    "notices notices org";
+    "focus requests"
+    "schedule noticeorg";
   gap: 16px;
+  align-items: stretch;
 }
 
 #view-home .home-role-root-hq-refined .home-hq-focus-card {
   grid-area: focus;
   grid-row: auto;
+  height: 100%;
   min-height: 0;
   padding: 18px 20px;
   border-radius: 18px;
@@ -35540,6 +35542,8 @@ body.calendar-public-shell #view-calendar-public {
 
 #view-home .home-role-root-hq-refined .home-hq-secondary-slot {
   min-width: 0;
+  height: 100%;
+  display: flex;
 }
 
 #view-home .home-role-root-hq-refined .home-hq-secondary-slot--requests {
@@ -35550,12 +35554,8 @@ body.calendar-public-shell #view-calendar-public {
   grid-area: schedule;
 }
 
-#view-home .home-role-root-hq-refined .home-hq-secondary-slot--notices {
-  grid-area: notices;
-}
-
-#view-home .home-role-root-hq-refined .home-hq-secondary-slot--org {
-  grid-area: org;
+#view-home .home-role-root-hq-refined .home-hq-secondary-slot--noticeorg {
+  grid-area: noticeorg;
 }
 
 #view-home .home-role-root-hq-refined .home-deck-card .home-card-scroll {
@@ -35567,6 +35567,10 @@ body.calendar-public-shell #view-calendar-public {
 
 #view-home .home-role-root-hq-refined .home-hq-secondary-slot .home-role-card {
   min-height: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   padding: 16px 18px;
   border-radius: 16px;
 }
@@ -35654,24 +35658,69 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #view-home .home-role-root-hq-refined .home-role-card--notices .home-role-empty,
-#view-home .home-role-root-hq-refined .home-role-card--org .home-role-empty {
+#view-home .home-role-root-hq-refined .home-role-card--org .home-role-empty,
+#view-home .home-role-root-hq-refined .home-role-card--notice-org .home-role-empty {
   min-height: 40px !important;
   padding-top: 4px;
 }
 
 #view-home .home-role-root-hq-refined .home-role-card--notices .home-role-list > li,
-#view-home .home-role-root-hq-refined .home-role-card--org .home-role-list > li {
+#view-home .home-role-root-hq-refined .home-role-card--org .home-role-list > li,
+#view-home .home-role-root-hq-refined .home-role-card--notice-org .home-role-list > li {
   padding: 12px 0;
 }
 
 #view-home .home-role-root-hq-refined .home-role-card--notices .home-card-scroll,
-#view-home .home-role-root-hq-refined .home-role-card--org .home-card-scroll {
+#view-home .home-role-root-hq-refined .home-role-card--org .home-card-scroll,
+#view-home .home-role-root-hq-refined .home-role-card--notice-org .home-card-scroll {
   padding-top: 6px;
+  flex: 1 1 auto;
 }
 
 #view-home .home-role-root-hq-refined .home-role-card--notices .home-role-card-head,
-#view-home .home-role-root-hq-refined .home-role-card--org .home-role-card-head {
+#view-home .home-role-root-hq-refined .home-role-card--org .home-role-card-head,
+#view-home .home-role-root-hq-refined .home-role-card--notice-org .home-role-card-head {
   padding-bottom: 10px;
+}
+
+#view-home .home-role-root-hq-refined .home-role-card--notice-org .home-card-scroll {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+#view-home .home-role-root-hq-refined .home-combo-section {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+}
+
+#view-home .home-role-root-hq-refined .home-combo-section + .home-combo-section {
+  padding-top: 14px;
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+#view-home .home-role-root-hq-refined .home-combo-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#view-home .home-role-root-hq-refined .home-combo-section-head h4 {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+  color: var(--ui-text-secondary);
+}
+
+#view-home .home-role-root-hq-refined .home-combo-section-head .btn {
+  min-height: 28px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
 }
 
 #view-requests[data-requests-segment='documents'] #requestsToolbarScopeCount,
@@ -35728,7 +35777,7 @@ body.calendar-public-shell #view-calendar-public {
     grid-template-areas:
       "focus focus"
       "requests schedule"
-      "notices org";
+      "noticeorg noticeorg";
   }
 }
 

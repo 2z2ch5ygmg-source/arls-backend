@@ -5281,6 +5281,39 @@ function buildHomeNoticeCardHtml({ briefing = null } = {}) {
   `;
 }
 
+function buildHomeNoticeOrgCardHtml({ briefing = null } = {}) {
+  const noticeRows = Array.isArray(briefing?.notice_rows) ? briefing.notice_rows.slice(0, 3) : [];
+  const orgRows = filterMeaningfulHomeRows(briefing?.org_issue_rows || []).slice(0, 3);
+  return `
+    <article class="module-card home-role-card home-role-card--notice-org home-deck-card home-deck-card-simple">
+      <div class="home-role-card-head">
+        <div>
+          <h3>공지·조직</h3>
+        </div>
+        <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/feature/notices">공지 보기</button>
+      </div>
+      <div class="home-card-scroll">
+        <section class="home-combo-section home-combo-section--notices">
+          <div class="home-combo-section-head">
+            <h4>공지사항</h4>
+          </div>
+          ${buildHomeNoticeRowsHtml(noticeRows)}
+        </section>
+        <section class="home-combo-section home-combo-section--org">
+          <div class="home-combo-section-head">
+            <h4>조직 이슈</h4>
+            <button class="btn btn-ghost btn-sm" type="button" data-action="drawer-open-route" data-route="/branch/employees">조직 보기</button>
+          </div>
+          ${buildHomeListRowsHtml(orgRows, {
+            emptyTitle: '조직 이슈가 없습니다.',
+            emptyMeta: '',
+          })}
+        </section>
+      </div>
+    </article>
+  `;
+}
+
 function buildHomeScheduleCardHtml({ briefing = null, ops = null, requestSummary = null } = {}) {
   const normalizedOps = ops || briefing?.ops_summary || {};
   const normalizedRequest = requestSummary || briefing?.request_summary || briefing?.approval_summary || {};
@@ -5527,11 +5560,8 @@ function buildHomeHqSurfaceHtml(briefing = null) {
   const secondaryCards = [
     { key: 'requests', html: buildHomeRequestCardHtml({ briefing, title: '요청·승인', allowQueueRoute: true }) },
     { key: 'schedule', html: buildHomeScheduleCardHtml({ briefing, ops, requestSummary }) },
-    { key: 'notices', html: buildHomeNoticeCardHtml({ briefing }) },
+    { key: 'noticeorg', html: buildHomeNoticeOrgCardHtml({ briefing }) },
   ];
-  if (Array.isArray(briefing?.org_issue_rows) && briefing.org_issue_rows.length) {
-    secondaryCards.push({ key: 'org', html: buildHomeOrgCardHtml({ briefing }) });
-  }
   return `
     <div class="home-role-root home-role-root-hq home-analytics-root home-analytics-root-hq home-role-root-hq-refined">
       <div class="home-stage home-stage-hq-refined">
