@@ -413,3 +413,21 @@ def test_fetch_booking_links_qualifies_joined_columns_with_alias(monkeypatch):
     assert "(bl.owner_user_id = %s OR EXISTS (SELECT 1 FROM calendar_containers cc WHERE cc.id = bl.container_id AND cc.site_id = %s))" in query
     assert "FROM calendar_booking_links bl" in query
     assert params == ("tenant-1", "user-1", "site-1")
+
+
+def test_fetch_sync_connections_qualifies_joined_columns_with_alias(monkeypatch):
+    conn = _CaptureConn()
+    monkeypatch.setattr(calendar_router, "_resolve_calendar_audience", lambda _user: "supervisor")
+    monkeypatch.setattr(calendar_router, "can_manage_calendar_sync", lambda _role: True)
+
+    calendar_router._fetch_sync_connections(
+        conn,
+        tenant_id="tenant-1",
+        user={"id": "user-1", "role": "supervisor"},
+    )
+
+    query, params = conn.cursor_obj.executed[0]
+    assert "WHERE sc.tenant_id = %s AND sc.owner_user_id = %s" in query
+    assert "FROM calendar_sync_connections sc" in query
+    assert "LEFT JOIN calendar_containers cc ON cc.id = sc.default_container_id" in query
+    assert params == ("tenant-1", "user-1")

@@ -1771,9 +1771,9 @@ def _fetch_sync_connections(conn, *, tenant_id: str, user: dict[str, Any]) -> li
         return []
     user_id = str(user.get("id") or "").strip() or None
     params: list[Any] = [tenant_id]
-    filters = ["tenant_id = %s"]
+    filters = ["sc.tenant_id = %s"]
     if _resolve_calendar_audience(user) != "hq" and user_id:
-        filters.append("owner_user_id = %s")
+        filters.append("sc.owner_user_id = %s")
         params.append(user_id)
     with conn.cursor() as cur:
         cur.execute(
