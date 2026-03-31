@@ -396,3 +396,20 @@ def test_fetch_events_qualifies_calendar_event_columns_with_alias(monkeypatch):
     assert "AND e.container_id = %s" in query
     assert "ORDER BY e.starts_at ASC, e.created_at ASC" in query
     assert params == ("tenant-1", "container-1", "2026-04-01T00:00:00+09:00", "2026-03-31T00:00:00+09:00")
+
+
+def test_fetch_booking_links_qualifies_joined_columns_with_alias(monkeypatch):
+    conn = _CaptureConn()
+    monkeypatch.setattr(calendar_router, "_resolve_calendar_audience", lambda _user: "supervisor")
+
+    calendar_router._fetch_booking_links(
+        conn,
+        tenant_id="tenant-1",
+        user={"id": "user-1", "site_id": "site-1", "role": "supervisor"},
+    )
+
+    query, params = conn.cursor_obj.executed[0]
+    assert "WHERE bl.tenant_id = %s" in query
+    assert "(bl.owner_user_id = %s OR EXISTS (SELECT 1 FROM calendar_containers cc WHERE cc.id = bl.container_id AND cc.site_id = %s))" in query
+    assert "FROM calendar_booking_links bl" in query
+    assert params == ("tenant-1", "user-1", "site-1")

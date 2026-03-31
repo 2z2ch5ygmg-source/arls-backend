@@ -1352,11 +1352,11 @@ def _fetch_booking_links(conn, *, tenant_id: str, user: dict[str, Any]) -> list[
     user_id = str(user.get("id") or "").strip() or None
     site_id = str(user.get("site_id") or "").strip() or None
     params: list[Any] = [tenant_id]
-    filters = ["tenant_id = %s"]
+    filters = ["bl.tenant_id = %s"]
     if _resolve_calendar_audience(user) == "hq":
         pass
     elif user_id:
-        filters.append("(owner_user_id = %s OR EXISTS (SELECT 1 FROM calendar_containers cc WHERE cc.id = container_id AND cc.site_id = %s))")
+        filters.append("(bl.owner_user_id = %s OR EXISTS (SELECT 1 FROM calendar_containers cc WHERE cc.id = bl.container_id AND cc.site_id = %s))")
         params.extend([user_id, site_id])
     with conn.cursor() as cur:
         cur.execute(
