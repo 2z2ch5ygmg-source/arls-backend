@@ -36442,7 +36442,7 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #shell[data-shell-mode='manager'] #view-profile .profile-settings-rail-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   align-items: start !important;
   gap: 0 !important;
   padding: 0 !important;
@@ -36450,7 +36450,8 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #shell[data-shell-mode='manager'] #view-profile .profile-settings-rail-item:nth-child(3),
-#shell[data-shell-mode='manager'] #view-profile .profile-settings-rail-item:nth-child(4) {
+#shell[data-shell-mode='manager'] #view-profile .profile-settings-rail-item:nth-child(4),
+#shell[data-shell-mode='manager'] #view-profile .profile-settings-rail-item:nth-child(5) {
   display: none !important;
 }
 
@@ -36496,7 +36497,7 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #shell[data-shell-mode='manager'] #view-profile .profile-manager-settings-shell {
-  gap: 14px !important;
+  gap: 12px !important;
 }
 
 #shell[data-shell-mode='manager'] #view-profile #lockPolicyCard {
@@ -36506,6 +36507,7 @@ body.calendar-public-shell #view-calendar-public {
 #shell[data-shell-mode='manager'] #view-profile #integrationFlagsCard,
 #shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard {
   gap: 12px !important;
+  padding: 16px 18px !important;
 }
 
 #shell[data-shell-mode='manager'] #view-profile #integrationFlagsCard .profile-control-head,
@@ -36521,7 +36523,8 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #shell[data-shell-mode='manager'] #view-profile #integrationFlagsCard .settings-flag-groups {
-  gap: 12px !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0 !important;
 }
 
 #shell[data-shell-mode='manager'] #view-profile #integrationFlagsCard .settings-flag-group-head h4 {
@@ -36529,22 +36532,63 @@ body.calendar-public-shell #view-calendar-public {
   line-height: 22px !important;
 }
 
+#shell[data-shell-mode='manager'] #view-profile #integrationFlagsCard .settings-flag-group {
+  display: grid !important;
+  grid-template-columns: 120px minmax(0, 1fr) !important;
+  gap: 0 16px !important;
+  align-items: start !important;
+  padding: 12px 0 !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #integrationFlagsCard .settings-flag-group-head {
+  gap: 2px !important;
+  padding-top: 10px !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #integrationFlagsCard .settings-flag-group-head > .muted {
+  display: none !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #integrationFlagsCard .settings-switch-list.settings-flag-list {
+  gap: 0 !important;
+  border-top: 0 !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #integrationFlagsCard .settings-switch-row {
+  padding: 10px 0 !important;
+  gap: 12px !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #integrationFlagsCard .settings-switch-row:last-child {
+  border-bottom: 0 !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #integrationFlagsCard .settings-switch-row:hover {
+  background: transparent !important;
+  transform: none !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #integrationFlagsCard .settings-switch-copy {
+  gap: 1px !important;
+}
+
 #shell[data-shell-mode='manager'] #view-profile #integrationFlagsCard .settings-switch-copy span {
-  max-width: 36ch !important;
+  display: none !important;
 }
 
 #shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .profile-google-links-layout {
-  grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.28fr) !important;
-  gap: 14px !important;
+  grid-template-columns: minmax(272px, 0.74fr) minmax(0, 1.26fr) !important;
+  gap: 12px !important;
 }
 
 #shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .profile-google-profile-list {
-  max-height: 248px !important;
+  max-height: 228px !important;
 }
 
 #shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .profile-google-link-row {
-  padding: 12px 14px !important;
-  border-radius: 12px !important;
+  padding: 10px 12px !important;
+  border-radius: 10px !important;
 }
 
 #shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .settings-profile-selector-row {
@@ -36562,16 +36606,56 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .settings-profile-form {
-  gap: 12px 14px !important;
+  gap: 10px 12px !important;
 }
 
 #shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .settings-form-group {
   gap: 8px !important;
-  padding-top: 12px !important;
+  padding-top: 10px !important;
 }
 
 #shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .settings-section-footer {
   padding-top: 8px !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .settings-form-group-head {
+  display: none !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .profile-google-links-head,
+#shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .profile-google-sync-head {
+  padding-bottom: 6px !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .profile-google-links-library,
+#shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .profile-google-links-editor,
+#shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .profile-google-sync-shell {
+  gap: 8px !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .profile-google-panel {
+  gap: 10px !important;
+  padding-top: 8px !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #googleSheetProfileLibraryMeta {
+  display: none !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .profile-google-profile-list .requests-inline-empty {
+  min-height: 88px !important;
+  padding: 14px 12px !important;
+  border-style: dashed !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .settings-switch-row.settings-span-full {
+  padding-left: 0 !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard .settings-advanced-group {
+  gap: 8px !important;
+  padding-top: 6px !important;
 }
 
 #view-notices .notices-toolbar-row {

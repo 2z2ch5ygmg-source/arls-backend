@@ -44,7 +44,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="assets/sentrix-hr-favicon-v4-16.png?v=20260323-sentrix-browser-brand-v4" />
     <link rel="shortcut icon" href="assets/sentrix-hr-favicon-v4.ico?v=20260323-sentrix-browser-brand-v4" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/sentrix-hr-favicon-v4-180.png?v=20260323-sentrix-browser-brand-v4" />
-    <link rel="stylesheet" href="css/styles.css?v=20260331-settings-phase3-01" />
+    <link rel="stylesheet" href="css/styles.css?v=20260331-settings-phase3-02" />
   </head>
   <body>
     <div id="app">
@@ -3023,9 +3023,6 @@
                           <h3>운영 플래그</h3>
                           <p class="muted">업무 흐름에 영향을 주는 플래그만 묶어 관리합니다.</p>
                         </div>
-                        <div class="profile-control-actions">
-                          <button class="btn btn-secondary" type="button" data-action="integration-flags-refresh">새로고침</button>
-                        </div>
                       </div>
                       <div class="settings-flag-groups settings-flag-groups-grid">
                         <section class="settings-flag-group">
@@ -3155,9 +3152,6 @@
                           <h3>구글 시트 링크</h3>
                           <p class="muted">등록과 동기화를 한 작업면에서 바로 관리합니다.</p>
                         </div>
-                        <div class="profile-control-actions">
-                          <button class="btn btn-secondary" type="button" data-action="google-profile-refresh">새로고침</button>
-                        </div>
                       </div>
 
                       <div id="googleSheetWorkspaceTabs" class="workspace-tabs profile-google-workspace-tabs" role="tablist" aria-label="구글 시트 링크 워크스페이스">
@@ -3179,13 +3173,13 @@
 
                           <div class="profile-google-links-editor">
                             <div class="settings-profile-selector-row">
-                              <button class="btn btn-secondary" type="button" data-action="google-profile-new">새 링크</button>
                               <label class="input-field settings-span-full" for="gsProfileSelect">
                                 선택한 링크
                                 <select id="gsProfileSelect">
                                   <option value="">새 링크 작성</option>
                                 </select>
                               </label>
+                              <button class="btn btn-secondary" type="button" data-action="google-profile-new">새 링크</button>
                             </div>
                             <form id="googleSheetProfileForm" class="settings-profile-form">
                               <section class="settings-form-group settings-span-full">
@@ -5344,11 +5338,12 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260331-settings-phase3-01"></script>
+    <script src="config.js?v=20260331-settings-phase3-02"></script>
     <script>
+      window.__RG_ARLS_ASSET_BUILD_ID__ = '20260331-settings-phase3-02';
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
-      window.ENV_BUILD_ID = window.ENV_BUILD_ID || Date.now();
+      window.ENV_BUILD_ID = window.__RG_ARLS_ASSET_BUILD_ID__;
       window.ENV_API_BASE = window.ENV_API_BASE || 'https://rg-arls-backend.azurewebsites.net';
       window.ENV_GOOGLE_MAPS_API_KEY = window.ENV_GOOGLE_MAPS_API_KEY || '';
 
@@ -5566,7 +5561,7 @@
         });
       }
 
-      const appBuildId = window.ENV_BUILD_ID || Date.now();
+      const appBuildId = window.__RG_ARLS_ASSET_BUILD_ID__ || window.ENV_BUILD_ID || Date.now();
       const appScript = document.createElement('script');
       appScript.src = `js/app.js?v=${encodeURIComponent(appBuildId)}`;
       appScript.defer = true;
