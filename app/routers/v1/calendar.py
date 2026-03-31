@@ -1257,6 +1257,7 @@ def _ensure_shared_container(conn, *, tenant_id: str, user: dict[str, Any]) -> s
 def _fetch_workspace_containers(conn, *, tenant_id: str, user: dict[str, Any]) -> list[CalendarContainerOut]:
     user_id = str(user.get("id") or "").strip() or None
     site_id = str(user.get("site_id") or "").strip() or None
+    has_site_scope = bool(site_id)
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -1294,7 +1295,7 @@ def _fetch_workspace_containers(conn, *, tenant_id: str, user: dict[str, Any]) -
               AND (
                 c.owner_user_id = %s
                 OR c.scope_type = 'shared'
-                OR (%s IS NOT NULL AND c.scope_type = 'team' AND c.site_id = %s)
+                OR (%s AND c.scope_type = 'team' AND c.site_id = %s)
                 OR m.user_id = %s
               )
             ORDER BY
@@ -1302,7 +1303,7 @@ def _fetch_workspace_containers(conn, *, tenant_id: str, user: dict[str, Any]) -
               c.is_default DESC,
               c.name ASC
             """,
-            (user_id, user_id, tenant_id, user_id, site_id, site_id, user_id),
+            (user_id, user_id, tenant_id, user_id, has_site_scope, site_id, user_id),
         )
         rows = cur.fetchall() or []
     containers: list[CalendarContainerOut] = []

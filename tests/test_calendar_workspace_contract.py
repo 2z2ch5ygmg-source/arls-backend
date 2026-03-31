@@ -365,4 +365,4 @@ def test_fetch_workspace_containers_orders_by_selected_scope_alias():
     query, params = conn.cursor_obj.executed[0]
     assert "AS scope_sort" in query
     assert "ORDER BY\n              scope_sort," in query
-    assert params == ("user-1", "user-1", "tenant-1", "user-1", "site-1", "site-1", "user-1")
+    assert params == ("user-1", "user-1", "tenant-1", "user-1", True, "site-1", "user-1")
