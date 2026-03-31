@@ -121,6 +121,36 @@ def test_calendar_workspace_includes_events_and_attendee_options(monkeypatch):
     assert result.attendee_options[0].display_name == "김하루"
 
 
+def test_fetch_attendee_options_uses_username_field_for_contact_identity():
+    conn = _FakeConn(
+        fetchall_queue=[
+            [
+                {
+                    "employee_id": uuid4(),
+                    "full_name": "김하루",
+                    "employee_code": "R692-01",
+                    "site_name": "Apple_가로수길",
+                    "user_id": uuid4(),
+                    "username": "haru@example.com",
+                }
+            ]
+        ]
+    )
+
+    result = calendar_router._fetch_attendee_options(
+        conn,
+        tenant_id="tenant-1",
+        user={"id": "user-1", "role": "hq_admin", "site_id": "site-1"},
+        audience="hq",
+    )
+
+    assert len(result) == 1
+    assert result[0].email == "haru@example.com"
+    executed_sql = conn.executed[0][0]
+    assert "au.username" in executed_sql
+    assert "login_id" not in executed_sql
+
+
 def test_create_calendar_event_returns_saved_event(monkeypatch):
     container = CalendarContainerOut(
         id=uuid4(),

@@ -267,11 +267,11 @@ def _fetch_attendee_options(conn, *, tenant_id: str, user: dict[str, Any], audie
                    e.employee_code,
                    COALESCE(s.site_name, '') AS site_name,
                    u.user_id,
-                   u.login_id
+                   u.username
             FROM employees e
             LEFT JOIN sites s ON s.id = e.site_id
             LEFT JOIN LATERAL (
-                SELECT au.id AS user_id, COALESCE(au.login_id, '') AS login_id
+                SELECT au.id AS user_id, COALESCE(au.username, '') AS username
                 FROM arls_users au
                 WHERE au.employee_id = e.id
                 ORDER BY au.created_at DESC NULLS LAST, au.id
@@ -296,7 +296,7 @@ def _fetch_attendee_options(conn, *, tenant_id: str, user: dict[str, Any], audie
                 employee_id=row.get("employee_id"),
                 display_name=name,
                 subtitle=" · ".join(subtitle_parts) or None,
-                email=str(row.get("login_id") or "").strip() or None,
+                email=str(row.get("username") or "").strip() or None,
             )
         )
     return options
@@ -514,7 +514,7 @@ def _collect_calendar_schedule_keys(
     emails: set[str] = set()
     organizer_user_id = _to_uuid_text(user.get("id"))
     organizer_employee_id = _to_uuid_text(user.get("employee_id"))
-    organizer_email = str(user.get("email") or user.get("login_id") or "").strip().lower()
+    organizer_email = str(user.get("email") or user.get("username") or "").strip().lower()
     if organizer_user_id:
         user_ids.add(organizer_user_id)
     if organizer_employee_id:
@@ -824,8 +824,8 @@ def _upsert_calendar_event_relations(
 ) -> None:
     organizer_user_id = _to_uuid_text(user.get("id"))
     organizer_employee_id = _to_uuid_text(user.get("employee_id"))
-    organizer_label = str(user.get("name") or user.get("login_id") or "주최자").strip() or "주최자"
-    organizer_email = str(user.get("email") or user.get("login_id") or "").strip() or None
+    organizer_label = str(user.get("full_name") or user.get("username") or "주최자").strip() or "주최자"
+    organizer_email = str(user.get("email") or user.get("username") or "").strip() or None
     normalized_attendees: list[CalendarAttendeeIn] = []
     seen_keys: set[str] = set()
     for row in attendees:
@@ -1047,7 +1047,7 @@ def _ensure_personal_container(conn, *, tenant_id: str, user: dict[str, Any]) ->
         if row:
             container_id = str(row.get("id"))
         else:
-            container_name = f"{str(user.get('name') or user.get('login_id') or '내 캘린더').strip() or '내 캘린더'}"
+            container_name = f"{str(user.get('full_name') or user.get('username') or '내 캘린더').strip() or '내 캘린더'}"
             cur.execute(
                 """
                 INSERT INTO calendar_containers (
@@ -1094,7 +1094,7 @@ def _ensure_personal_container(conn, *, tenant_id: str, user: dict[str, Any]) ->
             container_id=container_id,
             user_id=user_id,
             employee_id=str(user.get("employee_id") or "").strip() or None,
-            email=str(user.get("email") or user.get("login_id") or "").strip() or None,
+            email=str(user.get("email") or user.get("username") or "").strip() or None,
             permission="owner",
         )
     return container_id or None
@@ -1180,7 +1180,7 @@ def _ensure_team_container(conn, *, tenant_id: str, user: dict[str, Any]) -> str
             container_id=container_id,
             user_id=str(user.get("id") or "").strip() or None,
             employee_id=str(user.get("employee_id") or "").strip() or None,
-            email=str(user.get("email") or user.get("login_id") or "").strip() or None,
+            email=str(user.get("email") or user.get("username") or "").strip() or None,
             permission="edit",
         )
     return container_id or None
@@ -1247,7 +1247,7 @@ def _ensure_shared_container(conn, *, tenant_id: str, user: dict[str, Any]) -> s
             container_id=container_id,
             user_id=str(user.get("id") or "").strip() or None,
             employee_id=str(user.get("employee_id") or "").strip() or None,
-            email=str(user.get("email") or user.get("login_id") or "").strip() or None,
+            email=str(user.get("email") or user.get("username") or "").strip() or None,
             permission="owner",
         )
     return container_id or None
