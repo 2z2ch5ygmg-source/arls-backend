@@ -26,6 +26,31 @@ class _FakeConn:
         self.commit_calls += 1
 
 
+class _CaptureCursor:
+    def __init__(self) -> None:
+        self.executed: list[tuple[str, tuple | None]] = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
+
+    def execute(self, query, params=None) -> None:
+        self.executed.append((str(query), params))
+
+    def fetchall(self):
+        return []
+
+
+class _CaptureConn:
+    def __init__(self) -> None:
+        self.cursor_obj = _CaptureCursor()
+
+    def cursor(self):
+        return self.cursor_obj
+
+
 def _build_days(selected_date: str) -> list[CalendarMiniMonthDayOut]:
     rows: list[CalendarMiniMonthDayOut] = []
     for index in range(42):
@@ -326,3 +351,18 @@ def test_calendar_workspace_includes_selected_event(monkeypatch):
 
     assert len(result.events) == 1
     assert str(result.selected_event.id) == str(event.id)
+
+
+def test_fetch_workspace_containers_orders_by_selected_scope_alias():
+    conn = _CaptureConn()
+
+    calendar_router._fetch_workspace_containers(
+        conn,
+        tenant_id="tenant-1",
+        user={"id": "user-1", "site_id": "site-1"},
+    )
+
+    query, params = conn.cursor_obj.executed[0]
+    assert "AS scope_sort" in query
+    assert "ORDER BY\n              scope_sort," in query
+    assert params == ("user-1", "user-1", "tenant-1", "user-1", "site-1", "site-1", "user-1")

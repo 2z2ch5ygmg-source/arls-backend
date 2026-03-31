@@ -1268,6 +1268,11 @@ def _fetch_workspace_containers(conn, *, tenant_id: str, user: dict[str, Any]) -
                    c.provider,
                    c.is_default,
                    c.is_system,
+                   CASE
+                     WHEN c.scope_type = 'shared' THEN 0
+                     WHEN c.scope_type = 'team' THEN 1
+                     ELSE 2
+                   END AS scope_sort,
                    COALESCE(s.site_name, '') AS site_name,
                    COALESCE(u.full_name, '') AS owner_name,
                    COALESCE(m.permission,
@@ -1293,11 +1298,7 @@ def _fetch_workspace_containers(conn, *, tenant_id: str, user: dict[str, Any]) -
                 OR m.user_id = %s
               )
             ORDER BY
-              CASE
-                WHEN c.scope_type = 'shared' THEN 0
-                WHEN c.scope_type = 'team' THEN 1
-                ELSE 2
-              END,
+              scope_sort,
               c.is_default DESC,
               c.name ASC
             """,
