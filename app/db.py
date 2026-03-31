@@ -74,6 +74,109 @@ END
 $$;
 """
 
+CALENDAR_PHASE2_RESOURCE_COLUMN_SQL = """
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'calendar_events'
+  ) AND EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'calendar_resources'
+  ) THEN
+    ALTER TABLE calendar_events
+      ADD COLUMN IF NOT EXISTS resource_id uuid REFERENCES calendar_resources(id) ON DELETE SET NULL;
+
+    CREATE INDEX IF NOT EXISTS idx_calendar_events_resource_window
+      ON calendar_events (resource_id, starts_at, ends_at)
+      WHERE resource_id IS NOT NULL;
+  END IF;
+END
+$$;
+"""
+
+CALENDAR_PHASE4_SYNC_COLUMNS_SQL = """
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'calendar_sync_connections'
+  ) AND EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'calendar_containers'
+  ) THEN
+    ALTER TABLE calendar_sync_connections
+      ADD COLUMN IF NOT EXISTS default_container_id uuid NULL REFERENCES calendar_containers(id) ON DELETE SET NULL;
+
+    ALTER TABLE calendar_sync_connections
+      ADD COLUMN IF NOT EXISTS selected_external_calendars_json jsonb NOT NULL DEFAULT '[]'::jsonb;
+
+    ALTER TABLE calendar_sync_connections
+      ADD COLUMN IF NOT EXISTS last_sync_error text NULL;
+
+    CREATE INDEX IF NOT EXISTS idx_calendar_sync_connections_default_container_id
+      ON calendar_sync_connections(default_container_id);
+  END IF;
+END
+$$;
+"""
+
+CALENDAR_PHASE5_OPS_COLUMNS_SQL = """
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'calendar_booking_links'
+  ) THEN
+    ALTER TABLE calendar_booking_links
+      ADD COLUMN IF NOT EXISTS approval_policy text NOT NULL DEFAULT 'instant',
+      ADD COLUMN IF NOT EXISTS assignment_mode text NOT NULL DEFAULT 'single_host';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'calendar_events'
+  ) THEN
+    ALTER TABLE calendar_events
+      ADD COLUMN IF NOT EXISTS custom_fields_json jsonb NOT NULL DEFAULT '[]'::jsonb;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'calendar_events'
+  ) THEN
+    CREATE TABLE IF NOT EXISTS calendar_comments (
+      id uuid PRIMARY KEY DEFAULT arls_random_uuid(),
+      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      event_id uuid NOT NULL REFERENCES calendar_events(id) ON DELETE CASCADE,
+      author_user_id uuid REFERENCES arls_users(id) ON DELETE SET NULL,
+      body text NOT NULL DEFAULT '',
+      is_internal boolean NOT NULL DEFAULT FALSE,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_calendar_comments_event
+      ON calendar_comments (event_id, created_at ASC);
+  END IF;
+END
+$$;
+"""
+
 _pool: ConnectionPool | None = None
 
 
@@ -165,11 +268,23 @@ def _repair_runtime_constraints(conn) -> None:
         cur.execute(SCHEDULE_IMPORT_RAW_WORKBOOK_COLUMNS_SQL)
         cur.execute(MONTHLY_SCHEDULE_SHIFT_TYPE_CONSTRAINT_SQL)
         cur.execute(SENTRIX_SUPPORT_HQ_BATCH_SCOPE_CONSTRAINT_SQL)
+        cur.execute(CALENDAR_PHASE2_RESOURCE_COLUMN_SQL)
+        cur.execute(CALENDAR_PHASE4_SYNC_COLUMNS_SQL)
+        cur.execute(CALENDAR_PHASE5_OPS_COLUMNS_SQL)
 
 
 def ensure_schedule_import_raw_workbook_columns(conn) -> None:
     with conn.cursor() as cur:
         cur.execute(SCHEDULE_IMPORT_RAW_WORKBOOK_COLUMNS_SQL)
+
+
+def ensure_calendar_runtime_shape(conn) -> None:
+    if not hasattr(conn, "cursor"):
+        return
+    with conn.cursor() as cur:
+        cur.execute(CALENDAR_PHASE2_RESOURCE_COLUMN_SQL)
+        cur.execute(CALENDAR_PHASE4_SYNC_COLUMNS_SQL)
+        cur.execute(CALENDAR_PHASE5_OPS_COLUMNS_SQL)
 
 
 def get_pool() -> ConnectionPool:

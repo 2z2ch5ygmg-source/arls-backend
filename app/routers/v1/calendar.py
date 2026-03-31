@@ -9,6 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from ...db import ensure_calendar_runtime_shape
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
 from ...schemas import (
     CalendarAvailabilityLaneOut,
@@ -1919,6 +1920,7 @@ def get_calendar_workspace(
 ):
     if not can_view_calendar(user.get("role")):
         _raise_calendar_error(status.HTTP_403_FORBIDDEN, "캘린더를 볼 수 있는 권한이 없습니다.")
+    ensure_calendar_runtime_shape(conn)
     scoped_tenant = resolve_scoped_tenant(
         conn,
         user,
@@ -1999,6 +2001,7 @@ def create_calendar_booking_link(
 ):
     if not can_manage_calendar_booking_links(user.get("role")):
         _raise_calendar_error(status.HTTP_403_FORBIDDEN, "예약 링크를 생성할 수 있는 권한이 없습니다.")
+    ensure_calendar_runtime_shape(conn)
     scoped_tenant = resolve_scoped_tenant(
         conn,
         user,
@@ -2074,6 +2077,7 @@ def update_calendar_booking_link(
 ):
     if not can_manage_calendar_booking_links(user.get("role")):
         _raise_calendar_error(status.HTTP_403_FORBIDDEN, "예약 링크를 수정할 수 있는 권한이 없습니다.")
+    ensure_calendar_runtime_shape(conn)
     scoped_tenant = resolve_scoped_tenant(
         conn,
         user,
@@ -2160,6 +2164,7 @@ def delete_calendar_booking_link(
 ):
     if not can_manage_calendar_booking_links(user.get("role")):
         _raise_calendar_error(status.HTTP_403_FORBIDDEN, "예약 링크를 삭제할 수 있는 권한이 없습니다.")
+    ensure_calendar_runtime_shape(conn)
     scoped_tenant = resolve_scoped_tenant(
         conn,
         user,
@@ -2197,6 +2202,7 @@ def create_calendar_sync_connection(
 ):
     if not can_manage_calendar_sync(user.get("role")):
         _raise_calendar_error(status.HTTP_403_FORBIDDEN, "외부 연동을 생성할 수 있는 권한이 없습니다.")
+    ensure_calendar_runtime_shape(conn)
     scoped_tenant = resolve_scoped_tenant(
         conn,
         user,
@@ -2280,6 +2286,7 @@ def update_calendar_sync_connection(
 ):
     if not can_manage_calendar_sync(user.get("role")):
         _raise_calendar_error(status.HTTP_403_FORBIDDEN, "외부 연동을 수정할 수 있는 권한이 없습니다.")
+    ensure_calendar_runtime_shape(conn)
     scoped_tenant = resolve_scoped_tenant(
         conn,
         user,
@@ -2349,6 +2356,7 @@ def delete_calendar_sync_connection(
 ):
     if not can_manage_calendar_sync(user.get("role")):
         _raise_calendar_error(status.HTTP_403_FORBIDDEN, "외부 연동을 삭제할 수 있는 권한이 없습니다.")
+    ensure_calendar_runtime_shape(conn)
     scoped_tenant = resolve_scoped_tenant(
         conn,
         user,
@@ -2386,6 +2394,7 @@ def run_calendar_sync_connection(
 ):
     if not can_manage_calendar_sync(user.get("role")):
         _raise_calendar_error(status.HTTP_403_FORBIDDEN, "외부 연동을 실행할 수 있는 권한이 없습니다.")
+    ensure_calendar_runtime_shape(conn)
     scoped_tenant = resolve_scoped_tenant(
         conn,
         user,
@@ -2428,6 +2437,7 @@ def get_public_calendar_booking_link(
     slug: str,
     conn=Depends(get_db_conn),
 ):
+    ensure_calendar_runtime_shape(conn)
     row = _fetch_public_booking_link_row(conn, slug=str(slug or "").strip())
     if not row:
         _raise_calendar_error(status.HTTP_404_NOT_FOUND, "예약 링크를 찾을 수 없습니다.")
@@ -2460,6 +2470,7 @@ def submit_public_calendar_booking(
     payload: CalendarPublicBookingSubmitIn,
     conn=Depends(get_db_conn),
 ):
+    ensure_calendar_runtime_shape(conn)
     row = _fetch_public_booking_link_row(conn, slug=str(slug or "").strip())
     if not row:
         _raise_calendar_error(status.HTTP_404_NOT_FOUND, "예약 링크를 찾을 수 없습니다.")
@@ -2575,6 +2586,7 @@ def get_calendar_availability(
 ):
     if not can_view_calendar(user.get("role")):
         _raise_calendar_error(status.HTTP_403_FORBIDDEN, "캘린더를 볼 수 있는 권한이 없습니다.")
+    ensure_calendar_runtime_shape(conn)
 
     scoped_tenant = resolve_scoped_tenant(
         conn,
@@ -2735,6 +2747,7 @@ def create_calendar_event(
 ):
     if not can_create_calendar_event(user.get("role")):
         _raise_calendar_error(status.HTTP_403_FORBIDDEN, "일정을 생성할 수 있는 권한이 없습니다.")
+    ensure_calendar_runtime_shape(conn)
     _validate_calendar_event_payload(payload)
     scoped_tenant = resolve_scoped_tenant(
         conn,
@@ -2825,6 +2838,7 @@ def update_calendar_event(
 ):
     if not can_create_calendar_event(user.get("role")):
         _raise_calendar_error(status.HTTP_403_FORBIDDEN, "일정을 수정할 수 있는 권한이 없습니다.")
+    ensure_calendar_runtime_shape(conn)
     _validate_calendar_event_payload(payload)
     scoped_tenant = resolve_scoped_tenant(
         conn,
@@ -2939,6 +2953,7 @@ def delete_calendar_event(
 ):
     if not can_create_calendar_event(user.get("role")):
         _raise_calendar_error(status.HTTP_403_FORBIDDEN, "일정을 삭제할 수 있는 권한이 없습니다.")
+    ensure_calendar_runtime_shape(conn)
     scoped_tenant = resolve_scoped_tenant(
         conn,
         user,
@@ -2991,6 +3006,7 @@ def create_calendar_event_comment(
 ):
     if not can_create_calendar_event(user.get("role")):
         _raise_calendar_error(status.HTTP_403_FORBIDDEN, "일정 코멘트를 작성할 권한이 없습니다.")
+    ensure_calendar_runtime_shape(conn)
     scoped_tenant = resolve_scoped_tenant(
         conn,
         user,
