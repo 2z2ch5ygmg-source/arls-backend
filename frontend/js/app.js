@@ -68795,7 +68795,17 @@ function bindUiEvents() {
       const nextTab = normalizeCalendarViewTab(actionEl.dataset.tab || '');
       const calendarState = ensureCalendarWorkspaceState();
       calendarState.viewTab = nextTab;
-      runActionSafely(navigateToRoute(getCalendarTabRoute(nextTab)), '캘린더 보기를 전환하지 못했습니다.');
+      if (calendarState.workspace && typeof calendarState.workspace === 'object') {
+        calendarState.workspace = {
+          ...calendarState.workspace,
+          view: nextTab,
+        };
+      }
+      renderCalendarWorkspace();
+      runActionSafely((async () => {
+        await navigateToRoute(getCalendarTabRoute(nextTab));
+        await loadCalendarWorkspace({ force: true });
+      })(), '캘린더 보기를 전환하지 못했습니다.');
       return;
     }
 
