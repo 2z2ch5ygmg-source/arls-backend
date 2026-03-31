@@ -11250,10 +11250,9 @@ const DRAWER_MENU_BY_ROLE = {
   EMPLOYEE: [
     { type: 'section', title: '홈' },
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
-    { id: 'notices', title: '공지사항', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
-    { type: 'section', title: '업무' },
+    { type: 'section', title: '운영' },
     { id: 'attendance', title: '출퇴근', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, icon: 'clock-3' },
-    { id: 'requests', title: '요청', action: 'drawer-open-route', route: ROUTE_REQUESTS, icon: 'clipboard-list' },
+    { id: 'requests', title: '승인', action: 'drawer-open-route', route: ROUTE_REQUESTS, icon: 'clipboard-list' },
     { id: 'hr', title: '문서', action: 'drawer-open-route', route: ROUTE_HR, icon: 'file-text' },
     { id: 'schedule', title: '스케줄', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, icon: 'calendar-days' },
     {
@@ -11270,14 +11269,15 @@ const DRAWER_MENU_BY_ROLE = {
         { id: 'calendar-booking', title: '예약 링크', action: 'drawer-open-route', route: ROUTE_CALENDAR_BOOKING_LINKS, calendarSectionMatch: 'booking-links' },
       ],
     },
-    { type: 'section', title: '내 정보' },
+    { type: 'section', title: '공지' },
+    { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
+    { type: 'section', title: '개인' },
     { id: 'settings', title: '내 정보', action: 'drawer-open-route', route: ROUTE_PROFILE, icon: 'settings' },
   ],
   SUPERVISOR: [
     { type: 'section', title: '홈' },
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
-    { id: 'notices', title: '공지사항', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
-    { type: 'section', title: '업무' },
+    { type: 'section', title: '운영' },
     {
       id: 'attendance',
       title: '출퇴근',
@@ -11292,12 +11292,12 @@ const DRAWER_MENU_BY_ROLE = {
     },
     {
       id: 'requests',
-      title: '요청·승인',
+      title: '승인',
       action: 'drawer-open-route',
       route: ROUTE_REQUESTS,
       icon: 'clipboard-list',
       children: [
-        { id: 'requests-exceptions', title: '출퇴근예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
+        { id: 'requests-exceptions', title: '출퇴근 예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
         { id: 'requests-leave', title: '휴가', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=leave`, sectionMatch: 'leave' },
         { id: 'requests-approvals', title: '승인함', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=approvals`, sectionMatch: 'approvals' },
       ],
@@ -11331,7 +11331,7 @@ const DRAWER_MENU_BY_ROLE = {
     },
     {
       id: 'schedule-reports',
-      title: '보고',
+      title: '리포트',
       action: 'drawer-open-route',
       route: ROUTE_REPORTS,
       icon: 'clipboard-list',
@@ -11341,13 +11341,15 @@ const DRAWER_MENU_BY_ROLE = {
         { id: 'schedule-upload', title: 'Excel 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
       ],
     },
-    { type: 'section', title: '내 정보' },
+    { type: 'section', title: '공지' },
+    { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
+    { type: 'section', title: '개인' },
     { id: 'settings', title: '내 정보', action: 'drawer-open-route', route: ROUTE_PROFILE, icon: 'settings' },
   ],
   BRANCH_MANAGER: [
     { type: 'section', title: '홈' },
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
-    { id: 'notices', title: '공지사항', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
+    { type: 'section', title: '운영' },
     {
       id: 'attendance',
       title: '출퇴근',
@@ -11362,19 +11364,19 @@ const DRAWER_MENU_BY_ROLE = {
     },
     {
       id: 'work-center',
-      title: '요청·승인',
+      title: '승인',
       action: 'drawer-open-route',
       route: ROUTE_REQUESTS,
       icon: 'clipboard-list',
       children: [
-        { id: 'requests-exceptions', title: '출퇴근예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
+        { id: 'requests-exceptions', title: '출퇴근 예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
         { id: 'requests-leave', title: '휴가', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=leave`, sectionMatch: 'leave' },
         { id: 'requests-approvals', title: '승인함', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=approvals`, sectionMatch: 'approvals' },
       ],
     },
     {
       id: 'schedule',
-      title: '스케쥴',
+      title: '스케줄',
       action: 'drawer-open-route',
       route: ROUTE_SCHEDULE_CALENDAR,
       icon: 'calendar-days',
@@ -11400,7 +11402,7 @@ const DRAWER_MENU_BY_ROLE = {
     },
     {
       id: 'schedule-reports',
-      title: '보고',
+      title: '리포트',
       action: 'drawer-open-route',
       route: ROUTE_REPORTS,
       icon: 'clipboard-list',
@@ -11411,25 +11413,27 @@ const DRAWER_MENU_BY_ROLE = {
         { id: 'schedule-hq-upload', title: '지원근무자 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
       ],
     },
-    { type: 'section', title: '조직' },
+    { type: 'section', title: '조직/인력' },
     {
       id: 'organization',
-      title: '조직',
+      title: '구성원',
       action: 'drawer-open-route',
       route: ROUTE_ADMIN_EMPLOYEES,
       icon: 'building-2',
       children: [
         { id: 'employees', title: '직원', action: 'drawer-open-route', route: ROUTE_ADMIN_EMPLOYEES },
-        { id: 'sites', title: '지점', action: 'drawer-open-route', route: ROUTE_ADMIN_SITES },
+        { id: 'sites', title: '근무지', action: 'drawer-open-route', route: ROUTE_ADMIN_SITES },
       ],
     },
+    { type: 'section', title: '공지' },
+    { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
     { type: 'section', title: '설정' },
     { id: 'settings', title: '설정', action: 'drawer-open-route', route: ROUTE_PROFILE, icon: 'settings' },
   ],
   DEV: [
     { type: 'section', title: '홈' },
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
-    { id: 'notices', title: '공지사항', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
+    { type: 'section', title: '운영' },
     {
       id: 'attendance',
       title: '출퇴근',
@@ -11444,19 +11448,19 @@ const DRAWER_MENU_BY_ROLE = {
     },
     {
       id: 'work-center',
-      title: '요청·승인',
+      title: '승인',
       action: 'drawer-open-route',
       route: ROUTE_REQUESTS,
       icon: 'clipboard-list',
       children: [
-        { id: 'requests-exceptions', title: '출퇴근예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
+        { id: 'requests-exceptions', title: '출퇴근 예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
         { id: 'requests-leave', title: '휴가', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=leave`, sectionMatch: 'leave' },
         { id: 'requests-approvals', title: '승인함', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=approvals`, sectionMatch: 'approvals' },
       ],
     },
     {
       id: 'schedule',
-      title: '스케쥴',
+      title: '스케줄',
       action: 'drawer-open-route',
       route: ROUTE_SCHEDULE_CALENDAR,
       icon: 'calendar-days',
@@ -11482,7 +11486,7 @@ const DRAWER_MENU_BY_ROLE = {
     },
     {
       id: 'schedule-reports',
-      title: '보고',
+      title: '리포트',
       action: 'drawer-open-route',
       route: ROUTE_REPORTS,
       icon: 'clipboard-list',
@@ -11493,19 +11497,21 @@ const DRAWER_MENU_BY_ROLE = {
         { id: 'schedule-hq-upload', title: '지원근무자 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
       ],
     },
-    { type: 'section', title: '조직' },
+    { type: 'section', title: '조직/인력' },
     {
       id: 'organization',
-      title: '조직',
+      title: '구성원',
       action: 'drawer-open-route',
       route: ROUTE_ADMIN_EMPLOYEES,
       icon: 'building-2',
       children: [
         { id: 'employees', title: '직원', action: 'drawer-open-route', route: ROUTE_ADMIN_EMPLOYEES },
-        { id: 'sites', title: '지점', action: 'drawer-open-route', route: ROUTE_ADMIN_SITES },
+        { id: 'sites', title: '근무지', action: 'drawer-open-route', route: ROUTE_ADMIN_SITES },
         { id: 'company', title: '회사', action: 'drawer-open-route', route: ROUTE_MASTER_TENANTS },
       ],
     },
+    { type: 'section', title: '공지' },
+    { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
     { type: 'section', title: '설정' },
     { id: 'settings', title: '설정', action: 'drawer-open-route', route: ROUTE_PROFILE, icon: 'settings' },
     { type: 'section', title: '관리자' },
@@ -11516,7 +11522,7 @@ const DRAWER_MENU_BY_ROLE = {
       route: ROUTE_MASTER_AUDIT_LOGS,
       icon: 'shield',
       children: [
-        { id: 'audit', title: '감사로그', action: 'drawer-open-route', route: ROUTE_MASTER_AUDIT_LOGS },
+        { id: 'audit', title: '감사', action: 'drawer-open-route', route: ROUTE_MASTER_AUDIT_LOGS },
       ],
     },
   ],
@@ -38770,7 +38776,8 @@ function renderNoticesSearchControls() {
   const searchIcon = $('#noticesSearchIconSearch');
   const clearIcon = $('#noticesSearchIconClear');
   const hasDraftValue = Boolean(String(notices.searchDraft || '').trim());
-  const isExpanded = Boolean(notices.searchExpanded || hasDraftValue || notices.search);
+  const desktopExpanded = window.innerWidth >= 1180;
+  const isExpanded = Boolean(desktopExpanded || notices.searchExpanded || hasDraftValue || notices.search);
   notices.searchExpanded = isExpanded;
 
   if (searchInput instanceof HTMLInputElement) {
@@ -38789,7 +38796,7 @@ function renderNoticesSearchControls() {
     searchWrap.setAttribute('aria-hidden', isExpanded ? 'false' : 'true');
   }
   if (toggleBtn instanceof HTMLElement) {
-    toggleBtn.setAttribute('aria-label', hasDraftValue ? '검색어 지우기' : (isExpanded ? '검색 닫기' : '검색 열기'));
+    toggleBtn.setAttribute('aria-label', hasDraftValue ? '검색어 지우기' : (desktopExpanded ? '검색' : (isExpanded ? '검색 닫기' : '검색 열기')));
   }
   if (searchIcon instanceof HTMLElement) {
     searchIcon.classList.toggle('hidden', hasDraftValue);
@@ -38819,16 +38826,12 @@ function renderNoticesListPanel() {
     notices.error
       ? '공지 목록을 다시 불러오지 못했습니다.'
       : String(notices.search || '').trim()
-      ? '검색 조건에 맞는 공지가 없습니다.'
+      ? '검색 결과가 없습니다.'
       : canManageNotices()
       ? '등록된 공지가 없습니다.'
       : '표시할 공지가 없습니다.',
     notices.error
       ? notices.error
-      : String(notices.search || '').trim()
-      ? '검색어를 조정해 주세요.'
-      : canManageNotices()
-      ? ''
       : '',
   );
 }
@@ -38926,9 +38929,7 @@ function renderNoticesView() {
   const detailPanel = $('#noticesDetailPanel');
   const composePanel = $('#noticesComposePanel');
   if (subtitle) {
-    subtitle.textContent = canManageNotices()
-      ? '운영 공지를 등록하고, 중요 공지는 상단고정으로 먼저 노출할 수 있습니다.'
-      : '운영 공지와 안내를 카테고리, 제목, 날짜 기준으로 읽고, 공지 안 투표에는 바로 참여할 수 있습니다.';
+    subtitle.textContent = '';
   }
   if (readonlyPill instanceof HTMLElement) {
     readonlyPill.classList.toggle('hidden', canManageNotices());
