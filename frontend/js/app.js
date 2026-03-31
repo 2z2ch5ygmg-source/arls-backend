@@ -24723,17 +24723,19 @@ function renderRequestsToolbarSummary() {
   const statsBySegment = segment === 'documents'
     ? [`전체 ${rows.length}건`, `발급 대기 ${issuedCount}건`, `오늘 신규 ${createdToday}건`]
     : segment === 'approvals'
-      ? [`전체 ${rows.length}건`, `대기 ${pendingCount}건`, `처리 ${completedCount}건`, `오늘 신규 ${createdToday}건`]
+      ? [`대기 ${pendingCount}건`, `처리 ${completedCount}건`, `오늘 신규 ${createdToday}건`]
       : [`전체 ${rows.length}건`, `오늘 승인 ${approvedToday}건`, `오늘 반려 ${rejectedToday}건`];
   if (countEl) {
     countEl.textContent = segment === 'documents'
-      ? '문서 센터'
+      ? ''
       : segment === 'approvals'
-        ? '승인 큐'
+        ? ''
         : `대기 ${pendingCount}건`;
+    countEl.classList.toggle('hidden', segment === 'documents' || segment === 'approvals');
   }
   if (statsEl) {
     statsEl.innerHTML = '';
+    statsEl.classList.toggle('requests-toolbar-stats-compact', segment === 'documents' || segment === 'approvals');
     statsBySegment.forEach((label) => {
       const span = document.createElement('span');
       span.className = 'requests-toolbar-stat';
@@ -24769,6 +24771,7 @@ function renderRequestsFilterBar() {
   const dateCluster = document.querySelector('#requestsFilterBar .requests-filter-cluster-date');
   const coreCluster = document.querySelector('#requestsFilterBar .requests-filter-cluster-core');
   const searchCluster = document.querySelector('#requestsFilterBar .requests-filter-cluster-search');
+  const rangeShortcuts = document.querySelector('#requestsFilterBar .requests-range-shortcuts');
   const actorField = actorInput instanceof HTMLElement ? actorInput.closest('.input-field') : null;
   const subtypeField = subTypeSelect instanceof HTMLElement ? subTypeSelect.closest('.input-field') : null;
   const compactFilterMode = segment === 'documents' || segment === 'approvals';
@@ -24781,8 +24784,11 @@ function renderRequestsFilterBar() {
   if (searchCluster instanceof HTMLElement) {
     searchCluster.classList.toggle('is-compact', compactFilterMode);
   }
+  if (rangeShortcuts instanceof HTMLElement) {
+    rangeShortcuts.classList.toggle('hidden', compactFilterMode);
+  }
   if (actorField instanceof HTMLElement) {
-    actorField.classList.toggle('hidden', segment === 'documents');
+    actorField.classList.toggle('hidden', compactFilterMode);
   }
   if (subtypeField instanceof HTMLElement) {
     subtypeField.classList.toggle('hidden', segment === 'approvals');
@@ -24987,12 +24993,21 @@ function renderRequestsWorkspaceListRows() {
   const list = $('#requestsWorkspaceList');
   if (!list) return;
   clearList(list);
+  const segment = normalizeRequestsTabView(state.requestsTabView);
   const rows = Array.isArray(workspace.activeRows) ? workspace.activeRows : [];
   setRequestsWorkspaceListCount(rows.length);
   if (!rows.length) {
     workspace.detailKey = '';
     workspace.drawerOpen = false;
-    renderCompactListEmpty(list, '조건에 맞는 요청이 없습니다.', '필터를 다시 확인해 주세요.');
+    renderCompactListEmpty(
+      list,
+      segment === 'documents'
+        ? '등록된 문서 요청이 없습니다.'
+        : segment === 'approvals'
+          ? '처리할 승인 문서가 없습니다.'
+          : '조건에 맞는 요청이 없습니다.',
+      segment === 'documents' || segment === 'approvals' ? '' : '필터를 다시 확인해 주세요.',
+    );
     renderRequestsSortHeaders();
     return;
   }

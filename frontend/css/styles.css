@@ -35425,13 +35425,13 @@ body.calendar-public-shell #view-calendar-public {
 
 #view-requests[data-requests-segment='documents'] #requestsFilterBar .input-field span,
 #view-requests[data-requests-segment='approvals'] #requestsFilterBar .input-field span {
-  font-size: 11px;
-  line-height: 16px;
+  font-size: 12px;
+  line-height: 18px;
   color: var(--ui-text-tertiary);
 }
 
 #view-requests #requestsFilterBar .requests-filter-cluster-date.is-compact {
-  grid-template-columns: minmax(0, 1.4fr) auto;
+  grid-template-columns: minmax(320px, 420px);
 }
 
 #view-requests #requestsFilterBar .requests-filter-cluster-core.is-compact {
@@ -35439,7 +35439,25 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #view-requests #requestsFilterBar .requests-filter-cluster-search.is-compact {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(220px, 300px);
+  justify-content: end;
+}
+
+#view-requests[data-requests-segment='documents'] #requestsFilterBar .requests-filterbar-summary,
+#view-requests[data-requests-segment='approvals'] #requestsFilterBar .requests-filterbar-summary {
+  width: 100%;
+  justify-content: space-between;
+}
+
+#view-requests[data-requests-segment='documents'] #requestsToolbarQuickStats.requests-toolbar-stats-compact,
+#view-requests[data-requests-segment='approvals'] #requestsToolbarQuickStats.requests-toolbar-stats-compact {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+#view-requests[data-requests-segment='documents'] #requestsFilterBar .requests-range-shortcuts,
+#view-requests[data-requests-segment='approvals'] #requestsFilterBar .requests-range-shortcuts {
+  display: none;
 }
 
 #view-requests[data-requests-segment='documents'] #requestsMainListCard,
@@ -35450,15 +35468,17 @@ body.calendar-public-shell #view-calendar-public {
 #view-requests[data-requests-segment='documents'] .requests-inline-empty,
 #view-requests[data-requests-segment='approvals'] .requests-inline-empty,
 #view-requests[data-requests-segment='leave'] .requests-inline-empty {
-  min-height: 84px;
-  padding: 16px 0 8px;
+  min-height: 0;
+  padding: 10px 0 0;
   border-top: 0;
 }
 
 #view-requests[data-requests-segment='documents'] .requests-inline-empty,
 #view-requests[data-requests-segment='approvals'] .requests-inline-empty {
-  justify-items: center;
-  text-align: center;
+  justify-items: start;
+  align-content: start;
+  text-align: left;
+  gap: 0;
 }
 
 #view-requests[data-requests-segment='documents'] #requestsWorkspaceList > li,
@@ -35469,7 +35489,18 @@ body.calendar-public-shell #view-calendar-public {
 #view-requests[data-requests-segment='documents'] #requestsWorkspaceList,
 #view-requests[data-requests-segment='approvals'] #requestsWorkspaceList,
 #view-requests[data-requests-segment='leave'] #leaveWorkspaceRequestList {
-  min-height: 72px;
+  min-height: 0;
+}
+
+#view-requests[data-requests-segment='documents'] .requests-inline-empty strong,
+#view-requests[data-requests-segment='approvals'] .requests-inline-empty strong {
+  font-size: 13px;
+  line-height: 20px;
+}
+
+#view-requests[data-requests-segment='documents'] .requests-inline-empty span,
+#view-requests[data-requests-segment='approvals'] .requests-inline-empty span {
+  display: none;
 }
 
 @media (max-width: 1180px) {
