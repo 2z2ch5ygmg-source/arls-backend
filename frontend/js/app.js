@@ -40522,9 +40522,9 @@ function renderCalendarWorkspaceTabs() {
   const subtitleEl = $('#calendarViewSubtitle');
   if (titleEl) titleEl.textContent = '캘린더';
   if (subtitleEl) {
-    subtitleEl.textContent = workspace
-      ? `${workspace.role_label || 'ARLS'} · ${workspace.scope_label || '일정 범위'} · ${workspace.range_label || ''}`.replace(/\s+·\s*$/, '')
-      : '개인 일정, 팀 일정, 예약 링크를 한 공간에서 관리합니다.';
+    subtitleEl.textContent = '';
+    subtitleEl.classList.add('hidden');
+    subtitleEl.setAttribute('aria-hidden', 'true');
   }
 }
 
@@ -40653,10 +40653,9 @@ function renderCalendarWeekShell(workspace, selectedContainer) {
   return `
     <div class="calendar-center-card calendar-week-shell">
       <div class="calendar-center-toolbar">
-        <div>
+        <div class="calendar-center-toolbar-copy">
           <span class="calendar-eyebrow">Week</span>
           <h3>${escapeHtml(String(workspace?.range_label || '주간 보기'))}</h3>
-          <p>${escapeHtml(String(selectedContainer?.name || '캘린더'))} 일정을 시간순으로 확인합니다.</p>
         </div>
         <div class="calendar-center-toolbar-meta">
           <span class="calendar-inline-chip">${escapeHtml(String(workspace?.scope_label || '일정 범위'))}</span>
@@ -40696,12 +40695,12 @@ function renderCalendarMonthShell(workspace, selectedContainer) {
   return `
     <div class="calendar-center-card calendar-month-shell">
       <div class="calendar-center-toolbar">
-        <div>
+        <div class="calendar-center-toolbar-copy">
           <span class="calendar-eyebrow">Month</span>
           <h3>${escapeHtml(String(workspace?.range_label || '월간 보기'))}</h3>
-          <p>월간 흐름과 일정 밀집도를 한눈에 확인합니다.</p>
         </div>
         <div class="calendar-center-toolbar-meta">
+          <span class="calendar-inline-chip">${escapeHtml(String(workspace?.scope_label || '일정 범위'))}</span>
           <span class="calendar-inline-chip">${escapeHtml(String(selectedContainer?.name || '캘린더'))}</span>
           <button class="btn btn-primary" type="button" data-action="calendar-new-event">일정 추가</button>
         </div>
@@ -40741,12 +40740,12 @@ function renderCalendarAgendaShell(workspace, selectedContainer) {
   return `
     <div class="calendar-center-card calendar-agenda-shell">
       <div class="calendar-center-toolbar">
-        <div>
+        <div class="calendar-center-toolbar-copy">
           <span class="calendar-eyebrow">Agenda</span>
           <h3>${escapeHtml(String(workspace?.range_label || '아젠다'))}</h3>
-          <p>${escapeHtml(String(selectedContainer?.name || '캘린더'))} 기준으로 upcoming timeline을 확인합니다.</p>
         </div>
         <div class="calendar-center-toolbar-meta">
+          <span class="calendar-inline-chip">${escapeHtml(String(selectedContainer?.name || '캘린더'))}</span>
           <button class="btn btn-primary" type="button" data-action="calendar-new-event">일정 추가</button>
         </div>
       </div>
@@ -40816,12 +40815,13 @@ function renderCalendarBookingLinksShell(workspace) {
   return `
     <div class="calendar-center-card calendar-booking-shell">
       <div class="calendar-center-toolbar">
-        <div>
+        <div class="calendar-center-toolbar-copy">
           <span class="calendar-eyebrow">예약 링크</span>
           <h3>공개 예약 링크</h3>
-          <p>외부 게스트가 로그인 없이 예약할 수 있는 링크를 만들고 관리합니다.</p>
         </div>
         <div class="calendar-center-toolbar-meta">
+          <span class="calendar-inline-chip">${links.length}개 링크</span>
+          <span class="calendar-inline-chip">${syncConnections.length}개 연동</span>
           ${canManage ? '<button class="btn btn-primary" type="button" data-action="calendar-new-booking-link">예약 링크 만들기</button>' : ''}
         </div>
       </div>
@@ -40830,9 +40830,9 @@ function renderCalendarBookingLinksShell(workspace) {
           <article class="calendar-booking-card ${String(item?.id || '') === selectedId ? 'is-selected' : ''}">
             <span class="calendar-card-tone tone-orange"></span>
             <button class="calendar-booking-select" type="button" data-action="calendar-select-booking-link" data-booking-link-id="${escapeHtml(String(item?.id || ''))}">
-              <div class="calendar-booking-copy">
-                <strong>${escapeHtml(String(item?.title || '예약 링크'))}</strong>
-                <p>${escapeHtml(String(item?.description || item?.slug || 'slug'))}</p>
+            <div class="calendar-booking-copy">
+              <strong>${escapeHtml(String(item?.title || '예약 링크'))}</strong>
+                <p>${escapeHtml(String(item?.slug || 'slug'))}</p>
                 <div class="calendar-booking-badges">
                   <span class="calendar-inline-chip">${escapeHtml(getCalendarBookingApprovalPolicyLabel(item?.approval_policy || (item?.approval_required ? 'manual' : 'instant')))}</span>
                   <span class="calendar-inline-chip">${escapeHtml(getCalendarBookingAssignmentModeLabel(item?.assignment_mode || 'single_host'))}</span>
@@ -40890,7 +40890,7 @@ function renderCalendarBookingLinkEditor(workspace, selectedContainer) {
       <div class="calendar-detail-panel">
         <div class="calendar-detail-empty">
           <strong>예약 링크를 선택하세요</strong>
-          <p>왼쪽 목록에서 링크를 고르거나 새 예약 링크 만들기를 눌러 시작할 수 있습니다.</p>
+          <p>왼쪽 목록에서 링크를 고르면 설정을 바로 편집할 수 있습니다.</p>
           ${canManage ? '<button class="btn btn-primary" type="button" data-action="calendar-new-booking-link">예약 링크 만들기</button>' : ''}
         </div>
       </div>
@@ -40904,7 +40904,7 @@ function renderCalendarBookingLinkEditor(workspace, selectedContainer) {
           <span class="calendar-card-tone tone-orange"></span>
           <div>
             <strong>${escapeHtml(title)}</strong>
-            <p>${editorLink?.slug ? `공개 링크: ${escapeHtml(String(editorLink.slug))}` : '예약 링크 기본 설정을 입력하세요.'}</p>
+            <p>${editorLink?.slug ? escapeHtml(String(editorLink.slug)) : '기본 설정을 입력하세요.'}</p>
           </div>
         </div>
         <div class="calendar-detail-form calendar-booking-editor">
@@ -41013,7 +41013,7 @@ function renderCalendarSyncConnectionEditor(workspace, selectedContainer) {
       <div class="calendar-detail-panel">
         <div class="calendar-detail-empty">
           <strong>외부 연동을 선택하세요</strong>
-          <p>왼쪽 외부 연동 목록에서 연결을 고르거나 새 연동을 추가해 시작할 수 있습니다.</p>
+          <p>왼쪽 목록에서 연결을 고르면 상태와 기본 캘린더를 조정할 수 있습니다.</p>
           ${canManageSync ? '<button class="btn btn-primary" type="button" data-action="calendar-new-sync-connection">연동 추가</button>' : ''}
         </div>
       </div>
@@ -41368,7 +41368,7 @@ function renderCalendarDetailDrawer(workspace, selectedContainer) {
       <div class="calendar-detail-panel">
         <div class="calendar-detail-empty">
           <strong>이벤트를 선택하세요</strong>
-          <p>주간, 월간, 아젠다에서 일정을 고르거나 새 일정 추가를 눌러 편집을 시작할 수 있습니다.</p>
+          <p>왼쪽과 가운데에서 날짜나 일정을 고르면 이 패널에서 바로 편집합니다.</p>
           ${canEdit ? '<button class="btn btn-primary" type="button" data-action="calendar-new-event">새 일정 추가</button>' : ''}
         </div>
       </div>
@@ -41398,12 +41398,12 @@ function renderCalendarDetailDrawer(workspace, selectedContainer) {
         <div class="calendar-detail-scroller">
           <div class="calendar-detail-summary">
             <span class="calendar-card-tone tone-blue"></span>
-            <div>
-              <strong>${escapeHtml(headerTitle)}</strong>
-              <p>참석자와 가능한 시간을 함께 조율합니다.</p>
-              ${summaryBadges ? `<div class="calendar-event-badges">${summaryBadges}</div>` : ''}
-            </div>
+          <div>
+            <strong>${escapeHtml(headerTitle)}</strong>
+            <p>참석자와 가능 시간을 같이 확인합니다.</p>
+            ${summaryBadges ? `<div class="calendar-event-badges">${summaryBadges}</div>` : ''}
           </div>
+        </div>
           ${renderCalendarSchedulingAssistant(workspace, editorEvent, { readOnly })}
           ${renderCalendarAttendeeOptions(workspace, editorEvent, { readOnly })}
         </div>
@@ -41417,12 +41417,12 @@ function renderCalendarDetailDrawer(workspace, selectedContainer) {
         <div class="calendar-detail-scroller">
           <div class="calendar-detail-summary">
             <span class="calendar-card-tone tone-orange"></span>
-            <div>
-              <strong>${escapeHtml(headerTitle)}</strong>
-              <p>일정별 알림을 여러 개 설정합니다.</p>
-              ${summaryBadges ? `<div class="calendar-event-badges">${summaryBadges}</div>` : ''}
-            </div>
+          <div>
+            <strong>${escapeHtml(headerTitle)}</strong>
+            <p>알림 시점과 채널을 조정합니다.</p>
+            ${summaryBadges ? `<div class="calendar-event-badges">${summaryBadges}</div>` : ''}
           </div>
+        </div>
           <div class="calendar-detail-form">
             ${renderCalendarReminderCheckboxes(editorEvent.reminders)}
           </div>
@@ -41439,12 +41439,12 @@ function renderCalendarDetailDrawer(workspace, selectedContainer) {
         <div class="calendar-detail-scroller">
           <div class="calendar-detail-summary">
             <span class="calendar-card-tone tone-slate"></span>
-            <div>
-              <strong>${escapeHtml(headerTitle)}</strong>
-              <p>공유 메모와 개인 메모, 액션 아이템을 분리합니다.</p>
-              ${summaryBadges ? `<div class="calendar-event-badges">${summaryBadges}</div>` : ''}
-            </div>
+          <div>
+            <strong>${escapeHtml(headerTitle)}</strong>
+            <p>메모와 액션 아이템을 분리해 기록합니다.</p>
+            ${summaryBadges ? `<div class="calendar-event-badges">${summaryBadges}</div>` : ''}
           </div>
+        </div>
           <div class="calendar-detail-form">
             <div class="calendar-notes-section">
               <div class="calendar-booking-question-head">
@@ -42444,39 +42444,32 @@ function renderCalendarWorkspace() {
           <div class="calendar-sidebar-card-head">
             <div>
               <span class="calendar-sidebar-card-label">캘린더 목록</span>
-              <strong>${containers.length}개 연결</strong>
+              <strong>${containers.length}개 캘린더</strong>
             </div>
-            <span class="calendar-inline-chip">${escapeHtml(String(workspace.role_label || 'Role'))}</span>
+            <span class="calendar-inline-chip">${escapeHtml(String(workspace.scope_label || '일정 범위'))}</span>
           </div>
           ${renderCalendarContainerGroups(containers, selectedContainerId)}
         </section>
         <section class="calendar-sidebar-card">
           <div class="calendar-sidebar-card-head">
             <div>
-              <span class="calendar-sidebar-card-label">예약 링크</span>
-              <strong>${bookingLinks.length}개</strong>
+              <span class="calendar-sidebar-card-label">빠른 도구</span>
+              <strong>예약 · 템플릿</strong>
             </div>
             <span class="calendar-inline-chip">${escapeHtml(bookingManageLabel)}</span>
           </div>
           <div class="calendar-sidebar-meta">
-            <div><span>외부 예약</span><strong>${bookingLinks.length}</strong></div>
-            <div><span>동기화 연결</span><strong>${syncConnections.length}</strong></div>
-          </div>
-        </section>
-        <section class="calendar-sidebar-card">
-          <div class="calendar-sidebar-card-head">
-            <div>
-              <span class="calendar-sidebar-card-label">미팅 템플릿</span>
-              <strong>${templates.length}개</strong>
-            </div>
+            <div><span>예약 링크</span><strong>${bookingLinks.length}</strong></div>
+            <div><span>동기화</span><strong>${syncConnections.length}</strong></div>
           </div>
           <div class="calendar-template-list">
-            ${templates.map((item) => `
+            ${templates.slice(0, 4).map((item) => `
               <button class="calendar-template-row" type="button" data-action="calendar-apply-template" data-template-code="${escapeHtml(String(item?.code || ''))}">
                 <strong>${escapeHtml(String(item?.label || '템플릿'))}</strong>
                 <span>${escapeHtml(String(item?.description || ''))}</span>
               </button>
             `).join('') || '<div class="calendar-empty-inline">템플릿이 없습니다.</div>'}
+            ${templates.length > 4 ? `<div class="calendar-empty-inline">나머지 ${templates.length - 4}개는 필요한 시점에 불러옵니다.</div>` : ''}
           </div>
         </section>
       </aside>
@@ -42486,10 +42479,10 @@ function renderCalendarWorkspace() {
       <aside class="calendar-shell-detail">
         ${bookingDetailMode ? '' : `
           <div class="calendar-detail-tabs">
-            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'details' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="details">Details</button>
-            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'attendees' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="attendees">Attendees</button>
-            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'reminders' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="reminders">Reminders</button>
-            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'notes' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="notes">Notes</button>
+            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'details' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="details">상세</button>
+            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'attendees' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="attendees">참석자</button>
+            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'reminders' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="reminders">알림</button>
+            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'notes' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="notes">메모</button>
           </div>
         `}
         ${bookingDetailMode

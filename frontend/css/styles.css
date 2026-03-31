@@ -31938,21 +31938,21 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 }
 
 #view-calendar {
-  padding: 24px 26px 28px;
+  padding: 20px 24px 24px;
 }
 
 .calendar-workspace-root {
-  min-height: 640px;
+  min-height: 580px;
 }
 
 .calendar-workspace-tabs {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .calendar-shell {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 340px;
-  gap: 16px;
+  grid-template-columns: 252px minmax(0, 1fr) 320px;
+  gap: 14px;
   align-items: stretch;
 }
 
@@ -31967,13 +31967,13 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 .calendar-detail-panel {
   background: #fff;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 22px;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
 }
 
 .calendar-sidebar-card {
-  padding: 16px;
-  margin-bottom: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
 }
 
 .calendar-sidebar-card-head,
@@ -31986,7 +31986,7 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 
 .calendar-sidebar-card-head strong,
 .calendar-center-toolbar h3 {
-  font-size: 18px;
+  font-size: 17px;
   line-height: 1.2;
   color: #111827;
 }
@@ -31994,7 +31994,7 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 .calendar-sidebar-card-label,
 .calendar-eyebrow {
   display: inline-flex;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -32005,14 +32005,20 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
-  padding: 0 10px;
+  height: 26px;
+  padding: 0 9px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 122, 26, 0.18);
-  background: rgba(255, 122, 26, 0.08);
+  border: 1px solid rgba(255, 122, 26, 0.2);
+  background: rgba(255, 122, 26, 0.07);
   color: #b45309;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+}
+
+.calendar-center-toolbar-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
 .calendar-mini-month-weekdays,
@@ -32052,12 +32058,12 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 }
 
 .calendar-container-group + .calendar-container-group {
-  margin-top: 16px;
+  margin-top: 14px;
 }
 
 .calendar-container-list {
   display: grid;
-  gap: 8px;
+  gap: 7px;
 }
 
 .calendar-container-row {
@@ -32065,9 +32071,9 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 11px 12px;
+  padding: 10px 11px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #fff;
 }
 
@@ -32108,24 +32114,24 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 }
 
 .calendar-center-card {
-  padding: 18px;
-  min-height: 640px;
+  padding: 16px;
+  min-height: 580px;
 }
 
 .calendar-day-chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 14px 0 16px;
+  gap: 7px;
+  margin: 12px 0 14px;
 }
 
 .calendar-day-chip {
-  height: 34px;
-  padding: 0 12px;
+  height: 32px;
+  padding: 0 11px;
   border-radius: 999px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: #f8fafc;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -32138,22 +32144,22 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 .calendar-week-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .calendar-week-column {
   min-width: 0;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 18px;
-  padding: 12px;
-  background: #fbfdff;
+  border-radius: 14px;
+  padding: 10px;
+  background: #fcfdff;
 }
 
 .calendar-week-column-head {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: #475569;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .calendar-week-column-body {
@@ -32183,15 +32189,15 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 .calendar-month-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .calendar-month-cell {
-  min-height: 92px;
-  padding: 10px;
+  min-height: 84px;
+  padding: 9px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 18px;
-  background: #fbfdff;
+  border-radius: 14px;
+  background: #fcfdff;
   text-align: left;
 }
 
@@ -32229,9 +32235,9 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 .calendar-booking-card,
 .calendar-sync-card {
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 18px;
+  border-radius: 14px;
   background: #fff;
-  padding: 14px;
+  padding: 12px;
 }
 
 .calendar-booking-card {
@@ -32269,9 +32275,9 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 .calendar-agenda-item p,
 .calendar-detail-empty p,
 .calendar-template-row span {
-  margin-top: 4px;
-  font-size: 13px;
-  line-height: 1.5;
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.45;
   color: #64748b;
 }
 
@@ -32356,19 +32362,24 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 .calendar-shell-detail {
   display: grid;
   grid-template-rows: auto 1fr;
-  gap: 12px;
+  gap: 10px;
 }
 
 .calendar-detail-tabs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  background: #fff;
 }
 
 .calendar-detail-tabs .btn {
-  height: 38px;
-  font-size: 12px;
+  height: 34px;
+  font-size: 11px;
   font-weight: 700;
+  border-radius: 10px;
 }
 
 .calendar-detail-tabs .btn.active {
@@ -32380,8 +32391,8 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 .calendar-detail-panel {
   display: flex;
   flex-direction: column;
-  padding: 18px;
-  min-height: 640px;
+  padding: 16px;
+  min-height: 580px;
 }
 
 .calendar-detail-scroller {
@@ -32390,29 +32401,30 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
   overflow: auto;
   display: grid;
   align-content: start;
-  gap: 14px;
+  gap: 12px;
   padding-right: 2px;
 }
 
 .calendar-detail-summary {
   display: flex;
-  gap: 12px;
-  align-items: center;
-  padding: 14px;
-  border-radius: 18px;
-  background: #fff8f2;
-  margin-bottom: 14px;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 0 10px;
+  border-radius: 0;
+  background: transparent;
+  margin-bottom: 2px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
 }
 
 .calendar-detail-summary strong {
   display: block;
-  font-size: 16px;
+  font-size: 15px;
   color: #111827;
 }
 
 .calendar-detail-summary p {
-  margin-top: 4px;
-  font-size: 13px;
+  margin-top: 3px;
+  font-size: 12px;
   color: #64748b;
 }
 
@@ -32420,16 +32432,16 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .calendar-event-card {
   display: grid;
   gap: 4px;
   width: 100%;
-  padding: 12px;
+  padding: 11px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #fff;
   text-align: left;
   transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
@@ -32453,7 +32465,7 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 }
 
 .calendar-event-card strong {
-  font-size: 14px;
+  font-size: 13px;
   color: #111827;
 }
 
@@ -32534,9 +32546,9 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 
 .calendar-agenda-group {
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 18px;
+  border-radius: 14px;
   background: #fff;
-  padding: 14px;
+  padding: 12px;
 }
 
 .calendar-agenda-group-head {
@@ -32570,12 +32582,12 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 .calendar-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .calendar-form-field {
   display: grid;
-  gap: 6px;
+  gap: 5px;
 }
 
 .calendar-form-field-full {
@@ -32593,10 +32605,10 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 .calendar-form-field textarea {
   width: 100%;
   border: 1px solid rgba(15, 23, 42, 0.1);
-  border-radius: 12px;
+  border-radius: 10px;
   background: #fff;
-  padding: 10px 12px;
-  font-size: 13px;
+  padding: 9px 11px;
+  font-size: 12px;
   color: #111827;
 }
 
@@ -32614,9 +32626,9 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 9px 11px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 12px;
+  border-radius: 10px;
   background: #fff;
 }
 
@@ -32645,11 +32657,11 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 9px 11px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 12px;
+  border-radius: 10px;
   background: #fff;
-  font-size: 13px;
+  font-size: 12px;
   color: #111827;
 }
 
@@ -32658,16 +32670,18 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 16px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
 }
 
 .calendar-template-row {
   display: grid;
   gap: 4px;
   width: 100%;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #fff;
   text-align: left;
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
@@ -32686,11 +32700,11 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 
 .calendar-scheduler-card {
   display: grid;
-  gap: 14px;
-  padding: 14px;
+  gap: 12px;
+  padding: 12px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255, 122, 26, 0.04), rgba(37, 99, 235, 0.03));
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 122, 26, 0.03), rgba(37, 99, 235, 0.02));
 }
 
 .calendar-scheduler-head {
@@ -33002,9 +33016,9 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  padding: 14px;
+  padding: 12px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 18px;
+  border-radius: 14px;
   background: #fff;
 }
 
@@ -33027,9 +33041,9 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 .calendar-comment-compose {
   display: grid;
   gap: 12px;
-  padding: 14px;
+  padding: 12px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 18px;
+  border-radius: 14px;
   background: #fff;
 }
 
@@ -33100,7 +33114,7 @@ html[data-ui-theme='dark'] #attendanceCalendarPanel.is-attendance-v2-calendar #a
 
 .calendar-sync-status-grid div {
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #fff;
   padding: 12px;
 }
