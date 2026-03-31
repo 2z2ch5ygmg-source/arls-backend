@@ -42495,11 +42495,11 @@ function renderCalendarWorkspace() {
   `;
 }
 
-async function loadCalendarWorkspace({ force = false } = {}) {
+async function loadCalendarWorkspace({ force = false, view = '', date = '' } = {}) {
   const calendarState = ensureCalendarWorkspaceState();
   const routeView = resolveCalendarTabFromRoutePath(state.currentRoute || '');
-  const requestedView = normalizeCalendarViewTab(routeView || calendarState.viewTab || 'week');
-  const requestedDate = normalizeAttendanceDate(calendarState.anchorDate || calendarState.selectedDate || '') || toLocalDateKey(new Date());
+  const requestedView = normalizeCalendarViewTab(view || routeView || calendarState.viewTab || 'week');
+  const requestedDate = normalizeAttendanceDate(date || calendarState.anchorDate || calendarState.selectedDate || '') || toLocalDateKey(new Date());
   calendarState.loading = true;
   calendarState.viewTab = requestedView;
   calendarState.anchorDate = requestedDate;
@@ -68804,7 +68804,7 @@ function bindUiEvents() {
       renderCalendarWorkspace();
       runActionSafely((async () => {
         await navigateToRoute(getCalendarTabRoute(nextTab));
-        await loadCalendarWorkspace({ force: true });
+        await loadCalendarWorkspace({ force: true, view: nextTab });
       })(), '캘린더 보기를 전환하지 못했습니다.');
       return;
     }
