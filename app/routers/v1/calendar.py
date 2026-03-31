@@ -442,18 +442,31 @@ def _fetch_events(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, container_id, title, starts_at, ends_at, timezone, is_all_day,
-                   recurrence_rule, availability_status, visibility, location,
-                   conferencing_provider, conferencing_url, description, custom_fields_json,
-                   resource_id, COALESCE(cr.resource_name, '') AS resource_label,
-                   status
-            FROM calendar_events
-            LEFT JOIN calendar_resources cr ON cr.id = calendar_events.resource_id
-            WHERE tenant_id = %s
-              AND container_id = %s
-              AND starts_at < %s
-              AND ends_at > %s
-            ORDER BY starts_at ASC, created_at ASC
+            SELECT e.id,
+                   e.container_id,
+                   e.title,
+                   e.starts_at,
+                   e.ends_at,
+                   e.timezone,
+                   e.is_all_day,
+                   e.recurrence_rule,
+                   e.availability_status,
+                   e.visibility,
+                   e.location,
+                   e.conferencing_provider,
+                   e.conferencing_url,
+                   e.description,
+                   e.custom_fields_json,
+                   e.resource_id,
+                   COALESCE(cr.resource_name, '') AS resource_label,
+                   e.status
+            FROM calendar_events e
+            LEFT JOIN calendar_resources cr ON cr.id = e.resource_id
+            WHERE e.tenant_id = %s
+              AND e.container_id = %s
+              AND e.starts_at < %s
+              AND e.ends_at > %s
+            ORDER BY e.starts_at ASC, e.created_at ASC
             LIMIT 200
             """,
             (tenant_id, container_id, range_end, range_start),

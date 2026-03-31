@@ -29,6 +29,7 @@ class _FakeConn:
 class _CaptureCursor:
     def __init__(self) -> None:
         self.executed: list[tuple[str, tuple | None]] = []
+        self.fetchall_results: list[list[dict]] = [[]]
 
     def __enter__(self):
         return self
@@ -40,6 +41,8 @@ class _CaptureCursor:
         self.executed.append((str(query), params))
 
     def fetchall(self):
+        if self.fetchall_results:
+            return self.fetchall_results.pop(0)
         return []
 
 
@@ -366,3 +369,30 @@ def test_fetch_workspace_containers_orders_by_selected_scope_alias():
     assert "AS scope_sort" in query
     assert "ORDER BY\n              scope_sort," in query
     assert params == ("user-1", "user-1", "tenant-1", "user-1", True, "site-1", "user-1")
+
+
+def test_fetch_events_qualifies_calendar_event_columns_with_alias(monkeypatch):
+    conn = _CaptureConn()
+    monkeypatch.setattr(
+        calendar_router,
+        "_fetch_event_relations",
+        lambda *_args, **_kwargs: ({}, {}, {}, {}, {}, {}),
+    )
+
+    calendar_router._fetch_events(
+        conn,
+        tenant_id="tenant-1",
+        container_id="container-1",
+        range_start="2026-03-31T00:00:00+09:00",
+        range_end="2026-04-01T00:00:00+09:00",
+        user_id="user-1",
+    )
+
+    query, params = conn.cursor_obj.executed[0]
+    assert "SELECT e.id," in query
+    assert "FROM calendar_events e" in query
+    assert "LEFT JOIN calendar_resources cr ON cr.id = e.resource_id" in query
+    assert "WHERE e.tenant_id = %s" in query
+    assert "AND e.container_id = %s" in query
+    assert "ORDER BY e.starts_at ASC, e.created_at ASC" in query
+    assert params == ("tenant-1", "container-1", "2026-04-01T00:00:00+09:00", "2026-03-31T00:00:00+09:00")
