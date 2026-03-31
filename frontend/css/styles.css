@@ -35486,11 +35486,89 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 /* ===== Phase 3.7 final refinement against live Daou home + approval ===== */
+#view-home .home-role-root-hq-refined .home-stage-hq-refined {
+  grid-template-columns: minmax(360px, 1.14fr) minmax(280px, 0.9fr) minmax(260px, 0.9fr);
+  grid-template-areas:
+    "focus requests schedule"
+    "notices notices org";
+  gap: 16px;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-card {
+  grid-area: focus;
+  grid-row: auto;
+  min-height: 0;
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 122, 26, 0.06), rgba(255, 122, 26, 0.02) 34%, #fff 34%);
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-head {
+  padding-bottom: 14px;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-copy {
+  gap: 4px;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-copy h3 {
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-copy p {
+  max-width: 42ch;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-metrics {
+  padding-top: 12px;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-metric {
+  gap: 3px;
+  padding: 6px 14px 0;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-metric strong {
+  font-size: 26px;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-queue {
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-secondary-slot {
+  min-width: 0;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-secondary-slot--requests {
+  grid-area: requests;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-secondary-slot--schedule {
+  grid-area: schedule;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-secondary-slot--notices {
+  grid-area: notices;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-secondary-slot--org {
+  grid-area: org;
+}
+
 #view-home .home-role-root-hq-refined .home-deck-card .home-card-scroll {
-  padding: 10px 0 0;
+  padding: 8px 0 0;
   border: 0;
   border-radius: 0;
   background: transparent;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-secondary-slot .home-role-card {
+  min-height: 0;
+  padding: 16px 18px;
+  border-radius: 16px;
 }
 
 #view-home .home-role-root-hq-refined .home-hq-secondary-slot .home-role-card-head h3 {
@@ -35520,6 +35598,45 @@ body.calendar-public-shell #view-calendar-public {
   color: var(--ui-accent);
 }
 
+#view-home .home-role-root-hq-refined .home-module-summary-band {
+  padding: 10px 0 12px;
+}
+
+#view-home .home-role-root-hq-refined .home-module-summary-item {
+  gap: 2px;
+  padding: 0 12px;
+}
+
+#view-home .home-role-root-hq-refined .home-module-summary-item strong {
+  font-size: 22px;
+}
+
+#view-home .home-role-root-hq-refined .home-role-list {
+  border-top-color: var(--ui-border-subtle);
+}
+
+#view-home .home-role-root-hq-refined .home-role-list > li {
+  padding: 10px 0;
+}
+
+#view-home .home-role-root-hq-refined .home-role-list-copy {
+  gap: 4px;
+}
+
+#view-home .home-role-root-hq-refined .home-role-list-copy strong {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+#view-home .home-role-root-hq-refined .home-role-list-copy span {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+#view-home .home-role-root-hq-refined .home-role-list-side {
+  gap: 6px;
+}
+
 #view-home .home-role-root-hq-refined .home-role-card .home-role-empty {
   min-height: 52px !important;
   padding: 6px 0 0;
@@ -35534,6 +35651,27 @@ body.calendar-public-shell #view-calendar-public {
 #view-home .home-role-root-hq-refined .home-role-card .home-role-empty span {
   font-size: 12px;
   line-height: 18px;
+}
+
+#view-home .home-role-root-hq-refined .home-role-card--notices .home-role-empty,
+#view-home .home-role-root-hq-refined .home-role-card--org .home-role-empty {
+  min-height: 40px !important;
+  padding-top: 4px;
+}
+
+#view-home .home-role-root-hq-refined .home-role-card--notices .home-role-list > li,
+#view-home .home-role-root-hq-refined .home-role-card--org .home-role-list > li {
+  padding: 12px 0;
+}
+
+#view-home .home-role-root-hq-refined .home-role-card--notices .home-card-scroll,
+#view-home .home-role-root-hq-refined .home-role-card--org .home-card-scroll {
+  padding-top: 6px;
+}
+
+#view-home .home-role-root-hq-refined .home-role-card--notices .home-role-card-head,
+#view-home .home-role-root-hq-refined .home-role-card--org .home-role-card-head {
+  padding-bottom: 10px;
 }
 
 #view-requests[data-requests-segment='documents'] #requestsToolbarScopeCount,
@@ -35582,6 +35720,28 @@ body.calendar-public-shell #view-calendar-public {
 #view-requests[data-requests-segment='approvals'] .requests-inline-empty span {
   font-size: 12px;
   line-height: 18px;
+}
+
+@media (max-width: 1180px) {
+  #view-home .home-role-root-hq-refined .home-stage-hq-refined {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "focus focus"
+      "requests schedule"
+      "notices org";
+  }
+}
+
+@media (max-width: 900px) {
+  #view-home .home-role-root-hq-refined .home-stage-hq-refined {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "focus"
+      "requests"
+      "schedule"
+      "notices"
+      "org";
+  }
 }
 
 /* ===== Phase 5 refinement against live Daou board + approval settings ===== */

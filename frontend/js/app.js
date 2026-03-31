@@ -4802,6 +4802,29 @@ function parseHomeCountValue(rawValue = 0) {
   return matched ? Number(matched[0]) : 0;
 }
 
+function filterMeaningfulHomeRows(rows = []) {
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const title = String(row?.title || '').trim();
+    if (!title) return false;
+    const numericHaystack = [row?.value, row?.subtitle, row?.pill_label]
+      .map((part) => String(part || '').trim())
+      .filter(Boolean)
+      .join(' ');
+    const numericMatches = numericHaystack.match(/-?\d+(?:\.\d+)?/g) || [];
+    const hasPositiveNumber = numericMatches.some((matched) => Number(matched) > 0);
+    if (hasPositiveNumber) return true;
+    const tone = String(row?.pill_tone || '').trim().toLowerCase();
+    if (['error', 'danger'].includes(tone)) {
+      return true;
+    }
+    if (tone === 'warn') {
+      const haystack = `${title} ${String(row?.subtitle || '').trim()} ${String(row?.pill_label || '').trim()}`;
+      return /미지정|지연|실패/.test(haystack);
+    }
+    return false;
+  });
+}
+
 function getHomePersonalStatusPercent(status = '') {
   const normalized = String(status || '').trim().toUpperCase();
   if (normalized === 'DONE') return 100;
@@ -5228,15 +5251,14 @@ function buildHomeRequestCardHtml({ briefing = null, title = '내 요청·문서
         <button class="btn btn-secondary" type="button" ${actionAttrs}>열기</button>
       </div>
       ${buildHomeModuleSummaryBand([
-        { label: '처리 큐', value: `${total}건`, meta: total > 0 ? '확인 필요' : '문제 없음', tone: total > 0 ? 'warn' : 'neutral' },
-        { label: '휴가 승인', value: `${leavePending}건`, meta: leavePending > 0 ? '대기' : '문제 없음', tone: leavePending > 0 ? 'warn' : 'neutral' },
-        { label: '출퇴근·정정', value: `${attendancePending}건`, meta: attendancePending > 0 ? '검토 필요' : '문제 없음', tone: attendancePending > 0 ? 'warn' : 'neutral' },
-        { label: '미확인 알림', value: `${unread}건`, meta: unread > 0 ? '읽지 않음' : '문제 없음', tone: unread > 0 ? 'warn' : 'neutral' },
+        { label: '처리 큐', value: `${total}건`, meta: total > 0 ? '승인 필요' : '', tone: total > 0 ? 'warn' : 'neutral' },
+        { label: '승인 대기', value: `${leavePending + attendancePending}건`, meta: total > 0 ? '휴가·출퇴근' : '', tone: leavePending + attendancePending > 0 ? 'warn' : 'neutral' },
+        { label: '미확인 알림', value: `${unread}건`, meta: unread > 0 ? '알림 확인' : '', tone: unread > 0 ? 'warn' : 'neutral' },
       ])}
       <div class="home-card-scroll">
         ${buildHomeListRowsHtml(priorityRows, {
           emptyTitle: '지금 확인할 요청이 없습니다.',
-          emptyMeta: '새 요청이 생기면 여기에 표시됩니다.',
+          emptyMeta: '',
         })}
       </div>
     </article>
@@ -5266,6 +5288,7 @@ function buildHomeScheduleCardHtml({ briefing = null, ops = null, requestSummary
   const missingCount = Number(normalizedOps?.missing_count || 0);
   const siteCount = Number(normalizedOps?.site_count || 0);
   const pendingApprovalCount = Number(normalizedRequest?.total_pending_count || normalizedOps?.pending_approval_count || 0);
+  const riskRows = filterMeaningfulHomeRows(briefing?.schedule_risk_rows || []);
   return `
     <article class="module-card home-role-card home-role-card--schedule home-deck-card">
       <div class="home-role-card-head">
@@ -5275,14 +5298,14 @@ function buildHomeScheduleCardHtml({ briefing = null, ops = null, requestSummary
         <button class="btn btn-secondary" type="button" data-action="switch-view" data-view="schedule">스케줄 보기</button>
       </div>
       ${buildHomeModuleSummaryBand([
-        { label: '결원 지점', value: `${vacancySiteCount}곳`, meta: missingCount > 0 ? '즉시 조정' : '문제 없음', tone: vacancySiteCount > 0 ? 'warn' : 'neutral' },
-        { label: '승인 대기', value: `${pendingApprovalCount}건`, meta: '휴가·출퇴근 요청', tone: pendingApprovalCount > 0 ? 'warn' : 'neutral' },
-        { label: '운영 지점', value: `${siteCount}곳`, meta: '오늘 기준', tone: 'neutral' },
+        { label: '결원 지점', value: `${vacancySiteCount}곳`, meta: vacancySiteCount > 0 || missingCount > 0 ? '즉시 확인' : '', tone: vacancySiteCount > 0 ? 'warn' : 'neutral' },
+        { label: '승인 대기', value: `${pendingApprovalCount}건`, meta: pendingApprovalCount > 0 ? '휴가·출퇴근 요청' : '', tone: pendingApprovalCount > 0 ? 'warn' : 'neutral' },
+        { label: '운영 지점', value: `${siteCount}곳`, meta: '', tone: 'neutral' },
       ])}
       <div class="home-card-scroll">
-        ${buildHomeListRowsHtml(briefing?.schedule_risk_rows || [], {
+        ${buildHomeListRowsHtml(riskRows, {
           emptyTitle: '스케줄 리스크가 없습니다.',
-          emptyMeta: '결원이나 조정 이슈가 생기면 여기에 표시됩니다.',
+          emptyMeta: '',
         })}
       </div>
     </article>
@@ -5351,6 +5374,7 @@ function buildHomeScheduleAnalyticsCardHtml({ briefing = null, ops = null, reque
 }
 
 function buildHomeOrgCardHtml({ briefing = null } = {}) {
+  const orgRows = filterMeaningfulHomeRows(briefing?.org_issue_rows || []);
   return `
     <article class="module-card home-role-card home-role-card--org home-deck-card home-deck-card-simple">
       <div class="home-role-card-head">
@@ -5360,8 +5384,9 @@ function buildHomeOrgCardHtml({ briefing = null } = {}) {
         <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="/branch/employees">조직 보기</button>
       </div>
       <div class="home-card-scroll">
-        ${buildHomeListRowsHtml(briefing?.org_issue_rows || [], {
+        ${buildHomeListRowsHtml(orgRows, {
           emptyTitle: '조직 이슈가 없습니다.',
+          emptyMeta: '',
         })}
       </div>
     </article>
@@ -5491,9 +5516,14 @@ function buildHomeHqSurfaceHtml(briefing = null) {
   const vacancySiteCount = Number(ops?.vacancy_site_count || 0);
   const issueCount = Number(ops?.issue_count || 0);
   const focusTone = missingCount > 0 || vacancySiteCount > 0 || pendingApprovalCount > 0 ? 'warn' : 'neutral';
-  const focusRows = Array.isArray(briefing?.attendance_issue_rows) && briefing.attendance_issue_rows.length
+  const focusRowsSource = Array.isArray(briefing?.attendance_issue_rows) && briefing.attendance_issue_rows.length
     ? briefing.attendance_issue_rows
     : (Array.isArray(briefing?.schedule_risk_rows) ? briefing.schedule_risk_rows : []);
+  const focusRows = filterMeaningfulHomeRows(focusRowsSource);
+  const focusTitle = issueCount > 0 ? `확인 ${issueCount}건` : '오늘 운영 안정';
+  const focusMeta = issueCount > 0
+    ? `미출근 ${missingCount} · 승인 ${pendingApprovalCount} · 결원 ${vacancySiteCount}`
+    : `운영 현장 ${Number(ops?.site_count || 0)}곳 · 출근 ${presentCount}명`;
   const secondaryCards = [
     { key: 'requests', html: buildHomeRequestCardHtml({ briefing, title: '요청·승인', allowQueueRoute: true }) },
     { key: 'schedule', html: buildHomeScheduleCardHtml({ briefing, ops, requestSummary }) },
@@ -5508,9 +5538,9 @@ function buildHomeHqSurfaceHtml(briefing = null) {
         <section class="module-card home-hq-focus-card" data-tone="${escapeHomeHtml(focusTone)}">
           <div class="home-hq-focus-head">
             <div class="home-hq-focus-copy">
-              <span class="home-hq-focus-kicker">오늘 운영 포커스</span>
-              <h3>즉시 확인 ${escapeHomeHtml(`${issueCount}건`)}</h3>
-              <p>${escapeHomeHtml(`미출근 ${missingCount} · 승인 ${pendingApprovalCount} · 결원 ${vacancySiteCount}`)}</p>
+              <span class="home-hq-focus-kicker">오늘 운영</span>
+              <h3>${escapeHomeHtml(focusTitle)}</h3>
+              <p>${escapeHomeHtml(focusMeta)}</p>
             </div>
             <button class="btn btn-primary" type="button" data-action="switch-view" data-view="attendance">출퇴근 보기</button>
           </div>
@@ -5539,7 +5569,8 @@ function buildHomeHqSurfaceHtml(briefing = null) {
             </div>
             <div class="home-card-scroll">
               ${buildHomeListRowsHtml(focusRows, {
-                emptyTitle: '지금 바로 확인할 운영 이슈가 없습니다.',
+                emptyTitle: '지금 확인할 운영 이슈가 없습니다.',
+                emptyMeta: '',
               })}
             </div>
           </div>
