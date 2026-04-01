@@ -27,10 +27,6 @@ class AuthUser(BaseModel):
     role: str
     employee_id: Optional[UUID] = None
     employee_code: Optional[str] = None
-    must_change_password: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("must_change_password", "mustChangePassword"),
-    )
     is_master: Optional[bool] = Field(default=None, serialization_alias="isMaster")
     tenant_scope: Optional[str] = Field(default=None, serialization_alias="tenantScope")
 
@@ -362,10 +358,18 @@ class EmployeeCreate(BaseModel):
         validation_alias=AliasChoices("resident_no", "residentNo", "resident_number"),
     )
     phone: Optional[str] = None
+    email: Optional[str] = Field(default=None, max_length=255)
     birth_date: Optional[date] = Field(default=None, validation_alias=AliasChoices("birth_date", "birthdate"))
     address: Optional[str] = Field(default=None, max_length=255)
     hire_date: Optional[date] = None
     leave_date: Optional[date] = Field(default=None, validation_alias=AliasChoices("leave_date", "leaveDate"))
+    employment_status: Optional[str] = Field(
+        default="active",
+        max_length=32,
+        validation_alias=AliasChoices("employment_status", "employmentStatus"),
+    )
+    loa_start_date: Optional[date] = Field(default=None, validation_alias=AliasChoices("loa_start_date", "loaStartDate"))
+    loa_end_date: Optional[date] = Field(default=None, validation_alias=AliasChoices("loa_end_date", "loaEndDate"))
     guard_training_cert_no: Optional[str] = Field(
         default=None,
         max_length=120,
@@ -395,7 +399,9 @@ class EmployeeCreate(BaseModel):
         "gender",
         "resident_no",
         "phone",
+        "email",
         "address",
+        "employment_status",
         "guard_training_cert_no",
         "note",
         "roster_docx_attachment_id",
@@ -421,6 +427,44 @@ class EmployeeCreate(BaseModel):
     def _normalize_resident_no(cls, value: Optional[str]) -> Optional[str]:
         return _normalize_resident_no_value(value)
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalize_email(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip().lower()
+        if not normalized:
+            return None
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized):
+            raise ValueError("email must be a valid email")
+        return normalized
+
+    @field_validator("employment_status", mode="before")
+    @classmethod
+    def _normalize_employment_status(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return "active"
+        normalized = str(value).strip().lower()
+        if not normalized:
+            return "active"
+        aliases = {
+            "active": "active",
+            "재직": "active",
+            "재직중": "active",
+            "leave_of_absence": "leave_of_absence",
+            "loa": "leave_of_absence",
+            "휴직": "leave_of_absence",
+            "terminated": "terminated",
+            "retired": "terminated",
+            "퇴직": "terminated",
+            "inactive": "inactive",
+            "비활성": "inactive",
+        }
+        resolved = aliases.get(normalized)
+        if not resolved:
+            raise ValueError("employment_status must be active/leave_of_absence/terminated/inactive")
+        return resolved
+
     @model_validator(mode="after")
     def _site_ref_optional(self) -> "EmployeeCreate":
         # 지점관리자는 서버 세션(site scope)으로 site/company를 강제 주입하므로
@@ -440,6 +484,7 @@ class EmployeeOut(BaseModel):
     gender: Optional[str] = None
     resident_no: Optional[str] = None
     phone: Optional[str]
+    email: Optional[str] = None
     site_code: str
     site_name: Optional[str] = None
     company_code: str
@@ -452,6 +497,9 @@ class EmployeeOut(BaseModel):
     address: Optional[str] = None
     hire_date: Optional[date] = None
     leave_date: Optional[date] = None
+    employment_status: Optional[str] = None
+    loa_start_date: Optional[date] = None
+    loa_end_date: Optional[date] = None
     guard_training_cert_no: Optional[str] = None
     note: Optional[str] = None
     roster_docx_attachment_id: Optional[str] = None
@@ -470,10 +518,18 @@ class EmployeeUpdate(BaseModel):
         validation_alias=AliasChoices("resident_no", "residentNo", "resident_number"),
     )
     phone: Optional[str] = None
+    email: Optional[str] = Field(default=None, max_length=255)
     birth_date: Optional[date] = Field(default=None, validation_alias=AliasChoices("birth_date", "birthdate"))
     address: Optional[str] = Field(default=None, max_length=255)
     hire_date: Optional[date] = None
     leave_date: Optional[date] = Field(default=None, validation_alias=AliasChoices("leave_date", "leaveDate"))
+    employment_status: Optional[str] = Field(
+        default=None,
+        max_length=32,
+        validation_alias=AliasChoices("employment_status", "employmentStatus"),
+    )
+    loa_start_date: Optional[date] = Field(default=None, validation_alias=AliasChoices("loa_start_date", "loaStartDate"))
+    loa_end_date: Optional[date] = Field(default=None, validation_alias=AliasChoices("loa_end_date", "loaEndDate"))
     guard_training_cert_no: Optional[str] = Field(
         default=None,
         max_length=120,
@@ -500,6 +556,7 @@ class EmployeeUpdate(BaseModel):
         "resident_no",
         "phone",
         "address",
+        "employment_status",
         "guard_training_cert_no",
         "note",
         "roster_docx_attachment_id",
@@ -519,10 +576,48 @@ class EmployeeUpdate(BaseModel):
     def _normalize_gender(cls, value: Optional[str]) -> Optional[str]:
         return _normalize_gender_value(value)
 
+    @field_validator("employment_status", mode="before")
+    @classmethod
+    def _normalize_employment_status(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip().lower()
+        if not normalized:
+            return None
+        aliases = {
+            "active": "active",
+            "재직": "active",
+            "재직중": "active",
+            "leave_of_absence": "leave_of_absence",
+            "loa": "leave_of_absence",
+            "휴직": "leave_of_absence",
+            "terminated": "terminated",
+            "retired": "terminated",
+            "퇴직": "terminated",
+            "inactive": "inactive",
+            "비활성": "inactive",
+        }
+        resolved = aliases.get(normalized)
+        if not resolved:
+            raise ValueError("employment_status must be active/leave_of_absence/terminated/inactive")
+        return resolved
+
     @field_validator("resident_no", mode="before")
     @classmethod
     def _normalize_resident_no(cls, value: Optional[str]) -> Optional[str]:
         return _normalize_resident_no_value(value)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalize_email(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip().lower()
+        if not normalized:
+            return None
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized):
+            raise ValueError("email must be a valid email")
+        return normalized
 
 
 class AttendanceCreate(BaseModel):

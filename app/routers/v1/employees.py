@@ -165,7 +165,6 @@ class GuardRosterCommitItem(BaseModel):
     username: str | None = Field(default=None, max_length=120)
     initial_password: str | None = Field(default=None, max_length=120)
     role: str | None = Field(default=None, max_length=64)
-    must_change_password: bool = True
     soc_role: str | None = Field(default=None, max_length=64)
 
     @field_validator(
@@ -1252,8 +1251,26 @@ def _drawer_role_display(value: str | None) -> str:
     return fallback or "Officer"
 
 
-def _drawer_employment_status(*, is_active: bool, leave_date: date | None) -> str:
+def _drawer_employment_status(
+    *,
+    is_active: bool,
+    leave_date: date | None,
+    employment_status: str | None = None,
+    loa_start_date: date | None = None,
+    loa_end_date: date | None = None,
+) -> str:
     today_kst = datetime.now(KST).date()
+    normalized_status = str(employment_status or "").strip().lower()
+    if normalized_status in {"leave_of_absence", "loa"}:
+        if loa_start_date and loa_start_date > today_kst:
+            return "휴직 예정"
+        if loa_end_date and loa_end_date < today_kst:
+            return "휴직 종료"
+        return "휴직중"
+    if normalized_status in {"terminated", "retired"}:
+        return "퇴직"
+    if normalized_status == "inactive":
+        return "비활성"
     if leave_date and leave_date <= today_kst:
         return "퇴사"
     if not is_active:
@@ -1336,8 +1353,12 @@ def _fetch_employee_drawer_base(
                    e.management_no_str,
                    e.full_name,
                    e.phone,
+                   e.email,
                    e.hire_date,
                    e.leave_date,
+                   COALESCE(e.employment_status, 'active') AS employment_status,
+                   e.loa_start_date,
+                   e.loa_end_date,
                    {employee_active_expr} AS is_active,
                    COALESCE(t.tenant_code, '') AS tenant_code,
                    COALESCE(t.tenant_name, '') AS tenant_name,
@@ -1873,6 +1894,9 @@ def _build_employee_drawer_summary_payload(
     employment_status = _drawer_employment_status(
         is_active=bool(employee_row.get("is_active")),
         leave_date=employee_row.get("leave_date"),
+        employment_status=employee_row.get("employment_status"),
+        loa_start_date=employee_row.get("loa_start_date"),
+        loa_end_date=employee_row.get("loa_end_date"),
     )
     account_link_status = _drawer_account_link_status(
         employee_row.get("linked_user_id"),
@@ -2262,9 +2286,6 @@ def _upsert_guard_roster_employee(
     account_username = normalized_phone_credential
     account_initial_password = normalized_phone_credential
     account_password_hash = hash_password(account_initial_password)
-    account_must_change_password = True
-
-    user_has_must_change_password = _table_column_exists(conn, "arls_users", "must_change_password")
 
     with conn.cursor() as cur:
         existing = _lookup_employee_by_management_identity(
@@ -2281,8 +2302,7 @@ def _upsert_guard_roster_employee(
                 SELECT id, employee_uuid, employee_code, full_name, phone, birth_date, hire_date,
                        leave_date, address, management_no_str, gender, resident_no,
                        roster_docx_attachment_id, photo_attachment_id,
-                       guard_training_cert_no, note, soc_login_id, soc_role,
-                       username, password_hash, must_change_password, role
+                       guard_training_cert_no, note, soc_login_id, soc_role
                 FROM employees
                 WHERE tenant_id = %s
                   AND upper(employee_code) = upper(%s)
@@ -2322,7 +2342,6 @@ def _upsert_guard_roster_employee(
                 "note": note,
                 "username": account_username,
                 "password_hash": account_password_hash,
-                "must_change_password": account_must_change_password,
                 "role": account_user_role,
                 "soc_role": normalized_soc_role or existing.get("soc_role"),
             }
@@ -2340,8 +2359,7 @@ def _upsert_guard_roster_employee(
                 RETURNING id, employee_uuid, employee_code, full_name, phone,
                           birth_date, gender, resident_no, hire_date, leave_date, address, management_no_str,
                           roster_docx_attachment_id, photo_attachment_id,
-                          guard_training_cert_no, note, soc_login_id, soc_role,
-                          username, password_hash, must_change_password, role
+                          guard_training_cert_no, note, soc_login_id, soc_role
                 """,
                 tuple(update_values),
                 stage="guard_roster.employees_update",
@@ -2377,7 +2395,6 @@ def _upsert_guard_roster_employee(
                 "soc_role": normalized_soc_role or "Officer",
                 "username": account_username,
                 "password_hash": account_password_hash,
-                "must_change_password": account_must_change_password,
                 "role": account_user_role,
             }
             insert_columns = ", ".join(insert_fields.keys())
@@ -2390,8 +2407,7 @@ def _upsert_guard_roster_employee(
                 RETURNING id, employee_uuid, employee_code, full_name, phone,
                           birth_date, gender, resident_no, hire_date, leave_date, address, management_no_str,
                           roster_docx_attachment_id, photo_attachment_id,
-                          guard_training_cert_no, note, soc_login_id, soc_role,
-                          username, password_hash, must_change_password, role
+                          guard_training_cert_no, note, soc_login_id, soc_role
                 """,
                 tuple(insert_fields.values()),
                 stage="guard_roster.employees_insert",
@@ -2442,146 +2458,57 @@ def _upsert_guard_roster_employee(
                 target_user_id = str(username_owner.get("id") or "")
 
         if target_user_id:
-            reuse_from_username_owner = (
-                bool(username_owner)
-                and str(username_owner.get("id") or "") == target_user_id
-                and (username_owner_is_deleted or username_owner_employee_id in {"", employee_id_value})
+            exec_checked(
+                cur,
+                """
+                UPDATE arls_users
+                SET username = %s,
+                    password_hash = %s,
+                    full_name = %s,
+                    role = %s,
+                    employee_id = %s,
+                    site_id = %s,
+                    is_active = TRUE,
+                    is_deleted = FALSE,
+                    deleted_at = NULL,
+                    deleted_by = NULL,
+                    updated_at = timezone('utc', now())
+                WHERE id = %s
+                """,
+                (
+                    account_username,
+                    account_password_hash,
+                    full_name,
+                    account_user_role,
+                    employee_id_value,
+                    site_relation["site_id"],
+                    target_user_id,
+                ),
+                stage="guard_roster.users_reactivate",
             )
-            if reuse_from_username_owner:
-                if user_has_must_change_password:
-                    exec_checked(
-                        cur,
-                        """
-                        UPDATE arls_users
-                        SET username = %s,
-                            password_hash = %s,
-                            full_name = %s,
-                            role = %s,
-                            employee_id = %s,
-                            site_id = %s,
-                            is_active = TRUE,
-                            is_deleted = FALSE,
-                            deleted_at = NULL,
-                            deleted_by = NULL,
-                            must_change_password = %s,
-                            updated_at = timezone('utc', now())
-                        WHERE id = %s
-                        """,
-                        (
-                            account_username,
-                            account_password_hash,
-                            full_name,
-                            account_user_role,
-                            employee_id_value,
-                            site_relation["site_id"],
-                            account_must_change_password,
-                            target_user_id,
-                        ),
-                        stage="guard_roster.users_reactivate_with_password_reset",
-                    )
-                else:
-                    exec_checked(
-                        cur,
-                        """
-                        UPDATE arls_users
-                        SET username = %s,
-                            password_hash = %s,
-                            full_name = %s,
-                            role = %s,
-                            employee_id = %s,
-                            site_id = %s,
-                            is_active = TRUE,
-                            is_deleted = FALSE,
-                            deleted_at = NULL,
-                            deleted_by = NULL,
-                            updated_at = timezone('utc', now())
-                        WHERE id = %s
-                        """,
-                        (
-                            account_username,
-                            account_password_hash,
-                            full_name,
-                            account_user_role,
-                            employee_id_value,
-                            site_relation["site_id"],
-                            target_user_id,
-                        ),
-                        stage="guard_roster.users_reactivate_without_must_change",
-                    )
-            else:
-                exec_checked(
-                    cur,
-                    """
-                    UPDATE arls_users
-                    SET username = %s,
-                        full_name = %s,
-                        role = %s,
-                        employee_id = %s,
-                        site_id = %s,
-                        is_active = TRUE,
-                        is_deleted = FALSE,
-                        deleted_at = NULL,
-                        deleted_by = NULL,
-                        updated_at = timezone('utc', now())
-                    WHERE id = %s
-                    """,
-                    (
-                        account_username,
-                        full_name,
-                        account_user_role,
-                        employee_id_value,
-                        site_relation["site_id"],
-                        target_user_id,
-                    ),
-                    stage="guard_roster.users_update",
-                )
         else:
             new_user_id = str(uuid.uuid4())
-            if user_has_must_change_password:
-                exec_checked(
-                    cur,
-                    """
-                    INSERT INTO arls_users (
-                        id, tenant_id, username, password_hash, full_name, role, is_active,
-                        employee_id, site_id, must_change_password, created_at, updated_at
-                    )
-                    VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s, %s, %s, timezone('utc', now()), timezone('utc', now()))
-                    """,
-                    (
-                        new_user_id,
-                        tenant_id,
-                        account_username,
-                        account_password_hash,
-                        full_name,
-                        account_user_role,
-                        employee_id_value,
-                        site_relation["site_id"],
-                        account_must_change_password,
-                    ),
-                    stage="guard_roster.users_insert_with_must_change",
+            exec_checked(
+                cur,
+                """
+                INSERT INTO arls_users (
+                    id, tenant_id, username, password_hash, full_name, role, is_active,
+                    employee_id, site_id, created_at, updated_at
                 )
-            else:
-                exec_checked(
-                    cur,
-                    """
-                    INSERT INTO arls_users (
-                        id, tenant_id, username, password_hash, full_name, role, is_active,
-        employee_id, site_id, created_at, updated_at
-                    )
-                    VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s, %s, timezone('utc', now()), timezone('utc', now()))
-                    """,
-                    (
-                        new_user_id,
-                        tenant_id,
-                        account_username,
-                        account_password_hash,
-                        full_name,
-                        account_user_role,
-                        employee_id_value,
-                        site_relation["site_id"],
-                    ),
-                    stage="guard_roster.users_insert_without_must_change",
-                )
+                VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s, %s, timezone('utc', now()), timezone('utc', now()))
+                """,
+                (
+                    new_user_id,
+                    tenant_id,
+                    account_username,
+                    account_password_hash,
+                    full_name,
+                    account_user_role,
+                    employee_id_value,
+                    site_relation["site_id"],
+                ),
+                stage="guard_roster.users_insert",
+            )
 
     sync_ok, sync_status, sync_reason = _post_employee_sync_to_soc(
         tenant_id=str(tenant_id or ""),
@@ -3276,11 +3203,13 @@ def list_employees(
     if detail:
         select_sql = """
             SELECT e.id, e.tenant_id,
-                   e.employee_code, e.sequence_no, e.full_name, e.phone,
+                   e.employee_code, e.sequence_no, e.full_name, e.phone, e.email,
                    s.site_code, s.site_name, COALESCE(c.company_code, '') AS company_code,
                    {employee_active_select_sql},
                    {employee_deleted_select_sql},
                    e.management_no_str, e.gender, e.resident_no, e.birth_date, e.address, e.hire_date, e.leave_date,
+                   COALESCE(e.employment_status, 'active') AS employment_status,
+                   e.loa_start_date, e.loa_end_date,
                    e.guard_training_cert_no, e.note, e.roster_docx_attachment_id, e.photo_attachment_id,
                    e.soc_login_id, e.soc_role,
                    {account_select_sql}
@@ -3296,7 +3225,7 @@ def list_employees(
     else:
         select_sql = """
             SELECT e.id, e.tenant_id,
-                   e.employee_code, e.sequence_no, e.full_name, e.phone,
+                   e.employee_code, e.sequence_no, e.full_name, e.phone, e.email,
                    s.site_code, s.site_name, COALESCE(c.company_code, '') AS company_code,
                    {employee_active_select_sql},
                    {employee_deleted_select_sql},
@@ -3307,6 +3236,9 @@ def list_employees(
                    NULL::text AS address,
                    NULL::date AS hire_date,
                    NULL::date AS leave_date,
+                   COALESCE(e.employment_status, 'active') AS employment_status,
+                   e.loa_start_date,
+                   e.loa_end_date,
                    NULL::text AS guard_training_cert_no,
                    NULL::text AS note,
                    NULL::text AS roster_docx_attachment_id,
@@ -3461,7 +3393,6 @@ def create_employee(
     account_initial_password = normalized_phone_credential
     account_password_hash = hash_password(account_initial_password)
     account_user_role = normalize_user_role(normalized_soc_role)
-    account_must_change_password = True
     resolved_soc_login_id = account_username
 
     employee_id = uuid.uuid4()
@@ -3488,15 +3419,17 @@ def create_employee(
                 INSERT INTO employees
                     (
                       id, employee_uuid, tenant_id, company_id, site_id, sequence_no, employee_code, management_no_str,
-                      full_name, gender, resident_no, phone, duty_role, birth_date, address, hire_date, leave_date,
+                      full_name, gender, resident_no, phone, email, duty_role, birth_date, address, hire_date, leave_date,
+                      employment_status, loa_start_date, loa_end_date,
                       guard_training_cert_no, note, roster_docx_attachment_id, photo_attachment_id,
                       soc_login_id, soc_role
                     )
-                VALUES (%s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT DO NOTHING
-                RETURNING id, employee_code, sequence_no, full_name, phone, %s AS site_code, %s AS company_code,
+                RETURNING id, employee_code, sequence_no, full_name, phone, email, %s AS site_code, %s AS company_code,
                           NULL::uuid AS user_id, NULL::text AS user_role,
                           management_no_str, gender, resident_no, birth_date, address, hire_date, leave_date,
+                          employment_status, loa_start_date, loa_end_date,
                           guard_training_cert_no, note, roster_docx_attachment_id, photo_attachment_id,
                           soc_login_id, soc_role
                 """,
@@ -3512,11 +3445,15 @@ def create_employee(
                     normalized_gender,
                     normalized_resident_no,
                     payload.phone,
+                    payload.email,
                     duty_role_value,
                     payload.birth_date,
                     address_text,
                     payload.hire_date,
                     payload.leave_date,
+                    payload.employment_status or "active",
+                    payload.loa_start_date,
+                    payload.loa_end_date,
                     training_cert_no,
                     note_text,
                     roster_docx_attachment_id,
@@ -3538,15 +3475,17 @@ def create_employee(
                     INSERT INTO employees
                     (
                           id, employee_uuid, tenant_id, company_id, site_id, sequence_no, employee_code, management_no_str,
-                          full_name, gender, resident_no, phone, duty_role, birth_date, address, hire_date, leave_date,
+                          full_name, gender, resident_no, phone, email, duty_role, birth_date, address, hire_date, leave_date,
+                          employment_status, loa_start_date, loa_end_date,
                           guard_training_cert_no, note, roster_docx_attachment_id, photo_attachment_id,
                           soc_login_id, soc_role
                         )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT DO NOTHING
-                    RETURNING id, employee_code, sequence_no, full_name, phone, %s AS site_code, %s AS company_code,
+                    RETURNING id, employee_code, sequence_no, full_name, phone, email, %s AS site_code, %s AS company_code,
                               NULL::uuid AS user_id, NULL::text AS user_role,
                               management_no_str, gender, resident_no, birth_date, address, hire_date, leave_date,
+                              employment_status, loa_start_date, loa_end_date,
                               guard_training_cert_no, note, roster_docx_attachment_id, photo_attachment_id,
                               soc_login_id, soc_role
                     """,
@@ -3563,11 +3502,15 @@ def create_employee(
                         normalized_gender,
                         normalized_resident_no,
                         payload.phone,
+                        payload.email,
                         duty_role_value,
                         payload.birth_date,
                         address_text,
                         payload.hire_date,
                         payload.leave_date,
+                        payload.employment_status or "active",
+                        payload.loa_start_date,
+                        payload.loa_end_date,
                         training_cert_no,
                         note_text,
                         roster_docx_attachment_id,
@@ -3589,8 +3532,6 @@ def create_employee(
             "EMPLOYEE_CODE_CONFLICT",
             "failed to allocate employee_code",
         )
-
-    user_has_must_change_password = _table_column_exists(conn, "arls_users", "must_change_password")
     created_employee_id = str(created.get("id") or "")
     target_user_id = ""
     with conn.cursor() as cur:
@@ -3635,146 +3576,57 @@ def create_employee(
             target_user_id = str(username_owner.get("id") or "")
 
         if target_user_id:
-            reuse_from_username_owner = (
-                bool(username_owner)
-                and str(username_owner.get("id") or "") == target_user_id
-                and (username_owner_is_deleted or username_owner_employee_id in {"", created_employee_id})
+            exec_checked(
+                cur,
+                """
+                UPDATE arls_users
+                SET username = %s,
+                    password_hash = %s,
+                    full_name = %s,
+                    role = %s,
+                    employee_id = %s,
+                    site_id = %s,
+                    is_active = TRUE,
+                    is_deleted = FALSE,
+                    deleted_at = NULL,
+                    deleted_by = NULL,
+                    updated_at = timezone('utc', now())
+                WHERE id = %s
+                """,
+                (
+                    account_username,
+                    account_password_hash,
+                    full_name_text,
+                    account_user_role,
+                    created_employee_id,
+                    site_id,
+                    target_user_id,
+                ),
+                stage="employees.create.users_reactivate",
             )
-            if reuse_from_username_owner:
-                if user_has_must_change_password:
-                    exec_checked(
-                        cur,
-                        """
-                        UPDATE arls_users
-                        SET username = %s,
-                            password_hash = %s,
-                            full_name = %s,
-                            role = %s,
-                            employee_id = %s,
-                            site_id = %s,
-                            is_active = TRUE,
-                            is_deleted = FALSE,
-                            deleted_at = NULL,
-                            deleted_by = NULL,
-                            must_change_password = %s,
-                            updated_at = timezone('utc', now())
-                        WHERE id = %s
-                        """,
-                        (
-                            account_username,
-                            account_password_hash,
-                            full_name_text,
-                            account_user_role,
-                            created_employee_id,
-                            site_id,
-                            account_must_change_password,
-                            target_user_id,
-                        ),
-                        stage="employees.create.users_reactivate_with_password_reset",
-                    )
-                else:
-                    exec_checked(
-                        cur,
-                        """
-                        UPDATE arls_users
-                        SET username = %s,
-                            password_hash = %s,
-                            full_name = %s,
-                            role = %s,
-                            employee_id = %s,
-                            site_id = %s,
-                            is_active = TRUE,
-                            is_deleted = FALSE,
-                            deleted_at = NULL,
-                            deleted_by = NULL,
-                            updated_at = timezone('utc', now())
-                        WHERE id = %s
-                        """,
-                        (
-                            account_username,
-                            account_password_hash,
-                            full_name_text,
-                            account_user_role,
-                            created_employee_id,
-                            site_id,
-                            target_user_id,
-                        ),
-                        stage="employees.create.users_reactivate_without_must_change",
-                    )
-            else:
-                exec_checked(
-                    cur,
-                    """
-                    UPDATE arls_users
-                    SET username = %s,
-                        full_name = %s,
-                        role = %s,
-                        employee_id = %s,
-                        site_id = %s,
-                        is_active = TRUE,
-                        is_deleted = FALSE,
-                        deleted_at = NULL,
-                        deleted_by = NULL,
-                        updated_at = timezone('utc', now())
-                    WHERE id = %s
-                    """,
-                    (
-                        account_username,
-                        full_name_text,
-                        account_user_role,
-                        created_employee_id,
-                        site_id,
-                        target_user_id,
-                    ),
-                    stage="employees.create.users_update",
-                )
         else:
             new_user_id = str(uuid.uuid4())
-            if user_has_must_change_password:
-                exec_checked(
-                    cur,
-                    """
-                    INSERT INTO arls_users (
-                        id, tenant_id, username, password_hash, full_name, role, is_active,
-                        employee_id, site_id, must_change_password, created_at, updated_at
-                    )
-                    VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s, %s, %s, timezone('utc', now()), timezone('utc', now()))
-                    """,
-                    (
-                        new_user_id,
-                        tenant_id,
-                        account_username,
-                        account_password_hash,
-                        full_name_text,
-                        account_user_role,
-                        created_employee_id,
-                        site_id,
-                        account_must_change_password,
-                    ),
-                    stage="employees.create.users_insert_with_must_change",
+            exec_checked(
+                cur,
+                """
+                INSERT INTO arls_users (
+                    id, tenant_id, username, password_hash, full_name, role, is_active,
+                    employee_id, site_id, created_at, updated_at
                 )
-            else:
-                exec_checked(
-                    cur,
-                    """
-                    INSERT INTO arls_users (
-                        id, tenant_id, username, password_hash, full_name, role, is_active,
-                        employee_id, site_id, created_at, updated_at
-                    )
-                    VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s, %s, timezone('utc', now()), timezone('utc', now()))
-                    """,
-                    (
-                        new_user_id,
-                        tenant_id,
-                        account_username,
-                        account_password_hash,
-                        full_name_text,
-                        account_user_role,
-                        created_employee_id,
-                        site_id,
-                    ),
-                    stage="employees.create.users_insert_without_must_change",
-                )
+                VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s, %s, timezone('utc', now()), timezone('utc', now()))
+                """,
+                (
+                    new_user_id,
+                    tenant_id,
+                    account_username,
+                    account_password_hash,
+                    full_name_text,
+                    account_user_role,
+                    created_employee_id,
+                    site_id,
+                ),
+                stage="employees.create.users_insert",
+            )
 
     created_payload = {
         **created,
@@ -3848,6 +3700,8 @@ def update_employee(
             """
             SELECT id, employee_code, sequence_no, full_name, phone, site_id,
                    management_no_str, gender, resident_no, birth_date, address, hire_date, leave_date,
+                   COALESCE(employment_status, 'active') AS employment_status,
+                   loa_start_date, loa_end_date,
                    guard_training_cert_no, note, roster_docx_attachment_id, photo_attachment_id,
                    soc_login_id, soc_role
             FROM employees
@@ -3910,7 +3764,19 @@ def update_employee(
             if payload.resident_no is not None
             else _normalize_resident_no(current.get("resident_no"))
         )
+        resolved_email = (
+            _normalize_optional_text(payload.email)
+            if payload.email is not None
+            else _normalize_optional_text(current.get("email"))
+        )
         resolved_leave_date = payload.leave_date if payload.leave_date is not None else current.get("leave_date")
+        resolved_employment_status = (
+            str(payload.employment_status or "").strip().lower()
+            if payload.employment_status is not None
+            else str(current.get("employment_status") or "active").strip().lower()
+        ) or "active"
+        resolved_loa_start_date = payload.loa_start_date if payload.loa_start_date is not None else current.get("loa_start_date")
+        resolved_loa_end_date = payload.loa_end_date if payload.loa_end_date is not None else current.get("loa_end_date")
         resolved_training_cert_no = (
             _normalize_optional_text(payload.guard_training_cert_no)
             if payload.guard_training_cert_no is not None
@@ -3940,12 +3806,16 @@ def update_employee(
                 management_no_str = %s,
                 full_name = %s,
                 phone = %s,
+                email = %s,
                 gender = %s,
                 resident_no = %s,
                 birth_date = %s,
                 address = %s,
                 hire_date = %s,
                 leave_date = %s,
+                employment_status = %s,
+                loa_start_date = %s,
+                loa_end_date = %s,
                 guard_training_cert_no = %s,
                 note = %s,
                 roster_docx_attachment_id = %s,
@@ -3954,8 +3824,9 @@ def update_employee(
                 soc_role = %s
             WHERE id = %s
               AND tenant_id = %s
-            RETURNING id, employee_code, sequence_no, full_name, phone, site_id, management_no_str, gender, resident_no,
-                      birth_date, address, hire_date, leave_date, guard_training_cert_no, note,
+            RETURNING id, employee_code, sequence_no, full_name, phone, email, site_id, management_no_str, gender, resident_no,
+                      birth_date, address, hire_date, leave_date, employment_status, loa_start_date, loa_end_date,
+                      guard_training_cert_no, note,
                       roster_docx_attachment_id, photo_attachment_id, soc_login_id, soc_role
             """,
             (
@@ -3963,12 +3834,16 @@ def update_employee(
                 resolved_management_no,
                 payload.full_name,
                 payload.phone,
+                resolved_email,
                 resolved_gender,
                 resolved_resident_no,
                 payload.birth_date,
                 resolved_address,
                 payload.hire_date,
                 resolved_leave_date,
+                resolved_employment_status,
+                resolved_loa_start_date,
+                resolved_loa_end_date,
                 resolved_training_cert_no,
                 resolved_note,
                 resolved_roster_docx_attachment_id,
@@ -4079,6 +3954,9 @@ def update_employee(
         address=updated.get("address"),
         hire_date=updated.get("hire_date"),
         leave_date=updated.get("leave_date"),
+        employment_status=updated.get("employment_status"),
+        loa_start_date=updated.get("loa_start_date"),
+        loa_end_date=updated.get("loa_end_date"),
         guard_training_cert_no=updated.get("guard_training_cert_no"),
         note=updated.get("note"),
         roster_docx_attachment_id=updated.get("roster_docx_attachment_id"),

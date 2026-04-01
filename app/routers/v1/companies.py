@@ -37,7 +37,7 @@ def _resolve_target_tenant(conn, user, tenant_code: str | None):
             """
             SELECT id, tenant_code
             FROM tenants
-            WHERE tenant_code = %s
+            WHERE UPPER(tenant_code) = %s
               AND COALESCE(is_active, TRUE) = TRUE
               AND COALESCE(is_deleted, FALSE) = FALSE
             LIMIT 1
@@ -76,7 +76,7 @@ def list_companies(
             JOIN tenants t ON t.id = c.tenant_id
             WHERE COALESCE(t.is_active, TRUE) = TRUE
               AND COALESCE(t.is_deleted, FALSE) = FALSE
-              {"AND t.tenant_code = %s" if actor_role == ROLE_DEV and requested_tenant_code else ""}
+              {"AND UPPER(t.tenant_code) = %s" if actor_role == ROLE_DEV and requested_tenant_code else ""}
               {"AND c.tenant_id = %s" if actor_role != ROLE_DEV else ""}
             ORDER BY c.company_code
             """,

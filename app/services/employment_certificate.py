@@ -38,8 +38,18 @@ from reportlab.lib.styles import ParagraphStyle
 
 from ..config import settings
 
-TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "templates" / "employment_certificate.html"
-_DEFAULT_TEMPLATE_CACHE: str | None = None
+EMPLOYMENT_CERTIFICATE_TYPE_KEY = "employment_certificate"
+CAREER_CERTIFICATE_TYPE_KEY = "career_certificate"
+RETIREMENT_CERTIFICATE_TYPE_KEY = "retirement_certificate"
+LEAVE_OF_ABSENCE_CERTIFICATE_TYPE_KEY = "leave_of_absence_certificate"
+
+DEFAULT_TEMPLATE_PATHS: dict[str, Path] = {
+    EMPLOYMENT_CERTIFICATE_TYPE_KEY: Path(__file__).resolve().parent.parent / "templates" / "employment_certificate.html",
+    CAREER_CERTIFICATE_TYPE_KEY: Path(__file__).resolve().parent.parent / "templates" / "career_certificate.html",
+    RETIREMENT_CERTIFICATE_TYPE_KEY: Path(__file__).resolve().parent.parent / "templates" / "retirement_certificate.html",
+    LEAVE_OF_ABSENCE_CERTIFICATE_TYPE_KEY: Path(__file__).resolve().parent.parent / "templates" / "leave_of_absence_certificate.html",
+}
+_DEFAULT_TEMPLATE_CACHE: dict[str, str] = {}
 
 _KOREAN_FONT_NAME = "HYSMyeongJo-Medium"
 _FALLBACK_FONT_NAME = "Helvetica"
@@ -58,10 +68,18 @@ EMPLOYMENT_CERTIFICATE_TEMPLATE_VARIABLES = (
     "org_name",
     "position_name",
     "hire_date",
+    "submit_to",
     "issue_number",
     "issue_date",
     "issue_date_long",
     "purpose_label",
+    "certificate_type_key",
+    "certificate_title",
+    "certificate_statement",
+    "termination_date",
+    "loa_start_date",
+    "loa_end_date",
+    "return_due_date",
 )
 
 EMPLOYMENT_CERTIFICATE_TEMPLATE_REQUIRED_VARIABLES = (
@@ -84,7 +102,8 @@ _TEMPLATE_PLACEHOLDER_ALIASES: dict[str, tuple[str, ...]] = {
     "employee_name": ("employee_name", "name", "성명", "이름", "직원명"),
     "birth_date": ("birth_date", "birthdate", "생년월일"),
     "org_name": ("org_name", "소속", "부서", "현장", "현장명"),
-    "position_name": ("position_name", "position", "직급", "직위", "권한"),
+    "position_name": ("position_name", "position", "직급", "직위", "직책"),
+    "submit_to": ("submit_to", "제출처", "제출기관", "제출기관명"),
     "hire_date": ("hire_date", "hiredate", "입사일", "채용일"),
     "issue_number": ("issue_number", "issue_no", "발급번호", "문서번호"),
     "issue_date": ("issue_date", "issued_at", "발급일"),
@@ -102,16 +121,25 @@ PURPOSE_LABEL_MAP = {
 
 DOCX_LABEL_PATTERNS: dict[str, tuple[str, ...]] = {
     "employee_name": ("성명",),
+    "birth_date": ("생년월일",),
     "resident_no_masked": ("주민번호", "주민등록번호"),
     "employee_address": ("주소",),
     "employee_phone": ("연락처", "전화번호", "연락처전화번호"),
+    "org_name": ("소속", "부서", "현장", "현장명"),
+    "position_name": ("직위", "직급", "직책"),
     "company_name": ("회사명", "회사명소속"),
     "biz_reg_no": ("사업자", "사업자번호", "사업자등록번호"),
     "ceo_name": ("대표자", "대표자명"),
     "company_phone": ("대표전화", "대표연락처", "회사전화번호", "대표번호", "대표전화번호"),
     "company_address": ("소재지", "회사주소"),
+    "hire_date": ("입사일", "채용일"),
     "employment_period": ("재직기간",),
+    "submit_to": ("제출처", "제출기관"),
     "purpose_label": ("발급용도",),
+    "termination_date": ("퇴직일", "퇴사일", "근무종료일"),
+    "loa_start_date": ("휴직시작일", "휴직 시작일"),
+    "loa_end_date": ("휴직종료일", "휴직 종료일", "휴직만료일"),
+    "return_due_date": ("복귀예정일", "복직예정일"),
 }
 
 DOCX_PERSONAL_SECTION_TOKENS = ("인적사항",)
@@ -214,6 +242,14 @@ def _resolve_docx_label_value(label_key: str, context: dict[str, Any], section: 
         return str(context.get("employment_period") or "").strip()
     if label_key == "purpose_label":
         return str(context.get("purpose_label") or "").strip()
+    if label_key == "termination_date":
+        return str(context.get("termination_date") or context.get("leave_date") or "").strip()
+    if label_key == "loa_start_date":
+        return str(context.get("loa_start_date") or "").strip()
+    if label_key == "loa_end_date":
+        return str(context.get("loa_end_date") or "").strip()
+    if label_key == "return_due_date":
+        return str(context.get("return_due_date") or context.get("loa_end_date") or "").strip()
     return str(context.get(label_key) or "").strip()
 
 
@@ -285,6 +321,25 @@ def fill_employment_certificate_docx_by_labels(
                 if candidate_index is None:
                     continue
                 _set_docx_cell_text(row_cells[candidate_index], value_text)
+
+    replacements = {str(key): str(value or "").strip() for key, value in (context or {}).items()}
+    placeholder_patterns = [
+        (
+            re.compile(r"\{\{\s*" + re.escape(key) + r"\s*\}\}", flags=re.IGNORECASE),
+            value,
+        )
+        for key, value in replacements.items()
+        if key
+    ]
+    for paragraph in _iter_docx_paragraphs(document):
+        raw_text = str(paragraph.text or "")
+        if not raw_text.strip():
+            continue
+        replaced_text = raw_text
+        for pattern, value in placeholder_patterns:
+            replaced_text = pattern.sub(value, replaced_text)
+        if replaced_text != raw_text:
+            paragraph.text = replaced_text
 
     if seal_image_bytes:
         inserted = False
@@ -438,12 +493,16 @@ def normalize_template_placeholders(template_html: str) -> str:
     return normalized
 
 
-def load_default_template_html() -> str:
-    global _DEFAULT_TEMPLATE_CACHE
-    if _DEFAULT_TEMPLATE_CACHE is not None:
-        return _DEFAULT_TEMPLATE_CACHE
-    _DEFAULT_TEMPLATE_CACHE = TEMPLATE_PATH.read_text(encoding="utf-8")
-    return _DEFAULT_TEMPLATE_CACHE
+def load_default_template_html(certificate_type_key: str | None = None) -> str:
+    normalized_key = str(certificate_type_key or "").strip().lower() or EMPLOYMENT_CERTIFICATE_TYPE_KEY
+    template_path = DEFAULT_TEMPLATE_PATHS.get(normalized_key) or DEFAULT_TEMPLATE_PATHS[EMPLOYMENT_CERTIFICATE_TYPE_KEY]
+    cache_key = str(template_path)
+    cached = _DEFAULT_TEMPLATE_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    loaded = template_path.read_text(encoding="utf-8")
+    _DEFAULT_TEMPLATE_CACHE[cache_key] = loaded
+    return loaded
 
 
 def _register_pdf_font_once() -> str:
@@ -496,7 +555,8 @@ def build_issue_number(request_id: str, issued_at: datetime | None = None) -> st
 
 
 def render_employment_certificate_html(context: dict[str, Any], template_html: str | None = None) -> str:
-    template = str(template_html or "").strip() or load_default_template_html()
+    certificate_type_key = str((context or {}).get("certificate_type_key") or "").strip().lower()
+    template = str(template_html or "").strip() or load_default_template_html(certificate_type_key=certificate_type_key)
     template = normalize_template_placeholders(template)
     # Never expose auto-injected debug helpers in final output PDF/HTML.
     template = re.sub(

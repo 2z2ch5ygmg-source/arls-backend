@@ -92,7 +92,7 @@ class GroupwareFoundationPhase1Tests(unittest.TestCase):
         self.assertTrue(payload["database"]["groups"]["leave"]["ready"])
 
     def test_notification_dispatcher_writes_in_app_notification(self):
-        conn = _FakeConn()
+        conn = _FakeConn(fetchone_queue=[None])
         dispatcher = GroupwareNotificationDispatcher(conn)
 
         notification_id = dispatcher.dispatch_in_app(
@@ -105,12 +105,37 @@ class GroupwareFoundationPhase1Tests(unittest.TestCase):
         )
 
         self.assertTrue(notification_id)
-        sql, params = conn.executed[0]
+        self.assertEqual(len(conn.executed), 2)
+        sql, params = conn.executed[1]
         self.assertIn("INSERT INTO in_app_notifications", sql)
         self.assertEqual(params[1], "tenant-1")
         self.assertEqual(params[2], "user-1")
         self.assertEqual(params[3], "결재 문서가 도착했습니다.")
         self.assertEqual(params[4], "approval")
+
+    def test_notification_dispatcher_updates_existing_notification_without_on_conflict(self):
+        conn = _FakeConn(fetchone_queue=[{"id": "notif-1"}])
+        dispatcher = GroupwareNotificationDispatcher(conn)
+
+        notification_id = dispatcher.dispatch_in_app(
+            tenant_id="tenant-1",
+            user_id="user-1",
+            message="이미 있는 알림을 갱신합니다.",
+            category="approval",
+            dedupe_key="approval:doc-1",
+            payload={"document_id": "doc-1"},
+        )
+
+        self.assertEqual(notification_id, "notif-1")
+        self.assertEqual(len(conn.executed), 2)
+        lookup_sql, lookup_params = conn.executed[0]
+        update_sql, update_params = conn.executed[1]
+        self.assertIn("SELECT id", lookup_sql)
+        self.assertEqual(lookup_params, ("tenant-1", "user-1", "approval:doc-1"))
+        self.assertIn("UPDATE in_app_notifications", update_sql)
+        self.assertEqual(update_params[0], "이미 있는 알림을 갱신합니다.")
+        self.assertEqual(update_params[1], "approval")
+        self.assertEqual(update_params[3], "notif-1")
 
     def test_status_route_rejects_non_admin_user(self):
         with self.assertRaises(HTTPException) as exc_info:

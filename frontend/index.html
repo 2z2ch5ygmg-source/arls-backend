@@ -44,7 +44,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="assets/sentrix-hr-favicon-v4-16.png?v=20260323-sentrix-browser-brand-v4" />
     <link rel="shortcut icon" href="assets/sentrix-hr-favicon-v4.ico?v=20260323-sentrix-browser-brand-v4" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/sentrix-hr-favicon-v4-180.png?v=20260323-sentrix-browser-brand-v4" />
-    <link rel="stylesheet" href="css/styles.css?v=20260331-settings-phase3-03" />
+    <link rel="stylesheet" href="css/styles.css?v=20260331-groupware-rollout-profile-03" />
   </head>
   <body>
     <div id="app">
@@ -231,6 +231,311 @@
               </div>
             </div>
             <div id="homeAudienceSurface" class="home-audience-surface" aria-live="polite"></div>
+          </section>
+
+          <section id="view-messenger" class="panel card view hidden">
+            <div class="workspace-head messenger-workspace-head">
+              <div class="workspace-head-main">
+                <h2 id="messengerViewTitle">메신저</h2>
+                <p id="messengerViewSubtitle" class="muted">대화, 공지방, 읽음 상태를 한 작업면에서 확인합니다.</p>
+              </div>
+              <div class="workspace-head-actions">
+                <button class="btn btn-secondary" type="button" data-action="messenger-refresh">새로고침</button>
+                <button id="messengerCreateToggleBtn" class="btn btn-primary" type="button" data-action="messenger-toggle-create">대화 시작</button>
+              </div>
+            </div>
+
+            <div class="workspace-tabbar-row messenger-toolbar-row">
+              <div id="messengerTypeTabs" class="workspace-tabs messenger-type-tabs">
+                <button class="btn btn-secondary workspace-tab active" type="button" data-action="messenger-filter-type" data-type="all">전체</button>
+                <button class="btn btn-secondary workspace-tab" type="button" data-action="messenger-filter-type" data-type="dm">DM</button>
+                <button class="btn btn-secondary workspace-tab" type="button" data-action="messenger-filter-type" data-type="group">그룹</button>
+                <button class="btn btn-secondary workspace-tab" type="button" data-action="messenger-filter-type" data-type="announcement">공지방</button>
+              </div>
+              <div class="messenger-toolbar-actions">
+                <label class="input-field messenger-toolbar-search" for="messengerConversationSearch">
+                  <span>대화 검색</span>
+                  <input id="messengerConversationSearch" type="search" placeholder="대화 제목 또는 참여자 검색" autocomplete="off" />
+                </label>
+              </div>
+            </div>
+
+            <p id="messengerStatusHint" class="muted workspace-scope-hint hidden"></p>
+
+            <section id="messengerCreatePanel" class="messenger-create-panel hidden" aria-label="새 대화 만들기">
+              <div class="messenger-create-head">
+                <div class="messenger-create-title">
+                  <h3>새 대화</h3>
+                  <p class="muted">참여자를 고른 뒤 DM, 그룹방, 공지방을 바로 만듭니다.</p>
+                </div>
+                <button class="btn btn-secondary" type="button" data-action="messenger-toggle-create">닫기</button>
+              </div>
+
+              <div class="messenger-create-grid">
+                <div class="messenger-create-fields">
+                  <div class="workspace-tabs messenger-create-type-tabs">
+                    <button class="btn btn-secondary workspace-tab active" type="button" data-action="messenger-create-type" data-type="group">그룹</button>
+                    <button class="btn btn-secondary workspace-tab" type="button" data-action="messenger-create-type" data-type="dm">DM</button>
+                    <button class="btn btn-secondary workspace-tab" type="button" data-action="messenger-create-type" data-type="announcement">공지방</button>
+                  </div>
+
+                  <div class="messenger-create-field-grid">
+                    <label class="input-field" for="messengerCreateTitle">
+                      <span>대화 제목</span>
+                      <input id="messengerCreateTitle" type="text" placeholder="예: 운영 정리방" maxlength="120" />
+                    </label>
+                    <label class="input-field" for="messengerCreateRoomKey">
+                      <span>공지방 키</span>
+                      <input id="messengerCreateRoomKey" type="text" placeholder="예: ops-broadcast" maxlength="64" />
+                    </label>
+                  </div>
+
+                  <label class="input-field" for="messengerCreateDescription">
+                    <span>설명</span>
+                    <textarea id="messengerCreateDescription" rows="3" placeholder="대화 목적이나 공지방 설명을 남깁니다."></textarea>
+                  </label>
+
+                  <div class="messenger-create-field-grid">
+                    <label class="input-field" for="messengerCreateScopeType">
+                      <span>공지방 범위</span>
+                      <select id="messengerCreateScopeType">
+                        <option value="tenant">회사 전체</option>
+                        <option value="site">현장 단위</option>
+                      </select>
+                    </label>
+                    <label class="input-field" for="messengerCreateSearch">
+                      <span>참여자 검색</span>
+                      <input id="messengerCreateSearch" type="search" placeholder="직원명 또는 사번" autocomplete="off" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="messenger-member-panel">
+                  <div class="messenger-pane-head">
+                    <div>
+                      <strong>참여자 선택</strong>
+                      <p class="muted">연결된 계정만 대화에 추가할 수 있습니다.</p>
+                    </div>
+                    <span id="messengerCreateMemberMeta" class="messenger-pane-meta">0명 선택</span>
+                  </div>
+                  <ul id="messengerCreateMemberList" class="messenger-member-list"></ul>
+                </div>
+              </div>
+
+              <div class="messenger-create-actions">
+                <span id="messengerCreateStatus" class="muted"></span>
+                <button class="btn btn-primary" type="button" data-action="messenger-create-submit">대화 만들기</button>
+              </div>
+            </section>
+
+            <div class="messenger-shell">
+              <section class="messenger-list-panel" aria-label="대화 목록">
+                <div class="messenger-pane-head">
+                  <div>
+                    <strong>대화 목록</strong>
+                    <p id="messengerListSubtitle" class="muted">최근 업데이트 순으로 정렬됩니다.</p>
+                  </div>
+                  <span id="messengerListMeta" class="messenger-pane-meta">0개</span>
+                </div>
+                <ul id="messengerConversationList" class="messenger-conversation-list"></ul>
+              </section>
+
+              <section class="messenger-thread-panel" aria-label="대화 상세">
+                <div id="messengerThreadHead" class="messenger-thread-head">
+                  <div>
+                    <strong>대화를 선택해 주세요.</strong>
+                    <p class="muted">좌측 목록에서 대화를 열면 메시지가 이 영역에 표시됩니다.</p>
+                  </div>
+                </div>
+
+                <div class="messenger-thread-search">
+                  <label class="input-field messenger-thread-search-field" for="messengerMessageSearch">
+                    <span>메시지 검색</span>
+                    <input id="messengerMessageSearch" type="search" placeholder="전체 대화 메시지 검색" autocomplete="off" />
+                  </label>
+                </div>
+
+                <ul id="messengerSearchResults" class="messenger-search-results hidden"></ul>
+                <ul id="messengerMessageList" class="messenger-message-list"></ul>
+
+                <div class="messenger-composer">
+                  <label class="input-field messenger-composer-field" for="messengerComposerInput">
+                    <span>메시지</span>
+                    <textarea id="messengerComposerInput" rows="3" placeholder="메시지를 입력하세요." maxlength="4000"></textarea>
+                  </label>
+                  <div class="messenger-composer-actions">
+                    <span id="messengerComposerMeta" class="muted">대화를 선택하면 전송할 수 있습니다.</span>
+                    <button class="btn btn-primary" type="button" data-action="messenger-submit-message">보내기</button>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section id="view-meetings" class="panel card view hidden">
+            <div class="workspace-head meetings-workspace-head">
+              <div class="workspace-head-main">
+                <h2 id="meetingsViewTitle">화상대화</h2>
+                <p id="meetingsViewSubtitle" class="muted">즉시 회의, 예약 회의, 메신저 연계 상태를 한 작업면에서 관리합니다.</p>
+              </div>
+              <div class="workspace-head-actions">
+                <button class="btn btn-secondary" type="button" data-action="meetings-refresh">새로고침</button>
+                <button id="meetingsCreateToggleBtn" class="btn btn-primary" type="button" data-action="meetings-toggle-create">회의 시작</button>
+              </div>
+            </div>
+
+            <div class="workspace-tabbar-row meetings-toolbar-row">
+              <div id="meetingsStateTabs" class="workspace-tabs meetings-state-tabs">
+                <button class="btn btn-secondary workspace-tab active" type="button" data-action="meetings-filter-state" data-state="all">전체</button>
+                <button class="btn btn-secondary workspace-tab" type="button" data-action="meetings-filter-state" data-state="live">진행중</button>
+                <button class="btn btn-secondary workspace-tab" type="button" data-action="meetings-filter-state" data-state="scheduled">예약</button>
+                <button class="btn btn-secondary workspace-tab" type="button" data-action="meetings-filter-state" data-state="ended">종료</button>
+              </div>
+              <div class="meetings-toolbar-actions">
+                <label class="input-field meetings-toolbar-search" for="meetingsSearchInput">
+                  <span>회의 검색</span>
+                  <input id="meetingsSearchInput" type="search" placeholder="회의명 또는 호스트 검색" autocomplete="off" />
+                </label>
+                <div id="meetingsRolloutInline" class="meetings-rollout-inline" aria-live="polite"></div>
+              </div>
+            </div>
+
+            <p id="meetingsStatusHint" class="muted workspace-scope-hint hidden"></p>
+
+            <section id="meetingsCreatePanel" class="meetings-create-panel hidden" aria-label="새 화상대화 만들기">
+              <div class="meetings-create-head">
+                <div class="meetings-create-title">
+                  <h3>새 회의</h3>
+                  <p class="muted">즉시 회의는 바로 시작할 수 있고, 예약 회의는 시간을 지정해 등록합니다.</p>
+                </div>
+                <button class="btn btn-secondary" type="button" data-action="meetings-toggle-create">닫기</button>
+              </div>
+
+              <div class="meetings-create-grid">
+                <div class="meetings-create-fields">
+                  <div class="meetings-create-field-grid">
+                    <label class="input-field" for="meetingsCreateTitle">
+                      <span>회의 제목</span>
+                      <input id="meetingsCreateTitle" type="text" placeholder="예: 주간 운영 회의" maxlength="160" />
+                    </label>
+                    <label class="input-field" for="meetingsCreateScheduledFor">
+                      <span>예약 시간</span>
+                      <input id="meetingsCreateScheduledFor" type="datetime-local" />
+                    </label>
+                  </div>
+
+                  <label class="input-field" for="meetingsCreateSearch">
+                    <span>참가자 검색 (선택)</span>
+                    <input id="meetingsCreateSearch" type="search" placeholder="직원명 또는 사번" autocomplete="off" />
+                  </label>
+
+                  <label class="input-field" for="meetingsCreateLinkedConversation">
+                    <span>메신저 연계 (선택)</span>
+                    <select id="meetingsCreateLinkedConversation">
+                      <option value="">연결 안 함</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="meetings-member-panel">
+                  <div class="meetings-pane-head">
+                    <div>
+                      <strong>참가자 추가</strong>
+                      <p class="muted">즉시 회의는 혼자 시작할 수 있고, 필요하면 참가자를 추가할 수 있습니다.</p>
+                    </div>
+                    <span id="meetingsCreateMemberMeta" class="meetings-pane-meta">추가 0명</span>
+                  </div>
+                  <ul id="meetingsCreateMemberList" class="meetings-member-list"></ul>
+                </div>
+              </div>
+
+              <div class="meetings-create-actions">
+                <span id="meetingsCreateStatus" class="muted"></span>
+                <div class="meetings-create-action-buttons">
+                  <button class="btn btn-secondary" type="button" data-action="meetings-create-submit" data-start-now="false">예약 생성</button>
+                  <button class="btn btn-primary" type="button" data-action="meetings-create-submit" data-start-now="true">즉시 시작</button>
+                </div>
+              </div>
+            </section>
+
+            <div class="meetings-shell">
+              <section class="meetings-list-panel" aria-label="회의 목록">
+                <div class="meetings-pane-head">
+                  <div>
+                    <strong>회의 목록</strong>
+                    <p id="meetingsListSubtitle" class="muted">진행중 회의와 예약 회의를 최신순으로 보여줍니다.</p>
+                  </div>
+                  <span id="meetingsListMeta" class="meetings-pane-meta">0개</span>
+                </div>
+                <ul id="meetingsRoomList" class="meetings-room-list"></ul>
+              </section>
+
+              <section class="meetings-detail-panel" aria-label="회의 상세">
+                <div id="meetingsDetailHead" class="meetings-detail-head">
+                  <div>
+                    <strong>회의를 선택해 주세요.</strong>
+                    <p class="muted">좌측 목록에서 회의를 열면 참가자와 세션 상태가 표시됩니다.</p>
+                  </div>
+                </div>
+
+                <div id="meetingsDetailSummary" class="meetings-detail-summary"></div>
+
+                <div class="meetings-detail-grid">
+                  <section class="meetings-detail-block">
+                    <div class="meetings-pane-head">
+                      <strong>참가자</strong>
+                      <span id="meetingsParticipantsMeta" class="meetings-pane-meta">0명</span>
+                    </div>
+                    <div id="meetingsParticipantActions" class="meetings-participant-actions">
+                      <label class="input-field meetings-participant-select" for="meetingsParticipantSelect">
+                        <span>참가자 추가</span>
+                        <select id="meetingsParticipantSelect">
+                          <option value="">추가할 직원을 선택하세요</option>
+                        </select>
+                      </label>
+                      <button class="btn btn-secondary" type="button" data-action="meetings-add-participant">추가</button>
+                    </div>
+                    <p id="meetingsParticipantStatus" class="muted hidden"></p>
+                    <ul id="meetingsParticipantsList" class="meetings-participants-list"></ul>
+                  </section>
+
+                  <section class="meetings-detail-block">
+                    <div class="meetings-pane-head">
+                      <strong>연결 메신저</strong>
+                      <span id="meetingsChatLinksMeta" class="meetings-pane-meta">0개</span>
+                    </div>
+                    <div id="meetingsChatLinkActions" class="meetings-chat-link-actions">
+                      <label class="input-field meetings-chat-link-select" for="meetingsLinkConversationSelect">
+                        <span>대화 연결 추가</span>
+                        <select id="meetingsLinkConversationSelect">
+                          <option value="">연결할 대화를 선택하세요</option>
+                        </select>
+                      </label>
+                      <button class="btn btn-secondary" type="button" data-action="meetings-link-chat">연결</button>
+                    </div>
+                    <p id="meetingsChatLinkStatus" class="muted hidden"></p>
+                    <ul id="meetingsChatLinksList" class="meetings-chat-links-list"></ul>
+                  </section>
+                </div>
+
+                <section class="meetings-detail-block">
+                  <div class="meetings-pane-head">
+                    <strong>세션 상태</strong>
+                    <span id="meetingsSessionsMeta" class="meetings-pane-meta">0개</span>
+                  </div>
+                  <ul id="meetingsSessionsList" class="meetings-sessions-list"></ul>
+                </section>
+
+                <div class="meetings-quick-events">
+                  <button class="btn btn-secondary" type="button" data-action="meetings-record-event" data-event-type="mute_toggle">음소거 토글</button>
+                  <button class="btn btn-secondary" type="button" data-action="meetings-record-event" data-event-type="camera_toggle">카메라 토글</button>
+                  <button class="btn btn-secondary" type="button" data-action="meetings-record-event" data-event-type="screen_share_start">화면 공유</button>
+                  <button class="btn btn-secondary" type="button" data-action="meetings-record-event" data-event-type="reconnect">재접속 기록</button>
+                </div>
+
+                <div id="meetingsActionBar" class="meetings-action-bar"></div>
+              </section>
+            </div>
           </section>
 
           <section id="view-attendance-check" class="panel card view hidden">
@@ -1241,41 +1546,33 @@
 
             <article id="hrDocumentHomeCard" class="module-card stack">
               <div class="approval-head">
-                <h3>서류</h3>
+                <h3>증명서 종류</h3>
                 <span class="status-pill status-pill-neutral">MVP</span>
               </div>
               <div id="hrDocCardGrid" class="hr-doc-card-grid">
                 <button type="button" class="hr-doc-card active" data-action="hr-doc-open" data-doc="employment_certificate">
                   <strong>재직증명서</strong>
-                  <span>요청/승인/발급</span>
+                  <span>즉시 PDF 발급 · 앱에서 다운로드</span>
                 </button>
-                <button type="button" class="hr-doc-card hr-doc-card-disabled" disabled aria-disabled="true">
-                  <strong>연차신청서</strong>
-                  <span class="status-pill status-pill-warn">준비중</span>
+                <button type="button" class="hr-doc-card" data-action="hr-doc-open" data-doc="career_certificate">
+                  <strong>경력증명서</strong>
+                  <span>즉시 PDF 발급 · 앱에서 다운로드</span>
                 </button>
-                <button type="button" class="hr-doc-card hr-doc-card-disabled" disabled aria-disabled="true">
-                  <strong>경비원명부</strong>
-                  <span class="status-pill status-pill-warn">준비중</span>
+                <button type="button" class="hr-doc-card" data-action="hr-doc-open" data-doc="retirement_certificate">
+                  <strong>퇴직증명서</strong>
+                  <span>승인 후 PDF 발급 · 앱에서 다운로드</span>
                 </button>
-                <button type="button" class="hr-doc-card hr-doc-card-disabled" disabled aria-disabled="true">
-                  <strong>이력서</strong>
-                  <span class="status-pill status-pill-warn">준비중</span>
-                </button>
-                <button type="button" class="hr-doc-card hr-doc-card-disabled" disabled aria-disabled="true">
-                  <strong>해고통지서</strong>
-                  <span class="status-pill status-pill-warn">준비중</span>
-                </button>
-                <button type="button" class="hr-doc-card hr-doc-card-disabled" disabled aria-disabled="true">
-                  <strong>급여명세서</strong>
-                  <span class="status-pill status-pill-warn">준비중</span>
+                <button type="button" class="hr-doc-card" data-action="hr-doc-open" data-doc="leave_of_absence_certificate">
+                  <strong>휴직증명서</strong>
+                  <span>승인 후 PDF 발급 · 앱에서 다운로드</span>
                 </button>
               </div>
             </article>
 
             <article id="hrEmploymentEmployeeCard" class="module-card stack">
               <div class="approval-head">
-                <h3>재직증명서 신청</h3>
-                <span id="hrEmploymentQuota" class="status-pill status-pill-warn">오늘 남은 요청: -/3</span>
+                <h3 id="hrEmploymentRequestTitle">재직증명서 신청</h3>
+                <span id="hrEmploymentQuota" class="status-pill status-pill-warn">오늘 남은 요청: -/4</span>
               </div>
               <p id="hrEmploymentRequestStatus" class="muted">발급 용도를 선택하고 신청해 주세요.</p>
               <div id="hrPurposeCodeGroup" class="hr-purpose-group">
@@ -1288,6 +1585,26 @@
                 기타 용도 상세 (필수)
                 <input id="hrPurposeOtherText" type="text" maxlength="50" placeholder="예: 비자 발급 제출용" />
               </label>
+              <div class="registration-grid">
+                <label class="input-field" for="hrSubmitTo">
+                  제출처
+                  <input id="hrSubmitTo" type="text" maxlength="120" placeholder="예: OO은행 / 출입국사무소" />
+                </label>
+                <label class="input-field" for="hrCopyCount">
+                  발급 부수
+                  <input id="hrCopyCount" type="number" min="1" max="20" value="1" />
+                </label>
+              </div>
+              <div class="inline-actions">
+                <label class="ui-switch simple-check">
+                  <input id="hrIncludeAddress" type="checkbox" />
+                  <span>주소 포함</span>
+                </label>
+                <label class="ui-switch simple-check">
+                  <input id="hrIncludePhone" type="checkbox" />
+                  <span>연락처 포함</span>
+                </label>
+              </div>
               <div class="inline-actions">
                 <button id="hrEmploymentRequestSubmitBtn" type="button" class="btn btn-primary" data-action="hr-employment-request-submit">발급 신청</button>
               </div>
@@ -1296,7 +1613,7 @@
 
             <article id="hrEmploymentMyRequestsCard" class="module-card stack">
               <div class="approval-head">
-                <h3>내 요청 내역</h3>
+                <h3>내 증명서 요청</h3>
                 <button type="button" class="btn btn-secondary" data-action="hr-employment-my-refresh">새로고침</button>
               </div>
               <div class="table-wrap">
@@ -1306,7 +1623,7 @@
                       <th>요청일시</th>
                       <th>용도</th>
                       <th>상태</th>
-                      <th>반려 사유</th>
+                      <th>파일 상태</th>
                       <th>발급번호</th>
                       <th>작업</th>
                     </tr>
@@ -1322,7 +1639,7 @@
                 <button class="btn btn-secondary approval-tab" type="button" data-action="hr-admin-panel-tab" data-panel="templates">템플릿 관리</button>
               </div>
               <div class="approval-head">
-                <h3>재직증명서 요청 관리</h3>
+                <h3>증명서 요청 관리</h3>
                 <button type="button" class="btn btn-secondary" data-action="hr-employment-admin-refresh">새로고침</button>
               </div>
               <div id="hrEmploymentAdminStatusTabs" class="approval-tabs">
@@ -1346,7 +1663,7 @@
                       <th>소속</th>
                       <th>용도</th>
                       <th>상태</th>
-                      <th>메일 발송</th>
+                      <th>발급 진행</th>
                       <th>작업</th>
                     </tr>
                   </thead>
@@ -1361,10 +1678,19 @@
                 <button class="btn btn-secondary approval-tab active" type="button" data-action="hr-admin-panel-tab" data-panel="templates">템플릿 관리</button>
               </div>
               <div class="approval-head">
-                <h3>재직증명서 템플릿 관리</h3>
+                <h3>증명서 템플릿 관리</h3>
                 <button type="button" class="btn btn-secondary" data-action="hr-template-refresh">새로고침</button>
               </div>
               <div class="schedule-filter-row ui-filterbar">
+                <label class="input-field">
+                  템플릿 타입
+                  <select id="hrTemplateTypeSelect">
+                    <option value="employment_certificate">재직증명서</option>
+                    <option value="career_certificate">경력증명서</option>
+                    <option value="retirement_certificate">퇴직증명서</option>
+                    <option value="leave_of_absence_certificate">휴직증명서</option>
+                  </select>
+                </label>
                 <label class="input-field">
                   새 템플릿 업로드 (.docx, 최대 2MB)
                   <input id="hrTemplateUploadFile" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
@@ -1998,7 +2324,7 @@
             </div>
             <div id="scheduleHqTabs" class="workspace-tabs schedule-workspace-tabs">
               <button class="btn btn-secondary workspace-tab active" type="button" data-action="schedule-hq-tab" data-tab="calendar">월간 근무표</button>
-              <button class="btn btn-secondary workspace-tab" type="button" data-action="schedule-hq-tab" data-tab="upload">Excel 업로드</button>
+              <button class="btn btn-secondary workspace-tab" type="button" data-action="schedule-hq-tab" data-tab="upload">스케쥴 업로드</button>
               <button class="btn btn-secondary workspace-tab hidden" type="button" data-action="schedule-hq-tab" data-tab="hq-upload">지원근무자 업로드</button>
               <button class="btn btn-secondary workspace-tab shell-manager-only hidden" type="button" data-action="schedule-hq-tab" data-tab="templates">근무 템플릿</button>
               <button class="btn btn-secondary workspace-tab hidden" type="button" data-action="schedule-hq-tab" data-tab="reports">Finance 제출</button>
@@ -2133,47 +2459,7 @@
             </aside>
 
             <section class="schedule-upload-main-canvas">
-            <header class="schedule-upload-header">
-              <div>
-                <h3 id="scheduleUploadHeaderTitle">월간 업로드</h3>
-                <p id="scheduleUploadHeaderText" class="muted hidden"></p>
-              </div>
-            </header>
-
-            <section id="scheduleExcelWorkflowContextStrip" class="schedule-excel-context-strip" aria-label="업로드 컨텍스트">
-              <article id="scheduleExcelWorkflowContextTenantCard" class="schedule-excel-context-card">
-                <span class="schedule-excel-context-label">대상 테넌트</span>
-                <strong id="scheduleExcelWorkflowContextTenant" class="schedule-excel-context-value">테넌트 확인</strong>
-              </article>
-              <article id="scheduleExcelWorkflowContextSiteCard" class="schedule-excel-context-card">
-                <span class="schedule-excel-context-label">대상 지점</span>
-                <strong id="scheduleExcelWorkflowContextSite" class="schedule-excel-context-value">지점 선택</strong>
-              </article>
-              <article id="scheduleExcelWorkflowContextMonthCard" class="schedule-excel-context-card">
-                <span class="schedule-excel-context-label">대상 월</span>
-                <strong id="scheduleExcelWorkflowContextMonth" class="schedule-excel-context-value">월 선택</strong>
-              </article>
-              <article id="scheduleExcelWorkflowContextFileCard" class="schedule-excel-context-card">
-                <span class="schedule-excel-context-label">현재 파일</span>
-                <strong id="scheduleExcelWorkflowContextFile" class="schedule-excel-context-value">파일 선택 전</strong>
-              </article>
-              <article id="scheduleExcelWorkflowContextRevisionCard" class="schedule-excel-context-card">
-                <span class="schedule-excel-context-label">리비전</span>
-                <strong id="scheduleExcelWorkflowContextRevision" class="schedule-excel-context-value">-</strong>
-              </article>
-              <article id="scheduleExcelWorkflowContextStageCard" class="schedule-excel-context-card">
-                <span class="schedule-excel-context-label">현재 단계</span>
-                <strong id="scheduleExcelWorkflowContextStage" class="schedule-excel-context-value">-</strong>
-              </article>
-            </section>
-
             <section id="scheduleExcelWorkflowMappingSection" class="schedule-upload-step schedule-excel-workflow-section">
-              <div class="schedule-upload-step-head">
-                <div>
-                  <span class="schedule-upload-step-kicker">STEP 1</span>
-                  <h4>근무 템플릿 설정</h4>
-                </div>
-              </div>
               <div class="schedule-template-mapping-summary">
                 <div class="schedule-template-mapping-summary-head">
                   <strong>업로드에 사용할 근무 템플릿</strong>
@@ -2231,13 +2517,6 @@
             </section>
 
             <section id="scheduleExcelWorkflowBaseSection" class="schedule-upload-step schedule-excel-workflow-section">
-              <div class="schedule-upload-step-head">
-                <div>
-                  <span id="scheduleBaseStageKicker" class="schedule-upload-step-kicker">STEP 2</span>
-                  <h4 id="scheduleBaseStageTitle">대상 선택</h4>
-                </div>
-              </div>
-
               <div class="stack schedule-upload-stage-shell">
                 <section id="scheduleWriteControls" class="schedule-upload-step">
                   <div id="scheduleBaseContextStage" class="stack">
@@ -2316,7 +2595,7 @@
                 <section id="scheduleBaseReviewStage" class="schedule-upload-step hidden">
                   <div id="scheduleImportAnalysisEmpty" class="schedule-upload-placeholder">
                     <strong>분석 대기 중</strong>
-                    <p class="muted">지점, 월, 파일을 준비한 뒤 <code>분석 시작</code>을 누르면 결과가 여기에 표시됩니다.</p>
+                    <p class="muted">분석을 시작하면 결과가 여기에 표시됩니다.</p>
                   </div>
 
                   <div id="scheduleImportAnalysisWorkspace" class="stack hidden">
@@ -2325,25 +2604,10 @@
                       <div id="scheduleImportFileStateBadge" class="schedule-upload-file-state"></div>
                     </div>
 
-                    <section class="schedule-upload-issues-panel">
-                      <div class="schedule-preview-head">
-                        <div>
-                          <h3>이슈 요약</h3>
-                          <p class="muted">검토가 필요한 항목만 묶어서 보여줍니다.</p>
-                        </div>
-                      </div>
-                      <div id="scheduleImportIssueGroups" class="schedule-upload-issue-groups"></div>
-                      <details id="scheduleImportTechDetails" class="schedule-upload-tech-details">
-                        <summary>기술 통계 보기</summary>
-                        <div id="scheduleImportTechnicalBody" class="schedule-upload-tech-grid"></div>
-                      </details>
-                    </section>
-
                     <div id="schedulePreviewTableWrap" class="schedule-preview-wrap hidden">
                       <div class="schedule-preview-head">
                         <div>
                           <h3>행 미리보기</h3>
-                          <p class="muted">기본 보기에서는 실제 조치가 필요한 행만 먼저 보여줍니다.</p>
                         </div>
                         <div id="schedulePreviewModeSwitch" class="workspace-tabs" role="group" aria-label="행 미리보기 보기 방식">
                           <button class="btn btn-secondary workspace-tab active" type="button" data-action="schedule-preview-mode" data-mode="actionable" aria-pressed="true">기본 보기</button>
@@ -2366,6 +2630,19 @@
                         <tbody id="schedulePreviewTableBody"></tbody>
                       </table>
                     </div>
+
+                    <section class="schedule-upload-issues-panel">
+                      <div class="schedule-preview-head">
+                        <div>
+                          <h3>이슈 요약</h3>
+                        </div>
+                      </div>
+                      <div id="scheduleImportIssueGroups" class="schedule-upload-issue-groups"></div>
+                      <details id="scheduleImportTechDetails" class="schedule-upload-tech-details">
+                        <summary>기술 통계 보기</summary>
+                        <div id="scheduleImportTechnicalBody" class="schedule-upload-tech-grid"></div>
+                      </details>
+                    </section>
                     <div class="schedule-wizard-actions">
                       <button class="btn btn-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="file">이전</button>
                       <button class="btn btn-primary" type="button" id="scheduleBaseReviewNextBtn" data-action="apply-schedule">적용하기</button>
@@ -2401,14 +2678,6 @@
             </section>
 
             <section id="scheduleExcelWorkflowExportSection" class="schedule-upload-step schedule-excel-workflow-section">
-              <div class="schedule-upload-step-head">
-                <div>
-                  <span id="scheduleHqStageKicker" class="schedule-upload-step-kicker">STEP 1</span>
-                  <h4 id="scheduleHqStageTitle">제출용 추출</h4>
-                  <p class="muted hidden"></p>
-                </div>
-                <span id="scheduleSupportStatePill" class="status-pill status-pill-neutral">원본 대기</span>
-              </div>
               <div class="schedule-upload-context-grid schedule-hq-context-grid hidden">
                 <label id="scheduleHqTenantReadonlyField" class="input-field">
                   <span>테넌트</span>
@@ -2463,6 +2732,7 @@
               <section id="scheduleSupportHqDownloadSection" class="schedule-support-action-section stack">
                 <div class="approval-head">
                   <h3>HQ 제출용 추출</h3>
+                  <span id="scheduleSupportStatePill" class="status-pill status-pill-neutral">원본 대기</span>
                 </div>
                 <p class="muted hidden"></p>
                 <div class="schedule-support-upload-actions">
@@ -2474,13 +2744,6 @@
             </section>
 
             <section id="scheduleExcelWorkflowHandoffSection" class="schedule-upload-step schedule-excel-workflow-section">
-              <div class="schedule-upload-step-head">
-                <div>
-                  <span id="scheduleHqHandoffKicker" class="schedule-upload-step-kicker">STEP 2</span>
-                  <h4 id="scheduleHqHandoffTitle">작성본 업로드</h4>
-                  <p class="muted">작성본을 올리고 검토 후 반영합니다.</p>
-                </div>
-              </div>
               <section id="scheduleSupportUploadSection" class="schedule-support-action-section stack">
                 <div class="approval-head">
                   <h3>HQ 작성본 업로드</h3>
@@ -2614,7 +2877,7 @@
                   <button class="btn btn-primary" type="button" data-action="drawer-open-route" data-route="/reports?tab=finance">보고 열기</button>
                 </div>
               </div>
-              <p class="muted">스케줄 탭에서는 월간 근무표, Excel 업로드, 지원근무자 업로드, 근무 템플릿 owner 화면만 유지합니다.</p>
+              <p class="muted">스케줄 탭에서는 월간 근무표, 스케쥴 업로드, 지원근무자 업로드, 근무 템플릿 owner 화면만 유지합니다.</p>
             </section>
             </div>
 
@@ -3342,6 +3605,131 @@
                       </section>
                     </article>
 
+                        <article id="mailHubCard" class="profile-control-card profile-surface shell-manager-only">
+                          <div class="profile-control-head">
+                            <div class="profile-control-title">
+                              <span class="profile-section-kicker">Mail Hub</span>
+                              <h3>회사 메일 허브</h3>
+                              <p class="muted">발신 계정, 발신 프로필, 템플릿, 발송 작업 상태를 한 화면에서 확인합니다.</p>
+                            </div>
+                            <div class="profile-control-actions">
+                              <button class="btn btn-secondary" type="button" data-action="mail-hub-refresh">새로고침</button>
+                            </div>
+                          </div>
+                          <div id="mailHubSummary" class="profile-mail-summary" aria-live="polite"></div>
+                          <div class="profile-mail-layout">
+                            <section class="settings-form-group">
+                              <div class="settings-form-group-head">
+                                <h4>발신 프로필</h4>
+                                <p id="mailProfileStatus" class="muted settings-section-meta"></p>
+                              </div>
+                              <ul id="mailProfileList" class="list profile-mail-list"></ul>
+                            </section>
+                            <section class="settings-form-group">
+                              <div class="settings-form-group-head">
+                                <h4>템플릿</h4>
+                                <p id="mailTemplateStatus" class="muted settings-section-meta"></p>
+                              </div>
+                              <ul id="mailTemplateList" class="list profile-mail-list"></ul>
+                            </section>
+                          </div>
+                          <section class="settings-form-group">
+                            <div class="settings-form-group-head">
+                              <h4>발송 작업</h4>
+                              <p id="mailJobStatus" class="muted settings-section-meta"></p>
+                            </div>
+                            <div class="table-wrap">
+                              <table class="admin-table">
+                                <thead>
+                                  <tr>
+                                    <th>원본</th>
+                                    <th>수신자</th>
+                                    <th>프로필</th>
+                                    <th>상태</th>
+                                    <th>작업</th>
+                                  </tr>
+                                </thead>
+                                <tbody id="mailJobTableBody"></tbody>
+                              </table>
+                            </div>
+                          </section>
+                        </article>
+
+                        <article id="groupwareOpsCard" class="profile-control-card profile-surface shell-manager-only">
+                          <div class="profile-control-head">
+                            <div class="profile-control-title">
+                              <span class="profile-section-kicker">Groupware Rollout</span>
+                              <h3>그룹웨어 운영 현황</h3>
+                              <p class="muted">foundation, 호환 라우트, 회의 rollout 준비도를 같은 설정 화면에서 확인합니다.</p>
+                            </div>
+                            <div class="profile-control-actions">
+                              <button class="btn btn-secondary" type="button" data-action="groupware-open-meetings">화상대화</button>
+                              <button class="btn btn-secondary" type="button" data-action="groupware-admin-refresh">새로고침</button>
+                            </div>
+                          </div>
+                          <div id="groupwareOpsSummary" class="profile-mail-summary" aria-live="polite"></div>
+                          <div class="profile-mail-layout">
+                            <section class="settings-form-group">
+                              <div class="settings-form-group-head">
+                                <h4>Foundation</h4>
+                                <p id="groupwareFoundationStatus" class="muted settings-section-meta"></p>
+                              </div>
+                              <ul id="groupwareFoundationList" class="list profile-mail-list"></ul>
+                            </section>
+                            <section class="settings-form-group">
+                              <div class="settings-form-group-head">
+                                <h4>호환 경로</h4>
+                                <p id="groupwareCompatibilityStatus" class="muted settings-section-meta"></p>
+                              </div>
+                              <ul id="groupwareCompatibilityList" class="list profile-mail-list"></ul>
+                            </section>
+                          </div>
+                          <section class="settings-form-group">
+                            <div class="settings-form-group-head">
+                              <h4>회의 Rollout</h4>
+                              <p id="groupwareRolloutStatus" class="muted settings-section-meta"></p>
+                            </div>
+                            <div id="groupwareRolloutComposer" class="profile-groupware-rollout-form">
+                              <label class="input-field" for="groupwareRolloutEnvironment">
+                                환경
+                                <select id="groupwareRolloutEnvironment">
+                                  <option value="default" selected>default</option>
+                                  <option value="prod">prod</option>
+                                  <option value="staging">staging</option>
+                                </select>
+                              </label>
+                              <label class="input-field" for="groupwareRolloutCheckType">
+                                체크 종류
+                                <select id="groupwareRolloutCheckType">
+                                  <option value="load_test" selected>부하 테스트</option>
+                                  <option value="tenant_isolation">테넌트 분리</option>
+                                  <option value="gateway_probe">Gateway 연결</option>
+                                  <option value="sfu_probe">SFU 연결</option>
+                                  <option value="turn_probe">TURN 연결</option>
+                                  <option value="manual_smoke">수동 스모크</option>
+                                </select>
+                              </label>
+                              <label class="input-field" for="groupwareRolloutCheckState">
+                                상태
+                                <select id="groupwareRolloutCheckState">
+                                  <option value="ready" selected>준비</option>
+                                  <option value="passed">통과</option>
+                                  <option value="pending">대기</option>
+                                  <option value="blocked">차단</option>
+                                  <option value="failed">실패</option>
+                                </select>
+                              </label>
+                              <label class="input-field profile-groupware-rollout-summary" for="groupwareRolloutCheckSummary">
+                                요약
+                                <input id="groupwareRolloutCheckSummary" placeholder="예: load test 50 rooms 통과" maxlength="300" />
+                              </label>
+                              <button class="btn btn-primary" type="button" data-action="groupware-rollout-save">체크 기록</button>
+                            </div>
+                            <p id="groupwareRolloutCheckStatus" class="muted settings-section-status"></p>
+                            <ul id="groupwareRolloutList" class="list profile-mail-list"></ul>
+                          </section>
+                        </article>
+
                         <article id="lockPolicyCard" class="profile-control-card profile-surface shell-manager-only">
                           <div class="profile-control-head">
                             <div class="profile-control-title">
@@ -3386,21 +3774,29 @@
                           <span>소속</span>
                           <strong id="profileRailTenantValue">-</strong>
                         </div>
-                        <div class="profile-settings-rail-item">
+                        <div class="profile-settings-rail-item shell-employee-only">
                           <span>알림 권한</span>
                           <strong id="profileRailNotificationValue">-</strong>
                         </div>
-                        <div class="profile-settings-rail-item">
+                        <div class="profile-settings-rail-item shell-employee-only">
                           <span>최근 동기화</span>
                           <strong id="profileRailSyncValue">-</strong>
                         </div>
-                        <div class="profile-settings-rail-item shell-manager-only">
+                        <div class="profile-settings-rail-item shell-manager-only profile-settings-rail-item-optional">
                           <span>플래그</span>
                           <strong id="profileRailIntegrationValue">-</strong>
                         </div>
                         <div class="profile-settings-rail-item shell-manager-only">
                           <span>활성 프로파일</span>
                           <strong id="profileRailProfileValue">-</strong>
+                        </div>
+                        <div class="profile-settings-rail-item shell-manager-only">
+                          <span>그룹웨어</span>
+                          <strong id="profileRailGroupwareValue">-</strong>
+                        </div>
+                        <div class="profile-settings-rail-item shell-manager-only">
+                          <span>영상 Rollout</span>
+                          <strong id="profileRailMeetingsValue">-</strong>
                         </div>
                         <div class="profile-settings-rail-item shell-manager-only">
                           <span>잠금 상태</span>
@@ -3635,7 +4031,7 @@
                         </div>
                         <div class="reports-finance-main-actions">
                           <button class="btn btn-secondary" type="button" data-action="reports-finance-back-overview">상태확인으로 돌아가기</button>
-                          <button class="btn btn-secondary" type="button" data-action="reports-open-schedule-upload">Excel 업로드 열기</button>
+                          <button class="btn btn-secondary" type="button" data-action="reports-open-schedule-upload">스케쥴 업로드 열기</button>
                         </div>
                       </div>
                       <div class="reports-finance-submit-summary-bar reports-finance-wizard-context-bar">
@@ -4538,6 +4934,11 @@
                         </label>
 
                         <label class="input-field">
+                          이메일
+                          <input id="empEmail" type="email" placeholder="예: guard@example.com" required />
+                        </label>
+
+                        <label class="input-field">
                           관리번호
                           <input id="empManagementNo" placeholder="예: 0008 (선행 0 유지)" required />
                           <span class="input-helper">직원번호는 현장코드-관리번호 형식으로 자동 생성됩니다.</span>
@@ -4571,6 +4972,26 @@
                         <label class="input-field">
                           퇴직일 (선택)
                           <input id="empLeaveDate" type="date" />
+                        </label>
+
+                        <label class="input-field">
+                          재직 상태
+                          <select id="empEmploymentStatus">
+                            <option value="active">재직</option>
+                            <option value="leave_of_absence">휴직</option>
+                            <option value="terminated">퇴직</option>
+                            <option value="inactive">비활성</option>
+                          </select>
+                        </label>
+
+                        <label class="input-field">
+                          휴직 시작일 (선택)
+                          <input id="empLoaStartDate" type="date" />
+                        </label>
+
+                        <label class="input-field">
+                          휴직 종료일 / 복귀예정일 (선택)
+                          <input id="empLoaEndDate" type="date" />
                         </label>
                       </div>
                     </section>
@@ -5338,9 +5759,9 @@
       </button>
     </div>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=20260331-settings-phase3-03"></script>
+    <script src="config.js?v=20260331-groupware-admin-status-06"></script>
     <script>
-      window.__RG_ARLS_ASSET_BUILD_ID__ = '20260331-settings-phase3-03';
+      window.__RG_ARLS_ASSET_BUILD_ID__ = '20260331-groupware-admin-status-06';
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
       window.ENV_BUILD_ID = window.__RG_ARLS_ASSET_BUILD_ID__;

@@ -107,6 +107,27 @@ APPROVAL_FORM_DEFINITIONS: list[dict[str, Any]] = [
         "default_rule": {"approver_role": "hq_admin", "scope_type": "tenant"},
     },
     {
+        "form_key": "certificate_request",
+        "display_name": "증명서발급(공통)",
+        "category": "documents",
+        "schema_json": {
+            "fields": [
+                "certificate_type_key",
+                "purpose_code",
+                "purpose_text",
+                "submit_to",
+                "copy_count",
+                "include_address",
+                "include_phone",
+            ]
+        },
+        "settings_json": {"legacy_source_type": "certificate_request"},
+        "default_rules": (
+            {"approver_role": "hq_admin", "scope_type": "site_or_tenant"},
+            {"approver_role": "hq_admin", "scope_type": "tenant"},
+        ),
+    },
+    {
         "form_key": "general_memo",
         "display_name": "일반품의",
         "category": "general",
@@ -167,130 +188,193 @@ def ensure_default_approval_forms(conn, *, tenant_id: str, actor_user_id: str | 
         for form in APPROVAL_FORM_DEFINITIONS:
             cur.execute(
                 """
-                INSERT INTO approval_forms (
-                    id,
-                    tenant_id,
-                    form_key,
-                    display_name,
-                    category,
-                    status,
-                    description,
-                    created_by,
-                    created_at,
-                    updated_at
-                )
-                VALUES (%s, %s, %s, %s, %s, 'active', %s, %s, timezone('utc', now()), timezone('utc', now()))
-                ON CONFLICT (tenant_id, form_key)
-                DO UPDATE
-                SET display_name = EXCLUDED.display_name,
-                    category = EXCLUDED.category,
-                    status = 'active',
-                    description = EXCLUDED.description,
-                    updated_at = timezone('utc', now())
-                RETURNING id
+                SELECT id
+                FROM approval_forms
+                WHERE tenant_id = %s
+                  AND form_key = %s
+                LIMIT 1
                 """,
-                (
-                    str(uuid.uuid4()),
-                    tenant_id,
-                    form["form_key"],
-                    form["display_name"],
-                    form["category"],
-                    form["display_name"],
-                    actor_user_id,
-                ),
+                (tenant_id, form["form_key"]),
             )
             form_row = cur.fetchone() or {}
             form_id = str(form_row.get("id") or "").strip()
-            if not form_id:
+            if form_id:
                 cur.execute(
                     """
-                    SELECT id
-                    FROM approval_forms
-                    WHERE tenant_id = %s
-                      AND form_key = %s
-                    LIMIT 1
+                    UPDATE approval_forms
+                    SET display_name = %s,
+                        category = %s,
+                        status = 'active',
+                        description = %s,
+                        updated_at = timezone('utc', now())
+                    WHERE id = %s
                     """,
-                    (tenant_id, form["form_key"]),
+                    (
+                        form["display_name"],
+                        form["category"],
+                        form["display_name"],
+                        form_id,
+                    ),
                 )
-                resolved = cur.fetchone() or {}
-                form_id = str(resolved.get("id") or "").strip()
+            else:
+                form_id = str(uuid.uuid4())
+                cur.execute(
+                    """
+                    INSERT INTO approval_forms (
+                        id,
+                        tenant_id,
+                        form_key,
+                        display_name,
+                        category,
+                        status,
+                        description,
+                        created_by,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, 'active', %s, %s, timezone('utc', now()), timezone('utc', now()))
+                    """,
+                    (
+                        form_id,
+                        tenant_id,
+                        form["form_key"],
+                        form["display_name"],
+                        form["category"],
+                        form["display_name"],
+                        actor_user_id,
+                    ),
+                )
 
             cur.execute(
                 """
-                INSERT INTO approval_form_versions (
-                    id,
-                    tenant_id,
-                    form_id,
-                    version_no,
-                    schema_json,
-                    settings_json,
-                    is_active,
-                    created_by,
-                    created_at
-                )
-                VALUES (%s, %s, %s, 1, %s::jsonb, %s::jsonb, TRUE, %s, timezone('utc', now()))
-                ON CONFLICT (form_id, version_no)
-                DO UPDATE
-                SET schema_json = EXCLUDED.schema_json,
-                    settings_json = EXCLUDED.settings_json,
-                    is_active = TRUE
+                SELECT id
+                FROM approval_form_versions
+                WHERE form_id = %s
+                  AND version_no = 1
+                LIMIT 1
                 """,
-                (
-                    str(uuid.uuid4()),
-                    tenant_id,
-                    form_id,
-                    _json_dumps(form.get("schema_json")),
-                    _json_dumps(form.get("settings_json")),
-                    actor_user_id,
-                ),
+                (form_id,),
             )
+            version_row = cur.fetchone() or {}
+            version_id = str(version_row.get("id") or "").strip()
+            if version_id:
+                cur.execute(
+                    """
+                    UPDATE approval_form_versions
+                    SET schema_json = %s::jsonb,
+                        settings_json = %s::jsonb,
+                        is_active = TRUE
+                    WHERE id = %s
+                    """,
+                    (
+                        _json_dumps(form.get("schema_json")),
+                        _json_dumps(form.get("settings_json")),
+                        version_id,
+                    ),
+                )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO approval_form_versions (
+                        id,
+                        tenant_id,
+                        form_id,
+                        version_no,
+                        schema_json,
+                        settings_json,
+                        is_active,
+                        created_by,
+                        created_at
+                    )
+                    VALUES (%s, %s, %s, 1, %s::jsonb, %s::jsonb, TRUE, %s, timezone('utc', now()))
+                    """,
+                    (
+                        str(uuid.uuid4()),
+                        tenant_id,
+                        form_id,
+                        _json_dumps(form.get("schema_json")),
+                        _json_dumps(form.get("settings_json")),
+                        actor_user_id,
+                    ),
+                )
 
 
 def ensure_default_approval_line_rules(conn, *, tenant_id: str, actor_user_id: str | None = None) -> None:
     with conn.cursor() as cur:
         for index, form in enumerate(APPROVAL_FORM_DEFINITIONS, start=1):
-            rule = dict(form.get("default_rule") or {})
-            cur.execute(
-                """
-                INSERT INTO approval_line_rules (
-                    id,
-                    tenant_id,
-                    form_key,
-                    rule_order,
-                    rule_name,
-                    approver_role,
-                    approver_user_id,
-                    scope_type,
-                    site_id,
-                    is_active,
-                    conditions_json,
-                    created_by,
-                    created_at,
-                    updated_at
+            configured_rules = form.get("default_rules")
+            if configured_rules:
+                rules = [dict(rule or {}) for rule in configured_rules]
+            else:
+                rules = [dict(form.get("default_rule") or {})]
+            for rule_order, rule in enumerate(rules, start=1):
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM approval_line_rules
+                    WHERE tenant_id = %s
+                      AND form_key = %s
+                      AND rule_order = %s
+                    LIMIT 1
+                    """,
+                    (tenant_id, form["form_key"], rule_order),
                 )
-                VALUES (
-                    %s, %s, %s, 1, %s, %s, NULL, %s, NULL, TRUE, '{}'::jsonb, %s,
-                    timezone('utc', now()),
-                    timezone('utc', now())
+                existing = cur.fetchone() or {}
+                existing_id = str(existing.get("id") or "").strip()
+                if existing_id:
+                    cur.execute(
+                        """
+                        UPDATE approval_line_rules
+                        SET rule_name = %s,
+                            approver_role = %s,
+                            scope_type = %s,
+                            is_active = TRUE,
+                            updated_at = timezone('utc', now())
+                        WHERE id = %s
+                        """,
+                        (
+                            f"{form['display_name']} 기본 결재선 {rule_order}",
+                            rule.get("approver_role"),
+                            rule.get("scope_type") or "tenant",
+                            existing_id,
+                        ),
+                    )
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO approval_line_rules (
+                        id,
+                        tenant_id,
+                        form_key,
+                        rule_order,
+                        rule_name,
+                        approver_role,
+                        approver_user_id,
+                        scope_type,
+                        site_id,
+                        is_active,
+                        conditions_json,
+                        created_by,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (
+                        %s, %s, %s, %s, %s, %s, NULL, %s, NULL, TRUE, '{}'::jsonb, %s,
+                        timezone('utc', now()),
+                        timezone('utc', now())
+                    )
+                    """,
+                    (
+                        str(uuid.uuid4()),
+                        tenant_id,
+                        form["form_key"],
+                        rule_order,
+                        f"{form['display_name']} 기본 결재선 {rule_order}",
+                        rule.get("approver_role"),
+                        rule.get("scope_type") or "tenant",
+                        actor_user_id,
+                    ),
                 )
-                ON CONFLICT (tenant_id, form_key, rule_order)
-                DO UPDATE
-                SET rule_name = EXCLUDED.rule_name,
-                    approver_role = EXCLUDED.approver_role,
-                    scope_type = EXCLUDED.scope_type,
-                    is_active = TRUE,
-                    updated_at = timezone('utc', now())
-                """,
-                (
-                    str(uuid.uuid4()),
-                    tenant_id,
-                    form["form_key"],
-                    f"{form['display_name']} 기본 결재선",
-                    rule.get("approver_role"),
-                    rule.get("scope_type") or "tenant",
-                    actor_user_id,
-                ),
-            )
 
 
 def _fetch_form_bundle(conn, *, tenant_id: str, form_key: str) -> dict[str, Any] | None:
@@ -393,7 +477,9 @@ def _resolve_approver_from_rule(
                   AND is_active = TRUE
                   AND COALESCE(is_deleted, FALSE) = FALSE
                   AND lower(role) = ANY(%s)
-                ORDER BY created_at ASC
+                ORDER BY
+                    CASE WHEN site_id IS NULL THEN 0 ELSE 1 END,
+                    created_at ASC
                 LIMIT 1
                 """,
                 (tenant_id, role_variants),
@@ -548,6 +634,18 @@ def _insert_watchers(conn, *, tenant_id: str, document_id: str, watcher_user_ids
                 continue
             cur.execute(
                 """
+                SELECT id
+                FROM approval_watchers
+                WHERE document_id = %s
+                  AND watcher_user_id = %s
+                LIMIT 1
+                """,
+                (document_id, normalized_id),
+            )
+            if cur.fetchone():
+                continue
+            cur.execute(
+                """
                 INSERT INTO approval_watchers (
                     id,
                     tenant_id,
@@ -556,7 +654,6 @@ def _insert_watchers(conn, *, tenant_id: str, document_id: str, watcher_user_ids
                     created_at
                 )
                 VALUES (%s, %s, %s, %s, timezone('utc', now()))
-                ON CONFLICT (document_id, watcher_user_id) DO NOTHING
                 """,
                 (
                     str(uuid.uuid4()),
@@ -565,6 +662,25 @@ def _insert_watchers(conn, *, tenant_id: str, document_id: str, watcher_user_ids
                     normalized_id,
                 ),
             )
+
+
+def _run_noncritical_side_effect(conn, *, log_message: str, callback) -> None:
+    savepoint_name = f"sp_{uuid.uuid4().hex[:12]}"
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f"SAVEPOINT {savepoint_name}")
+        try:
+            callback()
+        except Exception as exc:  # pragma: no cover - protects main transaction from optional side-effects
+            with conn.cursor() as cur:
+                cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                cur.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+            logger.exception(log_message, exc_info=exc)
+            return
+        with conn.cursor() as cur:
+            cur.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+    except Exception as exc:  # pragma: no cover - if savepoint ops fail, keep request alive and log only
+        logger.exception(log_message, exc_info=exc)
 
 
 def _fetch_first_pending_step(conn, *, document_id: str) -> dict[str, Any] | None:
@@ -1037,16 +1153,22 @@ def create_approval_document(
     if submit:
         first_step = _fetch_first_pending_step(conn, document_id=document_id)
         if first_step and first_step.get("approver_user_id"):
-            GroupwareNotificationDispatcher(conn).dispatch_in_app(
-                tenant_id=tenant_id,
-                user_id=str(first_step["approver_user_id"]),
-                message=f"결재 요청이 도착했습니다: {title}",
-                category="approval",
-                dedupe_key=f"approval:doc:{document_id}:pending:{first_step['step_order']}",
-                payload={"document_id": document_id, "form_key": normalized_form_key},
+            _run_noncritical_side_effect(
+                conn,
+                log_message=f"[APPROVAL][NOTIFY] failed to dispatch review request doc={document_id}",
+                callback=lambda: GroupwareNotificationDispatcher(conn).dispatch_in_app(
+                    tenant_id=tenant_id,
+                    user_id=str(first_step["approver_user_id"]),
+                    message=f"결재 요청이 도착했습니다: {title}",
+                    category="approval",
+                    dedupe_key=f"approval:doc:{document_id}:pending:{first_step['step_order']}",
+                    payload={"document_id": document_id, "form_key": normalized_form_key},
+                ),
             )
-            try:
-                queue_approval_notification_mail(
+            _run_noncritical_side_effect(
+                conn,
+                log_message=f"[APPROVAL][MAIL] failed to queue review request doc={document_id}",
+                callback=lambda: queue_approval_notification_mail(
                     conn,
                     tenant_id=tenant_id,
                     template_key="approval_review_requested",
@@ -1056,24 +1178,26 @@ def create_approval_document(
                         "title": str(title or "").strip() or bundle.get("display_name") or normalized_form_key,
                         "form_display_name": bundle.get("display_name") or normalized_form_key,
                     },
-                )
-            except Exception as exc:  # pragma: no cover - mail queue must not break approval flow
-                logger.exception("[APPROVAL][MAIL] failed to queue review request doc=%s", document_id, exc_info=exc)
-
-    GroupwareAuditService(conn).write_event(
-        tenant_id=tenant_id,
-        module_key="approvals",
-        action_type="document_created",
-        actor_user_id=requester_user_id,
-        actor_role=requester_role,
-        target_type="approval_document",
-        target_id=document_id,
-        detail={
-            "form_key": normalized_form_key,
-            "document_status": document_status,
-            "legacy_source_type": legacy_source_type,
-            "legacy_source_id": legacy_source_id,
-        },
+                ),
+            )
+    _run_noncritical_side_effect(
+        conn,
+        log_message=f"[APPROVAL][AUDIT] failed to write document_created doc={document_id}",
+        callback=lambda: GroupwareAuditService(conn).write_event(
+            tenant_id=tenant_id,
+            module_key="approvals",
+            action_type="document_created",
+            actor_user_id=requester_user_id,
+            actor_role=requester_role,
+            target_type="approval_document",
+            target_id=document_id,
+            detail={
+                "form_key": normalized_form_key,
+                "document_status": document_status,
+                "legacy_source_type": legacy_source_type,
+                "legacy_source_id": legacy_source_id,
+            },
+        ),
     )
 
     return fetch_approval_document_detail(conn, tenant_id=tenant_id, document_id=document_id)
@@ -1364,16 +1488,22 @@ def record_approval_action(
     updated = fetch_approval_document_detail(conn, tenant_id=tenant_id, document_id=document_id)
     next_pending = _fetch_first_pending_step(conn, document_id=document_id)
     if normalized_action == ACTION_APPROVE and next_pending and next_pending.get("approver_user_id"):
-        GroupwareNotificationDispatcher(conn).dispatch_in_app(
-            tenant_id=tenant_id,
-            user_id=str(next_pending["approver_user_id"]),
-            message=f"결재 요청이 도착했습니다: {updated.get('title')}",
-            category="approval",
-            dedupe_key=f"approval:doc:{document_id}:pending:{next_pending['step_order']}",
-            payload={"document_id": document_id, "form_key": updated.get("form_key")},
+        _run_noncritical_side_effect(
+            conn,
+            log_message=f"[APPROVAL][NOTIFY] failed to dispatch next review request doc={document_id}",
+            callback=lambda: GroupwareNotificationDispatcher(conn).dispatch_in_app(
+                tenant_id=tenant_id,
+                user_id=str(next_pending["approver_user_id"]),
+                message=f"결재 요청이 도착했습니다: {updated.get('title')}",
+                category="approval",
+                dedupe_key=f"approval:doc:{document_id}:pending:{next_pending['step_order']}",
+                payload={"document_id": document_id, "form_key": updated.get("form_key")},
+            ),
         )
-        try:
-            queue_approval_notification_mail(
+        _run_noncritical_side_effect(
+            conn,
+            log_message=f"[APPROVAL][MAIL] failed to queue next review request doc={document_id}",
+            callback=lambda: queue_approval_notification_mail(
                 conn,
                 tenant_id=tenant_id,
                 template_key="approval_review_requested",
@@ -1383,15 +1513,16 @@ def record_approval_action(
                     "title": str(updated.get("title") or ""),
                     "form_display_name": str(updated.get("form_display_name") or updated.get("form_key") or ""),
                 },
-            )
-        except Exception as exc:  # pragma: no cover - mail queue must not break approval flow
-            logger.exception("[APPROVAL][MAIL] failed to queue next review request doc=%s", document_id, exc_info=exc)
+            ),
+        )
 
     if normalized_action == ACTION_APPROVE and str(updated.get("status") or "").strip().lower() == DOCUMENT_STATUS_APPROVED:
         requester_user_id = str(document.get("requester_user_id") or "").strip()
         if requester_user_id:
-            try:
-                queue_approval_notification_mail(
+            _run_noncritical_side_effect(
+                conn,
+                log_message=f"[APPROVAL][MAIL] failed to queue approval-complete doc={document_id}",
+                callback=lambda: queue_approval_notification_mail(
                     conn,
                     tenant_id=tenant_id,
                     template_key="approval_approved",
@@ -1401,15 +1532,16 @@ def record_approval_action(
                         "title": str(updated.get("title") or ""),
                         "form_display_name": str(updated.get("form_display_name") or updated.get("form_key") or ""),
                     },
-                )
-            except Exception as exc:  # pragma: no cover - mail queue must not break approval flow
-                logger.exception("[APPROVAL][MAIL] failed to queue approval-complete doc=%s", document_id, exc_info=exc)
+                ),
+            )
 
     if normalized_action in {ACTION_REJECT, ACTION_RETURN}:
         requester_user_id = str(document.get("requester_user_id") or "").strip()
         if requester_user_id:
-            try:
-                queue_approval_notification_mail(
+            _run_noncritical_side_effect(
+                conn,
+                log_message=f"[APPROVAL][MAIL] failed to queue approval-rejected doc={document_id}",
+                callback=lambda: queue_approval_notification_mail(
                     conn,
                     tenant_id=tenant_id,
                     template_key="approval_rejected",
@@ -1419,19 +1551,22 @@ def record_approval_action(
                         "title": str(updated.get("title") or ""),
                         "form_display_name": str(updated.get("form_display_name") or updated.get("form_key") or ""),
                     },
-                )
-            except Exception as exc:  # pragma: no cover - mail queue must not break approval flow
-                logger.exception("[APPROVAL][MAIL] failed to queue approval-rejected doc=%s", document_id, exc_info=exc)
+                ),
+            )
 
-    GroupwareAuditService(conn).write_event(
-        tenant_id=tenant_id,
-        module_key="approvals",
-        action_type=f"document_{normalized_action}",
-        actor_user_id=actor_user_id,
-        actor_role=actor_role,
-        target_type="approval_document",
-        target_id=document_id,
-        detail={"document_status": updated.get("status"), "step_id": current_step.get("id")},
+    _run_noncritical_side_effect(
+        conn,
+        log_message=f"[APPROVAL][AUDIT] failed to write document_{normalized_action} doc={document_id}",
+        callback=lambda: GroupwareAuditService(conn).write_event(
+            tenant_id=tenant_id,
+            module_key="approvals",
+            action_type=f"document_{normalized_action}",
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            target_type="approval_document",
+            target_id=document_id,
+            detail={"document_status": updated.get("status"), "step_id": current_step.get("id")},
+        ),
     )
     return updated
 
@@ -1569,15 +1704,19 @@ def _sync_document_terminal_state(
             action_type=action_type,
             comment_text=comment_text,
         )
-        GroupwareAuditService(conn).write_event(
-            tenant_id=tenant_id,
-            module_key="approvals",
-            action_type=f"legacy_sync_{action_type}",
-            actor_user_id=actor_user_id,
-            actor_role=actor_role,
-            target_type="approval_document",
-            target_id=document_id,
-            detail={"document_status": normalized_status},
+        _run_noncritical_side_effect(
+            conn,
+            log_message=f"[APPROVAL][AUDIT] failed to write legacy_sync_{action_type} doc={document_id}",
+            callback=lambda: GroupwareAuditService(conn).write_event(
+                tenant_id=tenant_id,
+                module_key="approvals",
+                action_type=f"legacy_sync_{action_type}",
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                target_type="approval_document",
+                target_id=document_id,
+                detail={"document_status": normalized_status},
+            ),
         )
 
 
@@ -1666,13 +1805,21 @@ def create_certificate_request_approval_adapter(
     employee_id: str,
     company_id: str | None,
     actor_user: dict,
+    certificate_type_key: str = "employment_certificate",
+    certificate_type_name: str | None = None,
     purpose_code: str,
     purpose_text: str | None,
+    submit_to: str | None = None,
+    copy_count: int | None = None,
+    include_address: bool | None = None,
+    include_phone: bool | None = None,
+    site_id: str | None = None,
+    legacy_source_type: str = "certificate_request",
 ) -> dict[str, Any] | None:
     existing = _find_legacy_document(
         conn,
         tenant_id=tenant_id,
-        legacy_source_type="employment_certificate_request",
+        legacy_source_type=legacy_source_type,
         legacy_source_id=document_request_id,
     )
     if existing:
@@ -1680,19 +1827,26 @@ def create_certificate_request_approval_adapter(
     return create_approval_document(
         conn,
         tenant_id=tenant_id,
-        form_key="employment_certificate",
-        title="증명서발급",
+        form_key="employment_certificate" if certificate_type_key == "employment_certificate" and legacy_source_type == "employment_certificate_request" else "certificate_request",
+        title=f"{certificate_type_name or '증명서'} 발급",
         requester_user_id=str(actor_user.get("id") or "").strip() or None,
         requester_role=str(actor_user.get("role") or "").strip() or None,
         employee_id=employee_id,
         company_id=company_id,
+        site_id=site_id,
         payload={
             "purpose_code": purpose_code,
             "purpose_text": purpose_text,
-            "document_type": "employment_certificate",
+            "document_type": certificate_type_key,
+            "certificate_type_key": certificate_type_key,
+            "certificate_type_name": certificate_type_name,
+            "submit_to": submit_to,
+            "copy_count": int(copy_count or 1),
+            "include_address": bool(include_address),
+            "include_phone": bool(include_phone),
         },
         submit=True,
-        legacy_source_type="employment_certificate_request",
+        legacy_source_type=legacy_source_type,
         legacy_source_id=document_request_id,
     )
 

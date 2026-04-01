@@ -23,6 +23,8 @@ from .v1.master_reset import router as master_reset_router
 from .v1.integrations import router as integrations_router
 from .v1.apple_weekly_truth import router as apple_weekly_truth_router
 from .v1.mail import router as mail_router
+from .v1.meetings import router as meetings_router
+from .v1.messenger import router as messenger_router
 from .v1.reports import router as reports_router
 from .v1.hr_documents import router as hr_documents_router
 from .v1.groupware_foundation import router as groupware_foundation_router
@@ -59,6 +61,8 @@ __all__ = [
     "integrations_router",
     "apple_weekly_truth_router",
     "mail_router",
+    "meetings_router",
+    "messenger_router",
     "reports_router",
     "hr_documents_router",
     "groupware_foundation_router",

@@ -51,6 +51,20 @@ class _FakeAuditService:
 
 
 class CertificatesMailPhase4Tests(unittest.TestCase):
+    def test_generic_certificate_phase4_migration_exists(self):
+        sql = (
+            Path(__file__).resolve().parent.parent
+            / "migrations"
+            / "031_certificates_generic_phase4.sql"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("employment_status", sql)
+        self.assertIn("loa_start_date", sql)
+        self.assertIn("loa_end_date", sql)
+        self.assertIn("submit_to", sql)
+        self.assertIn("copy_count", sql)
+        self.assertIn("mail_company_sent_at", sql)
+
     def test_phase4_migration_exists(self):
         sql = (
             Path(__file__).resolve().parent.parent
@@ -62,6 +76,81 @@ class CertificatesMailPhase4Tests(unittest.TestCase):
         self.assertIn("legacy_source_id", sql)
         self.assertIn("uq_certificate_requests_tenant_legacy_source", sql)
         self.assertIn("uq_certificate_issue_jobs_request", sql)
+
+    def test_generic_certificate_type_definitions_are_live(self):
+        definitions = {
+            item["type_key"]: item
+            for item in certificates_mail.CERTIFICATE_TYPE_DEFINITIONS
+        }
+
+        self.assertFalse(definitions["employment_certificate"]["requires_approval"])
+        self.assertFalse(definitions["career_certificate"]["requires_approval"])
+        self.assertTrue(definitions["retirement_certificate"]["requires_approval"])
+        self.assertTrue(definitions["leave_of_absence_certificate"]["requires_approval"])
+        self.assertFalse(definitions["employment_certificate"]["auto_mail_enabled"])
+        self.assertFalse(definitions["career_certificate"]["auto_mail_enabled"])
+        self.assertFalse(definitions["retirement_certificate"]["auto_mail_enabled"])
+        self.assertFalse(definitions["leave_of_absence_certificate"]["auto_mail_enabled"])
+        self.assertEqual(definitions["career_certificate"]["meta_json"].get("rollout"), "live")
+        self.assertEqual(definitions["retirement_certificate"]["meta_json"].get("rollout"), "live")
+
+    def test_certificate_type_eligibility_checks_status_only(self):
+        employee_row = {
+            "hire_date": "2024-01-01",
+            "leave_date": "2026-03-01",
+            "employment_status": "leave_of_absence",
+            "loa_start_date": "2026-03-20",
+            "loa_end_date": "2026-04-20",
+        }
+        available, reason = certificates_mail._certificate_type_eligibility(
+            type_key="leave_of_absence_certificate",
+            employee_row=employee_row,
+            employee_email="user@example.com",
+            company_archive_email="company@example.com",
+        )
+        self.assertTrue(available)
+        self.assertIn(reason, (None, ""))
+
+        unavailable, unavailable_reason = certificates_mail._certificate_type_eligibility(
+            type_key="retirement_certificate",
+            employee_row={"hire_date": "2024-01-01", "employment_status": "active"},
+            employee_email="user@example.com",
+            company_archive_email="company@example.com",
+        )
+        self.assertFalse(unavailable)
+        self.assertIn("퇴직", unavailable_reason)
+
+        no_mail, no_mail_reason = certificates_mail._certificate_type_eligibility(
+            type_key="employment_certificate",
+            employee_row={"hire_date": "2024-01-01", "employment_status": "active"},
+            employee_email=None,
+            company_archive_email=None,
+        )
+        self.assertTrue(no_mail)
+        self.assertIn(no_mail_reason, (None, ""))
+
+    def test_certificate_type_eligibility_positive_paths_for_career_and_retirement(self):
+        career_available, career_reason = certificates_mail._certificate_type_eligibility(
+            type_key="career_certificate",
+            employee_row={"hire_date": "2024-01-01", "employment_status": "active"},
+            employee_email=None,
+            company_archive_email=None,
+        )
+        self.assertTrue(career_available)
+        self.assertIn(career_reason, (None, ""))
+
+        retirement_available, retirement_reason = certificates_mail._certificate_type_eligibility(
+            type_key="retirement_certificate",
+            employee_row={
+                "hire_date": "2024-01-01",
+                "leave_date": "2026-03-20",
+                "employment_status": "terminated",
+            },
+            employee_email=None,
+            company_archive_email=None,
+        )
+        self.assertTrue(retirement_available)
+        self.assertIn(retirement_reason, (None, ""))
 
     def test_ensure_certificate_mail_foundation_seeds_defaults(self):
         fetchone_queue = []
@@ -134,6 +223,7 @@ class CertificatesMailPhase4Tests(unittest.TestCase):
     def test_sync_legacy_employment_certificate_request_upserts_certificate_request(self):
         conn = _FakeConn(
             fetchone_queue=[
+                None,
                 {
                     "id": "certificate-request-1",
                     "status": "issued",
@@ -198,6 +288,7 @@ class CertificatesMailPhase4Tests(unittest.TestCase):
     def test_sync_issue_job_upserts_current_job_state(self):
         conn = _FakeConn(
             fetchone_queue=[
+                None,
                 {
                     "id": "issue-job-1",
                     "certificate_request_id": "certificate-request-1",

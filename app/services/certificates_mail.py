@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
-from datetime import datetime, timezone
+import uuid
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from ..config import settings
@@ -10,39 +12,48 @@ from ..services.groupware_foundation import GroupwareAuditService
 from ..utils.schema_introspection import table_column_exists
 
 EMPLOYMENT_CERTIFICATE_TYPE_KEY = "employment_certificate"
+CAREER_CERTIFICATE_TYPE_KEY = "career_certificate"
+RETIREMENT_CERTIFICATE_TYPE_KEY = "retirement_certificate"
+LEAVE_OF_ABSENCE_CERTIFICATE_TYPE_KEY = "leave_of_absence_certificate"
 DEFAULT_MAIL_ACCOUNT_KEY = "default_smtp"
 DEFAULT_MAIL_PROFILE_KEY = "default_company"
 ISSUE_JOB_PAYLOAD_LIMIT = 4000
 MAIL_JOB_SOURCE_TYPE = "certificate_request_mail"
+CERTIFICATE_DAILY_LIMIT = 4
+logger = logging.getLogger(__name__)
 
 CERTIFICATE_TYPE_DEFINITIONS: tuple[dict[str, Any], ...] = (
     {
         "type_key": EMPLOYMENT_CERTIFICATE_TYPE_KEY,
         "display_name": "재직증명서",
-        "requires_approval": True,
-        "auto_mail_enabled": True,
-        "meta_json": {"legacy_document_type": "employment_certificate"},
-    },
-    {
-        "type_key": "career_certificate",
-        "display_name": "경력증명서",
-        "requires_approval": True,
+        "requires_approval": False,
         "auto_mail_enabled": False,
-        "meta_json": {"rollout": "planned"},
+        "meta_json": {
+            "legacy_document_type": "employment_certificate",
+            "rollout": "live",
+            "template_scope": "company_per_type",
+        },
     },
     {
-        "type_key": "retirement_certificate",
+        "type_key": CAREER_CERTIFICATE_TYPE_KEY,
+        "display_name": "경력증명서",
+        "requires_approval": False,
+        "auto_mail_enabled": False,
+        "meta_json": {"rollout": "live", "template_scope": "company_per_type"},
+    },
+    {
+        "type_key": RETIREMENT_CERTIFICATE_TYPE_KEY,
         "display_name": "퇴직증명서",
         "requires_approval": True,
         "auto_mail_enabled": False,
-        "meta_json": {"rollout": "planned"},
+        "meta_json": {"rollout": "live", "template_scope": "company_per_type"},
     },
     {
-        "type_key": "leave_of_absence_certificate",
+        "type_key": LEAVE_OF_ABSENCE_CERTIFICATE_TYPE_KEY,
         "display_name": "휴직증명서",
         "requires_approval": True,
         "auto_mail_enabled": False,
-        "meta_json": {"rollout": "planned"},
+        "meta_json": {"rollout": "live", "template_scope": "company_per_type"},
     },
     {
         "type_key": "payroll_statement",
@@ -61,6 +72,16 @@ CERTIFICATE_TYPE_DEFINITIONS: tuple[dict[str, Any], ...] = (
 )
 
 MAIL_TEMPLATE_DEFINITIONS: tuple[dict[str, str], ...] = (
+    {
+        "template_key": "certificate_issued_company",
+        "subject_template": "{{ certificate_type_name }} 발급 - {{ employee_name }}",
+        "body_template": "회사 보관용 {{ certificate_type_name }}가 발급되었습니다.",
+    },
+    {
+        "template_key": "certificate_issued_employee",
+        "subject_template": "{{ certificate_type_name }} 발급 - {{ employee_name }}",
+        "body_template": "직원 전달용 {{ certificate_type_name }}가 발급되었습니다.",
+    },
     {
         "template_key": "employment_certificate_issued_company",
         "subject_template": "재직증명서 발급 - {{ employee_name }}",
@@ -126,7 +147,12 @@ def _issue_job_state_from_certificate_status(value: str | None) -> str | None:
 
 
 def _json_dumps(value: Any) -> str:
-    return json.dumps(value or {}, ensure_ascii=False)
+    def _default_serializer(item: Any) -> str:
+        if isinstance(item, (uuid.UUID, datetime, date)):
+            return str(item)
+        return str(item)
+
+    return json.dumps(value or {}, ensure_ascii=False, default=_default_serializer)
 
 
 def _normalize_mail_job_state(value: str | None, *, default: str = "queued") -> str:
@@ -150,6 +176,32 @@ def _render_template_value(template: str, context: dict[str, Any] | None = None)
         rendered = rendered.replace(f"{{{{ {key} }}}}", value)
         rendered = rendered.replace(f"{{{{{key}}}}}", value)
     return re.sub(r"\{\{\s*[^}]+\s*\}\}", "", rendered).strip()
+
+
+def _run_noncritical_db_step(
+    conn,
+    *,
+    step_name: str,
+    callback,
+    fallback=None,
+    error_collector: list[str] | None = None,
+):
+    savepoint = f"certificate_mail_sp_{uuid.uuid4().hex}"
+    with conn.cursor() as cur:
+        cur.execute(f"SAVEPOINT {savepoint}")
+    try:
+        result = callback()
+    except Exception as exc:
+        logger.exception("[CERTIFICATES][MAIL] non-critical db step failed step=%s", step_name)
+        if error_collector is not None:
+            error_collector.append(str(exc)[:200])
+        with conn.cursor() as cur:
+            cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            cur.execute(f"RELEASE SAVEPOINT {savepoint}")
+        return fallback
+    with conn.cursor() as cur:
+        cur.execute(f"RELEASE SAVEPOINT {savepoint}")
+    return result
 
 
 def ensure_default_certificate_types(conn, *, tenant_id: str) -> list[dict[str, Any]]:
@@ -479,6 +531,328 @@ def _fetch_mail_template_by_key(conn, *, tenant_id: str, template_key: str) -> d
         return cur.fetchone()
 
 
+def _type_is_live(row: dict[str, Any] | None) -> bool:
+    meta = dict((row or {}).get("meta_json") or {})
+    return str(meta.get("rollout") or "").strip().lower() != "planned"
+
+
+def _fetch_certificate_employee_row(conn, *, tenant_id: str, employee_id: str) -> dict[str, Any] | None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT e.id,
+                   e.tenant_id,
+                   COALESCE(e.company_id, s.company_id) AS company_id,
+                   e.site_id,
+                   e.full_name,
+                   e.hire_date,
+                   e.leave_date,
+                   COALESCE(e.employment_status, 'active') AS employment_status,
+                   e.loa_start_date,
+                   e.loa_end_date,
+                   COALESCE(e.phone, '') AS phone,
+                   COALESCE(e.address, '') AS address
+            FROM employees e
+            LEFT JOIN sites s ON s.id = e.site_id
+            WHERE e.tenant_id = %s
+              AND e.id = %s
+            LIMIT 1
+            """,
+            (tenant_id, employee_id),
+        )
+        return cur.fetchone()
+
+
+def _fetch_tenant_archive_email(conn, *, tenant_id: str) -> str:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT COALESCE(email, '') AS email
+            FROM tenant_profiles
+            WHERE tenant_id = %s
+            LIMIT 1
+            """,
+            (tenant_id,),
+        )
+        row = cur.fetchone() or {}
+    return str(row.get("email") or "").strip()
+
+
+def _today_kst() -> date:
+    return datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=9))).date()
+
+
+def _coerce_date(value: Any) -> date | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).date()
+    except ValueError:
+        try:
+            return datetime.strptime(text[:10], "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+
+def _certificate_type_eligibility(
+    *,
+    type_key: str,
+    employee_row: dict[str, Any] | None,
+    employee_email: str | None,
+    company_archive_email: str | None,
+) -> tuple[bool, str | None]:
+    if not employee_row:
+        return False, "직원 정보를 찾을 수 없습니다."
+
+    today = _today_kst()
+    status_value = str(employee_row.get("employment_status") or "active").strip().lower()
+    hire_date = _coerce_date(employee_row.get("hire_date"))
+    leave_date = _coerce_date(employee_row.get("leave_date"))
+    loa_start_date = _coerce_date(employee_row.get("loa_start_date"))
+    loa_end_date = _coerce_date(employee_row.get("loa_end_date"))
+
+    if type_key == EMPLOYMENT_CERTIFICATE_TYPE_KEY:
+        if status_value in {"terminated", "retired"} or (leave_date and leave_date <= today):
+            return False, "퇴직 상태에서는 재직증명서를 신청할 수 없습니다."
+        if not hire_date:
+            return False, "입사일 정보가 필요합니다."
+        return True, None
+
+    if type_key == CAREER_CERTIFICATE_TYPE_KEY:
+        if not hire_date:
+            return False, "입사일 정보가 필요합니다."
+        return True, None
+
+    if type_key == RETIREMENT_CERTIFICATE_TYPE_KEY:
+        if status_value in {"terminated", "retired"} or leave_date:
+            return True, None
+        return False, "퇴직 처리된 직원만 신청할 수 있습니다."
+
+    if type_key == LEAVE_OF_ABSENCE_CERTIFICATE_TYPE_KEY:
+        if status_value not in {"leave_of_absence", "loa"}:
+            return False, "휴직 상태인 직원만 신청할 수 있습니다."
+        if loa_start_date and loa_start_date > today:
+            return False, "휴직 시작일 이후에 신청할 수 있습니다."
+        if loa_end_date and loa_end_date < today:
+            return False, "휴직 기간 중에만 신청할 수 있습니다."
+        return True, None
+
+    return False, "지원하지 않는 증명서 타입입니다."
+
+
+def upsert_certificate_issue_job(
+    conn,
+    *,
+    tenant_id: str,
+    certificate_request_id: str,
+    job_state: str,
+    payload_extra: dict[str, Any] | None = None,
+    increment_attempts: bool = False,
+    last_error: str | None = None,
+) -> dict[str, Any]:
+    desired_state = str(job_state or "").strip().lower() or "queued"
+    completed_at = _utcnow() if desired_state in {"completed", "failed", "cancelled"} else None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id,
+                   attempts,
+                   payload_json
+            FROM certificate_issue_jobs
+            WHERE tenant_id = %s
+              AND certificate_request_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (tenant_id, certificate_request_id),
+        )
+        existing = cur.fetchone() or {}
+        existing_id = str(existing.get("id") or "").strip()
+        attempts = int(existing.get("attempts") or 0)
+        merged_payload = dict(existing.get("payload_json") or {})
+        merged_payload.update(payload_extra or {})
+        if existing_id:
+            cur.execute(
+                """
+                UPDATE certificate_issue_jobs
+                SET job_state = %s,
+                    attempts = %s,
+                    last_error = %s,
+                    payload_json = %s::jsonb,
+                    locked_at = CASE WHEN %s = 'processing' THEN timezone('utc', now()) ELSE NULL END,
+                    completed_at = %s
+                WHERE id = %s
+                RETURNING id, certificate_request_id, job_state, attempts, last_error, completed_at, payload_json
+                """,
+                (
+                    desired_state,
+                    attempts + (1 if increment_attempts else 0),
+                    _truncate_error(last_error),
+                    _json_dumps(merged_payload),
+                    desired_state,
+                    completed_at,
+                    existing_id,
+                ),
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO certificate_issue_jobs (
+                    tenant_id,
+                    certificate_request_id,
+                    job_state,
+                    attempts,
+                    last_error,
+                    payload_json,
+                    locked_at,
+                    completed_at,
+                    created_at
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, %s::jsonb,
+                    CASE WHEN %s = 'processing' THEN timezone('utc', now()) ELSE NULL END,
+                    %s,
+                    timezone('utc', now())
+                )
+                RETURNING id, certificate_request_id, job_state, attempts, last_error, completed_at, payload_json
+                """,
+                (
+                    tenant_id,
+                    certificate_request_id,
+                    desired_state,
+                    1 if increment_attempts else 0,
+                    _truncate_error(last_error),
+                    _json_dumps(merged_payload),
+                    desired_state,
+                    completed_at,
+                ),
+            )
+        row = cur.fetchone() or {}
+    return {
+        "id": str(row.get("id") or ""),
+        "certificate_request_id": str(row.get("certificate_request_id") or certificate_request_id),
+        "job_state": row.get("job_state") or desired_state,
+        "attempts": int(row.get("attempts") or 0),
+        "last_error": row.get("last_error"),
+        "completed_at": row.get("completed_at"),
+        "payload_json": row.get("payload_json") or merged_payload,
+    }
+
+
+def record_certificate_mail_delivery_for_request(
+    conn,
+    *,
+    tenant_id: str,
+    certificate_request_id: str,
+    template_key: str,
+    recipient_role: str,
+    recipient_email: str,
+    subject: str,
+    body_text: str,
+    attachment_name: str,
+    sent: bool,
+    error: str | None = None,
+    sent_at: datetime | None = None,
+) -> dict[str, Any] | None:
+    foundation = ensure_certificate_mail_foundation(conn, tenant_id=tenant_id)
+    template_row = _fetch_mail_template_by_key(conn, tenant_id=tenant_id, template_key=template_key)
+    profile_row = _fetch_mail_profile_by_key(conn, tenant_id=tenant_id, profile_key=DEFAULT_MAIL_PROFILE_KEY)
+    account_row = _fetch_mail_account_by_key(conn, tenant_id=tenant_id, account_key=DEFAULT_MAIL_ACCOUNT_KEY)
+    state = "sent" if sent else "failed"
+    occurred_at = sent_at or _utcnow()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO outbound_mail_jobs (
+                tenant_id,
+                mail_account_id,
+                sender_profile_id,
+                template_id,
+                source_type,
+                source_id,
+                recipient_email,
+                subject,
+                body_text,
+                state,
+                attempts,
+                sent_at,
+                last_error,
+                payload_json,
+                created_at
+            )
+            VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s::jsonb, timezone('utc', now())
+            )
+            RETURNING id, state, sent_at, last_error
+            """,
+            (
+                tenant_id,
+                str((account_row or {}).get("id") or foundation["mail_account"]["id"] or "") or None,
+                str((profile_row or {}).get("id") or foundation["mail_profile"]["id"] or "") or None,
+                str((template_row or {}).get("id") or "") or None,
+                MAIL_JOB_SOURCE_TYPE,
+                f"{certificate_request_id}:{recipient_role}",
+                recipient_email,
+                subject,
+                body_text,
+                state,
+                occurred_at if sent else None,
+                _truncate_error(error),
+                _json_dumps(
+                    {
+                        "certificate_request_id": certificate_request_id,
+                        "recipient_role": recipient_role,
+                        "attachment_name": attachment_name,
+                        "template_key": template_key,
+                    }
+                ),
+            ),
+        )
+        job_row = cur.fetchone() or {}
+        cur.execute(
+            """
+            INSERT INTO mail_delivery_events (
+                tenant_id,
+                outbound_mail_job_id,
+                event_type,
+                provider_message_id,
+                event_payload,
+                occurred_at
+            )
+            VALUES (%s, %s, %s, NULL, %s::jsonb, %s)
+            RETURNING id
+            """,
+            (
+                tenant_id,
+                job_row.get("id"),
+                "delivered" if sent else "failed",
+                _json_dumps(
+                    {
+                        "recipient_role": recipient_role,
+                        "recipient_email": recipient_email,
+                        "error": _truncate_error(error),
+                    }
+                ),
+                occurred_at,
+            ),
+        )
+        event_row = cur.fetchone() or {}
+    return {
+        "job_id": str(job_row.get("id") or ""),
+        "event_id": str(event_row.get("id") or ""),
+        "state": job_row.get("state") or state,
+        "sent_at": job_row.get("sent_at"),
+        "last_error": job_row.get("last_error"),
+    }
+
+
 def _resolve_user_mail_target(conn, *, tenant_id: str, user_id: str) -> dict[str, Any] | None:
     normalized_user_id = str(user_id or "").strip()
     if not normalized_user_id:
@@ -661,8 +1035,14 @@ def queue_approval_notification_mail(
     )
 
 
-def list_certificate_types(conn, *, tenant_id: str) -> list[dict[str, Any]]:
+def list_certificate_types(
+    conn,
+    *,
+    tenant_id: str,
+    employee_id: str | None = None,
+) -> list[dict[str, Any]]:
     ensure_default_certificate_types(conn, tenant_id=tenant_id)
+    employee_row = _fetch_certificate_employee_row(conn, tenant_id=tenant_id, employee_id=employee_id) if employee_id else None
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -682,6 +1062,27 @@ def list_certificate_types(conn, *, tenant_id: str) -> list[dict[str, Any]]:
             "requires_approval": bool(row.get("requires_approval")),
             "auto_mail_enabled": bool(row.get("auto_mail_enabled")),
             "meta_json": row.get("meta_json") or {},
+            "available": (
+                _certificate_type_eligibility(
+                    type_key=str(row.get("type_key") or "").strip(),
+                    employee_row=employee_row,
+                    employee_email=None,
+                    company_archive_email=None,
+                )[0]
+                if employee_id and _type_is_live(row)
+                else _type_is_live(row)
+            ),
+            "eligibility_reason": (
+                _certificate_type_eligibility(
+                    type_key=str(row.get("type_key") or "").strip(),
+                    employee_row=employee_row,
+                    employee_email=None,
+                    company_archive_email=None,
+                )[1]
+                if employee_id and _type_is_live(row)
+                else ("준비 중인 타입입니다." if not _type_is_live(row) else None)
+            ),
+            "daily_limit": CERTIFICATE_DAILY_LIMIT if _type_is_live(row) else None,
             "created_at": row.get("created_at"),
             "updated_at": row.get("updated_at"),
         }
@@ -713,9 +1114,20 @@ def list_certificate_requests(
                    cr.status,
                    cr.purpose_code,
                    cr.purpose_text,
+                   cr.submit_to,
+                   cr.copy_count,
+                   cr.include_address,
+                   cr.include_phone,
+                   cr.rejection_reason,
+                   cr.mail_company_sent_at,
+                   cr.mail_employee_sent_at,
+                   cr.mail_error,
                    cr.requested_at,
                    cr.issued_at,
                    cr.issue_number,
+                   cr.file_name,
+                   cr.file_mime_type,
+                   CASE WHEN cr.file_bytes IS NOT NULL THEN TRUE ELSE FALSE END AS file_ready,
                    cr.legacy_source_type,
                    cr.legacy_source_id,
                    ct.type_key,
@@ -740,9 +1152,20 @@ def list_certificate_requests(
             "status": row.get("status"),
             "purpose_code": row.get("purpose_code"),
             "purpose_text": row.get("purpose_text"),
+            "submit_to": row.get("submit_to"),
+            "copy_count": int(row.get("copy_count") or 1),
+            "include_address": bool(row.get("include_address")),
+            "include_phone": bool(row.get("include_phone")),
+            "rejection_reason": row.get("rejection_reason"),
+            "mail_company_sent_at": row.get("mail_company_sent_at"),
+            "mail_employee_sent_at": row.get("mail_employee_sent_at"),
+            "mail_error": row.get("mail_error"),
             "requested_at": row.get("requested_at"),
             "issued_at": row.get("issued_at"),
             "issue_number": row.get("issue_number"),
+            "file_name": row.get("file_name"),
+            "file_mime_type": row.get("file_mime_type"),
+            "file_ready": bool(row.get("file_ready")),
             "legacy_source_type": row.get("legacy_source_type"),
             "legacy_source_id": row.get("legacy_source_id"),
             "certificate_type_key": row.get("type_key"),
@@ -791,9 +1214,20 @@ def list_admin_certificate_requests(
                    cr.status,
                    cr.purpose_code,
                    cr.purpose_text,
+                   cr.submit_to,
+                   cr.copy_count,
+                   cr.include_address,
+                   cr.include_phone,
+                   cr.rejection_reason,
+                   cr.mail_company_sent_at,
+                   cr.mail_employee_sent_at,
+                   cr.mail_error,
                    cr.requested_at,
                    cr.issued_at,
                    cr.issue_number,
+                   cr.file_name,
+                   cr.file_mime_type,
+                   CASE WHEN cr.file_bytes IS NOT NULL THEN TRUE ELSE FALSE END AS file_ready,
                    cr.legacy_source_type,
                    cr.legacy_source_id,
                    ct.type_key,
@@ -801,12 +1235,17 @@ def list_admin_certificate_requests(
                    e.id AS employee_id,
                    e.full_name AS employee_name,
                    e.employee_code,
+                   COALESCE(c.company_name, t.tenant_name, '') AS company_name,
+                   COALESCE(s.site_name, '본사') AS org_name,
                    ad.status AS approval_status,
                    COALESCE(job.job_state, '') AS issue_job_state,
                    COALESCE(job.last_error, '') AS issue_job_error
             FROM certificate_requests cr
             LEFT JOIN certificate_types ct ON ct.id = cr.certificate_type_id
             LEFT JOIN employees e ON e.id = cr.employee_id
+            LEFT JOIN sites s ON s.id = e.site_id
+            LEFT JOIN companies c ON c.id = COALESCE(cr.company_id, e.company_id, s.company_id)
+            LEFT JOIN tenants t ON t.id = cr.tenant_id
             LEFT JOIN approval_documents ad ON ad.id = cr.approval_document_id
             LEFT JOIN certificate_issue_jobs job ON job.certificate_request_id = cr.id
             WHERE {where_sql}
@@ -822,9 +1261,20 @@ def list_admin_certificate_requests(
             "status": row.get("status"),
             "purpose_code": row.get("purpose_code"),
             "purpose_text": row.get("purpose_text"),
+            "submit_to": row.get("submit_to"),
+            "copy_count": int(row.get("copy_count") or 1),
+            "include_address": bool(row.get("include_address")),
+            "include_phone": bool(row.get("include_phone")),
+            "rejection_reason": row.get("rejection_reason"),
+            "mail_company_sent_at": row.get("mail_company_sent_at"),
+            "mail_employee_sent_at": row.get("mail_employee_sent_at"),
+            "mail_error": row.get("mail_error"),
             "requested_at": row.get("requested_at"),
             "issued_at": row.get("issued_at"),
             "issue_number": row.get("issue_number"),
+            "file_name": row.get("file_name"),
+            "file_mime_type": row.get("file_mime_type"),
+            "file_ready": bool(row.get("file_ready")),
             "legacy_source_type": row.get("legacy_source_type"),
             "legacy_source_id": row.get("legacy_source_id"),
             "certificate_type_key": row.get("type_key"),
@@ -832,6 +1282,8 @@ def list_admin_certificate_requests(
             "employee_id": str(row.get("employee_id") or ""),
             "employee_name": row.get("employee_name"),
             "employee_code": row.get("employee_code"),
+            "company_name": row.get("company_name"),
+            "org": row.get("org_name"),
             "approval_status": row.get("approval_status"),
             "issue_job_state": row.get("issue_job_state") or None,
             "issue_job_error": row.get("issue_job_error") or None,
@@ -1298,12 +1750,14 @@ def _fetch_legacy_document_request_row(conn, *, tenant_id: str, legacy_request_i
                    e.full_name AS employee_name,
                    e.employee_code,
                    COALESCE(c.company_name, t.tenant_name) AS company_name,
-                   COALESCE(c.company_email, '') AS company_email,
+                   COALESCE(tp.email, '') AS company_email,
                    t.tenant_code
             FROM document_requests dr
             LEFT JOIN employees e ON e.id = dr.employee_id
-            LEFT JOIN companies c ON c.id = dr.company_id
+            LEFT JOIN sites s ON s.id = e.site_id
+            LEFT JOIN companies c ON c.id = COALESCE(dr.company_id, e.company_id, s.company_id)
             LEFT JOIN tenants t ON t.id = dr.tenant_id
+            LEFT JOIN tenant_profiles tp ON tp.tenant_id = dr.tenant_id
             WHERE dr.tenant_id = %s
               AND dr.id = %s
               AND dr.document_type = 'employment_certificate'
@@ -1450,76 +1904,115 @@ def sync_legacy_employment_certificate_request(
     )
     issued_attachment_object_id = _ensure_certificate_attachment_object(conn, row=row)
     normalized_status = _normalize_certificate_status(row.get("status"))
+    existing_request_id: str | None = None
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO certificate_requests (
-                tenant_id,
-                certificate_type_id,
-                employee_id,
-                requester_user_id,
-                approval_document_id,
-                purpose_code,
-                purpose_text,
-                status,
-                issued_attachment_object_id,
-                requested_at,
-                issued_at,
-                issue_number,
-                legacy_source_type,
-                legacy_source_id,
-                created_at,
-                updated_at
-            )
-            VALUES (
-                %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, 'employment_certificate_request', %s,
-                timezone('utc', now()), timezone('utc', now())
-            )
-            ON CONFLICT (tenant_id, legacy_source_type, legacy_source_id) DO UPDATE
-            SET certificate_type_id = EXCLUDED.certificate_type_id,
-                employee_id = EXCLUDED.employee_id,
-                approval_document_id = EXCLUDED.approval_document_id,
-                purpose_code = EXCLUDED.purpose_code,
-                purpose_text = EXCLUDED.purpose_text,
-                status = EXCLUDED.status,
-                issued_attachment_object_id = EXCLUDED.issued_attachment_object_id,
-                requested_at = EXCLUDED.requested_at,
-                issued_at = EXCLUDED.issued_at,
-                issue_number = EXCLUDED.issue_number,
-                updated_at = timezone('utc', now())
-            RETURNING id, status, issue_number, requested_at, issued_at, approval_document_id
+            SELECT id
+            FROM certificate_requests
+            WHERE tenant_id = %s
+              AND legacy_source_type = 'employment_certificate_request'
+              AND legacy_source_id = %s
+            LIMIT 1
             """,
-            (
-                tenant_id,
-                certificate_type.get("id"),
-                row.get("employee_id"),
-                approval_document_id,
-                row.get("purpose_code"),
-                row.get("purpose_text"),
-                normalized_status,
-                issued_attachment_object_id,
-                row.get("requested_at") or _utcnow(),
-                row.get("generated_at") or row.get("approved_at"),
-                row.get("issue_number"),
-                str(row.get("id") or ""),
-            ),
+            (tenant_id, str(row.get("id") or "")),
         )
+        existing = cur.fetchone() or {}
+        existing_request_id = str(existing.get("id") or "").strip() or None
+        if existing_request_id:
+            cur.execute(
+                """
+                UPDATE certificate_requests
+                SET certificate_type_id = %s,
+                    employee_id = %s,
+                    approval_document_id = %s,
+                    purpose_code = %s,
+                    purpose_text = %s,
+                    status = %s,
+                    issued_attachment_object_id = %s,
+                    requested_at = %s,
+                    issued_at = %s,
+                    issue_number = %s,
+                    updated_at = timezone('utc', now())
+                WHERE id = %s
+                RETURNING id, status, issue_number, requested_at, issued_at, approval_document_id
+                """,
+                (
+                    certificate_type.get("id"),
+                    row.get("employee_id"),
+                    approval_document_id,
+                    row.get("purpose_code"),
+                    row.get("purpose_text"),
+                    normalized_status,
+                    issued_attachment_object_id,
+                    row.get("requested_at") or _utcnow(),
+                    row.get("generated_at") or row.get("approved_at"),
+                    row.get("issue_number"),
+                    existing_request_id,
+                ),
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO certificate_requests (
+                    tenant_id,
+                    certificate_type_id,
+                    employee_id,
+                    requester_user_id,
+                    approval_document_id,
+                    purpose_code,
+                    purpose_text,
+                    status,
+                    issued_attachment_object_id,
+                    requested_at,
+                    issued_at,
+                    issue_number,
+                    legacy_source_type,
+                    legacy_source_id,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, 'employment_certificate_request', %s,
+                    timezone('utc', now()), timezone('utc', now())
+                )
+                RETURNING id, status, issue_number, requested_at, issued_at, approval_document_id
+                """,
+                (
+                    tenant_id,
+                    certificate_type.get("id"),
+                    row.get("employee_id"),
+                    approval_document_id,
+                    row.get("purpose_code"),
+                    row.get("purpose_text"),
+                    normalized_status,
+                    issued_attachment_object_id,
+                    row.get("requested_at") or _utcnow(),
+                    row.get("generated_at") or row.get("approved_at"),
+                    row.get("issue_number"),
+                    str(row.get("id") or ""),
+                ),
+            )
         synced = cur.fetchone() or {}
 
-    GroupwareAuditService(conn).write_event(
-        tenant_id=tenant_id,
-        module_key="certificates",
-        event_type="certificate_request_synced",
-        actor_user_id=actor_user_id,
-        actor_role=actor_role,
-        resource_type="certificate_request",
-        resource_id=str(synced.get("id") or ""),
-        payload={
-            "legacy_source_type": "employment_certificate_request",
-            "legacy_source_id": str(row.get("id") or ""),
-            "status": normalized_status,
-            "issue_number": row.get("issue_number"),
-        },
+    _run_noncritical_db_step(
+        conn,
+        step_name=f"certificate_request_synced_audit:{tenant_id}:{legacy_request_id}",
+        callback=lambda: GroupwareAuditService(conn).write_event(
+            tenant_id=tenant_id,
+            module_key="certificates",
+            event_type="certificate_request_synced",
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            resource_type="certificate_request",
+            resource_id=str(synced.get("id") or ""),
+            payload={
+                "legacy_source_type": "employment_certificate_request",
+                "legacy_source_id": str(row.get("id") or ""),
+                "status": normalized_status,
+                "issue_number": row.get("issue_number"),
+            },
+        ),
     )
 
     return {
@@ -1568,50 +2061,75 @@ def sync_legacy_employment_certificate_issue_job(
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO certificate_issue_jobs (
-                tenant_id,
-                certificate_request_id,
-                job_state,
-                attempts,
-                last_error,
-                payload_json,
-                locked_at,
-                completed_at,
-                created_at
-            )
-            VALUES (
-                %s, %s, %s, %s, %s, %s::jsonb,
-                CASE WHEN %s = 'processing' THEN timezone('utc', now()) ELSE NULL END,
-                %s,
-                timezone('utc', now())
-            )
-            ON CONFLICT (certificate_request_id) DO UPDATE
-            SET job_state = EXCLUDED.job_state,
-                attempts = CASE
-                    WHEN %s THEN certificate_issue_jobs.attempts + 1
-                    ELSE GREATEST(certificate_issue_jobs.attempts, EXCLUDED.attempts)
-                END,
-                last_error = EXCLUDED.last_error,
-                payload_json = EXCLUDED.payload_json,
-                locked_at = CASE
-                    WHEN EXCLUDED.job_state = 'processing' THEN timezone('utc', now())
-                    ELSE certificate_issue_jobs.locked_at
-                END,
-                completed_at = EXCLUDED.completed_at
-            RETURNING id, certificate_request_id, job_state, attempts, last_error, completed_at
+            SELECT id, attempts
+            FROM certificate_issue_jobs
+            WHERE certificate_request_id = %s
+            LIMIT 1
             """,
-            (
-                tenant_id,
-                request_row["id"],
-                desired_state,
-                1 if increment_attempts else 0,
-                last_error_value,
-                _json_dumps(payload),
-                desired_state,
-                completed_at,
-                increment_attempts,
-            ),
+            (request_row["id"],),
         )
+        existing = cur.fetchone() or {}
+        existing_job_id = str(existing.get("id") or "").strip() or None
+        if existing_job_id:
+            next_attempts = int(existing.get("attempts") or 0) + 1 if increment_attempts else max(int(existing.get("attempts") or 0), 0)
+            cur.execute(
+                """
+                UPDATE certificate_issue_jobs
+                SET job_state = %s,
+                    attempts = %s,
+                    last_error = %s,
+                    payload_json = %s::jsonb,
+                    locked_at = CASE
+                        WHEN %s = 'processing' THEN timezone('utc', now())
+                        ELSE locked_at
+                    END,
+                    completed_at = %s
+                WHERE id = %s
+                RETURNING id, certificate_request_id, job_state, attempts, last_error, completed_at
+                """,
+                (
+                    desired_state,
+                    next_attempts,
+                    last_error_value,
+                    _json_dumps(payload),
+                    desired_state,
+                    completed_at,
+                    existing_job_id,
+                ),
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO certificate_issue_jobs (
+                    tenant_id,
+                    certificate_request_id,
+                    job_state,
+                    attempts,
+                    last_error,
+                    payload_json,
+                    locked_at,
+                    completed_at,
+                    created_at
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, %s::jsonb,
+                    CASE WHEN %s = 'processing' THEN timezone('utc', now()) ELSE NULL END,
+                    %s,
+                    timezone('utc', now())
+                )
+                RETURNING id, certificate_request_id, job_state, attempts, last_error, completed_at
+                """,
+                (
+                    tenant_id,
+                    request_row["id"],
+                    desired_state,
+                    1 if increment_attempts else 0,
+                    last_error_value,
+                    _json_dumps(payload),
+                    desired_state,
+                    completed_at,
+                ),
+            )
         job_row = cur.fetchone() or {}
     return {
         "id": str(job_row.get("id") or ""),
@@ -1792,44 +2310,66 @@ def backfill_legacy_employment_certificate_requests(
     skipped_ids: list[str] = []
     failed_ids: list[dict[str, str]] = []
     for legacy_id in legacy_ids:
-        try:
-            request_row = sync_legacy_employment_certificate_request(
+        request_errors: list[str] = []
+        request_row = _run_noncritical_db_step(
+            conn,
+            step_name=f"backfill_request_sync:{tenant_id}:{legacy_id}",
+            callback=lambda: sync_legacy_employment_certificate_request(
                 conn,
                 tenant_id=tenant_id,
                 legacy_request_id=legacy_id,
                 actor_user_id=actor_user_id,
                 actor_role=actor_role,
-            )
-            if not request_row:
-                skipped_ids.append(legacy_id)
-                continue
-            synced_requests += 1
-            issue_job = sync_legacy_employment_certificate_issue_job(
+            ),
+            fallback=None,
+            error_collector=request_errors,
+        )
+        if request_errors:
+            failed_ids.append({"legacy_request_id": legacy_id, "error": request_errors[0]})
+            continue
+        if not request_row:
+            skipped_ids.append(legacy_id)
+            continue
+        synced_requests += 1
+
+        issue_job_errors: list[str] = []
+        issue_job = _run_noncritical_db_step(
+            conn,
+            step_name=f"backfill_issue_job_sync:{tenant_id}:{legacy_id}",
+            callback=lambda: sync_legacy_employment_certificate_issue_job(
                 conn,
                 tenant_id=tenant_id,
                 legacy_request_id=legacy_id,
-            )
-            if issue_job:
-                synced_jobs += 1
-        except Exception as exc:  # pragma: no cover - defensive admin backfill
-            failed_ids.append({"legacy_request_id": legacy_id, "error": str(exc)[:200]})
+            ),
+            fallback=None,
+            error_collector=issue_job_errors,
+        )
+        if issue_job_errors:
+            failed_ids.append({"legacy_request_id": legacy_id, "error": issue_job_errors[0]})
+            continue
+        if issue_job:
+            synced_jobs += 1
 
-    GroupwareAuditService(conn).write_event(
-        tenant_id=tenant_id,
-        module_key="certificates",
-        action_type="legacy_backfill_requested",
-        actor_user_id=actor_user_id,
-        actor_role=actor_role,
-        target_type="certificate_requests",
-        target_id=None,
-        detail={
-            "requested_count": len(legacy_ids),
-            "synced_requests": synced_requests,
-            "synced_jobs": synced_jobs,
-            "skipped_count": len(skipped_ids),
-            "failed_count": len(failed_ids),
-            "status_filter": status_filter or "all",
-        },
+    _run_noncritical_db_step(
+        conn,
+        step_name=f"legacy_backfill_audit:{tenant_id}:{len(legacy_ids)}",
+        callback=lambda: GroupwareAuditService(conn).write_event(
+            tenant_id=tenant_id,
+            module_key="certificates",
+            action_type="legacy_backfill_requested",
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            target_type="certificate_requests",
+            target_id=None,
+            detail={
+                "requested_count": len(legacy_ids),
+                "synced_requests": synced_requests,
+                "synced_jobs": synced_jobs,
+                "skipped_count": len(skipped_ids),
+                "failed_count": len(failed_ids),
+                "status_filter": status_filter or "all",
+            },
+        ),
     )
     return {
         "requested_count": len(legacy_ids),
@@ -1871,32 +2411,48 @@ def retry_certificate_issue_job(
 
     legacy_source_type = str(row.get("legacy_source_type") or "").strip().lower()
     legacy_source_id = str(row.get("legacy_source_id") or "").strip()
-    if legacy_source_type != "employment_certificate_request" or not legacy_source_id:
-        raise ValueError("LEGACY_SOURCE_NOT_SUPPORTED")
-
-    retried = sync_legacy_employment_certificate_issue_job(
+    certificate_request_id = str(row.get("certificate_request_id") or "").strip()
+    if legacy_source_type == "employment_certificate_request" and legacy_source_id:
+        retried = sync_legacy_employment_certificate_issue_job(
+            conn,
+            tenant_id=tenant_id,
+            legacy_request_id=legacy_source_id,
+            job_state="queued",
+            last_error=None,
+            payload_extra={"stage": "retry_requested"},
+            increment_attempts=False,
+        )
+    elif certificate_request_id:
+        retried = upsert_certificate_issue_job(
+            conn,
+            tenant_id=tenant_id,
+            certificate_request_id=certificate_request_id,
+            job_state="queued",
+            last_error=None,
+            payload_extra={"stage": "retry_requested"},
+            increment_attempts=False,
+        )
+    else:
+        raise ValueError("CERTIFICATE_REQUEST_NOT_FOUND")
+    _run_noncritical_db_step(
         conn,
-        tenant_id=tenant_id,
-        legacy_request_id=legacy_source_id,
-        job_state="queued",
-        last_error=None,
-        payload_extra={"stage": "retry_requested"},
-        increment_attempts=False,
-    )
-    GroupwareAuditService(conn).write_event(
-        tenant_id=tenant_id,
-        module_key="certificates",
-        action_type="issue_job_retried",
-        actor_user_id=actor_user_id,
-        actor_role=actor_role,
-        target_type="certificate_issue_job",
-        target_id=issue_job_id,
-        detail={"legacy_source_id": legacy_source_id},
+        step_name=f"issue_job_retried_audit:{tenant_id}:{issue_job_id}",
+        callback=lambda: GroupwareAuditService(conn).write_event(
+            tenant_id=tenant_id,
+            module_key="certificates",
+            action_type="issue_job_retried",
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            target_type="certificate_issue_job",
+            target_id=issue_job_id,
+            detail={"legacy_source_id": legacy_source_id, "certificate_request_id": certificate_request_id},
+        ),
     )
     return {
         "issue_job_id": issue_job_id,
         "legacy_source_id": legacy_source_id,
-        "certificate_request_id": str(row.get("certificate_request_id") or ""),
+        "legacy_source_type": legacy_source_type or None,
+        "certificate_request_id": certificate_request_id,
         "job_state": (retried or {}).get("job_state") or "queued",
         "certificate_status": row.get("certificate_status"),
     }
@@ -1953,15 +2509,19 @@ def retry_outbound_mail_job(
             ),
         )
         event = cur.fetchone() or {}
-    GroupwareAuditService(conn).write_event(
-        tenant_id=tenant_id,
-        module_key="mail",
-        action_type="outbound_mail_retried",
-        actor_user_id=actor_user_id,
-        actor_role=actor_role,
-        target_type="outbound_mail_job",
-        target_id=job_id,
-        detail={"source_type": row.get("source_type"), "source_id": row.get("source_id")},
+    _run_noncritical_db_step(
+        conn,
+        step_name=f"outbound_mail_retried_audit:{tenant_id}:{job_id}",
+        callback=lambda: GroupwareAuditService(conn).write_event(
+            tenant_id=tenant_id,
+            module_key="mail",
+            action_type="outbound_mail_retried",
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            target_type="outbound_mail_job",
+            target_id=job_id,
+            detail={"source_type": row.get("source_type"), "source_id": row.get("source_id")},
+        ),
     )
     return {
         "job_id": str(row.get("id") or ""),

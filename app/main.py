@@ -40,6 +40,8 @@ from .routers import (
     integrations_router,
     leaves_router,
     mail_router,
+    meetings_router,
+    messenger_router,
     me_router,
     master_reset_router,
     master_tenants_router,
@@ -345,6 +347,8 @@ app.include_router(debug_router, prefix="/api/v1")
 app.include_router(dev_scope_router, prefix="/api/v1")
 app.include_router(leaves_router, prefix="/api/v1")
 app.include_router(mail_router, prefix="/api/v1")
+app.include_router(meetings_router, prefix="/api/v1")
+app.include_router(messenger_router, prefix="/api/v1")
 app.include_router(schedules_router, prefix="/api/v1")
 app.include_router(schedules_bridge_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")

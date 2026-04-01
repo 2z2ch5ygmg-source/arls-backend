@@ -40,10 +40,18 @@ router = APIRouter(tags=["hr-documents"], dependencies=[Depends(apply_rate_limit
 logger = logging.getLogger(__name__)
 
 DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE = "employment_certificate"
-DAILY_REQUEST_LIMIT = 3
+DOCUMENT_TYPE_CAREER_CERTIFICATE = "career_certificate"
+DOCUMENT_TYPE_RETIREMENT_CERTIFICATE = "retirement_certificate"
+DOCUMENT_TYPE_LEAVE_OF_ABSENCE_CERTIFICATE = "leave_of_absence_certificate"
+DAILY_REQUEST_LIMIT = 4
 TZ_KST = timezone(timedelta(hours=9))
 PURPOSE_CODES = {"BANK", "GOV", "CARD", "OTHER"}
-ALLOWED_TEMPLATE_DOCUMENT_TYPES = {DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE}
+ALLOWED_TEMPLATE_DOCUMENT_TYPES = {
+    DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE,
+    DOCUMENT_TYPE_CAREER_CERTIFICATE,
+    DOCUMENT_TYPE_RETIREMENT_CERTIFICATE,
+    DOCUMENT_TYPE_LEAVE_OF_ABSENCE_CERTIFICATE,
+}
 ALLOWED_TEMPLATE_EXTENSIONS = {".docx"}
 MAX_TEMPLATE_UPLOAD_BYTES = 2 * 1024 * 1024
 
@@ -86,6 +94,29 @@ def _raise_api_error(status_code: int, code: str, message: str, *, fields: dict[
     if fields:
         detail["fields"] = fields
     raise HTTPException(status_code=status_code, detail=detail)
+
+
+def _run_noncritical_db_step(
+    conn,
+    *,
+    step_name: str,
+    callback,
+    fallback=None,
+):
+    savepoint = f"hr_documents_sp_{uuid.uuid4().hex}"
+    with conn.cursor() as cur:
+        cur.execute(f"SAVEPOINT {savepoint}")
+    try:
+        result = callback()
+    except Exception:
+        logger.exception("[HR][DOC] non-critical db step failed step=%s", step_name)
+        with conn.cursor() as cur:
+            cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            cur.execute(f"RELEASE SAVEPOINT {savepoint}")
+        return fallback
+    with conn.cursor() as cur:
+        cur.execute(f"RELEASE SAVEPOINT {savepoint}")
+    return result
 
 
 def _ensure_admin_role(user: dict) -> None:
@@ -263,9 +294,14 @@ def _get_employee_scope_row(conn, *, employee_id: str, tenant_id: str) -> dict[s
             SELECT e.id,
                    e.tenant_id,
                    COALESCE(e.company_id, s.company_id) AS company_id,
+                   e.site_id,
                    e.full_name,
                    e.birth_date,
                    e.hire_date,
+                   e.leave_date,
+                   COALESCE(e.employment_status, 'active') AS employment_status,
+                   e.loa_start_date,
+                   e.loa_end_date,
                    e.address,
                    e.phone,
                    e.management_no_str,
@@ -664,21 +700,23 @@ def _process_employment_certificate_issue_job(request_id: str) -> None:
                 logger.info("[HR][DOC] skip issue job because status is not generating: %s", row.get("status"))
                 return
 
-            try:
-                sync_legacy_employment_certificate_issue_job(
+            _run_noncritical_db_step(
+                conn,
+                step_name="certificate_issue_job_processing_sync",
+                callback=lambda: sync_legacy_employment_certificate_issue_job(
                     conn,
                     tenant_id=str(row.get("tenant_id") or "").strip(),
                     legacy_request_id=request_id,
                     job_state="processing",
-                    payload_extra={"stage": "pdf_generation"},
+                    payload_extra={
+                        "stage": "pdf_generation",
+                        "template_source": "pending",
+                        "template_mode": "pending",
+                        "seal_attached": False,
+                    },
                     increment_attempts=True,
-                )
-            except Exception as exc:  # pragma: no cover - sync must never break legacy flow
-                logger.exception(
-                    "[CERTIFICATE][SYNC] failed to mark issue job processing request_id=%s",
-                    request_id,
-                    exc_info=exc,
-                )
+                ),
+            )
 
             issued_at = datetime.now(timezone.utc)
             issue_number = build_issue_number(request_id, issued_at=issued_at)
@@ -784,45 +822,10 @@ def _process_employment_certificate_issue_job(request_id: str) -> None:
                     context,
                     seal_image_bytes=seal_image_bytes,
                 )
-            html_body = _build_employment_certificate_mail_html(context)
 
             tenant_code = str(row.get("tenant_code") or "").strip().lower() or "tenant"
             file_name = f"employment_certificate_{issue_number}.pdf"
             file_path = f"documents/employment_certificate/{tenant_code}/{request_id}.pdf"
-
-            company_email = _normalize_email(str(row.get("company_email") or ""))
-            employee_email = _resolve_employee_email(
-                conn,
-                tenant_id=str(row.get("tenant_id") or "").strip(),
-                employee_id=str(row.get("employee_id") or "").strip(),
-            )
-
-            company_mail_result = send_certificate_mail(
-                to_email=company_email,
-                subject=f"재직증명서 발급 - {context['employee_name']}",
-                html_body=html_body,
-                attachment_name=file_name,
-                attachment_bytes=pdf_bytes,
-            )
-            employee_mail_result = send_certificate_mail(
-                to_email=employee_email,
-                subject=f"재직증명서 발급 - {context['employee_name']}",
-                html_body=html_body,
-                attachment_name=file_name,
-                attachment_bytes=pdf_bytes,
-            )
-
-            mail_errors: list[str] = []
-            mail_company_sent_at = None
-            mail_employee_sent_at = None
-            if company_mail_result.sent:
-                mail_company_sent_at = issued_at
-            else:
-                mail_errors.append(f"company:{company_mail_result.error or 'send_failed'}")
-            if employee_mail_result.sent:
-                mail_employee_sent_at = issued_at
-            else:
-                mail_errors.append(f"employee:{employee_mail_result.error or 'send_failed'}")
 
             with conn.cursor() as cur:
                 cur.execute(
@@ -850,9 +853,9 @@ def _process_employment_certificate_issue_job(request_id: str) -> None:
                         file_path,
                         file_name,
                         pdf_bytes,
-                        "; ".join(mail_errors) if mail_errors else None,
-                        mail_company_sent_at,
-                        mail_employee_sent_at,
+                        None,
+                        None,
+                        None,
                         (active_template or {}).get("id"),
                         (active_template or {}).get("version"),
                         (active_template or {}).get("file_path"),
@@ -860,56 +863,42 @@ def _process_employment_certificate_issue_job(request_id: str) -> None:
                     ),
                 )
 
-            try:
-                sync_legacy_employment_certificate_request(
-                    conn,
-                    tenant_id=str(row.get("tenant_id") or "").strip(),
-                    legacy_request_id=request_id,
-                )
-                sync_legacy_employment_certificate_issue_job(
-                    conn,
-                    tenant_id=str(row.get("tenant_id") or "").strip(),
-                    legacy_request_id=request_id,
-                    job_state="completed",
-                    payload_extra={
-                        "stage": "issued",
-                        "issue_number": issue_number,
-                        "mail_company_sent": bool(company_mail_result.sent),
-                        "mail_employee_sent": bool(employee_mail_result.sent),
-                    },
-                )
-                record_certificate_mail_delivery(
-                    conn,
-                    tenant_id=str(row.get("tenant_id") or "").strip(),
-                    legacy_request_id=request_id,
-                    recipient_role="company",
-                    recipient_email=company_email,
-                    subject=f"재직증명서 발급 - {context['employee_name']}",
-                    body_text="회사 보관용 재직증명서가 발급되었습니다.",
-                    attachment_name=file_name,
-                    sent=bool(company_mail_result.sent),
-                    error=company_mail_result.error,
-                    sent_at=issued_at if company_mail_result.sent else None,
-                )
-                record_certificate_mail_delivery(
-                    conn,
-                    tenant_id=str(row.get("tenant_id") or "").strip(),
-                    legacy_request_id=request_id,
-                    recipient_role="employee",
-                    recipient_email=employee_email,
-                    subject=f"재직증명서 발급 - {context['employee_name']}",
-                    body_text="직원 전달용 재직증명서가 발급되었습니다.",
-                    attachment_name=file_name,
-                    sent=bool(employee_mail_result.sent),
-                    error=employee_mail_result.error,
-                    sent_at=issued_at if employee_mail_result.sent else None,
-                )
-            except Exception as exc:  # pragma: no cover - sync must never break legacy flow
-                logger.exception(
-                    "[CERTIFICATE][SYNC] failed to finalize certificate sync request_id=%s",
-                    request_id,
-                    exc_info=exc,
-                )
+            _run_noncritical_db_step(
+                conn,
+                step_name="certificate_issue_job_finalize_sync",
+                callback=lambda: (
+                    sync_legacy_employment_certificate_request(
+                        conn,
+                        tenant_id=str(row.get("tenant_id") or "").strip(),
+                        legacy_request_id=request_id,
+                    ),
+                    sync_legacy_employment_certificate_issue_job(
+                        conn,
+                        tenant_id=str(row.get("tenant_id") or "").strip(),
+                        legacy_request_id=request_id,
+                        job_state="completed",
+                        payload_extra={
+                            "stage": "issued",
+                            "issue_number": issue_number,
+                            "template_source": template_source,
+                            "template_mode": "html_fallback" if use_html_fallback else "docx",
+                            "template_id": str((active_template or {}).get("id") or ""),
+                            "template_version": (active_template or {}).get("version"),
+                            "template_file_path": str((active_template or {}).get("file_path") or "").strip() or None,
+                            "seal_attached": bool(seal_image_bytes),
+                            "download_ready": True,
+                            "autofill_field_count": sum(1 for value in context.values() if str(value or "").strip()),
+                            "autofill_keys": sorted([key for key, value in context.items() if str(value or "").strip()]),
+                            "autofill_preview": {
+                                "employee_name": str(context.get("employee_name") or "").strip(),
+                                "company_name": str(context.get("company_name") or "").strip(),
+                                "purpose_label": str(context.get("purpose_label") or "").strip(),
+                                "employment_period": str(context.get("employment_period") or "").strip(),
+                            },
+                        },
+                    ),
+                ),
+            )
     except Exception as exc:
         logger.exception("[HR][DOC] issue job failed request_id=%s", request_id, exc_info=exc)
         try:
@@ -918,18 +907,24 @@ def _process_employment_certificate_issue_job(request_id: str) -> None:
                 row = _fetch_document_request_for_issue(conn, request_id=request_id)
                 tenant_id = str((row or {}).get("tenant_id") or "").strip()
                 if tenant_id:
-                    sync_legacy_employment_certificate_request(
+                    _run_noncritical_db_step(
                         conn,
-                        tenant_id=tenant_id,
-                        legacy_request_id=request_id,
-                    )
-                    sync_legacy_employment_certificate_issue_job(
-                        conn,
-                        tenant_id=tenant_id,
-                        legacy_request_id=request_id,
-                        job_state="failed",
-                        last_error=str(exc),
-                        payload_extra={"stage": "failed"},
+                        step_name="certificate_issue_job_failed_sync",
+                        callback=lambda: (
+                            sync_legacy_employment_certificate_request(
+                                conn,
+                                tenant_id=tenant_id,
+                                legacy_request_id=request_id,
+                            ),
+                            sync_legacy_employment_certificate_issue_job(
+                                conn,
+                                tenant_id=tenant_id,
+                                legacy_request_id=request_id,
+                                job_state="failed",
+                                last_error=str(exc),
+                                payload_extra={"stage": "failed"},
+                            ),
+                        ),
                     )
         except Exception:
             logger.exception("[HR][DOC] failed to mark request failed request_id=%s", request_id)
@@ -991,8 +986,10 @@ def create_employment_certificate_request(
         row = cur.fetchone()
 
     remaining = max(0, DAILY_REQUEST_LIMIT - (today_count + 1))
-    try:
-        create_certificate_request_approval_adapter(
+    _run_noncritical_db_step(
+        conn,
+        step_name="employment_certificate_request_approval_adapter",
+        callback=lambda: create_certificate_request_approval_adapter(
             conn,
             tenant_id=tenant_id,
             document_request_id=str((row or {}).get("id") or request_id),
@@ -1001,23 +998,19 @@ def create_employment_certificate_request(
             actor_user=user,
             purpose_code=payload.purpose_code,
             purpose_text=purpose_text,
-        )
-    except Exception as exc:  # pragma: no cover - adapter must never break legacy flow
-        logger.exception(
-            "[APPROVAL][DOC] failed to mirror employment certificate request id=%s",
-            request_id,
-            exc_info=exc,
-        )
-    try:
-        sync_legacy_employment_certificate_request(
+        ),
+    )
+    _run_noncritical_db_step(
+        conn,
+        step_name="employment_certificate_request_sync",
+        callback=lambda: sync_legacy_employment_certificate_request(
             conn,
             tenant_id=tenant_id,
             legacy_request_id=str((row or {}).get("id") or request_id),
             actor_user_id=str(user.get("id") or "").strip() or None,
             actor_role=str(user.get("role") or "").strip() or None,
-        )
-    except Exception as exc:  # pragma: no cover - sync must never break legacy flow
-        logger.exception("[CERTIFICATE][SYNC] failed to sync request id=%s", request_id, exc_info=exc)
+        ),
+    )
     return {
         "request_id": str(row.get("id") if row else request_id),
         "status": (row or {}).get("status") or "requested",
@@ -1361,8 +1354,10 @@ def approve_employment_certificate_request(
         )
 
     background_tasks.add_task(_process_employment_certificate_issue_job, str(request_uuid))
-    try:
-        sync_legacy_approval_status(
+    _run_noncritical_db_step(
+        conn,
+        step_name="employment_certificate_approval_status_sync",
+        callback=lambda: sync_legacy_approval_status(
             conn,
             tenant_id=tenant_id,
             legacy_source_type="employment_certificate_request",
@@ -1370,26 +1365,28 @@ def approve_employment_certificate_request(
             status_value="approved",
             actor_user_id=str(user.get("id") or "").strip() or None,
             actor_role=str(user.get("role") or "").strip() or None,
-        )
-    except Exception as exc:  # pragma: no cover - adapter must never break legacy flow
-        logger.exception("[APPROVAL][DOC] failed to sync approval id=%s", request_uuid, exc_info=exc)
-    try:
-        sync_legacy_employment_certificate_request(
-            conn,
-            tenant_id=tenant_id,
-            legacy_request_id=str(request_uuid),
-            actor_user_id=str(user.get("id") or "").strip() or None,
-            actor_role=str(user.get("role") or "").strip() or None,
-        )
-        sync_legacy_employment_certificate_issue_job(
-            conn,
-            tenant_id=tenant_id,
-            legacy_request_id=str(request_uuid),
-            job_state="queued",
-            payload_extra={"stage": "approved"},
-        )
-    except Exception as exc:  # pragma: no cover - sync must never break legacy flow
-        logger.exception("[CERTIFICATE][SYNC] failed to queue issue job id=%s", request_uuid, exc_info=exc)
+        ),
+    )
+    _run_noncritical_db_step(
+        conn,
+        step_name="employment_certificate_approval_queue_sync",
+        callback=lambda: (
+            sync_legacy_employment_certificate_request(
+                conn,
+                tenant_id=tenant_id,
+                legacy_request_id=str(request_uuid),
+                actor_user_id=str(user.get("id") or "").strip() or None,
+                actor_role=str(user.get("role") or "").strip() or None,
+            ),
+            sync_legacy_employment_certificate_issue_job(
+                conn,
+                tenant_id=tenant_id,
+                legacy_request_id=str(request_uuid),
+                job_state="queued",
+                payload_extra={"stage": "approved"},
+            ),
+        ),
+    )
     return {"ok": True}
 
 
@@ -1439,8 +1436,10 @@ def reject_employment_certificate_request(
     if not row:
         _raise_api_error(status.HTTP_409_CONFLICT, "INVALID_STATUS", "현재 상태에서는 반려할 수 없습니다.")
 
-    try:
-        sync_legacy_approval_status(
+    _run_noncritical_db_step(
+        conn,
+        step_name="employment_certificate_rejection_status_sync",
+        callback=lambda: sync_legacy_approval_status(
             conn,
             tenant_id=tenant_id,
             legacy_source_type="employment_certificate_request",
@@ -1449,27 +1448,29 @@ def reject_employment_certificate_request(
             actor_user_id=str(user.get("id") or "").strip() or None,
             actor_role=str(user.get("role") or "").strip() or None,
             comment_text=payload.rejection_reason,
-        )
-    except Exception as exc:  # pragma: no cover - adapter must never break legacy flow
-        logger.exception("[APPROVAL][DOC] failed to sync rejection id=%s", request_uuid, exc_info=exc)
-    try:
-        sync_legacy_employment_certificate_request(
-            conn,
-            tenant_id=tenant_id,
-            legacy_request_id=str(request_uuid),
-            actor_user_id=str(user.get("id") or "").strip() or None,
-            actor_role=str(user.get("role") or "").strip() or None,
-        )
-        sync_legacy_employment_certificate_issue_job(
-            conn,
-            tenant_id=tenant_id,
-            legacy_request_id=str(request_uuid),
-            job_state="cancelled",
-            last_error=payload.rejection_reason,
-            payload_extra={"stage": "rejected"},
-        )
-    except Exception as exc:  # pragma: no cover - sync must never break legacy flow
-        logger.exception("[CERTIFICATE][SYNC] failed to sync rejection job id=%s", request_uuid, exc_info=exc)
+        ),
+    )
+    _run_noncritical_db_step(
+        conn,
+        step_name="employment_certificate_rejection_queue_sync",
+        callback=lambda: (
+            sync_legacy_employment_certificate_request(
+                conn,
+                tenant_id=tenant_id,
+                legacy_request_id=str(request_uuid),
+                actor_user_id=str(user.get("id") or "").strip() or None,
+                actor_role=str(user.get("role") or "").strip() or None,
+            ),
+            sync_legacy_employment_certificate_issue_job(
+                conn,
+                tenant_id=tenant_id,
+                legacy_request_id=str(request_uuid),
+                job_state="cancelled",
+                last_error=payload.rejection_reason,
+                payload_extra={"stage": "rejected"},
+            ),
+        ),
+    )
     return {"ok": True}
 
 

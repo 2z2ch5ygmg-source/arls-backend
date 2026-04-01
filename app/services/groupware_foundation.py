@@ -250,7 +250,44 @@ class GroupwareNotificationDispatcher:
         payload: dict[str, Any] | None = None,
     ) -> str:
         notification_id = str(uuid.uuid4())
+        normalized_message = str(message or "").strip() or "-"
+        normalized_category = str(category or "info").strip() or "info"
+        normalized_dedupe_key = str(dedupe_key or "").strip() or None
+        normalized_payload = _normalize_json_payload(payload)
         with self.conn.cursor() as cur:
+            if normalized_dedupe_key:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM in_app_notifications
+                    WHERE tenant_id = %s
+                      AND user_id = %s
+                      AND dedupe_key = %s
+                    LIMIT 1
+                    """,
+                    (tenant_id, user_id, normalized_dedupe_key),
+                )
+                existing = cur.fetchone() or {}
+                existing_id = str(existing.get("id") or "").strip()
+                if existing_id:
+                    cur.execute(
+                        """
+                        UPDATE in_app_notifications
+                        SET message = %s,
+                            category = %s,
+                            payload_json = %s::jsonb,
+                            created_at = timezone('utc', now())
+                        WHERE id = %s
+                        """,
+                        (
+                            normalized_message,
+                            normalized_category,
+                            normalized_payload,
+                            existing_id,
+                        ),
+                    )
+                    return existing_id
+
             cur.execute(
                 """
                 INSERT INTO in_app_notifications (
@@ -264,21 +301,15 @@ class GroupwareNotificationDispatcher:
                     created_at
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, timezone('utc', now()))
-                ON CONFLICT (tenant_id, user_id, dedupe_key)
-                DO UPDATE
-                SET message = EXCLUDED.message,
-                    category = EXCLUDED.category,
-                    payload_json = EXCLUDED.payload_json,
-                    created_at = timezone('utc', now())
                 """,
                 (
                     notification_id,
                     tenant_id,
                     user_id,
-                    str(message or "").strip() or "-",
-                    str(category or "info").strip() or "info",
-                    str(dedupe_key or "").strip() or None,
-                    _normalize_json_payload(payload),
+                    normalized_message,
+                    normalized_category,
+                    normalized_dedupe_key,
+                    normalized_payload,
                 ),
             )
         return notification_id

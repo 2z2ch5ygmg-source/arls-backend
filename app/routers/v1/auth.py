@@ -69,7 +69,6 @@ def _build_auth_user(
         role=role,
         employee_id=user.get("employee_id"),
         employee_code=user.get("employee_code"),
-        must_change_password=bool(user.get("must_change_password", False)),
         is_master=is_master if is_master else None,
         tenant_scope="ALL" if is_master else None,
     )
@@ -125,7 +124,6 @@ def _find_tenant_user_by_password(
         """
         SELECT au.id, au.tenant_id, au.username, au.full_name, au.role, au.password_hash,
                au.employee_id, e.employee_code,
-               COALESCE(au.must_change_password, FALSE) AS must_change_password,
                COALESCE(au.is_deleted, FALSE) AS is_deleted
         FROM arls_users au
         LEFT JOIN employees e ON e.id = au.employee_id
@@ -163,7 +161,6 @@ def handle_master_login(payload: LoginRequest, conn):
         """
         SELECT au.id, au.tenant_id, au.username, au.full_name, au.role, au.password_hash,
                au.employee_id, e.employee_code, t.tenant_code,
-               COALESCE(au.must_change_password, FALSE) AS must_change_password,
                COALESCE((to_jsonb(au)->>'is_super_admin')::boolean, FALSE) AS is_super_admin
         FROM arls_users au
         JOIN tenants t ON t.id = au.tenant_id
@@ -187,7 +184,6 @@ def handle_master_login(payload: LoginRequest, conn):
             """
             SELECT au.id, au.tenant_id, au.username, au.full_name, au.role, au.password_hash,
                    au.employee_id, e.employee_code, t.tenant_code,
-                   COALESCE(au.must_change_password, FALSE) AS must_change_password,
                    COALESCE((to_jsonb(au)->>'is_super_admin')::boolean, FALSE) AS is_super_admin
             FROM arls_users au
             JOIN tenants t ON t.id = au.tenant_id
@@ -214,7 +210,6 @@ def handle_master_login(payload: LoginRequest, conn):
             """
             SELECT au.id, au.tenant_id, au.username, au.full_name, au.role, au.password_hash,
                    au.employee_id, e.employee_code, t.tenant_code,
-                   COALESCE(au.must_change_password, FALSE) AS must_change_password,
                    COALESCE((to_jsonb(au)->>'is_super_admin')::boolean, FALSE) AS is_super_admin
             FROM arls_users au
             JOIN tenants t ON t.id = au.tenant_id
@@ -339,7 +334,6 @@ def refresh(payload: RefreshTokenRequest, conn=Depends(get_db_conn)):
         conn,
         """
         SELECT au.id, au.tenant_id, au.username, au.full_name, au.role, au.employee_id, au.is_active,
-               COALESCE(au.must_change_password, FALSE) AS must_change_password,
                e.employee_code, t.tenant_code, COALESCE(t.is_active, TRUE) AS tenant_is_active,
                COALESCE(t.is_deleted, FALSE) AS tenant_is_deleted
         FROM arls_users au
@@ -414,7 +408,6 @@ def me(user=Depends(get_current_user)):
         role=normalize_user_role(user["role"]),
         employee_id=user.get("employee_id"),
         employee_code=user.get("employee_code"),
-        must_change_password=bool(user.get("must_change_password", False)),
         is_master=is_master,
         tenant_scope="ALL" if is_master else None,
     )

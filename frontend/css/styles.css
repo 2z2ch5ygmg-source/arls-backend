@@ -5902,6 +5902,9 @@ button:disabled,
   background: var(--bg-surface-elevated);
   padding: var(--space-12);
   overflow: auto;
+  min-height: 300px;
+  max-height: clamp(320px, 56dvh, 640px);
+  overscroll-behavior: contain;
 }
 
 .schedule-upload-workspace {
@@ -5910,26 +5913,28 @@ button:disabled,
   border-radius: 20px;
   background: var(--ui-bg-surface);
   box-shadow: var(--shadow-card);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .schedule-upload-wizard-layout {
   display: grid;
   grid-template-columns: 224px minmax(0, 1fr);
-  min-height: 560px;
+  min-height: 0;
+  align-items: start;
 }
 
 .schedule-upload-step-rail {
-  padding: 28px 0 20px;
+  padding: 32px 0 28px;
   background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
   border-right: 1px solid rgba(226, 232, 240, 0.92);
 }
 
 .schedule-upload-main-canvas {
   min-width: 0;
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  align-content: start;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .schedule-upload-header {
@@ -6093,8 +6098,8 @@ button:disabled,
 .schedule-excel-workflow-section {
   scroll-margin-top: 28px;
   display: grid;
-  gap: 12px;
-  padding: 12px 28px 18px;
+  gap: 14px;
+  padding: 14px 28px 24px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -6114,29 +6119,31 @@ button:disabled,
 .schedule-wizard-progress {
   display: grid;
   position: relative;
-  gap: 18px;
+  gap: 28px;
   border: 0;
 }
 
 .schedule-wizard-progress::before {
   content: '';
   position: absolute;
-  left: 63px;
-  top: 14px;
-  bottom: 14px;
+  left: 65px;
+  top: 18px;
+  bottom: 18px;
   width: 1px;
   background: rgba(203, 213, 225, 0.88);
+  z-index: 0;
 }
 
 .schedule-wizard-step {
   position: relative;
   display: inline-flex;
+  isolation: isolate;
   width: 100%;
   align-items: center;
   justify-content: flex-start;
-  min-height: 54px;
+  min-height: 68px;
   min-width: 0;
-  padding: 0 32px 0 98px;
+  padding: 0 24px 0 112px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -6156,16 +6163,18 @@ button:disabled,
   left: 48px;
   top: 50%;
   transform: translateY(-50%);
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   border: 1.5px solid rgba(203, 213, 225, 0.94);
   border-radius: 999px;
   background: #fff;
+  box-shadow: 0 0 0 10px #fff;
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
+  z-index: 1;
 }
 
 .schedule-wizard-step:hover,
@@ -6497,20 +6506,21 @@ button:disabled,
 .schedule-upload-analysis-top {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  gap: 10px;
   align-items: start;
 }
 
 .schedule-upload-summary-strip {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .schedule-upload-summary-card {
   display: grid;
   gap: 4px;
-  padding: 12px;
+  min-height: 72px;
+  padding: 12px 14px;
 }
 
 .schedule-upload-file-state {
@@ -6525,26 +6535,62 @@ button:disabled,
 
 .schedule-upload-issues-panel {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .schedule-upload-issue-groups {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 4px 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-14);
+  background: var(--bg-surface-elevated);
+  max-height: 320px;
+  overflow: auto;
 }
 
 .schedule-upload-issue-card {
   display: grid;
-  gap: 8px;
-  padding: 12px;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.88);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.schedule-upload-issue-card:last-child {
+  border-bottom: 0;
 }
 
 .schedule-upload-issue-card-head {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  align-items: center;
+  align-items: flex-start;
+}
+
+.schedule-upload-issue-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.schedule-upload-issue-copy p,
+.schedule-upload-issue-examples {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.schedule-upload-issue-copy p {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .schedule-upload-issue-card p,
@@ -6553,16 +6599,34 @@ button:disabled,
 }
 
 .schedule-upload-tech-details {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-12);
-  background: var(--bg-surface-muted);
-  padding: 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .schedule-upload-tech-details summary {
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--bg-surface-muted);
   color: var(--text-secondary);
   font-weight: 600;
+}
+
+.schedule-upload-tech-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-12);
+  background: var(--bg-surface-muted);
 }
 
 .schedule-upload-owner-tab-hq {
@@ -6796,8 +6860,7 @@ button:disabled,
 }
 
 .schedule-upload-apply-bar {
-  position: sticky;
-  bottom: 0;
+  position: static;
   display: flex;
   justify-content: space-between;
   gap: 16px;
@@ -6805,15 +6868,15 @@ button:disabled,
   border: 1px solid rgba(249, 115, 22, 0.14);
   border-radius: var(--radius-16);
   background: rgba(255, 250, 245, 0.98);
-  padding: 14px 16px;
-  box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.04);
-  backdrop-filter: blur(8px);
-  z-index: 3;
+  padding: 10px 14px;
+  box-shadow: none;
+  backdrop-filter: none;
+  z-index: auto;
 }
 
 .schedule-upload-apply-state {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .schedule-upload-apply-actions {
@@ -7044,6 +7107,10 @@ button:disabled,
   .schedule-upload-context-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .schedule-upload-tech-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 860px) {
@@ -7066,7 +7133,7 @@ button:disabled,
   }
 
   .schedule-wizard-step {
-    min-height: 44px;
+    min-height: 48px;
     padding: 0 0 0 44px;
     font-size: 14px;
   }
@@ -10915,14 +10982,21 @@ a:hover {
 
 .hr-doc-card {
   display: grid;
-  gap: 4px;
-  align-content: start;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
   text-align: left;
   border: 1px solid var(--ui-border-subtle);
   border-radius: var(--ui-radius-lg);
   background: var(--ui-bg-surface);
   padding: 12px;
   color: var(--ui-text-primary);
+}
+
+.hr-doc-card-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
 .hr-doc-card strong {
@@ -10935,16 +11009,48 @@ a:hover {
   color: var(--ui-text-secondary);
 }
 
+.hr-doc-card-side {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.hr-doc-card-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: var(--ui-text-12);
+  line-height: 18px;
+  font-weight: var(--ui-fw-semibold);
+  white-space: nowrap;
+}
+
+.hr-doc-card-state.is-live {
+  color: var(--ui-accent);
+  background: var(--ui-accent-weak);
+}
+
+.hr-doc-card-state.is-planned {
+  color: var(--ui-text-secondary);
+  background: var(--ui-bg-surface-muted);
+}
+
 .hr-doc-card.active {
   border-color: rgba(255, 107, 0, 0.45);
   background: var(--ui-accent-weak);
 }
 
-.hr-doc-card.hr-doc-card-disabled,
-.hr-doc-card[disabled] {
-  cursor: default;
-  opacity: 0.8;
-  pointer-events: none;
+.hr-doc-card.is-planned {
+  border-style: dashed;
+}
+
+.hr-doc-card:hover,
+.hr-doc-card:focus-visible {
+  border-color: rgba(255, 107, 0, 0.28);
+  background: rgba(255, 107, 0, 0.03);
 }
 
 .hr-purpose-group {
@@ -14445,6 +14551,37 @@ textarea::placeholder {
   background: transparent;
 }
 
+.workspace-tabs-azure-icons .workspace-tab,
+.workspace-tabs-azure-icons .approval-tab {
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.workspace-tab-with-icon .workspace-tab-azure-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  color: currentColor;
+  opacity: 0.92;
+  transform: translateY(-0.5px);
+}
+
+.workspace-tab-with-icon .workspace-tab-azure-icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.workspace-tab-with-icon .workspace-tab-label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
+}
+
 .workspace-tab[aria-disabled='true'],
 .workspace-tab:disabled {
   color: var(--ui-text-muted);
@@ -15681,6 +15818,81 @@ textarea::placeholder {
   font-size: var(--ui-type-body-md-size);
   line-height: var(--ui-type-body-md-line);
   word-break: break-word;
+}
+
+#view-profile .profile-mail-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+#view-profile .profile-mail-summary-card {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+
+#view-profile .profile-mail-summary-card span {
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-type-label-sm-size);
+  line-height: var(--ui-type-label-sm-line);
+}
+
+#view-profile .profile-mail-summary-card strong {
+  font-size: var(--ui-type-body-md-size);
+  line-height: var(--ui-type-body-md-line);
+}
+
+#view-profile .profile-mail-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+#view-profile .profile-mail-list {
+  display: grid;
+  gap: 6px;
+}
+
+#view-profile .profile-mail-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+#view-profile .profile-mail-row:last-child {
+  border-bottom: 0;
+}
+
+#view-profile .profile-mail-row-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+#view-profile .profile-mail-row-main strong {
+  font-size: var(--ui-type-body-md-size);
+  line-height: var(--ui-type-body-md-line);
+}
+
+#view-profile .profile-mail-row-main span {
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-type-label-sm-size);
+  line-height: var(--ui-type-label-sm-line);
+  word-break: break-word;
+}
+
+#view-profile .profile-mail-row-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 #view-profile .profile-settings-rail {
@@ -36371,6 +36583,15 @@ body.calendar-public-shell #view-calendar-public {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  #view-profile .profile-groupware-rollout-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #view-profile .profile-groupware-rollout-summary,
+  #view-profile .profile-groupware-rollout-form .btn {
+    grid-column: span 2;
+  }
+
   #view-profile .profile-fact,
   #view-profile .profile-settings-rail-item {
     padding-left: 0;
@@ -36768,16 +36989,14 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #shell[data-shell-mode='manager'] #view-profile .profile-settings-rail-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
   align-items: start !important;
   gap: 0 !important;
   padding: 0 0 8px !important;
   border: 0 !important;
 }
 
-#shell[data-shell-mode='manager'] #view-profile .profile-settings-rail-item:nth-child(3),
-#shell[data-shell-mode='manager'] #view-profile .profile-settings-rail-item:nth-child(4),
-#shell[data-shell-mode='manager'] #view-profile .profile-settings-rail-item:nth-child(5) {
+#shell[data-shell-mode='manager'] #view-profile .profile-settings-rail-item.profile-settings-rail-item-optional {
   display: none !important;
 }
 
@@ -36813,6 +37032,22 @@ body.calendar-public-shell #view-calendar-public {
   display: none !important;
 }
 
+#view-profile .profile-groupware-rollout-form {
+  display: grid;
+  grid-template-columns: 140px 180px 140px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin: 0 0 12px;
+}
+
+#view-profile .profile-groupware-rollout-summary {
+  min-width: 0;
+}
+
+#view-profile .profile-groupware-rollout-form .btn {
+  min-width: 112px;
+}
+
 #shell[data-shell-mode='manager'] #view-profile .profile-settings-rail-actions.shell-manager-only {
   display: flex !important;
   justify-content: flex-end !important;
@@ -36834,6 +37069,28 @@ body.calendar-public-shell #view-calendar-public {
 #shell[data-shell-mode='manager'] #view-profile #googleSheetProfileCard {
   gap: 12px !important;
   padding: 16px 18px !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #groupwareOpsCard {
+  gap: 12px !important;
+  padding: 16px 18px !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #groupwareOpsCard .profile-control-head {
+  align-items: center !important;
+  padding-bottom: 6px !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #groupwareOpsCard .settings-form-group {
+  gap: 8px !important;
+  padding-top: 10px !important;
+}
+
+#shell[data-shell-mode='manager'] #view-profile #groupwareOpsCard .profile-mail-list .requests-inline-empty {
+  min-height: 64px !important;
+  padding: 14px 12px !important;
+  border-style: dashed !important;
 }
 
 #shell[data-shell-mode='manager'] #view-profile #integrationFlagsCard .profile-control-head,
@@ -37115,4 +37372,675 @@ body.calendar-public-shell #view-calendar-public {
 #attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-empty,
 #attendanceManagerWorkspace.is-attendance-v2-list .attendance-v2-empty-cell {
   padding: 16px 0 !important;
+}
+.messenger-toolbar-row {
+  align-items: end;
+  gap: 14px;
+}
+
+.messenger-toolbar-actions {
+  margin-left: auto;
+  min-width: 0;
+}
+
+.messenger-toolbar-search {
+  min-width: 300px;
+}
+
+.messenger-create-panel {
+  margin-top: 12px;
+  padding: 18px 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  background: #fff;
+}
+
+.messenger-create-head,
+.messenger-pane-head,
+.messenger-thread-head,
+.messenger-composer-actions,
+.messenger-conversation-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.messenger-create-head {
+  margin-bottom: 16px;
+}
+
+.messenger-create-title h3 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.messenger-create-title p,
+.messenger-pane-head p,
+.messenger-thread-title p {
+  margin: 6px 0 0;
+}
+
+.messenger-create-grid,
+.messenger-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.messenger-create-grid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.9fr);
+}
+
+.messenger-create-fields,
+.messenger-member-panel,
+.messenger-list-panel,
+.messenger-thread-panel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.messenger-create-type-tabs,
+.messenger-type-tabs {
+  flex-wrap: wrap;
+}
+
+.messenger-create-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.messenger-member-panel,
+.messenger-list-panel,
+.messenger-thread-panel {
+  padding: 18px 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  background: #fff;
+}
+
+.messenger-pane-meta {
+  color: var(--ui-text-muted, #667085);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.messenger-member-list,
+.messenger-conversation-list,
+.messenger-message-list,
+.messenger-search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.messenger-member-list,
+.messenger-conversation-list,
+.messenger-message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.messenger-member-button,
+.messenger-search-result,
+.messenger-conversation-row {
+  width: 100%;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  background: #fff;
+  text-align: left;
+}
+
+.messenger-member-button,
+.messenger-conversation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+}
+
+.messenger-member-row.is-selected .messenger-member-button,
+.messenger-conversation-row.active {
+  border-color: rgba(242, 109, 0, 0.28);
+  background: rgba(242, 109, 0, 0.05);
+}
+
+.messenger-member-main,
+.messenger-conversation-main,
+.messenger-thread-title {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.messenger-member-main strong,
+.messenger-conversation-title,
+.messenger-thread-title strong {
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.messenger-member-account,
+.messenger-conversation-meta,
+.messenger-search-result-meta,
+.messenger-message-meta,
+.messenger-thread-meta {
+  color: var(--ui-text-muted, #667085);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.messenger-member-check,
+.messenger-unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.messenger-conversation-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.messenger-conversation-updated {
+  color: var(--ui-text-muted, #667085);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.messenger-shell {
+  grid-template-columns: minmax(320px, 0.92fr) minmax(0, 1.55fr);
+  align-items: stretch;
+}
+
+.messenger-list-panel,
+.messenger-thread-panel {
+  min-height: 640px;
+}
+
+.messenger-thread-panel {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(280px, 1fr) auto;
+  gap: 14px;
+}
+
+.messenger-thread-search-field {
+  max-width: 340px;
+}
+
+.messenger-search-results {
+  gap: 8px;
+}
+
+.messenger-search-result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.messenger-search-result strong,
+.messenger-search-result span {
+  min-width: 0;
+}
+
+.messenger-search-result span:not(.messenger-search-result-meta) {
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.messenger-message-list {
+  padding-right: 2px;
+  overflow: auto;
+}
+
+.messenger-message-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.messenger-message-row.is-mine {
+  justify-content: flex-end;
+}
+
+.messenger-message-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: min(720px, 78%);
+}
+
+.messenger-message-row.is-mine .messenger-message-stack {
+  align-items: flex-end;
+}
+
+.messenger-message-bubble {
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.messenger-message-row.is-mine .messenger-message-bubble {
+  background: rgba(242, 109, 0, 0.08);
+  border-color: rgba(242, 109, 0, 0.18);
+}
+
+.messenger-message-row.is-highlighted .messenger-message-bubble {
+  box-shadow: 0 0 0 2px rgba(242, 109, 0, 0.12);
+}
+
+.messenger-message-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.messenger-reaction-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #fff;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.messenger-reaction-chip.is-active {
+  border-color: rgba(242, 109, 0, 0.24);
+  background: rgba(242, 109, 0, 0.08);
+  color: #b45309;
+}
+
+.messenger-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.messenger-composer-field textarea {
+  min-height: 92px;
+}
+
+.messenger-create-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.messenger-thread-side {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.messenger-thread-meta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.05);
+}
+
+@media (max-width: 1180px) {
+  .messenger-create-grid,
+  .messenger-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .messenger-list-panel,
+  .messenger-thread-panel {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .messenger-create-field-grid,
+  .messenger-toolbar-row {
+    grid-template-columns: minmax(0, 1fr);
+    display: grid;
+  }
+
+  .messenger-toolbar-actions,
+  .messenger-toolbar-search,
+  .messenger-thread-search-field {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .messenger-create-actions,
+  .messenger-composer-actions,
+  .messenger-thread-head,
+  .messenger-pane-head,
+  .messenger-create-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .messenger-message-stack {
+    max-width: 100%;
+  }
+}
+
+.meetings-workspace-head,
+.meetings-toolbar-row,
+.meetings-create-head,
+.meetings-pane-head,
+.meetings-detail-head,
+.meetings-action-bar,
+.meetings-create-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.meetings-toolbar-row,
+.meetings-create-panel,
+.meetings-list-panel,
+.meetings-detail-panel,
+.meetings-detail-block {
+  border: 1px solid var(--line-color);
+  border-radius: 18px;
+  padding: 18px 20px;
+}
+
+.meetings-toolbar-row,
+.meetings-detail-panel,
+.meetings-list-panel,
+.meetings-create-panel {
+  background: var(--surface-elevated);
+}
+
+.meetings-toolbar-actions,
+.meetings-toolbar-search,
+.meetings-rollout-inline,
+.meetings-chat-link-actions,
+.meetings-participant-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.meetings-toolbar-search {
+  min-width: 260px;
+}
+
+.meetings-rollout-inline {
+  align-items: center;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.meetings-rollout-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.meetings-create-panel,
+.meetings-list-panel,
+.meetings-detail-panel {
+  box-shadow: none;
+}
+
+.meetings-create-grid,
+.meetings-shell,
+.meetings-detail-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.meetings-create-grid,
+.meetings-detail-grid {
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+}
+
+.meetings-shell {
+  grid-template-columns: minmax(320px, 0.82fr) minmax(0, 1.18fr);
+}
+
+.meetings-create-fields,
+.meetings-member-panel,
+.meetings-list-panel,
+.meetings-detail-panel,
+.meetings-detail-block {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.meetings-chat-link-actions {
+  align-items: flex-end;
+}
+
+.meetings-chat-link-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.meetings-participant-actions {
+  align-items: flex-end;
+}
+
+.meetings-participant-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.meetings-create-field-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.meetings-member-list,
+.meetings-room-list,
+.meetings-participants-list,
+.meetings-chat-links-list,
+.meetings-sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+.meetings-member-button,
+.meetings-room-row,
+.meetings-linked-chat-button {
+  align-items: center;
+  background: var(--surface-base);
+  border: 1px solid var(--line-color);
+  border-radius: 16px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 14px 16px;
+  text-align: left;
+  width: 100%;
+}
+
+.meetings-member-button,
+.meetings-room-row {
+  cursor: pointer;
+}
+
+.meetings-member-row.is-selected .meetings-member-button,
+.meetings-room-row.active {
+  border-color: color-mix(in srgb, var(--brand-strong) 22%, var(--line-color));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-strong) 26%, transparent);
+}
+
+.meetings-member-main,
+.meetings-room-main,
+.meetings-detail-main,
+.meetings-detail-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.meetings-member-main strong,
+.meetings-room-title,
+.meetings-detail-main strong,
+.meetings-detail-title strong {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.meetings-member-account,
+.meetings-room-meta,
+.meetings-summary-label,
+.meetings-detail-main span,
+.meetings-detail-link {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.meetings-member-check {
+  color: var(--brand-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.meetings-room-title-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.meetings-room-updated {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.meetings-room-side,
+.meetings-detail-side,
+.meetings-detail-side-pill {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.meetings-detail-summary {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.meetings-summary-card {
+  background: var(--surface-muted);
+  border: 1px solid var(--line-color);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 84px;
+  padding: 14px 16px;
+}
+
+.meetings-summary-value {
+  color: var(--text-primary);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.meetings-action-bar {
+  border-top: 1px solid var(--line-color);
+  justify-content: flex-start;
+  margin-top: 6px;
+  padding-top: 14px;
+}
+
+.meetings-quick-events {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.meetings-quick-events.hidden {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .meetings-create-grid,
+  .meetings-shell,
+  .meetings-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .meetings-toolbar-row,
+  .meetings-create-head,
+  .meetings-pane-head,
+  .meetings-detail-head,
+  .meetings-create-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .meetings-create-field-grid,
+  .meetings-detail-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .meetings-toolbar-search,
+  .meetings-toolbar-actions,
+  .meetings-chat-link-actions,
+  .meetings-participant-actions {
+    width: 100%;
+  }
+
+  .meetings-chat-link-actions,
+  .meetings-participant-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }

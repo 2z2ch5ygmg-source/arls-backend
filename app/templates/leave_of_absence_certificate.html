@@ -3,16 +3,6 @@
 <head>
   <meta charset="utf-8" />
   <title>{{certificate_title}}</title>
-  <style>
-    body { font-family: sans-serif; font-size: 11px; color: #111827; }
-    .title { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 12px; letter-spacing: 1px; }
-    .section-title { font-size: 12px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-    td { border: 1px solid #b8c0cc; padding: 6px 8px; vertical-align: top; }
-    .label { width: 18%; background: #f3f4f6; font-weight: 700; }
-    .content { margin-top: 10px; margin-bottom: 10px; line-height: 1.8; text-align: center; }
-    .issued-at { margin-top: 18px; text-align: center; line-height: 1.8; }
-  </style>
 </head>
 <body>
   <div class="title">{{certificate_title}}</div>
@@ -29,19 +19,17 @@
     <tr><td class="label">주민등록번호</td><td>{{resident_no_masked}}</td><td class="label">입사일</td><td>{{hire_date}}</td></tr>
   </table>
 
-  <div class="section-title">재직 및 회사 정보</div>
+  <div class="section-title">휴직 및 회사 정보</div>
   <table>
     <tr><td class="label">회사명</td><td>{{company_name}}</td><td class="label">사업자등록번호</td><td>{{biz_reg_no}}</td></tr>
     <tr><td class="label">대표자명</td><td>{{ceo_name}}</td><td class="label">대표전화</td><td>{{company_phone}}</td></tr>
     <tr><td class="label">소재지</td><td>{{company_address}}</td><td class="label">재직기간</td><td>{{employment_period}}</td></tr>
+    <tr><td class="label">휴직 시작일</td><td>{{loa_start_date}}</td><td class="label">휴직 종료일</td><td>{{loa_end_date}}</td></tr>
+    <tr><td class="label">복귀예정일</td><td>{{return_due_date}}</td><td class="label">발급용도</td><td>{{purpose_label}}</td></tr>
+    <tr><td class="label">제출처</td><td>{{submit_to}}</td><td class="label">문서구분</td><td>{{certificate_title}}</td></tr>
   </table>
 
-  <div class="section-title">발급 정보</div>
-  <table>
-    <tr><td class="label">제출처</td><td>{{submit_to}}</td><td class="label">발급용도</td><td>{{purpose_label}}</td></tr>
-  </table>
-
-  <div class="content">위와 같이 재직 사실을 증명합니다.</div>
+  <div class="content">위와 같이 휴직 사실을 증명합니다.</div>
 
   <div class="issued-at">
     {{issue_date_long}}<br/>

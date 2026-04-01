@@ -337,6 +337,7 @@ const OPS_SUMMARY_CACHE_TTL_MS = 45000;
 const INTEGRATION_CACHE_TTL_FLAGS_MS = 120000;
 const INTEGRATION_CACHE_TTL_SOC_EVENTS_MS = 30000;
 const INTEGRATION_CACHE_TTL_SHEET_LOGS_MS = 45000;
+const INTEGRATION_CACHE_TTL_GROUPWARE_MS = 30000;
 const REMINDER_LOOKAHEAD_DAYS = 7;
 const REMINDER_ALLOWED_MINUTES = [10, 30, 60];
 const REMINDER_DEFAULT_MINUTES = 30;
@@ -375,6 +376,8 @@ const ROUTE_CALENDAR_PUBLIC_BOOKING = '/calendar/public-booking';
 const ROUTE_REQUESTS = '/requests';
 const ROUTE_HR = '/hr';
 const ROUTE_PROFILE = '/profile';
+const ROUTE_MESSENGER = '/messenger';
+const ROUTE_MEETINGS = '/meetings';
 const ROUTE_APPROVALS = '/branch/approvals';
 const ROUTE_REQUESTS_CORRECTION = '/requests/correction';
 const ROUTE_ADMIN_SITES = '/branch/sites';
@@ -383,18 +386,13 @@ const ROUTE_ADMIN_SITES_NEW = '/branch/sites/new';
 const ROUTE_ADMIN_EMPLOYEES = '/branch/employees';
 const ROUTE_ADMIN_EMPLOYEES_IMPORT = '/branch/employees/import';
 const ROUTE_ADMIN_EMPLOYEES_NEW = '/branch/employees/new';
-// TEMP(runtime-verification): keep the initial password-change state intact, but
-// narrowly bypass the forced profile gate for ARLS Supervisor evidence capture.
-// TODO: disable/revert after runtime verification is complete.
-const TEMP_RUNTIME_TEST_INITIAL_PASSWORD_GATE_BYPASS = {
-  enabled: false,
-  roles: new Set(['supervisor']),
-  tenantCodes: new Set(['SRS_KOREA']),
-};
 const EMPLOYEE_REG_MODE_MANUAL = 'manual';
 const EMPLOYEE_REG_MODE_IMPORT = 'import';
 const HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE = 'employment_certificate';
-const HR_EMPLOYMENT_DAILY_LIMIT = 3;
+const HR_DOC_TYPE_CAREER_CERTIFICATE = 'career_certificate';
+const HR_DOC_TYPE_RETIREMENT_CERTIFICATE = 'retirement_certificate';
+const HR_DOC_TYPE_LEAVE_OF_ABSENCE_CERTIFICATE = 'leave_of_absence_certificate';
+const HR_EMPLOYMENT_DAILY_LIMIT = 4;
 const HR_DATA_CACHE_TTL_MS = 30000;
 const HR_PURPOSE_CODES = new Set(['BANK', 'GOV', 'CARD', 'OTHER']);
 const HR_PURPOSE_LABELS = Object.freeze({
@@ -410,6 +408,54 @@ const HR_REQUEST_STATUS_LABELS = Object.freeze({
   rejected: '반려',
   failed: '발급실패',
 });
+const HR_CERTIFICATE_TYPE_FALLBACK_ROWS = Object.freeze([
+  {
+    type_key: HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE,
+    display_name: '재직증명서',
+    requires_approval: false,
+    auto_mail_enabled: false,
+    available: true,
+    meta_json: { legacy_document_type: 'employment_certificate', rollout: 'live' },
+  },
+  {
+    type_key: HR_DOC_TYPE_CAREER_CERTIFICATE,
+    display_name: '경력증명서',
+    requires_approval: false,
+    auto_mail_enabled: false,
+    available: true,
+    meta_json: { rollout: 'live' },
+  },
+  {
+    type_key: HR_DOC_TYPE_RETIREMENT_CERTIFICATE,
+    display_name: '퇴직증명서',
+    requires_approval: true,
+    auto_mail_enabled: false,
+    available: true,
+    meta_json: { rollout: 'live' },
+  },
+  {
+    type_key: HR_DOC_TYPE_LEAVE_OF_ABSENCE_CERTIFICATE,
+    display_name: '휴직증명서',
+    requires_approval: true,
+    auto_mail_enabled: false,
+    available: true,
+    meta_json: { rollout: 'live' },
+  },
+  {
+    type_key: 'payroll_statement',
+    display_name: '급여확인서',
+    requires_approval: true,
+    auto_mail_enabled: false,
+    meta_json: { rollout: 'planned' },
+  },
+  {
+    type_key: 'tax_withholding_statement',
+    display_name: '원천징수 관련 서류',
+    requires_approval: true,
+    auto_mail_enabled: false,
+    meta_json: { rollout: 'planned' },
+  },
+]);
 const ROUTE_ADMIN_SCHEDULE_TOOLS = '/branch/schedule-tools';
 const ROUTE_ADMIN_REPORTS_LOCK = '/branch/reports-lock';
 const ROUTE_MASTER = '/master';
@@ -809,6 +855,8 @@ function createInitialLeaveViewState() {
     managerScope: 'mine',
     rows: [],
     rowMap: new Map(),
+    balanceSummary: null,
+    policyRows: [],
     updatedAt: '',
     workspaceSection: 'requests',
     workspaceStartDate: toLocalDateKey(monthStart),
@@ -836,6 +884,8 @@ function createInitialRequestsWorkspaceState() {
     leaveDetailId: '',
     managerDetailKey: '',
     managerSocItemsById: new Map(),
+    approvalDetailById: new Map(),
+    approvalDetailLoadingKey: '',
     detailKey: '',
     drawerOpen: false,
     rowsById: new Map(),
@@ -1153,6 +1203,18 @@ function createInitialIntegrationState() {
     sheetLogs: [],
     sheetLogsFetchedAt: 0,
     sheetLogsProfileId: '',
+    mailAccounts: [],
+    mailProfiles: [],
+    mailTemplates: [],
+    mailJobs: [],
+    mailFetchedAt: 0,
+    groupwareFoundation: null,
+    groupwareCompatibility: null,
+    groupwareRollout: null,
+    groupwareFoundationError: '',
+    groupwareCompatibilityError: '',
+    groupwareRolloutError: '',
+    groupwareFetchedAt: 0,
   };
 }
 
@@ -1309,10 +1371,16 @@ function createInitialHrDocumentsState() {
     workspaceSegment: 'apply',
     purposeCode: 'BANK',
     purposeText: '',
+    submitTo: '',
+    copyCount: 1,
+    includeAddress: false,
+    includePhone: false,
     submitting: false,
-    dailyLimit: 3,
+    dailyLimit: HR_EMPLOYMENT_DAILY_LIMIT,
     todayRequestedCount: 0,
-    todayRemaining: 3,
+    todayRemaining: HR_EMPLOYMENT_DAILY_LIMIT,
+    typeRows: [],
+    typeRowsFetchedAt: 0,
     myRows: [],
     myRowsFetchedAt: 0,
     myRowsPage: 1,
@@ -1323,9 +1391,12 @@ function createInitialHrDocumentsState() {
     adminRowsFetchedAt: 0,
     adminRowsPage: 1,
     adminRowsPageSize: 30,
+    issueJobs: [],
+    issueJobsFetchedAt: 0,
     templatesRows: [],
     templatesFetchedAt: 0,
     templateUploading: false,
+    loadingTemplates: false,
     loadingMyRows: false,
     loadingAdminRows: false,
   };
@@ -1337,6 +1408,77 @@ function createInitialProfileViewState() {
     settingsTab: 'links',
     logsTarget: 'all',
     logsSelectedKey: '',
+  };
+}
+
+function createInitialMessengerState() {
+  return {
+    rows: [],
+    fetchedAt: 0,
+    detailById: {},
+    messagesByConversationId: {},
+    selectedConversationId: '',
+    loading: false,
+    detailLoading: false,
+    searchLoading: false,
+    directoryLoading: false,
+    sending: false,
+    searchResults: [],
+    searchQuery: '',
+    messageSearchQuery: '',
+    typeFilter: 'all',
+    composerBody: '',
+    createOpen: false,
+    createType: 'group',
+    createTitle: '',
+    createDescription: '',
+    createRoomKey: '',
+    createScopeType: 'tenant',
+    createSearch: '',
+    createMemberUserIds: [],
+    directoryRows: [],
+    directoryError: '',
+    error: '',
+    searchError: '',
+    presenceSessionKey: '',
+  };
+}
+
+function createInitialMeetingsState() {
+  return {
+    rows: [],
+    detailById: {},
+    rollout: null,
+    selectedRoomId: '',
+    loading: false,
+    detailLoading: false,
+    rolloutLoading: false,
+    directoryLoading: false,
+    saving: false,
+    searchQuery: '',
+    stateFilter: 'all',
+    createOpen: false,
+    createTitle: '',
+    createScheduledFor: '',
+    createSearch: '',
+    createLinkedConversationId: '',
+    createParticipantUserIds: [],
+    directoryRows: [],
+    directoryQuery: '',
+    directoryError: '',
+    conversationRows: [],
+    conversationFetchedAt: 0,
+    conversationLoading: false,
+    conversationError: '',
+    linkConversationId: '',
+    linkStatusMessage: '',
+    linkStatusLevel: 'info',
+    participantUserId: '',
+    participantStatusMessage: '',
+    participantStatusLevel: 'info',
+    error: '',
+    createStatusMessage: '',
+    createStatusLevel: 'info',
   };
 }
 
@@ -1621,6 +1763,8 @@ const state = {
   reports: createInitialReportsState(),
   hrDocs: createInitialHrDocumentsState(),
   profile: createInitialProfileViewState(),
+  messenger: createInitialMessengerState(),
+  meetings: createInitialMeetingsState(),
   notices: createInitialNoticesState(),
   reminder: createInitialReminderState(),
   devAdmin: createInitialDevAdminState(),
@@ -3541,8 +3685,13 @@ function createRealScheduleProvider() {
       const rows = await apiRequest(`/schedules/monthly?${params.toString()}`, { noStore: force });
       return Array.isArray(rows) ? rows : [];
     },
-    async listEmployees({ search = '' } = {}) {
-      const employeesPath = appendTenantCodeQuery('/employees?limit=500', getTenantCodeForScopedAdminApi());
+    async listEmployees({ search = '', includeAccount = false } = {}) {
+      const baseParams = new URLSearchParams();
+      baseParams.set('limit', '500');
+      if (includeAccount) {
+        baseParams.set('include_account', 'true');
+      }
+      const employeesPath = appendTenantCodeQuery(`/employees?${baseParams.toString()}`, getTenantCodeForScopedAdminApi());
       const rows = await fetchPagedApiRows(employeesPath, { pageLimit: 500, maxPages: 20 });
       const list = Array.isArray(rows) ? rows : [];
       const keyword = String(search || '').trim().toLowerCase();
@@ -10995,6 +11144,8 @@ const ROLE_PERMISSIONS = {
     userManage: true,
     auditRead: true,
     crossTenant: true,
+    messenger: true,
+    meetings: true,
   },
   hq_admin: {
     employees: true,
@@ -11020,6 +11171,8 @@ const ROLE_PERMISSIONS = {
     userManage: false,
     auditRead: true,
     crossTenant: false,
+    messenger: true,
+    meetings: true,
   },
   supervisor: {
     employees: false,
@@ -11045,6 +11198,8 @@ const ROLE_PERMISSIONS = {
     userManage: false,
     auditRead: false,
     crossTenant: false,
+    messenger: true,
+    meetings: true,
   },
   vice_supervisor: {
     employees: false,
@@ -11070,6 +11225,8 @@ const ROLE_PERMISSIONS = {
     userManage: false,
     auditRead: false,
     crossTenant: false,
+    messenger: true,
+    meetings: true,
   },
   officer: {
     employees: false,
@@ -11095,6 +11252,8 @@ const ROLE_PERMISSIONS = {
     userManage: false,
     auditRead: false,
     crossTenant: false,
+    messenger: true,
+    meetings: true,
   },
 };
 
@@ -11117,6 +11276,370 @@ const DRAWER_ICON_BY_TITLE = Object.freeze({
 
 function resolveDrawerIconName(item) {
   return String(item?.icon || DRAWER_ICON_BY_TITLE[item?.title] || 'help-circle').trim();
+}
+
+const AZURE_TOPBAR_TAB_ICON_GROUPS = Object.freeze({
+  messengerTypeTabs: {
+    dataKey: 'type',
+    icons: {
+      all: 'grid',
+      dm: 'message',
+      group: 'users',
+      announcement: 'megaphone',
+    },
+  },
+  meetingsStateTabs: {
+    dataKey: 'state',
+    icons: {
+      all: 'video',
+      live: 'activity',
+      scheduled: 'calendar',
+      ended: 'check',
+    },
+  },
+  opsWorkspaceTabs: {
+    dataKey: 'tab',
+    icons: {
+      overview: 'dashboard',
+      soc: 'shield',
+      sheets: 'sync',
+    },
+  },
+  requestsWorkspaceSegments: {
+    dataKey: 'segment',
+    icons: {
+      exceptions: 'clock',
+      correction: 'edit',
+      leave: 'calendar',
+      documents: 'file',
+      approvals: 'check',
+    },
+  },
+  leaveWorkspaceTabs: {
+    dataKey: 'section',
+    icons: {
+      policy: 'shield',
+      requests: 'history',
+      usage: 'chart',
+    },
+  },
+  hrWorkspaceSegments: {
+    dataKey: 'segment',
+    icons: {
+      apply: 'file',
+      'my-docs': 'folder',
+      approvals: 'check',
+      templates: 'template',
+    },
+  },
+  supportStatusWorkspaceTabs: {
+    dataKey: 'tab',
+    icons: {
+      status: 'users',
+      hq: 'sync',
+    },
+  },
+  attendanceWorkspaceTabs: {
+    dataKey: 'tab',
+    icons: {
+      status: 'activity',
+      calendar: 'calendar',
+      list: 'list',
+    },
+  },
+  scheduleHqTabs: {
+    dataKey: 'tab',
+    icons: {
+      calendar: 'calendar',
+      upload: 'upload',
+      'hq-upload': 'users',
+      templates: 'template',
+      reports: 'chart',
+    },
+  },
+  noticesCategoryTabs: {
+    dataKey: 'category',
+    icons: {
+      all: 'megaphone',
+      system: 'settings',
+      ops: 'shield',
+      hr: 'users',
+      general: 'message',
+    },
+  },
+  calendarWorkspaceTabs: {
+    dataKey: 'tab',
+    icons: {
+      week: 'calendar',
+      month: 'grid',
+      agenda: 'list',
+      'booking-links': 'link',
+    },
+  },
+  profileWorkspaceTabs: {
+    dataKey: 'segment',
+    icons: {
+      settings: 'settings',
+      logs: 'history',
+      theme: 'theme',
+    },
+  },
+  googleSheetWorkspaceTabs: {
+    dataKey: 'tab',
+    icons: {
+      links: 'link',
+      sync: 'sync',
+    },
+  },
+  reportsWorkspaceTabs: {
+    dataKey: 'tab',
+    icons: {
+      finance: 'chart',
+      'finance-download': 'download',
+    },
+  },
+});
+
+const AZURE_TOPBAR_LABEL_ICON_FALLBACKS = Object.freeze({
+  전체: 'grid',
+  DM: 'message',
+  그룹: 'users',
+  공지방: 'megaphone',
+  진행중: 'activity',
+  예약: 'calendar',
+  종료: 'check',
+  개요: 'dashboard',
+  SOC: 'shield',
+  '사이트 동기화': 'sync',
+  '출퇴근 예외': 'clock',
+  정정: 'edit',
+  휴가: 'calendar',
+  문서: 'file',
+  승인함: 'check',
+  '휴가 유형/정책': 'shield',
+  '요청 이력': 'history',
+  '사용 현황': 'chart',
+  신청: 'file',
+  '내 문서': 'folder',
+  승인: 'check',
+  템플릿: 'template',
+  '지원근무 현황': 'users',
+  'HQ 엑셀 워크스페이스': 'sync',
+  '출퇴근 현황': 'activity',
+  달력형: 'calendar',
+  리스트형: 'list',
+  '월간 근무표': 'calendar',
+  '스케쥴 업로드': 'upload',
+  '지원근무자 업로드': 'users',
+  '근무 템플릿': 'template',
+  'Finance 제출': 'chart',
+  'Finance 다운로드': 'download',
+  '주간 보기': 'calendar',
+  '월간 보기': 'grid',
+  아젠다: 'list',
+  '예약 링크': 'link',
+  '기본 설정': 'settings',
+  '작업 로그': 'history',
+  '모드 변경': 'theme',
+  '등록된 링크': 'link',
+  '동기화 시작하기': 'sync',
+});
+
+const AZURE_TOPBAR_ICON_SELECTORS = Object.freeze([
+  '#messengerTypeTabs',
+  '#meetingsStateTabs',
+  '#opsWorkspaceTabs',
+  '#requestsWorkspaceSegments',
+  '#leaveWorkspaceTabs',
+  '#hrWorkspaceSegments',
+  '#supportStatusWorkspaceTabs',
+  '#attendanceWorkspaceTabs',
+  '#scheduleHqTabs',
+  '#noticesCategoryTabs',
+  '#calendarWorkspaceTabs',
+  '#profileWorkspaceTabs',
+  '#googleSheetWorkspaceTabs',
+  '#reportsWorkspaceTabs',
+]);
+
+function normalizeAzureTopbarLookupValue(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizeAzureTopbarLabel(value = '') {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function buildAzureTopbarIconSvg(iconKey = 'grid') {
+  const pathsByIcon = {
+    activity: `
+      <path d="M2.5 8h2.6l1.2-2.7 2 5.4 1.3-3H13.5" />
+    `,
+    calendar: `
+      <rect x="2.5" y="3.5" width="11" height="10" rx="2" />
+      <path d="M5 2.5v2.3M11 2.5v2.3M2.5 7h11" />
+    `,
+    chart: `
+      <path d="M3 13V3.5M3 13h10" />
+      <path d="M6 10V8M8.5 10V5.5M11 10V7" />
+    `,
+    check: `
+      <circle cx="8" cy="8" r="5.5" />
+      <path d="m5.6 8.1 1.6 1.6 3.3-3.3" />
+    `,
+    clock: `
+      <circle cx="8" cy="8" r="5.5" />
+      <path d="M8 4.8v3.3l2.2 1.4" />
+    `,
+    dashboard: `
+      <rect x="2.8" y="3" width="4.1" height="4.1" rx="1" />
+      <rect x="9.1" y="3" width="4.1" height="4.1" rx="1" />
+      <rect x="2.8" y="9.2" width="4.1" height="4.1" rx="1" />
+      <rect x="9.1" y="9.2" width="4.1" height="4.1" rx="1" />
+    `,
+    download: `
+      <path d="M8 3.6v6" />
+      <path d="m5.8 7.4 2.2 2.2 2.2-2.2" />
+      <path d="M3.3 11.4v1A1.6 1.6 0 0 0 4.9 14h6.2a1.6 1.6 0 0 0 1.6-1.6v-1" />
+    `,
+    edit: `
+      <path d="m4.3 11.7-.6 1.5 1.5-.6 6-6-1-1z" />
+      <path d="m9.6 4.6 1 1" />
+      <path d="M10.7 3.5 12 4.8" />
+    `,
+    file: `
+      <path d="M5 2.8h4l3 3v7.2A1.8 1.8 0 0 1 10.2 14H5.8A1.8 1.8 0 0 1 4 12.2V4.6A1.8 1.8 0 0 1 5.8 2.8z" />
+      <path d="M9 2.8v3.4h3.2" />
+    `,
+    folder: `
+      <path d="M2.8 5.3h3.3l1.1 1.3h5.9v5.6A1.8 1.8 0 0 1 11.3 14H4.7A1.8 1.8 0 0 1 2.9 12.2z" />
+    `,
+    grid: `
+      <rect x="2.8" y="3" width="4.1" height="4.1" rx="1" />
+      <rect x="9.1" y="3" width="4.1" height="4.1" rx="1" />
+      <rect x="2.8" y="9.2" width="4.1" height="4.1" rx="1" />
+      <rect x="9.1" y="9.2" width="4.1" height="4.1" rx="1" />
+    `,
+    history: `
+      <path d="M3.6 5.2V3h2.2" />
+      <path d="M3.8 4.7A5.3 5.3 0 1 1 3.1 8" />
+      <path d="M8 5.1v3l2.1 1.3" />
+    `,
+    link: `
+      <path d="M6.3 9.7 9.7 6.3" />
+      <path d="M5.1 11 4 12.1a2 2 0 0 1-2.8-2.8l1.1-1.1a2 2 0 0 1 2.8 0" />
+      <path d="M10.9 5 12 3.9a2 2 0 0 1 2.8 2.8L13.7 7.8a2 2 0 0 1-2.8 0" />
+    `,
+    list: `
+      <path d="M5.3 4.5h7M5.3 8h7M5.3 11.5h7" />
+      <circle cx="3.3" cy="4.5" r=".7" />
+      <circle cx="3.3" cy="8" r=".7" />
+      <circle cx="3.3" cy="11.5" r=".7" />
+    `,
+    megaphone: `
+      <path d="M3.5 8.6V6.1l5.6-1.9v6.3z" />
+      <path d="M9.1 4.2 12.8 3v8L9.1 10.5" />
+      <path d="M4.5 8.8 5.5 12" />
+    `,
+    message: `
+      <path d="M3.2 4.2h9.6a1.6 1.6 0 0 1 1.6 1.6v4.5a1.6 1.6 0 0 1-1.6 1.6H7.2L4 14v-2.1H3.2a1.6 1.6 0 0 1-1.6-1.6V5.8a1.6 1.6 0 0 1 1.6-1.6z" />
+    `,
+    settings: `
+      <circle cx="8" cy="8" r="2.1" />
+      <path d="M8 2.7v1.2M8 12.1v1.2M12.1 8h1.2M2.7 8h1.2M11.2 4.8l.9-.9M3.9 12.1l.9-.9M11.2 11.2l.9.9M3.9 3.9l.9.9" />
+    `,
+    shield: `
+      <path d="M8 2.5 12.2 4v3.7c0 2.5-1.5 4.3-4.2 5.5-2.7-1.2-4.2-3-4.2-5.5V4z" />
+    `,
+    sync: `
+      <path d="M12.6 5V2.9L10.5 5" />
+      <path d="M12.5 3.9A4.8 4.8 0 0 0 4 5.4" />
+      <path d="M3.4 11v2.1L5.5 11" />
+      <path d="M3.5 12.1A4.8 4.8 0 0 0 12 10.6" />
+    `,
+    template: `
+      <rect x="2.8" y="3.1" width="10.4" height="9.8" rx="1.4" />
+      <path d="M2.8 6.4h10.4M6.2 6.4v6.5" />
+    `,
+    theme: `
+      <path d="M10.9 2.9A4.9 4.9 0 1 0 11 13 5.8 5.8 0 0 1 10.9 2.9z" />
+    `,
+    upload: `
+      <path d="M8 10V4.1" />
+      <path d="m5.8 6.3 2.2-2.2 2.2 2.2" />
+      <path d="M3.3 11.4v1A1.6 1.6 0 0 0 4.9 14h6.2a1.6 1.6 0 0 0 1.6-1.6v-1" />
+    `,
+    users: `
+      <circle cx="6.2" cy="6.1" r="1.8" />
+      <circle cx="10.7" cy="6.8" r="1.4" />
+      <path d="M3.8 11.7c.4-1.4 1.6-2.3 3.1-2.3 1.5 0 2.7.9 3.1 2.3" />
+      <path d="M9.2 11.5c.3-.9 1.1-1.5 2.1-1.5 1 0 1.8.6 2.1 1.5" />
+    `,
+    video: `
+      <rect x="2.8" y="4.3" width="7.8" height="7.4" rx="1.6" />
+      <path d="m10.6 6.2 2.6-1.5v6.6l-2.6-1.5" />
+    `,
+  };
+  const paths = pathsByIcon[iconKey] || pathsByIcon.grid;
+  return `
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+      ${paths}
+    </svg>
+  `;
+}
+
+function resolveAzureTopbarIconKey(containerId = '', button = null) {
+  if (!(button instanceof HTMLElement)) return '';
+  const config = AZURE_TOPBAR_TAB_ICON_GROUPS[containerId];
+  if (config) {
+    const datasetKey = String(config.dataKey || '').trim();
+    const datasetValue = normalizeAzureTopbarLookupValue(button.dataset?.[datasetKey] || '');
+    if (datasetValue && config.icons && config.icons[datasetValue]) {
+      return config.icons[datasetValue];
+    }
+  }
+  const label = normalizeAzureTopbarLabel(button.dataset.azureTopbarLabel || button.textContent || '');
+  return AZURE_TOPBAR_LABEL_ICON_FALLBACKS[label] || '';
+}
+
+function decorateAzureTopbarButton(button, iconKey = '') {
+  if (!(button instanceof HTMLElement) || !iconKey) return;
+  const label = normalizeAzureTopbarLabel(button.dataset.azureTopbarLabel || button.textContent || '');
+  if (!label) return;
+  button.dataset.azureTopbarLabel = label;
+  if (button.dataset.azureTopbarIconKey === iconKey && button.querySelector('.workspace-tab-azure-icon') && button.querySelector('.workspace-tab-label')) {
+    return;
+  }
+  const icon = document.createElement('span');
+  icon.className = 'workspace-tab-azure-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.innerHTML = buildAzureTopbarIconSvg(iconKey);
+  const copy = document.createElement('span');
+  copy.className = 'workspace-tab-label';
+  copy.textContent = label;
+  button.classList.add('workspace-tab-with-icon');
+  button.style.justifyContent = 'flex-start';
+  button.style.gap = '8px';
+  button.replaceChildren(icon, copy);
+  button.dataset.azureTopbarIconKey = iconKey;
+}
+
+function decorateAzureTopbarTabs(root = document) {
+  const rootNode = root && typeof root.querySelectorAll === 'function' ? root : document;
+  AZURE_TOPBAR_ICON_SELECTORS.forEach((selector) => {
+    rootNode.querySelectorAll(selector).forEach((container) => {
+      if (!(container instanceof HTMLElement)) return;
+      container.classList.add('workspace-tabs-azure-icons');
+      const containerId = String(container.id || '').trim();
+      Array.from(container.children).forEach((child) => {
+        if (!(child instanceof HTMLElement)) return;
+        if (!child.matches('button.workspace-tab, button.approval-tab')) return;
+        const iconKey = resolveAzureTopbarIconKey(containerId, child);
+        if (!iconKey) return;
+        decorateAzureTopbarButton(child, iconKey);
+      });
+    });
+  });
 }
 
 function applyDrawerLucideIcons() {
@@ -11269,6 +11792,9 @@ const DRAWER_MENU_BY_ROLE = {
         { id: 'calendar-booking', title: '예약 링크', action: 'drawer-open-route', route: ROUTE_CALENDAR_BOOKING_LINKS, calendarSectionMatch: 'booking-links' },
       ],
     },
+    { type: 'section', title: '협업' },
+    { id: 'messenger', title: '메신저', action: 'drawer-open-route', route: ROUTE_MESSENGER, icon: 'message-square' },
+    { id: 'meetings', title: '화상대화', action: 'drawer-open-route', route: ROUTE_MEETINGS, icon: 'video' },
     { type: 'section', title: '공지' },
     { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
     { type: 'section', title: '개인' },
@@ -11338,9 +11864,12 @@ const DRAWER_MENU_BY_ROLE = {
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
         { id: 'reports-finance-download', title: 'Finance 다운로드', action: 'drawer-open-route', route: ROUTE_REPORTS_FINANCE_DOWNLOAD, reportsTabMatch: 'finance-download' },
-        { id: 'schedule-upload', title: 'Excel 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+        { id: 'schedule-upload', title: '스케쥴 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
       ],
     },
+    { type: 'section', title: '협업' },
+    { id: 'messenger', title: '메신저', action: 'drawer-open-route', route: ROUTE_MESSENGER, icon: 'message-square' },
+    { id: 'meetings', title: '화상대화', action: 'drawer-open-route', route: ROUTE_MEETINGS, icon: 'video' },
     { type: 'section', title: '공지' },
     { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
     { type: 'section', title: '개인' },
@@ -11374,6 +11903,7 @@ const DRAWER_MENU_BY_ROLE = {
         { id: 'requests-approvals', title: '승인함', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=approvals`, sectionMatch: 'approvals' },
       ],
     },
+    { id: 'hr', title: '문서', action: 'drawer-open-route', route: ROUTE_HR, icon: 'file-text' },
     {
       id: 'schedule',
       title: '스케줄',
@@ -11409,7 +11939,7 @@ const DRAWER_MENU_BY_ROLE = {
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
         { id: 'reports-finance-download', title: 'Finance 다운로드', action: 'drawer-open-route', route: ROUTE_REPORTS_FINANCE_DOWNLOAD, reportsTabMatch: 'finance-download' },
-        { id: 'schedule-upload', title: 'Excel 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+        { id: 'schedule-upload', title: '스케쥴 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
         { id: 'schedule-hq-upload', title: '지원근무자 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
       ],
     },
@@ -11425,6 +11955,9 @@ const DRAWER_MENU_BY_ROLE = {
         { id: 'sites', title: '근무지', action: 'drawer-open-route', route: ROUTE_ADMIN_SITES },
       ],
     },
+    { type: 'section', title: '협업' },
+    { id: 'messenger', title: '메신저', action: 'drawer-open-route', route: ROUTE_MESSENGER, icon: 'message-square' },
+    { id: 'meetings', title: '화상대화', action: 'drawer-open-route', route: ROUTE_MEETINGS, icon: 'video' },
     { type: 'section', title: '공지' },
     { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
     { type: 'section', title: '설정' },
@@ -11458,6 +11991,7 @@ const DRAWER_MENU_BY_ROLE = {
         { id: 'requests-approvals', title: '승인함', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=approvals`, sectionMatch: 'approvals' },
       ],
     },
+    { id: 'hr', title: '문서', action: 'drawer-open-route', route: ROUTE_HR, icon: 'file-text' },
     {
       id: 'schedule',
       title: '스케줄',
@@ -11493,7 +12027,7 @@ const DRAWER_MENU_BY_ROLE = {
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
         { id: 'reports-finance-download', title: 'Finance 다운로드', action: 'drawer-open-route', route: ROUTE_REPORTS_FINANCE_DOWNLOAD, reportsTabMatch: 'finance-download' },
-        { id: 'schedule-upload', title: 'Excel 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
+        { id: 'schedule-upload', title: '스케쥴 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
         { id: 'schedule-hq-upload', title: '지원근무자 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_HQ_UPLOAD, scheduleSectionMatch: 'hq-upload' },
       ],
     },
@@ -11510,6 +12044,9 @@ const DRAWER_MENU_BY_ROLE = {
         { id: 'company', title: '회사', action: 'drawer-open-route', route: ROUTE_MASTER_TENANTS },
       ],
     },
+    { type: 'section', title: '협업' },
+    { id: 'messenger', title: '메신저', action: 'drawer-open-route', route: ROUTE_MESSENGER, icon: 'message-square' },
+    { id: 'meetings', title: '화상대화', action: 'drawer-open-route', route: ROUTE_MEETINGS, icon: 'video' },
     { type: 'section', title: '공지' },
     { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
     { type: 'section', title: '설정' },
@@ -11649,7 +12186,7 @@ function persistStoredAuthTokens(accessToken = '', refreshToken = '') {
   }
 }
 
-async function requestTokenRefresh() {
+async function requestTokenRefresh({ allowSoftFailureWithAccessToken = false, source = 'runtime' } = {}) {
   const refreshToken = getActiveRefreshToken();
   if (!refreshToken) return false;
   if (tokenRefreshPromise && tokenRefreshPromiseToken === refreshToken) return tokenRefreshPromise;
@@ -11679,9 +12216,15 @@ async function requestTokenRefresh() {
         if (response.status === 401 && refreshStillCurrent && currentAccessToken) {
           state.refreshToken = '';
           persistSession();
-          console.warn('[RG ARLS][Auth] discarded invalid refresh token and kept current access token');
+          const logMethod = allowSoftFailureWithAccessToken ? 'info' : 'warn';
+          console[logMethod]('[RG ARLS][Auth] discarded invalid refresh token and kept current access token', {
+            source,
+          });
         }
-        console.warn('[RG ARLS][Auth] refresh failed', {
+        const useSoftFailureLog = allowSoftFailureWithAccessToken && Boolean(currentAccessToken);
+        const logMethod = useSoftFailureLog ? 'info' : 'warn';
+        console[logMethod]('[RG ARLS][Auth] refresh failed', {
+          source,
           status: response.status,
           message: getApiErrorMessage(envelope, 'refresh failed'),
         });
@@ -11706,7 +12249,17 @@ async function requestTokenRefresh() {
       persistSession();
       return true;
     } catch (error) {
-      console.warn('[RG ARLS][Auth] refresh error', error);
+      const currentAccessToken = normalizeStoredJwtToken(getActiveAccessToken());
+      const errorName = String(error?.name || '').trim();
+      const errorMessage = String(error?.message || '').trim();
+      const isTransientFetchError = errorName === 'AbortError' || errorMessage.includes('Failed to fetch');
+      const useSoftFailureLog = allowSoftFailureWithAccessToken && Boolean(currentAccessToken) && isTransientFetchError;
+      const logMethod = useSoftFailureLog ? 'info' : 'warn';
+      console[logMethod]('[RG ARLS][Auth] refresh error', {
+        source,
+        name: errorName || '(unknown)',
+        message: errorMessage || '(empty)',
+      });
       return false;
     } finally {
       if (tokenRefreshPromiseToken === refreshToken) {
@@ -13861,14 +14414,11 @@ function renderScheduleImportSummaryStrip(preview = state.preview) {
   const diffCounts = preview?.diff_counts && typeof preview.diff_counts === 'object' ? preview.diff_counts : {};
   const reviewCount = Number(preview?.warning_rows || 0) || Number(diffCounts.review || 0) + Number(diffCounts.ignored_protected || 0);
   const applicableCount = Number(preview?.applicable_rows || preview?.valid_rows || 0);
-  const unchangedCount = Number(preview?.unchanged_rows || diffCounts.unchanged || 0);
   const blockedCount = Number(preview?.blocked_rows || preview?.invalid_rows || 0);
   const summaryItems = [
-    { label: '전체 행', value: Number(preview?.total_rows || 0) },
     { label: '반영 예정', value: applicableCount },
     { label: '검토 필요', value: reviewCount },
     { label: '차단', value: blockedCount },
-    { label: '변경 없음', value: unchangedCount },
   ];
 
   summaryItems.forEach((item) => {
@@ -13921,7 +14471,7 @@ function renderScheduleImportIssueGroups(preview = state.preview) {
     title.textContent = '이슈 없음';
     const desc = document.createElement('p');
     desc.className = 'muted';
-    desc.textContent = '현재 분석 결과에서 별도 차단 또는 검토 이슈가 없습니다.';
+    desc.textContent = '추가 검토가 필요한 항목이 없습니다.';
     card.appendChild(title);
     card.appendChild(desc);
     wrap.appendChild(card);
@@ -13934,8 +14484,16 @@ function renderScheduleImportIssueGroups(preview = state.preview) {
 
     const head = document.createElement('div');
     head.className = 'schedule-upload-issue-card-head';
+    const copy = document.createElement('div');
+    copy.className = 'schedule-upload-issue-copy';
     const title = document.createElement('strong');
     title.textContent = group.title;
+    const summary = document.createElement('p');
+    summary.textContent = String(group.guidance || group.description || '').trim();
+    copy.appendChild(title);
+    if (summary.textContent) {
+      copy.appendChild(summary);
+    }
     const count = document.createElement('span');
     count.className = group.level === 'success'
       ? 'status-pill status-pill-success'
@@ -13945,23 +14503,14 @@ function renderScheduleImportIssueGroups(preview = state.preview) {
           ? 'status-pill status-pill-warn'
           : 'status-pill status-pill-neutral'));
     count.textContent = `${group.count}건`;
-    head.appendChild(title);
+    head.appendChild(copy);
     head.appendChild(count);
 
-    const desc = document.createElement('p');
-    desc.className = 'muted';
-    desc.textContent = group.description;
-
-    const guide = document.createElement('p');
-    guide.textContent = group.guidance;
-
     card.appendChild(head);
-    card.appendChild(desc);
-    card.appendChild(guide);
 
     if (Array.isArray(group.examples) && group.examples.length) {
       const examples = document.createElement('p');
-      examples.className = 'muted';
+      examples.className = 'schedule-upload-issue-examples';
       examples.textContent = `예시: ${group.examples.join(' / ')}`;
       card.appendChild(examples);
     }
@@ -14075,7 +14624,7 @@ function renderScheduleUploadApplyBar() {
   const blockedReasons = Array.isArray(preview?.blocked_reasons) ? preview.blocked_reasons.filter(Boolean) : [];
 
   let summary = '분석 전';
-  let reason = '지점, 월, 파일을 준비한 뒤 분석을 시작하세요.';
+  let reason = '지점, 월, 파일을 준비하세요.';
   let canApply = false;
 
   if (uploadUi.analysisInFlight) {
@@ -14086,33 +14635,33 @@ function renderScheduleUploadApplyBar() {
         : ['file', 'site', 'month'],
     );
     reason = lockedFields
-      ? `${getScheduleImportProgressStage(uploadUi.analysisStageKey).detail} ${lockedFields}은(는) 완료 전까지 변경할 수 없습니다.`
+      ? `${lockedFields} 변경은 분석 완료 후 가능합니다.`
       : getScheduleImportProgressStage(uploadUi.analysisStageKey).detail;
   } else if (uploadUi.stale) {
     summary = '재분석 필요';
     const staleFields = formatScheduleImportContextFields(uploadUi.staleFields);
     reason = staleFields
-      ? `${staleFields} 변경으로 기존 분석 결과를 적용할 수 없습니다. 같은 조건으로 다시 분석하세요.`
-      : '현재 입력값과 마지막 분석 결과가 달라 다시 분석이 필요합니다.';
+      ? `${staleFields} 변경으로 재분석이 필요합니다.`
+      : '현재 입력값이 바뀌어 재분석이 필요합니다.';
   } else if (preview) {
     summary = `반영 예정 ${validRows}건 / 검토 필요 ${reviewRows}건 / 차단 ${invalidRows}건`;
     if (blockedReasons.length) {
       reason = blockedReasons[0];
     } else if (invalidRows > 0) {
-      reason = `차단 ${invalidRows}건 해결 후 적용 가능`;
+      reason = `차단 ${invalidRows}건 해결 후 적용 가능합니다.`;
     } else if (validRows <= 0 && reviewRows <= 0) {
       summary = '적용 가능한 변경 없음';
-      reason = '변경 없음 또는 보호영역만 포함되어 있습니다.';
+      reason = '변경할 항목이 없습니다.';
     } else if (uploadUi.applyResult && uploadUi.applyResult.includes('반영 완료')) {
       summary = '적용 완료';
       reason = uploadUi.applyResult;
     } else {
       summary = `반영 예정 ${validRows}건 / 검토 필요 ${reviewRows}건`;
       if (Boolean(uploadUi.canApply)) {
-        reason = `${getScheduleImportSiteLabel(selectedSite)} · ${formatScheduleMonthTitle(selectedMonth)} 기준으로 반영합니다.`;
+        reason = `${getScheduleImportSiteLabel(selectedSite)} · ${formatScheduleMonthTitle(selectedMonth)}`;
         canApply = true;
       } else {
-        reason = '차단 사유가 없으면 다음 단계에서 적용을 진행할 수 있습니다.';
+        reason = '검토 후 적용을 진행하세요.';
       }
     }
   }
@@ -14639,7 +15188,7 @@ function renderScheduleUploadGuidePanel() {
   setScheduleUploadGuidePanel({
     pillLabel: applyDone ? '완료' : '적용 진행',
     pillClass: applyDone ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral',
-    title: applyDone ? '월간 업로드 완료' : 'ARLS 반영 중',
+    title: applyDone ? '스케쥴 업로드 완료' : 'ARLS 반영 중',
     text: applyDone
       ? ''
       : '적용 결과를 정리하고 있습니다.',
@@ -14882,7 +15431,7 @@ function renderScheduleUploadWorkspace() {
   if (uploadHeaderTitle) {
     uploadHeaderTitle.textContent = activeTopTab === SCHEDULE_TAB_HQ_UPLOAD
       ? '지원근무자 업로드'
-      : 'Excel 업로드';
+      : '스케쥴 업로드';
   }
   if (uploadHeaderText) {
     uploadHeaderText.textContent = '';
@@ -16727,7 +17276,7 @@ function renderScheduleSupportShortcutCard() {
       pill.textContent = '조회 중';
     }
     if (text) {
-      text.textContent = '선택한 지점 기준 source artifact 상태를 확인하는 중입니다. 준비되면 Excel 업로드 workflow에서 이어갈 수 있습니다.';
+      text.textContent = '선택한 지점 기준 source artifact 상태를 확인하는 중입니다. 준비되면 스케쥴 업로드 workflow에서 이어갈 수 있습니다.';
     }
     return;
   }
@@ -16741,7 +17290,7 @@ function renderScheduleSupportShortcutCard() {
       pill.textContent = readySiteCount > 0 ? '전체 준비' : '전체 대기';
     }
     if (text) {
-      text.textContent = `${getScheduleMonthValue()} 기준 전체 ${readySiteCount}/${totalSiteCount || 0}개 지점이 준비되어 있습니다. 세부 추출과 업로드는 Excel 업로드 탭에서 진행하세요.`;
+      text.textContent = `${getScheduleMonthValue()} 기준 전체 ${readySiteCount}/${totalSiteCount || 0}개 지점이 준비되어 있습니다. 세부 추출과 업로드는 스케쥴 업로드 탭에서 진행하세요.`;
     }
     return;
   }
@@ -16756,7 +17305,7 @@ function renderScheduleSupportShortcutCard() {
     text.textContent = [
       `${selectedSite} · ${status?.month || getScheduleMonthValue()}`,
       artifactContext.revision ? `artifact ${artifactContext.revision.slice(0, 12)}` : 'artifact 준비 전',
-      '실제 workflow는 Excel 업로드 탭에서 진행',
+      '실제 workflow는 스케쥴 업로드 탭에서 진행',
     ].filter(Boolean).join(' · ');
   }
 }
@@ -23955,6 +24504,8 @@ function resolveBottomTabActiveView(viewName) {
     target === 'ops'
     || target === 'support-status'
     || target === 'reports'
+    || target === 'messenger'
+    || target === 'meetings'
     || target === 'profile'
     || target === 'roadmap'
     || target === 'org'
@@ -24140,6 +24691,9 @@ function ensureRequestsWorkspaceState() {
   }
   if (!(state.requestsWorkspace.managerSocItemsById instanceof Map)) {
     state.requestsWorkspace.managerSocItemsById = new Map();
+  }
+  if (!(state.requestsWorkspace.approvalDetailById instanceof Map)) {
+    state.requestsWorkspace.approvalDetailById = new Map();
   }
   return state.requestsWorkspace;
 }
@@ -24352,6 +24906,7 @@ function getRequestsTypeTone(kind = '') {
   if (normalized === 'attendance' || normalized === 'correction') return 'warn';
   if (normalized === 'leave') return 'info';
   if (normalized === 'document') return 'success';
+  if (normalized === 'approval') return 'warn';
   if (normalized === 'soc') return 'neutral';
   return 'neutral';
 }
@@ -24483,13 +25038,95 @@ function buildRequestsCorrectionItem(row = {}, { managerMode = false } = {}) {
   });
 }
 
+function normalizeApprovalDocumentStatus(value = '') {
+  return String(value || '').trim().toLowerCase() || 'submitted';
+}
+
+function getApprovalDocumentStatusLabel(value = '') {
+  const normalized = normalizeApprovalDocumentStatus(value);
+  if (normalized === 'draft') return '임시 저장';
+  if (normalized === 'submitted' || normalized === 'in_review') return '결재 대기';
+  if (normalized === 'approved') return '승인';
+  if (normalized === 'rejected') return '반려';
+  if (normalized === 'returned') return '반송';
+  if (normalized === 'cancelled' || normalized === 'canceled') return '취소';
+  return normalized || '-';
+}
+
+function getApprovalDocumentStatusPillClass(value = '') {
+  const normalized = normalizeApprovalDocumentStatus(value);
+  if (normalized === 'approved') return 'status-pill status-pill-success';
+  if (normalized === 'rejected' || normalized === 'returned') return 'status-pill status-pill-error';
+  if (normalized === 'draft' || normalized === 'cancelled' || normalized === 'canceled') return 'status-pill status-pill-warn';
+  return 'status-pill status-pill-neutral';
+}
+
+function formatApprovalLegacySourceLabel(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'leave_request') return '휴가';
+  if (normalized === 'attendance_request') return '출퇴근 예외';
+  if (normalized === 'employment_certificate_request') return '증명서';
+  return '결재';
+}
+
+function formatCertificateIssueStateLabel(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'queued') return '발급 대기';
+  if (normalized === 'processing') return '발급 중';
+  if (normalized === 'completed') return '발급 완료';
+  if (normalized === 'failed') return '발급 실패';
+  return normalized ? normalized : '발급 전';
+}
+
+function buildRequestsApprovalItem(row = {}) {
+  const status = normalizeApprovalDocumentStatus(row?.status);
+  const requestedAt = String(row?.submitted_at || row?.created_at || '').trim();
+  const priorityRank = status === 'submitted' || status === 'in_review' ? 1 : (status === 'rejected' || status === 'returned' ? 3 : 5);
+  const requestType = String(row?.form_display_name || row?.form_key || '결재').trim() || '결재';
+  const employeeName = String(row?.requester_name || '-').trim() || '-';
+  const approvalStage = row?.step_order
+    ? `결재 ${Number(row.step_order) || 1}단계`
+    : (status === 'approved' ? '처리 완료' : '결재 검토');
+  return createRequestsWorkspaceItem({
+    key: buildRequestRowKey('approval', row?.id),
+    kind: 'approval',
+    status,
+    companyName: String(renderTenantName(row) || state.user?.tenant_name || '-').trim() || '-',
+    siteName: '-',
+    employeeName,
+    actorName: employeeName,
+    requestType,
+    requestedAt,
+    requestedAtLabel: requestedAt ? new Date(requestedAt).toLocaleString('ko-KR') : '-',
+    updatedAt: String(row?.completed_at || row?.submitted_at || row?.created_at || '').trim(),
+    updatedAtLabel: formatDateLabel(row?.completed_at || row?.submitted_at || row?.created_at, '-'),
+    targetDateValue: requestedAt,
+    targetDateLabel: String(row?.document_no || '-').trim() || '-',
+    primaryText: String(row?.title || requestType).trim() || requestType,
+    secondaryText: `${requestType} · ${formatApprovalLegacySourceLabel(row?.legacy_source_type)}`,
+    summaryText: String(row?.document_no || '').trim() || '결재 문서',
+    statusLabel: getApprovalDocumentStatusLabel(status),
+    statusClass: getApprovalDocumentStatusPillClass(status),
+    integrationLabel: formatApprovalLegacySourceLabel(row?.legacy_source_type),
+    processorName: row?.step_order ? `현재 ${Number(row.step_order) || 1}단계` : '-',
+    approvalStage,
+    priorityRank,
+    priorityLabel: getRequestsPriorityLabel(priorityRank),
+    note: String(row?.title || '').trim(),
+    row,
+  });
+}
+
 function buildRequestsDocumentItem(row = {}, { adminMode = false } = {}) {
   const status = normalizeHrRequestStatus(row?.status);
   const requestedAt = String(row?.requested_at || '').trim();
   const priorityRank = status === 'requested' || status === 'generating' ? 1 : (status === 'rejected' ? 3 : 5);
   const employeeName = String(row?.employee_name || state.user?.full_name || state.user?.employee_name || '-').trim() || '-';
   const companyName = String(row?.company_name || state.user?.tenant_name || renderTenantName(row) || '-').trim() || '-';
-  const siteName = String(row?.org || row?.site_name || '-').trim() || '-';
+  const siteName = String(row?.org || row?.site_name || row?.site_code || '-').trim() || '-';
+  const certificateName = String(row?.certificate_type_name || row?.certificate_type_key || '증명서').trim() || '증명서';
+  const approvalStatus = normalizeApprovalDocumentStatus(row?.approval_status);
+  const issueStateLabel = formatCertificateIssueStateLabel(row?.issue_job_state || row?.status);
   return createRequestsWorkspaceItem({
     key: buildRequestRowKey('document', row?.id),
     kind: 'document',
@@ -24498,7 +25135,7 @@ function buildRequestsDocumentItem(row = {}, { adminMode = false } = {}) {
     siteName,
     employeeName,
     actorName: employeeName,
-    requestType: '재직증명서',
+    requestType: certificateName,
     requestedAt,
     requestedAtLabel: requestedAt ? new Date(requestedAt).toLocaleString('ko-KR') : '-',
     updatedAt: String(row?.updated_at || row?.requested_at || '').trim(),
@@ -24507,17 +25144,15 @@ function buildRequestsDocumentItem(row = {}, { adminMode = false } = {}) {
     targetDateLabel: requestedAt ? toRequestDateLabel(requestedAt) : '-',
     primaryText: employeeName,
     secondaryText: `${companyName}${siteName && siteName !== '-' ? ` · ${siteName}` : ''}`,
-    summaryText: formatHrPurposeLabel(row?.purpose_code, row?.purpose_text),
+    summaryText: `${formatHrPurposeLabel(row?.purpose_code, row?.purpose_text)} · ${issueStateLabel}`,
     statusLabel: getHrRequestStatusLabel(status),
     statusClass: getHrRequestStatusPillClass(status),
-    integrationLabel: adminMode
-      ? `회사:${row?.mail_company_sent_at ? '성공' : '대기'} / 직원:${row?.mail_employee_sent_at ? '성공' : '대기'}`
-      : (row?.file_ready ? '발급 완료' : '발급 대기'),
+    integrationLabel: `${getApprovalDocumentStatusLabel(approvalStatus)} · ${issueStateLabel}`,
     processorName: String(row?.approved_by || row?.reviewed_by || '-').trim() || '-',
-    approvalStage: adminMode ? '문서 발급 승인' : '내 문서 요청',
+    approvalStage: adminMode ? '증명서 발급 승인' : '내 증명서 요청',
     priorityRank,
     priorityLabel: getRequestsPriorityLabel(priorityRank),
-    note: formatHrPurposeLabel(row?.purpose_code, row?.purpose_text),
+    note: String(row?.issue_job_error || row?.rejection_reason || formatHrPurposeLabel(row?.purpose_code, row?.purpose_text)).trim(),
     row,
   });
 }
@@ -25135,22 +25770,63 @@ function renderRequestsWorkspaceDetailPanel() {
     const row = item.row || {};
     if (title) title.textContent = '문서 요청 상세';
     fields.push(
-      { label: '문서', value: '재직증명서' },
+      { label: '문서', value: String(row.certificate_type_name || row.certificate_type_key || '증명서').trim() || '증명서' },
       { label: '용도', value: formatHrPurposeLabel(row.purpose_code, row.purpose_text) },
+      { label: '결재 상태', value: getApprovalDocumentStatusLabel(row.approval_status || 'submitted') },
+      { label: '발급 진행', value: formatCertificateIssueStateLabel(row.issue_job_state || row.status) },
       { label: '발급 번호', value: row.issue_number || '-' },
-      { label: '반려 사유', value: row.rejection_reason || '-' },
+      { label: '오류/반려 사유', value: row.issue_job_error || row.rejection_reason || '-' },
     );
-    if (isManagerShellRole() && normalizeHrRequestStatus(row.status) === 'requested') {
+    const certificateRequestId = String(row.id || '').trim();
+    if (isManagerShellRole() && certificateRequestId && normalizeHrRequestStatus(row.status) === 'requested') {
       actions.push(
-        { label: '반려', variant: 'btn-destructive', action: 'hr-admin-reject', dataset: { requestId: row.id } },
-        { label: '승인', variant: 'btn-primary', action: 'hr-admin-approve', dataset: { requestId: row.id } },
+        { label: '반려', variant: 'btn-destructive', action: 'hr-admin-reject', dataset: { requestId: certificateRequestId } },
+        { label: '승인', variant: 'btn-primary', action: 'hr-admin-approve', dataset: { requestId: certificateRequestId } },
       );
     }
-    if (String(row.id || '').trim() && normalizeHrRequestStatus(row.status) === 'issued' && row.file_ready) {
-      actions.push({ label: 'PDF 다운로드', variant: 'btn-secondary', action: 'hr-employment-download', dataset: { requestId: row.id } });
+    if (certificateRequestId && normalizeHrRequestStatus(row.status) === 'issued') {
+      actions.push({ label: 'PDF 다운로드', variant: 'btn-secondary', action: 'hr-employment-download', dataset: { requestId: certificateRequestId } });
     }
     if (normalizeHrRequestStatus(row.status) === 'rejected' && String(row.rejection_reason || '').trim()) {
       actions.push({ label: '사유보기', variant: 'btn-ghost', action: 'hr-employment-view-reason', dataset: { reason: row.rejection_reason } });
+    }
+  } else if (item.kind === 'approval') {
+    const row = item.row || {};
+    const workspace = ensureRequestsWorkspaceState();
+    const documentId = String(row.id || '').trim();
+    const detail = workspace.approvalDetailById.get(documentId) || null;
+    const detailLoading = workspace.approvalDetailLoadingKey === documentId && !detail;
+    if (title) title.textContent = '결재 문서 상세';
+    fields.push(
+      { label: '문서번호', value: String(row.document_no || '-').trim() || '-' },
+      { label: '양식', value: String(row.form_display_name || row.form_key || '-').trim() || '-' },
+      { label: '요청자', value: String(row.requester_name || '-').trim() || '-' },
+      { label: '연결 업무', value: formatApprovalLegacySourceLabel(row.legacy_source_type) },
+    );
+    if (detailLoading) {
+      fields.push({ label: '상세', value: '결재 문서를 불러오는 중입니다.' });
+    } else if (detail) {
+      const steps = Array.isArray(detail.steps) ? detail.steps : [];
+      const comments = Array.isArray(detail.comments) ? detail.comments : [];
+      const attachments = Array.isArray(detail.attachments) ? detail.attachments : [];
+      const currentStep = steps.find((step) => ['pending', 'in_review'].includes(String(step?.status || '').trim().toLowerCase())) || steps[0] || null;
+      const latestComment = comments.length ? comments[comments.length - 1] : null;
+      fields.push(
+        { label: '현재 단계', value: currentStep ? `${Number(currentStep.step_order || 1)}단계 · ${getApprovalDocumentStatusLabel(currentStep.status || 'pending')}` : '단계 없음' },
+        { label: '참조자', value: `${Array.isArray(detail.watchers) ? detail.watchers.length : 0}명` },
+        { label: '첨부', value: attachments.length ? attachments.map((attachment) => attachment.file_name || attachment.mime_type || '첨부').join(', ') : '없음' },
+        { label: '최근 코멘트', value: latestComment?.body ? String(latestComment.body).trim() : '없음' },
+      );
+      const actionableStatuses = new Set(['submitted', 'in_review']);
+      if (documentId && actionableStatuses.has(normalizeApprovalDocumentStatus(detail.status || row.status))) {
+        actions.push(
+          { label: '반송', variant: 'btn-secondary', action: 'requests-approval-action', dataset: { documentId, actionType: 'return' } },
+          { label: '반려', variant: 'btn-destructive', action: 'requests-approval-action', dataset: { documentId, actionType: 'reject' } },
+          { label: '승인', variant: 'btn-primary', action: 'requests-approval-action', dataset: { documentId, actionType: 'approve' } },
+        );
+      }
+    } else {
+      fields.push({ label: '상세', value: '결재 문서를 선택하면 단계와 코멘트가 표시됩니다.' });
     }
   } else if (item.kind === 'soc') {
     const row = item.row || {};
@@ -25594,7 +26270,7 @@ function renderRequestsTabSections() {
     if (tab === 'leave') {
       descriptionEl.textContent = '휴가 유형, 요청 이력, 사용 현황을 한 흐름에서 확인하고 상세 패널에서 이어서 처리합니다.';
     } else if (tab === 'documents') {
-      descriptionEl.textContent = '재직증명서 요청과 발급 상태를 목록과 상세 패널에서 확인합니다. 신규 발급은 문서 센터로 이어집니다.';
+      descriptionEl.textContent = '재직·경력·퇴직·휴직 증명서 요청과 발급 상태를 목록과 상세 패널에서 확인합니다. 신규 발급은 문서 센터로 이어집니다.';
     } else if (tab === 'correction') {
       descriptionEl.textContent = '정정 요청 이력을 비교하고 상세 패널에서 변경 전후와 상태를 이어서 확인합니다.';
     } else if (tab === 'approvals') {
@@ -25865,6 +26541,8 @@ function resolveRouteForView(viewName = '') {
   }
   if (raw === 'hr') return ROUTE_HR;
   if (raw === 'leave') return `${ROUTE_REQUESTS}?section=leave`;
+  if (raw === 'messenger') return ROUTE_MESSENGER;
+  if (raw === 'meetings') return ROUTE_MEETINGS;
   if (raw === 'notices') return buildNoticesRoute();
   if (raw === 'ops') return ROUTE_OPS;
   if (raw === 'support-status') return ROUTE_SUPPORT_STATUS;
@@ -25890,6 +26568,8 @@ function resolveViewForRoute(routePath = '') {
   if (route === ROUTE_HOME) return 'home';
   if (route === ROUTE_FEATURE_NOTICES) return 'notices';
   if (route === ROUTE_HR) return 'hr';
+  if (route === ROUTE_MESSENGER) return 'messenger';
+  if (route === ROUTE_MEETINGS) return 'meetings';
   if (route === ROUTE_SUPPORT_STATUS) return 'support-status';
   if (route === ROUTE_OPS) return 'ops';
   if (route === ROUTE_REPORTS || route === ROUTE_REPORTS_APPLE || route === ROUTE_REPORTS_FINANCE_DOWNLOAD) return 'reports';
@@ -25918,6 +26598,8 @@ function isKnownRoute(routePath = '') {
     ROUTE_REPORTS_FINANCE_DOWNLOAD,
     ROUTE_REPORTS_APPLE,
     ROUTE_ATTENDANCE,
+    ROUTE_MESSENGER,
+    ROUTE_MEETINGS,
     ROUTE_CALENDAR_WEEK,
     ROUTE_CALENDAR_MONTH,
     ROUTE_CALENDAR_AGENDA,
@@ -25965,6 +26647,8 @@ function isRouteAllowed(routePath, perms = getRolePermissions(), navRole = getNa
   if (route === ROUTE_CALENDAR_PUBLIC_BOOKING) return true;
   if (!state.user || !state.token) return false;
   if (route === ROUTE_HOME || route === ROUTE_PROFILE || route === ROUTE_NOTIFICATIONS) return true;
+  if (route === ROUTE_MESSENGER) return Boolean(perms.messenger);
+  if (route === ROUTE_MEETINGS) return Boolean(perms.meetings);
   if (route === ROUTE_HR) return true;
   if (route === ROUTE_OPS) return isManagerShellRole(navRole);
   if (route === ROUTE_SUPPORT_STATUS) return isManagerShellRole(navRole);
@@ -26305,6 +26989,14 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
     setRequestsTabView('requests');
   }
 
+  if (route === ROUTE_MESSENGER) {
+    ensureMessengerState();
+  }
+
+  if (route === ROUTE_MEETINGS) {
+    ensureMeetingsState();
+  }
+
   if (route === ROUTE_REQUESTS) {
     const sectionParam = String(parsedParams.get('section') || '').trim().toLowerCase();
     if (isManagerShellRole()) {
@@ -26370,6 +27062,14 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
 
   if (route === ROUTE_REPORTS || route === ROUTE_REPORTS_FINANCE_DOWNLOAD) {
     scrollToSelector('#view-reports');
+  }
+
+  if (route === ROUTE_MESSENGER) {
+    scrollToSelector('#view-messenger');
+  }
+
+  if (route === ROUTE_MEETINGS) {
+    scrollToSelector('#view-meetings');
   }
 
   if (FEATURE_SKELETON_ROUTES.has(route)) {
@@ -26438,6 +27138,8 @@ function isViewAllowed(view, perms = getRolePermissions()) {
   if (raw === 'ops') return isManagerShellRole(getNavigationRole());
   if (raw === 'support-status') return isManagerShellRole(getNavigationRole());
   if (raw === 'reports') return canViewReportsCenter();
+  if (raw === 'messenger') return Boolean(perms.messenger);
+  if (raw === 'meetings') return Boolean(perms.meetings);
   if (raw === 'calendar') return Boolean(perms.calendar);
   const target = mapLegacyViewName(view);
   if (target === 'dev-console') return Boolean(perms.tenantManage);
@@ -28692,7 +29394,7 @@ function calculateLeaveUsageUnits(row = {}) {
   return { annual: days, half: 0 };
 }
 
-function buildLeaveSummary(rows = [], { scope = 'mine' } = {}) {
+function buildLeaveSummary(rows = [], { scope = 'mine', balanceSummary = null } = {}) {
   const list = Array.isArray(rows) ? rows : [];
   const todayKey = toLocalDateKey(new Date());
   const weekKeys = new Set(getCurrentWeekDates(new Date()).map((date) => toLocalDateKey(date)));
@@ -28721,12 +29423,25 @@ function buildLeaveSummary(rows = [], { scope = 'mine' } = {}) {
     }
   });
 
-  const annualRemaining = Math.max(0, LEAVE_ANNUAL_DEFAULT_ALLOWANCE - annualUsed);
+  const annualRemaining = balanceSummary && scope !== 'team'
+    ? Number(balanceSummary.remaining_days || 0)
+    : Math.max(0, LEAVE_ANNUAL_DEFAULT_ALLOWANCE - annualUsed);
+  const grantedDays = balanceSummary && scope !== 'team'
+    ? Number(balanceSummary.granted_days || 0)
+    : LEAVE_ANNUAL_DEFAULT_ALLOWANCE;
+  const restoredDays = balanceSummary && scope !== 'team'
+    ? Number(balanceSummary.restored_days || 0)
+    : 0;
+  const usedDays = balanceSummary && scope !== 'team'
+    ? Number(balanceSummary.used_days || 0)
+    : annualUsed;
   return {
     scope,
+    grantedDays,
     annualRemaining,
-    annualUsed,
+    annualUsed: usedDays,
     halfUsed,
+    restoredDays,
     todayLeaveCount: todayEmployees.size,
     weekLeaveCount: weekEmployees.size,
     pendingCount: list.filter((row) => String(row?.status || '').trim().toLowerCase() === 'pending').length,
@@ -28862,6 +29577,29 @@ function setLeaveWorkspaceComposerOpen(open = false) {
 }
 
 function buildLeavePolicyRows() {
+  const leaveState = state.leaveView || createInitialLeaveViewState();
+  const apiRows = Array.isArray(leaveState.policyRows) ? leaveState.policyRows : [];
+  const balance = leaveState.balanceSummary && typeof leaveState.balanceSummary === 'object'
+    ? leaveState.balanceSummary
+    : null;
+  if (apiRows.length) {
+    return apiRows.map((row) => {
+      const rules = row?.rules_json && typeof row.rules_json === 'object' ? row.rules_json : {};
+      const unit = String(rules.unit || '').trim().toLowerCase();
+      const carryOver = rules?.carry_over === true ? '이월 허용' : '당해 소진';
+      const isDefaultPolicy = balance?.policy_key && String(balance.policy_key || '').trim() === String(row?.policy_key || '').trim();
+      return {
+        key: String(row?.policy_key || '').trim() || 'policy',
+        label: String(row?.display_name || row?.policy_key || '휴가 정책').trim(),
+        category: isDefaultPolicy ? `${carryOver} · 기본 정책` : carryOver,
+        unit: unit === 'half_day' ? '0.5일 단위' : (unit === 'hour' ? '시간 단위' : '일 단위'),
+        approval: rules?.approval_required === false ? '자동 반영' : '승인 필요',
+        note: isDefaultPolicy
+          ? `잔여 ${formatLeaveUnits(balance.remaining_days, '일')} · 지급 ${formatLeaveUnits(balance.granted_days, '일')}`
+          : (rules?.note ? String(rules.note).trim() : '정책 규칙은 HR 설정 기준으로 적용됩니다.'),
+      };
+    });
+  }
   return [
     {
       key: 'annual',
@@ -29278,8 +30016,10 @@ function renderLeaveUsageSummary(summary = null) {
       { label: '대기 요청', value: `${Number(summary?.pendingCount || 0)}건` },
     ]
     : [
+      { label: '지급 연차', value: summary ? formatLeaveUnits(summary.grantedDays, '일') : '-' },
       { label: '잔여 연차', value: summary ? formatLeaveUnits(summary.annualRemaining, '일') : '-' },
       { label: '사용 연차', value: summary ? formatLeaveUnits(summary.annualUsed, '일') : '-' },
+      { label: '복원 연차', value: summary ? formatLeaveUnits(summary.restoredDays, '일') : '-' },
       { label: '반차 사용', value: summary ? formatLeaveUnits(summary.halfUsed, '회') : '-' },
       { label: '대기 요청', value: `${Number(summary?.pendingCount || 0)}건` },
     ];
@@ -29549,7 +30289,10 @@ function renderLeaveManagementWorkspace({ loading = false, errorMessage = '' } =
     const canOpen = scope === 'mine' && can('leaveWrite');
     composer.classList.toggle('hidden', !canOpen || !state.leaveView?.workspaceComposerOpen);
   }
-  const summary = buildLeaveSummary(state.leaveView?.rows || [], { scope });
+  const summary = buildLeaveSummary(state.leaveView?.rows || [], {
+    scope,
+    balanceSummary: state.leaveView?.balanceSummary || null,
+  });
   renderLeaveUsageSummary(summary);
   renderLeaveWorkspaceRequestToolbar(getLeaveWorkspaceRequestRows());
   renderLeaveWorkspaceRequestRows({ loading, errorMessage });
@@ -32739,6 +33482,8 @@ function getDesktopGlobalSearchItems() {
     { label: '홈', route: ROUTE_HOME, hint: '오늘 브리핑', keywords: ['대시보드', 'today', 'home', '브리핑'] },
     { label: '출퇴근', route: ROUTE_ATTENDANCE, hint: '기록/예외 스캔', keywords: ['근태', 'attendance', '타임시트', '예외'] },
     { label: '캘린더', route: ROUTE_CALENDAR_WEEK, hint: '협업 일정', keywords: ['캘린더', 'calendar', 'week', 'agenda', 'booking'] },
+    { label: '메신저', route: ROUTE_MESSENGER, hint: '대화와 공지방', keywords: ['메신저', '채팅', '대화', '공지방', 'messenger', 'chat'] },
+    { label: '화상대화', route: ROUTE_MEETINGS, hint: '회의방과 세션', keywords: ['회의', '화상', '미팅', 'meeting', 'video', 'meetings'] },
     { label: role === 'EMPLOYEE' ? '요청' : '요청·승인', route: ROUTE_REQUESTS, hint: '요청 inbox', keywords: ['요청', '승인', '휴가', '예외', 'inbox'] },
     { label: '문서', route: ROUTE_HR, hint: '문서 센터', keywords: ['문서', '재직증명서', 'hr'] },
     { label: '스케줄', route: ROUTE_SCHEDULE_CALENDAR, hint: '월간 근무표', keywords: ['스케줄', '일정', 'calendar', '캘린더', '근무표'] },
@@ -32748,7 +33493,7 @@ function getDesktopGlobalSearchItems() {
   if (role === 'BRANCH_MANAGER' || role === 'DEV') {
     items.splice(1, 0, { label: '지원근무자 현황', route: ROUTE_SUPPORT_STATUS, hint: '지원 배정 현황', keywords: ['지원근무', '지원근무자', 'support', '주간', '야간', 'sentrix'] });
     items.splice(6, 0,
-      { label: 'Excel 업로드', route: ROUTE_SCHEDULE_UPLOAD, hint: '근무표 업로드', keywords: ['엑셀', '업로드', '근무표', 'wizard'] },
+      { label: '스케쥴 업로드', route: ROUTE_SCHEDULE_UPLOAD, hint: '근무표 업로드', keywords: ['스케쥴', '스케줄', '엑셀', '업로드', '근무표', 'wizard'] },
       { label: '보고', route: ROUTE_REPORTS, hint: 'Finance 제출', keywords: ['보고', 'finance', '제출'] },
     );
     items.push(
@@ -33038,6 +33783,31 @@ function renderProfileThemeState() {
   }
 }
 
+function canViewGroupwareFoundationPanel() {
+  const role = String(state.user?.role || '').trim().toLowerCase();
+  return role === 'developer' || role === 'hq_admin';
+}
+
+function getGroupwareFoundationSummaryLabel() {
+  const foundation = state.integration.groupwareFoundation;
+  const readyGroups = Number(foundation?.database?.ready_group_count || 0);
+  const totalGroups = Number(foundation?.database?.total_group_count || 0);
+  if (totalGroups > 0) return `${readyGroups}/${totalGroups} 준비`;
+  if (state.integration.groupwareFoundationError) return '조회 실패';
+  if (!canViewGroupwareFoundationPanel()) return '권한 범위 외';
+  return '조회 대기';
+}
+
+function getGroupwareMeetingsRolloutLabel() {
+  const rollout = state.integration.groupwareRollout;
+  const status = String(rollout?.readiness?.status || '').trim().toLowerCase();
+  if (status === 'ready' || status === 'passed') return '준비';
+  if (status === 'blocked' || status === 'failed') return '차단';
+  if (status === 'pending') return '대기';
+  if (state.integration.groupwareRolloutError) return '조회 실패';
+  return '조회 대기';
+}
+
 function renderProfileSettingsRail() {
   const roleValue = $('#profileRailRoleValue');
   const tenantValue = $('#profileRailTenantValue');
@@ -33045,6 +33815,8 @@ function renderProfileSettingsRail() {
   const syncValue = $('#profileRailSyncValue');
   const integrationValue = $('#profileRailIntegrationValue');
   const profileValue = $('#profileRailProfileValue');
+  const groupwareValue = $('#profileRailGroupwareValue');
+  const meetingsValue = $('#profileRailMeetingsValue');
   const lockValue = $('#profileRailLockValue');
   const noteValue = $('#profileRailStatusNote');
 
@@ -33069,6 +33841,8 @@ function renderProfileSettingsRail() {
   const hasFlags = Object.keys(state.integration.flags || {}).length > 0;
   const selectedProfile = getSelectedGoogleSheetProfile();
   const lockPillText = String($('#lockStatusPill')?.textContent || '').trim();
+  const groupwareLabel = getGroupwareFoundationSummaryLabel();
+  const rolloutLabel = getGroupwareMeetingsRolloutLabel();
 
   if (roleValue) roleValue.textContent = roleLabel;
   if (tenantValue) tenantValue.textContent = tenantLabel;
@@ -33084,6 +33858,12 @@ function renderProfileSettingsRail() {
       ? (selectedProfile?.profile_name ? String(selectedProfile.profile_name).trim() : '선택 대기')
       : '-';
   }
+  if (groupwareValue) {
+    groupwareValue.textContent = canManageIntegrations() ? groupwareLabel : '-';
+  }
+  if (meetingsValue) {
+    meetingsValue.textContent = canManageIntegrations() ? rolloutLabel : '-';
+  }
   if (lockValue) {
     lockValue.textContent = canManageIntegrations() ? (lockPillText || '열림') : '-';
   }
@@ -33091,9 +33871,12 @@ function renderProfileSettingsRail() {
     if (!state.user) {
       noteValue.textContent = '로그인 후 설정을 확인할 수 있습니다.';
     } else if (canManageIntegrations()) {
-      noteValue.textContent = selectedProfile?.profile_name
-        ? '활성 링크와 잠금 상태를 확인한 뒤 필요한 설정만 조정하세요.'
-        : '먼저 활성 링크를 선택한 뒤 필요한 운영 설정만 조정하세요.';
+      const profilePhrase = selectedProfile?.profile_name
+        ? `활성 링크 ${String(selectedProfile.profile_name).trim()}`
+        : '활성 링크 선택 대기';
+      noteValue.textContent = canViewGroupwareFoundationPanel()
+        ? `${profilePhrase} · 그룹웨어 ${groupwareLabel} · 회의 rollout ${rolloutLabel}`
+        : `${profilePhrase} · 회의 rollout ${rolloutLabel}`;
     } else if (!state.reminder.available) {
       noteValue.textContent = '현재 기기에서는 예약 알림을 지원하지 않습니다.';
     } else if (isReminderPermissionDenied()) {
@@ -33986,14 +34769,612 @@ async function loadSocEvents({ force = false } = {}) {
   renderOpsAutomationStatus();
 }
 
+function getMailJobStatePillClass(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'sent' || normalized === 'completed') return 'status-pill status-pill-success';
+  if (normalized === 'failed') return 'status-pill status-pill-error';
+  if (normalized === 'queued' || normalized === 'retry') return 'status-pill status-pill-warn';
+  return 'status-pill status-pill-neutral';
+}
+
+function renderMailHubSummary() {
+  const target = $('#mailHubSummary');
+  if (!(target instanceof HTMLElement)) return;
+  const accounts = Array.isArray(state.integration.mailAccounts) ? state.integration.mailAccounts : [];
+  const profiles = Array.isArray(state.integration.mailProfiles) ? state.integration.mailProfiles : [];
+  const templates = Array.isArray(state.integration.mailTemplates) ? state.integration.mailTemplates : [];
+  const jobs = Array.isArray(state.integration.mailJobs) ? state.integration.mailJobs : [];
+  const failedJobs = jobs.filter((job) => String(job?.state || '').trim().toLowerCase() === 'failed').length;
+  target.innerHTML = '';
+  [
+    ['발신 계정', `${accounts.length}개`],
+    ['발신 프로필', `${profiles.length}개`],
+    ['활성 템플릿', `${templates.filter((item) => item?.is_active !== false).length}개`],
+    ['실패 작업', `${failedJobs}건`],
+  ].forEach(([label, value]) => {
+    const card = document.createElement('article');
+    card.className = 'profile-mail-summary-card';
+    card.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+    target.appendChild(card);
+  });
+}
+
+function createMailHubListRow({ title = '-', meta = '-', pillLabel = '', pillClass = 'status-pill status-pill-neutral' } = {}) {
+  const li = document.createElement('li');
+  li.className = 'profile-mail-row';
+  const main = document.createElement('div');
+  main.className = 'profile-mail-row-main';
+  const strong = document.createElement('strong');
+  strong.textContent = title;
+  const span = document.createElement('span');
+  span.textContent = meta;
+  main.append(strong, span);
+  li.appendChild(main);
+  if (pillLabel) {
+    const side = document.createElement('div');
+    side.className = 'profile-mail-row-side';
+    const pill = document.createElement('span');
+    pill.className = pillClass;
+    pill.textContent = pillLabel;
+    side.appendChild(pill);
+    li.appendChild(side);
+  }
+  return li;
+}
+
+function getGroupwareFoundationGroupLabel(groupKey = '') {
+  const normalized = String(groupKey || '').trim().toLowerCase();
+  if (normalized === 'attachments') return '첨부 저장소';
+  if (normalized === 'approvals') return '전자결재';
+  if (normalized === 'leave') return '연차 ledger';
+  if (normalized === 'certificates') return '증명서';
+  if (normalized === 'mail') return '메일 허브';
+  if (normalized === 'chat') return '메신저';
+  if (normalized === 'meetings') return '화상대화';
+  return normalized || '-';
+}
+
+function getGroupwareStatusMeta(status = '') {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'ready' || normalized === 'passed' || normalized === 'foundation-ready' || normalized === 'configured') {
+    return {
+      label: '준비',
+      className: 'status-pill status-pill-success',
+    };
+  }
+  if (normalized === 'blocked' || normalized === 'failed') {
+    return {
+      label: '차단',
+      className: 'status-pill status-pill-error',
+    };
+  }
+  if (normalized === 'partial') {
+    return {
+      label: '부분',
+      className: 'status-pill status-pill-warn',
+    };
+  }
+  if (normalized === 'active') {
+    return {
+      label: '활성',
+      className: 'status-pill status-pill-success',
+    };
+  }
+  return {
+    label: '대기',
+    className: 'status-pill status-pill-neutral',
+  };
+}
+
+function renderGroupwareOpsSummary() {
+  const target = $('#groupwareOpsSummary');
+  if (!(target instanceof HTMLElement)) return;
+  const foundation = state.integration.groupwareFoundation;
+  const compatibility = state.integration.groupwareCompatibility;
+  const rollout = state.integration.groupwareRollout;
+  const readyGroups = Number(foundation?.database?.ready_group_count || 0);
+  const totalGroups = Number(foundation?.database?.total_group_count || 0);
+  const compatibilityCount = Array.isArray(compatibility?.legacy_compatibility_routes)
+    ? compatibility.legacy_compatibility_routes.length
+    : 0;
+  const rolloutChecks = Array.isArray(rollout?.rollout_checks) ? rollout.rollout_checks.length : 0;
+  const liveRooms = Number(rollout?.runtime?.live_room_count || 0);
+  const readinessLabel = getGroupwareStatusMeta(rollout?.readiness?.status).label;
+
+  target.innerHTML = '';
+  [
+    ['Foundation', totalGroups ? `${readyGroups}/${totalGroups}` : '-'],
+    ['호환 경로', `${compatibilityCount}개`],
+    ['회의 준비도', readinessLabel],
+    ['실시간 회의', `${liveRooms}개`],
+    ['Rollout 체크', `${rolloutChecks}건`],
+  ].forEach(([label, value]) => {
+    const card = document.createElement('article');
+    card.className = 'profile-mail-summary-card';
+    card.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+    target.appendChild(card);
+  });
+}
+
+function renderGroupwareRolloutComposer() {
+  const composer = $('#groupwareRolloutComposer');
+  if (!(composer instanceof HTMLElement)) return;
+  const canWrite = canViewGroupwareFoundationPanel();
+  composer.classList.toggle('hidden', !canWrite);
+  const status = $('#groupwareRolloutCheckStatus');
+  if (status) {
+    status.textContent = canWrite
+      ? (String(status.textContent || '').trim() || '관리자는 rollout 체크를 기록할 수 있습니다.')
+      : 'Developer / HQ Admin만 rollout 체크를 기록할 수 있습니다.';
+  }
+}
+
+function applyRecordedGroupwareRolloutCheck(row) {
+  const payload = row && typeof row === 'object' ? row : null;
+  if (!payload) return;
+  const rollout = state.integration.groupwareRollout && typeof state.integration.groupwareRollout === 'object'
+    ? state.integration.groupwareRollout
+    : { rollout_checks: [], readiness: {}, runtime: {}, deployment_topology: {} };
+  const nextChecks = Array.isArray(rollout.rollout_checks) ? [...rollout.rollout_checks] : [];
+  const nextRow = {
+    ...payload,
+    check_type: String(payload.check_type || '').trim(),
+    status: String(payload.status || '').trim(),
+    summary: String(payload.summary || '').trim(),
+  };
+  nextChecks.unshift(nextRow);
+  rollout.rollout_checks = nextChecks;
+
+  const passingChecks = nextChecks.filter((item) => ['ready', 'passed'].includes(String(item?.status || '').trim().toLowerCase()));
+  const failingChecks = nextChecks.filter((item) => ['blocked', 'failed'].includes(String(item?.status || '').trim().toLowerCase()));
+  rollout.readiness = {
+    ...(rollout.readiness || {}),
+    status: failingChecks.length ? 'blocked' : (passingChecks.length ? 'ready' : 'pending'),
+    passing_check_count: passingChecks.length,
+    failing_check_count: failingChecks.length,
+    load_test_recorded: nextChecks.some((item) => String(item?.check_type || '').trim().toLowerCase() === 'load_test' && ['ready', 'passed'].includes(String(item?.status || '').trim().toLowerCase())),
+    tenant_isolation_recorded: nextChecks.some((item) => String(item?.check_type || '').trim().toLowerCase() === 'tenant_isolation' && ['ready', 'passed'].includes(String(item?.status || '').trim().toLowerCase())),
+  };
+  state.integration.groupwareRollout = rollout;
+}
+
+function renderGroupwareOpsCard() {
+  const allowed = canManageIntegrations();
+  toggleVisibility('#groupwareOpsCard', allowed);
+  if (!allowed) return;
+
+  renderGroupwareOpsSummary();
+  renderGroupwareRolloutComposer();
+
+  const foundationList = $('#groupwareFoundationList');
+  const compatibilityList = $('#groupwareCompatibilityList');
+  const rolloutList = $('#groupwareRolloutList');
+  const foundation = state.integration.groupwareFoundation;
+  const compatibility = state.integration.groupwareCompatibility;
+  const rollout = state.integration.groupwareRollout;
+  const foundationError = String(state.integration.groupwareFoundationError || '').trim();
+  const compatibilityError = String(state.integration.groupwareCompatibilityError || '').trim();
+  const rolloutError = String(state.integration.groupwareRolloutError || '').trim();
+
+  if ($('#groupwareFoundationStatus')) {
+    const summary = foundation?.database
+      ? `준비 그룹 ${Number(foundation.database.ready_group_count || 0)}/${Number(foundation.database.total_group_count || 0)}`
+      : (foundationError || (!canViewGroupwareFoundationPanel() ? 'Developer / HQ Admin 전용' : 'foundation 조회 대기'));
+    $('#groupwareFoundationStatus').textContent = summary;
+  }
+  if ($('#groupwareCompatibilityStatus')) {
+    const count = Array.isArray(compatibility?.legacy_compatibility_routes) ? compatibility.legacy_compatibility_routes.length : 0;
+    $('#groupwareCompatibilityStatus').textContent = compatibility
+      ? `legacy 호환 ${count}건`
+      : (compatibilityError || (!canViewGroupwareFoundationPanel() ? 'Developer / HQ Admin 전용' : '호환 경로 조회 대기'));
+  }
+  if ($('#groupwareRolloutStatus')) {
+    const readiness = getGroupwareStatusMeta(rollout?.readiness?.status);
+    const checks = Array.isArray(rollout?.rollout_checks) ? rollout.rollout_checks.length : 0;
+    $('#groupwareRolloutStatus').textContent = rollout
+      ? `준비도 ${readiness.label} · 체크 ${checks}건`
+      : (rolloutError || 'rollout 상태 조회 대기');
+  }
+
+  if (foundationList instanceof HTMLElement) {
+    clearList(foundationList);
+    if (foundation?.database?.groups && typeof foundation.database.groups === 'object') {
+      Object.entries(foundation.database.groups).forEach(([groupKey, groupValue]) => {
+        const tables = Array.isArray(groupValue?.tables) ? groupValue.tables : [];
+        const missing = Array.isArray(groupValue?.missing_tables) ? groupValue.missing_tables : [];
+        const readyCount = Math.max(tables.length - missing.length, 0);
+        const meta = missing.length
+          ? `테이블 ${readyCount}/${tables.length} · 누락 ${missing.slice(0, 2).join(', ')}${missing.length > 2 ? ' 외' : ''}`
+          : `테이블 ${readyCount}/${tables.length} · 준비 완료`;
+        const pill = getGroupwareStatusMeta(groupValue?.ready ? 'ready' : (missing.length ? 'partial' : 'pending'));
+        foundationList.appendChild(createMailHubListRow({
+          title: getGroupwareFoundationGroupLabel(groupKey),
+          meta,
+          pillLabel: pill.label,
+          pillClass: pill.className,
+        }));
+      });
+    } else if (!canViewGroupwareFoundationPanel()) {
+      renderCompactListEmpty(foundationList, 'Developer / HQ Admin만 foundation을 볼 수 있습니다.', '현재 계정에서는 회의 rollout만 확인할 수 있습니다.');
+    } else if (foundationError) {
+      renderCompactListEmpty(foundationList, 'foundation 상태를 불러오지 못했습니다.', foundationError);
+    } else {
+      renderCompactListEmpty(foundationList, 'foundation 상태를 불러오는 중입니다.');
+    }
+  }
+
+  if (compatibilityList instanceof HTMLElement) {
+    clearList(compatibilityList);
+    const rows = Array.isArray(compatibility?.legacy_compatibility_routes)
+      ? compatibility.legacy_compatibility_routes
+      : [];
+    if (rows.length) {
+      rows.forEach((row) => {
+        compatibilityList.appendChild(createMailHubListRow({
+          title: String(row?.legacy_prefix || '-').trim() || '-',
+          meta: `${String(row?.future_module || '-').trim()} · Phase ${Number(row?.cutover_phase || 0) || '-'} · ${String(row?.adapter_strategy || '').trim()}`,
+          pillLabel: `P${Number(row?.cutover_phase || 0) || '-'}`,
+          pillClass: 'status-pill status-pill-neutral',
+        }));
+      });
+    } else if (!canViewGroupwareFoundationPanel()) {
+      renderCompactListEmpty(compatibilityList, '호환 경로는 관리자 전용입니다.', 'Developer / HQ Admin 권한에서 상세 호환 경로를 확인할 수 있습니다.');
+    } else if (compatibilityError) {
+      renderCompactListEmpty(compatibilityList, '호환 경로를 불러오지 못했습니다.', compatibilityError);
+    } else {
+      renderCompactListEmpty(compatibilityList, '호환 경로를 불러오는 중입니다.');
+    }
+  }
+
+  if (rolloutList instanceof HTMLElement) {
+    clearList(rolloutList);
+    if (rollout) {
+      const readiness = getGroupwareStatusMeta(rollout?.readiness?.status);
+      const readinessMeta = [
+        `통과 ${Number(rollout?.readiness?.passing_check_count || 0)}건`,
+        `실패 ${Number(rollout?.readiness?.failing_check_count || 0)}건`,
+        rollout?.readiness?.load_test_recorded ? '부하 테스트 완료' : '부하 테스트 대기',
+        rollout?.readiness?.tenant_isolation_recorded ? '테넌트 분리 확인' : '테넌트 분리 대기',
+      ].join(' · ');
+      rolloutList.appendChild(createMailHubListRow({
+        title: '회의 rollout 준비도',
+        meta: readinessMeta,
+        pillLabel: readiness.label,
+        pillClass: readiness.className,
+      }));
+
+      [
+        ['RT Gateway', rollout?.deployment_topology?.rt_gateway?.status, String(rollout?.deployment_topology?.rt_gateway?.public_url || '').trim() || 'public url 미설정'],
+        ['Media SFU', rollout?.deployment_topology?.media_sfu?.status, String(rollout?.deployment_topology?.media_sfu?.public_url || '').trim() || 'public url 미설정'],
+        ['TURN', rollout?.deployment_topology?.coturn?.status, Array.isArray(rollout?.deployment_topology?.coturn?.uris) && rollout.deployment_topology.coturn.uris.length ? `${rollout.deployment_topology.coturn.uris.length}개 URI` : 'TURN URI 미설정'],
+        ['실행 중 런타임', 'active', `room ${Number(rollout?.runtime?.room_count || 0)} · live ${Number(rollout?.runtime?.live_room_count || 0)} · session ${Number(rollout?.runtime?.live_session_count || 0)}`],
+      ].forEach(([title, status, meta]) => {
+        const pill = getGroupwareStatusMeta(status);
+        rolloutList.appendChild(createMailHubListRow({
+          title,
+          meta,
+          pillLabel: pill.label,
+          pillClass: pill.className,
+        }));
+      });
+
+      const checkRows = Array.isArray(rollout?.rollout_checks) ? rollout.rollout_checks.slice(0, 4) : [];
+      checkRows.forEach((item) => {
+        const pill = getGroupwareStatusMeta(item?.status);
+        const checkedAt = formatProfileStatusDateTime(item?.checked_at || item?.created_at || '');
+        rolloutList.appendChild(createMailHubListRow({
+          title: `${String(item?.check_type || 'rollout_check').trim()} · ${String(item?.environment_key || 'default').trim()}`,
+          meta: `${String(item?.summary || '').trim() || '요약 없음'} · ${checkedAt}`,
+          pillLabel: pill.label,
+          pillClass: pill.className,
+        }));
+      });
+    } else if (rolloutError) {
+      renderCompactListEmpty(rolloutList, '회의 rollout 상태를 불러오지 못했습니다.', rolloutError);
+    } else {
+      renderCompactListEmpty(rolloutList, '회의 rollout 상태를 불러오는 중입니다.');
+    }
+  }
+}
+
+async function recordGroupwareRolloutCheck() {
+  if (!canViewGroupwareFoundationPanel()) {
+    showToast('rollout 체크 기록 권한이 없습니다.', 'error', 2200);
+    return;
+  }
+  const environmentKey = String($('#groupwareRolloutEnvironment')?.value || 'default').trim() || 'default';
+  const checkType = String($('#groupwareRolloutCheckType')?.value || '').trim();
+  const statusValue = String($('#groupwareRolloutCheckState')?.value || '').trim();
+  const summary = String($('#groupwareRolloutCheckSummary')?.value || '').trim();
+  if (!checkType || !statusValue || !summary) {
+    setInlineStatus('#groupwareRolloutCheckStatus', '환경, 체크 종류, 상태, 요약을 모두 입력해 주세요.', 'error');
+    return;
+  }
+
+  setInlineStatus('#groupwareRolloutCheckStatus', 'rollout 체크를 기록하는 중...', 'info');
+  const created = await apiRequest('/meetings/rollout/checks', {
+    method: 'POST',
+    body: {
+      environment_key: environmentKey,
+      check_type: checkType,
+      status: statusValue,
+      summary,
+      detail_json: {},
+    },
+  });
+  if ($('#groupwareRolloutCheckSummary')) {
+    $('#groupwareRolloutCheckSummary').value = '';
+  }
+  applyRecordedGroupwareRolloutCheck(created);
+  renderGroupwareOpsCard();
+  renderProfileSettingsRail();
+  setInlineStatus('#groupwareRolloutCheckStatus', 'rollout 체크를 기록했습니다.', 'success');
+  showToast('회의 rollout 체크를 기록했습니다.', 'success', 1800);
+  await loadGroupwareAdminData({ force: true });
+}
+
+function renderMailHubCard() {
+  const allowed = canManageIntegrations();
+  toggleVisibility('#mailHubCard', allowed);
+  if (!allowed) return;
+
+  renderMailHubSummary();
+
+  const profileList = $('#mailProfileList');
+  const templateList = $('#mailTemplateList');
+  const jobsBody = $('#mailJobTableBody');
+  const accounts = Array.isArray(state.integration.mailAccounts) ? state.integration.mailAccounts : [];
+  const profiles = Array.isArray(state.integration.mailProfiles) ? state.integration.mailProfiles : [];
+  const templates = Array.isArray(state.integration.mailTemplates) ? state.integration.mailTemplates : [];
+  const jobs = Array.isArray(state.integration.mailJobs) ? state.integration.mailJobs : [];
+
+  setInlineStatus('#mailProfileStatus', profiles.length ? `${profiles.length}개 프로필` : '등록된 발신 프로필이 없습니다.', profiles.length ? 'success' : 'info');
+  setInlineStatus('#mailTemplateStatus', templates.length ? `${templates.length}개 템플릿` : '등록된 템플릿이 없습니다.', templates.length ? 'success' : 'info');
+  setInlineStatus('#mailJobStatus', jobs.length ? `최근 ${jobs.length}건 작업` : '최근 발송 작업이 없습니다.', jobs.length ? 'success' : 'info');
+
+  if (profileList instanceof HTMLElement) {
+    clearList(profileList);
+    if (!profiles.length) {
+      renderCompactListEmpty(profileList, '발신 프로필이 없습니다.', accounts.length ? '백엔드 기본 프로필을 먼저 확인해 주세요.' : '발신 계정부터 연결해 주세요.');
+    } else {
+      profiles.forEach((profile) => {
+        const fromEmail = String(profile?.from_email || profile?.mail_account_sender_email || '-').trim() || '-';
+        const replyTo = String(profile?.reply_to_email || '').trim();
+        const meta = [fromEmail, replyTo ? `Reply-To ${replyTo}` : '', profile?.mail_account_key ? `계정 ${profile.mail_account_key}` : '']
+          .filter(Boolean)
+          .join(' · ');
+        profileList.appendChild(createMailHubListRow({
+          title: String(profile?.display_name || profile?.profile_key || '발신 프로필').trim(),
+          meta,
+          pillLabel: profile?.is_default ? '기본' : '보조',
+          pillClass: profile?.is_default ? 'status-pill status-pill-success' : 'status-pill status-pill-neutral',
+        }));
+      });
+    }
+  }
+
+  if (templateList instanceof HTMLElement) {
+    clearList(templateList);
+    if (!templates.length) {
+      renderCompactListEmpty(templateList, '메일 템플릿이 없습니다.', '기본 템플릿이 아직 동기화되지 않았습니다.');
+    } else {
+      templates.forEach((template) => {
+        templateList.appendChild(createMailHubListRow({
+          title: String(template?.template_key || 'template').trim(),
+          meta: String(template?.subject_template || '').trim() || '제목 템플릿 없음',
+          pillLabel: template?.is_active === false ? '비활성' : '활성',
+          pillClass: template?.is_active === false ? 'status-pill status-pill-neutral' : 'status-pill status-pill-success',
+        }));
+      });
+    }
+  }
+
+  if (jobsBody instanceof HTMLElement) {
+    if (!jobs.length) {
+      renderAdminTableEmptyState(jobsBody, 5, '최근 발송 작업이 없습니다.');
+    } else {
+      jobsBody.innerHTML = '';
+      jobs.forEach((job) => {
+        const tr = document.createElement('tr');
+        const appendCell = (value = '-') => {
+          const td = document.createElement('td');
+          td.textContent = String(value || '-').trim() || '-';
+          tr.appendChild(td);
+          return td;
+        };
+        appendCell(`${String(job?.source_type || '-').trim() || '-'} #${String(job?.source_id || '-').trim() || '-'}`);
+        appendCell(String(job?.recipient_email || '-').trim() || '-');
+        appendCell(String(job?.profile_key || job?.template_key || '-').trim() || '-');
+        const stateTd = document.createElement('td');
+        const pill = document.createElement('span');
+        pill.className = getMailJobStatePillClass(job?.state);
+        pill.textContent = String(job?.state || 'queued').trim() || 'queued';
+        stateTd.appendChild(pill);
+        if (String(job?.last_error || '').trim()) {
+          const errorMeta = document.createElement('div');
+          errorMeta.className = 'requests-row-secondary';
+          errorMeta.textContent = String(job.last_error).trim();
+          stateTd.appendChild(errorMeta);
+        }
+        tr.appendChild(stateTd);
+        const actionTd = document.createElement('td');
+        if (String(job?.state || '').trim().toLowerCase() === 'failed') {
+          const retryBtn = document.createElement('button');
+          retryBtn.type = 'button';
+          retryBtn.className = 'btn btn-secondary';
+          retryBtn.dataset.action = 'mail-job-retry';
+          retryBtn.dataset.jobId = String(job?.id || '').trim();
+          retryBtn.textContent = '재시도';
+          actionTd.appendChild(retryBtn);
+        } else {
+          actionTd.textContent = '-';
+        }
+        tr.appendChild(actionTd);
+        jobsBody.appendChild(tr);
+      });
+    }
+  }
+}
+
+async function loadMailHubData({ force = false } = {}) {
+  renderMailHubCard();
+  if (!canManageIntegrations()) return null;
+  if (!hasRuntimeTenantContext()) {
+    state.integration.mailAccounts = [];
+    state.integration.mailProfiles = [];
+    state.integration.mailTemplates = [];
+    state.integration.mailJobs = [];
+    setInlineStatus('#mailProfileStatus', '작업회사를 먼저 선택해 주세요.', 'info');
+    setInlineStatus('#mailTemplateStatus', '작업회사를 먼저 선택해 주세요.', 'info');
+    setInlineStatus('#mailJobStatus', '작업회사를 먼저 선택해 주세요.', 'info');
+    renderMailHubCard();
+    return null;
+  }
+
+  const now = Date.now();
+  const isFresh = !force
+    && Number(state.integration.mailFetchedAt || 0) > 0
+    && (now - Number(state.integration.mailFetchedAt || 0)) < INTEGRATION_CACHE_TTL_SOC_EVENTS_MS;
+  if (isFresh) {
+    renderMailHubCard();
+    return {
+      accounts: state.integration.mailAccounts,
+      profiles: state.integration.mailProfiles,
+      templates: state.integration.mailTemplates,
+      jobs: state.integration.mailJobs,
+    };
+  }
+
+  const [accountsPayload, profilesPayload, templatesPayload, jobsPayload] = await Promise.all([
+    apiRequest('/mail/accounts'),
+    apiRequest('/mail/sender-profiles'),
+    apiRequest('/mail/templates'),
+    apiRequest('/mail/jobs?limit=80'),
+  ]);
+  state.integration.mailAccounts = Array.isArray(accountsPayload?.items) ? accountsPayload.items : [];
+  state.integration.mailProfiles = Array.isArray(profilesPayload?.items) ? profilesPayload.items : [];
+  state.integration.mailTemplates = Array.isArray(templatesPayload?.items) ? templatesPayload.items : [];
+  state.integration.mailJobs = Array.isArray(jobsPayload?.items) ? jobsPayload.items : [];
+  state.integration.mailFetchedAt = Date.now();
+  renderMailHubCard();
+  return {
+    accounts: state.integration.mailAccounts,
+    profiles: state.integration.mailProfiles,
+    templates: state.integration.mailTemplates,
+    jobs: state.integration.mailJobs,
+  };
+}
+
+async function loadGroupwareAdminData({ force = false } = {}) {
+  renderGroupwareOpsCard();
+  if (!canManageIntegrations()) return null;
+
+  const now = Date.now();
+  const hasCachedPayload = Boolean(
+    state.integration.groupwareFoundation
+    || state.integration.groupwareCompatibility
+    || state.integration.groupwareRollout
+    || state.integration.groupwareFoundationError
+    || state.integration.groupwareCompatibilityError
+    || state.integration.groupwareRolloutError,
+  );
+  const isFresh = !force
+    && hasCachedPayload
+    && Number(state.integration.groupwareFetchedAt || 0) > 0
+    && (now - Number(state.integration.groupwareFetchedAt || 0)) < INTEGRATION_CACHE_TTL_GROUPWARE_MS;
+  if (isFresh) {
+    renderGroupwareOpsCard();
+    return {
+      foundation: state.integration.groupwareFoundation,
+      compatibility: state.integration.groupwareCompatibility,
+      rollout: state.integration.groupwareRollout,
+    };
+  }
+
+  state.integration.groupwareFoundationError = '';
+  state.integration.groupwareCompatibilityError = '';
+  state.integration.groupwareRolloutError = '';
+  renderGroupwareOpsCard();
+
+  const tasks = [apiRequest('/meetings/rollout/status')];
+  if (canViewGroupwareFoundationPanel()) {
+    tasks.unshift(apiRequest('/groupware/foundation/status'), apiRequest('/groupware/foundation/compatibility'));
+  } else {
+    state.integration.groupwareFoundation = null;
+    state.integration.groupwareCompatibility = null;
+  }
+
+  const results = await Promise.allSettled(tasks);
+  if (canViewGroupwareFoundationPanel()) {
+    const [foundationResult, compatibilityResult, rolloutResult] = results;
+    if (foundationResult?.status === 'fulfilled') {
+      state.integration.groupwareFoundation = foundationResult.value && typeof foundationResult.value === 'object'
+        ? foundationResult.value
+        : null;
+    } else {
+      state.integration.groupwareFoundation = null;
+      state.integration.groupwareFoundationError = normalizeActionError(foundationResult?.reason, 'foundation 상태를 불러오지 못했습니다.');
+    }
+
+    if (compatibilityResult?.status === 'fulfilled') {
+      state.integration.groupwareCompatibility = compatibilityResult.value && typeof compatibilityResult.value === 'object'
+        ? compatibilityResult.value
+        : null;
+    } else {
+      state.integration.groupwareCompatibility = null;
+      state.integration.groupwareCompatibilityError = normalizeActionError(compatibilityResult?.reason, '호환 경로를 불러오지 못했습니다.');
+    }
+
+    if (rolloutResult?.status === 'fulfilled') {
+      state.integration.groupwareRollout = rolloutResult.value && typeof rolloutResult.value === 'object'
+        ? rolloutResult.value
+        : null;
+    } else {
+      state.integration.groupwareRollout = null;
+      state.integration.groupwareRolloutError = normalizeActionError(rolloutResult?.reason, '회의 rollout 상태를 불러오지 못했습니다.');
+    }
+  } else {
+    const [rolloutResult] = results;
+    if (rolloutResult?.status === 'fulfilled') {
+      state.integration.groupwareRollout = rolloutResult.value && typeof rolloutResult.value === 'object'
+        ? rolloutResult.value
+        : null;
+    } else {
+      state.integration.groupwareRollout = null;
+      state.integration.groupwareRolloutError = normalizeActionError(rolloutResult?.reason, '회의 rollout 상태를 불러오지 못했습니다.');
+    }
+  }
+
+  state.integration.groupwareFetchedAt = Date.now();
+  renderGroupwareOpsCard();
+  renderProfileSettingsRail();
+  return {
+    foundation: state.integration.groupwareFoundation,
+    compatibility: state.integration.groupwareCompatibility,
+    rollout: state.integration.groupwareRollout,
+  };
+}
+
+async function retryMailHubJob(jobId = '') {
+  const normalizedId = String(jobId || '').trim();
+  if (!normalizedId) return;
+  await apiRequest(`/mail/jobs/${encodeURIComponent(normalizedId)}/retry`, {
+    method: 'POST',
+  });
+}
+
 async function loadProfileIntegrationData() {
   applyAppleTenantScopedUiVisibility();
   const allowed = canManageIntegrations();
   toggleVisibility('#integrationFlagsCard', allowed);
   toggleVisibility('#googleSheetProfileCard', allowed);
+  toggleVisibility('#mailHubCard', allowed);
+  toggleVisibility('#groupwareOpsCard', allowed);
   toggleVisibility('#socMonitorCard', allowed);
 
   if (!allowed) {
+    renderMailHubCard();
+    renderGroupwareOpsCard();
     renderOpsAutomationStatus();
     renderProfileSettingsRail();
     return;
@@ -34005,6 +35386,8 @@ async function loadProfileIntegrationData() {
   const jobs = [
     loadIntegrationFlags(),
     loadGoogleSheetProfiles(),
+    loadMailHubData(),
+    loadGroupwareAdminData(),
     loadSocEvents(),
   ];
   if (segment === 'logs') {
@@ -34773,6 +36156,8 @@ function clearSession() {
   state.reminder = createInitialReminderState();
   state.devAdmin = createInitialDevAdminState();
   state.integration = createInitialIntegrationState();
+  state.messenger = createInitialMessengerState();
+  state.meetings = createInitialMeetingsState();
   state.uiContext = createInitialUiContextState();
   state.viewRuntime = createInitialViewRuntimeState();
   state.taskProgress = createInitialTaskProgressState();
@@ -35116,8 +36501,12 @@ async function hydrateSession({ background = false } = {}) {
     hasAccessToken: Boolean(state.token),
     hasRefreshToken: Boolean(state.refreshToken),
   });
-  if (state.refreshToken) {
-    const refreshed = await requestTokenRefresh();
+  const shouldPreferStoredAccessToken = background && Boolean(state.token);
+  if (state.refreshToken && !shouldPreferStoredAccessToken) {
+    const refreshed = await requestTokenRefresh({
+      allowSoftFailureWithAccessToken: background,
+      source: background ? 'background_hydrate' : 'foreground_hydrate',
+    });
     if (hasHydrateSessionBeenSuperseded()) {
       console.info('[RG ARLS][Auth] ignored stale background hydrate after newer session replaced it');
       return false;
@@ -35128,6 +36517,8 @@ async function hydrateSession({ background = false } = {}) {
       showAuthPanel();
       return false;
     }
+  } else if (state.refreshToken && shouldPreferStoredAccessToken) {
+    console.info('[RG ARLS][Auth] skipped eager refresh during background hydrate because stored access token exists');
   }
   if (hasHydrateSessionBeenSuperseded()) {
     console.info('[RG ARLS][Auth] ignored stale background hydrate after newer session replaced it');
@@ -35151,8 +36542,7 @@ async function hydrateSession({ background = false } = {}) {
     showShellPanel();
     await syncServerInAppNotifications({ force: true, showToasts: false });
     const shouldNavigateAfterAuth = !background || !state.currentRoute || normalizeRoutePath(state.currentRoute) === ROUTE_LOGIN;
-    const mustChangeRouted = await enforceMustChangePasswordGate();
-    if (!mustChangeRouted && shouldNavigateAfterAuth) {
+    if (shouldNavigateAfterAuth) {
       const initialRoute = requestedRoute && requestedRoute !== ROUTE_LOGIN
         ? requestedRouteRaw
         : (consumePendingRouteAfterLogin() || resolvePostLoginDefaultRoute());
@@ -35178,8 +36568,7 @@ async function hydrateSession({ background = false } = {}) {
       setAuthStatus(AUTH_STATUS_AUTHENTICATED);
       showShellPanel();
       const shouldNavigateAfterAuth = !background || !state.currentRoute || normalizeRoutePath(state.currentRoute) === ROUTE_LOGIN;
-      const mustChangeRouted = await enforceMustChangePasswordGate();
-      if (!mustChangeRouted && shouldNavigateAfterAuth) {
+      if (shouldNavigateAfterAuth) {
         const initialRoute = requestedRoute && requestedRoute !== ROUTE_LOGIN
           ? requestedRouteRaw
           : (consumePendingRouteAfterLogin() || resolvePostLoginDefaultRoute());
@@ -35209,8 +36598,7 @@ async function hydrateSession({ background = false } = {}) {
     setAuthStatus(AUTH_STATUS_AUTHENTICATED);
     showShellPanel();
     const shouldNavigateAfterAuth = !background || !state.currentRoute || normalizeRoutePath(state.currentRoute) === ROUTE_LOGIN;
-    const mustChangeRouted = await enforceMustChangePasswordGate();
-    if (!mustChangeRouted && shouldNavigateAfterAuth) {
+    if (shouldNavigateAfterAuth) {
       const fallbackRoute = requestedRoute && requestedRoute !== ROUTE_LOGIN
         ? requestedRouteRaw
         : (consumePendingRouteAfterLogin() || resolvePostLoginDefaultRoute());
@@ -37555,7 +38943,7 @@ function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad
   if (previousView === 'schedule' && targetView !== 'schedule') {
     cancelScheduleEmployeeListChunkRender();
   }
-  ['home', 'attendance-check', 'ops', 'support-status', 'reports', 'checkin-request', 'requests', 'notices', 'hr', 'attendance', 'calendar', 'calendar-public', 'schedule', 'profile', 'roadmap', 'dev-console', 'employees', 'org'].forEach((view) => {
+  ['home', 'messenger', 'meetings', 'attendance-check', 'ops', 'support-status', 'reports', 'checkin-request', 'requests', 'notices', 'hr', 'attendance', 'calendar', 'calendar-public', 'schedule', 'profile', 'roadmap', 'dev-console', 'employees', 'org'].forEach((view) => {
     const panel = $(`#view-${view}`);
     if (!panel) return;
     const isTarget = view === targetView;
@@ -37613,6 +39001,7 @@ function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad
 
   applyDesktopRouteLayout(state.currentRoute);
   renderDesktopTopContext();
+  decorateAzureTopbarTabs(document);
 
   if (targetView === 'notices') {
     primeNoticesImmediateRouteState();
@@ -37628,6 +39017,7 @@ function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad
       showToast(normalizeActionError(err), 'error', 4000);
     })
     .finally(() => {
+      decorateAzureTopbarTabs(document);
       ensurePolling();
       ensureScheduleLiveRefresh();
     });
@@ -37758,7 +39148,7 @@ function setRequestsWorkspaceHeading(segment = normalizeRequestsTabView(state.re
   }
   if (segment === 'documents') {
     titleEl.textContent = '문서 요청 목록';
-    hintEl.textContent = '재직증명서 요청과 발급 상태를 확인하고 필요한 승인을 처리합니다.';
+    hintEl.textContent = '4종 증명서 요청과 발급 상태를 확인하고 필요한 승인을 처리합니다.';
     priorityTitleEl.textContent = '문서 발급 대기';
     priorityHintEl.textContent = '승인이 필요한 문서 요청과 발급 대기 상태를 우선 표시합니다.';
     return;
@@ -37850,17 +39240,17 @@ async function fetchManagerLeaveRequestRows() {
 async function fetchRequestsDocumentRows() {
   if (isManagerShellRole()) {
     const statuses = ['requested', 'generating', 'issued', 'rejected'];
-    const results = await Promise.all(statuses.map((status) => apiRequest(
-      `/admin/hr/documents/employment-certificate/requests?${new URLSearchParams({
+    const results = await Promise.all(
+      statuses.map((status) => apiRequest(`/certificates/admin/requests?${new URLSearchParams({
         status,
-        page: '1',
-        pageSize: '120',
-      }).toString()}`,
-    )));
+        limit: '120',
+      }).toString()}`)),
+    );
     const merged = [];
     const seen = new Set();
-    results.forEach((rows) => {
-      (Array.isArray(rows) ? rows : []).forEach((row) => {
+    results.forEach((payload) => {
+      const rows = Array.isArray(payload?.items) ? payload.items : [];
+      rows.forEach((row) => {
         const id = String(row?.id || '').trim();
         if (!id || seen.has(id)) return;
         seen.add(id);
@@ -37869,8 +39259,84 @@ async function fetchRequestsDocumentRows() {
     });
     return merged;
   }
-  await loadHrEmploymentQuota({ force: false });
+  await Promise.allSettled([
+    loadHrEmploymentQuota({ force: false }),
+    loadHrEmploymentCertificateTypes({ force: false }),
+  ]);
   return loadHrEmploymentMyRequests({ force: false });
+}
+
+async function fetchRequestsApprovalRows() {
+  if (!isManagerShellRole()) return [];
+  const processedMode = state.requestsManagerTab === REQUESTS_MANAGER_TAB_PROCESSED;
+  if (!processedMode) {
+    const payload = await apiRequest('/approvals/review-queue?limit=120');
+    const rows = Array.isArray(payload?.items) ? payload.items : [];
+    return rows.map((row) => buildRequestsApprovalItem(row));
+  }
+  const statuses = ['approved', 'rejected', 'returned'];
+  const payloads = await Promise.all(
+    statuses.map((status) => apiRequest(`/approvals/documents?${new URLSearchParams({
+      scope: 'review',
+      status,
+      limit: '80',
+    }).toString()}`)),
+  );
+  const merged = [];
+  const seen = new Set();
+  payloads.forEach((payload) => {
+    const rows = Array.isArray(payload?.items) ? payload.items : [];
+    rows.forEach((row) => {
+      const id = String(row?.id || '').trim();
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      merged.push(buildRequestsApprovalItem(row));
+    });
+  });
+  return merged;
+}
+
+async function loadRequestsApprovalDetail(documentId = '') {
+  const workspace = ensureRequestsWorkspaceState();
+  const normalizedId = String(documentId || '').trim();
+  if (!normalizedId) return null;
+  if (workspace.approvalDetailById.has(normalizedId)) {
+    return workspace.approvalDetailById.get(normalizedId) || null;
+  }
+  workspace.approvalDetailLoadingKey = normalizedId;
+  renderRequestsWorkspaceDetailPanel();
+  try {
+    const detail = await apiRequest(`/approvals/documents/${encodeURIComponent(normalizedId)}`);
+    workspace.approvalDetailById.set(normalizedId, detail && typeof detail === 'object' ? detail : null);
+    return workspace.approvalDetailById.get(normalizedId) || null;
+  } finally {
+    if (workspace.approvalDetailLoadingKey === normalizedId) {
+      workspace.approvalDetailLoadingKey = '';
+    }
+    renderRequestsWorkspaceDetailPanel();
+  }
+}
+
+async function submitRequestsApprovalAction(documentId = '', actionType = '', commentText = '') {
+  const normalizedId = String(documentId || '').trim();
+  const normalizedAction = String(actionType || '').trim().toLowerCase();
+  if (!normalizedId || !normalizedAction) {
+    throw new Error('결재 문서 정보가 올바르지 않습니다.');
+  }
+  const payload = {
+    action_type: normalizedAction,
+  };
+  const trimmedComment = String(commentText || '').trim();
+  if (trimmedComment) {
+    payload.comment_text = trimmedComment;
+  }
+  const result = await apiRequest(`/approvals/documents/${encodeURIComponent(normalizedId)}/actions`, {
+    method: 'POST',
+    body: payload,
+  });
+  const workspace = ensureRequestsWorkspaceState();
+  workspace.approvalDetailById.delete(normalizedId);
+  return result;
 }
 
 function getRequestsActiveRawRowsForCurrentTab() {
@@ -37932,31 +39398,7 @@ async function loadRequestsWorkspaceCurrentTab({ silent = false } = {}) {
           appliedChanges: row?.applied_changes && typeof row.applied_changes === 'object' ? row.applied_changes : {},
         }));
       } else {
-        const statuses = state.requestsManagerTab === REQUESTS_MANAGER_TAB_PROCESSED
-          ? ['approved', 'rejected', 'cancelled']
-          : ['pending'];
-        const [attendanceRows, leaveRows, documentRows] = await Promise.all([
-          can('attendanceReview') ? fetchManagerAttendanceRequests(statuses) : Promise.resolve([]),
-          can('leaveReview') ? fetchManagerLeaveRequests(statuses) : Promise.resolve([]),
-          fetchRequestsDocumentRows(),
-        ]);
-        const correctionStatuses = state.requestsManagerTab === REQUESTS_MANAGER_TAB_PROCESSED
-          ? ['approved', 'rejected']
-          : ['pending'];
-        const correctionRows = can('attendanceReview') ? getCorrectionRowsByStatuses(correctionStatuses) : [];
-        const approvalDocumentStatuses = new Set(
-          state.requestsManagerTab === REQUESTS_MANAGER_TAB_PROCESSED
-            ? ['issued', 'rejected']
-            : ['requested', 'generating'],
-        );
-        state.requestsWorkspace.approvalRows = [
-          ...(Array.isArray(attendanceRows) ? attendanceRows : []).map((row) => buildRequestsAttendanceItem(row, { managerMode: true })),
-          ...(Array.isArray(leaveRows) ? leaveRows : []).map((row) => buildRequestsLeaveItem(row, { managerMode: true })),
-          ...(Array.isArray(correctionRows) ? correctionRows : []).map((row) => buildRequestsCorrectionItem(row, { managerMode: true })),
-          ...(Array.isArray(documentRows) ? documentRows : [])
-            .filter((row) => approvalDocumentStatuses.has(normalizeHrRequestStatus(row?.status)))
-            .map((row) => buildRequestsDocumentItem(row, { adminMode: true })),
-        ];
+        state.requestsWorkspace.approvalRows = await fetchRequestsApprovalRows();
       }
     } else if (segment === 'correction') {
       state.requestsWorkspace.correctionRows = Array.isArray(state.correction?.items) ? state.correction.items : [];
@@ -38780,6 +40222,7 @@ function renderNoticesCategoryTabs() {
     button.textContent = item.label;
     tabs.appendChild(button);
   });
+  decorateAzureTopbarTabs(document);
 }
 
 function renderNoticesSearchControls() {
@@ -39263,6 +40706,10 @@ function ensureHrDocsState() {
   return state.hrDocs;
 }
 
+function isHrViewActive() {
+  return normalizeRoutePath(state.currentRoute || '') === ROUTE_HR;
+}
+
 function isHrAdminRole() {
   return getNavigationRole() === 'DEV' || getNavigationRole() === 'BRANCH_MANAGER';
 }
@@ -39416,24 +40863,250 @@ function formatHrPurposeLabel(code = '', text = '') {
   return HR_PURPOSE_LABELS[normalizedCode] || normalizedCode;
 }
 
+function formatHrCertificateMailState(row = {}) {
+  const status = normalizeHrRequestStatus(row?.status);
+  if (Boolean(row?.file_ready) || status === 'issued') return 'PDF 준비됨';
+  if (status === 'generating') return '발급 중';
+  if (status === 'requested') return '승인 대기';
+  if (status === 'rejected') return '반려';
+  if (status === 'failed') return '발급 실패';
+  return '-';
+}
+
+function normalizeHrCertificateTypeKey(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE;
+}
+
+function normalizeHrCertificateTypeRow(row = {}) {
+  const meta = row?.meta_json && typeof row.meta_json === 'object' ? row.meta_json : {};
+  return {
+    id: String(row?.id || '').trim(),
+    type_key: normalizeHrCertificateTypeKey(row?.type_key || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE),
+    display_name: String(row?.display_name || '증명서').trim() || '증명서',
+    requires_approval: row?.requires_approval !== false,
+    auto_mail_enabled: Boolean(row?.auto_mail_enabled),
+    available: row?.available !== undefined ? Boolean(row.available) : undefined,
+    eligibility_reason: String(row?.eligibility_reason || '').trim(),
+    daily_limit: Number(row?.daily_limit || HR_EMPLOYMENT_DAILY_LIMIT) || HR_EMPLOYMENT_DAILY_LIMIT,
+    meta_json: meta,
+  };
+}
+
+function getHrCertificateTypeRows() {
+  const hrState = ensureHrDocsState();
+  const rawRows = Array.isArray(hrState.typeRows) && hrState.typeRows.length
+    ? hrState.typeRows
+    : HR_CERTIFICATE_TYPE_FALLBACK_ROWS;
+  return rawRows.map((row) => normalizeHrCertificateTypeRow(row));
+}
+
+function isHrCertificateTypeRequestAvailable(typeRow = null) {
+  if (!typeRow || typeof typeRow !== 'object') return false;
+  if (typeof typeRow.available === 'boolean') {
+    return typeRow.available;
+  }
+  const meta = typeRow.meta_json && typeof typeRow.meta_json === 'object' ? typeRow.meta_json : {};
+  const rollout = String(meta.rollout || '').trim().toLowerCase();
+  return rollout !== 'planned';
+}
+
+function getHrCertificateTypeDisplayName(typeKey = '') {
+  const normalized = normalizeHrCertificateTypeKey(typeKey);
+  const row = getHrCertificateTypeRows().find((item) => item.type_key === normalized);
+  return String(row?.display_name || normalized || '증명서').trim() || '증명서';
+}
+
+function normalizeHrCopyCount(value) {
+  const parsed = Number.parseInt(String(value ?? '').trim(), 10);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.min(20, Math.max(1, parsed));
+}
+
+function countHrTodayRequestedRows(rows = []) {
+  const today = toLocalDateKey(new Date());
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const requestedAt = String(row?.requested_at || '').trim();
+    if (!requestedAt) return false;
+    return toLocalDateKey(new Date(requestedAt)) === today;
+  }).length;
+}
+
+function syncHrQuotaStateFromRows(rows = []) {
+  const hrState = ensureHrDocsState();
+  const limit = Number(hrState.dailyLimit || HR_EMPLOYMENT_DAILY_LIMIT) || HR_EMPLOYMENT_DAILY_LIMIT;
+  const requestedCount = countHrTodayRequestedRows(rows);
+  hrState.dailyLimit = limit;
+  hrState.todayRequestedCount = requestedCount;
+  hrState.todayRemaining = Math.max(0, limit - requestedCount);
+}
+
+function clearHrMyRequestRefreshTimer() {
+  const hrState = ensureHrDocsState();
+  if (hrState.myRowsRefreshTimer) {
+    clearTimeout(hrState.myRowsRefreshTimer);
+    hrState.myRowsRefreshTimer = 0;
+  }
+}
+
+function scheduleHrMyRequestRefresh(delayMs = 5000) {
+  const hrState = ensureHrDocsState();
+  clearHrMyRequestRefreshTimer();
+  hrState.myRowsRefreshTimer = setTimeout(async () => {
+    hrState.myRowsRefreshTimer = 0;
+    if (!isHrViewActive() || !isHrEmployeeRole()) return;
+    try {
+      const rows = await loadHrEmploymentMyRequests({ force: true });
+      const hasPendingRows = Array.isArray(rows) && rows.some((row) => {
+        const status = normalizeHrRequestStatus(row?.status);
+        return status === 'requested' || status === 'generating';
+      });
+      if (hasPendingRows) {
+        scheduleHrMyRequestRefresh(delayMs);
+      }
+    } catch (_) {
+      // Keep the current UI stable; the next explicit refresh can recover.
+    }
+  }, Math.max(1500, Number(delayMs || 0)));
+}
+
+function getHrCertificateTypeSubtitle(typeRow = null) {
+  if (!typeRow || typeof typeRow !== 'object') return '증명서 준비 상태를 확인하세요.';
+  if (isHrCertificateTypeRequestAvailable(typeRow)) {
+    return typeRow.requires_approval
+      ? '승인 후 PDF 발급 · 앱에서 다운로드'
+      : '즉시 PDF 발급 · 앱에서 다운로드';
+  }
+  if (String(typeRow.eligibility_reason || '').trim()) {
+    return String(typeRow.eligibility_reason || '').trim();
+  }
+  return '순차 오픈 예정';
+}
+
+function getHrCertificateTypeStateLabel(typeRow = null) {
+  if (!typeRow || typeof typeRow !== 'object') return '준비중';
+  if (isHrCertificateTypeRequestAvailable(typeRow)) {
+    return typeRow.requires_approval ? '승인형' : '자동발급';
+  }
+  return String(typeRow.eligibility_reason || '').trim() ? '신청 불가' : '준비중';
+}
+
+function getHrSelectedCertificateType() {
+  const hrState = ensureHrDocsState();
+  const rows = getHrCertificateTypeRows();
+  const selectedKey = normalizeHrCertificateTypeKey(hrState.selectedDocType || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE);
+  let selected = rows.find((row) => row.type_key === selectedKey) || null;
+  if (!selected) {
+    selected = rows.find((row) => isHrCertificateTypeRequestAvailable(row)) || rows[0] || null;
+  }
+  if (selected) {
+    hrState.selectedDocType = selected.type_key;
+  }
+  return selected;
+}
+
 function renderHrDocCardSelection() {
   const hrState = ensureHrDocsState();
-  let selected = String(hrState.selectedDocType || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE).trim();
-  if (selected !== HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE) {
-    selected = HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE;
-    hrState.selectedDocType = selected;
-  }
-  document.querySelectorAll('#hrDocCardGrid .hr-doc-card').forEach((button) => {
-    const docType = String(button?.dataset?.doc || '').trim();
-    const isEmployment = docType === HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE;
-    const cardDisabled = !isEmployment;
-    if (button instanceof HTMLButtonElement) {
-      button.disabled = cardDisabled;
-      button.setAttribute('aria-disabled', cardDisabled ? 'true' : 'false');
-    }
-    button.classList.toggle('hr-doc-card-disabled', cardDisabled);
-    button.classList.toggle('active', !cardDisabled && docType === selected);
+  const grid = $('#hrDocCardGrid');
+  if (!(grid instanceof HTMLElement)) return;
+  const rows = getHrCertificateTypeRows();
+  const selectedType = getHrSelectedCertificateType();
+  hrState.selectedDocType = normalizeHrCertificateTypeKey(selectedType?.type_key || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE);
+  grid.innerHTML = '';
+  rows.forEach((row) => {
+    const available = isHrCertificateTypeRequestAvailable(row);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `hr-doc-card${available ? ' is-live' : ' is-planned'}${row.type_key === hrState.selectedDocType ? ' active' : ''}`;
+    button.dataset.action = 'hr-doc-open';
+    button.dataset.doc = row.type_key;
+    button.setAttribute('aria-pressed', row.type_key === hrState.selectedDocType ? 'true' : 'false');
+
+    const copy = document.createElement('div');
+    copy.className = 'hr-doc-card-copy';
+    const title = document.createElement('strong');
+    title.textContent = row.display_name;
+    const subtitle = document.createElement('span');
+    subtitle.textContent = getHrCertificateTypeSubtitle(row);
+    copy.append(title, subtitle);
+
+    const side = document.createElement('div');
+    side.className = 'hr-doc-card-side';
+    const stateLabel = document.createElement('span');
+    stateLabel.className = `hr-doc-card-state ${available ? 'is-live' : 'is-planned'}`;
+    stateLabel.textContent = getHrCertificateTypeStateLabel(row);
+    side.appendChild(stateLabel);
+
+    button.append(copy, side);
+    grid.appendChild(button);
   });
+}
+
+function renderHrEmployeeRequestCard() {
+  const employeeMode = isHrEmployeeRole();
+  const selectedType = getHrSelectedCertificateType();
+  const available = isHrCertificateTypeRequestAvailable(selectedType);
+  const titleEl = $('#hrEmploymentRequestTitle');
+  const quotaPill = $('#hrEmploymentQuota');
+  const statusEl = $('#hrEmploymentRequestStatus');
+  const purposeCodeGroup = $('#hrPurposeCodeGroup');
+  const otherField = $('#hrPurposeOtherField');
+  const submitBtn = $('#hrEmploymentRequestSubmitBtn');
+  const submitToInput = $('#hrSubmitTo');
+  const copyCountInput = $('#hrCopyCount');
+  const includeAddressInput = $('#hrIncludeAddress');
+  const includePhoneInput = $('#hrIncludePhone');
+  const hrState = ensureHrDocsState();
+
+  if (titleEl) {
+    titleEl.textContent = `${String(selectedType?.display_name || '증명서').trim() || '증명서'} 신청`;
+  }
+  if (quotaPill) {
+    if (available) {
+      quotaPill.className = 'status-pill status-pill-warn';
+      quotaPill.textContent = `오늘 남은 요청: ${Math.max(0, Number(hrState.todayRemaining ?? HR_EMPLOYMENT_DAILY_LIMIT))}/${Number(hrState.dailyLimit || HR_EMPLOYMENT_DAILY_LIMIT)}`;
+    } else {
+      quotaPill.className = 'status-pill status-pill-neutral';
+      quotaPill.textContent = String(selectedType?.eligibility_reason || '').trim() ? '신청 불가' : '준비중';
+    }
+  }
+  if (statusEl && employeeMode) {
+    if (available) {
+      statusEl.textContent = selectedType?.requires_approval
+        ? `${selectedType?.display_name || '증명서'}는 승인 후 앱에서 PDF를 내려받을 수 있습니다. 제출처와 부수를 확인해 신청해 주세요.`
+        : `${selectedType?.display_name || '증명서'}는 요청 즉시 PDF 발급이 진행되며 완료 후 앱에서 다운로드할 수 있습니다. 제출처와 부수를 확인해 신청해 주세요.`;
+    } else if (String(selectedType?.eligibility_reason || '').trim()) {
+      statusEl.textContent = `${selectedType?.display_name || '해당 증명서'} 신청이 현재 불가합니다. ${String(selectedType?.eligibility_reason || '').trim()}`;
+    } else {
+      statusEl.textContent = `${selectedType?.display_name || '해당 증명서'}는 순차 오픈 예정입니다.`;
+    }
+  }
+  if (purposeCodeGroup) {
+    purposeCodeGroup.classList.toggle('hidden', !employeeMode || !available);
+  }
+  if (otherField) {
+    otherField.classList.toggle('hidden', !available || normalizeHrPurposeCode(ensureHrDocsState().purposeCode || 'BANK') !== 'OTHER');
+  }
+  if (submitToInput instanceof HTMLInputElement) {
+    submitToInput.value = String(hrState.submitTo || '');
+    submitToInput.disabled = !available;
+  }
+  if (copyCountInput instanceof HTMLInputElement) {
+    copyCountInput.value = String(normalizeHrCopyCount(hrState.copyCount));
+    copyCountInput.disabled = !available;
+  }
+  if (includeAddressInput instanceof HTMLInputElement) {
+    includeAddressInput.checked = Boolean(hrState.includeAddress);
+    includeAddressInput.disabled = !available;
+  }
+  if (includePhoneInput instanceof HTMLInputElement) {
+    includePhoneInput.checked = Boolean(hrState.includePhone);
+    includePhoneInput.disabled = !available;
+  }
+  if (submitBtn instanceof HTMLButtonElement) {
+    submitBtn.textContent = available ? '발급 신청' : '신청 불가';
+  }
+  updateHrRequestSubmitState();
 }
 
 function renderHrAdminStatusTabs() {
@@ -39449,17 +41122,28 @@ function updateHrRequestSubmitState() {
   const hrState = ensureHrDocsState();
   const submitBtn = $('#hrEmploymentRequestSubmitBtn');
   if (!(submitBtn instanceof HTMLButtonElement)) return;
+  const selectedType = getHrSelectedCertificateType();
   const purposeCode = normalizeHrPurposeCode(hrState.purposeCode || 'BANK');
   const purposeText = String(hrState.purposeText || '').trim();
-  const canSubmit = !hrState.submitting && (
-    purposeCode !== 'OTHER'
-    || (purposeText.length >= 2 && purposeText.length <= 50)
-  );
+  const submitTo = String(hrState.submitTo || '').trim();
+  const copyCount = normalizeHrCopyCount(hrState.copyCount);
+  hrState.copyCount = copyCount;
+  const canSubmit = isHrCertificateTypeRequestAvailable(selectedType)
+    && !hrState.submitting
+    && submitTo.length >= 2
+    && copyCount >= 1
+    && (
+      purposeCode !== 'OTHER'
+      || (purposeText.length >= 2 && purposeText.length <= 50)
+    );
+  submitBtn.textContent = isHrCertificateTypeRequestAvailable(selectedType) ? '발급 신청' : '신청 불가';
   submitBtn.disabled = !canSubmit;
 }
 
 function renderHrPurposeSelector() {
   const hrState = ensureHrDocsState();
+  const selectedType = getHrSelectedCertificateType();
+  const requestAvailable = isHrCertificateTypeRequestAvailable(selectedType);
   const selectedCode = normalizeHrPurposeCode(hrState.purposeCode || 'BANK');
   document.querySelectorAll('#hrPurposeCodeGroup [data-action="hr-purpose-select"]').forEach((button) => {
     const purposeCode = normalizeHrPurposeCode(button?.dataset?.purposeCode || 'BANK');
@@ -39471,12 +41155,12 @@ function renderHrPurposeSelector() {
   }
   const otherField = $('#hrPurposeOtherField');
   if (otherField) {
-    otherField.classList.toggle('hidden', selectedCode !== 'OTHER');
+    otherField.classList.toggle('hidden', !requestAvailable || selectedCode !== 'OTHER');
   }
   const otherInput = $('#hrPurposeOtherText');
   if (otherInput instanceof HTMLInputElement) {
     otherInput.value = String(hrState.purposeText || '');
-    otherInput.required = selectedCode === 'OTHER';
+    otherInput.required = requestAvailable && selectedCode === 'OTHER';
   }
   updateHrRequestSubmitState();
 }
@@ -39485,9 +41169,64 @@ function renderHrQuota() {
   const hrState = ensureHrDocsState();
   const quotaPill = $('#hrEmploymentQuota');
   if (!quotaPill) return;
+  const selectedType = getHrSelectedCertificateType();
+  if (!isHrCertificateTypeRequestAvailable(selectedType)) {
+    quotaPill.className = 'status-pill status-pill-neutral';
+    quotaPill.textContent = String(selectedType?.eligibility_reason || '').trim() ? '신청 불가' : '준비중';
+    return;
+  }
   const limit = Number(hrState.dailyLimit || HR_EMPLOYMENT_DAILY_LIMIT);
   const remaining = Math.max(0, Number(hrState.todayRemaining ?? limit));
+  quotaPill.className = 'status-pill status-pill-warn';
   quotaPill.textContent = `오늘 남은 요청: ${remaining}/${limit}`;
+}
+
+async function loadHrEmploymentCertificateTypes({ force = false } = {}) {
+  const hrState = ensureHrDocsState();
+  const now = Date.now();
+  const isFresh = !force
+    && Array.isArray(hrState.typeRows)
+    && Number(hrState.typeRowsFetchedAt || 0) > 0
+    && (now - Number(hrState.typeRowsFetchedAt || 0)) < HR_DATA_CACHE_TTL_MS;
+  if (isFresh) {
+    return hrState.typeRows;
+  }
+  try {
+    const payload = await apiRequest('/certificates/types');
+    hrState.typeRows = Array.isArray(payload?.items) ? payload.items : [];
+    hrState.typeRowsFetchedAt = Date.now();
+    getHrSelectedCertificateType();
+    renderHrViewFromCache();
+    return hrState.typeRows;
+  } catch (error) {
+    if (isHrViewActive()) {
+      const statusEl = $('#hrEmploymentAdminStatus');
+      if (statusEl && isHrAdminRole()) {
+        statusEl.textContent = normalizeActionError(error, '증명서 종류를 불러오지 못했습니다.');
+      }
+    }
+    return Array.isArray(hrState.typeRows) ? hrState.typeRows : [];
+  }
+}
+
+async function loadHrCertificateIssueJobs({ force = false } = {}) {
+  const hrState = ensureHrDocsState();
+  if (!isHrAdminRole()) {
+    hrState.issueJobs = [];
+    return [];
+  }
+  const now = Date.now();
+  const isFresh = !force
+    && Array.isArray(hrState.issueJobs)
+    && Number(hrState.issueJobsFetchedAt || 0) > 0
+    && (now - Number(hrState.issueJobsFetchedAt || 0)) < HR_DATA_CACHE_TTL_MS;
+  if (isFresh) {
+    return hrState.issueJobs;
+  }
+  const payload = await apiRequest('/certificates/admin/issue-jobs?limit=120');
+  hrState.issueJobs = Array.isArray(payload?.items) ? payload.items : [];
+  hrState.issueJobsFetchedAt = Date.now();
+  return hrState.issueJobs;
 }
 
 function renderHrMyRequestRows() {
@@ -39503,13 +41242,16 @@ function renderHrMyRequestRows() {
   tbody.innerHTML = '';
   rows.forEach((row) => {
     const tr = document.createElement('tr');
+    const certificateRequestId = String(row?.id || '').trim();
+    const legacyRequestId = String(row?.legacy_request_id || '').trim();
+    const fileReady = Boolean(row?.file_ready);
 
     const requestedAtTd = document.createElement('td');
     requestedAtTd.textContent = formatDateLabel(row?.requested_at, '-');
     tr.appendChild(requestedAtTd);
 
     const purposeTd = document.createElement('td');
-    purposeTd.textContent = formatHrPurposeLabel(row?.purpose_code, row?.purpose_text);
+    purposeTd.textContent = `${String(row?.certificate_type_name || row?.certificate_type_key || '증명서').trim() || '증명서'} · ${formatHrPurposeLabel(row?.purpose_code, row?.purpose_text)}`;
     tr.appendChild(purposeTd);
 
     const statusTd = document.createElement('td');
@@ -39519,30 +41261,29 @@ function renderHrMyRequestRows() {
     statusTd.appendChild(statusPill);
     tr.appendChild(statusTd);
 
-    const rejectionTd = document.createElement('td');
-    rejectionTd.textContent = String(row?.rejection_reason || '').trim() || '-';
-    tr.appendChild(rejectionTd);
+    const mailTd = document.createElement('td');
+    mailTd.textContent = formatHrCertificateMailState(row);
+    tr.appendChild(mailTd);
 
     const issueTd = document.createElement('td');
-    issueTd.textContent = String(row?.issue_number || '').trim() || '-';
+    issueTd.textContent = String(row?.issue_number || '').trim() || formatCertificateIssueStateLabel(row?.issue_job_state || row?.status);
     tr.appendChild(issueTd);
 
     const actionTd = document.createElement('td');
-    const requestId = String(row?.id || '').trim();
-    if (requestId && normalizeHrRequestStatus(row?.status) === 'issued' && row?.file_ready) {
+    if (certificateRequestId && (normalizeHrRequestStatus(row?.status) === 'issued' || fileReady)) {
       const downloadBtn = document.createElement('button');
       downloadBtn.type = 'button';
       downloadBtn.className = 'btn btn-secondary';
       downloadBtn.dataset.action = 'hr-employment-download';
-      downloadBtn.dataset.requestId = requestId;
+      downloadBtn.dataset.requestId = certificateRequestId;
       downloadBtn.textContent = 'PDF 다운로드';
       actionTd.appendChild(downloadBtn);
-    } else if (requestId && normalizeHrRequestStatus(row?.status) === 'rejected') {
+    } else if ((certificateRequestId || legacyRequestId) && normalizeHrRequestStatus(row?.status) === 'rejected') {
       const reasonBtn = document.createElement('button');
       reasonBtn.type = 'button';
       reasonBtn.className = 'btn btn-ghost';
       reasonBtn.dataset.action = 'hr-employment-view-reason';
-      reasonBtn.dataset.reason = String(row?.rejection_reason || '').trim();
+      reasonBtn.dataset.reason = String(row?.issue_job_error || row?.rejection_reason || '').trim();
       reasonBtn.textContent = '사유보기';
       actionTd.appendChild(reasonBtn);
     } else {
@@ -39571,7 +41312,7 @@ function renderHrTemplateRows() {
       td.textContent = String(value || '-').trim() || '-';
       tr.appendChild(td);
     };
-    appendCell(row?.document_type || '-');
+    appendCell(getHrCertificateTypeDisplayName(row?.document_type || '-'));
     appendCell(`v${Number(row?.version || 0)}`);
     appendCell(row?.file_path || '-');
     appendCell(Boolean(row?.is_active) ? '활성' : '비활성');
@@ -39594,6 +41335,10 @@ function renderHrAdminRequestRows() {
   tbody.innerHTML = '';
   rows.forEach((row) => {
     const tr = document.createElement('tr');
+    const certificateRequestId = String(row?.id || '').trim();
+    const issueJobs = Array.isArray(hrState.issueJobs) ? hrState.issueJobs : [];
+    const issueJob = issueJobs.find((item) => String(item?.certificate_request_id || '').trim() === String(row?.id || '').trim()) || null;
+    const fileReady = Boolean(row?.file_ready);
 
     const requestedAtTd = document.createElement('td');
     requestedAtTd.textContent = formatDateLabel(row?.requested_at, '-');
@@ -39612,7 +41357,7 @@ function renderHrAdminRequestRows() {
     tr.appendChild(orgTd);
 
     const purposeTd = document.createElement('td');
-    purposeTd.textContent = formatHrPurposeLabel(row?.purpose_code, row?.purpose_text);
+    purposeTd.textContent = `${String(row?.certificate_type_name || row?.certificate_type_key || '증명서').trim() || '증명서'} · ${formatHrPurposeLabel(row?.purpose_code, row?.purpose_text)}`;
     tr.appendChild(purposeTd);
 
     const statusTd = document.createElement('td');
@@ -39623,38 +41368,51 @@ function renderHrAdminRequestRows() {
     tr.appendChild(statusTd);
 
     const mailTd = document.createElement('td');
-    const companySent = Boolean(row?.mail_company_sent_at);
-    const employeeSent = Boolean(row?.mail_employee_sent_at);
-    mailTd.textContent = `회사:${companySent ? '성공' : '대기'} / 직원:${employeeSent ? '성공' : '대기'}`;
+    mailTd.textContent = `${getApprovalDocumentStatusLabel(row?.approval_status || 'submitted')} · ${formatCertificateIssueStateLabel(row?.issue_job_state || row?.status)}`;
     tr.appendChild(mailTd);
 
     const actionTd = document.createElement('td');
-    const requestId = String(row?.id || '').trim();
-    if (requestId && normalizeHrRequestStatus(row?.status) === 'requested') {
+    if (certificateRequestId && normalizeHrRequestStatus(row?.status) === 'requested') {
       const actionsWrap = document.createElement('div');
       actionsWrap.className = 'inline-actions';
       const approveBtn = document.createElement('button');
       approveBtn.type = 'button';
       approveBtn.className = 'btn btn-primary';
       approveBtn.dataset.action = 'hr-admin-approve';
-      approveBtn.dataset.requestId = requestId;
+      approveBtn.dataset.requestId = certificateRequestId;
       approveBtn.textContent = '승인';
       const rejectBtn = document.createElement('button');
       rejectBtn.type = 'button';
       rejectBtn.className = 'btn btn-destructive';
       rejectBtn.dataset.action = 'hr-admin-reject';
-      rejectBtn.dataset.requestId = requestId;
+      rejectBtn.dataset.requestId = certificateRequestId;
       rejectBtn.textContent = '반려';
       actionsWrap.append(approveBtn, rejectBtn);
       actionTd.appendChild(actionsWrap);
+    } else if (issueJob && String(issueJob?.job_state || '').trim().toLowerCase() === 'failed') {
+      const retryBtn = document.createElement('button');
+      retryBtn.type = 'button';
+      retryBtn.className = 'btn btn-secondary';
+      retryBtn.dataset.action = 'hr-issue-job-retry';
+      retryBtn.dataset.issueJobId = String(issueJob?.id || '').trim();
+      retryBtn.textContent = '발급 재시도';
+      actionTd.appendChild(retryBtn);
     } else if (normalizeHrRequestStatus(row?.status) === 'rejected') {
       const reasonBtn = document.createElement('button');
       reasonBtn.type = 'button';
       reasonBtn.className = 'btn btn-ghost';
       reasonBtn.dataset.action = 'hr-employment-view-reason';
-      reasonBtn.dataset.reason = String(row?.rejection_reason || '').trim();
+      reasonBtn.dataset.reason = String(row?.issue_job_error || row?.rejection_reason || '').trim();
       reasonBtn.textContent = '사유보기';
       actionTd.appendChild(reasonBtn);
+    } else if (certificateRequestId && (normalizeHrRequestStatus(row?.status) === 'issued' || fileReady)) {
+      const downloadBtn = document.createElement('button');
+      downloadBtn.type = 'button';
+      downloadBtn.className = 'btn btn-secondary';
+      downloadBtn.dataset.action = 'hr-employment-download';
+      downloadBtn.dataset.requestId = certificateRequestId;
+      downloadBtn.textContent = 'PDF 다운로드';
+      actionTd.appendChild(downloadBtn);
     } else {
       actionTd.textContent = '-';
     }
@@ -39665,7 +41423,7 @@ function renderHrAdminRequestRows() {
 
 function renderHrScopeAndPanels() {
   const hrState = ensureHrDocsState();
-  const navRole = getNavigationRole();
+  const selectedType = getHrSelectedCertificateType();
   const scopeHint = $('#hrScopeHint');
   const employeeCard = $('#hrEmploymentEmployeeCard');
   const myRowsCard = $('#hrEmploymentMyRequestsCard');
@@ -39680,21 +41438,43 @@ function renderHrScopeAndPanels() {
 
   if (scopeHint) {
     scopeHint.textContent = adminMode
-      ? 'HQ/DEV는 재직증명서 요청을 승인/반려하고 발급 현황을 확인합니다.'
-      : '재직증명서는 승인 후 발급됩니다. 오늘 최대 3회까지 요청할 수 있습니다.';
+      ? 'HQ/DEV는 증명서 요청을 승인/반려하고 발급 진행 상태를 확인합니다.'
+      : `${String(selectedType?.display_name || '증명서').trim() || '증명서'} 신청, 발급 이력, 다운로드 상태를 이 화면에서 관리합니다.`;
   }
   if (employeeCard) employeeCard.classList.toggle('hidden', !employeeMode);
   if (myRowsCard) myRowsCard.classList.toggle('hidden', !employeeMode);
   if (adminCard) adminCard.classList.toggle('hidden', !adminMode);
   if (templateCard) templateCard.classList.toggle('hidden', !templateManagerMode);
   if (statusEl && adminMode) {
-    statusEl.textContent = '요청 목록을 불러오는 중입니다.';
+    const hasFetchedAdminRows = Number(hrState.adminRowsFetchedAt || 0) > 0;
+    const statusText = String(statusEl.textContent || '').trim();
+    if (Boolean(hrState.loadingAdminRows) && !hasFetchedAdminRows) {
+      statusEl.textContent = '요청 목록을 불러오는 중입니다.';
+    } else if (!statusText || statusText.includes('불러오는 중')) {
+      statusEl.textContent = hasFetchedAdminRows
+        ? `${Array.isArray(hrState.adminRows) ? hrState.adminRows.length : 0}건 조회됨`
+        : '요청 조건을 설정하면 목록이 표시됩니다.';
+    }
   }
   if (templateStatusEl && adminMode) {
-    templateStatusEl.textContent = '현재 템플릿 버전을 불러오는 중입니다.';
+    const hasFetchedTemplates = Number(hrState.templatesFetchedAt || 0) > 0;
+    const templateStatusText = String(templateStatusEl.textContent || '').trim();
+    if (Boolean(hrState.loadingTemplates) && !hasFetchedTemplates) {
+      templateStatusEl.textContent = '현재 템플릿 버전을 불러오는 중입니다.';
+    } else if (!templateStatusText || templateStatusText.includes('불러오는 중')) {
+      templateStatusEl.textContent = hasFetchedTemplates
+        ? `${Array.isArray(hrState.templatesRows) ? hrState.templatesRows.length : 0}개 버전 조회됨`
+        : '문서 템플릿 상태를 확인할 수 있습니다.';
+    }
   }
   if (employeeStatusEl && employeeMode) {
-    employeeStatusEl.textContent = '발급 용도를 선택하고 신청해 주세요.';
+    employeeStatusEl.textContent = isHrCertificateTypeRequestAvailable(selectedType)
+      ? '발급 용도와 제출처를 확인한 뒤 신청해 주세요.'
+      : (
+        String(selectedType?.eligibility_reason || '').trim()
+          ? `${String(selectedType?.display_name || '해당 증명서').trim() || '해당 증명서'} 신청이 현재 불가합니다. ${String(selectedType?.eligibility_reason || '').trim()}`
+          : `${String(selectedType?.display_name || '해당 증명서').trim() || '해당 증명서'}는 순차 오픈 예정입니다.`
+      );
   }
 
   const tabButtons = document.querySelectorAll('#hrEmploymentAdminStatusTabs [data-action="hr-admin-status-filter"]');
@@ -39711,6 +41491,11 @@ function renderHrScopeAndPanels() {
   if (uploadBtn instanceof HTMLButtonElement) {
     uploadBtn.disabled = !templateManagerMode || Boolean(hrState.templateUploading);
   }
+  const templateTypeSelect = $('#hrTemplateTypeSelect');
+  if (templateTypeSelect instanceof HTMLSelectElement) {
+    templateTypeSelect.value = normalizeHrCertificateTypeKey(hrState.selectedDocType || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE);
+    templateTypeSelect.disabled = !templateManagerMode || Boolean(hrState.templateUploading);
+  }
 
   const purposeCodeGroup = $('#hrPurposeCodeGroup');
   if (purposeCodeGroup) purposeCodeGroup.classList.toggle('hidden', !employeeMode);
@@ -39719,10 +41504,12 @@ function renderHrScopeAndPanels() {
     hrState.workspaceSegment = resolveDefaultHrWorkspaceSegment();
   }
   renderHrWorkspaceSegments();
+  renderHrEmployeeRequestCard();
 }
 
 async function loadHrEmploymentQuota({ force = false } = {}) {
   const hrState = ensureHrDocsState();
+  hrState.dailyLimit = HR_EMPLOYMENT_DAILY_LIMIT;
   if (!isHrEmployeeRole()) {
     hrState.dailyLimit = HR_EMPLOYMENT_DAILY_LIMIT;
     hrState.todayRequestedCount = 0;
@@ -39735,6 +41522,7 @@ async function loadHrEmploymentQuota({ force = false } = {}) {
     && Number(hrState.myRowsFetchedAt || 0) > 0
     && (now - Number(hrState.myRowsFetchedAt || 0)) < HR_DATA_CACHE_TTL_MS;
   if (isFresh) {
+    syncHrQuotaStateFromRows(hrState.myRows);
     renderHrQuota();
     return {
       daily_limit: hrState.dailyLimit,
@@ -39742,17 +41530,19 @@ async function loadHrEmploymentQuota({ force = false } = {}) {
       today_remaining: hrState.todayRemaining,
     };
   }
-  const payload = await apiRequest('/hr/documents/employment-certificate/quota');
-  hrState.dailyLimit = Number(payload?.daily_limit || HR_EMPLOYMENT_DAILY_LIMIT) || HR_EMPLOYMENT_DAILY_LIMIT;
-  hrState.todayRequestedCount = Number(payload?.today_requested_count || 0) || 0;
-  hrState.todayRemaining = Number(payload?.today_remaining ?? Math.max(0, hrState.dailyLimit - hrState.todayRequestedCount)) || 0;
+  syncHrQuotaStateFromRows(hrState.myRows);
   renderHrQuota();
-  return payload;
+  return {
+    daily_limit: hrState.dailyLimit,
+    today_requested_count: hrState.todayRequestedCount,
+    today_remaining: hrState.todayRemaining,
+  };
 }
 
 async function loadHrEmploymentMyRequests({ force = false } = {}) {
   const hrState = ensureHrDocsState();
   if (!isHrEmployeeRole()) {
+    clearHrMyRequestRefreshTimer();
     hrState.myRows = [];
     renderHrMyRequestRows();
     return [];
@@ -39767,14 +41557,35 @@ async function loadHrEmploymentMyRequests({ force = false } = {}) {
     return hrState.myRows;
   }
   hrState.loadingMyRows = true;
-  const page = Math.max(1, Number(hrState.myRowsPage || 1));
   const pageSize = Math.max(1, Number(hrState.myRowsPageSize || 20));
   try {
-    const rows = await apiRequest(`/hr/documents/employment-certificate/requests?me=1&page=${page}&pageSize=${pageSize}`);
-    hrState.myRows = Array.isArray(rows) ? rows : [];
+    const payload = await apiRequest(`/certificates/requests?limit=${pageSize}`);
+    hrState.myRows = Array.isArray(payload?.items) ? payload.items : [];
     hrState.myRowsFetchedAt = Date.now();
+    syncHrQuotaStateFromRows(hrState.myRows);
+    renderHrQuota();
     renderHrMyRequestRows();
+    const hasPendingRows = hrState.myRows.some((row) => {
+      const status = normalizeHrRequestStatus(row?.status);
+      return status === 'requested' || status === 'generating';
+    });
+    if (hasPendingRows) {
+      scheduleHrMyRequestRefresh(5000);
+    } else {
+      clearHrMyRequestRefreshTimer();
+    }
     return hrState.myRows;
+  } catch (error) {
+    clearHrMyRequestRefreshTimer();
+    hrState.myRows = [];
+    syncHrQuotaStateFromRows([]);
+    renderHrQuota();
+    renderHrMyRequestRows();
+    const statusEl = $('#hrEmploymentRequestStatus');
+    if (statusEl && isHrViewActive()) {
+      statusEl.textContent = normalizeActionError(error, '증명서 요청 이력을 불러오지 못했습니다.');
+    }
+    return [];
   } finally {
     hrState.loadingMyRows = false;
   }
@@ -39802,13 +41613,16 @@ async function loadHrEmploymentAdminRequests({ force = false } = {}) {
   const q = String(hrState.adminQuery || '').trim();
   const params = new URLSearchParams({
     status: statusFilter,
-    page: String(Math.max(1, Number(hrState.adminRowsPage || 1))),
-    pageSize: String(Math.max(1, Number(hrState.adminRowsPageSize || 30))),
+    limit: String(Math.max(1, Number(hrState.adminRowsPageSize || 30))),
   });
   if (q) params.set('q', q);
   try {
-    const rows = await apiRequest(`/admin/hr/documents/employment-certificate/requests?${params.toString()}`);
-    hrState.adminRows = Array.isArray(rows) ? rows : [];
+    const [rowsPayload, issueJobs] = await Promise.all([
+      apiRequest(`/certificates/admin/requests?${params.toString()}`),
+      loadHrCertificateIssueJobs({ force }),
+    ]);
+    hrState.adminRows = Array.isArray(rowsPayload?.items) ? rowsPayload.items : [];
+    hrState.issueJobs = Array.isArray(issueJobs) ? issueJobs : [];
     hrState.adminRowsFetchedAt = Date.now();
     renderHrAdminStatusTabs();
     renderHrAdminRequestRows();
@@ -39817,6 +41631,16 @@ async function loadHrEmploymentAdminRequests({ force = false } = {}) {
       statusEl.textContent = `${hrState.adminRows.length}건 조회됨`;
     }
     return hrState.adminRows;
+  } catch (error) {
+    hrState.adminRows = [];
+    hrState.issueJobs = [];
+    renderHrAdminStatusTabs();
+    renderHrAdminRequestRows();
+    const statusEl = $('#hrEmploymentAdminStatus');
+    if (statusEl && isHrViewActive()) {
+      statusEl.textContent = normalizeActionError(error, '증명서 요청 목록을 불러오지 못했습니다.');
+    }
+    return [];
   } finally {
     hrState.loadingAdminRows = false;
   }
@@ -39838,15 +41662,34 @@ async function loadHrDocumentTemplates({ force = false } = {}) {
     renderHrTemplateRows();
     return hrState.templatesRows;
   }
-  const rows = await apiRequest('/admin/hr/documents/templates?document_type=employment_certificate');
-  hrState.templatesRows = Array.isArray(rows) ? rows : [];
-  hrState.templatesFetchedAt = Date.now();
-  renderHrTemplateRows();
-  const statusEl = $('#hrTemplateStatus');
-  if (statusEl) {
-    statusEl.textContent = `${hrState.templatesRows.length}개 버전 조회됨`;
+  hrState.loadingTemplates = true;
+  const templateTypeSelect = $('#hrTemplateTypeSelect');
+  const selectedTypeKey = normalizeHrCertificateTypeKey(
+    templateTypeSelect instanceof HTMLSelectElement
+      ? (templateTypeSelect.value || hrState.selectedDocType || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE)
+      : (hrState.selectedDocType || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE),
+  );
+  try {
+    const payload = await apiRequest(`/certificates/admin/templates?type_key=${encodeURIComponent(selectedTypeKey)}`);
+    hrState.templatesRows = Array.isArray(payload?.items) ? payload.items : [];
+    hrState.templatesFetchedAt = Date.now();
+    renderHrTemplateRows();
+    const statusEl = $('#hrTemplateStatus');
+    if (statusEl) {
+      statusEl.textContent = `${hrState.templatesRows.length}개 버전 조회됨`;
+    }
+    return hrState.templatesRows;
+  } catch (error) {
+    hrState.templatesRows = [];
+    renderHrTemplateRows();
+    const statusEl = $('#hrTemplateStatus');
+    if (statusEl && isHrViewActive()) {
+      statusEl.textContent = normalizeActionError(error, '문서 템플릿을 불러오지 못했습니다.');
+    }
+    return [];
+  } finally {
+    hrState.loadingTemplates = false;
   }
-  return hrState.templatesRows;
 }
 
 function renderHrViewFromCache() {
@@ -39854,6 +41697,7 @@ function renderHrViewFromCache() {
   renderHrDocCardSelection();
   renderHrPurposeSelector();
   renderHrQuota();
+  renderHrEmployeeRequestCard();
   renderHrAdminPanelTabs();
   renderHrAdminStatusTabs();
   renderHrMyRequestRows();
@@ -39863,7 +41707,7 @@ function renderHrViewFromCache() {
 
 async function loadHrViewPresenter() {
   const hrState = ensureHrDocsState();
-  hrState.selectedDocType = HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE;
+  hrState.selectedDocType = normalizeHrCertificateTypeKey(hrState.selectedDocType || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE);
   const parsed = parseRouteCandidate(getCurrentRouteWithQuery());
   const routeQuery = new URLSearchParams(parsed.query || '');
   if (isHrAdminRole()) {
@@ -39877,7 +41721,7 @@ async function loadHrViewPresenter() {
   }
   renderHrViewFromCache();
 
-  const tasks = [];
+  const tasks = [loadHrEmploymentCertificateTypes({ force: false })];
   if (isHrEmployeeRole()) {
     tasks.push(loadHrEmploymentQuota({ force: false }));
     tasks.push(loadHrEmploymentMyRequests({ force: false }));
@@ -39890,37 +41734,111 @@ async function loadHrViewPresenter() {
     }
   }
   if (tasks.length) {
-    await Promise.all(tasks);
+    await Promise.allSettled(tasks);
   }
 }
 
 async function submitHrEmploymentRequest() {
   const hrState = ensureHrDocsState();
+  const selectedType = getHrSelectedCertificateType();
+  const selectedTypeKey = normalizeHrCertificateTypeKey(selectedType?.type_key || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE);
+  const certificateLabel = String(selectedType?.display_name || '증명서').trim() || '증명서';
+  if (!isHrCertificateTypeRequestAvailable(selectedType)) {
+    showToast(
+      String(selectedType?.eligibility_reason || '').trim()
+        ? `${certificateLabel} 신청이 불가합니다. ${String(selectedType?.eligibility_reason || '').trim()}`
+        : `${certificateLabel}는 아직 신청이 열리지 않았습니다.`,
+      'info',
+      2400,
+    );
+    return;
+  }
+  const purposeOtherInput = $('#hrPurposeOtherText');
+  const submitToInput = $('#hrSubmitTo');
+  const copyCountInput = $('#hrCopyCount');
+  const includeAddressInput = $('#hrIncludeAddress');
+  const includePhoneInput = $('#hrIncludePhone');
+  hrState.purposeCode = normalizeHrPurposeCode(hrState.purposeCode || 'BANK');
+  hrState.purposeText = purposeOtherInput instanceof HTMLInputElement
+    ? String(purposeOtherInput.value || '').trim()
+    : String(hrState.purposeText || '').trim();
+  hrState.submitTo = submitToInput instanceof HTMLInputElement
+    ? String(submitToInput.value || '').trim()
+    : String(hrState.submitTo || '').trim();
+  hrState.copyCount = copyCountInput instanceof HTMLInputElement
+    ? normalizeHrCopyCount(copyCountInput.value)
+    : normalizeHrCopyCount(hrState.copyCount);
+  hrState.includeAddress = includeAddressInput instanceof HTMLInputElement
+    ? Boolean(includeAddressInput.checked)
+    : Boolean(hrState.includeAddress);
+  hrState.includePhone = includePhoneInput instanceof HTMLInputElement
+    ? Boolean(includePhoneInput.checked)
+    : Boolean(hrState.includePhone);
   const purposeCode = normalizeHrPurposeCode(hrState.purposeCode || 'BANK');
   const purposeText = String(hrState.purposeText || '').trim();
+  const submitTo = String(hrState.submitTo || '').trim();
+  const copyCount = normalizeHrCopyCount(hrState.copyCount);
   if (purposeCode === 'OTHER' && (purposeText.length < 2 || purposeText.length > 50)) {
     showToast('기타 용도는 2~50자로 입력해 주세요.', 'error', 2600);
+    return;
+  }
+  if (submitTo.length < 2) {
+    showToast('제출처를 2자 이상 입력해 주세요.', 'error', 2400);
     return;
   }
   hrState.submitting = true;
   updateHrRequestSubmitState();
   const statusEl = $('#hrEmploymentRequestStatus');
-  if (statusEl) statusEl.textContent = '발급 요청을 등록하는 중입니다...';
+  if (statusEl) statusEl.textContent = `${certificateLabel} 발급 요청을 등록하는 중입니다...`;
   try {
-    const payload = await apiRequest('/hr/documents/employment-certificate/requests', {
+    const payload = await apiRequest('/certificates/requests', {
       method: 'POST',
       body: {
+        type_key: selectedTypeKey,
         purpose_code: purposeCode,
         purpose_text: purposeCode === 'OTHER' ? purposeText : null,
+        submit_to: submitTo,
+        copy_count: copyCount,
+        include_address: Boolean(hrState.includeAddress),
+        include_phone: Boolean(hrState.includePhone),
       },
     });
-    hrState.todayRequestedCount = Number(payload?.today_requested_count || hrState.todayRequestedCount || 0);
-    hrState.todayRemaining = Number(payload?.today_remaining ?? Math.max(0, HR_EMPLOYMENT_DAILY_LIMIT - hrState.todayRequestedCount));
+    const createdItem = payload?.item && typeof payload.item === 'object'
+      ? payload.item
+      : null;
+    if (createdItem) {
+      const createdId = String(createdItem.id || createdItem.request_id || '').trim();
+      const currentRows = Array.isArray(hrState.myRows) ? [...hrState.myRows] : [];
+      const existingIndex = createdId
+        ? currentRows.findIndex((row) => String(row?.id || row?.request_id || '').trim() === createdId)
+        : -1;
+      if (existingIndex >= 0) {
+        currentRows[existingIndex] = { ...currentRows[existingIndex], ...createdItem };
+      } else {
+        currentRows.unshift(createdItem);
+      }
+      hrState.myRows = currentRows;
+      hrState.myRowsFetchedAt = Date.now();
+      syncHrQuotaStateFromRows(hrState.myRows);
+      renderHrQuota();
+      renderHrMyRequestRows();
+    }
+    setHrWorkspaceSegment('my-docs');
     hrState.myRowsFetchedAt = 0;
-    renderHrQuota();
     await loadHrEmploymentMyRequests({ force: true });
-    if (statusEl) statusEl.textContent = '요청이 접수되었습니다. 승인 완료 후 PDF를 다운로드할 수 있습니다.';
-    showToast('재직증명서 발급 요청이 접수되었습니다.', 'success', 2200);
+    const requestStatus = normalizeHrRequestStatus(payload?.item?.status || (selectedType?.requires_approval ? 'requested' : 'generating'));
+    if (statusEl) {
+      statusEl.textContent = requestStatus === 'requested'
+        ? `${certificateLabel} 요청이 접수되었습니다. 승인 완료 후 발급 상태를 이 화면에서 확인할 수 있습니다.`
+        : `${certificateLabel} 발급 작업을 시작했습니다. 완료되면 이 화면에서 PDF 다운로드 상태를 확인할 수 있습니다.`;
+    }
+    showToast(
+      requestStatus === 'requested'
+        ? `${certificateLabel} 발급 요청이 접수되었습니다.`
+        : `${certificateLabel} 발급 작업을 시작했습니다.`,
+      'success',
+      2200,
+    );
   } finally {
     hrState.submitting = false;
     updateHrRequestSubmitState();
@@ -39941,12 +41859,12 @@ async function downloadHrEmploymentRequestPdf(requestId = '', progressController
   if (tenantHeader) {
     headers['X-Tenant-Id'] = tenantHeader;
   }
-  const fallbackName = `employment_certificate_${id}.pdf`;
+  const fallbackName = `certificate_${id}.pdf`;
   await downloadAuthorizedFile({
-    requestUrl: `${state.activeApiBase}/hr/documents/requests/${encodeURIComponent(id)}/download`,
+    requestUrl: `${state.activeApiBase}/certificates/requests/${encodeURIComponent(id)}/download`,
     fallbackName,
     headers,
-    successMessage: '재직증명서 PDF를 다운로드했습니다.',
+    successMessage: '증명서 PDF를 다운로드했습니다.',
     progressController,
   });
 }
@@ -39954,7 +41872,7 @@ async function downloadHrEmploymentRequestPdf(requestId = '', progressController
 async function approveHrEmploymentRequest(requestId = '') {
   const id = String(requestId || '').trim();
   if (!id) return;
-  await apiRequest(`/admin/hr/documents/requests/${encodeURIComponent(id)}/approve`, {
+  await apiRequest(`/certificates/admin/requests/${encodeURIComponent(id)}/approve`, {
     method: 'POST',
   });
 }
@@ -39963,9 +41881,17 @@ async function rejectHrEmploymentRequest(requestId = '', reason = '') {
   const id = String(requestId || '').trim();
   const rejectionReason = String(reason || '').trim();
   if (!id) return;
-  await apiRequest(`/admin/hr/documents/requests/${encodeURIComponent(id)}/reject`, {
+  await apiRequest(`/certificates/admin/requests/${encodeURIComponent(id)}/reject`, {
     method: 'POST',
     body: { rejection_reason: rejectionReason },
+  });
+}
+
+async function retryHrCertificateIssueJob(issueJobId = '') {
+  const id = String(issueJobId || '').trim();
+  if (!id) return;
+  await apiRequest(`/certificates/admin/issue-jobs/${encodeURIComponent(id)}/retry`, {
+    method: 'POST',
   });
 }
 
@@ -39989,10 +41915,16 @@ async function uploadHrDocumentTemplate() {
   hrState.templateUploading = true;
   renderHrScopeAndPanels();
   try {
+    const templateTypeSelect = $('#hrTemplateTypeSelect');
+    const selectedTypeKey = normalizeHrCertificateTypeKey(
+      templateTypeSelect instanceof HTMLSelectElement
+        ? (templateTypeSelect.value || hrState.selectedDocType || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE)
+        : (hrState.selectedDocType || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE),
+    );
     const formData = new FormData();
-    formData.append('document_type', 'employment_certificate');
+    formData.append('type_key', selectedTypeKey);
     formData.append('file', file);
-    await apiRequest('/admin/hr/documents/templates/upload', {
+    await apiRequest('/certificates/admin/templates/upload', {
       method: 'POST',
       body: formData,
     });
@@ -42736,11 +44668,2067 @@ function renderAttendanceViewFromCache() {
   renderAttendanceMobileSegments();
 }
 
+const MESSENGER_REACTION_CHOICES = Object.freeze(['👍', '👀', '✅']);
+const MESSENGER_SEARCH_MIN_CHARS = 2;
+
+function ensureMessengerState() {
+  if (!state.messenger || typeof state.messenger !== 'object') {
+    state.messenger = createInitialMessengerState();
+  }
+  return state.messenger;
+}
+
+function getMessengerCurrentUserId() {
+  return String(
+    state.user?.id
+    || state.user?.user_id
+    || state.user?.account_id
+    || '',
+  ).trim();
+}
+
+function normalizeMessengerConversationType(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  return ['dm', 'group', 'announcement'].includes(normalized) ? normalized : 'all';
+}
+
+function canCreateMessengerConversation() {
+  return Boolean(state.user && state.token && getRolePermissions()?.messenger);
+}
+
+function canCreateMessengerAnnouncement() {
+  return Boolean(
+    canCreateMessengerConversation()
+    && (
+      isManagerShellRole()
+      || can('tenantAdmin')
+      || can('attendanceReview')
+      || can('leaveReview')
+      || can('employeeWrite')
+    )
+  );
+}
+
+function getMessengerPresenceSessionKey() {
+  const messenger = ensureMessengerState();
+  if (String(messenger.presenceSessionKey || '').trim()) {
+    return messenger.presenceSessionKey;
+  }
+  let nextKey = '';
+  try {
+    nextKey = String(localStorage.getItem('RG_ARLS_MESSENGER_PRESENCE_SESSION') || '').trim();
+  } catch {
+    nextKey = '';
+  }
+  if (!nextKey) {
+    nextKey = `messenger-${crypto.randomUUID()}`;
+    try {
+      localStorage.setItem('RG_ARLS_MESSENGER_PRESENCE_SESSION', nextKey);
+    } catch {
+      // ignore storage failure
+    }
+  }
+  messenger.presenceSessionKey = nextKey;
+  return nextKey;
+}
+
+async function ensureMessengerPresenceSession() {
+  if (!canCreateMessengerConversation()) return null;
+  const messenger = ensureMessengerState();
+  const sessionKey = getMessengerPresenceSessionKey();
+  const payload = await apiRequest('/messenger/presence/session', {
+    method: 'PUT',
+    body: {
+      session_key: sessionKey,
+      status: 'online',
+      device_type: 'web',
+      meta_json: {
+        route: state.currentRoute || ROUTE_MESSENGER,
+        view: state.currentView || 'messenger',
+      },
+    },
+  });
+  messenger.presenceSessionKey = sessionKey;
+  return payload;
+}
+
+function setMessengerStatusHint(message = '', level = 'info') {
+  const el = $('#messengerStatusHint');
+  if (!(el instanceof HTMLElement)) return;
+  const text = String(message || '').trim();
+  if (!text) {
+    el.classList.add('hidden');
+    el.textContent = '';
+    return;
+  }
+  el.classList.remove('hidden');
+  setInlineStatus('#messengerStatusHint', text, level);
+}
+
+function syncMessengerCreateStatus(message = '', level = 'info') {
+  const messenger = ensureMessengerState();
+  messenger.createStatusMessage = String(message || '').trim();
+  messenger.createStatusLevel = level;
+  const el = $('#messengerCreateStatus');
+  if (!(el instanceof HTMLElement)) return;
+  setInlineStatus('#messengerCreateStatus', messenger.createStatusMessage, level);
+}
+
+function resetMessengerCreateDraft({
+  createType = '',
+  preserveOpen = true,
+} = {}) {
+  const messenger = ensureMessengerState();
+  const nextType = normalizeMessengerConversationType(createType || messenger.createType || 'group');
+  messenger.createType = nextType === 'all' ? 'group' : nextType;
+  messenger.createTitle = '';
+  messenger.createDescription = '';
+  messenger.createRoomKey = '';
+  messenger.createScopeType = 'tenant';
+  messenger.createSearch = '';
+  messenger.createMemberUserIds = [];
+  messenger.directoryRows = [];
+  messenger.directoryQuery = '';
+  messenger.directoryError = '';
+  messenger.createStatusMessage = '';
+  messenger.createStatusLevel = 'info';
+  if (!preserveOpen) {
+    messenger.createOpen = false;
+  }
+}
+
+function getMessengerConversationTitle(conversation = {}) {
+  const type = String(conversation?.conversation_type || '').trim().toLowerCase();
+  const title = String(conversation?.title || '').trim();
+  if (title) return title;
+  const currentUserId = getMessengerCurrentUserId();
+  const members = Array.isArray(conversation?.members) ? conversation.members : [];
+  if (type === 'dm') {
+    const other = members.find((member) => String(member?.user_id || '').trim() !== currentUserId) || members[0];
+    return String(other?.full_name || other?.username || '직접 메시지').trim() || '직접 메시지';
+  }
+  return type === 'announcement' ? '공지방' : '새 그룹방';
+}
+
+function getMessengerConversationSummary(conversation = {}) {
+  const members = Array.isArray(conversation?.members) ? conversation.members : [];
+  const currentUserId = getMessengerCurrentUserId();
+  const otherNames = members
+    .filter((member) => String(member?.user_id || '').trim() !== currentUserId)
+    .map((member) => String(member?.full_name || member?.username || '').trim())
+    .filter(Boolean);
+  const lastMessage = conversation?.last_message && typeof conversation.last_message === 'object'
+    ? conversation.last_message
+    : null;
+  if (lastMessage) {
+    const sender = String(lastMessage?.sender_name || lastMessage?.sender_username || '').trim();
+    const body = String(lastMessage?.body || '').trim();
+    const preview = body || (String(lastMessage?.message_type || '').trim() === 'poll' ? '투표 메시지' : '새 메시지');
+    return [sender, preview].filter(Boolean).join(' · ');
+  }
+  if (String(conversation?.conversation_type || '').trim().toLowerCase() === 'dm') {
+    return otherNames[0] || '직접 메시지';
+  }
+  const siteName = String(conversation?.site_name || '').trim();
+  return [siteName, otherNames.slice(0, 3).join(', ')].filter(Boolean).join(' · ') || '참여자 정보 없음';
+}
+
+function getMessengerConversationRowsForRender() {
+  const messenger = ensureMessengerState();
+  const query = String(messenger.searchQuery || '').trim().toLowerCase();
+  const typeFilter = normalizeMessengerConversationType(messenger.typeFilter || 'all');
+  const rows = Array.isArray(messenger.rows) ? messenger.rows : [];
+  return rows.filter((row) => {
+    const type = String(row?.conversation_type || '').trim().toLowerCase();
+    if (typeFilter !== 'all' && type !== typeFilter) return false;
+    if (!query) return true;
+    const haystack = [
+      getMessengerConversationTitle(row),
+      row?.description,
+      row?.site_name,
+      ...(Array.isArray(row?.members)
+        ? row.members.flatMap((member) => [member?.full_name, member?.username, member?.site_name])
+        : []),
+    ]
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean)
+      .join(' ');
+    return haystack.includes(query);
+  });
+}
+
+async function loadMessengerConversations({ force = false } = {}) {
+  const messenger = ensureMessengerState();
+  messenger.loading = true;
+  messenger.error = '';
+  renderMessengerWorkspace();
+  try {
+    const payload = await apiRequest('/messenger/conversations?limit=120');
+    const rows = Array.isArray(payload?.items) ? payload.items : [];
+    messenger.rows = rows;
+    messenger.fetchedAt = Date.now();
+    const selectedId = String(messenger.selectedConversationId || '').trim();
+    const hasSelected = rows.some((row) => String(row?.id || '').trim() === selectedId);
+    messenger.selectedConversationId = hasSelected ? selectedId : String(rows[0]?.id || '').trim();
+    messenger.error = '';
+    setMessengerStatusHint(rows.length ? `대화 ${rows.length}개` : '참여 중인 대화가 없습니다.', rows.length ? 'success' : 'info');
+    renderMessengerWorkspace();
+    return rows;
+  } catch (error) {
+    messenger.error = normalizeActionError(error, '메신저 대화 목록을 불러오지 못했습니다.');
+    setMessengerStatusHint(messenger.error, 'error');
+    renderMessengerWorkspace();
+    return [];
+  } finally {
+    messenger.loading = false;
+    renderMessengerWorkspace();
+  }
+}
+
+async function loadMessengerConversationDetail(conversationId, { force = false } = {}) {
+  const messenger = ensureMessengerState();
+  const id = String(conversationId || '').trim();
+  if (!id) return null;
+  if (!force && messenger.detailById && messenger.detailById[id]) {
+    return messenger.detailById[id];
+  }
+  messenger.detailLoading = true;
+  renderMessengerWorkspace();
+  try {
+    const detail = await apiRequest(`/messenger/conversations/${encodeURIComponent(id)}`);
+    messenger.detailById = messenger.detailById || {};
+    messenger.detailById[id] = detail && typeof detail === 'object' ? detail : {};
+    renderMessengerWorkspace();
+    return messenger.detailById[id];
+  } catch (error) {
+    setMessengerStatusHint(normalizeActionError(error, '대화 상세를 불러오지 못했습니다.'), 'error');
+    throw error;
+  } finally {
+    messenger.detailLoading = false;
+    renderMessengerWorkspace();
+  }
+}
+
+async function markMessengerConversationRead(conversationId, messageId = '') {
+  const messenger = ensureMessengerState();
+  const id = String(conversationId || '').trim();
+  if (!id) return null;
+  const normalizedMessageId = String(messageId || '').trim();
+  const result = await apiRequest(`/messenger/conversations/${encodeURIComponent(id)}/read`, {
+    method: 'POST',
+    body: {
+      message_id: normalizedMessageId || null,
+    },
+  });
+  messenger.rows = (Array.isArray(messenger.rows) ? messenger.rows : []).map((row) => (
+    String(row?.id || '').trim() === id ? { ...row, unread_count: 0 } : row
+  ));
+  if (messenger.detailById?.[id]) {
+    messenger.detailById[id] = {
+      ...messenger.detailById[id],
+      unread_count: 0,
+    };
+  }
+  return result;
+}
+
+async function loadMessengerMessages(conversationId, { force = false } = {}) {
+  const messenger = ensureMessengerState();
+  const id = String(conversationId || '').trim();
+  if (!id) return [];
+  if (!force && messenger.messagesByConversationId && Array.isArray(messenger.messagesByConversationId[id])) {
+    renderMessengerWorkspace();
+    return messenger.messagesByConversationId[id];
+  }
+  messenger.detailLoading = true;
+  renderMessengerWorkspace();
+  try {
+    const payload = await apiRequest(`/messenger/conversations/${encodeURIComponent(id)}/messages?limit=120`);
+    const rows = Array.isArray(payload?.items) ? payload.items : [];
+    messenger.messagesByConversationId = messenger.messagesByConversationId || {};
+    messenger.messagesByConversationId[id] = rows;
+    const lastMessageId = String(rows[rows.length - 1]?.id || '').trim();
+    if (lastMessageId) {
+      await markMessengerConversationRead(id, lastMessageId);
+    }
+    renderMessengerWorkspace();
+    return rows;
+  } catch (error) {
+    setMessengerStatusHint(normalizeActionError(error, '메시지를 불러오지 못했습니다.'), 'error');
+    throw error;
+  } finally {
+    messenger.detailLoading = false;
+    renderMessengerWorkspace();
+  }
+}
+
+async function loadMessengerSearchResults(query = '') {
+  const messenger = ensureMessengerState();
+  const normalizedQuery = String(query || '').trim();
+  messenger.messageSearchQuery = normalizedQuery;
+  if (normalizedQuery.length < MESSENGER_SEARCH_MIN_CHARS) {
+    messenger.searchResults = [];
+    messenger.searchError = '';
+    messenger.searchLoading = false;
+    renderMessengerWorkspace();
+    return [];
+  }
+  messenger.searchLoading = true;
+  messenger.searchError = '';
+  renderMessengerWorkspace();
+  try {
+    const payload = await apiRequest(`/messenger/search/messages?q=${encodeURIComponent(normalizedQuery)}&limit=20`);
+    messenger.searchResults = Array.isArray(payload?.items) ? payload.items : [];
+    renderMessengerWorkspace();
+    return messenger.searchResults;
+  } catch (error) {
+    messenger.searchResults = [];
+    messenger.searchError = normalizeActionError(error, '메시지 검색에 실패했습니다.');
+    renderMessengerWorkspace();
+    return [];
+  } finally {
+    messenger.searchLoading = false;
+    renderMessengerWorkspace();
+  }
+}
+
+async function loadMessengerDirectory({ force = false } = {}) {
+  const messenger = ensureMessengerState();
+  const query = String(messenger.createSearch || '').trim();
+  const cacheKey = `${query}`.toLowerCase();
+  if (!force && messenger.directoryQuery === cacheKey && Array.isArray(messenger.directoryRows) && messenger.directoryRows.length) {
+    return messenger.directoryRows;
+  }
+  messenger.directoryLoading = true;
+  messenger.directoryError = '';
+  renderMessengerWorkspace();
+  try {
+    const rows = await getScheduleDataProvider().listEmployees({ search: query, includeAccount: true });
+    const currentUserId = getMessengerCurrentUserId();
+    const filtered = (Array.isArray(rows) ? rows : [])
+      .filter((row) => {
+        const userId = String(row?.user_id || '').trim();
+        const linkedUsername = getEmployeeLinkedAccountUsername(row);
+        if (!userId && !linkedUsername) return false;
+        if (currentUserId && userId === currentUserId) return false;
+        return true;
+      })
+      .map((row) => ({
+        ...row,
+        __messengerUserId: String(row?.user_id || '').trim(),
+        __messengerAccount: getEmployeeLinkedAccountUsername(row),
+      }))
+      .sort((a, b) => String(a?.full_name || a?.name || '').localeCompare(String(b?.full_name || b?.name || ''), 'ko'));
+    messenger.directoryRows = filtered;
+    messenger.directoryQuery = cacheKey;
+    renderMessengerWorkspace();
+    return filtered;
+  } catch (error) {
+    messenger.directoryRows = [];
+    messenger.directoryError = normalizeActionError(error, '참여자 목록을 불러오지 못했습니다.');
+    renderMessengerWorkspace();
+    return [];
+  } finally {
+    messenger.directoryLoading = false;
+    renderMessengerWorkspace();
+  }
+}
+
+function renderMessengerTypeTabs() {
+  const messenger = ensureMessengerState();
+  const activeType = normalizeMessengerConversationType(messenger.typeFilter || 'all');
+  document.querySelectorAll('[data-action="messenger-filter-type"]').forEach((button) => {
+    const type = normalizeMessengerConversationType(button.getAttribute('data-type') || 'all');
+    button.classList.toggle('active', type === activeType);
+  });
+}
+
+function renderMessengerCreatePanel() {
+  const messenger = ensureMessengerState();
+  const panel = $('#messengerCreatePanel');
+  if (!(panel instanceof HTMLElement)) return;
+  const canCreate = canCreateMessengerConversation();
+  panel.classList.toggle('hidden', !messenger.createOpen || !canCreate);
+  const toggleBtn = $('#messengerCreateToggleBtn');
+  if (toggleBtn instanceof HTMLButtonElement) {
+    toggleBtn.disabled = !canCreate;
+    toggleBtn.textContent = messenger.createOpen ? '대화 닫기' : '대화 시작';
+  }
+
+  const createType = normalizeMessengerConversationType(messenger.createType || 'group');
+  if (createType === 'announcement' && !canCreateMessengerAnnouncement()) {
+    messenger.createType = 'group';
+  }
+  const normalizedCreateType = normalizeMessengerConversationType(messenger.createType || 'group');
+  document.querySelectorAll('[data-action="messenger-create-type"]').forEach((button) => {
+    const type = normalizeMessengerConversationType(button.getAttribute('data-type') || 'group');
+    const isAnnouncement = type === 'announcement';
+    button.classList.toggle('active', type === normalizedCreateType);
+    button.classList.toggle('hidden', isAnnouncement && !canCreateMessengerAnnouncement());
+  });
+
+  const titleInput = $('#messengerCreateTitle');
+  const roomKeyInput = $('#messengerCreateRoomKey');
+  const descriptionInput = $('#messengerCreateDescription');
+  const scopeSelect = $('#messengerCreateScopeType');
+  const searchInput = $('#messengerCreateSearch');
+  if (titleInput instanceof HTMLInputElement) {
+    titleInput.value = String(messenger.createTitle || '');
+    titleInput.disabled = normalizedCreateType === 'dm';
+    titleInput.closest('label')?.classList.toggle('hidden', normalizedCreateType === 'dm');
+  }
+  if (roomKeyInput instanceof HTMLInputElement) {
+    roomKeyInput.value = String(messenger.createRoomKey || '');
+    roomKeyInput.disabled = normalizedCreateType !== 'announcement';
+    roomKeyInput.closest('label')?.classList.toggle('hidden', normalizedCreateType !== 'announcement');
+  }
+  if (descriptionInput instanceof HTMLTextAreaElement) {
+    descriptionInput.value = String(messenger.createDescription || '');
+  }
+  if (scopeSelect instanceof HTMLSelectElement) {
+    scopeSelect.value = String(messenger.createScopeType || 'tenant');
+    scopeSelect.disabled = normalizedCreateType !== 'announcement';
+    scopeSelect.closest('label')?.classList.toggle('hidden', normalizedCreateType !== 'announcement');
+  }
+  if (searchInput instanceof HTMLInputElement) {
+    searchInput.value = String(messenger.createSearch || '');
+  }
+
+  const memberList = $('#messengerCreateMemberList');
+  const selectedIds = new Set((Array.isArray(messenger.createMemberUserIds) ? messenger.createMemberUserIds : []).map((value) => String(value || '').trim()).filter(Boolean));
+  const memberMeta = $('#messengerCreateMemberMeta');
+  if (memberMeta instanceof HTMLElement) {
+    memberMeta.textContent = normalizedCreateType === 'dm' ? `${selectedIds.size}명 선택 · 1명 필요` : `${selectedIds.size}명 선택`;
+  }
+  if (memberList instanceof HTMLElement) {
+    clearList(memberList);
+    if (messenger.directoryLoading) {
+      renderSkeleton(memberList, 4);
+    } else if (messenger.directoryError) {
+      renderCompactListEmpty(memberList, '참여자 목록을 불러오지 못했습니다.', messenger.directoryError);
+    } else if (!(Array.isArray(messenger.directoryRows) && messenger.directoryRows.length)) {
+      renderCompactListEmpty(memberList, '선택 가능한 참여자가 없습니다.', '계정 연결된 직원만 대화에 추가할 수 있습니다.');
+    } else {
+      messenger.directoryRows.forEach((row) => {
+        const userId = String(row?.__messengerUserId || row?.user_id || '').trim();
+        if (!userId) return;
+        const li = document.createElement('li');
+        li.className = `messenger-member-row${selectedIds.has(userId) ? ' is-selected' : ''}`;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'messenger-member-button';
+        button.dataset.action = 'messenger-toggle-member';
+        button.dataset.userId = userId;
+        const main = document.createElement('div');
+        main.className = 'messenger-member-main';
+        const name = document.createElement('strong');
+        name.textContent = String(row?.full_name || row?.name || row?.employee_name || row?.employee_code || '직원').trim() || '직원';
+        const account = document.createElement('span');
+        account.className = 'messenger-member-account';
+        account.textContent = [
+          String(row?.employee_code || '').trim(),
+          String(row?.site_name || row?.site_code || '').trim(),
+          String(row?.__messengerAccount || '').trim(),
+        ].filter(Boolean).join(' · ') || '계정 연결됨';
+        main.append(name, account);
+        const check = document.createElement('span');
+        check.className = 'messenger-member-check';
+        check.textContent = selectedIds.has(userId) ? '선택됨' : '선택';
+        button.append(main, check);
+        li.appendChild(button);
+        memberList.appendChild(li);
+      });
+    }
+  }
+
+  const defaultStatusMessage = normalizedCreateType === 'dm'
+    ? '상대 1명을 선택하면 바로 DM을 만듭니다.'
+    : normalizedCreateType === 'announcement'
+      ? '공지방은 관리자 권한과 room key가 필요합니다.'
+      : '그룹방 이름 없이도 먼저 만들고 대화 안에서 정리할 수 있습니다.';
+  syncMessengerCreateStatus(
+    String(messenger.createStatusMessage || '').trim() || defaultStatusMessage,
+    messenger.createStatusLevel || 'info',
+  );
+}
+
+function renderMessengerConversationList() {
+  const messenger = ensureMessengerState();
+  const list = $('#messengerConversationList');
+  const meta = $('#messengerListMeta');
+  if (!(list instanceof HTMLElement)) return;
+  const rows = getMessengerConversationRowsForRender();
+  if (meta instanceof HTMLElement) {
+    meta.textContent = `${rows.length}개`;
+  }
+  clearList(list);
+  if (messenger.loading && !(Array.isArray(messenger.rows) && messenger.rows.length)) {
+    renderSkeleton(list, 5);
+    return;
+  }
+  if (!rows.length) {
+    renderCompactListEmpty(list, '표시할 대화가 없습니다.', '새 대화를 만들거나 검색어를 비워 주세요.');
+    return;
+  }
+  rows.forEach((row) => {
+    const conversationId = String(row?.id || '').trim();
+    if (!conversationId) return;
+    const isSelected = conversationId === String(messenger.selectedConversationId || '').trim();
+    const li = document.createElement('li');
+    li.className = `messenger-conversation-item${isSelected ? ' is-selected' : ''}`;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `messenger-conversation-row${isSelected ? ' active' : ''}`;
+    button.dataset.action = 'messenger-open-conversation';
+    button.dataset.conversationId = conversationId;
+    button.setAttribute('aria-current', isSelected ? 'true' : 'false');
+    const main = document.createElement('div');
+    main.className = 'messenger-conversation-main';
+    const titleRow = document.createElement('div');
+    titleRow.className = 'messenger-conversation-title-row';
+    const title = document.createElement('strong');
+    title.className = 'messenger-conversation-title';
+    title.textContent = getMessengerConversationTitle(row);
+    titleRow.appendChild(title);
+    const updatedAt = document.createElement('span');
+    updatedAt.className = 'messenger-conversation-updated';
+    updatedAt.textContent = formatIsoToLocalLabel(row?.updated_at || row?.created_at || '');
+    titleRow.appendChild(updatedAt);
+    const metaRow = document.createElement('div');
+    metaRow.className = 'messenger-conversation-meta';
+    metaRow.textContent = getMessengerConversationSummary(row);
+    main.append(titleRow, metaRow);
+    button.appendChild(main);
+    const side = document.createElement('div');
+    side.className = 'messenger-conversation-side';
+    const conversationType = String(row?.conversation_type || 'group').trim().toLowerCase();
+    const typePill = document.createElement('span');
+    typePill.className = `status-pill ${conversationType === 'announcement' ? 'status-pill-warn' : 'status-pill-neutral'}`;
+    typePill.textContent = conversationType === 'dm' ? 'DM' : (conversationType === 'announcement' ? '공지방' : '그룹');
+    side.appendChild(typePill);
+    const unread = Math.max(Number(row?.unread_count || 0), 0);
+    if (unread > 0) {
+      const unreadBadge = document.createElement('span');
+      unreadBadge.className = 'messenger-unread-badge';
+      unreadBadge.textContent = unread > 99 ? '99+' : String(unread);
+      side.appendChild(unreadBadge);
+    }
+    button.appendChild(side);
+    li.appendChild(button);
+    list.appendChild(li);
+  });
+}
+
+function renderMessengerThreadHead() {
+  const messenger = ensureMessengerState();
+  const target = $('#messengerThreadHead');
+  if (!(target instanceof HTMLElement)) return;
+  const conversationId = String(messenger.selectedConversationId || '').trim();
+  const detail = messenger.detailById?.[conversationId] || null;
+  if (!conversationId || !detail) {
+    target.innerHTML = `
+      <div>
+        <strong>대화를 선택해 주세요.</strong>
+        <p class="muted">좌측 목록에서 대화를 열면 메시지가 이 영역에 표시됩니다.</p>
+      </div>
+    `;
+    return;
+  }
+  const members = Array.isArray(detail?.members) ? detail.members : [];
+  const memberText = members
+    .map((member) => String(member?.full_name || member?.username || '').trim())
+    .filter(Boolean)
+    .join(', ');
+  const conversationType = String(detail?.conversation_type || '').trim().toLowerCase();
+  const scopeType = String(detail?.announcement_room?.scope_type || '').trim().toLowerCase();
+  const metaParts = [
+    conversationType === 'dm' ? 'DM' : (conversationType === 'announcement' ? '공지방' : '그룹'),
+    detail?.site_name ? `현장 ${String(detail.site_name).trim()}` : '',
+    conversationType === 'announcement' && detail?.announcement_room?.room_key
+      ? `키 ${String(detail.announcement_room.room_key).trim()} · ${scopeType === 'site' ? '현장 범위' : '회사 범위'}`
+      : '',
+  ].filter(Boolean);
+  target.innerHTML = '';
+  const main = document.createElement('div');
+  main.className = 'messenger-thread-title';
+  const title = document.createElement('strong');
+  title.textContent = getMessengerConversationTitle(detail);
+  const sub = document.createElement('p');
+  sub.className = 'muted';
+  sub.textContent = [
+    String(detail?.description || '').trim(),
+    memberText,
+  ].filter(Boolean).join(' · ') || '참여자 정보 없음';
+  main.append(title, sub);
+  const side = document.createElement('div');
+  side.className = 'messenger-thread-side';
+  metaParts.forEach((item) => {
+    const span = document.createElement('span');
+    span.className = 'messenger-thread-meta';
+    span.textContent = item;
+    side.appendChild(span);
+  });
+  target.append(main, side);
+}
+
+function renderMessengerSearchResults() {
+  const messenger = ensureMessengerState();
+  const list = $('#messengerSearchResults');
+  if (!(list instanceof HTMLElement)) return;
+  const query = String(messenger.messageSearchQuery || '').trim();
+  const results = Array.isArray(messenger.searchResults) ? messenger.searchResults : [];
+  list.classList.toggle('hidden', !query && !messenger.searchLoading && !messenger.searchError);
+  clearList(list);
+  if (!query) {
+    list.classList.add('hidden');
+    return;
+  }
+  list.classList.remove('hidden');
+  if (messenger.searchLoading) {
+    renderSkeleton(list, 2);
+    return;
+  }
+  if (messenger.searchError) {
+    renderCompactListEmpty(list, '메시지 검색에 실패했습니다.', messenger.searchError);
+    return;
+  }
+  if (!results.length) {
+    renderCompactListEmpty(list, '검색 결과가 없습니다.', '검색어를 바꿔 다시 확인해 주세요.');
+    return;
+  }
+  results.forEach((entry) => {
+    const message = entry?.message && typeof entry.message === 'object' ? entry.message : {};
+    const conversation = entry?.conversation && typeof entry.conversation === 'object' ? entry.conversation : {};
+    const li = document.createElement('li');
+    li.className = 'messenger-search-result-item';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'messenger-search-result';
+    button.dataset.action = 'messenger-search-result-open';
+    button.dataset.conversationId = String(message?.conversation_id || conversation?.id || '').trim();
+    button.dataset.messageId = String(message?.id || '').trim();
+    const title = document.createElement('strong');
+    title.textContent = getMessengerConversationTitle(conversation);
+    const body = document.createElement('span');
+    body.textContent = String(message?.body || '').trim() || '본문 없음';
+    const meta = document.createElement('span');
+    meta.className = 'messenger-search-result-meta';
+    meta.textContent = [
+      String(message?.sender_name || message?.sender_username || '').trim(),
+      formatIsoToLocalLabel(message?.created_at || ''),
+    ].filter(Boolean).join(' · ');
+    button.append(title, body, meta);
+    li.appendChild(button);
+    list.appendChild(li);
+  });
+}
+
+function renderMessengerMessages() {
+  const messenger = ensureMessengerState();
+  const list = $('#messengerMessageList');
+  if (!(list instanceof HTMLElement)) return;
+  const conversationId = String(messenger.selectedConversationId || '').trim();
+  const rows = Array.isArray(messenger.messagesByConversationId?.[conversationId])
+    ? messenger.messagesByConversationId[conversationId]
+    : [];
+  clearList(list);
+  if (!conversationId) {
+    renderCompactListEmpty(list, '대화를 선택해 주세요.', '좌측에서 대화를 열면 스레드가 표시됩니다.');
+    return;
+  }
+  if (messenger.detailLoading && !rows.length) {
+    renderSkeleton(list, 4);
+    return;
+  }
+  if (!rows.length) {
+    renderCompactListEmpty(list, '아직 메시지가 없습니다.', '첫 메시지로 대화를 시작해 보세요.');
+    return;
+  }
+  const currentUserId = getMessengerCurrentUserId();
+  rows.forEach((message) => {
+    const li = document.createElement('li');
+    const isMine = Boolean(
+      message?.is_mine
+      || (currentUserId && String(message?.sender_user_id || '').trim() === currentUserId)
+    );
+    li.className = `messenger-message-row${isMine ? ' is-mine' : ''}${String(messenger.highlightMessageId || '').trim() === String(message?.id || '').trim() ? ' is-highlighted' : ''}`;
+    li.dataset.messageId = String(message?.id || '').trim();
+
+    const stack = document.createElement('div');
+    stack.className = 'messenger-message-stack';
+    const meta = document.createElement('div');
+    meta.className = 'messenger-message-meta';
+    meta.textContent = [
+      !isMine ? String(message?.sender_name || message?.sender_username || '사용자').trim() : '나',
+      formatIsoToLocalLabel(message?.created_at || ''),
+      message?.edited_at ? '수정됨' : '',
+    ].filter(Boolean).join(' · ');
+
+    const bubble = document.createElement('div');
+    bubble.className = 'messenger-message-bubble';
+    bubble.textContent = String(message?.deleted_at ? '삭제된 메시지입니다.' : (message?.body || '')).trim()
+      || (String(message?.message_type || '').trim() === 'poll' ? '투표 메시지' : '메시지 없음');
+
+    const reactions = document.createElement('div');
+    reactions.className = 'messenger-message-reactions';
+    const reactionMap = new Map();
+    (Array.isArray(message?.reactions) ? message.reactions : []).forEach((item) => {
+      reactionMap.set(String(item?.reaction || '').trim(), item);
+    });
+    MESSENGER_REACTION_CHOICES.forEach((reaction) => {
+      const reactionInfo = reactionMap.get(reaction) || null;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `messenger-reaction-chip${reactionInfo?.reacted_by_me ? ' is-active' : ''}`;
+      button.dataset.action = 'messenger-reaction-toggle';
+      button.dataset.messageId = String(message?.id || '').trim();
+      button.dataset.reaction = reaction;
+      button.dataset.reacted = reactionInfo?.reacted_by_me ? 'true' : 'false';
+      button.textContent = `${reaction} ${reactionInfo?.count ? reactionInfo.count : ''}`.trim();
+      reactions.appendChild(button);
+    });
+
+    stack.append(meta, bubble, reactions);
+    li.appendChild(stack);
+    list.appendChild(li);
+  });
+
+  const highlighted = String(messenger.highlightMessageId || '').trim();
+  if (highlighted) {
+    const target = list.querySelector(`[data-message-id="${highlighted}"]`);
+    if (target instanceof HTMLElement) {
+      requestAnimationFrame(() => {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+  }
+}
+
+function renderMessengerComposer() {
+  const messenger = ensureMessengerState();
+  const input = $('#messengerComposerInput');
+  const meta = $('#messengerComposerMeta');
+  const sendBtn = document.querySelector('[data-action="messenger-submit-message"]');
+  const conversationId = String(messenger.selectedConversationId || '').trim();
+  const disabled = !conversationId || messenger.sending;
+  if (input instanceof HTMLTextAreaElement) {
+    input.disabled = disabled;
+    input.value = String(messenger.composerBody || '');
+    input.placeholder = conversationId ? '메시지를 입력하세요.' : '대화를 선택하면 입력할 수 있습니다.';
+  }
+  if (sendBtn instanceof HTMLButtonElement) {
+    sendBtn.disabled = disabled || !String(messenger.composerBody || '').trim();
+  }
+  if (meta instanceof HTMLElement) {
+    meta.textContent = conversationId
+      ? (messenger.sending ? '메시지 전송 중...' : 'Enter 대신 버튼으로 전송합니다.')
+      : '대화를 선택하면 전송할 수 있습니다.';
+  }
+}
+
+function renderMessengerWorkspace() {
+  const messenger = ensureMessengerState();
+  renderMessengerTypeTabs();
+  renderMessengerCreatePanel();
+  renderMessengerConversationList();
+  renderMessengerThreadHead();
+  renderMessengerSearchResults();
+  renderMessengerMessages();
+  renderMessengerComposer();
+  const subtitle = $('#messengerListSubtitle');
+  if (subtitle instanceof HTMLElement) {
+    subtitle.textContent = messenger.loading ? '대화 목록을 불러오는 중입니다.' : '최근 업데이트 순으로 정렬됩니다.';
+  }
+}
+
+async function openMessengerConversation(conversationId, { force = false } = {}) {
+  const messenger = ensureMessengerState();
+  const id = String(conversationId || '').trim();
+  if (!id) return null;
+  messenger.selectedConversationId = id;
+  messenger.highlightMessageId = '';
+  renderMessengerWorkspace();
+  await Promise.all([
+    loadMessengerConversationDetail(id, { force }),
+    loadMessengerMessages(id, { force }),
+  ]);
+  return messenger.detailById?.[id] || null;
+}
+
+async function submitMessengerMessage() {
+  const messenger = ensureMessengerState();
+  const conversationId = String(messenger.selectedConversationId || '').trim();
+  const body = String(messenger.composerBody || '').trim();
+  if (!conversationId) {
+    showToast('메시지를 보낼 대화를 먼저 선택해 주세요.', 'info', 2200);
+    return;
+  }
+  if (!body) {
+    showToast('메시지를 입력해 주세요.', 'info', 1800);
+    return;
+  }
+  messenger.sending = true;
+  renderMessengerWorkspace();
+  try {
+    await apiRequest(`/messenger/conversations/${encodeURIComponent(conversationId)}/messages`, {
+      method: 'POST',
+      body: {
+        body,
+        message_type: 'text',
+        mentioned_user_ids: [],
+      },
+    });
+    messenger.composerBody = '';
+    await Promise.all([
+      loadMessengerMessages(conversationId, { force: true }),
+      loadMessengerConversations({ force: true }),
+      loadMessengerConversationDetail(conversationId, { force: true }),
+    ]);
+    showToast('메시지를 보냈습니다.', 'success', 1800);
+  } finally {
+    messenger.sending = false;
+    renderMessengerWorkspace();
+  }
+}
+
+async function submitMessengerConversation() {
+  const messenger = ensureMessengerState();
+  const createType = normalizeMessengerConversationType(messenger.createType || 'group');
+  const selectedIds = (Array.isArray(messenger.createMemberUserIds) ? messenger.createMemberUserIds : [])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+  if (createType === 'dm' && selectedIds.length !== 1) {
+    syncMessengerCreateStatus('DM은 상대 1명을 선택해야 합니다.', 'error');
+    return;
+  }
+  if (createType !== 'dm' && !selectedIds.length) {
+    syncMessengerCreateStatus('참여자를 한 명 이상 선택해 주세요.', 'error');
+    return;
+  }
+  if (createType === 'announcement' && !canCreateMessengerAnnouncement()) {
+    syncMessengerCreateStatus('공지방 생성 권한이 없습니다.', 'error');
+    return;
+  }
+  const roomKey = String(messenger.createRoomKey || '').trim();
+  if (createType === 'announcement' && !roomKey) {
+    syncMessengerCreateStatus('공지방 키를 입력해 주세요.', 'error');
+    return;
+  }
+  syncMessengerCreateStatus('대화를 생성하는 중...', 'info');
+  const payload = {
+    conversation_type: createType === 'all' ? 'group' : createType,
+    member_user_ids: selectedIds,
+    title: String(messenger.createTitle || '').trim() || null,
+    description: String(messenger.createDescription || '').trim() || null,
+    announcement_room_key: createType === 'announcement' ? roomKey : null,
+    announcement_scope_type: createType === 'announcement'
+      ? String(messenger.createScopeType || 'tenant').trim().toLowerCase()
+      : null,
+  };
+  const created = await apiRequest('/messenger/conversations', {
+    method: 'POST',
+    body: payload,
+  });
+  resetMessengerCreateDraft({ createType: 'group', preserveOpen: false });
+  syncMessengerCreateStatus('', 'info');
+  await loadMessengerConversations({ force: true });
+  messenger.selectedConversationId = String(created?.id || '').trim() || messenger.selectedConversationId;
+  await openMessengerConversation(messenger.selectedConversationId, { force: true });
+  showToast('새 대화를 만들었습니다.', 'success', 1800);
+}
+
+async function toggleMessengerReaction(messageId, reaction, reactedByMe = false) {
+  const messenger = ensureMessengerState();
+  const normalizedMessageId = String(messageId || '').trim();
+  const normalizedReaction = String(reaction || '').trim();
+  if (!normalizedMessageId || !normalizedReaction) return;
+  const path = `/messenger/messages/${encodeURIComponent(normalizedMessageId)}/reactions${reactedByMe ? `/${encodeURIComponent(normalizedReaction)}` : ''}`;
+  const payload = reactedByMe
+    ? await apiRequest(path, { method: 'DELETE' })
+    : await apiRequest(path, { method: 'POST', body: { reaction: normalizedReaction } });
+  const conversationId = String(payload?.conversation_id || messenger.selectedConversationId || '').trim();
+  if (!conversationId) return;
+  const rows = Array.isArray(messenger.messagesByConversationId?.[conversationId])
+    ? messenger.messagesByConversationId[conversationId]
+    : [];
+  messenger.messagesByConversationId[conversationId] = rows.map((row) => (
+    String(row?.id || '').trim() === normalizedMessageId ? payload : row
+  ));
+  const conversationRows = Array.isArray(messenger.rows) ? messenger.rows : [];
+  messenger.rows = conversationRows.map((row) => {
+    if (String(row?.id || '').trim() !== conversationId) return row;
+    const lastMessage = row?.last_message && String(row.last_message?.id || '').trim() === normalizedMessageId ? payload : row?.last_message;
+    return { ...row, last_message: lastMessage };
+  });
+  renderMessengerWorkspace();
+}
+
+async function loadMessengerViewPresenter() {
+  const messenger = ensureMessengerState();
+  renderMessengerWorkspace();
+  await Promise.allSettled([
+    loadMessengerConversations(),
+    ensureMessengerPresenceSession(),
+  ]);
+  if (!Array.isArray(messenger.rows) || !messenger.rows.length) {
+    if (String(messenger.error || '').trim()) {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      await loadMessengerConversations({ force: true });
+    }
+  }
+  if (!messenger.selectedConversationId) {
+    messenger.selectedConversationId = String((Array.isArray(messenger.rows) ? messenger.rows[0]?.id : '') || '').trim();
+  }
+  if (messenger.selectedConversationId) {
+    await Promise.allSettled([
+      loadMessengerConversationDetail(messenger.selectedConversationId),
+      loadMessengerMessages(messenger.selectedConversationId),
+    ]);
+  }
+  loadMessengerDirectory({ force: true }).catch(() => {});
+  renderMessengerWorkspace();
+}
+
+const MEETINGS_STATE_FILTER_OPTIONS = Object.freeze(['all', 'live', 'scheduled', 'ended']);
+
+function ensureMeetingsState() {
+  if (!state.meetings || typeof state.meetings !== 'object') {
+    state.meetings = createInitialMeetingsState();
+  }
+  return state.meetings;
+}
+
+function getMeetingsCurrentUserId() {
+  return String(
+    state.user?.id
+    || state.user?.user_id
+    || state.user?.account_id
+    || '',
+  ).trim();
+}
+
+function canUseMeetings() {
+  return Boolean(state.user && state.token && getRolePermissions()?.meetings);
+}
+
+function normalizeMeetingsStateFilter(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  return MEETINGS_STATE_FILTER_OPTIONS.includes(normalized) ? normalized : 'all';
+}
+
+function normalizeMeetingsScheduledForValue(value = '') {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+}
+
+function formatMeetingsScheduledForInput(value = '') {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const offset = parsed.getTimezoneOffset() * 60 * 1000;
+  return new Date(parsed.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function getMeetingsRoomStateLabel(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'live') return '진행중';
+  if (normalized === 'scheduled') return '예약';
+  if (normalized === 'ended') return '종료';
+  return '대기';
+}
+
+function getMeetingsReadinessLabel(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'ready' || normalized === 'passed') return '준비 완료';
+  if (normalized === 'blocked' || normalized === 'failed') return '점검 필요';
+  return '준비 중';
+}
+
+function getMeetingsRoomRowsForRender() {
+  const meetings = ensureMeetingsState();
+  const search = String(meetings.searchQuery || '').trim().toLowerCase();
+  const stateFilter = normalizeMeetingsStateFilter(meetings.stateFilter || 'all');
+  return (Array.isArray(meetings.rows) ? meetings.rows : []).filter((row) => {
+    const roomState = String(row?.state || '').trim().toLowerCase() || 'scheduled';
+    if (stateFilter !== 'all' && roomState !== stateFilter) return false;
+    if (!search) return true;
+    const haystack = [
+      row?.title,
+      row?.host_name,
+      row?.room_key,
+      ...(Array.isArray(row?.participants)
+        ? row.participants.flatMap((participant) => [participant?.full_name, participant?.username, participant?.site_name])
+        : []),
+    ]
+      .map((item) => String(item || '').trim().toLowerCase())
+      .filter(Boolean)
+      .join(' ');
+    return haystack.includes(search);
+  });
+}
+
+function getMeetingsCurrentParticipant(room = null) {
+  const userId = getMeetingsCurrentUserId();
+  if (!userId) return null;
+  const participants = Array.isArray(room?.participants) ? room.participants : [];
+  return participants.find((participant) => String(participant?.user_id || '').trim() === userId) || null;
+}
+
+function setMeetingsStatusHint(message = '', level = 'info') {
+  const text = String(message || '').trim();
+  const el = $('#meetingsStatusHint');
+  if (!(el instanceof HTMLElement)) return;
+  if (!text) {
+    el.classList.add('hidden');
+    el.textContent = '';
+    return;
+  }
+  el.classList.remove('hidden');
+  setInlineStatus('#meetingsStatusHint', text, level);
+}
+
+function syncMeetingsCreateStatus(message = '', level = 'info') {
+  const meetings = ensureMeetingsState();
+  meetings.createStatusMessage = String(message || '').trim();
+  meetings.createStatusLevel = level;
+  const el = $('#meetingsCreateStatus');
+  if (!(el instanceof HTMLElement)) return;
+  setInlineStatus('#meetingsCreateStatus', meetings.createStatusMessage, level);
+}
+
+function syncMeetingsLinkStatus(message = '', level = 'info') {
+  const meetings = ensureMeetingsState();
+  meetings.linkStatusMessage = String(message || '').trim();
+  meetings.linkStatusLevel = level;
+  const el = $('#meetingsChatLinkStatus');
+  if (!(el instanceof HTMLElement)) return;
+  if (!meetings.linkStatusMessage) {
+    el.classList.add('hidden');
+    el.textContent = '';
+    return;
+  }
+  el.classList.remove('hidden');
+  setInlineStatus('#meetingsChatLinkStatus', meetings.linkStatusMessage, level);
+}
+
+function syncMeetingsParticipantStatus(message = '', level = 'info') {
+  const meetings = ensureMeetingsState();
+  meetings.participantStatusMessage = String(message || '').trim();
+  meetings.participantStatusLevel = level;
+  const el = $('#meetingsParticipantStatus');
+  if (!(el instanceof HTMLElement)) return;
+  if (!meetings.participantStatusMessage) {
+    el.classList.add('hidden');
+    el.textContent = '';
+    return;
+  }
+  el.classList.remove('hidden');
+  setInlineStatus('#meetingsParticipantStatus', meetings.participantStatusMessage, level);
+}
+
+function getMeetingsConversationOptionLabel(conversation = {}) {
+  const title = getMessengerConversationTitle(conversation);
+  const type = String(conversation?.conversation_type || '').trim().toLowerCase();
+  const siteName = String(conversation?.site_name || '').trim();
+  const parts = [
+    title,
+    type === 'dm' ? 'DM' : (type === 'announcement' ? '공지방' : '그룹'),
+    siteName,
+  ].filter(Boolean);
+  return parts.join(' · ') || '연결 가능한 대화';
+}
+
+function populateMeetingsConversationSelect(select, {
+  selectedId = '',
+  placeholder = '연결 안 함',
+  excludeIds = [],
+  disabled = false,
+} = {}) {
+  if (!(select instanceof HTMLSelectElement)) return;
+  const meetings = ensureMeetingsState();
+  const excluded = new Set((Array.isArray(excludeIds) ? excludeIds : []).map((value) => String(value || '').trim()).filter(Boolean));
+  const rows = (Array.isArray(meetings.conversationRows) ? meetings.conversationRows : []).filter((row) => {
+    const conversationId = String(row?.id || '').trim();
+    if (!conversationId) return false;
+    if (conversationId === String(selectedId || '').trim()) return true;
+    return !excluded.has(conversationId);
+  });
+  const nextSelectedId = String(selectedId || '').trim();
+  select.innerHTML = '';
+  const placeholderOption = document.createElement('option');
+  placeholderOption.value = '';
+  placeholderOption.textContent = placeholder;
+  select.appendChild(placeholderOption);
+  rows.forEach((row) => {
+    const option = document.createElement('option');
+    option.value = String(row?.id || '').trim();
+    option.textContent = getMeetingsConversationOptionLabel(row);
+    select.appendChild(option);
+  });
+  select.value = rows.some((row) => String(row?.id || '').trim() === nextSelectedId) ? nextSelectedId : '';
+  select.disabled = Boolean(disabled);
+}
+
+function getMeetingsDirectoryUserIdSet() {
+  const meetings = ensureMeetingsState();
+  return new Set(
+    (Array.isArray(meetings.directoryRows) ? meetings.directoryRows : [])
+      .map((row) => String(row?.__meetingsUserId || row?.user_id || '').trim())
+      .filter(Boolean),
+  );
+}
+
+function populateMeetingsParticipantSelect(select, {
+  selectedId = '',
+  placeholder = '추가할 직원을 선택하세요',
+  excludeIds = [],
+  disabled = false,
+} = {}) {
+  if (!(select instanceof HTMLSelectElement)) return;
+  const meetings = ensureMeetingsState();
+  const excluded = new Set((Array.isArray(excludeIds) ? excludeIds : []).map((value) => String(value || '').trim()).filter(Boolean));
+  const rows = (Array.isArray(meetings.directoryRows) ? meetings.directoryRows : []).filter((row) => {
+    const userId = String(row?.__meetingsUserId || row?.user_id || '').trim();
+    if (!userId) return false;
+    if (userId === String(selectedId || '').trim()) return true;
+    return !excluded.has(userId);
+  });
+  const nextSelectedId = String(selectedId || '').trim();
+  select.innerHTML = '';
+  const placeholderOption = document.createElement('option');
+  placeholderOption.value = '';
+  placeholderOption.textContent = placeholder;
+  select.appendChild(placeholderOption);
+  rows.forEach((row) => {
+    const userId = String(row?.__meetingsUserId || row?.user_id || '').trim();
+    const option = document.createElement('option');
+    option.value = userId;
+    option.textContent = [
+      String(row?.full_name || row?.name || row?.employee_name || row?.employee_code || '직원').trim() || '직원',
+      String(row?.site_name || row?.site_code || '').trim(),
+      String(row?.employee_code || '').trim(),
+    ].filter(Boolean).join(' · ');
+    select.appendChild(option);
+  });
+  select.value = rows.some((row) => String(row?.__meetingsUserId || row?.user_id || '').trim() === nextSelectedId) ? nextSelectedId : '';
+  select.disabled = Boolean(disabled);
+}
+
+async function loadMeetingsRooms({ force = false } = {}) {
+  const meetings = ensureMeetingsState();
+  meetings.loading = true;
+  meetings.error = '';
+  renderMeetingsWorkspace();
+  try {
+    const stateFilter = normalizeMeetingsStateFilter(meetings.stateFilter || 'all');
+    const query = stateFilter === 'all' ? '' : `?state=${encodeURIComponent(stateFilter)}`;
+    const payload = await apiRequest(`/meetings/rooms${query}`);
+    const rows = Array.isArray(payload?.items) ? payload.items : [];
+    meetings.rows = rows;
+    const selectedRoomId = String(meetings.selectedRoomId || '').trim();
+    const hasSelected = rows.some((row) => String(row?.id || '').trim() === selectedRoomId);
+    meetings.selectedRoomId = hasSelected ? selectedRoomId : String(rows[0]?.id || '').trim();
+    setMeetingsStatusHint(
+      rows.length ? `회의 ${rows.length}개` : '표시할 회의가 없습니다.',
+      rows.length ? 'success' : 'info',
+    );
+    renderMeetingsWorkspace();
+    return rows;
+  } catch (error) {
+    meetings.error = normalizeActionError(error, '회의 목록을 불러오지 못했습니다.');
+    setMeetingsStatusHint(meetings.error, 'error');
+    renderMeetingsWorkspace();
+    return [];
+  } finally {
+    meetings.loading = false;
+    renderMeetingsWorkspace();
+  }
+}
+
+async function loadMeetingsRoomDetail(roomId, { force = false } = {}) {
+  const meetings = ensureMeetingsState();
+  const id = String(roomId || '').trim();
+  if (!id) return null;
+  if (!force && meetings.detailById && meetings.detailById[id]) {
+    return meetings.detailById[id];
+  }
+  meetings.detailLoading = true;
+  renderMeetingsWorkspace();
+  try {
+    const detail = await apiRequest(`/meetings/rooms/${encodeURIComponent(id)}`);
+    meetings.detailById = meetings.detailById || {};
+    meetings.detailById[id] = detail && typeof detail === 'object' ? detail : {};
+    renderMeetingsWorkspace();
+    return meetings.detailById[id];
+  } catch (error) {
+    setMeetingsStatusHint(normalizeActionError(error, '회의 상세를 불러오지 못했습니다.'), 'error');
+    throw error;
+  } finally {
+    meetings.detailLoading = false;
+    renderMeetingsWorkspace();
+  }
+}
+
+async function loadMeetingsRolloutStatus() {
+  const meetings = ensureMeetingsState();
+  meetings.rolloutLoading = true;
+  renderMeetingsWorkspace();
+  try {
+    const payload = await apiRequest('/meetings/rollout/status');
+    meetings.rollout = payload && typeof payload === 'object' ? payload : null;
+    renderMeetingsWorkspace();
+    return meetings.rollout;
+  } catch (error) {
+    setMeetingsStatusHint(normalizeActionError(error, '회의 rollout 상태를 불러오지 못했습니다.'), 'error');
+    return null;
+  } finally {
+    meetings.rolloutLoading = false;
+    renderMeetingsWorkspace();
+  }
+}
+
+async function loadMeetingsDirectory({ force = false } = {}) {
+  const meetings = ensureMeetingsState();
+  const query = String(meetings.createSearch || '').trim();
+  const cacheKey = query.toLowerCase();
+  if (!force && meetings.directoryQuery === cacheKey && Array.isArray(meetings.directoryRows) && meetings.directoryRows.length) {
+    return meetings.directoryRows;
+  }
+  meetings.directoryLoading = true;
+  meetings.directoryError = '';
+  renderMeetingsWorkspace();
+  try {
+    const rows = await getScheduleDataProvider().listEmployees({ search: query, includeAccount: true });
+    const currentUserId = getMeetingsCurrentUserId();
+    const filtered = (Array.isArray(rows) ? rows : [])
+      .filter((row) => {
+        const userId = String(row?.user_id || '').trim();
+        if (!userId || (currentUserId && currentUserId === userId)) return false;
+        return true;
+      })
+      .map((row) => ({
+        ...row,
+        __meetingsUserId: String(row?.user_id || '').trim(),
+        __meetingsAccount: getEmployeeLinkedAccountUsername(row),
+      }))
+      .sort((a, b) => String(a?.full_name || a?.name || '').localeCompare(String(b?.full_name || b?.name || ''), 'ko'));
+    meetings.directoryRows = filtered;
+    meetings.directoryQuery = cacheKey;
+    renderMeetingsWorkspace();
+    return filtered;
+  } catch (error) {
+    meetings.directoryRows = [];
+    meetings.directoryError = normalizeActionError(error, '참여자 목록을 불러오지 못했습니다.');
+    renderMeetingsWorkspace();
+    return [];
+  } finally {
+    meetings.directoryLoading = false;
+    renderMeetingsWorkspace();
+  }
+}
+
+async function loadMeetingsConversationOptions({ force = false } = {}) {
+  const meetings = ensureMeetingsState();
+  if (!force && Array.isArray(meetings.conversationRows) && meetings.conversationRows.length) {
+    return meetings.conversationRows;
+  }
+  meetings.conversationLoading = true;
+  meetings.conversationError = '';
+  renderMeetingsWorkspace();
+  try {
+    const payload = await apiRequest('/messenger/conversations?limit=120');
+    const rows = Array.isArray(payload?.items) ? payload.items : [];
+    meetings.conversationRows = rows;
+    meetings.conversationFetchedAt = Date.now();
+    renderMeetingsWorkspace();
+    return rows;
+  } catch (error) {
+    meetings.conversationRows = [];
+    meetings.conversationError = normalizeActionError(error, '연결 가능한 메신저 대화를 불러오지 못했습니다.');
+    renderMeetingsWorkspace();
+    return [];
+  } finally {
+    meetings.conversationLoading = false;
+    renderMeetingsWorkspace();
+  }
+}
+
+function renderMeetingsStateTabs() {
+  const meetings = ensureMeetingsState();
+  const activeState = normalizeMeetingsStateFilter(meetings.stateFilter || 'all');
+  document.querySelectorAll('[data-action="meetings-filter-state"]').forEach((button) => {
+    const targetState = normalizeMeetingsStateFilter(button.getAttribute('data-state') || 'all');
+    button.classList.toggle('active', targetState === activeState);
+  });
+}
+
+function renderMeetingsRolloutInline() {
+  const meetings = ensureMeetingsState();
+  const target = $('#meetingsRolloutInline');
+  if (!(target instanceof HTMLElement)) return;
+  const rollout = meetings.rollout && typeof meetings.rollout === 'object' ? meetings.rollout : null;
+  if (meetings.rolloutLoading && !rollout) {
+    target.innerHTML = '<span class="status-pill status-pill-neutral">rollout 확인 중</span>';
+    return;
+  }
+  if (!rollout) {
+    target.innerHTML = '<span class="status-pill status-pill-neutral">rollout 데이터 없음</span>';
+    return;
+  }
+  const readiness = rollout.readiness && typeof rollout.readiness === 'object' ? rollout.readiness : {};
+  const runtime = rollout.runtime && typeof rollout.runtime === 'object' ? rollout.runtime : {};
+  const readinessStatus = String(readiness.status || '').trim().toLowerCase();
+  const readinessClass = readinessStatus === 'ready' || readinessStatus === 'passed'
+    ? 'status-pill-ok'
+    : (readinessStatus === 'blocked' || readinessStatus === 'failed' ? 'status-pill-warn' : 'status-pill-neutral');
+  target.innerHTML = `
+    <span class="status-pill ${readinessClass}">${escapeHtml(getMeetingsReadinessLabel(readinessStatus))}</span>
+    <span class="meetings-rollout-meta">활성 회의 ${Number(runtime.live_room_count || 0)}개 · 세션 ${Number(runtime.live_session_count || 0)}개 · 점검 통과 ${Number(readiness.passing_check_count || 0)}건</span>
+  `;
+}
+
+function renderMeetingsCreatePanel() {
+  const meetings = ensureMeetingsState();
+  const canCreate = canUseMeetings();
+  const panel = $('#meetingsCreatePanel');
+  if (!(panel instanceof HTMLElement)) return;
+  panel.classList.toggle('hidden', !meetings.createOpen || !canCreate);
+  const toggleBtn = $('#meetingsCreateToggleBtn');
+  if (toggleBtn instanceof HTMLButtonElement) {
+    toggleBtn.disabled = !canCreate;
+    toggleBtn.textContent = meetings.createOpen ? '닫기' : '회의 시작';
+  }
+
+  const titleInput = $('#meetingsCreateTitle');
+  const scheduledInput = $('#meetingsCreateScheduledFor');
+  const searchInput = $('#meetingsCreateSearch');
+  const linkedConversationSelect = $('#meetingsCreateLinkedConversation');
+  if (titleInput instanceof HTMLInputElement) {
+    titleInput.value = String(meetings.createTitle || '');
+  }
+  if (scheduledInput instanceof HTMLInputElement) {
+    scheduledInput.value = formatMeetingsScheduledForInput(meetings.createScheduledFor || '');
+  }
+  if (searchInput instanceof HTMLInputElement) {
+    searchInput.value = String(meetings.createSearch || '');
+  }
+  populateMeetingsConversationSelect(linkedConversationSelect, {
+    selectedId: meetings.createLinkedConversationId,
+    placeholder: meetings.conversationLoading ? '대화 불러오는 중...' : '연결 안 함',
+    disabled: !canCreate || meetings.conversationLoading || Boolean(meetings.conversationError),
+  });
+  if (linkedConversationSelect instanceof HTMLSelectElement) {
+    meetings.createLinkedConversationId = String(linkedConversationSelect.value || '').trim();
+  }
+
+  const selectedIds = new Set(
+    (Array.isArray(meetings.createParticipantUserIds) ? meetings.createParticipantUserIds : [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean),
+  );
+  const meta = $('#meetingsCreateMemberMeta');
+  if (meta instanceof HTMLElement) {
+    meta.textContent = selectedIds.size ? `추가 ${selectedIds.size}명` : '호스트만 참여';
+  }
+  const list = $('#meetingsCreateMemberList');
+  if (list instanceof HTMLElement) {
+    clearList(list);
+    if (meetings.directoryLoading) {
+      renderSkeleton(list, 4);
+    } else if (meetings.directoryError) {
+      renderCompactListEmpty(list, '참여자 목록을 불러오지 못했습니다.', meetings.directoryError);
+    } else if (!(Array.isArray(meetings.directoryRows) && meetings.directoryRows.length)) {
+      renderCompactListEmpty(list, '선택 가능한 참여자가 없습니다.', '계정 연결된 직원만 회의 참여자로 추가할 수 있습니다.');
+    } else {
+      meetings.directoryRows.forEach((row) => {
+        const userId = String(row?.__meetingsUserId || row?.user_id || '').trim();
+        if (!userId) return;
+        const li = document.createElement('li');
+        li.className = `meetings-member-row${selectedIds.has(userId) ? ' is-selected' : ''}`;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'meetings-member-button';
+        button.dataset.action = 'meetings-toggle-member';
+        button.dataset.userId = userId;
+        const main = document.createElement('div');
+        main.className = 'meetings-member-main';
+        const name = document.createElement('strong');
+        name.textContent = String(row?.full_name || row?.name || row?.employee_name || row?.employee_code || '직원').trim() || '직원';
+        const metaText = document.createElement('span');
+        metaText.className = 'meetings-member-account';
+        metaText.textContent = [
+          String(row?.employee_code || '').trim(),
+          String(row?.site_name || row?.site_code || '').trim(),
+          String(row?.__meetingsAccount || '').trim(),
+        ].filter(Boolean).join(' · ') || '계정 연결됨';
+        main.append(name, metaText);
+        const check = document.createElement('span');
+        check.className = 'meetings-member-check';
+        check.textContent = selectedIds.has(userId) ? '선택됨' : '선택';
+        button.append(main, check);
+        li.appendChild(button);
+        list.appendChild(li);
+      });
+    }
+  }
+  const linkedConversation = (Array.isArray(meetings.conversationRows) ? meetings.conversationRows : []).find(
+    (row) => String(row?.id || '').trim() === String(meetings.createLinkedConversationId || '').trim(),
+  );
+  syncMeetingsCreateStatus(
+    String(meetings.createStatusMessage || '').trim()
+      || (linkedConversation
+        ? `${getMeetingsConversationOptionLabel(linkedConversation)} 와(과) 함께 생성됩니다.`
+        : '즉시 회의는 바로 열 수 있고, 예약 회의는 시간을 지정해 만들 수 있습니다.'),
+    meetings.createStatusLevel || 'info',
+  );
+}
+
+function renderMeetingsRoomList() {
+  const meetings = ensureMeetingsState();
+  const list = $('#meetingsRoomList');
+  const subtitle = $('#meetingsListSubtitle');
+  const meta = $('#meetingsListMeta');
+  if (!(list instanceof HTMLElement)) return;
+  const rows = getMeetingsRoomRowsForRender();
+  if (subtitle instanceof HTMLElement) {
+    subtitle.textContent = meetings.loading ? '회의 목록을 불러오는 중입니다.' : '진행중, 예약, 종료 순으로 보여줍니다.';
+  }
+  if (meta instanceof HTMLElement) {
+    meta.textContent = `${rows.length}개`;
+  }
+  clearList(list);
+  if (meetings.loading && !(Array.isArray(meetings.rows) && meetings.rows.length)) {
+    renderSkeleton(list, 5);
+    return;
+  }
+  if (!rows.length) {
+    renderCompactListEmpty(list, '표시할 회의가 없습니다.', '우측 상단에서 새 회의를 시작하거나 예약해 보세요.');
+    return;
+  }
+  rows.forEach((row) => {
+    const roomId = String(row?.id || '').trim();
+    if (!roomId) return;
+    const li = document.createElement('li');
+    li.className = 'meetings-room-item';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `meetings-room-row${roomId === String(meetings.selectedRoomId || '').trim() ? ' active' : ''}`;
+    button.dataset.action = 'meetings-open-room';
+    button.dataset.roomId = roomId;
+    const main = document.createElement('div');
+    main.className = 'meetings-room-main';
+    const titleRow = document.createElement('div');
+    titleRow.className = 'meetings-room-title-row';
+    const title = document.createElement('strong');
+    title.className = 'meetings-room-title';
+    title.textContent = String(row?.title || '회의').trim() || '회의';
+    const updatedAt = document.createElement('span');
+    updatedAt.className = 'meetings-room-updated';
+    updatedAt.textContent = formatIsoToLocalLabel(row?.scheduled_for || row?.updated_at || row?.created_at || '');
+    titleRow.append(title, updatedAt);
+    const summary = document.createElement('div');
+    summary.className = 'meetings-room-meta';
+    summary.textContent = [
+      row?.host_name ? `호스트 ${String(row.host_name).trim()}` : '',
+      Number(row?.participant_count || 0) ? `참여 ${Number(row.participant_count || 0)}명` : '',
+      row?.room_key ? `링크 ${String(row.room_key).trim()}` : '',
+    ].filter(Boolean).join(' · ') || '회의 정보 없음';
+    main.append(titleRow, summary);
+    const side = document.createElement('div');
+    side.className = 'meetings-room-side';
+    const pill = document.createElement('span');
+    const roomState = String(row?.state || '').trim().toLowerCase() || 'scheduled';
+    pill.className = `status-pill ${roomState === 'live' ? 'status-pill-warn' : (roomState === 'ended' ? 'status-pill-neutral' : 'status-pill-ok')}`;
+    pill.textContent = getMeetingsRoomStateLabel(roomState);
+    side.appendChild(pill);
+    button.append(main, side);
+    li.appendChild(button);
+    list.appendChild(li);
+  });
+}
+
+function renderMeetingsDetailHead() {
+  const meetings = ensureMeetingsState();
+  const target = $('#meetingsDetailHead');
+  if (!(target instanceof HTMLElement)) return;
+  const roomId = String(meetings.selectedRoomId || '').trim();
+  const detail = meetings.detailById?.[roomId] || null;
+  if (!roomId || !detail) {
+    target.innerHTML = `
+      <div>
+        <strong>회의를 선택해 주세요.</strong>
+        <p class="muted">좌측 목록에서 회의를 열면 상세와 세션 상태가 표시됩니다.</p>
+      </div>
+    `;
+    return;
+  }
+  const stateLabel = getMeetingsRoomStateLabel(detail?.state);
+  target.innerHTML = `
+    <div class="meetings-detail-title">
+      <strong>${escapeHtml(String(detail?.title || '회의').trim() || '회의')}</strong>
+      <p class="muted">${escapeHtml([
+        detail?.host_name ? `호스트 ${String(detail.host_name).trim()}` : '',
+        detail?.room_key ? `링크 ${String(detail.room_key).trim()}` : '',
+        detail?.scheduled_for ? `예약 ${formatIsoToLocalLabel(detail.scheduled_for)}` : '',
+      ].filter(Boolean).join(' · ') || '회의 메타 없음')}</p>
+    </div>
+    <div class="meetings-detail-side">
+      <span class="status-pill ${String(detail?.state || '').trim().toLowerCase() === 'live' ? 'status-pill-warn' : 'status-pill-neutral'}">${escapeHtml(stateLabel)}</span>
+    </div>
+  `;
+}
+
+function renderMeetingsDetailSummary() {
+  const meetings = ensureMeetingsState();
+  const target = $('#meetingsDetailSummary');
+  if (!(target instanceof HTMLElement)) return;
+  const detail = meetings.detailById?.[String(meetings.selectedRoomId || '').trim()] || null;
+  target.innerHTML = '';
+  if (!detail) return;
+  const runtime = [
+    { label: '참여자', value: `${Number(detail?.participant_count || 0)}명` },
+    { label: '세션', value: `${Array.isArray(detail?.sessions) ? detail.sessions.length : 0}개` },
+    { label: '채팅 링크', value: `${Array.isArray(detail?.chat_links) ? detail.chat_links.length : 0}개` },
+  ];
+  runtime.forEach((item) => {
+    const card = document.createElement('div');
+    card.className = 'meetings-summary-card';
+    const label = document.createElement('span');
+    label.className = 'meetings-summary-label';
+    label.textContent = item.label;
+    const value = document.createElement('strong');
+    value.className = 'meetings-summary-value';
+    value.textContent = item.value;
+    card.append(label, value);
+    target.appendChild(card);
+  });
+}
+
+function renderMeetingsParticipants() {
+  const meetings = ensureMeetingsState();
+  const list = $('#meetingsParticipantsList');
+  const meta = $('#meetingsParticipantsMeta');
+  const actions = $('#meetingsParticipantActions');
+  const select = $('#meetingsParticipantSelect');
+  if (!(list instanceof HTMLElement)) return;
+  const detail = meetings.detailById?.[String(meetings.selectedRoomId || '').trim()] || null;
+  const rows = Array.isArray(detail?.participants) ? detail.participants : [];
+  if (meta instanceof HTMLElement) meta.textContent = `${rows.length}명`;
+  if (actions instanceof HTMLElement) {
+    const participantIds = rows.map((participant) => String(participant?.user_id || '').trim()).filter(Boolean);
+    actions.classList.toggle('hidden', !detail);
+    populateMeetingsParticipantSelect(select, {
+      selectedId: meetings.participantUserId,
+      placeholder: meetings.directoryLoading ? '직원 불러오는 중...' : '추가할 직원을 선택하세요',
+      excludeIds: participantIds,
+      disabled: !detail || meetings.directoryLoading || Boolean(meetings.directoryError),
+    });
+    if (select instanceof HTMLSelectElement) {
+      meetings.participantUserId = String(select.value || '').trim();
+    }
+  }
+  clearList(list);
+  if (!detail) {
+    syncMeetingsParticipantStatus('', 'info');
+    renderCompactListEmpty(list, '회의를 선택해 주세요.', '');
+    return;
+  }
+  if (meetings.directoryError) {
+    syncMeetingsParticipantStatus(meetings.directoryError, 'error');
+  } else if (!rows.length) {
+    syncMeetingsParticipantStatus('호스트만 참여 중입니다. 필요한 직원을 선택해 바로 초대할 수 있습니다.', 'info');
+  } else {
+    syncMeetingsParticipantStatus('', 'info');
+  }
+  if (!rows.length) {
+    renderCompactListEmpty(list, '참여자가 없습니다.', '새 회의 생성 시 참여자를 추가해 주세요.');
+    return;
+  }
+  rows.forEach((participant) => {
+    const li = document.createElement('li');
+    li.className = 'meetings-detail-row';
+    const main = document.createElement('div');
+    main.className = 'meetings-detail-main';
+    const title = document.createElement('strong');
+    title.textContent = String(participant?.full_name || participant?.username || '참여자').trim() || '참여자';
+    const sub = document.createElement('span');
+    sub.textContent = [
+      participant?.participant_role ? `역할 ${String(participant.participant_role).trim()}` : '',
+      participant?.site_name ? String(participant.site_name).trim() : '',
+    ].filter(Boolean).join(' · ') || '회의 참여자';
+    main.append(title, sub);
+    const side = document.createElement('div');
+    side.className = 'meetings-detail-side-pill';
+    const joined = Boolean(participant?.joined_at) && !participant?.left_at;
+    side.innerHTML = `<span class="status-pill ${joined ? 'status-pill-ok' : 'status-pill-neutral'}">${joined ? '참여중' : '대기'}</span>`;
+    li.append(main, side);
+    list.appendChild(li);
+  });
+}
+
+function renderMeetingsChatLinks() {
+  const meetings = ensureMeetingsState();
+  const list = $('#meetingsChatLinksList');
+  const meta = $('#meetingsChatLinksMeta');
+  const actions = $('#meetingsChatLinkActions');
+  const select = $('#meetingsLinkConversationSelect');
+  if (!(list instanceof HTMLElement)) return;
+  const detail = meetings.detailById?.[String(meetings.selectedRoomId || '').trim()] || null;
+  const rows = Array.isArray(detail?.chat_links) ? detail.chat_links : [];
+  if (meta instanceof HTMLElement) meta.textContent = `${rows.length}개`;
+  if (actions instanceof HTMLElement) {
+    const linkedIds = rows.map((row) => String(row?.conversation_id || '').trim()).filter(Boolean);
+    actions.classList.toggle('hidden', !detail);
+    populateMeetingsConversationSelect(select, {
+      selectedId: meetings.linkConversationId,
+      placeholder: meetings.conversationLoading ? '대화 불러오는 중...' : '연결할 대화를 선택하세요',
+      excludeIds: linkedIds,
+      disabled: !detail || meetings.conversationLoading || Boolean(meetings.conversationError),
+    });
+    if (select instanceof HTMLSelectElement) {
+      meetings.linkConversationId = String(select.value || '').trim();
+    }
+  }
+  clearList(list);
+  if (!detail) {
+    syncMeetingsLinkStatus('', 'info');
+    renderCompactListEmpty(list, '회의를 선택해 주세요.', '');
+    return;
+  }
+  if (meetings.conversationError) {
+    syncMeetingsLinkStatus(meetings.conversationError, 'error');
+  } else if (!rows.length) {
+    syncMeetingsLinkStatus('연결된 대화가 없으면 메신저 방을 하나 연결해 회의 문맥을 모을 수 있습니다.', 'info');
+  } else {
+    syncMeetingsLinkStatus('', 'info');
+  }
+  if (!rows.length) {
+    renderCompactListEmpty(list, '연결된 채팅이 없습니다.', '위 선택창에서 대화를 골라 회의와 연결해 주세요.');
+    return;
+  }
+  rows.forEach((row) => {
+    const conversationId = String(row?.conversation_id || '').trim();
+    const li = document.createElement('li');
+    li.className = 'meetings-detail-row';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'meetings-linked-chat-button';
+    button.dataset.action = 'meetings-open-chat';
+    button.dataset.conversationId = conversationId;
+    const main = document.createElement('div');
+    main.className = 'meetings-detail-main';
+    const title = document.createElement('strong');
+    title.textContent = String(row?.conversation_title || '연결된 대화').trim() || '연결된 대화';
+    const sub = document.createElement('span');
+    sub.textContent = [
+      String(row?.conversation_type || '').trim(),
+      String(row?.link_type || '').trim(),
+    ].filter(Boolean).join(' · ') || '메신저 연결';
+    main.append(title, sub);
+    const side = document.createElement('span');
+    side.className = 'meetings-detail-link';
+    side.textContent = '열기';
+    button.append(main, side);
+    li.appendChild(button);
+    list.appendChild(li);
+  });
+}
+
+function renderMeetingsSessions() {
+  const meetings = ensureMeetingsState();
+  const list = $('#meetingsSessionsList');
+  const meta = $('#meetingsSessionsMeta');
+  if (!(list instanceof HTMLElement)) return;
+  const detail = meetings.detailById?.[String(meetings.selectedRoomId || '').trim()] || null;
+  const rows = Array.isArray(detail?.sessions) ? detail.sessions : [];
+  if (meta instanceof HTMLElement) meta.textContent = `${rows.length}개`;
+  clearList(list);
+  if (!detail) {
+    renderCompactListEmpty(list, '회의를 선택해 주세요.', '');
+    return;
+  }
+  if (!rows.length) {
+    renderCompactListEmpty(list, '시작된 세션이 없습니다.', '즉시 회의를 시작하거나 예약 회의를 열어 주세요.');
+    return;
+  }
+  rows.forEach((session) => {
+    const li = document.createElement('li');
+    li.className = 'meetings-detail-row';
+    const main = document.createElement('div');
+    main.className = 'meetings-detail-main';
+    const title = document.createElement('strong');
+    title.textContent = [
+      String(session?.session_key || '').trim() || '세션',
+      String(session?.media_backend || '').trim().toLowerCase() === 'external' ? '외부' : 'Pion',
+    ].filter(Boolean).join(' · ');
+    const sub = document.createElement('span');
+    sub.textContent = [
+      session?.started_at ? `시작 ${formatIsoToLocalLabel(session.started_at)}` : '',
+      session?.ended_at ? `종료 ${formatIsoToLocalLabel(session.ended_at)}` : '',
+    ].filter(Boolean).join(' · ') || '세션 메타 없음';
+    main.append(title, sub);
+    const side = document.createElement('div');
+    side.className = 'meetings-detail-side-pill';
+    side.innerHTML = `<span class="status-pill ${String(session?.state || '').trim() === 'live' ? 'status-pill-warn' : 'status-pill-neutral'}">${escapeHtml(getMeetingsRoomStateLabel(session?.state || 'scheduled'))}</span>`;
+    li.append(main, side);
+    list.appendChild(li);
+  });
+}
+
+function renderMeetingsActionBar() {
+  const meetings = ensureMeetingsState();
+  const target = $('#meetingsActionBar');
+  if (!(target instanceof HTMLElement)) return;
+  target.innerHTML = '';
+  const roomId = String(meetings.selectedRoomId || '').trim();
+  const detail = meetings.detailById?.[roomId] || null;
+  if (!detail) return;
+  const activeSession = detail?.active_session && typeof detail.active_session === 'object' ? detail.active_session : null;
+  const currentParticipant = getMeetingsCurrentParticipant(detail);
+  const joined = Boolean(currentParticipant?.joined_at) && !currentParticipant?.left_at;
+  const isHost = String(detail?.host_user_id || '').trim() === getMeetingsCurrentUserId();
+  const buttons = [];
+  if (!activeSession && String(detail?.state || '').trim().toLowerCase() !== 'ended') {
+    buttons.push({ label: '세션 시작', action: 'meetings-session-start', variant: 'btn-primary' });
+  }
+  if (activeSession && !joined) {
+    buttons.push({ label: '회의 입장', action: 'meetings-session-join', variant: 'btn-primary' });
+  }
+  if (activeSession && joined) {
+    buttons.push({ label: '회의 나가기', action: 'meetings-session-leave', variant: 'btn-secondary' });
+  }
+  if (activeSession && isHost) {
+    buttons.push({ label: '회의 종료', action: 'meetings-session-end', variant: 'btn-secondary' });
+  }
+  if (detail?.room_key) {
+    buttons.push({ label: '링크 복사', action: 'meetings-copy-link', variant: 'btn-secondary' });
+  }
+  buttons.forEach((item) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `btn ${item.variant}`;
+    button.dataset.action = item.action;
+    if (activeSession?.id) button.dataset.sessionId = String(activeSession.id || '').trim();
+    button.textContent = item.label;
+    target.appendChild(button);
+  });
+}
+
+function renderMeetingsWorkspace() {
+  const meetings = ensureMeetingsState();
+  renderMeetingsStateTabs();
+  renderMeetingsRolloutInline();
+  renderMeetingsCreatePanel();
+  renderMeetingsRoomList();
+  renderMeetingsDetailHead();
+  renderMeetingsDetailSummary();
+  renderMeetingsParticipants();
+  renderMeetingsChatLinks();
+  renderMeetingsSessions();
+  renderMeetingsActionBar();
+  const quickEvents = $('.meetings-quick-events');
+  if (quickEvents instanceof HTMLElement) {
+    const detail = meetings.detailById?.[String(meetings.selectedRoomId || '').trim()] || null;
+    const activeSession = detail?.active_session && typeof detail.active_session === 'object' ? detail.active_session : null;
+    quickEvents.classList.toggle('hidden', !activeSession);
+  }
+}
+
+async function openMeetingsRoom(roomId, { force = false } = {}) {
+  const meetings = ensureMeetingsState();
+  const id = String(roomId || '').trim();
+  if (!id) return null;
+  meetings.selectedRoomId = id;
+  renderMeetingsWorkspace();
+  await loadMeetingsRoomDetail(id, { force });
+  return meetings.detailById?.[id] || null;
+}
+
+async function submitMeetingsRoom({ startNow = false } = {}) {
+  const meetings = ensureMeetingsState();
+  const validDirectoryIds = getMeetingsDirectoryUserIdSet();
+  const participantUserIds = (Array.isArray(meetings.createParticipantUserIds) ? meetings.createParticipantUserIds : [])
+    .map((value) => String(value || '').trim())
+    .filter((value) => !validDirectoryIds.size || validDirectoryIds.has(value));
+  const scheduledFor = normalizeMeetingsScheduledForValue(meetings.createScheduledFor || '');
+  const linkedConversationId = String(meetings.createLinkedConversationId || '').trim();
+  if (!startNow && !scheduledFor) {
+    syncMeetingsCreateStatus('예약 회의는 일시를 지정해야 합니다.', 'error');
+    return;
+  }
+  if (
+    Array.isArray(meetings.createParticipantUserIds)
+    && meetings.createParticipantUserIds.length
+    && !participantUserIds.length
+  ) {
+    syncMeetingsCreateStatus('선택한 참여자 정보를 새로 불러와야 합니다. 다시 선택해 주세요.', 'error');
+    return;
+  }
+  const title = String(meetings.createTitle || '').trim() || (startNow ? '즉시 회의' : '예약 회의');
+  syncMeetingsCreateStatus(startNow ? '즉시 회의를 시작하는 중...' : '예약 회의를 만드는 중...', 'info');
+  const created = await apiRequest('/meetings/rooms', {
+    method: 'POST',
+    body: {
+      title,
+      participant_user_ids: participantUserIds,
+      scheduled_for: startNow ? null : scheduledFor,
+      start_now: Boolean(startNow),
+      linked_conversation_id: linkedConversationId || null,
+      settings_json: {
+        created_from: 'web',
+      },
+    },
+  });
+  meetings.createOpen = false;
+  meetings.createTitle = '';
+  meetings.createScheduledFor = '';
+  meetings.createSearch = '';
+  meetings.createLinkedConversationId = '';
+  meetings.createParticipantUserIds = [];
+  syncMeetingsCreateStatus('', 'info');
+  await loadMeetingsRooms({ force: true });
+  meetings.selectedRoomId = String(created?.id || '').trim() || meetings.selectedRoomId;
+  await openMeetingsRoom(meetings.selectedRoomId, { force: true });
+  showToast(startNow ? '회의를 시작했습니다.' : '회의를 예약했습니다.', 'success', 1800);
+}
+
+async function addMeetingsParticipants(roomId, participantUserId) {
+  const id = String(roomId || '').trim();
+  const userId = String(participantUserId || '').trim();
+  if (!id) return;
+  if (!userId) {
+    syncMeetingsParticipantStatus('추가할 직원을 먼저 선택해 주세요.', 'error');
+    return;
+  }
+  const validDirectoryIds = getMeetingsDirectoryUserIdSet();
+  if (validDirectoryIds.size && !validDirectoryIds.has(userId)) {
+    syncMeetingsParticipantStatus('선택한 직원 정보가 오래되었습니다. 목록을 다시 불러온 뒤 다시 선택해 주세요.', 'error');
+    await loadMeetingsDirectory({ force: true });
+    renderMeetingsWorkspace();
+    return;
+  }
+  syncMeetingsParticipantStatus('참가자를 추가하는 중...', 'info');
+  const updatedDetail = await apiRequest(`/meetings/rooms/${encodeURIComponent(id)}/participants`, {
+    method: 'POST',
+    body: {
+      participant_user_ids: [userId],
+    },
+  });
+  const meetings = ensureMeetingsState();
+  if (updatedDetail && typeof updatedDetail === 'object' && String(updatedDetail.id || '').trim() === id) {
+    meetings.detailById = meetings.detailById || {};
+    meetings.detailById[id] = updatedDetail;
+    renderMeetingsWorkspace();
+  }
+  meetings.participantUserId = '';
+  await Promise.all([
+    loadMeetingsDirectory({ force: true }),
+    loadMeetingsRooms({ force: true }),
+    openMeetingsRoom(id, { force: true }),
+  ]);
+  syncMeetingsParticipantStatus('참가자를 회의에 추가했습니다.', 'success');
+  showToast('참가자를 추가했습니다.', 'success', 1800);
+}
+
+async function linkMeetingsConversation(roomId, conversationId) {
+  const id = String(roomId || '').trim();
+  const linkedConversationId = String(conversationId || '').trim();
+  if (!id) return;
+  if (!linkedConversationId) {
+    syncMeetingsLinkStatus('연결할 메신저 대화를 먼저 선택해 주세요.', 'error');
+    return;
+  }
+  syncMeetingsLinkStatus('메신저 대화를 회의에 연결하는 중...', 'info');
+  await apiRequest(`/meetings/rooms/${encodeURIComponent(id)}/chat-links`, {
+    method: 'POST',
+    body: {
+      conversation_id: linkedConversationId,
+      link_type: 'primary',
+    },
+  });
+  const meetings = ensureMeetingsState();
+  meetings.linkConversationId = '';
+  await Promise.all([
+    loadMeetingsConversationOptions({ force: true }),
+    openMeetingsRoom(id, { force: true }),
+  ]);
+  syncMeetingsLinkStatus('메신저 대화를 회의에 연결했습니다.', 'success');
+  showToast('메신저 연계를 추가했습니다.', 'success', 1800);
+}
+
+async function startMeetingsSession(roomId) {
+  const meetings = ensureMeetingsState();
+  const id = String(roomId || meetings.selectedRoomId || '').trim();
+  if (!id) return;
+  await apiRequest(`/meetings/rooms/${encodeURIComponent(id)}/sessions/start`, {
+    method: 'POST',
+    body: {
+      media_backend: 'pion',
+      meta_json: { source: 'web' },
+    },
+  });
+  await Promise.all([
+    loadMeetingsRooms({ force: true }),
+    openMeetingsRoom(id, { force: true }),
+  ]);
+  showToast('회의 세션을 시작했습니다.', 'success', 1800);
+}
+
+async function joinMeetingsSession(roomId, sessionId) {
+  const id = String(roomId || '').trim();
+  const sid = String(sessionId || '').trim();
+  if (!id || !sid) return;
+  await apiRequest(`/meetings/rooms/${encodeURIComponent(id)}/sessions/${encodeURIComponent(sid)}/join`, {
+    method: 'POST',
+    body: {
+      reconnect: false,
+      device_type: 'web',
+    },
+  });
+  await Promise.all([
+    loadMeetingsRooms({ force: true }),
+    openMeetingsRoom(id, { force: true }),
+  ]);
+  showToast('회의에 입장했습니다.', 'success', 1800);
+}
+
+async function leaveMeetingsSession(roomId, sessionId) {
+  const id = String(roomId || '').trim();
+  const sid = String(sessionId || '').trim();
+  if (!id || !sid) return;
+  await apiRequest(`/meetings/rooms/${encodeURIComponent(id)}/sessions/${encodeURIComponent(sid)}/leave`, {
+    method: 'POST',
+  });
+  await Promise.all([
+    loadMeetingsRooms({ force: true }),
+    openMeetingsRoom(id, { force: true }),
+  ]);
+  showToast('회의에서 나갔습니다.', 'success', 1800);
+}
+
+async function endMeetingsSession(roomId, sessionId) {
+  const id = String(roomId || '').trim();
+  const sid = String(sessionId || '').trim();
+  if (!id || !sid) return;
+  await apiRequest(`/meetings/rooms/${encodeURIComponent(id)}/sessions/${encodeURIComponent(sid)}/end`, {
+    method: 'POST',
+  });
+  await Promise.all([
+    loadMeetingsRooms({ force: true }),
+    openMeetingsRoom(id, { force: true }),
+    loadMeetingsRolloutStatus(),
+  ]);
+  showToast('회의를 종료했습니다.', 'success', 1800);
+}
+
+async function recordMeetingsQuickEvent(roomId, sessionId, eventType) {
+  const id = String(roomId || '').trim();
+  const sid = String(sessionId || '').trim();
+  const rawType = String(eventType || '').trim();
+  if (!id || !sid || !rawType) return;
+  const mappedType = (
+    rawType === 'mute_toggle' ? 'mute_on'
+      : rawType === 'camera_toggle' ? 'camera_on'
+        : rawType === 'screen_share_start' ? 'screen_share_on'
+          : rawType
+  );
+  await apiRequest(`/meetings/rooms/${encodeURIComponent(id)}/sessions/${encodeURIComponent(sid)}/events`, {
+    method: 'POST',
+    body: {
+      event_type: mappedType,
+      payload_json: {
+        source: 'web',
+        requested_event: rawType,
+      },
+    },
+  });
+  await openMeetingsRoom(id, { force: true });
+  showToast('회의 이벤트를 기록했습니다.', 'success', 1500);
+}
+
+async function openMeetingsLinkedChat(conversationId) {
+  const id = String(conversationId || '').trim();
+  if (!id) return;
+  const messenger = ensureMessengerState();
+  messenger.selectedConversationId = id;
+  messenger.highlightMessageId = '';
+  await navigateToRoute(ROUTE_MESSENGER);
+  await openMessengerConversation(id, { force: true });
+}
+
+async function copyMeetingsLink(roomKey = '') {
+  const text = String(roomKey || '').trim();
+  if (!text) return;
+  const full = `${window.location.origin}${window.location.pathname}#${ROUTE_MEETINGS}?room=${encodeURIComponent(text)}`;
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    await navigator.clipboard.writeText(full);
+  } else {
+    const textarea = document.createElement('textarea');
+    textarea.value = full;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+  }
+  showToast('회의 링크를 복사했습니다.', 'success', 1800);
+}
+
+async function loadMeetingsViewPresenter() {
+  const meetings = ensureMeetingsState();
+  renderMeetingsWorkspace();
+  await Promise.allSettled([
+    loadMeetingsRooms(),
+    loadMeetingsRolloutStatus(),
+    loadMeetingsDirectory(),
+    loadMeetingsConversationOptions(),
+  ]);
+  const currentRoute = parseRouteCandidate(getCurrentRouteWithQuery() || '');
+  const requestedRoomKey = String(new URLSearchParams(currentRoute.query || '').get('room') || '').trim().toLowerCase();
+  if (requestedRoomKey) {
+    try {
+      const linked = await apiRequest(`/meetings/links/${encodeURIComponent(requestedRoomKey)}`);
+      const linkedRoomId = String(linked?.id || '').trim();
+      if (linkedRoomId) {
+        meetings.selectedRoomId = linkedRoomId;
+        meetings.detailById[linkedRoomId] = linked;
+      }
+    } catch (error) {
+      setMeetingsStatusHint(normalizeActionError(error, '회의 링크를 찾지 못했습니다.'), 'error');
+    }
+  }
+  if (!meetings.selectedRoomId) {
+    meetings.selectedRoomId = String((Array.isArray(meetings.rows) ? meetings.rows[0]?.id : '') || '').trim();
+  }
+  if (meetings.selectedRoomId) {
+    await loadMeetingsRoomDetail(meetings.selectedRoomId);
+  }
+  renderMeetingsWorkspace();
+}
+
 const VIEW_PRESENTERS = {
   home: {
     loadingMessage: '홈 데이터를 불러오는 중입니다...',
     errorMessage: '홈 데이터를 불러오지 못했습니다.',
     load: loadHomeViewPresenter,
+  },
+  messenger: {
+    loadingMessage: '메신저를 불러오는 중입니다...',
+    errorMessage: '메신저 데이터를 불러오지 못했습니다.',
+    onCacheHit: () => {
+      renderMessengerWorkspace();
+    },
+    load: loadMessengerViewPresenter,
+  },
+  meetings: {
+    loadingMessage: '화상대화를 불러오는 중입니다...',
+    errorMessage: '화상대화 데이터를 불러오지 못했습니다.',
+    onCacheHit: () => {
+      renderMeetingsWorkspace();
+    },
+    load: loadMeetingsViewPresenter,
   },
   ops: {
     loadingMessage: '운영 요약을 불러오는 중입니다...',
@@ -45808,7 +49796,6 @@ function normalizeGuardRosterImportItem(item = {}, index = 0) {
       username,
       initialPasswordHint: phoneValue || '-',
       role: normalizedRole,
-      must_change_password: true,
     },
   };
 }
@@ -46127,9 +50114,6 @@ function updateGuardRosterRowAccount(rowId = '', patch = {}, { rerender = true }
   if (Object.prototype.hasOwnProperty.call(patch, 'role')) {
     target.account.role = normalizeGuardRosterRole(patch.role);
   }
-  if (Object.prototype.hasOwnProperty.call(patch, 'must_change_password')) {
-    target.account.must_change_password = Boolean(patch.must_change_password);
-  }
   if (rerender) {
     renderEmployeeRosterImportRows();
   }
@@ -46431,7 +50415,6 @@ async function onGuardRosterImportCommit(progressController = null) {
       photo_id: String(row?.attachments?.photo_id || '').trim() || null,
       username: username || null,
       initial_password: phone || null,
-      must_change_password: true,
       role,
       soc_role: role,
     };
@@ -47015,6 +50998,21 @@ function normalizeEmployeeGender(value) {
   return EMPLOYEE_GENDER_MAP[text.toUpperCase()] || EMPLOYEE_GENDER_MAP[text] || '';
 }
 
+function normalizeEmployeeEmploymentStatusValue(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return 'active';
+  if (text === '휴직' || text === '휴직중' || text === 'loa' || text === 'leave_of_absence') {
+    return 'leave_of_absence';
+  }
+  if (text === '퇴직' || text === 'terminated' || text === 'retired') {
+    return 'terminated';
+  }
+  if (text === 'inactive' || text === '비활성') {
+    return 'inactive';
+  }
+  return 'active';
+}
+
 function splitEmployeeNameAndGender(rawName, fallbackGender = '') {
   const source = String(rawName || '').trim();
   const normalizedFallback = normalizeEmployeeGender(fallbackGender);
@@ -47079,10 +51077,14 @@ function collectEmployeeFormMissingFields({ isEditMode = false } = {}) {
   const birthDate = String($('#empBirthDate')?.value || '').trim();
   const hireDate = String($('#empHireDate')?.value || '').trim();
   const phoneRaw = String($('#empPhone')?.value || '').trim();
+  const emailText = String($('#empEmail')?.value || '').trim();
   const phoneNorm = normalizeEmployeePhoneCredential(phoneRaw);
   const addressText = String($('#empAddress')?.value || '').trim();
   const trainingCertNo = String($('#empTrainingCertNo')?.value || '').trim();
   const socRole = normalizeSocEmployeeRole($('#empSocRole')?.value || '');
+  const employmentStatus = normalizeEmployeeEmploymentStatusValue($('#empEmploymentStatus')?.value || 'active');
+  const loaStartDate = String($('#empLoaStartDate')?.value || '').trim();
+  const loaEndDate = String($('#empLoaEndDate')?.value || '').trim();
 
   if (navRole === 'DEV' && !isEditMode && !String(tenantSelection.tenantId || '').trim()) {
     missing.push('회사 선택');
@@ -47093,9 +51095,12 @@ function collectEmployeeFormMissingFields({ isEditMode = false } = {}) {
   if (!birthDate) missing.push('생년월일');
   if (!hireDate) missing.push('채용일');
   if (!phoneRaw || !phoneNorm) missing.push('연락처');
+  if (!emailText) missing.push('이메일');
   if (!addressText) missing.push('주소');
   if (!trainingCertNo) missing.push('교부번호');
   if (!socRole) missing.push('권한');
+  if (employmentStatus === 'leave_of_absence' && !loaStartDate) missing.push('휴직 시작일');
+  if (employmentStatus === 'leave_of_absence' && !loaEndDate) missing.push('휴직 종료일');
 
   return missing;
 }
@@ -47416,12 +51421,16 @@ function resetEmployeeForm() {
   const nameInput = $('#empName');
   const genderInput = $('#empGender');
   const phoneInput = $('#empPhone');
+  const emailInput = $('#empEmail');
   const birthDateInput = $('#empBirthDate');
   const residentNoInput = $('#empResidentNo');
   const addressInput = $('#empAddress');
   const trainingCertNoInput = $('#empTrainingCertNo');
   const hireDateInput = $('#empHireDate');
   const leaveDateInput = $('#empLeaveDate');
+  const employmentStatusInput = $('#empEmploymentStatus');
+  const loaStartDateInput = $('#empLoaStartDate');
+  const loaEndDateInput = $('#empLoaEndDate');
   const socLoginIdInput = $('#empSocLoginId');
   const socTempPasswordInput = $('#empSocTempPassword');
   const socRoleInput = $('#empSocRole');
@@ -47456,12 +51465,16 @@ function resetEmployeeForm() {
   if (nameInput instanceof HTMLInputElement) nameInput.value = '';
   if (genderInput instanceof HTMLSelectElement || genderInput instanceof HTMLInputElement) genderInput.value = '';
   if (phoneInput instanceof HTMLInputElement) phoneInput.value = '';
+  if (emailInput instanceof HTMLInputElement) emailInput.value = '';
   if (birthDateInput instanceof HTMLInputElement) birthDateInput.value = '';
   if (residentNoInput instanceof HTMLInputElement) residentNoInput.value = '';
   if (addressInput instanceof HTMLInputElement) addressInput.value = '';
   if (trainingCertNoInput instanceof HTMLInputElement) trainingCertNoInput.value = '';
   if (hireDateInput instanceof HTMLInputElement) hireDateInput.value = '';
   if (leaveDateInput instanceof HTMLInputElement) leaveDateInput.value = '';
+  if (employmentStatusInput instanceof HTMLSelectElement || employmentStatusInput instanceof HTMLInputElement) employmentStatusInput.value = 'active';
+  if (loaStartDateInput instanceof HTMLInputElement) loaStartDateInput.value = '';
+  if (loaEndDateInput instanceof HTMLInputElement) loaEndDateInput.value = '';
   if (socLoginIdInput instanceof HTMLInputElement) {
     socLoginIdInput.value = '';
     socLoginIdInput.readOnly = true;
@@ -47500,12 +51513,16 @@ function fillEmployeeFormForEdit(row) {
   const nameInput = $('#empName');
   const genderInput = $('#empGender');
   const phoneInput = $('#empPhone');
+  const emailInput = $('#empEmail');
   const birthDateInput = $('#empBirthDate');
   const residentNoInput = $('#empResidentNo');
   const addressInput = $('#empAddress');
   const trainingCertNoInput = $('#empTrainingCertNo');
   const hireDateInput = $('#empHireDate');
   const leaveDateInput = $('#empLeaveDate');
+  const employmentStatusInput = $('#empEmploymentStatus');
+  const loaStartDateInput = $('#empLoaStartDate');
+  const loaEndDateInput = $('#empLoaEndDate');
   const socLoginIdInput = $('#empSocLoginId');
   const socTempPasswordInput = $('#empSocTempPassword');
   const socRoleInput = $('#empSocRole');
@@ -47570,6 +51587,7 @@ function fillEmployeeFormForEdit(row) {
     genderInput.value = normalizeEmployeeGender(String(row.gender || '').trim());
   }
   if (phoneInput instanceof HTMLInputElement) phoneInput.value = String(row.phone || '').trim();
+  if (emailInput instanceof HTMLInputElement) emailInput.value = String(row.email || '').trim();
   if (birthDateInput instanceof HTMLInputElement) birthDateInput.value = toDateInputValue(row.birth_date);
   if (residentNoInput instanceof HTMLInputElement) {
     residentNoInput.value = normalizeResidentNoValue(String(row.resident_no || '').trim());
@@ -47580,6 +51598,11 @@ function fillEmployeeFormForEdit(row) {
   }
   if (hireDateInput instanceof HTMLInputElement) hireDateInput.value = toDateInputValue(row.hire_date);
   if (leaveDateInput instanceof HTMLInputElement) leaveDateInput.value = toDateInputValue(row.leave_date);
+  if (employmentStatusInput instanceof HTMLSelectElement || employmentStatusInput instanceof HTMLInputElement) {
+    employmentStatusInput.value = normalizeEmployeeEmploymentStatusValue(String(row.employment_status || '').trim());
+  }
+  if (loaStartDateInput instanceof HTMLInputElement) loaStartDateInput.value = toDateInputValue(row.loa_start_date);
+  if (loaEndDateInput instanceof HTMLInputElement) loaEndDateInput.value = toDateInputValue(row.loa_end_date);
   if (socLoginIdInput instanceof HTMLInputElement) socLoginIdInput.readOnly = true;
   if (socTempPasswordInput instanceof HTMLInputElement) socTempPasswordInput.readOnly = true;
   updateEmployeeAccountPreviewFromPhone();
@@ -53277,13 +57300,20 @@ async function loadLeaves() {
 
   try {
     let rows = [];
+    let balanceSummary = null;
+    let policyRows = [];
     if (managerMode && scope === 'team' && can('leaveReview')) {
       const statuses = desktopWorkspace
         ? ['pending', 'approved', 'rejected', 'cancelled']
         : (statusFilter === 'all'
         ? ['pending', 'approved', 'rejected', 'cancelled']
         : [statusFilter]);
-      rows = await fetchManagerLeaveRequests(statuses);
+      const [leaveRows, policiesPayload] = await Promise.all([
+        fetchManagerLeaveRequests(statuses),
+        apiRequest('/leaves/policies').catch(() => ({ items: [] })),
+      ]);
+      rows = leaveRows;
+      policyRows = Array.isArray(policiesPayload?.items) ? policiesPayload.items : [];
     } else {
       const params = new URLSearchParams();
       params.set('limit', '300');
@@ -53294,19 +57324,31 @@ async function loadLeaves() {
       if (ownEmployeeCode) {
         params.set('employee_code', ownEmployeeCode);
       }
-      rows = await apiRequest(`/leaves?${params.toString()}`);
+      const [leaveRows, balancePayload, policiesPayload] = await Promise.all([
+        apiRequest(`/leaves?${params.toString()}`),
+        apiRequest('/leaves/balance').catch(() => null),
+        apiRequest('/leaves/policies').catch(() => ({ items: [] })),
+      ]);
+      rows = leaveRows;
+      balanceSummary = balancePayload && typeof balancePayload === 'object' ? balancePayload : null;
+      policyRows = Array.isArray(policiesPayload?.items) ? policiesPayload.items : [];
     }
 
     const normalizedRows = Array.isArray(rows) ? rows : [];
     state.leaveView.rows = normalizedRows;
     state.leaveView.rowMap = new Map(normalizedRows.map((row) => [String(row?.id || ''), row]));
+    state.leaveView.balanceSummary = balanceSummary;
+    state.leaveView.policyRows = Array.isArray(policyRows) ? policyRows : [];
     state.leaveView.updatedAt = new Date().toISOString();
 
     if (scope === 'mine') {
       syncLeaveStatusNotifications(normalizedRows);
     }
 
-    const summary = buildLeaveSummary(normalizedRows, { scope });
+    const summary = buildLeaveSummary(normalizedRows, {
+      scope,
+      balanceSummary: state.leaveView.balanceSummary,
+    });
     renderLeaveSummary(summary);
     if (target) {
       renderLeaveHistoryRows(normalizedRows, { scope, loading: false });
@@ -53322,10 +57364,12 @@ async function loadLeaves() {
     const message = mapLeaveErrorMessage(err, '휴가 데이터를 불러오지 못했습니다.');
     state.leaveView.rows = [];
     state.leaveView.rowMap = new Map();
+    state.leaveView.balanceSummary = null;
+    state.leaveView.policyRows = [];
     if (target) {
       renderLeaveHistoryRows([], { scope, loading: false, errorMessage: message });
     }
-    renderLeaveSummary(buildLeaveSummary([], { scope }));
+    renderLeaveSummary(buildLeaveSummary([], { scope, balanceSummary: null }));
     renderLeaveScopeTabs();
     renderLeaveStatusFilterTabs();
     setLeaveHint(message, 'error');
@@ -55124,23 +59168,31 @@ function renderScheduleHqTabs() {
   const uploadReportLikeVisible = activeTab === SCHEDULE_TAB_UPLOAD || activeTab === SCHEDULE_TAB_HQ_UPLOAD;
   const reportStyledVisible = reportsOwnerVisible || uploadReportLikeVisible;
   if (workspaceTitle) {
-    workspaceTitle.textContent = reportStyledVisible ? '보고' : '근무일정';
+    if (uploadReportLikeVisible && activeTab === SCHEDULE_TAB_HQ_UPLOAD) {
+      workspaceTitle.textContent = '지원근무자 업로드';
+    } else if (uploadReportLikeVisible) {
+      workspaceTitle.textContent = '스케쥴 업로드';
+    } else {
+      workspaceTitle.textContent = reportStyledVisible ? '보고' : '근무일정';
+    }
   }
   if (workspaceDescription) {
-    if (reportsOwnerVisible) {
-      workspaceDescription.textContent = 'Finance 제출 작업면';
-    } else if (uploadReportLikeVisible && activeTab === SCHEDULE_TAB_HQ_UPLOAD) {
-      workspaceDescription.textContent = '지원근무자 업로드';
-    } else if (uploadReportLikeVisible) {
-      workspaceDescription.textContent = 'Excel 업로드';
-    } else if (activeTab === SCHEDULE_TAB_HQ_UPLOAD) {
-      workspaceDescription.textContent = '지원근무자 HQ 업로드';
-    } else if (activeTab === SCHEDULE_TAB_UPLOAD) {
-      workspaceDescription.textContent = '월간 업로드 작업면';
-    } else if (activeTab === SCHEDULE_TAB_TEMPLATES) {
-      workspaceDescription.textContent = '근무 템플릿 라이브러리';
+    if (uploadReportLikeVisible) {
+      workspaceDescription.textContent = '';
+      workspaceDescription.classList.add('hidden');
     } else {
-      workspaceDescription.textContent = '월간 배치 기준 작업면';
+      workspaceDescription.classList.remove('hidden');
+      if (reportsOwnerVisible) {
+        workspaceDescription.textContent = 'Finance 제출 작업면';
+      } else if (activeTab === SCHEDULE_TAB_HQ_UPLOAD) {
+        workspaceDescription.textContent = '지원근무자 HQ 업로드';
+      } else if (activeTab === SCHEDULE_TAB_UPLOAD) {
+        workspaceDescription.textContent = '월간 배치 기준 작업면';
+      } else if (activeTab === SCHEDULE_TAB_TEMPLATES) {
+        workspaceDescription.textContent = '근무 템플릿 라이브러리';
+      } else {
+        workspaceDescription.textContent = '월간 배치 기준 작업면';
+      }
     }
   }
   if (workspaceHelpButton instanceof HTMLElement) {
@@ -55690,7 +59742,7 @@ function renderScheduleImportMappingProfileManager() {
     tr.className = 'admin-table-empty-row';
     const td = document.createElement('td');
     td.colSpan = 8;
-    td.textContent = '등록된 근무 템플릿이 없습니다. 템플릿 생성으로 월간 업로드 규칙을 먼저 준비하세요.';
+    td.textContent = '등록된 근무 템플릿이 없습니다. 템플릿 생성으로 스케쥴 업로드 규칙을 먼저 준비하세요.';
     tr.appendChild(td);
     tableBody.appendChild(tr);
     if (statusEl) statusEl.textContent = '등록된 프로필이 없습니다.';
@@ -56190,7 +60242,7 @@ async function openScheduleImportMappingEditor(options = {}) {
   content.appendChild(addBtn);
 
   openSheet({
-    title: mode === 'create' ? '월간 업로드 근무 템플릿 생성' : '월간 업로드 근무 템플릿',
+    title: mode === 'create' ? '스케쥴 업로드 근무 템플릿 생성' : '스케쥴 업로드 근무 템플릿',
     contentNode: content,
     actions: [
       { label: '취소', variant: 'btn-secondary', action: 'sheet-close' },
@@ -56255,7 +60307,7 @@ async function onScheduleImportMappingSave() {
   renderScheduleUploadWorkspace();
   invalidateScheduleImportAnalysis(['mapping_profile']);
   closeSheet();
-  showToast('월간 업로드 근무 템플릿을 저장했습니다.', 'success', 2600);
+  showToast('스케쥴 업로드 근무 템플릿을 저장했습니다.', 'success', 2600);
 }
 
 async function onScheduleImportMappingDelete(profileId, profileName) {
@@ -56504,7 +60556,7 @@ async function openReportsSupportOwnerWorkspace() {
     return;
   }
   await navigateToRoute(ROUTE_SCHEDULE_UPLOAD);
-  showToast('Excel 업로드 owner 화면으로 이동했습니다.', 'info', 2200);
+  showToast('스케쥴 업로드 owner 화면으로 이동했습니다.', 'info', 2200);
 }
 
 async function onReportsSupportDownload(progressController = null) {
@@ -62013,28 +66065,6 @@ async function setCurrentLocation(forceShowToast = false) {
   }
 }
 
-function shouldTemporarilyBypassMustChangePasswordGate() {
-  const role = normalizeRoleValue(state.user?.role || '');
-  const tenantCode = String(state.user?.tenant_code || '').trim().toUpperCase();
-  return Boolean(TEMP_RUNTIME_TEST_INITIAL_PASSWORD_GATE_BYPASS.enabled)
-    && TEMP_RUNTIME_TEST_INITIAL_PASSWORD_GATE_BYPASS.roles.has(role)
-    && TEMP_RUNTIME_TEST_INITIAL_PASSWORD_GATE_BYPASS.tenantCodes.has(tenantCode);
-}
-
-async function enforceMustChangePasswordGate() {
-  const mustChange = Boolean(state.user?.must_change_password ?? state.user?.mustChangePassword);
-  if (!mustChange) return false;
-  // TEMP(runtime-verification): bypass only the blocking redirect/profile gate.
-  // The underlying must_change_password state remains unchanged for later restore.
-  if (shouldTemporarilyBypassMustChangePasswordGate()) {
-    return false;
-  }
-  await navigateToRoute(ROUTE_PROFILE, { replace: true, silentDeniedModal: true });
-  setInlineStatus('#profilePasswordStatus', '초기 비밀번호입니다. 계속하려면 비밀번호를 먼저 변경해 주세요.', 'error');
-  showToast('초기 비밀번호 변경이 필요합니다.', 'info', 3000);
-  return true;
-}
-
 async function onLoginSubmit(event) {
   event?.preventDefault?.();
   const tenantCodeEl = $('#tenantCode');
@@ -62104,11 +66134,8 @@ async function onLoginSubmit(event) {
     pushRecentTenant(payload.tenant_code);
     showShellPanel();
     await syncServerInAppNotifications({ force: true, showToasts: false });
-    const mustChangeRouted = await enforceMustChangePasswordGate();
-    if (!mustChangeRouted) {
-      const nextRoute = consumePendingRouteAfterLogin() || resolvePostLoginDefaultRoute();
-      await navigateToRoute(nextRoute, { replace: true, silentDeniedModal: true });
-    }
+    const nextRoute = consumePendingRouteAfterLogin() || resolvePostLoginDefaultRoute();
+    await navigateToRoute(nextRoute, { replace: true, silentDeniedModal: true });
     state.pendingRouteAfterLogin = DEFAULT_AUTH_ROUTE;
     ensurePolling();
     restartScheduleLiveRefreshAfterAuth();
@@ -62203,7 +66230,11 @@ async function onEmployeeSubmit(event) {
     const residentNoValue = normalizeResidentNoValue($('#empResidentNo')?.value || '');
     const hireDate = parseOptionalDate($('#empHireDate')?.value);
     const leaveDate = parseOptionalDate($('#empLeaveDate')?.value);
+    const employmentStatus = normalizeEmployeeEmploymentStatusValue($('#empEmploymentStatus')?.value || 'active');
+    const loaStartDate = parseOptionalDate($('#empLoaStartDate')?.value);
+    const loaEndDate = parseOptionalDate($('#empLoaEndDate')?.value);
     const addressText = String($('#empAddress')?.value || '').trim() || null;
+    const emailText = String($('#empEmail')?.value || '').trim().toLowerCase() || null;
     const trainingCertNo = String($('#empTrainingCertNo')?.value || '').trim() || null;
     const phoneRaw = String($('#empPhone')?.value || '').trim();
     const phoneNorm = normalizeEmployeePhoneCredential(phoneRaw);
@@ -62214,10 +66245,14 @@ async function onEmployeeSubmit(event) {
       gender: genderValue || null,
       resident_no: residentNoValue || null,
       phone: phoneRaw || null,
+      email: emailText,
       birthdate: birthDate,
       address: addressText,
       hire_date: hireDate,
       leave_date: leaveDate,
+      employment_status: employmentStatus,
+      loa_start_date: loaStartDate,
+      loa_end_date: loaEndDate,
       training_cert_no: trainingCertNo,
       soc_login_id: phoneNorm || null,
       soc_temp_password: phoneNorm || null,
@@ -65005,6 +69040,36 @@ function bindUiEvents() {
       updateHrRequestSubmitState();
       return;
     }
+    if (target.id === 'hrTemplateTypeSelect') {
+      const hrState = ensureHrDocsState();
+      hrState.selectedDocType = normalizeHrCertificateTypeKey(target instanceof HTMLSelectElement ? target.value : hrState.selectedDocType);
+      renderHrDocCardSelection();
+      renderHrEmployeeRequestCard();
+      runActionSafely(loadHrDocumentTemplates({ force: true }), '문서 템플릿을 불러오지 못했습니다.');
+      return;
+    }
+    if (target.id === 'hrIncludeAddress' || target.id === 'hrIncludePhone') {
+      const hrState = ensureHrDocsState();
+      if (target.id === 'hrIncludeAddress') {
+        hrState.includeAddress = target instanceof HTMLInputElement ? Boolean(target.checked) : false;
+      } else {
+        hrState.includePhone = target instanceof HTMLInputElement ? Boolean(target.checked) : false;
+      }
+      updateHrRequestSubmitState();
+      return;
+    }
+    if (target.id === 'hrSubmitTo') {
+      const hrState = ensureHrDocsState();
+      hrState.submitTo = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
+      updateHrRequestSubmitState();
+      return;
+    }
+    if (target.id === 'hrCopyCount') {
+      const hrState = ensureHrDocsState();
+      hrState.copyCount = normalizeHrCopyCount(target instanceof HTMLInputElement ? target.value : hrState.copyCount);
+      updateHrRequestSubmitState();
+      return;
+    }
     if (target.id === 'leaveReason') {
       updateLeaveFormState({ enforceHalfDayRange: false });
       return;
@@ -65369,6 +69434,254 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'messenger-refresh') {
+      runWithBusy(() => loadMessengerViewPresenter(), '메신저 갱신 중...');
+      return;
+    }
+
+    if (action === 'messenger-toggle-create') {
+      const messenger = ensureMessengerState();
+      messenger.createOpen = !messenger.createOpen;
+      if (messenger.createOpen) {
+        resetMessengerCreateDraft({
+          createType: canCreateMessengerAnnouncement()
+            ? normalizeMessengerConversationType(messenger.createType || 'group')
+            : 'group',
+          preserveOpen: true,
+        });
+        syncMessengerCreateStatus('', 'info');
+        renderMessengerWorkspace();
+        runActionSafely(loadMessengerDirectory({ force: true }), '참여자 목록을 불러오지 못했습니다.');
+      } else {
+        resetMessengerCreateDraft({
+          createType: canCreateMessengerAnnouncement() ? messenger.createType || 'group' : 'group',
+          preserveOpen: false,
+        });
+        renderMessengerWorkspace();
+      }
+      return;
+    }
+
+    if (action === 'messenger-filter-type') {
+      const messenger = ensureMessengerState();
+      messenger.typeFilter = normalizeMessengerConversationType(actionEl.dataset.type || 'all');
+      renderMessengerWorkspace();
+      return;
+    }
+
+    if (action === 'messenger-open-conversation') {
+      const conversationId = String(actionEl.dataset.conversationId || '').trim();
+      runWithBusy(() => openMessengerConversation(conversationId, { force: true }), '대화 여는 중...');
+      return;
+    }
+
+    if (action === 'messenger-create-type') {
+      const messenger = ensureMessengerState();
+      const nextType = normalizeMessengerConversationType(actionEl.dataset.type || 'group');
+      if (nextType === 'announcement' && !canCreateMessengerAnnouncement()) {
+        showToast('공지방 생성 권한이 없습니다.', 'error', 2200);
+        return;
+      }
+      messenger.createType = nextType === 'all' ? 'group' : nextType;
+      messenger.createMemberUserIds = [];
+      if (messenger.createType !== 'announcement') {
+        messenger.createRoomKey = '';
+        messenger.createScopeType = 'tenant';
+      }
+      if (messenger.createType === 'dm') {
+        messenger.createTitle = '';
+      }
+      syncMessengerCreateStatus('', 'info');
+      renderMessengerWorkspace();
+      return;
+    }
+
+    if (action === 'messenger-toggle-member') {
+      const messenger = ensureMessengerState();
+      const userId = String(actionEl.dataset.userId || '').trim();
+      if (!userId) return;
+      const current = new Set((Array.isArray(messenger.createMemberUserIds) ? messenger.createMemberUserIds : []).map((value) => String(value || '').trim()).filter(Boolean));
+      if (current.has(userId)) {
+        current.delete(userId);
+      } else if (normalizeMessengerConversationType(messenger.createType || 'group') === 'dm') {
+        current.clear();
+        current.add(userId);
+      } else {
+        current.add(userId);
+      }
+      messenger.createMemberUserIds = Array.from(current);
+      renderMessengerWorkspace();
+      return;
+    }
+
+    if (action === 'messenger-create-submit') {
+      runWithBusy(() => submitMessengerConversation(), '대화 생성 중...');
+      return;
+    }
+
+    if (action === 'messenger-submit-message') {
+      runWithBusy(() => submitMessengerMessage(), '메시지 전송 중...');
+      return;
+    }
+
+    if (action === 'messenger-search-result-open') {
+      const conversationId = String(actionEl.dataset.conversationId || '').trim();
+      const messageId = String(actionEl.dataset.messageId || '').trim();
+      const messenger = ensureMessengerState();
+      messenger.highlightMessageId = messageId;
+      runWithBusy(async () => {
+        await openMessengerConversation(conversationId, { force: true });
+      }, '검색 결과 여는 중...');
+      return;
+    }
+
+    if (action === 'messenger-search-clear') {
+      const messenger = ensureMessengerState();
+      messenger.messageSearchQuery = '';
+      messenger.searchResults = [];
+      messenger.searchError = '';
+      const input = $('#messengerMessageSearch');
+      if (input instanceof HTMLInputElement) input.value = '';
+      renderMessengerWorkspace();
+      return;
+    }
+
+    if (action === 'messenger-reaction-toggle') {
+      const messageId = String(actionEl.dataset.messageId || '').trim();
+      const reaction = String(actionEl.dataset.reaction || '').trim();
+      const reacted = String(actionEl.dataset.reacted || '').trim() === 'true';
+      runActionSafely(toggleMessengerReaction(messageId, reaction, reacted), '리액션 처리에 실패했습니다.');
+      return;
+    }
+
+    if (action === 'meetings-refresh') {
+      runWithBusy(() => loadMeetingsViewPresenter(), '회의 갱신 중...');
+      return;
+    }
+
+    if (action === 'meetings-toggle-create') {
+      const meetings = ensureMeetingsState();
+      meetings.createOpen = !meetings.createOpen;
+      if (meetings.createOpen) {
+        meetings.createSearch = '';
+        meetings.createLinkedConversationId = '';
+        meetings.createParticipantUserIds = [];
+        syncMeetingsCreateStatus('', 'info');
+        renderMeetingsWorkspace();
+        const shouldRefreshDirectory = !(Array.isArray(meetings.directoryRows) && meetings.directoryRows.length);
+        const shouldRefreshConversations = !(Array.isArray(meetings.conversationRows) && meetings.conversationRows.length);
+        runActionSafely(
+          Promise.allSettled([
+            loadMeetingsDirectory({ force: shouldRefreshDirectory }),
+            loadMeetingsConversationOptions({ force: shouldRefreshConversations }),
+          ]),
+          '회의 생성 데이터를 불러오지 못했습니다.',
+        );
+      } else {
+        renderMeetingsWorkspace();
+      }
+      return;
+    }
+
+    if (action === 'meetings-filter-state') {
+      const meetings = ensureMeetingsState();
+      meetings.stateFilter = normalizeMeetingsStateFilter(actionEl.dataset.state || 'all');
+      runWithBusy(() => loadMeetingsRooms({ force: true }), '회의 목록 갱신 중...');
+      return;
+    }
+
+    if (action === 'meetings-open-room') {
+      const roomId = String(actionEl.dataset.roomId || '').trim();
+      runWithBusy(() => openMeetingsRoom(roomId, { force: true }), '회의 여는 중...');
+      return;
+    }
+
+    if (action === 'meetings-add-participant') {
+      const meetings = ensureMeetingsState();
+      const roomId = String(meetings.selectedRoomId || '').trim();
+      runWithBusy(() => addMeetingsParticipants(roomId, meetings.participantUserId), '참가자 추가 중...');
+      return;
+    }
+
+    if (action === 'meetings-toggle-member') {
+      const meetings = ensureMeetingsState();
+      const userId = String(actionEl.dataset.userId || '').trim();
+      if (!userId) return;
+      const current = new Set((Array.isArray(meetings.createParticipantUserIds) ? meetings.createParticipantUserIds : []).map((value) => String(value || '').trim()).filter(Boolean));
+      if (current.has(userId)) current.delete(userId);
+      else current.add(userId);
+      meetings.createParticipantUserIds = Array.from(current);
+      renderMeetingsWorkspace();
+      return;
+    }
+
+    if (action === 'meetings-create-submit') {
+      const startNow = String(actionEl.dataset.startNow || '').trim() === 'true';
+      runWithBusy(() => submitMeetingsRoom({ startNow }), startNow ? '즉시 회의 시작 중...' : '예약 회의 생성 중...');
+      return;
+    }
+
+    if (action === 'meetings-session-start') {
+      const meetings = ensureMeetingsState();
+      const roomId = String(meetings.selectedRoomId || '').trim();
+      runWithBusy(() => startMeetingsSession(roomId), '회의 세션 시작 중...');
+      return;
+    }
+
+    if (action === 'meetings-session-join') {
+      const meetings = ensureMeetingsState();
+      const roomId = String(meetings.selectedRoomId || '').trim();
+      const sessionId = String(actionEl.dataset.sessionId || '').trim();
+      runWithBusy(() => joinMeetingsSession(roomId, sessionId), '회의 입장 중...');
+      return;
+    }
+
+    if (action === 'meetings-session-leave') {
+      const meetings = ensureMeetingsState();
+      const roomId = String(meetings.selectedRoomId || '').trim();
+      const sessionId = String(actionEl.dataset.sessionId || '').trim();
+      runWithBusy(() => leaveMeetingsSession(roomId, sessionId), '회의 종료 처리 중...');
+      return;
+    }
+
+    if (action === 'meetings-session-end') {
+      const meetings = ensureMeetingsState();
+      const roomId = String(meetings.selectedRoomId || '').trim();
+      const sessionId = String(actionEl.dataset.sessionId || '').trim();
+      runWithBusy(() => endMeetingsSession(roomId, sessionId), '회의 종료 중...');
+      return;
+    }
+
+    if (action === 'meetings-record-event') {
+      const meetings = ensureMeetingsState();
+      const roomId = String(meetings.selectedRoomId || '').trim();
+      const detail = meetings.detailById?.[roomId] || null;
+      const sessionId = String(detail?.active_session?.id || '').trim();
+      const eventType = String(actionEl.dataset.eventType || '').trim();
+      runActionSafely(recordMeetingsQuickEvent(roomId, sessionId, eventType), '회의 이벤트 기록에 실패했습니다.');
+      return;
+    }
+
+    if (action === 'meetings-open-chat') {
+      const conversationId = String(actionEl.dataset.conversationId || '').trim();
+      runWithBusy(() => openMeetingsLinkedChat(conversationId), '연결된 채팅 여는 중...');
+      return;
+    }
+
+    if (action === 'meetings-link-chat') {
+      const meetings = ensureMeetingsState();
+      const roomId = String(meetings.selectedRoomId || '').trim();
+      runWithBusy(() => linkMeetingsConversation(roomId, meetings.linkConversationId), '메신저 연계 중...');
+      return;
+    }
+
+    if (action === 'meetings-copy-link') {
+      const meetings = ensureMeetingsState();
+      const detail = meetings.detailById?.[String(meetings.selectedRoomId || '').trim()] || null;
+      runActionSafely(copyMeetingsLink(detail?.room_key || ''), '회의 링크 복사에 실패했습니다.');
+      return;
+    }
+
     if (action === 'open-notifications') {
       closeDrawer();
       runActionSafely(navigateToRoute(ROUTE_NOTIFICATIONS), '알림함을 열지 못했습니다.');
@@ -65474,7 +69787,7 @@ function bindUiEvents() {
     }
 
     if (action === 'reports-open-schedule-upload') {
-      runActionSafely(navigateToRoute(ROUTE_SCHEDULE_UPLOAD), 'Excel 업로드 화면 이동에 실패했습니다.');
+      runActionSafely(navigateToRoute(ROUTE_SCHEDULE_UPLOAD), '스케쥴 업로드 화면 이동에 실패했습니다.');
       return;
     }
 
@@ -66903,6 +71216,40 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'mail-hub-refresh') {
+      runWithBusy(() => loadMailHubData({ force: true }), '메일 허브 새로고침 중...');
+      return;
+    }
+
+    if (action === 'groupware-admin-refresh') {
+      runWithBusy(() => loadGroupwareAdminData({ force: true }), '그룹웨어 상태 새로고침 중...');
+      return;
+    }
+
+    if (action === 'groupware-open-meetings') {
+      runActionSafely(navigateToRoute(ROUTE_MEETINGS), '화상대화 화면을 여는 중 오류가 발생했습니다.');
+      return;
+    }
+
+    if (action === 'groupware-rollout-save') {
+      runWithBusy(() => recordGroupwareRolloutCheck(), 'rollout 체크 기록 중...');
+      return;
+    }
+
+    if (action === 'mail-job-retry') {
+      const jobId = String(actionEl.dataset.jobId || '').trim();
+      if (!jobId) {
+        showToast('재시도할 메일 작업을 찾을 수 없습니다.', 'error', 2200);
+        return;
+      }
+      runWithBusy(async () => {
+        await retryMailHubJob(jobId);
+        showToast('메일 작업을 다시 큐에 올렸습니다.', 'success', 2200);
+        await loadMailHubData({ force: true });
+      }, '메일 작업 재시도 중...');
+      return;
+    }
+
     if (action === 'google-profile-select-row') {
       applyGoogleSheetProfileSelection(actionEl.dataset.profileId || '');
       return;
@@ -67234,15 +71581,45 @@ function bindUiEvents() {
 
     if (action === 'requests-workspace-select') {
       const workspace = ensureRequestsWorkspaceState();
-      workspace.detailKey = String(actionEl.dataset.requestKey || '').trim();
+      const detailKey = String(actionEl.dataset.requestKey || '').trim();
+      workspace.detailKey = detailKey;
       workspace.drawerOpen = true;
       renderRequestsWorkspaceView();
+      const item = workspace.rowsById.get(detailKey);
+      const documentId = String(item?.row?.id || '').trim();
+      if (item?.kind === 'approval' && documentId) {
+        runActionSafely(loadRequestsApprovalDetail(documentId), '결재 문서 상세를 불러오지 못했습니다.');
+      }
       return;
     }
 
     if (action === 'requests-close-drawer') {
       setRequestsWorkspaceDrawerOpen(false);
       renderRequestsWorkspaceDrawer();
+      return;
+    }
+
+    if (action === 'requests-approval-action') {
+      const documentId = String(actionEl.dataset.documentId || '').trim();
+      const actionType = String(actionEl.dataset.actionType || '').trim().toLowerCase();
+      if (!documentId || !actionType) {
+        showToast('결재 처리 정보를 찾을 수 없습니다.', 'error', 2200);
+        return;
+      }
+      const needsComment = actionType === 'reject' || actionType === 'return';
+      const commentText = needsComment
+        ? String(window.prompt(actionType === 'reject' ? '반려 사유를 입력하세요.' : '반송 사유를 입력하세요.', '') || '').trim()
+        : '';
+      if (needsComment && !commentText) {
+        showToast('사유 입력이 필요합니다.', 'info', 1800);
+        return;
+      }
+      const actionLabel = actionType === 'approve' ? '승인' : (actionType === 'reject' ? '반려' : '반송');
+      runWithBusy(async () => {
+        await submitRequestsApprovalAction(documentId, actionType, commentText);
+        showToast(`결재 문서를 ${actionLabel}했습니다.`, 'success', 2200);
+        await loadRequestsWorkspaceCurrentTab({ silent: true });
+      }, `${actionLabel} 처리 중...`);
       return;
     }
 
@@ -67307,13 +71684,26 @@ function bindUiEvents() {
     }
 
     if (action === 'hr-doc-open') {
-      const docType = String(actionEl.dataset.doc || '').trim();
-      if (docType !== HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE) {
+      const docType = normalizeHrCertificateTypeKey(actionEl.dataset.doc || '');
+      if (!docType) {
         return;
       }
       const hrState = ensureHrDocsState();
-      hrState.selectedDocType = HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE;
+      hrState.selectedDocType = docType;
+      const selectedType = getHrSelectedCertificateType();
       renderHrDocCardSelection();
+      renderHrEmployeeRequestCard();
+      renderHrPurposeSelector();
+      if (!isHrCertificateTypeRequestAvailable(selectedType)) {
+        const reason = String(selectedType?.eligibility_reason || '').trim();
+        showToast(
+          reason
+            ? `${String(selectedType?.display_name || '해당 증명서').trim() || '해당 증명서'} 신청이 현재 불가합니다. ${reason}`
+            : `${String(selectedType?.display_name || '해당 증명서').trim() || '해당 증명서'}는 순차 오픈 예정입니다.`,
+          'info',
+          2200,
+        );
+      }
       return;
     }
 
@@ -67346,9 +71736,9 @@ function bindUiEvents() {
       const requestId = String(actionEl.dataset.requestId || '').trim();
       runWithProgressTask((progressController) => downloadHrEmploymentRequestPdf(requestId, progressController), {
         busyLabel: 'PDF 다운로드 중...',
-        fallbackMessage: '재직증명서 PDF 다운로드에 실패했습니다.',
+        fallbackMessage: '증명서 PDF 다운로드에 실패했습니다.',
         progressOptions: {
-          title: '재직증명서 PDF를 준비하고 있습니다',
+          title: '증명서 PDF를 준비하고 있습니다',
           detail: '승인된 문서를 PDF로 생성해 브라우저에 전달하는 중입니다.',
           revealMode: LONG_TASK_REVEAL_IMMEDIATE,
           tone: LONG_TASK_TONE_DOWNLOAD,
@@ -67439,7 +71829,7 @@ function bindUiEvents() {
         return;
       }
       openConfirmDialog({
-        title: '재직증명서 승인',
+        title: '증명서 승인',
         message: '승인하면 문서 생성 및 메일 발송 작업이 시작됩니다. 진행하시겠습니까?',
         acceptLabel: '승인',
         acceptVariant: 'btn-primary',
@@ -67469,12 +71859,29 @@ function bindUiEvents() {
       }
       runWithBusy(async () => {
         await rejectHrEmploymentRequest(requestId, reason);
-        showToast('요청을 반려했습니다.', 'success', 1800);
+        showToast('증명서 요청을 반려했습니다.', 'success', 1800);
         await loadHrEmploymentAdminRequests({ force: true });
         if (state.currentView === 'requests') {
           await loadRequestsWorkspaceCurrentTab({ silent: true });
         }
       }, '반려 처리 중...');
+      return;
+    }
+
+    if (action === 'hr-issue-job-retry') {
+      const issueJobId = String(actionEl.dataset.issueJobId || '').trim();
+      if (!issueJobId) {
+        showToast('재시도할 발급 작업을 찾을 수 없습니다.', 'error', 2200);
+        return;
+      }
+      runWithBusy(async () => {
+        await retryHrCertificateIssueJob(issueJobId);
+        showToast('발급 작업을 다시 큐에 올렸습니다.', 'success', 2200);
+        await loadHrEmploymentAdminRequests({ force: true });
+        if (state.currentView === 'requests' && normalizeRequestsTabView(state.requestsTabView) === 'documents') {
+          await loadRequestsWorkspaceCurrentTab({ silent: true });
+        }
+      }, '발급 작업 재시도 중...');
       return;
     }
 
@@ -69598,6 +74005,47 @@ function bindUiEvents() {
       return;
     }
 
+    if (target.id === 'messengerCreateScopeType') {
+      const messenger = ensureMessengerState();
+      messenger.createScopeType = target instanceof HTMLSelectElement ? String(target.value || 'tenant').trim().toLowerCase() : 'tenant';
+      renderMessengerWorkspace();
+      return;
+    }
+
+    if (target.id === 'meetingsCreateLinkedConversation') {
+      const meetings = ensureMeetingsState();
+      meetings.createLinkedConversationId = target instanceof HTMLSelectElement ? String(target.value || '').trim() : '';
+      renderMeetingsWorkspace();
+      return;
+    }
+
+    if (target.id === 'meetingsLinkConversationSelect') {
+      const meetings = ensureMeetingsState();
+      meetings.linkConversationId = target instanceof HTMLSelectElement ? String(target.value || '').trim() : '';
+      if (meetings.linkConversationId) {
+        syncMeetingsLinkStatus('', 'info');
+      }
+      renderMeetingsWorkspace();
+      return;
+    }
+
+    if (target.id === 'meetingsParticipantSelect') {
+      const meetings = ensureMeetingsState();
+      meetings.participantUserId = target instanceof HTMLSelectElement ? String(target.value || '').trim() : '';
+      if (meetings.participantUserId) {
+        syncMeetingsParticipantStatus('', 'info');
+      }
+      renderMeetingsWorkspace();
+      return;
+    }
+
+    if (target.id === 'meetingsSearchInput') {
+      const meetings = ensureMeetingsState();
+      meetings.searchQuery = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
+      renderMeetingsWorkspace();
+      return;
+    }
+
     if (targetAction === 'employee-roster-site-change') {
       const rowId = String(target.dataset.rowId || '').trim();
       const siteCode = target instanceof HTMLSelectElement ? String(target.value || '').trim() : '';
@@ -70406,6 +74854,11 @@ function bindUiEvents() {
       return;
     }
 
+    if (target.id === 'empEmail') {
+      refreshEmployeeFormSubmitAvailability();
+      return;
+    }
+
     if (target.id === 'empResidentNo') {
       if (target instanceof HTMLInputElement) {
         target.value = normalizeResidentNoValue(target.value);
@@ -70419,10 +74872,14 @@ function bindUiEvents() {
       || target.id === 'empGender'
       || target.id === 'empBirthDate'
       || target.id === 'empResidentNo'
+      || target.id === 'empEmail'
       || target.id === 'empAddress'
       || target.id === 'empTrainingCertNo'
       || target.id === 'empHireDate'
       || target.id === 'empLeaveDate'
+      || target.id === 'empEmploymentStatus'
+      || target.id === 'empLoaStartDate'
+      || target.id === 'empLoaEndDate'
       || target.id === 'empSocRole'
     ) {
       refreshEmployeeFormSubmitAvailability();
@@ -70595,6 +75052,82 @@ function bindUiEvents() {
       renderEmployeesFromCache();
       return;
     }
+    if (target.id === 'messengerConversationSearch') {
+      const messenger = ensureMessengerState();
+      messenger.searchQuery = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
+      renderMessengerWorkspace();
+      return;
+    }
+    if (target.id === 'meetingsSearchInput') {
+      const meetings = ensureMeetingsState();
+      meetings.searchQuery = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
+      renderMeetingsWorkspace();
+      return;
+    }
+    if (target.id === 'messengerMessageSearch') {
+      const messenger = ensureMessengerState();
+      const query = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
+      messenger.messageSearchQuery = query;
+      runActionSafely(loadMessengerSearchResults(query), '메시지 검색에 실패했습니다.');
+      return;
+    }
+    if (target.id === 'messengerComposerInput') {
+      const messenger = ensureMessengerState();
+      messenger.composerBody = target instanceof HTMLTextAreaElement ? String(target.value || '') : '';
+      renderMessengerComposer();
+      return;
+    }
+    if (target.id === 'messengerCreateSearch') {
+      const messenger = ensureMessengerState();
+      messenger.createSearch = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
+      runActionSafely(loadMessengerDirectory({ force: true }), '참여자 목록을 불러오지 못했습니다.');
+      return;
+    }
+    if (target.id === 'messengerCreateTitle') {
+      const messenger = ensureMessengerState();
+      messenger.createTitle = target instanceof HTMLInputElement ? String(target.value || '') : '';
+      return;
+    }
+    if (target.id === 'messengerCreateDescription') {
+      const messenger = ensureMessengerState();
+      messenger.createDescription = target instanceof HTMLTextAreaElement ? String(target.value || '') : '';
+      return;
+    }
+    if (target.id === 'messengerCreateRoomKey') {
+      const messenger = ensureMessengerState();
+      messenger.createRoomKey = target instanceof HTMLInputElement ? String(target.value || '').trim().toLowerCase() : '';
+      if (target instanceof HTMLInputElement && target.value !== messenger.createRoomKey) {
+        target.value = messenger.createRoomKey;
+      }
+      return;
+    }
+    if (target.id === 'messengerCreateScopeType') {
+      const messenger = ensureMessengerState();
+      messenger.createScopeType = target instanceof HTMLSelectElement ? String(target.value || 'tenant').trim().toLowerCase() : 'tenant';
+      return;
+    }
+    if (target.id === 'meetingsCreateTitle') {
+      const meetings = ensureMeetingsState();
+      meetings.createTitle = target instanceof HTMLInputElement ? String(target.value || '') : '';
+      return;
+    }
+    if (target.id === 'meetingsCreateScheduledFor') {
+      const meetings = ensureMeetingsState();
+      meetings.createScheduledFor = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
+      return;
+    }
+    if (target.id === 'meetingsCreateSearch') {
+      const meetings = ensureMeetingsState();
+      meetings.createSearch = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
+      runActionSafely(loadMeetingsDirectory({ force: true }), '참여자 목록을 불러오지 못했습니다.');
+      return;
+    }
+    if (target.id === 'meetingsCreateLinkedConversation') {
+      const meetings = ensureMeetingsState();
+      meetings.createLinkedConversationId = target instanceof HTMLSelectElement ? String(target.value || '').trim() : '';
+      renderMeetingsWorkspace();
+      return;
+    }
     if (target.id === 'attendanceSearchInput') {
       if (!state.attendanceView) {
         state.attendanceView = createInitialAttendanceViewState();
@@ -70647,6 +75180,11 @@ function bindUiEvents() {
       return;
     }
 
+    if (target.id === 'empEmail') {
+      refreshEmployeeFormSubmitAvailability();
+      return;
+    }
+
     if (target.id === 'empResidentNo') {
       if (target instanceof HTMLInputElement) {
         target.value = normalizeResidentNoValue(target.value);
@@ -70660,10 +75198,14 @@ function bindUiEvents() {
       || target.id === 'empGender'
       || target.id === 'empBirthDate'
       || target.id === 'empResidentNo'
+      || target.id === 'empEmail'
       || target.id === 'empAddress'
       || target.id === 'empTrainingCertNo'
       || target.id === 'empHireDate'
       || target.id === 'empLeaveDate'
+      || target.id === 'empEmploymentStatus'
+      || target.id === 'empLoaStartDate'
+      || target.id === 'empLoaEndDate'
       || target.id === 'empSocRole'
     ) {
       refreshEmployeeFormSubmitAvailability();
