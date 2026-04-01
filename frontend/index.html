@@ -2604,6 +2604,32 @@
                       <div id="scheduleImportFileStateBadge" class="schedule-upload-file-state"></div>
                     </div>
 
+                    <div class="schedule-upload-review-shell">
+                      <section class="schedule-upload-issues-panel">
+                        <div class="schedule-preview-head">
+                          <div>
+                            <h3>이슈 요약</h3>
+                          </div>
+                        </div>
+                        <div id="scheduleImportIssueGroups" class="schedule-upload-issue-groups"></div>
+                        <details id="scheduleImportTechDetails" class="schedule-upload-tech-details">
+                          <summary>기술 통계 보기</summary>
+                          <div id="scheduleImportTechnicalBody" class="schedule-upload-tech-grid"></div>
+                        </details>
+                      </section>
+
+                      <aside id="scheduleUploadApplyBar" class="schedule-upload-apply-bar">
+                        <div class="schedule-upload-apply-state">
+                          <strong id="scheduleApplyStateSummary">분석 전</strong>
+                          <p id="scheduleApplyStateReason" class="muted">지점, 월, 파일을 준비한 뒤 분석하세요.</p>
+                        </div>
+                        <div class="schedule-upload-apply-actions">
+                          <button class="btn btn-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="file">이전</button>
+                          <button class="btn btn-primary" type="button" id="scheduleApplyBtn" data-action="apply-schedule">적용하기</button>
+                        </div>
+                      </aside>
+                    </div>
+
                     <div id="schedulePreviewTableWrap" class="schedule-preview-wrap hidden">
                       <div class="schedule-preview-head">
                         <div>
@@ -2630,23 +2656,6 @@
                         <tbody id="schedulePreviewTableBody"></tbody>
                       </table>
                     </div>
-
-                    <section class="schedule-upload-issues-panel">
-                      <div class="schedule-preview-head">
-                        <div>
-                          <h3>이슈 요약</h3>
-                        </div>
-                      </div>
-                      <div id="scheduleImportIssueGroups" class="schedule-upload-issue-groups"></div>
-                      <details id="scheduleImportTechDetails" class="schedule-upload-tech-details">
-                        <summary>기술 통계 보기</summary>
-                        <div id="scheduleImportTechnicalBody" class="schedule-upload-tech-grid"></div>
-                      </details>
-                    </section>
-                    <div class="schedule-wizard-actions">
-                      <button class="btn btn-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="file">이전</button>
-                      <button class="btn btn-primary" type="button" id="scheduleBaseReviewNextBtn" data-action="apply-schedule">적용하기</button>
-                    </div>
                   </div>
                 </section>
 
@@ -2663,13 +2672,6 @@
                     <button class="btn btn-primary" type="button" data-action="schedule-reset-upload">종료</button>
                   </div>
                 </section>
-
-                <div id="scheduleUploadApplyBar" class="schedule-upload-apply-bar">
-                  <div class="schedule-upload-apply-state">
-                    <strong id="scheduleApplyStateSummary">분석 전</strong>
-                    <p id="scheduleApplyStateReason" class="muted">지점, 월, 파일을 준비한 뒤 분석하세요.</p>
-                  </div>
-                </div>
 
                 <p id="scheduleBatchInfo" class="hidden" aria-hidden="true"></p>
                 <div id="scheduleToast" class="muted hidden" role="status" aria-live="polite"></div>

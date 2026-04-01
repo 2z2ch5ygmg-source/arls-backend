@@ -6193,7 +6193,7 @@ button:disabled,
   border-color: rgba(249, 115, 22, 0.94);
   background: #fff7ed;
   color: #c2410c;
-  box-shadow: 0 0 0 5px rgba(249, 115, 22, 0.12);
+  box-shadow: 0 0 0 10px #fff, 0 0 0 15px rgba(249, 115, 22, 0.12);
 }
 
 .schedule-wizard-step.is-complete {
@@ -6204,8 +6204,9 @@ button:disabled,
 
 .schedule-wizard-step.is-complete::before {
   border-color: rgba(34, 197, 94, 0.28);
-  background: rgba(34, 197, 94, 0.12);
+  background: #ecfdf5;
   color: var(--state-success-text);
+  box-shadow: 0 0 0 10px #fff;
 }
 
 .schedule-wizard-step:disabled {
@@ -6507,6 +6508,13 @@ button:disabled,
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
+  align-items: start;
+}
+
+.schedule-upload-review-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 12px;
   align-items: start;
 }
 
@@ -6860,15 +6868,15 @@ button:disabled,
 }
 
 .schedule-upload-apply-bar {
-  position: static;
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
-  border: 1px solid rgba(249, 115, 22, 0.14);
+  position: sticky;
+  top: 24px;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-16);
-  background: rgba(255, 250, 245, 0.98);
-  padding: 10px 14px;
+  background: var(--bg-surface-elevated);
+  padding: 14px 16px;
   box-shadow: none;
   backdrop-filter: none;
   z-index: auto;
@@ -6876,13 +6884,25 @@ button:disabled,
 
 .schedule-upload-apply-state {
   display: grid;
-  gap: 2px;
+  gap: 4px;
+}
+
+.schedule-upload-apply-state strong {
+  color: var(--text-primary);
+  font-size: var(--ui-type-section-sm-size);
+  line-height: var(--ui-type-section-sm-line);
+  font-weight: var(--ui-weight-semibold);
+}
+
+.schedule-upload-apply-state p {
+  margin: 0;
 }
 
 .schedule-upload-apply-actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .schedule-upload-hidden-status {
@@ -7111,6 +7131,14 @@ button:disabled,
   .schedule-upload-tech-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .schedule-upload-review-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .schedule-upload-apply-bar {
+    position: static;
+  }
 }
 
 @media (max-width: 860px) {
@@ -7166,6 +7194,14 @@ button:disabled,
   .schedule-upload-template-grid,
   .schedule-upload-file-row {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .schedule-upload-apply-actions {
+    justify-content: stretch;
+  }
+
+  .schedule-upload-apply-actions .btn {
+    flex: 1 1 0;
   }
 }
 

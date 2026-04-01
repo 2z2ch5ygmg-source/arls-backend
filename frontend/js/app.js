@@ -169,6 +169,19 @@ const MASTER_SECURITY_POLICY_KEY = 'rg-arls-master-security-policy';
 const REMINDER_PREF_KEY = 'rg-arls-reminder-prefs';
 const HOME_BRIEFING_CACHE_KEY = 'rg-arls-home-briefing';
 const HOME_BRIEFING_CACHE_TTL_MS = 10 * 60 * 1000;
+const HOME_VIEW_CACHE_TTL_MS = 45 * 1000;
+const HOME_VIEW_CACHE_QUERY_IGNORE = ['toast', 'toastMessage', 'debug', 'debug_logs', 'debugLogs', 'tab', 'view', 't', 'ts', 'source', 'from', 'returnTo', 'return'];
+const HOME_VIEW_CRITICAL_API_TIMEOUT_MS = 900;
+const HOME_VIEW_BACKGROUND_API_TIMEOUT_MS = 1800;
+const HOME_VIEW_BACKGROUND_RETRY_DELAY_MS = 3000;
+const HOME_AUTH_ME_TIMEOUT_MS = 900;
+const VIEW_SNAPSHOT_VERSION = 1;
+const VIEW_SNAPSHOT_STORAGE_PREFIX = 'rg-arls-view-snapshot:';
+const VIEW_SNAPSHOT_DEFAULT_MAX_BYTES = 1024 * 1024;
+const VIEW_SNAPSHOT_EMPLOYEES_MAX_BYTES = 800000;
+const VIEW_SNAPSHOT_PERSIST_DEBOUNCE_MS = 140;
+const VIEW_PREWARM_DELAY_MS = 260;
+const VIEW_PREWARM_CONCURRENCY = 2;
 const TENANT_CHECK_DEBOUNCE_MS = 320;
 const TENANT_CODE_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 const GEO_ACCURACY_WARN_METERS = 120;
@@ -1240,6 +1253,14 @@ function createInitialViewRuntimeState() {
     loadingByKey: new Map(),
     statsByView: {},
     perf: createInitialViewPerfState(),
+    backgroundToastDepth: 0,
+    snapshotTimers: new Map(),
+    prewarm: {
+      signature: '',
+      timerId: 0,
+      running: false,
+      lastQueuedAt: 0,
+    },
   };
 }
 
@@ -2082,6 +2103,20 @@ function ensureViewRuntimeState() {
   if (!state.viewRuntime.perf || typeof state.viewRuntime.perf !== 'object') {
     state.viewRuntime.perf = createInitialViewPerfState();
   }
+  if (!Number.isFinite(Number(state.viewRuntime.backgroundToastDepth))) {
+    state.viewRuntime.backgroundToastDepth = 0;
+  }
+  if (!(state.viewRuntime.snapshotTimers instanceof Map)) {
+    state.viewRuntime.snapshotTimers = new Map();
+  }
+  if (!state.viewRuntime.prewarm || typeof state.viewRuntime.prewarm !== 'object') {
+    state.viewRuntime.prewarm = {
+      signature: '',
+      timerId: 0,
+      running: false,
+      lastQueuedAt: 0,
+    };
+  }
   return state.viewRuntime;
 }
 
@@ -2281,12 +2316,142 @@ function renderChunkedNodes(
   return { cancel, token };
 }
 
-function resolveViewRuntimeCacheKey(viewName = '') {
+function cloneSerializableValue(value, fallback = null) {
+  try {
+    if (value === undefined) return fallback;
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeViewSnapshotName(viewName = '') {
+  return String(viewName || '').trim().toLowerCase();
+}
+
+function getViewSnapshotConfig(viewName = '') {
+  return VIEW_SNAPSHOT_CONFIG[normalizeViewSnapshotName(viewName)] || null;
+}
+
+function hasSessionStorageSupport() {
+  try {
+    return typeof window !== 'undefined' && Boolean(window.sessionStorage);
+  } catch {
+    return false;
+  }
+}
+
+function buildStableQueryString(params = new URLSearchParams(), ignoredKeys = new Set()) {
+  const entries = [];
+  params.forEach((value, key) => {
+    const normalizedKey = String(key || '').trim().toLowerCase();
+    if (ignoredKeys.has(normalizedKey)) return;
+    entries.push([String(key || '').trim(), String(value || '').trim()]);
+  });
+  entries.sort((left, right) => {
+    const keyDiff = left[0].localeCompare(right[0]);
+    if (keyDiff !== 0) return keyDiff;
+    return left[1].localeCompare(right[1]);
+  });
+  return entries
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join('&');
+}
+
+function resolveViewRouteKey(viewName = '', routeCandidate = '') {
+  const normalizedView = normalizeViewSnapshotName(viewName);
+  const config = getViewSnapshotConfig(normalizedView);
+  const fallbackRoute = String(
+    routeCandidate
+    || (typeof getCurrentRouteWithQuery === 'function' ? getCurrentRouteWithQuery() : '')
+    || state.currentRoute
+    || resolveRouteForView(normalizedView)
+    || '',
+  ).trim();
+  const parsed = parseRouteCandidate(fallbackRoute);
+  const routePath = normalizeRoutePath(parsed.path)
+    || normalizeRoutePath(resolveRouteForView(normalizedView))
+    || '';
+  if (!routePath) return normalizedView;
+  const ignoredKeys = new Set(
+    (Array.isArray(config?.ignoreQueryKeys) ? config.ignoreQueryKeys : [])
+      .map((key) => String(key || '').trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const normalizedQuery = buildStableQueryString(new URLSearchParams(parsed.query || ''), ignoredKeys);
+  return normalizedQuery ? `${routePath}?${normalizedQuery}` : routePath;
+}
+
+function buildViewSnapshotStorageKey(viewName = '', routeCandidate = '') {
+  const normalizedView = normalizeViewSnapshotName(viewName);
+  const routeKey = resolveViewRouteKey(normalizedView, routeCandidate);
+  if (!normalizedView || !routeKey) return '';
+  return `${VIEW_SNAPSHOT_STORAGE_PREFIX}${normalizedView}:${encodeURIComponent(routeKey)}`;
+}
+
+function listViewSnapshotStorageKeys(viewName = '') {
+  if (!hasSessionStorageSupport()) return [];
+  const normalizedView = normalizeViewSnapshotName(viewName);
+  const prefix = normalizedView
+    ? `${VIEW_SNAPSHOT_STORAGE_PREFIX}${normalizedView}:`
+    : VIEW_SNAPSHOT_STORAGE_PREFIX;
+  const keys = [];
+  try {
+    for (let index = 0; index < window.sessionStorage.length; index += 1) {
+      const key = String(window.sessionStorage.key(index) || '').trim();
+      if (key.startsWith(prefix)) {
+        keys.push(key);
+      }
+    }
+  } catch {
+    return [];
+  }
+  return keys;
+}
+
+function removeStoredViewSnapshot(viewName = '', routeCandidate = '') {
+  if (!hasSessionStorageSupport()) return;
+  const storageKey = buildViewSnapshotStorageKey(viewName, routeCandidate);
+  if (!storageKey) return;
+  try {
+    window.sessionStorage.removeItem(storageKey);
+  } catch {
+    // no-op
+  }
+}
+
+function readStoredViewSnapshot(viewName = '', routeCandidate = '') {
+  const config = getViewSnapshotConfig(viewName);
+  if (!config || !hasSessionStorageSupport()) return null;
+  const storageKey = buildViewSnapshotStorageKey(viewName, routeCandidate);
+  if (!storageKey) return null;
+  try {
+    const raw = window.sessionStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const ttlMs = Number(config.ttlMs || 0);
+    const savedAt = Number(parsed?.savedAt || 0);
+    const version = Number(parsed?.version || 0);
+    const routeKey = String(parsed?.routeKey || '').trim();
+    if (version !== VIEW_SNAPSHOT_VERSION || !routeKey || !Number.isFinite(savedAt)) {
+      window.sessionStorage.removeItem(storageKey);
+      return null;
+    }
+    if (ttlMs > 0 && (Date.now() - savedAt) > ttlMs) {
+      window.sessionStorage.removeItem(storageKey);
+      return null;
+    }
+    return parsed;
+  } catch {
+    removeStoredViewSnapshot(viewName, routeCandidate);
+    return null;
+  }
+}
+
+function resolveViewRuntimeCacheKey(viewName = '', routeOverride = '') {
   const normalizedView = String(viewName || '').trim() || 'unknown';
-  const routeWithQuery = typeof window !== 'undefined'
-    ? String(getCurrentRouteWithQuery() || '').trim()
-    : String(state.currentRoute || resolveRouteForView(normalizedView) || '').trim();
-  return `${normalizedView}:${routeWithQuery || normalizedView}`;
+  const routeKey = resolveViewRouteKey(normalizedView, routeOverride);
+  return `${normalizedView}:${routeKey || normalizedView}`;
 }
 
 function ensureViewRuntimeStats(viewName = '') {
@@ -2298,9 +2463,13 @@ function ensureViewRuntimeStats(viewName = '') {
       activations: 0,
       loads: 0,
       cacheHits: 0,
+      snapshotHits: 0,
+      snapshotWrites: 0,
+      snapshotInvalidations: 0,
       loadErrors: 0,
       lastLoadAt: 0,
       lastActivatedAt: 0,
+      lastSnapshotAt: 0,
     };
   }
   return runtime.statsByView[key];
@@ -2324,10 +2493,26 @@ function clearViewRuntimeCache(viewName = '') {
   const runtime = ensureViewRuntimeState();
   const target = String(viewName || '').trim();
   if (!target) {
+    if (runtime.snapshotTimers instanceof Map) {
+      runtime.snapshotTimers.forEach((timerId) => {
+        clearTimeout(Number(timerId) || 0);
+      });
+    }
+    if (runtime.prewarm?.timerId) {
+      clearTimeout(Number(runtime.prewarm.timerId) || 0);
+    }
     runtime.loadedByKey.clear();
     runtime.loadingByKey.clear();
     runtime.statsByView = {};
     runtime.perf = createInitialViewPerfState();
+    runtime.backgroundToastDepth = 0;
+    runtime.snapshotTimers = new Map();
+    runtime.prewarm = {
+      signature: '',
+      timerId: 0,
+      running: false,
+      lastQueuedAt: 0,
+    };
     return;
   }
   const prefix = `${target}:`;
@@ -2341,11 +2526,174 @@ function clearViewRuntimeCache(viewName = '') {
       runtime.loadingByKey.delete(key);
     }
   });
+  if (runtime.snapshotTimers instanceof Map) {
+    Array.from(runtime.snapshotTimers.keys()).forEach((key) => {
+      if (!String(key || '').startsWith(prefix)) return;
+      clearTimeout(Number(runtime.snapshotTimers.get(key)) || 0);
+      runtime.snapshotTimers.delete(key);
+    });
+  }
   delete runtime.statsByView[target];
   const perfScreen = resolvePerfScreenFromView(target, state.currentRoute || '');
   if (perfScreen && runtime.perf?.activeSession?.screen === perfScreen) {
     runtime.perf.activeSession = null;
   }
+}
+
+function isViewBackgroundModeActive() {
+  return Number(ensureViewRuntimeState().backgroundToastDepth || 0) > 0;
+}
+
+function runWithViewBackgroundMode(task) {
+  const runtime = ensureViewRuntimeState();
+  runtime.backgroundToastDepth = Math.max(0, Number(runtime.backgroundToastDepth || 0)) + 1;
+  return Promise.resolve()
+    .then(() => (typeof task === 'function' ? task() : task))
+    .finally(() => {
+      runtime.backgroundToastDepth = Math.max(0, Number(runtime.backgroundToastDepth || 0) - 1);
+    });
+}
+
+function resolveViewSnapshotRouteOverride(viewName = '', routeOverride = '') {
+  const normalizedView = normalizeViewSnapshotName(viewName);
+  const explicitRoute = String(routeOverride || '').trim();
+  if (explicitRoute) return explicitRoute;
+  if (normalizeViewSnapshotName(state.currentView || '') === normalizedView) {
+    return String(
+      (typeof getCurrentRouteWithQuery === 'function' ? getCurrentRouteWithQuery() : '')
+      || state.currentRoute
+      || resolveRouteForView(normalizedView)
+      || '',
+    ).trim();
+  }
+  return String(resolveRouteForView(normalizedView) || '').trim();
+}
+
+function persistViewSnapshot(viewName = '', { routeOverride = '', allowInactive = false } = {}) {
+  const normalizedView = normalizeViewSnapshotName(viewName);
+  const config = getViewSnapshotConfig(normalizedView);
+  if (!config || !hasSessionStorageSupport()) return false;
+  if (!allowInactive && normalizeViewSnapshotName(state.currentView || '') !== normalizedView) {
+    return false;
+  }
+  if (typeof config.serialize !== 'function') return false;
+  const resolvedRouteOverride = resolveViewSnapshotRouteOverride(normalizedView, routeOverride);
+  const routeKey = resolveViewRouteKey(normalizedView, resolvedRouteOverride);
+  const storageKey = buildViewSnapshotStorageKey(normalizedView, resolvedRouteOverride);
+  if (!routeKey || !storageKey) return false;
+  const payload = config.serialize({ routeKey });
+  if (!payload) {
+    removeStoredViewSnapshot(normalizedView, routeKey);
+    return false;
+  }
+  const record = {
+    version: VIEW_SNAPSHOT_VERSION,
+    savedAt: Date.now(),
+    routeKey,
+    view: normalizedView,
+    payload,
+  };
+  try {
+    const serialized = JSON.stringify(record);
+    const maxBytes = Number(config.maxBytes || VIEW_SNAPSHOT_DEFAULT_MAX_BYTES);
+    const byteSize = typeof TextEncoder !== 'undefined'
+      ? new TextEncoder().encode(serialized).length
+      : serialized.length;
+    if (Number.isFinite(maxBytes) && maxBytes > 0 && byteSize > maxBytes) {
+      removeStoredViewSnapshot(normalizedView, routeKey);
+      return false;
+    }
+    window.sessionStorage.setItem(storageKey, serialized);
+    const stats = ensureViewRuntimeStats(normalizedView);
+    stats.snapshotWrites += 1;
+    stats.lastSnapshotAt = record.savedAt;
+    return true;
+  } catch {
+    removeStoredViewSnapshot(normalizedView, routeKey);
+    return false;
+  }
+}
+
+function queueViewSnapshotPersist(viewName = '', {
+  routeOverride = '',
+  allowInactive = false,
+  delayMs = VIEW_SNAPSHOT_PERSIST_DEBOUNCE_MS,
+} = {}) {
+  const normalizedView = normalizeViewSnapshotName(viewName);
+  if (!getViewSnapshotConfig(normalizedView)) return;
+  const runtime = ensureViewRuntimeState();
+  const resolvedRouteOverride = resolveViewSnapshotRouteOverride(normalizedView, routeOverride);
+  const routeKey = resolveViewRouteKey(normalizedView, resolvedRouteOverride);
+  const timerKey = `${normalizedView}:${routeKey || '*'}`;
+  const existingTimer = Number(runtime.snapshotTimers.get(timerKey) || 0);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+  const nextTimer = window.setTimeout(() => {
+    runtime.snapshotTimers.delete(timerKey);
+    persistViewSnapshot(normalizedView, {
+      routeOverride: resolvedRouteOverride,
+      allowInactive,
+    });
+  }, Math.max(0, Number(delayMs || 0)));
+  runtime.snapshotTimers.set(timerKey, nextTimer);
+}
+
+function restoreViewSnapshot(viewName = '', { routeOverride = '' } = {}) {
+  const normalizedView = normalizeViewSnapshotName(viewName);
+  const config = getViewSnapshotConfig(normalizedView);
+  if (!config || typeof config.restore !== 'function') return null;
+  const record = readStoredViewSnapshot(normalizedView, routeOverride);
+  if (!record) return null;
+  try {
+    config.restore(record.payload, {
+      routeKey: String(record.routeKey || '').trim(),
+      savedAt: Number(record.savedAt || 0),
+    });
+    const stats = ensureViewRuntimeStats(normalizedView);
+    stats.snapshotHits += 1;
+    stats.lastSnapshotAt = Number(record.savedAt || 0);
+    return record.payload;
+  } catch (error) {
+    console.error('[RG ARLS] view snapshot restore failed', {
+      view: normalizedView,
+      routeOverride,
+      error,
+    });
+    removeStoredViewSnapshot(normalizedView, routeOverride);
+    return null;
+  }
+}
+
+function invalidateViewSnapshots(viewNames = [], { routeOverride = '', allRoutes = true } = {}) {
+  const targets = Array.isArray(viewNames) ? viewNames : [viewNames];
+  targets
+    .map((viewName) => normalizeViewSnapshotName(viewName))
+    .filter(Boolean)
+    .forEach((viewName) => {
+      clearViewRuntimeCache(viewName);
+      const stats = ensureViewRuntimeStats(viewName);
+      stats.snapshotInvalidations += 1;
+      if (hasSessionStorageSupport()) {
+        if (allRoutes || !routeOverride) {
+          listViewSnapshotStorageKeys(viewName).forEach((storageKey) => {
+            try {
+              window.sessionStorage.removeItem(storageKey);
+            } catch {
+              // no-op
+            }
+          });
+        } else {
+          removeStoredViewSnapshot(viewName, routeOverride);
+        }
+      }
+      if (normalizeViewSnapshotName(state.currentView || '') === viewName) {
+        queueViewSnapshotPersist(viewName, {
+          allowInactive: false,
+          delayMs: VIEW_SNAPSHOT_PERSIST_DEBOUNCE_MS + 80,
+        });
+      }
+    });
 }
 
 async function triggerHaptic(kind = 'tap') {
@@ -7258,6 +7606,7 @@ async function loadHomeManagerSupplementaryData({ force = false } = {}) {
   };
 
   renderHomeManagerDashboard();
+  queueViewSnapshotPersist('home', { allowInactive: true });
   return dashboard;
 }
 
@@ -7357,6 +7706,7 @@ async function loadHomeManagerOrgSummary({ force = false } = {}) {
   }
 
   renderHomeManagerDashboard();
+  queueViewSnapshotPersist('home', { allowInactive: true });
   return dashboard.organizationSummary;
 }
 
@@ -10708,6 +11058,7 @@ function renderReportsWorkspacePanels() {
   renderScheduleFinanceSubmissionStatus();
   renderReportsFinanceDownloadWorkspace();
   renderReportsContextSummary();
+  queueViewSnapshotPersist('reports');
 }
 
 function getActiveReportsViewTab() {
@@ -12273,6 +12624,74 @@ async function requestTokenRefresh({ allowSoftFailureWithAccessToken = false, so
   return tokenRefreshPromise;
 }
 
+function invalidateSnapshotsForMutation(method = 'GET', rawPath = '') {
+  const normalizedMethod = String(method || 'GET').trim().toUpperCase();
+  if (normalizedMethod === 'GET' || normalizedMethod === 'HEAD') return;
+  const pathname = normalizeRoutePath(parseRouteCandidate(rawPath).path || rawPath);
+  if (!pathname) return;
+
+  const targets = new Set();
+
+  if (pathname.startsWith('/attendance/records') || pathname.startsWith('/attendance/requests')) {
+    targets.add('home');
+    targets.add('attendance');
+    targets.add('requests');
+  }
+  if (pathname.startsWith('/leaves')) {
+    targets.add('attendance');
+    targets.add('requests');
+  }
+  if (pathname.startsWith('/approvals')) {
+    targets.add('requests');
+  }
+  if (pathname.startsWith('/certificates')) {
+    targets.add('requests');
+    targets.add('hr');
+  }
+  if (pathname.startsWith('/schedules')) {
+    targets.add('schedule');
+    targets.add('reports');
+    if (
+      pathname.includes('/finance-submission')
+      || pathname.includes('/support-roundtrip')
+      || pathname.includes('/work-templates')
+    ) {
+      targets.add('home');
+    }
+  }
+  if (pathname.startsWith('/calendar')) {
+    targets.add('calendar');
+  }
+  if (pathname.startsWith('/messenger')) {
+    targets.add('messenger');
+  }
+  if (pathname.startsWith('/meetings')) {
+    targets.add('meetings');
+  }
+  if (pathname.startsWith('/notices')) {
+    targets.add('notices');
+    targets.add('home');
+  }
+  if (pathname.startsWith('/employees') || pathname.startsWith('/users') || pathname.startsWith('/tenants')) {
+    targets.add('employees');
+    targets.add('home');
+  }
+  if (pathname.startsWith('/sites')) {
+    targets.add('home');
+    targets.add('attendance');
+    targets.add('employees');
+  }
+  if (pathname.startsWith('/users/me') || pathname.startsWith('/push/devices') || pathname.startsWith('/integrations')) {
+    targets.add('profile');
+  }
+
+  if (!targets.size) return;
+  invalidateViewSnapshots(Array.from(targets), { allRoutes: true });
+  if (targets.has('attendance')) {
+    clearAttendanceManagerSnapshot();
+  }
+}
+
 function apiRequest(path, options = {}) {
   const normalizedPath = stripLegacyTenantCodeQuery(path);
   const key = `${options.method || 'GET'}:${normalizedPath}:${JSON.stringify(options.body || {})}`;
@@ -12436,6 +12855,7 @@ function apiRequest(path, options = {}) {
       throw requestError;
     }
 
+    invalidateSnapshotsForMutation(method, normalizedPath);
     return envelope.data;
   })();
 
@@ -12516,6 +12936,7 @@ function isModalToastContext() {
 }
 
 function showToast(message, level = 'info', ttl = 2500) {
+  if (isViewBackgroundModeActive()) return;
   const toastEl = $('#globalToast') || $('#scheduleToast');
   if (!toastEl) return;
 
@@ -14668,7 +15089,10 @@ function renderScheduleUploadApplyBar() {
 
   summaryEl.textContent = summary;
   reasonEl.textContent = reason;
-  if (applyBtn) applyBtn.disabled = !canApply;
+  if (applyBtn instanceof HTMLButtonElement) {
+    applyBtn.disabled = !canApply;
+    applyBtn.textContent = uploadUi.analysisInFlight ? '분석 중...' : '적용하기';
+  }
   if (reviewApplyBtn instanceof HTMLButtonElement) {
     reviewApplyBtn.disabled = uploadUi.analysisInFlight || !Boolean(uploadUi.canApply);
     reviewApplyBtn.textContent = uploadUi.analysisInFlight ? '적용 중...' : '적용하기';
@@ -15569,7 +15993,7 @@ function renderSchedulePreviewTable(previewRows = []) {
     const td = document.createElement('td');
     td.colSpan = 8;
     td.appendChild(createScheduleUploadStackCell(
-      previewMode === 'actionable' ? '기본 보기에서는 검토/차단 대상만 표시됩니다.' : '표시할 행이 없습니다.',
+      previewMode === 'actionable' ? '기본 보기에서는 차단 항목만 표시됩니다.' : '표시할 행이 없습니다.',
       previewMode === 'actionable'
         ? '전체 보기로 전환하면 반영 예정과 보호/요약 메타데이터를 포함한 전체 분석 행을 볼 수 있습니다.'
         : '현재 검토 결과에서 표시할 행이 없습니다.',
@@ -15648,6 +16072,14 @@ function isScheduleImportPreviewRowActionable(row = {}) {
   return isBlocking || diffCategory === 'review' || Boolean(String(row?.apply_action || '').trim());
 }
 
+function isScheduleImportPreviewRowBlocked(row = {}) {
+  const decisionStage = String(row?.decision_stage || '').trim().toLowerCase();
+  if (decisionStage === 'block') return true;
+  const diffCategory = String(row?.diff_category || '').trim().toLowerCase();
+  const isProtected = Boolean(row?.is_protected) || diffCategory === 'ignored_protected';
+  return Boolean(row?.is_blocking) || (!isProtected && row?.is_valid === false);
+}
+
 function isScheduleImportPreviewRowProtectedInfoOnly(row = {}) {
   const diffCategory = String(row?.diff_category || '').trim().toLowerCase();
   const isProtected = Boolean(row?.is_protected) || diffCategory === 'ignored_protected';
@@ -15670,7 +16102,7 @@ function filterScheduleImportPreviewRows(rows = [], previewMode = 'actionable') 
   if (normalizedMode === 'all') return normalizedRows;
   return normalizedRows.filter((row) => {
     if (isScheduleImportPreviewRowProtectedInfoOnly(row)) return false;
-    return isScheduleImportPreviewRowActionable(row);
+    return isScheduleImportPreviewRowBlocked(row);
   });
 }
 
@@ -17327,6 +17759,7 @@ function renderScheduleReportsTabs() {
   if (financePanel instanceof HTMLElement) {
     financePanel.classList.toggle('hidden', !financeAllowed);
   }
+  queueViewSnapshotPersist('schedule');
 }
 
 function renderScheduleSupportRoundtripStatus() {
@@ -18563,6 +18996,7 @@ async function loadReportsFinanceOverviewWorkspace({ force = false } = {}) {
   } finally {
     state.reports.financeOverviewLoading = false;
     renderScheduleFinanceSubmissionStatus();
+    queueViewSnapshotPersist('reports', { allowInactive: true });
   }
 }
 
@@ -18587,6 +19021,8 @@ async function loadScheduleFinanceSubmissionStatus() {
   const status = await apiRequest(`/schedules/finance-submission/status?${params.toString()}`);
   state.schedule.financeStatus = status && typeof status === 'object' ? status : null;
   renderScheduleFinanceSubmissionStatus();
+  queueViewSnapshotPersist('schedule', { allowInactive: true });
+  queueViewSnapshotPersist('reports', { allowInactive: true });
   return state.schedule.financeStatus;
 }
 
@@ -18634,6 +19070,7 @@ async function loadReportsFinanceDownloadWorkspace({ force = false } = {}) {
   } finally {
     state.reports.financeDownloadLoading = false;
     renderReportsFinanceDownloadWorkspace();
+    queueViewSnapshotPersist('reports', { allowInactive: true });
   }
 }
 
@@ -24032,6 +24469,7 @@ async function loadHomeBriefing({ force = false } = {}) {
   } finally {
     state.home.briefingLoading = false;
     renderHomeAudienceSurface();
+    queueViewSnapshotPersist('home', { allowInactive: true });
   }
 }
 
@@ -24219,6 +24657,7 @@ async function loadNoticeListState({ force = false } = {}) {
   } finally {
     notices.loading = false;
     renderNoticesView();
+    queueViewSnapshotPersist('notices', { allowInactive: true });
   }
 }
 
@@ -24239,6 +24678,7 @@ async function loadNoticeDetailState(noticeId = ensureNoticesState().selectedNot
   } finally {
     notices.detailLoading = false;
     renderNoticesView();
+    queueViewSnapshotPersist('notices', { allowInactive: true });
   }
 }
 
@@ -24259,6 +24699,7 @@ async function loadHomeNoticeTeaser({ force = false } = {}) {
   } finally {
     notices.homeLoading = false;
     renderHomeManagerDashboard();
+    queueViewSnapshotPersist('home', { allowInactive: true });
   }
 }
 
@@ -28480,6 +28921,7 @@ async function loadHomeTodayRecordsDetail({ force = false } = {}) {
   applyTodayAttendance(rows, { syncStatus: false });
   const outsideCount = filterEmployeeRecords(rows).filter((row) => row?.is_within_radius === false).length;
   syncOutsideAttendanceNotification(outsideCount);
+  queueViewSnapshotPersist('home', { allowInactive: true });
   return rows;
 }
 
@@ -28525,6 +28967,7 @@ async function loadHomeSites({ activeOnly = true, notifyOnError = true, force = 
       renderOpsSiteOptions();
       renderSupportStatusWorkspace();
       evaluateHomeGeofence();
+      queueViewSnapshotPersist('home', { allowInactive: true });
       return state.home.sites;
     }
   }
@@ -28558,6 +29001,7 @@ async function loadHomeSites({ activeOnly = true, notifyOnError = true, force = 
   renderOpsSiteOptions();
   renderSupportStatusWorkspace();
   evaluateHomeGeofence();
+  queueViewSnapshotPersist('home', { allowInactive: true });
   return state.home.sites;
 }
 
@@ -28631,6 +29075,7 @@ async function loadHomeWeekEntries({ force = false } = {}) {
 
   renderHomeWeekStrip();
   queueReminderSync({ force: false, reason: 'home-week-refresh' });
+  queueViewSnapshotPersist('home', { allowInactive: true });
 }
 
 async function loadHomeData({ quiet = false, force = false } = {}) {
@@ -30298,6 +30743,7 @@ function renderLeaveManagementWorkspace({ loading = false, errorMessage = '' } =
   renderLeaveWorkspaceRequestRows({ loading, errorMessage });
   renderLeaveUsageRows();
   renderLeaveWorkspaceDetailPanel();
+  queueViewSnapshotPersist('requests');
 }
 
 function createLeaveHistoryListRow(row = {}, { scope = 'mine' } = {}) {
@@ -33924,6 +34370,7 @@ function renderProfileGoogleSettingsWorkspace() {
   toggleVisibility('#googleSheetSyncPanel', tab === 'sync');
   renderGoogleSheetProfileLibrary();
   renderGoogleSheetSyncWorkspace();
+  queueViewSnapshotPersist('profile');
 }
 
 function renderProfileLogsWorkspace() {
@@ -33951,6 +34398,7 @@ function renderProfileLogsWorkspace() {
   }
 
   renderOpsWorkspaceLogs();
+  queueViewSnapshotPersist('profile');
 }
 
 function renderProfileWorkspaceSegments() {
@@ -33981,6 +34429,7 @@ function renderProfileWorkspaceSegments() {
   if (logsAvailable && segment === 'logs') {
     renderProfileLogsWorkspace();
   }
+  queueViewSnapshotPersist('profile');
 }
 
 function buildProfileRouteWithSegment(segment = '') {
@@ -36193,6 +36642,8 @@ function clearSession() {
   } catch {
     // no-op
   }
+  clearAllStoredViewSnapshots();
+  clearAttendanceManagerSnapshot();
   persistStoredAuthTokens('', '');
 }
 
@@ -39010,7 +39461,8 @@ function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad
 
   return loadViewData(targetView, {
     force: Boolean(forceLoad),
-    cacheKey: resolveViewRuntimeCacheKey(targetView),
+    cacheKey: resolveViewRuntimeCacheKey(targetView, state.currentRoute || ''),
+    routeOverride: state.currentRoute || '',
   })
     .catch((err) => {
       console.error(err);
@@ -39020,6 +39472,7 @@ function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad
       decorateAzureTopbarTabs(document);
       ensurePolling();
       ensureScheduleLiveRefresh();
+      queuePostLoginViewPrewarm();
     });
 }
 
@@ -39202,6 +39655,7 @@ function renderRequestsWorkspaceView() {
   renderRequestsWorkspaceListRows();
   renderRequestsWorkspaceDetailPanel();
   syncRequestsWorkspaceSelection();
+  queueViewSnapshotPersist('requests');
 }
 
 function renderRequestsWorkspaceLoading() {
@@ -40410,6 +40864,7 @@ function renderNoticesView() {
   if (listPanel) listPanel.classList.toggle('hidden', notices.mode !== NOTICE_VIEW_MODE_LIST);
   if (detailPanel) detailPanel.classList.toggle('hidden', notices.mode !== NOTICE_VIEW_MODE_DETAIL);
   if (composePanel) composePanel.classList.toggle('hidden', notices.mode !== NOTICE_VIEW_MODE_COMPOSE || !canManageNotices());
+  queueViewSnapshotPersist('notices');
 }
 
 function shouldReloadNoticesOnCacheHit() {
@@ -41703,6 +42158,7 @@ function renderHrViewFromCache() {
   renderHrMyRequestRows();
   renderHrAdminRequestRows();
   renderHrTemplateRows();
+  queueViewSnapshotPersist('hr');
 }
 
 async function loadHrViewPresenter() {
@@ -44210,6 +44666,7 @@ function renderCalendarPublicBookingPage() {
       </section>
     </div>
   `;
+  queueViewSnapshotPersist('calendar');
 }
 
 async function submitCalendarPublicBookingFromUi() {
@@ -44666,6 +45123,7 @@ function renderAttendanceViewFromCache() {
   });
   renderAttendanceFilterMeta();
   renderAttendanceMobileSegments();
+  queueViewSnapshotPersist('attendance');
 }
 
 const MESSENGER_REACTION_CHOICES = Object.freeze(['👍', '👀', '✅']);
@@ -45439,6 +45897,7 @@ function renderMessengerWorkspace() {
   if (subtitle instanceof HTMLElement) {
     subtitle.textContent = messenger.loading ? '대화 목록을 불러오는 중입니다.' : '최근 업데이트 순으로 정렬됩니다.';
   }
+  queueViewSnapshotPersist('messenger');
 }
 
 async function openMessengerConversation(conversationId, { force = false } = {}) {
@@ -46435,6 +46894,7 @@ function renderMeetingsWorkspace() {
     const activeSession = detail?.active_session && typeof detail.active_session === 'object' ? detail.active_session : null;
     quickEvents.classList.toggle('hidden', !activeSession);
   }
+  queueViewSnapshotPersist('meetings');
 }
 
 async function openMeetingsRoom(roomId, { force = false } = {}) {
@@ -46708,10 +47168,1178 @@ async function loadMeetingsViewPresenter() {
   renderMeetingsWorkspace();
 }
 
+function cloneArrayValue(value, fallback = []) {
+  const cloned = cloneSerializableValue(Array.isArray(value) ? value : fallback, fallback);
+  return Array.isArray(cloned) ? cloned : fallback;
+}
+
+function cloneObjectValue(value, fallback = {}) {
+  const cloned = cloneSerializableValue(value && typeof value === 'object' && !Array.isArray(value) ? value : fallback, fallback);
+  return cloned && typeof cloned === 'object' && !Array.isArray(cloned) ? cloned : fallback;
+}
+
+function pickSerializableFields(source = {}, keys = []) {
+  const result = {};
+  (Array.isArray(keys) ? keys : []).forEach((key) => {
+    if (!Object.prototype.hasOwnProperty.call(source || {}, key)) return;
+    const cloned = cloneSerializableValue(source[key], undefined);
+    if (cloned !== undefined) {
+      result[key] = cloned;
+    }
+  });
+  return result;
+}
+
+function serializeMapEntries(map) {
+  return map instanceof Map ? cloneSerializableValue(Array.from(map.entries()), []) : [];
+}
+
+function restoreMapFromEntries(entries = []) {
+  return new Map(
+    (Array.isArray(entries) ? entries : []).filter((entry) => Array.isArray(entry) && entry.length >= 2),
+  );
+}
+
+function serializeSelectedMapEntries(map, keys = []) {
+  if (!(map instanceof Map)) return [];
+  const selectedKeys = Array.from(new Set(
+    (Array.isArray(keys) ? keys : [keys])
+      .map((key) => String(key || '').trim())
+      .filter(Boolean),
+  ));
+  return selectedKeys
+    .filter((key) => map.has(key))
+    .map((key) => [key, cloneSerializableValue(map.get(key), null)])
+    .filter((entry) => entry[1] !== null);
+}
+
+function serializeSetValues(set) {
+  return set instanceof Set ? cloneSerializableValue(Array.from(set.values()), []) : [];
+}
+
+function restoreSetFromValues(values = []) {
+  return new Set(Array.isArray(values) ? values : []);
+}
+
+function restoreDateFromDateKey(dateKey = '') {
+  const normalized = normalizeAttendanceDate(dateKey || '');
+  if (!normalized) return new Date();
+  const [year, month, day] = normalized.split('-').map((value) => Number(value || 0));
+  if (!year || !month || !day) return new Date();
+  return new Date(year, month - 1, day);
+}
+
+function serializeHomeWeekEntries(entries = []) {
+  return (Array.isArray(entries) ? entries : [])
+    .map((entry) => {
+      const dateKey = normalizeAttendanceDate(entry?.dateKey || '');
+      if (!dateKey) return null;
+      return {
+        dateKey,
+        shiftType: normalizeShiftType(entry?.shiftType || ''),
+        checkInCount: Math.max(0, Number(entry?.checkInCount || 0) || 0),
+        checkOutCount: Math.max(0, Number(entry?.checkOutCount || 0) || 0),
+      };
+    })
+    .filter(Boolean);
+}
+
+function restoreHomeWeekEntries(entries = []) {
+  return (Array.isArray(entries) ? entries : [])
+    .map((entry) => {
+      const dateKey = normalizeAttendanceDate(entry?.dateKey || '');
+      if (!dateKey) return null;
+      return {
+        dateKey,
+        dateObj: restoreDateFromDateKey(dateKey),
+        shiftType: normalizeShiftType(entry?.shiftType || ''),
+        checkInCount: Math.max(0, Number(entry?.checkInCount || 0) || 0),
+        checkOutCount: Math.max(0, Number(entry?.checkOutCount || 0) || 0),
+      };
+    })
+    .filter(Boolean);
+}
+
+function serializeHomeViewSnapshotPayload() {
+  const home = state.home || createInitialHomeState();
+  return {
+    home: {
+      ...pickSerializableFields(home, [
+        'audience',
+        'briefing',
+        'briefingError',
+        'activePanels',
+        'sites',
+        'selectedSiteCode',
+        'position',
+        'positionAccuracy',
+        'geoStatus',
+        'geoDistance',
+        'checkedInToday',
+        'checkedOutToday',
+        'todayRecords',
+        'todayStatus',
+        'todayCheckInAt',
+        'todayCheckOutAt',
+        'todayRecordId',
+        'todayButtonMode',
+        'todaySiteId',
+        'todaySiteCode',
+        'todaySiteName',
+        'todayAutoCheckout',
+        'weekError',
+        'weekScheduleEmpty',
+        'weekScheduleMonth',
+        'managerDashboard',
+      ]),
+      weekEntries: serializeHomeWeekEntries(home.weekEntries),
+    },
+    ops: cloneSerializableValue(state.ops || createInitialOpsState(), createInitialOpsState()),
+    noticesHomeRows: cloneArrayValue(state.notices?.homeRows, []),
+  };
+}
+
+function restoreHomeViewSnapshotPayload(payload = {}) {
+  const current = state.home || createInitialHomeState();
+  const nextHome = cloneObjectValue(payload.home, {});
+  state.home = {
+    ...createInitialHomeState(),
+    ...current,
+    ...pickSerializableFields(nextHome, [
+      'audience',
+      'briefing',
+      'briefingError',
+      'sites',
+      'selectedSiteCode',
+      'position',
+      'positionAccuracy',
+      'geoStatus',
+      'geoDistance',
+      'checkedInToday',
+      'checkedOutToday',
+      'todayRecords',
+      'todayStatus',
+      'todayCheckInAt',
+      'todayCheckOutAt',
+      'todayRecordId',
+      'todayButtonMode',
+      'todaySiteId',
+      'todaySiteCode',
+      'todaySiteName',
+      'todayAutoCheckout',
+      'weekError',
+      'weekScheduleEmpty',
+      'weekScheduleMonth',
+    ]),
+    activePanels: {
+      ...createInitialHomeState().activePanels,
+      ...cloneObjectValue(nextHome.activePanels, {}),
+    },
+    managerDashboard: {
+      ...createInitialHomeManagerDashboardState(),
+      ...cloneObjectValue(nextHome.managerDashboard, {}),
+    },
+    attendanceCheck: current.attendanceCheck || createInitialHomeAttendanceCheckState(),
+    briefingLoading: false,
+    loadingGeo: false,
+    weekLoading: false,
+    weekEntries: restoreHomeWeekEntries(nextHome.weekEntries),
+  };
+  state.ops = {
+    ...createInitialOpsState(),
+    ...cloneObjectValue(payload.ops, {}),
+  };
+  const notices = ensureNoticesState();
+  notices.homeRows = cloneArrayValue(payload.noticesHomeRows, []);
+  renderHomeAudienceSurface();
+  renderHomePolicySkeleton();
+  renderHomeWorkStatusCard();
+  renderHomeSiteOptions();
+  renderHomeSitePickerSummary();
+  renderHomeWeekStrip();
+  renderHomeManagerDashboard();
+  renderOpsSummary();
+  updateHomeCtaState();
+  markHomeCriticalUiReady({ apiMs: 0 });
+}
+
+function serializeAttendanceViewSnapshotPayload() {
+  const attendanceView = state.attendanceView || createInitialAttendanceViewState();
+  return {
+    attendanceView: pickSerializableFields(attendanceView, [
+      'date',
+      'calendarMonth',
+      'rangeStart',
+      'rangeEnd',
+      'rangePreset',
+      'managerTab',
+      'lateThresholdMinutes',
+      'earlyLeaveThresholdMinutes',
+      'employeeCode',
+      'siteCode',
+      'statusFilter',
+      'employees',
+      'sites',
+      'records',
+      'overtimeRows',
+      'appleOvertimeRows',
+      'leaveRows',
+      'issues',
+      'statusCode',
+      'selectedRecordKey',
+      'selectedManagerRowKey',
+      'mobileSegment',
+      'timelineRows',
+      'managerRows',
+      'managerRowsQueryKey',
+      'managerSummary',
+      'managerExceptionRows',
+      'managerPendingAttendanceRequests',
+      'managerPendingCorrections',
+      'managerSearchQuery',
+      'managerSortKey',
+      'managerSortDirection',
+      'managerDrawerOpen',
+      'managerRecordEdits',
+      'editingRowKey',
+    ]),
+  };
+}
+
+function restoreAttendanceViewSnapshotPayload(payload = {}) {
+  const current = state.attendanceView || createInitialAttendanceViewState();
+  state.attendanceView = {
+    ...createInitialAttendanceViewState(),
+    ...current,
+    ...pickSerializableFields(cloneObjectValue(payload.attendanceView, {}), [
+      'date',
+      'calendarMonth',
+      'rangeStart',
+      'rangeEnd',
+      'rangePreset',
+      'managerTab',
+      'lateThresholdMinutes',
+      'earlyLeaveThresholdMinutes',
+      'employeeCode',
+      'siteCode',
+      'statusFilter',
+      'employees',
+      'sites',
+      'records',
+      'overtimeRows',
+      'appleOvertimeRows',
+      'leaveRows',
+      'issues',
+      'statusCode',
+      'selectedRecordKey',
+      'selectedManagerRowKey',
+      'mobileSegment',
+      'timelineRows',
+      'managerRows',
+      'managerRowsQueryKey',
+      'managerSummary',
+      'managerExceptionRows',
+      'managerPendingAttendanceRequests',
+      'managerPendingCorrections',
+      'managerSearchQuery',
+      'managerSortKey',
+      'managerSortDirection',
+      'managerDrawerOpen',
+      'managerRecordEdits',
+      'editingRowKey',
+    ]),
+    managerPrefsLoaded: current.managerPrefsLoaded,
+    managerLoading: false,
+  };
+  renderAttendanceViewFromCache();
+}
+
+function serializeRequestsViewSnapshotPayload() {
+  const workspace = ensureRequestsWorkspaceState();
+  const leaveView = state.leaveView || createInitialLeaveViewState();
+  return {
+    requestsTabView: normalizeRequestsTabView(state.requestsTabView),
+    requestsMyFilter: normalizeRequestsMyFilter(state.requestsMyFilter),
+    requestsManagerTab: normalizeManagerRequestsTab(state.requestsManagerTab),
+    workspace: {
+      ...pickSerializableFields(workspace, [
+        'employeeDetailKey',
+        'leaveDetailId',
+        'managerDetailKey',
+        'detailKey',
+        'drawerOpen',
+        'startDate',
+        'endDate',
+        'rangePreset',
+        'siteFilter',
+        'employeeQuery',
+        'statusFilter',
+        'subTypeFilter',
+        'actorQuery',
+        'sortKey',
+        'sortDirection',
+        'filtersInitialized',
+      ]),
+      attendanceRows: cloneArrayValue(workspace.attendanceRows, []),
+      approvalRows: cloneArrayValue(workspace.approvalRows, []),
+      socRows: cloneArrayValue(workspace.socRows, []),
+      documentRows: cloneArrayValue(workspace.documentRows, []),
+      correctionRows: cloneArrayValue(workspace.correctionRows, []),
+      approvalDetailEntries: serializeSelectedMapEntries(
+        workspace.approvalDetailById,
+        [workspace.detailKey, workspace.approvalDetailLoadingKey],
+      ),
+    },
+    leaveView: pickSerializableFields(leaveView, [
+      'statusFilter',
+      'managerScope',
+      'rows',
+      'balanceSummary',
+      'policyRows',
+      'updatedAt',
+      'workspaceSection',
+      'workspaceStartDate',
+      'workspaceEndDate',
+      'workspaceSiteFilter',
+      'workspaceLeaveTypeFilter',
+      'workspaceStatusFilter',
+      'workspaceRequesterQuery',
+      'workspaceSortKey',
+      'workspaceSortDirection',
+      'usageSiteFilter',
+      'usageTypeFilter',
+      'usageSearchQuery',
+      'usageSortKey',
+      'usageSortDirection',
+      'workspaceSelectedRequestId',
+      'workspaceDrawerOpen',
+      'workspaceComposerOpen',
+    ]),
+  };
+}
+
+function restoreRequestsViewSnapshotPayload(payload = {}) {
+  state.requestsTabView = normalizeRequestsTabView(payload.requestsTabView || state.requestsTabView);
+  state.requestsMyFilter = normalizeRequestsMyFilter(payload.requestsMyFilter || state.requestsMyFilter);
+  state.requestsManagerTab = normalizeManagerRequestsTab(payload.requestsManagerTab || state.requestsManagerTab);
+
+  const workspace = ensureRequestsWorkspaceState();
+  const workspacePayload = cloneObjectValue(payload.workspace, {});
+  Object.assign(workspace, createInitialRequestsWorkspaceState(), pickSerializableFields(workspacePayload, [
+    'employeeDetailKey',
+    'leaveDetailId',
+    'managerDetailKey',
+    'detailKey',
+    'drawerOpen',
+    'startDate',
+    'endDate',
+    'rangePreset',
+    'siteFilter',
+    'employeeQuery',
+    'statusFilter',
+    'subTypeFilter',
+    'actorQuery',
+    'sortKey',
+    'sortDirection',
+    'filtersInitialized',
+  ]));
+  workspace.rowsById = new Map();
+  workspace.activeRows = [];
+  workspace.activePriorityRows = [];
+  workspace.priorityKeys = [];
+  workspace.priorityOverflowCount = 0;
+  workspace.managerSocItemsById = new Map();
+  workspace.approvalDetailLoadingKey = '';
+  workspace.attendanceRows = cloneArrayValue(workspacePayload.attendanceRows, []);
+  workspace.approvalRows = cloneArrayValue(workspacePayload.approvalRows, []);
+  workspace.socRows = cloneArrayValue(workspacePayload.socRows, []);
+  workspace.documentRows = cloneArrayValue(workspacePayload.documentRows, []);
+  workspace.correctionRows = cloneArrayValue(workspacePayload.correctionRows, []);
+  workspace.approvalDetailById = restoreMapFromEntries(workspacePayload.approvalDetailEntries);
+
+  const leavePayload = cloneObjectValue(payload.leaveView, {});
+  state.leaveView = {
+    ...createInitialLeaveViewState(),
+    ...(state.leaveView || {}),
+    ...pickSerializableFields(leavePayload, [
+      'statusFilter',
+      'managerScope',
+      'rows',
+      'balanceSummary',
+      'policyRows',
+      'updatedAt',
+      'workspaceSection',
+      'workspaceStartDate',
+      'workspaceEndDate',
+      'workspaceSiteFilter',
+      'workspaceLeaveTypeFilter',
+      'workspaceStatusFilter',
+      'workspaceRequesterQuery',
+      'workspaceSortKey',
+      'workspaceSortDirection',
+      'usageSiteFilter',
+      'usageTypeFilter',
+      'usageSearchQuery',
+      'usageSortKey',
+      'usageSortDirection',
+      'workspaceSelectedRequestId',
+      'workspaceDrawerOpen',
+      'workspaceComposerOpen',
+    ]),
+  };
+  state.leaveView.rowMap = new Map(
+    (Array.isArray(state.leaveView.rows) ? state.leaveView.rows : [])
+      .map((row) => [String(row?.id || '').trim(), row]),
+  );
+
+  renderRequestsTabSections();
+  const segment = normalizeRequestsTabView(state.requestsTabView);
+  if (segment === 'leave') {
+    renderLeaveManagementWorkspace({ loading: false });
+    return;
+  }
+  const rawRows = getRequestsActiveRawRowsForCurrentTab();
+  setRequestsWorkspaceRows(rawRows);
+  const desiredDetailKey = String(workspacePayload.detailKey || '').trim();
+  if (desiredDetailKey && workspace.rowsById.has(desiredDetailKey)) {
+    workspace.detailKey = desiredDetailKey;
+    workspace.drawerOpen = Boolean(workspacePayload.drawerOpen);
+  }
+  setRequestsWorkspaceHeading(segment);
+  renderRequestsWorkspaceView();
+}
+
+function serializeHrViewSnapshotPayload() {
+  return {
+    hrDocs: pickSerializableFields(ensureHrDocsState(), [
+      'selectedDocType',
+      'adminPanel',
+      'workspaceSegment',
+      'purposeCode',
+      'purposeText',
+      'submitTo',
+      'copyCount',
+      'includeAddress',
+      'includePhone',
+      'dailyLimit',
+      'todayRequestedCount',
+      'todayRemaining',
+      'typeRows',
+      'typeRowsFetchedAt',
+      'myRows',
+      'myRowsFetchedAt',
+      'myRowsPage',
+      'myRowsPageSize',
+      'adminStatus',
+      'adminQuery',
+      'adminRows',
+      'adminRowsFetchedAt',
+      'adminRowsPage',
+      'adminRowsPageSize',
+      'issueJobs',
+      'issueJobsFetchedAt',
+      'templatesRows',
+      'templatesFetchedAt',
+    ]),
+  };
+}
+
+function restoreHrViewSnapshotPayload(payload = {}) {
+  state.hrDocs = {
+    ...createInitialHrDocumentsState(),
+    ...(state.hrDocs || {}),
+    ...pickSerializableFields(cloneObjectValue(payload.hrDocs, {}), [
+      'selectedDocType',
+      'adminPanel',
+      'workspaceSegment',
+      'purposeCode',
+      'purposeText',
+      'submitTo',
+      'copyCount',
+      'includeAddress',
+      'includePhone',
+      'dailyLimit',
+      'todayRequestedCount',
+      'todayRemaining',
+      'typeRows',
+      'typeRowsFetchedAt',
+      'myRows',
+      'myRowsFetchedAt',
+      'myRowsPage',
+      'myRowsPageSize',
+      'adminStatus',
+      'adminQuery',
+      'adminRows',
+      'adminRowsFetchedAt',
+      'adminRowsPage',
+      'adminRowsPageSize',
+      'issueJobs',
+      'issueJobsFetchedAt',
+      'templatesRows',
+      'templatesFetchedAt',
+    ]),
+    submitting: false,
+    templateUploading: false,
+    loadingTemplates: false,
+    loadingMyRows: false,
+    loadingAdminRows: false,
+  };
+  renderHrViewFromCache();
+}
+
+function renderScheduleViewFromSnapshot() {
+  closeScheduleActionDropdowns();
+  renderScheduleMonthToolbar();
+  renderScheduleFilterOptions();
+  renderScheduleHqTabs();
+  renderScheduleOpsToolbar();
+  const activeTab = getScheduleActiveTopTab();
+  if (activeTab === SCHEDULE_TAB_TEMPLATES) {
+    renderScheduleTemplateTable();
+    return;
+  }
+  if (isScheduleUploadOwnerTab(activeTab)) {
+    renderScheduleUploadWorkspace();
+    return;
+  }
+  if (activeTab === SCHEDULE_TAB_REPORTS) {
+    renderScheduleReportsTabs();
+    renderReportsSupportHandoffPanel();
+    renderReportsContextSummary();
+    renderScheduleFinanceSubmissionStatus();
+    return;
+  }
+  if (Array.isArray(state.schedule?.rows) && state.schedule.rows.length) {
+    renderScheduleAll();
+    return;
+  }
+  renderScheduleCalendarSkeleton();
+  renderScheduleDetailSkeleton();
+}
+
+function serializeScheduleViewSnapshotPayload() {
+  const schedule = state.schedule || createInitialScheduleState();
+  return {
+    schedule: {
+      ...pickSerializableFields(schedule, [
+        'month',
+        'tenantCode',
+        'monthTitle',
+        'viewMode',
+        'hqTab',
+        'reportsTab',
+        'uploadWorkspaceMode',
+        'uploadWorkflowSection',
+        'baseWizardStep',
+        'hqWizardStep',
+        'hqWizardResumePromptShown',
+        'pendingHqWizardResume',
+        'siteFilter',
+        'shiftFilter',
+        'showLeaveRows',
+        'rows',
+        'leaveRows',
+        'boardDays',
+        'employees',
+        'templateRows',
+        'templatesFetchedAt',
+        'importMappingProfile',
+        'importMappingProfileFetchedAt',
+        'importMappingSelectedProfileId',
+        'importMappingTemplateDeleteNotice',
+        'templateOwnerTab',
+        'importSiteOptionsLoading',
+        'selectedEmployeeCode',
+        'selectedDateKey',
+        'lastInteractedDateKey',
+        'employeeFilter',
+        'managerSearch',
+        'mobileListInitialized',
+        'desktopDrawerOpen',
+        'supportStatus',
+        'supportHqWorkspace',
+        'supportPreviewBatchId',
+        'supportPreview',
+        'financeStatus',
+        'financePreviewBatchId',
+        'financePreview',
+        'financeTab',
+        'uploadUi',
+        'lastPerf',
+        'usingMockProvider',
+      ]),
+      siteCatalogEntries: serializeMapEntries(schedule.siteCatalogByTenant),
+      expandedDays: serializeSetValues(schedule.expandedDays),
+    },
+  };
+}
+
+function restoreScheduleViewSnapshotPayload(payload = {}) {
+  const snapshot = cloneObjectValue(payload.schedule, {});
+  const current = state.schedule || createInitialScheduleState();
+  state.schedule = {
+    ...createInitialScheduleState(),
+    ...current,
+    ...pickSerializableFields(snapshot, [
+      'month',
+      'tenantCode',
+      'monthTitle',
+      'viewMode',
+      'hqTab',
+      'reportsTab',
+      'uploadWorkspaceMode',
+      'uploadWorkflowSection',
+      'baseWizardStep',
+      'hqWizardStep',
+      'hqWizardResumePromptShown',
+      'pendingHqWizardResume',
+      'siteFilter',
+      'shiftFilter',
+      'showLeaveRows',
+      'rows',
+      'leaveRows',
+      'boardDays',
+      'employees',
+      'templateRows',
+      'templatesFetchedAt',
+      'importMappingProfile',
+      'importMappingProfileFetchedAt',
+      'importMappingSelectedProfileId',
+      'importMappingTemplateDeleteNotice',
+      'templateOwnerTab',
+      'importSiteOptionsLoading',
+      'selectedEmployeeCode',
+      'selectedDateKey',
+      'lastInteractedDateKey',
+      'employeeFilter',
+      'managerSearch',
+      'mobileListInitialized',
+      'desktopDrawerOpen',
+      'supportStatus',
+      'supportHqWorkspace',
+      'supportPreviewBatchId',
+      'supportPreview',
+      'financeStatus',
+      'financePreviewBatchId',
+      'financePreview',
+      'financeTab',
+      'uploadUi',
+      'lastPerf',
+      'usingMockProvider',
+    ]),
+  };
+  state.schedule.siteCatalogByTenant = restoreMapFromEntries(snapshot.siteCatalogEntries);
+  state.schedule.expandedDays = restoreSetFromValues(snapshot.expandedDays);
+  state.schedule.liteCacheByMonth = new Map();
+  state.schedule.cacheByMonth = new Map();
+  state.schedule.overtimeByDate = new Map();
+  state.schedule.overtimeLoadingByDate = new Set();
+  state.schedule.p1DateDetailsByKey = new Map();
+  state.schedule.p1DateDetailsLoadingByKey = new Set();
+  state.schedule.uploadWorkspaceBooting = false;
+  state.schedule.uploadWorkspaceBootPromise = null;
+  state.schedule.employeeListChunkCancel = null;
+  state.schedule.employeeListChunkCancelled = false;
+  renderScheduleViewFromSnapshot();
+}
+
+function serializeCalendarViewSnapshotPayload() {
+  return {
+    calendar: pickSerializableFields(ensureCalendarWorkspaceState(), [
+      'viewTab',
+      'anchorDate',
+      'selectedDate',
+      'workspace',
+      'selectedContainerId',
+      'selectedEventId',
+      'selectedDetailTab',
+      'draftEvent',
+      'availability',
+      'availabilityKey',
+      'selectedBookingLinkId',
+      'draftBookingLink',
+      'selectedSyncConnectionId',
+      'draftSyncConnection',
+      'bookingDetailMode',
+    ]),
+  };
+}
+
+function restoreCalendarViewSnapshotPayload(payload = {}) {
+  state.calendar = {
+    ...createInitialCalendarState(),
+    ...(state.calendar || {}),
+    ...pickSerializableFields(cloneObjectValue(payload.calendar, {}), [
+      'viewTab',
+      'anchorDate',
+      'selectedDate',
+      'workspace',
+      'selectedContainerId',
+      'selectedEventId',
+      'selectedDetailTab',
+      'draftEvent',
+      'availability',
+      'availabilityKey',
+      'selectedBookingLinkId',
+      'draftBookingLink',
+      'selectedSyncConnectionId',
+      'draftSyncConnection',
+      'bookingDetailMode',
+    ]),
+    loading: false,
+    error: '',
+    saving: false,
+    deleting: false,
+    availabilityLoading: false,
+    availabilityError: '',
+    bookingLinkSaving: false,
+    bookingLinkDeleting: false,
+    bookingLinkError: '',
+    syncConnectionSaving: false,
+    syncConnectionDeleting: false,
+    syncConnectionRunning: false,
+    syncConnectionError: '',
+  };
+  renderCalendarWorkspace();
+}
+
+function serializeReportsViewSnapshotPayload() {
+  return {
+    reports: pickSerializableFields(state.reports || createInitialReportsState(), [
+      'tenantCode',
+      'viewTab',
+      'financeView',
+      'financeStep',
+      'financeSelectedSiteCode',
+      'financeOverviewWorkspace',
+      'financeOverviewError',
+      'financeDownloadWorkspace',
+      'financeDownloadError',
+      'financeDownloadSelectedSiteCodes',
+      'supportStep',
+      'month',
+      'appleStatus',
+      'appleLogs',
+      'lastSyncedAt',
+      'error',
+    ]),
+    scheduleSupportStatus: cloneSerializableValue(state.schedule?.supportStatus || null, null),
+    scheduleSupportHqWorkspace: cloneSerializableValue(
+      state.schedule?.supportHqWorkspace || createInitialScheduleSupportHqWorkspaceState(),
+      createInitialScheduleSupportHqWorkspaceState(),
+    ),
+    scheduleFinanceStatus: cloneSerializableValue(state.schedule?.financeStatus || null, null),
+  };
+}
+
+function restoreReportsViewSnapshotPayload(payload = {}) {
+  state.reports = {
+    ...createInitialReportsState(),
+    ...(state.reports || {}),
+    ...pickSerializableFields(cloneObjectValue(payload.reports, {}), [
+      'tenantCode',
+      'viewTab',
+      'financeView',
+      'financeStep',
+      'financeSelectedSiteCode',
+      'financeOverviewWorkspace',
+      'financeOverviewError',
+      'financeDownloadWorkspace',
+      'financeDownloadError',
+      'financeDownloadSelectedSiteCodes',
+      'supportStep',
+      'month',
+      'appleStatus',
+      'appleLogs',
+      'lastSyncedAt',
+      'error',
+    ]),
+    loading: false,
+    financeOverviewLoading: false,
+    financeDownloadLoading: false,
+  };
+  if (!state.schedule || typeof state.schedule !== 'object') {
+    state.schedule = createInitialScheduleState();
+  }
+  state.schedule.supportStatus = cloneSerializableValue(payload.scheduleSupportStatus || null, null);
+  state.schedule.supportHqWorkspace = {
+    ...createInitialScheduleSupportHqWorkspaceState(),
+    ...cloneObjectValue(payload.scheduleSupportHqWorkspace, {}),
+  };
+  state.schedule.financeStatus = cloneSerializableValue(payload.scheduleFinanceStatus || null, null);
+  renderReportsSupportHandoffPanel();
+  renderReportsWorkspacePanels();
+}
+
+function serializeEmployeesViewSnapshotPayload() {
+  const admin = state.employeeAdmin || createInitialEmployeeAdminState();
+  return {
+    employeeAdmin: pickSerializableFields(admin, [
+      'rows',
+      'rowsSource',
+      'rowsScopeKey',
+      'rowsTenantWide',
+      'siteFilterRecoveryKey',
+      'selectedEmployeeId',
+      'searchQuery',
+      'sortKey',
+      'sortDirection',
+      'roleFilter',
+      'employmentStatusFilter',
+      'tenantFilterId',
+      'siteFilterCode',
+      'siteRows',
+      'siteRowsScopeKey',
+      'registrationMode',
+      'formExpanded',
+    ]),
+  };
+}
+
+function restoreEmployeesViewSnapshotPayload(payload = {}) {
+  const current = state.employeeAdmin || createInitialEmployeeAdminState();
+  state.employeeAdmin = {
+    ...createInitialEmployeeAdminState(),
+    ...current,
+    ...pickSerializableFields(cloneObjectValue(payload.employeeAdmin, {}), [
+      'rows',
+      'rowsSource',
+      'rowsScopeKey',
+      'rowsTenantWide',
+      'siteFilterRecoveryKey',
+      'selectedEmployeeId',
+      'searchQuery',
+      'sortKey',
+      'sortDirection',
+      'roleFilter',
+      'employmentStatusFilter',
+      'tenantFilterId',
+      'siteFilterCode',
+      'siteRows',
+      'siteRowsScopeKey',
+      'registrationMode',
+      'formExpanded',
+    ]),
+    detailEmployeeId: '',
+    detailTriggerEl: null,
+    detailDrawerOpen: false,
+    detailLoading: false,
+    detailError: '',
+    detailLoadSeq: 0,
+    detailCache: new Map(),
+    formLookupPending: 0,
+    formLookupLoading: false,
+    formTenantRequestSeq: 0,
+    formSiteRequestSeq: 0,
+    tableVirtualState: createInitialEmployeeAdminState().tableVirtualState,
+  };
+  ensureEmployeeFormPresentation();
+  if (Array.isArray(state.employeeAdmin.rows) && state.employeeAdmin.rows.length) {
+    renderEmployeesFromCache();
+  } else {
+    renderEmployeeTableRows([]);
+  }
+  renderDesktopTopContext();
+  refreshEmployeeBulkDeleteButtonState();
+}
+
+function serializeMessengerViewSnapshotPayload() {
+  const messenger = ensureMessengerState();
+  const selectedId = String(messenger.selectedConversationId || '').trim();
+  return {
+    messenger: {
+      ...pickSerializableFields(messenger, [
+        'rows',
+        'fetchedAt',
+        'selectedConversationId',
+        'searchQuery',
+        'messageSearchQuery',
+        'typeFilter',
+      ]),
+      selectedDetail: selectedId ? cloneSerializableValue(messenger.detailById?.[selectedId] || null, null) : null,
+      selectedMessages: selectedId ? cloneArrayValue(messenger.messagesByConversationId?.[selectedId], []) : [],
+    },
+  };
+}
+
+function restoreMessengerViewSnapshotPayload(payload = {}) {
+  const snapshot = cloneObjectValue(payload.messenger, {});
+  state.messenger = {
+    ...createInitialMessengerState(),
+    ...(state.messenger || {}),
+    ...pickSerializableFields(snapshot, [
+      'rows',
+      'fetchedAt',
+      'selectedConversationId',
+      'searchQuery',
+      'messageSearchQuery',
+      'typeFilter',
+    ]),
+    detailById: {},
+    messagesByConversationId: {},
+    loading: false,
+    detailLoading: false,
+    searchLoading: false,
+    directoryLoading: false,
+    sending: false,
+    searchResults: [],
+    directoryRows: [],
+    directoryError: '',
+    error: '',
+    searchError: '',
+  };
+  const selectedId = String(state.messenger.selectedConversationId || '').trim();
+  if (selectedId) {
+    if (snapshot.selectedDetail) {
+      state.messenger.detailById[selectedId] = snapshot.selectedDetail;
+    }
+    if (Array.isArray(snapshot.selectedMessages) && snapshot.selectedMessages.length) {
+      state.messenger.messagesByConversationId[selectedId] = snapshot.selectedMessages;
+    }
+  }
+  renderMessengerWorkspace();
+}
+
+function serializeMeetingsViewSnapshotPayload() {
+  const meetings = ensureMeetingsState();
+  const selectedId = String(meetings.selectedRoomId || '').trim();
+  return {
+    meetings: {
+      ...pickSerializableFields(meetings, [
+        'rows',
+        'rollout',
+        'selectedRoomId',
+        'searchQuery',
+        'stateFilter',
+      ]),
+      selectedDetail: selectedId ? cloneSerializableValue(meetings.detailById?.[selectedId] || null, null) : null,
+    },
+  };
+}
+
+function restoreMeetingsViewSnapshotPayload(payload = {}) {
+  const snapshot = cloneObjectValue(payload.meetings, {});
+  state.meetings = {
+    ...createInitialMeetingsState(),
+    ...(state.meetings || {}),
+    ...pickSerializableFields(snapshot, [
+      'rows',
+      'rollout',
+      'selectedRoomId',
+      'searchQuery',
+      'stateFilter',
+    ]),
+    detailById: {},
+    loading: false,
+    detailLoading: false,
+    rolloutLoading: false,
+    directoryLoading: false,
+    saving: false,
+    directoryRows: [],
+    directoryQuery: '',
+    directoryError: '',
+    conversationRows: [],
+    conversationFetchedAt: 0,
+    conversationLoading: false,
+    conversationError: '',
+    error: '',
+  };
+  const selectedId = String(state.meetings.selectedRoomId || '').trim();
+  if (selectedId && snapshot.selectedDetail) {
+    state.meetings.detailById[selectedId] = snapshot.selectedDetail;
+  }
+  renderMeetingsWorkspace();
+}
+
+function serializeNoticesViewSnapshotPayload() {
+  const notices = ensureNoticesState();
+  const mode = notices.mode === NOTICE_VIEW_MODE_DETAIL ? NOTICE_VIEW_MODE_DETAIL : NOTICE_VIEW_MODE_LIST;
+  return {
+    notices: {
+      category: normalizeNoticeCategory(notices.category || 'all'),
+      search: normalizeNoticeSearch(notices.search || ''),
+      mode,
+      selectedNoticeId: String(notices.selectedNoticeId || '').trim(),
+      selectedRow: mode === NOTICE_VIEW_MODE_DETAIL ? cloneSerializableValue(notices.selectedRow || null, null) : null,
+      rows: cloneArrayValue(notices.rows, []),
+      loadedListCategory: normalizeNoticeCategory(notices.loadedListCategory || notices.category || 'all'),
+      loadedListSearch: normalizeNoticeSearch(notices.loadedListSearch || notices.search || ''),
+      loadedDetailNoticeId: String(notices.loadedDetailNoticeId || '').trim(),
+      manageAccessHint: String(notices.manageAccessHint || '').trim(),
+    },
+  };
+}
+
+function restoreNoticesViewSnapshotPayload(payload = {}) {
+  const snapshot = cloneObjectValue(payload.notices, {});
+  const current = ensureNoticesState();
+  current.category = normalizeNoticeCategory(snapshot.category || current.category || 'all');
+  current.search = normalizeNoticeSearch(snapshot.search || '');
+  current.searchDraft = current.search;
+  current.searchExpanded = Boolean(current.search);
+  current.mode = snapshot.mode === NOTICE_VIEW_MODE_DETAIL ? NOTICE_VIEW_MODE_DETAIL : NOTICE_VIEW_MODE_LIST;
+  current.selectedNoticeId = String(snapshot.selectedNoticeId || '').trim();
+  current.selectedRow = current.mode === NOTICE_VIEW_MODE_DETAIL
+    ? cloneSerializableValue(snapshot.selectedRow || null, null)
+    : null;
+  current.rows = cloneArrayValue(snapshot.rows, []);
+  current.loadedListCategory = normalizeNoticeCategory(snapshot.loadedListCategory || current.category || 'all');
+  current.loadedListSearch = normalizeNoticeSearch(snapshot.loadedListSearch || current.search || '');
+  current.loadedDetailNoticeId = String(snapshot.loadedDetailNoticeId || '').trim();
+  current.manageAccessHint = String(snapshot.manageAccessHint || '').trim();
+  current.loading = false;
+  current.detailLoading = false;
+  current.error = '';
+  renderNoticesView();
+}
+
+function serializeProfileViewSnapshotPayload() {
+  return {
+    profile: pickSerializableFields(state.profile || createInitialProfileViewState(), [
+      'workspaceSegment',
+      'settingsTab',
+      'logsTarget',
+      'logsSelectedKey',
+    ]),
+    reminder: pickSerializableFields(state.reminder || createInitialReminderState(), [
+      'enabled',
+      'checkInLeadMinutes',
+      'checkOutEnabled',
+      'checkOutLeadMinutes',
+      'pushApprovalsEnabled',
+      'pushScheduleEnabled',
+      'permissionState',
+      'available',
+      'scheduledCount',
+      'lastSignature',
+      'lastSyncedAt',
+      'pushDeviceToken',
+      'pushDeviceRegisterKey',
+    ]),
+  };
+}
+
+function restoreProfileViewSnapshotPayload(payload = {}) {
+  state.profile = {
+    ...createInitialProfileViewState(),
+    ...(state.profile || {}),
+    ...pickSerializableFields(cloneObjectValue(payload.profile, {}), [
+      'workspaceSegment',
+      'settingsTab',
+      'logsTarget',
+      'logsSelectedKey',
+    ]),
+  };
+  state.reminder = {
+    ...createInitialReminderState(),
+    ...(state.reminder || {}),
+    ...pickSerializableFields(cloneObjectValue(payload.reminder, {}), [
+      'enabled',
+      'checkInLeadMinutes',
+      'checkOutEnabled',
+      'checkOutLeadMinutes',
+      'pushApprovalsEnabled',
+      'pushScheduleEnabled',
+      'permissionState',
+      'available',
+      'scheduledCount',
+      'lastSignature',
+      'lastSyncedAt',
+      'pushDeviceToken',
+      'pushDeviceRegisterKey',
+    ]),
+    syncInFlight: false,
+    syncTimer: null,
+    syncForcePending: false,
+  };
+  renderProfileSummary();
+  renderProfileWorkspaceSegments();
+  renderReminderSettings();
+  renderProfileThemeState();
+  renderLockPolicySkeleton();
+}
+
+function clearAllStoredViewSnapshots() {
+  if (!hasSessionStorageSupport()) return;
+  listViewSnapshotStorageKeys().forEach((storageKey) => {
+    try {
+      window.sessionStorage.removeItem(storageKey);
+    } catch {
+      // no-op
+    }
+  });
+}
+
+const VIEW_SNAPSHOT_CONFIG = Object.freeze({
+  home: {
+    ttlMs: 60 * 1000,
+    ignoreQueryKeys: HOME_VIEW_CACHE_QUERY_IGNORE,
+    serialize: () => serializeHomeViewSnapshotPayload(),
+    restore: (payload) => restoreHomeViewSnapshotPayload(payload),
+  },
+  attendance: {
+    ttlMs: 30 * 1000,
+    serialize: () => serializeAttendanceViewSnapshotPayload(),
+    restore: (payload) => restoreAttendanceViewSnapshotPayload(payload),
+  },
+  requests: {
+    ttlMs: 30 * 1000,
+    serialize: () => serializeRequestsViewSnapshotPayload(),
+    restore: (payload) => restoreRequestsViewSnapshotPayload(payload),
+  },
+  hr: {
+    ttlMs: 30 * 1000,
+    serialize: () => serializeHrViewSnapshotPayload(),
+    restore: (payload) => restoreHrViewSnapshotPayload(payload),
+  },
+  schedule: {
+    ttlMs: 60 * 1000,
+    serialize: () => serializeScheduleViewSnapshotPayload(),
+    restore: (payload) => restoreScheduleViewSnapshotPayload(payload),
+  },
+  calendar: {
+    ttlMs: 60 * 1000,
+    serialize: () => serializeCalendarViewSnapshotPayload(),
+    restore: (payload) => restoreCalendarViewSnapshotPayload(payload),
+  },
+  reports: {
+    ttlMs: 60 * 1000,
+    serialize: () => serializeReportsViewSnapshotPayload(),
+    restore: (payload) => restoreReportsViewSnapshotPayload(payload),
+  },
+  employees: {
+    ttlMs: 45 * 1000,
+    maxBytes: VIEW_SNAPSHOT_EMPLOYEES_MAX_BYTES,
+    serialize: () => serializeEmployeesViewSnapshotPayload(),
+    restore: (payload) => restoreEmployeesViewSnapshotPayload(payload),
+  },
+  messenger: {
+    ttlMs: 30 * 1000,
+    serialize: () => serializeMessengerViewSnapshotPayload(),
+    restore: (payload) => restoreMessengerViewSnapshotPayload(payload),
+  },
+  meetings: {
+    ttlMs: 30 * 1000,
+    serialize: () => serializeMeetingsViewSnapshotPayload(),
+    restore: (payload) => restoreMeetingsViewSnapshotPayload(payload),
+  },
+  notices: {
+    ttlMs: 30 * 1000,
+    serialize: () => serializeNoticesViewSnapshotPayload(),
+    restore: (payload) => restoreNoticesViewSnapshotPayload(payload),
+  },
+  profile: {
+    ttlMs: 60 * 1000,
+    serialize: () => serializeProfileViewSnapshotPayload(),
+    restore: (payload) => restoreProfileViewSnapshotPayload(payload),
+  },
+});
+
 const VIEW_PRESENTERS = {
   home: {
     loadingMessage: '홈 데이터를 불러오는 중입니다...',
     errorMessage: '홈 데이터를 불러오지 못했습니다.',
+    backgroundLoad: ({ force = false } = {}) => loadHomeData({ quiet: true, force }),
     load: loadHomeViewPresenter,
   },
   messenger: {
@@ -46762,6 +48390,7 @@ const VIEW_PRESENTERS = {
   requests: {
     loadingMessage: '요청/기록 데이터를 불러오는 중입니다...',
     errorMessage: '요청/기록 데이터를 불러오지 못했습니다.',
+    backgroundLoad: () => refreshRequestsForCurrentRole({ silent: true }),
     load: loadRequestsViewPresenter,
   },
   notices: {
@@ -46794,6 +48423,22 @@ const VIEW_PRESENTERS = {
       loadScheduleViewPresenter().catch((error) => {
         console.error('[RG ARLS] schedule cache-hit rerender failed', error);
       });
+    },
+    backgroundLoad: async ({ force = false } = {}) => {
+      const activeTab = getScheduleActiveTopTab();
+      if (activeTab === SCHEDULE_TAB_TEMPLATES) {
+        return loadScheduleTemplateRows({ force });
+      }
+      if (isScheduleUploadOwnerTab(activeTab)) {
+        return bootstrapScheduleUploadWorkspace({ force });
+      }
+      if (activeTab === SCHEDULE_TAB_REPORTS) {
+        await refreshScheduleImportSiteOptions({ force });
+        await loadScheduleFinanceSubmissionStatus();
+        renderScheduleReportsTabs();
+        return state.schedule?.financeStatus || null;
+      }
+      return loadSchedule({ force, background: true });
     },
     load: loadScheduleViewPresenter,
   },
@@ -46849,6 +48494,14 @@ const VIEW_PRESENTERS = {
         renderEmployeesFromCache();
       }
     },
+    backgroundLoad: async ({ force = false } = {}) => {
+      await syncEmployeeTenantFilterOptions({ force });
+      await Promise.all([
+        syncEmployeeSiteFilterOptions({ force }),
+        loadEmployees({ preferCache: true }),
+      ]);
+      return state.employeeAdmin?.rows || [];
+    },
     load: loadEmployeesViewPresenter,
   },
   org: {
@@ -46865,20 +48518,138 @@ const VIEW_PRESENTERS = {
   },
 };
 
-async function loadViewData(name, { force = false, cacheKey = '' } = {}) {
+function getViewPrewarmSignature() {
+  if (!state.user) return '';
+  const navRole = getNavigationRole();
+  if (navRole === 'DEV' && !hasRuntimeTenantContext()) return '';
+  const tenantSignature = navRole === 'DEV'
+    ? [
+      String(state.uiContext?.activeTenantId || '').trim(),
+      String(state.uiContext?.activeTenantCode || '').trim().toUpperCase(),
+      String(state.uiContext?.activeTenantName || '').trim(),
+    ].join(':')
+    : [
+      String(getTenantIdForScopedAdminApi?.() || state.user?.tenant_id || '').trim(),
+      String(getTenantCodeForScopedAdminApi?.() || state.user?.tenant_code || '').trim().toUpperCase(),
+    ].join(':');
+  return [
+    String(state.user?.id || state.user?.username || '').trim(),
+    String(state.user?.role || '').trim().toLowerCase(),
+    tenantSignature,
+  ].join('|');
+}
+
+function buildViewPrewarmTargets() {
+  const perms = getRolePermissions();
+  return [
+    { view: 'home', routeOverride: ROUTE_HOME },
+    { view: 'attendance', routeOverride: resolveRouteForView('attendance') },
+    { view: 'requests', routeOverride: ROUTE_REQUESTS },
+    { view: 'hr', routeOverride: ROUTE_HR },
+    { view: 'schedule', routeOverride: resolveRouteForView('schedule') },
+    { view: 'calendar', routeOverride: resolveRouteForView('calendar') },
+    { view: 'reports', routeOverride: resolveRouteForView('reports') },
+    { view: 'employees', routeOverride: ROUTE_ADMIN_EMPLOYEES },
+    { view: 'messenger', routeOverride: ROUTE_MESSENGER },
+    { view: 'meetings', routeOverride: ROUTE_MEETINGS },
+    { view: 'notices', routeOverride: buildNoticesRoute() },
+    { view: 'profile', routeOverride: resolveRouteForView('profile') },
+  ].filter((item) => isViewAllowed(item.view, perms));
+}
+
+function queuePostLoginViewPrewarm({ delayMs = VIEW_PREWARM_DELAY_MS } = {}) {
+  const signature = getViewPrewarmSignature();
+  if (!signature) return;
+  const runtime = ensureViewRuntimeState();
+  if (runtime.prewarm?.signature === signature) return;
+  if (runtime.prewarm?.timerId) {
+    clearTimeout(Number(runtime.prewarm.timerId) || 0);
+  }
+  runtime.prewarm = {
+    signature,
+    timerId: window.setTimeout(() => {
+      runtime.prewarm.timerId = 0;
+      runPostLoginViewPrewarm(signature).catch((error) => {
+        console.error('[RG ARLS] view prewarm failed', error);
+      });
+    }, Math.max(0, Number(delayMs || 0))),
+    running: false,
+    lastQueuedAt: Date.now(),
+  };
+}
+
+async function runPostLoginViewPrewarm(expectedSignature = '') {
+  const runtime = ensureViewRuntimeState();
+  if (!expectedSignature || runtime.prewarm?.running) return;
+  const currentSignature = getViewPrewarmSignature();
+  if (!currentSignature || currentSignature !== expectedSignature || runtime.prewarm?.signature !== expectedSignature) {
+    return;
+  }
+  runtime.prewarm.running = true;
+  const targets = buildViewPrewarmTargets();
+  const currentCacheKey = resolveViewRuntimeCacheKey(state.currentView || resolveViewForRoute(state.currentRoute || ''), state.currentRoute || '');
+  let cursor = 0;
+
+  const worker = async () => {
+    while (cursor < targets.length) {
+      if (getViewPrewarmSignature() !== expectedSignature) return;
+      const target = targets[cursor];
+      cursor += 1;
+      const cacheKey = resolveViewRuntimeCacheKey(target.view, target.routeOverride);
+      if (!cacheKey || cacheKey === currentCacheKey) continue;
+      if (runtime.loadedByKey.has(cacheKey) || runtime.loadingByKey.has(cacheKey)) continue;
+      if (readStoredViewSnapshot(target.view, target.routeOverride)) continue;
+      try {
+        await loadViewData(target.view, {
+          cacheKey,
+          routeOverride: target.routeOverride,
+          background: true,
+        });
+      } catch (error) {
+        console.info('[RG ARLS] view prewarm skipped', {
+          view: target.view,
+          route: target.routeOverride,
+          message: String(error?.message || '').trim(),
+        });
+      }
+    }
+  };
+
+  try {
+    await Promise.all(
+      Array.from({ length: VIEW_PREWARM_CONCURRENCY }, () => worker()),
+    );
+  } finally {
+    if (runtime.prewarm?.signature === expectedSignature) {
+      runtime.prewarm.running = false;
+      runtime.prewarm.timerId = 0;
+    }
+  }
+}
+
+async function loadViewData(name, {
+  force = false,
+  cacheKey = '',
+  routeOverride = '',
+  background = false,
+} = {}) {
   const viewName = String(name || '').trim();
   const presenter = VIEW_PRESENTERS[viewName];
   if (!presenter || typeof presenter.load !== 'function') return;
-  const perfRoute = normalizeRoutePath(state.currentRoute || resolveRouteForView(viewName) || '');
+  const perfRoute = normalizeRoutePath(parseRouteCandidate(routeOverride || state.currentRoute || resolveRouteForView(viewName) || '').path);
 
   const runtime = ensureViewRuntimeState();
   const stats = ensureViewRuntimeStats(viewName);
-  const resolvedCacheKey = String(cacheKey || resolveViewRuntimeCacheKey(viewName)).trim();
+  const resolvedCacheKey = String(cacheKey || resolveViewRuntimeCacheKey(viewName, routeOverride)).trim();
   if (!resolvedCacheKey) return;
+  const isActiveView = normalizeViewSnapshotName(state.currentView || '') === normalizeViewSnapshotName(viewName);
+  const shouldTouchUi = !background && isActiveView;
 
   if (!force && runtime.loadedByKey.has(resolvedCacheKey)) {
     stats.cacheHits += 1;
-    setViewRuntimeHint(viewName, '', 'info');
+    if (shouldTouchUi) {
+      setViewRuntimeHint(viewName, '', 'info');
+    }
     if (typeof presenter.onCacheHit === 'function') {
       try {
         presenter.onCacheHit(runtime.loadedByKey.get(resolvedCacheKey)?.result);
@@ -46899,42 +48670,97 @@ async function loadViewData(name, { force = false, cacheKey = '' } = {}) {
     return runtime.loadedByKey.get(resolvedCacheKey)?.result;
   }
 
+  if (!force) {
+    const restoredPayload = restoreViewSnapshot(viewName, { routeOverride });
+    if (restoredPayload) {
+      runtime.loadedByKey.set(resolvedCacheKey, {
+        loadedAt: Date.now(),
+        result: restoredPayload,
+      });
+      if (shouldTouchUi) {
+        setViewRuntimeHint(viewName, '', 'info');
+      }
+      markViewPerfStage('critical_ui_ready', {
+        routePath: perfRoute,
+        viewName,
+      });
+      requestAnimationFrame(() => {
+        markViewPerfStage('fully_interactive', {
+          routePath: perfRoute,
+          viewName,
+        });
+      });
+      if (!runtime.loadingByKey.has(resolvedCacheKey)) {
+        void loadViewData(viewName, {
+          force: true,
+          cacheKey: resolvedCacheKey,
+          routeOverride,
+          background: true,
+        }).catch((error) => {
+          console.error('[RG ARLS] background view revalidate failed', {
+            view: viewName,
+            routeOverride,
+            error,
+          });
+        });
+      }
+      return restoredPayload;
+    }
+  }
+
   const pendingTask = runtime.loadingByKey.get(resolvedCacheKey);
   if (pendingTask) {
     return pendingTask;
   }
 
   const task = (async () => {
-    setViewLoading(viewName, true);
-    if (presenter.skeletonOnlyLoading) {
-      setViewRuntimeHint(viewName, '', 'info');
-    } else {
-      setViewRuntimeHint(viewName, presenter.loadingMessage || '데이터를 불러오는 중입니다...', 'info');
+    if (shouldTouchUi) {
+      setViewLoading(viewName, true);
+      if (presenter.skeletonOnlyLoading) {
+        setViewRuntimeHint(viewName, '', 'info');
+      } else {
+        setViewRuntimeHint(viewName, presenter.loadingMessage || '데이터를 불러오는 중입니다...', 'info');
+      }
     }
     try {
-      const result = await presenter.load();
+      const loadOperation = background && typeof presenter.backgroundLoad === 'function'
+        ? () => presenter.backgroundLoad({ force })
+        : () => presenter.load();
+      const result = background
+        ? await runWithViewBackgroundMode(loadOperation)
+        : await loadOperation();
       stats.loads += 1;
       stats.lastLoadAt = Date.now();
       runtime.loadedByKey.set(resolvedCacheKey, {
         loadedAt: stats.lastLoadAt,
         result,
       });
-      setViewRuntimeHint(viewName, '', 'info');
+      persistViewSnapshot(viewName, {
+        routeOverride,
+        allowInactive: background || !isActiveView,
+      });
+      if (shouldTouchUi) {
+        setViewRuntimeHint(viewName, '', 'info');
+      }
       return result;
     } catch (err) {
       stats.loadErrors += 1;
-      const message = normalizeActionError(err, presenter.errorMessage || '화면 데이터를 불러오지 못했습니다.');
-      setViewRuntimeHint(viewName, message, 'error');
+      if (shouldTouchUi) {
+        const message = normalizeActionError(err, presenter.errorMessage || '화면 데이터를 불러오지 못했습니다.');
+        setViewRuntimeHint(viewName, message, 'error');
+      }
       throw err;
     } finally {
-      setViewLoading(viewName, false);
       runtime.loadingByKey.delete(resolvedCacheKey);
-      const panel = getViewPanel(viewName);
-      applyAccessibilityDefaults(panel || document);
-      markViewPerfStage('fully_interactive', {
-        routePath: perfRoute,
-        viewName,
-      });
+      if (shouldTouchUi) {
+        setViewLoading(viewName, false);
+        const panel = getViewPanel(viewName);
+        applyAccessibilityDefaults(panel || document);
+        markViewPerfStage('fully_interactive', {
+          routePath: perfRoute,
+          viewName,
+        });
+      }
     }
   })();
 
@@ -46998,9 +48824,13 @@ if (typeof window !== 'undefined') {
           activations: Number(stats?.activations || 0),
           loads: Number(stats?.loads || 0),
           cacheHits: Number(stats?.cacheHits || 0),
+          snapshotHits: Number(stats?.snapshotHits || 0),
+          snapshotWrites: Number(stats?.snapshotWrites || 0),
+          snapshotInvalidations: Number(stats?.snapshotInvalidations || 0),
           loadErrors: Number(stats?.loadErrors || 0),
           lastLoadAt: Number(stats?.lastLoadAt || 0),
           lastActivatedAt: Number(stats?.lastActivatedAt || 0),
+          lastSnapshotAt: Number(stats?.lastSnapshotAt || 0),
         };
         return acc;
       }, {});
@@ -51733,6 +53563,7 @@ async function loadEmployees({ preferCache = true, skipNetworkWhenCached = false
       },
     });
     if (canSkipNetworkWithCache) {
+      queueViewSnapshotPersist('employees', { allowInactive: true });
       return state.employeeAdmin.rows;
     }
   } else {
@@ -51791,6 +53622,7 @@ async function loadEmployees({ preferCache = true, skipNetworkWhenCached = false
       renderEmployeesFromCache();
       renderDesktopTopContext();
       refreshEmployeeBulkDeleteButtonState();
+      queueViewSnapshotPersist('employees', { allowInactive: true });
       markViewPerfStage('critical_ui_ready', {
         routePath: perfRoute,
         viewName: 'employees',
@@ -51827,6 +53659,7 @@ async function loadEmployees({ preferCache = true, skipNetworkWhenCached = false
     renderEmployeesFromCache();
     renderDesktopTopContext();
     refreshEmployeeBulkDeleteButtonState();
+    queueViewSnapshotPersist('employees', { allowInactive: true });
     markViewPerfStage('critical_ui_ready', {
       routePath: perfRoute,
       viewName: 'employees',
@@ -53824,12 +55657,14 @@ function serializeAttendanceManagerRowForStorage(row = null) {
 
 function loadAttendanceManagerSnapshot() {
   try {
-    const raw = localStorage.getItem(getAttendanceManagerSnapshotStorageKey());
+    const raw = hasSessionStorageSupport()
+      ? window.sessionStorage.getItem(getAttendanceManagerSnapshotStorageKey())
+      : '';
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return null;
     const savedAt = Number(parsed.savedAt || 0);
-    if (!Number.isFinite(savedAt) || (Date.now() - savedAt) > 900000) return null;
+    if (!Number.isFinite(savedAt) || (Date.now() - savedAt) > 30000) return null;
     if (String(parsed.queryKey || '') !== resolveAttendanceManagerSnapshotQueryKey()) return null;
     const rows = Array.isArray(parsed.rows)
       ? parsed.rows.map((row) => serializeAttendanceManagerRowForStorage(row)).filter(Boolean)
@@ -53844,17 +55679,29 @@ function loadAttendanceManagerSnapshot() {
 }
 
 function persistAttendanceManagerSnapshot() {
-  if (!state.attendanceView) return;
+  if (!state.attendanceView || !hasSessionStorageSupport()) return;
   try {
     const rows = Array.isArray(state.attendanceView.managerRows) ? state.attendanceView.managerRows : [];
-    if (!rows.length) return;
+    if (!rows.length) {
+      window.sessionStorage.removeItem(getAttendanceManagerSnapshotStorageKey());
+      return;
+    }
     const payload = {
       savedAt: Date.now(),
       queryKey: resolveAttendanceManagerSnapshotQueryKey(),
       rows: rows.map((row) => serializeAttendanceManagerRowForStorage(row)).filter(Boolean),
     };
-    localStorage.setItem(getAttendanceManagerSnapshotStorageKey(), JSON.stringify(payload));
+    window.sessionStorage.setItem(getAttendanceManagerSnapshotStorageKey(), JSON.stringify(payload));
   } catch {}
+}
+
+function clearAttendanceManagerSnapshot() {
+  if (!hasSessionStorageSupport()) return;
+  try {
+    window.sessionStorage.removeItem(getAttendanceManagerSnapshotStorageKey());
+  } catch {
+    // no-op
+  }
 }
 
 function normalizeAttendanceThresholdMinutes(value = '') {
@@ -57048,11 +58895,13 @@ async function loadAttendanceManagerView({ force = false } = {}) {
     }
     state.attendanceView.managerRows = managerRows;
     state.attendanceView.managerRowsQueryKey = managerRowsQueryKey;
+    persistAttendanceManagerSnapshot();
 
     const scopedRows = getFilteredAttendanceManagerRows(managerRows, { applyStatus: false });
     const filteredRows = getFilteredAttendanceManagerRows(managerRows, { applyStatus: true });
     renderAttendanceFilterMeta();
     renderAttendanceManagerWorkspace({ rows: filteredRows, scopedRows, loading: false });
+    queueViewSnapshotPersist('attendance', { allowInactive: true });
 
     prefetchAttendanceCalendarRecordsInBackground({ force: false });
 
@@ -57090,11 +58939,13 @@ async function loadAttendanceManagerView({ force = false } = {}) {
         if (isStaleLoad()) return;
         state.attendanceView.managerRows = hydratedRows;
         state.attendanceView.managerRowsQueryKey = managerRowsQueryKey;
+        persistAttendanceManagerSnapshot();
 
         const hydratedScopedRows = getFilteredAttendanceManagerRows(hydratedRows, { applyStatus: false });
         const hydratedFilteredRows = getFilteredAttendanceManagerRows(hydratedRows, { applyStatus: true });
         renderAttendanceFilterMeta();
         renderAttendanceManagerWorkspace({ rows: hydratedFilteredRows, scopedRows: hydratedScopedRows, loading: false });
+        queueViewSnapshotPersist('attendance', { allowInactive: true });
 
         if (pendingAttendanceResult.status === 'rejected') {
           showToast('정정 대기 데이터를 일부 불러오지 못했습니다.', 'info', 2200);
@@ -57247,6 +59098,7 @@ async function loadAttendanceView({ force = false } = {}) {
   });
   renderAttendanceFilterMeta();
   renderAttendanceMobileSegments();
+  queueViewSnapshotPersist('attendance', { allowInactive: true });
 
   if (force) {
     const secondaryErrors = [overtimeResult, appleResult, leaveResult].filter((item) => item.status === 'rejected');
@@ -59961,6 +61813,7 @@ function renderScheduleTemplateTable() {
   if (statusEl) {
     statusEl.textContent = `${rows.length}개 템플릿`;
   }
+  queueViewSnapshotPersist('schedule');
 }
 
 async function loadScheduleTemplateRows({ force = false } = {}) {
@@ -59988,6 +61841,7 @@ async function loadScheduleTemplateRows({ force = false } = {}) {
   state.schedule.templateRows = Array.isArray(rows) ? rows : [];
   state.schedule.templatesFetchedAt = Date.now();
   renderScheduleTemplateTable();
+  queueViewSnapshotPersist('schedule', { allowInactive: true });
   return state.schedule.templateRows;
 }
 
@@ -60060,11 +61914,13 @@ async function bootstrapScheduleUploadWorkspace({ force = false } = {}) {
         ]);
       }
       renderScheduleUploadWorkspace();
+      queueViewSnapshotPersist('schedule', { allowInactive: true });
       return true;
     } finally {
       state.schedule.uploadWorkspaceBooting = false;
       state.schedule.uploadWorkspaceBootPromise = null;
       renderScheduleUploadWorkspace();
+      queueViewSnapshotPersist('schedule', { allowInactive: true });
     }
   })();
   state.schedule.uploadWorkspaceBootPromise = bootPromise;
@@ -64441,6 +66297,7 @@ function renderScheduleAll() {
       + ` detail=${formatPerfDurationMs(state.schedule.lastPerf.detailRenderMs)}`,
     );
   }
+  queueViewSnapshotPersist('schedule');
 }
 
 function ensureScheduleSelectedDate() {
@@ -65364,6 +67221,7 @@ async function loadSchedule({ force = false, deferDetailHydration = false, backg
     const gridRenderStartedAt = getPerfNowMs();
     renderScheduleAll();
     ensureScheduleLiveRefresh({ immediate: true });
+    queueViewSnapshotPersist('schedule', { allowInactive: true });
     const gridRenderElapsedMs = getPerfNowMs() - gridRenderStartedAt;
     const monthSwitchGridReadyMs = monthSwitchStartedAt > 0
       ? (getPerfNowMs() - monthSwitchStartedAt)
@@ -65466,6 +67324,7 @@ async function loadSchedule({ force = false, deferDetailHydration = false, backg
       const detailRenderStartedAt = getPerfNowMs();
       renderScheduleAll();
       ensureScheduleLiveRefresh({ immediate: true });
+      queueViewSnapshotPersist('schedule', { allowInactive: true });
       const detailRenderElapsedMs = getPerfNowMs() - detailRenderStartedAt;
       const monthSwitchDetailReadyMs = monthSwitchStartedAt > 0
         ? (getPerfNowMs() - monthSwitchStartedAt)
@@ -65510,6 +67369,7 @@ async function loadSchedule({ force = false, deferDetailHydration = false, backg
       state.previewBatchId = '';
       setScheduleImportUI({ clearPreviewRows: true, clearApplyDetails: true });
       queueReminderSync({ force, reason: 'schedule-load' });
+      queueViewSnapshotPersist('schedule', { allowInactive: true });
       return state.schedule.rows;
     };
 
