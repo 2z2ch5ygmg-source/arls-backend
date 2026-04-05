@@ -1,6 +1,7 @@
-window.ENV_API_BASE = window.ENV_API_BASE || 'https://rg-arls-backend.azurewebsites.net';
-window.ENV_BUILD_ID = window.ENV_BUILD_ID || '1774920600';
+window.ENV_API_BASE = window.ENV_API_BASE || 'https://arls-wonseo-prod-260402.azurewebsites.net';
+window.ENV_BUILD_ID = window.ENV_BUILD_ID || '1775405400';
 window.ENV_GOOGLE_MAPS_API_KEY = window.ENV_GOOGLE_MAPS_API_KEY || '';
+window.ENV_SENTRIX_APP_BASE_URL = window.ENV_SENTRIX_APP_BASE_URL || 'https://sentrix-wonseo-prod-260402.azurewebsites.net';
 
 if (typeof window.__RG_ARLS_HANDLE_TAB_CLICK__ !== 'function') {
   window.__RG_ARLS_HANDLE_TAB_CLICK__ = (viewName) => {

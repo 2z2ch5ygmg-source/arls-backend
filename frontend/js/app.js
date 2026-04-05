@@ -1,7 +1,8 @@
 const query = new URLSearchParams(window.location.search);
 const inlineApiBase = typeof window === 'undefined' ? '' : (window.ENV_API_BASE || '').trim();
-const DEFAULT_DEPLOYED_BACKEND = 'https://rg-arls-backend.azurewebsites.net';
-const DEFAULT_SENTRIX_APP_BASE_URL = 'https://security-ops-center-prod-002-260227135557.azurewebsites.net';
+const inlineSentrixAppBase = typeof window === 'undefined' ? '' : (window.ENV_SENTRIX_APP_BASE_URL || '').trim();
+const DEFAULT_DEPLOYED_BACKEND = 'https://arls-wonseo-prod-260402.azurewebsites.net';
+const DEFAULT_SENTRIX_APP_BASE_URL = 'https://sentrix-wonseo-prod-260402.azurewebsites.net';
 const DEBUG_LOG_QUERY_KEYS = ['debug_logs', 'debugLogs', 'debug_location', 'debugLocation'];
 
 function isInvalidApiBase(value) {
@@ -36,7 +37,8 @@ function normalizeExternalAppBase(raw) {
 }
 
 function buildSentrixHqSupportSubmissionUrl(context = {}) {
-  const baseUrl = normalizeExternalAppBase(DEFAULT_SENTRIX_APP_BASE_URL) || DEFAULT_SENTRIX_APP_BASE_URL;
+  const baseUrl = normalizeExternalAppBase(inlineSentrixAppBase || DEFAULT_SENTRIX_APP_BASE_URL)
+    || DEFAULT_SENTRIX_APP_BASE_URL;
   const params = new URLSearchParams();
   const month = normalizeMonthKey(context.month || '');
   const siteCode = String(context.site_code || context.site || '').trim().toUpperCase();
@@ -44,7 +46,6 @@ function buildSentrixHqSupportSubmissionUrl(context = {}) {
   const revision = String(context.revision || '').trim();
   const sourceUploadBatchId = String(context.source_upload_batch_id || '').trim();
   const tenantCode = String(context.tenant_code || getTenantCodeForScopedAdminApi() || '').trim();
-  params.set('mode', 'hq-submission');
   if (month) params.set('month', month);
   if (siteCode) params.set('site', siteCode);
   if (artifactId) params.set('artifact_id', artifactId);
@@ -183,6 +184,7 @@ const VIEW_SNAPSHOT_PERSIST_DEBOUNCE_MS = 140;
 const VIEW_PREWARM_DELAY_MS = 260;
 const VIEW_PREWARM_CONCURRENCY = 2;
 const TENANT_CHECK_DEBOUNCE_MS = 320;
+const TENANT_CHECK_REQUEST_TIMEOUT_MS = 4500;
 const TENANT_CODE_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 const GEO_ACCURACY_WARN_METERS = 120;
 const HOME_LOCATION_OPTIONS = { enableHighAccuracy: true, maximumAge: 15000, timeout: 9000 };
@@ -317,8 +319,8 @@ const APPROVAL_TAB_CHECKIN = 'checkin-exception';
 const APPROVAL_TAB_LEAVE = 'leave';
 const APPROVAL_TAB_CORRECTION = 'correction';
 const REQUESTS_MANAGER_TAB_PENDING = 'pending';
-const REQUESTS_MANAGER_TAB_PROCESSED = 'processed';
-const REQUESTS_MANAGER_TAB_SOC = 'soc';
+const REQUESTS_MANAGER_TAB_PROCESSED = 'completed';
+const REQUESTS_MANAGER_TAB_SOC = 'in_progress';
 const REQUESTS_MY_FILTER_ALL = 'all';
 const REQUESTS_MY_FILTER_PENDING = 'pending';
 const REQUESTS_MY_FILTER_APPROVED = 'approved';
@@ -381,12 +383,12 @@ const ROUTE_SCHEDULE_UPLOAD = '/schedules/upload';
 const ROUTE_SCHEDULE_HQ_UPLOAD = '/schedules/hq-upload';
 const ROUTE_SCHEDULE_TEMPLATES = '/schedules/templates';
 const ROUTE_SCHEDULE_REPORTS = '/schedules/reports';
+const ROUTE_CALENDAR_DAY = '/calendar/day';
 const ROUTE_CALENDAR_WEEK = '/calendar/week';
 const ROUTE_CALENDAR_MONTH = '/calendar/month';
-const ROUTE_CALENDAR_AGENDA = '/calendar/agenda';
-const ROUTE_CALENDAR_BOOKING_LINKS = '/calendar/booking-links';
 const ROUTE_CALENDAR_PUBLIC_BOOKING = '/calendar/public-booking';
 const ROUTE_REQUESTS = '/requests';
+const ROUTE_LEAVE = '/leave';
 const ROUTE_HR = '/hr';
 const ROUTE_PROFILE = '/profile';
 const ROUTE_MESSENGER = '/messenger';
@@ -405,17 +407,36 @@ const HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE = 'employment_certificate';
 const HR_DOC_TYPE_CAREER_CERTIFICATE = 'career_certificate';
 const HR_DOC_TYPE_RETIREMENT_CERTIFICATE = 'retirement_certificate';
 const HR_DOC_TYPE_LEAVE_OF_ABSENCE_CERTIFICATE = 'leave_of_absence_certificate';
+const HR_DOC_TYPE_RESIGNATION_FORM = 'resignation_form';
 const HR_EMPLOYMENT_DAILY_LIMIT = 4;
 const HR_DATA_CACHE_TTL_MS = 30000;
 const HR_PURPOSE_CODES = new Set(['BANK', 'GOV', 'CARD', 'OTHER']);
+const HR_RESIGNATION_TYPE_LABELS = Object.freeze({
+  PERSONAL: '개인 사유',
+  CAREER: '이직/경력',
+  HEALTH: '건강 사유',
+  FAMILY: '가족 사유',
+  OTHER: '기타',
+});
 const HR_PURPOSE_LABELS = Object.freeze({
   BANK: '은행 제출',
   GOV: '관공서 제출',
   CARD: '카드사 제출',
   OTHER: '기타',
 });
+const PROFILE_SIGNATURE_ALLOWED_ROLES = new Set(['supervisor', 'vice_supervisor', 'hq_admin', 'developer']);
+const HR_APPROVAL_POLICY_STEP_KIND_OPTIONS = Object.freeze([
+  { value: 'site_supervisor', label: '현장 Supervisor' },
+  { value: 'rank', label: 'HQ 직급' },
+  { value: 'explicit_user', label: '지정 사용자' },
+]);
+const HR_APPROVAL_POLICY_SITE_ROLE_OPTIONS = Object.freeze([
+  { value: 'supervisor', label: 'Supervisor' },
+]);
 const HR_REQUEST_STATUS_LABELS = Object.freeze({
   requested: '승인대기',
+  delegatable: '전결 가능',
+  approved: '승인완료',
   generating: '발급중',
   issued: '발급완료',
   rejected: '반려',
@@ -453,6 +474,14 @@ const HR_CERTIFICATE_TYPE_FALLBACK_ROWS = Object.freeze([
     auto_mail_enabled: false,
     available: true,
     meta_json: { rollout: 'live' },
+  },
+  {
+    type_key: HR_DOC_TYPE_RESIGNATION_FORM,
+    display_name: '사직서',
+    requires_approval: true,
+    auto_mail_enabled: false,
+    available: true,
+    meta_json: { rollout: 'live', request_kind: 'submission' },
   },
   {
     type_key: 'payroll_statement',
@@ -568,6 +597,7 @@ const LEGACY_ROUTE_ALIASES = {
   '/employees/new': ROUTE_ADMIN_EMPLOYEES_NEW,
   '/employees/import': ROUTE_ADMIN_EMPLOYEES_IMPORT,
   '/hr': ROUTE_HR,
+  '/leave': ROUTE_LEAVE,
 };
 const DEV_TENANT_SCOPED_ROUTES = new Set([
   ROUTE_HOME,
@@ -579,6 +609,7 @@ const DEV_TENANT_SCOPED_ROUTES = new Set([
   ROUTE_ADMIN_SCHEDULE_TOOLS,
   ROUTE_ADMIN_REPORTS_LOCK,
   ROUTE_HR,
+  ROUTE_LEAVE,
 ]);
 const MAX_ROUTE_PATH_INPUT_LENGTH = 2048;
 let lastNormalizedRouteInput = '';
@@ -818,12 +849,32 @@ function createInitialAttendanceRequestState() {
 
 function createInitialAttendanceViewState() {
   const today = toLocalDateKey(new Date());
+  const weekRange = getCurrentWeekDates(new Date());
   return {
     date: today,
     calendarMonth: getMonthFromDateKey(today) || toMonthKey(new Date()),
     rangeStart: today,
     rangeEnd: today,
     rangePreset: 'today',
+    workspaceSection: 'daily',
+    periodMode: 'list',
+    statsScope: 'attendance',
+    statsAttendanceMetric: 'rate',
+    statsStaffMetric: 'weekday',
+    statsStartDate: toLocalDateKey(weekRange[0]),
+    statsEndDate: toLocalDateKey(weekRange[weekRange.length - 1]),
+    statsPreset: 'week',
+    statsEmployeeCode: '',
+    statsSiteCode: '',
+    statsGroupId: '',
+    statsRankId: '',
+    statsNumericLabels: true,
+    employeeFilterDraft: [],
+    employeeFilterApplied: [],
+    employeeFilterFacet: 'group',
+    siteFilterDraft: [],
+    siteFilterApplied: [],
+    siteFilterFacet: 'vendor',
     managerTab: 'status',
     lateThresholdMinutes: 10,
     earlyLeaveThresholdMinutes: 10,
@@ -863,6 +914,7 @@ function createInitialAttendanceViewState() {
 function createInitialLeaveViewState() {
   const today = new Date();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const currentYear = String(today.getFullYear());
   return {
     statusFilter: 'all',
     managerScope: 'mine',
@@ -871,23 +923,41 @@ function createInitialLeaveViewState() {
     balanceSummary: null,
     policyRows: [],
     updatedAt: '',
-    workspaceSection: 'requests',
+    workspaceSection: 'status',
     workspaceStartDate: toLocalDateKey(monthStart),
     workspaceEndDate: toLocalDateKey(today),
-    workspaceSiteFilter: 'all',
+    workspaceDateFilterTouched: false,
+    workspaceDateDefaultMode: 'month-to-date',
+    workspaceSiteFilterValues: [],
     workspaceLeaveTypeFilter: 'all',
     workspaceStatusFilter: 'all',
+    workspaceQueueTab: REQUESTS_MANAGER_TAB_PENDING,
     workspaceRequesterQuery: '',
+    workspaceEmployeeKeys: [],
+    workspacePolicyId: '',
     workspaceSortKey: 'submitted_at',
     workspaceSortDirection: 'desc',
-    usageSiteFilter: 'all',
-    usageTypeFilter: 'all',
+    grantsTab: 'history',
+    grantsRows: [],
+    grantsPolicyFilter: 'all',
+    grantsSearchQuery: '',
+    usagePolicyFilter: 'all',
     usageSearchQuery: '',
+    usageYear: currentYear,
+    usageReferenceDate: toLocalDateKey(today),
     usageSortKey: 'employee',
     usageSortDirection: 'asc',
+    policyStatusTab: 'active',
     workspaceSelectedRequestId: '',
     workspaceDrawerOpen: false,
     workspaceComposerOpen: false,
+    policyEditorContext: null,
+    policyEditorSelectedEmployeeCodes: [],
+    leaveGrantDraft: null,
+    leaveEmployeePicker: null,
+    employeePickerRows: [],
+    employeeFilterSheet: null,
+    siteFilterSheet: null,
   };
 }
 
@@ -908,8 +978,11 @@ function createInitialRequestsWorkspaceState() {
     startDate: '',
     endDate: '',
     rangePreset: 'this-week',
-    siteFilter: 'all',
+    dateFilterTouched: false,
+    dateDefaultMode: '',
+    siteFilterValues: [],
     employeeQuery: '',
+    employeeFilterKeys: [],
     statusFilter: 'all',
     subTypeFilter: 'all',
     actorQuery: '',
@@ -917,6 +990,8 @@ function createInitialRequestsWorkspaceState() {
     sortDirection: 'desc',
     priorityOverflowCount: 0,
     filtersInitialized: false,
+    employeeFilterSheet: null,
+    siteFilterSheet: null,
   };
 }
 
@@ -1095,12 +1170,15 @@ function createInitialScheduleState() {
 function createInitialCalendarState() {
   const today = toLocalDateKey(new Date());
   return {
-    viewTab: 'week',
+    viewTab: 'month',
     anchorDate: today,
     selectedDate: today,
+    fullscreen: false,
     workspace: null,
     loading: false,
     error: '',
+    filterOpen: false,
+    eventModalOpen: false,
     selectedContainerId: '',
     selectedEventId: '',
     selectedDetailTab: 'details',
@@ -1388,7 +1466,7 @@ function createInitialReportsState() {
 function createInitialHrDocumentsState() {
   return {
     selectedDocType: 'employment_certificate',
-    adminPanel: 'requests',
+    adminPanel: 'templates',
     workspaceSegment: 'apply',
     purposeCode: 'BANK',
     purposeText: '',
@@ -1396,6 +1474,10 @@ function createInitialHrDocumentsState() {
     copyCount: 1,
     includeAddress: false,
     includePhone: false,
+    resignationType: 'PERSONAL',
+    resignationExpectedLastWorkingDate: '',
+    resignationReason: '',
+    resignationHandoverNotes: '',
     submitting: false,
     dailyLimit: HR_EMPLOYMENT_DAILY_LIMIT,
     todayRequestedCount: 0,
@@ -1416,8 +1498,17 @@ function createInitialHrDocumentsState() {
     issueJobsFetchedAt: 0,
     templatesRows: [],
     templatesFetchedAt: 0,
+    approvalRulesRows: [],
+    approvalRulesFetchedAt: 0,
+    approvalRulesDocumentType: '',
+    approvalRuleUserOptions: [],
+    approvalRuleSiteOptions: [],
+    approvalRuleGroupOptions: [],
+    approvalRuleRankOptions: [],
     templateUploading: false,
     loadingTemplates: false,
+    loadingApprovalRules: false,
+    savingApprovalRules: false,
     loadingMyRows: false,
     loadingAdminRows: false,
   };
@@ -1429,6 +1520,17 @@ function createInitialProfileViewState() {
     settingsTab: 'links',
     logsTarget: 'all',
     logsSelectedKey: '',
+    signatureSourceType: 'draw',
+    signaturePreviewUrl: '',
+    signatureStatusText: '',
+    signatureFetchedAt: 0,
+    signatureLoading: false,
+    signatureSaving: false,
+    signatureDeleting: false,
+    signatureHasSavedItem: false,
+    signatureUploadFile: null,
+    signatureUploadFileName: '',
+    signatureCanvasBound: false,
   };
 }
 
@@ -1759,8 +1861,10 @@ const state = {
   drawerExpandedMenus: new Set(),
   tenantValid: false,
   tenantChecking: false,
+  tenantValidationBypass: false,
   tenantCheckTimer: null,
   tenantCheckSeq: 0,
+  tenantCheckAbortController: null,
   loginCredentialFeedbackTimer: null,
   loginTenantBeforeSuperAdmin: '',
   superAdminLoginMode: false,
@@ -11609,7 +11713,7 @@ const ROLE_PERMISSIONS = {
 };
 
 const DRAWER_ICON_BY_TITLE = Object.freeze({
-  공지: 'bell',
+  공지: 'megaphone',
   직원: 'users',
   지점: 'building',
   위치: 'map-pin',
@@ -11718,15 +11822,6 @@ const AZURE_TOPBAR_TAB_ICON_GROUPS = Object.freeze({
       general: 'message',
     },
   },
-  calendarWorkspaceTabs: {
-    dataKey: 'tab',
-    icons: {
-      week: 'calendar',
-      month: 'grid',
-      agenda: 'list',
-      'booking-links': 'link',
-    },
-  },
   profileWorkspaceTabs: {
     dataKey: 'segment',
     icons: {
@@ -11785,10 +11880,9 @@ const AZURE_TOPBAR_LABEL_ICON_FALLBACKS = Object.freeze({
   '근무 템플릿': 'template',
   'Finance 제출': 'chart',
   'Finance 다운로드': 'download',
-  '주간 보기': 'calendar',
-  '월간 보기': 'grid',
-  아젠다: 'list',
-  '예약 링크': 'link',
+  '일 보기': 'calendar',
+  '주 보기': 'calendar',
+  '월 보기': 'grid',
   '기본 설정': 'settings',
   '작업 로그': 'history',
   '모드 변경': 'theme',
@@ -11807,7 +11901,6 @@ const AZURE_TOPBAR_ICON_SELECTORS = Object.freeze([
   '#attendanceWorkspaceTabs',
   '#scheduleHqTabs',
   '#noticesCategoryTabs',
-  '#calendarWorkspaceTabs',
   '#profileWorkspaceTabs',
   '#googleSheetWorkspaceTabs',
   '#reportsWorkspaceTabs',
@@ -12040,16 +12133,13 @@ function isDrawerItemActiveRoute(targetRouteRaw = '', currentRouteRaw = '') {
 function isDrawerRequestsSectionVisible(section = '', perms = getRolePermissions(), navRole = getNavigationRole()) {
   const normalized = normalizeRequestsTabView(section);
   if (normalized === 'leave') {
-    return Boolean(perms.leave || perms.leaveWrite || perms.leaveReview);
-  }
-  if (normalized === 'approvals') {
-    return isManagerShellRole(navRole) && Boolean(perms.attendanceReview || perms.leaveReview);
+    return false;
   }
   if (normalized === 'correction') {
     return Boolean(perms.attendance || perms.attendanceWrite || isManagerShellRole(navRole));
   }
   if (normalized === 'documents') {
-    return true;
+    return isManagerShellRole(navRole) && isHrApprovalRole();
   }
   return Boolean(perms.attendance || perms.leave);
 }
@@ -12068,18 +12158,31 @@ function isDrawerScheduleSectionActive(section = '', currentRouteRaw = '') {
   return false;
 }
 
+function isDrawerHrSectionVisible(section = '') {
+  const normalized = String(section || '').trim().toLowerCase();
+  if (normalized === 'manage') {
+    return canAccessHrManageSegment();
+  }
+  if (normalized === 'my-docs') {
+    return isHrEmployeeRole();
+  }
+  return isHrEmployeeRole();
+}
+
 function isDrawerCalendarSectionActive(section = '', currentRouteRaw = '') {
-  const normalized = normalizeCalendarViewTab(section);
   const currentRoute = normalizeRoutePath(parseRouteCandidate(currentRouteRaw).path);
   if (!isCalendarRoutePath(currentRoute)) return false;
+  const normalizedSection = String(section || '').trim().toLowerCase();
+  if (!normalizedSection || normalizedSection === 'any') return true;
+  const normalized = normalizeCalendarViewTab(section);
   return resolveCalendarTabFromRoutePath(currentRoute) === normalized;
 }
 
 function isDrawerAttendanceSectionActive(section = '', currentRouteRaw = '') {
-  const normalized = normalizeAttendanceManagerTab(section);
+  const normalized = normalizeAttendanceWorkspaceSection(section);
   const currentRoute = normalizeRoutePath(parseRouteCandidate(currentRouteRaw).path);
   if (currentRoute !== ROUTE_ATTENDANCE) return false;
-  return normalizeAttendanceManagerTab(state.attendanceView?.managerTab || 'status') === normalized;
+  return getAttendanceWorkspaceSection() === normalized;
 }
 
 function isDrawerItemActive(item = null, currentRouteRaw = '') {
@@ -12117,6 +12220,18 @@ function isDrawerItemActive(item = null, currentRouteRaw = '') {
   if (calendarSectionMatch) {
     return isDrawerCalendarSectionActive(calendarSectionMatch, currentRouteRaw);
   }
+  const hrSectionMatch = String(item.hrSectionMatch || '').trim().toLowerCase();
+  if (hrSectionMatch) {
+    const currentRoute = normalizeRoutePath(parseRouteCandidate(currentRouteRaw).path);
+    if (currentRoute !== ROUTE_HR) return false;
+    const segment = normalizeHrWorkspaceSegment(state.hrDocs?.workspaceSegment || 'apply');
+    if (hrSectionMatch === 'apply' || hrSectionMatch === 'issue') {
+      return segment === 'apply' || segment === 'my-docs';
+    }
+    if (hrSectionMatch === 'manage') {
+      return segment === 'manage';
+    }
+  }
   return Boolean(item?.route) && isDrawerItemActiveRoute(item.route, currentRouteRaw);
 }
 
@@ -12125,76 +12240,43 @@ const DRAWER_MENU_BY_ROLE = {
     { type: 'section', title: '홈' },
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
     { type: 'section', title: '운영' },
-    { id: 'attendance', title: '출퇴근', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, icon: 'clock-3' },
-    { id: 'requests', title: '승인', action: 'drawer-open-route', route: ROUTE_REQUESTS, icon: 'clipboard-list' },
-    { id: 'hr', title: '문서', action: 'drawer-open-route', route: ROUTE_HR, icon: 'file-text' },
-    { id: 'schedule', title: '스케줄', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, icon: 'calendar-days' },
     {
-      id: 'calendar',
-      title: '캘린더',
+      id: 'schedule',
+      title: '스케줄',
       action: 'drawer-open-route',
-      route: ROUTE_CALENDAR_WEEK,
-      icon: 'calendar-range',
-      calendarSectionMatch: 'week',
+      route: ROUTE_SCHEDULE_CALENDAR,
+      icon: 'calendar-days',
+      scheduleSectionMatch: 'calendar',
       children: [
-        { id: 'calendar-week', title: '주간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_WEEK, calendarSectionMatch: 'week' },
-        { id: 'calendar-month', title: '월간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_MONTH, calendarSectionMatch: 'month' },
-        { id: 'calendar-agenda', title: '아젠다', action: 'drawer-open-route', route: ROUTE_CALENDAR_AGENDA, calendarSectionMatch: 'agenda' },
-        { id: 'calendar-booking', title: '예약 링크', action: 'drawer-open-route', route: ROUTE_CALENDAR_BOOKING_LINKS, calendarSectionMatch: 'booking-links' },
+        { id: 'schedule-calendar', title: '월간 근무표', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
+        { id: 'schedule-templates', title: '근무 템플릿', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
+        { id: 'schedule-calendar-view', title: '캘린더', action: 'drawer-open-route', route: ROUTE_CALENDAR_MONTH, calendarSectionMatch: 'any' },
       ],
     },
-    { type: 'section', title: '협업' },
-    { id: 'messenger', title: '메신저', action: 'drawer-open-route', route: ROUTE_MESSENGER, icon: 'message-square' },
-    { id: 'meetings', title: '화상대화', action: 'drawer-open-route', route: ROUTE_MEETINGS, icon: 'video' },
+    { id: 'attendance', title: '출퇴근', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, icon: 'clock-3' },
+    { id: 'leave', title: '휴가', action: 'drawer-open-route', route: ROUTE_LEAVE, icon: 'calendar' },
+    { id: 'requests', title: '승인', action: 'drawer-open-route', route: ROUTE_REQUESTS, icon: 'clipboard-check' },
+    {
+      id: 'document-center',
+      title: '문서',
+      action: 'drawer-open-route',
+      route: `${ROUTE_HR}?segment=apply`,
+      icon: 'files',
+      children: [
+        { id: 'hr-apply', title: '문서 발급', action: 'drawer-open-route', route: `${ROUTE_HR}?segment=apply`, hrSectionMatch: 'apply', requiresEmployeeContext: true },
+        { id: 'hr-my-docs', title: '내 문서', action: 'drawer-open-route', route: `${ROUTE_HR}?segment=my-docs`, hrSectionMatch: 'my-docs', requiresEmployeeContext: true },
+      ],
+    },
     { type: 'section', title: '공지' },
-    { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
-    { type: 'section', title: '개인' },
-    { id: 'settings', title: '내 정보', action: 'drawer-open-route', route: ROUTE_PROFILE, icon: 'settings' },
+    { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'megaphone' },
+    { type: 'section', title: '설정' },
+    { id: 'settings', title: '설정', action: 'drawer-open-route', route: ROUTE_PROFILE, icon: 'settings' },
   ],
   SUPERVISOR: [
     { type: 'section', title: '홈' },
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
     { type: 'section', title: '운영' },
     {
-      id: 'attendance',
-      title: '출퇴근',
-      action: 'drawer-open-route',
-      route: ROUTE_ATTENDANCE,
-      icon: 'clock-3',
-      children: [
-        { id: 'attendance-status', title: '출퇴근 현황', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, attendanceTabMatch: 'status' },
-        { id: 'attendance-calendar', title: '달력형', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?tab=calendar`, attendanceTabMatch: 'calendar' },
-        { id: 'attendance-list', title: '리스트형', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?tab=list`, attendanceTabMatch: 'list' },
-      ],
-    },
-    {
-      id: 'requests',
-      title: '승인',
-      action: 'drawer-open-route',
-      route: ROUTE_REQUESTS,
-      icon: 'clipboard-list',
-      children: [
-        { id: 'requests-exceptions', title: '출퇴근 예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
-        { id: 'requests-leave', title: '휴가', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=leave`, sectionMatch: 'leave' },
-        { id: 'requests-approvals', title: '승인함', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=approvals`, sectionMatch: 'approvals' },
-      ],
-    },
-    { id: 'hr', title: '문서', action: 'drawer-open-route', route: ROUTE_HR, icon: 'file-text' },
-    {
-      id: 'calendar',
-      title: '캘린더',
-      action: 'drawer-open-route',
-      route: ROUTE_CALENDAR_WEEK,
-      icon: 'calendar-range',
-      calendarSectionMatch: 'week',
-      children: [
-        { id: 'calendar-week', title: '주간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_WEEK, calendarSectionMatch: 'week' },
-        { id: 'calendar-month', title: '월간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_MONTH, calendarSectionMatch: 'month' },
-        { id: 'calendar-agenda', title: '아젠다', action: 'drawer-open-route', route: ROUTE_CALENDAR_AGENDA, calendarSectionMatch: 'agenda' },
-        { id: 'calendar-booking', title: '예약 링크', action: 'drawer-open-route', route: ROUTE_CALENDAR_BOOKING_LINKS, calendarSectionMatch: 'booking-links' },
-      ],
-    },
-    {
       id: 'schedule',
       title: '스케줄',
       action: 'drawer-open-route',
@@ -12204,6 +12286,42 @@ const DRAWER_MENU_BY_ROLE = {
       children: [
         { id: 'schedule-calendar', title: '월간 근무표', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
         { id: 'schedule-templates', title: '근무 템플릿', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
+        { id: 'schedule-calendar-view', title: '캘린더', action: 'drawer-open-route', route: ROUTE_CALENDAR_MONTH, calendarSectionMatch: 'any' },
+      ],
+    },
+    {
+      id: 'attendance',
+      title: '출퇴근',
+      action: 'drawer-open-route',
+      route: ROUTE_ATTENDANCE,
+      icon: 'clock-3',
+      children: [
+        { id: 'attendance-daily', title: '날짜별', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, attendanceTabMatch: 'daily' },
+        { id: 'attendance-period', title: '기간별', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?section=period&mode=list`, attendanceTabMatch: 'period' },
+        { id: 'attendance-stats', title: '통계', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?section=stats&scope=attendance`, attendanceTabMatch: 'stats' },
+      ],
+    },
+    { id: 'leave', title: '휴가', action: 'drawer-open-route', route: ROUTE_LEAVE, icon: 'calendar' },
+    {
+      id: 'requests',
+      title: '승인',
+      action: 'drawer-open-route',
+      route: ROUTE_REQUESTS,
+      icon: 'clipboard-check',
+      children: [
+        { id: 'requests-exceptions', title: '출퇴근 예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
+        { id: 'requests-documents', title: '문서', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=documents`, sectionMatch: 'documents', requiresDocumentApproval: true },
+      ],
+    },
+    {
+      id: 'document-center',
+      title: '문서',
+      action: 'drawer-open-route',
+      route: `${ROUTE_HR}?segment=apply`,
+      icon: 'files',
+      children: [
+        { id: 'hr-apply', title: '문서 발급', action: 'drawer-open-route', route: `${ROUTE_HR}?segment=apply`, hrSectionMatch: 'apply', requiresEmployeeContext: true },
+        { id: 'hr-my-docs', title: '내 문서', action: 'drawer-open-route', route: `${ROUTE_HR}?segment=my-docs`, hrSectionMatch: 'my-docs', requiresEmployeeContext: true },
       ],
     },
     {
@@ -12211,50 +12329,22 @@ const DRAWER_MENU_BY_ROLE = {
       title: '리포트',
       action: 'drawer-open-route',
       route: ROUTE_REPORTS,
-      icon: 'clipboard-list',
+      icon: 'bar-chart-3',
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
         { id: 'reports-finance-download', title: 'Finance 다운로드', action: 'drawer-open-route', route: ROUTE_REPORTS_FINANCE_DOWNLOAD, reportsTabMatch: 'finance-download' },
         { id: 'schedule-upload', title: '스케쥴 업로드', action: 'drawer-open-route', route: ROUTE_SCHEDULE_UPLOAD, scheduleSectionMatch: 'upload' },
       ],
     },
-    { type: 'section', title: '협업' },
-    { id: 'messenger', title: '메신저', action: 'drawer-open-route', route: ROUTE_MESSENGER, icon: 'message-square' },
-    { id: 'meetings', title: '화상대화', action: 'drawer-open-route', route: ROUTE_MEETINGS, icon: 'video' },
     { type: 'section', title: '공지' },
-    { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
-    { type: 'section', title: '개인' },
-    { id: 'settings', title: '내 정보', action: 'drawer-open-route', route: ROUTE_PROFILE, icon: 'settings' },
+    { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'megaphone' },
+    { type: 'section', title: '설정' },
+    { id: 'settings', title: '설정', action: 'drawer-open-route', route: ROUTE_PROFILE, icon: 'settings' },
   ],
   BRANCH_MANAGER: [
     { type: 'section', title: '홈' },
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
     { type: 'section', title: '운영' },
-    {
-      id: 'attendance',
-      title: '출퇴근',
-      action: 'drawer-open-route',
-      route: ROUTE_ATTENDANCE,
-      icon: 'clock-3',
-      children: [
-        { id: 'attendance-status', title: '출퇴근 현황', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, attendanceTabMatch: 'status' },
-        { id: 'attendance-calendar', title: '달력형', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?tab=calendar`, attendanceTabMatch: 'calendar' },
-        { id: 'attendance-list', title: '리스트형', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?tab=list`, attendanceTabMatch: 'list' },
-      ],
-    },
-    {
-      id: 'work-center',
-      title: '승인',
-      action: 'drawer-open-route',
-      route: ROUTE_REQUESTS,
-      icon: 'clipboard-list',
-      children: [
-        { id: 'requests-exceptions', title: '출퇴근 예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
-        { id: 'requests-leave', title: '휴가', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=leave`, sectionMatch: 'leave' },
-        { id: 'requests-approvals', title: '승인함', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=approvals`, sectionMatch: 'approvals' },
-      ],
-    },
-    { id: 'hr', title: '문서', action: 'drawer-open-route', route: ROUTE_HR, icon: 'file-text' },
     {
       id: 'schedule',
       title: '스케줄',
@@ -12265,20 +12355,43 @@ const DRAWER_MENU_BY_ROLE = {
       children: [
         { id: 'schedule-calendar', title: '월간 근무표', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
         { id: 'schedule-templates', title: '근무 템플릿', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
+        { id: 'schedule-calendar-view', title: '캘린더', action: 'drawer-open-route', route: ROUTE_CALENDAR_MONTH, calendarSectionMatch: 'any' },
       ],
     },
     {
-      id: 'calendar',
-      title: '캘린더',
+      id: 'attendance',
+      title: '출퇴근',
       action: 'drawer-open-route',
-      route: ROUTE_CALENDAR_WEEK,
-      icon: 'calendar-range',
-      calendarSectionMatch: 'week',
+      route: ROUTE_ATTENDANCE,
+      icon: 'clock-3',
       children: [
-        { id: 'calendar-week', title: '주간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_WEEK, calendarSectionMatch: 'week' },
-        { id: 'calendar-month', title: '월간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_MONTH, calendarSectionMatch: 'month' },
-        { id: 'calendar-agenda', title: '아젠다', action: 'drawer-open-route', route: ROUTE_CALENDAR_AGENDA, calendarSectionMatch: 'agenda' },
-        { id: 'calendar-booking', title: '예약 링크', action: 'drawer-open-route', route: ROUTE_CALENDAR_BOOKING_LINKS, calendarSectionMatch: 'booking-links' },
+        { id: 'attendance-daily', title: '날짜별', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, attendanceTabMatch: 'daily' },
+        { id: 'attendance-period', title: '기간별', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?section=period&mode=list`, attendanceTabMatch: 'period' },
+        { id: 'attendance-stats', title: '통계', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?section=stats&scope=attendance`, attendanceTabMatch: 'stats' },
+      ],
+    },
+    { id: 'leave', title: '휴가', action: 'drawer-open-route', route: ROUTE_LEAVE, icon: 'calendar' },
+    {
+      id: 'work-center',
+      title: '승인',
+      action: 'drawer-open-route',
+      route: ROUTE_REQUESTS,
+      icon: 'clipboard-check',
+      children: [
+        { id: 'requests-exceptions', title: '출퇴근 예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
+        { id: 'requests-documents', title: '문서', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=documents`, sectionMatch: 'documents', requiresDocumentApproval: true },
+      ],
+    },
+    {
+      id: 'document-center',
+      title: '문서',
+      action: 'drawer-open-route',
+      route: `${ROUTE_HR}?segment=apply`,
+      icon: 'files',
+      children: [
+        { id: 'hr-apply', title: '문서 발급', action: 'drawer-open-route', route: `${ROUTE_HR}?segment=apply`, hrSectionMatch: 'apply', requiresEmployeeContext: true },
+        { id: 'hr-my-docs', title: '내 문서', action: 'drawer-open-route', route: `${ROUTE_HR}?segment=my-docs`, hrSectionMatch: 'my-docs', requiresEmployeeContext: true },
+        { id: 'hr-manage', title: '문서 관리', action: 'drawer-open-route', route: `${ROUTE_HR}?segment=manage`, hrSectionMatch: 'manage', requiresTemplateManager: true },
       ],
     },
     {
@@ -12286,7 +12399,7 @@ const DRAWER_MENU_BY_ROLE = {
       title: '리포트',
       action: 'drawer-open-route',
       route: ROUTE_REPORTS,
-      icon: 'clipboard-list',
+      icon: 'bar-chart-3',
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
         { id: 'reports-finance-download', title: 'Finance 다운로드', action: 'drawer-open-route', route: ROUTE_REPORTS_FINANCE_DOWNLOAD, reportsTabMatch: 'finance-download' },
@@ -12306,11 +12419,8 @@ const DRAWER_MENU_BY_ROLE = {
         { id: 'sites', title: '근무지', action: 'drawer-open-route', route: ROUTE_ADMIN_SITES },
       ],
     },
-    { type: 'section', title: '협업' },
-    { id: 'messenger', title: '메신저', action: 'drawer-open-route', route: ROUTE_MESSENGER, icon: 'message-square' },
-    { id: 'meetings', title: '화상대화', action: 'drawer-open-route', route: ROUTE_MEETINGS, icon: 'video' },
     { type: 'section', title: '공지' },
-    { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
+    { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'megaphone' },
     { type: 'section', title: '설정' },
     { id: 'settings', title: '설정', action: 'drawer-open-route', route: ROUTE_PROFILE, icon: 'settings' },
   ],
@@ -12318,31 +12428,6 @@ const DRAWER_MENU_BY_ROLE = {
     { type: 'section', title: '홈' },
     { id: 'home', title: '홈', action: 'drawer-open-route', route: ROUTE_HOME, icon: 'house' },
     { type: 'section', title: '운영' },
-    {
-      id: 'attendance',
-      title: '출퇴근',
-      action: 'drawer-open-route',
-      route: ROUTE_ATTENDANCE,
-      icon: 'clock-3',
-      children: [
-        { id: 'attendance-status', title: '출퇴근 현황', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, attendanceTabMatch: 'status' },
-        { id: 'attendance-calendar', title: '달력형', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?tab=calendar`, attendanceTabMatch: 'calendar' },
-        { id: 'attendance-list', title: '리스트형', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?tab=list`, attendanceTabMatch: 'list' },
-      ],
-    },
-    {
-      id: 'work-center',
-      title: '승인',
-      action: 'drawer-open-route',
-      route: ROUTE_REQUESTS,
-      icon: 'clipboard-list',
-      children: [
-        { id: 'requests-exceptions', title: '출퇴근 예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
-        { id: 'requests-leave', title: '휴가', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=leave`, sectionMatch: 'leave' },
-        { id: 'requests-approvals', title: '승인함', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=approvals`, sectionMatch: 'approvals' },
-      ],
-    },
-    { id: 'hr', title: '문서', action: 'drawer-open-route', route: ROUTE_HR, icon: 'file-text' },
     {
       id: 'schedule',
       title: '스케줄',
@@ -12353,20 +12438,43 @@ const DRAWER_MENU_BY_ROLE = {
       children: [
         { id: 'schedule-calendar', title: '월간 근무표', action: 'drawer-open-route', route: ROUTE_SCHEDULE_CALENDAR, scheduleSectionMatch: 'calendar' },
         { id: 'schedule-templates', title: '근무 템플릿', action: 'drawer-open-route', route: ROUTE_SCHEDULE_TEMPLATES, scheduleSectionMatch: 'templates' },
+        { id: 'schedule-calendar-view', title: '캘린더', action: 'drawer-open-route', route: ROUTE_CALENDAR_MONTH, calendarSectionMatch: 'any' },
       ],
     },
     {
-      id: 'calendar',
-      title: '캘린더',
+      id: 'attendance',
+      title: '출퇴근',
       action: 'drawer-open-route',
-      route: ROUTE_CALENDAR_WEEK,
-      icon: 'calendar-range',
-      calendarSectionMatch: 'week',
+      route: ROUTE_ATTENDANCE,
+      icon: 'clock-3',
       children: [
-        { id: 'calendar-week', title: '주간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_WEEK, calendarSectionMatch: 'week' },
-        { id: 'calendar-month', title: '월간 보기', action: 'drawer-open-route', route: ROUTE_CALENDAR_MONTH, calendarSectionMatch: 'month' },
-        { id: 'calendar-agenda', title: '아젠다', action: 'drawer-open-route', route: ROUTE_CALENDAR_AGENDA, calendarSectionMatch: 'agenda' },
-        { id: 'calendar-booking', title: '예약 링크', action: 'drawer-open-route', route: ROUTE_CALENDAR_BOOKING_LINKS, calendarSectionMatch: 'booking-links' },
+        { id: 'attendance-daily', title: '날짜별', action: 'drawer-open-route', route: ROUTE_ATTENDANCE, attendanceTabMatch: 'daily' },
+        { id: 'attendance-period', title: '기간별', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?section=period&mode=list`, attendanceTabMatch: 'period' },
+        { id: 'attendance-stats', title: '통계', action: 'drawer-open-route', route: `${ROUTE_ATTENDANCE}?section=stats&scope=attendance`, attendanceTabMatch: 'stats' },
+      ],
+    },
+    { id: 'leave', title: '휴가', action: 'drawer-open-route', route: ROUTE_LEAVE, icon: 'calendar' },
+    {
+      id: 'work-center',
+      title: '승인',
+      action: 'drawer-open-route',
+      route: ROUTE_REQUESTS,
+      icon: 'clipboard-check',
+      children: [
+        { id: 'requests-exceptions', title: '출퇴근 예외', action: 'drawer-open-route', route: ROUTE_REQUESTS, sectionMatch: 'exceptions' },
+        { id: 'requests-documents', title: '문서', action: 'drawer-open-route', route: `${ROUTE_REQUESTS}?section=documents`, sectionMatch: 'documents', requiresDocumentApproval: true },
+      ],
+    },
+    {
+      id: 'document-center',
+      title: '문서',
+      action: 'drawer-open-route',
+      route: `${ROUTE_HR}?segment=apply`,
+      icon: 'files',
+      children: [
+        { id: 'hr-apply', title: '문서 발급', action: 'drawer-open-route', route: `${ROUTE_HR}?segment=apply`, hrSectionMatch: 'apply', requiresEmployeeContext: true },
+        { id: 'hr-my-docs', title: '내 문서', action: 'drawer-open-route', route: `${ROUTE_HR}?segment=my-docs`, hrSectionMatch: 'my-docs', requiresEmployeeContext: true },
+        { id: 'hr-manage', title: '문서 관리', action: 'drawer-open-route', route: `${ROUTE_HR}?segment=manage`, hrSectionMatch: 'manage', requiresTemplateManager: true },
       ],
     },
     {
@@ -12374,7 +12482,7 @@ const DRAWER_MENU_BY_ROLE = {
       title: '리포트',
       action: 'drawer-open-route',
       route: ROUTE_REPORTS,
-      icon: 'clipboard-list',
+      icon: 'bar-chart-3',
       children: [
         { id: 'reports-finance', title: 'Finance 제출', action: 'drawer-open-route', route: `${ROUTE_REPORTS}?tab=finance`, reportsTabMatch: 'finance' },
         { id: 'reports-finance-download', title: 'Finance 다운로드', action: 'drawer-open-route', route: ROUTE_REPORTS_FINANCE_DOWNLOAD, reportsTabMatch: 'finance-download' },
@@ -12395,24 +12503,12 @@ const DRAWER_MENU_BY_ROLE = {
         { id: 'company', title: '회사', action: 'drawer-open-route', route: ROUTE_MASTER_TENANTS },
       ],
     },
-    { type: 'section', title: '협업' },
-    { id: 'messenger', title: '메신저', action: 'drawer-open-route', route: ROUTE_MESSENGER, icon: 'message-square' },
-    { id: 'meetings', title: '화상대화', action: 'drawer-open-route', route: ROUTE_MEETINGS, icon: 'video' },
     { type: 'section', title: '공지' },
-    { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'bell' },
+    { id: 'notices', title: '공지', action: 'drawer-open-route', route: ROUTE_FEATURE_NOTICES, icon: 'megaphone' },
     { type: 'section', title: '설정' },
     { id: 'settings', title: '설정', action: 'drawer-open-route', route: ROUTE_PROFILE, icon: 'settings' },
     { type: 'section', title: '관리자' },
-    {
-      id: 'system',
-      title: '시스템',
-      action: 'drawer-open-route',
-      route: ROUTE_MASTER_AUDIT_LOGS,
-      icon: 'shield',
-      children: [
-        { id: 'audit', title: '감사', action: 'drawer-open-route', route: ROUTE_MASTER_AUDIT_LOGS },
-      ],
-    },
+    { id: 'audit', title: '감사', action: 'drawer-open-route', route: ROUTE_MASTER_AUDIT_LOGS, icon: 'shield' },
   ],
 };
 
@@ -21387,10 +21483,11 @@ async function securePasswordRemove() {
 function setTenantHelper(message, level = 'info') {
   const helper = $('#tenantHelper');
   if (!helper) return;
-  helper.classList.remove('tenant-helper-success', 'tenant-helper-error');
+  helper.classList.remove('tenant-helper-success', 'tenant-helper-error', 'tenant-helper-warning');
   helper.textContent = message || '';
   if (level === 'success') helper.classList.add('tenant-helper-success');
   if (level === 'error') helper.classList.add('tenant-helper-error');
+  if (level === 'warning' || level === 'warn') helper.classList.add('tenant-helper-warning');
 }
 
 function isSuperAdminLoginModeEnabled() {
@@ -21410,12 +21507,13 @@ function updateLoginSubmitState() {
   const tenant = getLoginTenantCode();
   const username = $('#username')?.value.trim() || '';
   const password = $('#password')?.value || '';
+  const tenantReady = state.tenantValid || state.tenantValidationBypass;
 
   const canSubmit = Boolean(
     tenant
     && username
     && password
-    && state.tenantValid
+    && tenantReady
     && !state.tenantChecking
     && !state.submitLoginBusy
     && !state.loadingLoginPrefs,
@@ -21436,7 +21534,7 @@ function refreshLoginFieldAvailability() {
   const rememberId = $('#rememberId');
 
   const lockAll = state.submitLoginBusy || state.loadingLoginPrefs;
-  const allowCredentials = !lockAll && state.tenantValid;
+  const allowCredentials = !lockAll && (state.tenantValid || state.tenantValidationBypass);
   const lockTenantInput = lockAll;
 
   if (tenantEl) tenantEl.disabled = lockTenantInput;
@@ -21448,6 +21546,16 @@ function refreshLoginFieldAvailability() {
   if (rememberId) rememberId.disabled = lockAll;
 
   updateLoginSubmitState();
+}
+
+function cancelTenantValidationRequest() {
+  if (!state.tenantCheckAbortController) return;
+  try {
+    state.tenantCheckAbortController.abort();
+  } catch {
+    // no-op
+  }
+  state.tenantCheckAbortController = null;
 }
 
 function getRecentTenants() {
@@ -21481,9 +21589,10 @@ function isTenantFormatValid(tenantCode) {
   return Boolean(tenant) && TENANT_CODE_PATTERN.test(tenant);
 }
 
-function markTenantValidation({ valid, checking, helper, helperLevel = 'info', error = '' }) {
+function markTenantValidation({ valid, checking, helper, helperLevel = 'info', error = '', allowSubmit = false }) {
   state.tenantValid = Boolean(valid);
   state.tenantChecking = Boolean(checking);
+  state.tenantValidationBypass = !state.tenantValid && Boolean(allowSubmit);
   if (helper !== undefined) {
     setTenantHelper(helper, helperLevel);
   }
@@ -21492,19 +21601,34 @@ function markTenantValidation({ valid, checking, helper, helperLevel = 'info', e
 }
 
 async function requestTenantValidation(tenantCode, sequence) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true;
+    try {
+      controller.abort();
+    } catch {
+      // no-op
+    }
+  }, TENANT_CHECK_REQUEST_TIMEOUT_MS);
+  state.tenantCheckAbortController = controller;
   try {
     const response = await fetch(`${state.activeApiBase}/auth/tenant-check?tenant_code=${encodeURIComponent(tenantCode)}`, {
       mode: 'cors',
       credentials: 'omit',
+      signal: controller.signal,
     });
     if (sequence !== state.tenantCheckSeq) return;
     if (!response.ok) {
       markTenantValidation({
         valid: false,
         checking: false,
-        helper: '회사 확인 중 오류가 발생했습니다.',
-        helperLevel: 'error',
-        error: '회사를 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.',
+        helper: response.status >= 500
+          ? '회사 확인이 지연되고 있습니다. 로그인은 계속 시도할 수 있습니다.'
+          : '회사 확인 중 오류가 발생했습니다.',
+        helperLevel: response.status >= 500 ? 'warning' : 'error',
+        error: response.status >= 500 ? '' : '회사를 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.',
+        allowSubmit: response.status >= 500,
       });
       return;
     }
@@ -21530,15 +21654,25 @@ async function requestTenantValidation(tenantCode, sequence) {
       helperLevel: 'error',
       error: '회사 번호를 다시 확인해 주세요.',
     });
-  } catch {
+  } catch (error) {
     if (sequence !== state.tenantCheckSeq) return;
     markTenantValidation({
       valid: false,
       checking: false,
-      helper: '네트워크 오류로 회사를 확인하지 못했습니다.',
-      helperLevel: 'error',
-      error: '인터넷 연결 또는 CORS 설정을 확인해 주세요.',
+      helper: timedOut
+        ? '회사 확인이 지연되고 있습니다. 로그인은 계속 시도할 수 있습니다.'
+        : '회사 확인에 실패했지만 로그인은 계속 시도할 수 있습니다.',
+      helperLevel: 'warning',
+      error: error?.name === 'AbortError' || timedOut
+        ? ''
+        : '네트워크 상태를 확인한 뒤 다시 시도해 주세요.',
+      allowSubmit: true,
     });
+  } finally {
+    window.clearTimeout(timeoutId);
+    if (state.tenantCheckAbortController === controller) {
+      state.tenantCheckAbortController = null;
+    }
   }
 }
 
@@ -21549,6 +21683,7 @@ function queueTenantValidation({ immediate = false } = {}) {
     clearTimeout(state.tenantCheckTimer);
     state.tenantCheckTimer = null;
   }
+  cancelTenantValidationRequest();
 
   if (!tenantCode) {
     markTenantValidation({
@@ -21786,7 +21921,6 @@ function roleScopeDescription(roleValue = '') {
 function mapLegacyViewName(view) {
   const value = String(view || '').trim();
   if (value === 'dashboard') return 'home';
-  if (value === 'leave') return 'requests';
   if (value === 'policies' || value === 'roadmap') return 'profile';
   return value || 'home';
 }
@@ -21794,8 +21928,8 @@ function mapLegacyViewName(view) {
 function normalizeRequestsTabView(view) {
   const value = String(view || '').trim().toLowerCase();
   if (value === 'attendance' || value === 'requests' || value === 'exceptions') return 'exceptions';
-  if (value === 'leave') return 'leave';
-  if (value === 'approvals') return 'approvals';
+  if (value === 'leave') return 'exceptions';
+  if (value === 'approvals') return 'documents';
   if (value === 'correction') return 'correction';
   if (value === 'documents' || value === 'document' || value === 'hr') return 'documents';
   return 'exceptions';
@@ -24913,9 +25047,65 @@ function setRequestsMyFilter(value) {
 
 function normalizeManagerRequestsTab(value) {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === REQUESTS_MANAGER_TAB_PROCESSED) return REQUESTS_MANAGER_TAB_PROCESSED;
-  if (normalized === REQUESTS_MANAGER_TAB_SOC) return REQUESTS_MANAGER_TAB_SOC;
+  if (normalized === 'completed' || normalized === 'processed') return REQUESTS_MANAGER_TAB_PROCESSED;
+  if (normalized === 'in_progress' || normalized === 'in-progress' || normalized === 'soc') return REQUESTS_MANAGER_TAB_SOC;
   return REQUESTS_MANAGER_TAB_PENDING;
+}
+
+function isManagerRequestsTabRouteValue(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'pending'
+    || normalized === 'completed'
+    || normalized === 'processed'
+    || normalized === 'in_progress'
+    || normalized === 'in-progress'
+    || normalized === 'soc';
+}
+
+function applyRequestsRouteSectionState(sectionValue = '', { managerMode = isManagerShellRole() } = {}) {
+  const sectionParam = String(sectionValue || '').trim().toLowerCase();
+  const normalizedManagerSection = isManagerRequestsTabRouteValue(sectionParam)
+    ? normalizeManagerRequestsTab(sectionParam)
+    : '';
+  if (managerMode) {
+    if (normalizedManagerSection) {
+      setManagerRequestsTab(normalizedManagerSection);
+      setRequestsTabView('documents');
+      return;
+    }
+    if (sectionParam === 'leave') {
+      setRequestsTabView('exceptions');
+      return;
+    }
+    if (sectionParam === 'correction') {
+      setManagerRequestsTab(REQUESTS_MANAGER_TAB_PENDING);
+      setRequestsTabView('exceptions');
+      return;
+    }
+    if (sectionParam === 'documents' || sectionParam === 'document' || sectionParam === 'hr') {
+      if (canUseRequestsDocumentApprovalMode()) {
+        setRequestsTabView('documents');
+      } else {
+        setRequestsTabView('exceptions');
+      }
+      return;
+    }
+    if (sectionParam === 'approvals') {
+      setManagerRequestsTab(REQUESTS_MANAGER_TAB_PENDING);
+      setRequestsTabView('documents');
+      return;
+    }
+    if (canUseRequestsDocumentApprovalMode()) {
+      setManagerRequestsTab(REQUESTS_MANAGER_TAB_PENDING);
+    }
+    setRequestsTabView('exceptions');
+    return;
+  }
+  if (sectionParam === 'leave') {
+    setRequestsTabView('exceptions');
+    return;
+  }
+  setRequestsTabView(sectionParam === 'correction' ? 'exceptions' : (sectionParam || 'exceptions'));
 }
 
 function setManagerRequestsTab(value) {
@@ -24941,6 +25131,7 @@ function resolveBottomTabActiveView(viewName) {
   if (target === 'requests' || target === 'hr' || target === 'checkin-request') {
     return resolveRequestsBottomTabView();
   }
+  if (target === 'leave') return 'requests';
   if (
     target === 'ops'
     || target === 'support-status'
@@ -25045,17 +25236,13 @@ function renderShellMode() {
 function renderWorkMobileSegments() {
   const managerMode = isManagerShellRole();
   const view = String(state.currentView || '').trim().toLowerCase();
-  const activeSegment = view === 'hr'
-    ? 'hr'
-    : (managerMode && view === 'requests' && state.requestsManagerTab === REQUESTS_MANAGER_TAB_PENDING ? 'approvals' : 'requests');
+  const activeSegment = view === 'hr' ? 'hr' : 'requests';
   ['#workMobileSegmentsRequests', '#workMobileSegmentsHr'].forEach((selector) => {
     const wrapper = $(selector);
     if (!wrapper) return;
     wrapper.classList.toggle('hidden', isDesktopViewport());
     wrapper.querySelectorAll('[data-action="work-mobile-segment"]').forEach((button) => {
       const segment = String(button?.dataset?.segment || '').trim();
-      const isApprovals = segment === 'approvals';
-      button.classList.toggle('hidden', isApprovals && !managerMode);
       button.classList.toggle('active', segment === activeSegment);
       button.setAttribute('aria-pressed', segment === activeSegment ? 'true' : 'false');
     });
@@ -25108,8 +25295,8 @@ function renderRequestsWorkspaceSegments() {
   const wrapper = $('#requestsWorkspaceSegments');
   if (!wrapper) return;
   const row = wrapper.closest('.workspace-tabbar-row');
-  const managerMode = isManagerShellRole();
-  const tab = normalizeRequestsTabView(state.requestsTabView);
+  const rawTab = normalizeRequestsTabView(state.requestsTabView);
+  const tab = rawTab === 'correction' ? 'exceptions' : rawTab;
   const showDesktopTabs = isDesktopViewport();
 
   wrapper.classList.toggle('hidden', !showDesktopTabs);
@@ -25119,8 +25306,8 @@ function renderRequestsWorkspaceSegments() {
 
   wrapper.querySelectorAll('[data-action="requests-workspace-segment"]').forEach((button) => {
     const segment = String(button?.dataset?.segment || '').trim();
-    const isApprovals = segment === 'approvals';
-    button.classList.toggle('hidden', isApprovals && !managerMode);
+    const isDocuments = segment === 'documents';
+    button.classList.toggle('hidden', isDocuments && !canUseRequestsDocumentApprovalMode());
     button.classList.toggle('active', segment === tab);
     button.setAttribute('aria-pressed', segment === tab ? 'true' : 'false');
   });
@@ -25142,6 +25329,7 @@ function ensureRequestsWorkspaceState() {
 function normalizeRequestsWorkspaceStatusFilter(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'pending') return 'pending';
+  if (normalized === 'in_progress' || normalized === 'in-progress') return 'in_progress';
   if (normalized === 'completed') return 'completed';
   if (normalized === 'rejected') return 'rejected';
   if (normalized === 'soc-pending') return 'soc-pending';
@@ -25252,21 +25440,50 @@ function createRequestsDateRangeForPreset(preset = 'this-week') {
   };
 }
 
-function ensureRequestsWorkspaceFilters() {
-  const workspace = ensureRequestsWorkspaceState();
-  if (workspace.filtersInitialized) return workspace;
+function resolveRequestsWorkspaceDefaultDateMode(segment = normalizeRequestsTabView(state.requestsTabView)) {
+  const normalizedSegment = normalizeRequestsTabView(segment);
+  if (normalizedSegment === 'documents' && isManagerShellRole() && canUseRequestsDocumentApprovalMode()) {
+    return 'open';
+  }
+  return 'this-week';
+}
+
+function applyRequestsWorkspaceDateDefaults(workspace, mode = resolveRequestsWorkspaceDefaultDateMode()) {
+  if (!workspace || typeof workspace !== 'object') return;
+  if (String(mode || '').trim().toLowerCase() === 'open') {
+    workspace.startDate = '';
+    workspace.endDate = '';
+    workspace.rangePreset = 'all';
+    workspace.dateDefaultMode = 'open';
+    return;
+  }
   const preset = createRequestsDateRangeForPreset('this-week');
   workspace.startDate = preset.startDate;
   workspace.endDate = preset.endDate;
   workspace.rangePreset = preset.rangePreset;
-  workspace.siteFilter = 'all';
-  workspace.employeeQuery = '';
-  workspace.statusFilter = 'all';
-  workspace.subTypeFilter = 'all';
-  workspace.actorQuery = '';
-  workspace.sortKey = 'submitted_at';
-  workspace.sortDirection = 'desc';
-  workspace.filtersInitialized = true;
+  workspace.dateDefaultMode = 'this-week';
+}
+
+function ensureRequestsWorkspaceFilters(segment = normalizeRequestsTabView(state.requestsTabView)) {
+  const workspace = ensureRequestsWorkspaceState();
+  const defaultDateMode = resolveRequestsWorkspaceDefaultDateMode(segment);
+  if (!workspace.filtersInitialized) {
+    workspace.siteFilterValues = [];
+    workspace.employeeQuery = '';
+    workspace.employeeFilterKeys = [];
+    workspace.statusFilter = 'all';
+    workspace.subTypeFilter = 'all';
+    workspace.actorQuery = '';
+    workspace.sortKey = 'submitted_at';
+    workspace.sortDirection = 'desc';
+    workspace.dateFilterTouched = false;
+    applyRequestsWorkspaceDateDefaults(workspace, defaultDateMode);
+    workspace.filtersInitialized = true;
+    return workspace;
+  }
+  if (!workspace.dateFilterTouched && workspace.dateDefaultMode !== defaultDateMode) {
+    applyRequestsWorkspaceDateDefaults(workspace, defaultDateMode);
+  }
   return workspace;
 }
 
@@ -25276,6 +25493,378 @@ function applyRequestsDateRangePreset(preset = 'this-week') {
   workspace.startDate = range.startDate;
   workspace.endDate = range.endDate;
   workspace.rangePreset = range.rangePreset;
+  workspace.dateFilterTouched = true;
+  workspace.dateDefaultMode = 'custom';
+}
+
+function normalizeStringArray(values = []) {
+  if (!Array.isArray(values)) return [];
+  const result = [];
+  values.forEach((value) => {
+    const normalized = String(value || '').trim();
+    if (!normalized || result.includes(normalized)) return;
+    result.push(normalized);
+  });
+  return result;
+}
+
+function getRequestsItemEmployeeFilterKey(item = {}) {
+  const employeeId = String(item?.employeeId || item?.row?.employee_id || item?.row?.requester_employee_id || '').trim();
+  const employeeCode = String(item?.employeeCode || item?.row?.employee_code || item?.row?.requester_employee_code || '').trim();
+  const employeeName = String(item?.employeeName || item?.row?.employee_name || item?.row?.requester_name || '').trim();
+  return employeeId || employeeCode || employeeName;
+}
+
+function getRequestsItemApprovalRankName(item = {}) {
+  return String(
+    item?.approvalRankName
+    || item?.row?.approval_rank_name
+    || item?.row?.requester_approval_rank_name
+    || '',
+  ).trim() || '직급 없음';
+}
+
+function getRequestsItemSiteName(item = {}) {
+  return String(item?.siteName || item?.row?.site_name || item?.row?.requester_site_name || item?.row?.org || '').trim() || '현장 미지정';
+}
+
+function getRequestsFilterSourceRows(source = 'requests') {
+  if (source === 'leave') {
+    const leaveState = state.leaveView || createInitialLeaveViewState();
+    return buildLeaveWorkspaceRequestItems(Array.isArray(leaveState.rows) ? leaveState.rows : []);
+  }
+  const workspace = ensureRequestsWorkspaceFilters();
+  return Array.from(workspace.rowsById?.values?.() || []);
+}
+
+function getRequestsSelectedEmployeeKeys(source = 'requests') {
+  if (source === 'leave') {
+    return normalizeStringArray(state.leaveView?.workspaceEmployeeKeys || []);
+  }
+  return normalizeStringArray(ensureRequestsWorkspaceFilters().employeeFilterKeys || []);
+}
+
+function setRequestsSelectedEmployeeKeys(source = 'requests', values = []) {
+  const normalized = normalizeStringArray(values);
+  if (source === 'leave') {
+    if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+    state.leaveView.workspaceEmployeeKeys = normalized;
+    return;
+  }
+  const workspace = ensureRequestsWorkspaceFilters();
+  workspace.employeeFilterKeys = normalized;
+}
+
+function getRequestsSelectedSiteValues(source = 'requests') {
+  if (source === 'leave') {
+    return normalizeStringArray(state.leaveView?.workspaceSiteFilterValues || []);
+  }
+  return normalizeStringArray(ensureRequestsWorkspaceFilters().siteFilterValues || []);
+}
+
+function setRequestsSelectedSiteValues(source = 'requests', values = []) {
+  const normalized = normalizeStringArray(values);
+  if (source === 'leave') {
+    if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+    state.leaveView.workspaceSiteFilterValues = normalized;
+    return;
+  }
+  const workspace = ensureRequestsWorkspaceFilters();
+  workspace.siteFilterValues = normalized;
+}
+
+function buildRequestsEmployeeFilterOptions(items = []) {
+  const map = new Map();
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const key = getRequestsItemEmployeeFilterKey(item);
+    if (!key || map.has(key)) return;
+    map.set(key, {
+      key,
+      name: String(item.employeeName || item.row?.employee_name || item.row?.requester_name || '-').trim() || '-',
+      code: String(item.employeeCode || item.row?.employee_code || item.row?.requester_employee_code || '').trim(),
+      siteName: getRequestsItemSiteName(item),
+      rankName: getRequestsItemApprovalRankName(item),
+    });
+  });
+  return Array.from(map.values()).sort((left, right) => {
+    const nameCompare = left.name.localeCompare(right.name, 'ko', { numeric: true, sensitivity: 'base' });
+    if (nameCompare !== 0) return nameCompare;
+    return String(left.code || '').localeCompare(String(right.code || ''), 'ko', { numeric: true, sensitivity: 'base' });
+  });
+}
+
+function buildRequestsFilterFacetOptions(options = [], facet = 'site') {
+  const map = new Map();
+  (Array.isArray(options) ? options : []).forEach((option) => {
+    const rawValue = facet === 'rank' ? option.rankName : option.siteName;
+    const value = String(rawValue || '').trim() || (facet === 'rank' ? '직급 없음' : '현장 미지정');
+    if (!value || map.has(value)) return;
+    map.set(value, {
+      value,
+      count: options.filter((item) => String(facet === 'rank' ? item.rankName : item.siteName).trim() === value).length,
+    });
+  });
+  return Array.from(map.values()).sort((left, right) => left.value.localeCompare(right.value, 'ko', { numeric: true, sensitivity: 'base' }));
+}
+
+function getRequestsFilterSheetState() {
+  if (!state.requestsFilterSheet || typeof state.requestsFilterSheet !== 'object') return null;
+  return state.requestsFilterSheet;
+}
+
+function updateRequestsFilterSheetStateFromInput(target) {
+  const sheetState = getRequestsFilterSheetState();
+  if (!sheetState || !(target instanceof HTMLElement)) return false;
+  const inputType = String(target.dataset.requestsFilterSheetInput || '').trim().toLowerCase();
+  if (!inputType) return false;
+  if (inputType === 'search' && target instanceof HTMLInputElement) {
+    sheetState.searchQuery = String(target.value || '').trim();
+    renderRequestsFilterSheet();
+    return true;
+  }
+  if (!(target instanceof HTMLInputElement)) return false;
+  const value = String(target.dataset.value || '').trim();
+  if (!value) return false;
+  const nextSelected = new Set(
+    inputType === 'employee'
+      ? normalizeStringArray(sheetState.selectedEmployeeKeys)
+      : inputType === 'rank'
+      ? normalizeStringArray(sheetState.selectedRankValues)
+      : normalizeStringArray(sheetState.selectedSiteValues),
+  );
+  if (target.checked) {
+    nextSelected.add(value);
+  } else {
+    nextSelected.delete(value);
+  }
+  if (inputType === 'employee') {
+    sheetState.selectedEmployeeKeys = Array.from(nextSelected);
+  } else if (inputType === 'rank') {
+    sheetState.selectedRankValues = Array.from(nextSelected);
+  } else {
+    sheetState.selectedSiteValues = Array.from(nextSelected);
+  }
+  renderRequestsFilterSheet();
+  return true;
+}
+
+function renderRequestsFilterTriggerLabels() {
+  [
+    { source: 'requests', employeeLabelId: 'requestsEmployeeFilterLabel', siteCountId: 'requestsSiteFilterCount' },
+    { source: 'leave', employeeLabelId: 'leaveWorkspaceEmployeeFilterLabel', siteCountId: 'leaveWorkspaceSiteFilterCount' },
+    { source: 'leave', employeeLabelId: 'leaveUsageEmployeeFilterLabel', siteCountId: '' },
+  ].forEach(({ source, employeeLabelId, siteCountId }) => {
+    const employeeLabelEl = document.getElementById(employeeLabelId);
+    const selectedEmployees = getRequestsSelectedEmployeeKeys(source);
+    if (employeeLabelEl) {
+      employeeLabelEl.textContent = selectedEmployees.length ? `직원 ${selectedEmployees.length}명` : '직원';
+    }
+    const siteCountEl = siteCountId ? document.getElementById(siteCountId) : null;
+    const selectedSites = getRequestsSelectedSiteValues(source);
+    if (siteCountEl) {
+      siteCountEl.textContent = String(selectedSites.length || 0);
+      siteCountEl.classList.toggle('hidden', selectedSites.length === 0);
+    }
+  });
+}
+
+function renderRequestsFilterSheet() {
+  const sheetState = getRequestsFilterSheetState();
+  const content = document.getElementById('requestsFilterSheetContent');
+  if (!sheetState || !(content instanceof HTMLElement)) return;
+  const sourceItems = getRequestsFilterSourceRows(sheetState.source);
+  const employeeOptions = buildRequestsEmployeeFilterOptions(sourceItems);
+  const searchQuery = String(sheetState.searchQuery || '').trim().toLowerCase();
+
+  content.innerHTML = '';
+
+  const head = document.createElement('div');
+  head.className = 'requests-filter-sheet-head';
+  const resetButton = document.createElement('button');
+  resetButton.type = 'button';
+  resetButton.className = 'btn btn-ghost requests-filter-sheet-reset';
+  resetButton.dataset.action = 'requests-filter-sheet-reset';
+  resetButton.textContent = '초기화';
+  head.appendChild(resetButton);
+  content.appendChild(head);
+
+  if (sheetState.type === 'site') {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'requests-filter-sheet-simple';
+
+    const searchLabel = document.createElement('label');
+    searchLabel.className = 'input-field';
+    searchLabel.innerHTML = '<span>검색</span>';
+    const searchInput = document.createElement('input');
+    searchInput.type = 'search';
+    searchInput.placeholder = '현장명 검색';
+    searchInput.value = String(sheetState.searchQuery || '');
+    searchInput.dataset.requestsFilterSheetInput = 'search';
+    searchLabel.appendChild(searchInput);
+    wrapper.appendChild(searchLabel);
+
+    const optionsWrap = document.createElement('div');
+    optionsWrap.className = 'requests-filter-sheet-option-list';
+    const options = buildRequestsFilterFacetOptions(employeeOptions, 'site').filter((option) => {
+      if (!searchQuery) return true;
+      return option.value.toLowerCase().includes(searchQuery);
+    });
+    if (!options.length) {
+      optionsWrap.innerHTML = '<div class="requests-filter-sheet-empty">선택 가능한 현장이 없습니다.</div>';
+    } else {
+      options.forEach((option) => {
+        const label = document.createElement('label');
+        label.className = 'requests-filter-sheet-option';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = normalizeStringArray(sheetState.selectedSiteValues).includes(option.value);
+        input.dataset.requestsFilterSheetInput = 'site';
+        input.dataset.value = option.value;
+        const copy = document.createElement('div');
+        copy.className = 'requests-filter-sheet-option-copy';
+        copy.innerHTML = `<strong>${option.value}</strong><span>${option.count}명</span>`;
+        label.append(input, copy);
+        optionsWrap.appendChild(label);
+      });
+    }
+    wrapper.appendChild(optionsWrap);
+    content.appendChild(wrapper);
+    return;
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'requests-filter-sheet';
+
+  const nav = document.createElement('div');
+  nav.className = 'requests-filter-sheet-nav';
+  [
+    { key: 'site', label: '사이트' },
+    { key: 'rank', label: '직급' },
+  ].forEach((item) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `btn btn-secondary requests-filter-sheet-nav-btn${sheetState.facet === item.key ? ' active' : ''}`;
+    button.dataset.action = 'requests-filter-sheet-facet';
+    button.dataset.facet = item.key;
+    button.textContent = item.label;
+    nav.appendChild(button);
+  });
+
+  const body = document.createElement('div');
+  body.className = 'requests-filter-sheet-body';
+
+  const searchLabel = document.createElement('label');
+  searchLabel.className = 'input-field requests-filter-sheet-search';
+  searchLabel.innerHTML = '<span class="sr-only">직원 검색</span>';
+  const searchInput = document.createElement('input');
+  searchInput.type = 'search';
+  searchInput.placeholder = '직원명 또는 사번 검색';
+  searchInput.value = String(sheetState.searchQuery || '');
+  searchInput.dataset.requestsFilterSheetInput = 'search';
+  searchLabel.appendChild(searchInput);
+  body.appendChild(searchLabel);
+
+  const facetOptionsWrap = document.createElement('div');
+  facetOptionsWrap.className = 'requests-filter-sheet-option-list requests-filter-sheet-facet-list';
+  buildRequestsFilterFacetOptions(employeeOptions, sheetState.facet).forEach((option) => {
+    const selectedValues = sheetState.facet === 'rank'
+      ? normalizeStringArray(sheetState.selectedRankValues)
+      : normalizeStringArray(sheetState.selectedSiteValues);
+    const label = document.createElement('label');
+    label.className = 'requests-filter-sheet-option';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = selectedValues.includes(option.value);
+    input.dataset.requestsFilterSheetInput = sheetState.facet;
+    input.dataset.value = option.value;
+    const copy = document.createElement('div');
+    copy.className = 'requests-filter-sheet-option-copy';
+    copy.innerHTML = `<strong>${option.value}</strong><span>${option.count}명</span>`;
+    label.append(input, copy);
+    facetOptionsWrap.appendChild(label);
+  });
+  body.appendChild(facetOptionsWrap);
+
+  const employeeList = document.createElement('div');
+  employeeList.className = 'requests-filter-sheet-option-list requests-filter-sheet-employee-list';
+  const visibleEmployees = employeeOptions.filter((option) => {
+    const selectedSites = normalizeStringArray(sheetState.selectedSiteValues);
+    const selectedRanks = normalizeStringArray(sheetState.selectedRankValues);
+    if (selectedSites.length && !selectedSites.includes(option.siteName)) return false;
+    if (selectedRanks.length && !selectedRanks.includes(option.rankName)) return false;
+    if (searchQuery) {
+      const haystack = `${option.name} ${option.code} ${option.siteName} ${option.rankName}`.toLowerCase();
+      if (!haystack.includes(searchQuery)) return false;
+    }
+    return true;
+  });
+  if (!visibleEmployees.length) {
+    employeeList.innerHTML = '<div class="requests-filter-sheet-empty">선택 가능한 직원이 없습니다.</div>';
+  } else {
+    visibleEmployees.forEach((option) => {
+      const label = document.createElement('label');
+      label.className = 'requests-filter-sheet-option';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = normalizeStringArray(sheetState.selectedEmployeeKeys).includes(option.key);
+      input.dataset.requestsFilterSheetInput = 'employee';
+      input.dataset.value = option.key;
+      const copy = document.createElement('div');
+      copy.className = 'requests-filter-sheet-option-copy';
+      copy.innerHTML = `<strong>${option.name}${option.code ? ` (${option.code})` : ''}</strong><span>${option.siteName} · ${option.rankName}</span>`;
+      label.append(input, copy);
+      employeeList.appendChild(label);
+    });
+  }
+  body.appendChild(employeeList);
+
+  wrapper.append(nav, body);
+  content.appendChild(wrapper);
+}
+
+function openRequestsFilterSheet({ source = 'requests', type = 'employee' } = {}) {
+  const content = document.createElement('div');
+  content.id = 'requestsFilterSheetContent';
+  const currentEmployees = getRequestsSelectedEmployeeKeys(source);
+  const currentSites = getRequestsSelectedSiteValues(source);
+  state.requestsFilterSheet = {
+    source,
+    type,
+    facet: 'site',
+    searchQuery: '',
+    selectedEmployeeKeys: [...currentEmployees],
+    selectedSiteValues: [...currentSites],
+    selectedRankValues: [],
+  };
+  openSheet({
+    title: type === 'site' ? '현장 필터' : '직원 필터',
+    contentNode: content,
+    actions: [
+      { label: '취소', variant: 'btn-secondary', action: 'sheet-close' },
+      { label: '적용', variant: 'btn-primary', action: 'requests-filter-sheet-apply' },
+    ],
+    layoutClass: 'sheet-layout-requests-filter',
+  });
+  renderRequestsFilterSheet();
+}
+
+function applyRequestsFilterSheet() {
+  const sheetState = getRequestsFilterSheetState();
+  if (!sheetState) return;
+  if (sheetState.type === 'site') {
+    setRequestsSelectedSiteValues(sheetState.source, sheetState.selectedSiteValues || []);
+  } else {
+    setRequestsSelectedEmployeeKeys(sheetState.source, sheetState.selectedEmployeeKeys || []);
+  }
+  renderRequestsFilterTriggerLabels();
+  closeSheet();
+  state.requestsFilterSheet = null;
+  if (sheetState.source === 'leave') {
+    renderLeaveManagementWorkspace();
+    return;
+  }
+  setRequestsWorkspaceRows(getRequestsActiveRawRowsForCurrentTab());
+  renderRequestsWorkspaceView();
 }
 
 function requestsDateMatchesRange(dateValue = '', startDate = '', endDate = '') {
@@ -25293,6 +25882,10 @@ function createRequestsWorkspaceItem(payload = {}) {
     key: '',
     kind: '',
     status: 'pending',
+    employeeId: '',
+    employeeCode: '',
+    approvalRankId: '',
+    approvalRankName: '',
     companyName: '-',
     siteName: '-',
     employeeName: '-',
@@ -25368,6 +25961,10 @@ function buildRequestsAttendanceItem(row = {}, { managerMode = false } = {}) {
     key: buildRequestRowKey('attendance', row.id),
     kind: 'attendance',
     status,
+    employeeId: String(row.employee_id || '').trim(),
+    employeeCode: String(row.employee_code || '').trim(),
+    approvalRankId: String(row.approval_rank_id || '').trim(),
+    approvalRankName: String(row.approval_rank_name || '').trim(),
     companyName,
     siteName,
     employeeName,
@@ -25406,11 +26003,15 @@ function buildRequestsLeaveItem(row = {}, { managerMode = false } = {}) {
     fallbackTenantCode: getTenantCodeForScopedAdminApi() || state.user?.tenant_code || '',
     fallbackTenantName: state.user?.tenant_name || '',
   });
-  const requestType = formatLeaveTypeLabel(row.leave_type, row.reason);
+  const requestType = String(row.policy_name || '').trim() || formatLeaveTypeLabel(row.leave_type, row.reason);
   return createRequestsWorkspaceItem({
     key: buildRequestRowKey('leave', row.id),
     kind: 'leave',
     status,
+    employeeId: String(row.employee_id || '').trim(),
+    employeeCode: String(row.employee_code || '').trim(),
+    approvalRankId: String(row.approval_rank_id || '').trim(),
+    approvalRankName: String(row.approval_rank_name || '').trim(),
     companyName,
     siteName,
     employeeName,
@@ -25453,6 +26054,8 @@ function buildRequestsCorrectionItem(row = {}, { managerMode = false } = {}) {
     key: buildRequestRowKey('correction', row.id),
     kind: 'correction',
     status,
+    employeeId: String(row.employee_id || '').trim(),
+    employeeCode: String(row.employeeCode || row.employee_code || '').trim(),
     companyName,
     siteName,
     employeeName,
@@ -25532,8 +26135,12 @@ function buildRequestsApprovalItem(row = {}) {
     key: buildRequestRowKey('approval', row?.id),
     kind: 'approval',
     status,
+    employeeId: String(row?.requester_employee_id || '').trim(),
+    employeeCode: String(row?.requester_employee_code || '').trim(),
+    approvalRankId: String(row?.requester_approval_rank_id || '').trim(),
+    approvalRankName: String(row?.requester_approval_rank_name || '').trim(),
     companyName: String(renderTenantName(row) || state.user?.tenant_name || '-').trim() || '-',
-    siteName: '-',
+    siteName: String(row?.requester_site_name || '-').trim() || '-',
     employeeName,
     actorName: employeeName,
     requestType,
@@ -25559,41 +26166,62 @@ function buildRequestsApprovalItem(row = {}) {
 }
 
 function buildRequestsDocumentItem(row = {}, { adminMode = false } = {}) {
+  const requestKind = getHrDocumentRequestKind(row);
+  const isResignation = requestKind === 'resignation';
   const status = normalizeHrRequestStatus(row?.status);
   const requestedAt = String(row?.requested_at || '').trim();
   const priorityRank = status === 'requested' || status === 'generating' ? 1 : (status === 'rejected' ? 3 : 5);
   const employeeName = String(row?.employee_name || state.user?.full_name || state.user?.employee_name || '-').trim() || '-';
   const companyName = String(row?.company_name || state.user?.tenant_name || renderTenantName(row) || '-').trim() || '-';
   const siteName = String(row?.org || row?.site_name || row?.site_code || '-').trim() || '-';
-  const certificateName = String(row?.certificate_type_name || row?.certificate_type_key || '증명서').trim() || '증명서';
+  const documentName = isResignation
+    ? (String(row?.document_title || '').trim() || '사직서')
+    : (String(row?.certificate_type_name || row?.certificate_type_key || '증명서').trim() || '증명서');
   const approvalStatus = normalizeApprovalDocumentStatus(row?.approval_status);
-  const issueStateLabel = formatCertificateIssueStateLabel(row?.issue_job_state || row?.status);
+  const issueStateLabel = isResignation
+    ? formatHrApprovalProgressSummary(row)
+    : formatCertificateIssueStateLabel(row?.issue_job_state || row?.status);
+  const targetDateValue = isResignation
+    ? String(row?.expected_last_working_date || requestedAt).trim()
+    : requestedAt;
+  const summaryText = isResignation
+    ? `${formatHrResignationTypeLabel(row?.resignation_type)} · ${formatHrApprovalProgressSummary(row)}`
+    : `${formatHrPurposeLabel(row?.purpose_code, row?.purpose_text)} · ${issueStateLabel}`;
+  const note = isResignation
+    ? String(row?.resignation_reason || row?.handover_notes || formatHrApprovalProgressSummary(row)).trim()
+    : String(row?.issue_job_error || row?.rejection_reason || formatHrPurposeLabel(row?.purpose_code, row?.purpose_text)).trim();
   return createRequestsWorkspaceItem({
     key: buildRequestRowKey('document', row?.id),
     kind: 'document',
     status,
+    employeeId: String(row?.employee_id || '').trim(),
+    employeeCode: String(row?.employee_code || '').trim(),
+    approvalRankId: String(row?.approval_rank_id || '').trim(),
+    approvalRankName: String(row?.approval_rank_name || '').trim(),
     companyName,
     siteName,
     employeeName,
     actorName: employeeName,
-    requestType: certificateName,
+    requestType: documentName,
     requestedAt,
     requestedAtLabel: requestedAt ? new Date(requestedAt).toLocaleString('ko-KR') : '-',
     updatedAt: String(row?.updated_at || row?.requested_at || '').trim(),
     updatedAtLabel: formatDateLabel(row?.updated_at || row?.requested_at, '-'),
-    targetDateValue: requestedAt,
-    targetDateLabel: requestedAt ? toRequestDateLabel(requestedAt) : '-',
+    targetDateValue,
+    targetDateLabel: targetDateValue ? toRequestDateLabel(targetDateValue) : '-',
     primaryText: employeeName,
     secondaryText: `${companyName}${siteName && siteName !== '-' ? ` · ${siteName}` : ''}`,
-    summaryText: `${formatHrPurposeLabel(row?.purpose_code, row?.purpose_text)} · ${issueStateLabel}`,
+    summaryText,
     statusLabel: getHrRequestStatusLabel(status),
     statusClass: getHrRequestStatusPillClass(status),
-    integrationLabel: `${getApprovalDocumentStatusLabel(approvalStatus)} · ${issueStateLabel}`,
-    processorName: String(row?.approved_by || row?.reviewed_by || '-').trim() || '-',
-    approvalStage: adminMode ? '증명서 발급 승인' : '내 증명서 요청',
+    integrationLabel: isResignation
+      ? formatHrApprovalProgressSummary(row)
+      : `${getApprovalDocumentStatusLabel(approvalStatus)} · ${issueStateLabel}`,
+    processorName: String(row?.current_approver_name || row?.approved_by || row?.reviewed_by || '-').trim() || '-',
+    approvalStage: adminMode ? '문서 승인' : '내 문서',
     priorityRank,
     priorityLabel: getRequestsPriorityLabel(priorityRank),
-    note: String(row?.issue_job_error || row?.rejection_reason || formatHrPurposeLabel(row?.purpose_code, row?.purpose_text)).trim(),
+    note,
     row,
   });
 }
@@ -25613,6 +26241,7 @@ function buildRequestsSocItem(row = {}) {
     key: String(row?.key || `soc-${row?.id || row?.receivedAt || row?.received_at || Math.random().toString(36).slice(2, 8)}`),
     kind: 'soc',
     status,
+    employeeCode: String(applied?.employee_code || '').trim(),
     companyName: String(state.user?.tenant_name || renderTenantName(row) || '-').trim() || '-',
     siteName,
     employeeName,
@@ -25670,13 +26299,16 @@ function requestsRowMatchesStatusFilter(item = {}, filter = 'all') {
   const status = String(item?.status || '').trim().toLowerCase();
   if (normalized === 'all') return true;
   if (normalized === 'pending') {
-    return ['pending', 'requested', 'generating'].includes(status);
+    return ['pending', 'requested', 'submitted'].includes(status);
+  }
+  if (normalized === 'in_progress') {
+    return ['in_review', 'generating'].includes(status);
   }
   if (normalized === 'completed') {
     return ['approved', 'issued', 'success', 'cancelled', 'canceled'].includes(status);
   }
   if (normalized === 'rejected') {
-    return ['rejected', 'failed', 'fail'].includes(status);
+    return ['rejected', 'returned', 'failed', 'fail'].includes(status);
   }
   if (normalized === 'soc-pending') {
     return status === 'pending' || status === 'generating' || status === 'fail' || String(item?.integrationLabel || '').includes('대기');
@@ -25684,33 +26316,41 @@ function requestsRowMatchesStatusFilter(item = {}, filter = 'all') {
   return true;
 }
 
+function requestsDocumentItemMatchesManagerTab(item = {}, managerTab = REQUESTS_MANAGER_TAB_PENDING) {
+  const normalizedTab = normalizeManagerRequestsTab(managerTab);
+  const status = String(item?.status || '').trim().toLowerCase();
+  if (normalizedTab === REQUESTS_MANAGER_TAB_PENDING) {
+    return ['pending', 'requested', 'submitted'].includes(status);
+  }
+  if (normalizedTab === REQUESTS_MANAGER_TAB_SOC) {
+    return ['in_review', 'generating'].includes(status);
+  }
+  return ['approved', 'issued', 'rejected', 'returned', 'failed', 'fail', 'cancelled', 'canceled'].includes(status);
+}
+
 function applyRequestsWorkspaceFilters(rows = []) {
   const workspace = ensureRequestsWorkspaceFilters();
   const items = Array.isArray(rows) ? rows : [];
-  const employeeQuery = String(workspace.employeeQuery || '').trim().toLowerCase();
-  const actorQuery = String(workspace.actorQuery || '').trim().toLowerCase();
-  const siteFilter = String(workspace.siteFilter || 'all').trim();
+  const currentSegment = normalizeRequestsTabView(state.requestsTabView);
+  const siteFilterValues = normalizeStringArray(workspace.siteFilterValues || []);
+  const employeeFilterKeys = normalizeStringArray(workspace.employeeFilterKeys || []);
   const statusFilter = normalizeRequestsWorkspaceStatusFilter(workspace.statusFilter || 'all');
-  const subTypeFilter = String(workspace.subTypeFilter || 'all').trim();
   const sortKey = normalizeRequestsWorkspaceSortKey(workspace.sortKey || 'submitted_at');
   const sortDirection = normalizeRequestsWorkspaceSortDirection(workspace.sortDirection || 'desc');
   const filtered = items.filter((item) => {
     if (!requestsDateMatchesRange(item.targetDateValue || item.requestedAt || item.updatedAt, workspace.startDate, workspace.endDate)) {
       return false;
     }
-    if (siteFilter && siteFilter !== 'all' && String(item.siteName || '').trim() !== siteFilter) {
+    if (siteFilterValues.length && !siteFilterValues.includes(getRequestsItemSiteName(item))) {
       return false;
     }
-    if (subTypeFilter && subTypeFilter !== 'all' && String(item.requestType || '').trim() !== subTypeFilter) {
+    if (employeeFilterKeys.length && !employeeFilterKeys.includes(getRequestsItemEmployeeFilterKey(item))) {
       return false;
     }
-    if (employeeQuery) {
-      const employeeHaystack = `${item.employeeName || ''} ${item.primaryText || ''}`.toLowerCase();
-      if (!employeeHaystack.includes(employeeQuery)) return false;
-    }
-    if (actorQuery) {
-      const actorHaystack = `${item.actorName || ''} ${item.processorName || ''} ${item.note || ''}`.toLowerCase();
-      if (!actorHaystack.includes(actorQuery)) return false;
+    if (currentSegment === 'documents' && isManagerShellRole() && canUseRequestsDocumentApprovalMode()) {
+      if (!requestsDocumentItemMatchesManagerTab(item, state.requestsManagerTab)) {
+        return false;
+      }
     }
     return requestsRowMatchesStatusFilter(item, statusFilter);
   });
@@ -25785,132 +26425,17 @@ function renderRequestsWorkspaceKpis() {
 }
 
 function renderRequestsToolbarSummary() {
-  const workspace = ensureRequestsWorkspaceState();
-  const countEl = $('#requestsToolbarScopeCount');
-  const statsEl = $('#requestsToolbarQuickStats');
-  const segment = normalizeRequestsTabView(state.requestsTabView);
-  const rows = Array.isArray(workspace.activeRows) ? workspace.activeRows : [];
-  const pendingCount = rows.filter((item) => requestsRowMatchesStatusFilter(item, 'pending')).length;
-  const approvedToday = rows.filter((item) => ['approved', 'issued', 'success'].includes(String(item.status || '').toLowerCase()) && toLocalDateKey(new Date(item.updatedAt || item.requestedAt || 0)) === toLocalDateKey(new Date())).length;
-  const rejectedToday = rows.filter((item) => ['rejected', 'failed', 'fail'].includes(String(item.status || '').toLowerCase()) && toLocalDateKey(new Date(item.updatedAt || item.requestedAt || 0)) === toLocalDateKey(new Date())).length;
-  const createdToday = rows.filter((item) => toLocalDateKey(new Date(item.requestedAt || item.createdAt || 0)) === toLocalDateKey(new Date())).length;
-  const completedCount = rows.filter((item) => requestsRowMatchesStatusFilter(item, 'completed')).length;
-  const issuedCount = rows.filter((item) => ['issued', 'generating', 'requested'].includes(String(item.status || '').toLowerCase())).length;
-  const statsBySegment = segment === 'documents'
-    ? [`전체 ${rows.length}건`, `발급 대기 ${issuedCount}건`, `오늘 신규 ${createdToday}건`]
-    : segment === 'approvals'
-      ? [`대기 ${pendingCount}건`, `처리 ${completedCount}건`, `오늘 신규 ${createdToday}건`]
-      : [`전체 ${rows.length}건`, `오늘 승인 ${approvedToday}건`, `오늘 반려 ${rejectedToday}건`];
-  if (countEl) {
-    countEl.textContent = segment === 'documents'
-      ? ''
-      : segment === 'approvals'
-        ? ''
-        : `대기 ${pendingCount}건`;
-    countEl.classList.toggle('hidden', segment === 'documents' || segment === 'approvals');
-  }
-  if (statsEl) {
-    statsEl.innerHTML = '';
-    statsEl.classList.toggle('requests-toolbar-stats-compact', segment === 'documents' || segment === 'approvals');
-    statsBySegment.forEach((label) => {
-      const span = document.createElement('span');
-      span.className = 'requests-toolbar-stat';
-      span.textContent = label;
-      statsEl.appendChild(span);
-    });
-  }
+  renderRequestsFilterTriggerLabels();
 }
 
 function renderRequestsFilterBar() {
   const workspace = ensureRequestsWorkspaceFilters();
-  const segment = normalizeRequestsTabView(state.requestsTabView);
   const startInput = $('#requestsFilterStartDate');
   const endInput = $('#requestsFilterEndDate');
-  const siteSelect = $('#requestsSiteFilter');
-  const employeeInput = $('#requestsEmployeeFilter');
   const statusSelect = $('#requestsStatusFilter');
-  const subTypeSelect = $('#requestsSubTypeFilter');
-  const actorInput = $('#requestsActorSearch');
-  const sortSelect = $('#requestsSortSelect');
   if (startInput instanceof HTMLInputElement) startInput.value = String(workspace.startDate || '');
   if (endInput instanceof HTMLInputElement) endInput.value = String(workspace.endDate || '');
-  if (employeeInput instanceof HTMLInputElement) employeeInput.value = String(workspace.employeeQuery || '');
   if (statusSelect instanceof HTMLSelectElement) statusSelect.value = normalizeRequestsWorkspaceStatusFilter(workspace.statusFilter || 'all');
-  if (subTypeSelect instanceof HTMLSelectElement) subTypeSelect.value = String(workspace.subTypeFilter || 'all').trim() || 'all';
-  if (actorInput instanceof HTMLInputElement) actorInput.value = String(workspace.actorQuery || '');
-  if (sortSelect instanceof HTMLSelectElement) sortSelect.value = getRequestsWorkspaceSortControlValue();
-
-  const root = $('#view-requests');
-  if (root instanceof HTMLElement) {
-    root.dataset.requestsSegment = segment;
-  }
-  const dateCluster = document.querySelector('#requestsFilterBar .requests-filter-cluster-date');
-  const coreCluster = document.querySelector('#requestsFilterBar .requests-filter-cluster-core');
-  const searchCluster = document.querySelector('#requestsFilterBar .requests-filter-cluster-search');
-  const rangeShortcuts = document.querySelector('#requestsFilterBar .requests-range-shortcuts');
-  const actorField = actorInput instanceof HTMLElement ? actorInput.closest('.input-field') : null;
-  const subtypeField = subTypeSelect instanceof HTMLElement ? subTypeSelect.closest('.input-field') : null;
-  const compactFilterMode = segment === 'documents' || segment === 'approvals';
-  if (dateCluster instanceof HTMLElement) {
-    dateCluster.classList.toggle('is-compact', compactFilterMode);
-  }
-  if (coreCluster instanceof HTMLElement) {
-    coreCluster.classList.toggle('is-compact', compactFilterMode);
-  }
-  if (searchCluster instanceof HTMLElement) {
-    searchCluster.classList.toggle('is-compact', compactFilterMode);
-  }
-  if (rangeShortcuts instanceof HTMLElement) {
-    rangeShortcuts.classList.toggle('hidden', compactFilterMode);
-  }
-  if (actorField instanceof HTMLElement) {
-    actorField.classList.toggle('hidden', compactFilterMode);
-  }
-  if (subtypeField instanceof HTMLElement) {
-    subtypeField.classList.toggle('hidden', segment === 'approvals');
-  }
-
-  document.querySelectorAll('#requestsFilterBar [data-action="requests-range"]').forEach((button) => {
-    const preset = String(button?.dataset?.range || '').trim().toLowerCase();
-    const active = preset && preset === String(workspace.rangePreset || '').trim().toLowerCase();
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', active ? 'true' : 'false');
-  });
-
-  if (siteSelect instanceof HTMLSelectElement) {
-    const rows = Array.from(workspace.rowsById?.values?.() || []);
-    const values = Array.from(new Set(rows.map((item) => String(item?.siteName || '').trim()).filter(Boolean))).sort((left, right) => left.localeCompare(right, 'ko'));
-    const selected = String(workspace.siteFilter || 'all').trim() || 'all';
-    siteSelect.innerHTML = '<option value="all">전체 현장</option>';
-    values.forEach((value) => {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = value;
-      option.selected = value === selected;
-      siteSelect.appendChild(option);
-    });
-    if (!values.includes(selected)) {
-      siteSelect.value = 'all';
-      workspace.siteFilter = 'all';
-    }
-  }
-  if (subTypeSelect instanceof HTMLSelectElement) {
-    const rows = Array.from(workspace.rowsById?.values?.() || []);
-    const values = Array.from(new Set(rows.map((item) => String(item?.requestType || '').trim()).filter(Boolean))).sort((left, right) => left.localeCompare(right, 'ko'));
-    const selected = String(workspace.subTypeFilter || 'all').trim() || 'all';
-    subTypeSelect.innerHTML = '<option value="all">전체 유형</option>';
-    values.forEach((value) => {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = value;
-      option.selected = value === selected;
-      subTypeSelect.appendChild(option);
-    });
-    if (selected !== 'all' && !values.includes(selected)) {
-      subTypeSelect.value = 'all';
-      workspace.subTypeFilter = 'all';
-    }
-  }
   renderRequestsToolbarSummary();
 }
 
@@ -26075,15 +26600,7 @@ function renderRequestsWorkspaceListRows() {
   if (!rows.length) {
     workspace.detailKey = '';
     workspace.drawerOpen = false;
-    renderCompactListEmpty(
-      list,
-      segment === 'documents'
-        ? '등록된 문서 요청이 없습니다.'
-        : segment === 'approvals'
-          ? '처리할 승인 문서가 없습니다.'
-          : '조건에 맞는 요청이 없습니다.',
-      segment === 'documents' || segment === 'approvals' ? '' : '필터를 다시 확인해 주세요.',
-    );
+    renderCompactListEmpty(list, '요청이 없습니다.');
     renderRequestsSortHeaders();
     return;
   }
@@ -26209,27 +26726,53 @@ function renderRequestsWorkspaceDetailPanel() {
     }
   } else if (item.kind === 'document') {
     const row = item.row || {};
+    const requestKind = getHrDocumentRequestKind(row);
+    const isResignation = requestKind === 'resignation';
     if (title) title.textContent = '문서 요청 상세';
-    fields.push(
-      { label: '문서', value: String(row.certificate_type_name || row.certificate_type_key || '증명서').trim() || '증명서' },
-      { label: '용도', value: formatHrPurposeLabel(row.purpose_code, row.purpose_text) },
-      { label: '결재 상태', value: getApprovalDocumentStatusLabel(row.approval_status || 'submitted') },
-      { label: '발급 진행', value: formatCertificateIssueStateLabel(row.issue_job_state || row.status) },
-      { label: '발급 번호', value: row.issue_number || '-' },
-      { label: '오류/반려 사유', value: row.issue_job_error || row.rejection_reason || '-' },
-    );
-    const certificateRequestId = String(row.id || '').trim();
-    if (isManagerShellRole() && certificateRequestId && normalizeHrRequestStatus(row.status) === 'requested') {
-      actions.push(
-        { label: '반려', variant: 'btn-destructive', action: 'hr-admin-reject', dataset: { requestId: certificateRequestId } },
-        { label: '승인', variant: 'btn-primary', action: 'hr-admin-approve', dataset: { requestId: certificateRequestId } },
+    if (isResignation) {
+      fields.push(
+        { label: '문서', value: String(row.document_title || '사직서').trim() || '사직서' },
+        { label: '사직 구분', value: formatHrResignationTypeLabel(row.resignation_type) },
+        { label: '희망 퇴사일', value: row.expected_last_working_date || '-' },
+        { label: '결재 진행', value: formatHrApprovalProgressSummary(row) },
+        { label: '사직 사유', value: row.resignation_reason || '-' },
+        { label: '인수인계 메모', value: row.handover_notes || '-' },
+        { label: '반려 사유', value: row.rejection_reason || '-' },
+      );
+    } else {
+      fields.push(
+        { label: '문서', value: String(row.certificate_type_name || row.certificate_type_key || '증명서').trim() || '증명서' },
+        { label: '용도', value: formatHrPurposeLabel(row.purpose_code, row.purpose_text) },
+        { label: '결재 상태', value: getApprovalDocumentStatusLabel(row.approval_status || 'submitted') },
+        { label: '발급 진행', value: formatCertificateIssueStateLabel(row.issue_job_state || row.status) },
+        { label: '발급 번호', value: row.issue_number || '-' },
+        { label: '오류/반려 사유', value: row.issue_job_error || row.rejection_reason || '-' },
       );
     }
-    if (certificateRequestId && normalizeHrRequestStatus(row.status) === 'issued') {
+    const certificateRequestId = String(row.id || '').trim();
+    if (canUseRequestsDocumentApprovalMode() && certificateRequestId && normalizeHrRequestStatus(row.status) === 'requested') {
+      actions.push(
+        { label: '반려', variant: 'btn-destructive', action: 'hr-admin-reject', dataset: { requestId: certificateRequestId, requestKind } },
+        { label: '승인', variant: 'btn-primary', action: 'hr-admin-approve', dataset: { requestId: certificateRequestId, requestKind } },
+      );
+      if (row?.can_delegate) {
+        actions.push({ label: '전결 승인', variant: 'btn-secondary', action: 'hr-admin-delegate-approve', dataset: { requestId: certificateRequestId, requestKind } });
+      }
+    }
+    if (!isResignation && certificateRequestId && (Boolean(row?.can_download_pdf) || normalizeHrRequestStatus(row.status) === 'issued')) {
       actions.push({ label: 'PDF 다운로드', variant: 'btn-secondary', action: 'hr-employment-download', dataset: { requestId: certificateRequestId } });
     }
     if (normalizeHrRequestStatus(row.status) === 'rejected' && String(row.rejection_reason || '').trim()) {
       actions.push({ label: '사유보기', variant: 'btn-ghost', action: 'hr-employment-view-reason', dataset: { reason: row.rejection_reason } });
+    } else if (isResignation && String(row.resignation_reason || row.handover_notes || '').trim()) {
+      actions.push({
+        label: '내용보기',
+        variant: 'btn-ghost',
+        action: 'hr-employment-view-reason',
+        dataset: {
+          reason: `사직 사유: ${String(row?.resignation_reason || '').trim() || '-'}${String(row?.handover_notes || '').trim() ? `\n인수인계 메모: ${String(row?.handover_notes || '').trim()}` : ''}`,
+        },
+      });
     }
   } else if (item.kind === 'approval') {
     const row = item.row || {};
@@ -26637,7 +27180,7 @@ function openRequestsNewRequestSheet() {
   hint.className = 'muted';
   hint.textContent = managerMode
     ? '새 요청 유형을 선택하세요.'
-    : '출퇴근 예외 또는 휴가 요청을 선택하세요.';
+    : '출퇴근 예외 요청을 등록하세요.';
   content.appendChild(hint);
 
   const actions = document.createElement('div');
@@ -26649,13 +27192,6 @@ function openRequestsNewRequestSheet() {
   checkinBtn.dataset.action = 'requests-quick-checkin';
   checkinBtn.textContent = '출퇴근 예외 요청';
   actions.appendChild(checkinBtn);
-
-  const leaveBtn = document.createElement('button');
-  leaveBtn.type = 'button';
-  leaveBtn.className = 'btn btn-secondary';
-  leaveBtn.dataset.action = 'requests-quick-leave';
-  leaveBtn.textContent = '휴가 요청';
-  actions.appendChild(leaveBtn);
 
   content.appendChild(actions);
 
@@ -26671,81 +27207,48 @@ function renderRequestsTabSections() {
   const navRole = getNavigationRole();
   const managerMode = isManagerShellRole(navRole);
   let tab = normalizeRequestsTabView(state.requestsTabView);
-  const canRequests = Boolean(perms.attendance || perms.leave);
-  const canLeave = Boolean(perms.leave || perms.leaveWrite || perms.leaveReview);
-  const canCorrection = Boolean(perms.attendance || perms.attendanceWrite);
-  const canApprovals = Boolean(perms.attendanceReview || perms.leaveReview);
-  const canDocuments = true;
+  const canRequests = Boolean(perms.attendance || perms.attendanceWrite || perms.attendanceReview);
+  const canDocuments = canUseRequestsDocumentApprovalMode();
   const titleEl = $('#requestsViewTitle');
   const descriptionEl = $('#requestsViewDescription');
   const newRequestBtn = document.querySelector('[data-action="requests-open-new-request"]');
 
-  if (managerMode && tab === 'approvals' && !canApprovals) {
-    state.requestsTabView = canLeave ? 'leave' : 'exceptions';
+  if (tab === 'documents' && !canDocuments) {
+    state.requestsTabView = 'exceptions';
   }
-  if (tab === 'leave' && !canLeave) {
-    state.requestsTabView = managerMode && canApprovals ? 'approvals' : 'exceptions';
+  if (tab === 'exceptions' && !canRequests && managerMode && canDocuments) {
+    state.requestsTabView = 'documents';
   }
-  if (tab === 'exceptions' && !canRequests && managerMode && canApprovals) {
-    state.requestsTabView = 'approvals';
-  }
-  if (tab === 'correction' && !canCorrection && !managerMode) {
+  if (tab === 'correction') {
     state.requestsTabView = 'exceptions';
   }
   tab = normalizeRequestsTabView(state.requestsTabView);
 
   if (titleEl) {
-    if (tab === 'leave') {
-      titleEl.textContent = '휴가 요청';
-    } else if (tab === 'documents') {
-      titleEl.textContent = '문서 요청';
+    if (tab === 'documents') {
+      titleEl.textContent = '문서 승인';
     } else if (tab === 'correction') {
       titleEl.textContent = '정정 요청';
-    } else if (tab === 'approvals') {
-      titleEl.textContent = '승인함';
     } else {
-      titleEl.textContent = '요청·승인';
+      titleEl.textContent = '출퇴근 예외';
     }
   }
   if (descriptionEl) {
-    if (tab === 'leave') {
-      descriptionEl.textContent = '휴가 유형, 요청 이력, 사용 현황을 한 흐름에서 확인하고 상세 패널에서 이어서 처리합니다.';
-    } else if (tab === 'documents') {
-      descriptionEl.textContent = '재직·경력·퇴직·휴직 증명서 요청과 발급 상태를 목록과 상세 패널에서 확인합니다. 신규 발급은 문서 센터로 이어집니다.';
-    } else if (tab === 'correction') {
-      descriptionEl.textContent = '정정 요청 이력을 비교하고 상세 패널에서 변경 전후와 상태를 이어서 확인합니다.';
-    } else if (tab === 'approvals') {
-      descriptionEl.textContent = '여러 요청 유형을 한 큐에서 비교하고 상세 패널에서 승인과 반려를 처리합니다.';
-    } else {
-      descriptionEl.textContent = '요청 유형을 선택하고 목록을 확인한 뒤 상세 패널에서 등록과 처리를 이어갑니다.';
-    }
+    descriptionEl.textContent = '';
   }
   if (newRequestBtn) {
-    if (tab === 'leave') {
-      newRequestBtn.textContent = '휴가 신청';
-    } else if (tab === 'documents') {
-      newRequestBtn.textContent = '문서 센터';
-    } else if (tab === 'correction') {
-      newRequestBtn.textContent = '정정 흐름 보기';
-    } else {
-      newRequestBtn.textContent = '새 요청';
-    }
-    newRequestBtn.classList.toggle('hidden', tab === 'approvals' || tab === 'correction');
+    newRequestBtn.textContent = '새 요청';
+    newRequestBtn.classList.toggle('hidden', isManagerShellRole() || tab === 'documents' || tab === 'correction');
   }
 
   const docsButton = document.querySelector('#requestsWorkspaceSegments [data-segment="documents"]');
   if (docsButton) docsButton.classList.toggle('hidden', !canDocuments);
 
-  const correctionButton = document.querySelector('#requestsWorkspaceSegments [data-segment="correction"]');
-  if (correctionButton) correctionButton.classList.toggle('hidden', !canCorrection && !managerMode);
-
-  const showLeaveWorkspace = tab === 'leave' && canLeave;
-  toggleVisibility('#requestsFilterBar', !showLeaveWorkspace);
-  toggleVisibility('#requestsKpiStrip', !showLeaveWorkspace);
-  toggleVisibility('#requestsWorkspaceShell', !showLeaveWorkspace);
+  toggleVisibility('#requestsFilterBar', true);
+  toggleVisibility('#requestsKpiStrip', true);
+  toggleVisibility('#requestsWorkspaceShell', true);
   toggleVisibility('#employeeRequestsQuickModule', false);
   toggleVisibility('#employeeRequestListModule', false);
-  toggleVisibility('#leaveModule', showLeaveWorkspace);
   toggleVisibility('#correctionModule', false);
   toggleVisibility('#attendanceApprovalModule', false);
   renderRequestsWorkspaceSegments();
@@ -26824,11 +27327,10 @@ function isScheduleRoutePath(routePath = '') {
     || route === ROUTE_ADMIN_SCHEDULE_TOOLS;
 }
 
-function normalizeCalendarViewTab(value = 'week') {
+function normalizeCalendarViewTab(value = 'month') {
   const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'day') return 'day';
   if (normalized === 'month') return 'month';
-  if (normalized === 'agenda') return 'agenda';
-  if (normalized === 'booking-links' || normalized === 'booking' || normalized === 'links') return 'booking-links';
   return 'week';
 }
 
@@ -26841,26 +27343,23 @@ function resolveCalendarPublicSlugFromRoute(routeWithQuery = '') {
 
 function isCalendarRoutePath(routePath = '') {
   const route = normalizeRoutePath(routePath);
-  return route === ROUTE_CALENDAR_WEEK
+  return route === ROUTE_CALENDAR_DAY
+    || route === ROUTE_CALENDAR_WEEK
     || route === ROUTE_CALENDAR_MONTH
-    || route === ROUTE_CALENDAR_AGENDA
-    || route === ROUTE_CALENDAR_BOOKING_LINKS
     || route === ROUTE_CALENDAR_PUBLIC_BOOKING;
 }
 
 function resolveCalendarTabFromRoutePath(routePath = '') {
   const route = normalizeRoutePath(routePath);
+  if (route === ROUTE_CALENDAR_DAY) return 'day';
   if (route === ROUTE_CALENDAR_MONTH) return 'month';
-  if (route === ROUTE_CALENDAR_AGENDA) return 'agenda';
-  if (route === ROUTE_CALENDAR_BOOKING_LINKS) return 'booking-links';
   return route === ROUTE_CALENDAR_WEEK ? 'week' : '';
 }
 
-function getCalendarTabRoute(tab = state.calendar?.viewTab || 'week') {
+function getCalendarTabRoute(tab = state.calendar?.viewTab || 'month') {
   const normalized = normalizeCalendarViewTab(tab);
+  if (normalized === 'day') return ROUTE_CALENDAR_DAY;
   if (normalized === 'month') return ROUTE_CALENDAR_MONTH;
-  if (normalized === 'agenda') return ROUTE_CALENDAR_AGENDA;
-  if (normalized === 'booking-links') return ROUTE_CALENDAR_BOOKING_LINKS;
   return ROUTE_CALENDAR_WEEK;
 }
 
@@ -26972,16 +27471,45 @@ function getTenantByCode(tenantCode = '') {
     .find((item) => String(item?.tenant_code || '').trim().toUpperCase() === code) || null;
 }
 
+function normalizeLeaveWorkspaceTabParam(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'history') return 'history';
+  if (normalized === 'grants' || normalized === 'grant') return 'grants';
+  if (normalized === 'settings' || normalized === 'policy') return 'settings';
+  return 'status';
+}
+
+function resolveLeaveTabFromWorkspaceSection(section = '') {
+  const normalized = String(section || '').trim().toLowerCase();
+  if (normalized === 'history' || normalized === 'requests') return 'history';
+  if (normalized === 'grants') return 'grants';
+  if (normalized === 'settings' || normalized === 'policy') return 'settings';
+  return 'status';
+}
+
+function resolveLeaveWorkspaceSectionFromTab(tab = '') {
+  const normalized = normalizeLeaveWorkspaceTabParam(tab);
+  if (normalized === 'history') return 'history';
+  if (normalized === 'grants') return 'grants';
+  if (normalized === 'settings') return 'settings';
+  return 'status';
+}
+
+function getLeaveTabRoute(tab = '') {
+  const normalizedTab = normalizeLeaveWorkspaceTabParam(tab || resolveLeaveTabFromWorkspaceSection(state.leaveView?.workspaceSection || 'status'));
+  return normalizedTab === 'status' ? ROUTE_LEAVE : `${ROUTE_LEAVE}?tab=${encodeURIComponent(normalizedTab)}`;
+}
+
 function resolveRouteForView(viewName = '') {
   const raw = String(viewName || '').trim().toLowerCase();
-  if (raw === 'attendance') return getAttendanceRouteWithTab();
-  if (raw === 'calendar') return getCalendarTabRoute(state.calendar?.viewTab || 'week');
+  if (raw === 'attendance') return getAttendanceWorkspaceRoute();
+  if (raw === 'calendar') return getCalendarTabRoute(state.calendar?.viewTab || 'month');
   if (raw === 'calendar-public') {
     const slug = String(state.calendar?.publicBookingSlug || '').trim();
     return slug ? `${ROUTE_CALENDAR_PUBLIC_BOOKING}?slug=${encodeURIComponent(slug)}` : ROUTE_CALENDAR_PUBLIC_BOOKING;
   }
   if (raw === 'hr') return ROUTE_HR;
-  if (raw === 'leave') return `${ROUTE_REQUESTS}?section=leave`;
+  if (raw === 'leave') return getLeaveTabRoute();
   if (raw === 'messenger') return ROUTE_MESSENGER;
   if (raw === 'meetings') return ROUTE_MEETINGS;
   if (raw === 'notices') return buildNoticesRoute();
@@ -27009,6 +27537,7 @@ function resolveViewForRoute(routePath = '') {
   if (route === ROUTE_HOME) return 'home';
   if (route === ROUTE_FEATURE_NOTICES) return 'notices';
   if (route === ROUTE_HR) return 'hr';
+  if (route === ROUTE_LEAVE) return 'leave';
   if (route === ROUTE_MESSENGER) return 'messenger';
   if (route === ROUTE_MEETINGS) return 'meetings';
   if (route === ROUTE_SUPPORT_STATUS) return 'support-status';
@@ -27041,10 +27570,9 @@ function isKnownRoute(routePath = '') {
     ROUTE_ATTENDANCE,
     ROUTE_MESSENGER,
     ROUTE_MEETINGS,
+    ROUTE_CALENDAR_DAY,
     ROUTE_CALENDAR_WEEK,
     ROUTE_CALENDAR_MONTH,
-    ROUTE_CALENDAR_AGENDA,
-    ROUTE_CALENDAR_BOOKING_LINKS,
     ROUTE_CALENDAR_PUBLIC_BOOKING,
     ROUTE_SCHEDULE,
     ROUTE_SCHEDULE_CALENDAR,
@@ -27054,6 +27582,7 @@ function isKnownRoute(routePath = '') {
     ROUTE_SCHEDULE_REPORTS,
     ROUTE_SCHEDULE_TEMPLATES,
     ROUTE_REQUESTS,
+    ROUTE_LEAVE,
     ROUTE_HR,
     ROUTE_PROFILE,
     ROUTE_APPROVALS,
@@ -27091,6 +27620,7 @@ function isRouteAllowed(routePath, perms = getRolePermissions(), navRole = getNa
   if (route === ROUTE_MESSENGER) return Boolean(perms.messenger);
   if (route === ROUTE_MEETINGS) return Boolean(perms.meetings);
   if (route === ROUTE_HR) return true;
+  if (route === ROUTE_LEAVE) return Boolean(perms.leave || perms.leaveWrite || perms.leaveReview);
   if (route === ROUTE_OPS) return isManagerShellRole(navRole);
   if (route === ROUTE_SUPPORT_STATUS) return isManagerShellRole(navRole);
   if (route === ROUTE_REPORTS) return canViewReportsCenter();
@@ -27107,9 +27637,11 @@ function isRouteAllowed(routePath, perms = getRolePermissions(), navRole = getNa
   ) return Boolean(perms.schedule);
   if (route === ROUTE_SCHEDULE_HQ_UPLOAD) return canUseScheduleUploadHqWizard();
   if (route === ROUTE_SCHEDULE_REPORTS) return canViewReportsCenter();
-  if (route === ROUTE_REQUESTS) return Boolean(perms.attendance || perms.leave);
+  if (route === ROUTE_REQUESTS) {
+    return Boolean(perms.attendance || perms.attendanceWrite || perms.attendanceReview || canUseRequestsDocumentApprovalMode());
+  }
   if (route === ROUTE_REQUESTS_CORRECTION) return Boolean(perms.attendance || perms.attendanceWrite);
-  if (route === ROUTE_APPROVALS) return Boolean(perms.attendanceReview || perms.leaveReview);
+  if (route === ROUTE_APPROVALS) return Boolean(perms.attendanceReview || canUseRequestsDocumentApprovalMode());
   if (route === ROUTE_ADMIN_SITES) return (navRole === 'DEV' || navRole === 'BRANCH_MANAGER') && Boolean(perms.org);
   if (route === ROUTE_ADMIN_SITES_EDIT) return (navRole === 'DEV' || navRole === 'BRANCH_MANAGER') && Boolean(perms.siteWrite);
   if (route === ROUTE_ADMIN_SITES_NEW) return (navRole === 'DEV' || navRole === 'BRANCH_MANAGER') && Boolean(perms.siteWrite);
@@ -27132,10 +27664,9 @@ function resolveFallbackRoute(perms = getRolePermissions(), navRole = getNavigat
   const candidates = [
     ROUTE_HOME,
     ROUTE_ATTENDANCE,
+    ROUTE_SCHEDULE_CALENDAR,
     ROUTE_REQUESTS,
     ROUTE_HR,
-    ROUTE_CALENDAR_WEEK,
-    ROUTE_SCHEDULE_CALENDAR,
     ROUTE_PROFILE,
     (navRole === 'DEV' || navRole === 'BRANCH_MANAGER') ? ROUTE_ADMIN_SITES : '',
     (navRole === 'DEV' || navRole === 'BRANCH_MANAGER') ? ROUTE_ADMIN_EMPLOYEES : '',
@@ -27183,7 +27714,6 @@ function openRouteDeniedModal(requestedRoute, fallbackRoute) {
 function resolveApprovalTabFromQueryString(queryString = '') {
   const params = new URLSearchParams(String(queryString || '').trim());
   const rawTab = String(params.get('tab') || '').trim().toLowerCase();
-  if (rawTab === APPROVAL_TAB_LEAVE) return APPROVAL_TAB_LEAVE;
   if (rawTab === APPROVAL_TAB_CORRECTION || rawTab === 'correction-request') return APPROVAL_TAB_CORRECTION;
   if (rawTab === APPROVAL_TAB_CHECKIN || rawTab === 'checkin' || rawTab === 'checkin-exception') {
     return APPROVAL_TAB_CHECKIN;
@@ -27233,8 +27763,35 @@ function applyAttendanceRouteStateFromQuery(routePath = '', parsedParams = new U
   if (!state.attendanceView) {
     state.attendanceView = createInitialAttendanceViewState();
   }
-  const requestedTab = parsedParams.has('tab') ? parsedParams.get('tab') : 'status';
-  setAttendanceManagerTab(requestedTab || 'status');
+  const requestedSection = normalizeAttendanceWorkspaceSection(parsedParams.get('section') || '');
+  const requestedMode = normalizeAttendancePeriodMode(parsedParams.get('mode') || '');
+  const requestedScope = normalizeAttendanceStatsScope(parsedParams.get('scope') || '');
+  const requestedMetric = normalizeAttendanceStatsAttendanceMetric(parsedParams.get('metric') || '');
+  const requestedStaffMetric = normalizeAttendanceStatsStaffMetric(parsedParams.get('staff_metric') || '');
+  const requestedTab = parsedParams.has('tab') ? parsedParams.get('tab') : '';
+  if (requestedSection) {
+    setAttendanceWorkspaceSection(requestedSection, { syncRoute: false });
+  } else if (requestedTab) {
+    setAttendanceManagerTab(requestedTab || 'status');
+  } else {
+    setAttendanceWorkspaceSection(state.attendanceView.workspaceSection || 'daily', { syncRoute: false });
+  }
+  if (state.attendanceView.workspaceSection === 'period') {
+    state.attendanceView.periodMode = normalizeAttendancePeriodMode(
+      requestedMode
+      || state.attendanceView.periodMode
+      || (normalizeAttendanceManagerTab(requestedTab || '') === 'calendar' ? 'calendar' : 'list')
+    );
+  }
+  if (state.attendanceView.workspaceSection === 'stats') {
+    state.attendanceView.statsScope = requestedScope || state.attendanceView.statsScope || 'attendance';
+    if (state.attendanceView.statsScope === 'attendance') {
+      state.attendanceView.statsAttendanceMetric = requestedMetric || state.attendanceView.statsAttendanceMetric || 'rate';
+    } else {
+      state.attendanceView.statsStaffMetric = requestedStaffMetric || state.attendanceView.statsStaffMetric || 'weekday';
+    }
+  }
+  syncAttendanceLegacyManagerTabFromWorkspace();
   if (!hasAttendanceManagerRowsForCurrentQuery()) {
     clearAttendanceManagerRows();
   }
@@ -27252,6 +27809,29 @@ function applyReportsRouteStateFromQuery(routePath = '', parsedParams = new URLS
     ? 'finance-download'
     : (route === ROUTE_SCHEDULE_REPORTS ? 'finance' : getDefaultReportsViewTab());
   setReportsViewTab(parsedParams.get('tab') || fallbackTab);
+}
+
+function applyHrRouteStateFromQuery(routePath = '', parsedParams = new URLSearchParams()) {
+  const route = normalizeRoutePath(routePath);
+  if (route !== ROUTE_HR) return;
+  const hrState = ensureHrDocsState();
+  const requestedSegment = normalizeHrWorkspaceSegment(parsedParams.get('segment') || hrState.workspaceSegment || 'apply');
+  const nextSegment = resolveAccessibleHrWorkspaceSegment(requestedSegment);
+  if (nextSegment !== requestedSegment) {
+    updateRouteHash(`${ROUTE_HR}?segment=${encodeURIComponent(nextSegment)}`, { replace: true });
+  }
+  hrState.workspaceSegment = nextSegment;
+  hrState.adminPanel = nextSegment === 'manage'
+    ? normalizeHrAdminPanel(hrState.adminPanel || 'templates')
+    : 'templates';
+}
+
+function applyLeaveRouteStateFromQuery(routePath = '', parsedParams = new URLSearchParams()) {
+  const route = normalizeRoutePath(routePath);
+  if (route !== ROUTE_LEAVE) return;
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  const requestedTab = resolveLeaveWorkspaceSectionFromTab(parsedParams.get('tab') || '');
+  state.leaveView.workspaceSection = normalizeLeaveWorkspaceSection(requestedTab || 'status');
 }
 
 function scrollToSelector(selector) {
@@ -27310,6 +27890,35 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
   const fallbackAuthedRoute = state.user ? resolvePostLoginDefaultRoute() : ROUTE_LOGIN;
   const requestedRoute = normalizeRoutePath(parsed.path) || fallbackAuthedRoute;
   let route = isKnownRoute(requestedRoute) ? requestedRoute : fallbackAuthedRoute;
+  if (route === ROUTE_APPROVALS) {
+    route = ROUTE_REQUESTS;
+    parsedParams.set('section', REQUESTS_MANAGER_TAB_PENDING);
+  }
+  if (route === ROUTE_ATTENDANCE) {
+    const legacyTab = String(parsedParams.get('tab') || '').trim().toLowerCase();
+    if (legacyTab) {
+      parsedParams.delete('tab');
+      if (legacyTab === 'calendar') {
+        parsedParams.set('section', 'period');
+        parsedParams.set('mode', 'calendar');
+      } else if (legacyTab === 'list') {
+        parsedParams.set('section', 'period');
+        parsedParams.set('mode', 'list');
+      } else {
+        parsedParams.set('section', 'daily');
+      }
+    }
+  }
+  if (route === ROUTE_HR) {
+    const rawSegment = String(parsedParams.get('segment') || '').trim().toLowerCase();
+    if (rawSegment === 'approvals') {
+      route = ROUTE_REQUESTS;
+      parsedParams = new URLSearchParams();
+      parsedParams.set('section', 'documents');
+    } else if (rawSegment === 'templates') {
+      parsedParams.set('segment', 'manage');
+    }
+  }
   const requestedReportsTab = String(parsedParams.get('tab') || '').trim().toLowerCase();
   if (route === ROUTE_REPORTS && requestedReportsTab === 'finance-download') {
     parsedParams.delete('tab');
@@ -27425,11 +28034,6 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
   const masterRoute = parseMasterRoute(route);
   if (masterRoute) syncMasterRouteContext(masterRoute);
 
-  if (route === ROUTE_APPROVALS) {
-    setManagerRequestsTab(REQUESTS_MANAGER_TAB_PENDING);
-    setRequestsTabView('requests');
-  }
-
   if (route === ROUTE_MESSENGER) {
     ensureMessengerState();
   }
@@ -27438,28 +28042,29 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
     ensureMeetingsState();
   }
 
+  let forceViewReload = false;
+
   if (route === ROUTE_REQUESTS) {
     const sectionParam = String(parsedParams.get('section') || '').trim().toLowerCase();
-    if (isManagerShellRole()) {
-      if (sectionParam === REQUESTS_MANAGER_TAB_PROCESSED || sectionParam === REQUESTS_MANAGER_TAB_SOC || sectionParam === REQUESTS_MANAGER_TAB_PENDING) {
-        setManagerRequestsTab(sectionParam);
-        setRequestsTabView('approvals');
-      } else if (sectionParam === 'leave' && (can('leave') || can('leaveReview') || can('leaveWrite'))) {
-        setRequestsTabView('leave');
-      } else if (sectionParam === 'correction') {
-        setRequestsTabView('correction');
-      } else if (sectionParam === 'documents' || sectionParam === 'hr') {
-        setRequestsTabView('documents');
-      } else if (sectionParam === 'approvals') {
-        setRequestsTabView('approvals');
-        setManagerRequestsTab(REQUESTS_MANAGER_TAB_PENDING);
-      } else {
-        setManagerRequestsTab(REQUESTS_MANAGER_TAB_PENDING);
-        setRequestsTabView('exceptions');
-      }
-    } else {
-      setRequestsTabView(sectionParam || 'exceptions');
+    if (sectionParam === 'leave') {
+      route = ROUTE_LEAVE;
+      parsedParams = new URLSearchParams();
+      parsedParams.set('tab', resolveLeaveTabFromWorkspaceSection(state.leaveView?.workspaceSection || 'status'));
     }
+    applyRequestsRouteSectionState(sectionParam);
+    if (isManagerShellRole() && sectionParam === 'approvals') {
+      parsedParams.set('section', REQUESTS_MANAGER_TAB_PENDING);
+    }
+    forceViewReload = true;
+  }
+
+  if (route === ROUTE_LEAVE) {
+    applyLeaveRouteStateFromQuery(route, parsedParams);
+    forceViewReload = true;
+  }
+
+  if (route === ROUTE_REQUESTS_CORRECTION) {
+    forceViewReload = true;
   }
 
   if (route === ROUTE_OPS) {
@@ -27469,6 +28074,7 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
   applyAttendanceRouteStateFromQuery(route, parsedParams);
   applyOpsRouteStateFromQuery(route, parsedParams);
   applyReportsRouteStateFromQuery(route, parsedParams);
+  applyHrRouteStateFromQuery(route, parsedParams);
   applyScheduleRouteStateFromQuery(route, parsedParams);
   applyNoticesRouteStateFromQuery(route, parsedParams);
   applyProfileRouteStateFromQuery(route, parsedParams);
@@ -27487,7 +28093,7 @@ async function navigateToRoute(rawRoute, { replace = false, silentDeniedModal = 
   renderDrawerMenu();
 
   const view = resolveViewForRoute(route);
-  await showView(view, { skipRouteSync: true, replaceRoute: replace });
+  await showView(view, { skipRouteSync: true, replaceRoute: replace, forceLoad: forceViewReload });
 
   if (route === ROUTE_NOTIFICATIONS) {
     openNotificationsSheet();
@@ -27585,7 +28191,7 @@ function isViewAllowed(view, perms = getRolePermissions()) {
   const target = mapLegacyViewName(view);
   if (target === 'dev-console') return Boolean(perms.tenantManage);
   if (target === 'home' || target === 'profile') return true;
-  if (target === 'requests') return Boolean(perms.attendance || perms.leave);
+  if (target === 'requests') return Boolean(perms.attendance || perms.attendanceWrite || perms.attendanceReview || canUseRequestsDocumentApprovalMode());
   if (target === 'hr') return true;
   if (target === 'checkin-request') return Boolean(perms.attendanceWrite);
   if (target === 'schedule') return Boolean(perms.schedule);
@@ -29791,6 +30397,17 @@ function normalizeLeaveStatusFilter(value = '') {
   return normalizeLeaveHistoryFilter(value);
 }
 
+function shouldUseLeaveApprovalInboxScope() {
+  if (!state.leaveView) {
+    state.leaveView = createInitialLeaveViewState();
+  }
+  const managerMode = isManagerShellRole();
+  const reviewCapable = Boolean(can('leaveReview'));
+  if (!managerMode || !reviewCapable) return false;
+  const activeSection = normalizeLeaveWorkspaceSection(state.leaveView.workspaceSection || 'status');
+  return isDesktopLeaveWorkspaceMode() && activeSection === 'history' && !Boolean(state.leaveView.workspaceComposerOpen);
+}
+
 function resolveLeaveManagerScope() {
   if (!state.leaveView) {
     state.leaveView = createInitialLeaveViewState();
@@ -29800,8 +30417,18 @@ function resolveLeaveManagerScope() {
   if (!managerMode || !reviewCapable) return 'mine';
   const ownEmployeeCode = String(state.user?.employee_code || '').trim();
   const preferred = normalizeLeaveManagerScope(state.leaveView.managerScope);
+  if (shouldUseLeaveApprovalInboxScope()) return 'team';
   if (preferred === 'mine' && !ownEmployeeCode) return 'team';
   return preferred;
+}
+
+function canManageLeaveSettings() {
+  const role = normalizeRoleValue(state.user?.role || '');
+  return role === 'developer' || role === 'hq_admin' || isMasterDeveloperAccount();
+}
+
+function canManageLeaveGrants() {
+  return canManageLeaveSettings();
 }
 
 function setLeaveManagerScope(scope = 'mine') {
@@ -29825,6 +30452,98 @@ function formatLeaveUnits(value = 0, suffix = '일') {
     ? String(Math.round(num))
     : num.toFixed(1);
   return `${normalized}${suffix}`;
+}
+
+function normalizeLeavePolicyCategory(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'annual') return 'annual';
+  if (normalized === 'reward') return 'reward';
+  if (normalized === 'special') return 'special';
+  return 'other';
+}
+
+function formatLeavePolicyCategoryLabel(value = '') {
+  const category = normalizeLeavePolicyCategory(value);
+  if (category === 'annual') return '연차휴가';
+  if (category === 'reward') return '포상휴가';
+  if (category === 'special') return '특별휴가';
+  return '기타 휴가';
+}
+
+function normalizeLeavePolicyUnit(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'hour') return 'hour';
+  if (normalized === 'half_day') return 'half_day';
+  return 'day';
+}
+
+function formatLeavePolicyUnitLabel(value = '') {
+  const unit = normalizeLeavePolicyUnit(value);
+  if (unit === 'hour') return '시간 단위';
+  if (unit === 'half_day') return '0.5일 단위';
+  return '일 단위';
+}
+
+function formatLeaveGrantModeLabel(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'manual' || normalized === 'on_request') return '수동 부여';
+  if (normalized === 'yearly' || normalized === 'accrual' || normalized === 'auto') return '근속 누적';
+  if (normalized === 'upfront' || normalized === 'advance') return '사전 부여';
+  return normalized || '-';
+}
+
+function normalizeLeavePromotionRequestTiming(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'after_grant_5m') return 'after_grant_5m';
+  if (normalized === 'after_grant_10m') return 'after_grant_10m';
+  return 'after_grant_6m';
+}
+
+function formatLeavePromotionRequestTimingLabel(value = '') {
+  const normalized = normalizeLeavePromotionRequestTiming(value);
+  if (normalized === 'after_grant_5m') return '연차 소멸 5개월 전 요청';
+  if (normalized === 'after_grant_10m') return '연차 소멸 10개월 전 요청';
+  return '연차 소멸 6개월 전 요청';
+}
+
+function normalizeLeavePromotionReminderMode(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'disabled') return 'disabled';
+  if (normalized === 'until_submitted') return 'until_submitted';
+  return 'month_before_expire';
+}
+
+function formatLeavePromotionReminderModeLabel(value = '') {
+  const normalized = normalizeLeavePromotionReminderMode(value);
+  if (normalized === 'disabled') return '재촉 알림 없음';
+  if (normalized === 'until_submitted') return '제출 전까지 반복 알림';
+  return '사용 만료 1개월 전 알림';
+}
+
+function normalizeLeavePromotionUnusedAction(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'manager_collect') return 'manager_collect';
+  return 'system_reclaim';
+}
+
+function formatLeavePromotionUnusedActionLabel(value = '') {
+  const normalized = normalizeLeavePromotionUnusedAction(value);
+  if (normalized === 'manager_collect') return '승인권자가 직접 회수 지정';
+  return '시스템이 무기록분 자동 회수';
+}
+
+function formatLeavePolicyTenureSummary(rules = {}) {
+  const items = Array.isArray(rules?.tenure_bonus_rules) ? rules.tenure_bonus_rules : [];
+  if (!items.length) return '';
+  const sorted = items
+    .map((item) => ({
+      years: Number(item?.years || 0),
+      extraDays: Number(item?.extra_days || 0),
+    }))
+    .filter((item) => Number.isFinite(item.years) && Number.isFinite(item.extraDays) && item.years > 0 && item.extraDays > 0)
+    .sort((a, b) => a.years - b.years);
+  if (!sorted.length) return '';
+  return sorted.map((item) => `${item.years}년 +${formatLeaveUnits(item.extraDays, '일')}`).join(' · ');
 }
 
 function calculateLeaveUsageUnits(row = {}) {
@@ -29924,7 +30643,7 @@ function renderLeaveScopeTabs() {
       managerHint.classList.remove('hidden');
       const scope = resolveLeaveManagerScope();
       managerHint.textContent = scope === 'team'
-        ? '팀 휴가 현황 조회 모드입니다. 승인/반려 처리는 요청 탭에서 진행하세요.'
+        ? '팀 휴가 현황 조회 모드입니다. 승인/반려 처리는 사용 이력 탭에서 진행하세요.'
         : '내 휴가 조회/신청 모드입니다.';
     }
   }
@@ -29977,9 +30696,29 @@ function renderLeaveSummary(summary = null) {
 
 function normalizeLeaveWorkspaceSection(value = '') {
   const section = String(value || '').trim().toLowerCase();
-  if (section === 'policy') return 'policy';
-  if (section === 'usage') return 'usage';
-  return 'requests';
+  if (section === 'settings' || section === 'policy') return 'settings';
+  if (section === 'history' || section === 'requests') return 'history';
+  if (section === 'grants' || section === 'grant') return 'grants';
+  return 'status';
+}
+
+function normalizeLeavePolicyStatusTab(value = '') {
+  return String(value || '').trim().toLowerCase() === 'inactive' ? 'inactive' : 'active';
+}
+
+function isLeavePolicyActiveRow(row = {}) {
+  const rules = row?.rules_json && typeof row.rules_json === 'object' ? row.rules_json : {};
+  const status = String(row?.status || rules?.status || '').trim().toLowerCase();
+  if (row?.is_active === false || rules?.active === false || rules?.is_active === false) return false;
+  if (row?.archived_at || row?.disabled_at || row?.deleted_at) return false;
+  if (status === 'inactive' || status === 'archived' || status === 'disabled') return false;
+  return true;
+}
+
+function normalizeLeaveUsageYear(value = '') {
+  const numeric = Number(String(value || '').trim());
+  if (!Number.isFinite(numeric)) return String(new Date().getFullYear());
+  return String(Math.min(2099, Math.max(2000, Math.round(numeric))));
 }
 
 function normalizeLeaveWorkspaceSortKey(value = '') {
@@ -29992,9 +30731,49 @@ function normalizeLeaveWorkspaceSortDirection(value = '') {
   return String(value || '').trim().toLowerCase() === 'asc' ? 'asc' : 'desc';
 }
 
+function resolveLeaveWorkspaceDefaultDateMode() {
+  const activeSection = normalizeLeaveWorkspaceSection(state.leaveView?.workspaceSection || 'status');
+  if (activeSection === 'history') return 'year-to-date';
+  return 'month-to-date';
+}
+
+function applyLeaveWorkspaceDateDefaults(leaveState, mode = resolveLeaveWorkspaceDefaultDateMode()) {
+  if (!leaveState || typeof leaveState !== 'object') return;
+  const normalizedMode = String(mode || '').trim().toLowerCase();
+  if (normalizedMode === 'open') {
+    leaveState.workspaceStartDate = '';
+    leaveState.workspaceEndDate = '';
+    leaveState.workspaceDateDefaultMode = 'open';
+    return;
+  }
+  const today = new Date();
+  if (normalizedMode === 'year-to-date') {
+    const yearStart = new Date(today.getFullYear(), 0, 1);
+    const yearEnd = new Date(today.getFullYear(), 11, 31);
+    leaveState.workspaceStartDate = toLocalDateKey(yearStart);
+    leaveState.workspaceEndDate = toLocalDateKey(yearEnd);
+    leaveState.workspaceDateDefaultMode = 'year-to-date';
+    return;
+  }
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  leaveState.workspaceStartDate = toLocalDateKey(monthStart);
+  leaveState.workspaceEndDate = toLocalDateKey(today);
+  leaveState.workspaceDateDefaultMode = 'month-to-date';
+}
+
+function syncLeaveWorkspaceDateDefaults() {
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  const leaveState = state.leaveView;
+  const defaultMode = resolveLeaveWorkspaceDefaultDateMode();
+  if (!leaveState.workspaceDateFilterTouched && leaveState.workspaceDateDefaultMode !== defaultMode) {
+    applyLeaveWorkspaceDateDefaults(leaveState, defaultMode);
+  }
+  return leaveState;
+}
+
 function normalizeLeaveUsageSortKey(value = '') {
   const key = String(value || '').trim().toLowerCase();
-  if (['site', 'annual', 'half', 'latest', 'pending'].includes(key)) return key;
+  if (['site', 'granted', 'used', 'pending', 'remaining', 'latest'].includes(key)) return key;
   return 'employee';
 }
 
@@ -30003,7 +30782,8 @@ function normalizeLeaveUsageSortDirection(value = '') {
 }
 
 function isDesktopLeaveWorkspaceMode() {
-  return isDesktopViewport() && normalizeRequestsTabView(state.requestsTabView) === 'leave';
+  if (!isDesktopViewport()) return false;
+  return state.currentView === 'leave';
 }
 
 function setLeaveWorkspaceSection(section = 'requests') {
@@ -30030,18 +30810,61 @@ function buildLeavePolicyRows() {
   if (apiRows.length) {
     return apiRows.map((row) => {
       const rules = row?.rules_json && typeof row.rules_json === 'object' ? row.rules_json : {};
-      const unit = String(rules.unit || '').trim().toLowerCase();
-      const carryOver = rules?.carry_over === true ? '이월 허용' : '당해 소진';
+      const categorySource = `${String(rules?.category || '').trim()} ${String(row?.policy_key || '').trim()} ${String(row?.display_name || '').trim()}`.toLowerCase();
+      let normalizedCategory = normalizeLeavePolicyCategory(rules?.category);
+      if (normalizedCategory === 'other') {
+        if (categorySource.includes('annual') || categorySource.includes('연차')) normalizedCategory = 'annual';
+        else if (categorySource.includes('reward') || categorySource.includes('포상')) normalizedCategory = 'reward';
+        else if (categorySource.includes('special') || categorySource.includes('특별') || categorySource.includes('병가')) normalizedCategory = 'special';
+      }
+      const categoryLabel = formatLeavePolicyCategoryLabel(normalizedCategory);
+      const allowedUnits = Array.isArray(rules?.allowed_units) ? rules.allowed_units : [];
+      const unitSource = rules?.unit || (allowedUnits.includes('half_day') ? 'half_day' : allowedUnits.includes('hour') ? 'hour' : 'day');
+      const targetScope = String(rules?.target_scope || '').trim() || 'company_all';
+      const selectedEmployeeCount = Array.isArray(rules?.selected_employee_codes) ? rules.selected_employee_codes.length : 0;
+      const targetLabel = targetScope === 'selected_employees'
+        ? `선택 구성원${selectedEmployeeCount ? ` ${selectedEmployeeCount}명` : ''}`
+        : targetScope === 'group'
+          ? '그룹 구성원'
+          : '회사의 모든 직원';
+      const grantMode = String(rules?.grant_mode || '').trim() || (rules?.category === 'annual' ? 'upfront' : 'manual');
+      const grantModeLabel = grantMode === 'manual'
+        ? '수동 부여'
+        : grantMode === 'yearly' || grantMode === 'accrual' || grantMode === 'auto'
+          ? '근속 누적'
+        : '사전 부여';
+      const carryLabel = rules?.carry_over === true ? '허용' : '허용 안 함';
+      const paidLabel = rules?.paid === false ? '무급' : '유급';
       const isDefaultPolicy = balance?.policy_key && String(balance.policy_key || '').trim() === String(row?.policy_key || '').trim();
+      const baseGrant = Number(rules?.base_grant_days || 0);
+      const baseGrantLabel = baseGrant > 0 ? `기본 ${formatLeaveUnits(baseGrant, '일')}` : '';
+      const tenureSummary = formatLeavePolicyTenureSummary(rules);
+      const noteParts = [
+        categoryLabel,
+        formatLeavePolicyUnitLabel(unitSource),
+        baseGrantLabel,
+        tenureSummary,
+        rules?.promotion_enabled ? '연차 촉진 사용' : '',
+        rules?.note ? String(rules.note).trim() : '',
+      ]
+        .map((part) => String(part || '').trim())
+        .filter(Boolean);
       return {
+        id: String(row?.id || '').trim(),
         key: String(row?.policy_key || '').trim() || 'policy',
         label: String(row?.display_name || row?.policy_key || '휴가 정책').trim(),
-        category: isDefaultPolicy ? `${carryOver} · 기본 정책` : carryOver,
-        unit: unit === 'half_day' ? '0.5일 단위' : (unit === 'hour' ? '시간 단위' : '일 단위'),
-        approval: rules?.approval_required === false ? '자동 반영' : '승인 필요',
-        note: isDefaultPolicy
+        description: noteParts.length ? noteParts.join(' · ') : '정책 규칙은 HR 설정 기준으로 적용됩니다.',
+        target: targetLabel,
+        grantMode: grantModeLabel,
+        carry: carryLabel,
+        paid: paidLabel,
+        active: isLeavePolicyActiveRow(row),
+        statusLabel: isDefaultPolicy ? '기본 정책' : (rules?.approval_required === false ? '자동 반영' : '승인 필요'),
+        statusTone: isDefaultPolicy ? 'tone-info' : (rules?.approval_required === false ? 'tone-progress' : 'tone-neutral'),
+        meta: isDefaultPolicy
           ? `잔여 ${formatLeaveUnits(balance.remaining_days, '일')} · 지급 ${formatLeaveUnits(balance.granted_days, '일')}`
-          : (rules?.note ? String(rules.note).trim() : '정책 규칙은 HR 설정 기준으로 적용됩니다.'),
+          : String(row?.policy_key || '').trim() || 'policy',
+        rules,
       };
     });
   }
@@ -30049,36 +30872,504 @@ function buildLeavePolicyRows() {
     {
       key: 'annual',
       label: formatLeaveTypeLabel('annual'),
-      category: '연차 / 유급',
-      unit: '일 단위',
-      approval: '승인 필요',
-      note: '여러 날짜를 한 번에 신청할 수 있습니다.',
+      description: '연차휴가 · 일 단위 · 기본 지급 규칙 적용',
+      target: '회사의 모든 직원',
+      grantMode: '사전 부여',
+      carry: '허용 안 함',
+      paid: '유급',
+      active: true,
+      statusLabel: '승인 필요',
+      statusTone: 'tone-neutral',
+      meta: 'annual',
+      rules: { category: 'annual' },
     },
     {
       key: 'half',
       label: formatLeaveTypeLabel('half'),
-      category: '연차 / 반일',
-      unit: '0.5일 단위',
-      approval: '승인 필요',
-      note: '같은 날짜에 오전/오후 반차만 신청할 수 있습니다.',
+      description: '연차휴가 · 반차 · 오전/오후 반차 선택',
+      target: '회사의 모든 직원',
+      grantMode: '사전 부여',
+      carry: '허용 안 함',
+      paid: '유급',
+      active: true,
+      statusLabel: '승인 필요',
+      statusTone: 'tone-neutral',
+      meta: 'half',
+      rules: { category: 'annual', unit: 'half_day' },
     },
     {
       key: 'sick',
       label: formatLeaveTypeLabel('sick'),
-      category: '특수 / 병가',
-      unit: '일 단위',
-      approval: '승인 필요',
-      note: '사유 기록이 필요하며 내부 사유 코드는 병가로 정리됩니다.',
+      description: '특별휴가 · 병가 · 내부 사유 기록 필요',
+      target: '회사의 모든 직원',
+      grantMode: '수동 부여',
+      carry: '허용 안 함',
+      paid: '유급',
+      active: true,
+      statusLabel: '승인 필요',
+      statusTone: 'tone-neutral',
+      meta: 'sick',
+      rules: { category: 'special' },
     },
     {
       key: 'other',
       label: formatLeaveTypeLabel('other'),
-      category: '기타 / 조퇴',
-      unit: '예외 처리',
-      approval: '승인 필요',
-      note: '내부 사유 코드는 조퇴로 정리되며 기타 메모를 함께 남길 수 있습니다.',
+      description: '기타 휴가 · 예외 처리 · 조퇴/기타 사유',
+      target: '회사의 모든 직원',
+      grantMode: '수동 부여',
+      carry: '허용 안 함',
+      paid: '유급',
+      active: true,
+      statusLabel: '승인 필요',
+      statusTone: 'tone-neutral',
+      meta: 'other',
+      rules: { category: 'other' },
     },
   ];
+}
+
+function createLeaveGrantDraft(seed = {}) {
+  const base = seed && typeof seed === 'object' ? seed : {};
+  const year = new Date().getFullYear();
+  return {
+    policyId: String(base.policyId || base.policy_id || '').trim(),
+    grantedDays: String(base.grantedDays ?? base.granted_days ?? '').trim() || '',
+    grantType: String(base.grantType || base.grant_type || 'manual').trim() || 'manual',
+    effectiveFrom: String(base.effectiveFrom || base.effective_from || `${year}-01-01`).trim() || `${year}-01-01`,
+    effectiveTo: String(base.effectiveTo || base.effective_to || `${year}-12-31`).trim() || `${year}-12-31`,
+    selectedEmployeeCodes: normalizeStringArray(base.selectedEmployeeCodes || base.selected_employee_codes || []),
+  };
+}
+
+function buildLeaveEmployeePickerRows(seedRows = []) {
+  const tenantCode = String(getLeaveScopedTenantCode() || state.user?.tenant_code || '').trim().toUpperCase();
+  const map = new Map();
+  (Array.isArray(seedRows) ? seedRows : []).forEach((row) => {
+    const employeeCode = String(row?.employee_code || row?.employeeCode || '').trim().toUpperCase();
+    if (!employeeCode || map.has(employeeCode)) return;
+    const rowTenant = String(row?.tenant_code || row?.tenantCode || tenantCode).trim().toUpperCase();
+    if (tenantCode && rowTenant && rowTenant !== tenantCode) return;
+    map.set(employeeCode, {
+      employeeCode,
+      employeeName: String(row?.full_name || row?.employee_name || row?.employeeName || employeeCode).trim() || employeeCode,
+      siteName: String(row?.site_name || row?.siteName || row?.site_code || '-').trim() || '-',
+      rankName: String(row?.approval_rank_name || row?.approvalRankName || row?.user_role || '직급 없음').trim() || '직급 없음',
+    });
+  });
+  return Array.from(map.values()).sort((left, right) => {
+    const nameResult = String(left.employeeName || '').localeCompare(String(right.employeeName || ''), 'ko', { numeric: true, sensitivity: 'base' });
+    if (nameResult !== 0) return nameResult;
+    return String(left.employeeCode || '').localeCompare(String(right.employeeCode || ''), 'ko', { numeric: true, sensitivity: 'base' });
+  });
+}
+
+async function ensureLeaveEmployeePickerRows({ force = false } = {}) {
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  if (!force && Array.isArray(state.leaveView.employeePickerRows) && state.leaveView.employeePickerRows.length) {
+    return state.leaveView.employeePickerRows;
+  }
+
+  let rows = Array.isArray(state.employeeAdmin?.rows) ? state.employeeAdmin.rows : [];
+  if (!rows.length && can('employees')) {
+    try {
+      const navRole = getNavigationRole();
+      if (navRole === 'DEV') {
+        const tenantCode = String(getLeaveScopedTenantCode() || state.user?.tenant_code || '').trim().toUpperCase();
+        const params = new URLSearchParams();
+        params.set('include_account', 'true');
+        if (tenantCode && tenantCode !== 'ALL') params.set('tenant_code', tenantCode);
+        rows = await fetchPagedApiRows(
+          params.toString() ? `/dev/employees?${params.toString()}` : '/dev/employees',
+          { pageLimit: 500, maxPages: 40 },
+        );
+      } else {
+        const tenantHeader = String(getTenantIdForScopedAdminApi() || state.user?.tenant_id || '').trim();
+        rows = await fetchPagedApiRows('/employees?include_account=true', {
+          headers: tenantHeader ? { 'X-Tenant-Id': tenantHeader } : null,
+          pageLimit: 500,
+          maxPages: 20,
+        });
+      }
+      if (Array.isArray(rows) && state.employeeAdmin && typeof state.employeeAdmin === 'object') {
+        state.employeeAdmin.rows = rows.map((row, index) => ({ ...row, __sourceIndex: index }));
+      }
+    } catch (error) {
+      console.warn('[RG ARLS] leave employee picker failed to fetch employee rows', error);
+    }
+  }
+
+  if (!rows.length) {
+    const fallbackRows = [
+      ...(Array.isArray(state.leaveView?.rows) ? state.leaveView.rows : []),
+      ...(Array.isArray(state.leaveView?.grantsRows) ? state.leaveView.grantsRows : []),
+    ];
+    rows = fallbackRows;
+  }
+
+  const pickerRows = buildLeaveEmployeePickerRows(rows);
+  state.leaveView.employeePickerRows = pickerRows;
+  return pickerRows;
+}
+
+function buildLeaveEmployeeSelectionSummary(codes = [], rows = []) {
+  const selectedCodes = normalizeStringArray(codes);
+  if (!selectedCodes.length) {
+    return {
+      label: '선택된 직원이 없습니다.',
+      items: [],
+    };
+  }
+  const rowMap = new Map((Array.isArray(rows) ? rows : []).map((row) => [String(row.employeeCode || '').trim().toUpperCase(), row]));
+  const items = selectedCodes.map((code) => rowMap.get(code) || {
+    employeeCode: code,
+    employeeName: code,
+    siteName: '-',
+    rankName: '직급 없음',
+  });
+  const preview = items.slice(0, 3).map((row) => `${row.employeeName} (${row.employeeCode})`);
+  return {
+    label: items.length > 3 ? `${preview.join(', ')} 외 ${items.length - 3}명` : preview.join(', '),
+    items,
+  };
+}
+
+function renderLeaveGrantEmployeeSummary() {
+  const trigger = $('#leaveGrantEmployeeTrigger');
+  const summary = $('#leaveGrantEmployeeSummary');
+  const leaveState = state.leaveView || createInitialLeaveViewState();
+  const draft = createLeaveGrantDraft(leaveState.leaveGrantDraft || {});
+  const employeeRows = Array.isArray(leaveState.employeePickerRows) ? leaveState.employeePickerRows : [];
+  const selection = buildLeaveEmployeeSelectionSummary(draft.selectedEmployeeCodes, employeeRows);
+  if (trigger) trigger.textContent = draft.selectedEmployeeCodes.length ? `직원 ${draft.selectedEmployeeCodes.length}명` : '직원 선택';
+  if (summary) summary.textContent = selection.label;
+}
+
+function readLeaveGrantDraftFromSheet() {
+  const current = createLeaveGrantDraft(state.leaveView?.leaveGrantDraft || {});
+  return createLeaveGrantDraft({
+    policyId: String($('#leaveGrantPolicyId')?.value || current.policyId || '').trim(),
+    grantedDays: String($('#leaveGrantDays')?.value || current.grantedDays || '').trim(),
+    grantType: String($('#leaveGrantType')?.value || current.grantType || 'manual').trim(),
+    effectiveFrom: String($('#leaveGrantStart')?.value || current.effectiveFrom || '').trim(),
+    effectiveTo: String($('#leaveGrantEnd')?.value || current.effectiveTo || '').trim(),
+    selectedEmployeeCodes: current.selectedEmployeeCodes,
+  });
+}
+
+function renderLeavePolicyEmployeeSummary() {
+  const trigger = $('#leavePolicyEmployeeTrigger');
+  const summary = $('#leavePolicyEmployeeSummary');
+  const leaveState = state.leaveView || createInitialLeaveViewState();
+  const selectedCodes = normalizeStringArray(leaveState.policyEditorSelectedEmployeeCodes || []);
+  const employeeRows = Array.isArray(leaveState.employeePickerRows) ? leaveState.employeePickerRows : [];
+  const selection = buildLeaveEmployeeSelectionSummary(selectedCodes, employeeRows);
+  if (trigger) {
+    trigger.textContent = selectedCodes.length ? `직원 ${selectedCodes.length}명` : '직원 선택';
+  }
+  if (summary) {
+    summary.textContent = selection.label;
+  }
+}
+
+function readLeavePolicyDraftFromSheet() {
+  const payload = collectLeavePolicyDraftFromForm();
+  const leaveState = state.leaveView || createInitialLeaveViewState();
+  const context = leaveState.policyEditorContext || {};
+  return createLeavePolicyDraft({
+    id: context.policyId || '',
+    display_name: payload.display_name,
+    selectedEmployeeCodes: payload.selected_employee_codes,
+    rules_json: {
+      category: payload.category,
+      description: payload.description,
+      target_scope: payload.target_scope,
+      selected_employee_codes: payload.selected_employee_codes,
+      grant_mode: payload.grant_mode,
+      unit: payload.unit,
+      approval_required: payload.approval_required,
+      paid: payload.paid,
+      carry_over: payload.carry_over,
+      reason_required: payload.reason_required,
+      delegate_allowed: payload.delegate_allowed,
+      leader_reflect: payload.leader_reflect,
+      approval_steps: payload.approval_steps,
+      base_grant_days: payload.base_grant_days,
+      tenure_bonus_rules: payload.tenure_bonus_rules,
+      promotion_enabled: payload.promotion_enabled,
+      promotion_request_timing: payload.promotion_request_timing,
+      promotion_reminder_mode: payload.promotion_reminder_mode,
+      promotion_use_same_approval: payload.promotion_use_same_approval,
+      promotion_unused_action: payload.promotion_unused_action,
+      note: payload.note,
+    },
+  });
+}
+
+function createLeaveEmployeePickerState({
+  source = 'grant',
+  draft = null,
+  context = null,
+} = {}) {
+  const sourceDraft = source === 'policy'
+    ? createLeavePolicyDraft(draft || {})
+    : createLeaveGrantDraft(draft || {});
+  return {
+    source,
+    sourceDraft,
+    sourceContext: context && typeof context === 'object' ? { ...context } : null,
+    searchQuery: '',
+    siteValue: '',
+    rankValue: '',
+    selectedCodes: normalizeStringArray(sourceDraft.selectedEmployeeCodes || []),
+  };
+}
+
+function getFilteredLeaveEmployeePickerRows() {
+  const leaveState = state.leaveView || createInitialLeaveViewState();
+  const picker = leaveState.leaveEmployeePicker && typeof leaveState.leaveEmployeePicker === 'object'
+    ? leaveState.leaveEmployeePicker
+    : createLeaveEmployeePickerState();
+  const rows = Array.isArray(leaveState.employeePickerRows) ? leaveState.employeePickerRows : [];
+  const searchQuery = String(picker.searchQuery || '').trim().toLowerCase();
+  const siteValue = String(picker.siteValue || '').trim();
+  const rankValue = String(picker.rankValue || '').trim();
+  return rows.filter((row) => {
+    if (siteValue && String(row.siteName || '').trim() !== siteValue) return false;
+    if (rankValue && String(row.rankName || '').trim() !== rankValue) return false;
+    if (!searchQuery) return true;
+    const haystack = `${row.employeeName || ''} ${row.employeeCode || ''} ${row.siteName || ''} ${row.rankName || ''}`.toLowerCase();
+    return haystack.includes(searchQuery);
+  });
+}
+
+function renderLeaveEmployeePickerSheet() {
+  const leaveState = state.leaveView || createInitialLeaveViewState();
+  const picker = leaveState.leaveEmployeePicker && typeof leaveState.leaveEmployeePicker === 'object'
+    ? leaveState.leaveEmployeePicker
+    : null;
+  if (!picker) return;
+  const searchInput = $('#leaveEmployeePickerSearch');
+  const siteSelect = $('#leaveEmployeePickerSite');
+  const rankSelect = $('#leaveEmployeePickerRank');
+  const availableList = $('#leaveEmployeePickerAvailableList');
+  const selectedList = $('#leaveEmployeePickerSelectedList');
+  const selectedCount = $('#leaveEmployeePickerSelectedCount');
+  const employeeRows = Array.isArray(leaveState.employeePickerRows) ? leaveState.employeePickerRows : [];
+  const filteredRows = getFilteredLeaveEmployeePickerRows();
+  const selectedCodes = normalizeStringArray(picker.selectedCodes || []);
+  const selection = buildLeaveEmployeeSelectionSummary(selectedCodes, employeeRows);
+  const uniqueSiteNames = Array.from(new Set(employeeRows.map((row) => String(row.siteName || '').trim()).filter(Boolean)))
+    .sort((left, right) => left.localeCompare(right, 'ko', { numeric: true, sensitivity: 'base' }));
+  const uniqueRankNames = Array.from(new Set(employeeRows.map((row) => String(row.rankName || '').trim()).filter(Boolean)))
+    .sort((left, right) => left.localeCompare(right, 'ko', { numeric: true, sensitivity: 'base' }));
+
+  if (searchInput instanceof HTMLInputElement && searchInput.value !== String(picker.searchQuery || '')) {
+    searchInput.value = String(picker.searchQuery || '');
+  }
+  if (siteSelect instanceof HTMLSelectElement) {
+    const current = String(picker.siteValue || '').trim();
+    siteSelect.innerHTML = '<option value="">전체 현장</option>';
+    uniqueSiteNames.forEach((siteName) => {
+      const option = document.createElement('option');
+      option.value = siteName;
+      option.textContent = siteName;
+      siteSelect.appendChild(option);
+    });
+    siteSelect.value = current && uniqueSiteNames.includes(current) ? current : '';
+  }
+  if (rankSelect instanceof HTMLSelectElement) {
+    const current = String(picker.rankValue || '').trim();
+    rankSelect.innerHTML = '<option value="">전체 직급</option>';
+    uniqueRankNames.forEach((rankName) => {
+      const option = document.createElement('option');
+      option.value = rankName;
+      option.textContent = rankName;
+      rankSelect.appendChild(option);
+    });
+    rankSelect.value = current && uniqueRankNames.includes(current) ? current : '';
+  }
+
+  if (availableList instanceof HTMLElement) {
+    availableList.innerHTML = '';
+    if (!filteredRows.length) {
+      availableList.innerHTML = '<div class="leave-employee-picker-empty">조건에 맞는 직원이 없습니다.</div>';
+    } else {
+      filteredRows.forEach((row) => {
+        const isSelected = selectedCodes.includes(String(row.employeeCode || '').trim().toUpperCase());
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `leave-employee-picker-item${isSelected ? ' is-selected' : ''}`;
+        button.dataset.action = 'leave-employee-picker-toggle';
+        button.dataset.employeeCode = row.employeeCode;
+        button.innerHTML = `
+          <span class="leave-employee-picker-item-check" aria-hidden="true">${isSelected ? '✓' : ''}</span>
+          <span class="leave-employee-picker-item-copy">
+            <strong>${row.employeeName}</strong>
+            <span>${row.employeeCode} · ${row.siteName} · ${row.rankName}</span>
+          </span>
+        `;
+        availableList.appendChild(button);
+      });
+    }
+  }
+
+  if (selectedList instanceof HTMLElement) {
+    selectedList.innerHTML = '';
+    if (!selection.items.length) {
+      selectedList.innerHTML = '<div class="leave-employee-picker-empty">선택된 직원이 없습니다.</div>';
+    } else {
+      selection.items.forEach((row) => {
+        const item = document.createElement('div');
+        item.className = 'leave-employee-picker-selected-item';
+        item.innerHTML = `
+          <div class="leave-employee-picker-selected-copy">
+            <strong>${row.employeeName}</strong>
+            <span>${row.employeeCode} · ${row.siteName} · ${row.rankName}</span>
+          </div>
+          <button class="btn btn-secondary btn-icon" type="button" data-action="leave-employee-picker-remove" data-employee-code="${row.employeeCode}" aria-label="선택 해제">✕</button>
+        `;
+        selectedList.appendChild(item);
+      });
+    }
+  }
+
+  if (selectedCount instanceof HTMLElement) {
+    selectedCount.textContent = `${selection.items.length}명 선택`;
+  }
+  const applyButton = document.querySelector('#sheetActions [data-action="leave-employee-picker-apply"]');
+  if (applyButton instanceof HTMLButtonElement) {
+    applyButton.disabled = selection.items.length === 0;
+  }
+}
+
+async function openLeaveEmployeePickerSheet({
+  source = 'grant',
+  draft = null,
+  context = null,
+} = {}) {
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  state.leaveView.leaveEmployeePicker = createLeaveEmployeePickerState({ source, draft, context });
+  await ensureLeaveEmployeePickerRows();
+  const content = document.createElement('div');
+  content.className = 'leave-employee-picker';
+  content.innerHTML = `
+    <div class="leave-employee-picker-toolbar">
+      <label class="input-field leave-employee-picker-search-field">
+        <span>검색</span>
+        <input id="leaveEmployeePickerSearch" type="search" placeholder="이름/사번/현장을 검색하세요." />
+      </label>
+      <label class="input-field">
+        <span>현장</span>
+        <select id="leaveEmployeePickerSite"></select>
+      </label>
+      <label class="input-field">
+        <span>직급</span>
+        <select id="leaveEmployeePickerRank"></select>
+      </label>
+    </div>
+    <div class="leave-employee-picker-grid">
+      <section class="leave-employee-picker-list">
+        <div class="leave-employee-picker-list-head">
+          <strong>직원 목록</strong>
+          <span>클릭해서 추가</span>
+        </div>
+        <div id="leaveEmployeePickerAvailableList" class="leave-employee-picker-list-body"></div>
+      </section>
+      <section class="leave-employee-picker-list leave-employee-picker-selected">
+        <div class="leave-employee-picker-list-head">
+          <strong>선택됨</strong>
+          <span id="leaveEmployeePickerSelectedCount">0명 선택</span>
+        </div>
+        <div id="leaveEmployeePickerSelectedList" class="leave-employee-picker-list-body"></div>
+      </section>
+    </div>
+  `;
+  openSheet({
+    title: source === 'policy' ? '정책 대상 직원 선택' : '휴가 부여 직원 선택',
+    contentNode: content,
+    actions: [
+      { label: '취소', variant: 'btn-secondary', action: 'leave-employee-picker-cancel' },
+      { label: '적용', variant: 'btn-primary', action: 'leave-employee-picker-apply' },
+    ],
+    layoutClass: 'sheet-layout-leave-employee-picker',
+  });
+  renderLeaveEmployeePickerSheet();
+}
+
+function restoreLeaveEmployeePickerSource({ apply = false } = {}) {
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  const picker = state.leaveView.leaveEmployeePicker && typeof state.leaveView.leaveEmployeePicker === 'object'
+    ? state.leaveView.leaveEmployeePicker
+    : null;
+  if (!picker) {
+    closeSheet();
+    return;
+  }
+  const nextSelectedCodes = apply
+    ? normalizeStringArray(picker.selectedCodes || [])
+    : normalizeStringArray(picker.sourceDraft?.selectedEmployeeCodes || []);
+  const source = String(picker.source || 'grant').trim();
+  const sourceDraft = picker.sourceDraft && typeof picker.sourceDraft === 'object'
+    ? { ...picker.sourceDraft }
+    : {};
+  state.leaveView.leaveEmployeePicker = null;
+
+  if (source === 'policy') {
+    const nextDraft = createLeavePolicyDraft({
+      ...sourceDraft,
+      selectedEmployeeCodes: nextSelectedCodes,
+    });
+    state.leaveView.policyEditorSelectedEmployeeCodes = nextSelectedCodes;
+    openLeavePolicyEditor({
+      draft: nextDraft,
+      context: picker.sourceContext || state.leaveView.policyEditorContext || null,
+    });
+    return;
+  }
+
+  const nextGrantDraft = createLeaveGrantDraft({
+    ...sourceDraft,
+    selectedEmployeeCodes: nextSelectedCodes,
+  });
+  state.leaveView.leaveGrantDraft = nextGrantDraft;
+  openLeaveGrantSheet({ draft: nextGrantDraft });
+}
+
+function normalizeLeaveWorkspaceQueueTab(value = '') {
+  return normalizeManagerRequestsTab(value || REQUESTS_MANAGER_TAB_PENDING);
+}
+
+function setLeaveWorkspaceQueueTab(value = '') {
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  state.leaveView.workspaceQueueTab = normalizeLeaveWorkspaceQueueTab(value || REQUESTS_MANAGER_TAB_PENDING);
+}
+
+function normalizeLeaveGrantsTab(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'members' ? 'members' : 'history';
+}
+
+function setLeaveGrantsTab(value = '') {
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  state.leaveView.grantsTab = normalizeLeaveGrantsTab(value);
+}
+
+function leaveWorkspaceItemMatchesQueueTab(item = {}, queueTab = REQUESTS_MANAGER_TAB_PENDING) {
+  const normalizedTab = normalizeLeaveWorkspaceQueueTab(queueTab);
+  const status = String(item?.status || '').trim().toLowerCase();
+  const row = item?.row || {};
+  const todayKey = toLocalDateKey(new Date());
+  const endDateKey = toRequestDateLabel(row?.end_at || row?.start_at || '');
+  if (normalizedTab === REQUESTS_MANAGER_TAB_PENDING) {
+    return status === 'pending';
+  }
+  if (normalizedTab === REQUESTS_MANAGER_TAB_SOC) {
+    return status === 'approved' && (!endDateKey || endDateKey >= todayKey);
+  }
+  if (status === 'approved') {
+    return Boolean(endDateKey) && endDateKey < todayKey;
+  }
+  return ['rejected', 'cancelled', 'canceled'].includes(status);
 }
 
 function formatLeaveRequestDurationLabel(row = {}) {
@@ -30089,22 +31380,63 @@ function formatLeaveRequestDurationLabel(row = {}) {
 }
 
 function renderLeaveWorkspaceTabs() {
-  const activeSection = normalizeLeaveWorkspaceSection(state.leaveView?.workspaceSection || 'requests');
+  let activeSection = normalizeLeaveWorkspaceSection(state.leaveView?.workspaceSection || 'status');
+  if (activeSection === 'grants' && !canManageLeaveGrants()) {
+    state.leaveView.workspaceSection = 'status';
+    activeSection = 'status';
+  }
+  if (activeSection === 'settings' && !canManageLeaveSettings()) {
+    state.leaveView.workspaceSection = 'status';
+    activeSection = 'status';
+  }
   document.querySelectorAll('#leaveWorkspaceTabs [data-action="leave-workspace-section"]').forEach((button) => {
-    const section = normalizeLeaveWorkspaceSection(button?.dataset?.section || 'requests');
+    const section = normalizeLeaveWorkspaceSection(button?.dataset?.section || 'status');
+    const canSee = (section === 'grants' ? canManageLeaveGrants() : section === 'settings' ? canManageLeaveSettings() : true);
+    button.classList.toggle('hidden', !canSee);
     button.classList.toggle('active', section === activeSection);
   });
-  toggleVisibility('#leavePolicySection', activeSection === 'policy');
-  toggleVisibility('#leaveRequestsSection', activeSection === 'requests');
-  toggleVisibility('#leaveUsageSection', activeSection === 'usage');
+  toggleVisibility('#leavePolicySection', activeSection === 'settings');
+  toggleVisibility('#leaveRequestsSection', activeSection === 'history');
+  toggleVisibility('#leaveUsageSection', activeSection === 'status');
+  toggleVisibility('#leaveGrantsSection', activeSection === 'grants');
+}
+
+function renderLeaveWorkspacePrimaryAction() {
+  const button = $('#leaveWorkspacePrimaryAction');
+  if (!(button instanceof HTMLButtonElement)) return;
+  const activeSection = normalizeLeaveWorkspaceSection(state.leaveView?.workspaceSection || 'status');
+  let config = null;
+
+  if (activeSection === 'settings' && canManageLeaveSettings()) {
+    config = { label: '정책 등록', action: 'leave-policy-register' };
+  } else if (activeSection === 'grants' && canManageLeaveGrants()) {
+    config = { label: '휴가 부여', action: 'leave-grant-open' };
+  } else if (can('leaveWrite')) {
+    config = {
+      label: activeSection === 'history' && state.leaveView?.workspaceComposerOpen ? '신청 닫기' : '휴가 신청',
+      action: 'leave-workspace-toggle-composer',
+    };
+  } else if ((activeSection === 'status' || activeSection === 'history') && canManageLeaveGrants()) {
+    config = { label: '휴가 부여', action: 'leave-grant-open' };
+  }
+
+  if (!config) {
+    button.classList.add('hidden');
+    return;
+  }
+  button.classList.remove('hidden');
+  button.textContent = config.label;
+  button.dataset.action = config.action;
+  button.setAttribute('aria-label', config.label);
 }
 
 function renderLeaveWorkspaceScopeTabs() {
   const wrap = $('#leaveWorkspaceScopeTabs');
   if (!wrap) return;
   const allowTeam = isManagerShellRole() && can('leaveReview');
-  wrap.classList.toggle('hidden', !allowTeam);
-  if (!allowTeam) return;
+  const hideWrap = !allowTeam || shouldUseLeaveApprovalInboxScope();
+  wrap.classList.toggle('hidden', hideWrap);
+  if (hideWrap) return;
   const activeScope = resolveLeaveManagerScope();
   wrap.querySelectorAll('[data-action="leave-workspace-scope"]').forEach((button) => {
     const scope = normalizeLeaveManagerScope(button?.dataset?.scope || 'mine');
@@ -30114,26 +31446,95 @@ function renderLeaveWorkspaceScopeTabs() {
 
 function renderLeavePolicySection() {
   const list = $('#leavePolicyList');
-  const countEl = $('#leavePolicyTypeCount');
   if (!(list instanceof HTMLElement)) return;
   const rows = buildLeavePolicyRows();
+  const activePolicyTab = normalizeLeavePolicyStatusTab(state.leaveView?.policyStatusTab || 'active');
+  const visibleRows = rows.filter((row) => (activePolicyTab === 'inactive' ? !row.active : row.active));
   clearList(list);
-  rows.forEach((row) => {
+  renderLeavePolicyStatusTabs();
+  if (!visibleRows.length) {
+    renderCompactListEmpty(list, activePolicyTab === 'inactive' ? '비활성 정책이 없습니다.' : '등록된 정책이 없습니다.');
+    return;
+  }
+  visibleRows.forEach((row) => {
     const li = document.createElement('li');
     li.className = 'leave-grid-row leave-policy-row';
+    li.dataset.action = 'leave-policy-open';
+    li.dataset.policyId = String(row?.id || row?.key || '');
     li.innerHTML = `
       <div class="leave-grid-cell">
         <div class="requests-row-primary">${row.label}</div>
-        <div class="requests-row-secondary">${row.key}</div>
+        <div class="requests-row-secondary">${row.meta}</div>
       </div>
-      <div class="leave-grid-cell"><div class="requests-row-primary">${row.category}</div></div>
-      <div class="leave-grid-cell"><div class="requests-row-primary">${row.unit}</div></div>
-      <div class="leave-grid-cell"><span class="requests-status-chip tone-neutral">${row.approval}</span></div>
-      <div class="leave-grid-cell"><div class="requests-row-secondary">${row.note}</div></div>
+      <div class="leave-grid-cell"><div class="requests-row-secondary">${row.description}</div></div>
+      <div class="leave-grid-cell"><div class="requests-row-primary">${row.target}</div></div>
+      <div class="leave-grid-cell"><div class="requests-row-primary">${row.grantMode}</div></div>
+      <div class="leave-grid-cell"><div class="requests-row-primary">${row.carry}</div></div>
+      <div class="leave-grid-cell"><div class="requests-row-primary">${row.paid}</div></div>
+      <div class="leave-grid-cell"><span class="requests-status-chip ${row.statusTone || 'tone-neutral'}">${row.statusLabel}</span></div>
     `;
     list.appendChild(li);
   });
-  if (countEl) countEl.textContent = `${rows.length}종`;
+}
+
+function renderLeavePolicyStatusTabs() {
+  document.querySelectorAll('#leavePolicyStatusTabs [data-action="leave-policy-status-tab"]').forEach((button) => {
+    const tab = normalizeLeavePolicyStatusTab(button?.dataset?.tab || 'active');
+    button.classList.toggle('active', tab === normalizeLeavePolicyStatusTab(state.leaveView?.policyStatusTab || 'active'));
+  });
+}
+
+function renderLeavePolicySelectOptions() {
+  const select = $('#leaveWorkspacePolicySelect');
+  if (!(select instanceof HTMLSelectElement)) return;
+  const leaveState = state.leaveView || createInitialLeaveViewState();
+  const policies = Array.isArray(leaveState.policyRows) ? leaveState.policyRows : [];
+  const selected = String(leaveState.workspacePolicyId || '').trim();
+  select.innerHTML = '<option value="">기본 정책</option>';
+  policies.forEach((policy) => {
+    const id = String(policy?.id || '').trim();
+    const name = String(policy?.display_name || policy?.policy_key || '').trim();
+    if (!id || !name) return;
+    const option = document.createElement('option');
+    option.value = id;
+    option.textContent = name;
+    option.selected = id === selected;
+    select.appendChild(option);
+  });
+  if (!selected) {
+    const defaultKey = String(leaveState.balanceSummary?.policy_key || '').trim();
+    const defaultPolicy = policies.find((policy) => String(policy?.policy_key || '').trim() === defaultKey);
+    if (defaultPolicy?.id) {
+      leaveState.workspacePolicyId = String(defaultPolicy.id);
+      select.value = String(defaultPolicy.id);
+      return;
+    }
+    select.value = '';
+  }
+}
+
+function resolveLeaveTypeFromPolicyId(policyId = '', fallbackType = 'annual') {
+  const id = String(policyId || '').trim();
+  if (!id) return fallbackType;
+  const rows = Array.isArray(state.leaveView?.policyRows) ? state.leaveView.policyRows : [];
+  const policy = rows.find((row) => String(row?.id || '').trim() === id);
+  if (!policy) return fallbackType;
+  const rules = policy?.rules_json && typeof policy.rules_json === 'object' ? policy.rules_json : {};
+  const category = normalizeLeavePolicyCategory(rules?.category || 'annual');
+  const allowedUnits = Array.isArray(rules?.allowed_units) ? rules.allowed_units : [];
+  const unit = normalizeLeavePolicyUnit(rules?.unit || (allowedUnits.includes('half_day') ? 'half_day' : allowedUnits.includes('hour') ? 'hour' : 'day'));
+  const name = String(policy?.display_name || '').trim();
+  if (category === 'annual' && unit === 'half_day') return 'half';
+  if (category === 'annual') return 'annual';
+  if (name.includes('병가')) return 'sick';
+  return 'other';
+}
+
+function renderLeaveWorkspaceSecondaryTabs() {
+  const wrap = $('#leaveWorkspaceSecondaryTabsWrap');
+  const titleEl = $('#leaveWorkspaceRequestTitle');
+  if (wrap) wrap.classList.add('hidden');
+  if (titleEl) titleEl.textContent = '사용 이력';
 }
 
 function buildLeaveWorkspaceRequestItems(rows = []) {
@@ -30142,30 +31543,40 @@ function buildLeaveWorkspaceRequestItems(rows = []) {
 }
 
 function getLeaveWorkspaceRequestRows() {
-  const leaveState = state.leaveView || createInitialLeaveViewState();
+  const leaveState = syncLeaveWorkspaceDateDefaults();
   const items = buildLeaveWorkspaceRequestItems(leaveState.rows);
-  const siteFilter = String(leaveState.workspaceSiteFilter || 'all').trim();
-  const typeFilter = String(leaveState.workspaceLeaveTypeFilter || 'all').trim().toLowerCase();
+  const siteFilterValues = normalizeStringArray(leaveState.workspaceSiteFilterValues || []);
   const statusFilter = normalizeLeaveStatusFilter(leaveState.workspaceStatusFilter || 'all');
-  const requesterQuery = String(leaveState.workspaceRequesterQuery || '').trim().toLowerCase();
+  const employeeKeys = normalizeStringArray(leaveState.workspaceEmployeeKeys || []);
   const startDate = String(leaveState.workspaceStartDate || '').trim();
   const endDate = String(leaveState.workspaceEndDate || '').trim();
+  const query = String(leaveState.workspaceRequesterQuery || '').trim().toLowerCase();
   const sortKey = normalizeLeaveWorkspaceSortKey(leaveState.workspaceSortKey || 'submitted_at');
   const sortDirection = normalizeLeaveWorkspaceSortDirection(leaveState.workspaceSortDirection || 'desc');
 
   const filtered = items.filter((item) => {
     const row = item.row || {};
-    if (siteFilter !== 'all' && String(item.siteName || '').trim() !== siteFilter) return false;
-    if (typeFilter !== 'all' && String(row.leave_type || '').trim().toLowerCase() !== typeFilter) return false;
+    if (siteFilterValues.length && !siteFilterValues.includes(getRequestsItemSiteName(item))) return false;
     if (statusFilter !== 'all' && String(item.status || '').trim().toLowerCase() !== statusFilter) return false;
-    if (requesterQuery) {
-      const haystack = `${item.employeeName || ''} ${row.employee_code || ''} ${item.note || ''}`.toLowerCase();
-      if (!haystack.includes(requesterQuery)) return false;
-    }
+    if (employeeKeys.length && !employeeKeys.includes(getRequestsItemEmployeeFilterKey(item))) return false;
     const startKey = toRequestDateLabel(row.start_at);
     if (startDate && startKey && startKey < startDate) return false;
     const endKey = toRequestDateLabel(row.end_at || row.start_at);
     if (endDate && endKey && endKey > endDate) return false;
+    if (query) {
+      const haystack = [
+        item.employeeName,
+        item.employeeCode,
+        item.requestType,
+        item.siteName,
+        item.processorName,
+        row?.policy_name,
+      ]
+        .map((value) => String(value || '').trim().toLowerCase())
+        .filter(Boolean)
+        .join(' ');
+      if (!haystack.includes(query)) return false;
+    }
     return true;
   });
 
@@ -30209,69 +31620,17 @@ function buildLeaveWorkspaceSummaryStats(items = []) {
 }
 
 function renderLeaveWorkspaceRequestToolbar(items = []) {
-  const leaveState = state.leaveView || createInitialLeaveViewState();
-  const scopeBadge = $('#leaveRequestsScopeBadge');
-  const statsEl = $('#leaveRequestsQuickStats');
-  const siteSelect = $('#leaveWorkspaceSiteFilter');
-  const typeSelect = $('#leaveWorkspaceTypeFilter');
+  const leaveState = syncLeaveWorkspaceDateDefaults();
+  if (normalizeLeaveWorkspaceSection(leaveState.workspaceSection || 'status') !== 'history') return;
   const statusSelect = $('#leaveWorkspaceStatusFilter');
-  const requesterInput = $('#leaveWorkspaceRequesterSearch');
   const startInput = $('#leaveWorkspaceStartDate');
   const endInput = $('#leaveWorkspaceEndDate');
-  const sortSelect = $('#leaveWorkspaceSortSelect');
-  const rows = Array.isArray(leaveState.rows) ? leaveState.rows : [];
-
-  if (scopeBadge) {
-    scopeBadge.textContent = resolveLeaveManagerScope() === 'team' ? '팀 휴가' : '내 휴가';
-  }
-  if (statsEl) {
-    statsEl.innerHTML = '';
-    buildLeaveWorkspaceSummaryStats(items).forEach((label) => {
-      const span = document.createElement('span');
-      span.className = 'requests-toolbar-stat';
-      span.textContent = label;
-      statsEl.appendChild(span);
-    });
-  }
+  const searchInput = $('#leaveWorkspaceSearch');
   if (startInput instanceof HTMLInputElement) startInput.value = String(leaveState.workspaceStartDate || '');
   if (endInput instanceof HTMLInputElement) endInput.value = String(leaveState.workspaceEndDate || '');
-  if (requesterInput instanceof HTMLInputElement) requesterInput.value = String(leaveState.workspaceRequesterQuery || '');
   if (statusSelect instanceof HTMLSelectElement) statusSelect.value = normalizeLeaveStatusFilter(leaveState.workspaceStatusFilter || 'all');
-  if (sortSelect instanceof HTMLSelectElement) {
-    sortSelect.value = `${normalizeLeaveWorkspaceSortKey(leaveState.workspaceSortKey)}_${normalizeLeaveWorkspaceSortDirection(leaveState.workspaceSortDirection)}`;
-  }
-  if (siteSelect instanceof HTMLSelectElement) {
-    const values = Array.from(new Set(rows.map((row) => String(row?.site_name || row?.site_code || '').trim()).filter(Boolean))).sort((left, right) => left.localeCompare(right, 'ko'));
-    const selected = String(leaveState.workspaceSiteFilter || 'all').trim() || 'all';
-    siteSelect.innerHTML = '<option value="all">전체 현장</option>';
-    values.forEach((value) => {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = value;
-      option.selected = value === selected;
-      siteSelect.appendChild(option);
-    });
-    if (!values.includes(selected)) {
-      siteSelect.value = 'all';
-      leaveState.workspaceSiteFilter = 'all';
-    }
-  }
-  if (typeSelect instanceof HTMLSelectElement) {
-    const values = Array.from(new Set(rows.map((row) => String(row?.leave_type || '').trim().toLowerCase()).filter(Boolean)));
-    const selected = String(leaveState.workspaceLeaveTypeFilter || 'all').trim().toLowerCase() || 'all';
-    typeSelect.innerHTML = '<option value="all">전체 유형</option>';
-    values.forEach((value) => {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = formatLeaveTypeLabel(value);
-      option.selected = value === selected;
-      typeSelect.appendChild(option);
-    });
-    if (!values.includes(selected)) {
-      typeSelect.value = 'all';
-      leaveState.workspaceLeaveTypeFilter = 'all';
-    }
-  }
+  if (searchInput instanceof HTMLInputElement) searchInput.value = String(leaveState.workspaceRequesterQuery || '');
+  renderRequestsFilterTriggerLabels();
   renderLeaveWorkspaceScopeTabs();
 }
 
@@ -30290,52 +31649,18 @@ function renderLeaveWorkspaceSortHeaders() {
 
 function createLeaveWorkspaceRequestRow(item = {}) {
   const row = item.row || {};
-  const li = document.createElement('li');
-  li.className = 'leave-grid-row leave-request-row';
+  const li = createRequestsWorkspaceRow(item);
+  li.classList.add('leave-request-row');
   li.dataset.action = 'leave-workspace-select';
   li.dataset.requestId = String(row.id || '');
-  li.tabIndex = 0;
   li.classList.toggle('is-selected', String(state.leaveView?.workspaceSelectedRequestId || '') === String(row.id || ''));
-  li.innerHTML = `
-    <div class="leave-grid-cell">
-      <div class="requests-row-primary">${item.employeeName || '-'}</div>
-      <div class="requests-row-secondary">${row.employee_code || '-'}</div>
-    </div>
-    <div class="leave-grid-cell">
-      <div class="requests-row-primary">${item.siteName || '-'}</div>
-      <div class="requests-row-secondary">${item.companyName || '-'}</div>
-    </div>
-    <div class="leave-grid-cell">
-      <span class="requests-type-label tone-info">${item.requestType || '-'}</span>
-      <div class="requests-row-secondary">${formatLeaveInternalReasonLabel(row.leave_type, row.reason) || '-'}</div>
-    </div>
-    <div class="leave-grid-cell">
-      <div class="requests-row-primary">${item.targetDateLabel || '-'}</div>
-      <div class="requests-row-secondary">${row.reason || '-'}</div>
-    </div>
-    <div class="leave-grid-cell">
-      <div class="requests-row-primary">${formatLeaveRequestDurationLabel(row)}</div>
-      <div class="requests-row-secondary">${row.half_day_slot ? formatLeaveHalfDaySlotLabel(row.half_day_slot) : ''}</div>
-    </div>
-    <div class="leave-grid-cell">
-      <div class="requests-row-primary">${item.requestedAtLabel || '-'}</div>
-      <div class="requests-row-secondary">${item.updatedAtLabel ? `최종 ${item.updatedAtLabel}` : ''}</div>
-    </div>
-    <div class="leave-grid-cell">
-      <div class="requests-status-inline">
-        <span class="requests-status-dot tone-${getRequestsStatusTone(item)}"></span>
-        <span class="requests-row-primary">${item.statusLabel || '-'}</span>
-      </div>
-    </div>
-    <div class="leave-grid-cell">
-      <div class="requests-row-primary">${item.processorName || '-'}</div>
-      <div class="requests-row-secondary">${item.note || '-'}</div>
-    </div>
-  `;
   return li;
 }
 
 function renderLeaveWorkspaceRequestRows({ loading = false, errorMessage = '' } = {}) {
+  if (normalizeLeaveWorkspaceSection(state.leaveView?.workspaceSection || 'status') !== 'history') {
+    return;
+  }
   const list = $('#leaveWorkspaceRequestList');
   const countEl = $('#leaveWorkspaceRequestCount');
   const hintEl = $('#leaveWorkspaceRequestHint');
@@ -30347,20 +31672,16 @@ function renderLeaveWorkspaceRequestRows({ loading = false, errorMessage = '' } 
   }
   clearList(list);
   if (errorMessage) {
-    renderCompactListEmpty(list, errorMessage, '잠시 후 다시 시도해 주세요.');
+    renderCompactListEmpty(list, errorMessage);
     if (countEl) countEl.textContent = '0건';
-    if (hintEl) hintEl.textContent = '휴가 요청을 불러오지 못했습니다.';
+    if (hintEl) hintEl.textContent = '';
     return;
   }
   const rows = getLeaveWorkspaceRequestRows();
   if (countEl) countEl.textContent = `${rows.length}건`;
-  if (hintEl) {
-    hintEl.textContent = resolveLeaveManagerScope() === 'team'
-      ? '팀 휴가 요청을 비교하고 선택한 항목은 drawer에서 승인/반려 처리합니다.'
-      : '내 휴가 요청 이력을 확인하고 상태를 추적합니다.';
-  }
+  if (hintEl) hintEl.textContent = '';
   if (!rows.length) {
-    renderCompactListEmpty(list, '조건에 맞는 휴가 요청이 없습니다.', '필터를 다시 확인해 주세요.');
+    renderCompactListEmpty(list, '요청이 없습니다.');
     state.leaveView.workspaceSelectedRequestId = '';
     state.leaveView.workspaceDrawerOpen = false;
     renderLeaveWorkspaceDetailPanel();
@@ -30376,73 +31697,331 @@ function renderLeaveWorkspaceRequestRows({ loading = false, errorMessage = '' } 
   renderLeaveWorkspaceDetailPanel();
 }
 
-function buildLeaveUsageRows(rows = []) {
-  const map = new Map();
+function buildLeaveHistoryChartBuckets(items = []) {
+  const rows = Array.isArray(items) ? items : [];
+  const startDate = String(state.leaveView?.workspaceStartDate || '').trim();
+  const endDate = String(state.leaveView?.workspaceEndDate || '').trim();
+  const todayKey = toLocalDateKey(new Date());
+  const sortedDateKeys = rows
+    .map((item) => toRequestDateLabel(item?.row?.start_at || item?.row?.requested_at || ''))
+    .filter(Boolean)
+    .sort();
+  const startKey = /^\d{4}-\d{2}-\d{2}$/.test(startDate)
+    ? startDate
+    : (sortedDateKeys[0] || todayKey);
+  const endKey = /^\d{4}-\d{2}-\d{2}$/.test(endDate)
+    ? endDate
+    : (sortedDateKeys.length ? sortedDateKeys[sortedDateKeys.length - 1] : todayKey);
+  const start = new Date(`${startKey}T00:00:00`);
+  const end = new Date(`${endKey}T00:00:00`);
+  const daySpan = Math.max(1, Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1);
+  const useMonthlyBuckets = daySpan > 62;
+  const buckets = new Map();
+
+  const ensureBucket = (key, label) => {
+    if (!buckets.has(key)) {
+      buckets.set(key, { key, label, approved: 0, planned: 0, pending: 0 });
+    }
+    return buckets.get(key);
+  };
+
+  if (useMonthlyBuckets) {
+    const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    const limit = new Date(end.getFullYear(), end.getMonth(), 1);
+    while (cursor <= limit) {
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+      ensureBucket(key, `${String(cursor.getMonth() + 1).padStart(2, '0')}월`);
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+  } else {
+    const cursor = new Date(start);
+    while (cursor <= end) {
+      const key = toLocalDateKey(cursor);
+      ensureBucket(key, `${String(cursor.getMonth() + 1).padStart(2, '0')}.${String(cursor.getDate()).padStart(2, '0')}`);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+
+  rows.forEach((item) => {
+    const row = item?.row || {};
+    const status = String(item?.status || row?.status || '').trim().toLowerCase();
+    if (!['approved', 'pending'].includes(status)) return;
+    const anchorKey = toRequestDateLabel(row?.start_at || row?.requested_at || '');
+    if (!anchorKey) return;
+    const bucketKey = useMonthlyBuckets ? anchorKey.slice(0, 7) : anchorKey;
+    const bucket = buckets.get(bucketKey);
+    if (!bucket) return;
+    if (status === 'pending') {
+      bucket.pending += 1;
+      return;
+    }
+    if (anchorKey > todayKey) {
+      bucket.planned += 1;
+      return;
+    }
+    bucket.approved += 1;
+  });
+
+  return Array.from(buckets.values());
+}
+
+function renderLeaveHistoryChart() {
+  const target = $('#leaveHistoryChart');
+  if (!(target instanceof HTMLElement)) return;
+  if (normalizeLeaveWorkspaceSection(state.leaveView?.workspaceSection || 'status') !== 'history') {
+    target.innerHTML = '';
+    return;
+  }
+  const approvedChecked = $('#leaveHistorySeriesApproved') instanceof HTMLInputElement
+    ? $('#leaveHistorySeriesApproved').checked
+    : true;
+  const plannedChecked = $('#leaveHistorySeriesPlanned') instanceof HTMLInputElement
+    ? $('#leaveHistorySeriesPlanned').checked
+    : true;
+  const pendingChecked = $('#leaveHistorySeriesPending') instanceof HTMLInputElement
+    ? $('#leaveHistorySeriesPending').checked
+    : true;
+  const buckets = buildLeaveHistoryChartBuckets(getLeaveWorkspaceRequestRows());
+  const maxValue = Math.max(
+    1,
+    ...buckets.map((bucket) => {
+      const totals = [
+        approvedChecked ? bucket.approved : 0,
+        plannedChecked ? bucket.planned : 0,
+        pendingChecked ? bucket.pending : 0,
+      ];
+      return totals.reduce((sum, value) => sum + value, 0);
+    }),
+  );
+
+  if (!buckets.length) {
+    target.innerHTML = '<div class="requests-compact-empty">표시할 사용 흐름이 없습니다.</div>';
+    return;
+  }
+
+  target.innerHTML = buckets.map((bucket) => {
+    const approvedHeight = approvedChecked ? Math.max(0, (bucket.approved / maxValue) * 100) : 0;
+    const plannedHeight = plannedChecked ? Math.max(0, (bucket.planned / maxValue) * 100) : 0;
+    const pendingHeight = pendingChecked ? Math.max(0, (bucket.pending / maxValue) * 100) : 0;
+    const total = (approvedChecked ? bucket.approved : 0) + (plannedChecked ? bucket.planned : 0) + (pendingChecked ? bucket.pending : 0);
+    return `
+      <div class="leave-history-chart-column">
+        <div class="leave-history-chart-track">
+          ${approvedChecked ? `<span class="leave-history-chart-bar tone-approved" style="height:${approvedHeight}%"></span>` : ''}
+          ${plannedChecked ? `<span class="leave-history-chart-bar tone-planned" style="height:${plannedHeight}%"></span>` : ''}
+          ${pendingChecked ? `<span class="leave-history-chart-bar tone-pending" style="height:${pendingHeight}%"></span>` : ''}
+        </div>
+        <strong>${total}</strong>
+        <span>${bucket.label}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function isLeaveRowInUsageRange(row = {}, selectedYear = normalizeLeaveUsageYear(state.leaveView?.usageYear || ''), referenceDateKey = '') {
+  const startKey = toRequestDateLabel(row?.start_at);
+  const endKey = toRequestDateLabel(row?.end_at || row?.start_at);
+  const yearStart = `${selectedYear}-01-01`;
+  const yearEnd = `${selectedYear}-12-31`;
+  if ((!startKey || startKey > yearEnd) && (!endKey || endKey < yearStart)) return false;
+  if (referenceDateKey && String(row?.status || '').trim().toLowerCase() === 'approved' && startKey && startKey > referenceDateKey) {
+    return false;
+  }
+  return true;
+}
+
+function isLeaveGrantInUsageRange(row = {}, selectedYear = normalizeLeaveUsageYear(state.leaveView?.usageYear || ''), referenceDateKey = '') {
+  const startKey = toRequestDateLabel(row?.effective_from);
+  const endKey = toRequestDateLabel(row?.effective_to || row?.effective_from);
+  const yearStart = `${selectedYear}-01-01`;
+  const yearEnd = `${selectedYear}-12-31`;
+  if ((!startKey || startKey > yearEnd) && (!endKey || endKey < yearStart)) return false;
+  if (referenceDateKey && startKey && startKey > referenceDateKey) return false;
+  return true;
+}
+
+function getLeaveUsageReferenceDateKey() {
+  const leaveState = state.leaveView || createInitialLeaveViewState();
+  const raw = String(leaveState.usageReferenceDate || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : toLocalDateKey(new Date());
+}
+
+function getLeaveUsageAvailableYears() {
+  const currentYear = new Date().getFullYear();
+  const years = new Set([currentYear - 1, currentYear, currentYear + 1]);
+  const leaveState = state.leaveView || createInitialLeaveViewState();
+  (Array.isArray(leaveState.rows) ? leaveState.rows : []).forEach((row) => {
+    [row?.start_at, row?.end_at].forEach((value) => {
+      const key = toRequestDateLabel(value);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(key)) years.add(Number(key.slice(0, 4)));
+    });
+  });
+  (Array.isArray(leaveState.grantsRows) ? leaveState.grantsRows : []).forEach((row) => {
+    [row?.effective_from, row?.effective_to].forEach((value) => {
+      const key = toRequestDateLabel(value);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(key)) years.add(Number(key.slice(0, 4)));
+    });
+  });
+  return Array.from(years)
+    .filter((value) => Number.isFinite(value))
+    .sort((left, right) => left - right)
+    .map((value) => String(value));
+}
+
+function buildLeaveUsageRows(rows = [], { grantsRows = [], balanceSummary = null, scope = resolveLeaveManagerScope() } = {}) {
+  const leaveState = state.leaveView || createInitialLeaveViewState();
+  const selectedYear = normalizeLeaveUsageYear(leaveState.usageYear || '');
+  const referenceDateKey = getLeaveUsageReferenceDateKey();
+  const selectedEmployees = normalizeStringArray(leaveState.workspaceEmployeeKeys || []);
+  const policyFilter = String(leaveState.usagePolicyFilter || 'all').trim();
+  const policyRows = buildLeavePolicyRows();
+  const defaultBalancePolicyKey = String(balanceSummary?.policy_key || '').trim();
+  const defaultPolicy = policyRows.find((policy) => String(policy?.key || '').trim() === defaultBalancePolicyKey);
+
+  const seededRows = new Map();
+  const ensureRow = (employeeKey = '', seed = {}) => {
+    const normalizedKey = String(employeeKey || '').trim();
+    if (!normalizedKey) return null;
+    if (!seededRows.has(normalizedKey)) {
+      seededRows.set(normalizedKey, {
+        key: normalizedKey,
+        employeeName: String(seed?.employeeName || seed?.employee_name || normalizedKey).trim() || normalizedKey,
+        employeeCode: String(seed?.employeeCode || seed?.employee_code || '').trim(),
+        siteName: String(seed?.siteName || seed?.site_name || seed?.site_code || '-').trim() || '-',
+        annualUsed: 0,
+        halfUsed: 0,
+        pendingCount: 0,
+        latestDate: '',
+        grantedDays: 0,
+        remainingDays: null,
+        hasGrantData: false,
+        policyIds: new Set(),
+        policyNames: new Set(),
+      });
+    }
+    const current = seededRows.get(normalizedKey);
+    if (!current.employeeCode && seed?.employeeCode) current.employeeCode = String(seed.employeeCode).trim();
+    if (!current.siteName || current.siteName === '-') {
+      const nextSite = String(seed?.siteName || seed?.site_name || seed?.site_code || '').trim();
+      if (nextSite) current.siteName = nextSite;
+    }
+    return current;
+  };
+
+  (Array.isArray(grantsRows) ? grantsRows : []).forEach((row) => {
+    const employeeKey = String(row?.employee_code || row?.employee_name || row?.employee_id || '').trim();
+    if (!employeeKey) return;
+    if (selectedEmployees.length && !selectedEmployees.includes(employeeKey)) return;
+    if (policyFilter !== 'all' && String(row?.policy_id || row?.policy_name || '').trim() !== policyFilter) return;
+    if (!isLeaveGrantInUsageRange(row, selectedYear, referenceDateKey)) return;
+    const current = ensureRow(employeeKey, row);
+    if (!current) return;
+    current.grantedDays += Number(row?.granted_days || 0) || 0;
+    current.hasGrantData = true;
+    if (row?.policy_id) current.policyIds.add(String(row.policy_id).trim());
+    if (row?.policy_name) current.policyNames.add(String(row.policy_name).trim());
+  });
+
   (Array.isArray(rows) ? rows : []).forEach((row) => {
     const employeeKey = String(row?.employee_code || row?.employee_name || row?.id || '').trim();
     if (!employeeKey) return;
-    const current = map.get(employeeKey) || {
-      key: employeeKey,
-      employeeName: String(row?.employee_name || row?.employee_code || '-').trim() || '-',
-      employeeCode: String(row?.employee_code || '').trim(),
-      siteName: String(row?.site_name || row?.site_code || '-').trim() || '-',
-      annualUsed: 0,
-      halfUsed: 0,
-      pendingCount: 0,
-      latestDate: '',
-      types: new Set(),
-    };
+    if (selectedEmployees.length && !selectedEmployees.includes(employeeKey)) return;
+    if (policyFilter !== 'all' && String(row?.policy_id || row?.policy_name || '').trim() !== policyFilter) return;
+    if (!isLeaveRowInUsageRange(row, selectedYear, referenceDateKey)) return;
+    const current = ensureRow(employeeKey, row);
+    if (!current) return;
     const usage = calculateLeaveUsageUnits(row);
     current.annualUsed += usage.annual;
     current.halfUsed += usage.half;
     if (String(row?.status || '').trim().toLowerCase() === 'pending') {
       current.pendingCount += 1;
     }
-    current.types.add(String(row?.leave_type || '').trim().toLowerCase());
+    if (row?.policy_id) current.policyIds.add(String(row.policy_id).trim());
+    if (row?.policy_name) current.policyNames.add(String(row.policy_name).trim());
     const candidateDate = String(row?.end_at || row?.start_at || '').trim();
     if (!current.latestDate || candidateDate > current.latestDate) {
       current.latestDate = candidateDate;
     }
-    map.set(employeeKey, current);
   });
-  return Array.from(map.values()).map((item) => ({
-    ...item,
-    types: Array.from(item.types),
-  }));
+
+  if (scope !== 'team' && balanceSummary) {
+    const ownEmployeeCode = String(state.user?.employee_code || '').trim() || String(state.user?.id || 'me').trim();
+    if (!selectedEmployees.length || selectedEmployees.includes(ownEmployeeCode)) {
+      const shouldShowBalance = policyFilter === 'all'
+        || policyFilter === String(defaultPolicy?.id || '').trim()
+        || policyFilter === defaultBalancePolicyKey;
+      if (shouldShowBalance) {
+        const current = ensureRow(ownEmployeeCode, {
+          employeeName: state.user?.full_name || state.user?.username || ownEmployeeCode,
+          employeeCode: ownEmployeeCode,
+        });
+        if (current) {
+          current.grantedDays = Number(balanceSummary.granted_days || 0) || 0;
+          current.remainingDays = Number(balanceSummary.remaining_days || 0);
+          current.hasGrantData = true;
+          if (defaultPolicy?.id) current.policyIds.add(String(defaultPolicy.id).trim());
+          if (defaultPolicy?.label) current.policyNames.add(String(defaultPolicy.label).trim());
+        }
+      }
+    }
+  }
+
+  return Array.from(seededRows.values()).map((item) => {
+    const remainingDays = item.remainingDays == null
+      ? (item.hasGrantData ? Math.max(0, item.grantedDays - item.annualUsed) : null)
+      : item.remainingDays;
+    return {
+      ...item,
+      remainingDays,
+      policyIds: Array.from(item.policyIds).filter(Boolean),
+      policyNames: Array.from(item.policyNames).filter(Boolean),
+    };
+  });
 }
 
 function getFilteredLeaveUsageRows() {
   const leaveState = state.leaveView || createInitialLeaveViewState();
-  const siteFilter = String(leaveState.usageSiteFilter || 'all').trim();
-  const typeFilter = String(leaveState.usageTypeFilter || 'all').trim().toLowerCase();
-  const query = String(leaveState.usageSearchQuery || '').trim().toLowerCase();
+  const scope = resolveLeaveManagerScope();
   const sortKey = normalizeLeaveUsageSortKey(leaveState.usageSortKey || 'employee');
   const sortDirection = normalizeLeaveUsageSortDirection(leaveState.usageSortDirection || 'asc');
-
-  const filtered = buildLeaveUsageRows(leaveState.rows).filter((item) => {
-    if (siteFilter !== 'all' && item.siteName !== siteFilter) return false;
-    if (typeFilter !== 'all' && !item.types.includes(typeFilter)) return false;
-    if (query) {
-      const haystack = `${item.employeeName} ${item.employeeCode} ${item.siteName}`.toLowerCase();
-      if (!haystack.includes(query)) return false;
-    }
-    return true;
+  const searchQuery = String(leaveState.usageSearchQuery || '').trim().toLowerCase();
+  const filtered = buildLeaveUsageRows(leaveState.rows, {
+    grantsRows: leaveState.grantsRows,
+    balanceSummary: leaveState.balanceSummary,
+    scope,
+  }).filter((row) => {
+    if (!searchQuery) return true;
+    const haystack = [
+      row.employeeName,
+      row.employeeCode,
+      row.siteName,
+      ...(Array.isArray(row.policyNames) ? row.policyNames : []),
+    ]
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean)
+      .join(' ');
+    return haystack.includes(searchQuery);
   });
 
   filtered.sort((left, right) => {
     let result = 0;
     if (sortKey === 'site') {
-      result = left.siteName.localeCompare(right.siteName, 'ko', { numeric: true, sensitivity: 'base' });
-    } else if (sortKey === 'annual') {
-      result = left.annualUsed - right.annualUsed;
-    } else if (sortKey === 'half') {
-      result = left.halfUsed - right.halfUsed;
+      result = String(left.siteName || '').localeCompare(String(right.siteName || ''), 'ko', { numeric: true, sensitivity: 'base' });
+    } else if (sortKey === 'granted') {
+      result = Number(left.grantedDays || 0) - Number(right.grantedDays || 0);
+    } else if (sortKey === 'used') {
+      result = Number(left.annualUsed || 0) - Number(right.annualUsed || 0);
+    } else if (sortKey === 'remaining') {
+      result = Number(left.remainingDays ?? -1) - Number(right.remainingDays ?? -1);
     } else if (sortKey === 'latest') {
       result = String(left.latestDate || '').localeCompare(String(right.latestDate || ''), 'ko', { numeric: true, sensitivity: 'base' });
     } else if (sortKey === 'pending') {
-      result = left.pendingCount - right.pendingCount;
+      result = Number(left.pendingCount || 0) - Number(right.pendingCount || 0);
     } else {
-      result = left.employeeName.localeCompare(right.employeeName, 'ko', { numeric: true, sensitivity: 'base' });
+      result = String(left.employeeName || '').localeCompare(String(right.employeeName || ''), 'ko', { numeric: true, sensitivity: 'base' });
+    }
+    if (result === 0) {
+      result = String(left.employeeCode || '').localeCompare(String(right.employeeCode || ''), 'ko', { numeric: true, sensitivity: 'base' });
     }
     return sortDirection === 'desc' ? -result : result;
   });
@@ -30458,15 +32037,13 @@ function renderLeaveUsageSummary(summary = null) {
     ? [
       { label: '오늘 휴가자', value: `${Number(summary?.todayLeaveCount || 0)}명` },
       { label: '이번주 휴가자', value: `${Number(summary?.weekLeaveCount || 0)}명` },
-      { label: '대기 요청', value: `${Number(summary?.pendingCount || 0)}건` },
+      { label: '승인 대기', value: `${Number(summary?.pendingCount || 0)}건` },
     ]
     : [
-      { label: '지급 연차', value: summary ? formatLeaveUnits(summary.grantedDays, '일') : '-' },
-      { label: '잔여 연차', value: summary ? formatLeaveUnits(summary.annualRemaining, '일') : '-' },
-      { label: '사용 연차', value: summary ? formatLeaveUnits(summary.annualUsed, '일') : '-' },
-      { label: '복원 연차', value: summary ? formatLeaveUnits(summary.restoredDays, '일') : '-' },
-      { label: '반차 사용', value: summary ? formatLeaveUnits(summary.halfUsed, '회') : '-' },
-      { label: '대기 요청', value: `${Number(summary?.pendingCount || 0)}건` },
+      { label: '지급', value: summary ? formatLeaveUnits(summary.grantedDays, '일') : '-' },
+      { label: '사용', value: summary ? formatLeaveUnits(summary.annualUsed, '일') : '-' },
+      { label: '잔여', value: summary ? formatLeaveUnits(summary.annualRemaining, '일') : '-' },
+      { label: '승인 대기', value: `${Number(summary?.pendingCount || 0)}건` },
     ];
   items.forEach((item) => {
     const box = document.createElement('div');
@@ -30481,47 +32058,60 @@ function renderLeaveUsageSummary(summary = null) {
 
 function renderLeaveUsageToolbar() {
   const leaveState = state.leaveView || createInitialLeaveViewState();
-  const rows = buildLeaveUsageRows(leaveState.rows);
-  const siteSelect = $('#leaveUsageSiteFilter');
-  const typeSelect = $('#leaveUsageTypeFilter');
+  const yearSelect = $('#leaveUsageYear');
+  const referenceInput = $('#leaveUsageReferenceDate');
+  const policySelect = $('#leaveUsagePolicyFilter');
   const searchInput = $('#leaveUsageSearch');
-  const sortSelect = $('#leaveUsageSortSelect');
-  if (searchInput instanceof HTMLInputElement) searchInput.value = String(leaveState.usageSearchQuery || '');
-  if (sortSelect instanceof HTMLSelectElement) {
-    sortSelect.value = `${normalizeLeaveUsageSortKey(leaveState.usageSortKey)}_${normalizeLeaveUsageSortDirection(leaveState.usageSortDirection)}`;
+  const years = getLeaveUsageAvailableYears();
+  const selectedYear = normalizeLeaveUsageYear(leaveState.usageYear || '');
+  const referenceDateKey = getLeaveUsageReferenceDateKey();
+
+  leaveState.usageYear = selectedYear;
+  leaveState.usageReferenceDate = referenceDateKey;
+
+  if (referenceInput instanceof HTMLInputElement) {
+    referenceInput.value = referenceDateKey;
   }
-  if (siteSelect instanceof HTMLSelectElement) {
-    const values = Array.from(new Set(rows.map((row) => String(row.siteName || '').trim()).filter(Boolean))).sort((left, right) => left.localeCompare(right, 'ko'));
-    const selected = String(leaveState.usageSiteFilter || 'all').trim() || 'all';
-    siteSelect.innerHTML = '<option value="all">전체 현장</option>';
-    values.forEach((value) => {
+  if (searchInput instanceof HTMLInputElement) {
+    searchInput.value = String(leaveState.usageSearchQuery || '');
+  }
+  if (yearSelect instanceof HTMLSelectElement) {
+    yearSelect.innerHTML = '';
+    years.forEach((year) => {
       const option = document.createElement('option');
-      option.value = value;
-      option.textContent = value;
-      option.selected = value === selected;
-      siteSelect.appendChild(option);
+      option.value = year;
+      option.textContent = `${year}년`;
+      option.selected = year === selectedYear;
+      yearSelect.appendChild(option);
     });
-    if (!values.includes(selected)) {
-      siteSelect.value = 'all';
-      leaveState.usageSiteFilter = 'all';
+    if (!years.includes(selectedYear)) {
+      const option = document.createElement('option');
+      option.value = selectedYear;
+      option.textContent = `${selectedYear}년`;
+      option.selected = true;
+      yearSelect.appendChild(option);
     }
   }
-  if (typeSelect instanceof HTMLSelectElement) {
-    const values = Array.from(new Set(rows.flatMap((row) => row.types).filter(Boolean))).sort();
-    const selected = String(leaveState.usageTypeFilter || 'all').trim().toLowerCase() || 'all';
-    typeSelect.innerHTML = '<option value="all">전체 유형</option>';
-    values.forEach((value) => {
+  if (policySelect instanceof HTMLSelectElement) {
+    const selectedPolicy = String(leaveState.usagePolicyFilter || 'all').trim() || 'all';
+    const options = buildLeavePolicyRows()
+      .filter((row) => row.active)
+      .map((row) => ({ value: String(row.id || row.key || '').trim(), label: row.label }));
+    policySelect.innerHTML = '<option value="all">전체 정책</option>';
+    options.forEach((item) => {
+      if (!item.value) return;
       const option = document.createElement('option');
-      option.value = value;
-      option.textContent = formatLeaveTypeLabel(value);
-      option.selected = value === selected;
-      typeSelect.appendChild(option);
+      option.value = item.value;
+      option.textContent = item.label;
+      option.selected = item.value === selectedPolicy;
+      policySelect.appendChild(option);
     });
-    if (!values.includes(selected)) {
-      typeSelect.value = 'all';
-      leaveState.usageTypeFilter = 'all';
+    if (selectedPolicy !== 'all' && !options.some((item) => item.value === selectedPolicy)) {
+      policySelect.value = 'all';
+      leaveState.usagePolicyFilter = 'all';
     }
   }
+  renderRequestsFilterTriggerLabels();
 }
 
 function renderLeaveUsageSortHeaders() {
@@ -30538,6 +32128,9 @@ function renderLeaveUsageSortHeaders() {
 }
 
 function renderLeaveUsageRows() {
+  if (normalizeLeaveWorkspaceSection(state.leaveView?.workspaceSection || 'status') !== 'status') {
+    return;
+  }
   const list = $('#leaveUsageList');
   const countEl = $('#leaveUsageCount');
   if (!(list instanceof HTMLElement)) return;
@@ -30554,23 +32147,182 @@ function renderLeaveUsageRows() {
   rows.forEach((item) => {
     const li = document.createElement('li');
     li.className = 'leave-grid-row leave-usage-row';
+    const grantedLabel = item.hasGrantData ? formatLeaveUnits(item.grantedDays, '일') : '-';
+    const usedLabel = formatLeaveUnits(item.annualUsed, '일');
+    const remainingLabel = item.remainingDays == null ? '-' : formatLeaveUnits(item.remainingDays, '일');
+    const pendingLabel = `${Number(item.pendingCount || 0)}건`;
+    const secondaryUsed = item.halfUsed > 0 ? `반차 ${formatLeaveUnits(item.halfUsed, '회')}` : (item.policyNames[0] || '-');
     li.innerHTML = `
       <div class="leave-grid-cell">
         <div class="requests-row-primary">${item.employeeName || '-'}</div>
         <div class="requests-row-secondary">${item.employeeCode || '-'}</div>
       </div>
       <div class="leave-grid-cell"><div class="requests-row-primary">${item.siteName || '-'}</div></div>
-      <div class="leave-grid-cell"><div class="requests-row-primary">${formatLeaveUnits(item.annualUsed, '일')}</div></div>
-      <div class="leave-grid-cell"><div class="requests-row-primary">${formatLeaveUnits(item.halfUsed, '회')}</div></div>
+      <div class="leave-grid-cell"><div class="requests-row-primary">${grantedLabel}</div></div>
+      <div class="leave-grid-cell"><div class="requests-row-primary">${usedLabel}</div><div class="requests-row-secondary">${secondaryUsed}</div></div>
+      <div class="leave-grid-cell"><div class="requests-row-primary">${pendingLabel}</div></div>
+      <div class="leave-grid-cell"><div class="requests-row-primary">${remainingLabel}</div></div>
       <div class="leave-grid-cell"><div class="requests-row-primary">${formatDateLabel(item.latestDate, '-')}</div></div>
-      <div class="leave-grid-cell"><div class="requests-row-primary">${item.pendingCount}건</div></div>
     `;
     list.appendChild(li);
   });
   renderLeaveUsageSortHeaders();
 }
 
+function buildLeaveGrantsMemberRows(rows = []) {
+  const map = new Map();
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const key = String(row?.employee_code || row?.employee_name || row?.employee_id || '').trim();
+    if (!key) return;
+    const current = map.get(key) || {
+      key,
+      employeeName: String(row?.employee_name || row?.employee_code || '-').trim() || '-',
+      employeeCode: String(row?.employee_code || '').trim(),
+      policyNames: new Set(),
+      grantedDays: 0,
+      rangeStart: '',
+      rangeEnd: '',
+      grantTypes: new Set(),
+    };
+    const policyName = String(row?.policy_name || '').trim();
+    if (policyName) current.policyNames.add(policyName);
+    const grantedDays = Number(row?.granted_days || 0);
+    current.grantedDays += Number.isFinite(grantedDays) ? grantedDays : 0;
+    const startKey = String(row?.effective_from || '').trim();
+    const endKey = String(row?.effective_to || '').trim();
+    if (!current.rangeStart || (startKey && startKey < current.rangeStart)) current.rangeStart = startKey;
+    if (!current.rangeEnd || (endKey && endKey > current.rangeEnd)) current.rangeEnd = endKey;
+    const grantType = String(row?.grant_type || '').trim();
+    if (grantType) current.grantTypes.add(grantType);
+    map.set(key, current);
+  });
+  return Array.from(map.values()).map((row) => ({
+    ...row,
+    policyNames: Array.from(row.policyNames),
+    grantTypes: Array.from(row.grantTypes),
+  }));
+}
+
+function getLeaveGrantsFilteredRows() {
+  const leaveState = state.leaveView || createInitialLeaveViewState();
+  const tab = normalizeLeaveGrantsTab(leaveState.grantsTab || 'history');
+  const policyFilter = String($('#leaveGrantsPolicyFilter')?.value || leaveState.grantsPolicyFilter || 'all').trim();
+  const query = String($('#leaveGrantsSearch')?.value || leaveState.grantsSearchQuery || '').trim().toLowerCase();
+  leaveState.grantsPolicyFilter = policyFilter;
+  leaveState.grantsSearchQuery = query;
+
+  const rawRows = Array.isArray(leaveState.grantsRows) ? leaveState.grantsRows : [];
+  const filtered = rawRows.filter((row) => {
+    if (policyFilter !== 'all' && String(row?.policy_id || row?.policy_name || '') !== policyFilter) return false;
+    if (query) {
+      const haystack = `${row?.employee_name || ''} ${row?.employee_code || ''} ${row?.policy_name || ''}`.toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    return true;
+  });
+
+  if (tab === 'members') {
+    return buildLeaveGrantsMemberRows(filtered);
+  }
+  return filtered;
+}
+
+function renderLeaveGrantsSection({ loading = false, errorMessage = '' } = {}) {
+  if (normalizeLeaveWorkspaceSection(state.leaveView?.workspaceSection || 'status') !== 'grants') {
+    return;
+  }
+  const list = $('#leaveGrantsList');
+  const tabs = $('#leaveGrantsTabs');
+  const createBtn = $('#leaveGrantCreateBtn');
+  if (!(list instanceof HTMLElement)) return;
+  if (!canManageLeaveGrants()) {
+    renderEmptyState(list, '휴가 부여 권한이 없습니다.');
+    if (createBtn) createBtn.classList.add('hidden');
+    return;
+  }
+  renderLeaveGrantsPolicyFilter();
+  if (tabs) {
+    tabs.querySelectorAll('[data-action="leave-grants-tab"]').forEach((button) => {
+      const tab = normalizeLeaveGrantsTab(button?.dataset?.tab || 'history');
+      button.classList.toggle('active', tab === normalizeLeaveGrantsTab(state.leaveView?.grantsTab || 'history'));
+    });
+  }
+  if (createBtn) createBtn.classList.toggle('hidden', !canManageLeaveGrants());
+  if (loading) {
+    renderSkeleton(list, 4);
+    return;
+  }
+  clearList(list);
+  if (errorMessage) {
+    renderCompactListEmpty(list, errorMessage);
+    return;
+  }
+  const rows = getLeaveGrantsFilteredRows();
+  if (!rows.length) {
+    renderCompactListEmpty(list, '휴가 부여 내역이 없습니다.');
+    return;
+  }
+  const isMembers = normalizeLeaveGrantsTab(state.leaveView?.grantsTab || 'history') === 'members';
+  rows.forEach((row) => {
+    const li = document.createElement('li');
+    li.className = 'leave-grid-row leave-grants-row';
+    const employeeLabel = `${row?.employee_name || row?.employeeName || '-'}${row?.employee_code || row?.employeeCode ? ` (${row?.employee_code || row?.employeeCode})` : ''}`;
+    const policyLabel = isMembers
+      ? (Array.isArray(row.policyNames) && row.policyNames.length ? row.policyNames.join(', ') : '-')
+      : (row?.policy_name || '-');
+    const grantedLabel = isMembers
+      ? formatLeaveUnits(row?.grantedDays || 0, '일')
+      : formatLeaveUnits(row?.granted_days || 0, '일');
+    const rangeStart = isMembers ? formatDateLabel(row?.rangeStart || '', '-') : formatDateLabel(row?.effective_from || '', '-');
+    const rangeEnd = isMembers ? formatDateLabel(row?.rangeEnd || '', '-') : formatDateLabel(row?.effective_to || '', '-');
+    const rangeLabel = isMembers
+      ? (rangeStart === '-' && rangeEnd === '-' ? '-' : `${rangeStart} ~ ${rangeEnd}`)
+      : (rangeStart === '-' && rangeEnd === '-' ? '-' : `${rangeStart} ~ ${rangeEnd}`);
+    const grantTypeLabel = isMembers
+      ? (Array.isArray(row.grantTypes) && row.grantTypes.length ? row.grantTypes.map((item) => formatLeaveGrantModeLabel(item)).join(', ') : '-')
+      : formatLeaveGrantModeLabel(row?.grant_type || '-');
+    li.innerHTML = `
+      <div class="leave-grid-cell">
+        <div class="requests-row-primary">${employeeLabel}</div>
+      </div>
+      <div class="leave-grid-cell"><div class="requests-row-primary">${policyLabel}</div></div>
+      <div class="leave-grid-cell"><div class="requests-row-primary">${grantedLabel}</div></div>
+      <div class="leave-grid-cell"><div class="requests-row-primary">${rangeLabel}</div></div>
+      <div class="leave-grid-cell"><div class="requests-row-primary">${grantTypeLabel}</div></div>
+    `;
+    list.appendChild(li);
+  });
+}
+
+function renderLeaveGrantsPolicyFilter() {
+  const filter = $('#leaveGrantsPolicyFilter');
+  if (!(filter instanceof HTMLSelectElement)) return;
+  const leaveState = state.leaveView || createInitialLeaveViewState();
+  const policies = Array.isArray(leaveState.policyRows) ? leaveState.policyRows : [];
+  const selected = String(leaveState.grantsPolicyFilter || filter.value || 'all').trim() || 'all';
+  filter.innerHTML = '<option value="all">전체 유형</option>';
+  policies.forEach((policy) => {
+    const key = String(policy?.id || policy?.policy_key || '').trim();
+    const label = String(policy?.display_name || policy?.policy_key || '').trim();
+    if (!key || !label) return;
+    const option = document.createElement('option');
+    option.value = key;
+    option.textContent = label;
+    filter.appendChild(option);
+  });
+  if (selected !== 'all' && !Array.from(filter.options).some((opt) => opt.value === selected)) {
+    leaveState.grantsPolicyFilter = 'all';
+    filter.value = 'all';
+  } else {
+    filter.value = selected;
+  }
+}
+
 function renderLeaveWorkspaceDetailPanel() {
+  if (normalizeLeaveWorkspaceSection(state.leaveView?.workspaceSection || 'status') !== 'history') {
+    renderLeaveWorkspaceDrawer();
+    return;
+  }
   const panelTitle = $('#leaveWorkspaceDetailTitle');
   const panelHint = $('#leaveWorkspaceDetailHint');
   const contentSelector = '#leaveWorkspaceDetailContent';
@@ -30591,6 +32343,7 @@ function renderLeaveWorkspaceDetailPanel() {
   const fields = [
     { label: '직원', value: item.employee_name || item.employee_code || '-' },
     { label: '현장', value: item.site_name || item.site_code || '-' },
+    ...(item.policy_name ? [{ label: '정책', value: item.policy_name }] : []),
     { label: '유형', value: halfLabel ? `${displayType} (${halfLabel})` : displayType },
     { label: '기간', value: formatLeavePeriodLabel(item.start_at, item.end_at, item.leave_type, item.half_day_slot) },
     { label: '사용량', value: formatLeaveRequestDurationLabel(item) },
@@ -30633,6 +32386,11 @@ function renderLeaveWorkspaceDetailPanel() {
 function renderLeaveWorkspaceDrawer() {
   const panel = $('#leaveWorkspaceDetailPanel');
   const backdrop = $('#leaveWorkspaceDetailBackdrop');
+  if (normalizeLeaveWorkspaceSection(state.leaveView?.workspaceSection || 'status') !== 'history') {
+    if (panel) panel.classList.add('hidden');
+    if (backdrop) backdrop.classList.add('hidden');
+    return;
+  }
   const requestId = String(state.leaveView?.workspaceSelectedRequestId || '').trim();
   const hasSelection = Boolean(requestId) && state.leaveView?.rowMap?.has(requestId);
   const open = isDesktopLeaveWorkspaceMode() && hasSelection && Boolean(state.leaveView?.workspaceDrawerOpen);
@@ -30720,12 +32478,21 @@ function applyLeaveWorkspaceQuickType(leaveType = 'annual', reasonPreset = '') {
 
 function renderLeaveManagementWorkspace({ loading = false, errorMessage = '' } = {}) {
   if (!$('#leaveWorkspaceDesktop')) return;
-  const root = $('#view-requests');
+  const root = $('#view-leave');
   if (root instanceof HTMLElement) {
-    root.dataset.requestsSegment = 'leave';
+    root.dataset.leaveSegment = 'leave';
+  }
+  const title = $('#leaveViewTitle');
+  const description = $('#leaveViewDescription');
+  if (title) title.textContent = '휴가';
+  if (description) {
+    description.textContent = '';
+    description.classList.add('hidden');
   }
   renderLeaveWorkspaceTabs();
+  renderLeaveWorkspacePrimaryAction();
   renderLeavePolicySection();
+  renderLeavePolicySelectOptions();
   syncLeaveWorkspaceComposerForm();
   updateLeaveWorkspaceComposerState({ enforceHalfDayRange: false });
   const scope = resolveLeaveManagerScope();
@@ -30739,11 +32506,617 @@ function renderLeaveManagementWorkspace({ loading = false, errorMessage = '' } =
     balanceSummary: state.leaveView?.balanceSummary || null,
   });
   renderLeaveUsageSummary(summary);
+  renderLeaveWorkspaceSecondaryTabs();
   renderLeaveWorkspaceRequestToolbar(getLeaveWorkspaceRequestRows());
   renderLeaveWorkspaceRequestRows({ loading, errorMessage });
+  renderLeaveHistoryChart();
   renderLeaveUsageRows();
+  renderLeaveGrantsSection({ loading, errorMessage });
   renderLeaveWorkspaceDetailPanel();
-  queueViewSnapshotPersist('requests');
+  queueViewSnapshotPersist('leave');
+}
+
+function createLeavePolicyDraft(seed = {}) {
+  const base = seed && typeof seed === 'object' ? seed : {};
+  const rules = base?.rules_json && typeof base.rules_json === 'object' ? base.rules_json : {};
+  const categorySource = base?.category || rules?.category || 'annual';
+  const normalizedCategory = normalizeLeavePolicyCategory(categorySource);
+  return {
+    id: String(base?.id || '').trim(),
+    displayName: String(base?.displayName || base?.display_name || '').trim(),
+    category: normalizedCategory,
+    description: String(base?.description || rules?.description || '').trim(),
+    targetScope: String(base?.targetScope || rules?.target_scope || '').trim() || 'company_all',
+    selectedEmployeeCodes: normalizeStringArray(base?.selectedEmployeeCodes || rules?.selected_employee_codes || []),
+    grantMode: String(base?.grantMode || rules?.grant_mode || '').trim() || (normalizedCategory === 'annual' ? 'upfront' : 'manual'),
+    unit: normalizeLeavePolicyUnit(base?.unit || rules?.unit || 'day'),
+    approvalRequired: base?.approvalRequired ?? (rules?.approval_required !== false),
+    carryOver: base?.carryOver ?? (rules?.carry_over === true),
+    paid: base?.paid ?? (rules?.paid !== false),
+    reasonRequired: base?.reasonRequired ?? (rules?.reason_required === true),
+    delegateAllowed: base?.delegateAllowed ?? (rules?.delegate_allowed === true || rules?.proxy_request_allowed === true),
+    leaderReflect: base?.leaderReflect ?? (rules?.leader_reflect === true || rules?.leader_schedule_reflect === true),
+    baseGrantDays: Number(base?.baseGrantDays ?? rules?.base_grant_days ?? 0),
+    tenureBonusRules: Array.isArray(base?.tenureBonusRules) ? base.tenureBonusRules : (Array.isArray(rules?.tenure_bonus_rules) ? rules.tenure_bonus_rules : []),
+    approvalSteps: Number(base?.approvalSteps ?? (Array.isArray(rules?.approval_steps) ? rules?.approval_steps?.length : rules?.approval_steps || 1)),
+    note: String(base?.note || rules?.note || '').trim(),
+    promotionEnabled: base?.promotionEnabled ?? (rules?.promotion_enabled === true),
+    promotionRequestTiming: normalizeLeavePromotionRequestTiming(base?.promotionRequestTiming || rules?.promotion_request_timing || 'after_grant_6m'),
+    promotionReminderMode: normalizeLeavePromotionReminderMode(base?.promotionReminderMode || rules?.promotion_reminder_mode || 'month_before_expire'),
+    promotionUseSameApproval: base?.promotionUseSameApproval ?? (rules?.promotion_use_same_approval !== false),
+    promotionUnusedAction: normalizeLeavePromotionUnusedAction(base?.promotionUnusedAction || rules?.promotion_unused_action || 'system_reclaim'),
+  };
+}
+
+function renderLeavePolicyTenureRuleRow({ years = '', extraDays = '' } = {}) {
+  const row = document.createElement('div');
+  row.className = 'leave-policy-tenure-row';
+  row.innerHTML = `
+    <label class="input-field">
+      <span>근속년수</span>
+      <input type="number" min="1" step="1" data-field="years" value="${years}" placeholder="예: 3" />
+    </label>
+    <label class="input-field">
+      <span>추가 지급일</span>
+      <input type="number" min="0" step="0.5" data-field="extraDays" value="${extraDays}" placeholder="예: 1" />
+    </label>
+    <button class="btn btn-secondary btn-icon" type="button" data-action="leave-policy-remove-tenure" aria-label="근속 규칙 삭제">✕</button>
+  `;
+  return row;
+}
+
+function syncLeavePolicyEditorCategory() {
+  const categorySelect = $('#leavePolicyCategorySelect');
+  const targetSelect = $('#leavePolicyTargetSelect');
+  const promotionSelect = $('#leavePolicyPromotionSelect');
+  const category = normalizeLeavePolicyCategory(categorySelect instanceof HTMLSelectElement ? categorySelect.value : 'annual');
+  const targetScope = String(targetSelect instanceof HTMLSelectElement ? targetSelect.value : 'company_all').trim() || 'company_all';
+  const promotionEnabled = String(promotionSelect instanceof HTMLSelectElement ? promotionSelect.value : 'false') === 'true';
+  document.querySelectorAll('[data-leave-policy-annual-only]').forEach((el) => {
+    el.classList.toggle('hidden', category !== 'annual');
+  });
+  document.querySelectorAll('[data-leave-policy-selected-employees]').forEach((el) => {
+    el.classList.toggle('hidden', targetScope !== 'selected_employees');
+  });
+  document.querySelectorAll('[data-leave-policy-promotion-fields]').forEach((el) => {
+    el.classList.toggle('hidden', category !== 'annual' || !promotionEnabled);
+  });
+  renderLeavePolicyEmployeeSummary();
+}
+
+function openLeavePolicyEditor({ policy = null, draft = null, context = null } = {}) {
+  if (!canManageLeaveSettings()) {
+    showToast('휴가 정책을 수정할 권한이 없습니다.', 'error', 2200);
+    return;
+  }
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  const editorDraft = createLeavePolicyDraft(draft || policy || {});
+  state.leaveView.policyEditorContext = context && typeof context === 'object'
+    ? {
+      mode: String(context.mode || (editorDraft.id ? 'edit' : 'create')).trim() || 'create',
+      policyId: String(context.policyId || editorDraft.id || '').trim(),
+    }
+    : {
+      mode: editorDraft.id ? 'edit' : 'create',
+      policyId: editorDraft.id,
+    };
+  state.leaveView.policyEditorSelectedEmployeeCodes = normalizeStringArray(editorDraft.selectedEmployeeCodes || []);
+  const content = document.createElement('div');
+  content.className = 'stack leave-policy-editor';
+  content.innerHTML = `
+    <section class="leave-policy-editor-section">
+      <div class="leave-policy-editor-section-head">
+        <h4>휴가 명칭</h4>
+      </div>
+      <div class="leave-policy-inline-grid leave-policy-inline-grid-wide">
+        <label class="input-field">
+          <span>휴가 명칭</span>
+          <input id="leavePolicyNameInput" type="text" maxlength="60" placeholder="예: 연차휴가" value="${editorDraft.displayName}" />
+        </label>
+        <label class="input-field">
+          <span>휴가 카테고리</span>
+          <select id="leavePolicyCategorySelect">
+            <option value="annual">연차휴가</option>
+            <option value="reward">포상휴가</option>
+            <option value="special">특별휴가</option>
+            <option value="other">기타 휴가</option>
+          </select>
+        </label>
+      </div>
+      <label class="input-field">
+        <span>휴가 성격</span>
+        <textarea id="leavePolicyDescriptionInput" rows="4" placeholder="휴가의 성격과 사용 기준을 입력하세요.">${editorDraft.description}</textarea>
+      </label>
+    </section>
+    <section class="leave-policy-editor-section">
+      <div class="leave-policy-editor-section-head">
+        <h4>정책 설정</h4>
+      </div>
+      <div class="leave-policy-inline-grid">
+        <label class="input-field">
+          <span>대상</span>
+          <select id="leavePolicyTargetSelect">
+            <option value="company_all">회사의 모든 직원</option>
+            <option value="group">특정 그룹</option>
+            <option value="selected_employees">선택 구성원</option>
+          </select>
+        </label>
+        <label class="input-field">
+          <span>부여 방식</span>
+          <select id="leavePolicyGrantModeSelect">
+            <option value="upfront">사전 부여</option>
+            <option value="manual">수동 부여</option>
+            <option value="yearly">근속 누적</option>
+          </select>
+        </label>
+        <label class="input-field">
+          <span>사용 단위</span>
+          <select id="leavePolicyUnitSelect">
+            <option value="day">일 단위</option>
+            <option value="half_day">0.5일 단위</option>
+            <option value="hour">시간 단위</option>
+          </select>
+        </label>
+        <label class="input-field">
+          <span>승인 필요</span>
+          <select id="leavePolicyApprovalSelect">
+            <option value="true">승인 필요</option>
+            <option value="false">자동 반영</option>
+          </select>
+        </label>
+        <label class="input-field">
+          <span>유급/무급</span>
+          <select id="leavePolicyPaidSelect">
+            <option value="true">유급</option>
+            <option value="false">무급</option>
+          </select>
+        </label>
+        <label class="input-field">
+          <span>이월</span>
+          <select id="leavePolicyCarrySelect">
+            <option value="false">당해 소진</option>
+            <option value="true">이월 허용</option>
+          </select>
+        </label>
+      </div>
+      <div class="leave-policy-selection-row hidden" data-leave-policy-selected-employees>
+        <button class="btn btn-secondary" type="button" id="leavePolicyEmployeeTrigger" data-action="leave-policy-pick-employees">직원 선택</button>
+        <div id="leavePolicyEmployeeSummary" class="leave-policy-selection-summary">선택된 직원이 없습니다.</div>
+      </div>
+    </section>
+    <section class="leave-policy-editor-section">
+      <div class="leave-policy-editor-section-head">
+        <h4>신청/승인 옵션</h4>
+      </div>
+      <div class="leave-policy-inline-grid">
+        <label class="input-field">
+          <span>사유 입력 필요</span>
+          <select id="leavePolicyReasonSelect">
+            <option value="false">선택</option>
+            <option value="true">필수</option>
+          </select>
+        </label>
+        <label class="input-field">
+          <span>대리 신청</span>
+          <select id="leavePolicyDelegateSelect">
+            <option value="false">불가</option>
+            <option value="true">허용</option>
+          </select>
+        </label>
+        <label class="input-field">
+          <span>리더 스케줄 반영</span>
+          <select id="leavePolicyLeaderSelect">
+            <option value="false">미반영</option>
+            <option value="true">반영</option>
+          </select>
+        </label>
+        <label class="input-field">
+          <span>승인 단계</span>
+          <select id="leavePolicyApprovalStepsSelect">
+            <option value="1">1단계</option>
+            <option value="2">2단계</option>
+            <option value="3">3단계</option>
+          </select>
+        </label>
+      </div>
+    </section>
+    <section class="leave-policy-editor-section leave-policy-annual-block" data-leave-policy-annual-only>
+      <div class="leave-policy-editor-section-head">
+        <h4>연차 지급 규칙</h4>
+      </div>
+      <div class="leave-policy-inline-grid">
+        <label class="input-field">
+          <span>기본 지급일수</span>
+          <input id="leavePolicyBaseGrantInput" type="number" min="0" step="0.5" placeholder="예: 15" value="${Number.isFinite(editorDraft.baseGrantDays) ? editorDraft.baseGrantDays : ''}" />
+        </label>
+        <label class="input-field">
+          <span>연차 촉진</span>
+          <select id="leavePolicyPromotionSelect">
+            <option value="false">사용 안함</option>
+            <option value="true">사용</option>
+          </select>
+        </label>
+      </div>
+      <div class="leave-policy-inline-grid hidden" data-leave-policy-promotion-fields>
+        <label class="input-field">
+          <span>촉진 요청 시점</span>
+          <select id="leavePolicyPromotionTimingSelect">
+            <option value="after_grant_6m">연차 부여 6개월 후</option>
+            <option value="after_grant_9m">연차 부여 9개월 후</option>
+            <option value="before_expire_30d">만료 30일 전</option>
+          </select>
+        </label>
+        <label class="input-field">
+          <span>재알림 방식</span>
+          <select id="leavePolicyPromotionReminderSelect">
+            <option value="month_before_expire">만료 한 달 전 재알림</option>
+            <option value="two_weeks_before_expire">만료 2주 전 재알림</option>
+            <option value="none">재알림 없음</option>
+          </select>
+        </label>
+        <label class="input-field">
+          <span>승인 단계 사용</span>
+          <select id="leavePolicyPromotionApprovalSelect">
+            <option value="true">기존 승인 단계 사용</option>
+            <option value="false">촉진 공지만 발송</option>
+          </select>
+        </label>
+        <label class="input-field">
+          <span>미사용 처리</span>
+          <select id="leavePolicyPromotionUnusedSelect">
+            <option value="system_reclaim">시스템에서 자동 회수</option>
+            <option value="manager_review">관리자 수동 처리</option>
+            <option value="carry_over">다음 해로 이월</option>
+          </select>
+        </label>
+      </div>
+      <div class="leave-policy-tenure-block">
+        <div class="leave-policy-tenure-head">
+          <strong>근속 가산 규칙</strong>
+          <button class="btn btn-secondary" type="button" data-action="leave-policy-add-tenure">근속 규칙 추가</button>
+        </div>
+        <div id="leavePolicyTenureList" class="leave-policy-tenure-list"></div>
+      </div>
+    </section>
+    <section class="leave-policy-editor-section">
+      <div class="leave-policy-editor-section-head">
+        <h4>안내 사항</h4>
+      </div>
+      <label class="input-field">
+        <span>안내 문구</span>
+        <textarea id="leavePolicyNoteInput" rows="3" placeholder="사용자에게 노출될 안내 문구를 입력하세요.">${editorDraft.note}</textarea>
+      </label>
+    </section>
+  `;
+  openSheet({
+    title: editorDraft.id ? '휴가 정책 수정' : '휴가 정책 등록',
+    contentNode: content,
+    actions: [
+      { label: '취소', variant: 'btn-secondary', action: 'sheet-close' },
+      { label: editorDraft.id ? '저장' : '등록', variant: 'btn-primary', action: 'leave-policy-save' },
+    ],
+    layoutClass: 'sheet-layout-leave-policy',
+  });
+  const categorySelect = $('#leavePolicyCategorySelect');
+  if (categorySelect instanceof HTMLSelectElement) {
+    categorySelect.value = editorDraft.category;
+  }
+  const unitSelect = $('#leavePolicyUnitSelect');
+  if (unitSelect instanceof HTMLSelectElement) unitSelect.value = editorDraft.unit;
+  const targetSelect = $('#leavePolicyTargetSelect');
+  if (targetSelect instanceof HTMLSelectElement) targetSelect.value = editorDraft.targetScope;
+  const grantModeSelect = $('#leavePolicyGrantModeSelect');
+  if (grantModeSelect instanceof HTMLSelectElement) grantModeSelect.value = editorDraft.grantMode;
+  const approvalSelect = $('#leavePolicyApprovalSelect');
+  if (approvalSelect instanceof HTMLSelectElement) approvalSelect.value = editorDraft.approvalRequired ? 'true' : 'false';
+  const paidSelect = $('#leavePolicyPaidSelect');
+  if (paidSelect instanceof HTMLSelectElement) paidSelect.value = editorDraft.paid ? 'true' : 'false';
+  const carrySelect = $('#leavePolicyCarrySelect');
+  if (carrySelect instanceof HTMLSelectElement) carrySelect.value = editorDraft.carryOver ? 'true' : 'false';
+  const reasonSelect = $('#leavePolicyReasonSelect');
+  if (reasonSelect instanceof HTMLSelectElement) reasonSelect.value = editorDraft.reasonRequired ? 'true' : 'false';
+  const delegateSelect = $('#leavePolicyDelegateSelect');
+  if (delegateSelect instanceof HTMLSelectElement) delegateSelect.value = editorDraft.delegateAllowed ? 'true' : 'false';
+  const leaderSelect = $('#leavePolicyLeaderSelect');
+  if (leaderSelect instanceof HTMLSelectElement) leaderSelect.value = editorDraft.leaderReflect ? 'true' : 'false';
+  const approvalStepsSelect = $('#leavePolicyApprovalStepsSelect');
+  if (approvalStepsSelect instanceof HTMLSelectElement) {
+    const steps = String(editorDraft.approvalSteps || 1);
+    approvalStepsSelect.value = ['1', '2', '3'].includes(steps) ? steps : '1';
+  }
+  const promotionSelect = $('#leavePolicyPromotionSelect');
+  if (promotionSelect instanceof HTMLSelectElement) promotionSelect.value = editorDraft.promotionEnabled ? 'true' : 'false';
+  const promotionTimingSelect = $('#leavePolicyPromotionTimingSelect');
+  if (promotionTimingSelect instanceof HTMLSelectElement) promotionTimingSelect.value = editorDraft.promotionRequestTiming;
+  const promotionReminderSelect = $('#leavePolicyPromotionReminderSelect');
+  if (promotionReminderSelect instanceof HTMLSelectElement) promotionReminderSelect.value = editorDraft.promotionReminderMode;
+  const promotionApprovalSelect = $('#leavePolicyPromotionApprovalSelect');
+  if (promotionApprovalSelect instanceof HTMLSelectElement) promotionApprovalSelect.value = editorDraft.promotionUseSameApproval ? 'true' : 'false';
+  const promotionUnusedSelect = $('#leavePolicyPromotionUnusedSelect');
+  if (promotionUnusedSelect instanceof HTMLSelectElement) promotionUnusedSelect.value = editorDraft.promotionUnusedAction;
+  const tenureList = $('#leavePolicyTenureList');
+  if (tenureList instanceof HTMLElement) {
+    const rules = Array.isArray(editorDraft.tenureBonusRules) ? editorDraft.tenureBonusRules : [];
+    if (!rules.length) {
+      tenureList.appendChild(renderLeavePolicyTenureRuleRow());
+    } else {
+      rules.forEach((rule) => {
+        tenureList.appendChild(renderLeavePolicyTenureRuleRow({
+          years: Number(rule?.years || ''),
+          extraDays: Number(rule?.extra_days || ''),
+        }));
+      });
+    }
+  }
+  syncLeavePolicyEditorCategory();
+}
+
+function collectLeavePolicyDraftFromForm() {
+  const nameInput = $('#leavePolicyNameInput');
+  const categorySelect = $('#leavePolicyCategorySelect');
+  const descriptionInput = $('#leavePolicyDescriptionInput');
+  const targetSelect = $('#leavePolicyTargetSelect');
+  const grantModeSelect = $('#leavePolicyGrantModeSelect');
+  const unitSelect = $('#leavePolicyUnitSelect');
+  const approvalSelect = $('#leavePolicyApprovalSelect');
+  const paidSelect = $('#leavePolicyPaidSelect');
+  const carrySelect = $('#leavePolicyCarrySelect');
+  const reasonSelect = $('#leavePolicyReasonSelect');
+  const delegateSelect = $('#leavePolicyDelegateSelect');
+  const leaderSelect = $('#leavePolicyLeaderSelect');
+  const approvalStepsSelect = $('#leavePolicyApprovalStepsSelect');
+  const baseGrantInput = $('#leavePolicyBaseGrantInput');
+  const promotionSelect = $('#leavePolicyPromotionSelect');
+  const promotionTimingSelect = $('#leavePolicyPromotionTimingSelect');
+  const promotionReminderSelect = $('#leavePolicyPromotionReminderSelect');
+  const promotionApprovalSelect = $('#leavePolicyPromotionApprovalSelect');
+  const promotionUnusedSelect = $('#leavePolicyPromotionUnusedSelect');
+  const noteInput = $('#leavePolicyNoteInput');
+  const displayName = String(nameInput instanceof HTMLInputElement ? nameInput.value : '').trim();
+  const category = normalizeLeavePolicyCategory(categorySelect instanceof HTMLSelectElement ? categorySelect.value : 'annual');
+  const description = String(descriptionInput instanceof HTMLTextAreaElement ? descriptionInput.value : '').trim();
+  const targetScope = String(targetSelect instanceof HTMLSelectElement ? targetSelect.value : 'company_all').trim() || 'company_all';
+  const grantMode = String(grantModeSelect instanceof HTMLSelectElement ? grantModeSelect.value : (category === 'annual' ? 'upfront' : 'manual')).trim() || 'manual';
+  const unit = normalizeLeavePolicyUnit(unitSelect instanceof HTMLSelectElement ? unitSelect.value : 'day');
+  const approvalRequired = String(approvalSelect instanceof HTMLSelectElement ? approvalSelect.value : 'true') !== 'false';
+  const paid = String(paidSelect instanceof HTMLSelectElement ? paidSelect.value : 'true') !== 'false';
+  const carryOver = String(carrySelect instanceof HTMLSelectElement ? carrySelect.value : 'false') === 'true';
+  const reasonRequired = String(reasonSelect instanceof HTMLSelectElement ? reasonSelect.value : 'false') === 'true';
+  const delegateAllowed = String(delegateSelect instanceof HTMLSelectElement ? delegateSelect.value : 'false') === 'true';
+  const leaderReflect = String(leaderSelect instanceof HTMLSelectElement ? leaderSelect.value : 'false') === 'true';
+  const approvalSteps = Number(approvalStepsSelect instanceof HTMLSelectElement ? approvalStepsSelect.value : 1) || 1;
+  const baseGrantDays = Number(baseGrantInput instanceof HTMLInputElement ? baseGrantInput.value : 0) || 0;
+  const promotionEnabled = String(promotionSelect instanceof HTMLSelectElement ? promotionSelect.value : 'false') === 'true';
+  const selectedEmployeeCodes = targetScope === 'selected_employees'
+    ? normalizeStringArray(state.leaveView?.policyEditorSelectedEmployeeCodes || [])
+    : [];
+  const promotionRequestTiming = normalizeLeavePromotionRequestTiming(promotionTimingSelect instanceof HTMLSelectElement ? promotionTimingSelect.value : 'after_grant_6m');
+  const promotionReminderMode = normalizeLeavePromotionReminderMode(promotionReminderSelect instanceof HTMLSelectElement ? promotionReminderSelect.value : 'month_before_expire');
+  const promotionUseSameApproval = String(promotionApprovalSelect instanceof HTMLSelectElement ? promotionApprovalSelect.value : 'true') !== 'false';
+  const promotionUnusedAction = normalizeLeavePromotionUnusedAction(promotionUnusedSelect instanceof HTMLSelectElement ? promotionUnusedSelect.value : 'system_reclaim');
+  const note = String(noteInput instanceof HTMLTextAreaElement ? noteInput.value : '').trim();
+
+  const tenureRules = [];
+  document.querySelectorAll('#leavePolicyTenureList .leave-policy-tenure-row').forEach((row) => {
+    const yearsInput = row.querySelector('[data-field="years"]');
+    const extraInput = row.querySelector('[data-field="extraDays"]');
+    const years = Number(yearsInput instanceof HTMLInputElement ? yearsInput.value : 0) || 0;
+    const extraDays = Number(extraInput instanceof HTMLInputElement ? extraInput.value : 0) || 0;
+    if (years > 0 && extraDays > 0) {
+      tenureRules.push({ years, extra_days: extraDays });
+    }
+  });
+
+  return {
+    display_name: displayName,
+    category,
+    description,
+    target_scope: targetScope,
+    selected_employee_codes: selectedEmployeeCodes,
+    grant_mode: grantMode,
+    unit,
+    approval_required: approvalRequired,
+    paid,
+    carry_over: carryOver,
+    reason_required: reasonRequired,
+    delegate_allowed: delegateAllowed,
+    leader_reflect: leaderReflect,
+    approval_steps: approvalSteps,
+    base_grant_days: category === 'annual' ? baseGrantDays : 0,
+    tenure_bonus_rules: category === 'annual' ? tenureRules : [],
+    promotion_enabled: category === 'annual' ? promotionEnabled : false,
+    promotion_request_timing: category === 'annual' ? promotionRequestTiming : 'after_grant_6m',
+    promotion_reminder_mode: category === 'annual' ? promotionReminderMode : 'month_before_expire',
+    promotion_use_same_approval: category === 'annual' ? promotionUseSameApproval : true,
+    promotion_unused_action: category === 'annual' ? promotionUnusedAction : 'system_reclaim',
+    note,
+  };
+}
+
+async function submitLeavePolicyEditor() {
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  const ctx = state.leaveView.policyEditorContext || {};
+  const payload = collectLeavePolicyDraftFromForm();
+  if (!payload.display_name) {
+    showToast('휴가 명칭을 입력해 주세요.', 'info', 2200);
+    const input = $('#leavePolicyNameInput');
+    if (input instanceof HTMLInputElement) input.focus();
+    return;
+  }
+  if (payload.target_scope === 'selected_employees' && !payload.selected_employee_codes.length) {
+    showToast('선택 구성원 정책은 대상 직원을 지정해 주세요.', 'info', 2200);
+    return;
+  }
+  if (ctx.policyId) {
+    await apiRequest(appendLeaveTenantQuery(`/leaves/policies/${encodeURIComponent(ctx.policyId)}`), {
+      method: 'PATCH',
+      body: payload,
+    });
+  } else {
+    await apiRequest(appendLeaveTenantQuery('/leaves/policies'), {
+      method: 'POST',
+      body: payload,
+    });
+  }
+  closeSheet();
+  showToast(ctx.policyId ? '휴가 정책을 수정했습니다.' : '휴가 정책을 등록했습니다.', 'success', 2200);
+  await loadLeaves();
+  setLeaveWorkspaceSection('settings');
+  renderLeaveManagementWorkspace();
+}
+
+function openLeavePolicyDetailSheet(policyId = '') {
+  const rows = buildLeavePolicyRows();
+  const row = rows.find((item) => String(item?.id || item?.key || '') === String(policyId || '').trim()) || rows.find((item) => String(item?.key || '') === String(policyId || '').trim());
+  if (!row) return;
+  const rules = row.rules || {};
+  const detail = document.createElement('div');
+  detail.className = 'stack';
+  const allowedUnits = Array.isArray(rules?.allowed_units) ? rules.allowed_units : [];
+  const unitSource = rules?.unit || (allowedUnits.includes('half_day') ? 'half_day' : allowedUnits.includes('hour') ? 'hour' : 'day');
+  const selectedEmployeeCount = Array.isArray(rules?.selected_employee_codes) ? rules.selected_employee_codes.length : 0;
+  detail.innerHTML = `
+    <div><strong>휴가 명칭</strong><div class="muted">${row.label}</div></div>
+    <div><strong>설명</strong><div class="muted">${row.description || '-'}</div></div>
+    <div><strong>대상</strong><div class="muted">${row.target || '회사의 모든 직원'}</div></div>
+    ${selectedEmployeeCount ? `<div><strong>선택 직원</strong><div class="muted">${selectedEmployeeCount}명 지정</div></div>` : ''}
+    <div><strong>부여 방식</strong><div class="muted">${row.grantMode || '-'}</div></div>
+    <div><strong>사용 단위</strong><div class="muted">${formatLeavePolicyUnitLabel(unitSource)}</div></div>
+    <div><strong>승인 방식</strong><div class="muted">${rules?.approval_required === false ? '자동 반영' : '승인 필요'}</div></div>
+    <div><strong>이월</strong><div class="muted">${row.carry || '-'}</div></div>
+    <div><strong>유급/무급</strong><div class="muted">${row.paid || '-'}</div></div>
+    <div><strong>기본 지급일수</strong><div class="muted">${rules?.base_grant_days ? formatLeaveUnits(rules.base_grant_days, '일') : '-'}</div></div>
+    <div><strong>근속 가산</strong><div class="muted">${formatLeavePolicyTenureSummary(rules) || '-'}</div></div>
+    ${rules?.promotion_enabled ? `<div><strong>연차 촉진</strong><div class="muted">사용</div></div>` : ''}
+    ${rules?.promotion_enabled ? `<div><strong>촉진 요청 시점</strong><div class="muted">${formatLeavePromotionRequestTimingLabel(rules?.promotion_request_timing)}</div></div>` : ''}
+    ${rules?.promotion_enabled ? `<div><strong>재알림 방식</strong><div class="muted">${formatLeavePromotionReminderModeLabel(rules?.promotion_reminder_mode)}</div></div>` : ''}
+    ${rules?.promotion_enabled ? `<div><strong>촉진 승인 처리</strong><div class="muted">${rules?.promotion_use_same_approval === false ? '촉진 공지만 발송' : '기존 승인 단계 사용'}</div></div>` : ''}
+    ${rules?.promotion_enabled ? `<div><strong>미사용 처리</strong><div class="muted">${formatLeavePromotionUnusedActionLabel(rules?.promotion_unused_action)}</div></div>` : ''}
+    <div><strong>안내 문구</strong><div class="muted">${rules?.note || '-'}</div></div>
+  `;
+  openSheet({
+    title: '휴가 정책 상세',
+    contentNode: detail,
+    actions: [
+      { label: '닫기', variant: 'btn-secondary', action: 'sheet-close' },
+      ...(canManageLeaveSettings() ? [{ label: '설정', variant: 'btn-primary', action: 'leave-policy-edit', policyId: row.id || row.key }] : []),
+    ],
+  });
+}
+
+function openLeaveGrantSheet({ draft = null } = {}) {
+  if (!canManageLeaveGrants()) {
+    showToast('휴가 부여 권한이 없습니다.', 'error', 2200);
+    return;
+  }
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  const grantDraft = createLeaveGrantDraft(draft || state.leaveView.leaveGrantDraft || {});
+  state.leaveView.leaveGrantDraft = grantDraft;
+  const content = document.createElement('div');
+  content.className = 'stack';
+  const policyOptions = buildLeavePolicyRows()
+    .filter((row) => String(row?.id || '').trim())
+    .map((row) => `<option value="${row.id}">${row.label}</option>`)
+    .join('');
+  const policySelectMarkup = policyOptions || '<option value="">정책을 먼저 등록하세요</option>';
+  const year = new Date().getFullYear();
+  content.innerHTML = `
+    <div class="leave-policy-selection-row">
+      <button class="btn btn-secondary" type="button" id="leaveGrantEmployeeTrigger" data-action="leave-grant-pick-employees">직원 선택</button>
+      <div id="leaveGrantEmployeeSummary" class="leave-policy-selection-summary">선택된 직원이 없습니다.</div>
+    </div>
+    <label class="input-field">
+      <span>휴가 유형</span>
+        <select id="leaveGrantPolicyId">
+        ${policySelectMarkup}
+      </select>
+    </label>
+    <div class="leave-policy-inline-grid">
+      <label class="input-field">
+        <span>지급 일수</span>
+        <input id="leaveGrantDays" type="number" min="0" step="0.5" placeholder="예: 15" value="${grantDraft.grantedDays}" />
+      </label>
+      <label class="input-field">
+        <span>부여 방식</span>
+        <select id="leaveGrantType">
+          <option value="manual">수동 부여</option>
+          <option value="annual">연차 자동</option>
+        </select>
+      </label>
+    </div>
+    <div class="leave-policy-inline-grid">
+      <label class="input-field">
+        <span>사용 시작일</span>
+        <input id="leaveGrantStart" type="date" value="${grantDraft.effectiveFrom || `${year}-01-01`}" />
+      </label>
+      <label class="input-field">
+        <span>사용 종료일</span>
+        <input id="leaveGrantEnd" type="date" value="${grantDraft.effectiveTo || `${year}-12-31`}" />
+      </label>
+    </div>
+    <p class="muted">부여 내역은 휴가 현황/사용 이력에 즉시 반영됩니다.</p>
+  `;
+  openSheet({
+    title: '휴가 부여',
+    contentNode: content,
+    actions: [
+      { label: '취소', variant: 'btn-secondary', action: 'sheet-close' },
+      { label: '부여', variant: 'btn-primary', action: 'leave-grant-save' },
+    ],
+  });
+  const policyIdSelect = $('#leaveGrantPolicyId');
+  if (policyIdSelect instanceof HTMLSelectElement) {
+    const optionValues = Array.from(policyIdSelect.options).map((option) => String(option.value || '').trim()).filter(Boolean);
+    const fallbackValue = optionValues[0] || '';
+    policyIdSelect.value = optionValues.includes(grantDraft.policyId) ? grantDraft.policyId : fallbackValue;
+  }
+  const grantTypeSelect = $('#leaveGrantType');
+  if (grantTypeSelect instanceof HTMLSelectElement) {
+    grantTypeSelect.value = ['manual', 'annual'].includes(grantDraft.grantType) ? grantDraft.grantType : 'manual';
+  }
+  renderLeaveGrantEmployeeSummary();
+}
+
+async function submitLeaveGrant() {
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  const grantDraft = readLeaveGrantDraftFromSheet();
+  state.leaveView.leaveGrantDraft = grantDraft;
+  const selectedEmployeeCodes = normalizeStringArray(grantDraft.selectedEmployeeCodes || []);
+  const policyId = String(grantDraft.policyId || '').trim();
+  const days = Number(grantDraft.grantedDays || 0);
+  const grantType = String(grantDraft.grantType || 'manual').trim();
+  const effectiveFrom = String(grantDraft.effectiveFrom || '').trim();
+  const effectiveTo = String(grantDraft.effectiveTo || '').trim();
+  if (!selectedEmployeeCodes.length) {
+    showToast('휴가를 부여할 직원을 선택해 주세요.', 'info', 2200);
+    return;
+  }
+  if (!policyId) {
+    showToast('휴가 유형을 선택해 주세요.', 'info', 2200);
+    return;
+  }
+  if (!Number.isFinite(days) || days <= 0) {
+    showToast('지급 일수를 입력해 주세요.', 'info', 2200);
+    return;
+  }
+  for (const employeeCode of selectedEmployeeCodes) {
+    await apiRequest(appendLeaveTenantQuery('/leaves/grants'), {
+      method: 'POST',
+      body: {
+        employee_code: employeeCode,
+        policy_id: policyId,
+        grant_type: grantType,
+        granted_days: days,
+        effective_from: effectiveFrom,
+        effective_to: effectiveTo,
+      },
+    });
+  }
+  state.leaveView.leaveGrantDraft = null;
+  closeSheet();
+  showToast(`휴가 부여를 ${selectedEmployeeCodes.length}명에게 저장했습니다.`, 'success', 2200);
+  await Promise.all([loadLeaveGrants(), loadLeaves()]);
+  renderLeaveManagementWorkspace();
 }
 
 function createLeaveHistoryListRow(row = {}, { scope = 'mine' } = {}) {
@@ -31962,7 +34335,6 @@ function getActiveTenantHeaderValue() {
 function shouldStripLegacyTenantCode(pathname = '') {
   return pathname.startsWith('/sites')
     || pathname.startsWith('/employees')
-    || pathname.startsWith('/leaves')
     || pathname.startsWith('/reports')
     || pathname.startsWith('/integrations');
 }
@@ -31992,6 +34364,30 @@ function appendTenantCodeQuery(path, tenantCode = '') {
   if (!route || !tenant) return route;
   const separator = route.includes('?') ? '&' : '?';
   return `${route}${separator}tenant_code=${encodeURIComponent(tenant)}`;
+}
+
+function getLeaveScopedTenantCode() {
+  const workingTenant = normalizeTenantCode(getWorkingTenantDisplayCode() || '');
+  if (workingTenant && workingTenant !== 'MASTER') return workingTenant;
+  const scopedTenant = normalizeTenantCode(getTenantCodeForScopedAdminApi() || '');
+  if (scopedTenant && scopedTenant !== 'MASTER') return scopedTenant;
+  const uiTenant = normalizeTenantCode(state.uiContext?.activeTenantCode || '');
+  if (uiTenant && uiTenant !== 'MASTER') return uiTenant;
+  return '';
+}
+
+function appendLeaveTenantQuery(path = '') {
+  const rawPath = String(path || '').trim();
+  if (!rawPath) return rawPath;
+  try {
+    const url = new URL(rawPath, 'https://local.invalid');
+    url.searchParams.delete('tenant_code');
+    url.searchParams.delete('tenantCode');
+    const query = url.searchParams.toString();
+    return appendTenantCodeQuery(`${url.pathname}${query ? `?${query}` : ''}`, getLeaveScopedTenantCode());
+  } catch {
+    return appendTenantCodeQuery(rawPath, getLeaveScopedTenantCode());
+  }
 }
 
 function applyTenantContextToFormFields() {
@@ -33911,14 +36307,17 @@ function getWorkspaceViewTitle(viewName = state.currentView || 'home') {
   if (view === 'ops') return '운영';
   if (view === 'support-status') return '지원근무자 현황';
   if (view === 'attendance' || view === 'attendance-check') return '출퇴근';
-  if (view === 'calendar') return '캘린더';
-  if (view === 'requests' || view === 'checkin-request') return managerMode ? '요청·승인' : '요청';
+  if (view === 'calendar') return '스케줄';
+  if (view === 'requests' || view === 'checkin-request') return managerMode ? '승인' : '요청';
   if (view === 'hr') return '문서';
   if (view === 'schedule') return '스케줄';
   if (view === 'org' || view === 'employees') return '조직';
   if (view === 'reports') return '보고';
   if (view === 'profile') return managerMode ? '설정' : '내 정보';
-  if (view === 'dev-console') return '시스템';
+  if (view === 'dev-console') {
+    const route = normalizeRoutePath(state.currentRoute || '');
+    return route === ROUTE_MASTER_AUDIT_LOGS ? '감사' : '구성원';
+  }
   return '홈';
 }
 
@@ -33927,12 +36326,11 @@ function getDesktopGlobalSearchItems() {
   const items = [
     { label: '홈', route: ROUTE_HOME, hint: '오늘 브리핑', keywords: ['대시보드', 'today', 'home', '브리핑'] },
     { label: '출퇴근', route: ROUTE_ATTENDANCE, hint: '기록/예외 스캔', keywords: ['근태', 'attendance', '타임시트', '예외'] },
-    { label: '캘린더', route: ROUTE_CALENDAR_WEEK, hint: '협업 일정', keywords: ['캘린더', 'calendar', 'week', 'agenda', 'booking'] },
     { label: '메신저', route: ROUTE_MESSENGER, hint: '대화와 공지방', keywords: ['메신저', '채팅', '대화', '공지방', 'messenger', 'chat'] },
     { label: '화상대화', route: ROUTE_MEETINGS, hint: '회의방과 세션', keywords: ['회의', '화상', '미팅', 'meeting', 'video', 'meetings'] },
-    { label: role === 'EMPLOYEE' ? '요청' : '요청·승인', route: ROUTE_REQUESTS, hint: '요청 inbox', keywords: ['요청', '승인', '휴가', '예외', 'inbox'] },
+    { label: role === 'EMPLOYEE' ? '요청' : '승인', route: ROUTE_REQUESTS, hint: '요청 inbox', keywords: ['요청', '승인', '휴가', '예외', 'inbox'] },
     { label: '문서', route: ROUTE_HR, hint: '문서 센터', keywords: ['문서', '재직증명서', 'hr'] },
-    { label: '스케줄', route: ROUTE_SCHEDULE_CALENDAR, hint: '월간 근무표', keywords: ['스케줄', '일정', 'calendar', '캘린더', '근무표'] },
+    { label: '스케줄', route: ROUTE_SCHEDULE_CALENDAR, hint: '월간 근무표', keywords: ['스케줄', '일정', 'calendar', '캘린더', 'month', 'week', 'day', '근무표'] },
     { label: role === 'EMPLOYEE' ? '내 정보' : '설정', route: ROUTE_PROFILE, hint: '계정/연동 설정', keywords: ['설정', '프로필', '알림', '보안', '연동'] },
   ];
 
@@ -33950,8 +36348,7 @@ function getDesktopGlobalSearchItems() {
   if (role === 'DEV') {
     items.push(
       { label: '회사', route: ROUTE_MASTER_TENANTS, hint: '회사 관리', keywords: ['회사', 'tenant', 'company'] },
-      { label: '시스템', route: ROUTE_MASTER_AUDIT_LOGS, hint: '감사로그', keywords: ['시스템', 'audit', '로그'] },
-      { label: '감사로그', route: ROUTE_MASTER_AUDIT_LOGS, hint: 'audit logs', keywords: ['감사', 'audit', '로그'] },
+      { label: '감사', route: ROUTE_MASTER_AUDIT_LOGS, hint: 'audit logs', keywords: ['감사', 'audit', '로그', '시스템'] },
     );
   }
 
@@ -34205,6 +36602,7 @@ function renderProfileSummary() {
 
   renderProfileSettingsRail();
   renderProfileThemeState();
+  renderProfileSignatureCard();
   renderLockPolicySkeleton();
 }
 
@@ -34226,6 +36624,298 @@ function renderProfileThemeState() {
   const currentMode = $('#profileThemeCurrentMode');
   if (currentMode) {
     currentMode.textContent = normalizeUiTheme(state.uiTheme || readStoredUiTheme()) === 'dark' ? '다크' : '라이트';
+  }
+}
+
+function normalizeProfileSignatureMode(value = '') {
+  return String(value || '').trim().toLowerCase() === 'upload' ? 'upload' : 'draw';
+}
+
+function isProfileSignatureEligible() {
+  const role = String(state.user?.role || '').trim().toLowerCase();
+  return PROFILE_SIGNATURE_ALLOWED_ROLES.has(role);
+}
+
+function isProfileSignatureCanvasBlank() {
+  const canvas = $('#profileSignatureCanvas');
+  if (!(canvas instanceof HTMLCanvasElement)) return true;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return true;
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  for (let index = 3; index < pixels.length; index += 4) {
+    if (pixels[index] !== 0) return false;
+  }
+  return true;
+}
+
+function clearProfileSignatureCanvas() {
+  const canvas = $('#profileSignatureCanvas');
+  if (!(canvas instanceof HTMLCanvasElement)) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function bindProfileSignatureCanvas() {
+  const profile = state.profile || createInitialProfileViewState();
+  const canvas = $('#profileSignatureCanvas');
+  if (!(canvas instanceof HTMLCanvasElement) || profile.signatureCanvasBound) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  profile.signatureCanvasBound = true;
+  state.profile = profile;
+  let drawing = false;
+  const resolvePoint = (event) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
+    const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
+    return {
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY,
+    };
+  };
+  const beginStroke = (event) => {
+    drawing = true;
+    const point = resolvePoint(event);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#111827';
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y);
+    ctx.lineTo(point.x, point.y);
+    ctx.stroke();
+  };
+  const moveStroke = (event) => {
+    if (!drawing) return;
+    const point = resolvePoint(event);
+    ctx.lineTo(point.x, point.y);
+    ctx.stroke();
+  };
+  const endStroke = () => {
+    drawing = false;
+    ctx.closePath();
+  };
+  canvas.addEventListener('pointerdown', beginStroke);
+  canvas.addEventListener('pointermove', moveStroke);
+  canvas.addEventListener('pointerup', endStroke);
+  canvas.addEventListener('pointerleave', endStroke);
+  canvas.addEventListener('pointercancel', endStroke);
+}
+
+function dataUrlToBlob(dataUrl = '') {
+  const normalized = String(dataUrl || '').trim();
+  if (!normalized.startsWith('data:')) return null;
+  const [header, payload] = normalized.split(',', 2);
+  if (!payload) return null;
+  const mimeMatch = /data:([^;]+);base64/i.exec(header);
+  const mimeType = mimeMatch?.[1] || 'image/png';
+  const binary = window.atob(payload);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mimeType });
+}
+
+async function readFileAsDataUrl(file) {
+  if (!(file instanceof File)) return '';
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('서명 파일을 읽지 못했습니다.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderProfileSignatureCard() {
+  const profile = state.profile || createInitialProfileViewState();
+  const card = $('#profileSignatureCard');
+  if (!(card instanceof HTMLElement)) return;
+  const eligible = isProfileSignatureEligible();
+  card.classList.toggle('hidden', !eligible);
+  if (!eligible) return;
+
+  bindProfileSignatureCanvas();
+  profile.signatureSourceType = normalizeProfileSignatureMode(profile.signatureSourceType || 'draw');
+  state.profile = profile;
+
+  const rolePill = $('#profileSignatureRolePill');
+  const statePill = $('#profileSignatureStatePill');
+  const drawPanel = $('#profileSignatureDrawPanel');
+  const uploadPanel = $('#profileSignatureUploadPanel');
+  const previewImg = $('#profileSignaturePreview');
+  const previewEmpty = $('#profileSignaturePreviewEmpty');
+  const statusEl = $('#profileSignatureStatus');
+  const uploadMeta = $('#profileSignatureUploadMeta');
+  const uploadInput = $('#profileSignatureUploadInput');
+
+  if (rolePill) rolePill.textContent = getRoleDisplayLabel(state.user?.role || '');
+  if (statePill) {
+    const hasSavedItem = Boolean(profile.signatureHasSavedItem);
+    statePill.className = hasSavedItem ? 'status-pill status-pill-success' : 'status-pill status-pill-warn';
+    statePill.textContent = profile.signatureLoading ? '불러오는 중' : (hasSavedItem ? '등록됨' : '미등록');
+  }
+  document.querySelectorAll('#profileSignatureCard [data-action="profile-signature-mode"]').forEach((button) => {
+    const mode = normalizeProfileSignatureMode(button?.dataset?.mode || 'draw');
+    button.classList.toggle('active', mode === profile.signatureSourceType);
+  });
+  if (drawPanel) drawPanel.classList.toggle('hidden', profile.signatureSourceType !== 'draw');
+  if (uploadPanel) uploadPanel.classList.toggle('hidden', profile.signatureSourceType !== 'upload');
+  if (uploadMeta) {
+    uploadMeta.textContent = profile.signatureUploadFileName
+      ? `${profile.signatureUploadFileName} 선택됨`
+      : '흰 배경이 없는 서명 이미지를 권장합니다.';
+  }
+  if (uploadInput instanceof HTMLInputElement && !profile.signatureUploadFileName) {
+    uploadInput.value = '';
+  }
+  if (previewImg instanceof HTMLImageElement) {
+    if (profile.signaturePreviewUrl) {
+      previewImg.src = profile.signaturePreviewUrl;
+      previewImg.classList.remove('hidden');
+    } else {
+      previewImg.src = '';
+      previewImg.classList.add('hidden');
+    }
+  }
+  if (previewEmpty) previewEmpty.classList.toggle('hidden', Boolean(profile.signaturePreviewUrl));
+  if (statusEl) {
+    statusEl.textContent = profile.signatureStatusText
+      || (profile.signatureLoading ? '서명 정보를 불러오는 중입니다.' : '전자결재에서 사용할 개인 서명을 등록하세요.');
+  }
+  const saveBtn = document.querySelector('#profileSignatureCard [data-action="profile-signature-save"]');
+  const deleteBtn = document.querySelector('#profileSignatureCard [data-action="profile-signature-delete"]');
+  if (saveBtn instanceof HTMLButtonElement) {
+    saveBtn.disabled = Boolean(profile.signatureSaving || profile.signatureLoading);
+  }
+  if (deleteBtn instanceof HTMLButtonElement) {
+    deleteBtn.disabled = Boolean(profile.signatureDeleting || profile.signatureLoading || !profile.signatureHasSavedItem);
+  }
+}
+
+async function loadProfileSignatureProfile({ force = false } = {}) {
+  if (!state.profile || typeof state.profile !== 'object') {
+    state.profile = createInitialProfileViewState();
+  }
+  const profile = state.profile;
+  if (!isProfileSignatureEligible()) {
+    profile.signaturePreviewUrl = '';
+    profile.signatureHasSavedItem = false;
+    profile.signatureStatusText = '';
+    renderProfileSignatureCard();
+    return null;
+  }
+  const now = Date.now();
+  const isFresh = !force && Number(profile.signatureFetchedAt || 0) > 0 && (now - Number(profile.signatureFetchedAt || 0)) < HR_DATA_CACHE_TTL_MS;
+  if (isFresh) {
+    renderProfileSignatureCard();
+    return null;
+  }
+  profile.signatureLoading = true;
+  renderProfileSignatureCard();
+  try {
+    const payload = await apiRequest('/users/me/signature');
+    const item = payload?.item && typeof payload.item === 'object' ? payload.item : null;
+    profile.signatureHasSavedItem = Boolean(item?.has_signature);
+    profile.signaturePreviewUrl = String(item?.preview_data_url || '').trim();
+    profile.signatureFetchedAt = Date.now();
+    if (!profile.signatureUploadFileName) {
+      profile.signatureSourceType = item?.source_type === 'uploaded' ? 'upload' : profile.signatureSourceType;
+    }
+    profile.signatureStatusText = profile.signatureHasSavedItem ? '현재 등록된 서명을 확인하고 교체할 수 있습니다.' : '등록된 서명이 없습니다.';
+    return item;
+  } catch (error) {
+    profile.signatureStatusText = normalizeActionError(error, '서명 정보를 불러오지 못했습니다.');
+    throw error;
+  } finally {
+    profile.signatureLoading = false;
+    renderProfileSignatureCard();
+  }
+}
+
+async function submitProfileSignatureSave() {
+  if (!state.profile || typeof state.profile !== 'object') {
+    state.profile = createInitialProfileViewState();
+  }
+  const profile = state.profile;
+  if (!isProfileSignatureEligible()) {
+    showToast('서명 등록 권한이 없습니다.', 'error', 2200);
+    return;
+  }
+  const formData = new FormData();
+  const mode = normalizeProfileSignatureMode(profile.signatureSourceType || 'draw');
+  let fileBlob = null;
+  let fileName = 'signature.png';
+  let sourceType = 'drawn';
+  if (mode === 'upload') {
+    if (!(profile.signatureUploadFile instanceof File)) {
+      throw new Error('업로드할 서명 이미지를 선택해 주세요.');
+    }
+    fileBlob = profile.signatureUploadFile;
+    fileName = String(profile.signatureUploadFile.name || 'signature.png').trim() || 'signature.png';
+    sourceType = 'uploaded';
+  } else {
+    const canvas = $('#profileSignatureCanvas');
+    if (!(canvas instanceof HTMLCanvasElement) || isProfileSignatureCanvasBlank()) {
+      throw new Error('서명을 먼저 그려 주세요.');
+    }
+    const dataUrl = canvas.toDataURL('image/png');
+    fileBlob = dataUrlToBlob(dataUrl);
+    fileName = 'signature-drawn.png';
+    sourceType = 'drawn';
+  }
+  if (!fileBlob) {
+    throw new Error('서명 파일을 준비하지 못했습니다.');
+  }
+  profile.signatureSaving = true;
+  profile.signatureStatusText = '서명을 저장하는 중입니다...';
+  renderProfileSignatureCard();
+  try {
+    formData.append('source_type', sourceType);
+    formData.append('file', fileBlob, fileName);
+    const payload = await apiRequest('/users/me/signature', {
+      method: 'POST',
+      body: formData,
+    });
+    const item = payload?.item && typeof payload.item === 'object' ? payload.item : null;
+    profile.signatureHasSavedItem = Boolean(item?.has_signature);
+    profile.signaturePreviewUrl = String(item?.preview_data_url || '').trim() || profile.signaturePreviewUrl;
+    profile.signatureFetchedAt = Date.now();
+    profile.signatureStatusText = '서명이 저장되었습니다.';
+    showToast('서명을 저장했습니다.', 'success', 2200);
+  } finally {
+    profile.signatureSaving = false;
+    renderProfileSignatureCard();
+  }
+}
+
+async function submitProfileSignatureDelete() {
+  if (!state.profile || typeof state.profile !== 'object') {
+    state.profile = createInitialProfileViewState();
+  }
+  const profile = state.profile;
+  if (!profile.signatureHasSavedItem) {
+    return;
+  }
+  profile.signatureDeleting = true;
+  profile.signatureStatusText = '등록된 서명을 삭제하는 중입니다...';
+  renderProfileSignatureCard();
+  try {
+    await apiRequest('/users/me/signature', {
+      method: 'DELETE',
+    });
+    profile.signaturePreviewUrl = '';
+    profile.signatureHasSavedItem = false;
+    profile.signatureUploadFile = null;
+    profile.signatureUploadFileName = '';
+    profile.signatureFetchedAt = Date.now();
+    clearProfileSignatureCanvas();
+    profile.signatureStatusText = '등록된 서명을 삭제했습니다.';
+    showToast('서명을 삭제했습니다.', 'success', 2200);
+  } finally {
+    profile.signatureDeleting = false;
+    renderProfileSignatureCard();
   }
 }
 
@@ -36069,6 +38759,7 @@ function renderDrawerMenu() {
   const items = DRAWER_MENU_BY_ROLE[drawerRole] || DRAWER_MENU_BY_ROLE.EMPLOYEE;
   const perms = getRolePermissions();
   const currentRoute = state.currentRoute || window.location.hash.replace(/^#/, '') || ROUTE_HOME;
+  const rawRole = getHrRawRole();
   const tenantLabel = $('#drawerTenantLabel');
   const desktopTenantLabel = $('#desktopTenantLabel');
   const drawerTenantSelectWrap = $('#drawerTenantSelectWrap');
@@ -36120,13 +38811,25 @@ function renderDrawerMenu() {
     if (item.view && !isViewAllowed(item.view, perms)) {
       return;
     }
-    const children = Array.isArray(item.children) ? item.children.filter((child) => {
+    const originalChildren = Array.isArray(item.children) ? item.children : [];
+    const children = originalChildren.filter((child) => {
       if (!child?.route) return false;
+      if (child.requiresEmployeeContext && !isHrEmployeeRole()) return false;
+      if (child.requiresTemplateManager && !canAccessHrManageSegment()) return false;
+      if (child.requiresDocumentApproval && !isHrApprovalRole()) return false;
+      const hrSectionMatch = String(child?.hrSectionMatch || '').trim().toLowerCase();
+      if (hrSectionMatch && !isDrawerHrSectionVisible(hrSectionMatch)) {
+        return false;
+      }
       if (String(child?.sectionMatch || '').trim()) {
         return isDrawerRequestsSectionVisible(child.sectionMatch, perms, role);
       }
       return isRouteAllowed(child.route, perms, role);
-    }) : [];
+    });
+
+    if (originalChildren.length && !children.length) {
+      return;
+    }
 
     if (!children.length) {
       const btn = buildDrawerMenuButton(item, currentRoute);
@@ -36293,7 +38996,7 @@ function applyWriteAccessUI(perms) {
   const approvalTitle = $('#approvalModuleTitle');
   const approvalScopeHint = $('#approvalModuleScopeHint');
   if (approvalTitle) {
-    approvalTitle.textContent = isDev ? '승인함' : '지점관리자 승인함';
+    approvalTitle.textContent = isDev ? '승인' : '지점관리자 승인';
   }
   if (approvalScopeHint) {
     approvalScopeHint.textContent = isDev
@@ -36583,6 +39286,8 @@ function clearSession() {
   state.notificationItems = [];
   state.tenantValid = false;
   state.tenantChecking = false;
+  state.tenantValidationBypass = false;
+  cancelTenantValidationRequest();
   state.loginTenantBeforeSuperAdmin = '';
   state.superAdminLoginMode = false;
   state.home = createInitialHomeState();
@@ -39394,10 +42099,11 @@ function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad
   if (previousView === 'schedule' && targetView !== 'schedule') {
     cancelScheduleEmployeeListChunkRender();
   }
-  ['home', 'messenger', 'meetings', 'attendance-check', 'ops', 'support-status', 'reports', 'checkin-request', 'requests', 'notices', 'hr', 'attendance', 'calendar', 'calendar-public', 'schedule', 'profile', 'roadmap', 'dev-console', 'employees', 'org'].forEach((view) => {
+  const panelTarget = targetView;
+  ['home', 'messenger', 'meetings', 'attendance-check', 'ops', 'support-status', 'reports', 'checkin-request', 'requests', 'leave', 'notices', 'hr', 'attendance', 'calendar', 'calendar-public', 'schedule', 'profile', 'roadmap', 'dev-console', 'employees', 'org'].forEach((view) => {
     const panel = $(`#view-${view}`);
     if (!panel) return;
-    const isTarget = view === targetView;
+    const isTarget = view === panelTarget;
     panel.classList.toggle('hidden', !isTarget);
   });
   if (targetView === 'calendar-public') {
@@ -39564,7 +42270,7 @@ async function loadCheckinRequestViewPresenter() {
 function renderRequestsSecondaryTabs() {
   const wrap = $('#requestsSecondaryTabsWrap');
   if (!wrap) return;
-  const show = isManagerShellRole() && normalizeRequestsTabView(state.requestsTabView) === 'approvals';
+  const show = isManagerShellRole() && normalizeRequestsTabView(state.requestsTabView) === 'documents' && canUseRequestsDocumentApprovalMode();
   wrap.classList.toggle('hidden', !show);
   document.querySelectorAll('#requestsSecondaryTabs [data-action="approval-queue-tab"]').forEach((button) => {
     const tab = normalizeManagerRequestsTab(button?.dataset?.tab || REQUESTS_MANAGER_TAB_PENDING);
@@ -39578,18 +42284,15 @@ function setRequestsWorkspaceHeading(segment = normalizeRequestsTabView(state.re
   const priorityTitleEl = $('#requestsPriorityQueueTitle');
   const priorityHintEl = $('#requestsPriorityQueueHint');
   if (!titleEl || !hintEl || !priorityTitleEl || !priorityHintEl) return;
-  if (segment === 'leave') {
-    titleEl.textContent = '휴가 목록';
-    hintEl.textContent = '신청된 휴가 요청을 확인하고 우측 패널에서 상세를 검토합니다.';
-    priorityTitleEl.textContent = '우선 처리 휴가';
-    priorityHintEl.textContent = '오래된 대기 휴가 요청과 오늘 마감되는 건을 먼저 표시합니다.';
-    return;
-  }
-  if (segment === 'approvals') {
-    titleEl.textContent = '통합 승인 큐';
-    hintEl.textContent = '여러 요청 유형을 한 큐에서 비교하고, 선택한 요청은 drawer에서 바로 처리합니다.';
-    priorityTitleEl.textContent = '우선 처리 큐';
-    priorityHintEl.textContent = '오래된 승인 대기, 정정, 문서 발급 대기를 먼저 표시합니다.';
+  if (segment === 'documents' && isManagerShellRole() && canUseRequestsDocumentApprovalMode()) {
+    titleEl.textContent = state.requestsManagerTab === REQUESTS_MANAGER_TAB_SOC
+      ? '진행중'
+      : state.requestsManagerTab === REQUESTS_MANAGER_TAB_PROCESSED
+      ? '처리완료'
+      : '승인 대기';
+    hintEl.textContent = '';
+    priorityTitleEl.textContent = titleEl.textContent;
+    priorityHintEl.textContent = '';
     return;
   }
   if (segment === 'correction') {
@@ -39599,17 +42302,10 @@ function setRequestsWorkspaceHeading(segment = normalizeRequestsTabView(state.re
     priorityHintEl.textContent = '아직 처리되지 않은 정정 요청을 먼저 표시합니다.';
     return;
   }
-  if (segment === 'documents') {
-    titleEl.textContent = '문서 요청 목록';
-    hintEl.textContent = '4종 증명서 요청과 발급 상태를 확인하고 필요한 승인을 처리합니다.';
-    priorityTitleEl.textContent = '문서 발급 대기';
-    priorityHintEl.textContent = '승인이 필요한 문서 요청과 발급 대기 상태를 우선 표시합니다.';
-    return;
-  }
-  titleEl.textContent = '출퇴근 예외 목록';
-  hintEl.textContent = '출퇴근 예외 요청을 확인하고 우측 패널에서 승인/반려를 처리합니다.';
-  priorityTitleEl.textContent = '우선 처리 예외';
-  priorityHintEl.textContent = '오래된 예외 요청과 즉시 확인이 필요한 건을 먼저 표시합니다.';
+  titleEl.textContent = '출퇴근 예외';
+  hintEl.textContent = '';
+  priorityTitleEl.textContent = '출퇴근 예외';
+  priorityHintEl.textContent = '';
 }
 
 function setRequestsWorkspaceRows(rows = []) {
@@ -39632,14 +42328,15 @@ function setRequestsWorkspaceRows(rows = []) {
 function renderRequestsWorkspaceView() {
   const segment = normalizeRequestsTabView(state.requestsTabView);
   const workspace = ensureRequestsWorkspaceState();
-  const showPriorityQueue = segment === 'exceptions' || segment === 'correction';
-  const showKpiStrip = segment === 'exceptions' || segment === 'correction';
+  const showPriorityQueue = false;
+  const showKpiStrip = false;
   const root = $('#view-requests');
   if (root instanceof HTMLElement) {
     root.dataset.requestsSegment = segment;
   }
   renderRequestsWorkspaceSegments();
   renderRequestsSecondaryTabs();
+  setRequestsWorkspaceHeading(segment);
   toggleVisibility('#requestsPriorityQueueCard', showPriorityQueue);
   toggleVisibility('#requestsKpiStrip', showKpiStrip);
   renderRequestsFilterBar();
@@ -39678,7 +42375,7 @@ async function fetchEmployeeLeaveRows() {
   const params = new URLSearchParams({ limit: '200' });
   const ownEmployeeCode = String(state.user?.employee_code || '').trim();
   if (ownEmployeeCode) params.set('employee_code', ownEmployeeCode);
-  return apiRequest(`/leaves?${params.toString()}`);
+  return apiRequest(appendLeaveTenantQuery(`/leaves?${params.toString()}`));
 }
 
 async function fetchManagerAttendanceRequestRows() {
@@ -39692,22 +42389,33 @@ async function fetchManagerLeaveRequestRows() {
 }
 
 async function fetchRequestsDocumentRows() {
-  if (isManagerShellRole()) {
-    const statuses = ['requested', 'generating', 'issued', 'rejected'];
-    const results = await Promise.all(
-      statuses.map((status) => apiRequest(`/certificates/admin/requests?${new URLSearchParams({
-        status,
-        limit: '120',
-      }).toString()}`)),
-    );
+  if (canUseRequestsDocumentApprovalMode()) {
+    const certificateStatuses = ['requested', 'generating', 'issued', 'rejected'];
+    const resignationStatuses = ['requested', 'approved', 'rejected'];
+    const [certificateResults, resignationResults] = await Promise.all([
+      Promise.all(
+        certificateStatuses.map((status) => apiRequest(`/certificates/admin/requests?${new URLSearchParams({
+          status,
+          limit: '120',
+        }).toString()}`)),
+      ),
+      Promise.all(
+        resignationStatuses.map((status) => apiRequest(`/admin/hr/documents/resignation-requests?${new URLSearchParams({
+          status,
+          limit: '120',
+        }).toString()}`)),
+      ),
+    ]);
     const merged = [];
     const seen = new Set();
-    results.forEach((payload) => {
+    [...certificateResults, ...resignationResults].forEach((payload) => {
       const rows = Array.isArray(payload?.items) ? payload.items : [];
       rows.forEach((row) => {
         const id = String(row?.id || '').trim();
-        if (!id || seen.has(id)) return;
-        seen.add(id);
+        const requestKind = getHrDocumentRequestKind(row);
+        const dedupeKey = `${requestKind}:${id}`;
+        if (!id || seen.has(dedupeKey)) return;
+        seen.add(dedupeKey);
         merged.push(row);
       });
     });
@@ -39722,13 +42430,14 @@ async function fetchRequestsDocumentRows() {
 
 async function fetchRequestsApprovalRows() {
   if (!isManagerShellRole()) return [];
-  const processedMode = state.requestsManagerTab === REQUESTS_MANAGER_TAB_PROCESSED;
-  if (!processedMode) {
+  if (state.requestsManagerTab === REQUESTS_MANAGER_TAB_PENDING) {
     const payload = await apiRequest('/approvals/review-queue?limit=120');
     const rows = Array.isArray(payload?.items) ? payload.items : [];
     return rows.map((row) => buildRequestsApprovalItem(row));
   }
-  const statuses = ['approved', 'rejected', 'returned'];
+  const statuses = state.requestsManagerTab === REQUESTS_MANAGER_TAB_SOC
+    ? ['submitted', 'in_review']
+    : ['approved', 'rejected', 'returned', 'cancelled'];
   const payloads = await Promise.all(
     statuses.map((status) => apiRequest(`/approvals/documents?${new URLSearchParams({
       scope: 'review',
@@ -39796,18 +42505,6 @@ async function submitRequestsApprovalAction(documentId = '', actionType = '', co
 function getRequestsActiveRawRowsForCurrentTab() {
   const segment = normalizeRequestsTabView(state.requestsTabView);
   const managerMode = isManagerShellRole();
-  if (segment === 'leave') {
-    const rows = Array.isArray(state.leaveView?.rows) ? state.leaveView.rows : [];
-    return rows.map((row) => buildRequestsLeaveItem(row, { managerMode }));
-  }
-  if (segment === 'approvals') {
-    if (state.requestsManagerTab === REQUESTS_MANAGER_TAB_SOC) {
-      const rows = Array.isArray(state.requestsWorkspace?.socRows) ? state.requestsWorkspace.socRows : [];
-      return rows.map((row) => buildRequestsSocItem(row));
-    }
-    const rows = Array.isArray(state.requestsWorkspace?.approvalRows) ? state.requestsWorkspace.approvalRows : [];
-    return rows;
-  }
   if (segment === 'correction') {
     const rows = Array.isArray(state.requestsWorkspace?.correctionRows)
       ? state.requestsWorkspace.correctionRows
@@ -39816,7 +42513,7 @@ function getRequestsActiveRawRowsForCurrentTab() {
   }
   if (segment === 'documents') {
     const rows = Array.isArray(state.requestsWorkspace?.documentRows) ? state.requestsWorkspace.documentRows : [];
-    return rows.map((row) => buildRequestsDocumentItem(row, { adminMode: isManagerShellRole() }));
+    return rows.map((row) => buildRequestsDocumentItem(row, { adminMode: canUseRequestsDocumentApprovalMode() }));
   }
   if (managerMode) {
     const rows = Array.isArray(state.requestsWorkspace?.attendanceRows) ? state.requestsWorkspace.attendanceRows : [];
@@ -39830,31 +42527,9 @@ async function loadRequestsWorkspaceCurrentTab({ silent = false } = {}) {
   ensureRequestsWorkspaceFilters();
   const segment = normalizeRequestsTabView(state.requestsTabView);
   const managerMode = isManagerShellRole();
-  if (segment === 'leave') {
-    setRequestsWorkspaceHeading(segment);
-    return loadLeaves();
-  }
   renderRequestsWorkspaceLoading();
   try {
-    if (segment === 'approvals') {
-      if (state.requestsManagerTab === REQUESTS_MANAGER_TAB_SOC) {
-        const params = new URLSearchParams();
-        params.set('limit', '80');
-        const tenantCode = getTenantCodeForScopedAdminApi();
-        if (tenantCode) params.set('tenant_code', tenantCode);
-        const socRows = await apiRequest(`/integrations/soc/events?${params.toString()}`);
-        state.requestsWorkspace.socRows = (Array.isArray(socRows) ? socRows : []).map((row) => ({
-          ...row,
-          key: `soc-${row?.id || row?.received_at || Math.random().toString(36).slice(2, 8)}`,
-          receivedAt: row?.received_at || '',
-          eventType: row?.event_type || '',
-          errorText: row?.error_text || '',
-          appliedChanges: row?.applied_changes && typeof row.applied_changes === 'object' ? row.applied_changes : {},
-        }));
-      } else {
-        state.requestsWorkspace.approvalRows = await fetchRequestsApprovalRows();
-      }
-    } else if (segment === 'correction') {
+    if (segment === 'correction') {
       state.requestsWorkspace.correctionRows = Array.isArray(state.correction?.items) ? state.correction.items : [];
     } else if (segment === 'documents') {
       state.requestsWorkspace.documentRows = await fetchRequestsDocumentRows();
@@ -39879,11 +42554,11 @@ async function loadRequestsWorkspaceCurrentTab({ silent = false } = {}) {
 }
 
 function focusRequestsEntrySection() {
-  if (normalizeRequestsTabView(state.requestsTabView) === 'leave') {
-    scrollToSelector(isDesktopLeaveWorkspaceMode() ? '#leaveWorkspaceDesktop' : '#leaveModule');
-    return;
-  }
   scrollToSelector('#requestsWorkspaceShell');
+}
+
+function focusLeaveEntrySection() {
+  scrollToSelector('#leaveWorkspaceDesktop');
 }
 
 async function refreshRequestsForCurrentRole({ silent = false } = {}) {
@@ -39896,6 +42571,13 @@ async function loadRequestsViewPresenter() {
   renderRequestsTabSections();
   await refreshRequestsForCurrentRole({ silent: true });
   focusRequestsEntrySection();
+}
+
+async function loadLeaveViewPresenter() {
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  renderLeaveManagementWorkspace();
+  await loadLeaves();
+  focusLeaveEntrySection();
 }
 
 async function loadScheduleViewPresenter() {
@@ -40020,6 +42702,10 @@ async function loadProfileViewPresenter() {
   runActionSafely(
     loadProfileIntegrationData(),
     '프로필 연동 데이터를 동기화하지 못했습니다.',
+  );
+  runActionSafely(
+    loadProfileSignatureProfile({ force: false }),
+    '서명 정보를 불러오지 못했습니다.',
   );
 }
 
@@ -41165,22 +43851,89 @@ function isHrViewActive() {
   return normalizeRoutePath(state.currentRoute || '') === ROUTE_HR;
 }
 
+function getHrRawRole() {
+  return normalizeRoleValue(state.user?.role || '');
+}
+
+function isHrApprovalRole() {
+  const role = getHrRawRole();
+  return role === 'developer' || role === 'hq_admin' || role === 'supervisor';
+}
+
 function isHrAdminRole() {
-  return getNavigationRole() === 'DEV' || getNavigationRole() === 'BRANCH_MANAGER';
+  return isHrApprovalRole();
 }
 
 function isHrTemplateManagerRole() {
-  return getNavigationRole() === 'DEV';
+  const role = getHrRawRole();
+  return role === 'developer';
+}
+
+function isHrApprovalPolicyManagerRole() {
+  const role = getHrRawRole();
+  return role === 'developer' || role === 'hq_admin';
+}
+
+function canAccessHrManageSegment() {
+  return isHrApprovalPolicyManagerRole();
 }
 
 function isHrEmployeeRole() {
-  return !isHrAdminRole();
+  return Boolean(state.user?.employee_id);
 }
 
 function normalizeHrPurposeCode(value = 'BANK') {
   const code = String(value || '').trim().toUpperCase();
   if (!HR_PURPOSE_CODES.has(code)) return 'BANK';
   return code;
+}
+
+function normalizeHrResignationType(value = 'PERSONAL') {
+  const code = String(value || '').trim().toUpperCase();
+  return HR_RESIGNATION_TYPE_LABELS[code] ? code : 'PERSONAL';
+}
+
+function formatHrResignationTypeLabel(value = '') {
+  const normalized = normalizeHrResignationType(value || 'PERSONAL');
+  return HR_RESIGNATION_TYPE_LABELS[normalized] || normalized;
+}
+
+function isHrResignationDocumentType(value = '') {
+  return String(value || '').trim().toLowerCase() === HR_DOC_TYPE_RESIGNATION_FORM;
+}
+
+function normalizeHrDocumentRequestKind(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'resignation' || normalized === HR_DOC_TYPE_RESIGNATION_FORM) {
+    return 'resignation';
+  }
+  return 'certificate';
+}
+
+function getHrDocumentRequestKind(row = {}) {
+  const directKind = normalizeHrDocumentRequestKind(
+    row?.request_kind
+      || row?.document_kind
+      || row?.document_type
+      || row?.type_key
+      || row?.certificate_type_key,
+  );
+  if (directKind === 'resignation') {
+    return 'resignation';
+  }
+  if (
+    String(row?.document_title || '').trim() === '사직서'
+    || String(row?.resignation_type || '').trim()
+    || String(row?.resignation_reason || '').trim()
+    || String(row?.handover_notes || '').trim()
+  ) {
+    return 'resignation';
+  }
+  return 'certificate';
+}
+
+function canUseRequestsDocumentApprovalMode() {
+  return isHrApprovalRole();
 }
 
 function normalizeHrRequestStatus(value = '') {
@@ -41191,7 +43944,8 @@ function normalizeHrRequestStatus(value = '') {
 
 function normalizeHrAdminPanel(value = '') {
   const panel = String(value || '').trim().toLowerCase();
-  return panel === 'templates' ? 'templates' : 'requests';
+  if (panel === 'approval-rules' || panel === 'approval_rules' || panel === 'rules') return 'approval-rules';
+  return 'templates';
 }
 
 function getHrRequestStatusLabel(value = '') {
@@ -41201,7 +43955,8 @@ function getHrRequestStatusLabel(value = '') {
 
 function getHrRequestStatusPillClass(value = '') {
   const key = normalizeHrRequestStatus(value);
-  if (key === 'issued') return 'status-pill status-pill-success';
+  if (key === 'approved' || key === 'issued') return 'status-pill status-pill-success';
+  if (key === 'delegatable') return 'status-pill status-pill-warn';
   if (key === 'generating') return 'status-pill status-pill-warn';
   if (key === 'rejected' || key === 'failed') return 'status-pill status-pill-error';
   return 'status-pill status-pill-neutral';
@@ -41210,69 +43965,81 @@ function getHrRequestStatusPillClass(value = '') {
 function renderHrAdminPanelTabs() {
   const hrState = ensureHrDocsState();
   const templateManagerMode = isHrTemplateManagerRole();
-  const activePanel = templateManagerMode
-    ? normalizeHrAdminPanel(hrState.adminPanel || 'requests')
-    : 'requests';
-  hrState.adminPanel = activePanel;
-  document.querySelectorAll('.hr-admin-panel-tabs [data-action="hr-admin-panel-tab"]').forEach((button) => {
-    const panel = normalizeHrAdminPanel(button?.dataset?.panel || 'requests');
-    const isTemplateTab = panel === 'templates';
-    button.classList.toggle('hidden', isTemplateTab && !templateManagerMode);
-    button.classList.toggle('active', panel === activePanel);
-  });
-  const requestsCard = $('#hrEmploymentAdminCard');
-  const templateCard = $('#hrTemplateAdminCard');
-  if (requestsCard) {
-    requestsCard.classList.toggle('hidden', !isHrAdminRole() || activePanel !== 'requests');
+  const approvalPolicyManagerMode = isHrApprovalPolicyManagerRole();
+  let activePanel = normalizeHrAdminPanel(hrState.adminPanel || 'templates');
+  if (activePanel === 'templates' && !templateManagerMode && approvalPolicyManagerMode) {
+    activePanel = 'approval-rules';
   }
-  if (templateCard) {
-    templateCard.classList.toggle('hidden', !templateManagerMode || activePanel !== 'templates');
+  if (activePanel === 'approval-rules' && !approvalPolicyManagerMode && templateManagerMode) {
+    activePanel = 'templates';
+  }
+  hrState.adminPanel = activePanel;
+  document.querySelectorAll('#hrManagePanelTabs [data-action="hr-manage-panel-tab"]').forEach((button) => {
+    const panel = normalizeHrAdminPanel(button?.dataset?.panel || 'templates');
+    const hidden = panel === 'templates' ? !templateManagerMode : !approvalPolicyManagerMode;
+    button.classList.toggle('hidden', hidden);
+    button.classList.toggle('active', !hidden && panel === activePanel);
+    button.setAttribute('aria-pressed', !hidden && panel === activePanel ? 'true' : 'false');
+  });
+  const manageCard = $('#hrTemplateAdminCard');
+  const templatesPanel = $('#hrManageTemplatesPanel');
+  const approvalRulesPanel = $('#hrManageApprovalRulesPanel');
+  if (manageCard) {
+    manageCard.classList.toggle('hidden', !(templateManagerMode || approvalPolicyManagerMode));
+  }
+  if (templatesPanel) {
+    templatesPanel.classList.toggle('hidden', !templateManagerMode || activePanel !== 'templates');
+  }
+  if (approvalRulesPanel) {
+    approvalRulesPanel.classList.toggle('hidden', !approvalPolicyManagerMode || activePanel !== 'approval-rules');
   }
 }
 
 function normalizeHrWorkspaceSegment(value = '') {
   const segment = String(value || '').trim().toLowerCase();
   if (segment === 'my-docs') return 'my-docs';
-  if (segment === 'approvals') return 'approvals';
-  if (segment === 'templates') return 'templates';
+  if (segment === 'manage' || segment === 'templates') return 'manage';
   return 'apply';
 }
 
 function resolveDefaultHrWorkspaceSegment() {
-  if (isHrEmployeeRole()) return 'apply';
-  return isHrTemplateManagerRole() ? 'approvals' : 'approvals';
+  if (!isHrEmployeeRole() && canAccessHrManageSegment()) return 'manage';
+  return 'apply';
+}
+
+function resolveAccessibleHrWorkspaceSegment(value = '') {
+  let segment = normalizeHrWorkspaceSegment(value || resolveDefaultHrWorkspaceSegment());
+  if (!isHrEmployeeRole() && (segment === 'apply' || segment === 'my-docs')) {
+    segment = canAccessHrManageSegment() ? 'manage' : 'apply';
+  }
+  if (!canAccessHrManageSegment() && segment === 'manage') {
+    segment = isHrEmployeeRole() ? 'apply' : resolveDefaultHrWorkspaceSegment();
+  }
+  return segment;
 }
 
 function setHrWorkspaceSegment(value = '') {
   const hrState = ensureHrDocsState();
-  hrState.workspaceSegment = normalizeHrWorkspaceSegment(value || hrState.workspaceSegment || resolveDefaultHrWorkspaceSegment());
+  hrState.workspaceSegment = resolveAccessibleHrWorkspaceSegment(
+    value || hrState.workspaceSegment || resolveDefaultHrWorkspaceSegment(),
+  );
   renderHrWorkspaceSegments();
 }
 
 function renderHrWorkspaceSegments() {
   const hrState = ensureHrDocsState();
   const employeeMode = isHrEmployeeRole();
-  const adminMode = isHrAdminRole();
-  const templateManagerMode = isHrTemplateManagerRole();
-  let segment = normalizeHrWorkspaceSegment(hrState.workspaceSegment || resolveDefaultHrWorkspaceSegment());
-  if (employeeMode && segment !== 'apply' && segment !== 'my-docs') {
-    segment = 'apply';
-  }
-  if (adminMode && (segment === 'apply' || segment === 'my-docs')) {
-    segment = 'approvals';
-  }
-  if (!templateManagerMode && segment === 'templates') {
-    segment = 'approvals';
-  }
+  const manageAccessMode = canAccessHrManageSegment();
+  let segment = resolveAccessibleHrWorkspaceSegment(hrState.workspaceSegment || resolveDefaultHrWorkspaceSegment());
   hrState.workspaceSegment = segment;
 
   const segmentWrap = $('#hrWorkspaceSegments');
   if (segmentWrap) {
     segmentWrap.querySelectorAll('[data-action="hr-workspace-segment"]').forEach((button) => {
       const buttonSegment = normalizeHrWorkspaceSegment(button?.dataset?.segment || 'apply');
-      const isAdminTab = buttonSegment === 'approvals' || buttonSegment === 'templates';
-      const isTemplateTab = buttonSegment === 'templates';
-      const hidden = (employeeMode && isAdminTab) || (!employeeMode && (buttonSegment === 'apply' || buttonSegment === 'my-docs')) || (isTemplateTab && !templateManagerMode);
+      const hidden = (buttonSegment === 'apply' || buttonSegment === 'my-docs')
+        ? !employeeMode
+        : !manageAccessMode;
       button.classList.toggle('hidden', hidden);
       button.classList.toggle('active', !hidden && buttonSegment === segment);
       button.setAttribute('aria-pressed', !hidden && buttonSegment === segment ? 'true' : 'false');
@@ -41281,32 +44048,17 @@ function renderHrWorkspaceSegments() {
 
   const showApply = segment === 'apply';
   const showMyDocs = segment === 'my-docs';
-  const showApprovals = segment === 'approvals';
-  const showTemplates = segment === 'templates';
+  const showManage = segment === 'manage';
 
-  toggleVisibility('#hrDocumentHomeCard', true);
+  toggleVisibility('#hrDocumentHomeCard', showApply);
   toggleVisibility('#hrEmploymentEmployeeCard', employeeMode && showApply);
   toggleVisibility('#hrEmploymentMyRequestsCard', employeeMode && showMyDocs);
-
-  if (showTemplates) {
-    hrState.adminPanel = 'templates';
-  } else if (showApprovals) {
-    hrState.adminPanel = 'requests';
+  toggleVisibility('#hrEmploymentAdminCard', false);
+  toggleVisibility('#hrTemplateAdminCard', manageAccessMode && showManage);
+  if (showManage) {
+    hrState.adminPanel = normalizeHrAdminPanel(hrState.adminPanel || 'templates');
   }
-
-  if (!adminMode) {
-    toggleVisibility('#hrEmploymentAdminCard', false);
-    toggleVisibility('#hrTemplateAdminCard', false);
-  } else {
-    renderHrAdminPanelTabs();
-    if (showApprovals) {
-      toggleVisibility('#hrEmploymentAdminCard', true);
-      toggleVisibility('#hrTemplateAdminCard', false);
-    } else if (showTemplates) {
-      toggleVisibility('#hrEmploymentAdminCard', false);
-      toggleVisibility('#hrTemplateAdminCard', templateManagerMode);
-    }
-  }
+  renderHrAdminPanelTabs();
 }
 
 function formatHrPurposeLabel(code = '', text = '') {
@@ -41350,10 +44102,15 @@ function normalizeHrCertificateTypeRow(row = {}) {
 
 function getHrCertificateTypeRows() {
   const hrState = ensureHrDocsState();
-  const rawRows = Array.isArray(hrState.typeRows) && hrState.typeRows.length
-    ? hrState.typeRows
-    : HR_CERTIFICATE_TYPE_FALLBACK_ROWS;
-  return rawRows.map((row) => normalizeHrCertificateTypeRow(row));
+  const fetchedRows = Array.isArray(hrState.typeRows) ? hrState.typeRows : [];
+  const merged = [...fetchedRows];
+  HR_CERTIFICATE_TYPE_FALLBACK_ROWS.forEach((fallbackRow) => {
+    const key = normalizeHrCertificateTypeKey(fallbackRow?.type_key || '');
+    if (!merged.some((row) => normalizeHrCertificateTypeKey(row?.type_key || '') === key)) {
+      merged.push(fallbackRow);
+    }
+  });
+  return merged.map((row) => normalizeHrCertificateTypeRow(row));
 }
 
 function isHrCertificateTypeRequestAvailable(typeRow = null) {
@@ -41364,6 +44121,10 @@ function isHrCertificateTypeRequestAvailable(typeRow = null) {
   const meta = typeRow.meta_json && typeof typeRow.meta_json === 'object' ? typeRow.meta_json : {};
   const rollout = String(meta.rollout || '').trim().toLowerCase();
   return rollout !== 'planned';
+}
+
+function isHrSelectedResignationType() {
+  return isHrResignationDocumentType(getHrSelectedCertificateType()?.type_key || '');
 }
 
 function getHrCertificateTypeDisplayName(typeKey = '') {
@@ -41427,6 +44188,9 @@ function scheduleHrMyRequestRefresh(delayMs = 5000) {
 
 function getHrCertificateTypeSubtitle(typeRow = null) {
   if (!typeRow || typeof typeRow !== 'object') return '증명서 준비 상태를 확인하세요.';
+  if (isHrResignationDocumentType(typeRow.type_key)) {
+    return '제출형 문서 · 관리자 검토';
+  }
   if (isHrCertificateTypeRequestAvailable(typeRow)) {
     return typeRow.requires_approval
       ? '승인 후 PDF 발급 · 앱에서 다운로드'
@@ -41440,6 +44204,9 @@ function getHrCertificateTypeSubtitle(typeRow = null) {
 
 function getHrCertificateTypeStateLabel(typeRow = null) {
   if (!typeRow || typeof typeRow !== 'object') return '준비중';
+  if (isHrResignationDocumentType(typeRow.type_key)) {
+    return '제출형';
+  }
   if (isHrCertificateTypeRequestAvailable(typeRow)) {
     return typeRow.requires_approval ? '승인형' : '자동발급';
   }
@@ -41497,16 +44264,77 @@ function renderHrDocCardSelection() {
   });
 }
 
+function renderHrTableHeaders() {
+  const isResignation = isHrSelectedResignationType();
+  const myHeaders = {
+    requestedAt: $('#hrMyHeadRequestedAt'),
+    subject: $('#hrMyHeadSubject'),
+    status: $('#hrMyHeadStatus'),
+    meta: $('#hrMyHeadMeta'),
+    progress: $('#hrMyHeadProgress'),
+    action: $('#hrMyHeadAction'),
+  };
+  const adminHeaders = {
+    requestedAt: $('#hrAdminHeadRequestedAt'),
+    employee: $('#hrAdminHeadEmployee'),
+    company: $('#hrAdminHeadCompany'),
+    org: $('#hrAdminHeadOrg'),
+    subject: $('#hrAdminHeadSubject'),
+    status: $('#hrAdminHeadStatus'),
+    progress: $('#hrAdminHeadProgress'),
+    action: $('#hrAdminHeadAction'),
+  };
+  if (myHeaders.requestedAt) myHeaders.requestedAt.textContent = '요청일시';
+  if (myHeaders.subject) myHeaders.subject.textContent = isResignation ? '문서' : '용도';
+  if (myHeaders.status) myHeaders.status.textContent = '상태';
+  if (myHeaders.meta) myHeaders.meta.textContent = isResignation ? '희망 퇴사일' : '승인 라인';
+  if (myHeaders.progress) myHeaders.progress.textContent = '진행상태';
+  if (myHeaders.action) myHeaders.action.textContent = '작업';
+
+  if (adminHeaders.requestedAt) adminHeaders.requestedAt.textContent = '요청일시';
+  if (adminHeaders.employee) adminHeaders.employee.textContent = '직원';
+  if (adminHeaders.company) adminHeaders.company.textContent = '회사';
+  if (adminHeaders.org) adminHeaders.org.textContent = '소속';
+  if (adminHeaders.subject) adminHeaders.subject.textContent = isResignation ? '문서 내용' : '용도';
+  if (adminHeaders.status) adminHeaders.status.textContent = '상태';
+  if (adminHeaders.progress) adminHeaders.progress.textContent = '승인/발급 진행';
+  if (adminHeaders.action) adminHeaders.action.textContent = '작업';
+}
+
+function syncHrResignationFormInputs() {
+  const hrState = ensureHrDocsState();
+  const typeSelect = $('#hrResignationType');
+  const dateInput = $('#hrResignationExpectedDate');
+  const reasonInput = $('#hrResignationReason');
+  const handoverInput = $('#hrResignationHandover');
+  if (typeSelect instanceof HTMLSelectElement) {
+    typeSelect.value = normalizeHrResignationType(hrState.resignationType || 'PERSONAL');
+  }
+  if (dateInput instanceof HTMLInputElement) {
+    dateInput.value = String(hrState.resignationExpectedLastWorkingDate || '');
+  }
+  if (reasonInput instanceof HTMLTextAreaElement) {
+    reasonInput.value = String(hrState.resignationReason || '');
+  }
+  if (handoverInput instanceof HTMLTextAreaElement) {
+    handoverInput.value = String(hrState.resignationHandoverNotes || '');
+  }
+}
+
 function renderHrEmployeeRequestCard() {
   const employeeMode = isHrEmployeeRole();
   const selectedType = getHrSelectedCertificateType();
   const available = isHrCertificateTypeRequestAvailable(selectedType);
+  const isResignation = isHrResignationDocumentType(selectedType?.type_key || '');
   const titleEl = $('#hrEmploymentRequestTitle');
   const quotaPill = $('#hrEmploymentQuota');
   const statusEl = $('#hrEmploymentRequestStatus');
   const purposeCodeGroup = $('#hrPurposeCodeGroup');
   const otherField = $('#hrPurposeOtherField');
   const submitBtn = $('#hrEmploymentRequestSubmitBtn');
+  const resignationFieldWrap = $('#hrResignationFormFields');
+  const certificateFieldWrap = $('#hrCertificateRequestFields');
+  const certificateToggleWrap = $('#hrCertificateToggleFields');
   const submitToInput = $('#hrSubmitTo');
   const copyCountInput = $('#hrCopyCount');
   const includeAddressInput = $('#hrIncludeAddress');
@@ -41514,10 +44342,13 @@ function renderHrEmployeeRequestCard() {
   const hrState = ensureHrDocsState();
 
   if (titleEl) {
-    titleEl.textContent = `${String(selectedType?.display_name || '증명서').trim() || '증명서'} 신청`;
+    titleEl.textContent = `${String(selectedType?.display_name || '증명서').trim() || '증명서'} ${isResignation ? '제출' : '신청'}`;
   }
   if (quotaPill) {
-    if (available) {
+    if (isResignation) {
+      quotaPill.className = 'status-pill status-pill-neutral';
+      quotaPill.textContent = '제출형 문서';
+    } else if (available) {
       quotaPill.className = 'status-pill status-pill-warn';
       quotaPill.textContent = `오늘 남은 요청: ${Math.max(0, Number(hrState.todayRemaining ?? HR_EMPLOYMENT_DAILY_LIMIT))}/${Number(hrState.dailyLimit || HR_EMPLOYMENT_DAILY_LIMIT)}`;
     } else {
@@ -41526,7 +44357,9 @@ function renderHrEmployeeRequestCard() {
     }
   }
   if (statusEl && employeeMode) {
-    if (available) {
+    if (isResignation && available) {
+      statusEl.textContent = '희망 퇴사일과 사직 사유를 입력해 제출해 주세요. 제출 후 관리자 검토 상태를 이 화면에서 확인할 수 있습니다.';
+    } else if (available) {
       statusEl.textContent = selectedType?.requires_approval
         ? `${selectedType?.display_name || '증명서'}는 승인 후 앱에서 PDF를 내려받을 수 있습니다. 제출처와 부수를 확인해 신청해 주세요.`
         : `${selectedType?.display_name || '증명서'}는 요청 즉시 PDF 발급이 진행되며 완료 후 앱에서 다운로드할 수 있습니다. 제출처와 부수를 확인해 신청해 주세요.`;
@@ -41537,40 +44370,81 @@ function renderHrEmployeeRequestCard() {
     }
   }
   if (purposeCodeGroup) {
-    purposeCodeGroup.classList.toggle('hidden', !employeeMode || !available);
+    purposeCodeGroup.classList.toggle('hidden', !employeeMode || !available || isResignation);
   }
   if (otherField) {
-    otherField.classList.toggle('hidden', !available || normalizeHrPurposeCode(ensureHrDocsState().purposeCode || 'BANK') !== 'OTHER');
+    otherField.classList.toggle('hidden', !available || isResignation || normalizeHrPurposeCode(ensureHrDocsState().purposeCode || 'BANK') !== 'OTHER');
+  }
+  if (resignationFieldWrap) {
+    resignationFieldWrap.classList.toggle('hidden', !employeeMode || !isResignation || !available);
+    resignationFieldWrap.querySelectorAll('input, textarea, select').forEach((field) => {
+      field.disabled = !available || !isResignation;
+    });
+  }
+  if (certificateFieldWrap) {
+    certificateFieldWrap.classList.toggle('hidden', !employeeMode || isResignation);
+  }
+  if (certificateToggleWrap) {
+    certificateToggleWrap.classList.toggle('hidden', !employeeMode || isResignation);
   }
   if (submitToInput instanceof HTMLInputElement) {
     submitToInput.value = String(hrState.submitTo || '');
-    submitToInput.disabled = !available;
+    submitToInput.disabled = !available || isResignation;
   }
   if (copyCountInput instanceof HTMLInputElement) {
     copyCountInput.value = String(normalizeHrCopyCount(hrState.copyCount));
-    copyCountInput.disabled = !available;
+    copyCountInput.disabled = !available || isResignation;
   }
   if (includeAddressInput instanceof HTMLInputElement) {
     includeAddressInput.checked = Boolean(hrState.includeAddress);
-    includeAddressInput.disabled = !available;
+    includeAddressInput.disabled = !available || isResignation;
   }
   if (includePhoneInput instanceof HTMLInputElement) {
     includePhoneInput.checked = Boolean(hrState.includePhone);
-    includePhoneInput.disabled = !available;
+    includePhoneInput.disabled = !available || isResignation;
   }
   if (submitBtn instanceof HTMLButtonElement) {
-    submitBtn.textContent = available ? '발급 신청' : '신청 불가';
+    submitBtn.textContent = available ? (isResignation ? '문서 제출' : '발급 신청') : '신청 불가';
   }
+  syncHrResignationFormInputs();
   updateHrRequestSubmitState();
 }
 
 function renderHrAdminStatusTabs() {
   const hrState = ensureHrDocsState();
   const selectedStatus = normalizeHrRequestStatus(hrState.adminStatus || 'requested');
-  document.querySelectorAll('#hrEmploymentAdminStatusTabs [data-action="hr-admin-status-filter"]').forEach((button) => {
-    const status = normalizeHrRequestStatus(button?.dataset?.status || 'requested');
-    button.classList.toggle('active', status === selectedStatus);
-  });
+  const isResignation = isHrSelectedResignationType();
+  const requestedBtn = $('#hrAdminStatusRequested');
+  const delegatableBtn = $('#hrAdminStatusDelegatable');
+  const generatingBtn = $('#hrAdminStatusGenerating');
+  const issuedBtn = $('#hrAdminStatusIssued');
+  const rejectedBtn = $('#hrAdminStatusRejected');
+  if (requestedBtn) {
+    requestedBtn.dataset.status = 'requested';
+    requestedBtn.textContent = isResignation ? '검토대기' : '승인대기';
+    requestedBtn.classList.toggle('active', selectedStatus === 'requested');
+  }
+  if (delegatableBtn) {
+    delegatableBtn.dataset.status = 'delegatable';
+    delegatableBtn.textContent = '전결 가능';
+    delegatableBtn.classList.toggle('active', selectedStatus === 'delegatable');
+  }
+  if (generatingBtn) {
+    generatingBtn.classList.toggle('hidden', isResignation);
+    generatingBtn.dataset.status = 'generating';
+    generatingBtn.textContent = '발급중';
+    generatingBtn.classList.toggle('active', !isResignation && selectedStatus === 'generating');
+  }
+  if (issuedBtn) {
+    issuedBtn.dataset.status = isResignation ? 'approved' : 'issued';
+    issuedBtn.textContent = isResignation ? '승인완료' : '발급완료';
+    issuedBtn.classList.toggle('active', selectedStatus === (isResignation ? 'approved' : 'issued'));
+  }
+  if (rejectedBtn) {
+    rejectedBtn.dataset.status = 'rejected';
+    rejectedBtn.textContent = '반려';
+    rejectedBtn.classList.toggle('active', selectedStatus === 'rejected');
+  }
 }
 
 function updateHrRequestSubmitState() {
@@ -41578,26 +44452,40 @@ function updateHrRequestSubmitState() {
   const submitBtn = $('#hrEmploymentRequestSubmitBtn');
   if (!(submitBtn instanceof HTMLButtonElement)) return;
   const selectedType = getHrSelectedCertificateType();
+  const isResignation = isHrResignationDocumentType(selectedType?.type_key || '');
   const purposeCode = normalizeHrPurposeCode(hrState.purposeCode || 'BANK');
   const purposeText = String(hrState.purposeText || '').trim();
   const submitTo = String(hrState.submitTo || '').trim();
   const copyCount = normalizeHrCopyCount(hrState.copyCount);
+  const resignationType = normalizeHrResignationType(hrState.resignationType || 'PERSONAL');
+  const expectedLastWorkingDate = String(hrState.resignationExpectedLastWorkingDate || '').trim();
+  const resignationReason = String(hrState.resignationReason || '').trim();
   hrState.copyCount = copyCount;
+  hrState.resignationType = resignationType;
   const canSubmit = isHrCertificateTypeRequestAvailable(selectedType)
     && !hrState.submitting
-    && submitTo.length >= 2
-    && copyCount >= 1
     && (
-      purposeCode !== 'OTHER'
-      || (purposeText.length >= 2 && purposeText.length <= 50)
+      isResignation
+        ? Boolean(expectedLastWorkingDate) && resignationReason.length >= 5
+        : (
+          submitTo.length >= 2
+          && copyCount >= 1
+          && (
+            purposeCode !== 'OTHER'
+            || (purposeText.length >= 2 && purposeText.length <= 50)
+          )
+        )
     );
-  submitBtn.textContent = isHrCertificateTypeRequestAvailable(selectedType) ? '발급 신청' : '신청 불가';
+  submitBtn.textContent = isHrCertificateTypeRequestAvailable(selectedType)
+    ? (isResignation ? '문서 제출' : '발급 신청')
+    : '신청 불가';
   submitBtn.disabled = !canSubmit;
 }
 
 function renderHrPurposeSelector() {
   const hrState = ensureHrDocsState();
   const selectedType = getHrSelectedCertificateType();
+  const isResignation = isHrResignationDocumentType(selectedType?.type_key || '');
   const requestAvailable = isHrCertificateTypeRequestAvailable(selectedType);
   const selectedCode = normalizeHrPurposeCode(hrState.purposeCode || 'BANK');
   document.querySelectorAll('#hrPurposeCodeGroup [data-action="hr-purpose-select"]').forEach((button) => {
@@ -41610,12 +44498,12 @@ function renderHrPurposeSelector() {
   }
   const otherField = $('#hrPurposeOtherField');
   if (otherField) {
-    otherField.classList.toggle('hidden', !requestAvailable || selectedCode !== 'OTHER');
+    otherField.classList.toggle('hidden', !requestAvailable || isResignation || selectedCode !== 'OTHER');
   }
   const otherInput = $('#hrPurposeOtherText');
   if (otherInput instanceof HTMLInputElement) {
     otherInput.value = String(hrState.purposeText || '');
-    otherInput.required = requestAvailable && selectedCode === 'OTHER';
+    otherInput.required = requestAvailable && !isResignation && selectedCode === 'OTHER';
   }
   updateHrRequestSubmitState();
 }
@@ -41625,6 +44513,11 @@ function renderHrQuota() {
   const quotaPill = $('#hrEmploymentQuota');
   if (!quotaPill) return;
   const selectedType = getHrSelectedCertificateType();
+  if (isHrResignationDocumentType(selectedType?.type_key || '')) {
+    quotaPill.className = 'status-pill status-pill-neutral';
+    quotaPill.textContent = '제출형 문서';
+    return;
+  }
   if (!isHrCertificateTypeRequestAvailable(selectedType)) {
     quotaPill.className = 'status-pill status-pill-neutral';
     quotaPill.textContent = String(selectedType?.eligibility_reason || '').trim() ? '신청 불가' : '준비중';
@@ -41684,11 +44577,44 @@ async function loadHrCertificateIssueJobs({ force = false } = {}) {
   return hrState.issueJobs;
 }
 
+function formatHrApproverName(row = {}) {
+  const approver = row?.current_approver;
+  if (!approver || typeof approver !== 'object') return '-';
+  return String(approver.name || approver.full_name || approver.username || '-').trim() || '-';
+}
+
+function formatHrApprovalProgressSummary(row = {}) {
+  const progress = row?.approval_progress && typeof row.approval_progress === 'object' ? row.approval_progress : {};
+  const completed = Number(progress.completed_count || 0);
+  const total = Number(progress.total_count || 0);
+  if (!total) return '승인선 미설정';
+  const currentApprover = formatHrApproverName(row);
+  if ((progress.status || '').toLowerCase() === 'approved') {
+    return `${completed}/${total} 승인 완료`;
+  }
+  if ((progress.status || '').toLowerCase() === 'rejected') {
+    return `${completed}/${total} 승인 · 반려`;
+  }
+  return `${completed}/${total} 승인 · 현재 ${currentApprover}`;
+}
+
+function formatHrApprovalLineSummary(row = {}) {
+  const line = Array.isArray(row?.approval_line)
+    ? row.approval_line
+    : (Array.isArray(row?.approval_progress?.line) ? row.approval_progress.line : []);
+  if (!line.length) return '-';
+  return line
+    .map((step) => String(step?.approver_name || step?.name || step?.approver_role || step?.step_kind || '').trim())
+    .filter(Boolean)
+    .join(' → ') || '-';
+}
+
 function renderHrMyRequestRows() {
   const tbody = $('#hrEmploymentMyRequestTableBody');
   if (!(tbody instanceof HTMLElement)) return;
   const hrState = ensureHrDocsState();
   const rows = Array.isArray(hrState.myRows) ? hrState.myRows : [];
+  const isResignation = isHrSelectedResignationType();
   if (!rows.length) {
     renderAdminTableEmptyState(tbody, 6, '요청 내역이 없습니다.');
     return;
@@ -41697,7 +44623,7 @@ function renderHrMyRequestRows() {
   tbody.innerHTML = '';
   rows.forEach((row) => {
     const tr = document.createElement('tr');
-    const certificateRequestId = String(row?.id || '').trim();
+    const requestId = String(row?.id || '').trim();
     const legacyRequestId = String(row?.legacy_request_id || '').trim();
     const fileReady = Boolean(row?.file_ready);
 
@@ -41705,9 +44631,13 @@ function renderHrMyRequestRows() {
     requestedAtTd.textContent = formatDateLabel(row?.requested_at, '-');
     tr.appendChild(requestedAtTd);
 
-    const purposeTd = document.createElement('td');
-    purposeTd.textContent = `${String(row?.certificate_type_name || row?.certificate_type_key || '증명서').trim() || '증명서'} · ${formatHrPurposeLabel(row?.purpose_code, row?.purpose_text)}`;
-    tr.appendChild(purposeTd);
+    const subjectTd = document.createElement('td');
+    if (isResignation) {
+      subjectTd.textContent = `사직서 · ${formatHrResignationTypeLabel(row?.resignation_type)}`;
+    } else {
+      subjectTd.textContent = `${String(row?.certificate_type_name || row?.certificate_type_key || '증명서').trim() || '증명서'} · ${formatHrPurposeLabel(row?.purpose_code, row?.purpose_text)}`;
+    }
+    tr.appendChild(subjectTd);
 
     const statusTd = document.createElement('td');
     const statusPill = document.createElement('span');
@@ -41716,31 +44646,47 @@ function renderHrMyRequestRows() {
     statusTd.appendChild(statusPill);
     tr.appendChild(statusTd);
 
-    const mailTd = document.createElement('td');
-    mailTd.textContent = formatHrCertificateMailState(row);
-    tr.appendChild(mailTd);
+    const metaTd = document.createElement('td');
+    metaTd.textContent = isResignation
+      ? (formatDateLabel(row?.expected_last_working_date, '-') || '-')
+      : formatHrApprovalLineSummary(row);
+    tr.appendChild(metaTd);
 
-    const issueTd = document.createElement('td');
-    issueTd.textContent = String(row?.issue_number || '').trim() || formatCertificateIssueStateLabel(row?.issue_job_state || row?.status);
-    tr.appendChild(issueTd);
+    const progressTd = document.createElement('td');
+    progressTd.textContent = isResignation
+      ? formatHrApprovalProgressSummary(row)
+      : (
+        row?.can_download_pdf || fileReady || normalizeHrRequestStatus(row?.status) === 'issued'
+          ? `${formatHrApprovalProgressSummary(row)} · ${String(row?.issue_number || '').trim() || 'PDF 준비됨'}`
+          : formatHrApprovalProgressSummary(row)
+      );
+    tr.appendChild(progressTd);
 
     const actionTd = document.createElement('td');
-    if (certificateRequestId && (normalizeHrRequestStatus(row?.status) === 'issued' || fileReady)) {
+    if (!isResignation && requestId && (Boolean(row?.can_download_pdf) || normalizeHrRequestStatus(row?.status) === 'issued' || fileReady)) {
       const downloadBtn = document.createElement('button');
       downloadBtn.type = 'button';
       downloadBtn.className = 'btn btn-secondary';
       downloadBtn.dataset.action = 'hr-employment-download';
-      downloadBtn.dataset.requestId = certificateRequestId;
+      downloadBtn.dataset.requestId = requestId;
       downloadBtn.textContent = 'PDF 다운로드';
       actionTd.appendChild(downloadBtn);
-    } else if ((certificateRequestId || legacyRequestId) && normalizeHrRequestStatus(row?.status) === 'rejected') {
+    } else if ((requestId || legacyRequestId) && normalizeHrRequestStatus(row?.status) === 'rejected') {
       const reasonBtn = document.createElement('button');
       reasonBtn.type = 'button';
       reasonBtn.className = 'btn btn-ghost';
       reasonBtn.dataset.action = 'hr-employment-view-reason';
-      reasonBtn.dataset.reason = String(row?.issue_job_error || row?.rejection_reason || '').trim();
+      reasonBtn.dataset.reason = String(row?.issue_job_error || row?.rejection_reason || row?.resignation_reason || '').trim();
       reasonBtn.textContent = '사유보기';
       actionTd.appendChild(reasonBtn);
+    } else if (isResignation && String(row?.resignation_reason || '').trim()) {
+      const detailBtn = document.createElement('button');
+      detailBtn.type = 'button';
+      detailBtn.className = 'btn btn-ghost';
+      detailBtn.dataset.action = 'hr-employment-view-reason';
+      detailBtn.dataset.reason = `사직 사유: ${String(row?.resignation_reason || '').trim()}${String(row?.handover_notes || '').trim() ? `\n인수인계 메모: ${String(row?.handover_notes || '').trim()}` : ''}`;
+      detailBtn.textContent = '내용보기';
+      actionTd.appendChild(detailBtn);
     } else {
       actionTd.textContent = '-';
     }
@@ -41756,7 +44702,7 @@ function renderHrTemplateRows() {
   const hrState = ensureHrDocsState();
   const rows = Array.isArray(hrState.templatesRows) ? hrState.templatesRows : [];
   if (!rows.length) {
-    renderAdminTableEmptyState(tbody, 6, '등록된 템플릿이 없습니다. 기본 템플릿을 사용합니다.');
+    renderAdminTableEmptyState(tbody, 7, '등록된 템플릿이 없습니다. 기본 템플릿을 사용합니다.');
     return;
   }
   tbody.innerHTML = '';
@@ -41769,6 +44715,15 @@ function renderHrTemplateRows() {
     };
     appendCell(getHrCertificateTypeDisplayName(row?.document_type || '-'));
     appendCell(`v${Number(row?.version || 0)}`);
+    const previewTd = document.createElement('td');
+    const previewBtn = document.createElement('button');
+    previewBtn.type = 'button';
+    previewBtn.className = 'btn btn-secondary';
+    previewBtn.dataset.action = 'hr-template-preview';
+    previewBtn.dataset.templateId = String(row?.id || '').trim();
+    previewBtn.textContent = '템플릿 예시';
+    previewTd.appendChild(previewBtn);
+    tr.appendChild(previewTd);
     appendCell(row?.file_path || '-');
     appendCell(Boolean(row?.is_active) ? '활성' : '비활성');
     appendCell(formatDateLabel(row?.created_at, '-'));
@@ -41777,11 +44732,258 @@ function renderHrTemplateRows() {
   });
 }
 
+function normalizeHrApprovalRuleTargetMode(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'rank') return 'rank';
+  if (normalized === 'explicit_user') return 'explicit_user';
+  return 'site_supervisor';
+}
+
+function normalizeHrApprovalRuleScopeType(value = '') {
+  return normalizeHrApprovalRuleTargetMode(value);
+}
+
+function createHrApprovalRuleDraft(partial = {}) {
+  return {
+    step_kind: normalizeHrApprovalRuleTargetMode(partial?.step_kind || partial?.target_mode || 'site_supervisor'),
+    label: String(partial?.label || partial?.rule_name || '').trim(),
+    site_role: String(partial?.site_role || partial?.approver_role || 'supervisor').trim() || 'supervisor',
+    approval_group_id: String(partial?.approval_group_id || '').trim(),
+    approval_rank_id: String(partial?.approval_rank_id || '').trim(),
+    explicit_user_id: String(partial?.explicit_user_id || partial?.approver_user_id || '').trim(),
+    allow_delegate: Boolean(partial?.allow_delegate),
+    is_required: partial?.is_required !== false,
+  };
+}
+
+function renderHrApprovalRulesEditor() {
+  const editor = $('#hrApprovalRulesEditor');
+  if (!(editor instanceof HTMLElement)) return;
+  const statusEl = $('#hrApprovalRulesStatus');
+  const hrState = ensureHrDocsState();
+  document.querySelectorAll('#hrApprovalRulesSection [data-action="hr-approval-rule-add"], #hrApprovalRulesSection [data-action="hr-approval-rules-save"], #hrApprovalRulesSection [data-action="hr-approval-rules-refresh"]').forEach((button) => {
+    if (button instanceof HTMLButtonElement) {
+      button.disabled = !isHrTemplateManagerRole() || Boolean(hrState.loadingApprovalRules) || Boolean(hrState.savingApprovalRules);
+    }
+  });
+  if (!isHrTemplateManagerRole()) {
+    editor.innerHTML = '';
+    if (statusEl) statusEl.textContent = '';
+    return;
+  }
+
+  const rows = Array.isArray(hrState.approvalRulesRows)
+    ? hrState.approvalRulesRows.map((row) => createHrApprovalRuleDraft(row))
+    : [];
+
+  if (statusEl && !String(statusEl.textContent || '').trim()) {
+    statusEl.textContent = hrState.loadingApprovalRules
+      ? '기본 승인 절차를 불러오는 중입니다.'
+      : '문서 타입별 승인 단계를 최대 6개까지 구성할 수 있습니다.';
+  }
+
+  if (!rows.length) {
+    editor.innerHTML = '<div class="hr-approval-rule-empty">기본 승인 절차가 없습니다. 필요한 단계만 추가해서 저장하세요.</div>';
+    return;
+  }
+
+  editor.innerHTML = '';
+  const userOptions = (Array.isArray(hrState.approvalRuleUserOptions) ? hrState.approvalRuleUserOptions : []).filter((option) => PROFILE_SIGNATURE_ALLOWED_ROLES.has(String(option?.role || '').trim().toLowerCase()));
+  const siteOptions = Array.isArray(hrState.approvalRuleSiteOptions) ? hrState.approvalRuleSiteOptions : [];
+  const groupOptions = Array.isArray(hrState.approvalRuleGroupOptions) ? hrState.approvalRuleGroupOptions : [];
+  const rankOptions = Array.isArray(hrState.approvalRuleRankOptions) ? hrState.approvalRuleRankOptions : [];
+  rows.forEach((row, index) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'hr-approval-rule-row';
+    const useRank = row.step_kind === 'rank';
+    const useExplicitUser = row.step_kind === 'explicit_user';
+    const useSiteSupervisor = row.step_kind === 'site_supervisor';
+    wrapper.innerHTML = `
+      <label class="input-field">
+        단계명
+        <input type="text" value="${escapeHtml(row.label || '')}" data-hr-approval-rule-field="label" data-hr-approval-rule-index="${index}" placeholder="예: 1차 승인" />
+      </label>
+      <label class="input-field">
+        단계 유형
+        <select data-hr-approval-rule-field="step_kind" data-hr-approval-rule-index="${index}">
+          ${HR_APPROVAL_POLICY_STEP_KIND_OPTIONS.map((option) => `<option value="${option.value}"${option.value === row.step_kind ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+        </select>
+      </label>
+      <label class="input-field">
+        현장 역할
+        <select data-hr-approval-rule-field="site_role" data-hr-approval-rule-index="${index}" ${useSiteSupervisor ? '' : 'disabled'}>
+          ${HR_APPROVAL_POLICY_SITE_ROLE_OPTIONS.map((option) => `<option value="${option.value}"${option.value === row.site_role ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+        </select>
+      </label>
+      <label class="input-field">
+        그룹
+        <select data-hr-approval-rule-field="approval_group_id" data-hr-approval-rule-index="${index}" ${useRank ? '' : 'disabled'}>
+          <option value="">전체 그룹</option>
+          ${groupOptions.map((option) => `<option value="${option.id}"${option.id === row.approval_group_id ? ' selected' : ''}>${escapeHtml(option.name || option.label || '-') }</option>`).join('')}
+        </select>
+      </label>
+      <label class="input-field">
+        직급
+        <select data-hr-approval-rule-field="approval_rank_id" data-hr-approval-rule-index="${index}" ${useRank ? '' : 'disabled'}>
+          <option value="">직급 선택</option>
+          ${rankOptions.map((option) => `<option value="${option.id}"${option.id === row.approval_rank_id ? ' selected' : ''}>${escapeHtml(option.name || option.label || '-')}</option>`).join('')}
+        </select>
+      </label>
+      <label class="input-field">
+        승인 사용자
+        <select data-hr-approval-rule-field="explicit_user_id" data-hr-approval-rule-index="${index}" ${useExplicitUser ? '' : 'disabled'}>
+          <option value="">사용자 선택</option>
+          ${userOptions.map((option) => `<option value="${option.id}"${option.id === row.explicit_user_id ? ' selected' : ''}>${escapeHtml(`${option.full_name || option.username} · ${option.role || '-'}`)}</option>`).join('')}
+        </select>
+      </label>
+      <label class="input-field">
+        현장
+        <select data-hr-approval-rule-field="site_id" data-hr-approval-rule-index="${index}" disabled>
+          <option value="">자동 선택</option>
+          ${siteOptions.map((option) => `<option value="${option.id}">${escapeHtml(option.site_name || option.site_code)}</option>`).join('')}
+        </select>
+      </label>
+      <div class="input-field">
+        <span>전결 허용</span>
+        <label class="ui-switch simple-check">
+          <input type="checkbox" ${row.allow_delegate ? 'checked' : ''} data-hr-approval-rule-field="allow_delegate" data-hr-approval-rule-index="${index}" />
+          <span>상위 승인자 전결 허용</span>
+        </label>
+      </div>
+    `;
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'btn btn-ghost';
+    removeBtn.dataset.action = 'hr-approval-rule-remove';
+    removeBtn.dataset.index = String(index);
+    removeBtn.textContent = '삭제';
+    wrapper.appendChild(removeBtn);
+    editor.appendChild(wrapper);
+  });
+}
+
+function updateHrApprovalRuleDraftField(index, field, value) {
+  const hrState = ensureHrDocsState();
+  const rows = Array.isArray(hrState.approvalRulesRows) ? hrState.approvalRulesRows : [];
+  if (!rows[index]) return;
+  const nextRow = createHrApprovalRuleDraft(rows[index]);
+  if (field === 'step_kind') {
+    nextRow.step_kind = normalizeHrApprovalRuleTargetMode(value);
+    if (nextRow.step_kind !== 'site_supervisor') {
+      nextRow.site_role = 'supervisor';
+    }
+    if (nextRow.step_kind !== 'rank') {
+      nextRow.approval_group_id = '';
+      nextRow.approval_rank_id = '';
+    }
+    if (nextRow.step_kind !== 'explicit_user') {
+      nextRow.explicit_user_id = '';
+    }
+  } else if (field === 'allow_delegate') {
+    nextRow.allow_delegate = Boolean(value);
+  } else {
+    nextRow[field] = String(value || '').trim();
+  }
+  rows[index] = nextRow;
+  hrState.approvalRulesRows = rows;
+  renderHrApprovalRulesEditor();
+}
+
+async function loadHrDocumentApprovalRules({ force = false } = {}) {
+  const hrState = ensureHrDocsState();
+  if (!isHrApprovalPolicyManagerRole()) {
+    hrState.approvalRulesRows = [];
+    hrState.approvalRuleUserOptions = [];
+    hrState.approvalRuleSiteOptions = [];
+    hrState.approvalRuleGroupOptions = [];
+    hrState.approvalRuleRankOptions = [];
+    renderHrApprovalRulesEditor();
+    return [];
+  }
+  const selectedTypeKey = normalizeHrCertificateTypeKey(hrState.selectedDocType || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE);
+  const now = Date.now();
+  const isFresh = !force
+    && hrState.approvalRulesDocumentType === selectedTypeKey
+    && Number(hrState.approvalRulesFetchedAt || 0) > 0
+    && (now - Number(hrState.approvalRulesFetchedAt || 0)) < HR_DATA_CACHE_TTL_MS;
+  if (isFresh) {
+    renderHrApprovalRulesEditor();
+    return hrState.approvalRulesRows;
+  }
+  hrState.loadingApprovalRules = true;
+  const statusEl = $('#hrApprovalRulesStatus');
+  if (statusEl) statusEl.textContent = '기본 승인 절차를 불러오는 중입니다.';
+  renderHrApprovalRulesEditor();
+  try {
+    const payload = await apiRequest(`/admin/hr/documents/approval-policy?document_type=${encodeURIComponent(selectedTypeKey)}`);
+    hrState.approvalRulesRows = Array.isArray(payload?.items) ? payload.items.map((row) => createHrApprovalRuleDraft(row)) : [];
+    hrState.approvalRuleUserOptions = Array.isArray(payload?.user_options) ? payload.user_options : [];
+    hrState.approvalRuleSiteOptions = Array.isArray(payload?.site_options) ? payload.site_options : [];
+    hrState.approvalRuleGroupOptions = Array.isArray(payload?.group_options) ? payload.group_options : [];
+    hrState.approvalRuleRankOptions = Array.isArray(payload?.rank_options) ? payload.rank_options : [];
+    hrState.approvalRulesFetchedAt = Date.now();
+    hrState.approvalRulesDocumentType = selectedTypeKey;
+    if (statusEl) statusEl.textContent = `${hrState.approvalRulesRows.length}개 단계가 설정되어 있습니다.`;
+    renderHrApprovalRulesEditor();
+    return hrState.approvalRulesRows;
+  } catch (error) {
+    hrState.approvalRulesRows = [];
+    hrState.approvalRuleUserOptions = [];
+    hrState.approvalRuleSiteOptions = [];
+    hrState.approvalRuleGroupOptions = [];
+    hrState.approvalRuleRankOptions = [];
+    if (statusEl) statusEl.textContent = normalizeActionError(error, '기본 승인 절차를 불러오지 못했습니다.');
+    renderHrApprovalRulesEditor();
+    return [];
+  } finally {
+    hrState.loadingApprovalRules = false;
+  }
+}
+
+async function saveHrDocumentApprovalRules() {
+  const hrState = ensureHrDocsState();
+  if (!isHrApprovalPolicyManagerRole()) {
+    throw new Error('권한이 없습니다.');
+  }
+  const selectedTypeKey = normalizeHrCertificateTypeKey(hrState.selectedDocType || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE);
+  const rows = Array.isArray(hrState.approvalRulesRows) ? hrState.approvalRulesRows.map((row) => createHrApprovalRuleDraft(row)) : [];
+  if (rows.length > 6) {
+    throw new Error('기본 승인 절차는 최대 6단계까지 저장할 수 있습니다.');
+  }
+  hrState.savingApprovalRules = true;
+  const statusEl = $('#hrApprovalRulesStatus');
+  if (statusEl) statusEl.textContent = '기본 승인 절차를 저장하는 중입니다.';
+  renderHrApprovalRulesEditor();
+  try {
+    const payload = await apiRequest('/admin/hr/documents/approval-policy', {
+      method: 'PUT',
+      body: {
+        document_type: selectedTypeKey,
+        items: rows,
+      },
+    });
+    hrState.approvalRulesRows = Array.isArray(payload?.items) ? payload.items.map((row) => createHrApprovalRuleDraft(row)) : [];
+    hrState.approvalRuleUserOptions = Array.isArray(payload?.user_options) ? payload.user_options : hrState.approvalRuleUserOptions;
+    hrState.approvalRuleSiteOptions = Array.isArray(payload?.site_options) ? payload.site_options : hrState.approvalRuleSiteOptions;
+    hrState.approvalRuleGroupOptions = Array.isArray(payload?.group_options) ? payload.group_options : hrState.approvalRuleGroupOptions;
+    hrState.approvalRuleRankOptions = Array.isArray(payload?.rank_options) ? payload.rank_options : hrState.approvalRuleRankOptions;
+    hrState.approvalRulesFetchedAt = Date.now();
+    hrState.approvalRulesDocumentType = selectedTypeKey;
+    if (statusEl) statusEl.textContent = '기본 승인 절차를 저장했습니다.';
+    renderHrApprovalRulesEditor();
+    showToast('기본 승인 절차를 저장했습니다.', 'success', 2200);
+  } finally {
+    hrState.savingApprovalRules = false;
+    renderHrApprovalRulesEditor();
+  }
+}
+
 function renderHrAdminRequestRows() {
   const tbody = $('#hrEmploymentAdminRequestTableBody');
   if (!(tbody instanceof HTMLElement)) return;
   const hrState = ensureHrDocsState();
   const rows = Array.isArray(hrState.adminRows) ? hrState.adminRows : [];
+  const isResignation = isHrSelectedResignationType();
   if (!rows.length) {
     renderAdminTableEmptyState(tbody, 8, '해당 조건의 요청이 없습니다.');
     return;
@@ -41790,7 +44992,7 @@ function renderHrAdminRequestRows() {
   tbody.innerHTML = '';
   rows.forEach((row) => {
     const tr = document.createElement('tr');
-    const certificateRequestId = String(row?.id || '').trim();
+    const requestId = String(row?.id || '').trim();
     const issueJobs = Array.isArray(hrState.issueJobs) ? hrState.issueJobs : [];
     const issueJob = issueJobs.find((item) => String(item?.certificate_request_id || '').trim() === String(row?.id || '').trim()) || null;
     const fileReady = Boolean(row?.file_ready);
@@ -41811,9 +45013,13 @@ function renderHrAdminRequestRows() {
     orgTd.textContent = String(row?.org || '-').trim() || '-';
     tr.appendChild(orgTd);
 
-    const purposeTd = document.createElement('td');
-    purposeTd.textContent = `${String(row?.certificate_type_name || row?.certificate_type_key || '증명서').trim() || '증명서'} · ${formatHrPurposeLabel(row?.purpose_code, row?.purpose_text)}`;
-    tr.appendChild(purposeTd);
+    const subjectTd = document.createElement('td');
+    if (isResignation) {
+      subjectTd.textContent = `사직서 · ${formatHrResignationTypeLabel(row?.resignation_type)}`;
+    } else {
+      subjectTd.textContent = `${String(row?.certificate_type_name || row?.certificate_type_key || '증명서').trim() || '증명서'} · ${formatHrPurposeLabel(row?.purpose_code, row?.purpose_text)}`;
+    }
+    tr.appendChild(subjectTd);
 
     const statusTd = document.createElement('td');
     const statusPill = document.createElement('span');
@@ -41822,29 +45028,44 @@ function renderHrAdminRequestRows() {
     statusTd.appendChild(statusPill);
     tr.appendChild(statusTd);
 
-    const mailTd = document.createElement('td');
-    mailTd.textContent = `${getApprovalDocumentStatusLabel(row?.approval_status || 'submitted')} · ${formatCertificateIssueStateLabel(row?.issue_job_state || row?.status)}`;
-    tr.appendChild(mailTd);
+    const progressTd = document.createElement('td');
+    progressTd.textContent = isResignation
+      ? formatHrApprovalProgressSummary(row)
+      : `${formatHrApprovalProgressSummary(row)} · ${formatCertificateIssueStateLabel(row?.issue_job_state || row?.status)}`;
+    tr.appendChild(progressTd);
 
     const actionTd = document.createElement('td');
-    if (certificateRequestId && normalizeHrRequestStatus(row?.status) === 'requested') {
+    if (requestId && normalizeHrRequestStatus(row?.status) === 'requested') {
       const actionsWrap = document.createElement('div');
       actionsWrap.className = 'inline-actions';
       const approveBtn = document.createElement('button');
       approveBtn.type = 'button';
       approveBtn.className = 'btn btn-primary';
       approveBtn.dataset.action = 'hr-admin-approve';
-      approveBtn.dataset.requestId = certificateRequestId;
+      approveBtn.dataset.requestId = requestId;
+      approveBtn.dataset.requestKind = isResignation ? 'resignation' : 'certificate';
       approveBtn.textContent = '승인';
       const rejectBtn = document.createElement('button');
       rejectBtn.type = 'button';
       rejectBtn.className = 'btn btn-destructive';
       rejectBtn.dataset.action = 'hr-admin-reject';
-      rejectBtn.dataset.requestId = certificateRequestId;
+      rejectBtn.dataset.requestId = requestId;
+      rejectBtn.dataset.requestKind = isResignation ? 'resignation' : 'certificate';
       rejectBtn.textContent = '반려';
-      actionsWrap.append(approveBtn, rejectBtn);
+      actionsWrap.append(approveBtn);
+      if (row?.can_delegate) {
+        const delegateBtn = document.createElement('button');
+        delegateBtn.type = 'button';
+        delegateBtn.className = 'btn btn-secondary';
+        delegateBtn.dataset.action = 'hr-admin-delegate-approve';
+        delegateBtn.dataset.requestId = requestId;
+        delegateBtn.dataset.requestKind = isResignation ? 'resignation' : 'certificate';
+        delegateBtn.textContent = '전결 승인';
+        actionsWrap.append(delegateBtn);
+      }
+      actionsWrap.append(rejectBtn);
       actionTd.appendChild(actionsWrap);
-    } else if (issueJob && String(issueJob?.job_state || '').trim().toLowerCase() === 'failed') {
+    } else if (!isResignation && issueJob && String(issueJob?.job_state || '').trim().toLowerCase() === 'failed') {
       const retryBtn = document.createElement('button');
       retryBtn.type = 'button';
       retryBtn.className = 'btn btn-secondary';
@@ -41857,17 +45078,25 @@ function renderHrAdminRequestRows() {
       reasonBtn.type = 'button';
       reasonBtn.className = 'btn btn-ghost';
       reasonBtn.dataset.action = 'hr-employment-view-reason';
-      reasonBtn.dataset.reason = String(row?.issue_job_error || row?.rejection_reason || '').trim();
+      reasonBtn.dataset.reason = String(row?.issue_job_error || row?.rejection_reason || row?.resignation_reason || '').trim();
       reasonBtn.textContent = '사유보기';
       actionTd.appendChild(reasonBtn);
-    } else if (certificateRequestId && (normalizeHrRequestStatus(row?.status) === 'issued' || fileReady)) {
+    } else if (!isResignation && requestId && (Boolean(row?.can_download_pdf) || normalizeHrRequestStatus(row?.status) === 'issued' || fileReady)) {
       const downloadBtn = document.createElement('button');
       downloadBtn.type = 'button';
       downloadBtn.className = 'btn btn-secondary';
       downloadBtn.dataset.action = 'hr-employment-download';
-      downloadBtn.dataset.requestId = certificateRequestId;
+      downloadBtn.dataset.requestId = requestId;
       downloadBtn.textContent = 'PDF 다운로드';
       actionTd.appendChild(downloadBtn);
+    } else if (isResignation && String(row?.resignation_reason || '').trim()) {
+      const detailBtn = document.createElement('button');
+      detailBtn.type = 'button';
+      detailBtn.className = 'btn btn-ghost';
+      detailBtn.dataset.action = 'hr-employment-view-reason';
+      detailBtn.dataset.reason = `사직 사유: ${String(row?.resignation_reason || '').trim()}${String(row?.handover_notes || '').trim() ? `\n인수인계 메모: ${String(row?.handover_notes || '').trim()}` : ''}`;
+      detailBtn.textContent = '내용보기';
+      actionTd.appendChild(detailBtn);
     } else {
       actionTd.textContent = '-';
     }
@@ -41879,39 +45108,35 @@ function renderHrAdminRequestRows() {
 function renderHrScopeAndPanels() {
   const hrState = ensureHrDocsState();
   const selectedType = getHrSelectedCertificateType();
+  const isResignation = isHrResignationDocumentType(selectedType?.type_key || '');
   const scopeHint = $('#hrScopeHint');
   const employeeCard = $('#hrEmploymentEmployeeCard');
   const myRowsCard = $('#hrEmploymentMyRequestsCard');
-  const adminCard = $('#hrEmploymentAdminCard');
   const templateCard = $('#hrTemplateAdminCard');
-  const statusEl = $('#hrEmploymentAdminStatus');
   const templateStatusEl = $('#hrTemplateStatus');
   const employeeStatusEl = $('#hrEmploymentRequestStatus');
-  const adminMode = isHrAdminRole();
   const employeeMode = isHrEmployeeRole();
   const templateManagerMode = isHrTemplateManagerRole();
+  const approvalPolicyManagerMode = isHrApprovalPolicyManagerRole();
 
   if (scopeHint) {
-    scopeHint.textContent = adminMode
-      ? 'HQ/DEV는 증명서 요청을 승인/반려하고 발급 진행 상태를 확인합니다.'
-      : `${String(selectedType?.display_name || '증명서').trim() || '증명서'} 신청, 발급 이력, 다운로드 상태를 이 화면에서 관리합니다.`;
+    const segment = normalizeHrWorkspaceSegment(hrState.workspaceSegment || 'apply');
+    scopeHint.textContent = segment === 'manage'
+      ? '템플릿 버전과 문서별 기본 승인 절차를 관리합니다.'
+      : (
+        segment === 'my-docs'
+          ? '신청한 문서의 승인 진행상태와 최종 결과를 확인합니다.'
+          : (
+            isResignation
+              ? '사직서를 제출하고 진행 상태를 확인합니다.'
+              : `${String(selectedType?.display_name || '증명서').trim() || '증명서'} 신청과 최종 PDF 다운로드를 관리합니다.`
+          )
+      );
   }
   if (employeeCard) employeeCard.classList.toggle('hidden', !employeeMode);
   if (myRowsCard) myRowsCard.classList.toggle('hidden', !employeeMode);
-  if (adminCard) adminCard.classList.toggle('hidden', !adminMode);
-  if (templateCard) templateCard.classList.toggle('hidden', !templateManagerMode);
-  if (statusEl && adminMode) {
-    const hasFetchedAdminRows = Number(hrState.adminRowsFetchedAt || 0) > 0;
-    const statusText = String(statusEl.textContent || '').trim();
-    if (Boolean(hrState.loadingAdminRows) && !hasFetchedAdminRows) {
-      statusEl.textContent = '요청 목록을 불러오는 중입니다.';
-    } else if (!statusText || statusText.includes('불러오는 중')) {
-      statusEl.textContent = hasFetchedAdminRows
-        ? `${Array.isArray(hrState.adminRows) ? hrState.adminRows.length : 0}건 조회됨`
-        : '요청 조건을 설정하면 목록이 표시됩니다.';
-    }
-  }
-  if (templateStatusEl && adminMode) {
+  if (templateCard) templateCard.classList.toggle('hidden', !(templateManagerMode || approvalPolicyManagerMode));
+  if (templateStatusEl && templateManagerMode) {
     const hasFetchedTemplates = Number(hrState.templatesFetchedAt || 0) > 0;
     const templateStatusText = String(templateStatusEl.textContent || '').trim();
     if (Boolean(hrState.loadingTemplates) && !hasFetchedTemplates) {
@@ -41924,7 +45149,11 @@ function renderHrScopeAndPanels() {
   }
   if (employeeStatusEl && employeeMode) {
     employeeStatusEl.textContent = isHrCertificateTypeRequestAvailable(selectedType)
-      ? '발급 용도와 제출처를 확인한 뒤 신청해 주세요.'
+      ? (
+        isResignation
+          ? '희망 퇴사일과 사직 사유를 입력해 제출해 주세요.'
+          : '발급 용도와 제출처를 확인한 뒤 신청해 주세요.'
+      )
       : (
         String(selectedType?.eligibility_reason || '').trim()
           ? `${String(selectedType?.display_name || '해당 증명서').trim() || '해당 증명서'} 신청이 현재 불가합니다. ${String(selectedType?.eligibility_reason || '').trim()}`
@@ -41932,24 +45161,19 @@ function renderHrScopeAndPanels() {
       );
   }
 
-  const tabButtons = document.querySelectorAll('#hrEmploymentAdminStatusTabs [data-action="hr-admin-status-filter"]');
-  tabButtons.forEach((btn) => {
-    btn.classList.toggle('hidden', !adminMode);
-  });
-  const adminSearch = $('#hrEmploymentAdminSearch');
-  if (adminSearch instanceof HTMLInputElement) {
-    adminSearch.disabled = !adminMode;
-    adminSearch.value = String(hrState.adminQuery || '');
-  }
-
   const uploadBtn = $('#hrTemplateUploadBtn');
   if (uploadBtn instanceof HTMLButtonElement) {
     uploadBtn.disabled = !templateManagerMode || Boolean(hrState.templateUploading);
   }
+  document.querySelectorAll('#hrApprovalRulesSection [data-action="hr-approval-rule-add"], #hrApprovalRulesSection [data-action="hr-approval-rules-save"], #hrApprovalRulesSection [data-action="hr-approval-rules-refresh"]').forEach((button) => {
+    if (button instanceof HTMLButtonElement) {
+      button.disabled = !approvalPolicyManagerMode || Boolean(hrState.loadingApprovalRules) || Boolean(hrState.savingApprovalRules);
+    }
+  });
   const templateTypeSelect = $('#hrTemplateTypeSelect');
   if (templateTypeSelect instanceof HTMLSelectElement) {
     templateTypeSelect.value = normalizeHrCertificateTypeKey(hrState.selectedDocType || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE);
-    templateTypeSelect.disabled = !templateManagerMode || Boolean(hrState.templateUploading);
+    templateTypeSelect.disabled = !(templateManagerMode || approvalPolicyManagerMode) || Boolean(hrState.templateUploading);
   }
 
   const purposeCodeGroup = $('#hrPurposeCodeGroup');
@@ -41959,6 +45183,7 @@ function renderHrScopeAndPanels() {
     hrState.workspaceSegment = resolveDefaultHrWorkspaceSegment();
   }
   renderHrWorkspaceSegments();
+  renderHrTableHeaders();
   renderHrEmployeeRequestCard();
 }
 
@@ -42013,12 +45238,19 @@ async function loadHrEmploymentMyRequests({ force = false } = {}) {
   }
   hrState.loadingMyRows = true;
   const pageSize = Math.max(1, Number(hrState.myRowsPageSize || 20));
+  const isResignation = isHrSelectedResignationType();
   try {
-    const payload = await apiRequest(`/certificates/requests?limit=${pageSize}`);
-    hrState.myRows = Array.isArray(payload?.items) ? payload.items : [];
+    const payload = isResignation
+      ? await apiRequest(`/hr/documents/resignation-requests?page=1&pageSize=${pageSize}`)
+      : await apiRequest(`/certificates/requests?limit=${pageSize}`);
+    hrState.myRows = Array.isArray(payload?.items)
+      ? payload.items
+      : (Array.isArray(payload) ? payload : []);
     hrState.myRowsFetchedAt = Date.now();
-    syncHrQuotaStateFromRows(hrState.myRows);
-    renderHrQuota();
+    if (!isResignation) {
+      syncHrQuotaStateFromRows(hrState.myRows);
+      renderHrQuota();
+    }
     renderHrMyRequestRows();
     const hasPendingRows = hrState.myRows.some((row) => {
       const status = normalizeHrRequestStatus(row?.status);
@@ -42033,12 +45265,14 @@ async function loadHrEmploymentMyRequests({ force = false } = {}) {
   } catch (error) {
     clearHrMyRequestRefreshTimer();
     hrState.myRows = [];
-    syncHrQuotaStateFromRows([]);
-    renderHrQuota();
+    if (!isResignation) {
+      syncHrQuotaStateFromRows([]);
+      renderHrQuota();
+    }
     renderHrMyRequestRows();
     const statusEl = $('#hrEmploymentRequestStatus');
     if (statusEl && isHrViewActive()) {
-      statusEl.textContent = normalizeActionError(error, '증명서 요청 이력을 불러오지 못했습니다.');
+      statusEl.textContent = normalizeActionError(error, isResignation ? '사직서 제출 이력을 불러오지 못했습니다.' : '증명서 요청 이력을 불러오지 못했습니다.');
     }
     return [];
   } finally {
@@ -42048,7 +45282,7 @@ async function loadHrEmploymentMyRequests({ force = false } = {}) {
 
 async function loadHrEmploymentAdminRequests({ force = false } = {}) {
   const hrState = ensureHrDocsState();
-  if (!isHrAdminRole()) {
+  if (!isHrApprovalRole()) {
     hrState.adminRows = [];
     renderHrAdminRequestRows();
     return [];
@@ -42064,20 +45298,33 @@ async function loadHrEmploymentAdminRequests({ force = false } = {}) {
     return hrState.adminRows;
   }
   hrState.loadingAdminRows = true;
+  const isResignation = isHrSelectedResignationType();
   const statusFilter = normalizeHrRequestStatus(hrState.adminStatus || 'requested');
+  const apiStatusFilter = statusFilter === 'delegatable' ? 'requested' : statusFilter;
   const q = String(hrState.adminQuery || '').trim();
   const params = new URLSearchParams({
-    status: statusFilter,
+    status: apiStatusFilter,
     limit: String(Math.max(1, Number(hrState.adminRowsPageSize || 30))),
   });
   if (q) params.set('q', q);
   try {
-    const [rowsPayload, issueJobs] = await Promise.all([
-      apiRequest(`/certificates/admin/requests?${params.toString()}`),
-      loadHrCertificateIssueJobs({ force }),
-    ]);
-    hrState.adminRows = Array.isArray(rowsPayload?.items) ? rowsPayload.items : [];
-    hrState.issueJobs = Array.isArray(issueJobs) ? issueJobs : [];
+    if (isResignation) {
+      const rowsPayload = await apiRequest(`/admin/hr/documents/resignation-requests?${params.toString()}`);
+      hrState.adminRows = Array.isArray(rowsPayload?.items)
+        ? rowsPayload.items
+        : (Array.isArray(rowsPayload) ? rowsPayload : []);
+      hrState.issueJobs = [];
+    } else {
+      const [rowsPayload, issueJobs] = await Promise.all([
+        apiRequest(`/certificates/admin/requests?${params.toString()}`),
+        loadHrCertificateIssueJobs({ force }),
+      ]);
+      hrState.adminRows = Array.isArray(rowsPayload?.items) ? rowsPayload.items : [];
+      hrState.issueJobs = Array.isArray(issueJobs) ? issueJobs : [];
+    }
+    if (statusFilter === 'delegatable') {
+      hrState.adminRows = hrState.adminRows.filter((row) => Boolean(row?.can_delegate));
+    }
     hrState.adminRowsFetchedAt = Date.now();
     renderHrAdminStatusTabs();
     renderHrAdminRequestRows();
@@ -42093,7 +45340,7 @@ async function loadHrEmploymentAdminRequests({ force = false } = {}) {
     renderHrAdminRequestRows();
     const statusEl = $('#hrEmploymentAdminStatus');
     if (statusEl && isHrViewActive()) {
-      statusEl.textContent = normalizeActionError(error, '증명서 요청 목록을 불러오지 못했습니다.');
+      statusEl.textContent = normalizeActionError(error, isResignation ? '사직서 제출 목록을 불러오지 못했습니다.' : '증명서 요청 목록을 불러오지 못했습니다.');
     }
     return [];
   } finally {
@@ -42105,7 +45352,9 @@ async function loadHrDocumentTemplates({ force = false } = {}) {
   const hrState = ensureHrDocsState();
   if (!isHrTemplateManagerRole()) {
     hrState.templatesRows = [];
+    hrState.approvalRulesRows = [];
     renderHrTemplateRows();
+    renderHrApprovalRulesEditor();
     return [];
   }
   const now = Date.now();
@@ -42115,6 +45364,7 @@ async function loadHrDocumentTemplates({ force = false } = {}) {
     && (now - Number(hrState.templatesFetchedAt || 0)) < HR_DATA_CACHE_TTL_MS;
   if (isFresh) {
     renderHrTemplateRows();
+    renderHrApprovalRulesEditor();
     return hrState.templatesRows;
   }
   hrState.loadingTemplates = true;
@@ -42129,6 +45379,7 @@ async function loadHrDocumentTemplates({ force = false } = {}) {
     hrState.templatesRows = Array.isArray(payload?.items) ? payload.items : [];
     hrState.templatesFetchedAt = Date.now();
     renderHrTemplateRows();
+    loadHrDocumentApprovalRules({ force }).catch(() => {});
     const statusEl = $('#hrTemplateStatus');
     if (statusEl) {
       statusEl.textContent = `${hrState.templatesRows.length}개 버전 조회됨`;
@@ -42137,6 +45388,7 @@ async function loadHrDocumentTemplates({ force = false } = {}) {
   } catch (error) {
     hrState.templatesRows = [];
     renderHrTemplateRows();
+    renderHrApprovalRulesEditor();
     const statusEl = $('#hrTemplateStatus');
     if (statusEl && isHrViewActive()) {
       statusEl.textContent = normalizeActionError(error, '문서 템플릿을 불러오지 못했습니다.');
@@ -42145,6 +45397,17 @@ async function loadHrDocumentTemplates({ force = false } = {}) {
   } finally {
     hrState.loadingTemplates = false;
   }
+}
+
+function buildHrManageLoadTasks({ force = false } = {}) {
+  const tasks = [];
+  if (isHrTemplateManagerRole()) {
+    tasks.push(loadHrDocumentTemplates({ force }));
+  }
+  if (isHrApprovalPolicyManagerRole()) {
+    tasks.push(loadHrDocumentApprovalRules({ force }));
+  }
+  return tasks;
 }
 
 function renderHrViewFromCache() {
@@ -42158,6 +45421,7 @@ function renderHrViewFromCache() {
   renderHrMyRequestRows();
   renderHrAdminRequestRows();
   renderHrTemplateRows();
+  renderHrApprovalRulesEditor();
   queueViewSnapshotPersist('hr');
 }
 
@@ -42166,15 +45430,7 @@ async function loadHrViewPresenter() {
   hrState.selectedDocType = normalizeHrCertificateTypeKey(hrState.selectedDocType || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE);
   const parsed = parseRouteCandidate(getCurrentRouteWithQuery());
   const routeQuery = new URLSearchParams(parsed.query || '');
-  if (isHrAdminRole()) {
-    hrState.adminPanel = normalizeHrAdminPanel(routeQuery.get('panel') || hrState.adminPanel || 'requests');
-    if (!isHrTemplateManagerRole() && hrState.adminPanel === 'templates') {
-      hrState.adminPanel = 'requests';
-    }
-    hrState.workspaceSegment = hrState.adminPanel === 'templates' ? 'templates' : 'approvals';
-  } else {
-    hrState.workspaceSegment = normalizeHrWorkspaceSegment(hrState.workspaceSegment || 'apply');
-  }
+  applyHrRouteStateFromQuery(parsed.path || ROUTE_HR, routeQuery);
   renderHrViewFromCache();
 
   const tasks = [loadHrEmploymentCertificateTypes({ force: false })];
@@ -42182,11 +45438,10 @@ async function loadHrViewPresenter() {
     tasks.push(loadHrEmploymentQuota({ force: false }));
     tasks.push(loadHrEmploymentMyRequests({ force: false }));
   }
-  if (isHrAdminRole()) {
-    if (normalizeHrAdminPanel(hrState.adminPanel || 'requests') === 'templates') {
-      tasks.push(loadHrDocumentTemplates({ force: false }));
-    } else {
-      tasks.push(loadHrEmploymentAdminRequests({ force: false }));
+  if (canAccessHrManageSegment()) {
+    const segment = normalizeHrWorkspaceSegment(hrState.workspaceSegment || 'apply');
+    if (segment === 'manage') {
+      tasks.push(...buildHrManageLoadTasks({ force: false }));
     }
   }
   if (tasks.length) {
@@ -42198,6 +45453,7 @@ async function submitHrEmploymentRequest() {
   const hrState = ensureHrDocsState();
   const selectedType = getHrSelectedCertificateType();
   const selectedTypeKey = normalizeHrCertificateTypeKey(selectedType?.type_key || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE);
+  const isResignation = isHrResignationDocumentType(selectedTypeKey);
   const certificateLabel = String(selectedType?.display_name || '증명서').trim() || '증명서';
   if (!isHrCertificateTypeRequestAvailable(selectedType)) {
     showToast(
@@ -42214,6 +45470,10 @@ async function submitHrEmploymentRequest() {
   const copyCountInput = $('#hrCopyCount');
   const includeAddressInput = $('#hrIncludeAddress');
   const includePhoneInput = $('#hrIncludePhone');
+  const resignationTypeInput = $('#hrResignationType');
+  const resignationDateInput = $('#hrResignationExpectedDate');
+  const resignationReasonInput = $('#hrResignationReason');
+  const resignationHandoverInput = $('#hrResignationHandover');
   hrState.purposeCode = normalizeHrPurposeCode(hrState.purposeCode || 'BANK');
   hrState.purposeText = purposeOtherInput instanceof HTMLInputElement
     ? String(purposeOtherInput.value || '').trim()
@@ -42230,35 +45490,69 @@ async function submitHrEmploymentRequest() {
   hrState.includePhone = includePhoneInput instanceof HTMLInputElement
     ? Boolean(includePhoneInput.checked)
     : Boolean(hrState.includePhone);
+  hrState.resignationType = resignationTypeInput instanceof HTMLSelectElement
+    ? normalizeHrResignationType(resignationTypeInput.value)
+    : normalizeHrResignationType(hrState.resignationType || 'PERSONAL');
+  hrState.resignationExpectedLastWorkingDate = resignationDateInput instanceof HTMLInputElement
+    ? String(resignationDateInput.value || '').trim()
+    : String(hrState.resignationExpectedLastWorkingDate || '').trim();
+  hrState.resignationReason = resignationReasonInput instanceof HTMLTextAreaElement
+    ? String(resignationReasonInput.value || '').trim()
+    : String(hrState.resignationReason || '').trim();
+  hrState.resignationHandoverNotes = resignationHandoverInput instanceof HTMLTextAreaElement
+    ? String(resignationHandoverInput.value || '').trim()
+    : String(hrState.resignationHandoverNotes || '').trim();
   const purposeCode = normalizeHrPurposeCode(hrState.purposeCode || 'BANK');
   const purposeText = String(hrState.purposeText || '').trim();
   const submitTo = String(hrState.submitTo || '').trim();
   const copyCount = normalizeHrCopyCount(hrState.copyCount);
+  const resignationType = normalizeHrResignationType(hrState.resignationType || 'PERSONAL');
+  const resignationExpectedLastWorkingDate = String(hrState.resignationExpectedLastWorkingDate || '').trim();
+  const resignationReason = String(hrState.resignationReason || '').trim();
+  const resignationHandoverNotes = String(hrState.resignationHandoverNotes || '').trim();
   if (purposeCode === 'OTHER' && (purposeText.length < 2 || purposeText.length > 50)) {
     showToast('기타 용도는 2~50자로 입력해 주세요.', 'error', 2600);
     return;
   }
-  if (submitTo.length < 2) {
+  if (!isResignation && submitTo.length < 2) {
     showToast('제출처를 2자 이상 입력해 주세요.', 'error', 2400);
+    return;
+  }
+  if (isResignation && !resignationExpectedLastWorkingDate) {
+    showToast('희망 퇴사일을 입력해 주세요.', 'error', 2400);
+    return;
+  }
+  if (isResignation && resignationReason.length < 5) {
+    showToast('사직 사유를 5자 이상 입력해 주세요.', 'error', 2400);
     return;
   }
   hrState.submitting = true;
   updateHrRequestSubmitState();
   const statusEl = $('#hrEmploymentRequestStatus');
-  if (statusEl) statusEl.textContent = `${certificateLabel} 발급 요청을 등록하는 중입니다...`;
+  if (statusEl) statusEl.textContent = `${certificateLabel} ${isResignation ? '제출을 접수하는 중입니다...' : '발급 요청을 등록하는 중입니다...'}`;
   try {
-    const payload = await apiRequest('/certificates/requests', {
-      method: 'POST',
-      body: {
-        type_key: selectedTypeKey,
-        purpose_code: purposeCode,
-        purpose_text: purposeCode === 'OTHER' ? purposeText : null,
-        submit_to: submitTo,
-        copy_count: copyCount,
-        include_address: Boolean(hrState.includeAddress),
-        include_phone: Boolean(hrState.includePhone),
-      },
-    });
+    const payload = isResignation
+      ? await apiRequest('/hr/documents/resignation-requests', {
+        method: 'POST',
+        body: {
+          resignation_type: resignationType,
+          expected_last_working_date: resignationExpectedLastWorkingDate,
+          resignation_reason: resignationReason,
+          handover_notes: resignationHandoverNotes || null,
+        },
+      })
+      : await apiRequest('/certificates/requests', {
+        method: 'POST',
+        body: {
+          type_key: selectedTypeKey,
+          purpose_code: purposeCode,
+          purpose_text: purposeCode === 'OTHER' ? purposeText : null,
+          submit_to: submitTo,
+          copy_count: copyCount,
+          include_address: Boolean(hrState.includeAddress),
+          include_phone: Boolean(hrState.includePhone),
+        },
+      });
     const createdItem = payload?.item && typeof payload.item === 'object'
       ? payload.item
       : null;
@@ -42282,16 +45576,24 @@ async function submitHrEmploymentRequest() {
     setHrWorkspaceSegment('my-docs');
     hrState.myRowsFetchedAt = 0;
     await loadHrEmploymentMyRequests({ force: true });
-    const requestStatus = normalizeHrRequestStatus(payload?.item?.status || (selectedType?.requires_approval ? 'requested' : 'generating'));
+    const requestStatus = normalizeHrRequestStatus(payload?.item?.status || (isResignation ? 'requested' : (selectedType?.requires_approval ? 'requested' : 'generating')));
     if (statusEl) {
-      statusEl.textContent = requestStatus === 'requested'
-        ? `${certificateLabel} 요청이 접수되었습니다. 승인 완료 후 발급 상태를 이 화면에서 확인할 수 있습니다.`
-        : `${certificateLabel} 발급 작업을 시작했습니다. 완료되면 이 화면에서 PDF 다운로드 상태를 확인할 수 있습니다.`;
+      statusEl.textContent = isResignation
+        ? `${certificateLabel} 제출이 접수되었습니다. 관리자 검토 결과를 이 화면에서 확인할 수 있습니다.`
+        : (
+          requestStatus === 'requested'
+            ? `${certificateLabel} 요청이 접수되었습니다. 승인 완료 후 발급 상태를 이 화면에서 확인할 수 있습니다.`
+            : `${certificateLabel} 발급 작업을 시작했습니다. 완료되면 이 화면에서 PDF 다운로드 상태를 확인할 수 있습니다.`
+        );
     }
     showToast(
-      requestStatus === 'requested'
-        ? `${certificateLabel} 발급 요청이 접수되었습니다.`
-        : `${certificateLabel} 발급 작업을 시작했습니다.`,
+      isResignation
+        ? `${certificateLabel} 제출이 접수되었습니다.`
+        : (
+          requestStatus === 'requested'
+            ? `${certificateLabel} 발급 요청이 접수되었습니다.`
+            : `${certificateLabel} 발급 작업을 시작했습니다.`
+        ),
       'success',
       2200,
     );
@@ -42325,19 +45627,25 @@ async function downloadHrEmploymentRequestPdf(requestId = '', progressController
   });
 }
 
-async function approveHrEmploymentRequest(requestId = '') {
+async function approveHrEmploymentRequest(requestId = '', { requestKind = '' } = {}) {
   const id = String(requestId || '').trim();
   if (!id) return;
-  await apiRequest(`/certificates/admin/requests/${encodeURIComponent(id)}/approve`, {
+  const endpoint = normalizeHrDocumentRequestKind(requestKind || (isHrSelectedResignationType() ? 'resignation' : 'certificate')) === 'resignation'
+    ? `/admin/hr/documents/resignation-requests/${encodeURIComponent(id)}/approve`
+    : `/certificates/admin/requests/${encodeURIComponent(id)}/approve`;
+  await apiRequest(endpoint, {
     method: 'POST',
   });
 }
 
-async function rejectHrEmploymentRequest(requestId = '', reason = '') {
+async function rejectHrEmploymentRequest(requestId = '', reason = '', { requestKind = '' } = {}) {
   const id = String(requestId || '').trim();
   const rejectionReason = String(reason || '').trim();
   if (!id) return;
-  await apiRequest(`/certificates/admin/requests/${encodeURIComponent(id)}/reject`, {
+  const endpoint = normalizeHrDocumentRequestKind(requestKind || (isHrSelectedResignationType() ? 'resignation' : 'certificate')) === 'resignation'
+    ? `/admin/hr/documents/resignation-requests/${encodeURIComponent(id)}/reject`
+    : `/certificates/admin/requests/${encodeURIComponent(id)}/reject`;
+  await apiRequest(endpoint, {
     method: 'POST',
     body: { rejection_reason: rejectionReason },
   });
@@ -42401,7 +45709,7 @@ function ensureCalendarWorkspaceState() {
   return state.calendar;
 }
 
-function getCalendarWorkspacePath(viewTab = 'week', anchorDate = '') {
+function getCalendarWorkspacePath(viewTab = 'month', anchorDate = '') {
   const calendarState = ensureCalendarWorkspaceState();
   const params = new URLSearchParams();
   params.set('view', normalizeCalendarViewTab(viewTab));
@@ -42422,6 +45730,27 @@ function parseCalendarDateKey(dateKey = '') {
   const [year, month, day] = normalized.split('-').map((value) => Number(value || 0));
   if (!year || !month || !day) return new Date();
   return new Date(year, month - 1, day);
+}
+
+function buildCalendarMonthDays(anchorDate = '', selectedDate = '') {
+  const anchor = parseCalendarDateKey(anchorDate || toLocalDateKey(new Date()));
+  const selectedKey = normalizeAttendanceDate(selectedDate || anchorDate || '') || toLocalDateKey(anchor);
+  const todayKey = toLocalDateKey(new Date());
+  const monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const gridStart = new Date(monthStart);
+  gridStart.setDate(monthStart.getDate() - monthStart.getDay());
+  return Array.from({ length: 42 }, (_, index) => {
+    const current = new Date(gridStart);
+    current.setDate(gridStart.getDate() + index);
+    const dateKey = toLocalDateKey(current);
+    return {
+      date: dateKey,
+      day: current.getDate(),
+      in_month: current.getMonth() === anchor.getMonth(),
+      is_today: dateKey === todayKey,
+      is_selected: dateKey === selectedKey,
+    };
+  });
 }
 
 function formatCalendarDayHeading(dateKey = '') {
@@ -42894,18 +46223,133 @@ function buildCalendarAvailabilityKey(query = {}) {
   });
 }
 
-function renderCalendarWorkspaceTabs() {
+function syncCalendarWorkspaceSelection(workspace, {
+  view = '',
+  date = '',
+} = {}) {
+  if (!workspace || typeof workspace !== 'object') return workspace;
+  const nextView = normalizeCalendarViewTab(view || workspace?.view || 'month');
+  const nextDate = normalizeAttendanceDate(
+    date
+    || workspace?.selected_date
+    || workspace?.anchor_date
+    || ''
+  ) || toLocalDateKey(new Date());
+  const miniMonthDays = buildCalendarMonthDays(nextDate, nextDate);
+  return {
+    ...workspace,
+    view: nextView,
+    anchor_date: nextDate,
+    selected_date: nextDate,
+    selected_days: [nextDate],
+    mini_month_days: miniMonthDays,
+  };
+}
+
+function getCalendarFullscreenTarget() {
+  return $('#view-calendar');
+}
+
+function isCalendarFullscreenActive() {
+  const target = getCalendarFullscreenTarget();
+  return Boolean(target && document.fullscreenElement === target);
+}
+
+function syncCalendarFullscreenState() {
   const calendarState = ensureCalendarWorkspaceState();
-  const activeTab = normalizeCalendarViewTab(calendarState.viewTab || resolveCalendarTabFromRoutePath(state.currentRoute || '') || 'week');
-  const tabs = $('#calendarWorkspaceTabs');
-  if (tabs) {
-    tabs.querySelectorAll('[data-action="calendar-set-view"]').forEach((button) => {
-      const isActive = normalizeCalendarViewTab(button.dataset.tab || '') === activeTab;
-      button.classList.toggle('active', isActive);
-      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  const active = isCalendarFullscreenActive();
+  calendarState.fullscreen = active;
+  const target = getCalendarFullscreenTarget();
+  if (target instanceof HTMLElement) {
+    target.classList.toggle('is-calendar-fullscreen', active);
+  }
+  if (state.currentView === 'calendar') {
+    renderCalendarWorkspaceTabs();
+    requestAnimationFrame(() => {
+      positionCalendarTimelineViewport(calendarState.workspace);
     });
   }
-  const workspace = calendarState.workspace || null;
+}
+
+let calendarFullscreenListenerBound = false;
+
+function ensureCalendarFullscreenListener() {
+  if (calendarFullscreenListenerBound) return;
+  document.addEventListener('fullscreenchange', () => {
+    syncCalendarFullscreenState();
+  });
+  calendarFullscreenListenerBound = true;
+}
+
+function renderCalendarWorkspaceTabs() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const activeTab = normalizeCalendarViewTab(calendarState.viewTab || resolveCalendarTabFromRoutePath(state.currentRoute || '') || 'month');
+  const tabs = $('#calendarWorkspaceTabs');
+  if (tabs) {
+    const anchorDate = normalizeAttendanceDate(calendarState.anchorDate || calendarState.workspace?.anchor_date || calendarState.selectedDate || '') || toLocalDateKey(new Date());
+    const workspace = calendarState.workspace || null;
+    const label = formatCalendarToolbarRangeLabel(activeTab, anchorDate);
+    const filterButtonDisabled = !Array.isArray(workspace?.containers) || !workspace.containers.length;
+    const isFullscreen = Boolean(calendarState.fullscreen);
+    tabs.innerHTML = `
+      <div class="calendar-toolbar-shell">
+        <div class="calendar-toolbar-left">
+          <div class="calendar-toolbar-nav">
+            <button class="calendar-toolbar-chip" type="button" data-action="calendar-go-today">오늘</button>
+            <button class="calendar-toolbar-icon" type="button" aria-label="이전" data-action="calendar-shift-range" data-direction="-1">‹</button>
+            <button class="calendar-toolbar-icon" type="button" aria-label="다음" data-action="calendar-shift-range" data-direction="1">›</button>
+          </div>
+          <div class="calendar-toolbar-copy">
+            <strong>${escapeHtml(label)}</strong>
+          </div>
+        </div>
+        <div class="calendar-toolbar-right">
+          <button
+            class="calendar-toolbar-icon ${isFullscreen ? 'is-active' : ''}"
+            type="button"
+            data-action="calendar-toggle-fullscreen"
+            aria-label="${isFullscreen ? '전체화면 종료' : '전체화면'}"
+            aria-pressed="${isFullscreen ? 'true' : 'false'}"
+            title="${isFullscreen ? '전체화면 종료' : '전체화면'}">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M7 3H3v4"></path>
+              <path d="M13 3h4v4"></path>
+              <path d="M17 13v4h-4"></path>
+              <path d="M3 13v4h4"></path>
+            </svg>
+          </button>
+          <div class="calendar-toolbar-filter-wrap">
+            <button
+              class="calendar-toolbar-chip ${calendarState.filterOpen ? 'is-active' : ''}"
+              type="button"
+              data-action="calendar-toggle-filter"
+              aria-expanded="${calendarState.filterOpen ? 'true' : 'false'}"
+              ${filterButtonDisabled ? 'disabled' : ''}>
+              필터
+            </button>
+            ${calendarState.filterOpen ? renderCalendarFilterPopover(workspace) : ''}
+          </div>
+          <div class="calendar-toolbar-segment" role="tablist" aria-label="캘린더 보기">
+            ${[
+              ['day', '일'],
+              ['week', '주'],
+              ['month', '월'],
+            ].map(([tab, labelText]) => `
+              <button
+                class="calendar-toolbar-segment-btn ${activeTab === tab ? 'is-active' : ''}"
+                type="button"
+                role="tab"
+                aria-selected="${activeTab === tab ? 'true' : 'false'}"
+                data-action="calendar-set-view"
+                data-tab="${tab}">
+                ${labelText}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
   const titleEl = $('#calendarViewTitle');
   const subtitleEl = $('#calendarViewSubtitle');
   if (titleEl) titleEl.textContent = '캘린더';
@@ -42918,6 +46362,7 @@ function renderCalendarWorkspaceTabs() {
 
 function renderCalendarMiniMonth(days = [], selectedDate = '') {
   const weekLabels = ['일', '월', '화', '수', '목', '금', '토'];
+  const currentSelectedDate = normalizeAttendanceDate(selectedDate || '') || '';
   return `
     <div class="calendar-mini-month">
       <div class="calendar-mini-month-weekdays">${weekLabels.map((label) => `<span>${label}</span>`).join('')}</div>
@@ -42927,7 +46372,7 @@ function renderCalendarMiniMonth(days = [], selectedDate = '') {
             'calendar-mini-month-cell',
             row?.in_month ? '' : 'is-outside',
             row?.is_today ? 'is-today' : '',
-            (row?.is_selected || String(row?.date || '') === String(selectedDate || '')) ? 'is-selected' : '',
+            String(row?.date || '') === currentSelectedDate ? 'is-selected' : '',
           ].filter(Boolean).join(' ');
           return `<button class="${classes}" type="button" data-action="calendar-select-date" data-date="${escapeHtml(String(row?.date || ''))}">${Number(row?.day || 0)}</button>`;
         }).join('')}
@@ -42979,6 +46424,269 @@ function buildCalendarWeekDateKeys(anchorDate = '') {
     date.setDate(start.getDate() + index);
     return toLocalDateKey(date);
   });
+}
+
+function shiftCalendarAnchorDate(anchorDate = '', viewTab = 'month', direction = 0) {
+  const delta = Number(direction || 0);
+  const base = parseCalendarDateKey(anchorDate || toLocalDateKey(new Date()));
+  if (!Number.isFinite(delta) || !delta) return toLocalDateKey(base);
+  const next = new Date(base);
+  const normalizedView = normalizeCalendarViewTab(viewTab);
+  if (normalizedView === 'day') {
+    next.setDate(next.getDate() + delta);
+  } else if (normalizedView === 'week') {
+    next.setDate(next.getDate() + (delta * 7));
+  } else {
+    next.setMonth(next.getMonth() + delta);
+  }
+  return toLocalDateKey(next);
+}
+
+function formatCalendarToolbarRangeLabel(viewTab = 'month', anchorDate = '') {
+  const normalizedView = normalizeCalendarViewTab(viewTab);
+  const base = parseCalendarDateKey(anchorDate || toLocalDateKey(new Date()));
+  if (normalizedView === 'day') {
+    return base.toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'long',
+    });
+  }
+  if (normalizedView === 'week') {
+    const weekKeys = buildCalendarWeekDateKeys(toLocalDateKey(base));
+    const start = parseCalendarDateKey(weekKeys[0]);
+    const end = parseCalendarDateKey(weekKeys[weekKeys.length - 1]);
+    const sameYear = start.getFullYear() === end.getFullYear();
+    const sameMonth = sameYear && start.getMonth() === end.getMonth();
+    if (sameMonth) {
+      return `${start.getFullYear()}년 ${start.getMonth() + 1}월 ${start.getDate()}일 - ${end.getDate()}일`;
+    }
+    if (sameYear) {
+      return `${start.getFullYear()}년 ${start.getMonth() + 1}월 ${start.getDate()}일 - ${end.getMonth() + 1}월 ${end.getDate()}일`;
+    }
+    return `${start.getFullYear()}년 ${start.getMonth() + 1}월 ${start.getDate()}일 - ${end.getFullYear()}년 ${end.getMonth() + 1}월 ${end.getDate()}일`;
+  }
+  return `${base.getFullYear()}년 ${base.getMonth() + 1}월`;
+}
+
+function formatCalendarMiniMonthLabel(anchorDate = '') {
+  const base = parseCalendarDateKey(anchorDate || toLocalDateKey(new Date()));
+  return `${base.getFullYear()}년 ${base.getMonth() + 1}월`;
+}
+
+function buildCalendarTimelineHours(startHour = 6, endHour = 23) {
+  return Array.from({ length: Math.max(endHour - startHour, 1) }, (_, index) => startHour + index);
+}
+
+function formatCalendarTimelineHourLabel(hour = 0) {
+  const date = new Date(2026, 0, 1, Number(hour || 0), 0, 0, 0);
+  return date.toLocaleTimeString('ko-KR', {
+    hour: 'numeric',
+    hour12: true,
+  });
+}
+
+function getCalendarNowIndicatorStyle(dateKey = '', { startHour = 6, hourHeight = 52 } = {}) {
+  const now = new Date();
+  if (toLocalDateKey(now) !== String(dateKey || '')) return '';
+  const minutes = (now.getHours() * 60) + now.getMinutes();
+  if (minutes < (startHour * 60)) return '';
+  const top = ((minutes - (startHour * 60)) / 60) * hourHeight;
+  return `top:${top}px;`;
+}
+
+function collectCalendarEventsForDate(events = [], dateKey = '') {
+  const dayStart = new Date(`${dateKey}T00:00:00`);
+  const nextDay = new Date(dayStart);
+  nextDay.setDate(nextDay.getDate() + 1);
+  const allDay = [];
+  const timed = [];
+  (Array.isArray(events) ? events : []).forEach((event) => {
+    const start = new Date(event?.starts_at || '');
+    const end = new Date(event?.ends_at || event?.starts_at || '');
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+    if (end <= dayStart || start >= nextDay) return;
+    if (event?.is_all_day) {
+      allDay.push(event);
+      return;
+    }
+    timed.push(event);
+  });
+  timed.sort((left, right) => new Date(left?.starts_at || 0) - new Date(right?.starts_at || 0));
+  return { allDay, timed };
+}
+
+function getCalendarEventLayoutStyle(event = null, { startHour = 6, hourHeight = 64 } = {}) {
+  const start = new Date(event?.starts_at || '');
+  const end = new Date(event?.ends_at || event?.starts_at || '');
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return 'top:0;height:36px;';
+  }
+  const startMinutes = Math.max((start.getHours() * 60) + start.getMinutes(), startHour * 60);
+  const endMinutes = Math.max((end.getHours() * 60) + end.getMinutes(), startMinutes + 30);
+  const top = ((startMinutes - (startHour * 60)) / 60) * hourHeight;
+  const height = Math.max(((endMinutes - startMinutes) / 60) * hourHeight, 40);
+  return `top:${top}px;height:${height}px;`;
+}
+
+function renderCalendarFilterPopover(workspace) {
+  const containers = Array.isArray(workspace?.containers) ? workspace.containers : [];
+  const selectedId = String(getCalendarSelectedContainer(workspace)?.id || workspace?.selected_container_id || '').trim();
+  const groups = [
+    ['personal', '내 캘린더'],
+    ['team', '팀 캘린더'],
+    ['shared', '공유 캘린더'],
+  ];
+  return `
+    <div class="calendar-filter-popover" role="dialog" aria-label="캘린더 필터">
+      <div class="calendar-filter-popover-head">
+        <strong>표시할 캘린더</strong>
+        <span>${escapeHtml(String(workspace?.scope_label || '운영 범위'))}</span>
+      </div>
+      ${groups.map(([scopeKey, label]) => {
+        const rows = containers.filter((item) => String(item?.scope_type || '').trim().toLowerCase() === scopeKey);
+        if (!rows.length) return '';
+        return `
+          <div class="calendar-filter-group">
+            <span class="calendar-filter-group-label">${label}</span>
+            <div class="calendar-filter-list">
+              ${rows.map((item) => {
+                const isSelected = String(item?.id || '').trim() === selectedId;
+                return `
+                  <button
+                    class="calendar-filter-option ${isSelected ? 'is-selected' : ''}"
+                    type="button"
+                    data-action="calendar-select-container"
+                    data-container-id="${escapeHtml(String(item?.id || ''))}">
+                    <span class="calendar-filter-swatch" style="--calendar-filter-swatch:${escapeHtml(String(item?.color || '#ff7a1a'))}"></span>
+                    <span class="calendar-filter-copy">
+                      <strong>${escapeHtml(String(item?.name || '캘린더'))}</strong>
+                      <span>${escapeHtml(String(item?.owner_label || item?.badge_label || getCalendarScopeTypeLabel(item?.scope_type || '')))}</span>
+                    </span>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderCalendarMonthEventPills(workspace, events = [], selectedEventId = '') {
+  return (Array.isArray(events) ? events : []).slice(0, 3).map((event) => {
+    const container = getCalendarContainerMetaById(workspace, event?.container_id || '');
+    const swatch = String(container?.color || '#ff7a1a').trim() || '#ff7a1a';
+    return `
+      <button
+        class="calendar-month-outlook-event ${String(event?.id || '') === selectedEventId ? 'is-selected' : ''}"
+        type="button"
+        data-action="calendar-select-event"
+        data-event-id="${escapeHtml(String(event?.id || ''))}"
+        style="--calendar-event-accent:${escapeHtml(swatch)}">
+        <span>${escapeHtml(String(event?.title || '일정'))}</span>
+      </button>
+    `;
+  }).join('');
+}
+
+function renderCalendarTimelineColumns(workspace, dateKeys = [], { dayMode = false } = {}) {
+  const eventsByDate = groupCalendarEventsByDate(workspace?.events || []);
+  const selectedEventId = String(ensureCalendarWorkspaceState().selectedEventId || workspace?.selected_event?.id || '').trim();
+  const selectedDate = normalizeAttendanceDate(ensureCalendarWorkspaceState().selectedDate || workspace?.selected_date || workspace?.anchor_date || '') || '';
+  const hours = buildCalendarTimelineHours();
+  const hourHeight = 52;
+  const bodyHeight = hours.length * hourHeight;
+  return `
+    <div class="calendar-timeline-shell ${dayMode ? 'is-day' : 'is-week'}">
+      <div class="calendar-timeline-head">
+        <div class="calendar-timeline-head-spacer"></div>
+        <div class="calendar-timeline-day-heads" style="--calendar-column-count:${dateKeys.length}">
+          ${dateKeys.map((dateKey) => {
+            const date = parseCalendarDateKey(dateKey);
+            const isSelected = selectedDate === dateKey;
+            return `
+              <button class="calendar-timeline-day-head ${isSelected ? 'is-selected' : ''}" type="button" data-action="calendar-select-date" data-date="${escapeHtml(dateKey)}">
+                <span>${escapeHtml(date.toLocaleDateString('ko-KR', { weekday: 'short' }))}</span>
+                <strong>${date.getDate()}일</strong>
+              </button>
+            `;
+          }).join('')}
+        </div>
+      </div>
+      <div class="calendar-timeline-all-day">
+        <div class="calendar-timeline-all-day-label">하루 종일</div>
+        <div class="calendar-timeline-all-day-columns" style="--calendar-column-count:${dateKeys.length}">
+          ${dateKeys.map((dateKey) => {
+            const allDayRows = collectCalendarEventsForDate(eventsByDate[dateKey] || [], dateKey).allDay;
+            return `
+              <div class="calendar-timeline-all-day-column">
+                ${allDayRows.map((event) => {
+                  const container = getCalendarContainerMetaById(workspace, event?.container_id || '');
+                  return `
+                    <button
+                      class="calendar-all-day-pill ${String(event?.id || '') === selectedEventId ? 'is-selected' : ''}"
+                      type="button"
+                      data-action="calendar-select-event"
+                      data-event-id="${escapeHtml(String(event?.id || ''))}"
+                      style="--calendar-event-accent:${escapeHtml(String(container?.color || '#ff7a1a'))}">
+                      ${escapeHtml(String(event?.title || '종일 일정'))}
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+      <div class="calendar-timeline-body">
+        <div class="calendar-timeline-time-rail">
+          ${hours.map((hour) => `<div class="calendar-timeline-hour">${escapeHtml(formatCalendarTimelineHourLabel(hour))}</div>`).join('')}
+        </div>
+        <div class="calendar-timeline-columns" style="--calendar-column-count:${dateKeys.length};--calendar-grid-height:${bodyHeight}px">
+          ${dateKeys.map((dateKey) => {
+            const timedEvents = collectCalendarEventsForDate(eventsByDate[dateKey] || [], dateKey).timed;
+            return `
+              <div class="calendar-timeline-column" data-calendar-column-date="${escapeHtml(dateKey)}">
+                <div class="calendar-timeline-grid">
+                  ${hours.map((hour) => `
+                    <button
+                      class="calendar-time-slot"
+                      type="button"
+                      data-date="${escapeHtml(dateKey)}"
+                      data-hour="${hour}"
+                      aria-label="${escapeHtml(`${dateKey} ${hour}시 일정 생성 영역`)}"></button>
+                  `).join('')}
+                  ${getCalendarNowIndicatorStyle(dateKey, { startHour: 6, hourHeight }) ? `
+                    <div class="calendar-timeline-now-line" style="${getCalendarNowIndicatorStyle(dateKey, { startHour: 6, hourHeight })}"></div>
+                  ` : ''}
+                </div>
+                <div class="calendar-timeline-events">
+                  ${timedEvents.map((event) => {
+                    const container = getCalendarContainerMetaById(workspace, event?.container_id || '');
+                    return `
+                      <button
+                      class="calendar-time-event ${String(event?.id || '') === selectedEventId ? 'is-selected' : ''}"
+                      type="button"
+                      data-action="calendar-select-event"
+                      data-event-id="${escapeHtml(String(event?.id || ''))}"
+                        style="${getCalendarEventLayoutStyle(event, { startHour: 6, hourHeight })} --calendar-event-accent:${escapeHtml(String(container?.color || '#ff7a1a'))};">
+                        <strong>${escapeHtml(String(event?.title || '일정'))}</strong>
+                        <span>${escapeHtml(formatCalendarEventTime(event))}</span>
+                        ${event?.location ? `<em>${escapeHtml(String(event.location))}</em>` : ''}
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function getCalendarContainerMetaById(workspace, containerId = '') {
@@ -43036,43 +46744,10 @@ function renderCalendarEventCard(workspace, event, { compact = false, selected =
 
 function renderCalendarWeekShell(workspace, selectedContainer) {
   const weekKeys = buildCalendarWeekDateKeys(workspace?.anchor_date || workspace?.selected_date || toLocalDateKey(new Date()));
-  const eventsByDate = groupCalendarEventsByDate(workspace?.events || []);
-  const selectedEventId = String(ensureCalendarWorkspaceState().selectedEventId || workspace?.selected_event?.id || '').trim();
   return `
-    <div class="calendar-center-card calendar-week-shell">
-      <div class="calendar-center-toolbar">
-        <div class="calendar-center-toolbar-copy">
-          <span class="calendar-eyebrow">Week</span>
-          <h3>${escapeHtml(String(workspace?.range_label || '주간 보기'))}</h3>
-        </div>
-        <div class="calendar-center-toolbar-meta">
-          <span class="calendar-inline-chip">${escapeHtml(String(workspace?.scope_label || '일정 범위'))}</span>
-          <span class="calendar-inline-chip">${escapeHtml(String(selectedContainer?.name || '캘린더 선택'))}</span>
-          <button class="btn btn-primary" type="button" data-action="calendar-new-event">일정 추가</button>
-        </div>
-      </div>
-      <div class="calendar-day-chip-row">
-        ${weekKeys.map((dateKey) => {
-          const selected = String(workspace?.selected_date || '') === dateKey;
-          return `<button class="calendar-day-chip ${selected ? 'is-selected' : ''}" type="button" data-action="calendar-select-date" data-date="${escapeHtml(dateKey)}">${escapeHtml(formatCalendarDayHeading(dateKey))}</button>`;
-        }).join('')}
-      </div>
-      <div class="calendar-week-grid">
-        ${weekKeys.map((dateKey) => {
-          const rows = Array.isArray(eventsByDate[dateKey]) ? eventsByDate[dateKey] : [];
-          return `
-          <div class="calendar-week-column ${String(workspace?.selected_date || '') === dateKey ? 'is-selected' : ''}">
-            <div class="calendar-week-column-head">${escapeHtml(formatCalendarDayHeading(dateKey))}</div>
-            <div class="calendar-week-column-body">
-              ${rows.length ? rows.map((event) => renderCalendarEventCard(workspace, event, {
-                selected: String(event?.id || '') === selectedEventId,
-              })).join('') : '<div class="calendar-week-empty">등록된 일정이 없습니다.</div>'}
-            </div>
-          </div>
-        `;
-        }).join('')}
-      </div>
-    </div>
+    <section class="calendar-surface calendar-surface-week">
+      ${renderCalendarTimelineColumns(workspace, weekKeys, { dayMode: false })}
+    </section>
   `;
 }
 
@@ -43080,45 +46755,46 @@ function renderCalendarMonthShell(workspace, selectedContainer) {
   const days = Array.isArray(workspace?.mini_month_days) ? workspace.mini_month_days : [];
   const eventsByDate = groupCalendarEventsByDate(workspace?.events || []);
   const selectedEventId = String(ensureCalendarWorkspaceState().selectedEventId || workspace?.selected_event?.id || '').trim();
+  const selectedDate = normalizeAttendanceDate(ensureCalendarWorkspaceState().selectedDate || workspace?.selected_date || workspace?.anchor_date || '') || '';
   return `
-    <div class="calendar-center-card calendar-month-shell">
-      <div class="calendar-center-toolbar">
-        <div class="calendar-center-toolbar-copy">
-          <span class="calendar-eyebrow">Month</span>
-          <h3>${escapeHtml(String(workspace?.range_label || '월간 보기'))}</h3>
-        </div>
-        <div class="calendar-center-toolbar-meta">
-          <span class="calendar-inline-chip">${escapeHtml(String(workspace?.scope_label || '일정 범위'))}</span>
-          <span class="calendar-inline-chip">${escapeHtml(String(selectedContainer?.name || '캘린더'))}</span>
-          <button class="btn btn-primary" type="button" data-action="calendar-new-event">일정 추가</button>
-        </div>
+    <section class="calendar-surface calendar-surface-month">
+      <div class="calendar-month-outlook-weekdays">
+        ${['일', '월', '화', '수', '목', '금', '토'].map((label) => `
+          <span>${escapeHtml(label)}</span>
+        `).join('')}
       </div>
-      <div class="calendar-month-grid">
+      <div class="calendar-month-outlook-grid">
         ${days.map((row) => {
           const dayEvents = Array.isArray(eventsByDate[row?.date]) ? eventsByDate[row?.date] : [];
           const classes = [
-            'calendar-month-cell',
+            'calendar-month-outlook-cell',
             row?.in_month ? '' : 'is-outside',
             row?.is_today ? 'is-today' : '',
-            row?.is_selected ? 'is-selected' : '',
+            String(row?.date || '') === selectedDate ? 'is-selected' : '',
           ].filter(Boolean).join(' ');
           return `
-            <button class="${classes}" type="button" data-action="calendar-select-date" data-date="${escapeHtml(String(row?.date || ''))}">
-              <span class="calendar-month-cell-day">${Number(row?.day || 0)}</span>
-              <span class="calendar-month-cell-copy">${dayEvents.length ? `${dayEvents.length}개 일정` : '일정 없음'}</span>
-              <span class="calendar-month-event-list">
-                ${dayEvents.slice(0, 3).map((event) => `
-                  <span class="calendar-month-event-pill ${String(event?.id || '') === selectedEventId ? 'is-selected' : ''}">
-                    ${escapeHtml(String(event?.title || '일정'))}
-                  </span>
-                `).join('')}
-                ${dayEvents.length > 3 ? `<span class="calendar-month-more">+${dayEvents.length - 3}</span>` : ''}
-              </span>
-            </button>
+            <div class="${classes}" data-calendar-day-cell data-date="${escapeHtml(String(row?.date || ''))}">
+              <button class="calendar-month-outlook-date" type="button" data-action="calendar-select-date" data-date="${escapeHtml(String(row?.date || ''))}">
+                ${Number(row?.day || 0)}
+              </button>
+              <div class="calendar-month-outlook-events">
+                ${renderCalendarMonthEventPills(workspace, dayEvents, selectedEventId)}
+                ${dayEvents.length > 3 ? `<span class="calendar-month-outlook-more">+${dayEvents.length - 3}</span>` : ''}
+              </div>
+            </div>
           `;
         }).join('')}
       </div>
-    </div>
+    </section>
+  `;
+}
+
+function renderCalendarDayShell(workspace) {
+  const dateKey = normalizeAttendanceDate(workspace?.selected_date || workspace?.anchor_date || toLocalDateKey(new Date())) || toLocalDateKey(new Date());
+  return `
+    <section class="calendar-surface calendar-surface-day">
+      ${renderCalendarTimelineColumns(workspace, [dateKey], { dayMode: true })}
+    </section>
   `;
 }
 
@@ -43481,10 +47157,9 @@ function renderCalendarSyncConnectionEditor(workspace, selectedContainer) {
 }
 
 function renderCalendarCenterSurface(workspace, selectedContainer) {
-  const activeTab = normalizeCalendarViewTab(ensureCalendarWorkspaceState().viewTab || workspace?.view || 'week');
+  const activeTab = normalizeCalendarViewTab(ensureCalendarWorkspaceState().viewTab || workspace?.view || 'month');
+  if (activeTab === 'day') return renderCalendarDayShell(workspace);
   if (activeTab === 'month') return renderCalendarMonthShell(workspace, selectedContainer);
-  if (activeTab === 'agenda') return renderCalendarAgendaShell(workspace, selectedContainer);
-  if (activeTab === 'booking-links') return renderCalendarBookingLinksShell(workspace);
   return renderCalendarWeekShell(workspace, selectedContainer);
 }
 
@@ -44245,6 +47920,7 @@ async function saveCalendarEventFromUi() {
     }
     calendarState.draftEvent = null;
     await loadCalendarWorkspace({ force: true });
+    closeCalendarEventModal();
     showToast(editorEvent.id ? '일정이 수정되었습니다.' : '일정을 추가했습니다.', 'success', 2200);
   } finally {
     calendarState.saving = false;
@@ -44266,6 +47942,7 @@ async function deleteSelectedCalendarEvent() {
     calendarState.selectedEventId = '';
     calendarState.draftEvent = null;
     await loadCalendarWorkspace({ force: true });
+    closeCalendarEventModal();
     showToast('일정을 삭제했습니다.', 'success', 2200);
   } finally {
     calendarState.deleting = false;
@@ -44776,25 +48453,233 @@ async function loadCalendarPublicBookingPresenter() {
   return loadCalendarPublicBooking({ force: false });
 }
 
+function renderCalendarLeftRail(workspace) {
+  return `
+    <aside class="calendar-outlook-sidebar">
+      <button class="btn btn-primary calendar-outlook-compose" type="button" data-action="calendar-new-event">새 일정</button>
+      <section class="calendar-outlook-sidebar-panel">
+        <div class="calendar-outlook-sidebar-head">
+          <strong>${escapeHtml(formatCalendarMiniMonthLabel(workspace?.anchor_date || workspace?.selected_date || ''))}</strong>
+        </div>
+        ${renderCalendarMiniMonth(workspace?.mini_month_days || [], ensureCalendarWorkspaceState().selectedDate || workspace?.selected_date)}
+      </section>
+    </aside>
+  `;
+}
+
+function renderCalendarEventModalBody(workspace) {
+  const editorEvent = getCalendarActiveEditorEvent(workspace);
+  if (!editorEvent) return '';
+  const sourceBadge = getCalendarEventSourceBadge(workspace, editorEvent);
+  const readOnly = isCalendarEventReadOnly(workspace, editorEvent);
+  const canSave = Boolean(workspace?.capabilities?.can_create) && !readOnly;
+  const readOnlyAttr = readOnly ? 'readonly' : '';
+  const disabledAttr = readOnly ? 'disabled' : '';
+  const comments = Array.isArray(editorEvent.comments) ? editorEvent.comments : [];
+  return `
+    <div class="calendar-event-modal-body" data-calendar-editor-root="true">
+      <section class="calendar-event-modal-hero">
+        <div>
+          <strong>${escapeHtml(String(editorEvent.title || (editorEvent.id ? '일정 상세' : '새 일정')))}</strong>
+          <p>${escapeHtml(formatCalendarLongDateLabel(getCalendarDateKeyFromValue(editorEvent.starts_at) || workspace?.selected_date || ''))}</p>
+        </div>
+        <div class="calendar-event-badges">
+          ${sourceBadge ? `<span class="calendar-inline-chip source-badge">${escapeHtml(sourceBadge)}</span>` : ''}
+          ${readOnly ? '<span class="calendar-inline-chip readonly-badge">읽기 전용</span>' : ''}
+        </div>
+      </section>
+      <section class="calendar-event-modal-section">
+        <div class="calendar-event-modal-section-head"><strong>기본 정보</strong></div>
+        <div class="calendar-form-grid">
+          <label class="calendar-form-field calendar-form-field-full">
+            <span>제목</span>
+            <input id="calendarTitleInput" type="text" value="${escapeHtml(editorEvent.title || '')}" placeholder="일정 제목" ${readOnlyAttr} />
+          </label>
+          <label class="calendar-form-field">
+            <span>시작</span>
+            <input id="calendarStartsAtInput" type="datetime-local" value="${escapeHtml(formatCalendarDateTimeInputValue(editorEvent.starts_at))}" ${disabledAttr} />
+          </label>
+          <label class="calendar-form-field">
+            <span>종료</span>
+            <input id="calendarEndsAtInput" type="datetime-local" value="${escapeHtml(formatCalendarDateTimeInputValue(editorEvent.ends_at))}" ${disabledAttr} />
+          </label>
+          <label class="calendar-form-field">
+            <span>반복</span>
+            <select id="calendarRecurrenceInput" ${disabledAttr}>
+              <option value="none" ${getCalendarRecurrencePresetFromRule(editorEvent.recurrence_rule) === 'none' ? 'selected' : ''}>반복 안 함</option>
+              <option value="daily" ${getCalendarRecurrencePresetFromRule(editorEvent.recurrence_rule) === 'daily' ? 'selected' : ''}>매일</option>
+              <option value="weekly" ${getCalendarRecurrencePresetFromRule(editorEvent.recurrence_rule) === 'weekly' ? 'selected' : ''}>매주</option>
+              <option value="biweekly" ${getCalendarRecurrencePresetFromRule(editorEvent.recurrence_rule) === 'biweekly' ? 'selected' : ''}>격주</option>
+              <option value="monthly" ${getCalendarRecurrencePresetFromRule(editorEvent.recurrence_rule) === 'monthly' ? 'selected' : ''}>매월</option>
+            </select>
+          </label>
+          <label class="calendar-form-field">
+            <span>가용 상태</span>
+            <select id="calendarAvailabilityInput" ${disabledAttr}>
+              <option value="busy" ${editorEvent.availability_status === 'busy' ? 'selected' : ''}>Busy</option>
+              <option value="free" ${editorEvent.availability_status === 'free' ? 'selected' : ''}>Free</option>
+            </select>
+          </label>
+          <label class="calendar-form-field">
+            <span>공개 범위</span>
+            <select id="calendarVisibilityInput" ${disabledAttr}>
+              <option value="private" ${editorEvent.visibility === 'private' ? 'selected' : ''}>Private</option>
+              <option value="team" ${editorEvent.visibility === 'team' ? 'selected' : ''}>Team</option>
+              <option value="shared" ${editorEvent.visibility === 'shared' ? 'selected' : ''}>Shared</option>
+            </select>
+          </label>
+          <label class="calendar-form-field">
+            <span>회의실</span>
+            <select id="calendarResourceSelect" ${disabledAttr}>
+              <option value="">선택 안 함</option>
+              ${(Array.isArray(workspace?.resources) ? workspace.resources : []).map((row) => `
+                <option value="${escapeHtml(String(row?.id || ''))}" ${String(row?.id || '') === String(editorEvent.resource_id || '') ? 'selected' : ''}>
+                  ${escapeHtml(String(row?.resource_name || '리소스'))}${row?.site_label ? ` · ${escapeHtml(String(row.site_label))}` : ''}
+                </option>
+              `).join('')}
+            </select>
+          </label>
+          <label class="calendar-form-field calendar-form-field-full">
+            <span>장소</span>
+            <input id="calendarLocationInput" type="text" value="${escapeHtml(editorEvent.location || '')}" placeholder="장소 입력" ${readOnlyAttr} />
+          </label>
+          <label class="calendar-form-field">
+            <span>화상회의</span>
+            <input id="calendarConferencingProviderInput" type="text" value="${escapeHtml(editorEvent.conferencing_provider || '')}" placeholder="Google Meet / Teams" ${readOnlyAttr} />
+          </label>
+          <label class="calendar-form-field">
+            <span>링크</span>
+            <input id="calendarConferencingUrlInput" type="url" value="${escapeHtml(editorEvent.conferencing_url || '')}" placeholder="https://..." ${readOnlyAttr} />
+          </label>
+          <label class="calendar-form-field calendar-form-field-full">
+            <span>설명</span>
+            <textarea id="calendarDescriptionInput" rows="5" placeholder="일정 설명" ${readOnlyAttr}>${escapeHtml(editorEvent.description || '')}</textarea>
+          </label>
+        </div>
+      </section>
+      <section class="calendar-event-modal-section">
+        <div class="calendar-event-modal-section-head"><strong>참석자</strong></div>
+        ${renderCalendarSchedulingAssistant(workspace, editorEvent, { readOnly })}
+        ${renderCalendarAttendeeOptions(workspace, editorEvent, { readOnly })}
+      </section>
+      <section class="calendar-event-modal-section">
+        <div class="calendar-event-modal-section-head"><strong>알림</strong></div>
+        ${renderCalendarReminderCheckboxes(editorEvent.reminders)}
+      </section>
+      <section class="calendar-event-modal-section">
+        <div class="calendar-event-modal-section-head"><strong>메모</strong></div>
+        <div class="calendar-detail-form">
+          <label class="calendar-form-field">
+            <span>Shared Notes</span>
+            <textarea id="calendarSharedNoteInput" rows="4" placeholder="팀과 공유할 메모" ${readOnlyAttr}>${escapeHtml(editorEvent.shared_note || '')}</textarea>
+          </label>
+          <label class="calendar-form-field">
+            <span>Private Memo</span>
+            <textarea id="calendarPrivateMemoInput" rows="4" placeholder="개인 메모" ${readOnlyAttr}>${escapeHtml(editorEvent.private_memo || '')}</textarea>
+          </label>
+          <label class="calendar-form-field">
+            <span>Action Items</span>
+            <textarea id="calendarActionItemsInput" rows="4" placeholder="한 줄에 하나씩 입력" ${readOnlyAttr}>${escapeHtml((editorEvent.action_items_text || []).join('\n'))}</textarea>
+          </label>
+        </div>
+      </section>
+      <section class="calendar-event-modal-section">
+        <div class="calendar-event-modal-section-head"><strong>댓글</strong></div>
+        <div class="calendar-comment-thread">
+          ${comments.length ? comments.map((comment) => `
+            <article class="calendar-comment-row ${comment?.is_internal ? 'is-internal' : ''}">
+              <div class="calendar-comment-meta">
+                <strong>${escapeHtml(String(comment?.author_label || '작성자'))}</strong>
+                <span>${escapeHtml(formatProfileStatusDateTime(comment?.created_at || ''))}</span>
+              </div>
+              <p>${escapeHtml(String(comment?.body || ''))}</p>
+            </article>
+          `).join('') : '<div class="calendar-empty-inline">댓글이 없습니다.</div>'}
+        </div>
+        ${canSave ? `
+          <div class="calendar-comment-compose">
+            <label class="calendar-form-field calendar-form-field-full">
+              <span>새 댓글</span>
+              <textarea id="calendarCommentBodyInput" rows="3" placeholder="일정 진행 메모를 남기세요.">${escapeHtml(String(editorEvent.comment_draft_body || ''))}</textarea>
+            </label>
+            <label class="calendar-check-row">
+              <input id="calendarCommentInternalToggle" type="checkbox" ${editorEvent.comment_draft_is_internal ? 'checked' : ''} />
+              <span>내부 메모로 저장</span>
+            </label>
+            <div class="calendar-comment-actions">
+              <button class="btn btn-secondary" type="button" data-action="calendar-post-comment">댓글 남기기</button>
+            </div>
+          </div>
+        ` : ''}
+      </section>
+    </div>
+  `;
+}
+
+function openCalendarEventModal() {
+  const calendarState = ensureCalendarWorkspaceState();
+  const workspace = calendarState.workspace;
+  const editorEvent = getCalendarActiveEditorEvent(workspace);
+  if (!workspace || !editorEvent) return;
+  const contentNode = document.createElement('div');
+  contentNode.innerHTML = renderCalendarEventModalBody(workspace);
+  const readOnly = isCalendarEventReadOnly(workspace, editorEvent);
+  openSheet({
+    title: editorEvent.id ? '일정 상세' : '새 일정',
+    contentNode,
+    actions: [
+      ...(editorEvent.id && !readOnly ? [{ label: '삭제', variant: 'btn-secondary', action: 'calendar-delete-event' }] : []),
+      ...(!readOnly ? [{ label: calendarState.saving ? '저장 중...' : '저장', variant: 'btn-primary', action: 'calendar-save-event' }] : []),
+    ],
+  });
+  $('#appSheet')?.classList.add('sheet-layout-calendar-event');
+  calendarState.eventModalOpen = true;
+}
+
+function closeCalendarEventModal() {
+  const calendarState = ensureCalendarWorkspaceState();
+  calendarState.eventModalOpen = false;
+  closeSheet();
+}
+
+function positionCalendarTimelineViewport(workspace) {
+  const activeTab = normalizeCalendarViewTab(ensureCalendarWorkspaceState().viewTab || workspace?.view || 'month');
+  if (!['day', 'week'].includes(activeTab)) return;
+  const body = document.querySelector('.calendar-timeline-body');
+  if (!(body instanceof HTMLElement)) return;
+  const now = new Date();
+  const visibleDates = activeTab === 'day'
+    ? [normalizeAttendanceDate(workspace?.selected_date || workspace?.anchor_date || '') || '']
+    : buildCalendarWeekDateKeys(workspace?.anchor_date || workspace?.selected_date || toLocalDateKey(now));
+  if (!visibleDates.includes(toLocalDateKey(now))) {
+    body.scrollTop = 0;
+    return;
+  }
+  const startHour = 6;
+  const hourHeight = 52;
+  const minutes = (now.getHours() * 60) + now.getMinutes();
+  const rawTop = ((minutes - (startHour * 60)) / 60) * hourHeight;
+  body.scrollTop = Math.max(0, rawTop - (body.clientHeight * 0.35));
+}
+
 function renderCalendarWorkspace() {
   const calendarState = ensureCalendarWorkspaceState();
+  ensureCalendarFullscreenListener();
   const root = $('#calendarWorkspaceRoot');
   if (!root) return;
+  calendarState.fullscreen = isCalendarFullscreenActive();
   renderCalendarWorkspaceTabs();
   const workspace = calendarState.workspace || null;
   if (calendarState.loading && !workspace) {
     root.innerHTML = `
-      <div class="calendar-shell is-loading">
-        <aside class="calendar-shell-sidebar">
-          <div class="calendar-sidebar-card calendar-loading-card"></div>
-          <div class="calendar-sidebar-card calendar-loading-card"></div>
+      <div class="calendar-outlook-shell is-loading">
+        <aside class="calendar-outlook-sidebar">
+          <div class="calendar-outlook-sidebar-panel calendar-loading-card"></div>
+          <div class="calendar-outlook-sidebar-panel calendar-loading-card"></div>
         </aside>
-        <section class="calendar-shell-main">
-          <div class="calendar-center-card calendar-loading-card"></div>
+        <section class="calendar-outlook-main">
+          <div class="calendar-surface calendar-loading-card"></div>
         </section>
-        <aside class="calendar-shell-detail">
-          <div class="calendar-center-card calendar-loading-card"></div>
-        </aside>
       </div>
     `;
     return;
@@ -44807,92 +48692,45 @@ function renderCalendarWorkspace() {
     root.innerHTML = '<div class="calendar-status-panel">캘린더 초기 구조를 준비하지 못했습니다.</div>';
     return;
   }
-  const containers = Array.isArray(workspace.containers) ? workspace.containers : [];
   const selectedContainer = getCalendarSelectedContainer(workspace);
-  const selectedContainerId = String(selectedContainer?.id || workspace.selected_container_id || '').trim();
-  const bookingLinks = Array.isArray(workspace.booking_links) ? workspace.booking_links : [];
-  const syncConnections = Array.isArray(workspace.sync_connections) ? workspace.sync_connections : [];
-  const templates = Array.isArray(workspace.templates) ? workspace.templates : [];
-  const bookingManageLabel = workspace.capabilities?.can_manage_booking_links ? '생성 가능' : '읽기 전용';
-  const activeTab = normalizeCalendarViewTab(calendarState.viewTab || workspace?.view || 'week');
-  const bookingDetailMode = activeTab === 'booking-links';
-  const bookingPanelMode = calendarState.bookingDetailMode === 'sync' ? 'sync' : 'booking';
   root.innerHTML = `
-    <div class="calendar-shell">
-      <aside class="calendar-shell-sidebar">
-        <section class="calendar-sidebar-card">
-          <div class="calendar-sidebar-card-head">
-            <div>
-              <span class="calendar-sidebar-card-label">미니 월</span>
-              <strong>${escapeHtml(String(workspace.range_label || '캘린더'))}</strong>
-            </div>
-          </div>
-          ${renderCalendarMiniMonth(workspace.mini_month_days || [], calendarState.selectedDate || workspace.selected_date)}
-        </section>
-        <section class="calendar-sidebar-card">
-          <div class="calendar-sidebar-card-head">
-            <div>
-              <span class="calendar-sidebar-card-label">캘린더 목록</span>
-              <strong>${containers.length}개 캘린더</strong>
-            </div>
-            <span class="calendar-inline-chip">${escapeHtml(String(workspace.scope_label || '일정 범위'))}</span>
-          </div>
-          ${renderCalendarContainerGroups(containers, selectedContainerId)}
-        </section>
-        <section class="calendar-sidebar-card">
-          <div class="calendar-sidebar-card-head">
-            <div>
-              <span class="calendar-sidebar-card-label">빠른 도구</span>
-              <strong>예약 · 템플릿</strong>
-            </div>
-            <span class="calendar-inline-chip">${escapeHtml(bookingManageLabel)}</span>
-          </div>
-          <div class="calendar-sidebar-meta">
-            <div><span>예약 링크</span><strong>${bookingLinks.length}</strong></div>
-            <div><span>동기화</span><strong>${syncConnections.length}</strong></div>
-          </div>
-          <div class="calendar-template-list">
-            ${templates.slice(0, 4).map((item) => `
-              <button class="calendar-template-row" type="button" data-action="calendar-apply-template" data-template-code="${escapeHtml(String(item?.code || ''))}">
-                <strong>${escapeHtml(String(item?.label || '템플릿'))}</strong>
-                <span>${escapeHtml(String(item?.description || ''))}</span>
-              </button>
-            `).join('') || '<div class="calendar-empty-inline">템플릿이 없습니다.</div>'}
-            ${templates.length > 4 ? `<div class="calendar-empty-inline">나머지 ${templates.length - 4}개는 필요한 시점에 불러옵니다.</div>` : ''}
-          </div>
-        </section>
-      </aside>
-      <section class="calendar-shell-main">
+    <div class="calendar-outlook-shell">
+      ${renderCalendarLeftRail(workspace)}
+      <section class="calendar-outlook-main">
         ${renderCalendarCenterSurface(workspace, selectedContainer)}
       </section>
-      <aside class="calendar-shell-detail">
-        ${bookingDetailMode ? '' : `
-          <div class="calendar-detail-tabs">
-            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'details' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="details">상세</button>
-            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'attendees' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="attendees">참석자</button>
-            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'reminders' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="reminders">알림</button>
-            <button class="btn btn-secondary ${calendarState.selectedDetailTab === 'notes' ? 'active' : ''}" type="button" data-action="calendar-detail-tab" data-tab="notes">메모</button>
-          </div>
-        `}
-        ${bookingDetailMode
-          ? (bookingPanelMode === 'sync'
-            ? renderCalendarSyncConnectionEditor(workspace, selectedContainer)
-            : renderCalendarBookingLinkEditor(workspace, selectedContainer))
-          : renderCalendarDetailDrawer(workspace, selectedContainer)}
-      </aside>
     </div>
   `;
+  requestAnimationFrame(() => {
+    positionCalendarTimelineViewport(workspace);
+    setTimeout(() => positionCalendarTimelineViewport(workspace), 40);
+  });
+  if (calendarState.eventModalOpen && state.currentView === 'calendar') {
+    requestAnimationFrame(() => {
+      const sheet = $('#appSheet');
+      if (sheet && !sheet.classList.contains('hidden')) {
+        openCalendarEventModal();
+      }
+    });
+  }
 }
 
 async function loadCalendarWorkspace({ force = false, view = '', date = '' } = {}) {
   const calendarState = ensureCalendarWorkspaceState();
   const routeView = resolveCalendarTabFromRoutePath(state.currentRoute || '');
-  const requestedView = normalizeCalendarViewTab(view || routeView || calendarState.viewTab || 'week');
+  const requestedView = normalizeCalendarViewTab(view || routeView || calendarState.viewTab || 'month');
   const requestedDate = normalizeAttendanceDate(date || calendarState.anchorDate || calendarState.selectedDate || '') || toLocalDateKey(new Date());
   calendarState.loading = true;
   calendarState.viewTab = requestedView;
   calendarState.anchorDate = requestedDate;
+  calendarState.selectedDate = requestedDate;
   calendarState.error = '';
+  if (calendarState.workspace && typeof calendarState.workspace === 'object') {
+    calendarState.workspace = syncCalendarWorkspaceSelection(calendarState.workspace, {
+      view: requestedView,
+      date: requestedDate,
+    });
+  }
   renderCalendarWorkspace();
   try {
     const payload = await apiRequest(getCalendarWorkspacePath(requestedView, requestedDate), {
@@ -44984,7 +48822,7 @@ async function loadCalendarWorkspace({ force = false, view = '', date = '' } = {
 
 async function loadCalendarViewPresenter() {
   const calendarState = ensureCalendarWorkspaceState();
-  calendarState.viewTab = normalizeCalendarViewTab(resolveCalendarTabFromRoutePath(state.currentRoute || '') || calendarState.viewTab || 'week');
+  calendarState.viewTab = normalizeCalendarViewTab(resolveCalendarTabFromRoutePath(state.currentRoute || '') || calendarState.viewTab || 'month');
   renderCalendarWorkspace();
   return loadCalendarWorkspace({ force: false });
 }
@@ -47372,6 +51210,25 @@ function serializeAttendanceViewSnapshotPayload() {
       'rangeStart',
       'rangeEnd',
       'rangePreset',
+      'workspaceSection',
+      'periodMode',
+      'statsScope',
+      'statsAttendanceMetric',
+      'statsStaffMetric',
+      'statsStartDate',
+      'statsEndDate',
+      'statsPreset',
+      'statsEmployeeCode',
+      'statsSiteCode',
+      'statsGroupId',
+      'statsRankId',
+      'statsNumericLabels',
+      'employeeFilterDraft',
+      'employeeFilterApplied',
+      'employeeFilterFacet',
+      'siteFilterDraft',
+      'siteFilterApplied',
+      'siteFilterFacet',
       'managerTab',
       'lateThresholdMinutes',
       'earlyLeaveThresholdMinutes',
@@ -47417,6 +51274,25 @@ function restoreAttendanceViewSnapshotPayload(payload = {}) {
       'rangeStart',
       'rangeEnd',
       'rangePreset',
+      'workspaceSection',
+      'periodMode',
+      'statsScope',
+      'statsAttendanceMetric',
+      'statsStaffMetric',
+      'statsStartDate',
+      'statsEndDate',
+      'statsPreset',
+      'statsEmployeeCode',
+      'statsSiteCode',
+      'statsGroupId',
+      'statsRankId',
+      'statsNumericLabels',
+      'employeeFilterDraft',
+      'employeeFilterApplied',
+      'employeeFilterFacet',
+      'siteFilterDraft',
+      'siteFilterApplied',
+      'siteFilterFacet',
       'managerTab',
       'lateThresholdMinutes',
       'earlyLeaveThresholdMinutes',
@@ -47471,11 +51347,9 @@ function serializeRequestsViewSnapshotPayload() {
         'startDate',
         'endDate',
         'rangePreset',
-        'siteFilter',
-        'employeeQuery',
+        'siteFilterValues',
+        'employeeFilterKeys',
         'statusFilter',
-        'subTypeFilter',
-        'actorQuery',
         'sortKey',
         'sortDirection',
         'filtersInitialized',
@@ -47500,17 +51374,22 @@ function serializeRequestsViewSnapshotPayload() {
       'workspaceSection',
       'workspaceStartDate',
       'workspaceEndDate',
-      'workspaceSiteFilter',
-      'workspaceLeaveTypeFilter',
+      'workspaceDateFilterTouched',
+      'workspaceDateDefaultMode',
+      'workspaceSiteFilterValues',
       'workspaceStatusFilter',
+      'workspaceEmployeeKeys',
       'workspaceRequesterQuery',
       'workspaceSortKey',
       'workspaceSortDirection',
-      'usageSiteFilter',
-      'usageTypeFilter',
+      'grantsTab',
+      'usagePolicyFilter',
       'usageSearchQuery',
+      'usageYear',
+      'usageReferenceDate',
       'usageSortKey',
       'usageSortDirection',
+      'policyStatusTab',
       'workspaceSelectedRequestId',
       'workspaceDrawerOpen',
       'workspaceComposerOpen',
@@ -47518,7 +51397,7 @@ function serializeRequestsViewSnapshotPayload() {
   };
 }
 
-function restoreRequestsViewSnapshotPayload(payload = {}) {
+function restoreRequestsViewSnapshotPayload(payload = {}, meta = {}) {
   state.requestsTabView = normalizeRequestsTabView(payload.requestsTabView || state.requestsTabView);
   state.requestsMyFilter = normalizeRequestsMyFilter(payload.requestsMyFilter || state.requestsMyFilter);
   state.requestsManagerTab = normalizeManagerRequestsTab(payload.requestsManagerTab || state.requestsManagerTab);
@@ -47534,11 +51413,11 @@ function restoreRequestsViewSnapshotPayload(payload = {}) {
     'startDate',
     'endDate',
     'rangePreset',
-    'siteFilter',
-    'employeeQuery',
+    'dateFilterTouched',
+    'dateDefaultMode',
+    'siteFilterValues',
+    'employeeFilterKeys',
     'statusFilter',
-    'subTypeFilter',
-    'actorQuery',
     'sortKey',
     'sortDirection',
     'filtersInitialized',
@@ -47571,17 +51450,22 @@ function restoreRequestsViewSnapshotPayload(payload = {}) {
       'workspaceSection',
       'workspaceStartDate',
       'workspaceEndDate',
-      'workspaceSiteFilter',
-      'workspaceLeaveTypeFilter',
+      'workspaceDateFilterTouched',
+      'workspaceDateDefaultMode',
+      'workspaceSiteFilterValues',
       'workspaceStatusFilter',
+      'workspaceEmployeeKeys',
       'workspaceRequesterQuery',
       'workspaceSortKey',
       'workspaceSortDirection',
-      'usageSiteFilter',
-      'usageTypeFilter',
+      'grantsTab',
+      'usagePolicyFilter',
       'usageSearchQuery',
+      'usageYear',
+      'usageReferenceDate',
       'usageSortKey',
       'usageSortDirection',
+      'policyStatusTab',
       'workspaceSelectedRequestId',
       'workspaceDrawerOpen',
       'workspaceComposerOpen',
@@ -47591,6 +51475,16 @@ function restoreRequestsViewSnapshotPayload(payload = {}) {
     (Array.isArray(state.leaveView.rows) ? state.leaveView.rows : [])
       .map((row) => [String(row?.id || '').trim(), row]),
   );
+
+  const routeKey = String(meta?.routeKey || '').trim();
+  if (routeKey && routeKey.startsWith(ROUTE_REQUESTS)) {
+    try {
+      const params = new URLSearchParams(routeKey.split('?')[1] || '');
+      applyRequestsRouteSectionState(params.get('section') || '');
+    } catch {
+      // ignore malformed snapshot route keys
+    }
+  }
 
   renderRequestsTabSections();
   const segment = normalizeRequestsTabView(state.requestsTabView);
@@ -48200,6 +52094,7 @@ function serializeProfileViewSnapshotPayload() {
       'settingsTab',
       'logsTarget',
       'logsSelectedKey',
+      'signatureSourceType',
     ]),
     reminder: pickSerializableFields(state.reminder || createInitialReminderState(), [
       'enabled',
@@ -48228,6 +52123,7 @@ function restoreProfileViewSnapshotPayload(payload = {}) {
       'settingsTab',
       'logsTarget',
       'logsSelectedKey',
+      'signatureSourceType',
     ]),
   };
   state.reminder = {
@@ -48393,6 +52289,11 @@ const VIEW_PRESENTERS = {
     backgroundLoad: () => refreshRequestsForCurrentRole({ silent: true }),
     load: loadRequestsViewPresenter,
   },
+  leave: {
+    loadingMessage: '휴가 데이터를 불러오는 중입니다...',
+    errorMessage: '휴가 데이터를 불러오지 못했습니다.',
+    load: loadLeaveViewPresenter,
+  },
   notices: {
     loadingMessage: '공지사항 화면을 준비하는 중입니다...',
     errorMessage: '공지사항 화면을 준비하지 못했습니다.',
@@ -48445,6 +52346,7 @@ const VIEW_PRESENTERS = {
   calendar: {
     loadingMessage: '캘린더를 준비하는 중입니다...',
     errorMessage: '캘린더 데이터를 불러오지 못했습니다.',
+    skeletonOnlyLoading: true,
     onCacheHit: () => {
       renderCalendarWorkspace();
     },
@@ -48772,11 +52674,12 @@ function showTabRouteFallback(viewName) {
   const view = String(viewName || '').trim();
   if (!view) return;
   const normalizedView = view.toLowerCase();
-  if (normalizedView === 'requests' || normalizedView === 'leave' || normalizedView === 'correction') {
+  if (normalizedView === 'requests' || normalizedView === 'correction') {
     setRequestsTabView(normalizedView);
   }
-  if (normalizedView === REQUESTS_MANAGER_TAB_PENDING || normalizedView === REQUESTS_MANAGER_TAB_PROCESSED || normalizedView === REQUESTS_MANAGER_TAB_SOC) {
-    setManagerRequestsTab(normalizedView);
+  const normalizedManagerView = normalizeManagerRequestsTab(normalizedView);
+  if ([REQUESTS_MANAGER_TAB_PENDING, REQUESTS_MANAGER_TAB_PROCESSED, REQUESTS_MANAGER_TAB_SOC].includes(normalizedManagerView)) {
+    setManagerRequestsTab(normalizedManagerView);
   } else if (isManagerShellRole() && normalizedView === 'requests') {
     setManagerRequestsTab(REQUESTS_MANAGER_TAB_PENDING);
   }
@@ -49955,8 +53858,8 @@ function buildEmployeeDesktopTableRow(item) {
   const phone = String(item.phone || '').trim();
   const roleLabel = getEmployeeRoleLabel(item);
   const employmentMeta = getEmployeeEmploymentStatusMeta(item);
-  const accountMeta = getEmployeeAccountLinkageMeta(item);
   const loginId = getEmployeeLinkedAccountUsername(item);
+  const canWriteEmployees = can('employeeWrite');
 
   appendStackCell({
     title: companyName,
@@ -49983,19 +53886,6 @@ function buildEmployeeDesktopTableRow(item) {
     subtitle: loginId ? 'SOC 계정 사용' : '계정 연결 전',
     className: 'role-cell',
   });
-  const accountTd = document.createElement('td');
-  accountTd.className = 'account-cell';
-  const accountWrap = document.createElement('div');
-  accountWrap.className = 'employee-table-status-stack';
-  accountWrap.appendChild(buildEmployeeDirectoryBadge(accountMeta.label, accountMeta.className));
-  if (loginId) {
-    const loginEl = document.createElement('span');
-    loginEl.className = 'employee-table-cell-subtitle';
-    loginEl.textContent = loginId;
-    accountWrap.appendChild(loginEl);
-  }
-  accountTd.appendChild(accountWrap);
-  tr.appendChild(accountTd);
   const employmentTd = document.createElement('td');
   employmentTd.className = 'employment-cell';
   const employmentWrap = document.createElement('div');
@@ -50015,14 +53905,37 @@ function buildEmployeeDesktopTableRow(item) {
 
   const actionsTd = document.createElement('td');
   actionsTd.className = 'actions-cell';
-  const openBtn = document.createElement('button');
-  openBtn.type = 'button';
-  openBtn.className = 'btn btn-ghost employee-row-open-btn';
-  openBtn.dataset.action = 'employee-open-detail';
-  openBtn.dataset.employeeId = String(item.id || '');
-  openBtn.textContent = '상세';
-  openBtn.setAttribute('aria-label', `${fullName} 상세 열기`);
-  actionsTd.appendChild(openBtn);
+  const actionsWrap = document.createElement('div');
+  actionsWrap.className = 'table-actions employee-row-actions';
+  if (canWriteEmployees) {
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'btn btn-ghost btn-sm employee-row-action-btn';
+    editBtn.dataset.action = 'employee-edit';
+    editBtn.dataset.employeeId = String(item.id || '');
+    editBtn.textContent = '수정';
+    editBtn.setAttribute('aria-label', `${fullName} 수정`);
+    actionsWrap.appendChild(editBtn);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'btn btn-ghost btn-sm employee-row-action-btn employee-row-delete-btn';
+    deleteBtn.dataset.action = 'employee-delete';
+    deleteBtn.dataset.employeeId = String(item.id || '');
+    deleteBtn.textContent = '삭제';
+    deleteBtn.setAttribute('aria-label', `${fullName} 삭제`);
+    actionsWrap.appendChild(deleteBtn);
+  } else {
+    const openBtn = document.createElement('button');
+    openBtn.type = 'button';
+    openBtn.className = 'btn btn-ghost btn-sm employee-row-action-btn';
+    openBtn.dataset.action = 'employee-open-detail';
+    openBtn.dataset.employeeId = String(item.id || '');
+    openBtn.textContent = '보기';
+    openBtn.setAttribute('aria-label', `${fullName} 상세 열기`);
+    actionsWrap.appendChild(openBtn);
+  }
+  actionsTd.appendChild(actionsWrap);
   tr.appendChild(actionsTd);
   return tr;
 }
@@ -50304,8 +54217,6 @@ function renderEmployeeDirectorySummaryStrip(filteredRows = []) {
   const activeCount = Number(employmentCounts.active || 0);
   const inactiveCount = Number(employmentCounts.inactive || 0);
   const retiredDeletedCount = Number(employmentCounts.retired || 0) + Number(employmentCounts.deleted || 0);
-  const linkedCount = rows.filter((item) => getEmployeeAccountLinkageMeta(item).key === 'linked').length;
-  const unlinkedCount = Math.max(0, rows.length - linkedCount);
   const uniqueSiteCount = new Set(
     rows.map((item) => String(item?.site_code || '').trim().toUpperCase()).filter(Boolean),
   ).size;
@@ -50316,7 +54227,6 @@ function renderEmployeeDirectorySummaryStrip(filteredRows = []) {
       return map;
     }, new Map()),
   );
-  const linkedRate = rows.length ? formatOrganizationSummaryPercent(linkedCount, rows.length) : '0%';
   renderOrganizationSummaryStrip('#employeeDirectorySummaryStrip', [
     {
       label: '표시 인원',
@@ -50329,12 +54239,6 @@ function renderEmployeeDirectorySummaryStrip(filteredRows = []) {
       value: `${activeCount}명 재직`,
       meta: rows.length ? `비활성 ${inactiveCount}명 · 퇴직/삭제 ${retiredDeletedCount}명` : '직원 데이터 없음',
       tone: rows.length && retiredDeletedCount === 0 && inactiveCount === 0 ? 'success' : (activeCount > 0 ? 'warn' : ''),
-    },
-    {
-      label: '계정 연결',
-      value: `${linkedCount}명`,
-      meta: unlinkedCount > 0 ? `미연결 ${unlinkedCount}명 · 연결률 ${linkedRate}` : `연결률 ${linkedRate}`,
-      tone: rows.length && unlinkedCount === 0 ? 'success' : (linkedCount > 0 ? 'warn' : ''),
     },
     {
       label: '운영 현장',
@@ -52390,17 +56294,22 @@ function renderEmployeeListRows(rows = [], { emptyTitle = '등록된 직원이 �
   }
 
   const buildEmployeeListNode = (item) => {
+    const canWriteEmployees = can('employeeWrite');
+    const employeeId = String(item.id || '').trim();
+    const fullName = String(item.full_name || '-').trim() || '-';
     const li = document.createElement('li');
     li.classList.add('content-fade-in');
 
     const row = document.createElement('div');
     row.className = 'list-row';
+    row.dataset.action = 'employee-open-detail';
+    row.dataset.employeeId = employeeId;
 
     const main = document.createElement('div');
     main.className = 'list-row-main';
     const titleEl = document.createElement('div');
     titleEl.className = 'list-row-title';
-    titleEl.textContent = `[${String(item.employee_code || '-').trim() || '-'}] ${String(item.full_name || '-').trim() || '-'}`;
+    titleEl.textContent = `[${String(item.employee_code || '-').trim() || '-'}] ${fullName}`;
     const subEl = document.createElement('div');
     subEl.className = 'list-row-sub';
     const siteCode = String(item.site_code || '').trim().toUpperCase();
@@ -52417,15 +56326,36 @@ function renderEmployeeListRows(rows = [], { emptyTitle = '등록된 직원이 �
     row.appendChild(main);
 
     const actions = document.createElement('div');
-    actions.className = 'dev-admin-actions';
+    actions.className = 'dev-admin-actions table-actions';
 
-    const detailBtn = document.createElement('button');
-    detailBtn.type = 'button';
-    detailBtn.className = 'btn btn-ghost';
-    detailBtn.dataset.action = 'employee-open-detail';
-    detailBtn.dataset.employeeId = String(item.id || '');
-    detailBtn.textContent = '상세';
-    actions.appendChild(detailBtn);
+    if (canWriteEmployees) {
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'btn btn-ghost btn-sm employee-row-action-btn';
+      editBtn.dataset.action = 'employee-edit';
+      editBtn.dataset.employeeId = employeeId;
+      editBtn.textContent = '수정';
+      editBtn.setAttribute('aria-label', `${fullName} 수정`);
+      actions.appendChild(editBtn);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'btn btn-ghost btn-sm employee-row-action-btn employee-row-delete-btn';
+      deleteBtn.dataset.action = 'employee-delete';
+      deleteBtn.dataset.employeeId = employeeId;
+      deleteBtn.textContent = '삭제';
+      deleteBtn.setAttribute('aria-label', `${fullName} 삭제`);
+      actions.appendChild(deleteBtn);
+    } else {
+      const detailBtn = document.createElement('button');
+      detailBtn.type = 'button';
+      detailBtn.className = 'btn btn-ghost btn-sm employee-row-action-btn';
+      detailBtn.dataset.action = 'employee-open-detail';
+      detailBtn.dataset.employeeId = employeeId;
+      detailBtn.textContent = '보기';
+      detailBtn.setAttribute('aria-label', `${fullName} 상세 열기`);
+      actions.appendChild(detailBtn);
+    }
 
     row.appendChild(actions);
 
@@ -52465,10 +56395,6 @@ function renderEmployeesFromCache() {
   const statusSelect = $('#employeeEmploymentStatusFilter');
   if (statusSelect instanceof HTMLSelectElement) {
     statusSelect.value = String(state.employeeAdmin?.employmentStatusFilter || 'all').trim();
-  }
-  const sortSelect = $('#employeeSortSelect');
-  if (sortSelect instanceof HTMLSelectElement) {
-    sortSelect.value = getEmployeeSortControlValue();
   }
   renderEmployeeDirectoryCount(filtered);
   renderEmployeeDirectorySummaryStrip(filtered);
@@ -55567,6 +59493,75 @@ function normalizeAttendanceManagerTab(value = '') {
   return 'status';
 }
 
+function normalizeAttendanceWorkspaceSection(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'period' || normalized === 'calendar' || normalized === 'list') return 'period';
+  if (normalized === 'stats' || normalized === 'analytics' || normalized === 'statistic') return 'stats';
+  if (normalized === 'daily' || normalized === 'status' || normalized === 'today') return 'daily';
+  return 'daily';
+}
+
+function normalizeAttendancePeriodMode(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'calendar') return 'calendar';
+  return 'list';
+}
+
+function normalizeAttendanceStatsScope(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'staff-ratio' || normalized === 'staff_ratio' || normalized === 'staffratio') return 'staff-ratio';
+  return 'attendance';
+}
+
+function normalizeAttendanceStatsAttendanceMetric(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'late' || normalized === 'late-rate') return 'late';
+  if (normalized === 'early' || normalized === 'early-leave' || normalized === 'early_leave') return 'early';
+  if (normalized === 'special' || normalized === 'issue' || normalized === 'issues') return 'special';
+  return 'rate';
+}
+
+function normalizeAttendanceStatsStaffMetric(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'hour' || normalized === 'hourly' || normalized === 'time') return 'hour';
+  return 'weekday';
+}
+
+function resolveAttendanceLegacyManagerTabFromWorkspace(view = state.attendanceView) {
+  const currentView = view && typeof view === 'object' ? view : {};
+  const section = normalizeAttendanceWorkspaceSection(currentView.workspaceSection || '');
+  if (section === 'period') {
+    return normalizeAttendancePeriodMode(currentView.periodMode || '') === 'calendar' ? 'calendar' : 'list';
+  }
+  return 'status';
+}
+
+function syncAttendanceLegacyManagerTabFromWorkspace(view = state.attendanceView) {
+  const currentView = view && typeof view === 'object' ? view : null;
+  if (!currentView) return 'status';
+  const nextTab = resolveAttendanceLegacyManagerTabFromWorkspace(currentView);
+  currentView.managerTab = nextTab;
+  return nextTab;
+}
+
+function syncAttendanceWorkspaceStateFromManagerTab(view = state.attendanceView) {
+  const currentView = view && typeof view === 'object' ? view : null;
+  if (!currentView) return 'daily';
+  const managerTab = normalizeAttendanceManagerTab(currentView.managerTab || 'status');
+  if (managerTab === 'calendar') {
+    currentView.workspaceSection = 'period';
+    currentView.periodMode = 'calendar';
+  } else if (managerTab === 'list') {
+    currentView.workspaceSection = 'period';
+    currentView.periodMode = 'list';
+  } else {
+    currentView.workspaceSection = normalizeAttendanceWorkspaceSection(currentView.workspaceSection || 'daily') === 'stats'
+      ? 'stats'
+      : 'daily';
+  }
+  return normalizeAttendanceWorkspaceSection(currentView.workspaceSection || 'daily');
+}
+
 function getAttendanceManagerStorageScope() {
   const tenantCode = String(getTenantCodeForScopedAdminApi() || state.user?.tenant_code || state.user?.tenantCode || 'default').trim().toUpperCase() || 'DEFAULT';
   const userCode = String(state.user?.employee_code || state.user?.username || state.user?.id || 'anonymous').trim().toUpperCase() || 'ANONYMOUS';
@@ -55587,7 +59582,17 @@ function getAttendanceManagerSnapshotStorageKey() {
 
 function resolveAttendanceManagerSnapshotQueryKey(view = state.attendanceView) {
   const currentView = view && typeof view === 'object' ? view : {};
-  const tab = normalizeAttendanceManagerTab(currentView.managerTab || 'status');
+  const section = normalizeAttendanceWorkspaceSection(currentView.workspaceSection || '');
+  if (section === 'stats') {
+    const scope = normalizeAttendanceStatsScope(currentView.statsScope || 'attendance');
+    const start = normalizeAttendanceDate(currentView.statsStartDate || '') || toLocalDateKey(new Date());
+    const end = normalizeAttendanceDate(currentView.statsEndDate || '') || start;
+    const metric = scope === 'attendance'
+      ? normalizeAttendanceStatsAttendanceMetric(currentView.statsAttendanceMetric || 'rate')
+      : normalizeAttendanceStatsStaffMetric(currentView.statsStaffMetric || 'weekday');
+    return `stats:${scope}:${metric}:${start}:${end}`;
+  }
+  const tab = resolveAttendanceLegacyManagerTabFromWorkspace(currentView);
   if (tab === 'calendar') {
     return `calendar:${normalizeMonthKey(currentView.calendarMonth || '') || toMonthKey(new Date())}`;
   }
@@ -55737,7 +59742,14 @@ function persistAttendanceManagerPrefs() {
   if (!state.attendanceView) return;
   try {
     const payload = {
-      managerTab: normalizeAttendanceManagerTab(state.attendanceView.managerTab || 'status'),
+      managerTab: resolveAttendanceLegacyManagerTabFromWorkspace(state.attendanceView),
+      workspaceSection: normalizeAttendanceWorkspaceSection(state.attendanceView.workspaceSection || 'daily'),
+      periodMode: normalizeAttendancePeriodMode(state.attendanceView.periodMode || 'list'),
+      statsScope: normalizeAttendanceStatsScope(state.attendanceView.statsScope || 'attendance'),
+      statsAttendanceMetric: normalizeAttendanceStatsAttendanceMetric(state.attendanceView.statsAttendanceMetric || 'rate'),
+      statsStaffMetric: normalizeAttendanceStatsStaffMetric(state.attendanceView.statsStaffMetric || 'weekday'),
+      statsStartDate: normalizeAttendanceDate(state.attendanceView.statsStartDate || ''),
+      statsEndDate: normalizeAttendanceDate(state.attendanceView.statsEndDate || ''),
       calendarMonth: normalizeMonthKey(state.attendanceView.calendarMonth || ''),
       lateThresholdMinutes: normalizeAttendanceThresholdMinutes(state.attendanceView.lateThresholdMinutes),
       earlyLeaveThresholdMinutes: normalizeAttendanceThresholdMinutes(state.attendanceView.earlyLeaveThresholdMinutes),
@@ -55773,7 +59785,15 @@ function ensureAttendanceManagerPreferencesLoaded() {
   }
   if (state.attendanceView.managerPrefsLoaded) return;
   const prefs = loadAttendanceManagerPrefs();
+  state.attendanceView.workspaceSection = normalizeAttendanceWorkspaceSection(prefs.workspaceSection || state.attendanceView.workspaceSection || 'daily');
+  state.attendanceView.periodMode = normalizeAttendancePeriodMode(prefs.periodMode || state.attendanceView.periodMode || 'list');
+  state.attendanceView.statsScope = normalizeAttendanceStatsScope(prefs.statsScope || state.attendanceView.statsScope || 'attendance');
+  state.attendanceView.statsAttendanceMetric = normalizeAttendanceStatsAttendanceMetric(prefs.statsAttendanceMetric || state.attendanceView.statsAttendanceMetric || 'rate');
+  state.attendanceView.statsStaffMetric = normalizeAttendanceStatsStaffMetric(prefs.statsStaffMetric || state.attendanceView.statsStaffMetric || 'weekday');
+  state.attendanceView.statsStartDate = normalizeAttendanceDate(prefs.statsStartDate || state.attendanceView.statsStartDate || '') || state.attendanceView.statsStartDate;
+  state.attendanceView.statsEndDate = normalizeAttendanceDate(prefs.statsEndDate || state.attendanceView.statsEndDate || '') || state.attendanceView.statsEndDate;
   state.attendanceView.managerTab = normalizeAttendanceManagerTab(prefs.managerTab || state.attendanceView.managerTab || 'status');
+  syncAttendanceWorkspaceStateFromManagerTab(state.attendanceView);
   state.attendanceView.calendarMonth = normalizeMonthKey(prefs.calendarMonth || state.attendanceView.calendarMonth || '') || getMonthFromDateKey(state.attendanceView.date || '') || toMonthKey(new Date());
   state.attendanceView.lateThresholdMinutes = normalizeAttendanceThresholdMinutes(prefs.lateThresholdMinutes ?? state.attendanceView.lateThresholdMinutes);
   state.attendanceView.earlyLeaveThresholdMinutes = normalizeAttendanceThresholdMinutes(prefs.earlyLeaveThresholdMinutes ?? state.attendanceView.earlyLeaveThresholdMinutes);
@@ -55794,6 +59814,8 @@ function clearAttendanceManagerRows() {
   state.attendanceView.managerRowsQueryKey = '';
   state.attendanceView.managerSummary = null;
   state.attendanceView.managerExceptionRows = [];
+  state.attendanceView.managerPendingAttendanceRequests = [];
+  state.attendanceView.managerPendingCorrections = [];
   state.attendanceView.selectedManagerRowKey = '';
 }
 
@@ -55919,6 +59941,10 @@ function resetAttendanceManagerFilters({ syncInputs = true } = {}) {
   state.attendanceView.siteCode = (role === 'supervisor' || role === 'vice_supervisor')
     ? getAttendanceDefaultSiteCode()
     : '';
+  state.attendanceView.employeeFilterDraft = [];
+  state.attendanceView.employeeFilterApplied = [];
+  state.attendanceView.siteFilterDraft = state.attendanceView.siteCode ? [`site:${state.attendanceView.siteCode}`] : [];
+  state.attendanceView.siteFilterApplied = state.attendanceView.siteCode ? [`site:${state.attendanceView.siteCode}`] : [];
   state.attendanceView.statusFilter = 'all';
   state.attendanceView.managerSearchQuery = '';
   state.attendanceView.lateThresholdMinutes = 10;
@@ -55958,31 +59984,372 @@ function getAttendanceDateRange() {
 
 function getAttendanceManagerTab() {
   ensureAttendanceManagerPreferencesLoaded();
-  return normalizeAttendanceManagerTab(state.attendanceView?.managerTab || 'status');
+  return resolveAttendanceLegacyManagerTabFromWorkspace(state.attendanceView);
+}
+
+function normalizeAttendanceFilterToken(rawValue = '') {
+  const text = String(rawValue || '').trim();
+  if (!text.includes(':')) return '';
+  const [facetRaw, ...rest] = text.split(':');
+  const facet = String(facetRaw || '').trim().toLowerCase();
+  const value = rest.join(':').trim();
+  if (!facet || !value) return '';
+  return `${facet}:${value}`;
+}
+
+function parseAttendanceFilterToken(rawValue = '') {
+  const token = normalizeAttendanceFilterToken(rawValue);
+  if (!token) return { facet: '', value: '' };
+  const [facet, ...rest] = token.split(':');
+  return {
+    facet: String(facet || '').trim().toLowerCase(),
+    value: rest.join(':').trim(),
+  };
+}
+
+function uniqAttendanceTokens(values = []) {
+  return Array.from(
+    new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) => normalizeAttendanceFilterToken(value))
+        .filter(Boolean),
+    ),
+  );
+}
+
+function getAttendanceEmployeeGroupLabel(item = null) {
+  return String(
+    item?.group_name
+    || item?.groupName
+    || item?.department_name
+    || item?.departmentName
+    || item?.team_name
+    || item?.teamName
+    || item?.organization_name
+    || item?.organizationName
+    || '미분류 그룹',
+  ).trim() || '미분류 그룹';
+}
+
+function getAttendanceEmployeeRankLabel(item = null) {
+  return String(
+    item?.job_rank_name
+    || item?.jobRankName
+    || item?.approval_rank_name
+    || item?.approvalRankName
+    || item?.position_name
+    || item?.positionName
+    || item?.job_title
+    || item?.jobTitle
+    || item?.role_label
+    || item?.role
+    || '직무/직급 없음',
+  ).trim() || '직무/직급 없음';
+}
+
+function getAttendanceSiteVendorLabel(item = null) {
+  return String(
+    item?.vendor_name
+    || item?.vendorName
+    || item?.company_name
+    || item?.companyName
+    || item?.tenant_name
+    || item?.tenantName
+    || '기본 운영사',
+  ).trim() || '기본 운영사';
+}
+
+function getAttendanceSiteRegionLabel(item = null) {
+  return String(
+    item?.province
+    || item?.state
+    || item?.region_name
+    || item?.regionName
+    || item?.address_region
+    || item?.sido
+    || '기타 지역',
+  ).trim() || '기타 지역';
+}
+
+function getAttendanceSiteCityLabel(item = null) {
+  return String(
+    item?.city
+    || item?.district
+    || item?.gu
+    || item?.address_city
+    || item?.sigungu
+    || getAttendanceSiteRegionLabel(item),
+  ).trim() || getAttendanceSiteRegionLabel(item);
+}
+
+function buildAttendanceEmployeeFilterCatalog() {
+  const employees = Array.isArray(state.attendanceView?.employees) ? state.attendanceView.employees : [];
+  const groups = new Map();
+  const ranks = new Map();
+  employees.forEach((item) => {
+    const employeeCode = String(item?.employee_code || '').trim();
+    if (!employeeCode) return;
+    const employeeName = String(item?.full_name || item?.name || employeeCode).trim() || employeeCode;
+    const groupLabel = getAttendanceEmployeeGroupLabel(item);
+    const rankLabel = getAttendanceEmployeeRankLabel(item);
+    if (!groups.has(groupLabel)) {
+      groups.set(groupLabel, { token: `group:${groupLabel}`, label: groupLabel, count: 0, employees: [] });
+    }
+    if (!ranks.has(rankLabel)) {
+      ranks.set(rankLabel, { token: `rank:${rankLabel}`, label: rankLabel, count: 0, employees: [] });
+    }
+    groups.get(groupLabel).count += 1;
+    groups.get(groupLabel).employees.push({ code: employeeCode, name: employeeName });
+    ranks.get(rankLabel).count += 1;
+    ranks.get(rankLabel).employees.push({ code: employeeCode, name: employeeName });
+  });
+  const sortByLabel = (left, right) => String(left.label || '').localeCompare(String(right.label || ''), 'ko', { numeric: true, sensitivity: 'base' });
+  return {
+    group: [...groups.values()].sort(sortByLabel),
+    rank: [...ranks.values()].sort(sortByLabel),
+  };
+}
+
+function buildAttendanceSiteFilterCatalog() {
+  const sites = Array.isArray(state.attendanceView?.sites) ? state.attendanceView.sites : [];
+  const vendors = new Map();
+  const regions = new Map();
+  const cities = new Map();
+  const siteOptions = [];
+  sites.forEach((item) => {
+    const siteCode = String(item?.site_code || '').trim().toUpperCase();
+    if (!siteCode) return;
+    const siteName = String(item?.site_name || item?.name || siteCode).trim() || siteCode;
+    const vendorLabel = getAttendanceSiteVendorLabel(item);
+    const regionLabel = getAttendanceSiteRegionLabel(item);
+    const cityLabel = getAttendanceSiteCityLabel(item);
+    if (!vendors.has(vendorLabel)) {
+      vendors.set(vendorLabel, { token: `vendor:${vendorLabel}`, label: vendorLabel, count: 0 });
+    }
+    if (!regions.has(regionLabel)) {
+      regions.set(regionLabel, { token: `region:${regionLabel}`, label: regionLabel, count: 0 });
+    }
+    if (!cities.has(cityLabel)) {
+      cities.set(cityLabel, { token: `city:${cityLabel}`, label: cityLabel, count: 0 });
+    }
+    vendors.get(vendorLabel).count += 1;
+    regions.get(regionLabel).count += 1;
+    cities.get(cityLabel).count += 1;
+    siteOptions.push({
+      token: `site:${siteCode}`,
+      label: siteName,
+      description: siteCode,
+      code: siteCode,
+      vendorLabel,
+      regionLabel,
+      cityLabel,
+    });
+  });
+  const sortByLabel = (left, right) => String(left.label || '').localeCompare(String(right.label || ''), 'ko', { numeric: true, sensitivity: 'base' });
+  return {
+    vendor: [...vendors.values()].sort(sortByLabel),
+    region: [...regions.values()].sort(sortByLabel),
+    city: [...cities.values()].sort(sortByLabel),
+    site: siteOptions.sort(sortByLabel),
+  };
+}
+
+function resolveAttendanceAppliedEmployeeCodes(tokens = state.attendanceView?.employeeFilterApplied || []) {
+  const normalizedTokens = uniqAttendanceTokens(tokens);
+  if (!normalizedTokens.length) {
+    const legacyCode = String(state.attendanceView?.employeeCode || '').trim();
+    return legacyCode ? [legacyCode] : [];
+  }
+  const selectedGroups = new Set();
+  const selectedRanks = new Set();
+  normalizedTokens.forEach((token) => {
+    const parsed = parseAttendanceFilterToken(token);
+    if (parsed.facet === 'group') selectedGroups.add(parsed.value);
+    if (parsed.facet === 'rank') selectedRanks.add(parsed.value);
+  });
+  const employees = Array.isArray(state.attendanceView?.employees) ? state.attendanceView.employees : [];
+  return Array.from(
+    new Set(
+      employees
+        .filter((item) => {
+          const employeeCode = String(item?.employee_code || '').trim();
+          if (!employeeCode) return false;
+          if (selectedGroups.size && !selectedGroups.has(getAttendanceEmployeeGroupLabel(item))) return false;
+          if (selectedRanks.size && !selectedRanks.has(getAttendanceEmployeeRankLabel(item))) return false;
+          return true;
+        })
+        .map((item) => String(item?.employee_code || '').trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function resolveAttendanceAppliedSiteCodes(tokens = state.attendanceView?.siteFilterApplied || []) {
+  const normalizedTokens = uniqAttendanceTokens(tokens);
+  if (!normalizedTokens.length) {
+    const legacyCode = String(state.attendanceView?.siteCode || '').trim().toUpperCase();
+    return legacyCode ? [legacyCode] : [];
+  }
+  const selectedSites = new Set();
+  const selectedVendors = new Set();
+  const selectedRegions = new Set();
+  const selectedCities = new Set();
+  normalizedTokens.forEach((token) => {
+    const parsed = parseAttendanceFilterToken(token);
+    if (parsed.facet === 'site') selectedSites.add(parsed.value.toUpperCase());
+    if (parsed.facet === 'vendor') selectedVendors.add(parsed.value);
+    if (parsed.facet === 'region') selectedRegions.add(parsed.value);
+    if (parsed.facet === 'city') selectedCities.add(parsed.value);
+  });
+  const sites = Array.isArray(state.attendanceView?.sites) ? state.attendanceView.sites : [];
+  return Array.from(
+    new Set(
+      sites
+        .filter((item) => {
+          const siteCode = String(item?.site_code || '').trim().toUpperCase();
+          if (!siteCode) return false;
+          if (selectedSites.size && !selectedSites.has(siteCode)) return false;
+          if (selectedVendors.size && !selectedVendors.has(getAttendanceSiteVendorLabel(item))) return false;
+          if (selectedRegions.size && !selectedRegions.has(getAttendanceSiteRegionLabel(item))) return false;
+          if (selectedCities.size && !selectedCities.has(getAttendanceSiteCityLabel(item))) return false;
+          return true;
+        })
+        .map((item) => String(item?.site_code || '').trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function getAttendanceAppliedEmployeeCodes() {
+  return resolveAttendanceAppliedEmployeeCodes();
+}
+
+function getAttendanceAppliedSiteCodes() {
+  return resolveAttendanceAppliedSiteCodes();
+}
+
+function isAttendancePeriodCalendarViewActive() {
+  return state.currentView === 'attendance'
+    && getAttendanceWorkspaceSection() === 'period'
+    && normalizeAttendancePeriodMode(state.attendanceView?.periodMode || 'list') === 'calendar';
+}
+
+function getActiveScheduleCalendarGrid() {
+  if (isAttendancePeriodCalendarViewActive()) {
+    return $('#attendancePeriodCalendarGrid');
+  }
+  return $('#scheduleCalendarGrid');
+}
+
+function getAttendanceWorkspaceSection() {
+  ensureAttendanceManagerPreferencesLoaded();
+  return normalizeAttendanceWorkspaceSection(state.attendanceView?.workspaceSection || 'daily');
+}
+
+function getAttendanceWorkspaceRoute({
+  section = state.attendanceView?.workspaceSection || 'daily',
+  periodMode = state.attendanceView?.periodMode || 'list',
+  statsScope = state.attendanceView?.statsScope || 'attendance',
+  statsAttendanceMetric = state.attendanceView?.statsAttendanceMetric || 'rate',
+  statsStaffMetric = state.attendanceView?.statsStaffMetric || 'weekday',
+} = {}) {
+  const normalizedSection = normalizeAttendanceWorkspaceSection(section);
+  const params = new URLSearchParams();
+  if (normalizedSection !== 'daily') {
+    params.set('section', normalizedSection);
+  }
+  if (normalizedSection === 'period') {
+    params.set('mode', normalizeAttendancePeriodMode(periodMode));
+  }
+  if (normalizedSection === 'stats') {
+    const normalizedScope = normalizeAttendanceStatsScope(statsScope);
+    params.set('scope', normalizedScope);
+    if (normalizedScope === 'attendance') {
+      params.set('metric', normalizeAttendanceStatsAttendanceMetric(statsAttendanceMetric));
+    } else {
+      params.set('staff_metric', normalizeAttendanceStatsStaffMetric(statsStaffMetric));
+    }
+  }
+  const query = params.toString();
+  return query ? `${ROUTE_ATTENDANCE}?${query}` : ROUTE_ATTENDANCE;
 }
 
 function getAttendanceRouteWithTab(tabRaw = '') {
   const tab = normalizeAttendanceManagerTab(tabRaw || getAttendanceManagerTab());
-  return tab === 'status' ? ROUTE_ATTENDANCE : `${ROUTE_ATTENDANCE}?tab=${encodeURIComponent(tab)}`;
+  if (tab === 'calendar') {
+    return getAttendanceWorkspaceRoute({ section: 'period', periodMode: 'calendar' });
+  }
+  if (tab === 'list') {
+    return getAttendanceWorkspaceRoute({ section: 'period', periodMode: 'list' });
+  }
+  return getAttendanceWorkspaceRoute({ section: 'daily' });
 }
 
-function setAttendanceManagerTab(tabRaw = 'status', { syncRoute = false } = {}) {
+function setAttendanceWorkspaceSection(sectionRaw = 'daily', { syncRoute = false } = {}) {
   if (!state.attendanceView) {
     state.attendanceView = createInitialAttendanceViewState();
   }
-  const nextTab = normalizeAttendanceManagerTab(tabRaw);
-  state.attendanceView.managerTab = nextTab;
-  if (nextTab === 'status') {
+  const nextSection = normalizeAttendanceWorkspaceSection(sectionRaw);
+  state.attendanceView.workspaceSection = nextSection;
+  if (nextSection === 'daily') {
     setAttendanceDateRange({
       start: getAttendanceActiveDate(),
       end: getAttendanceActiveDate(),
       preset: 'today',
       syncInputs: false,
     });
-  } else if (nextTab === 'calendar') {
+  } else if (nextSection === 'period') {
+    state.attendanceView.periodMode = normalizeAttendancePeriodMode(state.attendanceView.periodMode || 'list');
     state.attendanceView.calendarMonth = normalizeMonthKey(state.attendanceView.calendarMonth || '') || getMonthFromDateKey(state.attendanceView.date || '') || toMonthKey(new Date());
   }
+  syncAttendanceLegacyManagerTabFromWorkspace(state.attendanceView);
   persistAttendanceManagerPrefs();
+  if (syncRoute) {
+    navigateToRoute(getAttendanceWorkspaceRoute(), { replace: true, silentDeniedModal: true });
+  }
+  return nextSection;
+}
+
+function setAttendancePeriodMode(modeRaw = 'list', { syncRoute = false } = {}) {
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  state.attendanceView.workspaceSection = 'period';
+  state.attendanceView.periodMode = normalizeAttendancePeriodMode(modeRaw);
+  state.attendanceView.calendarMonth = normalizeMonthKey(state.attendanceView.calendarMonth || '') || getMonthFromDateKey(state.attendanceView.date || '') || toMonthKey(new Date());
+  syncAttendanceLegacyManagerTabFromWorkspace(state.attendanceView);
+  persistAttendanceManagerPrefs();
+  if (syncRoute) {
+    navigateToRoute(getAttendanceWorkspaceRoute(), { replace: true, silentDeniedModal: true });
+  }
+  return state.attendanceView.periodMode;
+}
+
+function setAttendanceStatsScope(scopeRaw = 'attendance', { syncRoute = false } = {}) {
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  state.attendanceView.workspaceSection = 'stats';
+  state.attendanceView.statsScope = normalizeAttendanceStatsScope(scopeRaw);
+  syncAttendanceLegacyManagerTabFromWorkspace(state.attendanceView);
+  persistAttendanceManagerPrefs();
+  if (syncRoute) {
+    navigateToRoute(getAttendanceWorkspaceRoute(), { replace: true, silentDeniedModal: true });
+  }
+  return state.attendanceView.statsScope;
+}
+
+function setAttendanceManagerTab(tabRaw = 'status', { syncRoute = false } = {}) {
+  const nextTab = normalizeAttendanceManagerTab(tabRaw);
+  if (nextTab === 'calendar') {
+    setAttendanceWorkspaceSection('period', { syncRoute: false });
+    setAttendancePeriodMode('calendar', { syncRoute: false });
+  } else if (nextTab === 'list') {
+    setAttendanceWorkspaceSection('period', { syncRoute: false });
+    setAttendancePeriodMode('list', { syncRoute: false });
+  } else {
+    setAttendanceWorkspaceSection('daily', { syncRoute: false });
+  }
   if (syncRoute) {
     navigateToRoute(getAttendanceRouteWithTab(nextTab), { replace: true, silentDeniedModal: true });
   }
@@ -55990,6 +60357,12 @@ function setAttendanceManagerTab(tabRaw = 'status', { syncRoute = false } = {}) 
 }
 
 function getAttendanceManagerFetchRange() {
+  const section = getAttendanceWorkspaceSection();
+  if (section === 'stats') {
+    const start = normalizeAttendanceDate(state.attendanceView?.statsStartDate || '') || toLocalDateKey(new Date());
+    const end = normalizeAttendanceDate(state.attendanceView?.statsEndDate || '') || start;
+    return { start, end };
+  }
   const tab = getAttendanceManagerTab();
   if (tab === 'status') {
     const dateKey = getAttendanceActiveDate();
@@ -56036,13 +60409,19 @@ function syncAttendanceManagerFilterInputs() {
     state.attendanceView = createInitialAttendanceViewState();
   }
   if (!canUseAttendanceManagerFilter()) return;
+  const section = getAttendanceWorkspaceSection();
+  const periodMode = normalizeAttendancePeriodMode(state.attendanceView.periodMode || 'list');
+  const statsScope = normalizeAttendanceStatsScope(state.attendanceView.statsScope || 'attendance');
+  const statsAttendanceMetric = normalizeAttendanceStatsAttendanceMetric(state.attendanceView.statsAttendanceMetric || 'rate');
+  const statsStaffMetric = normalizeAttendanceStatsStaffMetric(state.attendanceView.statsStaffMetric || 'weekday');
   const employeeSelect = $('#attendanceEmployeeSelect');
   const siteSelect = $('#attendanceSiteSelect');
   const statusSelect = $('#attendanceStatusSelect');
-  const searchInput = $('#attendanceSearchInput');
-  const sortSelect = $('#attendanceSortSelect');
   const statusDateInput = $('#attendanceStatusDateInput');
   const calendarMonthInput = $('#attendanceCalendarMonthInput');
+  const periodRangeTrigger = $('#attendancePeriodRangeTrigger');
+  const statsRangeTrigger = $('#attendanceStatsRangeTrigger');
+  const periodModeTabs = $('#attendancePeriodModeInlineTabs');
   const lateThresholdSelect = $('#attendanceLateThresholdSelect');
   const earlyThresholdSelect = $('#attendanceEarlyThresholdSelect');
   if (employeeSelect instanceof HTMLSelectElement) {
@@ -56054,17 +60433,28 @@ function syncAttendanceManagerFilterInputs() {
   if (statusSelect instanceof HTMLSelectElement) {
     statusSelect.value = normalizeAttendanceStatusFilter(state.attendanceView.statusFilter || 'all');
   }
-  if (searchInput instanceof HTMLInputElement) {
-    searchInput.value = String(state.attendanceView.managerSearchQuery || '').trim();
-  }
-  if (sortSelect instanceof HTMLSelectElement) {
-    sortSelect.value = getAttendanceManagerSortControlValue();
-  }
+  state.attendanceView.managerSearchQuery = '';
   if (statusDateInput instanceof HTMLInputElement) {
     statusDateInput.value = getAttendanceActiveDate();
   }
   if (calendarMonthInput instanceof HTMLInputElement) {
     calendarMonthInput.value = normalizeMonthKey(state.attendanceView.calendarMonth || '') || getMonthFromDateKey(getAttendanceActiveDate()) || toMonthKey(new Date());
+  }
+  if (periodRangeTrigger instanceof HTMLElement) {
+    const range = getAttendanceDateRange();
+    periodRangeTrigger.textContent = buildAttendanceRangeTriggerLabel(range.start, range.end);
+  }
+  if (statsRangeTrigger instanceof HTMLElement) {
+    const start = normalizeAttendanceDate(state.attendanceView.statsStartDate || '') || normalizeAttendanceDate(state.attendanceView.rangeStart || '') || '';
+    const end = normalizeAttendanceDate(state.attendanceView.statsEndDate || '') || normalizeAttendanceDate(state.attendanceView.rangeEnd || '') || start;
+    statsRangeTrigger.textContent = buildAttendanceRangeTriggerLabel(start, end);
+  }
+  if (periodModeTabs instanceof HTMLElement) {
+    periodModeTabs.querySelectorAll('[data-action="attendance-switch-period-mode"]').forEach((button) => {
+      const active = normalizeAttendancePeriodMode(button?.dataset?.mode || 'list') === periodMode;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
   }
   if (lateThresholdSelect instanceof HTMLSelectElement) {
     lateThresholdSelect.value = String(normalizeAttendanceThresholdMinutes(state.attendanceView.lateThresholdMinutes));
@@ -56072,28 +60462,30 @@ function syncAttendanceManagerFilterInputs() {
   if (earlyThresholdSelect instanceof HTMLSelectElement) {
     earlyThresholdSelect.value = String(normalizeAttendanceThresholdMinutes(state.attendanceView.earlyLeaveThresholdMinutes));
   }
-  setAttendanceDateRange({
-    start: state.attendanceView.rangeStart,
-    end: state.attendanceView.rangeEnd,
-    preset: state.attendanceView.rangePreset || 'today',
-    syncInputs: true,
-  });
-  document.querySelectorAll('[data-action="attendance-range-preset"]').forEach((button) => {
-    const preset = normalizeAttendanceRangePreset(button?.dataset?.range || '');
-    button.classList.toggle('active', preset === normalizeAttendanceRangePreset(state.attendanceView.rangePreset || 'today'));
-    button.setAttribute('aria-pressed', button.classList.contains('active') ? 'true' : 'false');
-  });
-  document.querySelectorAll('[data-action="attendance-status-preset"]').forEach((button) => {
-    const range = String(button?.dataset?.range || '').trim().toLowerCase();
-    const active = (range === 'today' && getAttendanceActiveDate() === toLocalDateKey(new Date()))
-      || (range === 'yesterday' && getAttendanceActiveDate() === toLocalDateKey(new Date(Date.now() - 86400000)));
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', active ? 'true' : 'false');
-  });
+  const statsTitle = $('#attendanceStatsPanelTitle');
+  if (statsTitle instanceof HTMLElement) {
+    if (statsScope === 'attendance') {
+      const labelMap = {
+        rate: '출근율 통계',
+        late: '지각률 통계',
+        early: '조퇴율 통계',
+        special: '출퇴근 특이사항 통계',
+      };
+      statsTitle.textContent = labelMap[statsAttendanceMetric] || '출퇴근 통계';
+    } else {
+      statsTitle.textContent = statsStaffMetric === 'hour'
+        ? '근무 직원 비율 · 시간별'
+        : '근무 직원 비율 · 요일별';
+    }
+  }
+  if (section === 'period' && periodMode === 'calendar') {
+    state.schedule.month = normalizeMonthKey(state.attendanceView.calendarMonth || '') || state.schedule.month || toMonthKey(new Date());
+  }
   renderAttendanceWorkspaceTabs();
   renderAttendanceWorkspaceHeader();
   renderAttendanceToolbarVisibility();
   renderAttendanceManagerPanelVisibility();
+  renderAttendanceFilterMeta();
 }
 
 function normalizeAttendanceManagerSortKey(sortKey = '') {
@@ -56766,6 +61158,73 @@ function buildAttendanceRangeLabel(startRaw = '', endRaw = '') {
   return `${toDateLabel(start)} ~ ${toDateLabel(end)}`;
 }
 
+function formatAttendanceControlDateLabel(rawValue = '') {
+  const dateKey = normalizeAttendanceDate(rawValue);
+  if (!dateKey) return '';
+  const date = new Date(`${dateKey}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return '';
+  const weekday = ['일', '월', '화', '수', '목', '금', '토'][date.getDay()];
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')} (${weekday})`;
+}
+
+function buildAttendanceRangeTriggerLabel(startRaw = '', endRaw = '') {
+  const start = normalizeAttendanceDate(startRaw);
+  const end = normalizeAttendanceDate(endRaw);
+  if (!start || !end) return '기간 선택';
+  if (start === end) return formatAttendanceControlDateLabel(start);
+  return `${formatAttendanceControlDateLabel(start)} ~ ${formatAttendanceControlDateLabel(end)}`;
+}
+
+function buildAttendanceSheetDateRange(targetRaw = 'period') {
+  const target = String(targetRaw || '').trim().toLowerCase() === 'stats' ? 'stats' : 'period';
+  if (target === 'stats') {
+    const start = normalizeAttendanceDate(state.attendanceView?.statsStartDate || '') || normalizeAttendanceDate(state.attendanceView?.rangeStart || '') || toLocalDateKey(new Date());
+    const end = normalizeAttendanceDate(state.attendanceView?.statsEndDate || '') || normalizeAttendanceDate(state.attendanceView?.rangeEnd || '') || start;
+    return { target, start, end };
+  }
+  const range = getAttendanceDateRange();
+  return {
+    target,
+    start: normalizeAttendanceDate(range.start || '') || toLocalDateKey(new Date()),
+    end: normalizeAttendanceDate(range.end || '') || normalizeAttendanceDate(range.start || '') || toLocalDateKey(new Date()),
+  };
+}
+
+function openAttendanceRangeSheet(targetRaw = 'period') {
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  const { target, start, end } = buildAttendanceSheetDateRange(targetRaw);
+  state.attendanceView.rangeSheetTarget = target;
+  const wrapper = document.createElement('div');
+  wrapper.className = 'attendance-range-sheet';
+  wrapper.innerHTML = `
+    <div class="attendance-range-sheet-summary">
+      <strong>${escapeHtml(buildAttendanceRangeTriggerLabel(start, end))}</strong>
+      <span>${target === 'stats' ? '통계 조회 범위를 선택합니다.' : '기간별 조회 범위를 선택합니다.'}</span>
+    </div>
+    <div class="attendance-range-sheet-fields">
+      <label class="input-field attendance-range-sheet-field">
+        <span>시작일</span>
+        <input id="attendanceRangeSheetStart" type="date" value="${escapeHtml(start)}" />
+      </label>
+      <label class="input-field attendance-range-sheet-field">
+        <span>종료일</span>
+        <input id="attendanceRangeSheetEnd" type="date" value="${escapeHtml(end)}" />
+      </label>
+    </div>
+  `;
+  openSheet({
+    title: '기간',
+    contentNode: wrapper,
+    layoutClass: 'sheet-layout-requests-filter',
+    actions: [
+      { label: '취소', variant: 'btn-secondary', action: 'sheet-close' },
+      { label: '적용', variant: 'btn-primary', action: 'attendance-apply-range-sheet' },
+    ],
+  });
+}
+
 function buildAttendanceLeaveMap(rows = [], dateKeys = new Set()) {
   const map = new Map();
   (Array.isArray(rows) ? rows : []).forEach((row) => {
@@ -57100,32 +61559,22 @@ function buildAttendanceManagerRows({
 
 function getFilteredAttendanceManagerRows(rows = [], { applyStatus = true } = {}) {
   const list = Array.isArray(rows) ? rows : [];
-  const employeeCode = String(state.attendanceView?.employeeCode || '').trim();
-  const siteCode = String(state.attendanceView?.siteCode || '').trim().toUpperCase();
+  const employeeCodes = getAttendanceAppliedEmployeeCodes();
+  const siteCodes = getAttendanceAppliedSiteCodes();
   const statusFilter = normalizeAttendanceStatusFilter(state.attendanceView?.statusFilter || 'all');
-  const searchQuery = String(state.attendanceView?.managerSearchQuery || '').trim().toLowerCase();
   const sortKey = normalizeAttendanceManagerSortKey(state.attendanceView?.managerSortKey || '');
   const sortDirection = normalizeAttendanceManagerSortDirection(state.attendanceView?.managerSortDirection || '');
   let filtered = list;
-  if (employeeCode) {
-    filtered = filtered.filter((row) => String(row?.employeeCode || '').trim() === employeeCode);
+  if (employeeCodes.length) {
+    const allowed = new Set(employeeCodes);
+    filtered = filtered.filter((row) => allowed.has(String(row?.employeeCode || '').trim()));
   }
-  if (siteCode) {
-    filtered = filtered.filter((row) => String(row?.siteCode || '').trim().toUpperCase() === siteCode);
+  if (siteCodes.length) {
+    const allowed = new Set(siteCodes);
+    filtered = filtered.filter((row) => allowed.has(String(row?.siteCode || '').trim().toUpperCase()));
   }
   if (applyStatus && statusFilter !== 'all') {
     filtered = filtered.filter((row) => String(row?.statusCode || '').trim() === statusFilter);
-  }
-  if (searchQuery) {
-    filtered = filtered.filter((row) => [
-      row?.employeeName,
-      row?.employeeCode,
-      row?.companyName,
-      row?.siteName,
-      row?.siteCode,
-      row?.statusLabel,
-      row?.processingState,
-    ].some((value) => String(value || '').toLowerCase().includes(searchQuery)));
   }
   if (sortKey && sortDirection) {
     filtered = [...filtered].sort((leftRow, rightRow) => {
@@ -57308,7 +61757,7 @@ function getAttendanceExceptionReasons(row = null) {
 function getAttendanceExceptionHelpText() {
   const criteria = ATTENDANCE_EXCEPTION_RULES.map((item) => item.label).join(', ');
   const order = ATTENDANCE_EXCEPTION_RULES.map((item) => item.label).join(' → ');
-  return `예외 큐는 현재 기간·현장·직원·검색 범위에서 상태 필터와 무관하게 ${criteria}에 해당하는 기록만 추려 최대 ${ATTENDANCE_EXCEPTION_PREVIEW_LIMIT}건 먼저 보여줍니다. 우선순위는 ${order} 순서입니다.`;
+  return `예외 큐는 현재 기간·현장·직원 범위에서 상태 필터와 무관하게 ${criteria}에 해당하는 기록만 추려 최대 ${ATTENDANCE_EXCEPTION_PREVIEW_LIMIT}건 먼저 보여줍니다. 우선순위는 ${order} 순서입니다.`;
 }
 
 function setAttendanceExceptionHelpOpen(open) {
@@ -57852,18 +62301,27 @@ function renderAttendanceSupportSections(row = null) {
 }
 
 function renderAttendanceFilterMeta() {
-  if (canUseAttendanceManagerFilter()) {
-    const metaEl = $('#attendanceFilterMeta');
-    if (metaEl) {
-      metaEl.textContent = '';
-      metaEl.classList.add('hidden');
+  const employeeTrigger = $('#attendanceEmployeeFilterTrigger');
+  const siteTrigger = $('#attendanceSiteFilterTrigger');
+  const employeeTokens = uniqAttendanceTokens(state.attendanceView?.employeeFilterApplied || []);
+  const siteTokens = uniqAttendanceTokens(state.attendanceView?.siteFilterApplied || []);
+  if (employeeTrigger instanceof HTMLElement) {
+    if (!employeeTokens.length) {
+      employeeTrigger.textContent = '직원';
+    } else if (employeeTokens.length === 1) {
+      employeeTrigger.textContent = parseAttendanceFilterToken(employeeTokens[0]).value || '직원';
+    } else {
+      employeeTrigger.textContent = `직원 ${employeeTokens.length}`;
     }
-    return;
   }
-  const metaEl = $('#attendanceEmployeeFilterMeta');
-  if (metaEl) {
-    metaEl.textContent = '';
-    metaEl.classList.add('hidden');
+  if (siteTrigger instanceof HTMLElement) {
+    if (!siteTokens.length) {
+      siteTrigger.textContent = '근무지';
+    } else if (siteTokens.length === 1) {
+      siteTrigger.textContent = parseAttendanceFilterToken(siteTokens[0]).value || '근무지';
+    } else {
+      siteTrigger.textContent = `근무지 ${siteTokens.length}`;
+    }
   }
 }
 
@@ -57899,6 +62357,11 @@ function renderAttendanceManagerFilterOptions() {
       state.attendanceView.siteCode = getAttendanceDefaultSiteCode();
     }
   }
+  if (!Array.isArray(state.attendanceView?.siteFilterApplied) || !state.attendanceView.siteFilterApplied.length) {
+    const legacySiteCode = String(state.attendanceView?.siteCode || '').trim().toUpperCase();
+    state.attendanceView.siteFilterApplied = legacySiteCode ? [`site:${legacySiteCode}`] : [];
+    state.attendanceView.siteFilterDraft = [...state.attendanceView.siteFilterApplied];
+  }
   syncAttendanceManagerFilterInputs();
 }
 
@@ -57906,16 +62369,18 @@ function getScopedAttendanceRecords(rows = []) {
   let list = Array.isArray(rows) ? rows : [];
   const ownEmployeeCode = String(state.user?.employee_code || '').trim();
   const managerFilter = canUseAttendanceManagerFilter();
-  const employeeFilter = managerFilter
-    ? String(state.attendanceView?.employeeCode || '').trim()
-    : ownEmployeeCode;
-  const siteFilter = managerFilter ? String(state.attendanceView?.siteCode || '').trim() : '';
+  const employeeFilters = managerFilter
+    ? getAttendanceAppliedEmployeeCodes()
+    : (ownEmployeeCode ? [ownEmployeeCode] : []);
+  const siteFilters = managerFilter ? getAttendanceAppliedSiteCodes() : [];
 
-  if (employeeFilter) {
-    list = list.filter((row) => String(row?.employee_code || '').trim() === employeeFilter);
+  if (employeeFilters.length) {
+    const allowed = new Set(employeeFilters);
+    list = list.filter((row) => allowed.has(String(row?.employee_code || '').trim()));
   }
-  if (siteFilter) {
-    list = list.filter((row) => String(row?.site_code || '').trim() === siteFilter);
+  if (siteFilters.length) {
+    const allowed = new Set(siteFilters);
+    list = list.filter((row) => allowed.has(String(row?.site_code || '').trim().toUpperCase()));
   }
   return list;
 }
@@ -57924,16 +62389,18 @@ function getScopedOvertimeRows(rows = []) {
   let list = Array.isArray(rows) ? rows : [];
   const ownEmployeeCode = String(state.user?.employee_code || '').trim();
   const managerFilter = canUseAttendanceManagerFilter();
-  const employeeFilter = managerFilter
-    ? String(state.attendanceView?.employeeCode || '').trim()
-    : ownEmployeeCode;
-  const siteFilter = managerFilter ? String(state.attendanceView?.siteCode || '').trim() : '';
+  const employeeFilters = managerFilter
+    ? getAttendanceAppliedEmployeeCodes()
+    : (ownEmployeeCode ? [ownEmployeeCode] : []);
+  const siteFilters = managerFilter ? getAttendanceAppliedSiteCodes() : [];
 
-  if (employeeFilter) {
-    list = list.filter((row) => String(row?.employee_code || '').trim() === employeeFilter);
+  if (employeeFilters.length) {
+    const allowed = new Set(employeeFilters);
+    list = list.filter((row) => allowed.has(String(row?.employee_code || '').trim()));
   }
-  if (siteFilter) {
-    list = list.filter((row) => String(row?.site_code || '').trim() === siteFilter);
+  if (siteFilters.length) {
+    const allowed = new Set(siteFilters);
+    list = list.filter((row) => allowed.has(String(row?.site_code || '').trim().toUpperCase()));
   }
   return list;
 }
@@ -57941,14 +62408,15 @@ function getScopedOvertimeRows(rows = []) {
 function getScopedAppleOvertimeRows(rows = []) {
   let list = Array.isArray(rows) ? rows : [];
   const managerFilter = canUseAttendanceManagerFilter();
-  const siteFilter = managerFilter ? String(state.attendanceView?.siteCode || '').trim() : '';
-  if (siteFilter) {
-    list = list.filter((row) => String(row?.site_code || '').trim() === siteFilter);
+  const siteFilters = managerFilter ? getAttendanceAppliedSiteCodes() : [];
+  if (siteFilters.length) {
+    const allowed = new Set(siteFilters);
+    list = list.filter((row) => allowed.has(String(row?.site_code || '').trim().toUpperCase()));
   }
   if (!managerFilter) {
     const ownUserId = String(state.user?.id || '').trim();
     list = list.filter((row) => String(row?.leader_user_id || '').trim() === ownUserId);
-  } else if (String(state.attendanceView?.employeeCode || '').trim()) {
+  } else if (getAttendanceAppliedEmployeeCodes().length) {
     // apple OT는 employee_code가 없어 직원 필터가 켜진 경우 혼선 방지를 위해 숨김.
     list = [];
   }
@@ -57959,15 +62427,17 @@ function getScopedLeaveRows(rows = []) {
   let list = Array.isArray(rows) ? rows : [];
   const ownEmployeeCode = String(state.user?.employee_code || '').trim();
   const managerFilter = canUseAttendanceManagerFilter();
-  const employeeFilter = managerFilter
-    ? String(state.attendanceView?.employeeCode || '').trim()
-    : ownEmployeeCode;
-  const siteFilter = managerFilter ? String(state.attendanceView?.siteCode || '').trim() : '';
-  if (employeeFilter) {
-    list = list.filter((row) => String(row?.employee_code || '').trim() === employeeFilter);
+  const employeeFilters = managerFilter
+    ? getAttendanceAppliedEmployeeCodes()
+    : (ownEmployeeCode ? [ownEmployeeCode] : []);
+  const siteFilters = managerFilter ? getAttendanceAppliedSiteCodes() : [];
+  if (employeeFilters.length) {
+    const allowed = new Set(employeeFilters);
+    list = list.filter((row) => allowed.has(String(row?.employee_code || '').trim()));
   }
-  if (siteFilter) {
-    list = list.filter((row) => String(row?.site_code || '').trim() === siteFilter);
+  if (siteFilters.length) {
+    const allowed = new Set(siteFilters);
+    list = list.filter((row) => allowed.has(String(row?.site_code || '').trim().toUpperCase()));
   }
   return list;
 }
@@ -58008,73 +62478,194 @@ async function ensureAttendanceFilterOptionsLoaded() {
 }
 
 async function openAttendanceFilterSheet() {
+  await openAttendanceEmployeeFilterSheet();
+}
+
+async function openAttendanceEmployeeFilterSheet() {
   if (!canUseAttendanceManagerFilter()) return;
   await ensureAttendanceFilterOptionsLoaded();
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  state.attendanceView.employeeFilterDraft = uniqAttendanceTokens(
+    Array.isArray(state.attendanceView.employeeFilterApplied) && state.attendanceView.employeeFilterApplied.length
+      ? state.attendanceView.employeeFilterApplied
+      : [],
+  );
+  state.attendanceView.employeeFilterFacet = ['group', 'rank'].includes(String(state.attendanceView.employeeFilterFacet || '').trim())
+    ? state.attendanceView.employeeFilterFacet
+    : 'group';
 
   const wrapper = document.createElement('div');
-  wrapper.className = 'stack';
-  const employeeSelectId = 'attendanceFilterEmployeeSelect';
-  const siteSelectId = 'attendanceFilterSiteSelect';
+  wrapper.className = 'requests-filter-sheet attendance-filter-sheet';
+  const nav = document.createElement('div');
+  nav.className = 'requests-filter-sheet-nav';
+  const body = document.createElement('div');
+  body.className = 'requests-filter-sheet-body';
+  wrapper.appendChild(nav);
+  wrapper.appendChild(body);
 
-  const employeeField = document.createElement('label');
-  employeeField.className = 'input-field';
-  employeeField.textContent = '직원';
-  const employeeSelect = document.createElement('select');
-  employeeSelect.id = employeeSelectId;
-  employeeSelect.innerHTML = '<option value="">전체 직원</option>';
-  (Array.isArray(state.attendanceView?.employees) ? state.attendanceView.employees : []).forEach((item) => {
-    const code = String(item?.employee_code || '').trim();
-    if (!code) return;
-    const option = document.createElement('option');
-    option.value = code;
-    option.textContent = `${code}${item?.full_name ? ` · ${item.full_name}` : ''}`;
-    employeeSelect.appendChild(option);
-  });
-  employeeSelect.value = String(state.attendanceView?.employeeCode || '').trim();
-  employeeField.appendChild(employeeSelect);
-  wrapper.appendChild(employeeField);
+  const render = () => {
+    const catalog = buildAttendanceEmployeeFilterCatalog();
+    const facet = String(state.attendanceView.employeeFilterFacet || 'group').trim() === 'rank' ? 'rank' : 'group';
+    const options = catalog[facet] || [];
+    nav.innerHTML = `
+      <div class="attendance-simple-filter-head">
+        <strong>조건</strong>
+        <button type="button" class="btn btn-secondary requests-filter-sheet-reset" data-role="employee-filter-reset">초기화</button>
+      </div>
+      <button type="button" class="btn btn-secondary attendance-simple-filter-facet${facet === 'group' ? ' active' : ''}" data-role="employee-filter-facet" data-facet="group">
+        <span>그룹</span>
+        <small>전체</small>
+      </button>
+      <button type="button" class="btn btn-secondary attendance-simple-filter-facet${facet === 'rank' ? ' active' : ''}" data-role="employee-filter-facet" data-facet="rank">
+        <span>직무·직급</span>
+        <small>전체</small>
+      </button>
+    `;
+    body.innerHTML = `
+      <div class="attendance-simple-filter-pane">
+        <div class="attendance-simple-filter-pane-head">
+          <strong>${facet === 'group' ? '그룹' : '직무·직급'}</strong>
+        </div>
+        <div class="attendance-simple-filter-option-list">
+          ${options.length ? options.map((item) => `
+            <label class="attendance-simple-filter-option${state.attendanceView.employeeFilterDraft.includes(item.token) ? ' is-selected' : ''}">
+              <input type="checkbox" value="${escapeHtml(item.token)}" ${state.attendanceView.employeeFilterDraft.includes(item.token) ? 'checked' : ''} />
+              <span class="attendance-simple-filter-option-copy">
+                <strong>${escapeHtml(item.label)}</strong>
+                <span>${item.count}명</span>
+              </span>
+            </label>
+          `).join('') : '<div class="attendance-simple-filter-empty">선택 가능한 항목이 없습니다.</div>'}
+        </div>
+      </div>
+    `;
+    nav.querySelector('[data-role="employee-filter-reset"]')?.addEventListener('click', () => {
+      state.attendanceView.employeeFilterDraft = [];
+      render();
+    });
+    nav.querySelectorAll('[data-role="employee-filter-facet"]').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.attendanceView.employeeFilterFacet = String(button.dataset.facet || 'group');
+        render();
+      });
+    });
+    body.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+      checkbox.addEventListener('change', () => {
+        const token = normalizeAttendanceFilterToken(checkbox.value || '');
+        const next = new Set(state.attendanceView.employeeFilterDraft || []);
+        if (checkbox.checked) next.add(token);
+        else next.delete(token);
+        state.attendanceView.employeeFilterDraft = uniqAttendanceTokens([...next]);
+      });
+    });
+  };
 
-  const siteField = document.createElement('label');
-  siteField.className = 'input-field';
-  siteField.textContent = '현장';
-  const siteSelect = document.createElement('select');
-  siteSelect.id = siteSelectId;
-  siteSelect.innerHTML = '<option value="">전체 현장</option>';
-  (Array.isArray(state.attendanceView?.sites) ? state.attendanceView.sites : []).forEach((item) => {
-    const code = String(item?.site_code || '').trim();
-    if (!code) return;
-    const option = document.createElement('option');
-    option.value = code;
-    option.textContent = `${code}${item?.site_name ? ` · ${item.site_name}` : ''}`;
-    siteSelect.appendChild(option);
-  });
-  siteSelect.value = String(state.attendanceView?.siteCode || '').trim();
-  siteField.appendChild(siteSelect);
-  wrapper.appendChild(siteField);
-
-  const actions = document.createElement('div');
-  actions.className = 'quick-actions';
-  const applyBtn = document.createElement('button');
-  applyBtn.type = 'button';
-  applyBtn.className = 'btn btn-primary';
-  applyBtn.textContent = '필터 적용';
-  applyBtn.dataset.action = 'attendance-filter-apply';
-  applyBtn.dataset.employeeSelectId = employeeSelectId;
-  applyBtn.dataset.siteSelectId = siteSelectId;
-  actions.appendChild(applyBtn);
-
-  const clearBtn = document.createElement('button');
-  clearBtn.type = 'button';
-  clearBtn.className = 'btn btn-secondary';
-  clearBtn.textContent = '필터 초기화';
-  clearBtn.dataset.action = 'attendance-filter-clear';
-  actions.appendChild(clearBtn);
-  wrapper.appendChild(actions);
-
+  render();
   openSheet({
-    title: '직원/현장 필터',
+    title: '직원 필터',
     contentNode: wrapper,
-    actions: [{ label: '닫기', variant: 'btn-secondary', action: 'sheet-close' }],
+    layoutClass: 'sheet-layout-requests-filter',
+    actions: [
+      { label: '취소', variant: 'btn-secondary', action: 'sheet-close' },
+      { label: '적용', variant: 'btn-primary', action: 'attendance-apply-employee-filter-sheet' },
+    ],
+  });
+}
+
+async function openAttendanceSiteFilterSheet() {
+  if (!canUseAttendanceManagerFilter()) return;
+  await ensureAttendanceFilterOptionsLoaded();
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  state.attendanceView.siteFilterDraft = uniqAttendanceTokens(
+    Array.isArray(state.attendanceView.siteFilterApplied) && state.attendanceView.siteFilterApplied.length
+      ? state.attendanceView.siteFilterApplied
+      : [],
+  );
+  state.attendanceView.siteFilterFacet = ['vendor', 'region', 'city', 'site'].includes(String(state.attendanceView.siteFilterFacet || '').trim())
+    ? state.attendanceView.siteFilterFacet
+    : 'vendor';
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'requests-filter-sheet attendance-filter-sheet';
+  const nav = document.createElement('div');
+  nav.className = 'requests-filter-sheet-nav';
+  const body = document.createElement('div');
+  body.className = 'requests-filter-sheet-body';
+  wrapper.appendChild(nav);
+  wrapper.appendChild(body);
+
+  const render = () => {
+    const catalog = buildAttendanceSiteFilterCatalog();
+    const facet = ['vendor', 'region', 'city', 'site'].includes(String(state.attendanceView.siteFilterFacet || '').trim())
+      ? state.attendanceView.siteFilterFacet
+      : 'vendor';
+    const options = catalog[facet] || [];
+    nav.innerHTML = `
+      <div class="attendance-simple-filter-head">
+        <strong>조건</strong>
+        <button type="button" class="btn btn-secondary requests-filter-sheet-reset" data-role="site-filter-reset">초기화</button>
+      </div>
+      <button type="button" class="btn btn-secondary attendance-simple-filter-facet${facet === 'vendor' ? ' active' : ''}" data-role="site-filter-facet" data-facet="vendor"><span>유통사</span><small>전체</small></button>
+      <button type="button" class="btn btn-secondary attendance-simple-filter-facet${facet === 'region' ? ' active' : ''}" data-role="site-filter-facet" data-facet="region"><span>도</span><small>전체</small></button>
+      <button type="button" class="btn btn-secondary attendance-simple-filter-facet${facet === 'city' ? ' active' : ''}" data-role="site-filter-facet" data-facet="city"><span>도시</span><small>전체</small></button>
+      <button type="button" class="btn btn-secondary attendance-simple-filter-facet${facet === 'site' ? ' active' : ''}" data-role="site-filter-facet" data-facet="site"><span>근무지</span><small>전체</small></button>
+    `;
+    body.innerHTML = `
+      <div class="attendance-simple-filter-pane">
+        <div class="attendance-simple-filter-pane-head">
+          <strong>${facet === 'site' ? '근무지' : '범위'}</strong>
+        </div>
+        <div class="attendance-simple-filter-option-list">
+          ${options.length ? options.map((item) => `
+            <label class="attendance-simple-filter-option${state.attendanceView.siteFilterDraft.includes(item.token) ? ' is-selected' : ''}">
+              <input type="checkbox" value="${escapeHtml(item.token)}" ${state.attendanceView.siteFilterDraft.includes(item.token) ? 'checked' : ''} />
+              <span class="attendance-simple-filter-option-copy">
+                <strong>${escapeHtml(item.label)}</strong>
+                <span>${escapeHtml(
+                  facet === 'site'
+                    ? [item.vendorLabel, item.regionLabel, item.cityLabel, item.code].filter(Boolean).join(' · ')
+                    : (item.description || `${item.count || 0}곳`)
+                )}</span>
+              </span>
+            </label>
+          `).join('') : '<div class="attendance-simple-filter-empty">선택 가능한 항목이 없습니다.</div>'}
+        </div>
+      </div>
+    `;
+    nav.querySelector('[data-role="site-filter-reset"]')?.addEventListener('click', () => {
+      state.attendanceView.siteFilterDraft = [];
+      render();
+    });
+    nav.querySelectorAll('[data-role="site-filter-facet"]').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.attendanceView.siteFilterFacet = String(button.dataset.facet || 'vendor');
+        render();
+      });
+    });
+    body.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+      checkbox.addEventListener('change', () => {
+        const token = normalizeAttendanceFilterToken(checkbox.value || '');
+        const next = new Set(state.attendanceView.siteFilterDraft || []);
+        if (checkbox.checked) next.add(token);
+        else next.delete(token);
+        state.attendanceView.siteFilterDraft = uniqAttendanceTokens([...next]);
+      });
+    });
+  };
+
+  render();
+  openSheet({
+    title: '근무지 필터',
+    contentNode: wrapper,
+    layoutClass: 'sheet-layout-requests-filter',
+    actions: [
+      { label: '취소', variant: 'btn-secondary', action: 'sheet-close' },
+      { label: '적용', variant: 'btn-primary', action: 'attendance-apply-site-filter-sheet' },
+    ],
   });
 }
 
@@ -58146,47 +62737,89 @@ function renderAttendanceWorkspaceHeader() {
     subtitleEl.textContent = '';
     subtitleEl.classList.add('hidden');
   }
+  const section = getAttendanceWorkspaceSection();
+  const periodMode = normalizeAttendancePeriodMode(state.attendanceView?.periodMode || 'list');
+  const correctionBtn = $('#attendanceCorrectionBtn');
+  const exportBtn = $('#attendanceExportBtn');
+  const refreshBtn = document.querySelector('#view-attendance [data-action="attendance-refresh"]');
+  const actionsWrap = document.querySelector('#view-attendance .workspace-head-actions');
+  const showCorrection = (can('attendance') || can('attendanceReview') || can('leaveReview'))
+    && (section === 'daily' || (section === 'period' && periodMode === 'list'));
+  if (correctionBtn instanceof HTMLElement) {
+    correctionBtn.classList.toggle('hidden', !showCorrection);
+  }
+  if (exportBtn instanceof HTMLElement) {
+    exportBtn.classList.add('hidden');
+  }
+  if (refreshBtn instanceof HTMLElement) {
+    refreshBtn.classList.add('hidden');
+  }
+  if (actionsWrap instanceof HTMLElement) {
+    const hasVisibleAction = [...actionsWrap.children].some((child) => child instanceof HTMLElement && !child.classList.contains('hidden'));
+    actionsWrap.classList.toggle('hidden', !hasVisibleAction);
+  }
 }
 
 function renderAttendanceWorkspaceTabs() {
-  const tab = getAttendanceManagerTab();
+  const section = getAttendanceWorkspaceSection();
+  const periodMode = normalizeAttendancePeriodMode(state.attendanceView?.periodMode || 'list');
   const wrapper = $('#attendanceWorkspaceTabs');
-  if (!(wrapper instanceof HTMLElement)) return;
-  wrapper.querySelectorAll('[data-action="attendance-switch-tab"]').forEach((button) => {
-    const buttonTab = normalizeAttendanceManagerTab(button?.dataset?.tab || 'status');
-    const active = buttonTab === tab;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', active ? 'true' : 'false');
-  });
+  if (wrapper instanceof HTMLElement) {
+    wrapper.querySelectorAll('[data-action="attendance-switch-section"]').forEach((button) => {
+      const active = normalizeAttendanceWorkspaceSection(button?.dataset?.section || 'daily') === section;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+  const subnav = $('#attendanceWorkspaceSubnav');
+  if (subnav instanceof HTMLElement) {
+    subnav.classList.add('hidden');
+    subnav.setAttribute('aria-hidden', 'true');
+  }
+  const inlinePeriodTabs = $('#attendancePeriodModeInlineTabs');
+  if (inlinePeriodTabs instanceof HTMLElement) {
+    inlinePeriodTabs.classList.toggle('hidden', section !== 'period');
+    inlinePeriodTabs.querySelectorAll('[data-action="attendance-switch-period-mode"]').forEach((button) => {
+      const active = normalizeAttendancePeriodMode(button?.dataset?.mode || 'list') === periodMode;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
 }
 
 function renderAttendanceToolbarVisibility() {
-  const tab = getAttendanceManagerTab();
-  const showOptions = tab === 'calendar' || tab === 'list';
-  toggleVisibility('#attendanceToolbarStatusFields', tab === 'status');
-  toggleVisibility('#attendanceToolbarCalendarFields', tab === 'calendar');
-  toggleVisibility('#attendanceToolbarListFields', tab === 'list');
-  toggleVisibility('#attendanceToolbarOptionsCluster', showOptions);
-  toggleVisibility('#attendanceLateThresholdField', tab === 'calendar' || tab === 'list');
-  toggleVisibility('#attendanceEarlyThresholdField', tab === 'calendar' || tab === 'list');
-  toggleVisibility('#attendanceSortField', tab === 'list');
+  const section = getAttendanceWorkspaceSection();
+  const periodMode = normalizeAttendancePeriodMode(state.attendanceView?.periodMode || 'list');
+  toggleVisibility('#attendanceToolbarStatusFields', section === 'daily');
+  toggleVisibility('#attendanceToolbarCalendarFields', section === 'period');
+  toggleVisibility('#attendanceToolbarListFields', section === 'stats');
+  toggleVisibility('#attendancePeriodListControls', section === 'period' && periodMode === 'list');
+  toggleVisibility('#attendancePeriodCalendarControls', section === 'period' && periodMode === 'calendar');
+  toggleVisibility('#attendanceLateThresholdField', false);
+  toggleVisibility('#attendanceEarlyThresholdField', false);
+  toggleVisibility('#attendanceSortField', false);
 }
 
 function renderAttendanceManagerPanelVisibility() {
   const tab = getAttendanceManagerTab();
+  const section = getAttendanceWorkspaceSection();
+  const periodMode = normalizeAttendancePeriodMode(state.attendanceView?.periodMode || 'list');
   const showWorkspace = tab === 'status' || tab === 'list';
   const v2ManagerReady = typeof window === 'undefined'
     ? true
     : window.__RG_ARLS_ATTENDANCE_V2_MANAGER_READY__ === true;
   const useV2ManagerLayout = v2ManagerReady
     && canUseAttendanceManagerFilter()
+    && section !== 'stats'
+    && !(section === 'period' && periodMode === 'calendar')
     && ['status', 'list', 'calendar'].includes(tab);
-  if (canUseAttendanceManagerFilter() && !v2ManagerReady) {
+  if (canUseAttendanceManagerFilter() && !v2ManagerReady && section !== 'stats') {
     toggleVisibility('#attendanceManagerWorkspace', false);
     toggleVisibility('#attendanceStatusPanel', false);
     toggleVisibility('#attendanceCalendarPanel', false);
     toggleVisibility('#attendanceListPanel', false);
     toggleVisibility('#attendanceAdminDetailPanel', false);
+    toggleVisibility('#attendanceStatsPanel', false);
     return;
   }
   const workspace = $('#attendanceManagerWorkspace');
@@ -58199,11 +62832,21 @@ function renderAttendanceManagerPanelVisibility() {
   if (calendarPanel instanceof HTMLElement) {
     calendarPanel.classList.toggle('is-attendance-v2-calendar', useV2ManagerLayout && tab === 'calendar');
   }
-  toggleVisibility('#attendanceManagerWorkspace', showWorkspace);
-  toggleVisibility('#attendanceStatusPanel', tab === 'status');
-  toggleVisibility('#attendanceCalendarPanel', tab === 'calendar');
-  toggleVisibility('#attendanceListPanel', tab === 'list' || (useV2ManagerLayout && tab === 'status'));
-  toggleVisibility('#attendanceAdminDetailPanel', showWorkspace);
+  if (section === 'stats') {
+    toggleVisibility('#attendanceManagerWorkspace', false);
+    toggleVisibility('#attendanceStatusPanel', false);
+    toggleVisibility('#attendanceCalendarPanel', false);
+    toggleVisibility('#attendanceListPanel', false);
+    toggleVisibility('#attendanceAdminDetailPanel', false);
+    toggleVisibility('#attendanceStatsPanel', true);
+    return;
+  }
+  toggleVisibility('#attendanceStatsPanel', false);
+  toggleVisibility('#attendanceManagerWorkspace', section === 'daily' || (section === 'period' && periodMode === 'list'));
+  toggleVisibility('#attendanceStatusPanel', section === 'daily');
+  toggleVisibility('#attendanceCalendarPanel', section === 'period' && periodMode === 'calendar');
+  toggleVisibility('#attendanceListPanel', (section === 'period' && periodMode === 'list') || (useV2ManagerLayout && section === 'daily'));
+  toggleVisibility('#attendanceAdminDetailPanel', section === 'daily' || (section === 'period' && periodMode === 'list'));
 }
 
 function buildAttendanceCalendarEmployeeGroups(rows = []) {
@@ -58471,6 +63114,8 @@ function renderAttendanceManagerTableRows(rows = [], { loading = false } = {}) {
 }
 
 function renderAttendanceManagerWorkspace({ rows = [], scopedRows = [], loading = false } = {}) {
+  const section = getAttendanceWorkspaceSection();
+  const periodMode = normalizeAttendancePeriodMode(state.attendanceView?.periodMode || 'list');
   const summary = buildAttendanceManagerSummary(scopedRows);
   const exceptions = buildAttendanceManagerExceptionRows(scopedRows);
   const selectedRow = getSelectedAttendanceManagerRow(rows);
@@ -58482,7 +63127,11 @@ function renderAttendanceManagerWorkspace({ rows = [], scopedRows = [], loading 
   renderAttendanceWorkspaceTabs();
   renderAttendanceToolbarVisibility();
   renderAttendanceManagerPanelVisibility();
-  if (tab === 'status') {
+  if (section === 'stats') {
+    renderAttendanceStatsWorkspace(scopedRows, { loading });
+  } else if (section === 'period' && periodMode === 'calendar') {
+    renderAttendancePeriodCalendarWorkspace({ loading });
+  } else if (tab === 'status') {
     renderAttendanceManagerKpiStrip(summary, scopedRows);
     renderAttendanceManagerExceptions(exceptions, { loading });
     renderAttendanceStatusRecordList(rows, { loading });
@@ -58491,7 +63140,7 @@ function renderAttendanceManagerWorkspace({ rows = [], scopedRows = [], loading 
   } else {
     renderAttendanceManagerTableRows(rows, { loading });
   }
-  if (tab === 'status' || tab === 'list') {
+  if (section !== 'stats' && !(section === 'period' && periodMode === 'calendar') && (tab === 'status' || tab === 'list')) {
     if (!selectedRow || loading) {
       renderAttendanceManagerDrawer(null);
     } else {
@@ -58502,6 +63151,436 @@ function renderAttendanceManagerWorkspace({ rows = [], scopedRows = [], loading 
   if (exportBtn instanceof HTMLButtonElement) {
     exportBtn.disabled = !rows.length;
   }
+}
+
+function getAttendanceStatsDateKeys() {
+  const start = normalizeAttendanceDate(state.attendanceView?.statsStartDate || '') || toLocalDateKey(new Date());
+  const end = normalizeAttendanceDate(state.attendanceView?.statsEndDate || '') || start;
+  if (start > end) {
+    return buildDateKeysBetween(end, start);
+  }
+  return buildDateKeysBetween(start, end);
+}
+
+function buildAttendanceStatsBuckets(rows = []) {
+  const map = new Map();
+  const dateKeys = getAttendanceStatsDateKeys();
+  dateKeys.forEach((dateKey) => {
+    map.set(dateKey, []);
+  });
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const dateKey = normalizeAttendanceDate(row?.dateKey || row?.baseDate || row?.date || '');
+    if (!dateKey) return;
+    if (!map.has(dateKey)) {
+      map.set(dateKey, []);
+    }
+    map.get(dateKey).push(row);
+  });
+  return {
+    dateKeys: dateKeys.length ? dateKeys : Array.from(map.keys()).sort(),
+    rowsByDate: map,
+  };
+}
+
+function buildAttendanceStatsDaySnapshot(rows = []) {
+  const list = Array.isArray(rows) ? rows : [];
+  const summary = buildAttendanceManagerSummary(list);
+  const dashboard = buildAttendanceStatusDashboard(list, summary);
+  const specialCount = list.filter((row) => (
+    row?.hasMissingIn
+    || row?.hasMissingOut
+    || row?.hasLocationIssue
+    || row?.hasAttendanceWithoutSchedule
+    || row?.isEdited
+    || Number(row?.pendingCount || 0) > 0
+  )).length;
+  const workingTarget = Math.max(0, Number(dashboard.workingTarget || 0));
+  const rowCount = Math.max(0, list.length);
+  const baseDenominator = workingTarget || rowCount || 1;
+  return {
+    workingTarget,
+    rowCount,
+    attendanceRate: Math.round(Number(dashboard.attendanceRate || 0) * 10) / 10,
+    lateRate: Math.round(((Number(dashboard.late || 0) / baseDenominator) * 100) * 10) / 10,
+    earlyRate: Math.round(((Number(dashboard.earlyLeave || 0) / baseDenominator) * 100) * 10) / 10,
+    specialRate: Math.round(((specialCount / baseDenominator) * 100) * 10) / 10,
+    specialCount,
+  };
+}
+
+function buildAttendanceStatsAttendanceMetricSeries(rows = [], metric = 'rate') {
+  const normalizedMetric = normalizeAttendanceStatsAttendanceMetric(metric);
+  const { dateKeys, rowsByDate } = buildAttendanceStatsBuckets(rows);
+  const titleMap = {
+    rate: '출근율',
+    late: '지각률',
+    early: '조퇴율',
+    special: '출퇴근 특이사항',
+  };
+  const descriptionMap = {
+    rate: '기간별 출근 완료 비율입니다.',
+    late: '예정 근무 대비 지각 비율입니다.',
+    early: '예정 근무 대비 조퇴 비율입니다.',
+    special: '특이사항 발생 비율입니다.',
+  };
+  const labels = dateKeys.map((dateKey) => {
+    const date = new Date(`${dateKey}T00:00:00`);
+    return `${date.getMonth() + 1}.${date.getDate()}(${['일', '월', '화', '수', '목', '금', '토'][date.getDay()]})`;
+  });
+  const values = dateKeys.map((dateKey) => {
+    const snapshot = buildAttendanceStatsDaySnapshot(rowsByDate.get(dateKey) || []);
+    if (normalizedMetric === 'late') return snapshot.lateRate;
+    if (normalizedMetric === 'early') return snapshot.earlyRate;
+    if (normalizedMetric === 'special') return snapshot.specialRate;
+    return snapshot.attendanceRate;
+  });
+  return {
+    title: titleMap[normalizedMetric] || '출퇴근 통계',
+    description: descriptionMap[normalizedMetric] || '기간별 출퇴근 흐름입니다.',
+    labels,
+    rawLabels: dateKeys,
+    values,
+    percent: true,
+    legend: [
+      {
+        key: normalizedMetric,
+        label: titleMap[normalizedMetric] || '출퇴근 통계',
+        color: '#ff7a1a',
+        active: true,
+      },
+    ],
+    tableHeader: ['날짜', '비율'],
+    tableRows: labels.map((label, index) => [label, `${values[index].toFixed(1)}%`]),
+    fileStem: `attendance_${normalizedMetric}`,
+  };
+}
+
+function buildAttendanceStatsStaffMetricSeries(rows = [], metric = 'weekday') {
+  const normalizedMetric = normalizeAttendanceStatsStaffMetric(metric);
+  const { dateKeys, rowsByDate } = buildAttendanceStatsBuckets(rows);
+  if (normalizedMetric === 'hour') {
+    const totalRows = Math.max(1, (Array.isArray(rows) ? rows : []).filter((row) => Boolean(row?.scheduleRow)).length || (Array.isArray(rows) ? rows.length : 0) || 1);
+    const hourlyCounts = Array.from({ length: 24 }, () => 0);
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const scheduleRow = row?.scheduleRow || null;
+      const startMinutes = getAttendanceComparableMinutes(normalizeAttendanceClockValue(scheduleRow?.start_time || ''));
+      const endMinutes = getAttendanceComparableMinutes(normalizeAttendanceClockValue(scheduleRow?.end_time || ''));
+      if (Number.isFinite(startMinutes) && Number.isFinite(endMinutes) && endMinutes > startMinutes) {
+        for (let hour = 0; hour < 24; hour += 1) {
+          const bucketStart = hour * 60;
+          const bucketEnd = bucketStart + 60;
+          if (startMinutes < bucketEnd && endMinutes > bucketStart) {
+            hourlyCounts[hour] += 1;
+          }
+        }
+        return;
+      }
+      const checkInMinutes = getAttendanceComparableMinutes(normalizeAttendanceClockValue(row?.checkInLabel || ''));
+      if (Number.isFinite(checkInMinutes)) {
+        const hour = Math.max(0, Math.min(23, Math.floor(checkInMinutes / 60)));
+        hourlyCounts[hour] += 1;
+      }
+    });
+    const labels = Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, '0')}:00`);
+    const values = hourlyCounts.map((count) => Math.round(((count / totalRows) * 100) * 10) / 10);
+    return {
+      title: '근무 직원 비율 · 시간별',
+      description: '선택 기간의 시간대별 근무 분포입니다.',
+      labels,
+      rawLabels: labels,
+      values,
+      percent: true,
+      legend: [{ key: 'staff-hour', label: '전체', color: '#ff7a1a', active: true }],
+      tableHeader: ['시간', '비율'],
+      tableRows: labels.map((label, index) => [label, `${values[index].toFixed(1)}%`]),
+      fileStem: 'attendance_staff_ratio_hour',
+    };
+  }
+
+  const weekdayLabels = ['일', '월', '화', '수', '목', '금', '토'];
+  const buckets = Array.from({ length: 7 }, () => ({ sum: 0, count: 0 }));
+  dateKeys.forEach((dateKey) => {
+    const snapshot = buildAttendanceStatsDaySnapshot(rowsByDate.get(dateKey) || []);
+    const date = new Date(`${dateKey}T00:00:00`);
+    const day = date.getDay();
+    buckets[day].sum += snapshot.attendanceRate;
+    buckets[day].count += 1;
+  });
+  const values = buckets.map((bucket) => bucket.count ? Math.round(((bucket.sum / bucket.count) * 10)) / 10 : 0);
+  return {
+    title: '근무 직원 비율 · 요일별',
+    description: '선택 기간의 요일별 평균 근무 비율입니다.',
+    labels: weekdayLabels,
+    rawLabels: weekdayLabels,
+    values,
+    percent: true,
+    legend: [{ key: 'staff-weekday', label: '전체', color: '#ff7a1a', active: true }],
+    tableHeader: ['요일', '비율'],
+    tableRows: weekdayLabels.map((label, index) => [label, `${values[index].toFixed(1)}%`]),
+    fileStem: 'attendance_staff_ratio_weekday',
+  };
+}
+
+function buildAttendanceStatsLineSvg({ labels = [], values = [], color = '#ff7a1a', percent = true } = {}) {
+  const chartWidth = 860;
+  const chartHeight = 340;
+  const padding = { top: 16, right: 28, bottom: 44, left: 52 };
+  const innerWidth = chartWidth - padding.left - padding.right;
+  const innerHeight = chartHeight - padding.top - padding.bottom;
+  const list = Array.isArray(values) ? values.map((value) => Number(value || 0)) : [];
+  const hasValues = list.length > 0;
+  const maxValue = percent
+    ? 100
+    : Math.max(1, ...list, 1);
+  const minValue = 0;
+  const steps = 5;
+  const xForIndex = (index) => padding.left + ((innerWidth / Math.max(1, (list.length - 1 || 1))) * index);
+  const yForValue = (value) => {
+    const ratio = (Number(value || 0) - minValue) / Math.max(1, (maxValue - minValue));
+    return padding.top + innerHeight - (ratio * innerHeight);
+  };
+  const polyline = hasValues
+    ? list.map((value, index) => `${xForIndex(index)},${yForValue(value)}`).join(' ')
+    : '';
+  const gridRows = Array.from({ length: steps + 1 }, (_, index) => {
+    const value = maxValue - ((maxValue / steps) * index);
+    const y = padding.top + ((innerHeight / steps) * index);
+    return {
+      y,
+      label: percent ? `${Math.round(value)}%` : String(Math.round(value)),
+    };
+  });
+
+  return `
+    <svg class="attendance-stats-chart-svg" viewBox="0 0 ${chartWidth} ${chartHeight}" role="img" aria-label="출퇴근 통계 차트">
+      <rect x="0" y="0" width="${chartWidth}" height="${chartHeight}" fill="transparent"></rect>
+      ${gridRows.map((row) => `
+        <g class="attendance-stats-grid-row">
+          <line x1="${padding.left}" y1="${row.y}" x2="${chartWidth - padding.right}" y2="${row.y}" stroke="rgba(148, 163, 184, 0.16)" stroke-width="1"></line>
+          <text x="${padding.left - 8}" y="${row.y + 4}" text-anchor="end" fill="rgba(100, 116, 139, 0.9)" font-size="11">${row.label}</text>
+        </g>
+      `).join('')}
+      <line x1="${padding.left}" y1="${padding.top + innerHeight}" x2="${chartWidth - padding.right}" y2="${padding.top + innerHeight}" stroke="rgba(148, 163, 184, 0.32)" stroke-width="1.2"></line>
+      ${hasValues ? `
+        <polyline points="${polyline}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
+        ${list.map((value, index) => `
+          <g class="attendance-stats-point">
+            <circle cx="${xForIndex(index)}" cy="${yForValue(value)}" r="4" fill="${color}"></circle>
+            <text x="${xForIndex(index)}" y="${yForValue(value) - 10}" text-anchor="middle" fill="${color}" font-size="11" font-weight="700">${Number(value || 0).toFixed(1)}%</text>
+            <text x="${xForIndex(index)}" y="${padding.top + innerHeight + 18}" text-anchor="middle" fill="rgba(100, 116, 139, 0.92)" font-size="11">${escapeHtml(labels[index] || '')}</text>
+          </g>
+        `).join('')}
+      ` : ''}
+    </svg>
+  `;
+}
+
+function renderAttendancePeriodCalendarWorkspace({ loading = false } = {}) {
+  const summaryHost = $('#attendancePeriodCalendarSummaryHost');
+  const target = $('#attendancePeriodCalendarGrid');
+  const month = normalizeMonthKey(state.attendanceView?.calendarMonth || '') || toMonthKey(new Date());
+  state.schedule.month = month;
+  toggleVisibility('#attendanceCalendarSummaryStrip', false);
+  toggleVisibility('#attendanceCalendarGridWrap', false);
+  toggleVisibility('#attendancePeriodCalendarSummaryHost', true);
+  toggleVisibility('#attendancePeriodCalendarGrid', true);
+  if (summaryHost instanceof HTMLElement) {
+    summaryHost.innerHTML = `
+      <div class="attendance-period-calendar-note">
+        <div class="attendance-period-calendar-note-copy">
+          <strong>기간별 캘린더</strong>
+          <span>${escapeHtml(month)} · 월간 근무표와 동일한 shared 캘린더</span>
+        </div>
+        <div class="attendance-period-calendar-note-meta">
+          <span class="attendance-period-calendar-chip">실시간 반영</span>
+          <span class="attendance-period-calendar-chip is-muted">근무 템플릿 연동</span>
+        </div>
+      </div>
+    `;
+  }
+  if (!(target instanceof HTMLElement)) return;
+  if (loading && !Array.isArray(state.schedule?.rows).length) {
+    renderScheduleCalendarSkeleton();
+    return;
+  }
+  renderScheduleCalendar();
+}
+
+function renderAttendanceStatsPanelTabs() {
+  const host = $('#attendanceStatsPanelTabs');
+  if (!(host instanceof HTMLElement)) return;
+  const section = getAttendanceWorkspaceSection();
+  if (section !== 'stats') {
+    host.innerHTML = '';
+    host.classList.add('hidden');
+    return;
+  }
+  const scope = normalizeAttendanceStatsScope(state.attendanceView?.statsScope || 'attendance');
+  const attendanceMetric = normalizeAttendanceStatsAttendanceMetric(state.attendanceView?.statsAttendanceMetric || 'rate');
+  const staffMetric = normalizeAttendanceStatsStaffMetric(state.attendanceView?.statsStaffMetric || 'weekday');
+  const scopeTabs = [
+    { key: 'attendance', label: '출퇴근', action: 'attendance-switch-stats-scope' },
+    { key: 'staff-ratio', label: '근무 직원 비율', action: 'attendance-switch-stats-scope' },
+  ];
+  const metricTabs = scope === 'attendance'
+    ? [
+        { key: 'rate', label: '출근율', action: 'attendance-switch-stats-attendance-metric' },
+        { key: 'late', label: '지각률', action: 'attendance-switch-stats-attendance-metric' },
+        { key: 'early', label: '조퇴율', action: 'attendance-switch-stats-attendance-metric' },
+        { key: 'special', label: '출퇴근 특이사항', action: 'attendance-switch-stats-attendance-metric' },
+      ]
+    : [
+        { key: 'weekday', label: '요일별', action: 'attendance-switch-stats-staff-metric' },
+        { key: 'hour', label: '시간별', action: 'attendance-switch-stats-staff-metric' },
+      ];
+  host.innerHTML = `
+    <div class="attendance-stats-panel-tab-row attendance-stats-panel-tab-row-scope" role="tablist" aria-label="통계 범위">
+      ${scopeTabs.map((tab) => `
+        <button
+          type="button"
+          class="attendance-stats-panel-tab${scope === tab.key ? ' active' : ''}"
+          data-action="${tab.action}"
+          data-scope="${tab.key}"
+          aria-pressed="${scope === tab.key ? 'true' : 'false'}"
+        >${tab.label}</button>
+      `).join('')}
+    </div>
+    <div class="attendance-stats-panel-tab-row attendance-stats-panel-tab-row-metric" role="tablist" aria-label="통계 지표">
+      ${metricTabs.map((tab) => {
+        const active = scope === 'attendance'
+          ? attendanceMetric === tab.key
+          : staffMetric === tab.key;
+        const datasetKey = scope === 'attendance' ? `data-metric="${tab.key}"` : `data-metric="${tab.key}"`;
+        return `
+          <button
+            type="button"
+            class="attendance-stats-panel-pill${active ? ' active' : ''}"
+            data-action="${tab.action}"
+            ${datasetKey}
+            aria-pressed="${active ? 'true' : 'false'}"
+          >${tab.label}</button>
+        `;
+      }).join('')}
+    </div>
+  `;
+  host.classList.remove('hidden');
+}
+
+function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
+  const panel = $('#attendanceStatsPanelBody');
+  if (!(panel instanceof HTMLElement)) return;
+  renderAttendanceStatsPanelTabs();
+  if (loading) {
+    panel.innerHTML = '<div class="attendance-stats-shell"><div class="attendance-stats-card"><div class="attendance-stats-empty">출퇴근 통계를 불러오는 중입니다.</div></div></div>';
+    return;
+  }
+  const scope = normalizeAttendanceStatsScope(state.attendanceView?.statsScope || 'attendance');
+  const attendanceMetric = normalizeAttendanceStatsAttendanceMetric(state.attendanceView?.statsAttendanceMetric || 'rate');
+  const staffMetric = normalizeAttendanceStatsStaffMetric(state.attendanceView?.statsStaffMetric || 'weekday');
+  const start = normalizeAttendanceDate(state.attendanceView?.statsStartDate || '') || '';
+  const end = normalizeAttendanceDate(state.attendanceView?.statsEndDate || '') || '';
+  const dataset = scope === 'attendance'
+    ? buildAttendanceStatsAttendanceMetricSeries(rows, attendanceMetric)
+    : buildAttendanceStatsStaffMetricSeries(rows, staffMetric);
+  const values = Array.isArray(dataset.values) ? dataset.values.map((value) => Number(value) || 0) : [];
+  const peakValue = values.length ? Math.max(...values) : 0;
+  const averageValue = values.length
+    ? (values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length))
+    : 0;
+  const totalValue = values.reduce((sum, value) => sum + value, 0);
+  const valueSuffix = dataset.percent === false ? '' : '%';
+  const summaryTiles = [
+    { label: '최대', value: `${Math.round(peakValue * 10) / 10}${valueSuffix}` },
+    { label: '평균', value: `${Math.round(averageValue * 10) / 10}${valueSuffix}` },
+    { label: '누적', value: `${Math.round(totalValue * 10) / 10}${valueSuffix}` },
+    { label: '구간 수', value: `${dataset.labels.length}` },
+  ];
+  const svgMarkup = buildAttendanceStatsLineSvg({
+    labels: dataset.labels,
+    values: dataset.values,
+    color: '#ff7a1a',
+    percent: dataset.percent !== false,
+  });
+  state.attendanceView.__statsExport = {
+    fileStem: dataset.fileStem,
+    header: dataset.tableHeader,
+    rows: dataset.tableRows,
+    svgMarkup,
+  };
+  panel.innerHTML = `
+    <div class="attendance-stats-shell">
+      <section class="attendance-stats-card">
+        <div class="attendance-stats-card-head">
+          <div>
+            <h4>${escapeHtml(dataset.title)}</h4>
+            <p>${escapeHtml(dataset.description)}</p>
+          </div>
+          <div class="attendance-stats-head-side">
+            <span class="attendance-stats-meta">${escapeHtml(start && end ? `${start} ~ ${end}` : '조회 범위 없음')}</span>
+            <span class="attendance-stats-inline-label">${escapeHtml(scope === 'attendance' ? '출퇴근 지표' : '근무 직원 비율')}</span>
+          </div>
+        </div>
+        <div class="attendance-stats-topline">
+          ${summaryTiles.map((item) => `
+            <article class="attendance-stats-topline-card">
+              <span>${escapeHtml(item.label)}</span>
+              <strong>${escapeHtml(item.value)}</strong>
+            </article>
+          `).join('')}
+        </div>
+        <div class="attendance-stats-chart-layout">
+          <div class="attendance-stats-chart-wrap" data-export-name="${escapeHtml(dataset.fileStem)}">
+            ${svgMarkup}
+          </div>
+          <aside class="attendance-stats-legend">
+            ${dataset.legend.map((item) => `
+              <div class="attendance-stats-legend-item">
+                <span class="attendance-stats-legend-swatch" style="background:${escapeHtml(item.color || '#ff7a1a')}"></span>
+                <span>${escapeHtml(item.label)}</span>
+              </div>
+            `).join('')}
+          </aside>
+        </div>
+      </section>
+      <section class="attendance-stats-table-card">
+        <div class="attendance-stats-card-head attendance-stats-table-head">
+          <div>
+            <h4>세부 지표</h4>
+            <p>${escapeHtml(dataset.tableRows.length ? `총 ${dataset.tableRows.length}개 구간` : '표시할 구간이 없습니다.')}</p>
+          </div>
+        </div>
+        <table class="attendance-stats-table">
+          <thead>
+            <tr>${dataset.tableHeader.map((label) => `<th>${escapeHtml(label)}</th>`).join('')}</tr>
+          </thead>
+          <tbody>
+            ${dataset.tableRows.length ? dataset.tableRows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('') : '<tr><td colspan="2">데이터가 없습니다.</td></tr>'}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  `;
+}
+
+function exportAttendanceStatsData() {
+  const payload = state.attendanceView?.__statsExport || null;
+  if (!payload || !Array.isArray(payload.rows) || !payload.rows.length) {
+    showToast('내보낼 통계 데이터가 없습니다.', 'info', 2000);
+    return;
+  }
+  downloadCsvFile(`${String(payload.fileStem || 'attendance_stats').trim() || 'attendance_stats'}.csv`, payload.header || [], payload.rows);
+  showToast('통계 데이터를 다운로드했습니다.', 'success', 2000);
+}
+
+function exportAttendanceStatsImage() {
+  const payload = state.attendanceView?.__statsExport || null;
+  if (!payload?.svgMarkup) {
+    showToast('내보낼 차트 이미지가 없습니다.', 'info', 2000);
+    return;
+  }
+  const blob = new Blob([payload.svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
+  triggerBrowserDownloadFromBlob(blob, `${String(payload.fileStem || 'attendance_chart').trim() || 'attendance_chart'}.svg`);
+  showToast('차트 이미지를 다운로드했습니다.', 'success', 2000);
 }
 
 function getAttendanceManagerRowByKey(recordKey = '') {
@@ -58697,6 +63776,68 @@ function csvEscape(value = '') {
   return text;
 }
 
+function downloadCsvFile(filename = 'export.csv', header = [], rows = []) {
+  const body = Array.isArray(rows) ? rows : [];
+  const csv = [header, ...body].map((line) => line.map(csvEscape).join(',')).join('\n');
+  const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' });
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = href;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(href);
+}
+
+function exportLeaveUsageRows() {
+  const rows = getFilteredLeaveUsageRows();
+  if (!rows.length) {
+    showToast('내보낼 휴가 현황이 없습니다.', 'info', 2200);
+    return;
+  }
+  downloadCsvFile(
+    `leave_status_${String(state.leaveView?.usageYear || toMonthKey(new Date())).replaceAll('-', '')}.csv`,
+    ['직원', '사번', '현장', '지급', '사용', '승인 대기', '잔여', '최근 사용', '정책'],
+    rows.map((row) => [
+      row.employeeName || '-',
+      row.employeeCode || '-',
+      row.siteName || '-',
+      formatLeaveUnits(row.grantedDays || 0, '일'),
+      formatLeaveUnits(row.annualUsed || 0, '일'),
+      `${Number(row.pendingCount || 0)}건`,
+      row.remainingDays == null ? '-' : formatLeaveUnits(row.remainingDays, '일'),
+      formatDateLabel(row.latestDate, '-'),
+      Array.isArray(row.policyNames) && row.policyNames.length ? row.policyNames.join(', ') : '-',
+    ]),
+  );
+  showToast('휴가 현황을 다운로드했습니다.', 'success', 2000);
+}
+
+function exportLeaveHistoryRows() {
+  const rows = getLeaveWorkspaceRequestRows();
+  if (!rows.length) {
+    showToast('내보낼 휴가 사용 이력이 없습니다.', 'info', 2200);
+    return;
+  }
+  downloadCsvFile(
+    `leave_history_${String(state.leaveView?.workspaceStartDate || '').replaceAll('-', '') || 'all'}_${String(state.leaveView?.workspaceEndDate || '').replaceAll('-', '') || 'all'}.csv`,
+    ['유형', '요청자', '사번', '현장', '기간', '사용량', '상태', '처리자', '신청 시각'],
+    rows.map((item) => [
+      item.requestType || '-',
+      item.employeeName || '-',
+      item.employeeCode || '-',
+      item.siteName || '-',
+      formatLeavePeriodLabel(item.row?.start_at, item.row?.end_at, item.row?.leave_type, item.row?.half_day_slot),
+      formatLeaveRequestDurationLabel(item.row || {}),
+      item.statusLabel || '-',
+      item.processorName || '-',
+      item.requestedAt ? new Date(item.requestedAt).toLocaleString('ko-KR') : '-',
+    ]),
+  );
+  showToast('휴가 사용 이력을 다운로드했습니다.', 'success', 2000);
+}
+
 function exportAttendanceManagerRows() {
   const rows = getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: true });
   if (!rows.length) {
@@ -58802,19 +63943,20 @@ async function loadAttendanceManagerView({ force = false } = {}) {
     const dateKeys = buildDateKeysBetween(start, end);
     const months = buildMonthKeysBetween(start, end);
     const tenantCode = getTenantCodeForScopedAdminApi();
+    const leaveTenantCode = getLeaveScopedTenantCode();
     const recordFetchConcurrency = activeTab === 'calendar'
       ? ATTENDANCE_MANAGER_CALENDAR_FETCH_CONCURRENCY
       : ATTENDANCE_MANAGER_FETCH_CONCURRENCY;
     const leaveParams = new URLSearchParams();
     leaveParams.set('status', 'approved');
     leaveParams.set('limit', '300');
-    if (tenantCode) leaveParams.set('tenant_code', tenantCode);
+    if (leaveTenantCode) leaveParams.set('tenant_code', leaveTenantCode);
     const shouldLoadOvertime = activeTab !== 'calendar';
     const correctionRows = can('attendanceReview') ? getCorrectionRowsByStatuses(['pending']) : [];
     const schedulesPromise = Promise.all(
       months.map((month) => loadMonthlyScheduleRowsWithCache({ month, tenantCode, force })),
     ).then((groups) => groups.flat());
-    const leavesPromise = apiRequest(`/leaves?${leaveParams.toString()}`);
+    const leavesPromise = apiRequest(appendLeaveTenantQuery(`/leaves?${leaveParams.toString()}`));
     const recordsPromise = fetchAttendanceRecordsByDateKeys(dateKeys, { force, concurrency: recordFetchConcurrency });
 
     if (activeTab === 'calendar' && !initialCachedManagerRows.length) {
@@ -58993,7 +64135,16 @@ async function loadAttendanceView({ force = false } = {}) {
   if (!managerMode && !listEl) return [];
 
   if (managerMode) {
-    return loadAttendanceManagerView({ force });
+    const result = await loadAttendanceManagerView({ force });
+    if (isAttendancePeriodCalendarViewActive()) {
+      state.schedule.month = normalizeMonthKey(state.attendanceView?.calendarMonth || '') || state.schedule.month || toMonthKey(new Date());
+      try {
+        await loadSchedule({ force, background: false });
+      } catch (error) {
+        console.error('[RG ARLS] attendance period calendar schedule load failed', error);
+      }
+    }
+    return result;
   }
 
   const activeDate = setAttendanceActiveDate(state.attendanceView.date || toLocalDateKey(new Date()), { syncInput: true });
@@ -59021,9 +64172,13 @@ async function loadAttendanceView({ force = false } = {}) {
   leaveParams.set('limit', '300');
 
   const tenantCode = getTenantCodeForScopedAdminApi();
+  const leaveTenantCode = getLeaveScopedTenantCode();
   if (tenantCode) {
     overtimeParams.set('tenant_code', tenantCode);
     appleParams.set('tenant_code', tenantCode);
+  }
+  if (leaveTenantCode) {
+    leaveParams.set('tenant_code', leaveTenantCode);
   }
 
   const ownEmployeeCode = String(state.user?.employee_code || '').trim();
@@ -59036,7 +64191,7 @@ async function loadAttendanceView({ force = false } = {}) {
     apiRequest(`/attendance/records?date=${encodeURIComponent(activeDate)}`),
     apiRequest(`/schedules/overtime-daily?${overtimeParams.toString()}`),
     apiRequest(`/schedules/apple-overtime?${appleParams.toString()}`),
-    apiRequest(`/leaves?${leaveParams.toString()}`),
+    apiRequest(appendLeaveTenantQuery(`/leaves?${leaveParams.toString()}`)),
   ]);
 
   if (recordsResult.status !== 'fulfilled') {
@@ -59154,20 +64309,24 @@ async function loadLeaves() {
     let rows = [];
     let balanceSummary = null;
     let policyRows = [];
+    let grantsRows = Array.isArray(state.leaveView?.grantsRows) ? state.leaveView.grantsRows : [];
     if (managerMode && scope === 'team' && can('leaveReview')) {
       const statuses = desktopWorkspace
         ? ['pending', 'approved', 'rejected', 'cancelled']
         : (statusFilter === 'all'
         ? ['pending', 'approved', 'rejected', 'cancelled']
         : [statusFilter]);
-      const [leaveRows, policiesPayload] = await Promise.all([
+      const [leaveRows, policiesPayload, grantsPayload] = await Promise.all([
         fetchManagerLeaveRequests(statuses),
-        apiRequest('/leaves/policies').catch(() => ({ items: [] })),
+        apiRequest(appendLeaveTenantQuery('/leaves/policies')).catch(() => ({ items: [] })),
+        canManageLeaveGrants() ? apiRequest(appendLeaveTenantQuery('/leaves/grants?limit=200')).catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
       ]);
       rows = leaveRows;
       policyRows = Array.isArray(policiesPayload?.items) ? policiesPayload.items : [];
+      grantsRows = Array.isArray(grantsPayload?.items) ? grantsPayload.items : [];
     } else {
       const params = new URLSearchParams();
+      const balanceParams = new URLSearchParams();
       params.set('limit', '300');
       if (!desktopWorkspace && statusFilter !== 'all') {
         params.set('status', statusFilter);
@@ -59175,15 +64334,18 @@ async function loadLeaves() {
       const ownEmployeeCode = String(state.user?.employee_code || '').trim();
       if (ownEmployeeCode) {
         params.set('employee_code', ownEmployeeCode);
+        balanceParams.set('employee_code', ownEmployeeCode);
       }
-      const [leaveRows, balancePayload, policiesPayload] = await Promise.all([
-        apiRequest(`/leaves?${params.toString()}`),
-        apiRequest('/leaves/balance').catch(() => null),
-        apiRequest('/leaves/policies').catch(() => ({ items: [] })),
+      const [leaveRows, balancePayload, policiesPayload, grantsPayload] = await Promise.all([
+        apiRequest(appendLeaveTenantQuery(`/leaves?${params.toString()}`)),
+        apiRequest(appendLeaveTenantQuery(`/leaves/balance${balanceParams.size ? `?${balanceParams.toString()}` : ''}`)).catch(() => null),
+        apiRequest(appendLeaveTenantQuery('/leaves/policies')).catch(() => ({ items: [] })),
+        canManageLeaveGrants() ? apiRequest(appendLeaveTenantQuery('/leaves/grants?limit=200')).catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
       ]);
       rows = leaveRows;
       balanceSummary = balancePayload && typeof balancePayload === 'object' ? balancePayload : null;
       policyRows = Array.isArray(policiesPayload?.items) ? policiesPayload.items : [];
+      grantsRows = Array.isArray(grantsPayload?.items) ? grantsPayload.items : [];
     }
 
     const normalizedRows = Array.isArray(rows) ? rows : [];
@@ -59191,6 +64353,7 @@ async function loadLeaves() {
     state.leaveView.rowMap = new Map(normalizedRows.map((row) => [String(row?.id || ''), row]));
     state.leaveView.balanceSummary = balanceSummary;
     state.leaveView.policyRows = Array.isArray(policyRows) ? policyRows : [];
+    state.leaveView.grantsRows = Array.isArray(grantsRows) ? grantsRows : [];
     state.leaveView.updatedAt = new Date().toISOString();
 
     if (scope === 'mine') {
@@ -59229,6 +64392,24 @@ async function loadLeaves() {
       renderLeaveManagementWorkspace({ loading: false, errorMessage: message });
     }
     showToast(message, 'error', 4200);
+    return [];
+  }
+}
+
+async function loadLeaveGrants() {
+  if (!canManageLeaveGrants()) return [];
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  renderLeaveGrantsSection({ loading: true });
+  try {
+    const payload = await apiRequest(appendLeaveTenantQuery('/leaves/grants?limit=200'));
+    const rows = Array.isArray(payload?.items) ? payload.items : [];
+    state.leaveView.grantsRows = rows;
+    renderLeaveGrantsSection({ loading: false });
+    return rows;
+  } catch (err) {
+    const message = mapLeaveErrorMessage(err, '휴가 부여 내역을 불러오지 못했습니다.');
+    renderLeaveGrantsSection({ loading: false, errorMessage: message });
+    showToast(message, 'error', 2800);
     return [];
   }
 }
@@ -59600,7 +64781,7 @@ async function onEmployeeRequestCancel(requestKey) {
   if (kind === 'attendance') {
     await apiRequest(`/attendance/requests/${row.id}/cancel`, { method: 'POST' });
   } else if (kind === 'leave') {
-    await apiRequest(`/leaves/${row.id}/cancel`, { method: 'POST' });
+    await apiRequest(appendLeaveTenantQuery(`/leaves/${row.id}/cancel`), { method: 'POST' });
   } else {
     throw new Error('정정 요청 취소는 다음 단계에서 지원됩니다.');
   }
@@ -59633,10 +64814,10 @@ async function loadEmployeeRequestsView({ silent = false } = {}) {
         }).toString()}`)
         : Promise.resolve([]),
       can('leave')
-        ? apiRequest(`/leaves?${new URLSearchParams({
+        ? apiRequest(appendLeaveTenantQuery(`/leaves?${new URLSearchParams({
           limit: '120',
           ...(statusParam ? { status: statusParam } : {}),
-        }).toString()}`)
+        }).toString()}`))
         : Promise.resolve([]),
     ]);
 
@@ -59800,9 +64981,9 @@ async function fetchManagerLeaveRequests(statuses = ['pending']) {
   if (Array.isArray(statuses) && statuses.length) {
     params.set('status', statuses.join(','));
   }
-  const tenantCode = getTenantCodeForScopedAdminApi();
+  const tenantCode = getLeaveScopedTenantCode();
   if (tenantCode) params.set('tenant_code', tenantCode);
-  return apiRequest(`/leaves/review-queue?${params.toString()}`);
+  return apiRequest(appendLeaveTenantQuery(`/leaves/review-queue?${params.toString()}`));
 }
 
 function getCorrectionRowsByStatuses(statuses = ['pending']) {
@@ -60184,7 +65365,7 @@ function appendSocLeaveLogsReadonlySection(target, rows = []) {
 
   const helper = document.createElement('p');
   helper.className = 'muted';
-  helper.textContent = 'SOC 승인 이벤트로 생성된 휴무/연차 반영 이력입니다. 승인함에서 수정할 수 없습니다.';
+  helper.textContent = 'SOC 승인 이벤트로 생성된 휴무/연차 반영 이력입니다. 승인 화면에서는 수정할 수 없습니다.';
   card.appendChild(helper);
 
   const list = document.createElement('ul');
@@ -60237,10 +65418,10 @@ async function loadLeaveApprovals(target) {
   try {
     const params = new URLSearchParams();
     params.set('limit', '30');
-    const tenantCode = getTenantCodeForScopedAdminApi()
+    const tenantCode = getLeaveScopedTenantCode()
       || String($('#leaveTenant')?.value || state.user?.tenant_code || '').trim();
     if (tenantCode) params.set('tenant_code', tenantCode);
-    const rows = await apiRequest(`/leaves/pending?${params.toString()}`);
+    const rows = await apiRequest(appendLeaveTenantQuery(`/leaves/pending?${params.toString()}`));
     state.leaveApprovalItemsById = new Map((rows || []).map((row) => [String(row.id), row]));
 
     let socLogs = [];
@@ -60357,11 +65538,11 @@ function setApprovalTab(tab) {
     setManagerRequestsTab(raw);
   }
   if (state.requestsManagerTab === REQUESTS_MANAGER_TAB_PROCESSED) {
-    setAttendanceApprovalHint('처리 내역을 조회합니다.', 'info');
+    setAttendanceApprovalHint('처리 완료 요청을 조회합니다.', 'info');
   } else if (state.requestsManagerTab === REQUESTS_MANAGER_TAB_SOC) {
-    setAttendanceApprovalHint('SOC 연동 반영 로그를 조회합니다.', 'info');
+    setAttendanceApprovalHint('진행중인 요청을 조회합니다.', 'info');
   } else {
-    setAttendanceApprovalHint('대기중인 요청입니다.', 'info');
+    setAttendanceApprovalHint('승인 대기 요청입니다.', 'info');
   }
 }
 
@@ -60620,7 +65801,7 @@ async function onLeaveRequestReview(requestId, nextStatus, reviewNote = null) {
     throw new Error('요청 식별자가 없습니다.');
   }
 
-  const updated = await apiRequest(`/leaves/${requestId}/review`, {
+  const updated = await apiRequest(appendLeaveTenantQuery(`/leaves/${requestId}/review`), {
     method: 'POST',
     body: {
       status: nextStatus,
@@ -60655,6 +65836,15 @@ function isScheduleManagerMode() {
 
 function canMutateScheduleData() {
   return can('scheduleWrite') && getScheduleDataProvider().mode === 'real';
+}
+
+function canReadScheduleTemplateData() {
+  if (getScheduleDataProvider().mode !== 'real') return false;
+  const role = normalizeRoleValue(state.user?.role || '');
+  return role === 'developer'
+    || role === 'hq_admin'
+    || role === 'supervisor'
+    || role === 'vice_supervisor';
 }
 
 function canUseScheduleSupportRoundtripSource() {
@@ -60810,7 +66000,7 @@ function canUseScheduleUploadHqWizard() {
 }
 
 function isScheduleTemplateTabVisible() {
-  return can('scheduleWrite');
+  return canReadScheduleTemplateData();
 }
 
 function isScheduleBoardTab(tab = '') {
@@ -61688,10 +66878,17 @@ function renderScheduleTemplateTable() {
   const tableBody = $('#scheduleTemplateTableBody');
   const statusEl = $('#scheduleTemplateStatus');
   if (!(tableBody instanceof HTMLElement)) return;
+  const canWrite = canMutateScheduleData();
   tableBody.innerHTML = '';
   renderScheduleImportMappingProfileSummary();
   renderScheduleImportMappingProfileManager();
   renderScheduleTemplateOwnerSections();
+
+  document.querySelectorAll('[data-action="schedule-template-create"]').forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) return;
+    button.classList.toggle('hidden', !canWrite);
+    button.disabled = !canWrite;
+  });
 
   document.querySelectorAll('[data-action="schedule-open-upload-mapping-step"]').forEach((button) => {
     if (!(button instanceof HTMLButtonElement)) return;
@@ -61759,52 +66956,59 @@ function renderScheduleTemplateTable() {
     const actionsWrap = document.createElement('div');
     actionsWrap.className = 'table-actions';
 
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'btn btn-secondary';
-    editBtn.dataset.action = 'schedule-template-edit';
-    editBtn.dataset.templateId = templateId;
-    editBtn.textContent = '수정';
-    actionsWrap.appendChild(editBtn);
+    if (canWrite) {
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'btn btn-secondary';
+      editBtn.dataset.action = 'schedule-template-edit';
+      editBtn.dataset.templateId = templateId;
+      editBtn.textContent = '수정';
+      actionsWrap.appendChild(editBtn);
 
-    const duplicateBtn = document.createElement('button');
-    duplicateBtn.type = 'button';
-    duplicateBtn.className = 'btn btn-secondary';
-    duplicateBtn.dataset.action = 'schedule-template-duplicate';
-    duplicateBtn.dataset.templateId = templateId;
-    duplicateBtn.textContent = '복제';
-    actionsWrap.appendChild(duplicateBtn);
+      const duplicateBtn = document.createElement('button');
+      duplicateBtn.type = 'button';
+      duplicateBtn.className = 'btn btn-secondary';
+      duplicateBtn.dataset.action = 'schedule-template-duplicate';
+      duplicateBtn.dataset.templateId = templateId;
+      duplicateBtn.textContent = '복제';
+      actionsWrap.appendChild(duplicateBtn);
 
-    const toggleBtn = document.createElement('button');
-    toggleBtn.type = 'button';
-    toggleBtn.className = isActive ? 'btn btn-destructive' : 'btn btn-secondary';
-    toggleBtn.dataset.action = 'schedule-template-toggle-active';
-    toggleBtn.dataset.templateId = templateId;
-    toggleBtn.dataset.nextActive = isActive ? '0' : '1';
-    toggleBtn.textContent = isActive ? '비활성화' : '활성화';
-    actionsWrap.appendChild(toggleBtn);
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = isActive ? 'btn btn-destructive' : 'btn btn-secondary';
+      toggleBtn.dataset.action = 'schedule-template-toggle-active';
+      toggleBtn.dataset.templateId = templateId;
+      toggleBtn.dataset.nextActive = isActive ? '0' : '1';
+      toggleBtn.textContent = isActive ? '비활성화' : '활성화';
+      actionsWrap.appendChild(toggleBtn);
 
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'btn btn-destructive';
-    deleteBtn.dataset.action = 'schedule-template-delete';
-    deleteBtn.dataset.templateId = templateId;
-    deleteBtn.textContent = '삭제';
-    if (usageCount > 0) {
-      deleteBtn.title = `삭제 시 연결된 근무 템플릿 ${usageCount}개가 비활성화됩니다.`;
-    } else if (isActive) {
-      deleteBtn.title = '활성 템플릿도 바로 삭제할 수 있습니다.';
-    }
-    actionsWrap.appendChild(deleteBtn);
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'btn btn-destructive';
+      deleteBtn.dataset.action = 'schedule-template-delete';
+      deleteBtn.dataset.templateId = templateId;
+      deleteBtn.textContent = '삭제';
+      if (usageCount > 0) {
+        deleteBtn.title = `삭제 시 연결된 근무 템플릿 ${usageCount}개가 비활성화됩니다.`;
+      } else if (isActive) {
+        deleteBtn.title = '활성 템플릿도 바로 삭제할 수 있습니다.';
+      }
+      actionsWrap.appendChild(deleteBtn);
 
-    actionTd.appendChild(actionsWrap);
-    if (usageCount > 0 || isActive) {
-      const note = document.createElement('p');
-      note.className = 'schedule-template-action-note';
-      note.textContent = usageCount > 0
-        ? `삭제 시 연결된 근무 템플릿 ${usageCount}개가 비활성화됩니다.`
-        : '활성 템플릿도 바로 삭제할 수 있습니다.';
-      actionTd.appendChild(note);
+      actionTd.appendChild(actionsWrap);
+      if (usageCount > 0 || isActive) {
+        const note = document.createElement('p');
+        note.className = 'schedule-template-action-note';
+        note.textContent = usageCount > 0
+          ? `삭제 시 연결된 근무 템플릿 ${usageCount}개가 비활성화됩니다.`
+          : '활성 템플릿도 바로 삭제할 수 있습니다.';
+        actionTd.appendChild(note);
+      }
+    } else {
+      const readonly = document.createElement('span');
+      readonly.className = 'muted';
+      readonly.textContent = '읽기 전용';
+      actionTd.appendChild(readonly);
     }
     tr.appendChild(actionTd);
     tableBody.appendChild(tr);
@@ -61817,7 +67021,7 @@ function renderScheduleTemplateTable() {
 }
 
 async function loadScheduleTemplateRows({ force = false } = {}) {
-  if (!canMutateScheduleData()) return [];
+  if (!canReadScheduleTemplateData()) return [];
   const statusEl = $('#scheduleTemplateStatus');
   const now = Date.now();
   const isFresh = Array.isArray(state.schedule.templateRows)
@@ -65112,7 +70316,7 @@ async function loadApprovedLeaveRowsForMonths(months = [], { tenantCode = '', li
   }
 
   const queryString = params.toString();
-  const rows = await apiRequest(`/leaves${queryString ? `?${queryString}` : ''}`, { noStore: force });
+  const rows = await apiRequest(appendLeaveTenantQuery(`/leaves${queryString ? `?${queryString}` : ''}`), { noStore: force });
   return normalizeApprovedLeaveRows(rows, normalizedMonths);
 }
 
@@ -65589,7 +70793,7 @@ function renderScheduleManagerHints() {
 }
 
 function renderScheduleCalendarMessage(message) {
-  const target = $('#scheduleCalendarGrid');
+  const target = getActiveScheduleCalendarGrid();
   if (!target) return;
   target.innerHTML = '';
   target.classList.remove('schedule-list-view');
@@ -65601,7 +70805,7 @@ function renderScheduleCalendarMessage(message) {
 }
 
 function renderScheduleCalendarSkeleton() {
-  const target = $('#scheduleCalendarGrid');
+  const target = getActiveScheduleCalendarGrid();
   if (!target) return;
   target.innerHTML = '';
   target.classList.remove('schedule-list-view');
@@ -66160,7 +71364,7 @@ function ScheduleMonthPage({ target, month, monthMeta, dayMap } = {}) {
 
 function renderScheduleCalendar() {
   const renderStartedAt = getPerfNowMs();
-  const target = $('#scheduleCalendarGrid');
+  const target = getActiveScheduleCalendarGrid();
   if (!target) {
     state.schedule.lastPerf.calendarRenderMs = 0;
     return;
@@ -67120,7 +72324,7 @@ async function loadSchedule({ force = false, deferDetailHydration = false, backg
   const scheduleLoadStartedAt = getPerfNowMs();
   const monthSwitchStartedAt = Number(state.schedule?.monthSwitchStartedAt || 0);
   const schedulePerfRoute = getSchedulePerfRoutePath();
-  const calendarTarget = $('#scheduleCalendarGrid');
+  const calendarTarget = getActiveScheduleCalendarGrid();
   if (!calendarTarget) return [];
   cancelScheduleEmployeeListChunkRender();
   const loadGeneration = Number(state.schedule?.loadGeneration || 0) + 1;
@@ -67413,10 +72617,15 @@ function resetPollingRuntime() {
 
 function isScheduleLiveRefreshEnabled() {
   if (!state.token) return false;
-  if (state.currentView !== 'schedule') return false;
+  const scheduleViewActive = state.currentView === 'schedule';
+  const attendanceCalendarActive = isAttendancePeriodCalendarViewActive();
+  if (!scheduleViewActive && !attendanceCalendarActive) return false;
   if (document.visibilityState !== 'visible') return false;
-  if (!isScheduleBoardTab(getScheduleActiveTopTab())) return false;
-  return Boolean(normalizeMonthKey(state.schedule?.month));
+  if (scheduleViewActive && !isScheduleBoardTab(getScheduleActiveTopTab())) return false;
+  const month = scheduleViewActive
+    ? normalizeMonthKey(state.schedule?.month)
+    : normalizeMonthKey(state.attendanceView?.calendarMonth || state.schedule?.month);
+  return Boolean(month);
 }
 
 function getScheduleLiveRefreshSiteCode() {
@@ -67951,7 +73160,7 @@ async function onLoginSubmit(event) {
     return;
   }
 
-  if (!state.tenantValid) {
+  if (!state.tenantValid && !state.tenantValidationBypass) {
     queueTenantValidation({ immediate: true });
     setFieldError('#tenantError', '유효한 테넌트 코드를 확인한 뒤 로그인해 주세요.');
     return;
@@ -68006,7 +73215,7 @@ async function onLoginSubmit(event) {
     const credentialFailure = isCredentialLoginFailure(err);
 
     if (credentialFailure) {
-      setAuthMessage('');
+      showAuthError(message);
       triggerLoginCredentialFailureFeedback();
     } else {
       showAuthError(message);
@@ -68777,7 +73986,7 @@ async function onLeaveSubmit(event) {
       payload.reason = payload.leave_type === 'sick' ? '병가' : '조퇴';
     }
 
-    await apiRequest('/leaves', { method: 'POST', body: payload });
+    await apiRequest(appendLeaveTenantQuery('/leaves'), { method: 'POST', body: payload });
     setLeaveStatusFilter('all');
     renderLeaveStatusFilterTabs();
     await loadLeaves();
@@ -68808,11 +74017,13 @@ function resetLeaveWorkspaceComposer() {
   const startInput = $('#leaveWorkspaceStart');
   const endInput = $('#leaveWorkspaceEnd');
   const reasonInput = $('#leaveWorkspaceReason');
+  const policySelect = $('#leaveWorkspacePolicySelect');
   if (typeInput instanceof HTMLSelectElement) typeInput.value = 'annual';
   if (halfSlotInput instanceof HTMLSelectElement) halfSlotInput.value = 'am';
   if (startInput instanceof HTMLInputElement) startInput.value = '';
   if (endInput instanceof HTMLInputElement) endInput.value = '';
   if (reasonInput instanceof HTMLInputElement) reasonInput.value = '';
+  if (policySelect instanceof HTMLSelectElement) policySelect.value = '';
   clearLeaveWorkspaceAttachmentSelection();
   updateLeaveWorkspaceComposerState({ enforceHalfDayRange: false });
 }
@@ -68826,8 +74037,10 @@ async function onLeaveWorkspaceSubmit(event) {
   const submitBtn = $('#leaveWorkspaceSubmitBtn');
   setButtonsBusy(submitBtn, true, '신청 중...');
   try {
-    const leaveType = String($('#leaveWorkspaceType')?.value || '').trim().toLowerCase();
+    const baseLeaveType = String($('#leaveWorkspaceType')?.value || '').trim().toLowerCase();
     const halfDaySlot = String($('#leaveWorkspaceHalfSlot')?.value || '').trim().toLowerCase();
+    const policyId = String($('#leaveWorkspacePolicySelect')?.value || '').trim();
+    const leaveType = resolveLeaveTypeFromPolicyId(policyId, baseLeaveType);
     const startAt = String($('#leaveWorkspaceStart')?.value || '').trim();
     const endAtRaw = String($('#leaveWorkspaceEnd')?.value || '').trim();
     const endAt = leaveType === 'half' ? startAt : endAtRaw;
@@ -68836,6 +74049,7 @@ async function onLeaveWorkspaceSubmit(event) {
     const payload = {
       tenant_code: $('#leaveWorkspaceTenant')?.value.trim(),
       employee_code: $('#leaveWorkspaceEmp')?.value.trim(),
+      policy_id: policyId || null,
       leave_type: leaveType,
       half_day_slot: leaveType === 'half' ? halfDaySlot : null,
       start_at: startAt,
@@ -68860,12 +74074,13 @@ async function onLeaveWorkspaceSubmit(event) {
       payload.reason = payload.leave_type === 'sick' ? '병가' : '조퇴';
     }
 
-    await apiRequest('/leaves', { method: 'POST', body: payload });
+    await apiRequest(appendLeaveTenantQuery('/leaves'), { method: 'POST', body: payload });
     setLeaveManagerScope('mine');
-    setLeaveWorkspaceSection('requests');
+    setLeaveWorkspaceSection('history');
     setLeaveWorkspaceComposerOpen(false);
     setLeaveWorkspaceDrawerOpen(false);
     state.leaveView.workspaceSelectedRequestId = '';
+    state.leaveView.workspacePolicyId = policyId || '';
     resetLeaveWorkspaceComposer();
     await loadLeaves();
     if (state.currentView === 'requests' && !isManagerShellRole()) {
@@ -69241,6 +74456,9 @@ function closeSheet() {
     sheet.setAttribute('aria-hidden', 'true');
     sheet.classList.remove('sheet-layout-schedule-create');
     sheet.classList.remove('sheet-layout-schedule-single-create');
+    sheet.classList.remove('sheet-layout-calendar-event');
+    sheet.classList.remove('sheet-layout-requests-filter');
+    sheet.classList.remove('sheet-layout-leave-employee-picker');
   }
   if (title) title.textContent = '작업';
   if (content) content.innerHTML = '';
@@ -69256,6 +74474,7 @@ function closeSheet() {
     }
   }
   state.sheetContext = null;
+  state.requestsFilterSheet = null;
   if (sheetConfirmContext) {
     state.confirmContext = null;
     if (typeof sheetConfirmContext.cleanup === 'function') {
@@ -69276,9 +74495,12 @@ function closeSheet() {
   if (state.employeeAdmin) {
     state.employeeAdmin.deleteConfirm = null;
   }
+  if (state.calendar && typeof state.calendar === 'object') {
+    state.calendar.eventModalOpen = false;
+  }
 }
 
-function openSheet({ title = '작업', contentNode = null, actions = [] } = {}) {
+function openSheet({ title = '작업', contentNode = null, actions = [], layoutClass = '' } = {}) {
   const backdrop = $('#sheetBackdrop');
   const sheet = $('#appSheet');
   const titleEl = $('#sheetTitle');
@@ -69291,6 +74513,12 @@ function openSheet({ title = '작업', contentNode = null, actions = [] } = {}) 
 
   sheet.classList.remove('sheet-layout-schedule-create');
   sheet.classList.remove('sheet-layout-schedule-single-create');
+  sheet.classList.remove('sheet-layout-calendar-event');
+  sheet.classList.remove('sheet-layout-requests-filter');
+  sheet.classList.remove('sheet-layout-leave-employee-picker');
+  if (layoutClass) {
+    sheet.classList.add(layoutClass);
+  }
   titleEl.textContent = title;
   contentEl.innerHTML = '';
   actionsEl.innerHTML = '';
@@ -70815,7 +76043,7 @@ function bindUiEvents() {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
 
-    if (target.closest('.calendar-shell-detail')) {
+    if (target.closest('.calendar-shell-detail, [data-calendar-editor-root]')) {
       snapshotCalendarEditorStateFromDom(ensureCalendarWorkspaceState().workspace);
       if (
         target.id === 'calendarTitleInput'
@@ -70905,7 +76133,25 @@ function bindUiEvents() {
       hrState.selectedDocType = normalizeHrCertificateTypeKey(target instanceof HTMLSelectElement ? target.value : hrState.selectedDocType);
       renderHrDocCardSelection();
       renderHrEmployeeRequestCard();
-      runActionSafely(loadHrDocumentTemplates({ force: true }), '문서 템플릿을 불러오지 못했습니다.');
+      renderHrAdminStatusTabs();
+      renderHrTableHeaders();
+      if (isHrTemplateManagerRole()) {
+        runActionSafely(loadHrDocumentTemplates({ force: true }), '문서 템플릿을 불러오지 못했습니다.');
+      }
+      if (isHrApprovalPolicyManagerRole()) {
+        runActionSafely(loadHrDocumentApprovalRules({ force: true }), '기본 승인 절차를 불러오지 못했습니다.');
+      }
+      return;
+    }
+    if (target.dataset.hrApprovalRuleField) {
+      const index = Number.parseInt(String(target.dataset.hrApprovalRuleIndex || '0'), 10) || 0;
+      const field = String(target.dataset.hrApprovalRuleField || '').trim();
+      const value = target instanceof HTMLInputElement
+        ? (target.type === 'checkbox' ? target.checked : target.value)
+        : target instanceof HTMLSelectElement
+          ? target.value
+        : '';
+      updateHrApprovalRuleDraftField(index, field, value);
       return;
     }
     if (target.id === 'hrIncludeAddress' || target.id === 'hrIncludePhone') {
@@ -70930,6 +76176,30 @@ function bindUiEvents() {
       updateHrRequestSubmitState();
       return;
     }
+    if (target.id === 'hrResignationType') {
+      const hrState = ensureHrDocsState();
+      hrState.resignationType = normalizeHrResignationType(target instanceof HTMLSelectElement ? target.value : hrState.resignationType);
+      updateHrRequestSubmitState();
+      return;
+    }
+    if (target.id === 'hrResignationExpectedDate') {
+      const hrState = ensureHrDocsState();
+      hrState.resignationExpectedLastWorkingDate = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
+      updateHrRequestSubmitState();
+      return;
+    }
+    if (target.id === 'hrResignationReason') {
+      const hrState = ensureHrDocsState();
+      hrState.resignationReason = target instanceof HTMLTextAreaElement ? String(target.value || '').trim() : '';
+      updateHrRequestSubmitState();
+      return;
+    }
+    if (target.id === 'hrResignationHandover') {
+      const hrState = ensureHrDocsState();
+      hrState.resignationHandoverNotes = target instanceof HTMLTextAreaElement ? String(target.value || '').trim() : '';
+      updateHrRequestSubmitState();
+      return;
+    }
     if (target.id === 'leaveReason') {
       updateLeaveFormState({ enforceHalfDayRange: false });
       return;
@@ -70940,10 +76210,16 @@ function bindUiEvents() {
       return;
     }
 
-    if (target.id === 'leaveWorkspaceRequesterSearch') {
+    if (target.id === 'leaveWorkspaceSearch') {
       if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
       state.leaveView.workspaceRequesterQuery = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
       renderLeaveWorkspaceRequestRows();
+      renderLeaveHistoryChart();
+      return;
+    }
+
+    if (target.id === 'leaveHistorySeriesApproved' || target.id === 'leaveHistorySeriesPlanned' || target.id === 'leaveHistorySeriesPending') {
+      renderLeaveHistoryChart();
       return;
     }
 
@@ -70951,6 +76227,13 @@ function bindUiEvents() {
       if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
       state.leaveView.usageSearchQuery = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
       renderLeaveUsageRows();
+      return;
+    }
+
+    if (target.id === 'leaveGrantsSearch') {
+      if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+      state.leaveView.grantsSearchQuery = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
+      renderLeaveGrantsSection();
       return;
     }
 
@@ -71185,6 +76468,14 @@ function bindUiEvents() {
     const actionEl = event.target instanceof Element ? event.target.closest('[data-action]') : null;
     const action = actionEl?.dataset?.action || '';
     if (!action) {
+      if (
+        ensureCalendarWorkspaceState().filterOpen
+        && event.target instanceof Element
+        && !event.target.closest('#calendarWorkspaceTabs')
+      ) {
+        ensureCalendarWorkspaceState().filterOpen = false;
+        renderCalendarWorkspaceTabs();
+      }
       const notices = ensureNoticesState();
       if (
         notices.composeTablePickerOpen
@@ -71286,6 +76577,43 @@ function bindUiEvents() {
 
     if (action === 'profile-logs-target') {
       setProfileLogsTarget(actionEl.dataset.target || 'all');
+      return;
+    }
+
+    if (action === 'profile-signature-mode') {
+      if (!state.profile || typeof state.profile !== 'object') {
+        state.profile = createInitialProfileViewState();
+      }
+      state.profile.signatureSourceType = normalizeProfileSignatureMode(actionEl.dataset.mode || 'draw');
+      renderProfileSignatureCard();
+      return;
+    }
+
+    if (action === 'profile-signature-clear') {
+      clearProfileSignatureCanvas();
+      if (state.profile && typeof state.profile === 'object') {
+        state.profile.signatureStatusText = '그린 서명을 지웠습니다.';
+      }
+      renderProfileSignatureCard();
+      return;
+    }
+
+    if (action === 'profile-signature-save') {
+      runWithBusy(() => submitProfileSignatureSave(), '서명 저장 중...');
+      return;
+    }
+
+    if (action === 'profile-signature-delete') {
+      openConfirmDialog({
+        title: '서명 삭제',
+        message: '등록된 개인 서명을 삭제하시겠습니까? 이후 문서 승인 시 다시 등록해야 합니다.',
+        acceptLabel: '삭제',
+        acceptVariant: 'btn-destructive',
+        triggerEl: actionEl,
+        onAccept: async () => {
+          await submitProfileSignatureDelete();
+        },
+      });
       return;
     }
 
@@ -72298,8 +77626,9 @@ function bindUiEvents() {
       if (requestedView === 'requests' || requestedView === 'leave' || requestedView === 'correction') {
         setRequestsTabView(requestedView);
       }
-      if (requestedView === REQUESTS_MANAGER_TAB_PENDING || requestedView === REQUESTS_MANAGER_TAB_PROCESSED || requestedView === REQUESTS_MANAGER_TAB_SOC) {
-        setManagerRequestsTab(requestedView);
+      const normalizedManagerView = normalizeManagerRequestsTab(requestedView);
+      if ([REQUESTS_MANAGER_TAB_PENDING, REQUESTS_MANAGER_TAB_PROCESSED, REQUESTS_MANAGER_TAB_SOC].includes(normalizedManagerView)) {
+        setManagerRequestsTab(normalizedManagerView);
       } else if (isManagerShellRole() && requestedView === 'requests') {
         setManagerRequestsTab(REQUESTS_MANAGER_TAB_PENDING);
       }
@@ -73243,10 +78572,9 @@ function bindUiEvents() {
 
     if (action === 'home-mobile-open-leave') {
       runWithBusy(async () => {
-        setRequestsTabView('leave');
-        const moved = await navigateToRoute(ROUTE_REQUESTS);
+        const moved = await navigateToRoute(ROUTE_LEAVE);
         if (!moved) return;
-        scrollToSelector('#leaveModule');
+        scrollToSelector('#leaveWorkspaceDesktop');
       }, '휴가 화면 이동 중...');
       return;
     }
@@ -73303,15 +78631,6 @@ function bindUiEvents() {
     if (action === 'requests-workspace-segment') {
       const segment = String(actionEl.dataset.segment || '').trim().toLowerCase();
       setRequestsWorkspaceDrawerOpen(false);
-      if (segment === 'approvals' && isManagerShellRole()) {
-        setRequestsTabView('approvals');
-        setManagerRequestsTab(REQUESTS_MANAGER_TAB_PENDING);
-        state.currentRoute = ROUTE_REQUESTS;
-        state.lastAllowedRoute = ROUTE_REQUESTS;
-        updateRouteHash(`${ROUTE_REQUESTS}?section=${encodeURIComponent(state.requestsManagerTab)}`, { replace: true });
-        runActionSafely(loadRequestsWorkspaceCurrentTab(), '승인함을 불러오지 못했습니다.');
-        return;
-      }
       setRequestsTabView(segment || 'exceptions');
       state.currentRoute = ROUTE_REQUESTS;
       state.lastAllowedRoute = ROUTE_REQUESTS;
@@ -73327,15 +78646,6 @@ function bindUiEvents() {
         runActionSafely(navigateToRoute(ROUTE_HR), '문서 화면 이동에 실패했습니다.');
         return;
       }
-      if (segment === 'approvals' && isManagerShellRole()) {
-        setRequestsTabView('approvals');
-        setManagerRequestsTab(REQUESTS_MANAGER_TAB_PENDING);
-        runActionSafely(
-          navigateToRoute(`${ROUTE_REQUESTS}?section=${encodeURIComponent(REQUESTS_MANAGER_TAB_PENDING)}`),
-          '승인 화면 이동에 실패했습니다.',
-        );
-        return;
-      }
       setRequestsTabView('exceptions');
       runActionSafely(navigateToRoute(ROUTE_REQUESTS), '요청 화면 이동에 실패했습니다.');
       return;
@@ -73347,7 +78657,7 @@ function bindUiEvents() {
           showToast('휴가 신청 권한이 없습니다.', 'error', 2200);
           return;
         }
-        setLeaveWorkspaceSection('requests');
+        setLeaveWorkspaceSection('history');
         setLeaveWorkspaceDrawerOpen(false);
         if (resolveLeaveManagerScope() !== 'mine') {
           setLeaveManagerScope('mine');
@@ -73400,6 +78710,50 @@ function bindUiEvents() {
       }
       setRequestsWorkspaceDrawerOpen(false);
       runWithBusy(() => loadRequestsWorkspaceCurrentTab(), '새로고침 중...');
+      return;
+    }
+
+    if (action === 'requests-open-employee-filter') {
+      openRequestsFilterSheet({ source: 'requests', type: 'employee' });
+      return;
+    }
+
+    if (action === 'requests-open-site-filter') {
+      openRequestsFilterSheet({ source: 'requests', type: 'site' });
+      return;
+    }
+
+    if (action === 'leave-open-employee-filter') {
+      openRequestsFilterSheet({ source: 'leave', type: 'employee' });
+      return;
+    }
+
+    if (action === 'leave-open-site-filter') {
+      openRequestsFilterSheet({ source: 'leave', type: 'site' });
+      return;
+    }
+
+    if (action === 'requests-filter-sheet-facet') {
+      const sheetState = getRequestsFilterSheetState();
+      if (!sheetState) return;
+      sheetState.facet = String(actionEl.dataset.facet || 'site').trim().toLowerCase() === 'rank' ? 'rank' : 'site';
+      renderRequestsFilterSheet();
+      return;
+    }
+
+    if (action === 'requests-filter-sheet-apply') {
+      applyRequestsFilterSheet();
+      return;
+    }
+
+    if (action === 'requests-filter-sheet-reset') {
+      const sheetState = getRequestsFilterSheetState();
+      if (!sheetState) return;
+      sheetState.searchQuery = '';
+      sheetState.selectedEmployeeKeys = [];
+      sheetState.selectedSiteValues = [];
+      sheetState.selectedRankValues = [];
+      renderRequestsFilterSheet();
       return;
     }
 
@@ -73503,10 +78857,9 @@ function bindUiEvents() {
 
     if (action === 'requests-quick-leave') {
       runWithBusy(async () => {
-        setRequestsTabView('leave');
-        setLeaveWorkspaceSection('requests');
+        setLeaveWorkspaceSection('history');
         setLeaveWorkspaceComposerOpen(true);
-        const moved = await navigateToRoute(`${ROUTE_REQUESTS}?section=leave`);
+        const moved = await navigateToRoute(ROUTE_LEAVE);
         if (!moved) return;
         await loadLeaves();
         scrollToSelector(isDesktopLeaveWorkspaceMode() ? '#leaveWorkspaceComposer' : '#leaveModule');
@@ -73533,10 +78886,17 @@ function bindUiEvents() {
     if (action === 'hr-workspace-segment') {
       const segment = normalizeHrWorkspaceSegment(actionEl.dataset.segment || 'apply');
       setHrWorkspaceSegment(segment);
-      if (segment === 'templates') {
-        runActionSafely(loadHrDocumentTemplates({ force: false }), '템플릿 목록을 불러오지 못했습니다.');
-      } else if (segment === 'approvals') {
-        runActionSafely(loadHrEmploymentAdminRequests({ force: false }), '승인 요청 목록을 불러오지 못했습니다.');
+      state.currentRoute = ROUTE_HR;
+      state.lastAllowedRoute = ROUTE_HR;
+      updateRouteHash(`${ROUTE_HR}?segment=${encodeURIComponent(segment)}`, { replace: true });
+      if (segment === 'manage') {
+        const tasks = buildHrManageLoadTasks({ force: false });
+        if (tasks.length) {
+          runActionSafely(
+            Promise.allSettled(tasks),
+            '문서 관리 정보를 불러오지 못했습니다.',
+          );
+        }
       } else if (segment === 'my-docs') {
         runActionSafely(loadHrEmploymentMyRequests({ force: false }), '내 문서 목록을 불러오지 못했습니다.');
       }
@@ -73550,10 +78910,29 @@ function bindUiEvents() {
       }
       const hrState = ensureHrDocsState();
       hrState.selectedDocType = docType;
+      hrState.myRowsFetchedAt = 0;
+      hrState.adminRowsFetchedAt = 0;
+      hrState.templatesFetchedAt = 0;
+      if (isHrResignationDocumentType(docType) && !['requested', 'approved', 'rejected'].includes(normalizeHrRequestStatus(hrState.adminStatus || 'requested'))) {
+        hrState.adminStatus = 'requested';
+      }
       const selectedType = getHrSelectedCertificateType();
       renderHrDocCardSelection();
       renderHrEmployeeRequestCard();
       renderHrPurposeSelector();
+      renderHrAdminStatusTabs();
+      renderHrTableHeaders();
+      if (isHrEmployeeRole() && normalizeHrWorkspaceSegment(hrState.workspaceSegment || 'apply') === 'my-docs') {
+        runActionSafely(loadHrEmploymentMyRequests({ force: true }), '내 문서 목록을 불러오지 못했습니다.');
+      } else if (canAccessHrManageSegment() && normalizeHrWorkspaceSegment(hrState.workspaceSegment || 'apply') === 'manage') {
+        const tasks = buildHrManageLoadTasks({ force: true });
+        if (tasks.length) {
+          runActionSafely(
+            Promise.allSettled(tasks),
+            '문서 관리 정보를 불러오지 못했습니다.',
+          );
+        }
+      }
       if (!isHrCertificateTypeRequestAvailable(selectedType)) {
         const reason = String(selectedType?.eligibility_reason || '').trim();
         showToast(
@@ -73628,31 +79007,28 @@ function bindUiEvents() {
       return;
     }
 
-    if (action === 'hr-admin-panel-tab') {
+    if (action === 'hr-manage-panel-tab') {
       const hrState = ensureHrDocsState();
-      if (!isHrAdminRole()) {
+      const nextPanel = normalizeHrAdminPanel(actionEl.dataset.panel || 'templates');
+      const canOpenPanel = nextPanel === 'templates' ? isHrTemplateManagerRole() : isHrApprovalPolicyManagerRole();
+      if (!canOpenPanel) {
         return;
       }
-      const nextPanel = normalizeHrAdminPanel(actionEl.dataset.panel || 'requests');
-      if (nextPanel === 'templates' && !isHrTemplateManagerRole()) {
-        showToast('템플릿 관리는 Developer 권한만 가능합니다.', 'error', 2200);
-        return;
-      }
-      if (normalizeHrAdminPanel(hrState.adminPanel || 'requests') === nextPanel) {
+      if (normalizeHrAdminPanel(hrState.adminPanel || 'templates') === nextPanel) {
         return;
       }
       hrState.adminPanel = nextPanel;
-      hrState.workspaceSegment = nextPanel === 'templates' ? 'templates' : 'approvals';
+      hrState.workspaceSegment = 'manage';
       renderHrAdminPanelTabs();
       renderHrWorkspaceSegments();
       state.currentRoute = ROUTE_HR;
       state.lastAllowedRoute = ROUTE_HR;
-      updateRouteHash(`${ROUTE_HR}?panel=${encodeURIComponent(nextPanel)}`, { replace: true });
+      updateRouteHash(`${ROUTE_HR}?segment=${encodeURIComponent(hrState.workspaceSegment)}`, { replace: true });
       runActionSafely(
         nextPanel === 'templates'
           ? loadHrDocumentTemplates({ force: false })
-          : loadHrEmploymentAdminRequests({ force: false }),
-        'HR 패널을 불러오지 못했습니다.',
+          : loadHrDocumentApprovalRules({ force: false }),
+        '문서 관리 패널을 불러오지 못했습니다.',
       );
       return;
     }
@@ -73662,8 +79038,70 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'hr-approval-rules-refresh') {
+      runWithBusy(() => loadHrDocumentApprovalRules({ force: true }), '기본 승인 절차 새로고침 중...');
+      return;
+    }
+
+    if (action === 'hr-approval-rule-add') {
+      const hrState = ensureHrDocsState();
+      const rows = Array.isArray(hrState.approvalRulesRows) ? hrState.approvalRulesRows : [];
+      if (rows.length >= 6) {
+        showToast('기본 승인 절차는 최대 6단계까지 추가할 수 있습니다.', 'info', 2200);
+        return;
+      }
+      rows.push(createHrApprovalRuleDraft({
+        label: `승인 ${rows.length + 1}`,
+      }));
+      hrState.approvalRulesRows = rows;
+      const statusEl = $('#hrApprovalRulesStatus');
+      if (statusEl) statusEl.textContent = '새 승인 단계를 추가했습니다. 저장해야 반영됩니다.';
+      renderHrApprovalRulesEditor();
+      return;
+    }
+
+    if (action === 'hr-approval-rule-remove') {
+      const hrState = ensureHrDocsState();
+      const index = Number.parseInt(String(actionEl.dataset.index || '-1'), 10);
+      if (!Array.isArray(hrState.approvalRulesRows) || index < 0 || index >= hrState.approvalRulesRows.length) {
+        return;
+      }
+      hrState.approvalRulesRows.splice(index, 1);
+      const statusEl = $('#hrApprovalRulesStatus');
+      if (statusEl) statusEl.textContent = '승인 단계를 제거했습니다. 저장해야 반영됩니다.';
+      renderHrApprovalRulesEditor();
+      return;
+    }
+
+    if (action === 'hr-approval-rules-save') {
+      runWithBusy(() => saveHrDocumentApprovalRules(), '기본 승인 절차 저장 중...');
+      return;
+    }
+
     if (action === 'hr-template-upload') {
       runWithBusy(() => uploadHrDocumentTemplate(), '템플릿 업로드 중...');
+      return;
+    }
+
+    if (action === 'hr-template-preview') {
+      const templateId = String(actionEl.dataset.templateId || '').trim();
+      if (!templateId) {
+        showToast('템플릿 정보를 찾을 수 없습니다.', 'error', 2000);
+        return;
+      }
+      runWithProgressTask(async (progressController) => {
+        progressController?.setProgress?.(25, '샘플 템플릿을 준비하는 중입니다.');
+        const response = await fetchAuthorizedDownloadResponse({
+          requestUrl: `${getApiBaseUrl()}/admin/hr/documents/templates/${encodeURIComponent(templateId)}/preview`,
+        });
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank', 'noopener,noreferrer');
+        window.setTimeout(() => URL.revokeObjectURL(url), 15000);
+      }, {
+        busyLabel: '템플릿 예시 여는 중...',
+        fallbackMessage: '템플릿 예시를 열지 못했습니다.',
+      });
       return;
     }
 
@@ -73688,16 +79126,49 @@ function bindUiEvents() {
         showToast('요청 정보를 찾을 수 없습니다.', 'error', 2200);
         return;
       }
+      const requestKind = normalizeHrDocumentRequestKind(actionEl.dataset.requestKind || '');
+      const isResignation = requestKind === 'resignation';
       openConfirmDialog({
-        title: '증명서 승인',
-        message: '승인하면 문서 생성 및 메일 발송 작업이 시작됩니다. 진행하시겠습니까?',
+        title: isResignation ? '사직서 승인' : '증명서 승인',
+        message: isResignation ? '사직서 제출을 승인하시겠습니까?' : '승인하면 문서 생성 및 메일 발송 작업이 시작됩니다. 진행하시겠습니까?',
         acceptLabel: '승인',
         acceptVariant: 'btn-primary',
         triggerEl: actionEl,
         onAccept: async () => {
-          await approveHrEmploymentRequest(requestId);
-          showToast('승인 요청을 접수했습니다. 발급 작업을 시작합니다.', 'success', 2200);
-          await loadHrEmploymentAdminRequests({ force: true });
+          await approveHrEmploymentRequest(requestId, { requestKind });
+          showToast(isResignation ? '사직서 제출을 승인했습니다.' : '승인 요청을 접수했습니다. 발급 작업을 시작합니다.', 'success', 2200);
+          if (state.currentView === 'requests') {
+            await loadRequestsWorkspaceCurrentTab({ silent: true });
+          }
+        },
+      });
+      return;
+    }
+
+    if (action === 'hr-admin-delegate-approve') {
+      const requestId = String(actionEl.dataset.requestId || '').trim();
+      if (!requestId) {
+        showToast('요청 정보를 찾을 수 없습니다.', 'error', 2200);
+        return;
+      }
+      const requestKind = normalizeHrDocumentRequestKind(actionEl.dataset.requestKind || '');
+      const isResignation = requestKind === 'resignation';
+      openConfirmDialog({
+        title: isResignation ? '사직서 전결 승인' : '문서 전결 승인',
+        message: '상위 승인자가 하위 단계를 생략하고 전결 처리합니다. 계속하시겠습니까?',
+        acceptLabel: '전결 승인',
+        acceptVariant: 'btn-primary',
+        triggerEl: actionEl,
+        onAccept: async () => {
+          if (isResignation) {
+            await apiRequest(`/admin/hr/documents/resignation-requests/${encodeURIComponent(requestId)}/delegate-approve`, { method: 'POST' });
+          } else {
+            await apiRequest(`/certificates/admin/requests/${encodeURIComponent(requestId)}/delegate-approve`, { method: 'POST' });
+          }
+          showToast('전결 승인 처리했습니다.', 'success', 2200);
+          if (normalizeHrWorkspaceSegment(ensureHrDocsState().workspaceSegment || 'apply') === 'my-docs') {
+            await loadHrEmploymentMyRequests({ force: true });
+          }
           if (state.currentView === 'requests') {
             await loadRequestsWorkspaceCurrentTab({ silent: true });
           }
@@ -73717,10 +79188,10 @@ function bindUiEvents() {
         showToast('반려 사유 입력이 필요합니다.', 'info', 2000);
         return;
       }
+      const requestKind = normalizeHrDocumentRequestKind(actionEl.dataset.requestKind || '');
       runWithBusy(async () => {
-        await rejectHrEmploymentRequest(requestId, reason);
-        showToast('증명서 요청을 반려했습니다.', 'success', 1800);
-        await loadHrEmploymentAdminRequests({ force: true });
+        await rejectHrEmploymentRequest(requestId, reason, { requestKind });
+        showToast(requestKind === 'resignation' ? '사직서 제출을 반려했습니다.' : '증명서 요청을 반려했습니다.', 'success', 1800);
         if (state.currentView === 'requests') {
           await loadRequestsWorkspaceCurrentTab({ silent: true });
         }
@@ -73757,18 +79228,59 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'leave-refresh-current-view') {
+      const activeSection = normalizeLeaveWorkspaceSection(state.leaveView?.workspaceSection || 'status');
+      if (activeSection === 'grants') {
+        runWithBusy(() => loadLeaveGrants(), '조회 중...');
+        return;
+      }
+      runWithBusy(() => loadLeaves(), '조회 중...');
+      return;
+    }
+
+    if (action === 'leave-export-usage') {
+      exportLeaveUsageRows();
+      return;
+    }
+
+    if (action === 'leave-export-history') {
+      exportLeaveHistoryRows();
+      return;
+    }
+
     if (action === 'leave-workspace-section') {
-      setLeaveWorkspaceSection(actionEl.dataset.section || 'requests');
+      const nextSection = actionEl.dataset.section || 'status';
+      setLeaveWorkspaceSection(nextSection);
+      updateRouteHash(getLeaveTabRoute(nextSection), { replace: true });
+      if (nextSection === 'history' && isDesktopLeaveWorkspaceMode() && isManagerShellRole() && can('leaveReview') && !Boolean(state.leaveView?.workspaceComposerOpen)) {
+        runWithBusy(() => loadLeaves(), '조회 중...');
+        return;
+      }
+      if (nextSection === 'grants' && canManageLeaveGrants()) {
+        runWithBusy(() => loadLeaveGrants(), '조회 중...');
+        return;
+      }
+      if (nextSection === 'settings' && canManageLeaveSettings()) {
+        runWithBusy(() => loadLeaves(), '조회 중...');
+        return;
+      }
       renderLeaveManagementWorkspace();
       return;
     }
 
     if (action === 'leave-workspace-scope') {
-      setLeaveWorkspaceSection('requests');
+      setLeaveWorkspaceSection('history');
       setLeaveWorkspaceDrawerOpen(false);
       setLeaveWorkspaceComposerOpen(false);
       setLeaveManagerScope(actionEl.dataset.scope || 'mine');
       runWithBusy(() => loadLeaves(), '조회 중...');
+      return;
+    }
+
+    if (action === 'leave-workspace-queue-tab') {
+      setLeaveWorkspaceQueueTab(actionEl.dataset.tab || REQUESTS_MANAGER_TAB_PENDING);
+      setLeaveWorkspaceDrawerOpen(false);
+      renderLeaveManagementWorkspace();
       return;
     }
 
@@ -73799,13 +79311,22 @@ function bindUiEvents() {
       const currentDirection = normalizeLeaveUsageSortDirection(state.leaveView.usageSortDirection || 'asc');
       if (currentKey !== nextKey) {
         state.leaveView.usageSortKey = nextKey;
-        state.leaveView.usageSortDirection = ['annual', 'half', 'latest', 'pending'].includes(nextKey) ? 'desc' : 'asc';
+        state.leaveView.usageSortDirection = ['granted', 'used', 'remaining', 'latest', 'pending'].includes(nextKey) ? 'desc' : 'asc';
       } else if (currentDirection === 'asc') {
         state.leaveView.usageSortDirection = 'desc';
       } else {
         state.leaveView.usageSortKey = 'employee';
         state.leaveView.usageSortDirection = 'asc';
       }
+      renderLeaveUsageRows();
+      return;
+    }
+
+    if (action === 'leave-usage-shift-year') {
+      if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+      const currentYear = Number(normalizeLeaveUsageYear(state.leaveView.usageYear || ''));
+      const delta = Number(actionEl.dataset.direction || 0) || 0;
+      state.leaveView.usageYear = normalizeLeaveUsageYear(currentYear + delta);
       renderLeaveUsageRows();
       return;
     }
@@ -73823,12 +79344,140 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'leave-policy-register') {
+      openLeavePolicyEditor();
+      return;
+    }
+
+    if (action === 'leave-policy-status-tab') {
+      if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+      state.leaveView.policyStatusTab = normalizeLeavePolicyStatusTab(actionEl.dataset.tab || 'active');
+      renderLeavePolicySection();
+      return;
+    }
+
+    if (action === 'leave-policy-save') {
+      runWithBusy(async () => {
+        await submitLeavePolicyEditor();
+      }, '휴가 정책 저장 중...');
+      return;
+    }
+
+    if (action === 'leave-policy-open') {
+      openLeavePolicyDetailSheet(actionEl.dataset.policyId || '');
+      return;
+    }
+
+    if (action === 'leave-policy-edit') {
+      const policyId = String(actionEl.dataset.policyId || '').trim();
+      const rows = Array.isArray(state.leaveView?.policyRows) ? state.leaveView.policyRows : [];
+      const policy = rows.find((row) => String(row?.id || '').trim() === policyId) || null;
+      openLeavePolicyEditor({ policy });
+      return;
+    }
+
+    if (action === 'leave-policy-pick-employees') {
+      if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+      const draft = readLeavePolicyDraftFromSheet();
+      runWithBusy(async () => {
+        await openLeaveEmployeePickerSheet({
+          source: 'policy',
+          draft,
+          context: state.leaveView.policyEditorContext || null,
+        });
+      }, '직원 목록 준비 중...');
+      return;
+    }
+
+    if (action === 'leave-policy-add-tenure') {
+      const list = $('#leavePolicyTenureList');
+      if (list instanceof HTMLElement) {
+        list.appendChild(renderLeavePolicyTenureRuleRow());
+      }
+      return;
+    }
+
+    if (action === 'leave-policy-remove-tenure') {
+      const row = actionEl.closest('.leave-policy-tenure-row');
+      if (row && row.parentElement) {
+        row.parentElement.removeChild(row);
+      }
+      return;
+    }
+
+    if (action === 'leave-grants-tab') {
+      setLeaveGrantsTab(actionEl.dataset.tab || 'history');
+      renderLeaveGrantsSection();
+      return;
+    }
+
+    if (action === 'leave-grant-open') {
+      openLeaveGrantSheet();
+      return;
+    }
+
+    if (action === 'leave-grant-pick-employees') {
+      if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+      state.leaveView.leaveGrantDraft = readLeaveGrantDraftFromSheet();
+      runWithBusy(async () => {
+        await openLeaveEmployeePickerSheet({
+          source: 'grant',
+          draft: state.leaveView.leaveGrantDraft,
+        });
+      }, '직원 목록 준비 중...');
+      return;
+    }
+
+    if (action === 'leave-grant-save') {
+      runWithBusy(async () => {
+        await submitLeaveGrant();
+      }, '휴가 부여 저장 중...');
+      return;
+    }
+
+    if (action === 'leave-employee-picker-toggle') {
+      if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+      const picker = state.leaveView.leaveEmployeePicker && typeof state.leaveView.leaveEmployeePicker === 'object'
+        ? state.leaveView.leaveEmployeePicker
+        : null;
+      if (!picker) return;
+      const employeeCode = String(actionEl.dataset.employeeCode || '').trim().toUpperCase();
+      const nextCodes = normalizeStringArray(picker.selectedCodes || []);
+      picker.selectedCodes = nextCodes.includes(employeeCode)
+        ? nextCodes.filter((code) => code !== employeeCode)
+        : [...nextCodes, employeeCode];
+      renderLeaveEmployeePickerSheet();
+      return;
+    }
+
+    if (action === 'leave-employee-picker-remove') {
+      if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+      const picker = state.leaveView.leaveEmployeePicker && typeof state.leaveView.leaveEmployeePicker === 'object'
+        ? state.leaveView.leaveEmployeePicker
+        : null;
+      if (!picker) return;
+      const employeeCode = String(actionEl.dataset.employeeCode || '').trim().toUpperCase();
+      picker.selectedCodes = normalizeStringArray(picker.selectedCodes || []).filter((code) => code !== employeeCode);
+      renderLeaveEmployeePickerSheet();
+      return;
+    }
+
+    if (action === 'leave-employee-picker-apply') {
+      restoreLeaveEmployeePickerSource({ apply: true });
+      return;
+    }
+
+    if (action === 'leave-employee-picker-cancel') {
+      restoreLeaveEmployeePickerSource({ apply: false });
+      return;
+    }
+
     if (action === 'leave-workspace-toggle-composer') {
       if (!can('leaveWrite')) {
         showToast('휴가 신청 권한이 없습니다.', 'error', 2200);
         return;
       }
-      setLeaveWorkspaceSection('requests');
+      setLeaveWorkspaceSection('history');
       const nextOpen = !Boolean(state.leaveView?.workspaceComposerOpen);
       setLeaveWorkspaceComposerOpen(nextOpen);
       if (nextOpen && resolveLeaveManagerScope() !== 'mine') {
@@ -73837,6 +79486,10 @@ function bindUiEvents() {
           await loadLeaves();
           scrollToSelector('#leaveWorkspaceComposer');
         }, '휴가 신청 화면 준비 중...');
+        return;
+      }
+      if (!nextOpen && isDesktopLeaveWorkspaceMode() && isManagerShellRole() && can('leaveReview')) {
+        runWithBusy(() => loadLeaves(), '조회 중...');
         return;
       }
       renderLeaveManagementWorkspace();
@@ -73906,6 +79559,157 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'attendance-switch-section') {
+      const requestedSection = normalizeAttendanceWorkspaceSection(actionEl.dataset.section || 'daily');
+      setAttendanceWorkspaceSection(requestedSection);
+      if (requestedSection === 'period' && !String(state.attendanceView?.periodMode || '').trim()) {
+        setAttendancePeriodMode('list');
+      }
+      syncAttendanceManagerFilterInputs();
+      updateRouteHash(getAttendanceWorkspaceRoute(), { replace: true });
+      if (requestedSection === 'period' && normalizeAttendancePeriodMode(state.attendanceView?.periodMode || 'list') === 'calendar') {
+        state.schedule.month = normalizeMonthKey(state.attendanceView?.calendarMonth || '') || toMonthKey(new Date());
+        runWithBusy(() => loadSchedule({ force: false }), '월간 근무표 준비 중...');
+      } else {
+        renderAttendanceViewFromCache();
+        Promise.resolve()
+          .then(() => loadAttendanceView({ force: false }))
+          .catch((error) => {
+            console.error('[RG ARLS] attendance section switch refresh failed', error);
+          });
+      }
+      return;
+    }
+
+    if (action === 'attendance-switch-period-mode') {
+      const mode = normalizeAttendancePeriodMode(actionEl.dataset.mode || 'list');
+      setAttendancePeriodMode(mode);
+      syncAttendanceManagerFilterInputs();
+      updateRouteHash(getAttendanceWorkspaceRoute(), { replace: true });
+      if (mode === 'calendar') {
+        state.schedule.month = normalizeMonthKey(state.attendanceView?.calendarMonth || '') || toMonthKey(new Date());
+        runWithBusy(() => loadSchedule({ force: false }), '월간 근무표 준비 중...');
+      } else {
+        renderAttendanceViewFromCache();
+        Promise.resolve()
+          .then(() => loadAttendanceView({ force: false }))
+          .catch((error) => {
+            console.error('[RG ARLS] attendance period mode switch refresh failed', error);
+          });
+      }
+      return;
+    }
+
+    if (action === 'attendance-switch-stats-scope') {
+      setAttendanceStatsScope(actionEl.dataset.scope || 'attendance');
+      syncAttendanceManagerFilterInputs();
+      updateRouteHash(getAttendanceWorkspaceRoute(), { replace: true });
+      renderAttendanceViewFromCache();
+      Promise.resolve()
+        .then(() => loadAttendanceView({ force: false }))
+        .catch((error) => {
+          console.error('[RG ARLS] attendance stats scope switch refresh failed', error);
+        });
+      return;
+    }
+
+    if (action === 'attendance-switch-stats-attendance-metric') {
+      if (!state.attendanceView) {
+        state.attendanceView = createInitialAttendanceViewState();
+      }
+      state.attendanceView.statsAttendanceMetric = normalizeAttendanceStatsAttendanceMetric(actionEl.dataset.metric || 'rate');
+      persistAttendanceManagerPrefs();
+      syncAttendanceManagerFilterInputs();
+      updateRouteHash(getAttendanceWorkspaceRoute(), { replace: true });
+      renderAttendanceViewFromCache();
+      return;
+    }
+
+    if (action === 'attendance-switch-stats-staff-metric') {
+      if (!state.attendanceView) {
+        state.attendanceView = createInitialAttendanceViewState();
+      }
+      state.attendanceView.statsStaffMetric = normalizeAttendanceStatsStaffMetric(actionEl.dataset.metric || 'weekday');
+      persistAttendanceManagerPrefs();
+      syncAttendanceManagerFilterInputs();
+      updateRouteHash(getAttendanceWorkspaceRoute(), { replace: true });
+      renderAttendanceViewFromCache();
+      return;
+    }
+
+    if (action === 'attendance-open-employee-filter') {
+      runWithBusy(() => openAttendanceEmployeeFilterSheet(), '필터 준비 중...');
+      return;
+    }
+
+    if (action === 'attendance-open-site-filter') {
+      runWithBusy(() => openAttendanceSiteFilterSheet(), '필터 준비 중...');
+      return;
+    }
+
+    if (action === 'attendance-open-range-sheet') {
+      openAttendanceRangeSheet(actionEl.dataset.target || 'period');
+      return;
+    }
+
+    if (action === 'attendance-apply-employee-filter-sheet') {
+      if (!state.attendanceView) {
+        state.attendanceView = createInitialAttendanceViewState();
+      }
+      state.attendanceView.employeeFilterApplied = uniqAttendanceTokens(state.attendanceView.employeeFilterDraft || []);
+      state.attendanceView.employeeCode = '';
+      persistAttendanceManagerPrefs();
+      closeSheet();
+      syncAttendanceManagerFilterInputs();
+      renderAttendanceFilterMeta();
+      runWithBusy(() => loadAttendanceView({ force: true }), '필터 적용 중...');
+      return;
+    }
+
+    if (action === 'attendance-apply-site-filter-sheet') {
+      if (!state.attendanceView) {
+        state.attendanceView = createInitialAttendanceViewState();
+      }
+      const appliedTokens = uniqAttendanceTokens(state.attendanceView.siteFilterDraft || []);
+      state.attendanceView.siteFilterApplied = appliedTokens;
+      const exactSiteTokens = appliedTokens
+        .map((token) => parseAttendanceFilterToken(token))
+        .filter((item) => item.facet === 'site' && item.value)
+        .map((item) => String(item.value || '').trim().toUpperCase())
+        .filter(Boolean);
+      state.attendanceView.siteCode = exactSiteTokens.length === 1 ? exactSiteTokens[0] : '';
+      persistAttendanceManagerPrefs();
+      closeSheet();
+      syncAttendanceManagerFilterInputs();
+      renderAttendanceFilterMeta();
+      if (getAttendanceWorkspaceSection() === 'period' && normalizeAttendancePeriodMode(state.attendanceView.periodMode || 'list') === 'calendar') {
+        runWithBusy(() => loadSchedule({ force: true }), '필터 적용 중...');
+      } else {
+        runWithBusy(() => loadAttendanceView({ force: true }), '필터 적용 중...');
+      }
+      return;
+    }
+
+    if (action === 'attendance-shift-day') {
+      const direction = Number(actionEl.dataset.direction || 0) || 0;
+      const currentDate = new Date(`${getAttendanceActiveDate()}T00:00:00`);
+      currentDate.setDate(currentDate.getDate() + direction);
+      setAttendanceActiveDate(toLocalDateKey(currentDate), { syncInput: false });
+      syncAttendanceManagerFilterInputs();
+      runWithBusy(() => loadAttendanceView({ force: true }), '날짜 이동 중...');
+      return;
+    }
+
+    if (action === 'attendance-stats-export-data') {
+      exportAttendanceStatsData();
+      return;
+    }
+
+    if (action === 'attendance-stats-export-image') {
+      exportAttendanceStatsImage();
+      return;
+    }
+
     if (action === 'attendance-switch-tab') {
       const requestedTab = normalizeAttendanceManagerTab(actionEl.dataset.tab || 'status');
       if (requestedTab === getAttendanceManagerTab()) {
@@ -73920,20 +79724,6 @@ function bindUiEvents() {
         .catch((error) => {
           console.error('[RG ARLS] attendance tab switch refresh failed', error);
         });
-      return;
-    }
-
-    if (action === 'attendance-status-preset') {
-      const range = String(actionEl.dataset.range || 'today').trim().toLowerCase();
-      if (range === 'yesterday') {
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        setAttendanceActiveDate(toLocalDateKey(yesterday), { syncInput: false });
-      } else {
-        setAttendanceActiveDate(toLocalDateKey(new Date()), { syncInput: false });
-      }
-      syncAttendanceManagerFilterInputs();
-      runWithBusy(() => loadAttendanceView({ force: true }), '현황 조회 중...');
       return;
     }
 
@@ -73963,13 +79753,6 @@ function bindUiEvents() {
       return;
     }
 
-    if (action === 'attendance-range-preset') {
-      setAttendanceRangePreset(actionEl.dataset.range || 'today');
-      syncAttendanceManagerFilterInputs();
-      runWithBusy(() => loadAttendanceView({ force: true }), '기간 조회 중...');
-      return;
-    }
-
     if (action === 'attendance-filter-reset') {
       resetAttendanceManagerFilters({ syncInputs: true });
       renderAttendanceFilterMeta();
@@ -73989,6 +79772,41 @@ function bindUiEvents() {
         scopedRows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: false }),
         loading: false,
       });
+      return;
+    }
+
+    if (action === 'attendance-apply-range-sheet') {
+      if (!state.attendanceView) {
+        state.attendanceView = createInitialAttendanceViewState();
+      }
+      const startInput = $('#attendanceRangeSheetStart');
+      const endInput = $('#attendanceRangeSheetEnd');
+      let start = normalizeAttendanceDate(startInput instanceof HTMLInputElement ? startInput.value : '');
+      let end = normalizeAttendanceDate(endInput instanceof HTMLInputElement ? endInput.value : '');
+      if (!start && end) start = end;
+      if (!end && start) end = start;
+      if (!start && !end) {
+        const fallback = buildAttendanceSheetDateRange(state.attendanceView.rangeSheetTarget || 'period');
+        start = fallback.start;
+        end = fallback.end;
+      }
+      if (start > end) {
+        [start, end] = [end, start];
+      }
+      const targetName = String(state.attendanceView.rangeSheetTarget || 'period').trim().toLowerCase() === 'stats'
+        ? 'stats'
+        : 'period';
+      if (targetName === 'stats') {
+        state.attendanceView.statsStartDate = start;
+        state.attendanceView.statsEndDate = end;
+        state.attendanceView.statsPreset = 'custom';
+      } else {
+        setAttendanceDateRange({ start, end, preset: 'custom', syncInputs: false });
+      }
+      persistAttendanceManagerPrefs();
+      closeSheet();
+      syncAttendanceManagerFilterInputs();
+      runWithBusy(() => loadAttendanceView({ force: true }), '기간 조회 중...');
       return;
     }
 
@@ -74388,7 +80206,7 @@ function bindUiEvents() {
     }
 
     if (action === 'employee-directory-open-leave') {
-      runActionSafely(navigateToRoute(`${ROUTE_REQUESTS}?section=leave`), '휴가 화면으로 이동하지 못했습니다.');
+      runActionSafely(navigateToRoute(ROUTE_LEAVE), '휴가 화면으로 이동하지 못했습니다.');
       return;
     }
 
@@ -75061,12 +80879,14 @@ function bindUiEvents() {
     if (action === 'calendar-set-view') {
       const nextTab = normalizeCalendarViewTab(actionEl.dataset.tab || '');
       const calendarState = ensureCalendarWorkspaceState();
+      if (calendarState.eventModalOpen) closeCalendarEventModal();
       calendarState.viewTab = nextTab;
+      calendarState.filterOpen = false;
       if (calendarState.workspace && typeof calendarState.workspace === 'object') {
-        calendarState.workspace = {
-          ...calendarState.workspace,
+        calendarState.workspace = syncCalendarWorkspaceSelection(calendarState.workspace, {
           view: nextTab,
-        };
+          date: calendarState.anchorDate || calendarState.selectedDate || toLocalDateKey(new Date()),
+        });
       }
       renderCalendarWorkspace();
       runActionSafely((async () => {
@@ -75076,11 +80896,79 @@ function bindUiEvents() {
       return;
     }
 
+    if (action === 'calendar-go-today') {
+      const today = toLocalDateKey(new Date());
+      const calendarState = ensureCalendarWorkspaceState();
+      if (calendarState.eventModalOpen) closeCalendarEventModal();
+      calendarState.anchorDate = today;
+      calendarState.selectedDate = today;
+      calendarState.filterOpen = false;
+      if (calendarState.workspace && typeof calendarState.workspace === 'object') {
+        calendarState.workspace = syncCalendarWorkspaceSelection(calendarState.workspace, {
+          view: calendarState.viewTab || 'month',
+          date: today,
+        });
+      }
+      renderCalendarWorkspace();
+      loadCalendarWorkspace({ force: true, date: today }).catch((error) => {
+        console.error('[RG ARLS] calendar go today failed', error);
+      });
+      return;
+    }
+
+    if (action === 'calendar-shift-range') {
+      const calendarState = ensureCalendarWorkspaceState();
+      if (calendarState.eventModalOpen) closeCalendarEventModal();
+      const direction = Number(actionEl.dataset.direction || 0);
+      const nextDate = shiftCalendarAnchorDate(
+        calendarState.anchorDate || calendarState.selectedDate || toLocalDateKey(new Date()),
+        calendarState.viewTab || 'month',
+        direction,
+      );
+      calendarState.anchorDate = nextDate;
+      calendarState.selectedDate = nextDate;
+      calendarState.filterOpen = false;
+      if (calendarState.workspace && typeof calendarState.workspace === 'object') {
+        calendarState.workspace = syncCalendarWorkspaceSelection(calendarState.workspace, {
+          view: calendarState.viewTab || 'month',
+          date: nextDate,
+        });
+      }
+      renderCalendarWorkspace();
+      loadCalendarWorkspace({ force: true, date: nextDate }).catch((error) => {
+        console.error('[RG ARLS] calendar range shift failed', error);
+      });
+      return;
+    }
+
+    if (action === 'calendar-toggle-filter') {
+      const calendarState = ensureCalendarWorkspaceState();
+      calendarState.filterOpen = !calendarState.filterOpen;
+      renderCalendarWorkspaceTabs();
+      return;
+    }
+
+    if (action === 'calendar-toggle-fullscreen') {
+      const target = getCalendarFullscreenTarget();
+      if (!(target instanceof HTMLElement)) return;
+      runActionSafely((async () => {
+        if (document.fullscreenElement === target) {
+          await document.exitFullscreen();
+        } else {
+          await target.requestFullscreen();
+        }
+        syncCalendarFullscreenState();
+      })(), '캘린더 전체화면 전환에 실패했습니다.');
+      return;
+    }
+
     if (action === 'calendar-select-container') {
       const calendarState = ensureCalendarWorkspaceState();
+      if (calendarState.eventModalOpen) closeCalendarEventModal();
       calendarState.selectedContainerId = String(actionEl.dataset.containerId || '').trim();
       calendarState.selectedEventId = '';
       calendarState.draftEvent = null;
+      calendarState.filterOpen = false;
       loadCalendarWorkspace({ force: true }).catch((error) => {
         console.error('[RG ARLS] calendar container change failed', error);
       });
@@ -75091,10 +80979,27 @@ function bindUiEvents() {
       const dateKey = normalizeAttendanceDate(actionEl.dataset.date || '');
       if (!dateKey) return;
       const calendarState = ensureCalendarWorkspaceState();
+      if (calendarState.eventModalOpen) closeCalendarEventModal();
+      if (
+        String(calendarState.selectedDate || '') === dateKey
+        && String(calendarState.anchorDate || '') === dateKey
+      ) {
+        calendarState.filterOpen = false;
+        renderCalendarWorkspace();
+        return;
+      }
       calendarState.anchorDate = dateKey;
       calendarState.selectedDate = dateKey;
       calendarState.selectedEventId = '';
       calendarState.draftEvent = null;
+      calendarState.filterOpen = false;
+      if (calendarState.workspace && typeof calendarState.workspace === 'object') {
+        calendarState.workspace = syncCalendarWorkspaceSelection(calendarState.workspace, {
+          view: calendarState.viewTab || 'month',
+          date: dateKey,
+        });
+      }
+      renderCalendarWorkspace();
       loadCalendarWorkspace({ force: true }).catch((error) => {
         console.error('[RG ARLS] calendar date change failed', error);
       });
@@ -75112,17 +81017,17 @@ function bindUiEvents() {
       const selectedDateKey = getCalendarDateKeyFromValue(selectedEvent?.starts_at || '');
       if (selectedDateKey) {
         calendarState.selectedDate = selectedDateKey;
-        if (calendarState.viewTab !== 'agenda') {
-          calendarState.anchorDate = selectedDateKey;
-        }
+        calendarState.anchorDate = selectedDateKey;
       }
       calendarState.draftEvent = null;
       renderCalendarWorkspace();
+      openCalendarEventModal();
       return;
     }
 
     if (action === 'calendar-new-event') {
       startCalendarDraft();
+      openCalendarEventModal();
       return;
     }
 
@@ -75816,24 +81721,67 @@ function bindUiEvents() {
 
   document.addEventListener('dblclick', (event) => {
     if (window.__RG_ARLS_HANDLERS_BOUND__ !== true) return;
-    if (!canMutateScheduleData()) return;
     const target = event.target instanceof Element ? event.target : null;
     if (!target) return;
     const route = normalizeRoutePath(state.currentRoute || '');
-    if (!isScheduleRoutePath(route)) return;
-    if (getScheduleViewModeValue() !== SCHEDULE_VIEW_MODE_CALENDAR) return;
+    if (isScheduleRoutePath(route)) {
+      if (!canMutateScheduleData()) return;
+      if (getScheduleViewModeValue() !== SCHEDULE_VIEW_MODE_CALENDAR) return;
 
-    const cell = target.closest('.schedule-calendar-cell[data-date]');
-    if (!(cell instanceof HTMLElement)) return;
-    if (target.closest('.schedule-shift-card, .schedule-day-more')) return;
+      const cell = target.closest('.schedule-calendar-cell[data-date]');
+      if (!(cell instanceof HTMLElement)) return;
+      if (target.closest('.schedule-shift-card, .schedule-day-more')) return;
 
-    const dateKey = String(cell.dataset.date || '').trim();
+      const dateKey = String(cell.dataset.date || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      state.schedule.lastInteractedDateKey = dateKey;
+      runActionSafely(openSingleScheduleModal({ date: dateKey }), '단일 생성 화면을 열지 못했습니다.');
+      return;
+    }
+
+    if (!isCalendarRoutePath(route)) return;
+    if (target.closest('[data-action="calendar-select-event"]')) return;
+    const calendarState = ensureCalendarWorkspaceState();
+    const workspace = calendarState.workspace;
+    if (!workspace?.capabilities?.can_create) return;
+
+    const timeSlot = target.closest('.calendar-time-slot[data-date][data-hour]');
+    const dayCell = target.closest('[data-calendar-day-cell][data-date]');
+    const dateKey = String(
+      timeSlot instanceof HTMLElement
+        ? timeSlot.dataset.date || ''
+        : dayCell instanceof HTMLElement
+          ? dayCell.dataset.date || ''
+          : '',
+    ).trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
 
     event.preventDefault();
     event.stopPropagation();
-    state.schedule.lastInteractedDateKey = dateKey;
-    runActionSafely(openSingleScheduleModal({ date: dateKey }), '단일 생성 화면을 열지 못했습니다.');
+    const selectedContainer = getCalendarSelectedContainer(workspace);
+    calendarState.anchorDate = dateKey;
+    calendarState.selectedDate = dateKey;
+    calendarState.selectedEventId = '';
+    calendarState.draftEvent = createCalendarDraftEvent(
+      workspace,
+      String(selectedContainer?.id || workspace?.selected_container_id || '').trim(),
+      dateKey,
+    );
+    if (timeSlot instanceof HTMLElement) {
+      const hour = Number(timeSlot.dataset.hour || 9);
+      const startsAt = parseCalendarDateTimeInputValue(`${dateKey}T${String(Math.max(Math.min(hour, 23), 0)).padStart(2, '0')}:00`);
+      const endsAt = parseCalendarDateTimeInputValue(`${dateKey}T${String(Math.max(Math.min(hour + 1, 23), 1)).padStart(2, '0')}:00`);
+      calendarState.draftEvent = {
+        ...calendarState.draftEvent,
+        starts_at: startsAt || calendarState.draftEvent.starts_at,
+        ends_at: endsAt || calendarState.draftEvent.ends_at,
+      };
+    }
+    renderCalendarWorkspace();
+    openCalendarEventModal();
   }, { signal });
 
   document.addEventListener('change', (event) => {
@@ -75841,7 +81789,7 @@ function bindUiEvents() {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
 
-    if (target.closest('.calendar-shell-detail')) {
+    if (target.closest('.calendar-shell-detail, [data-calendar-editor-root]')) {
       snapshotCalendarEditorStateFromDom(ensureCalendarWorkspaceState().workspace);
       if (
         target.id === 'calendarStartsAtInput'
@@ -75862,6 +81810,53 @@ function bindUiEvents() {
 
     if (target.id === 'desktopGlobalSearch') {
       handleDesktopGlobalSearch(target instanceof HTMLInputElement ? target.value : '');
+      return;
+    }
+
+    if (target.id === 'profileSignatureUploadInput') {
+      const profile = state.profile || createInitialProfileViewState();
+      const file = target instanceof HTMLInputElement && target.files && target.files[0] ? target.files[0] : null;
+      profile.signatureUploadFile = file;
+      profile.signatureUploadFileName = file ? String(file.name || '').trim() : '';
+      state.profile = profile;
+      if (file) {
+        readFileAsDataUrl(file)
+          .then((dataUrl) => {
+            profile.signaturePreviewUrl = dataUrl;
+            profile.signatureStatusText = '업로드한 서명을 미리보기로 확인했습니다.';
+            renderProfileSignatureCard();
+          })
+          .catch((error) => {
+            profile.signatureStatusText = normalizeActionError(error, '서명 미리보기를 만들지 못했습니다.');
+            renderProfileSignatureCard();
+          });
+      } else {
+        renderProfileSignatureCard();
+      }
+      return;
+    }
+
+    if (target.id === 'hrTemplateTypeSelect') {
+      const hrState = ensureHrDocsState();
+      hrState.selectedDocType = normalizeHrCertificateTypeKey(target instanceof HTMLSelectElement ? target.value : hrState.selectedDocType);
+      if (isHrTemplateManagerRole()) {
+        runActionSafely(loadHrDocumentTemplates({ force: true }), '문서 템플릿을 불러오지 못했습니다.');
+      }
+      if (isHrApprovalPolicyManagerRole()) {
+        runActionSafely(loadHrDocumentApprovalRules({ force: true }), '기본 승인 절차를 불러오지 못했습니다.');
+      }
+      return;
+    }
+
+    if (target.dataset.hrApprovalRuleField) {
+      const index = Number.parseInt(String(target.dataset.hrApprovalRuleIndex || '0'), 10) || 0;
+      const field = String(target.dataset.hrApprovalRuleField || '').trim();
+      const value = target instanceof HTMLInputElement
+        ? (target.type === 'checkbox' ? target.checked : target.value)
+        : target instanceof HTMLSelectElement
+          ? target.value
+        : '';
+      updateHrApprovalRuleDraftField(index, field, value);
       return;
     }
 
@@ -75962,6 +81957,45 @@ function bindUiEvents() {
         }
       }
       updateLeaveWorkspaceComposerState({ enforceHalfDayRange: true });
+      return;
+    }
+
+    if (target.id === 'leaveWorkspacePolicySelect') {
+      if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+      state.leaveView.workspacePolicyId = target instanceof HTMLSelectElement ? String(target.value || '').trim() : '';
+      return;
+    }
+
+    if (target.id === 'leavePolicyCategorySelect') {
+      syncLeavePolicyEditorCategory();
+      return;
+    }
+
+    if (target.id === 'leavePolicyTargetSelect' || target.id === 'leavePolicyPromotionSelect') {
+      syncLeavePolicyEditorCategory();
+      return;
+    }
+
+    if (target.id === 'leaveEmployeePickerSite') {
+      if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+      if (state.leaveView.leaveEmployeePicker && typeof state.leaveView.leaveEmployeePicker === 'object') {
+        state.leaveView.leaveEmployeePicker.siteValue = target instanceof HTMLSelectElement ? String(target.value || '').trim() : '';
+        renderLeaveEmployeePickerSheet();
+      }
+      return;
+    }
+
+    if (target.id === 'leaveEmployeePickerRank') {
+      if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+      if (state.leaveView.leaveEmployeePicker && typeof state.leaveView.leaveEmployeePicker === 'object') {
+        state.leaveView.leaveEmployeePicker.rankValue = target instanceof HTMLSelectElement ? String(target.value || '').trim() : '';
+        renderLeaveEmployeePickerSheet();
+      }
+      return;
+    }
+
+    if (target.id === 'leaveGrantsPolicyFilter') {
+      renderLeaveGrantsSection();
       return;
     }
 
@@ -76121,48 +82155,43 @@ function bindUiEvents() {
       const endInput = $('#leaveWorkspaceEndDate');
       state.leaveView.workspaceStartDate = startInput instanceof HTMLInputElement ? String(startInput.value || '').trim() : '';
       state.leaveView.workspaceEndDate = endInput instanceof HTMLInputElement ? String(endInput.value || '').trim() : '';
+      state.leaveView.workspaceDateFilterTouched = true;
+      state.leaveView.workspaceDateDefaultMode = 'custom';
       renderLeaveWorkspaceRequestRows();
+      renderLeaveHistoryChart();
       return;
     }
 
-    if (target.id === 'leaveWorkspaceSiteFilter' || target.id === 'leaveWorkspaceTypeFilter' || target.id === 'leaveWorkspaceStatusFilter') {
+    if (target.id === 'leaveWorkspaceStatusFilter') {
       if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
-      const siteSelect = $('#leaveWorkspaceSiteFilter');
-      const typeSelect = $('#leaveWorkspaceTypeFilter');
       const statusSelect = $('#leaveWorkspaceStatusFilter');
-      state.leaveView.workspaceSiteFilter = siteSelect instanceof HTMLSelectElement ? String(siteSelect.value || 'all').trim() : 'all';
-      state.leaveView.workspaceLeaveTypeFilter = typeSelect instanceof HTMLSelectElement ? String(typeSelect.value || 'all').trim().toLowerCase() : 'all';
       state.leaveView.workspaceStatusFilter = statusSelect instanceof HTMLSelectElement ? normalizeLeaveStatusFilter(statusSelect.value || 'all') : 'all';
       renderLeaveWorkspaceRequestRows();
+      renderLeaveHistoryChart();
       return;
     }
 
-    if (target.id === 'leaveWorkspaceSortSelect') {
+    if (target.id === 'leaveUsageYear') {
       if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
-      const value = target instanceof HTMLSelectElement ? String(target.value || 'submitted_desc').trim().toLowerCase() : 'submitted_desc';
-      const [rawKey, rawDirection] = value.split('_');
-      state.leaveView.workspaceSortKey = normalizeLeaveWorkspaceSortKey(rawKey || 'submitted_at');
-      state.leaveView.workspaceSortDirection = normalizeLeaveWorkspaceSortDirection(rawDirection || 'desc');
-      renderLeaveWorkspaceRequestRows();
-      return;
-    }
-
-    if (target.id === 'leaveUsageSiteFilter' || target.id === 'leaveUsageTypeFilter') {
-      if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
-      const siteSelect = $('#leaveUsageSiteFilter');
-      const typeSelect = $('#leaveUsageTypeFilter');
-      state.leaveView.usageSiteFilter = siteSelect instanceof HTMLSelectElement ? String(siteSelect.value || 'all').trim() : 'all';
-      state.leaveView.usageTypeFilter = typeSelect instanceof HTMLSelectElement ? String(typeSelect.value || 'all').trim().toLowerCase() : 'all';
+      state.leaveView.usageYear = normalizeLeaveUsageYear(target instanceof HTMLSelectElement ? target.value : state.leaveView.usageYear);
       renderLeaveUsageRows();
       return;
     }
 
-    if (target.id === 'leaveUsageSortSelect') {
+    if (target.id === 'leaveUsageReferenceDate') {
       if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
-      const value = target instanceof HTMLSelectElement ? String(target.value || 'employee_asc').trim().toLowerCase() : 'employee_asc';
-      const [rawKey, rawDirection] = value.split('_');
-      state.leaveView.usageSortKey = normalizeLeaveUsageSortKey(rawKey || 'employee');
-      state.leaveView.usageSortDirection = normalizeLeaveUsageSortDirection(rawDirection || 'asc');
+      state.leaveView.usageReferenceDate = target instanceof HTMLInputElement
+        ? String(target.value || '').trim()
+        : state.leaveView.usageReferenceDate;
+      renderLeaveUsageRows();
+      return;
+    }
+
+    if (target.id === 'leaveUsagePolicyFilter') {
+      if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+      state.leaveView.usagePolicyFilter = target instanceof HTMLSelectElement
+        ? String(target.value || 'all').trim()
+        : 'all';
       renderLeaveUsageRows();
       return;
     }
@@ -76431,20 +82460,14 @@ function bindUiEvents() {
         state.attendanceView = createInitialAttendanceViewState();
       }
       state.attendanceView.calendarMonth = normalizeMonthKey(target instanceof HTMLInputElement ? target.value : '') || toMonthKey(new Date());
+      state.schedule.month = state.attendanceView.calendarMonth;
       persistAttendanceManagerPrefs();
       syncAttendanceManagerFilterInputs();
-      runActionSafely(loadAttendanceView({ force: true }), '월간 출퇴근 기록 조회 중 오류가 발생했습니다.');
-      return;
-    }
-
-    if (target.id === 'attendanceRangeStartInput' || target.id === 'attendanceRangeEndInput') {
-      const startInput = $('#attendanceRangeStartInput');
-      const endInput = $('#attendanceRangeEndInput');
-      const start = normalizeAttendanceDate(startInput instanceof HTMLInputElement ? startInput.value : '');
-      const end = normalizeAttendanceDate(endInput instanceof HTMLInputElement ? endInput.value : '');
-      setAttendanceDateRange({ start, end, preset: 'custom', syncInputs: true });
-      syncAttendanceManagerFilterInputs();
-      runActionSafely(loadAttendanceView({ force: true }), '출퇴근 기간 조회 중 오류가 발생했습니다.');
+      if (getAttendanceWorkspaceSection() === 'period' && normalizeAttendancePeriodMode(state.attendanceView.periodMode || 'list') === 'calendar') {
+        runActionSafely(loadSchedule({ force: true }), '월간 근무표 조회 중 오류가 발생했습니다.');
+      } else {
+        runActionSafely(loadAttendanceView({ force: true }), '월간 출퇴근 기록 조회 중 오류가 발생했습니다.');
+      }
       return;
     }
 
@@ -76473,20 +82496,6 @@ function bindUiEvents() {
       state.attendanceView.statusFilter = statusSelect instanceof HTMLSelectElement ? normalizeAttendanceStatusFilter(statusSelect.value || 'all') : 'all';
       renderAttendanceFilterMeta();
       runActionSafely(loadAttendanceView({ force: true }), '출퇴근 필터 조회 중 오류가 발생했습니다.');
-      return;
-    }
-
-    if (target.id === 'attendanceSearchInput') {
-      if (!state.attendanceView) {
-        state.attendanceView = createInitialAttendanceViewState();
-      }
-      state.attendanceView.managerSearchQuery = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
-      renderAttendanceFilterMeta();
-      renderAttendanceManagerWorkspace({
-        rows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: true }),
-        scopedRows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: false }),
-        loading: false,
-      });
       return;
     }
 
@@ -76988,17 +82997,12 @@ function bindUiEvents() {
       renderMeetingsWorkspace();
       return;
     }
-    if (target.id === 'attendanceSearchInput') {
-      if (!state.attendanceView) {
-        state.attendanceView = createInitialAttendanceViewState();
+    if (target.id === 'leaveEmployeePickerSearch') {
+      if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+      if (state.leaveView.leaveEmployeePicker && typeof state.leaveView.leaveEmployeePicker === 'object') {
+        state.leaveView.leaveEmployeePicker.searchQuery = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
+        renderLeaveEmployeePickerSheet();
       }
-      state.attendanceView.managerSearchQuery = target instanceof HTMLInputElement ? String(target.value || '').trim() : '';
-      renderAttendanceFilterMeta();
-      renderAttendanceManagerWorkspace({
-        rows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: true }),
-        scopedRows: getFilteredAttendanceManagerRows(getAttendanceManagerRowsForCurrentQuery(), { applyStatus: false }),
-        loading: false,
-      });
       return;
     }
     if (target.id === 'supportStatusSearchInput') {
@@ -77177,35 +83181,28 @@ function bindUiEvents() {
     if (
       target.id === 'requestsFilterStartDate'
       || target.id === 'requestsFilterEndDate'
-      || target.id === 'requestsSiteFilter'
-      || target.id === 'requestsEmployeeFilter'
       || target.id === 'requestsStatusFilter'
-      || target.id === 'requestsSubTypeFilter'
-      || target.id === 'requestsActorSearch'
-      || target.id === 'requestsSortSelect'
     ) {
       const workspace = ensureRequestsWorkspaceFilters();
       if (target.id === 'requestsFilterStartDate' && target instanceof HTMLInputElement) {
         workspace.startDate = String(target.value || '').trim();
         workspace.rangePreset = 'custom';
+        workspace.dateFilterTouched = true;
+        workspace.dateDefaultMode = 'custom';
       } else if (target.id === 'requestsFilterEndDate' && target instanceof HTMLInputElement) {
         workspace.endDate = String(target.value || '').trim();
         workspace.rangePreset = 'custom';
-      } else if (target.id === 'requestsSiteFilter' && target instanceof HTMLSelectElement) {
-        workspace.siteFilter = String(target.value || 'all').trim() || 'all';
-      } else if (target.id === 'requestsEmployeeFilter' && target instanceof HTMLInputElement) {
-        workspace.employeeQuery = String(target.value || '').trim();
+        workspace.dateFilterTouched = true;
+        workspace.dateDefaultMode = 'custom';
       } else if (target.id === 'requestsStatusFilter' && target instanceof HTMLSelectElement) {
         workspace.statusFilter = normalizeRequestsWorkspaceStatusFilter(target.value || 'all');
-      } else if (target.id === 'requestsSubTypeFilter' && target instanceof HTMLSelectElement) {
-        workspace.subTypeFilter = String(target.value || 'all').trim() || 'all';
-      } else if (target.id === 'requestsActorSearch' && target instanceof HTMLInputElement) {
-        workspace.actorQuery = String(target.value || '').trim();
-      } else if (target.id === 'requestsSortSelect' && target instanceof HTMLSelectElement) {
-        applyRequestsWorkspaceSortControlValue(target.value || 'submitted_desc');
       }
       setRequestsWorkspaceRows(getRequestsActiveRawRowsForCurrentTab());
       renderRequestsWorkspaceView();
+      return;
+    }
+
+    if (updateRequestsFilterSheetStateFromInput(target)) {
       return;
     }
   }, { signal });
@@ -77230,7 +83227,7 @@ function bindUiEvents() {
     if (!touch) return;
     const deltaY = touch.clientY - startY;
     if (deltaY < 80) return;
-    showToast('승인함 새로고침 중...', 'info', 1200);
+    showToast('승인 화면 새로고침 중...', 'info', 1200);
     runActionSafely(loadManagerRequestTab(), '요청함 새로고침에 실패했습니다.');
   }, { signal, passive: true });
 
@@ -77446,6 +83443,14 @@ document.addEventListener('compositionend', (event) => {
     const managerMode = typeof canUseAttendanceManagerFilter === 'function'
       ? canUseAttendanceManagerFilter()
       : true;
+    const section = typeof getAttendanceWorkspaceSection === 'function'
+      ? getAttendanceWorkspaceSection()
+      : 'daily';
+    const periodMode = typeof normalizeAttendancePeriodMode === 'function'
+      ? normalizeAttendancePeriodMode(state?.attendanceView?.periodMode || 'list')
+      : 'list';
+    if (section === 'stats') return false;
+    if (section === 'period' && periodMode === 'calendar') return false;
     return Boolean(managerMode) && ['status', 'list', 'calendar'].includes(tab);
   }
 
@@ -77485,6 +83490,18 @@ document.addEventListener('compositionend', (event) => {
 
   function v2Date(row) {
     return v2Text(row?.baseDateLabel, row?.dateLabel, row?.workDateLabel, row?.attendanceDateLabel, row?.baseDate, row?.date, '-');
+  }
+
+  function v2Role(row) {
+    return v2Text(
+      row?.jobRankName,
+      row?.rankLabel,
+      row?.positionName,
+      row?.jobTitle,
+      row?.roleLabel,
+      row?.roleName,
+      '-',
+    );
   }
 
   function v2Schedule(row) {
@@ -77554,6 +83571,66 @@ document.addEventListener('compositionend', (event) => {
       row?.reviewMemo,
       '판정 기준 정보가 없습니다.'
     );
+  }
+
+  function v2WorkState(row) {
+    const facts = v2StatusFacts(row);
+    if (facts.leave) return '휴가';
+    if (facts.upcoming) return '출근 전';
+    if (facts.hasClockOut) return '퇴근';
+    if (facts.complete) return '근무 중';
+    return v2Text(row?.processingState, row?.statusLabel, '확인 필요');
+  }
+
+  function v2SpecialBadgesMarkup(row) {
+    const badges = [];
+    if (row?.hasMissingIn) badges.push({ label: '미출근', tone: 'danger' });
+    if (row?.hasMissingOut) badges.push({ label: '미퇴근', tone: 'warning' });
+    if (row?.hasLate) badges.push({ label: '지각', tone: 'warning' });
+    if (row?.hasEarlyLeave) badges.push({ label: '조퇴', tone: 'warning' });
+    if (row?.hasAttendanceWithoutSchedule) badges.push({ label: '미배정', tone: 'danger' });
+    if (row?.hasLocationIssue) badges.push({ label: '위치', tone: 'neutral' });
+    if (row?.isEdited) badges.push({ label: '수정', tone: 'accent' });
+    if (row?.hasLeave) badges.push({ label: '휴가', tone: 'muted' });
+    if (!badges.length) {
+      return '<span class="attendance-v2-special-inline is-empty">-</span>';
+    }
+    return `
+      <span class="attendance-v2-special-inline-list">
+        ${badges.slice(0, 3).map((badge) => `<span class="attendance-v2-special-inline is-${escapeValue(badge.tone)}">${escapeValue(badge.label)}</span>`).join('')}
+      </span>
+    `;
+  }
+
+  function v2BuildDailyDashboard(summary = {}, rows = []) {
+    const list = v2Array(rows);
+    const completeCount = list.filter((row) => v2StatusFacts(row).complete).length;
+    const leaveCount = list.filter((row) => Boolean(row?.hasLeave)).length;
+    const missingInCount = list.filter((row) => Boolean(row?.hasMissingIn)).length;
+    const missingOutCount = list.filter((row) => Boolean(row?.hasMissingOut)).length;
+    const locationIssueCount = list.filter((row) => Boolean(row?.hasLocationIssue)).length;
+    const editedCount = list.filter((row) => Boolean(row?.isEdited)).length;
+    const dashboard = buildAttendanceStatusDashboard(list, {
+      scheduled: Math.max(0, Number(summary?.target || 0)),
+      normal: completeCount,
+      late: Math.max(0, Number(summary?.late || 0)),
+      earlyLeave: Math.max(0, Number(summary?.early || 0)),
+      missingIn: missingInCount,
+      missingOut: missingOutCount,
+      leave: leaveCount,
+      locationIssue: locationIssueCount,
+      correctionPending: Math.max(0, Number(summary?.correction || 0)),
+      edited: editedCount,
+    });
+    const factsList = list.map((row) => ({ row, facts: v2StatusFacts(row) }));
+    const onDuty = factsList.filter((item) => item.facts.complete && !item.facts.hasClockOut && !item.facts.leave).length;
+    const checkedOut = factsList.filter((item) => item.facts.hasClockOut && !item.facts.leave).length;
+    return {
+      ...dashboard,
+      checkedOut,
+      onDuty,
+      totalPeople: list.length,
+    };
   }
 
   function v2StatusKey(row) {
@@ -77765,6 +83842,18 @@ document.addEventListener('compositionend', (event) => {
         return '조퇴';
       case 'correction':
         return '정정 대기';
+      case 'leave':
+        return '휴가';
+      case 'upcoming':
+        return '출근 전';
+      case 'missing_out':
+        return '미퇴근';
+      case 'location':
+        return '위치 이상';
+      case 'outside':
+        return '미배정 출근';
+      case 'edited':
+        return '수정 기록';
       default:
         return '전체';
     }
@@ -77787,6 +83876,18 @@ document.addEventListener('compositionend', (event) => {
         return facts.early;
       case 'correction':
         return facts.correction;
+      case 'leave':
+        return facts.leave;
+      case 'upcoming':
+        return facts.upcoming;
+      case 'missing_out':
+        return Boolean(row?.hasMissingOut);
+      case 'location':
+        return Boolean(row?.hasLocationIssue);
+      case 'outside':
+        return Boolean(row?.hasAttendanceWithoutSchedule);
+      case 'edited':
+        return Boolean(row?.isEdited);
       default:
         return true;
     }
@@ -77858,6 +83959,7 @@ document.addEventListener('compositionend', (event) => {
       workspace.classList.remove('is-attendance-v2-manager');
       workspace.classList.remove('is-attendance-v2-status');
       workspace.classList.remove('is-attendance-v2-list');
+      workspace.classList.remove('is-attendance-v2-no-selection');
     }
     const calendarPanel = document.getElementById('attendanceCalendarPanel');
     if (calendarPanel) {
@@ -77870,57 +83972,171 @@ document.addEventListener('compositionend', (event) => {
     }
   }
 
-  function v2SummaryMarkup(summary, loading = false) {
-    const metrics = [
-      { filterKey: 'rate', label: '출근율', value: `${summary.rate}%`, meta: `${summary.complete} / ${summary.target}`, tone: 'accent', progress: summary.rate },
-      { filterKey: 'target', label: '출근 대상', value: `${summary.target}`, meta: '예정 근무 기준', tone: 'neutral' },
-      { filterKey: 'complete', label: '출근 완료', value: `${summary.complete}`, meta: '실제 기록 기준', tone: 'success' },
-      { filterKey: 'missing', label: '미출근', value: `${summary.missing}`, meta: '가장 먼저 확인', tone: 'danger' },
-      { filterKey: 'late', label: '지각', value: `${summary.late}`, meta: '예외 발생', tone: 'warning' },
-      { filterKey: 'early', label: '조퇴', value: `${summary.early}`, meta: '퇴근 기록 확인', tone: 'warning' },
-      { filterKey: 'correction', label: '정정 대기', value: `${summary.correction}`, meta: '승인 필요', tone: 'neutral' }
+  function v2SummaryMarkup(summary, rows = [], loading = false) {
+    const section = typeof getAttendanceWorkspaceSection === 'function'
+      ? getAttendanceWorkspaceSection()
+      : 'daily';
+    const dashboard = v2BuildDailyDashboard(summary, rows);
+    const dailyOverviewItems = [
+      { filterKey: 'complete', label: '출근', value: dashboard.checkedIn, meta: '', tone: 'success' },
+      { filterKey: 'upcoming', label: '출근 전', value: dashboard.beforeStart, meta: '', tone: 'neutral' },
+      { filterKey: 'missing', label: '미출근', value: dashboard.missingIn, meta: '', tone: 'danger' },
+      { filterKey: 'late', label: '지각', value: dashboard.late, meta: '', tone: 'warning' },
+      { filterKey: 'early', label: '조퇴', value: dashboard.earlyLeave, meta: '', tone: 'warning' },
     ];
+    const scheduleItems = [
+      { filterKey: 'target', label: '출근 대상', value: dashboard.workingTarget, meta: '' },
+      { filterKey: 'leave', label: '휴가', value: dashboard.leaveCount, meta: '' },
+      { filterKey: '', label: '휴무', value: dashboard.offCount, meta: '' },
+      { filterKey: '', label: '교육', value: dashboard.educationCount, meta: '' },
+      { filterKey: '', label: '기타', value: dashboard.otherScheduleCount, meta: '' },
+      { filterKey: '', label: '일정없음', value: dashboard.noScheduleCount, meta: '' },
+    ];
+    const specialItems = [
+      { filterKey: 'outside', label: '미배정 근무지에 출근', value: dashboard.outsideScheduleCount, tone: 'danger' },
+      { filterKey: 'location', label: '출퇴근 위치 이상', value: dashboard.locationIssueCount, tone: 'neutral' },
+      { filterKey: 'edited', label: '출퇴근 기록 수정됨', value: dashboard.editedCount, tone: 'accent' },
+      { filterKey: 'correction', label: '정정 대기', value: dashboard.correctionNeeded, tone: 'warning' },
+    ];
+    const periodItems = (() => {
+      if (typeof getAttendanceManagerFetchRange !== 'function') return [];
+      const range = getAttendanceManagerFetchRange();
+      return [
+        { label: '기간', value: `${range.start || '-'} ~ ${range.end || '-'}` },
+        { label: '대상', value: `${dashboard.totalPeople}명` },
+        { label: '확인 필요', value: `${dashboard.missingIn + dashboard.missingOut + dashboard.correctionNeeded}건` },
+      ];
+    })();
     if (loading) {
+      if (section === 'period') {
+        return `
+          <div class="attendance-v2-section-head">
+            <h3>기간별 출퇴근</h3>
+            <span class="attendance-v2-inline-meta">집계 중</span>
+          </div>
+          <div class="attendance-v2-period-strip is-loading" aria-hidden="true">
+            ${Array.from({ length: 3 }, () => `
+              <div class="attendance-v2-period-card is-loading">
+                <span class="attendance-v2-skeleton-line is-short"></span>
+                <span class="attendance-v2-skeleton-line is-medium"></span>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
       return `
         <div class="attendance-v2-section-head">
-          <h3>오늘 상태 요약</h3>
+          <h3>출퇴근 현황</h3>
           <span class="attendance-v2-inline-meta">집계 중</span>
         </div>
-        <div class="attendance-v2-summary-strip is-loading" aria-hidden="true">
-          ${Array.from({ length: metrics.length }, () => `
-            <div class="attendance-v2-summary-item is-loading">
-              <span class="attendance-v2-skeleton-line is-short"></span>
-              <span class="attendance-v2-skeleton-line is-value"></span>
-              <span class="attendance-v2-skeleton-line is-wide"></span>
-            </div>
+        <div class="attendance-v2-daily-shell is-loading" aria-hidden="true">
+          <div class="attendance-v2-rate-card is-loading">
+            <span class="attendance-v2-skeleton-line is-short"></span>
+            <span class="attendance-v2-skeleton-line is-value"></span>
+            <span class="attendance-v2-skeleton-line is-wide"></span>
+          </div>
+          <div class="attendance-v2-summary-strip is-loading">
+            ${Array.from({ length: 6 }, () => `
+              <div class="attendance-v2-summary-item is-loading">
+                <span class="attendance-v2-skeleton-line is-short"></span>
+                <span class="attendance-v2-skeleton-line is-value"></span>
+                <span class="attendance-v2-skeleton-line is-wide"></span>
+              </div>
+            `).join('')}
+          </div>
+          <div class="attendance-v2-special-strip is-loading">
+            ${Array.from({ length: 4 }, () => `
+              <div class="attendance-v2-special-card is-loading">
+                <span class="attendance-v2-skeleton-line is-short"></span>
+                <span class="attendance-v2-skeleton-line is-medium"></span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+    if (section === 'period') {
+      return `
+        <div class="attendance-v2-section-head">
+          <h3>기간별 출퇴근</h3>
+        </div>
+        <div class="attendance-v2-period-strip">
+          ${periodItems.map((item) => `
+            <article class="attendance-v2-period-card">
+              <span class="attendance-v2-period-label">${escapeValue(item.label)}</span>
+              <strong class="attendance-v2-period-value">${escapeValue(item.value)}</strong>
+            </article>
           `).join('')}
         </div>
       `;
     }
+    const renderButtonCard = (item, extraClass = '') => {
+      const isActive = attendanceStatusV2FilterKey === item.filterKey;
+      if (!item.filterKey) {
+        return `
+          <article class="attendance-v2-summary-item ${extraClass} is-neutral">
+            <span class="attendance-v2-summary-label">${escapeValue(item.label)}</span>
+            <strong class="attendance-v2-summary-value">${escapeValue(String(item.value))}</strong>
+            ${item.meta ? `<span class="attendance-v2-summary-meta">${escapeValue(item.meta)}</span>` : ''}
+          </article>
+        `;
+      }
+      return `
+        <button type="button" class="attendance-v2-summary-item ${extraClass} is-${escapeValue(item.tone || 'neutral')}${isActive ? ' is-active' : ''}" data-filter-key="${escapeValue(item.filterKey)}" aria-pressed="${isActive ? 'true' : 'false'}">
+          <span class="attendance-v2-summary-label">${escapeValue(item.label)}</span>
+          <strong class="attendance-v2-summary-value">${escapeValue(String(item.value))}</strong>
+          ${item.meta ? `<span class="attendance-v2-summary-meta">${escapeValue(item.meta)}</span>` : ''}
+        </button>
+      `;
+    };
     return `
       <div class="attendance-v2-section-head">
-        <h3>오늘 상태 요약</h3>
+        <h3>출퇴근 현황</h3>
       </div>
-      <div class="attendance-v2-summary-strip">
-        ${metrics.map((metric) => `
-          <button type="button" class="attendance-v2-summary-item is-${metric.tone}${attendanceStatusV2FilterKey === metric.filterKey ? ' is-active' : ''}" data-filter-key="${escapeValue(metric.filterKey)}" aria-pressed="${attendanceStatusV2FilterKey === metric.filterKey ? 'true' : 'false'}">
-            <span class="attendance-v2-summary-label">${escapeValue(metric.label)}</span>
-            <strong class="attendance-v2-summary-value">${escapeValue(metric.value)}</strong>
-            <span class="attendance-v2-summary-meta">${escapeValue(metric.meta)}</span>
-            ${metric.progress != null ? `
-              <span class="attendance-v2-summary-progress">
-                <span style="width:${Math.max(0, Math.min(100, metric.progress))}%"></span>
-              </span>
-            ` : ''}
-          </button>
+      <div class="attendance-v2-daily-shell">
+        <button type="button" class="attendance-v2-rate-card${attendanceStatusV2FilterKey === 'rate' ? ' is-active' : ''}" data-filter-key="rate" aria-pressed="${attendanceStatusV2FilterKey === 'rate' ? 'true' : 'false'}">
+          <div class="attendance-v2-rate-ring" style="--rate:${Math.max(0, Math.min(100, dashboard.attendanceRate || 0))}%">
+            <div class="attendance-v2-rate-ring-inner">
+              <span>출근율</span>
+              <strong>${escapeValue(`${dashboard.attendanceRate || 0}%`)}</strong>
+            </div>
+          </div>
+          <span class="attendance-v2-rate-meta">${escapeValue(`${dashboard.checkedIn} / ${dashboard.workingTarget}`)}</span>
+        </button>
+        <div class="attendance-v2-daily-main">
+          <div class="attendance-v2-summary-strip attendance-v2-summary-strip-daily">
+            ${dailyOverviewItems.map((item) => renderButtonCard(item)).join('')}
+          </div>
+          <div class="attendance-v2-schedule-board">
+            ${scheduleItems.map((item) => renderButtonCard(item, 'is-compact')).join('')}
+          </div>
+        </div>
+      </div>
+      <div class="attendance-v2-section-subhead">
+        <h4>출퇴근 특이사항</h4>
+      </div>
+      <div class="attendance-v2-special-strip">
+        ${specialItems.map((item) => `
+          ${item.filterKey ? `
+            <button type="button" class="attendance-v2-special-card is-${escapeValue(item.tone)}${attendanceStatusV2FilterKey === item.filterKey ? ' is-active' : ''}" data-filter-key="${escapeValue(item.filterKey)}" aria-pressed="${attendanceStatusV2FilterKey === item.filterKey ? 'true' : 'false'}">
+              <span class="attendance-v2-special-label">${escapeValue(item.label)}</span>
+              <strong class="attendance-v2-special-value">${escapeValue(String(item.value))}</strong>
+            </button>
+          ` : `
+            <article class="attendance-v2-special-card is-${escapeValue(item.tone)}">
+              <span class="attendance-v2-special-label">${escapeValue(item.label)}</span>
+              <strong class="attendance-v2-special-value">${escapeValue(String(item.value))}</strong>
+            </article>
+          `}
         `).join('')}
       </div>
     `;
   }
 
-  function v2QueueMarkup(queueRows, loading, filterKey) {
+  function v2QueueMarkup(queueRows, rows, loading, filterKey) {
+    const dashboard = v2BuildDailyDashboard(v2BuildSummary(rows), rows);
     const previewMode = filterKey !== 'all';
-    const title = previewMode ? `${v2FilterLabel(filterKey)} 미리보기` : '우선 확인 예외';
+    const title = previewMode ? `${v2FilterLabel(filterKey)} 목록` : '출근인원 근무상태';
     if (loading) {
       return `
         <div class="attendance-v2-section-head">
@@ -77928,14 +84144,10 @@ document.addEventListener('compositionend', (event) => {
           <span class="attendance-v2-count-chip">불러오는 중</span>
         </div>
         <div class="attendance-v2-loading-stack" aria-hidden="true">
-          ${Array.from({ length: 4 }, () => `
-            <div class="attendance-v2-loading-row">
-              <span class="attendance-v2-skeleton-line is-medium"></span>
+          ${Array.from({ length: 3 }, () => `
+            <div class="attendance-v2-loading-card">
               <span class="attendance-v2-skeleton-line is-medium"></span>
               <span class="attendance-v2-skeleton-line is-wide"></span>
-              <span class="attendance-v2-skeleton-line is-wide"></span>
-              <span class="attendance-v2-skeleton-line is-chip"></span>
-              <span class="attendance-v2-skeleton-line is-medium"></span>
             </div>
           `).join('')}
         </div>
@@ -77949,17 +84161,35 @@ document.addEventListener('compositionend', (event) => {
           <span class="attendance-v2-inline-meta">총 ${queueRows.length}건</span>
         </div>
       </div>
-      ${queueRows.length ? `
-        <div class="attendance-v2-queue-table">
-          <div class="attendance-v2-queue-head">
-            <span>직원</span>
-            <span>현장</span>
-            <span>예정 근무</span>
-            <span>실제 기록</span>
-            <span>판정</span>
-            <span>관련 요청</span>
+      ${!previewMode ? `
+        <div class="attendance-v2-presence-board">
+          <div class="attendance-v2-presence-track">
+            <span class="attendance-v2-presence-label">근무 중</span>
+            <div class="attendance-v2-presence-progress">
+              <span style="width:${Math.max(0, Math.min(100, dashboard.workingTarget ? Math.round((dashboard.onDuty / Math.max(1, dashboard.workingTarget)) * 100) : 0))}%"></span>
+            </div>
+            <strong class="attendance-v2-presence-value">${escapeValue(`${dashboard.onDuty} (${dashboard.workingTarget ? Math.round((dashboard.onDuty / Math.max(1, dashboard.workingTarget)) * 100) : 0}%)`)}</strong>
           </div>
-          <div class="attendance-v2-queue-body">
+          <div class="attendance-v2-presence-metrics">
+            <article><span>출근 전</span><strong>${escapeValue(String(dashboard.beforeStart))}</strong></article>
+            <article><span>퇴근</span><strong>${escapeValue(String(dashboard.checkedOut))}</strong></article>
+            <article><span>미퇴근</span><strong>${escapeValue(String(dashboard.missingOut))}</strong></article>
+          </div>
+        </div>
+      ` : ''}
+      ${queueRows.length ? `
+        <div class="attendance-v2-queue-table${previewMode ? '' : ' is-attention'}">
+          ${previewMode ? '' : `
+            <div class="attendance-v2-queue-head">
+              <span>직원</span>
+              <span>현장</span>
+              <span>예정 근무</span>
+              <span>실제 기록</span>
+              <span>판정</span>
+              <span>관련 요청</span>
+            </div>
+          `}
+          <div class="attendance-v2-queue-body${previewMode ? ' is-preview' : ''}">
             ${queueRows.map(({ row, index, key }) => {
               const rowKey = v2RowKey(row, index);
               return `
@@ -77975,15 +84205,18 @@ document.addEventListener('compositionend', (event) => {
             }).join('')}
           </div>
         </div>
-      ` : `<div class="attendance-v2-empty">${escapeValue(previewMode ? `${v2FilterLabel(filterKey)} 기록이 없습니다.` : '우선 확인 예외가 없습니다.')}</div>`}
+      ` : `<div class="attendance-v2-empty">${escapeValue(previewMode ? `${v2FilterLabel(filterKey)} 기록이 없습니다.` : '확인할 출근인원 상태가 없습니다.')}</div>`}
     `;
   }
 
   function v2TableMarkup(rows, loading, filterKey) {
+    const section = typeof getAttendanceWorkspaceSection === 'function'
+      ? getAttendanceWorkspaceSection()
+      : 'daily';
     if (loading) {
       return `
         <div class="attendance-v2-section-head">
-          <h3>전체 출퇴근 기록</h3>
+          <h3>${section === 'period' ? '기간별 출퇴근 기록' : '직원별 출퇴근 기록'}</h3>
           <span class="attendance-v2-inline-meta">불러오는 중</span>
         </div>
         <div class="attendance-v2-table-wrap is-loading" aria-hidden="true">
@@ -77991,19 +84224,20 @@ document.addEventListener('compositionend', (event) => {
             <thead>
               <tr>
                 <th>직원</th>
-                <th>현장</th>
-                <th>예정 근무</th>
-                <th>출근</th>
-                <th>퇴근</th>
-                <th>판정</th>
-                <th>관련 요청</th>
-                <th>기준일</th>
+                <th>직무·직급</th>
+                <th>근무상태</th>
+                <th>스케줄</th>
+                <th>출퇴근시각</th>
+                <th>특이사항</th>
+                <th>지각</th>
+                <th>조퇴</th>
+                <th>상세</th>
               </tr>
             </thead>
             <tbody>
               ${Array.from({ length: 5 }, () => `
                 <tr class="attendance-v2-loading-table-row">
-                  ${Array.from({ length: 8 }, () => `
+                  ${Array.from({ length: 9 }, () => `
                     <td><span class="attendance-v2-skeleton-line is-wide"></span></td>
                   `).join('')}
                 </tr>
@@ -78015,7 +84249,7 @@ document.addEventListener('compositionend', (event) => {
     }
     return `
       <div class="attendance-v2-section-head">
-        <h3>전체 출퇴근 기록</h3>
+        <h3>${section === 'period' ? '기간별 출퇴근 기록' : '직원별 출퇴근 기록'}</h3>
         <div class="attendance-v2-head-meta">
           ${filterKey !== 'all' ? `<span class="attendance-v2-inline-meta">${escapeValue(v2FilterLabel(filterKey))}</span>` : ''}
           <span class="attendance-v2-inline-meta">총 ${rows.length}명</span>
@@ -78026,13 +84260,14 @@ document.addEventListener('compositionend', (event) => {
           <thead>
             <tr>
               <th>직원</th>
-              <th>현장</th>
-              <th>예정 근무</th>
-              <th>출근</th>
-              <th>퇴근</th>
-              <th>판정</th>
-              <th>관련 요청</th>
-              <th>기준일</th>
+              <th>직무·직급</th>
+              <th>근무상태</th>
+              <th>스케줄</th>
+              <th>출퇴근시각</th>
+              <th>특이사항</th>
+              <th>지각</th>
+              <th>조퇴</th>
+              <th>상세</th>
             </tr>
           </thead>
           <tbody>
@@ -78040,17 +84275,33 @@ document.addEventListener('compositionend', (event) => {
               const rowKey = v2RowKey(row, index);
               return `
                 <tr class="${rowKey === attendanceStatusV2SelectedKey ? 'is-selected' : ''}" data-row-key="${escapeValue(rowKey)}" tabindex="0">
-                  <td>${escapeValue(v2Name(row))}</td>
-                  <td>${escapeValue(v2Site(row))}</td>
-                  <td>${escapeValue(v2Schedule(row))}</td>
-                  <td>${escapeValue(v2ActualIn(row))}</td>
-                  <td>${escapeValue(v2ActualOut(row))}</td>
-                  <td>${v2StatusInlineMarkup(v2StatusKey(row), v2StatusLabel(row))}</td>
-                  <td>${escapeValue(v2RequestLabel(row))}</td>
-                  <td>${escapeValue(v2Date(row))}</td>
+                  <td>
+                    <div class="attendance-v2-table-primary">
+                      <strong>${escapeValue(v2Name(row))}</strong>
+                      <span>${escapeValue(v2EmployeeCode(row) || v2Site(row))}</span>
+                    </div>
+                  </td>
+                  <td>${escapeValue(v2Role(row))}</td>
+                  <td>${v2StatusInlineMarkup(v2StatusKey(row), v2WorkState(row))}</td>
+                  <td>
+                    <div class="attendance-v2-table-primary">
+                      <strong>${escapeValue(v2Schedule(row))}</strong>
+                      <span>${escapeValue(v2Date(row))}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="attendance-v2-table-primary">
+                      <strong>${escapeValue(v2ActualIn(row))}</strong>
+                      <span>${escapeValue(v2ActualOut(row))}</span>
+                    </div>
+                  </td>
+                  <td>${v2SpecialBadgesMarkup(row)}</td>
+                  <td>${escapeValue(row?.lateMinutesLabel || '-')}</td>
+                  <td>${escapeValue(row?.earlyLeaveMinutesLabel || '-')}</td>
+                  <td><span class="attendance-v2-row-detail-link">상세</span></td>
                 </tr>
               `;
-            }).join('') : '<tr><td colspan="8" class="attendance-v2-empty-cell">기록이 없습니다.</td></tr>'}
+            }).join('') : '<tr><td colspan="9" class="attendance-v2-empty-cell">기록이 없습니다.</td></tr>'}
           </tbody>
         </table>
       </div>
@@ -78108,7 +84359,7 @@ document.addEventListener('compositionend', (event) => {
         <div class="attendance-v2-inspector-actions">
           <button type="button" class="attendance-v2-inspector-action is-primary" data-inspector-action="list" data-row-key="${escapeValue(attendanceStatusV2SelectedKey || '')}">리스트형에서 보기</button>
           <button type="button" class="attendance-v2-inspector-action" data-inspector-action="calendar" data-row-key="${escapeValue(attendanceStatusV2SelectedKey || '')}">달력형에서 보기</button>
-          <button type="button" class="attendance-v2-inspector-action is-subtle" data-inspector-action="${hasRequest ? 'approvals' : 'correction'}" data-row-key="${escapeValue(attendanceStatusV2SelectedKey || '')}">${hasRequest ? '승인함 열기' : '정정 요청'}</button>
+          <button type="button" class="attendance-v2-inspector-action is-subtle" data-inspector-action="${hasRequest ? 'approvals' : 'correction'}" data-row-key="${escapeValue(attendanceStatusV2SelectedKey || '')}">${hasRequest ? '승인 문서 보기' : '정정 요청'}</button>
         </div>
         <div class="attendance-v2-detail-grid">
           <article class="attendance-v2-detail-card">
@@ -78229,17 +84480,13 @@ document.addEventListener('compositionend', (event) => {
     }
     const dateKey = v2DateKey(row);
     const siteCode = v2SiteCode(row);
-    const employeeQuery = v2Name(row) === '직원 미지정'
-      ? (v2EmployeeCode(row) || '')
-      : v2Name(row);
+    const employeeKey = String(v2EmployeeCode(row) || v2Name(row) || '').trim();
     state.requestsWorkspace.startDate = dateKey;
     state.requestsWorkspace.endDate = dateKey;
     state.requestsWorkspace.rangePreset = 'custom';
-    state.requestsWorkspace.siteFilter = siteCode || '';
-    state.requestsWorkspace.employeeQuery = employeeQuery;
+    state.requestsWorkspace.siteFilterValues = siteCode ? [siteCode] : [];
+    state.requestsWorkspace.employeeFilterKeys = employeeKey ? [employeeKey] : [];
     state.requestsWorkspace.statusFilter = 'all';
-    state.requestsWorkspace.subTypeFilter = 'all';
-    state.requestsWorkspace.actorQuery = '';
     state.requestsWorkspace.filtersInitialized = true;
   }
 
@@ -78373,6 +84620,9 @@ document.addEventListener('compositionend', (event) => {
     const filteredRows = activeRows.filter((row) => v2RowMatchesFilter(row, attendanceStatusV2FilterKey));
     const queueRows = v2QueueRows(filteredRows, attendanceStatusV2FilterKey);
     const selectedRow = v2ResolveSelectedRow(filteredRows, queueRows);
+    if (shell.workspace instanceof HTMLElement) {
+      shell.workspace.classList.toggle('is-attendance-v2-no-selection', !loading && !selectedRow);
+    }
 
     if (state.attendanceView) {
       state.attendanceView.managerSummary = summary;
@@ -78382,14 +84632,14 @@ document.addEventListener('compositionend', (event) => {
 
     if (shell.summaryHost) {
       shell.summaryHost.setAttribute('aria-busy', loading ? 'true' : 'false');
-      shell.summaryHost.innerHTML = v2SummaryMarkup(summary, loading);
+      shell.summaryHost.innerHTML = v2SummaryMarkup(summary, activeRows, loading);
       v2BindSelection(shell.summaryHost);
     }
 
     if (tab === 'status') {
       if (shell.queueHost) {
         shell.queueHost.setAttribute('aria-busy', loading ? 'true' : 'false');
-        shell.queueHost.innerHTML = v2QueueMarkup(queueRows, loading, attendanceStatusV2FilterKey);
+        shell.queueHost.innerHTML = v2QueueMarkup(queueRows, filteredRows, loading, attendanceStatusV2FilterKey);
         v2BindSelection(shell.queueHost);
       }
       if (shell.tableHost) {
