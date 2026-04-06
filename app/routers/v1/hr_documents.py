@@ -18,6 +18,7 @@ from ...db import get_connection
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
 from ...services.approval_engine import (
     create_certificate_request_approval_adapter,
+    ensure_default_approval_line_rules,
     sync_legacy_approval_status,
 )
 from ...services.certificates_mail import (
@@ -54,6 +55,15 @@ ALLOWED_TEMPLATE_DOCUMENT_TYPES = {
 }
 ALLOWED_TEMPLATE_EXTENSIONS = {".docx"}
 MAX_TEMPLATE_UPLOAD_BYTES = 2 * 1024 * 1024
+APPROVAL_POLICY_RULE_FORM_KEY_PREFIX = "certificate_request:"
+APPROVAL_POLICY_SUPPORTED_DOCUMENT_TYPES = {
+    DOCUMENT_TYPE_RETIREMENT_CERTIFICATE,
+    DOCUMENT_TYPE_LEAVE_OF_ABSENCE_CERTIFICATE,
+}
+APPROVAL_POLICY_SITE_ROLE_OPTIONS = (
+    {"value": "supervisor", "label": "Supervisor"},
+)
+APPROVAL_POLICY_ALLOWED_USER_ROLES = ("supervisor", "vice_supervisor", "hq_admin", "developer")
 
 
 class EmploymentCertificateRequestCreate(BaseModel):
@@ -87,6 +97,54 @@ class EmploymentCertificateRejectRequest(BaseModel):
         if not normalized:
             raise ValueError("rejection_reason is required")
         return normalized
+
+
+class DocumentApprovalPolicyStepIn(BaseModel):
+    step_kind: str = Field(default="site_supervisor", min_length=1, max_length=32)
+    label: str = Field(default="", max_length=120)
+    site_role: str = Field(default="supervisor", max_length=32)
+    explicit_user_id: str | None = Field(default=None, max_length=64)
+    approval_group_id: str | None = Field(default=None, max_length=64)
+    approval_rank_id: str | None = Field(default=None, max_length=64)
+    allow_delegate: bool = False
+    is_required: bool = True
+
+    @field_validator("step_kind", mode="before")
+    @classmethod
+    def _normalize_step_kind(cls, value: str | None) -> str:
+        normalized = str(value or "").strip().lower()
+        if normalized not in {"site_supervisor", "explicit_user", "rank"}:
+            raise ValueError("step_kind must be site_supervisor/explicit_user/rank")
+        return normalized or "site_supervisor"
+
+    @field_validator("site_role", mode="before")
+    @classmethod
+    def _normalize_site_role(cls, value: str | None) -> str:
+        normalized = normalize_role(value)
+        if normalized not in {"supervisor", "vice_supervisor", "hq_admin", "developer"}:
+            return "supervisor"
+        return normalized
+
+    @field_validator("explicit_user_id", "approval_group_id", "approval_rank_id", mode="before")
+    @classmethod
+    def _normalize_optional_id(cls, value: str | None) -> str | None:
+        normalized = str(value or "").strip()
+        return normalized or None
+
+    @field_validator("label", mode="before")
+    @classmethod
+    def _normalize_label(cls, value: str | None) -> str:
+        return str(value or "").strip()
+
+
+class DocumentApprovalPolicyUpdateRequest(BaseModel):
+    document_type: str = Field(min_length=1, max_length=64)
+    items: list[DocumentApprovalPolicyStepIn] = Field(default_factory=list)
+
+    @field_validator("document_type", mode="before")
+    @classmethod
+    def _normalize_document_type(cls, value: str | None) -> str:
+        return str(value or "").strip().lower()
 
 
 def _raise_api_error(status_code: int, code: str, message: str, *, fields: dict[str, str] | None = None) -> None:
@@ -429,6 +487,205 @@ def _normalize_document_type(value: str | None) -> str:
             fields={"document_type": "invalid"},
         )
     return normalized
+
+
+def _normalize_approval_policy_document_type(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized not in {
+        DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE,
+        DOCUMENT_TYPE_CAREER_CERTIFICATE,
+        DOCUMENT_TYPE_RETIREMENT_CERTIFICATE,
+        DOCUMENT_TYPE_LEAVE_OF_ABSENCE_CERTIFICATE,
+        "resignation_form",
+    }:
+        _raise_api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            "입력값을 확인해주세요.",
+            fields={"document_type": "invalid"},
+        )
+    return normalized
+
+
+def _resolve_document_approval_policy_state(document_type: str) -> dict[str, Any]:
+    normalized_document_type = _normalize_approval_policy_document_type(document_type)
+    if normalized_document_type == DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE:
+        return {
+            "document_type": normalized_document_type,
+            "editable": False,
+            "unsupported_reason": "재직증명서는 즉시 발급 문서라 승인 절차를 편집하지 않습니다.",
+            "rule_form_key": None,
+            "fallback_form_key": None,
+        }
+    if normalized_document_type == DOCUMENT_TYPE_CAREER_CERTIFICATE:
+        return {
+            "document_type": normalized_document_type,
+            "editable": False,
+            "unsupported_reason": "경력증명서는 즉시 발급 문서라 승인 절차를 편집하지 않습니다.",
+            "rule_form_key": None,
+            "fallback_form_key": None,
+        }
+    if normalized_document_type == "resignation_form":
+        return {
+            "document_type": normalized_document_type,
+            "editable": False,
+            "unsupported_reason": "사직서는 기존 검토 흐름을 유지하므로 이 화면에서 승인 절차를 편집하지 않습니다.",
+            "rule_form_key": None,
+            "fallback_form_key": None,
+        }
+    if normalized_document_type not in APPROVAL_POLICY_SUPPORTED_DOCUMENT_TYPES:
+        return {
+            "document_type": normalized_document_type,
+            "editable": False,
+            "unsupported_reason": "현재 이 문서 타입은 문서 관리 화면에서 승인 절차를 편집할 수 없습니다.",
+            "rule_form_key": None,
+            "fallback_form_key": None,
+        }
+    return {
+        "document_type": normalized_document_type,
+        "editable": True,
+        "unsupported_reason": "",
+        "rule_form_key": f"{APPROVAL_POLICY_RULE_FORM_KEY_PREFIX}{normalized_document_type}",
+        "fallback_form_key": "certificate_request",
+    }
+
+
+def _fetch_document_approval_policy_rows(
+    conn,
+    *,
+    tenant_id: str,
+    document_type: str,
+) -> tuple[list[dict[str, Any]], str | None]:
+    policy_state = _resolve_document_approval_policy_state(document_type)
+    if not policy_state["editable"]:
+        return [], None
+
+    for form_key in (policy_state["rule_form_key"], policy_state["fallback_form_key"]):
+        if not form_key:
+            continue
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id,
+                       rule_order,
+                       rule_name,
+                       approver_role,
+                       approver_user_id,
+                       scope_type,
+                       site_id,
+                       conditions_json
+                FROM approval_line_rules
+                WHERE tenant_id = %s
+                  AND form_key = %s
+                  AND is_active = TRUE
+                ORDER BY rule_order ASC, created_at ASC
+                """,
+                (tenant_id, form_key),
+            )
+            rows = [dict(row) for row in (cur.fetchall() or [])]
+        if rows:
+            return rows, form_key
+    return [], policy_state["rule_form_key"]
+
+
+def _serialize_document_approval_policy_row(row: dict[str, Any]) -> dict[str, Any]:
+    conditions = row.get("conditions_json") if isinstance(row.get("conditions_json"), dict) else {}
+    step_kind = str(conditions.get("step_kind") or "").strip().lower()
+    if step_kind not in {"site_supervisor", "explicit_user", "rank"}:
+        step_kind = "explicit_user" if str(row.get("approver_user_id") or "").strip() else "site_supervisor"
+    approver_user_id = str(row.get("approver_user_id") or "").strip()
+    approver_role = normalize_role(conditions.get("site_role") or row.get("approver_role"))
+    return {
+        "id": str(row.get("id") or "").strip(),
+        "step_kind": step_kind,
+        "label": str(row.get("rule_name") or "").strip(),
+        "site_role": approver_role or "supervisor",
+        "approval_group_id": str(conditions.get("approval_group_id") or "").strip(),
+        "approval_rank_id": str(conditions.get("approval_rank_id") or "").strip(),
+        "explicit_user_id": approver_user_id,
+        "allow_delegate": bool(conditions.get("allow_delegate")),
+        "is_required": conditions.get("is_required") is not False,
+    }
+
+
+def _list_document_approval_policy_user_options(conn, *, tenant_id: str) -> list[dict[str, Any]]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, username, full_name, role
+            FROM arls_users
+            WHERE tenant_id = %s
+              AND is_active = TRUE
+              AND COALESCE(is_deleted, FALSE) = FALSE
+              AND lower(role) = ANY(%s)
+            ORDER BY created_at ASC, username ASC
+            """,
+            (tenant_id, list(APPROVAL_POLICY_ALLOWED_USER_ROLES)),
+        )
+        rows = cur.fetchall() or []
+    return [
+        {
+            "id": str(row.get("id") or "").strip(),
+            "username": str(row.get("username") or "").strip(),
+            "full_name": str(row.get("full_name") or "").strip(),
+            "role": normalize_role(row.get("role")),
+        }
+        for row in rows
+    ]
+
+
+def _list_document_approval_policy_site_options(conn, *, tenant_id: str) -> list[dict[str, Any]]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, site_code, site_name
+            FROM sites
+            WHERE tenant_id = %s
+              AND COALESCE(is_active, TRUE) = TRUE
+            ORDER BY created_at ASC, site_name ASC
+            """,
+            (tenant_id,),
+        )
+        rows = cur.fetchall() or []
+    return [
+        {
+            "id": str(row.get("id") or "").strip(),
+            "site_code": str(row.get("site_code") or "").strip(),
+            "site_name": str(row.get("site_name") or "").strip(),
+        }
+        for row in rows
+    ]
+
+
+def _build_document_approval_policy_response(
+    conn,
+    *,
+    tenant_id: str,
+    document_type: str,
+) -> dict[str, Any]:
+    policy_state = _resolve_document_approval_policy_state(document_type)
+    items: list[dict[str, Any]] = []
+    matched_form_key = None
+    if policy_state["editable"]:
+        ensure_default_approval_line_rules(conn, tenant_id=tenant_id)
+        rows, matched_form_key = _fetch_document_approval_policy_rows(
+            conn,
+            tenant_id=tenant_id,
+            document_type=document_type,
+        )
+        items = [_serialize_document_approval_policy_row(row) for row in rows]
+    return {
+        "document_type": policy_state["document_type"],
+        "editable": bool(policy_state["editable"]),
+        "unsupported_reason": str(policy_state["unsupported_reason"] or "").strip(),
+        "items": items,
+        "resolved_form_key": matched_form_key,
+        "user_options": _list_document_approval_policy_user_options(conn, tenant_id=tenant_id),
+        "site_options": _list_document_approval_policy_site_options(conn, tenant_id=tenant_id),
+        "group_options": [],
+        "rank_options": [],
+        "site_role_options": list(APPROVAL_POLICY_SITE_ROLE_OPTIONS),
+    }
 
 
 def _normalize_company_scope_id(raw_value: str | None) -> str | None:
@@ -1549,6 +1806,156 @@ def list_document_templates(
         }
         for row in rows
     ]
+
+
+@router.get("/admin/hr/documents/approval-policy")
+def get_document_approval_policy(
+    document_type: str = Query(default=DOCUMENT_TYPE_RETIREMENT_CERTIFICATE),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    _ensure_admin_role(user)
+    tenant = resolve_scoped_tenant(
+        conn,
+        user,
+        header_tenant_id=x_tenant_id,
+        require_dev_context=False,
+    )
+    tenant_id = str(tenant.get("id") or "").strip()
+    normalized_document_type = _normalize_approval_policy_document_type(document_type)
+    return _build_document_approval_policy_response(
+        conn,
+        tenant_id=tenant_id,
+        document_type=normalized_document_type,
+    )
+
+
+@router.put("/admin/hr/documents/approval-policy")
+def update_document_approval_policy(
+    payload: DocumentApprovalPolicyUpdateRequest,
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    _ensure_admin_role(user)
+    tenant = resolve_scoped_tenant(
+        conn,
+        user,
+        header_tenant_id=x_tenant_id,
+        require_dev_context=False,
+    )
+    tenant_id = str(tenant.get("id") or "").strip()
+    actor_user_id = str(user.get("id") or "").strip() or None
+    normalized_document_type = _normalize_approval_policy_document_type(payload.document_type)
+    policy_state = _resolve_document_approval_policy_state(normalized_document_type)
+    if not policy_state["editable"]:
+        _raise_api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            str(policy_state["unsupported_reason"] or "지원하지 않는 문서 타입입니다."),
+            fields={"document_type": "unsupported"},
+        )
+    items = list(payload.items or [])
+    if not items:
+        _raise_api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            "최소 1개의 승인 단계를 저장해야 합니다.",
+            fields={"items": "min_1"},
+        )
+    if len(items) > 6:
+        _raise_api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            "입력값을 확인해주세요.",
+            fields={"items": "max_6"},
+        )
+
+    for index, item in enumerate(items, start=1):
+        if item.step_kind == "rank":
+            _raise_api_error(
+                status.HTTP_400_BAD_REQUEST,
+                "VALIDATION_ERROR",
+                "HQ 직급 기반 단계는 아직 지원하지 않습니다.",
+                fields={f"items[{index - 1}].step_kind": "unsupported"},
+            )
+        if item.step_kind == "explicit_user":
+            if not item.explicit_user_id:
+                _raise_api_error(
+                    status.HTTP_400_BAD_REQUEST,
+                    "VALIDATION_ERROR",
+                    "입력값을 확인해주세요.",
+                    fields={f"items[{index - 1}].explicit_user_id": "required"},
+                )
+            _parse_uuid(item.explicit_user_id, field_name=f"items[{index - 1}].explicit_user_id")
+
+    ensure_default_approval_line_rules(conn, tenant_id=tenant_id, actor_user_id=actor_user_id)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM approval_line_rules
+            WHERE tenant_id = %s
+              AND form_key = %s
+            """,
+            (tenant_id, policy_state["rule_form_key"]),
+        )
+        for index, item in enumerate(items, start=1):
+            approver_role = item.site_role if item.step_kind == "site_supervisor" else None
+            approver_user_id = item.explicit_user_id if item.step_kind == "explicit_user" else None
+            scope_type = "site_or_tenant" if item.step_kind == "site_supervisor" else "tenant"
+            cur.execute(
+                """
+                INSERT INTO approval_line_rules (
+                    id,
+                    tenant_id,
+                    form_key,
+                    rule_order,
+                    rule_name,
+                    approver_role,
+                    approver_user_id,
+                    scope_type,
+                    site_id,
+                    is_active,
+                    conditions_json,
+                    created_by,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s::uuid, %s, NULL, TRUE, %s::jsonb, %s,
+                    timezone('utc', now()), timezone('utc', now())
+                )
+                """,
+                (
+                    str(uuid.uuid4()),
+                    tenant_id,
+                    policy_state["rule_form_key"],
+                    index,
+                    item.label or f"승인 {index}",
+                    approver_role,
+                    approver_user_id,
+                    scope_type,
+                    _json_dumps(
+                        {
+                            "step_kind": item.step_kind,
+                            "site_role": item.site_role,
+                            "approval_group_id": item.approval_group_id,
+                            "approval_rank_id": item.approval_rank_id,
+                            "allow_delegate": bool(item.allow_delegate),
+                            "is_required": bool(item.is_required),
+                            "document_type": normalized_document_type,
+                        }
+                    ),
+                    actor_user_id,
+                ),
+            )
+
+    return _build_document_approval_policy_response(
+        conn,
+        tenant_id=tenant_id,
+        document_type=normalized_document_type,
+    )
 
 
 @router.post("/admin/hr/documents/templates/upload")
