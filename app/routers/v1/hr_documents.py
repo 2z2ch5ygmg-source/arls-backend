@@ -34,7 +34,7 @@ from ...services.employment_certificate import (
     issue_employment_certificate_pdf_from_docx,
     send_certificate_mail,
 )
-from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, ROLE_EMPLOYEE, normalize_role
+from ...utils.permissions import ROLE_BRANCH_MANAGER, ROLE_DEV, ROLE_EMPLOYEE, normalize_role, normalize_user_role
 from ...utils.schema_introspection import table_column_exists
 from ...utils.tenant_context import resolve_scoped_tenant
 
@@ -121,7 +121,7 @@ class DocumentApprovalPolicyStepIn(BaseModel):
     @field_validator("site_role", mode="before")
     @classmethod
     def _normalize_site_role(cls, value: str | None) -> str:
-        normalized = normalize_role(value)
+        normalized = normalize_user_role(value)
         if normalized not in {"supervisor", "vice_supervisor", "hq_admin", "developer"}:
             return "supervisor"
         return normalized
@@ -599,7 +599,8 @@ def _serialize_document_approval_policy_row(row: dict[str, Any]) -> dict[str, An
     if step_kind not in {"site_supervisor", "explicit_user", "rank"}:
         step_kind = "explicit_user" if str(row.get("approver_user_id") or "").strip() else "site_supervisor"
     approver_user_id = str(row.get("approver_user_id") or "").strip()
-    approver_role = normalize_role(conditions.get("site_role") or row.get("approver_role"))
+    raw_approver_role = str(conditions.get("site_role") or row.get("approver_role") or "").strip()
+    approver_role = normalize_user_role(raw_approver_role) if raw_approver_role else "supervisor"
     return {
         "id": str(row.get("id") or "").strip(),
         "step_kind": step_kind,
@@ -633,7 +634,7 @@ def _list_document_approval_policy_user_options(conn, *, tenant_id: str) -> list
             "id": str(row.get("id") or "").strip(),
             "username": str(row.get("username") or "").strip(),
             "full_name": str(row.get("full_name") or "").strip(),
-            "role": normalize_role(row.get("role")),
+            "role": normalize_user_role(row.get("role")),
         }
         for row in rows
     ]
