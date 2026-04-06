@@ -44053,52 +44053,122 @@ html[data-ui-theme='dark'] .attendance-stats-chart-wrap {
   font-size: 12px;
 }
 
-body[data-current-view='attendance'] .topbar.app-topbar {
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] .topbar.app-topbar,
+html[data-ui-theme='light'] body[data-current-view='attendance'] .topbar.app-topbar {
+  --app-topbar-bg: #f4f6f9;
+  --app-topbar-border-color: #d7dee8;
+  color: #253041;
+}
+
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] .topbar.app-topbar .topbar-session-info,
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] .topbar.app-topbar .icon-btn,
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] .topbar.app-topbar .topbar-profile-btn,
+html[data-ui-theme='light'] body[data-current-view='attendance'] .topbar.app-topbar .topbar-session-info,
+html[data-ui-theme='light'] body[data-current-view='attendance'] .topbar.app-topbar .icon-btn,
+html[data-ui-theme='light'] body[data-current-view='attendance'] .topbar.app-topbar .topbar-profile-btn {
+  color: #253041;
+}
+
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] #desktopSidebar,
+html[data-ui-theme='light'] body[data-current-view='attendance'] #desktopSidebar {
+  background: #f1f4f8;
+  border-right-color: #d8dfe8;
+}
+
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] #desktopSidebar .desktop-sidebar-head,
+html[data-ui-theme='light'] body[data-current-view='attendance'] #desktopSidebar .desktop-sidebar-head {
+  border-bottom-color: rgba(15, 23, 42, 0.08);
+}
+
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] #desktopSidebar .drawer-role,
+html[data-ui-theme='light'] body[data-current-view='attendance'] #desktopSidebar .drawer-role {
+  color: #f97316;
+}
+
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] #desktopSidebar .drawer-tenant,
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] #desktopSidebar .drawer-section-label,
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] #desktopSidebar .drawer-item-icon,
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] #desktopSidebar .drawer-item-label,
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] #desktopSidebar .drawer-submenu-arrow,
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] #desktopSidebar .drawer-subitem,
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] #desktopSidebar .drawer-subitem-label,
+html[data-ui-theme='light'] body[data-current-view='attendance'] #desktopSidebar .drawer-tenant,
+html[data-ui-theme='light'] body[data-current-view='attendance'] #desktopSidebar .drawer-section-label,
+html[data-ui-theme='light'] body[data-current-view='attendance'] #desktopSidebar .drawer-item-icon,
+html[data-ui-theme='light'] body[data-current-view='attendance'] #desktopSidebar .drawer-item-label,
+html[data-ui-theme='light'] body[data-current-view='attendance'] #desktopSidebar .drawer-submenu-arrow,
+html[data-ui-theme='light'] body[data-current-view='attendance'] #desktopSidebar .drawer-subitem,
+html[data-ui-theme='light'] body[data-current-view='attendance'] #desktopSidebar .drawer-subitem-label {
+  color: #334155;
+}
+
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] #desktopSidebar .drawer-item:hover,
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] #desktopSidebar .drawer-subitem:hover,
+html[data-ui-theme='light'] body[data-current-view='attendance'] #desktopSidebar .drawer-item:hover,
+html[data-ui-theme='light'] body[data-current-view='attendance'] #desktopSidebar .drawer-subitem:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] #desktopSidebar .drawer-menu .drawer-item.active,
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] #desktopSidebar .drawer-subitem.active,
+html[data-ui-theme='light'] body[data-current-view='attendance'] #desktopSidebar .drawer-menu .drawer-item.active,
+html[data-ui-theme='light'] body[data-current-view='attendance'] #desktopSidebar .drawer-subitem.active {
+  background: rgba(255, 122, 26, 0.12);
+}
+
+html:not([data-ui-theme='dark']) body[data-current-view='attendance'] #desktopSidebar .drawer-tenant-select,
+html[data-ui-theme='light'] body[data-current-view='attendance'] #desktopSidebar .drawer-tenant-select {
+  background: #ffffff;
+  border-color: #d7dee8;
+  color: #1f2937;
+}
+
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] .topbar.app-topbar {
   --app-topbar-bg: #232933;
   --app-topbar-border-color: #384253;
   color: #eef3fb;
 }
 
-body[data-current-view='attendance'] .topbar.app-topbar .topbar-session-info,
-body[data-current-view='attendance'] .topbar.app-topbar .icon-btn,
-body[data-current-view='attendance'] .topbar.app-topbar .topbar-profile-btn {
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] .topbar.app-topbar .topbar-session-info,
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] .topbar.app-topbar .icon-btn,
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] .topbar.app-topbar .topbar-profile-btn {
   color: #eef3fb;
 }
 
-body[data-current-view='attendance'] #desktopSidebar {
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] #desktopSidebar {
   background: #20252e;
   border-right-color: #343d4c;
 }
 
-body[data-current-view='attendance'] #desktopSidebar .desktop-sidebar-head {
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] #desktopSidebar .desktop-sidebar-head {
   border-bottom-color: rgba(241, 245, 249, 0.12);
 }
 
-body[data-current-view='attendance'] #desktopSidebar .drawer-role {
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] #desktopSidebar .drawer-role {
   color: #ff9b52;
 }
 
-body[data-current-view='attendance'] #desktopSidebar .drawer-tenant,
-body[data-current-view='attendance'] #desktopSidebar .drawer-section-label,
-body[data-current-view='attendance'] #desktopSidebar .drawer-item-icon,
-body[data-current-view='attendance'] #desktopSidebar .drawer-item-label,
-body[data-current-view='attendance'] #desktopSidebar .drawer-submenu-arrow,
-body[data-current-view='attendance'] #desktopSidebar .drawer-subitem,
-body[data-current-view='attendance'] #desktopSidebar .drawer-subitem-label {
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] #desktopSidebar .drawer-tenant,
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] #desktopSidebar .drawer-section-label,
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] #desktopSidebar .drawer-item-icon,
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] #desktopSidebar .drawer-item-label,
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] #desktopSidebar .drawer-submenu-arrow,
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] #desktopSidebar .drawer-subitem,
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] #desktopSidebar .drawer-subitem-label {
   color: #d7dfeb;
 }
 
-body[data-current-view='attendance'] #desktopSidebar .drawer-item:hover,
-body[data-current-view='attendance'] #desktopSidebar .drawer-subitem:hover {
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] #desktopSidebar .drawer-item:hover,
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] #desktopSidebar .drawer-subitem:hover {
   background: rgba(255, 255, 255, 0.06);
 }
 
-body[data-current-view='attendance'] #desktopSidebar .drawer-menu .drawer-item.active,
-body[data-current-view='attendance'] #desktopSidebar .drawer-subitem.active {
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] #desktopSidebar .drawer-menu .drawer-item.active,
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] #desktopSidebar .drawer-subitem.active {
   background: rgba(255, 122, 26, 0.16);
 }
 
-body[data-current-view='attendance'] #desktopSidebar .drawer-tenant-select {
+:root[data-ui-theme='dark'] body[data-current-view='attendance'] #desktopSidebar .drawer-tenant-select {
   background: #2a313d;
   border-color: #434d5e;
   color: #f3f7ff;
