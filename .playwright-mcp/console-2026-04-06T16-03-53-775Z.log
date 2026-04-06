@@ -16,3 +16,9 @@
   "queryApi": "(none)",
   "origin": "http://127.0.0.1:4175"
 } @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:2037
+[   57292ms] [INFO] [RG ARLS][Auth] token stored {hasAccessToken: true, hasRefreshToken: true} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:39444
+[   58873ms] [INFO] [PERF][COMPANY_LIST] click->mount: 20.1ms @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
+[   58873ms] [INFO] [PERF][COMPANY_LIST] mount->first_ui: 7.2ms @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
+[   58873ms] [INFO] [PERF][COMPANY_LIST] mount->critical_ui: 5.4ms @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
+[   58873ms] [INFO] [PERF][COMPANY_LIST] total_to_interactive: 587.3ms @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
+[   58873ms] [INFO] [PERF][COMPANY_LIST] api_vs_render: api=561.4ms render=1.2ms dominant=api @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
