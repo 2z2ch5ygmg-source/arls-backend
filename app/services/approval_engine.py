@@ -488,33 +488,56 @@ def _resolve_approver_from_rule(
     return dict(row) if row else None
 
 
+def _resolve_approval_rule_form_keys(
+    *,
+    form_key: str,
+    payload: dict[str, Any] | None = None,
+) -> list[str]:
+    normalized_form_key = str(form_key or "").strip().lower()
+    if not normalized_form_key:
+        return []
+
+    keys: list[str] = [normalized_form_key]
+    if normalized_form_key == "certificate_request":
+        document_type = str((payload or {}).get("document_type") or (payload or {}).get("certificate_type_key") or "").strip().lower()
+        if document_type:
+            keys.insert(0, f"{normalized_form_key}:{document_type}")
+    return keys
+
+
 def _resolve_auto_approval_steps(
     conn,
     *,
     tenant_id: str,
     form_key: str,
     site_id: str | None,
+    payload: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT id,
-                   rule_order,
-                   rule_name,
-                   approver_role,
-                   approver_user_id,
-                   scope_type,
-                   site_id,
-                   conditions_json
-            FROM approval_line_rules
-            WHERE tenant_id = %s
-              AND form_key = %s
-              AND is_active = TRUE
-            ORDER BY rule_order ASC, created_at ASC
-            """,
-            (tenant_id, form_key),
-        )
-        rules = [dict(row) for row in (cur.fetchall() or [])]
+    rules: list[dict[str, Any]] = []
+    for candidate_form_key in _resolve_approval_rule_form_keys(form_key=form_key, payload=payload):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id,
+                       rule_order,
+                       rule_name,
+                       approver_role,
+                       approver_user_id,
+                       scope_type,
+                       site_id,
+                       conditions_json
+                FROM approval_line_rules
+                WHERE tenant_id = %s
+                  AND form_key = %s
+                  AND is_active = TRUE
+                ORDER BY rule_order ASC, created_at ASC
+                """,
+                (tenant_id, candidate_form_key),
+            )
+            rows = [dict(row) for row in (cur.fetchall() or [])]
+        if rows:
+            rules = rows
+            break
 
     resolved_steps: list[dict[str, Any]] = []
     for rule in rules:
@@ -1035,6 +1058,7 @@ def create_approval_document(
         tenant_id=tenant_id,
         form_key=normalized_form_key,
         site_id=site_id,
+        payload=payload,
     )
 
     document_id = str(uuid.uuid4())
