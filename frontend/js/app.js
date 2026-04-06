@@ -44420,6 +44420,77 @@ function getHrSelectedCertificateType() {
   return selected;
 }
 
+function getHrTemplateUploadSupportState(typeRow = getHrSelectedCertificateType()) {
+  const typeKey = normalizeHrCertificateTypeKey(typeRow?.type_key || '');
+  const displayName = String(typeRow?.display_name || '문서').trim() || '문서';
+  if (!HR_TEMPLATE_UPLOAD_SUPPORTED_DOC_TYPES.has(typeKey)) {
+    if (isHrResignationDocumentType(typeKey)) {
+      return {
+        editable: false,
+        reason: '사직서는 제출형 문서라 DOCX 템플릿 업로드를 지원하지 않습니다.',
+        displayName,
+      };
+    }
+    return {
+      editable: false,
+      reason: `${displayName} 템플릿은 아직 준비되지 않았습니다.`,
+      displayName,
+    };
+  }
+  return { editable: true, reason: '', displayName };
+}
+
+function getHrApprovalRulesSupportState(typeRow = getHrSelectedCertificateType()) {
+  const typeKey = normalizeHrCertificateTypeKey(typeRow?.type_key || '');
+  const displayName = String(typeRow?.display_name || '문서').trim() || '문서';
+  if (!typeRow || typeof typeRow !== 'object') {
+    return { editable: false, reason: '문서 타입을 먼저 선택해 주세요.', displayName };
+  }
+  if (!Boolean(typeRow.requires_approval)) {
+    return {
+      editable: false,
+      reason: `${displayName}는 즉시 발급 문서라 승인 절차를 사용하지 않습니다.`,
+      displayName,
+    };
+  }
+  if (!isHrCertificateTypeRequestAvailable(typeRow)) {
+    return {
+      editable: false,
+      reason: String(typeRow?.eligibility_reason || '').trim() || `${displayName}는 아직 신청할 수 없어 승인 절차를 편집하지 않습니다.`,
+      displayName,
+    };
+  }
+  if (isHrResignationDocumentType(typeKey)) {
+    return {
+      editable: false,
+      reason: '사직서는 기존 검토 흐름을 유지하므로 문서 관리 화면에서 승인 절차를 편집하지 않습니다.',
+      displayName,
+    };
+  }
+  if (!HR_APPROVAL_RULE_SUPPORTED_DOC_TYPES.has(typeKey)) {
+    return {
+      editable: false,
+      reason: `${displayName}의 승인 절차는 아직 문서별 편집을 지원하지 않습니다.`,
+      displayName,
+    };
+  }
+  return { editable: true, reason: '', displayName };
+}
+
+function getHrApprovalRuleValidationMessage(rows = []) {
+  const draftRows = Array.isArray(rows) ? rows : [];
+  for (let index = 0; index < draftRows.length; index += 1) {
+    const row = createHrApprovalRuleDraft(draftRows[index]);
+    if (row.step_kind === 'rank') {
+      return 'HQ 직급 기반 단계는 아직 지원되지 않습니다. 지정 사용자 또는 현장 Supervisor를 사용하세요.';
+    }
+    if (row.step_kind === 'explicit_user' && !String(row.explicit_user_id || '').trim()) {
+      return `${index + 1}단계 승인 사용자를 선택해 주세요.`;
+    }
+  }
+  return '';
+}
+
 function renderHrDocCardSelection() {
   const hrState = ensureHrDocsState();
   const grid = $('#hrDocCardGrid');
