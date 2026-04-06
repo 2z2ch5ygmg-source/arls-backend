@@ -45226,6 +45226,9 @@ function renderHrScopeAndPanels() {
   const hrState = ensureHrDocsState();
   const selectedType = getHrSelectedCertificateType();
   const isResignation = isHrResignationDocumentType(selectedType?.type_key || '');
+  const templateSupport = getHrTemplateUploadSupportState(selectedType);
+  const approvalSupport = getHrApprovalRulesSupportState(selectedType);
+  const approvalValidationMessage = getHrApprovalRuleValidationMessage(hrState.approvalRulesRows);
   const scopeHint = $('#hrScopeHint');
   const employeeCard = $('#hrEmploymentEmployeeCard');
   const myRowsCard = $('#hrEmploymentMyRequestsCard');
@@ -45256,7 +45259,9 @@ function renderHrScopeAndPanels() {
   if (templateStatusEl && templateManagerMode) {
     const hasFetchedTemplates = Number(hrState.templatesFetchedAt || 0) > 0;
     const templateStatusText = String(templateStatusEl.textContent || '').trim();
-    if (Boolean(hrState.loadingTemplates) && !hasFetchedTemplates) {
+    if (!templateSupport.editable) {
+      templateStatusEl.textContent = templateSupport.reason;
+    } else if (Boolean(hrState.loadingTemplates) && !hasFetchedTemplates) {
       templateStatusEl.textContent = '현재 템플릿 버전을 불러오는 중입니다.';
     } else if (!templateStatusText || templateStatusText.includes('불러오는 중')) {
       templateStatusEl.textContent = hasFetchedTemplates
@@ -45280,11 +45285,28 @@ function renderHrScopeAndPanels() {
 
   const uploadBtn = $('#hrTemplateUploadBtn');
   if (uploadBtn instanceof HTMLButtonElement) {
-    uploadBtn.disabled = !templateManagerMode || Boolean(hrState.templateUploading);
+    uploadBtn.disabled = !templateManagerMode || !templateSupport.editable || Boolean(hrState.templateUploading);
+    if (!templateSupport.editable) {
+      uploadBtn.title = templateSupport.reason;
+    } else {
+      uploadBtn.removeAttribute('title');
+    }
   }
   document.querySelectorAll('#hrApprovalRulesSection [data-action="hr-approval-rule-add"], #hrApprovalRulesSection [data-action="hr-approval-rules-save"], #hrApprovalRulesSection [data-action="hr-approval-rules-refresh"]').forEach((button) => {
     if (button instanceof HTMLButtonElement) {
-      button.disabled = !approvalPolicyManagerMode || Boolean(hrState.loadingApprovalRules) || Boolean(hrState.savingApprovalRules);
+      const disabledReason = !approvalSupport.editable
+        ? approvalSupport.reason
+        : approvalValidationMessage;
+      button.disabled = !approvalPolicyManagerMode
+        || !approvalSupport.editable
+        || Boolean(approvalValidationMessage && button.dataset.action === 'hr-approval-rules-save')
+        || Boolean(hrState.loadingApprovalRules)
+        || Boolean(hrState.savingApprovalRules);
+      if (disabledReason) {
+        button.title = disabledReason;
+      } else {
+        button.removeAttribute('title');
+      }
     }
   });
   const templateTypeSelect = $('#hrTemplateTypeSelect');
