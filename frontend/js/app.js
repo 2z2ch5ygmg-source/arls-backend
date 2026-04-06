@@ -30773,6 +30773,51 @@ function syncLeaveWorkspaceDateDefaults() {
   return leaveState;
 }
 
+function buildLeaveWorkspaceRangeTriggerLabel(startRaw = '', endRaw = '') {
+  return buildAttendanceRangeTriggerLabel(startRaw, endRaw);
+}
+
+function buildLeaveWorkspaceRangeSummary(modeRaw = '') {
+  const mode = String(modeRaw || '').trim().toLowerCase();
+  if (mode === 'custom') return '직접 선택 범위';
+  if (mode === 'year-to-date') return '올해 누적 범위';
+  if (mode === 'open') return '전체 이력 기준';
+  return '이번 달 기본 범위';
+}
+
+function openLeaveWorkspaceRangeSheet() {
+  const leaveState = syncLeaveWorkspaceDateDefaults();
+  const start = String(leaveState.workspaceStartDate || '').trim();
+  const end = String(leaveState.workspaceEndDate || '').trim();
+  const wrapper = document.createElement('div');
+  wrapper.className = 'attendance-range-sheet';
+  wrapper.innerHTML = `
+    <div class="attendance-range-sheet-summary">
+      <strong>${escapeHtml(buildLeaveWorkspaceRangeTriggerLabel(start, end))}</strong>
+      <span>사용 이력 조회 범위를 선택합니다.</span>
+    </div>
+    <div class="attendance-range-sheet-fields">
+      <label class="input-field attendance-range-sheet-field">
+        <span>시작일</span>
+        <input id="leaveWorkspaceRangeSheetStart" type="date" value="${escapeHtml(start)}" />
+      </label>
+      <label class="input-field attendance-range-sheet-field">
+        <span>종료일</span>
+        <input id="leaveWorkspaceRangeSheetEnd" type="date" value="${escapeHtml(end)}" />
+      </label>
+    </div>
+  `;
+  openSheet({
+    title: '휴가 기간',
+    contentNode: wrapper,
+    layoutClass: 'sheet-layout-requests-filter',
+    actions: [
+      { label: '취소', variant: 'btn-secondary', action: 'sheet-close' },
+      { label: '적용', variant: 'btn-primary', action: 'leave-apply-workspace-range-sheet' },
+    ],
+  });
+}
+
 function normalizeLeaveUsageSortKey(value = '') {
   const key = String(value || '').trim().toLowerCase();
   if (['site', 'granted', 'used', 'pending', 'remaining', 'latest'].includes(key)) return key;
@@ -31415,7 +31460,7 @@ function renderLeaveWorkspacePrimaryAction() {
     config = { label: '휴가 부여', action: 'leave-grant-open' };
   } else if (can('leaveWrite')) {
     config = {
-      label: activeSection === 'history' && state.leaveView?.workspaceComposerOpen ? '신청 닫기' : '휴가 신청',
+      label: '휴가 신청',
       action: 'leave-workspace-toggle-composer',
     };
   } else if ((activeSection === 'status' || activeSection === 'history') && canManageLeaveGrants()) {
@@ -31450,7 +31495,13 @@ function renderLeavePolicySection() {
   const list = $('#leavePolicyList');
   if (!(list instanceof HTMLElement)) return;
   const rows = buildLeavePolicyRows();
-  const activePolicyTab = normalizeLeavePolicyStatusTab(state.leaveView?.policyStatusTab || 'active');
+  const hasInactiveRows = rows.some((row) => !row.active);
+  let activePolicyTab = normalizeLeavePolicyStatusTab(state.leaveView?.policyStatusTab || 'active');
+  if (!hasInactiveRows && activePolicyTab === 'inactive') {
+    if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+    state.leaveView.policyStatusTab = 'active';
+    activePolicyTab = 'active';
+  }
   const visibleRows = rows.filter((row) => (activePolicyTab === 'inactive' ? !row.active : row.active));
   clearList(list);
   renderLeavePolicyStatusTabs();
@@ -31480,9 +31531,17 @@ function renderLeavePolicySection() {
 }
 
 function renderLeavePolicyStatusTabs() {
+  const hasInactiveRows = buildLeavePolicyRows().some((row) => !row.active);
+  let activeTab = normalizeLeavePolicyStatusTab(state.leaveView?.policyStatusTab || 'active');
+  if (!hasInactiveRows && activeTab === 'inactive') {
+    if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+    state.leaveView.policyStatusTab = 'active';
+    activeTab = 'active';
+  }
   document.querySelectorAll('#leavePolicyStatusTabs [data-action="leave-policy-status-tab"]').forEach((button) => {
     const tab = normalizeLeavePolicyStatusTab(button?.dataset?.tab || 'active');
-    button.classList.toggle('active', tab === normalizeLeavePolicyStatusTab(state.leaveView?.policyStatusTab || 'active'));
+    button.classList.toggle('hidden', tab === 'inactive' && !hasInactiveRows);
+    button.classList.toggle('active', tab === activeTab);
   });
 }
 
@@ -31625,11 +31684,18 @@ function renderLeaveWorkspaceRequestToolbar(items = []) {
   const leaveState = syncLeaveWorkspaceDateDefaults();
   if (normalizeLeaveWorkspaceSection(leaveState.workspaceSection || 'status') !== 'history') return;
   const statusSelect = $('#leaveWorkspaceStatusFilter');
-  const startInput = $('#leaveWorkspaceStartDate');
-  const endInput = $('#leaveWorkspaceEndDate');
+  const rangeTrigger = $('#leaveWorkspaceRangeTrigger');
+  const rangeSummary = $('#leaveWorkspaceRangeSummary');
   const searchInput = $('#leaveWorkspaceSearch');
-  if (startInput instanceof HTMLInputElement) startInput.value = String(leaveState.workspaceStartDate || '');
-  if (endInput instanceof HTMLInputElement) endInput.value = String(leaveState.workspaceEndDate || '');
+  if (rangeTrigger instanceof HTMLButtonElement) {
+    rangeTrigger.textContent = buildLeaveWorkspaceRangeTriggerLabel(
+      leaveState.workspaceStartDate,
+      leaveState.workspaceEndDate,
+    );
+  }
+  if (rangeSummary instanceof HTMLElement) {
+    rangeSummary.textContent = buildLeaveWorkspaceRangeSummary(leaveState.workspaceDateDefaultMode || '');
+  }
   if (statusSelect instanceof HTMLSelectElement) statusSelect.value = normalizeLeaveStatusFilter(leaveState.workspaceStatusFilter || 'all');
   if (searchInput instanceof HTMLInputElement) searchInput.value = String(leaveState.workspaceRequesterQuery || '');
   renderRequestsFilterTriggerLabels();
@@ -32405,6 +32471,100 @@ function renderLeaveWorkspaceDrawer() {
   }
 }
 
+function buildLeaveWorkspaceCreateSheetContent() {
+  const content = document.createElement('div');
+  content.className = 'stack';
+  content.innerHTML = `
+    <div class="approval-head">
+      <div class="requests-heading-block">
+        <h3>휴가 신청</h3>
+        <p class="muted">신청은 전용 입력면에서 등록하고 결과 확인은 사용 이력에서 이어집니다.</p>
+      </div>
+    </div>
+    <div id="leaveWorkspaceQuickTypeChips" class="quick-actions leave-quick-chips">
+      <button class="btn btn-secondary active" type="button" data-action="leave-workspace-quick-type" data-leave-type="annual">연차</button>
+      <button class="btn btn-secondary" type="button" data-action="leave-workspace-quick-type" data-leave-type="half">반차</button>
+      <button class="btn btn-secondary" type="button" data-action="leave-workspace-quick-type" data-leave-type="sick" data-reason-preset="병가">병가</button>
+      <button class="btn btn-secondary" type="button" data-action="leave-workspace-quick-type" data-leave-type="other" data-reason-preset="조퇴">조퇴</button>
+    </div>
+    <form id="leaveWorkspaceForm" class="stack">
+      <input id="leaveWorkspaceTenant" type="hidden" />
+      <input id="leaveWorkspaceEmp" type="hidden" />
+      <div class="registration-grid">
+        <label class="input-field">
+          <span>유형</span>
+          <select id="leaveWorkspaceType" required>
+            <option value="annual">연차</option>
+            <option value="half">반차</option>
+            <option value="sick">병가 (내부번호)</option>
+            <option value="other">조퇴 (내부번호)</option>
+          </select>
+        </label>
+        <label class="input-field">
+          <span>휴가 정책</span>
+          <select id="leaveWorkspacePolicySelect">
+            <option value="">기본 정책</option>
+          </select>
+        </label>
+        <label id="leaveWorkspaceHalfSlotField" class="input-field hidden">
+          <span>반차 구분</span>
+          <select id="leaveWorkspaceHalfSlot">
+            <option value="am">오전 반차</option>
+            <option value="pm">오후 반차</option>
+          </select>
+        </label>
+        <label class="input-field">
+          <span>시작일</span>
+          <input id="leaveWorkspaceStart" type="date" required />
+        </label>
+        <label class="input-field">
+          <span>종료일</span>
+          <input id="leaveWorkspaceEnd" type="date" required />
+        </label>
+        <label class="input-field registration-span-full">
+          <span>사유 메모 (선택)</span>
+          <input id="leaveWorkspaceReason" placeholder="필요 시 상세 사유를 입력하세요." />
+        </label>
+        <label class="input-field registration-span-full">
+          <span>첨부 (선택, 최대 3개)</span>
+          <input id="leaveWorkspaceAttachments" type="file" accept="image/*,.pdf" multiple />
+          <span id="leaveWorkspaceAttachmentHint" class="input-helper">선택된 첨부가 없습니다.</span>
+        </label>
+      </div>
+      <div class="requests-detail-actions">
+        <button class="btn btn-secondary" type="button" data-action="sheet-close">취소</button>
+        <button class="btn btn-primary" id="leaveWorkspaceSubmitBtn" type="submit">휴가 신청</button>
+      </div>
+    </form>
+  `;
+  return content;
+}
+
+function openLeaveWorkspaceCreateSheet() {
+  if (!can('leaveWrite')) {
+    showToast('휴가 신청 권한이 없습니다.', 'error', 2200);
+    return;
+  }
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  state.leaveView.workspaceComposerOpen = true;
+  openSheet({
+    title: '휴가 신청',
+    contentNode: buildLeaveWorkspaceCreateSheetContent(),
+  });
+  state.sheetContext = {
+    mode: 'leave-workspace-create',
+    cleanup: () => {
+      if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+      state.leaveView.workspaceComposerOpen = false;
+      renderLeaveManagementWorkspace();
+    },
+  };
+  syncLeaveWorkspaceComposerForm();
+  renderLeavePolicySelectOptions();
+  updateLeaveWorkspaceComposerState({ enforceHalfDayRange: false });
+  setLeaveWorkspaceAttachmentHint('선택된 첨부가 없습니다.');
+}
+
 function syncLeaveWorkspaceComposerForm() {
   const tenantInput = $('#leaveWorkspaceTenant');
   const empInput = $('#leaveWorkspaceEmp');
@@ -32995,6 +33155,12 @@ function openLeavePolicyDetailSheet(policyId = '') {
     ${rules?.promotion_enabled ? `<div><strong>촉진 승인 처리</strong><div class="muted">${rules?.promotion_use_same_approval === false ? '촉진 공지만 발송' : '기존 승인 단계 사용'}</div></div>` : ''}
     ${rules?.promotion_enabled ? `<div><strong>미사용 처리</strong><div class="muted">${formatLeavePromotionUnusedActionLabel(rules?.promotion_unused_action)}</div></div>` : ''}
     <div><strong>안내 문구</strong><div class="muted">${rules?.note || '-'}</div></div>
+    ${canManageLeaveSettings() ? `
+      <div class="leave-policy-detail-blocked-delete">
+        <button type="button" class="btn btn-secondary" disabled aria-disabled="true">정책 삭제</button>
+        <p class="muted">삭제 API 계약이 아직 연결되지 않아 현재는 삭제 경로를 노출만 유지합니다. 실제 제거는 백엔드 계약 추가 후 활성화해야 합니다.</p>
+      </div>
+    ` : ''}
   `;
   openSheet({
     title: '휴가 정책 상세',
@@ -74152,6 +74318,9 @@ async function onLeaveWorkspaceSubmit(event) {
     state.leaveView.workspaceSelectedRequestId = '';
     state.leaveView.workspacePolicyId = policyId || '';
     resetLeaveWorkspaceComposer();
+    if (state.sheetContext?.mode === 'leave-workspace-create') {
+      closeSheet();
+    }
     await loadLeaves();
     if (state.currentView === 'requests' && !isManagerShellRole()) {
       await loadEmployeeRequestsView({ silent: true });
@@ -78729,18 +78898,17 @@ function bindUiEvents() {
         }
         setLeaveWorkspaceSection('history');
         setLeaveWorkspaceDrawerOpen(false);
-        if (resolveLeaveManagerScope() !== 'mine') {
-          setLeaveManagerScope('mine');
-          setLeaveWorkspaceComposerOpen(true);
-          runWithBusy(async () => {
+        const needsReload = resolveLeaveManagerScope() !== 'mine';
+        runWithBusy(async () => {
+          if (needsReload) {
+            setLeaveManagerScope('mine');
             await loadLeaves();
-            scrollToSelector('#leaveWorkspaceComposer');
-          }, '휴가 화면 준비 중...');
-          return;
-        }
-        setLeaveWorkspaceComposerOpen(true);
-        renderLeaveManagementWorkspace();
-        scrollToSelector('#leaveWorkspaceComposer');
+          } else {
+            setLeaveManagerScope('mine');
+            renderLeaveManagementWorkspace();
+          }
+          openLeaveWorkspaceCreateSheet();
+        }, '휴가 화면 준비 중...');
         return;
       }
       const segment = normalizeRequestsTabView(state.requestsTabView);
@@ -78754,12 +78922,7 @@ function bindUiEvents() {
 
     if (action === 'requests-open-filter') {
       if (isDesktopLeaveWorkspaceMode()) {
-        const target = $('#leaveWorkspaceStartDate');
-        scrollToSelector('#leaveRequestsToolbar');
-        if (target instanceof HTMLInputElement) {
-          target.focus();
-          if (typeof target.showPicker === 'function') target.showPicker();
-        }
+        openLeaveWorkspaceRangeSheet();
         return;
       }
       const target = $('#requestsFilterStartDate');
@@ -78928,12 +79091,12 @@ function bindUiEvents() {
     if (action === 'requests-quick-leave') {
       runWithBusy(async () => {
         setLeaveWorkspaceSection('history');
-        setLeaveWorkspaceComposerOpen(true);
+        setLeaveManagerScope('mine');
+        closeSheet();
         const moved = await navigateToRoute(ROUTE_LEAVE);
         if (!moved) return;
         await loadLeaves();
-        scrollToSelector(isDesktopLeaveWorkspaceMode() ? '#leaveWorkspaceComposer' : '#leaveModule');
-        closeSheet();
+        openLeaveWorkspaceCreateSheet();
       }, '휴가 화면 이동 중...');
       return;
     }
@@ -79547,25 +79710,21 @@ function bindUiEvents() {
         showToast('휴가 신청 권한이 없습니다.', 'error', 2200);
         return;
       }
-      setLeaveWorkspaceSection('history');
-      const nextOpen = !Boolean(state.leaveView?.workspaceComposerOpen);
-      setLeaveWorkspaceComposerOpen(nextOpen);
-      if (nextOpen && resolveLeaveManagerScope() !== 'mine') {
+      const needsReload = resolveLeaveManagerScope() !== 'mine';
+      runWithBusy(async () => {
         setLeaveManagerScope('mine');
-        runWithBusy(async () => {
+        if (needsReload) {
           await loadLeaves();
-          scrollToSelector('#leaveWorkspaceComposer');
-        }, '휴가 신청 화면 준비 중...');
-        return;
-      }
-      if (!nextOpen && isDesktopLeaveWorkspaceMode() && isManagerShellRole() && can('leaveReview')) {
-        runWithBusy(() => loadLeaves(), '조회 중...');
-        return;
-      }
-      renderLeaveManagementWorkspace();
-      if (nextOpen) {
-        scrollToSelector('#leaveWorkspaceComposer');
-      }
+        } else {
+          renderLeaveManagementWorkspace();
+        }
+        openLeaveWorkspaceCreateSheet();
+      }, '휴가 신청 화면 준비 중...');
+      return;
+    }
+
+    if (action === 'leave-workspace-open-range-sheet') {
+      openLeaveWorkspaceRangeSheet();
       return;
     }
 
@@ -79877,6 +80036,33 @@ function bindUiEvents() {
       closeSheet();
       syncAttendanceManagerFilterInputs();
       runWithBusy(() => loadAttendanceView({ force: true }), '기간 조회 중...');
+      return;
+    }
+
+    if (action === 'leave-apply-workspace-range-sheet') {
+      const leaveState = syncLeaveWorkspaceDateDefaults();
+      const startInput = $('#leaveWorkspaceRangeSheetStart');
+      const endInput = $('#leaveWorkspaceRangeSheetEnd');
+      let start = normalizeAttendanceDate(startInput instanceof HTMLInputElement ? startInput.value : '');
+      let end = normalizeAttendanceDate(endInput instanceof HTMLInputElement ? endInput.value : '');
+      if (!start && end) start = end;
+      if (!end && start) end = start;
+      if (!start && !end) {
+        start = String(leaveState.workspaceStartDate || '').trim();
+        end = String(leaveState.workspaceEndDate || '').trim();
+      }
+      if (start && end && start > end) {
+        [start, end] = [end, start];
+      }
+      if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+      state.leaveView.workspaceStartDate = start;
+      state.leaveView.workspaceEndDate = end;
+      state.leaveView.workspaceDateFilterTouched = true;
+      state.leaveView.workspaceDateDefaultMode = 'custom';
+      closeSheet();
+      renderLeaveWorkspaceRequestToolbar(getLeaveWorkspaceRequestRows());
+      renderLeaveWorkspaceRequestRows();
+      renderLeaveHistoryChart();
       return;
     }
 
