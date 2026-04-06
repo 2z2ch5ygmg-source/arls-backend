@@ -63392,8 +63392,8 @@ function buildAttendanceStatsStaffMetricSeries(rows = [], metric = 'weekday') {
 
 function buildAttendanceStatsLineSvg({ labels = [], values = [], color = '#ff7a1a', percent = true } = {}) {
   const chartWidth = 860;
-  const chartHeight = 340;
-  const padding = { top: 16, right: 28, bottom: 44, left: 52 };
+  const chartHeight = 320;
+  const padding = { top: 14, right: 18, bottom: 36, left: 42 };
   const innerWidth = chartWidth - padding.left - padding.right;
   const innerHeight = chartHeight - padding.top - padding.bottom;
   const list = Array.isArray(values) ? values.map((value) => Number(value || 0)) : [];
@@ -63589,12 +63589,12 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
             <span class="attendance-stats-inline-label">${escapeHtml(scope === 'attendance' ? '출퇴근 지표' : '근무 직원 비율')}</span>
           </div>
         </div>
-        <div class="attendance-stats-topline">
+        <div class="attendance-stats-inline-strip">
           ${summaryTiles.map((item) => `
-            <article class="attendance-stats-topline-card">
-              <span>${escapeHtml(item.label)}</span>
-              <strong>${escapeHtml(item.value)}</strong>
-            </article>
+            <span class="attendance-stats-inline-chip">
+              <strong>${escapeHtml(item.label)}</strong>
+              <span>${escapeHtml(item.value)}</span>
+            </span>
           `).join('')}
         </div>
         <div class="attendance-stats-chart-layout">
@@ -84123,16 +84123,11 @@ document.addEventListener('compositionend', (event) => {
     }
     if (section === 'period') {
       return `
-        <div class="attendance-v2-section-head">
+        <div class="attendance-v2-section-head is-compact">
           <h3>기간별 출퇴근</h3>
-        </div>
-        <div class="attendance-v2-period-strip">
-          ${periodItems.map((item) => `
-            <article class="attendance-v2-period-card">
-              <span class="attendance-v2-period-label">${escapeValue(item.label)}</span>
-              <strong class="attendance-v2-period-value">${escapeValue(item.value)}</strong>
-            </article>
-          `).join('')}
+          <div class="attendance-v2-head-meta">
+            ${periodItems.map((item) => `<span class="attendance-v2-inline-meta">${escapeValue(item.label)} ${escapeValue(item.value)}</span>`).join('')}
+          </div>
         </div>
       `;
     }
@@ -84155,6 +84150,7 @@ document.addEventListener('compositionend', (event) => {
         </button>
       `;
     };
+    const totalPeopleLabel = `${dashboard.totalPeople}명`;
     const presenceItems = [
       { label: '근무 중', value: dashboard.onDuty },
       { label: '출근 전', value: dashboard.beforeStart },
@@ -84165,7 +84161,7 @@ document.addEventListener('compositionend', (event) => {
       <div class="attendance-v2-section-head">
         <h3>출퇴근 현황</h3>
         <div class="attendance-v2-head-meta">
-          <span class="attendance-v2-inline-meta">전체 ${escapeValue(`${dashboard.totalPeople}명`)}</span>
+          <span class="attendance-v2-inline-meta">전체 ${escapeValue(totalPeopleLabel)}</span>
         </div>
       </div>
       <div class="attendance-v2-daily-shell">
@@ -84178,14 +84174,51 @@ document.addEventListener('compositionend', (event) => {
           </div>
           <span class="attendance-v2-rate-meta">${escapeValue(`${dashboard.checkedIn} / ${dashboard.workingTarget}`)}</span>
         </button>
-        <div class="attendance-v2-daily-main">
-          <div class="attendance-v2-summary-strip attendance-v2-summary-strip-daily">
-            ${dailyOverviewItems.map((item) => renderButtonCard(item)).join('')}
+        <section class="attendance-v2-overview-board">
+          <div class="attendance-v2-overview-main">
+            ${renderButtonCard(dailyOverviewItems[0], 'attendance-v2-overview-card attendance-v2-overview-card-main')}
+          </div>
+          <div class="attendance-v2-overview-split">
+            ${renderButtonCard(dailyOverviewItems[1], 'attendance-v2-overview-card attendance-v2-overview-card-split')}
+            ${renderButtonCard(dailyOverviewItems[2], 'attendance-v2-overview-card attendance-v2-overview-card-split')}
+          </div>
+          <div class="attendance-v2-overview-foot">
+            ${renderButtonCard(scheduleItems[0], 'attendance-v2-overview-card attendance-v2-overview-card-foot')}
+          </div>
+        </section>
+        <div class="attendance-v2-focus-stack">
+          ${renderButtonCard(dailyOverviewItems[3], 'attendance-v2-focus-card attendance-v2-focus-card-late')}
+          ${renderButtonCard(dailyOverviewItems[4], 'attendance-v2-focus-card attendance-v2-focus-card-early')}
+        </div>
+        <section class="attendance-v2-schedule-shell">
+          <div class="attendance-v2-section-subhead attendance-v2-section-subhead-inline">
+            <h4>스케줄</h4>
+            <span class="attendance-v2-section-unit">단위 : 명</span>
           </div>
           <div class="attendance-v2-schedule-board">
-            ${scheduleItems.map((item) => renderButtonCard(item, 'is-compact')).join('')}
+            ${scheduleItems.map((item) => renderButtonCard(item, 'attendance-v2-schedule-card is-compact')).join('')}
           </div>
-        </div>
+          <article class="attendance-v2-schedule-total">
+            <span>전체 인원</span>
+            <strong>${escapeValue(totalPeopleLabel)}</strong>
+          </article>
+        </section>
+      </div>
+      <div class="attendance-v2-daily-lower">
+        <section class="attendance-v2-special-block">
+          <div class="attendance-v2-section-subhead attendance-v2-section-subhead-inline">
+            <h4>출퇴근 특이사항</h4>
+            <span class="attendance-v2-section-unit">단위 : 명</span>
+          </div>
+          <div class="attendance-v2-special-strip">
+            ${specialItems.map((item) => `
+              <button type="button" class="attendance-v2-special-card is-${escapeValue(item.tone)}${attendanceStatusV2FilterKey === item.filterKey ? ' is-active' : ''}" data-filter-key="${escapeValue(item.filterKey)}" aria-pressed="${attendanceStatusV2FilterKey === item.filterKey ? 'true' : 'false'}">
+                <span class="attendance-v2-special-label">${escapeValue(item.label)}</span>
+                <strong class="attendance-v2-special-value">${escapeValue(String(item.value))}</strong>
+              </button>
+            `).join('')}
+          </div>
+        </section>
         <section class="attendance-v2-presence-shell">
           <div class="attendance-v2-section-subhead attendance-v2-section-subhead-inline">
             <h4>근무 상태</h4>
@@ -84209,24 +84242,6 @@ document.addEventListener('compositionend', (event) => {
             </div>
           </div>
         </section>
-      </div>
-      <div class="attendance-v2-section-subhead">
-        <h4>출퇴근 특이사항</h4>
-      </div>
-      <div class="attendance-v2-special-strip">
-        ${specialItems.map((item) => `
-          ${item.filterKey ? `
-            <button type="button" class="attendance-v2-special-card is-${escapeValue(item.tone)}${attendanceStatusV2FilterKey === item.filterKey ? ' is-active' : ''}" data-filter-key="${escapeValue(item.filterKey)}" aria-pressed="${attendanceStatusV2FilterKey === item.filterKey ? 'true' : 'false'}">
-              <span class="attendance-v2-special-label">${escapeValue(item.label)}</span>
-              <strong class="attendance-v2-special-value">${escapeValue(String(item.value))}</strong>
-            </button>
-          ` : `
-            <article class="attendance-v2-special-card is-${escapeValue(item.tone)}">
-              <span class="attendance-v2-special-label">${escapeValue(item.label)}</span>
-              <strong class="attendance-v2-special-value">${escapeValue(String(item.value))}</strong>
-            </article>
-          `}
-        `).join('')}
       </div>
     `;
   }
@@ -84399,7 +84414,14 @@ document.addEventListener('compositionend', (event) => {
                   <td><span class="attendance-v2-row-detail-link">상세</span></td>
                 </tr>
               `;
-            }).join('') : '<tr><td colspan="9" class="attendance-v2-empty-cell">기록이 없습니다.</td></tr>'}
+            }).join('') : Array.from({ length: section === 'period' ? 6 : 1 }, (_, index) => `
+              <tr class="attendance-v2-empty-row${section === 'period' ? ' is-period' : ''}">
+                ${index === 2
+                  ? `<td colspan="9" class="attendance-v2-empty-cell">기록이 없습니다.</td>`
+                  : Array.from({ length: 9 }, () => '<td class="attendance-v2-empty-placeholder">-</td>').join('')
+                }
+              </tr>
+            `).join('')}
           </tbody>
         </table>
       </div>
