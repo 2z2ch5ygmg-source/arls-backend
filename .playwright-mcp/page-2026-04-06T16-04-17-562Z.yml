@@ -1,0 +1,35 @@
+- generic [ref=e2]:
+  - generic [ref=e5]:
+    - generic [ref=e7]:
+      - img "Sentrix HR 로고" [ref=e8]
+      - generic [ref=e9]:
+        - img "Sentrix HR" [ref=e10]
+        - paragraph [ref=e11]: 테넌트 코드와 계정 정보를 입력해 근무 운영 화면으로 바로 이동하세요.
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - heading "계정 인증" [level=2] [ref=e14]
+        - paragraph [ref=e15]: 필수 항목 3개를 모두 입력해야 로그인할 수 있습니다.
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - generic [ref=e18]: 테넌트 코드
+          - combobox "테넌트 코드 접속할 테넌트 코드를 입력해 주세요." [active] [ref=e19]: MASTER
+          - generic [ref=e20]: "확인됨: MASTER (Master Console)"
+        - generic [ref=e21]:
+          - generic [ref=e22]: 아이디
+          - textbox "아이디" [ref=e23]:
+            - /placeholder: 로그인 아이디
+        - generic [ref=e24]:
+          - generic [ref=e25]: 비밀번호
+          - generic [ref=e26]:
+            - textbox "비밀번호" [ref=e27]
+            - button "비밀번호 보기" [ref=e28]:
+              - img [ref=e29]
+        - generic [ref=e32]:
+          - generic [ref=e33] [cursor=pointer]:
+            - checkbox "테넌트 코드 기억" [checked] [ref=e34]
+            - text: 테넌트 코드 기억
+          - generic [ref=e35] [cursor=pointer]:
+            - checkbox "아이디 기억" [checked] [ref=e36]
+            - text: 아이디 기억
+        - button "로그인" [disabled] [ref=e37]
+  - text: / 보기 보기 보기
