@@ -872,9 +872,11 @@ function createInitialAttendanceViewState() {
     employeeFilterDraft: [],
     employeeFilterApplied: [],
     employeeFilterFacet: 'group',
+    employeeFilterQuery: '',
     siteFilterDraft: [],
     siteFilterApplied: [],
-    siteFilterFacet: 'vendor',
+    siteFilterFacet: 'site',
+    siteFilterQuery: '',
     managerTab: 'status',
     lateThresholdMinutes: 10,
     earlyLeaveThresholdMinutes: 10,
@@ -34297,6 +34299,20 @@ function getTenantCodeForScopedAdminApi() {
   return ctxCode;
 }
 
+function getAttendanceScopedTenantCode() {
+  if (!state.user) return '';
+  const role = getNavigationRole();
+  if (role !== 'DEV') {
+    return normalizeTenantCode(state.user?.tenant_code || '');
+  }
+  const candidates = [
+    String(getActiveTenantContext().code || '').trim().toUpperCase(),
+    normalizeTenantCode(state.uiContext?.activeTenantCode || ''),
+    normalizeTenantCode(readUiActiveTenantFilterContext().activeTenantCode || ''),
+  ].filter(Boolean);
+  return candidates.find((code) => code && code !== 'MASTER') || '';
+}
+
 function getTenantIdForScopedAdminApi() {
   if (!state.user) return '';
   const role = getNavigationRole();
@@ -62303,10 +62319,21 @@ function renderAttendanceSupportSections(row = null) {
 function renderAttendanceFilterMeta() {
   const employeeTrigger = $('#attendanceEmployeeFilterTrigger');
   const siteTrigger = $('#attendanceSiteFilterTrigger');
+  const hasScopedTenant = Boolean(getAttendanceScopedTenantCode());
+  if (!hasScopedTenant && state.attendanceView) {
+    state.attendanceView.employeeCode = '';
+    state.attendanceView.siteCode = '';
+    state.attendanceView.employeeFilterApplied = [];
+    state.attendanceView.employeeFilterDraft = [];
+    state.attendanceView.siteFilterApplied = [];
+    state.attendanceView.siteFilterDraft = [];
+  }
   const employeeTokens = uniqAttendanceTokens(state.attendanceView?.employeeFilterApplied || []);
   const siteTokens = uniqAttendanceTokens(state.attendanceView?.siteFilterApplied || []);
   if (employeeTrigger instanceof HTMLElement) {
-    if (!employeeTokens.length) {
+    employeeTrigger.toggleAttribute('disabled', !hasScopedTenant);
+    employeeTrigger.title = hasScopedTenant ? '' : '조회 테넌트를 먼저 선택하세요.';
+    if (!hasScopedTenant || !employeeTokens.length) {
       employeeTrigger.textContent = '직원';
     } else if (employeeTokens.length === 1) {
       employeeTrigger.textContent = parseAttendanceFilterToken(employeeTokens[0]).value || '직원';
@@ -62315,7 +62342,9 @@ function renderAttendanceFilterMeta() {
     }
   }
   if (siteTrigger instanceof HTMLElement) {
-    if (!siteTokens.length) {
+    siteTrigger.toggleAttribute('disabled', !hasScopedTenant);
+    siteTrigger.title = hasScopedTenant ? '' : '조회 테넌트를 먼저 선택하세요.';
+    if (!hasScopedTenant || !siteTokens.length) {
       siteTrigger.textContent = '근무지';
     } else if (siteTokens.length === 1) {
       siteTrigger.textContent = parseAttendanceFilterToken(siteTokens[0]).value || '근무지';
@@ -62447,11 +62476,21 @@ async function ensureAttendanceFilterOptionsLoaded() {
   if (!state.attendanceView) {
     state.attendanceView = createInitialAttendanceViewState();
   }
+  const tenantCode = getAttendanceScopedTenantCode();
+  if (!tenantCode) {
+    state.attendanceView.employeeCode = '';
+    state.attendanceView.siteCode = '';
+    state.attendanceView.employees = [];
+    state.attendanceView.sites = [];
+    state.attendanceView.employeeFilterApplied = [];
+    state.attendanceView.employeeFilterDraft = [];
+    state.attendanceView.siteFilterApplied = [];
+    state.attendanceView.siteFilterDraft = [];
+    return;
+  }
   if (Array.isArray(state.attendanceView.employees) && state.attendanceView.employees.length && Array.isArray(state.attendanceView.sites) && state.attendanceView.sites.length) {
     return;
   }
-
-  const tenantCode = getTenantCodeForScopedAdminApi();
   const sitesParams = new URLSearchParams();
   sitesParams.set('active', 'all');
   sitesParams.set('limit', '500');
@@ -62495,6 +62534,7 @@ async function openAttendanceEmployeeFilterSheet() {
   state.attendanceView.employeeFilterFacet = ['group', 'rank'].includes(String(state.attendanceView.employeeFilterFacet || '').trim())
     ? state.attendanceView.employeeFilterFacet
     : 'group';
+  state.attendanceView.employeeFilterQuery = String(state.attendanceView.employeeFilterQuery || '').trim();
 
   const wrapper = document.createElement('div');
   wrapper.className = 'requests-filter-sheet attendance-filter-sheet';
@@ -62508,7 +62548,17 @@ async function openAttendanceEmployeeFilterSheet() {
   const render = () => {
     const catalog = buildAttendanceEmployeeFilterCatalog();
     const facet = String(state.attendanceView.employeeFilterFacet || 'group').trim() === 'rank' ? 'rank' : 'group';
-    const options = catalog[facet] || [];
+    const query = String(state.attendanceView.employeeFilterQuery || '').trim().toLowerCase();
+    const options = (catalog[facet] || []).filter((item) => {
+      if (!query) return true;
+      const haystack = [
+        item.label,
+        ...(Array.isArray(item.employees) ? item.employees.flatMap((employee) => [employee?.name, employee?.code]) : []),
+      ]
+        .map((value) => String(value || '').toLowerCase())
+        .join(' ');
+      return haystack.includes(query);
+    });
     nav.innerHTML = `
       <div class="attendance-simple-filter-head">
         <strong>조건</strong>
@@ -62525,8 +62575,14 @@ async function openAttendanceEmployeeFilterSheet() {
     `;
     body.innerHTML = `
       <div class="attendance-simple-filter-pane">
-        <div class="attendance-simple-filter-pane-head">
-          <strong>${facet === 'group' ? '그룹' : '직무·직급'}</strong>
+        <div class="attendance-simple-filter-toolbar">
+          <div class="attendance-simple-filter-toolbar-copy">
+            <strong>${facet === 'group' ? '그룹' : '직무·직급'}</strong>
+            <span>선택 ${state.attendanceView.employeeFilterDraft.length}건</span>
+          </div>
+          <label class="attendance-simple-filter-search">
+            <input type="search" value="${escapeHtml(state.attendanceView.employeeFilterQuery || '')}" placeholder="이름 또는 코드 검색" />
+          </label>
         </div>
         <div class="attendance-simple-filter-option-list">
           ${options.length ? options.map((item) => `
@@ -62550,6 +62606,10 @@ async function openAttendanceEmployeeFilterSheet() {
         state.attendanceView.employeeFilterFacet = String(button.dataset.facet || 'group');
         render();
       });
+    });
+    body.querySelector('.attendance-simple-filter-search input')?.addEventListener('input', (event) => {
+      state.attendanceView.employeeFilterQuery = String(event.target?.value || '');
+      render();
     });
     body.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
       checkbox.addEventListener('change', () => {
@@ -62581,13 +62641,11 @@ async function openAttendanceSiteFilterSheet() {
     state.attendanceView = createInitialAttendanceViewState();
   }
   state.attendanceView.siteFilterDraft = uniqAttendanceTokens(
-    Array.isArray(state.attendanceView.siteFilterApplied) && state.attendanceView.siteFilterApplied.length
-      ? state.attendanceView.siteFilterApplied
-      : [],
+    (Array.isArray(state.attendanceView.siteFilterApplied) ? state.attendanceView.siteFilterApplied : [])
+      .filter((token) => String(token || '').startsWith('site:')),
   );
-  state.attendanceView.siteFilterFacet = ['vendor', 'region', 'city', 'site'].includes(String(state.attendanceView.siteFilterFacet || '').trim())
-    ? state.attendanceView.siteFilterFacet
-    : 'vendor';
+  state.attendanceView.siteFilterFacet = 'site';
+  state.attendanceView.siteFilterQuery = String(state.attendanceView.siteFilterQuery || '').trim();
 
   const wrapper = document.createElement('div');
   wrapper.className = 'requests-filter-sheet attendance-filter-sheet';
@@ -62600,24 +62658,39 @@ async function openAttendanceSiteFilterSheet() {
 
   const render = () => {
     const catalog = buildAttendanceSiteFilterCatalog();
-    const facet = ['vendor', 'region', 'city', 'site'].includes(String(state.attendanceView.siteFilterFacet || '').trim())
-      ? state.attendanceView.siteFilterFacet
-      : 'vendor';
-    const options = catalog[facet] || [];
+    const facet = 'site';
+    const query = String(state.attendanceView.siteFilterQuery || '').trim().toLowerCase();
+    const options = (catalog.site || []).filter((item) => {
+      if (!query) return true;
+      const haystack = [
+        item.label,
+        item.description,
+        item.vendorLabel,
+        item.regionLabel,
+        item.cityLabel,
+        item.code,
+      ]
+        .map((value) => String(value || '').toLowerCase())
+        .join(' ');
+      return haystack.includes(query);
+    });
     nav.innerHTML = `
       <div class="attendance-simple-filter-head">
         <strong>조건</strong>
         <button type="button" class="btn btn-secondary requests-filter-sheet-reset" data-role="site-filter-reset">초기화</button>
       </div>
-      <button type="button" class="btn btn-secondary attendance-simple-filter-facet${facet === 'vendor' ? ' active' : ''}" data-role="site-filter-facet" data-facet="vendor"><span>유통사</span><small>전체</small></button>
-      <button type="button" class="btn btn-secondary attendance-simple-filter-facet${facet === 'region' ? ' active' : ''}" data-role="site-filter-facet" data-facet="region"><span>도</span><small>전체</small></button>
-      <button type="button" class="btn btn-secondary attendance-simple-filter-facet${facet === 'city' ? ' active' : ''}" data-role="site-filter-facet" data-facet="city"><span>도시</span><small>전체</small></button>
-      <button type="button" class="btn btn-secondary attendance-simple-filter-facet${facet === 'site' ? ' active' : ''}" data-role="site-filter-facet" data-facet="site"><span>근무지</span><small>전체</small></button>
+      <button type="button" class="btn btn-secondary attendance-simple-filter-facet active" disabled><span>근무지</span><small>지원 범위</small></button>
     `;
     body.innerHTML = `
       <div class="attendance-simple-filter-pane">
-        <div class="attendance-simple-filter-pane-head">
-          <strong>${facet === 'site' ? '근무지' : '범위'}</strong>
+        <div class="attendance-simple-filter-toolbar">
+          <div class="attendance-simple-filter-toolbar-copy">
+            <strong>근무지</strong>
+            <span>선택 ${state.attendanceView.siteFilterDraft.length}건</span>
+          </div>
+          <label class="attendance-simple-filter-search">
+            <input type="search" value="${escapeHtml(state.attendanceView.siteFilterQuery || '')}" placeholder="근무지 또는 코드 검색" />
+          </label>
         </div>
         <div class="attendance-simple-filter-option-list">
           ${options.length ? options.map((item) => `
@@ -62626,9 +62699,7 @@ async function openAttendanceSiteFilterSheet() {
               <span class="attendance-simple-filter-option-copy">
                 <strong>${escapeHtml(item.label)}</strong>
                 <span>${escapeHtml(
-                  facet === 'site'
-                    ? [item.vendorLabel, item.regionLabel, item.cityLabel, item.code].filter(Boolean).join(' · ')
-                    : (item.description || `${item.count || 0}곳`)
+                  [item.code, item.vendorLabel, item.regionLabel, item.cityLabel].filter(Boolean).join(' · ')
                 )}</span>
               </span>
             </label>
@@ -62640,11 +62711,9 @@ async function openAttendanceSiteFilterSheet() {
       state.attendanceView.siteFilterDraft = [];
       render();
     });
-    nav.querySelectorAll('[data-role="site-filter-facet"]').forEach((button) => {
-      button.addEventListener('click', () => {
-        state.attendanceView.siteFilterFacet = String(button.dataset.facet || 'vendor');
-        render();
-      });
+    body.querySelector('.attendance-simple-filter-search input')?.addEventListener('input', (event) => {
+      state.attendanceView.siteFilterQuery = String(event.target?.value || '');
+      render();
     });
     body.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
       checkbox.addEventListener('change', () => {
@@ -83988,12 +84057,9 @@ document.addEventListener('compositionend', (event) => {
       { filterKey: 'target', label: '출근 대상', value: dashboard.workingTarget, meta: '' },
       { filterKey: 'leave', label: '휴가', value: dashboard.leaveCount, meta: '' },
       { filterKey: '', label: '휴무', value: dashboard.offCount, meta: '' },
-      { filterKey: '', label: '교육', value: dashboard.educationCount, meta: '' },
-      { filterKey: '', label: '기타', value: dashboard.otherScheduleCount, meta: '' },
       { filterKey: '', label: '일정없음', value: dashboard.noScheduleCount, meta: '' },
     ];
     const specialItems = [
-      { filterKey: 'outside', label: '미배정 근무지에 출근', value: dashboard.outsideScheduleCount, tone: 'danger' },
       { filterKey: 'location', label: '출퇴근 위치 이상', value: dashboard.locationIssueCount, tone: 'neutral' },
       { filterKey: 'edited', label: '출퇴근 기록 수정됨', value: dashboard.editedCount, tone: 'accent' },
       { filterKey: 'correction', label: '정정 대기', value: dashboard.correctionNeeded, tone: 'warning' },
