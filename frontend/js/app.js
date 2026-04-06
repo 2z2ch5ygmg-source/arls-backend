@@ -63392,8 +63392,8 @@ function buildAttendanceStatsStaffMetricSeries(rows = [], metric = 'weekday') {
 
 function buildAttendanceStatsLineSvg({ labels = [], values = [], color = '#ff7a1a', percent = true } = {}) {
   const chartWidth = 860;
-  const chartHeight = 320;
-  const padding = { top: 14, right: 18, bottom: 36, left: 42 };
+  const chartHeight = 356;
+  const padding = { top: 14, right: 14, bottom: 34, left: 40 };
   const innerWidth = chartWidth - padding.left - padding.right;
   const innerHeight = chartHeight - padding.top - padding.bottom;
   const list = Array.isArray(values) ? values.map((value) => Number(value || 0)) : [];
@@ -84123,8 +84123,8 @@ document.addEventListener('compositionend', (event) => {
     }
     if (section === 'period') {
       return `
-        <div class="attendance-v2-section-head is-compact">
-          <h3>기간별 출퇴근</h3>
+        <div class="attendance-v2-section-head is-compact attendance-v2-period-meta-head">
+          <span class="attendance-v2-period-meta-label">기간별 출퇴근</span>
           <div class="attendance-v2-head-meta">
             ${periodItems.map((item) => `<span class="attendance-v2-inline-meta">${escapeValue(item.label)} ${escapeValue(item.value)}</span>`).join('')}
           </div>
