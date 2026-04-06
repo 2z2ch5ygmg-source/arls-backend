@@ -83,6 +83,57 @@ class ApprovalEnginePhase2Tests(unittest.TestCase):
         self.assertIn("uq_approval_line_rules_tenant_form_order", sql)
         self.assertIn("scope_type IN ('tenant', 'site', 'site_or_tenant')", sql)
 
+    def test_resolve_approval_rule_form_keys_uses_document_specific_certificate_key(self):
+        self.assertEqual(
+            approval_engine._resolve_approval_rule_form_keys(
+                form_key="certificate_request",
+                payload={"document_type": "retirement_certificate"},
+            ),
+            ["certificate_request:retirement_certificate", "certificate_request"],
+        )
+
+    def test_resolve_auto_approval_steps_falls_back_to_generic_certificate_rules(self):
+        conn = _FakeConn(
+            fetchall_queue=[
+                [],
+                [
+                    {
+                        "id": "rule-1",
+                        "rule_order": 1,
+                        "rule_name": "기본 결재선 1",
+                        "approver_role": "hq_admin",
+                        "approver_user_id": None,
+                        "scope_type": "tenant",
+                        "site_id": None,
+                        "conditions_json": {},
+                    }
+                ],
+            ]
+        )
+
+        with patch.object(
+            approval_engine,
+            "_resolve_approver_from_rule",
+            return_value={
+                "id": "approver-1",
+                "employee_id": "emp-1",
+                "username": "hq.approver",
+                "full_name": "HQ Approver",
+            },
+        ):
+            steps = approval_engine._resolve_auto_approval_steps(
+                conn,
+                tenant_id="tenant-1",
+                form_key="certificate_request",
+                site_id="site-1",
+                payload={"document_type": "retirement_certificate"},
+            )
+
+        self.assertEqual(len(steps), 1)
+        self.assertEqual(steps[0]["approver_user_id"], "approver-1")
+        self.assertEqual(conn.executed[0][1], ("tenant-1", "certificate_request:retirement_certificate"))
+        self.assertEqual(conn.executed[1][1], ("tenant-1", "certificate_request"))
+
     def test_create_document_inserts_document_steps_and_submit_action(self):
         conn = _FakeConn()
         dispatcher = _FakeDispatcher(conn)

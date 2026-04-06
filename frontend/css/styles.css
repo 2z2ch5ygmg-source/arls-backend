@@ -11049,6 +11049,27 @@ a:hover {
   gap: var(--ui-space-8);
 }
 
+.hr-doc-card-group-label {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-text-12);
+  font-weight: var(--ui-fw-semibold);
+}
+
+.hr-doc-card-group-label[data-group-gap='true'] {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--ui-border-subtle);
+}
+
+.hr-doc-card-group-label.is-requestable {
+  color: var(--ui-accent-strong);
+}
+
 .hr-doc-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -13585,6 +13606,11 @@ a:hover {
     grid-column: 2;
   }
 
+  #view-hr[data-hr-layout='my-docs'] > #hrEmploymentMyRequestsCard,
+  #view-hr[data-hr-layout='manage'] > #hrTemplateAdminCard {
+    grid-column: 1 / -1;
+  }
+
   #view-profile > .quick-actions {
     display: none !important;
   }
@@ -15834,7 +15860,7 @@ textarea::placeholder {
 
 #view-hr .hr-approval-rule-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1.2fr) repeat(4, minmax(120px, 1fr)) auto;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(150px, 0.9fr) minmax(150px, 1fr) minmax(220px, 1.2fr) auto;
   gap: 10px;
   align-items: end;
   padding: 12px 14px;
@@ -15849,6 +15875,14 @@ textarea::placeholder {
 
 #view-hr .hr-approval-rules-actions {
   justify-content: space-between;
+}
+
+#view-hr .hr-approval-rule-note {
+  grid-column: 1 / -1;
+  margin: -2px 0 0;
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-text-12);
+  line-height: 1.5;
 }
 
 #view-hr .hr-approval-rule-empty {

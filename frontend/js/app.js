@@ -44817,7 +44817,12 @@ function renderHrTemplateRows() {
   const tbody = $('#hrTemplateTableBody');
   if (!(tbody instanceof HTMLElement)) return;
   const hrState = ensureHrDocsState();
+  const templateSupport = getHrTemplateUploadSupportState();
   const rows = Array.isArray(hrState.templatesRows) ? hrState.templatesRows : [];
+  if (!templateSupport.editable) {
+    renderAdminTableEmptyState(tbody, 7, templateSupport.reason);
+    return;
+  }
   if (!rows.length) {
     renderAdminTableEmptyState(tbody, 7, '등록된 템플릿이 없습니다. 기본 템플릿을 사용합니다.');
     return;
@@ -44878,14 +44883,26 @@ function renderHrApprovalRulesEditor() {
   if (!(editor instanceof HTMLElement)) return;
   const statusEl = $('#hrApprovalRulesStatus');
   const hrState = ensureHrDocsState();
+  const approvalSupport = getHrApprovalRulesSupportState();
+  const validationMessage = getHrApprovalRuleValidationMessage(hrState.approvalRulesRows);
   document.querySelectorAll('#hrApprovalRulesSection [data-action="hr-approval-rule-add"], #hrApprovalRulesSection [data-action="hr-approval-rules-save"], #hrApprovalRulesSection [data-action="hr-approval-rules-refresh"]').forEach((button) => {
     if (button instanceof HTMLButtonElement) {
-      button.disabled = !isHrTemplateManagerRole() || Boolean(hrState.loadingApprovalRules) || Boolean(hrState.savingApprovalRules);
+      button.disabled = !isHrApprovalPolicyManagerRole()
+        || !approvalSupport.editable
+        || Boolean(validationMessage && button.dataset.action === 'hr-approval-rules-save')
+        || Boolean(hrState.loadingApprovalRules)
+        || Boolean(hrState.savingApprovalRules);
     }
   });
-  if (!isHrTemplateManagerRole()) {
+  if (!isHrApprovalPolicyManagerRole()) {
     editor.innerHTML = '';
     if (statusEl) statusEl.textContent = '';
+    return;
+  }
+
+  if (!approvalSupport.editable) {
+    editor.innerHTML = `<div class="hr-approval-rule-empty">${escapeHtml(approvalSupport.reason)}</div>`;
+    if (statusEl) statusEl.textContent = approvalSupport.reason;
     return;
   }
 
@@ -44893,28 +44910,28 @@ function renderHrApprovalRulesEditor() {
     ? hrState.approvalRulesRows.map((row) => createHrApprovalRuleDraft(row))
     : [];
 
-  if (statusEl && !String(statusEl.textContent || '').trim()) {
-    statusEl.textContent = hrState.loadingApprovalRules
-      ? '기본 승인 절차를 불러오는 중입니다.'
-      : '문서 타입별 승인 단계를 최대 6개까지 구성할 수 있습니다.';
+  if (statusEl && (!String(statusEl.textContent || '').trim() || validationMessage)) {
+    statusEl.textContent = validationMessage
+      || (hrState.loadingApprovalRules
+        ? `${approvalSupport.displayName} 승인 절차를 불러오는 중입니다.`
+        : `${approvalSupport.displayName} 승인 단계를 최대 6개까지 구성할 수 있습니다.`);
   }
 
   if (!rows.length) {
-    editor.innerHTML = '<div class="hr-approval-rule-empty">기본 승인 절차가 없습니다. 필요한 단계만 추가해서 저장하세요.</div>';
+    editor.innerHTML = `<div class="hr-approval-rule-empty">${escapeHtml(approvalSupport.displayName)} 승인 절차가 없습니다. 필요한 단계만 추가해서 저장하세요.</div>`;
     return;
   }
 
   editor.innerHTML = '';
   const userOptions = (Array.isArray(hrState.approvalRuleUserOptions) ? hrState.approvalRuleUserOptions : []).filter((option) => PROFILE_SIGNATURE_ALLOWED_ROLES.has(String(option?.role || '').trim().toLowerCase()));
-  const siteOptions = Array.isArray(hrState.approvalRuleSiteOptions) ? hrState.approvalRuleSiteOptions : [];
-  const groupOptions = Array.isArray(hrState.approvalRuleGroupOptions) ? hrState.approvalRuleGroupOptions : [];
-  const rankOptions = Array.isArray(hrState.approvalRuleRankOptions) ? hrState.approvalRuleRankOptions : [];
   rows.forEach((row, index) => {
     const wrapper = document.createElement('div');
     wrapper.className = 'hr-approval-rule-row';
-    const useRank = row.step_kind === 'rank';
     const useExplicitUser = row.step_kind === 'explicit_user';
     const useSiteSupervisor = row.step_kind === 'site_supervisor';
+    const ruleNote = row.step_kind === 'rank'
+      ? 'HQ 직급 기반 단계는 아직 지원되지 않습니다. 지정 사용자 또는 현장 Supervisor를 사용하세요.'
+      : (useExplicitUser ? '지정 사용자를 선택하면 해당 사용자가 이 단계 결재자로 고정됩니다.' : '현장 Supervisor 단계는 요청자의 현장 책임자를 우선 찾고, 없으면 HQ 관리자로 보정합니다.');
     wrapper.innerHTML = `
       <label class="input-field">
         단계명
@@ -44933,31 +44950,10 @@ function renderHrApprovalRulesEditor() {
         </select>
       </label>
       <label class="input-field">
-        그룹
-        <select data-hr-approval-rule-field="approval_group_id" data-hr-approval-rule-index="${index}" ${useRank ? '' : 'disabled'}>
-          <option value="">전체 그룹</option>
-          ${groupOptions.map((option) => `<option value="${option.id}"${option.id === row.approval_group_id ? ' selected' : ''}>${escapeHtml(option.name || option.label || '-') }</option>`).join('')}
-        </select>
-      </label>
-      <label class="input-field">
-        직급
-        <select data-hr-approval-rule-field="approval_rank_id" data-hr-approval-rule-index="${index}" ${useRank ? '' : 'disabled'}>
-          <option value="">직급 선택</option>
-          ${rankOptions.map((option) => `<option value="${option.id}"${option.id === row.approval_rank_id ? ' selected' : ''}>${escapeHtml(option.name || option.label || '-')}</option>`).join('')}
-        </select>
-      </label>
-      <label class="input-field">
         승인 사용자
         <select data-hr-approval-rule-field="explicit_user_id" data-hr-approval-rule-index="${index}" ${useExplicitUser ? '' : 'disabled'}>
           <option value="">사용자 선택</option>
           ${userOptions.map((option) => `<option value="${option.id}"${option.id === row.explicit_user_id ? ' selected' : ''}>${escapeHtml(`${option.full_name || option.username} · ${option.role || '-'}`)}</option>`).join('')}
-        </select>
-      </label>
-      <label class="input-field">
-        현장
-        <select data-hr-approval-rule-field="site_id" data-hr-approval-rule-index="${index}" disabled>
-          <option value="">자동 선택</option>
-          ${siteOptions.map((option) => `<option value="${option.id}">${escapeHtml(option.site_name || option.site_code)}</option>`).join('')}
         </select>
       </label>
       <div class="input-field">
@@ -44967,6 +44963,7 @@ function renderHrApprovalRulesEditor() {
           <span>상위 승인자 전결 허용</span>
         </label>
       </div>
+      <p class="hr-approval-rule-note">${escapeHtml(ruleNote)}</p>
     `;
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
@@ -45008,12 +45005,17 @@ function updateHrApprovalRuleDraftField(index, field, value) {
 
 async function loadHrDocumentApprovalRules({ force = false } = {}) {
   const hrState = ensureHrDocsState();
-  if (!isHrApprovalPolicyManagerRole()) {
+  const approvalSupport = getHrApprovalRulesSupportState();
+  if (!isHrApprovalPolicyManagerRole() || !approvalSupport.editable) {
     hrState.approvalRulesRows = [];
     hrState.approvalRuleUserOptions = [];
     hrState.approvalRuleSiteOptions = [];
     hrState.approvalRuleGroupOptions = [];
     hrState.approvalRuleRankOptions = [];
+    if (approvalSupport.reason) {
+      const statusEl = $('#hrApprovalRulesStatus');
+      if (statusEl) statusEl.textContent = approvalSupport.reason;
+    }
     renderHrApprovalRulesEditor();
     return [];
   }
@@ -45040,7 +45042,11 @@ async function loadHrDocumentApprovalRules({ force = false } = {}) {
     hrState.approvalRuleRankOptions = Array.isArray(payload?.rank_options) ? payload.rank_options : [];
     hrState.approvalRulesFetchedAt = Date.now();
     hrState.approvalRulesDocumentType = selectedTypeKey;
-    if (statusEl) statusEl.textContent = `${hrState.approvalRulesRows.length}개 단계가 설정되어 있습니다.`;
+    if (statusEl) {
+      statusEl.textContent = payload?.unsupported_reason
+        ? String(payload.unsupported_reason || '').trim()
+        : `${hrState.approvalRulesRows.length}개 단계가 설정되어 있습니다.`;
+    }
     renderHrApprovalRulesEditor();
     return hrState.approvalRulesRows;
   } catch (error) {
@@ -45059,13 +45065,24 @@ async function loadHrDocumentApprovalRules({ force = false } = {}) {
 
 async function saveHrDocumentApprovalRules() {
   const hrState = ensureHrDocsState();
+  const approvalSupport = getHrApprovalRulesSupportState();
   if (!isHrApprovalPolicyManagerRole()) {
     throw new Error('권한이 없습니다.');
   }
+  if (!approvalSupport.editable) {
+    throw new Error(approvalSupport.reason || '현재 문서 타입의 승인 절차를 편집할 수 없습니다.');
+  }
   const selectedTypeKey = normalizeHrCertificateTypeKey(hrState.selectedDocType || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE);
   const rows = Array.isArray(hrState.approvalRulesRows) ? hrState.approvalRulesRows.map((row) => createHrApprovalRuleDraft(row)) : [];
+  const validationMessage = getHrApprovalRuleValidationMessage(rows);
+  if (validationMessage) {
+    throw new Error(validationMessage);
+  }
   if (rows.length > 6) {
     throw new Error('기본 승인 절차는 최대 6단계까지 저장할 수 있습니다.');
+  }
+  if (!rows.length) {
+    throw new Error('최소 1개의 승인 단계를 저장해야 합니다.');
   }
   hrState.savingApprovalRules = true;
   const statusEl = $('#hrApprovalRulesStatus');
@@ -45489,9 +45506,14 @@ async function loadHrEmploymentAdminRequests({ force = false } = {}) {
 
 async function loadHrDocumentTemplates({ force = false } = {}) {
   const hrState = ensureHrDocsState();
-  if (!isHrTemplateManagerRole()) {
+  const templateSupport = getHrTemplateUploadSupportState();
+  if (!isHrTemplateManagerRole() || !templateSupport.editable) {
     hrState.templatesRows = [];
     hrState.approvalRulesRows = [];
+    const statusEl = $('#hrTemplateStatus');
+    if (statusEl && templateSupport.reason) {
+      statusEl.textContent = templateSupport.reason;
+    }
     renderHrTemplateRows();
     renderHrApprovalRulesEditor();
     return [];
@@ -45515,7 +45537,9 @@ async function loadHrDocumentTemplates({ force = false } = {}) {
   );
   try {
     const payload = await apiRequest(`/certificates/admin/templates?type_key=${encodeURIComponent(selectedTypeKey)}`);
-    hrState.templatesRows = Array.isArray(payload?.items) ? payload.items : [];
+    hrState.templatesRows = Array.isArray(payload?.items)
+      ? payload.items
+      : (Array.isArray(payload) ? payload : []);
     hrState.templatesFetchedAt = Date.now();
     renderHrTemplateRows();
     loadHrDocumentApprovalRules({ force }).catch(() => {});
@@ -45802,6 +45826,10 @@ async function uploadHrDocumentTemplate() {
   const hrState = ensureHrDocsState();
   if (!isHrTemplateManagerRole()) {
     throw new Error('권한이 없습니다.');
+  }
+  const templateSupport = getHrTemplateUploadSupportState();
+  if (!templateSupport.editable) {
+    throw new Error(templateSupport.reason || '현재 문서 타입은 템플릿 업로드를 지원하지 않습니다.');
   }
   const fileInput = $('#hrTemplateUploadFile');
   if (!(fileInput instanceof HTMLInputElement) || !fileInput.files || !fileInput.files.length) {
@@ -76324,6 +76352,7 @@ function bindUiEvents() {
       const hrState = ensureHrDocsState();
       hrState.selectedDocType = normalizeHrCertificateTypeKey(target instanceof HTMLSelectElement ? target.value : hrState.selectedDocType);
       renderHrDocCardSelection();
+      renderHrScopeAndPanels();
       renderHrEmployeeRequestCard();
       renderHrAdminStatusTabs();
       renderHrTableHeaders();
@@ -79110,6 +79139,7 @@ function bindUiEvents() {
       }
       const selectedType = getHrSelectedCertificateType();
       renderHrDocCardSelection();
+      renderHrScopeAndPanels();
       renderHrEmployeeRequestCard();
       renderHrPurposeSelector();
       renderHrAdminStatusTabs();
@@ -79237,6 +79267,11 @@ function bindUiEvents() {
 
     if (action === 'hr-approval-rule-add') {
       const hrState = ensureHrDocsState();
+      const approvalSupport = getHrApprovalRulesSupportState();
+      if (!approvalSupport.editable) {
+        showToast(approvalSupport.reason || '현재 문서 타입의 승인 절차를 편집할 수 없습니다.', 'info', 2200);
+        return;
+      }
       const rows = Array.isArray(hrState.approvalRulesRows) ? hrState.approvalRulesRows : [];
       if (rows.length >= 6) {
         showToast('기본 승인 절차는 최대 6단계까지 추가할 수 있습니다.', 'info', 2200);
@@ -79266,6 +79301,11 @@ function bindUiEvents() {
     }
 
     if (action === 'hr-approval-rules-save') {
+      const validationMessage = getHrApprovalRuleValidationMessage(ensureHrDocsState().approvalRulesRows);
+      if (validationMessage) {
+        showToast(validationMessage, 'error', 2600);
+        return;
+      }
       runWithBusy(() => saveHrDocumentApprovalRules(), '기본 승인 절차 저장 중...');
       return;
     }
@@ -82031,6 +82071,7 @@ function bindUiEvents() {
     if (target.id === 'hrTemplateTypeSelect') {
       const hrState = ensureHrDocsState();
       hrState.selectedDocType = normalizeHrCertificateTypeKey(target instanceof HTMLSelectElement ? target.value : hrState.selectedDocType);
+      renderHrScopeAndPanels();
       if (isHrTemplateManagerRole()) {
         runActionSafely(loadHrDocumentTemplates({ force: true }), '문서 템플릿을 불러오지 못했습니다.');
       }
