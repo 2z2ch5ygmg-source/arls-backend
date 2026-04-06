@@ -42106,6 +42106,7 @@ function showView(name, { skipRouteSync = false, replaceRoute = false, forceLoad
     stopScheduleLiveRefresh();
   }
   state.currentView = targetView;
+  document.body.dataset.currentView = targetView;
   if (previousView === 'attendance-check' && targetView !== 'attendance-check') {
     clearHomeAttendanceCheckWatch();
     clearHomeAttendanceCheckMapObjects();
@@ -63059,7 +63060,7 @@ function getSelectedAttendanceManagerRow(rows = []) {
   const list = Array.isArray(rows) ? rows : [];
   if (!list.length) return null;
   const selectedKey = String(state.attendanceView?.selectedManagerRowKey || '').trim();
-  return list.find((row) => row.key === selectedKey) || list[0] || null;
+  return list.find((row) => row.key === selectedKey) || null;
 }
 
 function renderAttendanceManagerSortHeaders() {
@@ -84693,20 +84694,6 @@ document.addEventListener('compositionend', (event) => {
         state.attendanceView.selectedManagerRowKey = attendanceStatusV2SelectedKey || '';
       }
       return selected;
-    }
-    if (queueRows.length) {
-      attendanceStatusV2SelectedKey = v2RowKey(queueRows[0].row, queueRows[0].index);
-      if (state.attendanceView) {
-        state.attendanceView.selectedManagerRowKey = attendanceStatusV2SelectedKey || '';
-      }
-      return queueRows[0].row;
-    }
-    if (list.length) {
-      attendanceStatusV2SelectedKey = v2RowKey(list[0], 0);
-      if (state.attendanceView) {
-        state.attendanceView.selectedManagerRowKey = attendanceStatusV2SelectedKey || '';
-      }
-      return list[0];
     }
     attendanceStatusV2SelectedKey = null;
     if (state.attendanceView) {

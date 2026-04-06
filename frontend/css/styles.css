@@ -44053,6 +44053,72 @@ html[data-ui-theme='dark'] .attendance-stats-chart-wrap {
   font-size: 12px;
 }
 
+body[data-current-view='attendance'] .topbar.app-topbar {
+  --app-topbar-bg: #232933;
+  --app-topbar-border-color: #384253;
+  color: #eef3fb;
+}
+
+body[data-current-view='attendance'] .topbar.app-topbar .topbar-session-info,
+body[data-current-view='attendance'] .topbar.app-topbar .icon-btn,
+body[data-current-view='attendance'] .topbar.app-topbar .topbar-profile-btn {
+  color: #eef3fb;
+}
+
+body[data-current-view='attendance'] #desktopSidebar {
+  background: #20252e;
+  border-right-color: #343d4c;
+}
+
+body[data-current-view='attendance'] #desktopSidebar .desktop-sidebar-head {
+  border-bottom-color: rgba(241, 245, 249, 0.12);
+}
+
+body[data-current-view='attendance'] #desktopSidebar .drawer-role {
+  color: #ff9b52;
+}
+
+body[data-current-view='attendance'] #desktopSidebar .drawer-tenant,
+body[data-current-view='attendance'] #desktopSidebar .drawer-section-label,
+body[data-current-view='attendance'] #desktopSidebar .drawer-item-icon,
+body[data-current-view='attendance'] #desktopSidebar .drawer-item-label,
+body[data-current-view='attendance'] #desktopSidebar .drawer-submenu-arrow,
+body[data-current-view='attendance'] #desktopSidebar .drawer-subitem,
+body[data-current-view='attendance'] #desktopSidebar .drawer-subitem-label {
+  color: #d7dfeb;
+}
+
+body[data-current-view='attendance'] #desktopSidebar .drawer-item:hover,
+body[data-current-view='attendance'] #desktopSidebar .drawer-subitem:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+body[data-current-view='attendance'] #desktopSidebar .drawer-menu .drawer-item.active,
+body[data-current-view='attendance'] #desktopSidebar .drawer-subitem.active {
+  background: rgba(255, 122, 26, 0.16);
+}
+
+body[data-current-view='attendance'] #desktopSidebar .drawer-tenant-select {
+  background: #2a313d;
+  border-color: #434d5e;
+  color: #f3f7ff;
+}
+
+body[data-current-view='attendance'] #view-attendance .workspace-head.attendance-workspace-head,
+body[data-current-view='attendance'] #view-attendance #attendanceOpsToolbar {
+  margin-bottom: 10px;
+}
+
+body[data-current-view='attendance'] #attendanceStatsPanel .attendance-stats-card,
+body[data-current-view='attendance'] #attendanceStatsPanel .attendance-stats-table-card {
+  border-radius: 14px;
+}
+
+body[data-current-view='attendance'] #attendanceStatsPanel .attendance-stats-chart-wrap,
+body[data-current-view='attendance'] #attendanceStatsPanel .attendance-stats-legend {
+  border-radius: 12px;
+}
+
 @media (max-width: 1200px) {
   #attendanceManagerWorkspace.is-attendance-v2-status .attendance-v2-daily-shell {
     grid-template-columns: 1fr;
