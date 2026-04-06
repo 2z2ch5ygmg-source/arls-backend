@@ -44225,6 +44225,10 @@ function renderHrWorkspaceSegments() {
   const manageAccessMode = canAccessHrManageSegment();
   let segment = resolveAccessibleHrWorkspaceSegment(hrState.workspaceSegment || resolveDefaultHrWorkspaceSegment());
   hrState.workspaceSegment = segment;
+  const hrView = $('#view-hr');
+  if (hrView instanceof HTMLElement) {
+    hrView.dataset.hrLayout = segment;
+  }
 
   const segmentWrap = $('#hrWorkspaceSegments');
   if (segmentWrap) {
@@ -44499,32 +44503,47 @@ function renderHrDocCardSelection() {
   const selectedType = getHrSelectedCertificateType();
   hrState.selectedDocType = normalizeHrCertificateTypeKey(selectedType?.type_key || HR_DOC_TYPE_EMPLOYMENT_CERTIFICATE);
   grid.innerHTML = '';
-  rows.forEach((row) => {
-    const available = isHrCertificateTypeRequestAvailable(row);
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = `hr-doc-card${available ? ' is-live' : ' is-planned'}${row.type_key === hrState.selectedDocType ? ' active' : ''}`;
-    button.dataset.action = 'hr-doc-open';
-    button.dataset.doc = row.type_key;
-    button.setAttribute('aria-pressed', row.type_key === hrState.selectedDocType ? 'true' : 'false');
+  const requestableRows = rows.filter((row) => isHrCertificateTypeRequestAvailable(row));
+  const unavailableRows = rows.filter((row) => !isHrCertificateTypeRequestAvailable(row));
+  const groups = [
+    { label: '바로 신청 가능한 문서', rows: requestableRows, tone: 'requestable' },
+    { label: '준비 중 / 신청 불가', rows: unavailableRows, tone: 'unavailable' },
+  ].filter((group) => group.rows.length);
 
-    const copy = document.createElement('div');
-    copy.className = 'hr-doc-card-copy';
-    const title = document.createElement('strong');
-    title.textContent = row.display_name;
-    const subtitle = document.createElement('span');
-    subtitle.textContent = getHrCertificateTypeSubtitle(row);
-    copy.append(title, subtitle);
+  groups.forEach((group, groupIndex) => {
+    const label = document.createElement('div');
+    label.className = `hr-doc-card-group-label is-${group.tone}`;
+    label.textContent = group.label;
+    if (groupIndex > 0) label.dataset.groupGap = 'true';
+    grid.appendChild(label);
 
-    const side = document.createElement('div');
-    side.className = 'hr-doc-card-side';
-    const stateLabel = document.createElement('span');
-    stateLabel.className = `hr-doc-card-state ${available ? 'is-live' : 'is-planned'}`;
-    stateLabel.textContent = getHrCertificateTypeStateLabel(row);
-    side.appendChild(stateLabel);
+    group.rows.forEach((row) => {
+      const available = isHrCertificateTypeRequestAvailable(row);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `hr-doc-card${available ? ' is-live' : ' is-planned'}${row.type_key === hrState.selectedDocType ? ' active' : ''}`;
+      button.dataset.action = 'hr-doc-open';
+      button.dataset.doc = row.type_key;
+      button.setAttribute('aria-pressed', row.type_key === hrState.selectedDocType ? 'true' : 'false');
 
-    button.append(copy, side);
-    grid.appendChild(button);
+      const copy = document.createElement('div');
+      copy.className = 'hr-doc-card-copy';
+      const title = document.createElement('strong');
+      title.textContent = row.display_name;
+      const subtitle = document.createElement('span');
+      subtitle.textContent = getHrCertificateTypeSubtitle(row);
+      copy.append(title, subtitle);
+
+      const side = document.createElement('div');
+      side.className = 'hr-doc-card-side';
+      const stateLabel = document.createElement('span');
+      stateLabel.className = `hr-doc-card-state ${available ? 'is-live' : 'is-planned'}`;
+      stateLabel.textContent = getHrCertificateTypeStateLabel(row);
+      side.appendChild(stateLabel);
+
+      button.append(copy, side);
+      grid.appendChild(button);
+    });
   });
 }
 
