@@ -22,3 +22,18 @@
 [   58873ms] [INFO] [PERF][COMPANY_LIST] mount->critical_ui: 5.4ms @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
 [   58873ms] [INFO] [PERF][COMPANY_LIST] total_to_interactive: 587.3ms @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
 [   58873ms] [INFO] [PERF][COMPANY_LIST] api_vs_render: api=561.4ms render=1.2ms dominant=api @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
+[   63176ms] [INFO] [RG ARLS][HOME][API] {stage: core-ready, quiet: true, force: false, total_calls: 1, order: Array(1)} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:29472
+[   63177ms] [INFO] [RG ARLS][HOME][API] {stage: background-complete, quiet: true, force: false, total_calls: 1, order: Array(1)} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:29472
+[   63270ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/admin/hr/documents/approval-policy?document_type=employment_certificate:0
+[   63270ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /admin/hr/documents/approval-policy?document_type=employment_certificate, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[   65257ms] [INFO] [PERF][SCHEDULE] month_switch_shell_ready: 0.0ms @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
+[   66110ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/admin/hr/documents/approval-policy?document_type=employment_certificate:0
+[   66110ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /admin/hr/documents/approval-policy?document_type=employment_certificate, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[   66873ms] [INFO] [PERF][SCHEDULE] month_switch_grid_ready: 0.0ms api_lite: 1610.4ms dom: 2.0ms @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
+[   66873ms] [INFO] [PERF][SCHEDULE][API] monthly-board-lite db=530.5ms serialize=0.2ms total=530.9ms bytes=3069 @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
+[   67484ms] [INFO] [PERF][SCHEDULE] month_switch_detail_ready: 0.0ms api_detail: 607.2ms dom: 2.7ms @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
+[   67484ms] [INFO] [PERF][SCHEDULE] month_switch_hydrate_done: 0.0ms api_detail: 607.2ms dom: 2.7ms @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
+[   71830ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/users/me/signature:0
+[   71831ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /users/me/signature, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[   71831ms] [ERROR] Error: Method Not Allowed
+    at http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12942:28 @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:76172
