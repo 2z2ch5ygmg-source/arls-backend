@@ -1,0 +1,18 @@
+[     476ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://127.0.0.1:4175/:0
+[     476ms] [VERBOSE] [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) %o @ http://127.0.0.1:4175/:0
+[     497ms] [INFO] [RG ARLS] API base {
+  "activeApiBase": "https://arls-wonseo-prod-260402.azurewebsites.net/api/v1",
+  "source": "inline-or-default",
+  "inlineApiBase": "https://arls-wonseo-prod-260402.azurewebsites.net",
+  "queryApi": "(none)",
+  "origin": "http://127.0.0.1:4175"
+} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:2037
+[     726ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://127.0.0.1:4175/#/login:0
+[     726ms] [VERBOSE] [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) %o @ http://127.0.0.1:4175/#/login:0
+[     751ms] [INFO] [RG ARLS] API base {
+  "activeApiBase": "https://arls-wonseo-prod-260402.azurewebsites.net/api/v1",
+  "source": "inline-or-default",
+  "inlineApiBase": "https://arls-wonseo-prod-260402.azurewebsites.net",
+  "queryApi": "(none)",
+  "origin": "http://127.0.0.1:4175"
+} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:2037
