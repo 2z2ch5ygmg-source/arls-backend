@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 from io import BytesIO
 from pathlib import Path
@@ -220,7 +221,11 @@ def _format_date(value: Any) -> str:
             return value.isoformat()
         except Exception:
             return ""
-    return ""
+    return "" 
+
+
+def _json_dumps(value: Any) -> str:
+    return json.dumps(value or {}, ensure_ascii=False, default=str)
 
 
 def _mask_resident_registration(value: str | None) -> str:
