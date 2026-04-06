@@ -64757,16 +64757,16 @@ async function loadLeaves() {
 async function loadLeaveGrants() {
   if (!canManageLeaveGrants()) return [];
   if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
-  renderLeaveGrantsSection({ loading: true });
+  renderLeaveManagementWorkspace({ loading: true });
   try {
     const payload = await apiRequest(appendLeaveTenantQuery('/leaves/grants?limit=200'));
     const rows = Array.isArray(payload?.items) ? payload.items : [];
     state.leaveView.grantsRows = rows;
-    renderLeaveGrantsSection({ loading: false });
+    renderLeaveManagementWorkspace({ loading: false });
     return rows;
   } catch (err) {
     const message = mapLeaveErrorMessage(err, '휴가 부여 내역을 불러오지 못했습니다.');
-    renderLeaveGrantsSection({ loading: false, errorMessage: message });
+    renderLeaveManagementWorkspace({ loading: false, errorMessage: message });
     showToast(message, 'error', 2800);
     return [];
   }
