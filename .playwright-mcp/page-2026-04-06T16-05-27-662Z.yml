@@ -1,0 +1,241 @@
+- generic [ref=e2]:
+  - banner [ref=e39]:
+    - link "Sentrix HR 홈으로 이동" [ref=e40] [cursor=pointer]:
+      - img "Sentrix HR" [ref=e41]
+    - generic [ref=e42]:
+      - generic [ref=e43]: Developer
+      - button "사용자 프로필 열기" [ref=e44]:
+        - img [ref=e45]
+        - generic [ref=e48]: 내 정보
+      - button "다크 모드로 전환" [ref=e49] [cursor=pointer]:
+        - generic [ref=e50]:
+          - img [ref=e52]
+          - img [ref=e59]
+        - generic [ref=e62]: 화면 모드 전환
+      - button "알림 열기" [ref=e63]
+  - generic [ref=e65]:
+    - complementary "PC 사이드바 메뉴" [ref=e66]:
+      - generic [ref=e68]:
+        - paragraph [ref=e69]: Developer
+        - generic [ref=e70]:
+          - generic [ref=e71]: 조회 테넌트
+          - combobox "조회 테넌트" [ref=e72]:
+            - option "Phase13 회사 09011819 (PHASE13_09011819)" [selected]
+            - option "Phase13 회사 09694533 (PHASE13_09694533)"
+            - option "SRS Korea (SRS_KOREA)"
+      - navigation "PC 메인 메뉴" [ref=e73]:
+        - paragraph [ref=e485]: 홈
+        - button "홈" [ref=e486]:
+          - img [ref=e488]
+          - generic [ref=e491]: 홈
+        - paragraph [ref=e492]: 운영
+        - generic [ref=e493]:
+          - button "스케줄" [ref=e494]:
+            - img [ref=e496]
+            - generic [ref=e498]: 스케줄
+            - img [ref=e500]
+          - generic:
+            - button "월간 근무표" [ref=e502]:
+              - generic [ref=e503]: 월간 근무표
+            - button "근무 템플릿" [ref=e504]:
+              - generic [ref=e505]: 근무 템플릿
+            - button "캘린더" [ref=e506]:
+              - generic [ref=e507]: 캘린더
+        - generic [ref=e508]:
+          - button "출퇴근" [ref=e509]:
+            - img [ref=e511]
+            - generic [ref=e514]: 출퇴근
+            - img [ref=e516]
+          - generic:
+            - button "날짜별" [ref=e518]:
+              - generic [ref=e519]: 날짜별
+            - button "기간별" [ref=e520]:
+              - generic [ref=e521]: 기간별
+            - button "통계" [ref=e522]:
+              - generic [ref=e523]: 통계
+        - button "휴가" [ref=e524]:
+          - img [ref=e526]
+          - generic [ref=e528]: 휴가
+        - generic [ref=e529]:
+          - button "승인" [ref=e530]:
+            - img [ref=e532]
+            - generic [ref=e536]: 승인
+            - img [ref=e538]
+          - generic:
+            - button "출퇴근 예외" [ref=e540]:
+              - generic [ref=e541]: 출퇴근 예외
+            - button "문서" [ref=e542]:
+              - generic [ref=e543]: 문서
+        - generic [ref=e544]:
+          - button "문서" [ref=e545]:
+            - img [ref=e547]
+            - generic [ref=e551]: 문서
+            - img [ref=e553]
+          - button "문서 관리" [ref=e555]:
+            - generic [ref=e556]: 문서 관리
+        - generic [ref=e557]:
+          - button "리포트" [ref=e558]:
+            - img [ref=e560]
+            - generic [ref=e562]: 리포트
+            - img [ref=e564]
+          - generic:
+            - button "Finance 제출" [ref=e566]:
+              - generic [ref=e567]: Finance 제출
+            - button "Finance 다운로드" [ref=e568]:
+              - generic [ref=e569]: Finance 다운로드
+            - button "스케쥴 업로드" [ref=e570]:
+              - generic [ref=e571]: 스케쥴 업로드
+            - button "지원근무자 업로드" [ref=e572]:
+              - generic [ref=e573]: 지원근무자 업로드
+        - paragraph [ref=e574]: 조직/인력
+        - generic [ref=e575]:
+          - button "구성원" [expanded] [ref=e576]:
+            - img [ref=e578]
+            - generic [ref=e582]: 구성원
+            - img [ref=e584]
+          - generic [ref=e586]:
+            - button "직원" [ref=e587]:
+              - generic [ref=e588]: 직원
+            - button "근무지" [ref=e589]:
+              - generic [ref=e590]: 근무지
+            - button "회사" [ref=e591]:
+              - generic [ref=e592]: 회사
+        - paragraph [ref=e593]: 공지
+        - button "공지" [ref=e594]:
+          - img [ref=e596]
+          - generic [ref=e599]: 공지
+        - paragraph [ref=e600]: 설정
+        - button "설정" [ref=e601]:
+          - img [ref=e603]
+          - generic [ref=e606]: 설정
+        - paragraph [ref=e607]: 관리자
+        - button "감사" [ref=e608]:
+          - img [ref=e610]
+          - generic [ref=e612]: 감사
+      - button "로그아웃" [ref=e202]
+    - main [ref=e203]:
+      - generic [ref=e613]:
+        - heading "휴가" [level=2] [ref=e616]
+        - generic [ref=e618]:
+          - generic [ref=e619]:
+            - generic [ref=e621]:
+              - button "현황" [ref=e622]
+              - button "사용 이력" [ref=e623]
+              - button "부여" [ref=e624]
+              - button "설정" [ref=e625]
+            - button "휴가 신청" [ref=e627]
+          - generic [ref=e628]:
+            - generic [ref=e629]:
+              - generic [ref=e691]:
+                - generic [ref=e692]: 오늘 휴가자
+                - strong [ref=e693]: 0명
+              - generic [ref=e694]:
+                - generic [ref=e695]: 이번주 휴가자
+                - strong [ref=e696]: 0명
+              - generic [ref=e697]:
+                - generic [ref=e698]: 승인 대기
+                - strong [ref=e699]: 0건
+            - article [ref=e639]:
+              - generic [ref=e640]:
+                - heading "휴가 현황" [level=3] [ref=e642]
+                - generic [ref=e643]:
+                  - button "휴가 동기화" [ref=e644]
+                  - button "다운로드" [ref=e645]
+                  - generic [ref=e646]:
+                    - generic [ref=e647]: 단위
+                    - combobox "단위" [ref=e648]:
+                      - option "기본" [selected]
+                      - option "일"
+                      - option "명"
+                  - generic [ref=e649]:
+                    - generic [ref=e650]: 현황 검색
+                    - searchbox "현황 검색" [ref=e651]
+                  - generic [ref=e652]: 0명
+              - generic [ref=e653]:
+                - generic [ref=e654]:
+                  - button "이전 연도" [ref=e655]: ‹
+                  - generic [ref=e656]:
+                    - generic [ref=e657]: 기준 연도
+                    - combobox "기준 연도" [ref=e658]:
+                      - option "2025년"
+                      - option "2026년" [selected]
+                      - option "2027년"
+                  - button "다음 연도" [ref=e659]: ›
+                - generic [ref=e660]:
+                  - generic [ref=e661]: 기준일
+                  - textbox "기준일" [ref=e662]: 2026-04-07
+                - generic [ref=e663]:
+                  - generic [ref=e664]: 직원
+                  - button "직원" [ref=e665]
+                - generic [ref=e666]:
+                  - generic [ref=e667]: 휴가 정책
+                  - combobox "휴가 정책" [ref=e668]:
+                    - option "전체 정책" [selected]
+                    - option "연차"
+                    - option "반차"
+                    - option "연차"
+                    - option "연차"
+              - generic "휴가 사용 현황 컬럼" [ref=e669]:
+                - button "직원" [ref=e670] [cursor=pointer]:
+                  - generic [ref=e671]: 직원
+                  - generic [ref=e672]: ↑
+                - button "현장" [ref=e673] [cursor=pointer]:
+                  - generic [ref=e674]: 현장
+                - button "지급" [ref=e675] [cursor=pointer]:
+                  - generic [ref=e676]: 지급
+                - button "사용" [ref=e677] [cursor=pointer]:
+                  - generic [ref=e678]: 사용
+                - button "승인 대기" [ref=e679] [cursor=pointer]:
+                  - generic [ref=e680]: 승인 대기
+                - button "잔여" [ref=e681] [cursor=pointer]:
+                  - generic [ref=e682]: 잔여
+                - button "최근 사용" [ref=e683] [cursor=pointer]:
+                  - generic [ref=e684]: 최근 사용
+              - list [ref=e685]:
+                - listitem [ref=e700]:
+                  - generic [ref=e701]:
+                    - generic [ref=e702]: 데이터 없음
+                    - generic [ref=e703]: 표시할 휴가 사용 데이터가 없습니다.
+                    - generic [ref=e704]: 현재 범위에서 승인된 휴가 또는 대기 요청이 없습니다.
+      - text: / 보기 보기 보기
+  - dialog [ref=e706]:
+    - generic [ref=e707]: 휴가 신청
+    - generic [ref=e709]:
+      - generic [ref=e711]:
+        - heading "휴가 신청" [level=3] [ref=e712]
+        - paragraph [ref=e713]: 신청은 전용 입력면에서 등록하고 결과 확인은 사용 이력에서 이어집니다.
+      - generic [ref=e714]:
+        - button "연차" [ref=e715]
+        - button "반차" [ref=e716]
+        - button "병가" [ref=e717]
+        - button "조퇴" [ref=e718]
+      - generic [ref=e719]:
+        - generic [ref=e720]:
+          - generic [ref=e721]:
+            - generic [ref=e722]: 유형
+            - combobox "유형" [ref=e723]:
+              - option "연차" [selected]
+              - option "반차"
+              - option "병가 (내부번호)"
+              - option "조퇴 (내부번호)"
+          - generic [ref=e724]:
+            - generic [ref=e725]: 휴가 정책
+            - combobox "휴가 정책" [ref=e726]:
+              - option "기본 정책" [selected]
+          - generic [ref=e727]:
+            - generic [ref=e728]: 시작일
+            - textbox "시작일" [ref=e729]
+          - generic [ref=e730]:
+            - generic [ref=e731]: 종료일
+            - textbox "종료일" [ref=e732]
+          - generic [ref=e733]:
+            - generic [ref=e734]: 사유 메모 (선택)
+            - textbox "사유 메모 (선택)" [ref=e735]:
+              - /placeholder: 필요 시 상세 사유를 입력하세요.
+          - generic [ref=e736]:
+            - generic [ref=e737]: 첨부 (선택, 최대 3개)
+            - button "첨부 (선택, 최대 3개) 선택된 첨부가 없습니다." [ref=e738]
+            - generic [ref=e739]: 선택된 첨부가 없습니다.
+        - generic [ref=e740]:
+          - button "취소" [ref=e741]
+          - button "휴가 신청" [ref=e742]

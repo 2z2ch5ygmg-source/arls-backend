@@ -37,3 +37,62 @@
 [   71831ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /users/me/signature, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
 [   71831ms] [ERROR] Error: Method Not Allowed
     at http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12942:28 @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:76172
+[   79116ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/grants?limit=200&tenant_code=PHASE13_09011819:0
+[   79116ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/grants?limit=200&tenant_code=PHASE13_09011819, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[   79990ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/policies?tenant_code=PHASE13_09011819:0
+[   79991ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/policies?tenant_code=PHASE13_09011819, status: 404, code: NOT_FOUND, message: tenant not found} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[   91890ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/grants?limit=200&tenant_code=PHASE13_09011819:0
+[   91890ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/grants?limit=200&tenant_code=PHASE13_09011819, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[   92590ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/policies?tenant_code=PHASE13_09011819:0
+[   92590ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/policies?tenant_code=PHASE13_09011819, status: 404, code: NOT_FOUND, message: tenant not found} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[  103860ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/grants?limit=200&tenant_code=PHASE13_09011819:0
+[  103860ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/grants?limit=200&tenant_code=PHASE13_09011819, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[  104611ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/policies?tenant_code=PHASE13_09011819:0
+[  104611ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/policies?tenant_code=PHASE13_09011819, status: 404, code: NOT_FOUND, message: tenant not found} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[  119560ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/grants?limit=200&tenant_code=PHASE13_09011819:0
+[  119560ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/grants?limit=200&tenant_code=PHASE13_09011819, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[  121724ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/grants?limit=200&tenant_code=PHASE13_09011819:0
+[  121725ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/grants?limit=200&tenant_code=PHASE13_09011819, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[  122621ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/policies?tenant_code=PHASE13_09011819:0
+[  122622ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/policies?tenant_code=PHASE13_09011819, status: 404, code: NOT_FOUND, message: tenant not found} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[  171709ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/grants?limit=200&tenant_code=PHASE13_09011819:0
+[  171709ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/grants?limit=200&tenant_code=PHASE13_09011819, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[  282122ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/grants?limit=200&tenant_code=PHASE13_09011819:0
+[  282122ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/grants?limit=200&tenant_code=PHASE13_09011819, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[  326311ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://127.0.0.1:4175/#/leave?tab=grants:0
+[  326311ms] [VERBOSE] [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) %o @ http://127.0.0.1:4175/#/leave?tab=grants:0
+[  326350ms] [INFO] [RG ARLS] API base {
+  "activeApiBase": "https://arls-wonseo-prod-260402.azurewebsites.net/api/v1",
+  "source": "inline-or-default",
+  "inlineApiBase": "https://arls-wonseo-prod-260402.azurewebsites.net",
+  "queryApi": "(none)",
+  "origin": "http://127.0.0.1:4175"
+} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:2037
+[  326412ms] [INFO] [RG ARLS][Auth] stored token check {hasAccessToken: true, hasRefreshToken: true} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:39837
+[  326412ms] [INFO] [RG ARLS][Auth] skipped eager refresh during background hydrate because stored access token exists @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:39858
+[  326452ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/grants?limit=200&tenant_code=PHASE13_09011819:0
+[  326452ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/grants?limit=200&tenant_code=PHASE13_09011819, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[  327012ms] [INFO] [RG ARLS][Auth] token stored {hasAccessToken: true, hasRefreshToken: true} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:39444
+[  327401ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/policies?tenant_code=PHASE13_09011819:0
+[  327401ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/policies?tenant_code=PHASE13_09011819, status: 404, code: NOT_FOUND, message: tenant not found} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[  330392ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/admin/hr/documents/approval-policy?document_type=employment_certificate:0
+[  330392ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /admin/hr/documents/approval-policy?document_type=employment_certificate, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[  330982ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/admin/hr/documents/approval-policy?document_type=employment_certificate:0
+[  330983ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /admin/hr/documents/approval-policy?document_type=employment_certificate, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[  331070ms] [INFO] [RG ARLS][HOME][API] {stage: core-ready, quiet: true, force: false, total_calls: 1, order: Array(1)} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:29472
+[  331070ms] [INFO] [RG ARLS][HOME][API] {stage: background-complete, quiet: true, force: false, total_calls: 1, order: Array(1)} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:29472
+[  331072ms] [INFO] [PERF][SCHEDULE] month_switch_shell_ready: 0.0ms @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
+[  331997ms] [INFO] [PERF][SCHEDULE] month_switch_grid_ready: 0.0ms api_lite: 915.2ms dom: 3.5ms @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
+[  331997ms] [INFO] [PERF][SCHEDULE][API] monthly-board-lite db=700.6ms serialize=0.2ms total=701.0ms bytes=3069 @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
+[  332566ms] [INFO] [PERF][SCHEDULE] month_switch_detail_ready: 0.0ms api_detail: 566.7ms dom: 1.4ms @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
+[  332566ms] [INFO] [PERF][SCHEDULE] month_switch_hydrate_done: 0.0ms api_detail: 566.7ms dom: 1.4ms @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:154
+[  336542ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/users/me/signature:0
+[  336542ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /users/me/signature, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[  336543ms] [ERROR] Error: Method Not Allowed
+    at http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12942:28 @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:76172
+[  357504ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/grants?limit=200&tenant_code=PHASE13_09011819:0
+[  357505ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/grants?limit=200&tenant_code=PHASE13_09011819, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[  358242ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/policies?tenant_code=PHASE13_09011819:0
+[  358243ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/policies?tenant_code=PHASE13_09011819, status: 404, code: NOT_FOUND, message: tenant not found} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
+[  377947ms] [ERROR] Failed to load resource: the server responded with a status of 405 () @ https://arls-wonseo-prod-260402.azurewebsites.net/api/v1/leaves/grants?limit=200&tenant_code=PHASE13_09011819:0
+[  377947ms] [ERROR] [RG ARLS][API] request failed {method: GET, path: /leaves/grants?limit=200&tenant_code=PHASE13_09011819, status: 405, code: HTTP_405, message: Method Not Allowed} @ http://127.0.0.1:4175/js/app.js?v=20260406-attendance-shople-parity-live-07:12931
