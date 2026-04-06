@@ -84155,9 +84155,18 @@ document.addEventListener('compositionend', (event) => {
         </button>
       `;
     };
+    const presenceItems = [
+      { label: '근무 중', value: dashboard.onDuty },
+      { label: '출근 전', value: dashboard.beforeStart },
+      { label: '퇴근', value: dashboard.checkedOut },
+      { label: '미퇴근', value: dashboard.missingOut },
+    ];
     return `
       <div class="attendance-v2-section-head">
         <h3>출퇴근 현황</h3>
+        <div class="attendance-v2-head-meta">
+          <span class="attendance-v2-inline-meta">전체 ${escapeValue(`${dashboard.totalPeople}명`)}</span>
+        </div>
       </div>
       <div class="attendance-v2-daily-shell">
         <button type="button" class="attendance-v2-rate-card${attendanceStatusV2FilterKey === 'rate' ? ' is-active' : ''}" data-filter-key="rate" aria-pressed="${attendanceStatusV2FilterKey === 'rate' ? 'true' : 'false'}">
@@ -84177,6 +84186,29 @@ document.addEventListener('compositionend', (event) => {
             ${scheduleItems.map((item) => renderButtonCard(item, 'is-compact')).join('')}
           </div>
         </div>
+        <section class="attendance-v2-presence-shell">
+          <div class="attendance-v2-section-subhead attendance-v2-section-subhead-inline">
+            <h4>근무 상태</h4>
+            <span class="attendance-v2-section-unit">단위 : 명</span>
+          </div>
+          <div class="attendance-v2-presence-board">
+            <div class="attendance-v2-presence-track">
+              <span class="attendance-v2-presence-label">근무 중 비율</span>
+              <div class="attendance-v2-presence-progress">
+                <span style="width:${Math.max(0, Math.min(100, dashboard.workingTarget ? Math.round((dashboard.onDuty / Math.max(1, dashboard.workingTarget)) * 100) : 0))}%"></span>
+              </div>
+              <strong class="attendance-v2-presence-value">${escapeValue(`${dashboard.onDuty}명`)}</strong>
+            </div>
+            <div class="attendance-v2-presence-metrics">
+              ${presenceItems.map((item) => `
+                <article>
+                  <span>${escapeValue(item.label)}</span>
+                  <strong>${escapeValue(String(item.value))}</strong>
+                </article>
+              `).join('')}
+            </div>
+          </div>
+        </section>
       </div>
       <div class="attendance-v2-section-subhead">
         <h4>출퇴근 특이사항</h4>
