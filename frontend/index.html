@@ -1167,20 +1167,17 @@
                 </section>
 
                 <section id="leaveRequestsSection" class="leave-workspace-section stack hidden">
-                  <div id="leaveRequestsToolbar" class="module-card leave-requests-toolbar">
-                    <div class="leave-requests-filter-controls">
-                      <div id="leaveWorkspaceScopeTabs" class="approval-tabs azure-tabbar hidden">
-                        <button class="btn btn-secondary approval-tab active" type="button" data-action="leave-workspace-scope" data-scope="mine">내 휴가</button>
-                        <button class="btn btn-secondary approval-tab" type="button" data-action="leave-workspace-scope" data-scope="team">팀 휴가</button>
+                    <div id="leaveRequestsToolbar" class="module-card leave-requests-toolbar">
+                      <div class="leave-requests-filter-controls">
+                        <div id="leaveWorkspaceScopeTabs" class="approval-tabs azure-tabbar hidden">
+                          <button class="btn btn-secondary approval-tab active" type="button" data-action="leave-workspace-scope" data-scope="mine">내 휴가</button>
+                          <button class="btn btn-secondary approval-tab" type="button" data-action="leave-workspace-scope" data-scope="team">팀 휴가</button>
+                        </div>
+                      <div class="leave-filter-field leave-filter-field-range">
+                        <span>기간</span>
+                        <button id="leaveWorkspaceRangeTrigger" class="btn btn-secondary leave-range-trigger" type="button" data-action="leave-workspace-open-range-sheet">기간 선택</button>
+                        <span id="leaveWorkspaceRangeSummary" class="leave-range-summary muted">조회 범위를 선택하세요.</span>
                       </div>
-                      <label class="input-field leave-filter-field">
-                        <span>시작일</span>
-                        <input id="leaveWorkspaceStartDate" type="date" />
-                      </label>
-                      <label class="input-field leave-filter-field">
-                        <span>종료일</span>
-                        <input id="leaveWorkspaceEndDate" type="date" />
-                      </label>
                       <label class="input-field leave-filter-field">
                         <span>상태</span>
                         <select id="leaveWorkspaceStatusFilter">
@@ -1246,71 +1243,6 @@
                       </div>
                     </div>
                     <div id="leaveHistoryChart" class="leave-history-chart" aria-live="polite"></div>
-                  </article>
-
-                  <article id="leaveWorkspaceComposer" class="module-card stack leave-workspace-composer hidden">
-                    <div class="approval-head">
-                      <div class="requests-heading-block">
-                        <h3>휴가 신청</h3>
-                        <p class="muted">필요한 휴가를 등록하고 요청 상태는 아래 목록에서 바로 확인합니다.</p>
-                      </div>
-                      <button class="btn btn-secondary" type="button" data-action="leave-workspace-toggle-composer">닫기</button>
-                    </div>
-                    <div id="leaveWorkspaceQuickTypeChips" class="quick-actions leave-quick-chips">
-                      <button class="btn btn-secondary active" type="button" data-action="leave-workspace-quick-type" data-leave-type="annual">연차</button>
-                      <button class="btn btn-secondary" type="button" data-action="leave-workspace-quick-type" data-leave-type="half">반차</button>
-                      <button class="btn btn-secondary" type="button" data-action="leave-workspace-quick-type" data-leave-type="sick" data-reason-preset="병가">병가</button>
-                      <button class="btn btn-secondary" type="button" data-action="leave-workspace-quick-type" data-leave-type="other" data-reason-preset="조퇴">조퇴</button>
-                    </div>
-                    <form id="leaveWorkspaceForm" class="stack">
-                      <input id="leaveWorkspaceTenant" type="hidden" />
-                      <input id="leaveWorkspaceEmp" type="hidden" />
-                      <div class="registration-grid">
-                        <label class="input-field">
-                          <span>유형</span>
-                          <select id="leaveWorkspaceType" required>
-                            <option value="annual">연차</option>
-                            <option value="half">반차</option>
-                            <option value="sick">병가 (내부번호)</option>
-                            <option value="other">조퇴 (내부번호)</option>
-                          </select>
-                        </label>
-                        <label class="input-field">
-                          <span>휴가 정책</span>
-                          <select id="leaveWorkspacePolicySelect">
-                            <option value="">기본 정책</option>
-                          </select>
-                        </label>
-                        <label id="leaveWorkspaceHalfSlotField" class="input-field hidden">
-                          <span>반차 구분</span>
-                          <select id="leaveWorkspaceHalfSlot">
-                            <option value="am">오전 반차</option>
-                            <option value="pm">오후 반차</option>
-                          </select>
-                        </label>
-                        <label class="input-field">
-                          <span>시작일</span>
-                          <input id="leaveWorkspaceStart" type="date" required />
-                        </label>
-                        <label class="input-field">
-                          <span>종료일</span>
-                          <input id="leaveWorkspaceEnd" type="date" required />
-                        </label>
-                        <label class="input-field registration-span-full">
-                          <span>사유 메모 (선택)</span>
-                          <input id="leaveWorkspaceReason" placeholder="필요 시 상세 사유를 입력하세요." />
-                        </label>
-                        <label class="input-field registration-span-full">
-                          <span>첨부 (선택, 최대 3개)</span>
-                          <input id="leaveWorkspaceAttachments" type="file" accept="image/*,.pdf" multiple />
-                          <span id="leaveWorkspaceAttachmentHint" class="input-helper">선택된 첨부가 없습니다.</span>
-                        </label>
-                      </div>
-                      <div class="requests-detail-actions">
-                        <button class="btn btn-secondary" type="button" data-action="leave-workspace-toggle-composer">취소</button>
-                        <button class="btn btn-primary" id="leaveWorkspaceSubmitBtn" type="submit">휴가 신청</button>
-                      </div>
-                    </form>
                   </article>
 
                   <article id="leaveWorkspaceRequestsCard" class="module-card stack leave-workspace-requests-card">

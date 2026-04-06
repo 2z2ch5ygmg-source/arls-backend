@@ -17086,6 +17086,24 @@ textarea::placeholder {
   min-width: 0;
 }
 
+#view-leave .leave-filter-field-range {
+  display: grid;
+  gap: 6px;
+}
+
+#view-leave .leave-range-trigger {
+  min-height: var(--ui-filter-control-h);
+  justify-content: flex-start;
+  width: 100%;
+}
+
+#view-leave .leave-range-summary {
+  display: block;
+  min-height: 18px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
 #view-leave .leave-filter-field input,
 #view-leave .leave-filter-field select {
   min-height: var(--ui-filter-control-h);
@@ -17320,6 +17338,17 @@ textarea::placeholder {
 #view-leave #leaveWorkspaceDetailContent.requests-detail-content {
   overflow: auto;
   padding-right: 2px;
+}
+
+#view-leave .leave-policy-detail-blocked-delete {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+#view-leave .leave-policy-detail-blocked-delete .btn {
+  justify-self: start;
 }
 
 #view-leave .leave-workspace-shell .empty-state {
