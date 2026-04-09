@@ -48455,6 +48455,62 @@ function renderProfileSettingsRail() {
         : "알림을 켜면 근무 시작과 퇴근 예정 알림을 자동 예약합니다.";
     }
   }
+
+  const activeSection = normalizeProfileSettingsSection(
+    state.profile?.settingsSection || getDefaultProfileSettingsSection(),
+  );
+  const managerMode = canManageIntegrations();
+  const visibleKeys = managerMode
+    ? {
+        operations: ["role", "tenant", "integration", "lock"],
+        integration: ["role", "tenant", "profile"],
+        advanced: ["role", "tenant", "groupware", "meetings"],
+        account: ["role", "tenant"],
+      }[activeSection] || ["role", "tenant"]
+    : ["role", "tenant", "notification", "sync"];
+  const itemByKey = {
+    role: roleValue?.closest(".profile-settings-rail-item"),
+    tenant: tenantValue?.closest(".profile-settings-rail-item"),
+    notification: notificationValue?.closest(".profile-settings-rail-item"),
+    sync: syncValue?.closest(".profile-settings-rail-item"),
+    integration: integrationValue?.closest(".profile-settings-rail-item"),
+    profile: profileValue?.closest(".profile-settings-rail-item"),
+    groupware: groupwareValue?.closest(".profile-settings-rail-item"),
+    meetings: meetingsValue?.closest(".profile-settings-rail-item"),
+    lock: lockValue?.closest(".profile-settings-rail-item"),
+  };
+  Object.entries(itemByKey).forEach(([key, element]) => {
+    if (!(element instanceof HTMLElement)) return;
+    element.classList.toggle("hidden", !visibleKeys.includes(key));
+  });
+
+  const employeeActions = document.querySelector(
+    "#profileSettingsStateRail .profile-settings-rail-actions.shell-employee-only",
+  );
+  if (employeeActions instanceof HTMLElement) {
+    employeeActions.classList.toggle("hidden", managerMode);
+  }
+
+  const managerActions = document.querySelector(
+    "#profileSettingsStateRail .profile-settings-rail-actions.shell-manager-only",
+  );
+  if (managerActions instanceof HTMLElement) {
+    const showManagerActions =
+      managerMode &&
+      (activeSection === "operations" || activeSection === "integration");
+    managerActions.classList.toggle("hidden", !showManagerActions);
+    managerActions.querySelectorAll("button[data-action]").forEach((button) => {
+      const action = String(button.dataset.action || "").trim();
+      const shouldShow =
+        activeSection === "operations"
+          ? action === "profile-open-sheet-logs" ||
+            action === "lock-open-settings"
+          : activeSection === "integration"
+            ? action === "profile-open-sheet-logs"
+            : false;
+      button.classList.toggle("hidden", !shouldShow);
+    });
+  }
 }
 
 function getDefaultProfileSettingsSection() {
@@ -48652,6 +48708,7 @@ function renderProfileWorkspaceSegments() {
     state.profile.settingsSection = normalizeProfileSettingsSection(
       state.profile.settingsSection || getDefaultProfileSettingsSection(),
     );
+    renderProfileSettingsRail();
     renderProfileGoogleSettingsWorkspace();
     renderProfileSettingsSections();
   }
@@ -48763,6 +48820,7 @@ function setProfileSettingsSection(value = "") {
       state.profile.settingsSection ||
       getDefaultProfileSettingsSection(),
   );
+  renderProfileSettingsRail();
   renderProfileSettingsSectionTabs();
   renderProfileSettingsSections();
   queueViewSnapshotPersist("profile");

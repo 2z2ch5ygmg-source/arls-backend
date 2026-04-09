@@ -42029,7 +42029,7 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #view-profile .profile-settings-rail-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 0;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--ui-border-subtle);
@@ -49587,6 +49587,23 @@ html[data-ui-theme="light"]
   .settings-form-group-head
   > .muted {
   display: none;
+}
+
+#view-profile #mailHubSummary,
+#view-profile #groupwareOpsSummary {
+  display: none;
+}
+
+#view-profile #mailHubCard .profile-mail-layout {
+  gap: 12px;
+}
+
+#view-profile #groupwareOpsCard .profile-mail-layout {
+  gap: 14px;
+}
+
+#view-profile #groupwareOpsCard .profile-groupware-rollout-form {
+  gap: 10px 12px;
 }
 
 #view-notices .notices-list-rows.is-empty {
