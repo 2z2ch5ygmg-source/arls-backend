@@ -6408,16 +6408,96 @@ function buildHomeContextStripHtml(items = []) {
   `;
 }
 
+function normalizeHomeVisualTone(tone = "") {
+  switch (
+    String(tone || "")
+      .trim()
+      .toLowerCase()
+  ) {
+    case "warn":
+    case "warning":
+    case "danger":
+    case "error":
+    case "accent":
+      return "accent";
+    case "success":
+    case "teal":
+      return "teal";
+    case "muted":
+    case "slate":
+      return "slate";
+    default:
+      return "neutral";
+  }
+}
+
+function buildHomeSurfaceIconMarkup(iconKey = "grid", tone = "accent") {
+  return `
+    <span class="home-surface-card-icon-chip is-${escapeHomeHtml(normalizeHomeVisualTone(tone))}" aria-hidden="true">
+      ${buildAzureTopbarIconSvg(iconKey || "grid")}
+    </span>
+  `;
+}
+
+function buildHomeEmptyStateMarkup({
+  title = "표시할 항목이 없습니다.",
+  meta = "",
+  iconKey = "list",
+  tone = "accent",
+} = {}) {
+  return `
+    <div class="home-role-empty home-queue-empty">
+      <span class="home-empty-icon is-${escapeHomeHtml(normalizeHomeVisualTone(tone))}" aria-hidden="true">
+        ${buildAzureTopbarIconSvg(iconKey || "list")}
+      </span>
+      <strong>${escapeHomeHtml(title || "표시할 항목이 없습니다.")}</strong>
+      ${
+        String(meta || "").trim()
+          ? `<span>${escapeHomeHtml(meta || "")}</span>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+function resolveHomeQueueIndicatorTone(row = null, fallbackTone = "neutral") {
+  if (row && typeof row === "object") {
+    const explicitTone =
+      row.pillTone || row.pill_tone || row.tone || row.statusTone || "";
+    if (String(explicitTone || "").trim()) {
+      return normalizeHomeVisualTone(explicitTone);
+    }
+    const numericParts = String(
+      row.valueLabel || row.value || row.countLabel || "",
+    )
+      .replace(/,/g, "")
+      .match(/-?\d+(?:\.\d+)?/g);
+    if (Array.isArray(numericParts)) {
+      const hasPositive = numericParts.some((part) => Number(part) > 0);
+      if (hasPositive) return "accent";
+    }
+  }
+  return normalizeHomeVisualTone(fallbackTone);
+}
+
 function buildHomeQueueListHtml(
   rows = [],
-  { emptyTitle = "표시할 항목이 없습니다." } = {},
+  {
+    emptyTitle = "표시할 항목이 없습니다.",
+    emptyMeta = "",
+    emptyIconKey = "list",
+    emptyTone = "accent",
+  } = {},
 ) {
   const items = (Array.isArray(rows) ? rows : []).filter(Boolean);
   if (!items.length) {
     return `
-      <div class="home-role-empty home-queue-empty">
-        <strong>${escapeHomeHtml(emptyTitle)}</strong>
-      </div>
+      ${buildHomeEmptyStateMarkup({
+        title: emptyTitle,
+        meta: emptyMeta,
+        iconKey: emptyIconKey,
+        tone: emptyTone,
+      })}
     `;
   }
   return `
@@ -6433,6 +6513,7 @@ function buildHomeQueueListHtml(
           const pillTone = String(
             row?.pillTone || row?.pill_tone || "neutral",
           ).trim();
+          const visualTone = resolveHomeQueueIndicatorTone(row, pillTone);
           const actionAttrs = buildHomeActionAttrs({
             route: row?.route,
             view: row?.view,
@@ -6446,7 +6527,10 @@ function buildHomeQueueListHtml(
                 ${isClickable ? `type="button" ${actionAttrs}` : ""}
               >
               <div class="home-queue-copy">
-                <strong>${escapeHomeHtml(row?.title || "-")}</strong>
+                <div class="home-queue-title-row">
+                  <span class="home-queue-row-indicator is-${escapeHomeHtml(visualTone)}" aria-hidden="true"></span>
+                  <strong>${escapeHomeHtml(row?.title || "-")}</strong>
+                </div>
                 ${
                   String(row?.subtitle || "").trim()
                     ? `<span>${escapeHomeHtml(row?.subtitle || "")}</span>`
@@ -6480,7 +6564,11 @@ function buildHomeSurfaceCardHtml({
   view = "",
   metrics = [],
   rows = [],
+  iconKey = "grid",
+  iconTone = "accent",
+  accentLabel = "",
   emptyTitle = "표시할 항목이 없습니다.",
+  emptyMeta = "",
   className = "",
 } = {}) {
   const actionAttrs = buildHomeActionAttrs({ route, view });
@@ -6501,7 +6589,17 @@ function buildHomeSurfaceCardHtml({
       ${isClickable ? `type="button" ${actionAttrs}` : ""}
     >
       <div class="home-surface-card-head">
-        <h3>${escapeHomeHtml(title || "업무")}</h3>
+        <div class="home-surface-card-title-row">
+          ${buildHomeSurfaceIconMarkup(iconKey, iconTone)}
+          <div class="home-surface-card-head-copy">
+            ${
+              String(accentLabel || "").trim()
+                ? `<span class="home-surface-card-kicker">${escapeHomeHtml(accentLabel || "")}</span>`
+                : ""
+            }
+            <h3>${escapeHomeHtml(title || "업무")}</h3>
+          </div>
+        </div>
         ${
           isClickable
             ? '<span class="home-surface-card-chevron" aria-hidden="true">›</span>'
@@ -6514,7 +6612,12 @@ function buildHomeSurfaceCardHtml({
           : ""
       }
       <div class="home-surface-card-body">
-        ${buildHomeQueueListHtml(rows, { emptyTitle })}
+        ${buildHomeQueueListHtml(rows, {
+          emptyTitle,
+          emptyMeta,
+          emptyIconKey: iconKey,
+          emptyTone: iconTone,
+        })}
       </div>
     </${rootTag}>
   `;
@@ -6869,12 +6972,12 @@ function buildHomeListRowsHtml(
 ) {
   const items = Array.isArray(rows) ? rows : [];
   if (!items.length) {
-    return `
-      <div class="home-role-empty">
-        <strong>${escapeHomeHtml(emptyTitle)}</strong>
-        ${String(emptyMeta || "").trim() ? `<span>${escapeHomeHtml(emptyMeta || "")}</span>` : ""}
-      </div>
-    `;
+    return buildHomeEmptyStateMarkup({
+      title: emptyTitle,
+      meta: emptyMeta,
+      iconKey: "list",
+      tone: "slate",
+    });
   }
   return `
     <ul class="home-role-list">
@@ -6901,11 +7004,11 @@ function buildHomeListRowsHtml(
 function buildHomeNoticeRowsHtml(rows = []) {
   const items = Array.isArray(rows) ? rows : [];
   if (!items.length) {
-    return `
-      <div class="home-role-empty">
-        <strong>새 공지가 없습니다.</strong>
-      </div>
-    `;
+    return buildHomeEmptyStateMarkup({
+      title: "새 공지가 없습니다.",
+      iconKey: "megaphone",
+      tone: "slate",
+    });
   }
   return `
     <ul class="home-role-list home-role-list-notice">
@@ -7667,6 +7770,10 @@ function buildHomeHqSurfaceHtml(briefing = null) {
   const attendanceCardHtml = buildHomeSurfaceCardHtml({
     title: "출퇴근",
     route: ROUTE_ATTENDANCE,
+    className: "home-surface-card-attendance",
+    iconKey: "clock",
+    iconTone: "accent",
+    accentLabel: "실시간 근태",
     metrics: [
       {
         label: "출근",
@@ -7686,10 +7793,15 @@ function buildHomeHqSurfaceHtml(briefing = null) {
     ],
     rows: stripHomeRowRoutes(attendanceRows),
     emptyTitle: "오늘 즉시 확인할 출퇴근 예외가 없습니다.",
+    emptyMeta: "새 예외가 생기면 이 카드에서 바로 확인합니다.",
   });
   const scheduleCardHtml = buildHomeSurfaceCardHtml({
     title: "오늘 스케줄",
     route: ROUTE_SCHEDULE_LIST,
+    className: "home-surface-card-schedule",
+    iconKey: "calendar",
+    iconTone: "accent",
+    accentLabel: "운영 큐",
     metrics: [
       {
         label: "운영 지점",
@@ -7703,11 +7815,15 @@ function buildHomeHqSurfaceHtml(briefing = null) {
     ],
     rows: stripHomeRowRoutes(scheduleRows),
     emptyTitle: "오늘 조정이 필요한 스케줄이 없습니다.",
+    emptyMeta: "운영 리스크가 생기면 여기에서 바로 정리합니다.",
   });
   const employeeCardHtml = buildHomeSurfaceCardHtml({
     title: "구성원",
     route: ROUTE_ADMIN_EMPLOYEES,
-    className: "home-surface-card-secondary",
+    className: "home-surface-card-secondary home-surface-card-people",
+    iconKey: "users",
+    iconTone: "slate",
+    accentLabel: "조직 상태",
     metrics: [
       {
         label: "조직 이슈",
@@ -7717,11 +7833,15 @@ function buildHomeHqSurfaceHtml(briefing = null) {
     ],
     rows: stripHomeRowRoutes(employeeRows),
     emptyTitle: "구성원 이슈가 없습니다.",
+    emptyMeta: "조직 상태 변화가 생기면 여기에서 확인합니다.",
   });
   const siteCardHtml = buildHomeSurfaceCardHtml({
     title: "근무지",
     route: ROUTE_ADMIN_SITES,
-    className: "home-surface-card-secondary",
+    className: "home-surface-card-secondary home-surface-card-site",
+    iconKey: "dashboard",
+    iconTone: "slate",
+    accentLabel: "현장 상태",
     metrics: [
       {
         label: "운영 지점",
@@ -7735,6 +7855,7 @@ function buildHomeHqSurfaceHtml(briefing = null) {
     ],
     rows: stripHomeRowRoutes(siteRows),
     emptyTitle: "운영 중인 근무지를 확인하세요.",
+    emptyMeta: "근무지 변화와 배정 이슈를 계속 추적합니다.",
   });
   return `
     <div class="home-role-root home-role-root-hq-v2">
@@ -80458,6 +80579,9 @@ function renderAttendanceCompactEmpty(
   li.className = "content-fade-in";
   li.innerHTML = `
     <div class="attendance-compact-empty">
+      <div class="attendance-compact-empty-icon" aria-hidden="true">
+        ${buildAzureTopbarIconSvg("file")}
+      </div>
       <div class="attendance-compact-empty-title">${title}</div>
       ${description ? `<div class="attendance-compact-empty-description">${description}</div>` : ""}
     </div>
@@ -109896,6 +110020,99 @@ document.addEventListener("compositionend", (event) => {
     });
   }
 
+  function v2IconTone(tone = "neutral") {
+    switch (
+      String(tone || "")
+        .trim()
+        .toLowerCase()
+    ) {
+      case "danger":
+      case "error":
+      case "red":
+        return "red";
+      case "success":
+      case "teal":
+      case "green":
+        return "blue";
+      case "warning":
+      case "warn":
+      case "accent":
+      case "orange":
+      case "amber":
+        return "orange";
+      case "muted":
+      case "slate":
+        return "slate";
+      default:
+        return "muted";
+    }
+  }
+
+  function v2IconKeyForSummaryItem(item = {}) {
+    const filterKey = String(item?.filterKey || "").trim();
+    const label = String(item?.label || "").trim();
+    if (filterKey === "rate" || /출근율/.test(label)) return "activity";
+    if (filterKey === "target" || /출근 대상/.test(label)) return "users";
+    if (filterKey === "complete" || /^출근$/.test(label)) return "check";
+    if (filterKey === "missing" || /미출근/.test(label)) return "clock";
+    if (
+      filterKey === "late" ||
+      filterKey === "early" ||
+      /지각|조퇴/.test(label)
+    )
+      return "clock";
+    if (filterKey === "correction" || /정정/.test(label)) return "edit";
+    if (filterKey === "leave" || /휴가/.test(label)) return "calendar";
+    if (filterKey === "upcoming" || /출근 전/.test(label)) return "history";
+    if (filterKey === "location" || /위치/.test(label)) return "shield";
+    if (filterKey === "edited" || /수정/.test(label)) return "edit";
+    return "grid";
+  }
+
+  function v2IconChipMarkup(
+    iconKey = "grid",
+    tone = "muted",
+    { light = false } = {},
+  ) {
+    return `
+      <span class="attendance-v2-card-icon is-${escapeValue(light ? "light" : v2IconTone(tone))}" aria-hidden="true">
+        ${buildAzureTopbarIconSvg(iconKey || "grid")}
+      </span>
+    `;
+  }
+
+  function v2SectionTitleMarkup(
+    title = "",
+    { iconKey = "grid", tone = "orange" } = {},
+  ) {
+    return `
+      <div class="attendance-v2-section-title-row">
+        ${v2IconChipMarkup(iconKey, tone)}
+        <h3>${escapeValue(title || "")}</h3>
+      </div>
+    `;
+  }
+
+  function v2EmptyMarkup(
+    title = "기록이 없습니다.",
+    description = "",
+    { iconKey = "list", tone = "muted", extraClass = "" } = {},
+  ) {
+    return `
+      <div class="attendance-v2-empty${extraClass ? ` ${escapeValue(extraClass)}` : ""}">
+        <div class="attendance-v2-empty-box">
+          ${v2IconChipMarkup(iconKey, tone)}
+          <strong>${escapeValue(title)}</strong>
+          ${
+            String(description || "").trim()
+              ? `<span>${escapeValue(description)}</span>`
+              : ""
+          }
+        </div>
+      </div>
+    `;
+  }
+
   function v2SummaryMarkup(summary, rows = [], loading = false) {
     const section =
       typeof getAttendanceWorkspaceSection === "function"
@@ -110026,10 +110243,18 @@ document.addEventListener("compositionend", (event) => {
     }
     const renderButtonCard = (item, extraClass = "") => {
       const isActive = attendanceStatusV2FilterKey === item.filterKey;
+      const iconKey = v2IconKeyForSummaryItem(item);
+      const iconTone = item.tone || (item.filterKey ? "accent" : "muted");
+      const labelHtml = `
+        <span class="attendance-v2-card-label-row">
+          ${v2IconChipMarkup(iconKey, iconTone)}
+          <span class="attendance-v2-card-label-text">${escapeValue(item.label)}</span>
+        </span>
+      `;
       if (!item.filterKey) {
         return `
           <article class="attendance-v2-summary-item ${extraClass} is-neutral">
-            <span class="attendance-v2-summary-label">${escapeValue(item.label)}</span>
+            <span class="attendance-v2-summary-label">${labelHtml}</span>
             <strong class="attendance-v2-summary-value">${escapeValue(String(item.value))}</strong>
             ${item.meta ? `<span class="attendance-v2-summary-meta">${escapeValue(item.meta)}</span>` : ""}
           </article>
@@ -110037,7 +110262,7 @@ document.addEventListener("compositionend", (event) => {
       }
       return `
         <button type="button" class="attendance-v2-summary-item ${extraClass} is-${escapeValue(item.tone || "neutral")}${isActive ? " is-active" : ""}" data-filter-key="${escapeValue(item.filterKey)}" aria-pressed="${isActive ? "true" : "false"}">
-          <span class="attendance-v2-summary-label">${escapeValue(item.label)}</span>
+          <span class="attendance-v2-summary-label">${labelHtml}</span>
           <strong class="attendance-v2-summary-value">${escapeValue(String(item.value))}</strong>
           ${item.meta ? `<span class="attendance-v2-summary-meta">${escapeValue(item.meta)}</span>` : ""}
         </button>
@@ -110098,7 +110323,10 @@ document.addEventListener("compositionend", (event) => {
     return `
       <div class="attendance-v2-section-head attendance-v2-section-head-daily">
         <div class="attendance-v2-headline-block">
-          <h3>오늘 출퇴근</h3>
+          ${v2SectionTitleMarkup("오늘 출퇴근", {
+            iconKey: "clock",
+            tone: "orange",
+          })}
           <p class="attendance-v2-section-copy">예외와 전체 기록을 같은 화면에서 바로 정리합니다.</p>
         </div>
         <div class="attendance-v2-head-meta">
@@ -110126,7 +110354,10 @@ document.addEventListener("compositionend", (event) => {
     if (loading) {
       return `
         <div class="attendance-v2-section-head">
-          <h3>${escapeValue(title)}</h3>
+          ${v2SectionTitleMarkup(title, {
+            iconKey: "list",
+            tone: "orange",
+          })}
           <span class="attendance-v2-count-chip">불러오는 중</span>
         </div>
         <div class="attendance-v2-loading-stack" aria-hidden="true">
@@ -110144,7 +110375,13 @@ document.addEventListener("compositionend", (event) => {
     }
     return `
       <div class="attendance-v2-section-head attendance-v2-section-head-queue">
-        <h3>${escapeValue(title)}</h3>
+        ${v2SectionTitleMarkup(title, {
+          iconKey:
+            filterKey !== "all"
+              ? v2IconKeyForSummaryItem({ filterKey })
+              : "list",
+          tone: filterKey !== "all" ? "orange" : "slate",
+        })}
         <div class="attendance-v2-head-meta">
           ${filterKey !== "all" ? `<button type="button" class="attendance-v2-clear-filter" data-clear-filter="true">${escapeValue(v2FilterLabel(filterKey))} 해제</button>` : ""}
           <span class="attendance-v2-inline-meta">총 ${queueRows.length}건</span>
@@ -110187,7 +110424,21 @@ document.addEventListener("compositionend", (event) => {
           </div>
         </div>
       `
-          : `<div class="attendance-v2-empty">${escapeValue(previewMode ? `${v2FilterLabel(filterKey)} 기록이 없습니다.` : "우선 확인할 예외가 없습니다.")}</div>`
+          : v2EmptyMarkup(
+              previewMode
+                ? `${v2FilterLabel(filterKey)} 기록이 없습니다.`
+                : "우선 확인할 예외가 없습니다.",
+              previewMode
+                ? "선택한 상태에서 바로 확인할 항목이 없습니다."
+                : "새 예외가 생기면 이 영역에서 바로 확인합니다.",
+              {
+                iconKey:
+                  filterKey !== "all"
+                    ? v2IconKeyForSummaryItem({ filterKey })
+                    : "shield",
+                tone: filterKey !== "all" ? "orange" : "slate",
+              },
+            )
       }
     `;
   }
@@ -110200,7 +110451,13 @@ document.addEventListener("compositionend", (event) => {
     if (loading) {
       return `
         <div class="attendance-v2-section-head">
-          <h3>${section === "period" ? "기간별 출퇴근" : "직원별 출퇴근 기록"}</h3>
+          ${v2SectionTitleMarkup(
+            section === "period" ? "기간별 출퇴근" : "직원별 출퇴근 기록",
+            {
+              iconKey: section === "period" ? "calendar" : "users",
+              tone: section === "period" ? "slate" : "orange",
+            },
+          )}
           <span class="attendance-v2-inline-meta">불러오는 중</span>
         </div>
         <div class="attendance-v2-table-wrap is-loading" aria-hidden="true">
@@ -110239,7 +110496,13 @@ document.addEventListener("compositionend", (event) => {
     }
     return `
       <div class="attendance-v2-section-head${section === "period" ? " attendance-v2-section-head-period" : ""}">
-        <h3>${section === "period" ? "기간별 출퇴근" : "직원별 출퇴근 기록"}</h3>
+        ${v2SectionTitleMarkup(
+          section === "period" ? "기간별 출퇴근" : "직원별 출퇴근 기록",
+          {
+            iconKey: section === "period" ? "calendar" : "users",
+            tone: section === "period" ? "slate" : "orange",
+          },
+        )}
         ${
           section === "period"
             ? ""
@@ -110304,7 +110567,19 @@ document.addEventListener("compositionend", (event) => {
                     .join("")
                 : `
               <tr class="attendance-v2-empty-row${section === "period" ? " is-period" : ""}">
-                <td colspan="9" class="attendance-v2-empty-cell">기록이 없습니다.</td>
+                <td colspan="9" class="attendance-v2-empty-cell">
+                  ${v2EmptyMarkup(
+                    "기록이 없습니다.",
+                    section === "period"
+                      ? "선택한 기간에 맞는 출퇴근 기록이 없습니다."
+                      : "현재 조건에서 표시할 직원 기록이 없습니다.",
+                    {
+                      iconKey: section === "period" ? "calendar" : "list",
+                      tone: "slate",
+                      extraClass: "is-table",
+                    },
+                  )}
+                </td>
               </tr>
             `
             }
@@ -110348,9 +110623,20 @@ document.addEventListener("compositionend", (event) => {
       return `
         <div class="attendance-v2-inspector-shell">
           <div class="attendance-v2-section-head">
-            <h3>선택 상세</h3>
+            ${v2SectionTitleMarkup("선택 상세", {
+              iconKey: "file",
+              tone: "slate",
+            })}
           </div>
-          <div class="attendance-v2-empty is-inspector">현재 선택된 기록이 없습니다.</div>
+          ${v2EmptyMarkup(
+            "현재 선택된 기록이 없습니다.",
+            "예외 또는 기록 행을 선택하면 상세 판단을 바로 확인할 수 있습니다.",
+            {
+              iconKey: "file",
+              tone: "slate",
+              extraClass: "is-inspector",
+            },
+          )}
         </div>
       `;
     }
@@ -110360,7 +110646,10 @@ document.addEventListener("compositionend", (event) => {
       <div class="attendance-v2-inspector-shell">
         <div class="attendance-v2-section-head">
           <div class="attendance-v2-inspector-headline">
-            <h3>${escapeValue(v2Name(row))}</h3>
+            ${v2SectionTitleMarkup(v2Name(row), {
+              iconKey: "users",
+              tone: "slate",
+            })}
             <span class="attendance-v2-inline-meta">${escapeValue(v2Site(row))} · ${escapeValue(v2Date(row))}</span>
           </div>
           ${v2StatusInlineMarkup(statusKey, v2StatusLabel(row))}
