@@ -16429,6 +16429,32 @@ textarea::placeholder {
   align-items: start;
 }
 
+#view-profile .profile-google-links-layout.is-empty-library {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+#view-profile
+  .profile-google-links-layout.is-empty-library
+  .profile-google-links-library {
+  order: -1;
+}
+
+#view-profile
+  .profile-google-links-layout.is-empty-library
+  .profile-google-profile-list {
+  max-height: none;
+  overflow: visible;
+}
+
+#view-profile
+  .profile-google-links-layout.is-empty-library
+  .profile-google-profile-list
+  .requests-inline-empty {
+  padding: 10px 12px;
+  border-style: dashed;
+}
+
 #view-profile .profile-google-links-library,
 #view-profile .profile-google-links-editor,
 #view-profile .profile-google-sync-shell {

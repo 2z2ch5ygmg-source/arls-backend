@@ -48594,6 +48594,13 @@ function normalizeProfileSettingsTab(value = "") {
   return "links";
 }
 
+function hasGoogleSheetProfiles() {
+  return (
+    Array.isArray(state.integration?.profiles) &&
+    state.integration.profiles.length > 0
+  );
+}
+
 function normalizeProfileWorkspaceSegment(value = "") {
   const segment = String(value || "")
     .trim()
@@ -48607,7 +48614,11 @@ function renderProfileGoogleSettingsWorkspace() {
   if (!state.profile || typeof state.profile !== "object") {
     state.profile = createInitialProfileViewState();
   }
-  const tab = normalizeProfileSettingsTab(state.profile.settingsTab || "links");
+  const hasProfiles = hasGoogleSheetProfiles();
+  let tab = normalizeProfileSettingsTab(state.profile.settingsTab || "links");
+  if (!hasProfiles && tab === "sync") {
+    tab = "links";
+  }
   state.profile.settingsTab = tab;
 
   const wrapper = $("#googleSheetWorkspaceTabs");
@@ -48618,12 +48629,21 @@ function renderProfileGoogleSettingsWorkspace() {
         const buttonTab = normalizeProfileSettingsTab(
           button?.dataset?.tab || "links",
         );
+        const shouldHide = buttonTab === "sync" && !hasProfiles;
+        button.classList.toggle("hidden", shouldHide);
         button.classList.toggle("active", buttonTab === tab);
         button.setAttribute(
           "aria-pressed",
           buttonTab === tab ? "true" : "false",
         );
       });
+  }
+
+  const linksLayout = document.querySelector(
+    "#googleSheetLinksPanel .profile-google-links-layout",
+  );
+  if (linksLayout instanceof HTMLElement) {
+    linksLayout.classList.toggle("is-empty-library", !hasProfiles);
   }
 
   toggleVisibility("#googleSheetLinksPanel", tab === "links");
