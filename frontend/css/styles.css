@@ -49594,6 +49594,64 @@ html[data-ui-theme="light"]
   display: none;
 }
 
+#view-profile #profilePasswordCard,
+#view-profile #profileSignatureCard {
+  gap: 12px;
+}
+
+#view-profile #profilePasswordCard .profile-control-title > .muted,
+#view-profile #profileSignatureCard .profile-control-title > .muted {
+  display: none;
+}
+
+#view-profile #profilePasswordCard .profile-control-head,
+#view-profile #profileSignatureCard .profile-control-head {
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-profile #profilePasswordCard .profile-password-form {
+  gap: 10px;
+}
+
+#view-profile #profilePasswordCard .settings-inline-grid {
+  gap: 10px 12px;
+}
+
+#view-profile #profileSignatureCard .profile-signature-mode-toggle {
+  gap: 6px;
+}
+
+#view-profile #profileSignatureCard .profile-signature-workspace {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+  gap: 12px;
+}
+
+#view-profile #profileSignatureCard .profile-signature-panel,
+#view-profile #profileSignatureCard .profile-signature-preview-panel {
+  gap: 10px;
+}
+
+#view-profile #profileSignatureCard .profile-signature-panel canvas {
+  height: 148px;
+  min-height: 148px;
+}
+
+#view-profile #profileSignatureCard .profile-signature-preview-frame {
+  min-height: 132px;
+  padding: 12px;
+}
+
+#view-profile #profileSignatureCard .inline-actions {
+  gap: 8px;
+}
+
+#view-profile #profileSignatureCard .settings-section-footer {
+  padding-top: 8px;
+}
+
 #view-profile #mailHubCard .profile-mail-layout {
   gap: 12px;
 }
@@ -49725,6 +49783,10 @@ html[data-ui-theme="light"]
 }
 
 @media (max-width: 1023px) {
+  #view-profile #profileSignatureCard .profile-signature-workspace {
+    grid-template-columns: 1fr;
+  }
+
   #view-profile .profile-settings-section-tabs {
     flex-wrap: wrap;
   }
