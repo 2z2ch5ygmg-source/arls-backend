@@ -48161,6 +48161,11 @@ html[data-ui-theme="dark"] .attendance-stats-chart-wrap {
   align-items: start;
 }
 
+#view-home .home-dashboard-stack-v2 {
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+
 #view-home .home-ops-shell-v2-staff {
   grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
 }
@@ -48234,6 +48239,14 @@ html[data-ui-theme="dark"] .attendance-stats-chart-wrap {
   gap: 12px;
 }
 
+#view-home .home-surface-card-chevron {
+  flex: 0 0 auto;
+  color: var(--ui-text-secondary);
+  font-size: 22px;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
 #view-home .home-surface-card-head h3 {
   margin: 0;
   font-size: 18px;
@@ -48241,6 +48254,10 @@ html[data-ui-theme="dark"] .attendance-stats-chart-wrap {
 }
 
 #view-home .home-surface-card-body {
+  min-width: 0;
+}
+
+#view-home .home-dashboard-stack-v2 .home-surface-card {
   min-width: 0;
 }
 
@@ -48323,6 +48340,10 @@ html[data-ui-theme="dark"] .attendance-stats-chart-wrap {
 #view-home .home-role-root-staff-v2 .home-metric-tiles,
 #view-home .home-role-root-officer-v2 .home-metric-tiles {
   gap: 8px;
+}
+
+#view-home .home-role-root-hq-v2 .home-metric-tiles {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 #view-home .home-role-root-hq-v2 .home-metric-tile,
@@ -49688,6 +49709,110 @@ html[data-ui-theme="light"]
 
 #view-profile #groupwareOpsCard .profile-groupware-rollout-form {
   gap: 10px 12px;
+}
+
+#view-attendance #attendanceManagerShell {
+  gap: 0;
+  padding: 20px 22px 24px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 24px;
+  background: var(--ui-bg-surface);
+  box-shadow: none;
+}
+
+#view-attendance #attendanceShellTopCard {
+  gap: 14px;
+  padding: 0 0 18px;
+  border: 0;
+  border-bottom: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-attendance #attendanceOpsToolbar {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+#view-attendance #attendanceManagerWorkspace {
+  margin-top: 18px;
+}
+
+#view-attendance #attendanceStatusPanel,
+#view-attendance #attendanceListPanel,
+#view-attendance #attendanceCalendarPanel,
+#view-attendance #attendanceStatsPanel,
+#view-attendance #attendanceAdminDetailPanel,
+#view-attendance #attendanceManagerKpiRack,
+#view-attendance #attendanceExceptionQueueCard,
+#view-attendance #attendanceStatusRecordCard,
+#view-attendance #attendanceManagerTableCard {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-attendance #attendanceManagerKpiRack {
+  padding: 0 0 18px !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+}
+
+#view-attendance .attendance-status-main-grid {
+  gap: 22px;
+}
+
+#view-attendance #attendanceExceptionQueueCard,
+#view-attendance #attendanceStatusRecordCard,
+#view-attendance #attendanceManagerTableCard,
+#view-attendance #attendanceAdminDetailPanel {
+  padding: 0 !important;
+}
+
+#view-attendance #attendanceExceptionQueueCard,
+#view-attendance #attendanceStatusRecordCard,
+#view-attendance #attendanceManagerTableCard {
+  padding-top: 18px !important;
+  border-top: 1px solid var(--ui-border-subtle) !important;
+}
+
+#view-attendance #attendanceAdminDetailPanel {
+  padding-left: 22px !important;
+  border-left: 1px solid var(--ui-border-subtle) !important;
+}
+
+#view-attendance #attendanceStatusPanel .approval-head,
+#view-attendance #attendanceListPanel .attendance-grid-head,
+#view-attendance
+  #attendanceAdminDetailPanel
+  .attendance-admin-detail-panel-head {
+  padding-bottom: 2px;
+}
+
+#view-attendance .attendance-workspace-table-wrap {
+  border-radius: 16px;
+}
+
+#view-attendance .attendance-detail-empty,
+#view-attendance .attendance-compact-empty {
+  min-height: 0;
+  padding: 14px 16px;
+}
+
+@media (max-width: 1279px) {
+  #view-attendance #attendanceManagerShell {
+    padding: 18px 18px 20px;
+  }
+
+  #view-attendance #attendanceAdminDetailPanel {
+    padding-left: 0 !important;
+    border-left: 0 !important;
+    border-top: 1px solid var(--ui-border-subtle) !important;
+    padding-top: 18px !important;
+  }
 }
 
 #view-notices .notices-list-rows.is-empty {

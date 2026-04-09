@@ -6502,6 +6502,11 @@ function buildHomeSurfaceCardHtml({
     >
       <div class="home-surface-card-head">
         <h3>${escapeHomeHtml(title || "업무")}</h3>
+        ${
+          isClickable
+            ? '<span class="home-surface-card-chevron" aria-hidden="true">›</span>'
+            : ""
+        }
       </div>
       ${
         metricRows.length
@@ -7635,34 +7640,55 @@ function buildHomeHqSurfaceHtml(briefing = null) {
   const requestPendingCount = Number(
     requestSummary?.total_pending_count || ops?.pending_approval_count || 0,
   );
-  const queueRows = buildHomeHqQueueRows(briefing);
-  const noticeRows = Array.isArray(briefing?.notice_rows)
-    ? briefing.notice_rows.slice(0, 3).map((row) => ({
-        title: row?.title || "공지",
-        subtitle:
-          formatHomeBriefingDate(row?.published_at || row?.created_at || "") ||
-          "최신 공지",
-        route: ROUTE_FEATURE_NOTICES,
-      }))
-    : [];
-  const orgRows = buildHomeQueueSummaryRows(briefing?.org_issue_rows || []);
-  const requestCardHtml = buildHomeSurfaceCardHtml({
-    title: "요청·승인",
-    route: `${ROUTE_REQUESTS}?section=${encodeURIComponent(
-      REQUESTS_MANAGER_TAB_PENDING,
-    )}`,
+  const attendanceRows = buildHomeQueueSummaryRows(
+    Array.isArray(briefing?.attendance_issue_rows)
+      ? briefing.attendance_issue_rows.slice(0, 4)
+      : [],
+    ROUTE_ATTENDANCE,
+  );
+  const scheduleRows = buildHomeQueueSummaryRows(
+    Array.isArray(briefing?.schedule_risk_rows)
+      ? briefing.schedule_risk_rows.slice(0, 4)
+      : [],
+    ROUTE_SCHEDULE_LIST,
+  );
+  const employeeRows = buildHomeQueueSummaryRows(
+    Array.isArray(briefing?.org_issue_rows)
+      ? briefing.org_issue_rows.slice(0, 4)
+      : [],
+    ROUTE_ADMIN_EMPLOYEES,
+  );
+  const siteRows = buildHomeQueueSummaryRows(
+    Array.isArray(briefing?.schedule_risk_rows)
+      ? briefing.schedule_risk_rows.slice(0, 2)
+      : [],
+    ROUTE_ADMIN_SITES,
+  );
+  const attendanceCardHtml = buildHomeSurfaceCardHtml({
+    title: "출퇴근",
+    route: ROUTE_ATTENDANCE,
     metrics: [
+      {
+        label: "출근",
+        value: `${Number(ops?.present_count || 0)} / ${Number(ops?.scheduled_count || 0)}`,
+        tone: "teal",
+      },
+      {
+        label: "미출근",
+        value: `${Number(ops?.missing_count || 0)}건`,
+        tone: Number(ops?.missing_count || 0) > 0 ? "warn" : "neutral",
+      },
       {
         label: "승인 대기",
         value: `${requestPendingCount}건`,
         tone: requestPendingCount > 0 ? "warn" : "neutral",
       },
     ],
-    rows: stripHomeRowRoutes(buildHomeRequestQueueRows(briefing)),
-    emptyTitle: "요청과 알림이 없습니다.",
+    rows: stripHomeRowRoutes(attendanceRows),
+    emptyTitle: "오늘 즉시 확인할 출퇴근 예외가 없습니다.",
   });
   const scheduleCardHtml = buildHomeSurfaceCardHtml({
-    title: "스케줄 리스크",
+    title: "오늘 스케줄",
     route: ROUTE_SCHEDULE_LIST,
     metrics: [
       {
@@ -7675,72 +7701,46 @@ function buildHomeHqSurfaceHtml(briefing = null) {
         tone: Number(ops?.vacancy_site_count || 0) > 0 ? "warn" : "neutral",
       },
     ],
-    rows: stripHomeRowRoutes(
-      buildHomeQueueSummaryRows(
-        briefing?.schedule_risk_rows || [],
-        ROUTE_SCHEDULE_LIST,
-      ).slice(0, 4),
-    ),
-    emptyTitle: "스케줄 리스크가 없습니다.",
+    rows: stripHomeRowRoutes(scheduleRows),
+    emptyTitle: "오늘 조정이 필요한 스케줄이 없습니다.",
   });
-  const noticeOrgCardHtml = buildHomeSurfaceCardHtml({
-    title: "공지·조직",
-    route: noticeRows.length ? ROUTE_FEATURE_NOTICES : ROUTE_ADMIN_EMPLOYEES,
-    rows: stripHomeRowRoutes([...noticeRows, ...orgRows].slice(0, 4)),
-    emptyTitle: "새 공지와 조직 이슈가 없습니다.",
+  const employeeCardHtml = buildHomeSurfaceCardHtml({
+    title: "구성원",
+    route: ROUTE_ADMIN_EMPLOYEES,
+    metrics: [
+      {
+        label: "조직 이슈",
+        value: `${employeeRows.length}건`,
+        tone: employeeRows.length > 0 ? "warn" : "neutral",
+      },
+    ],
+    rows: stripHomeRowRoutes(employeeRows),
+    emptyTitle: "구성원 이슈가 없습니다.",
   });
-  const lowDataMode =
-    !queueRows.length &&
-    requestPendingCount === 0 &&
-    Number(ops?.missing_count || 0) === 0 &&
-    Number(ops?.vacancy_site_count || 0) === 0;
+  const siteCardHtml = buildHomeSurfaceCardHtml({
+    title: "근무지",
+    route: ROUTE_ADMIN_SITES,
+    metrics: [
+      {
+        label: "운영 지점",
+        value: `${Number(ops?.site_count || 0)}곳`,
+      },
+      {
+        label: "결원 지점",
+        value: `${Number(ops?.vacancy_site_count || 0)}곳`,
+        tone: Number(ops?.vacancy_site_count || 0) > 0 ? "warn" : "neutral",
+      },
+    ],
+    rows: stripHomeRowRoutes(siteRows),
+    emptyTitle: "운영 중인 근무지를 확인하세요.",
+  });
   return `
     <div class="home-role-root home-role-root-hq-v2">
-      ${buildHomeContextStripHtml(buildHomeContextItems(briefing, "hq"))}
-      <div class="home-ops-shell-v2${lowDataMode ? " is-low-data" : ""}">
-        ${buildHomeSurfaceCardHtml({
-          title: "운영 인박스",
-          className: "home-surface-card-primary",
-          metrics: [
-            {
-              label: "출근",
-              value: `${Number(ops?.present_count || 0)} / ${Number(ops?.scheduled_count || 0)}`,
-              tone: "teal",
-            },
-            {
-              label: "즉시 확인",
-              value: `${Number(ops?.missing_count || 0) + Number(ops?.vacancy_site_count || 0)}건`,
-              meta:
-                Number(ops?.missing_count || 0) +
-                  Number(ops?.vacancy_site_count || 0) >
-                0
-                  ? "미출근·결원"
-                  : "",
-              tone:
-                Number(ops?.missing_count || 0) +
-                  Number(ops?.vacancy_site_count || 0) >
-                0
-                  ? "warn"
-                  : "neutral",
-            },
-            {
-              label: "승인 대기",
-              value: `${requestPendingCount}건`,
-              tone: requestPendingCount > 0 ? "warn" : "neutral",
-            },
-          ],
-          rows: queueRows,
-          emptyTitle: "오늘 즉시 처리할 운영 이슈가 없습니다.",
-        })}
-        ${
-          lowDataMode
-            ? `${requestCardHtml}${scheduleCardHtml}${noticeOrgCardHtml}`
-            : `<div class="home-rail-stack">
-          ${requestCardHtml}
-          ${scheduleCardHtml}
-          ${noticeOrgCardHtml}
-        </div>`
-        }
+      <div class="home-ops-shell-v2 home-dashboard-stack-v2">
+        ${attendanceCardHtml}
+        ${scheduleCardHtml}
+        ${employeeCardHtml}
+        ${siteCardHtml}
       </div>
     </div>
   `;
