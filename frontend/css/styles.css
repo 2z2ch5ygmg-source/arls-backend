@@ -49783,12 +49783,19 @@ html[data-ui-theme="light"]
 }
 
 #view-home .home-surface-card-attendance .home-metric-tile:first-child {
-  border-color: rgba(255, 122, 26, 0.2);
+  border-color: rgba(255, 122, 26, 0.88);
   background: linear-gradient(
     180deg,
-    rgba(255, 248, 242, 0.98),
-    rgba(255, 247, 237, 0.98)
+    rgba(255, 122, 26, 0.96),
+    rgba(255, 148, 72, 0.94)
   );
+  box-shadow: none;
+}
+
+#view-home .home-surface-card-attendance .home-metric-tile:first-child span,
+#view-home .home-surface-card-attendance .home-metric-tile:first-child strong,
+#view-home .home-surface-card-attendance .home-metric-tile:first-child small {
+  color: #fff;
 }
 
 #view-attendance #attendanceWorkspaceTabs .workspace-tab:hover,
@@ -49912,6 +49919,46 @@ html[data-ui-theme="light"]
 #view-attendance .attendance-v2-summary-item.is-accent,
 #view-attendance .attendance-v2-summary-item.is-neutral {
   box-shadow: inset 0 3px 0 rgba(255, 122, 26, 0.22);
+}
+
+#view-attendance
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item:first-child {
+  border-color: rgba(255, 122, 26, 0.88);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 122, 26, 0.96),
+    rgba(255, 148, 72, 0.94)
+  );
+  box-shadow: none;
+}
+
+#view-attendance
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item:first-child
+  .attendance-v2-summary-label,
+#view-attendance
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item:first-child
+  .attendance-v2-card-label-text,
+#view-attendance
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item:first-child
+  .attendance-v2-summary-value,
+#view-attendance
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item:first-child
+  .attendance-v2-summary-meta {
+  color: #fff;
+}
+
+#view-attendance
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item:first-child
+  .attendance-v2-card-icon {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #fff;
 }
 
 #view-attendance .attendance-v2-summary-item.is-active,
