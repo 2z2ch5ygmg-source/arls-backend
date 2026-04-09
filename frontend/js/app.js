@@ -7707,6 +7707,7 @@ function buildHomeHqSurfaceHtml(briefing = null) {
   const employeeCardHtml = buildHomeSurfaceCardHtml({
     title: "구성원",
     route: ROUTE_ADMIN_EMPLOYEES,
+    className: "home-surface-card-secondary",
     metrics: [
       {
         label: "조직 이슈",
@@ -7720,6 +7721,7 @@ function buildHomeHqSurfaceHtml(briefing = null) {
   const siteCardHtml = buildHomeSurfaceCardHtml({
     title: "근무지",
     route: ROUTE_ADMIN_SITES,
+    className: "home-surface-card-secondary",
     metrics: [
       {
         label: "운영 지점",
@@ -7740,14 +7742,8 @@ function buildHomeHqSurfaceHtml(briefing = null) {
         ${attendanceCardHtml}
         ${scheduleCardHtml}
         <div class="home-secondary-link-grid">
-          ${employeeCardHtml.replace(
-            "home-surface-card",
-            "home-surface-card home-surface-card-secondary",
-          )}
-          ${siteCardHtml.replace(
-            "home-surface-card",
-            "home-surface-card home-surface-card-secondary",
-          )}
+          ${employeeCardHtml}
+          ${siteCardHtml}
         </div>
       </div>
     </div>
