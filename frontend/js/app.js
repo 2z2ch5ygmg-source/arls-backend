@@ -7739,8 +7739,16 @@ function buildHomeHqSurfaceHtml(briefing = null) {
       <div class="home-ops-shell-v2 home-dashboard-stack-v2">
         ${attendanceCardHtml}
         ${scheduleCardHtml}
-        ${employeeCardHtml}
-        ${siteCardHtml}
+        <div class="home-secondary-link-grid">
+          ${employeeCardHtml.replace(
+            "home-surface-card",
+            "home-surface-card home-surface-card-secondary",
+          )}
+          ${siteCardHtml.replace(
+            "home-surface-card",
+            "home-surface-card home-surface-card-secondary",
+          )}
+        </div>
       </div>
     </div>
   `;
@@ -110678,8 +110686,6 @@ document.addEventListener("compositionend", (event) => {
       const listPanel = document.getElementById("attendanceListPanel");
       const detailPanel = document.getElementById("attendanceAdminDetailPanel");
       const queueCard = document.getElementById("attendanceExceptionQueueCard");
-      const isWideDesktop =
-        typeof window !== "undefined" ? window.innerWidth > 1280 : true;
       if (
         shell.workspace instanceof HTMLElement &&
         ["status", "list"].includes(tab)
@@ -110687,12 +110693,10 @@ document.addEventListener("compositionend", (event) => {
         shell.workspace.style.setProperty("display", "grid", "important");
         shell.workspace.style.setProperty(
           "grid-template-columns",
-          isWideDesktop
-            ? "minmax(0, 1fr) minmax(320px, 360px)"
-            : "minmax(0, 1fr)",
+          "minmax(0, 1fr)",
           "important",
         );
-        shell.workspace.style.setProperty("gap", "18px", "important");
+        shell.workspace.style.setProperty("gap", "20px", "important");
         shell.workspace.style.setProperty("align-items", "start", "important");
       }
       if (statusPanel instanceof HTMLElement && tab === "status") {
@@ -110715,28 +110719,12 @@ document.addEventListener("compositionend", (event) => {
         detailPanel instanceof HTMLElement &&
         ["status", "list"].includes(tab)
       ) {
-        detailPanel.style.setProperty(
-          "grid-column",
-          isWideDesktop ? "2" : "1",
-          "important",
-        );
-        detailPanel.style.setProperty(
-          "grid-row",
-          isWideDesktop ? "1 / span 2" : "auto",
-          "important",
-        );
-        detailPanel.style.setProperty(
-          "position",
-          isWideDesktop ? "sticky" : "static",
-          "important",
-        );
-        detailPanel.style.setProperty(
-          "top",
-          isWideDesktop ? "108px" : "auto",
-          "important",
-        );
+        detailPanel.style.setProperty("grid-column", "1", "important");
+        detailPanel.style.setProperty("grid-row", "auto", "important");
+        detailPanel.style.setProperty("position", "static", "important");
+        detailPanel.style.setProperty("top", "auto", "important");
         detailPanel.style.setProperty("align-self", "start", "important");
-        detailPanel.style.setProperty("padding", "18px 20px", "important");
+        detailPanel.style.setProperty("padding", "0", "important");
       }
       if (queueCard instanceof HTMLElement) {
         queueCard.style.setProperty(
@@ -110760,11 +110748,7 @@ document.addEventListener("compositionend", (event) => {
         );
         shell.workspace.style.setProperty(
           "grid-template-columns",
-          !loading && !selectedRow
-            ? "minmax(0, 1fr)"
-            : isWideDesktop
-              ? "minmax(0, 1fr) minmax(320px, 360px)"
-              : "minmax(0, 1fr)",
+          "minmax(0, 1fr)",
           "important",
         );
       }

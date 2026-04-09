@@ -48261,6 +48261,21 @@ html[data-ui-theme="dark"] .attendance-stats-chart-wrap {
   min-width: 0;
 }
 
+#view-home .home-secondary-link-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+#view-home .home-surface-card-secondary {
+  padding: 14px 16px;
+  gap: 10px;
+}
+
+#view-home .home-surface-card-secondary .home-metric-tiles {
+  grid-template-columns: 1fr;
+}
+
 #view-home .home-queue-list {
   list-style: none;
   margin: 0;
@@ -48530,6 +48545,10 @@ html[data-ui-theme="dark"] .attendance-stats-chart-wrap {
 @media (max-width: 1280px) {
   #view-home .home-ops-shell-v2,
   #view-home .home-personal-shell-v2 {
+    grid-template-columns: 1fr;
+  }
+
+  #view-home .home-secondary-link-grid {
     grid-template-columns: 1fr;
   }
 
@@ -49739,6 +49758,8 @@ html[data-ui-theme="light"]
 
 #view-attendance #attendanceManagerWorkspace {
   margin-top: 18px;
+  grid-template-columns: 1fr !important;
+  gap: 20px !important;
 }
 
 #view-attendance #attendanceStatusPanel,
@@ -49780,8 +49801,12 @@ html[data-ui-theme="light"]
 }
 
 #view-attendance #attendanceAdminDetailPanel {
-  padding-left: 22px !important;
-  border-left: 1px solid var(--ui-border-subtle) !important;
+  padding-left: 0 !important;
+  padding-top: 18px !important;
+  border-left: 0 !important;
+  border-top: 1px solid var(--ui-border-subtle) !important;
+  position: static !important;
+  top: auto !important;
 }
 
 #view-attendance #attendanceStatusPanel .approval-head,
@@ -49809,9 +49834,6 @@ html[data-ui-theme="light"]
 
   #view-attendance #attendanceAdminDetailPanel {
     padding-left: 0 !important;
-    border-left: 0 !important;
-    border-top: 1px solid var(--ui-border-subtle) !important;
-    padding-top: 18px !important;
   }
 }
 
@@ -52999,8 +53021,8 @@ body[data-current-view="attendance"]
 #attendanceManagerWorkspace.is-attendance-v2-status,
 #attendanceManagerWorkspace.is-attendance-v2-list {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 360px) !important;
-  gap: 18px !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 20px !important;
   align-items: start;
 }
 
@@ -53018,34 +53040,17 @@ body[data-current-view="attendance"]
 
 #attendanceManagerWorkspace.is-attendance-v2-status #attendanceAdminDetailPanel,
 #attendanceManagerWorkspace.is-attendance-v2-list #attendanceAdminDetailPanel {
-  grid-column: 2 !important;
-  grid-row: 1 / span 2 !important;
-  position: sticky !important;
-  top: 108px;
+  grid-column: 1 !important;
+  grid-row: auto !important;
+  position: static !important;
+  top: auto;
   align-self: start;
-  padding: 18px 20px !important;
+  padding: 0 !important;
 }
 
 #attendanceManagerWorkspace.is-attendance-v2-status
   #attendanceExceptionQueueCard {
   display: grid !important;
-}
-
-@media (max-width: 1280px) {
-  #attendanceManagerWorkspace.is-attendance-v2-status,
-  #attendanceManagerWorkspace.is-attendance-v2-list {
-    grid-template-columns: 1fr !important;
-  }
-
-  #attendanceManagerWorkspace.is-attendance-v2-status
-    #attendanceAdminDetailPanel,
-  #attendanceManagerWorkspace.is-attendance-v2-list
-    #attendanceAdminDetailPanel {
-    grid-column: 1 !important;
-    grid-row: auto !important;
-    position: static !important;
-    top: auto;
-  }
 }
 
 /* 2026-04-09 final schedule-family ownership override */
