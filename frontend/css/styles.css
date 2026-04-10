@@ -49812,6 +49812,72 @@ html[data-ui-theme="light"]
   background: transparent;
 }
 
+/* 2026-04-10 ralph Phase B flattening follow-up */
+.attendance-picker-modal-body {
+  gap: 12px;
+  min-height: 340px;
+}
+
+.attendance-picker-modal-nav {
+  padding-right: 10px;
+}
+
+.attendance-picker-modal-nav-item {
+  padding: 8px 0;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.92) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.attendance-picker-modal-nav-item:last-child {
+  border-bottom: 0 !important;
+}
+
+.attendance-picker-modal-panel {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  overflow: visible !important;
+}
+
+.attendance-picker-modal-panel-head {
+  padding: 10px 0 10px 12px;
+  background: transparent !important;
+}
+
+.attendance-picker-modal-panel-body {
+  padding: 6px 0 0 12px;
+  gap: 0;
+}
+
+.attendance-picker-option-stack {
+  gap: 0 !important;
+}
+
+.attendance-picker-option {
+  padding: 10px 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.92) !important;
+  border-radius: 0 !important;
+}
+
+.attendance-picker-option:last-child {
+  border-bottom: 0 !important;
+}
+
+.attendance-picker-option.is-selected {
+  background: rgba(59, 130, 246, 0.05) !important;
+  box-shadow: none !important;
+}
+
+.attendance-picker-empty {
+  min-height: 120px;
+  padding: 0 12px;
+  border: 0 !important;
+  background: transparent !important;
+}
+
 /* 2026-04-10 control grammar follow-up terminal overrides */
 #view-attendance #attendanceStatsPanel .attendance-stats-topline {
   display: grid !important;
