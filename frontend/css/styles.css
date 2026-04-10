@@ -52601,31 +52601,6 @@ body[data-current-view="attendance"]
   padding-right: 2px;
 }
 
-/* 2026-04-10 control grammar follow-up final repairs */
-#view-attendance #attendanceStatsPanel .attendance-stats-topline {
-  display: grid !important;
-}
-
-#view-attendance #attendanceStatsPanel .attendance-stats-topline-card {
-  display: grid !important;
-  align-content: center;
-  gap: 2px;
-}
-
-#view-attendance #attendanceStatsPanel .attendance-stats-side-card-summary {
-  display: block !important;
-}
-
-#view-attendance #attendanceStatsPanel .attendance-stats-chart-wrap {
-  min-height: 320px !important;
-  display: grid;
-}
-
-#view-attendance #attendanceStatsPanel .attendance-stats-chart-wrap svg {
-  width: 100% !important;
-  height: 100% !important;
-}
-
 #view-attendance .attendance-stats-table-wrap-wide {
   max-height: 360px;
   overflow: auto;
