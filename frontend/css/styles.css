@@ -17900,7 +17900,7 @@ textarea::placeholder {
 }
 
 #view-leave .leave-workspace-shell .empty-state {
-  min-height: 88px;
+  min-height: 64px;
   padding: 12px 14px;
   background: var(--bg-surface-muted);
   border: 1px solid var(--ui-border-subtle);
@@ -44963,11 +44963,13 @@ body.calendar-public-shell #view-calendar-public {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  flex: 0 0 auto;
+  flex: 0 0 260px;
 }
 
 #view-leave .leave-workspace-primary-cta {
-  min-width: 110px;
+  width: 100%;
+  min-width: 220px;
+  min-height: 44px;
   border-radius: 12px;
 }
 
@@ -53198,6 +53200,10 @@ body[data-current-view="attendance"]
 #view-leave #leaveUsageGridCard,
 #view-leave #leavePolicySection {
   padding: 18px 20px;
+}
+
+#view-leave #leaveUsageGridCard.is-empty-state {
+  min-height: 320px;
 }
 
 #view-requests[data-requests-segment="documents"] #requestsFilterBar,

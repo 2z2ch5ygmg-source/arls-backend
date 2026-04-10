@@ -41064,12 +41064,8 @@ function renderLeaveWorkspaceTabs() {
   }
   const tabsWrap = $("#leaveWorkspaceTabs");
   const tabsNav = tabsWrap?.closest(".leave-workspace-header-nav");
-  if (tabsWrap instanceof HTMLElement) {
-    tabsWrap.classList.toggle("hidden", isDesktopViewport());
-  }
-  if (tabsNav instanceof HTMLElement) {
-    tabsNav.classList.toggle("hidden", isDesktopViewport());
-  }
+  if (tabsWrap instanceof HTMLElement) tabsWrap.classList.remove("hidden");
+  if (tabsNav instanceof HTMLElement) tabsNav.classList.remove("hidden");
   document
     .querySelectorAll(
       '#leaveWorkspaceTabs [data-action="leave-workspace-section"]',
@@ -42179,12 +42175,16 @@ function renderLeaveUsageRows() {
   }
   const list = $("#leaveUsageList");
   const countEl = $("#leaveUsageCount");
+  const card = $("#leaveUsageGridCard");
   if (!(list instanceof HTMLElement)) return;
   clearList(list);
   renderLeaveUsageToolbar();
   const rows = getFilteredLeaveUsageRows();
   if (countEl) countEl.textContent = `${rows.length}명`;
   if (!rows.length) {
+    if (card instanceof HTMLElement) {
+      card.classList.add("is-empty-state");
+    }
     renderEmptyState(
       list,
       "표시할 휴가 사용 데이터가 없습니다.",
@@ -42193,6 +42193,9 @@ function renderLeaveUsageRows() {
     list.querySelector(".empty-state")?.classList.add("requests-compact-empty");
     renderLeaveUsageSortHeaders();
     return;
+  }
+  if (card instanceof HTMLElement) {
+    card.classList.remove("is-empty-state");
   }
   rows.forEach((item) => {
     const li = document.createElement("li");
