@@ -49532,6 +49532,105 @@ html[data-ui-theme="light"]
   min-width: 132px;
 }
 
+/* 2026-04-10 attendance correction pass */
+#view-attendance .attendance-v2-empty,
+#view-attendance .attendance-compact-empty {
+  gap: 6px;
+}
+
+#view-attendance .attendance-v2-empty-box {
+  gap: 4px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+#view-attendance .attendance-v2-empty-box .attendance-v2-card-icon,
+#view-attendance .attendance-compact-empty-icon {
+  display: none !important;
+}
+
+#view-attendance .attendance-v2-empty.is-table .attendance-v2-empty-box {
+  width: 100%;
+  margin: 0;
+}
+
+#view-attendance .attendance-v2-empty.is-table {
+  padding: 12px 0;
+}
+
+#view-attendance #attendanceExceptionQueueCard .attendance-v2-empty,
+#view-attendance #attendanceManagerTableCard .attendance-v2-empty {
+  justify-items: center;
+  text-align: center;
+}
+
+#view-attendance #attendanceExceptionQueueCard .attendance-v2-empty-box strong,
+#view-attendance #attendanceManagerTableCard .attendance-v2-empty-box strong {
+  font-size: 14px;
+}
+
+#view-attendance #attendanceExceptionQueueCard .attendance-v2-empty-box span,
+#view-attendance #attendanceManagerTableCard .attendance-v2-empty-box span {
+  font-size: 12px;
+}
+
+#view-attendance #attendanceStatsPanel {
+  padding-top: 12px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-grid-head {
+  padding-bottom: 0;
+}
+
+#view-attendance #attendanceStatsPanelTabs {
+  gap: 8px;
+  padding: 0 0 8px;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-card,
+#view-attendance #attendanceStatsPanel .attendance-stats-table-card,
+#view-attendance .attendance-stats-detail-block {
+  padding: 10px 12px;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-card-head {
+  gap: 4px;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-card-head h4 {
+  font-size: 15px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-meta {
+  min-height: 24px !important;
+  padding: 0 8px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-chart-shell {
+  padding-top: 4px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-chart-layout {
+  grid-template-columns: minmax(0, 1fr) 84px !important;
+  gap: 8px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-chart-wrap {
+  min-height: 132px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-legend-item {
+  min-height: 20px !important;
+  gap: 6px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-table-head {
+  margin-bottom: 6px !important;
+}
+
 /* 2026-04-10 home hq shople correction pass */
 #view-home .home-role-root-hq-refined .home-stage-hq-refined {
   grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
