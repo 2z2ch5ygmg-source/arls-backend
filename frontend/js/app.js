@@ -55478,6 +55478,13 @@ function showView(
   decorateAzureTopbarTabs(document);
 
   if (targetView === "notices") {
+    const parsedNoticeRoute = parseRouteCandidate(
+      state.currentRoute || getCurrentRouteWithQuery() || "",
+    );
+    applyNoticesRouteStateFromQuery(
+      parsedNoticeRoute.path,
+      new URLSearchParams(parsedNoticeRoute.query || ""),
+    );
     primeNoticesImmediateRouteState();
     renderNoticesView();
   }
