@@ -52953,7 +52953,10 @@ body[data-current-view="attendance"]
 }
 
 #view-leave #leaveUsageSummaryStrip {
-  display: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 180px));
+  justify-content: start;
+  gap: 8px;
 }
 
 #view-leave #leaveUsageGridCard,
