@@ -82637,6 +82637,11 @@ function renderAttendanceSupportSections(row = null) {
 function renderAttendanceFilterMeta() {
   const employeeTrigger = $("#attendanceEmployeeFilterTrigger");
   const siteTrigger = $("#attendanceSiteFilterTrigger");
+  const statusSelect = $("#attendanceStatusSelect");
+  const statusField =
+    statusSelect instanceof HTMLElement
+      ? statusSelect.closest(".attendance-ops-field")
+      : null;
   const hasScopedTenant = Boolean(getAttendanceScopedTenantCode());
   if (!hasScopedTenant && state.attendanceView) {
     state.attendanceView.employeeCode = "";
@@ -82652,11 +82657,21 @@ function renderAttendanceFilterMeta() {
   const siteTokens = uniqAttendanceTokens(
     state.attendanceView?.siteFilterApplied || [],
   );
+  const hasEmployeeFilter = hasScopedTenant && employeeTokens.length > 0;
+  const hasSiteFilter = hasScopedTenant && siteTokens.length > 0;
+  const statusValue =
+    statusSelect instanceof HTMLSelectElement
+      ? String(statusSelect.value || "")
+          .trim()
+          .toLowerCase() || "all"
+      : "all";
+  const hasStatusFilter = statusValue !== "all";
   if (employeeTrigger instanceof HTMLElement) {
     employeeTrigger.toggleAttribute("disabled", !hasScopedTenant);
     employeeTrigger.title = hasScopedTenant
       ? ""
       : "조회 테넌트를 먼저 선택하세요.";
+    employeeTrigger.classList.toggle("is-active-filter", hasEmployeeFilter);
     if (!hasScopedTenant || !employeeTokens.length) {
       employeeTrigger.textContent = "직원";
     } else if (employeeTokens.length === 1) {
@@ -82672,6 +82687,7 @@ function renderAttendanceFilterMeta() {
   if (siteTrigger instanceof HTMLElement) {
     siteTrigger.toggleAttribute("disabled", !hasScopedTenant);
     siteTrigger.title = hasScopedTenant ? "" : "조회 테넌트를 먼저 선택하세요.";
+    siteTrigger.classList.toggle("is-active-filter", hasSiteFilter);
     if (!hasScopedTenant || !siteTokens.length) {
       siteTrigger.textContent = "근무지";
     } else if (siteTokens.length === 1) {
@@ -82683,6 +82699,19 @@ function renderAttendanceFilterMeta() {
     } else {
       siteTrigger.textContent = `근무지 ${siteTokens.length}`;
     }
+  }
+  if (statusSelect instanceof HTMLSelectElement) {
+    statusSelect.classList.toggle(
+      "is-active-filter",
+      hasStatusFilter || statusValue === "all",
+    );
+  }
+  if (statusField instanceof HTMLElement) {
+    statusField.classList.toggle(
+      "is-current-scope",
+      statusValue === "all" && hasScopedTenant,
+    );
+    statusField.classList.toggle("is-active-filter", hasStatusFilter);
   }
 }
 
