@@ -48785,7 +48785,6 @@ function renderProfileSettingsRail() {
     profile: profileValue?.closest(".profile-settings-rail-item"),
     groupware: groupwareValue?.closest(".profile-settings-rail-item"),
     meetings: meetingsValue?.closest(".profile-settings-rail-item"),
-    lock: lockValue?.closest(".profile-settings-rail-item"),
   };
   Object.entries(itemByKey).forEach(([key, element]) => {
     if (!(element instanceof HTMLElement)) return;
