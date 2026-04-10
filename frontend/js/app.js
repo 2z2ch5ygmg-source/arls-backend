@@ -42100,6 +42100,34 @@ function renderLeaveUsageSummary(summary = null) {
   });
 }
 
+function mountLeaveUsageSummaryStrip() {
+  const card = $("#leaveUsageGridCard");
+  const summary = $("#leaveUsageSummaryStrip");
+  if (!(card instanceof HTMLElement) || !(summary instanceof HTMLElement))
+    return;
+  const toolbar = card.querySelector(".leave-usage-toolbar");
+  if (!(toolbar instanceof HTMLElement)) return;
+  if (
+    summary.parentElement !== card ||
+    summary.nextElementSibling !== toolbar
+  ) {
+    card.insertBefore(summary, toolbar);
+  }
+}
+
+function ensureLeaveUsageToolbarMetaHost() {
+  const toolbar = $("#leaveUsageGridCard .leave-usage-toolbar");
+  if (!(toolbar instanceof HTMLElement)) return null;
+  let host = $("#leaveUsageToolbarMeta");
+  if (!(host instanceof HTMLElement)) {
+    host = document.createElement("div");
+    host.id = "leaveUsageToolbarMeta";
+    host.className = "leave-usage-toolbar-meta";
+    toolbar.appendChild(host);
+  }
+  return host;
+}
+
 function renderLeaveUsageToolbar() {
   const leaveState = state.leaveView || createInitialLeaveViewState();
   const yearSelect = $("#leaveUsageYear");
@@ -42163,6 +42191,11 @@ function renderLeaveUsageToolbar() {
     }
   }
   renderRequestsFilterTriggerLabels();
+  const headActions = $("#leaveUsageGridCard .leave-status-list-actions");
+  const host = ensureLeaveUsageToolbarMetaHost();
+  if (headActions instanceof HTMLElement && host instanceof HTMLElement) {
+    host.appendChild(headActions);
+  }
 }
 
 function renderLeaveUsageSortHeaders() {
@@ -42865,6 +42898,7 @@ function renderLeaveManagementWorkspace({
     balanceSummary: state.leaveView?.balanceSummary || null,
   });
   renderLeaveUsageSummary(summary);
+  mountLeaveUsageSummaryStrip();
   renderLeaveWorkspaceSecondaryTabs();
   renderLeaveWorkspaceRequestToolbar(getLeaveWorkspaceRequestRows());
   renderLeaveWorkspaceRequestRows({ loading, errorMessage });

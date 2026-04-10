@@ -52968,6 +52968,10 @@ body[data-current-view="attendance"]
   border-bottom: 1px solid var(--ui-border-subtle);
 }
 
+#view-leave #leaveUsageGridCard > #leaveUsageSummaryStrip {
+  margin: 0 18px 10px;
+}
+
 #view-leave .leave-usage-toolbar .input-field > span,
 #view-leave .leave-requests-filter-controls .leave-filter-field > span,
 #view-leave .leave-inline-select > span {
@@ -52978,6 +52982,18 @@ body[data-current-view="attendance"]
 #view-leave .leave-requests-toolbar,
 #view-leave .leave-requests-toolbar-actions {
   align-items: center;
+}
+
+#view-leave .leave-usage-toolbar {
+  justify-content: space-between;
+}
+
+#view-leave #leaveUsageToolbarMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+  margin-left: auto;
 }
 
 #view-leave .leave-usage-toolbar .input-field input,
