@@ -49532,6 +49532,265 @@ html[data-ui-theme="light"]
   min-width: 132px;
 }
 
+/* 2026-04-10 home hq shople correction pass */
+#view-home .home-role-root-hq-refined .home-stage-hq-refined {
+  grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
+  grid-template-areas:
+    "focus requests"
+    "schedule org";
+  gap: 14px;
+  align-items: start;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-card {
+  grid-area: focus;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: none;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-card[data-tone="warn"] {
+  border-color: var(--ui-border-subtle);
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-head {
+  padding-bottom: 10px;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-kicker {
+  display: none;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-copy {
+  gap: 3px;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-copy h3 {
+  font-size: 22px;
+  line-height: 1.14;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-copy p {
+  max-width: none;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-metric-tiles-compact,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-metric-tiles-compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-card .home-metric-tile,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-metric-tile {
+  min-height: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.96);
+  background: #fff;
+  box-shadow: none;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-metric-tile
+  span,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-metric-tile
+  span {
+  font-size: 11px;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-metric-tile
+  strong,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-metric-tile
+  strong {
+  font-size: 18px;
+  line-height: 1.08;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-metric-tile
+  small,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-metric-tile
+  small {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-module-summary-band,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--org
+  .home-module-summary-band {
+  padding: 10px 0;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-queue {
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-secondary-slot {
+  display: block;
+  height: auto;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-secondary-slot--requests {
+  grid-area: requests;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-secondary-slot--schedule {
+  grid-area: schedule;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-secondary-slot--noticeorg {
+  grid-area: org;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-secondary-slot .home-role-card {
+  width: 100%;
+  height: auto;
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 16px;
+}
+
+#view-home .home-role-root-hq-refined .home-role-card-head {
+  align-items: center;
+  padding-bottom: 10px;
+}
+
+#view-home .home-role-root-hq-refined .home-role-card-head h3 {
+  font-size: 18px;
+}
+
+#view-home .home-role-root-hq-refined .home-role-card .home-card-scroll {
+  padding-top: 8px;
+}
+
+#view-home .home-role-root-hq-refined .home-role-card--org .home-card-scroll {
+  display: grid;
+  gap: 8px;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--org
+  .home-role-card-head
+  h3,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-role-card-head
+  h3,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--requests
+  .home-role-card-head
+  h3 {
+  position: relative;
+  padding-left: 12px;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--org
+  .home-role-card-head
+  h3::before,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-role-card-head
+  h3::before,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--requests
+  .home-role-card-head
+  h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 4px;
+  border-radius: 999px;
+  background: var(--ui-accent);
+}
+
+#view-home .home-role-root-hq-refined .home-queue-list {
+  gap: 0;
+}
+
+#view-home .home-role-root-hq-refined .home-queue-row {
+  padding: 10px 0;
+}
+
+#view-home .home-role-root-hq-refined .home-queue-empty {
+  min-height: 0;
+  padding: 8px 0 0;
+  place-items: start;
+  text-align: left;
+}
+
+#view-home .home-empty-icon {
+  display: none !important;
+}
+
+@media (max-width: 1180px) {
+  #view-home .home-role-root-hq-refined .home-stage-hq-refined {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "focus"
+      "requests"
+      "schedule"
+      "org";
+  }
+
+  #view-home
+    .home-role-root-hq-refined
+    .home-hq-focus-card
+    .home-metric-tiles-compact,
+  #view-home
+    .home-role-root-hq-refined
+    .home-role-card--schedule-analytics
+    .home-metric-tiles-compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* 2026-04-10 ralph Phase A/B terminal overrides */
 #view-attendance[data-attendance-section="stats"]
   #attendanceOpsToolbar

@@ -6476,9 +6476,6 @@ function buildHomeEmptyStateMarkup({
 } = {}) {
   return `
     <div class="home-role-empty home-queue-empty">
-      <span class="home-empty-icon is-${escapeHomeHtml(normalizeHomeVisualTone(tone))}" aria-hidden="true">
-        ${buildAzureTopbarIconSvg(iconKey || "list")}
-      </span>
       <strong>${escapeHomeHtml(title || "표시할 항목이 없습니다.")}</strong>
       ${
         String(meta || "").trim()
@@ -7487,28 +7484,11 @@ function buildHomeScheduleAnalyticsCardHtml({
   const rawRiskRows = Array.isArray(briefing?.schedule_risk_rows)
     ? briefing.schedule_risk_rows
     : [];
-  const chartRows = rawRiskRows.slice(0, 6).map((row, index) => ({
-    label: row?.title || `항목 ${index + 1}`,
-    value: parseHomeCountValue(row?.value),
-    valueLabel: row?.value || "0",
-    tone:
-      row?.pill_tone === "success"
-        ? "teal"
-        : row?.pill_tone === "danger"
-          ? "danger"
-          : row?.pill_tone === "warn"
-            ? "orange"
-            : index === 0
-              ? "orange"
-              : index === 1
-                ? "slate"
-                : "neutral",
-  }));
-  const riskTotal = chartRows.reduce(
-    (sum, row) => sum + Number(row.value || 0),
+  const focusRows = filterMeaningfulHomeRows(rawRiskRows).slice(0, 4);
+  const riskTotal = focusRows.reduce(
+    (sum, row) => sum + parseHomeCountValue(row?.value),
     0,
   );
-  const focusRows = rawRiskRows.slice(0, 4);
   return `
     <article class="module-card home-role-card home-role-card--schedule-analytics">
       <div class="home-role-card-head">
@@ -7517,50 +7497,42 @@ function buildHomeScheduleAnalyticsCardHtml({
         </div>
         <button class="btn btn-secondary" type="button" data-action="switch-view" data-view="schedule">스케줄 보기</button>
       </div>
-      <div class="home-schedule-board">
-        <div class="home-schedule-board-main">
-          <div class="home-schedule-board-lead">
-            <span>오늘 조정 필요</span>
-            <strong>${escapeHomeHtml(`${riskTotal}건`)}</strong>
-            <small>${escapeHomeHtml(`운영 지점 ${Number(normalizedOps?.site_count || 0)} · 결원 ${Number(normalizedOps?.vacancy_site_count || 0)} · 승인 ${Number(normalizedRequest?.total_pending_count || 0)}`)}</small>
-          </div>
-          ${buildHomeColumnChartHtml(chartRows)}
-        </div>
-        <div class="home-schedule-board-side">
-          <div class="home-schedule-board-stats">
-            ${buildHomeMetricTilesHtml(
-              [
-                {
-                  label: "운영 지점",
-                  value: `${Number(normalizedOps?.site_count || 0)}곳`,
-                  meta: "오늘 기준",
-                  tone: "neutral",
-                },
-                {
-                  label: "결원 지점",
-                  value: `${vacancySiteCount}곳`,
-                  meta: missingCount > 0 ? "즉시 확인" : "정상",
-                  tone: vacancySiteCount > 0 ? "warn" : "neutral",
-                },
-                {
-                  label: "승인 대기",
-                  value: `${Number(normalizedRequest?.total_pending_count || 0)}건`,
-                  meta: "휴가·출퇴근 요청",
-                  tone:
-                    Number(normalizedRequest?.total_pending_count || 0) > 0
-                      ? "warn"
-                      : "neutral",
-                },
-              ],
-              { compact: true },
-            )}
-          </div>
-          <div class="home-card-scroll">
-            ${buildHomeListRowsHtml(focusRows, {
-              emptyTitle: "스케줄 리스크가 없습니다.",
-            })}
-          </div>
-        </div>
+      ${buildHomeMetricTilesHtml(
+        [
+          {
+            label: "오늘 조정 필요",
+            value: `${riskTotal}건`,
+            meta: `운영 ${Number(normalizedOps?.site_count || 0)}곳`,
+            tone: riskTotal > 0 ? "warn" : "neutral",
+          },
+          {
+            label: "운영 지점",
+            value: `${Number(normalizedOps?.site_count || 0)}곳`,
+            meta: "오늘 기준",
+            tone: "neutral",
+          },
+          {
+            label: "결원 지점",
+            value: `${vacancySiteCount}곳`,
+            meta: missingCount > 0 ? "즉시 확인" : "정상",
+            tone: vacancySiteCount > 0 ? "warn" : "neutral",
+          },
+          {
+            label: "승인 대기",
+            value: `${Number(normalizedRequest?.total_pending_count || 0)}건`,
+            meta: "휴가·출퇴근 요청",
+            tone:
+              Number(normalizedRequest?.total_pending_count || 0) > 0
+                ? "warn"
+                : "neutral",
+          },
+        ],
+        { compact: true },
+      )}
+      <div class="home-card-scroll">
+        ${buildHomeListRowsHtml(focusRows, {
+          emptyTitle: "스케줄 리스크가 없습니다.",
+        })}
       </div>
     </article>
   `;
@@ -7714,32 +7686,6 @@ function buildHomeHqFocusCardHtml({ briefing = null } = {}) {
     Number(ops?.attendance_rate || 0) ||
       (presentCount / Math.max(1, scheduledCount)) * 100,
   );
-  const distributionRows = [
-    {
-      label: "근무",
-      value: scheduledCount,
-      valueLabel: `${scheduledCount}명`,
-      tone: "orange",
-    },
-    {
-      label: "휴무",
-      value: offCount,
-      valueLabel: `${offCount}명`,
-      tone: "slate",
-    },
-    {
-      label: "휴가",
-      value: leaveCount,
-      valueLabel: `${leaveCount}명`,
-      tone: "teal",
-    },
-    {
-      label: "승인",
-      value: pendingCount,
-      valueLabel: `${pendingCount}건`,
-      tone: "danger",
-    },
-  ];
   const queueRows = attendanceRows.length
     ? attendanceRows
     : [
@@ -7749,59 +7695,69 @@ function buildHomeHqFocusCardHtml({ briefing = null } = {}) {
         },
       ];
   return `
-    <article class="module-card home-hq-focus-card" data-tone="${
-      pendingCount > 0 || Number(ops?.missing_count || 0) > 0
-        ? "warn"
-        : "neutral"
-    }">
-      <div class="home-hq-focus-head">
+    <article class="module-card home-hq-focus-card">
+      <div class="home-role-card-head home-hq-focus-head">
         <div class="home-hq-focus-copy">
-          <span class="home-hq-focus-kicker">실시간 근태</span>
           <h3>오늘 출퇴근</h3>
-          <p>오늘 출근율과 근무/휴무/휴가 분포, 승인 대기를 한 화면에서 확인합니다.</p>
+          <p>오늘 출근율과 근무/휴무/휴가 분포, 승인 대기를 한 번에 확인합니다.</p>
         </div>
         <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="${escapeHomeHtml(
           ROUTE_ATTENDANCE,
         )}">출퇴근 보기</button>
       </div>
-      <div class="home-analytics-hero-body">
-        ${buildHomeRingHeroHtml({
-          title: "오늘 출근율",
-          percent: attendanceRate,
-          valueLabel: `${presentCount} / ${scheduledCount}명`,
-          meta: `${Math.max(0, Number(ops?.missing_count || 0))}건 미출근`,
-          footer: `승인 대기 ${pendingCount}건`,
-          tone: "orange",
-          size: "sm",
-        })}
-        <div class="home-analytics-hero-summary">
-          ${buildHomeColumnChartHtml(distributionRows)}
-          ${buildHomeMetricTilesHtml(
-            [
-              {
-                label: "구성원 현황",
-                value: `${Math.max(0, Number(organizationSummary?.activeEmployeeCount || 0))}명`,
-                meta: `재직 ${Math.max(0, Number(organizationSummary?.employeeTotal || 0))}명`,
-              },
-              {
-                label: "승인 대기",
-                value: `${pendingCount}건`,
-                meta: "휴가·출퇴근",
-                tone: pendingCount > 0 ? "warn" : "neutral",
-              },
-              {
-                label: "근무지 현황",
-                value: `${Math.max(0, Number(ops?.site_count || 0))}곳`,
-                meta: `결원 ${Math.max(0, Number(ops?.vacancy_site_count || 0))}곳`,
-                tone:
-                  Number(ops?.vacancy_site_count || 0) > 0 ? "warn" : "neutral",
-              },
-            ],
-            { compact: true },
-          )}
-        </div>
-      </div>
-      <div class="home-hq-focus-queue">
+      ${buildHomeMetricTilesHtml(
+        [
+          {
+            label: "오늘 출근율",
+            value: `${attendanceRate}%`,
+            meta: `${presentCount} / ${scheduledCount}명`,
+            tone:
+              Number(ops?.missing_count || 0) > 0 || pendingCount > 0
+                ? "warn"
+                : "neutral",
+          },
+          {
+            label: "근무",
+            value: `${scheduledCount}명`,
+            meta: `출근 ${presentCount}명`,
+            tone: "neutral",
+          },
+          {
+            label: "휴무",
+            value: `${offCount}명`,
+            meta: "비근무",
+            tone: "neutral",
+          },
+          {
+            label: "휴가",
+            value: `${leaveCount}명`,
+            meta: "오늘 휴가",
+            tone: "teal",
+          },
+        ],
+        { compact: true },
+      )}
+      ${buildHomeModuleSummaryBand([
+        {
+          label: "승인 대기",
+          value: `${pendingCount}건`,
+          meta: "휴가·출퇴근",
+          tone: pendingCount > 0 ? "warn" : "neutral",
+        },
+        {
+          label: "구성원 현황",
+          value: `${Math.max(0, Number(organizationSummary?.activeEmployeeCount || 0))}명`,
+          meta: `재직 ${Math.max(0, Number(organizationSummary?.employeeTotal || 0))}명`,
+          tone: "neutral",
+        },
+        {
+          label: "근무지 현황",
+          value: `${Math.max(0, Number(ops?.site_count || 0))}곳`,
+          meta: `결원 ${Math.max(0, Number(ops?.vacancy_site_count || 0))}곳`,
+          tone: Number(ops?.vacancy_site_count || 0) > 0 ? "warn" : "neutral",
+        },
+      ])}
+      <div class="home-card-scroll home-hq-focus-queue">
         ${buildHomeListRowsHtml(queueRows, {
           emptyTitle: "오늘 즉시 확인할 출퇴근 예외가 없습니다.",
           emptyMeta: "새 예외가 생기면 이 카드에서 바로 확인합니다.",
@@ -7831,62 +7787,39 @@ function buildHomeHqStatusComboCardHtml({ briefing = null } = {}) {
           ? "warn"
           : "neutral",
   }));
-  const siteRows = buildHomeQueueSummaryRows(
-    Array.isArray(briefing?.schedule_risk_rows)
-      ? briefing.schedule_risk_rows.slice(0, 3)
-      : [],
-    ROUTE_ADMIN_SITES,
-  );
   return `
-    <article class="module-card home-role-card home-role-card--notice-org">
+    <article class="module-card home-role-card home-role-card--org home-deck-card">
       <div class="home-role-card-head">
         <div>
-          <h3>구성원·근무지</h3>
+          <h3>구성원 현황</h3>
         </div>
+        <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="${escapeHomeHtml(
+          ROUTE_ADMIN_EMPLOYEES,
+        )}">구성원 보기</button>
       </div>
       <div class="home-card-scroll">
-        <section class="home-combo-section">
-          <div class="home-combo-section-head">
-            <h4>구성원 현황</h4>
-            <button class="btn btn-ghost btn-sm" type="button" data-action="drawer-open-route" data-route="${escapeHomeHtml(
-              ROUTE_ADMIN_EMPLOYEES,
-            )}">구성원 보기</button>
-          </div>
-          ${buildHomeModuleSummaryBand([
-            {
-              label: "재직",
-              value: `${Math.max(0, Number(organizationSummary?.employeeTotal || 0))}명`,
-            },
-            {
-              label: "활성",
-              value: `${Math.max(0, Number(organizationSummary?.activeEmployeeCount || 0))}명`,
-            },
-            {
-              label: "미연결",
-              value: `${Math.max(0, Number(organizationSummary?.unlinkedCount || 0))}명`,
-              tone:
-                Number(organizationSummary?.unlinkedCount || 0) > 0
-                  ? "warn"
-                  : "neutral",
-            },
-          ])}
-          ${buildHomeListRowsHtml(orgRows, {
-            emptyTitle: "구성원 이슈가 없습니다.",
-            emptyMeta: "조직 상태 변화가 생기면 여기에서 확인합니다.",
-          })}
-        </section>
-        <section class="home-combo-section">
-          <div class="home-combo-section-head">
-            <h4>근무지 현황</h4>
-            <button class="btn btn-ghost btn-sm" type="button" data-action="drawer-open-route" data-route="${escapeHomeHtml(
-              ROUTE_ADMIN_SITES,
-            )}">근무지 보기</button>
-          </div>
-          ${buildHomeListRowsHtml(stripHomeRowRoutes(siteRows), {
-            emptyTitle: "운영 중인 근무지를 확인하세요.",
-            emptyMeta: "근무지 변화와 배정 이슈를 계속 추적합니다.",
-          })}
-        </section>
+        ${buildHomeModuleSummaryBand([
+          {
+            label: "재직",
+            value: `${Math.max(0, Number(organizationSummary?.employeeTotal || 0))}명`,
+          },
+          {
+            label: "활성",
+            value: `${Math.max(0, Number(organizationSummary?.activeEmployeeCount || 0))}명`,
+          },
+          {
+            label: "미연결",
+            value: `${Math.max(0, Number(organizationSummary?.unlinkedCount || 0))}명`,
+            tone:
+              Number(organizationSummary?.unlinkedCount || 0) > 0
+                ? "warn"
+                : "neutral",
+          },
+        ])}
+        ${buildHomeListRowsHtml(orgRows, {
+          emptyTitle: "구성원 이슈가 없습니다.",
+          emptyMeta: "조직 상태 변화가 생기면 여기에서 확인합니다.",
+        })}
       </div>
     </article>
   `;
