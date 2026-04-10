@@ -55487,6 +55487,13 @@ function showView(
     );
     primeNoticesImmediateRouteState();
     renderNoticesView();
+    if (!document.querySelector("#noticesCategoryTabs .workspace-tab")) {
+      queueMicrotask(() => {
+        loadNoticesViewPresenter().catch((error) => {
+          console.error("[RG ARLS] notices fallback load failed", error);
+        });
+      });
+    }
   }
 
   return loadViewData(targetView, {
