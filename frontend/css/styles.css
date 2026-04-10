@@ -49616,6 +49616,130 @@ html[data-ui-theme="light"]
   min-width: 132px;
 }
 
+/* 2026-04-10 final correction-pass overrides */
+#view-attendance #attendanceStatsPanel .attendance-stats-shell {
+  grid-template-columns: minmax(0, 1.34fr) minmax(320px, 0.66fr) !important;
+  gap: 14px !important;
+  align-items: start !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-card-primary,
+#view-attendance #attendanceStatsPanel .attendance-stats-table-card {
+  padding: 12px 14px !important;
+  border: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 16px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-card-head {
+  margin-bottom: 6px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-card-head h4 {
+  font-size: 16px !important;
+  line-height: 1.2 !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-meta {
+  min-height: 28px !important;
+  padding: 0 10px !important;
+  font-size: 11px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-topline {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+  margin-bottom: 8px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-topline-card {
+  min-height: 52px !important;
+  padding: 8px 10px !important;
+  border-radius: 12px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-topline-card span {
+  font-size: 11px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-topline-card strong {
+  font-size: 19px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-chart-shell {
+  padding-top: 8px !important;
+  border-top: 1px solid var(--ui-border-subtle) !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-chart-layout {
+  grid-template-columns: minmax(0, 1fr) 92px !important;
+  gap: 10px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-chart-wrap {
+  min-height: 156px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-legend {
+  gap: 4px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-legend-item {
+  min-height: 24px !important;
+  gap: 8px !important;
+  padding: 0 !important;
+  font-size: 11px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-table-card {
+  align-self: start !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-table-head {
+  margin-bottom: 8px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-table-wrap-wide {
+  max-height: none !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-table-wide th,
+#view-attendance #attendanceStatsPanel .attendance-stats-table-wide td {
+  min-width: 72px !important;
+  padding: 9px 10px !important;
+  font-size: 11px !important;
+}
+
+#view-attendance
+  #attendanceStatsPanel
+  .attendance-stats-table-wide
+  th:first-child,
+#view-attendance
+  #attendanceStatsPanel
+  .attendance-stats-table-wide
+  td:first-child {
+  min-width: 94px !important;
+}
+
+@media (max-width: 1599px) {
+  #view-attendance #attendanceStatsPanel .attendance-stats-shell {
+    grid-template-columns: 1fr !important;
+  }
+
+  #view-attendance #attendanceStatsPanel .attendance-stats-topline {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
 /* 2026-04-10 home + attendance visual-language pass */
 #view-home .home-surface-card {
   position: relative;
