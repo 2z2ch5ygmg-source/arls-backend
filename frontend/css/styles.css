@@ -49616,6 +49616,38 @@ html[data-ui-theme="light"]
   min-width: 132px;
 }
 
+/* 2026-04-10 control grammar follow-up terminal overrides */
+#view-attendance #attendanceStatsPanel .attendance-stats-topline {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-topline-card {
+  display: grid !important;
+  align-content: center;
+  gap: 2px;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-side-card-summary {
+  display: block !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-chart-wrap {
+  min-height: 320px !important;
+  display: grid;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-chart-wrap svg {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+@media (max-width: 1599px) {
+  #view-attendance #attendanceStatsPanel .attendance-stats-topline {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
 /* 2026-04-10 control grammar follow-up */
 #view-home .home-surface-card::before,
 #view-home .home-surface-card-secondary::before {
