@@ -49678,6 +49678,125 @@ html[data-ui-theme="light"]
   }
 }
 
+/* 2026-04-11 leave global law retrofit */
+#view-leave #leaveWorkspaceTabs {
+  gap: 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-leave #leaveWorkspaceTabs .workspace-tab {
+  min-height: 0;
+  height: auto;
+  padding: 0 0 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ui-text-secondary);
+}
+
+#view-leave #leaveWorkspaceTabs .workspace-tab.active {
+  border-bottom-color: var(--ui-accent);
+  background: transparent;
+  color: var(--ui-accent);
+}
+
+#view-leave #leaveUsageSummaryStrip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-leave .leave-usage-summary-item {
+  padding: 0 14px;
+  border-left: 1px solid var(--ui-border-subtle);
+  background: transparent;
+}
+
+#view-leave .leave-usage-summary-item:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+#view-leave #leaveUsageGridCard,
+#view-leave #leaveRequestsToolbar,
+#view-leave #leaveWorkspaceRequestsCard,
+#view-leave #leavePolicySection {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-leave .leave-status-list-head,
+#view-leave #leaveWorkspaceRequestsCard .requests-list-head,
+#view-leave #leavePolicySection .approval-head {
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-leave .leave-usage-toolbar,
+#view-leave #leaveRequestsToolbar .leave-requests-filter-controls {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-leave #leaveUsageGridCard .leave-usage-grid-header,
+#view-leave #leaveUsageList .leave-usage-row,
+#view-leave #leaveWorkspaceRequestsCard .leave-request-grid-header,
+#view-leave #leaveWorkspaceRequestList .leave-request-row,
+#view-leave #leavePolicySection .leave-policy-grid-header,
+#view-leave #leavePolicyList .leave-policy-row {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+#view-leave #leaveUsageGridCard .leave-usage-grid-header,
+#view-leave #leaveWorkspaceRequestsCard .leave-request-grid-header,
+#view-leave #leavePolicySection .leave-policy-grid-header {
+  min-height: auto;
+  background: transparent;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-leave #leaveUsageList .leave-usage-row,
+#view-leave #leaveWorkspaceRequestList .leave-request-row,
+#view-leave #leavePolicyList .leave-policy-row {
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+#view-leave #leaveUsageList .leave-usage-row:first-child,
+#view-leave #leaveWorkspaceRequestList .leave-request-row:first-child,
+#view-leave #leavePolicyList .leave-policy-row:first-child {
+  border-top: 0;
+}
+
+#view-leave .requests-inline-empty,
+#view-leave #leaveUsageSection .empty-state,
+#view-leave #leaveRequestsSection .empty-state,
+#view-leave #leavePolicySection .empty-state {
+  min-height: 120px;
+  padding: 18px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+#view-leave .requests-inline-empty .empty-state-icon,
+#view-leave #leaveUsageSection .empty-state-icon,
+#view-leave #leaveRequestsSection .empty-state-icon,
+#view-leave #leavePolicySection .empty-state-icon {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: rgba(226, 232, 240, 0.72);
+  color: rgba(71, 85, 105, 0.98);
+}
+
 /* 2026-04-10 home graph restoration pass */
 #view-home
   .home-role-root-hq-refined
@@ -50349,7 +50468,9 @@ html[data-ui-theme="light"]
   box-shadow: none !important;
 }
 
-#view-attendance #attendanceStatsPanel .attendance-stats-summary-item:first-child {
+#view-attendance
+  #attendanceStatsPanel
+  .attendance-stats-summary-item:first-child {
   padding-left: 0 !important;
   border-left: 0 !important;
 }
