@@ -53228,6 +53228,89 @@ body[data-current-view="attendance"]
   min-height: 320px;
 }
 
+/* 2026-04-10 floating empty states */
+#view-requests .requests-inline-empty,
+#view-requests .requests-compact-empty,
+#view-requests .empty-state.requests-compact-empty,
+#view-leave #leaveUsageSection .empty-state,
+#view-leave #leaveRequestsSection .empty-state,
+#view-leave #leavePolicySection .empty-state,
+#view-leave #leaveGrantsSection .empty-state,
+#view-hr .empty-state {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  text-align: center;
+  min-height: 160px;
+  padding: 24px 16px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  gap: 8px;
+}
+
+#view-requests .requests-inline-empty::before,
+#view-requests .requests-compact-empty::before,
+#view-requests .empty-state.requests-compact-empty::before,
+#view-leave #leaveUsageSection .empty-state::before,
+#view-leave #leaveRequestsSection .empty-state::before,
+#view-leave #leavePolicySection .empty-state::before,
+#view-leave #leaveGrantsSection .empty-state::before,
+#view-hr .empty-state::before {
+  display: none !important;
+}
+
+#view-requests .requests-inline-empty .empty-state-icon,
+#view-requests .requests-compact-empty .empty-state-icon,
+#view-requests .empty-state.requests-compact-empty .empty-state-icon,
+#view-leave #leaveUsageSection .empty-state-icon,
+#view-leave #leaveRequestsSection .empty-state-icon,
+#view-leave #leavePolicySection .empty-state-icon,
+#view-leave #leaveGrantsSection .empty-state-icon,
+#view-hr .empty-state-icon {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(15, 23, 42, 0.05);
+  color: rgba(100, 116, 139, 0.92);
+}
+
+#view-requests .requests-inline-empty .empty-state-icon svg,
+#view-requests .requests-compact-empty .empty-state-icon svg,
+#view-leave #leaveUsageSection .empty-state-icon svg,
+#view-leave #leaveRequestsSection .empty-state-icon svg,
+#view-leave #leavePolicySection .empty-state-icon svg,
+#view-leave #leaveGrantsSection .empty-state-icon svg,
+#view-hr .empty-state-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+#view-requests .requests-inline-empty .empty-state-title,
+#view-requests .requests-compact-empty .empty-state-title,
+#view-leave #leaveUsageSection .empty-state-title,
+#view-leave #leaveRequestsSection .empty-state-title,
+#view-leave #leavePolicySection .empty-state-title,
+#view-leave #leaveGrantsSection .empty-state-title,
+#view-hr .empty-state-title {
+  text-align: center;
+}
+
+#view-requests .requests-inline-empty .empty-state-description,
+#view-requests .requests-compact-empty .empty-state-description,
+#view-leave #leaveUsageSection .empty-state-description,
+#view-leave #leaveRequestsSection .empty-state-description,
+#view-leave #leavePolicySection .empty-state-description,
+#view-leave #leaveGrantsSection .empty-state-description,
+#view-hr .empty-state-description,
+#view-requests .requests-inline-empty span {
+  max-width: 34ch;
+  text-align: center;
+}
+
 #view-requests[data-requests-segment="documents"] #requestsFilterBar,
 #view-requests[data-requests-segment="documents"] #requestsPriorityQueueCard,
 #view-requests[data-requests-segment="documents"] #requestsMainListCard,

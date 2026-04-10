@@ -3780,8 +3780,8 @@ function renderCompactListEmpty(
   box.className = "requests-inline-empty";
   box.innerHTML = `
     ${getEmptyStateIconMarkup()}
-    <strong>${text}</strong>
-    ${metaText ? `<span>${metaText}</span>` : ""}
+    <strong class="empty-state-title">${text}</strong>
+    ${metaText ? `<span class="empty-state-description">${metaText}</span>` : ""}
   `;
   li.appendChild(box);
   target.appendChild(li);
