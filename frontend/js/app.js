@@ -37055,7 +37055,7 @@ async function navigateToRoute(
   }
 
   if (route === ROUTE_ADMIN_REPORTS_LOCK) {
-    scrollToSelector("#lockPolicyCard");
+    scrollToSelector("#view-profile");
   }
 
   if (
@@ -48251,7 +48251,6 @@ function renderProfileSummary() {
   renderProfileSignatureCard();
   renderProfileSettingsSectionTabs();
   renderProfileSettingsSections();
-  renderLockPolicySkeleton();
 }
 
 function formatProfileStatusDateTime(rawValue = "") {
@@ -48684,7 +48683,6 @@ function renderProfileSettingsRail() {
   const profileValue = $("#profileRailProfileValue");
   const groupwareValue = $("#profileRailGroupwareValue");
   const meetingsValue = $("#profileRailMeetingsValue");
-  const lockValue = $("#profileRailLockValue");
   const noteValue = $("#profileRailStatusNote");
 
   const roleLabel = state.user ? getRoleDisplayLabel(state.user.role) : "-";
@@ -48715,7 +48713,6 @@ function renderProfileSettingsRail() {
   ).length;
   const hasFlags = Object.keys(state.integration.flags || {}).length > 0;
   const selectedProfile = getSelectedGoogleSheetProfile();
-  const lockPillText = String($("#lockStatusPill")?.textContent || "").trim();
   const groupwareLabel = getGroupwareFoundationSummaryLabel();
   const rolloutLabel = getGroupwareMeetingsRolloutLabel();
 
@@ -48742,11 +48739,6 @@ function renderProfileSettingsRail() {
   }
   if (meetingsValue) {
     meetingsValue.textContent = canManageIntegrations() ? rolloutLabel : "-";
-  }
-  if (lockValue) {
-    lockValue.textContent = canManageIntegrations()
-      ? lockPillText || "열림"
-      : "-";
   }
   if (noteValue) {
     if (!state.user) {
@@ -51037,7 +51029,6 @@ async function loadProfileIntegrationData() {
   toggleVisibility("#googleSheetProfileCard", allowed);
   toggleVisibility("#mailHubCard", allowed);
   toggleVisibility("#groupwareOpsCard", allowed);
-  toggleVisibility("#socMonitorCard", allowed);
   renderProfileSettingsSections();
 
   if (!allowed) {
@@ -51159,45 +51150,6 @@ async function onProfilePasswordSubmit(event) {
       await submitProfilePasswordChange(currentPassword, newPassword);
     },
   });
-}
-
-function renderLockPolicySkeleton() {
-  const card = $("#lockPolicyCard");
-  const pill = $("#lockStatusPill");
-  const summary = $("#lockStatusSummary");
-  const startInput = $("#lockPeriodStart");
-  const endInput = $("#lockPeriodEnd");
-  if (!card || !pill || !summary || !startInput || !endInput) return;
-
-  const navRole = getNavigationRole();
-  const canLockManage =
-    (navRole === "DEV" || navRole === "BRANCH_MANAGER") && can("schedule");
-  const isLockRoute =
-    normalizeRoutePath(state.currentRoute || "") === ROUTE_ADMIN_REPORTS_LOCK;
-  const isProfileRoute =
-    normalizeRoutePath(state.currentRoute || "") === ROUTE_PROFILE;
-  card.classList.toggle("hidden", !canLockManage || !isLockRoute);
-  if (!canLockManage || (!isLockRoute && !isProfileRoute)) {
-    renderProfileSettingsRail();
-    return;
-  }
-
-  const today = new Date();
-  const monthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
-  const monthEnd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()).padStart(2, "0")}`;
-  if (!startInput.value) startInput.value = monthStart;
-  if (!endInput.value) endInput.value = monthEnd;
-  startInput.disabled = true;
-  endInput.disabled = true;
-  startInput.setAttribute("aria-disabled", "true");
-  endInput.setAttribute("aria-disabled", "true");
-
-  pill.className = "status-pill status-pill-warn";
-  pill.textContent = "열림";
-  summary.textContent = isLockRoute
-    ? "기간 잠금 상태와 적용 범위를 확인한 뒤 저장합니다."
-    : "잠금 정책은 별도 화면에서 이어서 관리합니다.";
-  renderProfileSettingsRail();
 }
 
 function renderNotificationBadge() {
@@ -51903,9 +51855,6 @@ function applyWriteAccessUI(perms) {
   const integrationManage = navRole === "DEV" || navRole === "BRANCH_MANAGER";
   toggleVisibility("#integrationFlagsCard", integrationManage);
   toggleVisibility("#googleSheetProfileCard", integrationManage);
-  toggleVisibility("#googleSheetExecutionCard", integrationManage);
-  toggleVisibility("#googleSheetFailureLogCard", integrationManage);
-  toggleVisibility("#socMonitorCard", integrationManage);
   if (integrationManage) {
     applyIntegrationTenantFieldState();
     renderIntegrationFlags();
@@ -51921,8 +51870,6 @@ function applyWriteAccessUI(perms) {
     renderSocEventList();
     renderOpsAutomationStatus();
   }
-
-  renderLockPolicySkeleton();
 }
 
 function persistSession() {
@@ -69298,7 +69245,6 @@ function restoreProfileViewSnapshotPayload(payload = {}) {
   renderProfileWorkspaceSegments();
   renderReminderSettings();
   renderProfileThemeState();
-  renderLockPolicySkeleton();
 }
 
 function clearAllStoredViewSnapshots() {
@@ -69515,7 +69461,6 @@ const VIEW_PRESENTERS = {
       renderProfileWorkspaceSegments();
       renderReminderSettings();
       renderProfileThemeState();
-      renderLockPolicySkeleton();
     },
     load: loadProfileViewPresenter,
   },

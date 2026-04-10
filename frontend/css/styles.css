@@ -11234,9 +11234,7 @@ a:hover {
   #view-profile .notification-settings-card,
   #view-profile .notification-push-card,
   #view-profile #integrationFlagsCard,
-  #view-profile #googleSheetProfileCard,
-  #view-profile #socMonitorCard,
-  #view-profile #lockPolicyCard {
+  #view-profile #googleSheetProfileCard {
     grid-column: span 1;
   }
 
@@ -16415,8 +16413,7 @@ textarea::placeholder {
 
 #view-profile .settings-profile-form .input-field input,
 #view-profile .settings-profile-form .input-field select,
-#view-profile .settings-profile-selector-row .input-field select,
-#view-profile #lockPolicyCard .input-field input {
+#view-profile .settings-profile-selector-row .input-field select {
   min-height: 44px;
 }
 
@@ -22143,8 +22140,7 @@ button.attendance-status-special-card.active {
   #view-profile .settings-profile-form select,
   #view-profile .settings-profile-selector-row input,
   #view-profile .settings-profile-selector-row select,
-  #view-profile .settings-sync-date-row input,
-  #view-profile #socMonitorCard select {
+  #view-profile .settings-sync-date-row input {
     min-height: var(--arls-desktop-filter-h);
     height: var(--arls-desktop-filter-h);
     padding-top: 0;
@@ -22386,8 +22382,7 @@ button.attendance-status-special-card.active {
   .attendance-detail-empty,
   .employee-directory-compact-empty,
   #view-home .home-compact-empty,
-  #view-profile .settings-compact-log-list .empty-state,
-  #view-profile #socMonitorCard .empty-state {
+  #view-profile .settings-compact-log-list .empty-state {
     min-height: 0;
     padding: var(--arls-desktop-empty-pad-y) var(--arls-desktop-empty-pad-x);
     gap: 4px;
@@ -22475,12 +22470,6 @@ button.attendance-status-special-card.active {
   #view-profile .settings-log-toolbar,
   #view-profile .settings-monitor-toolbar {
     align-items: center;
-  }
-
-  #view-profile #googleSheetExecutionCard,
-  #view-profile #googleSheetFailureLogCard,
-  #view-profile #socMonitorCard {
-    gap: 10px;
   }
 
   #shell.desktop-route-employees-import .shell-content {
@@ -42800,10 +42789,6 @@ body.calendar-public-shell #view-calendar-public {
   #view-profile
   .profile-manager-settings-shell {
   gap: 12px !important;
-}
-
-#shell[data-shell-mode="manager"] #view-profile #lockPolicyCard {
-  display: none !important;
 }
 
 #shell[data-shell-mode="manager"] #view-profile #integrationFlagsCard,
