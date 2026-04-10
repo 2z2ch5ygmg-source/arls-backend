@@ -7676,6 +7676,222 @@ function buildHomeSiteReadinessCardHtml({ briefing = null } = {}) {
   `;
 }
 
+function buildHomeHqFocusCardHtml({ briefing = null } = {}) {
+  const ops = briefing?.ops_summary || {};
+  const requestSummary =
+    briefing?.request_summary || briefing?.approval_summary || {};
+  const dashboard = getHomeManagerDashboardState();
+  const organizationSummary = dashboard.organizationSummary || {};
+  const leaveSummary = dashboard.leaveSummary || {};
+  const attendanceRows = buildHomeQueueSummaryRows(
+    Array.isArray(briefing?.attendance_issue_rows)
+      ? briefing.attendance_issue_rows.slice(0, 4)
+      : [],
+    ROUTE_ATTENDANCE,
+  );
+  const scheduledCount = Math.max(
+    0,
+    Number(
+      ops?.scheduled_count ||
+        dashboard.scheduleSummary?.todayScheduledCount ||
+        0,
+    ),
+  );
+  const presentCount = Math.max(0, Number(ops?.present_count || 0));
+  const leaveCount = Math.max(0, Number(leaveSummary?.todayLeaveCount || 0));
+  const activeEmployees = Math.max(
+    scheduledCount + leaveCount,
+    Number(organizationSummary?.activeEmployeeCount || 0),
+  );
+  const offCount = Math.max(0, activeEmployees - scheduledCount - leaveCount);
+  const pendingCount = Math.max(
+    0,
+    Number(
+      requestSummary?.total_pending_count || ops?.pending_approval_count || 0,
+    ),
+  );
+  const attendanceRate = clampHomePercent(
+    Number(ops?.attendance_rate || 0) ||
+      (presentCount / Math.max(1, scheduledCount)) * 100,
+  );
+  const distributionRows = [
+    {
+      label: "근무",
+      value: scheduledCount,
+      valueLabel: `${scheduledCount}명`,
+      tone: "orange",
+    },
+    {
+      label: "휴무",
+      value: offCount,
+      valueLabel: `${offCount}명`,
+      tone: "slate",
+    },
+    {
+      label: "휴가",
+      value: leaveCount,
+      valueLabel: `${leaveCount}명`,
+      tone: "teal",
+    },
+    {
+      label: "승인",
+      value: pendingCount,
+      valueLabel: `${pendingCount}건`,
+      tone: "danger",
+    },
+  ];
+  const queueRows = attendanceRows.length
+    ? attendanceRows
+    : [
+        {
+          title: "오늘 즉시 확인할 출퇴근 예외가 없습니다.",
+          subtitle: "새 예외가 생기면 이 카드에서 바로 확인합니다.",
+        },
+      ];
+  return `
+    <article class="module-card home-hq-focus-card" data-tone="${
+      pendingCount > 0 || Number(ops?.missing_count || 0) > 0
+        ? "warn"
+        : "neutral"
+    }">
+      <div class="home-hq-focus-head">
+        <div class="home-hq-focus-copy">
+          <span class="home-hq-focus-kicker">실시간 근태</span>
+          <h3>오늘 출퇴근</h3>
+          <p>오늘 출근율과 근무/휴무/휴가 분포, 승인 대기를 한 화면에서 확인합니다.</p>
+        </div>
+        <button class="btn btn-secondary" type="button" data-action="drawer-open-route" data-route="${escapeHomeHtml(
+          ROUTE_ATTENDANCE,
+        )}">출퇴근 보기</button>
+      </div>
+      <div class="home-analytics-hero-body">
+        ${buildHomeRingHeroHtml({
+          title: "오늘 출근율",
+          percent: attendanceRate,
+          valueLabel: `${presentCount} / ${scheduledCount}명`,
+          meta: `${Math.max(0, Number(ops?.missing_count || 0))}건 미출근`,
+          footer: `승인 대기 ${pendingCount}건`,
+          tone: "orange",
+          size: "sm",
+        })}
+        <div class="home-analytics-hero-summary">
+          ${buildHomeColumnChartHtml(distributionRows)}
+          ${buildHomeMetricTilesHtml(
+            [
+              {
+                label: "구성원 현황",
+                value: `${Math.max(0, Number(organizationSummary?.activeEmployeeCount || 0))}명`,
+                meta: `재직 ${Math.max(0, Number(organizationSummary?.employeeTotal || 0))}명`,
+              },
+              {
+                label: "승인 대기",
+                value: `${pendingCount}건`,
+                meta: "휴가·출퇴근",
+                tone: pendingCount > 0 ? "warn" : "neutral",
+              },
+              {
+                label: "근무지 현황",
+                value: `${Math.max(0, Number(ops?.site_count || 0))}곳`,
+                meta: `결원 ${Math.max(0, Number(ops?.vacancy_site_count || 0))}곳`,
+                tone:
+                  Number(ops?.vacancy_site_count || 0) > 0 ? "warn" : "neutral",
+              },
+            ],
+            { compact: true },
+          )}
+        </div>
+      </div>
+      <div class="home-hq-focus-queue">
+        ${buildHomeListRowsHtml(queueRows, {
+          emptyTitle: "오늘 즉시 확인할 출퇴근 예외가 없습니다.",
+          emptyMeta: "새 예외가 생기면 이 카드에서 바로 확인합니다.",
+        })}
+      </div>
+    </article>
+  `;
+}
+
+function buildHomeHqStatusComboCardHtml({ briefing = null } = {}) {
+  const dashboard = getHomeManagerDashboardState();
+  const organizationSummary = dashboard.organizationSummary || {};
+  const orgRows = buildHomeOrgIssueRows().map((row) => ({
+    title: row.title,
+    subtitle: row.subtitle,
+    value: row.pillLabel,
+    pill_label:
+      row.pillVariant === "warn"
+        ? "주의"
+        : row.pillVariant === "error"
+          ? "확인"
+          : "정상",
+    pill_tone:
+      row.pillVariant === "warn"
+        ? "warn"
+        : row.pillVariant === "error"
+          ? "warn"
+          : "neutral",
+  }));
+  const siteRows = buildHomeQueueSummaryRows(
+    Array.isArray(briefing?.schedule_risk_rows)
+      ? briefing.schedule_risk_rows.slice(0, 3)
+      : [],
+    ROUTE_ADMIN_SITES,
+  );
+  return `
+    <article class="module-card home-role-card home-role-card--notice-org">
+      <div class="home-role-card-head">
+        <div>
+          <h3>구성원·근무지</h3>
+        </div>
+      </div>
+      <div class="home-card-scroll">
+        <section class="home-combo-section">
+          <div class="home-combo-section-head">
+            <h4>구성원 현황</h4>
+            <button class="btn btn-ghost btn-sm" type="button" data-action="drawer-open-route" data-route="${escapeHomeHtml(
+              ROUTE_ADMIN_EMPLOYEES,
+            )}">구성원 보기</button>
+          </div>
+          ${buildHomeModuleSummaryBand([
+            {
+              label: "재직",
+              value: `${Math.max(0, Number(organizationSummary?.employeeTotal || 0))}명`,
+            },
+            {
+              label: "활성",
+              value: `${Math.max(0, Number(organizationSummary?.activeEmployeeCount || 0))}명`,
+            },
+            {
+              label: "미연결",
+              value: `${Math.max(0, Number(organizationSummary?.unlinkedCount || 0))}명`,
+              tone:
+                Number(organizationSummary?.unlinkedCount || 0) > 0
+                  ? "warn"
+                  : "neutral",
+            },
+          ])}
+          ${buildHomeListRowsHtml(orgRows, {
+            emptyTitle: "구성원 이슈가 없습니다.",
+            emptyMeta: "조직 상태 변화가 생기면 여기에서 확인합니다.",
+          })}
+        </section>
+        <section class="home-combo-section">
+          <div class="home-combo-section-head">
+            <h4>근무지 현황</h4>
+            <button class="btn btn-ghost btn-sm" type="button" data-action="drawer-open-route" data-route="${escapeHomeHtml(
+              ROUTE_ADMIN_SITES,
+            )}">근무지 보기</button>
+          </div>
+          ${buildHomeListRowsHtml(stripHomeRowRoutes(siteRows), {
+            emptyTitle: "운영 중인 근무지를 확인하세요.",
+            emptyMeta: "근무지 변화와 배정 이슈를 계속 추적합니다.",
+          })}
+        </section>
+      </div>
+    </article>
+  `;
+}
+
 function buildHomeSupervisorHeroCardHtml({ briefing = null } = {}) {
   const site = briefing?.site_summary || {};
   const attendanceRate = clampHomePercent(
@@ -7774,142 +7990,22 @@ function getHomeNextShiftMeta(briefing = null) {
 }
 
 function buildHomeHqSurfaceHtml(briefing = null) {
-  const ops = briefing?.ops_summary || {};
-  const requestSummary =
-    briefing?.request_summary || briefing?.approval_summary || {};
-  const requestPendingCount = Number(
-    requestSummary?.total_pending_count || ops?.pending_approval_count || 0,
-  );
-  const attendanceRate = Number(ops?.attendance_rate || 0);
-  const attendanceRows = buildHomeQueueSummaryRows(
-    Array.isArray(briefing?.attendance_issue_rows)
-      ? briefing.attendance_issue_rows.slice(0, 4)
-      : [],
-    ROUTE_ATTENDANCE,
-  );
-  const scheduleRows = buildHomeQueueSummaryRows(
-    Array.isArray(briefing?.schedule_risk_rows)
-      ? briefing.schedule_risk_rows.slice(0, 4)
-      : [],
-    ROUTE_SCHEDULE_LIST,
-  );
-  const employeeRows = buildHomeQueueSummaryRows(
-    Array.isArray(briefing?.org_issue_rows)
-      ? briefing.org_issue_rows.slice(0, 4)
-      : [],
-    ROUTE_ADMIN_EMPLOYEES,
-  );
-  const siteRows = buildHomeQueueSummaryRows(
-    Array.isArray(briefing?.schedule_risk_rows)
-      ? briefing.schedule_risk_rows.slice(0, 2)
-      : [],
-    ROUTE_ADMIN_SITES,
-  );
-  const attendanceCardHtml = buildHomeSurfaceCardHtml({
-    title: "출퇴근",
-    route: ROUTE_ATTENDANCE,
-    className: "home-surface-card-attendance",
-    iconKey: "clock",
-    iconTone: "accent",
-    accentLabel: "실시간 근태",
-    metrics: [
-      {
-        label: "오늘 출근율",
-        value: `${attendanceRate}%`,
-        meta: `${Number(ops?.present_count || 0)} / ${Number(ops?.scheduled_count || 0)}명`,
-        tone: "warn",
-      },
-      {
-        label: "미출근",
-        value: `${Number(ops?.missing_count || 0)}건`,
-        tone: Number(ops?.missing_count || 0) > 0 ? "warn" : "neutral",
-      },
-      {
-        label: "승인 대기",
-        value: `${requestPendingCount}건`,
-        tone: requestPendingCount > 0 ? "warn" : "neutral",
-      },
-    ],
-    rows: stripHomeRowRoutes(attendanceRows),
-    emptyTitle: "오늘 즉시 확인할 출퇴근 예외가 없습니다.",
-    emptyMeta: "새 예외가 생기면 이 카드에서 바로 확인합니다.",
-  });
-  const scheduleCardHtml = buildHomeSurfaceCardHtml({
-    title: "오늘 스케줄",
-    route: ROUTE_SCHEDULE_LIST,
-    className: "home-surface-card-schedule",
-    iconKey: "calendar",
-    iconTone: "accent",
-    accentLabel: "운영 큐",
-    metrics: [
-      {
-        label: "근무 예정",
-        value: `${Number(ops?.scheduled_count || 0)}명`,
-        meta: `운영 지점 ${Number(ops?.site_count || 0)}곳`,
-      },
-      {
-        label: "출근 완료",
-        value: `${Number(ops?.present_count || 0)}명`,
-        tone: "teal",
-      },
-      {
-        label: "결원/이슈",
-        value: `${Number(ops?.missing_count || 0)}건`,
-        tone: Number(ops?.vacancy_site_count || 0) > 0 ? "warn" : "neutral",
-      },
-    ],
-    rows: stripHomeRowRoutes(scheduleRows),
-    emptyTitle: "오늘 조정이 필요한 스케줄이 없습니다.",
-    emptyMeta: "운영 리스크가 생기면 여기에서 바로 정리합니다.",
-  });
-  const employeeCardHtml = buildHomeSurfaceCardHtml({
-    title: "구성원",
-    route: ROUTE_ADMIN_EMPLOYEES,
-    className: "home-surface-card-secondary home-surface-card-people",
-    iconKey: "users",
-    iconTone: "slate",
-    accentLabel: "조직 상태",
-    metrics: [
-      {
-        label: "조직 이슈",
-        value: `${employeeRows.length}건`,
-        tone: employeeRows.length > 0 ? "warn" : "neutral",
-      },
-    ],
-    rows: stripHomeRowRoutes(employeeRows),
-    emptyTitle: "구성원 이슈가 없습니다.",
-    emptyMeta: "조직 상태 변화가 생기면 여기에서 확인합니다.",
-  });
-  const siteCardHtml = buildHomeSurfaceCardHtml({
-    title: "근무지",
-    route: ROUTE_ADMIN_SITES,
-    className: "home-surface-card-secondary home-surface-card-site",
-    iconKey: "dashboard",
-    iconTone: "slate",
-    accentLabel: "현장 상태",
-    metrics: [
-      {
-        label: "운영 지점",
-        value: `${Number(ops?.site_count || 0)}곳`,
-      },
-      {
-        label: "결원 지점",
-        value: `${Number(ops?.vacancy_site_count || 0)}곳`,
-        tone: Number(ops?.vacancy_site_count || 0) > 0 ? "warn" : "neutral",
-      },
-    ],
-    rows: stripHomeRowRoutes(siteRows),
-    emptyTitle: "운영 중인 근무지를 확인하세요.",
-    emptyMeta: "근무지 변화와 배정 이슈를 계속 추적합니다.",
-  });
   return `
-    <div class="home-role-root home-role-root-hq-v2">
-      <div class="home-ops-shell-v2 home-dashboard-stack-v2">
-        ${attendanceCardHtml}
-        ${scheduleCardHtml}
-        <div class="home-secondary-link-grid">
-          ${employeeCardHtml}
-          ${siteCardHtml}
+    <div class="home-role-root home-role-root-hq-refined">
+      <div class="home-stage-hq-refined">
+        ${buildHomeHqFocusCardHtml({ briefing })}
+        <div class="home-hq-secondary-slot home-hq-secondary-slot--requests">
+          ${buildHomeRequestCardHtml({
+            briefing,
+            title: "승인 대기",
+            allowQueueRoute: true,
+          })}
+        </div>
+        <div class="home-hq-secondary-slot home-hq-secondary-slot--schedule">
+          ${buildHomeScheduleAnalyticsCardHtml({ briefing })}
+        </div>
+        <div class="home-hq-secondary-slot home-hq-secondary-slot--noticeorg">
+          ${buildHomeHqStatusComboCardHtml({ briefing })}
         </div>
       </div>
     </div>
