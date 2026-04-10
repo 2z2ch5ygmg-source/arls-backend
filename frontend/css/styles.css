@@ -49642,9 +49642,44 @@ html[data-ui-theme="light"]
   height: 100% !important;
 }
 
+#view-attendance #attendanceStatsPanel .attendance-stats-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-summary-item {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-height: 52px;
+  padding: 8px 10px;
+  border: 1px solid rgba(226, 232, 240, 0.96);
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.9);
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-summary-item span {
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--ui-text-secondary);
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-summary-item strong {
+  font-size: 19px;
+  line-height: 1.15;
+  font-weight: 800;
+  color: var(--ui-text-primary);
+}
+
 @media (max-width: 1599px) {
   #view-attendance #attendanceStatsPanel .attendance-stats-topline {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #view-attendance #attendanceStatsPanel .attendance-stats-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

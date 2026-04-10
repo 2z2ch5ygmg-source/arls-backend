@@ -84565,11 +84565,11 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
     percent: dataset.percent !== false,
   });
   const summaryTilesHtml = `
-    <div class="attendance-stats-topline">
+    <div class="attendance-stats-summary-strip">
       ${summaryTiles
         .map(
           (item) => `
-        <article class="attendance-stats-topline-card">
+        <article class="attendance-stats-summary-item">
           <span>${escapeHtml(item.label)}</span>
           <strong>${escapeHtml(item.value)}</strong>
         </article>
