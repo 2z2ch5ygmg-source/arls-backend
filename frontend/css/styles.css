@@ -49994,7 +49994,9 @@ html[data-ui-theme="light"]
   box-shadow: none !important;
 }
 
-#view-reports .reports-finance-content-canvas > .reports-finance-canvas-step:first-child,
+#view-reports
+  .reports-finance-content-canvas
+  > .reports-finance-canvas-step:first-child,
 #view-reports .reports-support-detail-stack > .reports-wizard-step:first-child {
   padding-top: 0;
   border-top: 0;
