@@ -53274,8 +53274,8 @@ body[data-current-view="attendance"]
   height: 44px;
   border-radius: 999px;
   border: 0;
-  background: rgba(15, 23, 42, 0.05);
-  color: rgba(100, 116, 139, 0.92);
+  background: rgba(226, 232, 240, 0.72);
+  color: rgba(71, 85, 105, 0.98);
 }
 
 #view-requests .requests-inline-empty .empty-state-icon svg,
@@ -53297,6 +53297,7 @@ body[data-current-view="attendance"]
 #view-leave #leaveGrantsSection .empty-state-title,
 #view-hr .empty-state-title {
   text-align: center;
+  color: var(--ui-text-primary);
 }
 
 #view-requests .requests-inline-empty .empty-state-description,
@@ -53309,6 +53310,7 @@ body[data-current-view="attendance"]
 #view-requests .requests-inline-empty span {
   max-width: 34ch;
   text-align: center;
+  color: var(--ui-text-secondary);
 }
 
 #view-requests[data-requests-segment="documents"] #requestsFilterBar,
