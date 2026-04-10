@@ -49890,6 +49890,200 @@ html[data-ui-theme="light"]
   }
 }
 
+/* 2026-04-10 global design law retrofit */
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-metric-tiles-compact,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-metric-tiles-compact {
+  gap: 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--ui-border-subtle);
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-card .home-metric-tile,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-metric-tile {
+  padding: 0 12px;
+  border: 0;
+  border-left: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-metric-tile:first-child,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-metric-tile:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-card-scroll,
+#view-home .home-role-root-hq-refined .home-role-card--org .home-card-scroll {
+  padding-top: 10px;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-role-list,
+#view-home .home-role-root-hq-refined .home-role-card--org .home-role-list,
+#view-home .home-role-root-hq-refined .home-hq-focus-card .home-queue-list {
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-strip,
+#attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-strip-queue-first {
+  gap: 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--ui-border-subtle);
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-item {
+  min-height: 0;
+  padding: 0 12px;
+  border: 0 !important;
+  border-left: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-item:first-child {
+  padding-left: 0;
+  border-left: 0 !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-card-label-row {
+  gap: 0;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-item
+  .attendance-v2-card-icon {
+  display: none !important;
+}
+
+#attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item:first-child
+  .attendance-v2-summary-label,
+#attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item:first-child
+  .attendance-v2-card-label-text,
+#attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item:first-child
+  .attendance-v2-summary-value,
+#attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item:first-child
+  .attendance-v2-summary-meta {
+  color: var(--ui-accent);
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-topline,
+#view-attendance #attendanceStatsPanel .attendance-stats-summary-strip {
+  gap: 0 !important;
+  padding: 8px 0;
+  border-top: 1px solid var(--ui-border-subtle);
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-topline-card,
+#view-attendance #attendanceStatsPanel .attendance-stats-summary-item {
+  min-height: 0 !important;
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-left: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-attendance
+  #attendanceStatsPanel
+  .attendance-stats-topline-card:first-child,
+#view-attendance
+  #attendanceStatsPanel
+  .attendance-stats-summary-item:first-child {
+  padding-left: 0 !important;
+  border-left: 0 !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-side-card {
+  padding: 0 0 0 12px;
+  border: 0;
+  border-left: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+
+@media (max-width: 1180px) {
+  #view-home
+    .home-role-root-hq-refined
+    .home-hq-focus-card
+    .home-metric-tiles-compact,
+  #view-home
+    .home-role-root-hq-refined
+    .home-role-card--schedule-analytics
+    .home-metric-tiles-compact,
+  #attendanceManagerWorkspace.is-attendance-v2-status
+    .attendance-v2-summary-strip,
+  #attendanceManagerWorkspace.is-attendance-v2-status
+    .attendance-v2-summary-strip-queue-first,
+  #view-attendance #attendanceStatsPanel .attendance-stats-topline,
+  #view-attendance #attendanceStatsPanel .attendance-stats-summary-strip {
+    gap: 8px !important;
+    border-top: 0;
+    border-bottom: 0;
+  }
+
+  #view-home .home-role-root-hq-refined .home-hq-focus-card .home-metric-tile,
+  #view-home
+    .home-role-root-hq-refined
+    .home-role-card--schedule-analytics
+    .home-metric-tile,
+  #attendanceManagerWorkspace.is-attendance-v2-status
+    .attendance-v2-summary-item,
+  #view-attendance #attendanceStatsPanel .attendance-stats-topline-card,
+  #view-attendance #attendanceStatsPanel .attendance-stats-summary-item {
+    padding: 10px 12px !important;
+    border-left: 0 !important;
+    border: 1px solid var(--ui-border-subtle) !important;
+    border-radius: 12px !important;
+  }
+
+  #view-attendance #attendanceStatsPanel .attendance-stats-side-card {
+    padding: 10px 12px;
+    border-left: 0;
+    border: 1px solid var(--ui-border-subtle);
+    border-radius: 12px;
+  }
+}
+
 /* 2026-04-10 ralph Phase A/B terminal overrides */
 #view-attendance[data-attendance-section="stats"]
   #attendanceOpsToolbar
