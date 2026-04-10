@@ -49532,6 +49532,152 @@ html[data-ui-theme="light"]
   min-width: 132px;
 }
 
+/* 2026-04-10 requests global law retrofit */
+#view-requests #requestsWorkspaceSegments {
+  display: inline-flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-requests #requestsWorkspaceSegments .workspace-tab {
+  min-height: 0;
+  height: auto;
+  padding: 0 0 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ui-text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+#view-requests #requestsWorkspaceSegments .workspace-tab.active {
+  border-bottom-color: var(--ui-accent);
+  background: transparent;
+  color: var(--ui-accent);
+}
+
+#view-requests #requestsFilterBar,
+#view-requests #requestsFilterBar.requests-ops-toolbar,
+#view-requests[data-requests-segment="documents"] #requestsFilterBar {
+  margin: 0 0 12px;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-requests #requestsWorkspaceShell {
+  grid-template-columns: 1fr minmax(320px, 360px);
+  gap: 18px;
+}
+
+#view-requests .requests-main-column {
+  gap: 14px;
+}
+
+#view-requests #requestsMainListCard,
+#view-requests #requestsPriorityQueueCard,
+#view-requests[data-requests-segment="documents"] #requestsMainListCard,
+#view-requests[data-requests-segment="documents"] #requestsPriorityQueueCard {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-requests .requests-list-head,
+#view-requests .requests-priority-card .approval-head {
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-requests .requests-grid-header {
+  padding: 10px 0;
+  min-height: auto;
+  border-bottom: 1px solid var(--ui-border-subtle);
+  background: transparent;
+}
+
+#view-requests #requestsWorkspaceList .requests-workspace-row,
+#view-requests #requestsPriorityQueueList .requests-priority-row {
+  padding: 12px 0;
+  border-top: 1px solid var(--ui-border-subtle);
+  background: transparent;
+}
+
+#view-requests #requestsWorkspaceList .requests-workspace-row:first-child,
+#view-requests #requestsPriorityQueueList .requests-priority-row:first-child {
+  border-top: 0;
+}
+
+#view-requests .requests-secondary-tabbar {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-requests #requestsSecondaryTabs {
+  gap: 16px;
+}
+
+#view-requests #requestsSecondaryTabs .approval-tab {
+  min-height: 0;
+  height: auto;
+  padding: 0 0 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ui-text-secondary);
+  box-shadow: none;
+}
+
+#view-requests #requestsSecondaryTabs .approval-tab.active {
+  border-bottom-color: var(--ui-accent);
+  background: transparent;
+  color: var(--ui-accent);
+}
+
+#view-requests .requests-inline-empty,
+#view-requests .requests-compact-empty,
+#view-requests .empty-state.requests-compact-empty {
+  min-height: 128px;
+  padding: 20px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-requests .requests-inline-empty .empty-state-icon,
+#view-requests .requests-compact-empty .empty-state-icon,
+#view-requests .empty-state.requests-compact-empty .empty-state-icon {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: rgba(226, 232, 240, 0.72);
+  color: rgba(71, 85, 105, 0.98);
+}
+
+#view-requests #requestsUnifiedDetailPanel,
+#view-requests[data-requests-segment="documents"] #requestsUnifiedDetailPanel {
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+@media (max-width: 1180px) {
+  #view-requests #requestsWorkspaceShell {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* 2026-04-10 attendance correction pass */
 #view-attendance .attendance-v2-empty,
 #view-attendance .attendance-compact-empty {
