@@ -49517,6 +49517,123 @@ html[data-ui-theme="light"]
   min-width: 132px;
 }
 
+/* 2026-04-11 settings manager surface cleanup */
+#shell[data-shell-mode="manager"] #view-profile .profile-surface,
+#shell[data-shell-mode="manager"] #view-profile .profile-settings-rail {
+  gap: 12px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile .profile-control-head {
+  padding-bottom: 10px !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile .profile-settings-rail-grid {
+  gap: 0 !important;
+  padding-bottom: 10px !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile .profile-settings-rail-actions.shell-manager-only {
+  justify-content: flex-start !important;
+  padding-top: 10px !important;
+  border-top: 1px solid var(--ui-border-subtle) !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile #integrationFlagsCard .settings-flag-group {
+  padding-top: 12px !important;
+  border-top: 1px solid var(--ui-border-subtle) !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile #integrationFlagsCard .settings-switch-row {
+  padding: 12px 0 !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-panel {
+  gap: 12px !important;
+  padding-top: 12px !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-links-layout {
+  gap: 16px !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-profile-list {
+  gap: 0 !important;
+  max-height: 260px !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-link-row {
+  padding: 12px 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-link-row:last-child {
+  border-bottom: 0 !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-link-row:hover,
+#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-link-row:focus-visible,
+#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-link-row.active {
+  border-color: var(--ui-border-subtle) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-link-row.active .profile-google-link-row-main strong {
+  color: var(--ui-accent) !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-profile-list .requests-inline-empty {
+  padding: 16px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-sync-summary,
+#shell[data-shell-mode="manager"] #view-profile #mailHubCard .profile-mail-summary,
+#shell[data-shell-mode="manager"] #view-profile #groupwareOpsCard .profile-mail-summary {
+  gap: 12px !important;
+  padding-top: 12px !important;
+  border-top: 1px solid var(--ui-border-subtle) !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile .profile-google-sync-summary-card,
+#shell[data-shell-mode="manager"] #view-profile .profile-mail-summary-card {
+  padding: 10px 0 0 !important;
+  border: 0 !important;
+  border-top: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile #mailHubCard .profile-mail-layout,
+#shell[data-shell-mode="manager"] #view-profile #groupwareOpsCard .profile-mail-layout {
+  gap: 12px !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile #mailHubCard .settings-form-group,
+#shell[data-shell-mode="manager"] #view-profile #groupwareOpsCard .settings-form-group {
+  gap: 8px !important;
+  padding-top: 12px !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile #groupwareOpsCard .profile-groupware-rollout-form {
+  margin: 0 !important;
+  padding-top: 12px !important;
+  border-top: 1px solid var(--ui-border-subtle) !important;
+}
+
 /* 2026-04-11 document center plane normalization */
 #view-hr > #hrDocumentHomeCard,
 #view-hr > #hrEmploymentEmployeeCard,
