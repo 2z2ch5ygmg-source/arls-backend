@@ -50902,12 +50902,16 @@ html[data-ui-theme="light"]
 #view-attendance .attendance-v2-section-title-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0;
   min-width: 0;
 }
 
 #view-attendance .attendance-v2-section-title-row h3 {
   margin: 0;
+}
+
+#view-attendance .attendance-v2-section-title-row .attendance-v2-card-icon {
+  display: none !important;
 }
 
 #view-attendance .attendance-v2-card-label-row {
@@ -51039,18 +51043,19 @@ html[data-ui-theme="light"]
 #view-attendance .attendance-compact-empty {
   display: grid;
   justify-items: start;
-  gap: 10px;
+  gap: 6px;
   text-align: left;
 }
 
 #view-attendance .attendance-v2-empty-box {
   display: grid;
-  gap: 8px;
+  gap: 4px;
   justify-items: start;
-  padding: 16px 18px;
-  border: 1px dashed rgba(255, 122, 26, 0.22);
-  border-radius: 16px;
-  background: rgba(255, 250, 245, 0.72);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 #view-attendance .attendance-v2-empty-box strong {
@@ -51067,12 +51072,12 @@ html[data-ui-theme="light"]
 }
 
 #view-attendance .attendance-v2-empty.is-table {
-  padding: 0;
+  padding: 12px 0;
 }
 
 #view-attendance .attendance-v2-empty.is-table .attendance-v2-empty-box {
-  width: min(320px, 100%);
-  margin: 14px auto;
+  width: 100%;
+  margin: 0;
   justify-items: center;
   text-align: center;
 }
@@ -51082,7 +51087,7 @@ html[data-ui-theme="light"]
 }
 
 #view-attendance .attendance-compact-empty-icon {
-  display: inline-flex;
+  display: none !important;
   align-items: center;
   justify-content: center;
   width: 38px;
