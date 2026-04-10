@@ -49859,7 +49859,10 @@ html[data-ui-theme="light"]
   box-shadow: none;
 }
 
-#view-home .home-role-root-hq-refined .home-hq-focus-card .home-column-chart-track,
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-column-chart-track,
 #view-home
   .home-role-root-hq-refined
   .home-role-card--schedule-analytics
@@ -49873,13 +49876,25 @@ html[data-ui-theme="light"]
   );
 }
 
-#view-home .home-role-root-hq-refined .home-role-card--schedule-analytics .home-schedule-visual-shell {
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-schedule-visual-shell {
   padding: 10px 0 14px;
 }
 
-#view-home .home-role-root-hq-refined .home-hq-focus-card .home-module-summary-band,
-#view-home .home-role-root-hq-refined .home-role-card--schedule-analytics .home-module-summary-band,
-#view-home .home-role-root-hq-refined .home-role-card--org .home-module-summary-band {
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-module-summary-band,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-module-summary-band,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--org
+  .home-module-summary-band {
   padding-top: 12px;
 }
 
@@ -50245,6 +50260,20 @@ html[data-ui-theme="light"]
   padding: 8px 0 0;
   place-items: start;
   text-align: left;
+}
+
+#view-home .home-role-root-hq-refined .home-role-card--requests .home-queue-empty,
+#view-home .home-role-root-hq-refined .home-role-card--org .home-queue-empty {
+  min-height: 120px;
+  padding: 18px 0 8px;
+  justify-items: center;
+  align-content: center;
+  text-align: center;
+}
+
+#view-home .home-role-root-hq-refined .home-role-card--requests .home-queue-empty span,
+#view-home .home-role-root-hq-refined .home-role-card--org .home-queue-empty span {
+  max-width: 30ch;
 }
 
 #view-home .home-empty-icon {

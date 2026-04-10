@@ -6476,6 +6476,9 @@ function buildHomeEmptyStateMarkup({
 } = {}) {
   return `
     <div class="home-role-empty home-queue-empty">
+      <span class="home-empty-icon is-${escapeHomeHtml(normalizeHomeVisualTone(tone))}" aria-hidden="true">
+        ${buildAzureTopbarIconSvg(iconKey || "list")}
+      </span>
       <strong>${escapeHomeHtml(title || "표시할 항목이 없습니다.")}</strong>
       ${
         String(meta || "").trim()
