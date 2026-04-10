@@ -49722,7 +49722,7 @@ html[data-ui-theme="light"]
   padding-inline: 12px;
 }
 
-@media (min-width: 1800px) {
+@media (min-width: 1600px) {
   #view-requests,
   #view-leave,
   #view-hr {
