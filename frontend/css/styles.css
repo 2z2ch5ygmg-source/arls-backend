@@ -49925,11 +49925,8 @@ html[data-ui-theme="light"]
   .attendance-v2-summary-strip-queue-first
   .attendance-v2-summary-item:first-child {
   border-color: rgba(255, 122, 26, 0.88);
-  background: linear-gradient(
-    180deg,
-    rgba(255, 122, 26, 0.96),
-    rgba(255, 148, 72, 0.94)
-  );
+  background: #ff7a1a !important;
+  background-image: none !important;
   box-shadow: none;
 }
 
