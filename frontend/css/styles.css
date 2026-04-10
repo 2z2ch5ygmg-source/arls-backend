@@ -50274,6 +50274,10 @@ html[data-ui-theme="dark"] #view-attendance .attendance-v2-empty-box {
   line-height: 1.05;
 }
 
+#view-home .home-role-root-hq-v2 .home-metric-tiles.home-metric-tiles-compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 #view-home .home-role-root-hq-v2 .home-metric-tile span,
 #view-home .home-role-root-staff-v2 .home-metric-tile span,
 #view-home .home-role-root-officer-v2 .home-metric-tile span {
@@ -50317,6 +50321,12 @@ html[data-ui-theme="dark"] #view-attendance .attendance-v2-empty-box {
 }
 
 @media (max-width: 1024px) {
+  #view-home
+    .home-role-root-hq-v2
+    .home-metric-tiles.home-metric-tiles-compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   #view-home .home-queue-subtitle,
   #view-home .home-surface-card-secondary .home-queue-meta-cluster {
     padding-left: 0;

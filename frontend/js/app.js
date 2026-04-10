@@ -84252,9 +84252,9 @@ function buildAttendanceStatsLineSvg({
   color = "#ff7a1a",
   percent = true,
 } = {}) {
-  const chartWidth = 860;
-  const chartHeight = 196;
-  const padding = { top: 12, right: 14, bottom: 28, left: 36 };
+  const chartWidth = 1180;
+  const chartHeight = 148;
+  const padding = { top: 8, right: 10, bottom: 24, left: 30 };
   const innerWidth = chartWidth - padding.left - padding.right;
   const innerHeight = chartHeight - padding.top - padding.bottom;
   const list = Array.isArray(values)
@@ -84263,7 +84263,7 @@ function buildAttendanceStatsLineSvg({
   const hasValues = list.length > 0;
   const maxValue = percent ? 100 : Math.max(1, ...list, 1);
   const minValue = 0;
-  const steps = 4;
+  const steps = 3;
   const xForIndex = (index) =>
     padding.left + (innerWidth / Math.max(1, list.length - 1 || 1)) * index;
   const yForValue = (value) => {
@@ -84284,9 +84284,9 @@ function buildAttendanceStatsLineSvg({
       label: percent ? `${Math.round(value)}%` : String(Math.round(value)),
     };
   });
-  const showPointValueLabels = list.length <= 8;
-  const xLabelStep = list.length > 16 ? 3 : list.length > 10 ? 2 : 1;
-  const xLabelFontSize = list.length > 16 ? 9 : 10;
+  const showPointValueLabels = list.length <= 4;
+  const xLabelStep = list.length > 12 ? 2 : 1;
+  const xLabelFontSize = 9;
 
   return `
     <svg class="attendance-stats-chart-svg" viewBox="0 0 ${chartWidth} ${chartHeight}" role="img" aria-label="출퇴근 통계 차트">
