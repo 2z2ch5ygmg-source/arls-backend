@@ -49749,6 +49749,148 @@ html[data-ui-theme="light"]
   border-top: 0;
 }
 
+/* 2026-04-11 organization family plane normalization */
+#view-employees .employee-top-action-bar,
+#view-employees .employee-toolbar,
+#view-org .site-filter-grid,
+#view-org .site-console-toolbar,
+#view-dev-console .master-company-toolbar-card,
+#view-dev-console .master-company-table-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-employees .employee-console-topbar,
+#view-org .site-directory-table-head,
+#view-dev-console .master-company-table-head,
+#view-dev-console .master-company-toolbar,
+#view-org .site-console-toolbar {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+#view-employees .employee-toolbar,
+#view-org .site-filter-grid,
+#view-dev-console .master-company-toolbar {
+  padding: 14px 0 0;
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+#view-dev-console .master-company-table-card,
+#view-org .site-directory-table-card,
+#view-employees .employee-directory-table-card,
+#view-employees #employeeDesktopTableCard {
+  padding-right: 0;
+  padding-left: 0;
+  border: 0;
+  border-top: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-dev-console #masterTenantTableWrap,
+#view-org #siteDesktopTableWrap,
+#view-employees #employeeDesktopTableWrap,
+#view-employees #employeeDesktopTableCard .employee-table-wrap {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-dev-console .master-company-utility {
+  margin: 0;
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+
+#view-dev-console .master-company-utility summary {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ui-text-secondary);
+}
+
+#view-dev-console .master-company-utility-body {
+  padding: 12px 0 0;
+  border: 0;
+  background: transparent;
+}
+
+#view-employees .employee-directory-summary-strip,
+#view-org .organization-summary-strip,
+#view-dev-console .organization-summary-strip,
+#view-dev-console #masterTenantSummaryStrip {
+  gap: 12px 16px;
+  padding-top: 2px;
+}
+
+#view-employees .employee-summary-card,
+#view-org .organization-summary-item,
+#view-dev-console .organization-summary-item,
+#view-dev-console #masterTenantSummaryStrip .organization-summary-item {
+  min-height: 0;
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none;
+}
+
+#view-employees .employee-summary-card[data-tone="success"],
+#view-employees .employee-summary-card[data-tone="warn"],
+#view-org .organization-summary-item[data-layout="lead"],
+#view-org .organization-summary-item[data-tone="success"],
+#view-org .organization-summary-item[data-tone="warn"],
+#view-org .organization-summary-item[data-tone="danger"],
+#view-dev-console .organization-summary-item[data-layout="lead"],
+#view-dev-console .organization-summary-item[data-tone="success"],
+#view-dev-console .organization-summary-item[data-tone="warn"],
+#view-dev-console .organization-summary-item[data-tone="danger"] {
+  background: transparent !important;
+  border-color: var(--ui-border-subtle);
+}
+
+#view-org .organization-summary-item[data-layout="lead"]::before,
+#view-dev-console .organization-summary-item[data-layout="lead"]::before {
+  display: none;
+}
+
+#view-employees .employee-summary-card-head,
+#view-org .organization-summary-item,
+#view-dev-console .organization-summary-item {
+  gap: 8px;
+}
+
+#view-employees .employee-summary-card-value,
+#view-org .organization-summary-value,
+#view-dev-console .organization-summary-value {
+  font-size: clamp(20px, 1.45vw, 26px);
+}
+
+#view-employees .employee-directory-count,
+#view-dev-console .master-company-table-count {
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ui-text-secondary);
+}
+
+#view-org .site-toolbar-actions .btn,
+#view-employees .employee-toolbar-actions .btn,
+#view-dev-console .master-company-toolbar-actions .btn {
+  min-width: 104px;
+}
+
 /* 2026-04-10 requests global law retrofit */
 #view-requests #requestsWorkspaceSegments {
   display: inline-flex;
