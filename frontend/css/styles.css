@@ -50262,7 +50262,10 @@ html[data-ui-theme="light"]
   text-align: left;
 }
 
-#view-home .home-role-root-hq-refined .home-role-card--requests .home-queue-empty,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--requests
+  .home-queue-empty,
 #view-home .home-role-root-hq-refined .home-role-card--org .home-queue-empty {
   min-height: 120px;
   padding: 18px 0 8px;
@@ -50271,8 +50274,16 @@ html[data-ui-theme="light"]
   text-align: center;
 }
 
-#view-home .home-role-root-hq-refined .home-role-card--requests .home-queue-empty span,
-#view-home .home-role-root-hq-refined .home-role-card--org .home-queue-empty span {
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--requests
+  .home-queue-empty
+  span,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--org
+  .home-queue-empty
+  span {
   max-width: 30ch;
 }
 
