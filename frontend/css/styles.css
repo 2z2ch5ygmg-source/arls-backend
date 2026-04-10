@@ -49678,6 +49678,243 @@ html[data-ui-theme="light"]
   }
 }
 
+/* 2026-04-10 home graph restoration pass */
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--org
+  .home-role-card-head
+  h3,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-role-card-head
+  h3,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--requests
+  .home-role-card-head
+  h3 {
+  padding-left: 0;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--org
+  .home-role-card-head
+  h3::before,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-role-card-head
+  h3::before,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--requests
+  .home-role-card-head
+  h3::before {
+  display: none;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-copy {
+  gap: 6px;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-copy p {
+  font-size: 13px;
+  line-height: 20px;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-visuals {
+  display: grid;
+  grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+  padding: 12px 0 14px;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-card .home-ring-card {
+  padding: 16px 18px;
+  border: 0;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #469cff, #2f80ff);
+  box-shadow: none;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-ring-card
+  .home-ring-title,
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-ring-card
+  .home-ring-center
+  strong,
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-ring-card
+  .home-ring-center
+  span,
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-ring-card
+  .home-ring-meta
+  strong,
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-ring-card
+  .home-ring-meta
+  span {
+  color: #fff;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-ring-card
+  .home-ring-visual {
+  width: min(100%, 156px);
+  aspect-ratio: 1;
+  min-height: 0;
+  margin: 0 auto;
+  padding: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    rgba(255, 255, 255, 0.96) calc(var(--progress) * 1%),
+    rgba(255, 255, 255, 0.22) 0
+  );
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-ring-card
+  .home-ring-visual::after {
+  display: block;
+  inset: 14px;
+  background: rgba(47, 128, 255, 0.92);
+  box-shadow: none;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-ring-card
+  .home-ring-center {
+  position: absolute;
+  inset: 0;
+  place-content: center;
+  text-align: center;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-ring-card
+  .home-ring-center
+  strong {
+  font-size: 34px;
+  line-height: 1;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-ring-card
+  .home-ring-center
+  span {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-ring-card
+  .home-ring-meta {
+  text-align: center;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-chart-block,
+#view-home .home-role-root-hq-refined .home-schedule-visual-shell {
+  display: grid;
+  align-content: stretch;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-card .home-column-chart,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-column-chart {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 4px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-card .home-column-chart-track,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-column-chart-track {
+  min-height: 134px;
+  border-radius: 14px;
+  background: linear-gradient(
+    180deg,
+    rgba(241, 245, 249, 0.82),
+    rgba(226, 232, 240, 0.4)
+  );
+}
+
+#view-home .home-role-root-hq-refined .home-role-card--schedule-analytics .home-schedule-visual-shell {
+  padding: 10px 0 14px;
+}
+
+#view-home .home-role-root-hq-refined .home-hq-focus-card .home-module-summary-band,
+#view-home .home-role-root-hq-refined .home-role-card--schedule-analytics .home-module-summary-band,
+#view-home .home-role-root-hq-refined .home-role-card--org .home-module-summary-band {
+  padding-top: 12px;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-hq-focus-card
+  .home-module-summary-band
+  .home-module-summary-item,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--schedule-analytics
+  .home-module-summary-band
+  .home-module-summary-item,
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--org
+  .home-module-summary-band
+  .home-module-summary-item {
+  padding-inline: 16px;
+}
+
+@media (max-width: 1180px) {
+  #view-home .home-role-root-hq-refined .home-hq-focus-visuals {
+    grid-template-columns: 1fr;
+  }
+
+  #view-home .home-role-root-hq-refined .home-hq-focus-card .home-column-chart,
+  #view-home
+    .home-role-root-hq-refined
+    .home-role-card--schedule-analytics
+    .home-column-chart {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* 2026-04-10 attendance correction pass */
 #view-attendance .attendance-v2-empty,
 #view-attendance .attendance-compact-empty {
@@ -49967,7 +50204,7 @@ html[data-ui-theme="light"]
   .home-role-card-head
   h3 {
   position: relative;
-  padding-left: 12px;
+  padding-left: 0;
 }
 
 #view-home

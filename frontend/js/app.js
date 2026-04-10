@@ -7489,6 +7489,35 @@ function buildHomeScheduleAnalyticsCardHtml({
     (sum, row) => sum + parseHomeCountValue(row?.value),
     0,
   );
+  const chartRows = [
+    {
+      label: "조정 필요",
+      value: riskTotal,
+      valueLabel: `${riskTotal}건`,
+      tone: riskTotal > 0 ? "orange" : "neutral",
+    },
+    {
+      label: "운영",
+      value: Number(normalizedOps?.site_count || 0),
+      valueLabel: `${Number(normalizedOps?.site_count || 0)}곳`,
+      tone: "slate",
+    },
+    {
+      label: "결원",
+      value: vacancySiteCount,
+      valueLabel: `${vacancySiteCount}곳`,
+      tone: vacancySiteCount > 0 ? "orange" : "neutral",
+    },
+    {
+      label: "승인",
+      value: Number(normalizedRequest?.total_pending_count || 0),
+      valueLabel: `${Number(normalizedRequest?.total_pending_count || 0)}건`,
+      tone:
+        Number(normalizedRequest?.total_pending_count || 0) > 0
+          ? "danger"
+          : "neutral",
+    },
+  ];
   return `
     <article class="module-card home-role-card home-role-card--schedule-analytics">
       <div class="home-role-card-head">
@@ -7529,6 +7558,9 @@ function buildHomeScheduleAnalyticsCardHtml({
         ],
         { compact: true },
       )}
+      <div class="home-schedule-visual-shell">
+        ${buildHomeColumnChartHtml(chartRows)}
+      </div>
       <div class="home-card-scroll">
         ${buildHomeListRowsHtml(focusRows, {
           emptyTitle: "스케줄 리스크가 없습니다.",
@@ -7686,6 +7718,32 @@ function buildHomeHqFocusCardHtml({ briefing = null } = {}) {
     Number(ops?.attendance_rate || 0) ||
       (presentCount / Math.max(1, scheduledCount)) * 100,
   );
+  const distributionRows = [
+    {
+      label: "근무",
+      value: scheduledCount,
+      valueLabel: `${scheduledCount}명`,
+      tone: "slate",
+    },
+    {
+      label: "휴무",
+      value: offCount,
+      valueLabel: `${offCount}명`,
+      tone: "neutral",
+    },
+    {
+      label: "휴가",
+      value: leaveCount,
+      valueLabel: `${leaveCount}명`,
+      tone: "teal",
+    },
+    {
+      label: "승인",
+      value: pendingCount,
+      valueLabel: `${pendingCount}건`,
+      tone: "danger",
+    },
+  ];
   const queueRows = attendanceRows.length
     ? attendanceRows
     : [
@@ -7705,38 +7763,20 @@ function buildHomeHqFocusCardHtml({ briefing = null } = {}) {
           ROUTE_ATTENDANCE,
         )}">출퇴근 보기</button>
       </div>
-      ${buildHomeMetricTilesHtml(
-        [
-          {
-            label: "오늘 출근율",
-            value: `${attendanceRate}%`,
-            meta: `${presentCount} / ${scheduledCount}명`,
-            tone:
-              Number(ops?.missing_count || 0) > 0 || pendingCount > 0
-                ? "warn"
-                : "neutral",
-          },
-          {
-            label: "근무",
-            value: `${scheduledCount}명`,
-            meta: `출근 ${presentCount}명`,
-            tone: "neutral",
-          },
-          {
-            label: "휴무",
-            value: `${offCount}명`,
-            meta: "비근무",
-            tone: "neutral",
-          },
-          {
-            label: "휴가",
-            value: `${leaveCount}명`,
-            meta: "오늘 휴가",
-            tone: "teal",
-          },
-        ],
-        { compact: true },
-      )}
+      <div class="home-hq-focus-visuals">
+        ${buildHomeRingHeroHtml({
+          title: "오늘 출근율",
+          percent: attendanceRate,
+          valueLabel: `${presentCount} / ${scheduledCount}명`,
+          meta: `${Math.max(0, Number(ops?.missing_count || 0))}건 미출근`,
+          footer: `승인 대기 ${pendingCount}건`,
+          tone: "blue",
+          size: "sm",
+        })}
+        <div class="home-hq-focus-chart-block">
+          ${buildHomeColumnChartHtml(distributionRows)}
+        </div>
+      </div>
       ${buildHomeModuleSummaryBand([
         {
           label: "승인 대기",
