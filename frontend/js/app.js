@@ -84545,6 +84545,46 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
         .join("")}
     </div>
   `;
+  const legendHtml = `
+    <div class="attendance-stats-legend">
+      ${dataset.legend
+        .map(
+          (item) => `
+        <div class="attendance-stats-legend-item">
+          <span class="attendance-stats-legend-swatch" style="background:${escapeHtml(item.color || "#ff7a1a")}"></span>
+          <span>${escapeHtml(item.label)}</span>
+        </div>
+      `,
+        )
+        .join("")}
+    </div>
+  `;
+  const detailTableHtml = `
+    <div class="attendance-stats-card-head attendance-stats-table-head">
+      <div>
+        <h4>세부 지표</h4>
+      </div>
+    </div>
+    <div class="attendance-stats-table-wrap attendance-stats-table-wrap-wide">
+      <table class="attendance-stats-table attendance-stats-table-wide">
+        <thead>
+          <tr>${detailHeader
+            .map((label) => `<th>${escapeHtml(label)}</th>`)
+            .join("")}</tr>
+        </thead>
+        <tbody>
+          ${detailRows
+            .map(
+              (row) =>
+                `<tr>${row
+                  .map((cell) => `<td>${escapeHtml(cell)}</td>`)
+                  .join("")}</tr>`,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
   state.attendanceView.__statsExport = {
     fileStem: dataset.fileStem,
     header: dataset.tableHeader,
@@ -84553,7 +84593,7 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
   };
   panel.innerHTML = `
     <div class="attendance-stats-shell">
-      <section class="attendance-stats-card attendance-stats-card-primary">
+      <section class="attendance-stats-card attendance-stats-card-primary attendance-stats-card-composed">
         <div class="attendance-stats-card-head">
           <div>
             <h4>${escapeHtml(dataset.title)}</h4>
@@ -84562,42 +84602,23 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
             <span class="attendance-stats-meta">${escapeHtml(start && end ? `${start} ~ ${end}` : "조회 범위 없음")}</span>
           </div>
         </div>
-        ${summaryTilesHtml}
-        <div class="attendance-stats-chart-shell">
-          <div class="attendance-stats-chart-layout">
-            <div class="attendance-stats-chart-wrap" data-export-name="${escapeHtml(dataset.fileStem)}">
-              ${svgMarkup}
+        <div class="attendance-stats-composed-shell">
+          <div class="attendance-stats-main-graph">
+            <div class="attendance-stats-chart-shell">
+              <div class="attendance-stats-chart-wrap" data-export-name="${escapeHtml(dataset.fileStem)}">
+                ${svgMarkup}
+              </div>
             </div>
-            <aside class="attendance-stats-legend">
-              ${dataset.legend
-                .map(
-                  (item) => `
-                <div class="attendance-stats-legend-item">
-                  <span class="attendance-stats-legend-swatch" style="background:${escapeHtml(item.color || "#ff7a1a")}"></span>
-                  <span>${escapeHtml(item.label)}</span>
-                </div>
-              `,
-                )
-                .join("")}
-            </aside>
           </div>
-        </div>
-      </section>
-      <section class="attendance-stats-table-card">
-        <div class="attendance-stats-card-head attendance-stats-table-head">
-          <div>
-            <h4>세부 지표</h4>
-          </div>
-        </div>
-        <div class="attendance-stats-table-wrap attendance-stats-table-wrap-wide">
-          <table class="attendance-stats-table attendance-stats-table-wide">
-            <thead>
-              <tr>${detailHeader.map((label) => `<th>${escapeHtml(label)}</th>`).join("")}</tr>
-            </thead>
-            <tbody>
-              ${detailRows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}
-            </tbody>
-          </table>
+          <aside class="attendance-stats-side-panel">
+            ${summaryTilesHtml}
+            <section class="attendance-stats-side-card attendance-stats-side-card-legend">
+              ${legendHtml}
+            </section>
+            <section class="attendance-stats-side-card attendance-stats-side-card-table">
+              ${detailTableHtml}
+            </section>
+          </aside>
         </div>
       </section>
     </div>
