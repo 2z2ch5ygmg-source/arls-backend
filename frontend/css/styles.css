@@ -49891,6 +49891,164 @@ html[data-ui-theme="light"]
   min-width: 104px;
 }
 
+/* 2026-04-11 reports plane normalization */
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-overview-view,
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-wizard-view,
+#view-reports #financeDownloadPanel,
+#view-reports #reportsSupportCard {
+  gap: 14px;
+  padding: 16px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-download-header,
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-main-head,
+#view-reports #financeDownloadPanel .reports-finance-download-header,
+#view-reports #reportsSupportCard > .approval-head {
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-download-actions,
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-main-actions,
+#view-reports #financeDownloadPanel .reports-finance-download-actions {
+  gap: 8px;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-step-rail,
+#view-reports .reports-support-sidebar {
+  padding: 0 0 12px;
+  border-right: 0;
+  border-bottom: 1px solid var(--ui-border-subtle);
+  background: transparent;
+}
+
+#view-reports .reports-finance-step-rail-item,
+#view-reports .reports-support-stepnav-item {
+  gap: 10px;
+  padding: 10px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-reports .reports-finance-step-rail-item:hover,
+#view-reports .reports-finance-step-rail-item:focus-visible,
+#view-reports .reports-finance-step-rail-item.is-current:hover,
+#view-reports .reports-finance-step-rail-item[data-step-state="complete"]:hover,
+#view-reports .reports-finance-step-rail-item[data-step-state="blocked"]:hover,
+#view-reports .reports-support-stepnav-item:hover,
+#view-reports .reports-support-stepnav-item:focus-visible,
+#view-reports .reports-support-stepnav-item.is-current:hover,
+#view-reports .reports-support-stepnav-item[data-step-state="complete"]:hover,
+#view-reports .reports-support-stepnav-item[data-step-state="blocked"]:hover {
+  border: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-reports .reports-finance-step-rail-item.is-current,
+#view-reports .reports-finance-step-rail-item[data-step-state="active"],
+#view-reports .reports-finance-step-rail-item[data-step-state="complete"],
+#view-reports .reports-finance-step-rail-item[data-step-state="blocked"],
+#view-reports .reports-support-stepnav-item.is-current,
+#view-reports .reports-support-stepnav-item[data-step-state="active"],
+#view-reports .reports-support-stepnav-item[data-step-state="complete"],
+#view-reports .reports-support-stepnav-item[data-step-state="blocked"] {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+#view-reports .reports-finance-main-canvas,
+#view-reports .reports-support-stage-shell {
+  gap: 0;
+}
+
+#view-reports .reports-finance-blocked-list,
+#view-reports #scheduleSupportBlockedReasons {
+  margin: 0;
+  padding: 10px 0 0 18px;
+  border-top: 1px solid var(--ui-border-subtle);
+  border-bottom: 0;
+  background: transparent;
+}
+
+#view-reports .reports-finance-content-canvas,
+#view-reports .reports-support-detail-stack {
+  padding: 12px 0 0;
+  gap: 0;
+}
+
+#view-reports .reports-finance-content-canvas > .reports-finance-canvas-step,
+#view-reports .reports-support-detail-stack > .reports-wizard-step {
+  gap: 12px;
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-reports .reports-finance-content-canvas > .reports-finance-canvas-step:first-child,
+#view-reports .reports-support-detail-stack > .reports-wizard-step:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+#view-reports .reports-finance-step-head,
+#view-reports .reports-wizard-step-head {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-reports .reports-wizard-footer,
+#view-reports .schedule-wizard-actions,
+#view-reports .schedule-support-upload-actions {
+  margin-top: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+#view-reports .schedule-support-upload-actions {
+  justify-content: flex-start;
+}
+
+#view-reports .schedule-support-status-grid {
+  gap: 0 16px;
+  padding-top: 12px;
+}
+
+#view-reports .schedule-support-meta-card,
+#view-reports .schedule-support-action-section,
+#view-reports .schedule-upload-summary-strip,
+#view-reports .schedule-upload-issue-groups,
+#view-reports .schedule-upload-placeholder,
+#view-reports .schedule-preview-wrap,
+#view-reports .task-progress-strip,
+#view-reports .schedule-upload-apply-bar {
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-reports .schedule-support-meta-card:first-child,
+#view-reports .schedule-upload-summary-strip:empty,
+#view-reports .schedule-upload-issue-groups:empty {
+  border-top-color: transparent;
+}
+
+#view-reports .task-progress-strip {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
 /* 2026-04-10 requests global law retrofit */
 #view-requests #requestsWorkspaceSegments {
   display: inline-flex;
