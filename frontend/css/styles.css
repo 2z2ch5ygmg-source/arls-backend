@@ -39863,45 +39863,6 @@ body.calendar-public-shell #view-calendar-public {
   display: none !important;
 }
 
-#view-attendance .attendance-stats-panel-tab-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-#view-attendance .attendance-stats-panel-tab {
-  min-height: 34px;
-  padding: 0 2px 8px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--ui-text-secondary);
-  font-size: 15px;
-  font-weight: 700;
-}
-
-#view-attendance .attendance-stats-panel-tab.active {
-  color: var(--ui-text-primary);
-  border-bottom-color: var(--ui-accent);
-}
-
-#view-attendance .attendance-stats-panel-pill {
-  min-height: 38px;
-  padding: 0 16px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 12px;
-  background: #fff;
-  color: var(--ui-text-secondary);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-#view-attendance .attendance-stats-panel-pill.active {
-  border-color: rgba(255, 122, 26, 0.22);
-  background: rgba(255, 122, 26, 0.08);
-  color: var(--ui-accent);
-}
-
 #view-attendance .attendance-filter-sheet .requests-filter-sheet-nav {
   min-width: 228px;
   padding: 0 18px 0 0;
@@ -48050,17 +48011,6 @@ html[data-ui-theme="dark"]
   color: #475569;
 }
 
-.attendance-stats-panel-tab {
-  font-size: 14px !important;
-  min-height: 30px !important;
-}
-
-.attendance-stats-panel-pill {
-  min-height: 32px !important;
-  padding-inline: 12px !important;
-  font-size: 12px !important;
-}
-
 .attendance-stats-card-head h4 {
   font-size: 16px;
 }
@@ -48370,17 +48320,11 @@ html[data-ui-theme="dark"] .attendance-stats-chart-wrap {
   color: #0f172a;
 }
 
-#view-home .home-role-root-hq-v2 .home-metric-tiles,
 #view-home .home-role-root-staff-v2 .home-metric-tiles,
 #view-home .home-role-root-officer-v2 .home-metric-tiles {
   gap: 8px;
 }
 
-#view-home .home-role-root-hq-v2 .home-metric-tiles {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-#view-home .home-role-root-hq-v2 .home-metric-tile,
 #view-home .home-role-root-staff-v2 .home-metric-tile,
 #view-home .home-role-root-officer-v2 .home-metric-tile {
   min-height: 74px;
@@ -48389,7 +48333,6 @@ html[data-ui-theme="dark"] .attendance-stats-chart-wrap {
   background: #f8fafc;
 }
 
-#view-home .home-role-root-hq-v2 .home-metric-tile strong,
 #view-home .home-role-root-staff-v2 .home-metric-tile strong,
 #view-home .home-role-root-officer-v2 .home-metric-tile strong {
   font-size: 22px;
@@ -49021,52 +48964,6 @@ html[data-ui-theme="dark"]
 
 #view-attendance .attendance-simple-filter-option-copy span {
   font-size: 11px;
-}
-
-#attendanceStatsPanel .attendance-stats-panel-tab-row-scope {
-  display: flex;
-  align-items: center;
-  gap: 22px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--ui-border-subtle);
-}
-
-#attendanceStatsPanel .attendance-stats-panel-tab-row-metric {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-top: 2px;
-}
-
-#attendanceStatsPanel .attendance-stats-panel-tab {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding: 0 0 10px;
-  font-weight: 800;
-  color: var(--ui-text-secondary);
-}
-
-#attendanceStatsPanel .attendance-stats-panel-tab.active {
-  color: #2563eb;
-  box-shadow: inset 0 -2px 0 #2563eb;
-}
-
-#attendanceStatsPanel .attendance-stats-panel-pill {
-  min-height: 38px;
-  padding: 0 16px;
-  border: 1px solid rgba(226, 232, 240, 0.96);
-  border-radius: 12px;
-  background: rgba(248, 250, 252, 0.9);
-  color: var(--ui-text-secondary);
-  font-weight: 700;
-}
-
-#attendanceStatsPanel .attendance-stats-panel-pill.active {
-  border-color: rgba(37, 99, 235, 0.18);
-  background: rgba(37, 99, 235, 0.08);
-  color: #2563eb;
-  box-shadow: none;
 }
 
 #attendanceStatsPanel .attendance-stats-card {
@@ -49717,167 +49614,6 @@ html[data-ui-theme="light"]
   box-shadow: none;
 }
 
-.modal-sheet.sheet-layout-attendance-picker {
-  padding: 18px 18px 16px;
-  border-radius: 20px;
-}
-
-.modal-sheet.sheet-layout-attendance-picker .sheet-content {
-  gap: 12px;
-}
-
-.modal-sheet.sheet-layout-attendance-picker .sheet-actions {
-  padding-top: 12px;
-  border-top: 1px solid var(--ui-border-subtle);
-}
-
-.attendance-picker-modal {
-  gap: 12px;
-}
-
-.attendance-picker-modal-head {
-  gap: 10px;
-}
-
-.attendance-picker-modal-body {
-  grid-template-columns: 132px minmax(0, 1fr);
-  gap: 14px;
-  min-height: 360px;
-}
-
-.attendance-picker-modal-nav {
-  gap: 0;
-  padding-right: 12px;
-  border-right: 1px solid var(--ui-border-subtle);
-}
-
-.attendance-picker-modal-nav-item {
-  gap: 2px;
-  padding: 10px 4px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.attendance-picker-modal-nav-item strong {
-  color: var(--ui-text-primary);
-}
-
-.attendance-picker-modal-nav-item span {
-  color: var(--ui-text-secondary);
-}
-
-.attendance-picker-modal-panel {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.attendance-picker-modal-panel-head {
-  padding: 10px 0 10px 14px;
-  border-bottom: 1px solid var(--ui-border-subtle);
-  background: transparent;
-}
-
-.attendance-picker-modal-panel-body {
-  padding: 8px 0 0 14px;
-  gap: 0;
-}
-
-.attendance-picker-option-stack {
-  gap: 0;
-}
-
-.attendance-picker-option {
-  padding: 10px 0;
-  border: 0;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.92);
-  border-radius: 0;
-  background: transparent;
-}
-
-.attendance-picker-option:last-child {
-  border-bottom: 0;
-}
-
-.attendance-picker-option.is-selected {
-  background: rgba(59, 130, 246, 0.06);
-  box-shadow: none;
-}
-
-.attendance-picker-empty {
-  min-height: 180px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-/* 2026-04-10 ralph Phase B flattening follow-up */
-.attendance-picker-modal-body {
-  gap: 12px;
-  min-height: 340px;
-}
-
-.attendance-picker-modal-nav {
-  padding-right: 10px;
-}
-
-.attendance-picker-modal-nav-item {
-  padding: 8px 0;
-  border: 0 !important;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.92) !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-}
-
-.attendance-picker-modal-nav-item:last-child {
-  border-bottom: 0 !important;
-}
-
-.attendance-picker-modal-panel {
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  overflow: visible !important;
-}
-
-.attendance-picker-modal-panel-head {
-  padding: 10px 0 10px 12px;
-  background: transparent !important;
-}
-
-.attendance-picker-modal-panel-body {
-  padding: 6px 0 0 12px;
-  gap: 0;
-}
-
-.attendance-picker-option-stack {
-  gap: 0 !important;
-}
-
-.attendance-picker-option {
-  padding: 10px 0 !important;
-  border: 0 !important;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.92) !important;
-  border-radius: 0 !important;
-}
-
-.attendance-picker-option:last-child {
-  border-bottom: 0 !important;
-}
-
-.attendance-picker-option.is-selected {
-  background: rgba(59, 130, 246, 0.05) !important;
-  box-shadow: none !important;
-}
-
-.attendance-picker-empty {
-  min-height: 120px;
-  padding: 0 12px;
-  border: 0 !important;
-  background: transparent !important;
-}
-
 /* 2026-04-10 control grammar follow-up terminal overrides */
 #view-attendance #attendanceStatsPanel .attendance-stats-topline {
   display: grid !important;
@@ -50106,55 +49842,6 @@ html[data-ui-theme="light"]
   }
 }
 
-#attendanceStatsToolbarControls {
-  display: flex;
-  align-items: center;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-#attendanceStatsToolbarControls.hidden {
-  display: none !important;
-}
-
-#attendanceStatsToolbarControls .attendance-stats-toolbar-rail {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
-#attendanceStatsToolbarControls .attendance-stats-toolbar-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
-#attendanceStatsToolbarControls .attendance-stats-toolbar-divider {
-  width: 1px;
-  align-self: stretch;
-  background: rgba(226, 232, 240, 0.96);
-}
-
-#attendanceStatsToolbarControls .attendance-stats-panel-tab-row,
-#attendanceStatsToolbarControls .attendance-stats-panel-tab-row-scope,
-#attendanceStatsToolbarControls .attendance-stats-panel-tab-row-metric {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 0 !important;
-  border: 0 !important;
-}
-
-#view-attendance #attendanceStatsPanelTabs {
-  display: none !important;
-}
-
 #view-attendance[data-attendance-section="stats"]
   #attendanceOpsToolbar
   .attendance-ops-field {
@@ -50296,40 +49983,6 @@ html[data-ui-theme="light"]
 
 #view-attendance #attendanceToolbarListFields .attendance-range-trigger {
   min-width: 248px;
-}
-
-#view-attendance .attendance-stats-panel-tab {
-  min-height: 32px;
-  padding: 0 2px 6px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--ui-text-secondary);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-#view-attendance .attendance-stats-panel-tab.active {
-  color: var(--ui-accent);
-  border-bottom-color: var(--ui-accent);
-  box-shadow: none;
-}
-
-#view-attendance .attendance-stats-panel-pill {
-  min-height: 30px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(248, 250, 252, 0.92);
-  color: var(--ui-text-secondary);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-#view-attendance .attendance-stats-panel-pill.active {
-  background: rgba(255, 247, 237, 0.92);
-  color: var(--ui-accent);
-  border: 0;
 }
 
 #view-attendance #attendanceStatsPanel .attendance-stats-shell {
@@ -51147,7 +50800,6 @@ html[data-ui-theme="dark"] #view-attendance .attendance-v2-empty-box {
   padding-left: 16px;
 }
 
-#view-home .home-role-root-hq-v2 .home-metric-tile,
 #view-home .home-role-root-staff-v2 .home-metric-tile,
 #view-home .home-role-root-officer-v2 .home-metric-tile {
   min-height: 58px;
@@ -51156,25 +50808,18 @@ html[data-ui-theme="dark"] #view-attendance .attendance-v2-empty-box {
   align-content: start;
 }
 
-#view-home .home-role-root-hq-v2 .home-metric-tile strong,
 #view-home .home-role-root-staff-v2 .home-metric-tile strong,
 #view-home .home-role-root-officer-v2 .home-metric-tile strong {
   font-size: 18px;
   line-height: 1.05;
 }
 
-#view-home .home-role-root-hq-v2 .home-metric-tiles.home-metric-tiles-compact {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-#view-home .home-role-root-hq-v2 .home-metric-tile span,
 #view-home .home-role-root-staff-v2 .home-metric-tile span,
 #view-home .home-role-root-officer-v2 .home-metric-tile span {
   font-size: 11px;
   line-height: 1.2;
 }
 
-#view-home .home-role-root-hq-v2 .home-metric-tile small,
 #view-home .home-role-root-staff-v2 .home-metric-tile small,
 #view-home .home-role-root-officer-v2 .home-metric-tile small {
   font-size: 10px;
@@ -51210,12 +50855,6 @@ html[data-ui-theme="dark"] #view-attendance .attendance-v2-empty-box {
 }
 
 @media (max-width: 1024px) {
-  #view-home
-    .home-role-root-hq-v2
-    .home-metric-tiles.home-metric-tiles-compact {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   #view-home .home-queue-subtitle,
   #view-home .home-surface-card-secondary .home-queue-meta-cluster {
     padding-left: 0;
@@ -51285,46 +50924,6 @@ html[data-ui-theme="dark"] #view-attendance .attendance-v2-empty-box {
   .attendance-v2-empty.is-table
   .attendance-v2-empty-box {
   margin: 10px auto;
-}
-
-#view-attendance #attendanceStatsPanelTabs {
-  gap: 6px;
-  padding: 0 0 10px;
-}
-
-#view-attendance .attendance-stats-panel-tab-row-scope {
-  gap: 14px;
-  padding-bottom: 6px;
-}
-
-#view-attendance .attendance-stats-panel-tab {
-  padding: 0 0 8px;
-  font-size: 13px;
-}
-
-#view-attendance .attendance-stats-panel-tab.active {
-  color: var(--ui-accent);
-  box-shadow: inset 0 -2px 0 var(--ui-accent);
-}
-
-#view-attendance .attendance-stats-panel-tab-shell {
-  margin-top: 0;
-  padding-left: 0;
-}
-
-#view-attendance .attendance-stats-panel-pill {
-  min-height: 32px;
-  padding: 0 12px;
-  border: 1px solid rgba(226, 232, 240, 0.92);
-  border-radius: 999px;
-  background: #fff;
-  margin-right: 6px;
-}
-
-#view-attendance .attendance-stats-panel-pill.active {
-  border-color: rgba(255, 122, 26, 0.28);
-  background: rgba(255, 247, 237, 0.92);
-  color: var(--ui-accent);
 }
 
 #view-attendance .attendance-stats-shell {
@@ -52973,47 +52572,6 @@ body[data-current-view="attendance"]
   border-bottom: 1px solid var(--ui-border-subtle);
 }
 
-#view-attendance #attendanceStatsPanelTabs {
-  gap: 8px;
-  padding: 0 0 12px;
-}
-
-#view-attendance .attendance-stats-panel-tab-row-scope {
-  gap: 20px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--ui-border-subtle);
-}
-
-#view-attendance .attendance-stats-panel-tab-shell {
-  display: flex;
-  align-items: flex-end;
-  border-bottom: 1px solid var(--ui-border-subtle);
-  margin-top: -1px;
-  padding-left: 2px;
-}
-
-#view-attendance .attendance-stats-panel-tab-row-metric {
-  gap: 0;
-}
-
-#view-attendance .attendance-stats-panel-pill {
-  min-height: 44px;
-  padding: 0 18px;
-  border: 1px solid var(--ui-border-subtle);
-  border-bottom: 0;
-  border-radius: 10px 10px 0 0;
-  background: #f8fafc;
-  margin-right: 4px;
-  margin-bottom: -1px;
-  box-shadow: none;
-}
-
-#view-attendance .attendance-stats-panel-pill.active {
-  border-color: var(--ui-border-subtle);
-  background: #fff;
-  color: var(--ui-accent);
-}
-
 #view-attendance .attendance-stats-head-side {
   align-items: center;
 }
@@ -53217,11 +52775,16 @@ body[data-current-view="attendance"]
   display: grid;
   gap: 2px;
   width: 100%;
-  padding: 12px 14px;
-  border: 1px solid rgba(255, 122, 26, 0.18);
-  border-radius: 14px;
-  background: rgba(255, 122, 26, 0.08);
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 0;
+  background: transparent;
   text-align: left;
+}
+
+.attendance-picker-modal-nav-item:last-child {
+  border-bottom: 0;
 }
 
 .attendance-picker-modal-nav-item strong {
@@ -53240,10 +52803,10 @@ body[data-current-view="attendance"]
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 16px;
-  background: #fff;
-  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
 }
 
 .attendance-picker-modal-panel-head {
@@ -53251,17 +52814,17 @@ body[data-current-view="attendance"]
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 10px 0 10px 12px;
   border-bottom: 1px solid var(--ui-border-subtle);
-  background: var(--bg-surface-muted);
+  background: transparent;
 }
 
 .attendance-picker-modal-panel-body {
   min-height: 0;
   overflow: auto;
-  padding: 12px;
+  padding: 6px 0 0 12px;
   display: grid;
-  gap: 14px;
+  gap: 0;
 }
 
 .attendance-picker-group {
@@ -53279,7 +52842,7 @@ body[data-current-view="attendance"]
 
 .attendance-picker-option-stack {
   display: grid;
-  gap: 8px;
+  gap: 0;
 }
 
 .attendance-picker-option {
@@ -53287,15 +52850,20 @@ body[data-current-view="attendance"]
   grid-template-columns: 18px minmax(0, 1fr);
   align-items: flex-start;
   gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 12px;
-  background: #fff;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 0;
+  background: transparent;
+}
+
+.attendance-picker-option:last-child {
+  border-bottom: 0;
 }
 
 .attendance-picker-option.is-selected {
-  border-color: rgba(255, 122, 26, 0.22);
-  background: rgba(255, 122, 26, 0.06);
+  background: rgba(59, 130, 246, 0.05);
+  box-shadow: none;
 }
 
 .attendance-picker-option-copy {
@@ -53321,9 +52889,10 @@ body[data-current-view="attendance"]
   min-height: 120px;
   display: grid;
   place-items: center;
-  border: 1px dashed var(--ui-border-subtle);
-  border-radius: 12px;
-  background: var(--bg-surface-muted);
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   text-align: center;
 }
 
@@ -53550,12 +53119,12 @@ body[data-current-view="attendance"]
 }
 
 .attendance-picker-modal-nav-item {
-  border-color: rgba(255, 122, 26, 0.12);
-  background: rgba(255, 122, 26, 0.05);
+  border-color: transparent;
+  background: transparent;
 }
 
 .attendance-picker-option-stack {
-  gap: 4px;
+  gap: 0;
 }
 
 .attendance-picker-option {
@@ -54932,18 +54501,6 @@ body[data-current-view="attendance"]
 
 #view-attendance #attendanceStatsPanelTabs {
   margin-top: -2px;
-}
-
-#view-attendance .attendance-stats-panel-tab-row-scope,
-#view-attendance .attendance-stats-panel-tab-row-metric {
-  gap: 6px;
-}
-
-#view-attendance .attendance-stats-panel-tab,
-#view-attendance .attendance-stats-panel-pill {
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: 999px;
 }
 
 #view-attendance #attendanceStatsPanel .attendance-stats-card,

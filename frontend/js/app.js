@@ -84558,16 +84558,11 @@ function renderAttendancePeriodCalendarWorkspace({ loading = false } = {}) {
 
 function renderAttendanceStatsPanelTabs() {
   const host = $("#attendanceStatsPanelTabs");
-  const toolbarHost = document.getElementById("attendanceStatsToolbarControls");
   if (!(host instanceof HTMLElement)) return;
   const section = getAttendanceWorkspaceSection();
   if (section !== "stats") {
     host.innerHTML = "";
     host.classList.add("hidden");
-    if (toolbarHost instanceof HTMLElement) {
-      toolbarHost.innerHTML = "";
-      toolbarHost.classList.add("hidden");
-    }
     return;
   }
   const scope = normalizeAttendanceStatsScope(
@@ -84686,10 +84681,6 @@ function renderAttendanceStatsPanelTabs() {
     </div>
   `;
   host.classList.remove("hidden");
-  if (toolbarHost instanceof HTMLElement) {
-    toolbarHost.innerHTML = "";
-    toolbarHost.classList.add("hidden");
-  }
 }
 
 function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
