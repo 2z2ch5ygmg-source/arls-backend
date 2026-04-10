@@ -6520,6 +6520,23 @@ function buildHomeQueueListHtml(
           });
           const isClickable = Boolean(actionAttrs);
           const rowTag = isClickable ? "button" : "div";
+          const metaCluster =
+            valueLabel || pillLabel
+              ? `
+                <span class="home-queue-meta-cluster">
+                  ${
+                    valueLabel
+                      ? `<em class="home-queue-value">${escapeHomeHtml(valueLabel)}</em>`
+                      : ""
+                  }
+                  ${
+                    pillLabel
+                      ? `<span class="${getHomeBriefingToneClass(pillTone)}">${escapeHomeHtml(pillLabel)}</span>`
+                      : ""
+                  }
+                </span>
+              `
+              : "";
           return `
             <li>
               <${rowTag}
@@ -6527,25 +6544,16 @@ function buildHomeQueueListHtml(
                 ${isClickable ? `type="button" ${actionAttrs}` : ""}
               >
               <div class="home-queue-copy">
-                <div class="home-queue-title-row">
-                  <span class="home-queue-row-indicator is-${escapeHomeHtml(visualTone)}" aria-hidden="true"></span>
-                  <strong>${escapeHomeHtml(row?.title || "-")}</strong>
+                <div class="home-queue-header-row">
+                  <div class="home-queue-title-row">
+                    <span class="home-queue-row-indicator is-${escapeHomeHtml(visualTone)}" aria-hidden="true"></span>
+                    <strong>${escapeHomeHtml(row?.title || "-")}</strong>
+                  </div>
+                  ${metaCluster}
                 </div>
                 ${
                   String(row?.subtitle || "").trim()
-                    ? `<span>${escapeHomeHtml(row?.subtitle || "")}</span>`
-                    : ""
-                }
-              </div>
-              <div class="home-queue-side">
-                ${
-                  valueLabel
-                    ? `<em class="home-queue-value">${escapeHomeHtml(valueLabel)}</em>`
-                    : ""
-                }
-                ${
-                  pillLabel
-                    ? `<span class="${getHomeBriefingToneClass(pillTone)}">${escapeHomeHtml(pillLabel)}</span>`
+                    ? `<span class="home-queue-subtitle">${escapeHomeHtml(row?.subtitle || "")}</span>`
                     : ""
                 }
               </div>
@@ -7743,6 +7751,7 @@ function buildHomeHqSurfaceHtml(briefing = null) {
   const requestPendingCount = Number(
     requestSummary?.total_pending_count || ops?.pending_approval_count || 0,
   );
+  const attendanceRate = Number(ops?.attendance_rate || 0);
   const attendanceRows = buildHomeQueueSummaryRows(
     Array.isArray(briefing?.attendance_issue_rows)
       ? briefing.attendance_issue_rows.slice(0, 4)
@@ -7776,9 +7785,10 @@ function buildHomeHqSurfaceHtml(briefing = null) {
     accentLabel: "실시간 근태",
     metrics: [
       {
-        label: "출근",
-        value: `${Number(ops?.present_count || 0)} / ${Number(ops?.scheduled_count || 0)}`,
-        tone: "teal",
+        label: "오늘 출근율",
+        value: `${attendanceRate}%`,
+        meta: `${Number(ops?.present_count || 0)} / ${Number(ops?.scheduled_count || 0)}명`,
+        tone: "warn",
       },
       {
         label: "미출근",
@@ -7804,12 +7814,18 @@ function buildHomeHqSurfaceHtml(briefing = null) {
     accentLabel: "운영 큐",
     metrics: [
       {
-        label: "운영 지점",
-        value: `${Number(ops?.site_count || 0)}곳`,
+        label: "근무 예정",
+        value: `${Number(ops?.scheduled_count || 0)}명`,
+        meta: `운영 지점 ${Number(ops?.site_count || 0)}곳`,
       },
       {
-        label: "결원 지점",
-        value: `${Number(ops?.vacancy_site_count || 0)}곳`,
+        label: "출근 완료",
+        value: `${Number(ops?.present_count || 0)}명`,
+        tone: "teal",
+      },
+      {
+        label: "결원/이슈",
+        value: `${Number(ops?.missing_count || 0)}건`,
         tone: Number(ops?.vacancy_site_count || 0) > 0 ? "warn" : "neutral",
       },
     ],
@@ -84237,8 +84253,8 @@ function buildAttendanceStatsLineSvg({
   percent = true,
 } = {}) {
   const chartWidth = 860;
-  const chartHeight = 248;
-  const padding = { top: 14, right: 14, bottom: 34, left: 40 };
+  const chartHeight = 196;
+  const padding = { top: 12, right: 14, bottom: 28, left: 36 };
   const innerWidth = chartWidth - padding.left - padding.right;
   const innerHeight = chartHeight - padding.top - padding.bottom;
   const list = Array.isArray(values)
@@ -84247,7 +84263,7 @@ function buildAttendanceStatsLineSvg({
   const hasValues = list.length > 0;
   const maxValue = percent ? 100 : Math.max(1, ...list, 1);
   const minValue = 0;
-  const steps = 5;
+  const steps = 4;
   const xForIndex = (index) =>
     padding.left + (innerWidth / Math.max(1, list.length - 1 || 1)) * index;
   const yForValue = (value) => {
@@ -84268,9 +84284,9 @@ function buildAttendanceStatsLineSvg({
       label: percent ? `${Math.round(value)}%` : String(Math.round(value)),
     };
   });
-  const showPointValueLabels = list.length <= 12;
-  const xLabelStep = list.length > 24 ? 4 : list.length > 14 ? 2 : 1;
-  const xLabelFontSize = list.length > 24 ? 9 : 11;
+  const showPointValueLabels = list.length <= 8;
+  const xLabelStep = list.length > 16 ? 3 : list.length > 10 ? 2 : 1;
+  const xLabelFontSize = list.length > 16 ? 9 : 10;
 
   return `
     <svg class="attendance-stats-chart-svg" viewBox="0 0 ${chartWidth} ${chartHeight}" role="img" aria-label="출퇴근 통계 차트">
@@ -84279,24 +84295,24 @@ function buildAttendanceStatsLineSvg({
         .map(
           (row) => `
         <g class="attendance-stats-grid-row">
-          <line x1="${padding.left}" y1="${row.y}" x2="${chartWidth - padding.right}" y2="${row.y}" stroke="rgba(148, 163, 184, 0.16)" stroke-width="1"></line>
-          <text x="${padding.left - 8}" y="${row.y + 4}" text-anchor="end" fill="rgba(100, 116, 139, 0.9)" font-size="11">${row.label}</text>
+          <line x1="${padding.left}" y1="${row.y}" x2="${chartWidth - padding.right}" y2="${row.y}" stroke="rgba(148, 163, 184, 0.12)" stroke-width="1"></line>
+          <text x="${padding.left - 8}" y="${row.y + 4}" text-anchor="end" fill="rgba(100, 116, 139, 0.82)" font-size="10">${row.label}</text>
         </g>
       `,
         )
         .join("")}
-      <line x1="${padding.left}" y1="${padding.top + innerHeight}" x2="${chartWidth - padding.right}" y2="${padding.top + innerHeight}" stroke="rgba(148, 163, 184, 0.32)" stroke-width="1.2"></line>
+      <line x1="${padding.left}" y1="${padding.top + innerHeight}" x2="${chartWidth - padding.right}" y2="${padding.top + innerHeight}" stroke="rgba(148, 163, 184, 0.22)" stroke-width="1"></line>
       ${
         hasValues
           ? `
-        <polyline points="${polyline}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
+        <polyline points="${polyline}" fill="none" stroke="${color}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></polyline>
         ${list
           .map(
             (value, index) => `
           <g class="attendance-stats-point">
-            <circle cx="${xForIndex(index)}" cy="${yForValue(value)}" r="4" fill="${color}"></circle>
-            ${showPointValueLabels ? `<text x="${xForIndex(index)}" y="${yForValue(value) - 10}" text-anchor="middle" fill="${color}" font-size="11" font-weight="700">${Number(value || 0).toFixed(1)}%</text>` : ""}
-            <text x="${xForIndex(index)}" y="${padding.top + innerHeight + 18}" text-anchor="middle" fill="rgba(100, 116, 139, 0.92)" font-size="${xLabelFontSize}">${index % xLabelStep === 0 ? escapeHtml(labels[index] || "") : ""}</text>
+            <circle cx="${xForIndex(index)}" cy="${yForValue(value)}" r="3.5" fill="${color}"></circle>
+            ${showPointValueLabels ? `<text x="${xForIndex(index)}" y="${yForValue(value) - 8}" text-anchor="middle" fill="${color}" font-size="10" font-weight="700">${Number(value || 0).toFixed(1)}%</text>` : ""}
+            <text x="${xForIndex(index)}" y="${padding.top + innerHeight + 16}" text-anchor="middle" fill="rgba(100, 116, 139, 0.88)" font-size="${xLabelFontSize}">${index % xLabelStep === 0 ? escapeHtml(labels[index] || "") : ""}</text>
           </g>
         `,
           )
@@ -84515,6 +84531,20 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
     color: "#ff7a1a",
     percent: dataset.percent !== false,
   });
+  const summaryTilesHtml = `
+    <div class="attendance-stats-topline">
+      ${summaryTiles
+        .map(
+          (item) => `
+        <article class="attendance-stats-topline-card">
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${escapeHtml(item.value)}</strong>
+        </article>
+      `,
+        )
+        .join("")}
+    </div>
+  `;
   state.attendanceView.__statsExport = {
     fileStem: dataset.fileStem,
     header: dataset.tableHeader,
@@ -84523,7 +84553,7 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
   };
   panel.innerHTML = `
     <div class="attendance-stats-shell">
-      <section class="attendance-stats-card">
+      <section class="attendance-stats-card attendance-stats-card-primary">
         <div class="attendance-stats-card-head">
           <div>
             <h4>${escapeHtml(dataset.title)}</h4>
@@ -84532,6 +84562,7 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
             <span class="attendance-stats-meta">${escapeHtml(start && end ? `${start} ~ ${end}` : "조회 범위 없음")}</span>
           </div>
         </div>
+        ${summaryTilesHtml}
         <div class="attendance-stats-chart-shell">
           <div class="attendance-stats-chart-layout">
             <div class="attendance-stats-chart-wrap" data-export-name="${escapeHtml(dataset.fileStem)}">
@@ -84551,22 +84582,22 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
             </aside>
           </div>
         </div>
-        <div class="attendance-stats-detail-block">
-          <div class="attendance-stats-card-head attendance-stats-table-head">
-            <div>
-              <h4>세부 지표</h4>
-            </div>
+      </section>
+      <section class="attendance-stats-table-card">
+        <div class="attendance-stats-card-head attendance-stats-table-head">
+          <div>
+            <h4>세부 지표</h4>
           </div>
-          <div class="attendance-stats-table-wrap attendance-stats-table-wrap-wide">
-            <table class="attendance-stats-table attendance-stats-table-wide">
-              <thead>
-                <tr>${detailHeader.map((label) => `<th>${escapeHtml(label)}</th>`).join("")}</tr>
-              </thead>
-              <tbody>
-                ${detailRows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}
-              </tbody>
-            </table>
-          </div>
+        </div>
+        <div class="attendance-stats-table-wrap attendance-stats-table-wrap-wide">
+          <table class="attendance-stats-table attendance-stats-table-wide">
+            <thead>
+              <tr>${detailHeader.map((label) => `<th>${escapeHtml(label)}</th>`).join("")}</tr>
+            </thead>
+            <tbody>
+              ${detailRows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}
+            </tbody>
+          </table>
         </div>
       </section>
     </div>
