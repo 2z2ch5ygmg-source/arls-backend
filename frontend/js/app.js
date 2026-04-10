@@ -37050,6 +37050,11 @@ async function navigateToRoute(
     forceLoad: forceViewReload,
   });
 
+  if (route === ROUTE_FEATURE_NOTICES) {
+    applyNoticesRouteStateFromQuery(route, parsedParams);
+    await loadNoticesViewPresenter();
+  }
+
   if (route === ROUTE_NOTIFICATIONS) {
     openNotificationsSheet();
   }
