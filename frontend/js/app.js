@@ -84357,13 +84357,31 @@ function renderAttendancePeriodCalendarWorkspace({ loading = false } = {}) {
   renderScheduleCalendar();
 }
 
+function ensureAttendanceStatsToolbarControlsHost() {
+  const toolbarGroup = document.getElementById("attendanceToolbarListFields");
+  if (!(toolbarGroup instanceof HTMLElement)) return null;
+  let host = document.getElementById("attendanceStatsToolbarControls");
+  if (!(host instanceof HTMLElement)) {
+    host = document.createElement("div");
+    host.id = "attendanceStatsToolbarControls";
+    host.className = "attendance-stats-toolbar-controls";
+    toolbarGroup.appendChild(host);
+  }
+  return host;
+}
+
 function renderAttendanceStatsPanelTabs() {
   const host = $("#attendanceStatsPanelTabs");
+  const toolbarHost = ensureAttendanceStatsToolbarControlsHost();
   if (!(host instanceof HTMLElement)) return;
   const section = getAttendanceWorkspaceSection();
   if (section !== "stats") {
     host.innerHTML = "";
     host.classList.add("hidden");
+    if (toolbarHost instanceof HTMLElement) {
+      toolbarHost.innerHTML = "";
+      toolbarHost.classList.add("hidden");
+    }
     return;
   }
   const scope = normalizeAttendanceStatsScope(
@@ -84423,7 +84441,7 @@ function renderAttendanceStatsPanelTabs() {
             action: "attendance-switch-stats-staff-metric",
           },
         ];
-  host.innerHTML = `
+  const scopeTabsHtml = `
     <div class="attendance-stats-panel-tab-row attendance-stats-panel-tab-row-scope" role="tablist" aria-label="통계 범위">
       ${scopeTabs
         .map(
@@ -84439,33 +84457,48 @@ function renderAttendanceStatsPanelTabs() {
         )
         .join("")}
     </div>
-    <div class="attendance-stats-panel-tab-shell">
-      <div class="attendance-stats-panel-tab-row attendance-stats-panel-tab-row-metric" role="tablist" aria-label="통계 지표">
-        ${metricTabs
-          .map((tab) => {
-            const active =
-              scope === "attendance"
-                ? attendanceMetric === tab.key
-                : staffMetric === tab.key;
-            const datasetKey =
-              scope === "attendance"
-                ? `data-metric="${tab.key}"`
-                : `data-metric="${tab.key}"`;
-            return `
-            <button
-              type="button"
-              class="attendance-stats-panel-pill${active ? " active" : ""}"
-              data-action="${tab.action}"
-              ${datasetKey}
-              aria-pressed="${active ? "true" : "false"}"
-            >${tab.label}</button>
-          `;
-          })
-          .join("")}
-      </div>
+  `;
+  const metricTabsHtml = `
+    <div class="attendance-stats-panel-tab-row attendance-stats-panel-tab-row-metric" role="tablist" aria-label="통계 지표">
+      ${metricTabs
+        .map((tab) => {
+          const active =
+            scope === "attendance"
+              ? attendanceMetric === tab.key
+              : staffMetric === tab.key;
+          const datasetKey =
+            scope === "attendance"
+              ? `data-metric="${tab.key}"`
+              : `data-metric="${tab.key}"`;
+          return `
+          <button
+            type="button"
+            class="attendance-stats-panel-pill${active ? " active" : ""}"
+            data-action="${tab.action}"
+            ${datasetKey}
+            aria-pressed="${active ? "true" : "false"}"
+          >${tab.label}</button>
+        `;
+        })
+        .join("")}
     </div>
   `;
-  host.classList.remove("hidden");
+  if (toolbarHost instanceof HTMLElement) {
+    toolbarHost.innerHTML = `
+      <div class="attendance-stats-toolbar-rail">
+        <div class="attendance-stats-toolbar-group attendance-stats-toolbar-group-scope">
+          ${scopeTabsHtml}
+        </div>
+        <div class="attendance-stats-toolbar-divider" aria-hidden="true"></div>
+        <div class="attendance-stats-toolbar-group attendance-stats-toolbar-group-metric">
+          ${metricTabsHtml}
+        </div>
+      </div>
+    `;
+    toolbarHost.classList.remove("hidden");
+  }
+  host.innerHTML = "";
+  host.classList.add("hidden");
 }
 
 function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
@@ -84610,15 +84643,17 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
               </div>
             </div>
           </div>
-          <aside class="attendance-stats-side-panel">
-            ${summaryTilesHtml}
+          <div class="attendance-stats-bottom-rail">
+            <section class="attendance-stats-side-card attendance-stats-side-card-summary">
+              ${summaryTilesHtml}
+            </section>
             <section class="attendance-stats-side-card attendance-stats-side-card-legend">
               ${legendHtml}
             </section>
-            <section class="attendance-stats-side-card attendance-stats-side-card-table">
-              ${detailTableHtml}
-            </section>
-          </aside>
+          </div>
+          <section class="attendance-stats-detail-panel attendance-stats-side-card attendance-stats-side-card-table">
+            ${detailTableHtml}
+          </section>
         </div>
       </section>
     </div>
