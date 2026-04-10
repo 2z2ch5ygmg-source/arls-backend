@@ -84460,22 +84460,9 @@ function renderAttendancePeriodCalendarWorkspace({ loading = false } = {}) {
   renderScheduleCalendar();
 }
 
-function ensureAttendanceStatsToolbarControlsHost() {
-  const toolbarGroup = document.getElementById("attendanceToolbarListFields");
-  if (!(toolbarGroup instanceof HTMLElement)) return null;
-  let host = document.getElementById("attendanceStatsToolbarControls");
-  if (!(host instanceof HTMLElement)) {
-    host = document.createElement("div");
-    host.id = "attendanceStatsToolbarControls";
-    host.className = "attendance-stats-toolbar-controls";
-    toolbarGroup.appendChild(host);
-  }
-  return host;
-}
-
 function renderAttendanceStatsPanelTabs() {
   const host = $("#attendanceStatsPanelTabs");
-  const toolbarHost = ensureAttendanceStatsToolbarControlsHost();
+  const toolbarHost = document.getElementById("attendanceStatsToolbarControls");
   if (!(host instanceof HTMLElement)) return;
   const section = getAttendanceWorkspaceSection();
   if (section !== "stats") {
@@ -84544,14 +84531,15 @@ function renderAttendanceStatsPanelTabs() {
             action: "attendance-switch-stats-staff-metric",
           },
         ];
-  const scopeTabsHtml = `
-    <div class="attendance-stats-panel-tab-row attendance-stats-panel-tab-row-scope" role="tablist" aria-label="통계 범위">
+  host.innerHTML = `
+    <div class="attendance-stats-topbar-row attendance-stats-topbar-row-primary">
+      <div class="attendance-stats-topbar-primary-tabs" role="tablist" aria-label="통계 범위">
       ${scopeTabs
         .map(
           (tab) => `
         <button
           type="button"
-          class="attendance-stats-panel-tab${scope === tab.key ? " active" : ""}"
+          class="attendance-stats-primary-tab${scope === tab.key ? " active" : ""}"
           data-action="${tab.action}"
           data-scope="${tab.key}"
           aria-pressed="${scope === tab.key ? "true" : "false"}"
@@ -84559,10 +84547,25 @@ function renderAttendanceStatsPanelTabs() {
       `,
         )
         .join("")}
+      </div>
+      <div class="attendance-stats-topbar-actions">
+        <button
+          class="btn btn-secondary btn-sm attendance-stats-topbar-action"
+          type="button"
+          data-action="attendance-stats-export-image"
+        >
+          차트 이미지
+        </button>
+        <button
+          class="btn btn-secondary btn-sm attendance-stats-topbar-action"
+          type="button"
+          data-action="attendance-stats-export-data"
+        >
+          차트 데이터
+        </button>
+      </div>
     </div>
-  `;
-  const metricTabsHtml = `
-    <div class="attendance-stats-panel-tab-row attendance-stats-panel-tab-row-metric" role="tablist" aria-label="통계 지표">
+    <div class="attendance-stats-topbar-row attendance-stats-topbar-row-secondary" role="tablist" aria-label="통계 지표">
       ${metricTabs
         .map((tab) => {
           const active =
@@ -84576,7 +84579,7 @@ function renderAttendanceStatsPanelTabs() {
           return `
           <button
             type="button"
-            class="attendance-stats-panel-pill${active ? " active" : ""}"
+            class="attendance-stats-bookmark-tab${active ? " active" : ""}"
             data-action="${tab.action}"
             ${datasetKey}
             aria-pressed="${active ? "true" : "false"}"
@@ -84586,22 +84589,11 @@ function renderAttendanceStatsPanelTabs() {
         .join("")}
     </div>
   `;
+  host.classList.remove("hidden");
   if (toolbarHost instanceof HTMLElement) {
-    toolbarHost.innerHTML = `
-      <div class="attendance-stats-toolbar-rail">
-        <div class="attendance-stats-toolbar-group attendance-stats-toolbar-group-scope">
-          ${scopeTabsHtml}
-        </div>
-        <div class="attendance-stats-toolbar-divider" aria-hidden="true"></div>
-        <div class="attendance-stats-toolbar-group attendance-stats-toolbar-group-metric">
-          ${metricTabsHtml}
-        </div>
-      </div>
-    `;
-    toolbarHost.classList.remove("hidden");
+    toolbarHost.innerHTML = "";
+    toolbarHost.classList.add("hidden");
   }
-  host.innerHTML = "";
-  host.classList.add("hidden");
 }
 
 function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
