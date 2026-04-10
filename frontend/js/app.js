@@ -37052,6 +37052,8 @@ async function navigateToRoute(
 
   if (route === ROUTE_FEATURE_NOTICES) {
     applyNoticesRouteStateFromQuery(route, parsedParams);
+    primeNoticesImmediateRouteState();
+    renderNoticesView();
     await loadNoticesViewPresenter();
   }
 
@@ -55487,7 +55489,7 @@ function showView(
 
   if (targetView === "notices") {
     const parsedNoticeRoute = parseRouteCandidate(
-      state.currentRoute || getCurrentRouteWithQuery() || "",
+      getCurrentRouteWithQuery() || state.currentRoute || "",
     );
     applyNoticesRouteStateFromQuery(
       parsedNoticeRoute.path,

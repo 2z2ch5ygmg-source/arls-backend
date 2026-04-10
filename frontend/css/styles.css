@@ -53262,6 +53262,49 @@ html[data-ui-theme="dark"] #view-attendance .attendance-v2-empty-box {
   padding: 0 16px;
 }
 
+#view-notices .notices-list-rows.is-empty .requests-inline-empty,
+#view-messenger .requests-inline-empty,
+#view-meetings .requests-inline-empty {
+  width: min(560px, 100%);
+  min-height: 0 !important;
+  margin: 16px auto 0;
+  padding: 28px 0 24px !important;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  align-items: center;
+  text-align: center;
+}
+
+#view-notices
+  .notices-list-rows.is-empty
+  .requests-inline-empty
+  .empty-state-icon,
+#view-messenger .requests-inline-empty .empty-state-icon,
+#view-meetings .requests-inline-empty .empty-state-icon {
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--ui-text-secondary);
+}
+
+#view-notices .notices-list-rows.is-empty .requests-inline-empty strong,
+#view-messenger .requests-inline-empty strong,
+#view-meetings .requests-inline-empty strong {
+  font-size: 16px;
+  line-height: 1.45;
+  letter-spacing: -0.02em;
+}
+
+#view-notices .notices-list-rows.is-empty .requests-inline-empty span,
+#view-messenger .requests-inline-empty span,
+#view-meetings .requests-inline-empty span {
+  color: var(--ui-text-secondary);
+}
+
 #view-notices .notices-compose-panel {
   width: min(1180px, calc(100% - 32px));
   display: grid;
@@ -53361,6 +53404,142 @@ html[data-ui-theme="dark"] #view-attendance .attendance-v2-empty-box {
   padding-top: 14px;
 }
 
+#view-messenger .messenger-create-panel,
+#view-messenger .messenger-member-panel,
+#view-messenger .messenger-list-panel,
+#view-messenger .messenger-thread-panel,
+#view-meetings .meetings-toolbar-row,
+#view-meetings .meetings-create-panel,
+#view-meetings .meetings-member-panel,
+#view-meetings .meetings-list-panel,
+#view-meetings .meetings-detail-panel,
+#view-meetings .meetings-detail-block {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-messenger .messenger-create-panel,
+#view-meetings .meetings-create-panel {
+  margin-top: 8px;
+  padding: 20px 0 0;
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+#view-messenger .messenger-create-grid,
+#view-messenger .messenger-shell,
+#view-meetings .meetings-create-grid,
+#view-meetings .meetings-shell,
+#view-meetings .meetings-detail-grid {
+  gap: 0 28px;
+}
+
+#view-messenger .messenger-member-panel,
+#view-meetings .meetings-member-panel {
+  padding: 0 0 0 28px;
+  border-left: 1px solid var(--ui-border-subtle);
+}
+
+#view-messenger .messenger-list-panel,
+#view-meetings .meetings-list-panel {
+  padding: 12px 28px 0 0;
+  border-right: 1px solid var(--ui-border-subtle);
+}
+
+#view-messenger .messenger-thread-panel,
+#view-meetings .meetings-detail-panel {
+  padding: 12px 0 0 28px;
+}
+
+#view-meetings .meetings-toolbar-row {
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-messenger .messenger-member-list,
+#view-messenger .messenger-conversation-list,
+#view-messenger .messenger-message-list,
+#view-meetings .meetings-member-list,
+#view-meetings .meetings-room-list,
+#view-meetings .meetings-participants-list,
+#view-meetings .meetings-chat-links-list,
+#view-meetings .meetings-sessions-list {
+  gap: 0;
+}
+
+#view-messenger .messenger-member-button,
+#view-messenger .messenger-conversation-row,
+#view-messenger .messenger-search-result,
+#view-meetings .meetings-member-button,
+#view-meetings .meetings-room-row,
+#view-meetings .meetings-linked-chat-button,
+#view-meetings .meetings-detail-row {
+  border: 0;
+  border-bottom: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-messenger .messenger-member-button,
+#view-messenger .messenger-conversation-row,
+#view-meetings .meetings-member-button,
+#view-meetings .meetings-room-row,
+#view-meetings .meetings-linked-chat-button,
+#view-meetings .meetings-detail-row {
+  padding: 14px 0;
+}
+
+#view-messenger .messenger-member-row.is-selected .messenger-member-button,
+#view-messenger .messenger-conversation-row.active,
+#view-meetings .meetings-member-row.is-selected .meetings-member-button,
+#view-meetings .meetings-room-row.active {
+  border-color: var(--ui-border-subtle);
+  background: rgba(242, 109, 0, 0.04);
+  box-shadow: inset 2px 0 0 var(--ui-accent);
+}
+
+#view-messenger .messenger-thread-meta,
+#view-meetings .meetings-detail-side-pill {
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+#view-meetings .meetings-detail-summary {
+  gap: 0;
+  padding: 14px 0 18px;
+  border-top: 1px solid var(--ui-border-subtle);
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-meetings .meetings-summary-card {
+  min-height: 0;
+  padding: 0 18px;
+  border: 0;
+  border-left: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+
+#view-meetings .meetings-detail-summary > .meetings-summary-card:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+#view-meetings .meetings-detail-summary > .meetings-summary-card:last-child {
+  padding-right: 0;
+}
+
+#view-messenger .messenger-composer,
+#view-meetings .meetings-action-bar {
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
 @media (max-width: 1023px) {
   #view-profile #profileSignatureCard .profile-signature-workspace {
     grid-template-columns: 1fr;
@@ -53389,6 +53568,28 @@ html[data-ui-theme="dark"] #view-attendance .attendance-v2-empty-box {
 
   #view-notices .notices-compose-panel .notices-compose-document {
     padding: 20px 18px 18px;
+  }
+}
+
+@media (max-width: 1180px) {
+  #view-messenger .messenger-create-grid,
+  #view-messenger .messenger-shell,
+  #view-meetings .meetings-create-grid,
+  #view-meetings .meetings-shell,
+  #view-meetings .meetings-detail-grid {
+    gap: 18px;
+  }
+
+  #view-messenger .messenger-member-panel,
+  #view-messenger .messenger-list-panel,
+  #view-messenger .messenger-thread-panel,
+  #view-meetings .meetings-member-panel,
+  #view-meetings .meetings-list-panel,
+  #view-meetings .meetings-detail-panel {
+    padding-left: 0;
+    padding-right: 0;
+    border-left: 0;
+    border-right: 0;
   }
 }
 
