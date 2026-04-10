@@ -37052,8 +37052,6 @@ async function navigateToRoute(
 
   if (route === ROUTE_FEATURE_NOTICES) {
     applyNoticesRouteStateFromQuery(route, parsedParams);
-    primeNoticesImmediateRouteState();
-    renderNoticesView();
     await loadNoticesViewPresenter();
   }
 
