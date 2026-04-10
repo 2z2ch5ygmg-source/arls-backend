@@ -84688,6 +84688,7 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
   const values = Array.isArray(dataset.values)
     ? dataset.values.map((value) => Number(value) || 0)
     : [];
+  const hasNonZeroValues = values.some((value) => value > 0);
   const peakValue = values.length ? Math.max(...values) : 0;
   const averageValue = values.length
     ? values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length)
@@ -84722,6 +84723,15 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
     color: "#ff7a1a",
     percent: dataset.percent !== false,
   });
+  const emptyOverlayHtml = hasNonZeroValues
+    ? ""
+    : `
+      <div class="attendance-stats-empty-overlay" aria-hidden="true">
+        <span class="attendance-stats-empty-icon">${buildAzureTopbarIconSvg("chart")}</span>
+        <strong>표시할 통계가 없습니다.</strong>
+        <span>선택한 조건에서 집계 가능한 출퇴근 데이터가 없습니다.</span>
+      </div>
+    `;
   const summaryTilesHtml = `
     <div class="attendance-stats-summary-strip">
       ${summaryTiles
@@ -84795,19 +84805,14 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
         </div>
         <div class="attendance-stats-composed-shell">
           <div class="attendance-stats-main-graph">
+            ${summaryTilesHtml}
             <div class="attendance-stats-chart-shell">
               <div class="attendance-stats-chart-wrap" data-export-name="${escapeHtml(dataset.fileStem)}">
                 ${svgMarkup}
+                ${emptyOverlayHtml}
               </div>
             </div>
-          </div>
-          <div class="attendance-stats-bottom-rail">
-            <section class="attendance-stats-side-card attendance-stats-side-card-summary">
-              ${summaryTilesHtml}
-            </section>
-            <section class="attendance-stats-side-card attendance-stats-side-card-legend">
-              ${legendHtml}
-            </section>
+            ${legendHtml}
           </div>
           <section class="attendance-stats-detail-panel attendance-stats-side-card attendance-stats-side-card-table">
             ${detailTableHtml}

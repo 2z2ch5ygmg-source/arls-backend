@@ -50324,6 +50324,111 @@ html[data-ui-theme="light"]
   }
 }
 
+/* 2026-04-11 attendance stats body refinement */
+#view-attendance #attendanceStatsPanel .attendance-stats-composed-shell {
+  gap: 12px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-main-graph {
+  gap: 10px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-summary-strip {
+  gap: 0 !important;
+  padding: 6px 0 8px;
+  border-top: 0;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-summary-item {
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-left: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-summary-item:first-child {
+  padding-left: 0 !important;
+  border-left: 0 !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-chart-shell {
+  padding-top: 4px !important;
+  border-top: 0 !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-chart-wrap {
+  position: relative;
+  min-height: 180px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-empty-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  pointer-events: none;
+  text-align: center;
+  background: linear-gradient(
+    180deg,
+    rgba(248, 250, 252, 0.18),
+    rgba(248, 250, 252, 0.58)
+  );
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-empty-icon {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.82);
+  color: #475569;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-empty-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-empty-overlay strong {
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--ui-text-primary);
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-empty-overlay span {
+  max-width: 30ch;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ui-text-secondary);
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-legend {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 8px 16px !important;
+  padding: 2px 0 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-legend-item {
+  min-height: 20px !important;
+  gap: 6px !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-side-card-legend,
+#view-attendance #attendanceStatsPanel .attendance-stats-side-card-summary,
+#view-attendance #attendanceStatsPanel .attendance-stats-bottom-rail {
+  display: contents !important;
+}
+
 /* 2026-04-10 global design law retrofit */
 #view-home
   .home-role-root-hq-refined
