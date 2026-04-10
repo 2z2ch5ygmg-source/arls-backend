@@ -36993,6 +36993,10 @@ async function navigateToRoute(
     forceViewReload = true;
   }
 
+  if (route === ROUTE_FEATURE_NOTICES) {
+    forceViewReload = true;
+  }
+
   if (
     route === ROUTE_ADMIN_EMPLOYEES ||
     route === ROUTE_ADMIN_SITES ||
