@@ -32907,8 +32907,30 @@ function renderRequestsWorkspaceSegments() {
   const wrapper = $("#requestsWorkspaceSegments");
   if (!wrapper) return;
   const row = wrapper.closest(".workspace-tabbar-row");
-  wrapper.classList.add("hidden");
-  if (row) row.classList.add("hidden");
+  const canDocuments = canUseRequestsDocumentApprovalMode();
+  const buttons = Array.from(
+    wrapper.querySelectorAll('[data-action="requests-workspace-segment"]'),
+  );
+  buttons.forEach((button) => {
+    const segment = normalizeRequestsTabView(button?.dataset?.segment || "");
+    const hidden = segment === "documents" ? !canDocuments : false;
+    button.classList.toggle("hidden", hidden);
+    button.classList.toggle(
+      "active",
+      !hidden && segment === normalizeRequestsTabView(state.requestsTabView),
+    );
+    button.setAttribute(
+      "aria-pressed",
+      !hidden && segment === normalizeRequestsTabView(state.requestsTabView)
+        ? "true"
+        : "false",
+    );
+  });
+  const visibleCount = buttons.filter(
+    (button) => !button.classList.contains("hidden"),
+  ).length;
+  wrapper.classList.toggle("hidden", visibleCount <= 1);
+  if (row) row.classList.toggle("hidden", visibleCount <= 1);
 }
 
 function ensureRequestsWorkspaceState() {
@@ -34655,6 +34677,7 @@ function createRequestsPriorityRow(item = {}) {
 function renderRequestsWorkspaceListRows() {
   const workspace = ensureRequestsWorkspaceState();
   const list = $("#requestsWorkspaceList");
+  const card = $("#requestsMainListCard");
   if (!list) return;
   clearList(list);
   const segment = normalizeRequestsTabView(state.requestsTabView);
@@ -34663,9 +34686,23 @@ function renderRequestsWorkspaceListRows() {
   if (!rows.length) {
     workspace.detailKey = "";
     workspace.drawerOpen = false;
-    renderCompactListEmpty(list, "요청이 없습니다.");
+    if (card instanceof HTMLElement) {
+      card.classList.add("is-empty-state");
+    }
+    renderCompactListEmpty(
+      list,
+      segment === "documents"
+        ? "문서 요청이 없습니다."
+        : "현재 조건에 맞는 요청이 없습니다.",
+      segment === "documents"
+        ? "새 문서 요청이나 승인 건이 들어오면 여기서 바로 확인할 수 있습니다."
+        : "기간, 상태, 직원을 조정하면 다른 요청을 바로 확인할 수 있습니다.",
+    );
     renderRequestsSortHeaders();
     return;
+  }
+  if (card instanceof HTMLElement) {
+    card.classList.remove("is-empty-state");
   }
   rows.forEach((item) => {
     list.appendChild(createRequestsWorkspaceRow(item));

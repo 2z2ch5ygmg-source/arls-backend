@@ -17120,6 +17120,8 @@ textarea::placeholder {
 
 #view-requests #requestsWorkspaceSegments {
   min-height: 44px;
+  gap: 8px;
+  border-bottom: 0;
 }
 
 #view-requests #requestsWorkspaceSegments .workspace-tab {
@@ -17128,6 +17130,9 @@ textarea::placeholder {
   padding: 0 16px;
   font-size: 14px;
   line-height: 20px;
+  border-radius: 999px;
+  border-bottom: 0;
+  background: rgba(248, 250, 252, 0.92);
 }
 
 #view-requests #requestsFilterBar.requests-ops-toolbar {
@@ -17319,6 +17324,10 @@ textarea::placeholder {
   min-height: max(520px, calc(100dvh - 280px));
 }
 
+#view-requests #requestsMainListCard.is-empty-state {
+  min-height: 300px;
+}
+
 #view-requests .requests-list-head {
   gap: 8px;
   padding-bottom: 10px;
@@ -17336,6 +17345,11 @@ textarea::placeholder {
   max-height: calc(100dvh - 360px);
   overflow: auto;
   padding-right: 4px;
+}
+
+#view-requests #requestsMainListCard.is-empty-state #requestsWorkspaceList {
+  max-height: none;
+  overflow: visible;
 }
 
 #view-requests .requests-workspace-row {
@@ -44625,9 +44639,9 @@ body.calendar-public-shell #view-calendar-public {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  min-height: 280px;
-  padding: 28px 20px;
+  gap: 8px;
+  min-height: 180px;
+  padding: 20px 18px;
   color: var(--requests-shell-muted);
   text-align: center;
 }
