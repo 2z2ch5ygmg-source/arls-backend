@@ -49683,6 +49683,126 @@ html[data-ui-theme="light"]
   }
 }
 
+/* 2026-04-10 phase2 shell normalization */
+#view-requests #requestsViewDescription,
+#view-leave #leaveViewDescription,
+#view-hr #hrScopeHint {
+  display: none !important;
+}
+
+#view-requests,
+#view-leave,
+#view-hr {
+  gap: 14px !important;
+}
+
+#view-requests .workspace-head,
+#view-leave .workspace-head,
+#view-hr .workspace-head {
+  align-items: center;
+  gap: 12px;
+}
+
+#view-requests .workspace-head-main,
+#view-leave .workspace-head-main,
+#view-hr .workspace-head-main {
+  gap: 0;
+}
+
+#view-requests .workspace-head-actions,
+#view-leave .workspace-head-actions,
+#view-hr .workspace-head-actions {
+  gap: 8px;
+}
+
+#view-requests .workspace-head-actions .btn,
+#view-leave .workspace-head-actions .btn,
+#view-hr .workspace-head-actions .btn {
+  min-height: 34px;
+  padding-inline: 12px;
+}
+
+@media (min-width: 1800px) {
+  #view-requests,
+  #view-leave,
+  #view-hr {
+    width: min(100%, 1460px);
+    margin-inline: auto;
+  }
+}
+
+#view-requests #requestsWorkspaceShell {
+  grid-template-columns: 1fr;
+}
+
+#view-requests .requests-main-column {
+  gap: 10px;
+}
+
+#view-requests #requestsFilterBar.requests-ops-toolbar {
+  padding: 10px 14px;
+}
+
+#view-requests #requestsMainListCard,
+#view-requests #requestsPriorityQueueCard {
+  padding: 12px 14px;
+}
+
+#view-leave .leave-workspace-tabbar-row {
+  gap: 12px;
+  padding-bottom: 10px;
+}
+
+#view-leave #leaveRequestsToolbar,
+#view-leave #leaveUsageGridCard,
+#view-leave #leavePolicySection,
+#view-leave #leaveWorkspaceRequestsCard {
+  border-radius: 18px;
+  padding-inline: 16px;
+}
+
+#view-leave .leave-requests-toolbar {
+  gap: 10px;
+}
+
+#view-leave .leave-requests-filter-controls,
+#view-leave .leave-requests-toolbar-actions,
+#view-leave .leave-usage-toolbar {
+  gap: 8px 10px;
+}
+
+#view-hr > #hrWorkspaceSegments {
+  padding-bottom: 10px;
+}
+
+#view-hr .hr-approval-procedure-toolbar {
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+#view-hr .hr-approval-procedure-type-field {
+  flex: 0 1 360px;
+  max-width: 360px;
+}
+
+#view-hr .hr-approval-procedure-toolbar-actions {
+  margin-left: 0;
+}
+
+#view-hr .hr-approval-procedure-workspace {
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+#view-hr .hr-approval-procedure-preview-card,
+#view-hr #hrManageTemplatesPanel,
+#view-hr > #hrEmploymentEmployeeCard,
+#view-hr > #hrEmploymentMyRequestsCard,
+#view-hr > #hrTemplateAdminCard {
+  border-radius: 18px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.03);
+}
+
 /* 2026-04-10 control grammar follow-up */
 #view-home .home-surface-card::before,
 #view-home .home-surface-card-secondary::before {
