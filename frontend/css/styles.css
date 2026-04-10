@@ -49539,36 +49539,56 @@ html[data-ui-theme="light"]
   border-bottom: 1px solid var(--ui-border-subtle) !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile .profile-settings-rail-actions.shell-manager-only {
+#shell[data-shell-mode="manager"]
+  #view-profile
+  .profile-settings-rail-actions.shell-manager-only {
   justify-content: flex-start !important;
   padding-top: 10px !important;
   border-top: 1px solid var(--ui-border-subtle) !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile #integrationFlagsCard .settings-flag-group {
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #integrationFlagsCard
+  .settings-flag-group {
   padding-top: 12px !important;
   border-top: 1px solid var(--ui-border-subtle) !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile #integrationFlagsCard .settings-switch-row {
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #integrationFlagsCard
+  .settings-switch-row {
   padding: 12px 0 !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-panel {
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #googleSheetProfileCard
+  .profile-google-panel {
   gap: 12px !important;
   padding-top: 12px !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-links-layout {
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #googleSheetProfileCard
+  .profile-google-links-layout {
   gap: 16px !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-profile-list {
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #googleSheetProfileCard
+  .profile-google-profile-list {
   gap: 0 !important;
   max-height: 260px !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-link-row {
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #googleSheetProfileCard
+  .profile-google-link-row {
   padding: 12px 0 !important;
   border: 0 !important;
   border-bottom: 1px solid var(--ui-border-subtle) !important;
@@ -49577,38 +49597,70 @@ html[data-ui-theme="light"]
   box-shadow: none !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-link-row:last-child {
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #googleSheetProfileCard
+  .profile-google-link-row:last-child {
   border-bottom: 0 !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-link-row:hover,
-#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-link-row:focus-visible,
-#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-link-row.active {
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #googleSheetProfileCard
+  .profile-google-link-row:hover,
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #googleSheetProfileCard
+  .profile-google-link-row:focus-visible,
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #googleSheetProfileCard
+  .profile-google-link-row.active {
   border-color: var(--ui-border-subtle) !important;
   background: transparent !important;
   box-shadow: none !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-link-row.active .profile-google-link-row-main strong {
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #googleSheetProfileCard
+  .profile-google-link-row.active
+  .profile-google-link-row-main
+  strong {
   color: var(--ui-accent) !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-profile-list .requests-inline-empty {
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #googleSheetProfileCard
+  .profile-google-profile-list
+  .requests-inline-empty {
   padding: 16px 0 !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile #googleSheetProfileCard .profile-google-sync-summary,
-#shell[data-shell-mode="manager"] #view-profile #mailHubCard .profile-mail-summary,
-#shell[data-shell-mode="manager"] #view-profile #groupwareOpsCard .profile-mail-summary {
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #googleSheetProfileCard
+  .profile-google-sync-summary,
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #mailHubCard
+  .profile-mail-summary,
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #groupwareOpsCard
+  .profile-mail-summary {
   gap: 12px !important;
   padding-top: 12px !important;
   border-top: 1px solid var(--ui-border-subtle) !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile .profile-google-sync-summary-card,
+#shell[data-shell-mode="manager"]
+  #view-profile
+  .profile-google-sync-summary-card,
 #shell[data-shell-mode="manager"] #view-profile .profile-mail-summary-card {
   padding: 10px 0 0 !important;
   border: 0 !important;
@@ -49617,21 +49669,104 @@ html[data-ui-theme="light"]
   background: transparent !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile #mailHubCard .profile-mail-layout,
-#shell[data-shell-mode="manager"] #view-profile #groupwareOpsCard .profile-mail-layout {
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #mailHubCard
+  .profile-mail-layout,
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #groupwareOpsCard
+  .profile-mail-layout {
   gap: 12px !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile #mailHubCard .settings-form-group,
-#shell[data-shell-mode="manager"] #view-profile #groupwareOpsCard .settings-form-group {
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #mailHubCard
+  .settings-form-group,
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #groupwareOpsCard
+  .settings-form-group {
   gap: 8px !important;
   padding-top: 12px !important;
 }
 
-#shell[data-shell-mode="manager"] #view-profile #groupwareOpsCard .profile-groupware-rollout-form {
+#shell[data-shell-mode="manager"]
+  #view-profile
+  #groupwareOpsCard
+  .profile-groupware-rollout-form {
   margin: 0 !important;
   padding-top: 12px !important;
   border-top: 1px solid var(--ui-border-subtle) !important;
+}
+
+/* 2026-04-11 settings live-card cleanup */
+#view-profile #googleSheetProfileCard .profile-google-panel,
+#view-profile #mailHubCard,
+#view-profile #groupwareOpsCard {
+  gap: 12px;
+}
+
+#view-profile #googleSheetProfileCard .profile-google-sync-summary,
+#view-profile #mailHubCard .profile-mail-summary,
+#view-profile #groupwareOpsCard .profile-mail-summary {
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+#view-profile #googleSheetProfileCard .profile-google-sync-summary-card,
+#view-profile #mailHubCard .profile-mail-summary-card,
+#view-profile #groupwareOpsCard .profile-mail-summary-card {
+  padding: 10px 0 0;
+  border: 0;
+  border-top: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+
+#view-profile #googleSheetProfileCard .profile-google-profile-list {
+  gap: 0;
+}
+
+#view-profile #googleSheetProfileCard .profile-google-link-row {
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-profile #googleSheetProfileCard .profile-google-link-row:last-child {
+  border-bottom: 0;
+}
+
+#view-profile #googleSheetProfileCard .profile-google-link-row:hover,
+#view-profile #googleSheetProfileCard .profile-google-link-row:focus-visible,
+#view-profile #googleSheetProfileCard .profile-google-link-row.active {
+  border-color: var(--ui-border-subtle);
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-profile
+  #googleSheetProfileCard
+  .profile-google-link-row.active
+  .profile-google-link-row-main
+  strong {
+  color: var(--ui-accent);
+}
+
+#view-profile
+  #googleSheetProfileCard
+  .profile-google-profile-list
+  .requests-inline-empty {
+  padding: 16px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 /* 2026-04-11 document center plane normalization */
