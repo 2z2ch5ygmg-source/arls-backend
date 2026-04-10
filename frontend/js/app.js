@@ -3717,6 +3717,33 @@ function createListRow({
 // Keep the alias so presenter refreshes do not crash at runtime.
 const makeListRow = createListRow;
 
+function getEmptyStateIconMarkup() {
+  return `
+    <span class="empty-state-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path
+          d="M7 5.75h6.5l3.5 3.5v8.5a1.75 1.75 0 0 1-1.75 1.75h-8.5A1.75 1.75 0 0 1 5 17.75v-10A2 2 0 0 1 7 5.75Z"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M13.5 5.75v3a1 1 0 0 0 1 1h3"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M8.5 13h7M8.5 16h4.5"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </span>
+  `;
+}
+
 function renderEmptyState(
   target,
   text = "표시할 데이터가 없습니다.",
@@ -3730,6 +3757,7 @@ function renderEmptyState(
   const box = document.createElement("div");
   box.className = "empty-state";
   box.innerHTML = `
+    ${getEmptyStateIconMarkup()}
     <div class="empty-state-title">데이터 없음</div>
     <div class="empty-state-description">${text}</div>
     ${ctaText ? `<div class="empty-state-meta">${ctaText}</div>` : ""}
@@ -3751,6 +3779,7 @@ function renderCompactListEmpty(
   const box = document.createElement("div");
   box.className = "requests-inline-empty";
   box.innerHTML = `
+    ${getEmptyStateIconMarkup()}
     <strong>${text}</strong>
     ${metaText ? `<span>${metaText}</span>` : ""}
   `;
@@ -35245,7 +35274,7 @@ function renderRequestsDetailEmpty(
     box.classList.add("requests-compact-empty");
   }
   box.innerHTML = `
-    <div class="empty-state-icon" aria-hidden="true">□</div>
+    ${getEmptyStateIconMarkup()}
     <div class="empty-state-title">데이터 없음</div>
     <div class="empty-state-description">${description}</div>
   `;
@@ -36628,7 +36657,7 @@ function openFeatureSkeletonSheet(routePath = "") {
   const empty = document.createElement("div");
   empty.className = "empty-state";
   empty.innerHTML = `
-    <div class="empty-state-icon" aria-hidden="true">□</div>
+    ${getEmptyStateIconMarkup()}
     <div class="empty-state-title">준비 중</div>
     <div class="empty-state-description">${meta.detail}</div>
   `;
