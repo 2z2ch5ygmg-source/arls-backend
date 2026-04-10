@@ -49532,6 +49532,223 @@ html[data-ui-theme="light"]
   min-width: 132px;
 }
 
+/* 2026-04-11 document center plane normalization */
+#view-hr > #hrDocumentHomeCard,
+#view-hr > #hrEmploymentEmployeeCard,
+#view-hr > #hrEmploymentMyRequestsCard,
+#view-hr > #hrTemplateAdminCard {
+  gap: 14px;
+}
+
+#view-hr > #hrDocumentHomeCard .approval-head,
+#view-hr > #hrEmploymentEmployeeCard .approval-head,
+#view-hr > #hrEmploymentMyRequestsCard .approval-head,
+#view-hr .hr-template-library-head,
+#view-hr .hr-approval-procedure-page-head {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-hr > #hrDocumentHomeCard .status-pill,
+#view-hr > #hrEmploymentEmployeeCard .status-pill {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ui-text-secondary);
+  box-shadow: none;
+}
+
+#view-hr #hrDocCardGrid {
+  gap: 0;
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+#view-hr .hr-doc-card-group-label {
+  gap: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 14px 0 8px;
+  color: var(--ui-text-secondary);
+}
+
+#view-hr .hr-doc-card-group-label[data-group-gap="true"] {
+  margin-top: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+#view-hr .hr-doc-card {
+  gap: 14px;
+  min-height: 0;
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+
+#view-hr .hr-doc-card:last-child {
+  border-bottom: 0;
+}
+
+#view-hr .hr-doc-card.active,
+#view-hr .hr-doc-card.is-planned,
+#view-hr .hr-doc-card:hover,
+#view-hr .hr-doc-card:focus-visible {
+  border-color: var(--ui-border-subtle);
+  background: transparent;
+}
+
+#view-hr .hr-doc-card strong {
+  font-size: 15px;
+}
+
+#view-hr .hr-doc-card.active strong {
+  color: var(--ui-accent);
+}
+
+#view-hr .hr-doc-card-state {
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-weight: 700;
+}
+
+#view-hr .hr-doc-card-state.is-live {
+  background: transparent;
+  color: var(--ui-accent);
+}
+
+#view-hr .hr-doc-card-state.is-planned {
+  background: transparent;
+  color: var(--ui-text-secondary);
+}
+
+#view-hr .hr-purpose-group,
+#view-hr #hrCertificateToggleFields {
+  gap: 10px 12px;
+}
+
+#view-hr .table-wrap {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+#view-hr .admin-table thead th {
+  background: transparent;
+  padding: 10px 12px 12px;
+}
+
+#view-hr .admin-table tbody td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+#view-hr .admin-table-empty-row td {
+  padding-top: 52px;
+  padding-bottom: 52px;
+  background: transparent;
+}
+
+#view-hr .hr-approval-procedure-workspace {
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+#view-hr .hr-approval-procedure-preview-card,
+#view-hr #hrManageTemplatesPanel {
+  gap: 14px;
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-hr .hr-approval-procedure-editor,
+#view-hr .hr-approval-procedure-preview {
+  gap: 14px;
+}
+
+#view-hr .hr-approval-procedure-editor {
+  padding-top: 0;
+  border-top: 0;
+}
+
+#view-hr .hr-approval-procedure-sheet-section,
+#view-hr .hr-approval-stage-card,
+#view-hr .hr-approval-inline-state,
+#view-hr .hr-approval-rule-empty {
+  border: 0;
+  border-top: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-hr .hr-approval-procedure-sheet > :first-child,
+#view-hr #hrApprovalProcedureEditor > :first-child,
+#view-hr .hr-approval-procedure-preview > :first-child {
+  border-top: 0;
+}
+
+#view-hr .hr-approval-stage-topbar {
+  padding: 14px 0 12px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+  background: transparent;
+}
+
+#view-hr .hr-approval-stage-body {
+  gap: 0;
+  padding: 12px 0 0;
+}
+
+#view-hr .hr-approval-stage-member-list {
+  display: grid;
+  gap: 0;
+}
+
+#view-hr .hr-approval-stage-member-list > .hr-approval-member-card:first-child {
+  border-top: 0;
+}
+
+#view-hr .hr-approval-member-card {
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+
+#view-hr .hr-approval-member-avatar {
+  width: 34px;
+  height: 34px;
+  font-size: 12px;
+}
+
+#view-hr .hr-approval-stage-empty-state,
+#view-hr .hr-approval-rule-empty,
+#view-hr .hr-approval-inline-state {
+  min-height: 96px;
+  padding: 10px 0 0;
+  justify-items: start;
+  text-align: left;
+  align-content: start;
+}
+
+#view-hr .hr-approval-stage-empty-state {
+  border-top: 0;
+}
+
 /* 2026-04-10 requests global law retrofit */
 #view-requests #requestsWorkspaceSegments {
   display: inline-flex;
