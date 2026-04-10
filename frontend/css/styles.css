@@ -49635,6 +49635,183 @@ html[data-ui-theme="light"]
   min-width: 132px;
 }
 
+/* 2026-04-10 ralph Phase A/B terminal overrides */
+#view-attendance[data-attendance-section="stats"]
+  #attendanceOpsToolbar
+  .attendance-ops-toolbar-group.attendance-ops-toolbar-shared {
+  gap: 8px;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceOpsToolbar
+  #attendanceEmployeeFilterTrigger,
+#view-attendance[data-attendance-section="stats"]
+  #attendanceOpsToolbar
+  #attendanceSiteFilterTrigger,
+#view-attendance[data-attendance-section="stats"]
+  #attendanceOpsToolbar
+  #attendanceStatusSelect,
+#view-attendance[data-attendance-section="stats"]
+  #attendanceOpsToolbar
+  #attendanceStatsRangeTrigger {
+  min-height: 36px;
+  height: 36px;
+  border: 1px solid rgba(226, 232, 240, 0.96);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: none;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceOpsToolbar
+  #attendanceStatusSelect {
+  padding-inline: 12px 30px;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-topbar-row-primary {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-topbar-primary-tabs {
+  gap: 18px;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-primary-tab {
+  padding: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-topbar-actions {
+  gap: 8px;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-topbar-action {
+  min-height: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-topbar-row-secondary {
+  gap: 0;
+  padding-top: 2px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-bookmark-tab {
+  min-height: 38px;
+  padding: 0 18px;
+  margin-right: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.96);
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: rgba(248, 250, 252, 0.76);
+  box-shadow: none;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-bookmark-tab.active {
+  border-color: rgba(226, 232, 240, 0.96);
+  border-top-color: rgba(255, 122, 26, 0.75);
+  background: #fff;
+  box-shadow: none;
+}
+
+.modal-sheet.sheet-layout-attendance-picker {
+  padding: 18px 18px 16px;
+  border-radius: 20px;
+}
+
+.modal-sheet.sheet-layout-attendance-picker .sheet-content {
+  gap: 12px;
+}
+
+.modal-sheet.sheet-layout-attendance-picker .sheet-actions {
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+.attendance-picker-modal {
+  gap: 12px;
+}
+
+.attendance-picker-modal-head {
+  gap: 10px;
+}
+
+.attendance-picker-modal-body {
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 14px;
+  min-height: 360px;
+}
+
+.attendance-picker-modal-nav {
+  gap: 0;
+  padding-right: 12px;
+  border-right: 1px solid var(--ui-border-subtle);
+}
+
+.attendance-picker-modal-nav-item {
+  gap: 2px;
+  padding: 10px 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.attendance-picker-modal-nav-item strong {
+  color: var(--ui-text-primary);
+}
+
+.attendance-picker-modal-nav-item span {
+  color: var(--ui-text-secondary);
+}
+
+.attendance-picker-modal-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.attendance-picker-modal-panel-head {
+  padding: 10px 0 10px 14px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+  background: transparent;
+}
+
+.attendance-picker-modal-panel-body {
+  padding: 8px 0 0 14px;
+  gap: 0;
+}
+
+.attendance-picker-option-stack {
+  gap: 0;
+}
+
+.attendance-picker-option {
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 0;
+  background: transparent;
+}
+
+.attendance-picker-option:last-child {
+  border-bottom: 0;
+}
+
+.attendance-picker-option.is-selected {
+  background: rgba(59, 130, 246, 0.06);
+  box-shadow: none;
+}
+
+.attendance-picker-empty {
+  min-height: 180px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 /* 2026-04-10 control grammar follow-up terminal overrides */
 #view-attendance #attendanceStatsPanel .attendance-stats-topline {
   display: grid !important;
