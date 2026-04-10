@@ -50166,6 +50166,7 @@ html[data-ui-theme="light"]
 
 #view-home .home-role-root-hq-refined .home-hq-secondary-slot--requests {
   grid-area: requests;
+  align-self: start;
 }
 
 #view-home .home-role-root-hq-refined .home-hq-secondary-slot--schedule {
@@ -50174,6 +50175,7 @@ html[data-ui-theme="light"]
 
 #view-home .home-role-root-hq-refined .home-hq-secondary-slot--noticeorg {
   grid-area: org;
+  align-self: start;
 }
 
 #view-home .home-role-root-hq-refined .home-hq-secondary-slot .home-role-card {
@@ -50181,6 +50183,7 @@ html[data-ui-theme="light"]
   height: auto;
   display: grid;
   gap: 10px;
+  align-content: start;
   padding: 14px 16px;
   border-radius: 16px;
 }
@@ -50289,6 +50292,14 @@ html[data-ui-theme="light"]
 
 #view-home .home-empty-icon {
   display: none !important;
+}
+
+#view-home
+  .home-role-root-hq-refined
+  .home-role-card--requests
+  .home-empty-icon,
+#view-home .home-role-root-hq-refined .home-role-card--org .home-empty-icon {
+  display: inline-flex !important;
 }
 
 @media (max-width: 1180px) {
