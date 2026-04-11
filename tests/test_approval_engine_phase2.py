@@ -264,6 +264,93 @@ class ApprovalEnginePhase2Tests(unittest.TestCase):
         self.assertTrue(any("INSERT INTO approval_steps" in sql for sql, _ in conn.executed))
         self.assertTrue(any("INSERT INTO approval_actions" in sql for sql, _ in conn.executed))
 
+    def test_create_document_notifies_all_first_stage_approvers(self):
+        conn = _FakeConn()
+        dispatcher = _FakeDispatcher(conn)
+        audit = _FakeAuditService(conn)
+
+        with patch.object(approval_engine, "ensure_default_approval_forms"), \
+             patch.object(approval_engine, "ensure_default_approval_line_rules"), \
+             patch.object(
+                 approval_engine,
+                 "_fetch_form_bundle",
+                 return_value={
+                     "form_id": "form-1",
+                     "form_version_id": "ver-1",
+                     "display_name": "증명서발급",
+                 },
+             ), \
+             patch.object(
+                 approval_engine,
+                 "_resolve_auto_approval_steps",
+                 return_value=[
+                     {
+                         "step_order": 1,
+                         "approver_user_id": "approver-1",
+                         "approver_employee_id": "emp-approver-1",
+                         "meta_json": {"stage_member_count": 2},
+                     },
+                     {
+                         "step_order": 1,
+                         "approver_user_id": "approver-2",
+                         "approver_employee_id": "emp-approver-2",
+                         "meta_json": {"stage_member_count": 2},
+                     },
+                     {
+                         "step_order": 2,
+                         "approver_user_id": "approver-3",
+                         "approver_employee_id": "emp-approver-3",
+                         "meta_json": {"stage_member_count": 1},
+                     },
+                 ],
+             ), \
+             patch.object(
+                 approval_engine,
+                 "_fetch_first_pending_step",
+                 return_value={"id": "step-1", "approver_user_id": "approver-1", "step_order": 1},
+             ), \
+             patch.object(
+                 approval_engine,
+                 "_fetch_pending_stage_steps",
+                 return_value=[
+                     {"id": "step-1", "approver_user_id": "approver-1", "step_order": 1},
+                     {"id": "step-2", "approver_user_id": "approver-2", "step_order": 1},
+                 ],
+             ), \
+             patch.object(
+                 approval_engine,
+                 "fetch_approval_document_detail",
+                 return_value={"id": "doc-1", "status": "in_review", "title": "증명서발급"},
+             ), \
+             patch.object(
+                 approval_engine,
+                 "queue_approval_notification_mail",
+                 return_value={"id": "mail-job-1"},
+             ) as queue_mail, \
+             patch.object(approval_engine, "GroupwareNotificationDispatcher", return_value=dispatcher), \
+             patch.object(approval_engine, "GroupwareAuditService", return_value=audit):
+            approval_engine.create_approval_document(
+                conn,
+                tenant_id="tenant-1",
+                form_key="certificate_request",
+                title="증명서발급",
+                requester_user_id="user-1",
+                requester_role="officer",
+                employee_id="emp-1",
+                site_id="site-1",
+                payload={"certificate_type": "employment_certificate"},
+                submit=True,
+            )
+
+        insert_params = [params for sql, params in conn.executed if "INSERT INTO approval_steps" in sql]
+        self.assertEqual([params[3] for params in insert_params], [1, 1, 2])
+        self.assertEqual([params[4] for params in insert_params], ["pending", "pending", "queued"])
+        self.assertEqual(
+            [call["user_id"] for call in dispatcher.calls],
+            ["approver-1", "approver-2"],
+        )
+        self.assertEqual(queue_mail.call_count, 2)
+
     def test_record_approve_action_promotes_next_step(self):
         conn = _FakeConn()
         dispatcher = _FakeDispatcher(conn)
@@ -314,6 +401,91 @@ class ApprovalEnginePhase2Tests(unittest.TestCase):
         self.assertTrue(any("UPDATE approval_documents" in sql for sql, _ in conn.executed))
         self.assertEqual(dispatcher.calls[0]["user_id"], "reviewer-2")
         queue_mail.assert_called_once()
+
+    def test_record_approve_action_skips_same_stage_and_notifies_all_next_stage_approvers(self):
+        conn = _FakeConn()
+        dispatcher = _FakeDispatcher(conn)
+        audit = _FakeAuditService(conn)
+
+        with patch.object(
+            approval_engine,
+            "_fetch_document_row",
+            return_value={"id": "doc-1", "title": "재직증명서", "status": "in_review"},
+        ), \
+             patch.object(
+                 approval_engine,
+                 "_fetch_first_pending_step",
+                 side_effect=[
+                     {"id": "step-1", "step_order": 1, "approver_user_id": "reviewer-1"},
+                     {"id": "step-3", "step_order": 2, "approver_user_id": "reviewer-3"},
+                 ],
+             ), \
+             patch.object(
+                 approval_engine,
+                 "_fetch_next_queued_stage_steps",
+                 return_value=[
+                     {"id": "step-3", "step_order": 2, "approver_user_id": "reviewer-3"},
+                     {"id": "step-4", "step_order": 2, "approver_user_id": "reviewer-4"},
+                 ],
+             ), \
+             patch.object(
+                 approval_engine,
+                 "_fetch_pending_stage_steps",
+                 return_value=[
+                     {"id": "step-3", "step_order": 2, "approver_user_id": "reviewer-3"},
+                     {"id": "step-4", "step_order": 2, "approver_user_id": "reviewer-4"},
+                 ],
+             ), \
+             patch.object(
+                 approval_engine,
+                 "_sync_legacy_leave_request_from_approval",
+                 return_value=None,
+             ), \
+             patch.object(
+                 approval_engine,
+                 "fetch_approval_document_detail",
+                 return_value={
+                     "id": "doc-1",
+                     "status": "in_review",
+                     "title": "재직증명서",
+                     "form_key": "certificate_request",
+                     "form_display_name": "재직증명서",
+                 },
+             ), \
+             patch.object(
+                 approval_engine,
+                 "queue_approval_notification_mail",
+                 return_value={"id": "mail-job-2"},
+             ) as queue_mail, \
+             patch.object(approval_engine, "GroupwareNotificationDispatcher", return_value=dispatcher), \
+             patch.object(approval_engine, "GroupwareAuditService", return_value=audit):
+            result = approval_engine.record_approval_action(
+                conn,
+                tenant_id="tenant-1",
+                document_id="doc-1",
+                actor_user_id="reviewer-1",
+                actor_role="hq_admin",
+                action_type="approve",
+                comment_text="승인",
+            )
+
+        self.assertEqual(result["status"], "in_review")
+        skipped_update = next(
+            params for sql, params in conn.executed
+            if "UPDATE approval_steps" in sql and "AND id <> %s" in sql
+        )
+        self.assertEqual(skipped_update[1], "doc-1")
+        self.assertEqual(skipped_update[2], 1)
+        pending_update = next(
+            params for sql, params in conn.executed
+            if "UPDATE approval_steps" in sql and "AND step_order = %s" in sql and params[0] == "pending"
+        )
+        self.assertEqual(pending_update[2], 2)
+        self.assertEqual(
+            [call["user_id"] for call in dispatcher.calls],
+            ["reviewer-3", "reviewer-4"],
+        )
+        self.assertEqual(queue_mail.call_count, 2)
 
     def test_record_approval_action_tolerates_notification_and_audit_failures(self):
         conn = _FakeConn()

@@ -45,6 +45,7 @@ DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE = "employment_certificate"
 DOCUMENT_TYPE_CAREER_CERTIFICATE = "career_certificate"
 DOCUMENT_TYPE_RETIREMENT_CERTIFICATE = "retirement_certificate"
 DOCUMENT_TYPE_LEAVE_OF_ABSENCE_CERTIFICATE = "leave_of_absence_certificate"
+DOCUMENT_TYPE_RESIGNATION_FORM = "resignation_form"
 DAILY_REQUEST_LIMIT = 4
 TZ_KST = timezone(timedelta(hours=9))
 PURPOSE_CODES = {"BANK", "GOV", "CARD", "OTHER"}
@@ -53,18 +54,22 @@ ALLOWED_TEMPLATE_DOCUMENT_TYPES = {
     DOCUMENT_TYPE_CAREER_CERTIFICATE,
     DOCUMENT_TYPE_RETIREMENT_CERTIFICATE,
     DOCUMENT_TYPE_LEAVE_OF_ABSENCE_CERTIFICATE,
+    DOCUMENT_TYPE_RESIGNATION_FORM,
 }
 ALLOWED_TEMPLATE_EXTENSIONS = {".docx"}
 MAX_TEMPLATE_UPLOAD_BYTES = 2 * 1024 * 1024
 APPROVAL_POLICY_RULE_FORM_KEY_PREFIX = "certificate_request:"
 APPROVAL_POLICY_SUPPORTED_DOCUMENT_TYPES = {
+    DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE,
+    DOCUMENT_TYPE_CAREER_CERTIFICATE,
     DOCUMENT_TYPE_RETIREMENT_CERTIFICATE,
     DOCUMENT_TYPE_LEAVE_OF_ABSENCE_CERTIFICATE,
+    "resignation_form",
 }
 APPROVAL_POLICY_SITE_ROLE_OPTIONS = (
     {"value": "supervisor", "label": "Supervisor"},
 )
-APPROVAL_POLICY_ALLOWED_USER_ROLES = ("supervisor", "vice_supervisor", "hq_admin", "developer")
+APPROVAL_POLICY_ALLOWED_USER_ROLES = ("officer", "vice_supervisor", "supervisor", "hq_admin", "developer")
 
 
 class EmploymentCertificateRequestCreate(BaseModel):
@@ -100,11 +105,50 @@ class EmploymentCertificateRejectRequest(BaseModel):
         return normalized
 
 
+class ResignationRequestCreate(BaseModel):
+    resignation_type: str = Field(min_length=1, max_length=32)
+    expected_last_working_date: str = Field(min_length=8, max_length=32)
+    resignation_reason: str = Field(min_length=5, max_length=400)
+    handover_notes: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("resignation_type", mode="before")
+    @classmethod
+    def _normalize_resignation_type(cls, value: str | None) -> str:
+        normalized = str(value or "").strip().upper()
+        if normalized not in {"PERSONAL", "CONTRACT_END", "CAREER", "HEALTH", "OTHER"}:
+            raise ValueError("resignation_type invalid")
+        return normalized
+
+    @field_validator("expected_last_working_date", mode="before")
+    @classmethod
+    def _normalize_expected_last_working_date(cls, value: str | None) -> str:
+        normalized = str(value or "").strip()
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", normalized):
+            raise ValueError("expected_last_working_date invalid")
+        return normalized
+
+    @field_validator("resignation_reason", mode="before")
+    @classmethod
+    def _normalize_resignation_reason(cls, value: str | None) -> str:
+        normalized = str(value or "").strip()
+        if len(normalized) < 5:
+            raise ValueError("resignation_reason too_short")
+        return normalized
+
+    @field_validator("handover_notes", mode="before")
+    @classmethod
+    def _normalize_handover_notes(cls, value: str | None) -> str | None:
+        normalized = str(value or "").strip()
+        return normalized or None
+
+
 class DocumentApprovalPolicyStepIn(BaseModel):
+    stage_order: int | None = Field(default=None, ge=1, le=7)
     step_kind: str = Field(default="site_supervisor", min_length=1, max_length=32)
     label: str = Field(default="", max_length=120)
     site_role: str = Field(default="supervisor", max_length=32)
     explicit_user_id: str | None = Field(default=None, max_length=64)
+    member_user_ids: list[str] = Field(default_factory=list)
     approval_group_id: str | None = Field(default=None, max_length=64)
     approval_rank_id: str | None = Field(default=None, max_length=64)
     allow_delegate: bool = False
@@ -131,6 +175,19 @@ class DocumentApprovalPolicyStepIn(BaseModel):
     def _normalize_optional_id(cls, value: str | None) -> str | None:
         normalized = str(value or "").strip()
         return normalized or None
+
+    @field_validator("member_user_ids", mode="before")
+    @classmethod
+    def _normalize_member_user_ids(cls, value) -> list[str]:
+        if value is None:
+            return []
+        values = value if isinstance(value, list) else [value]
+        normalized: list[str] = []
+        for item in values:
+            current = str(item or "").strip()
+            if current and current not in normalized:
+                normalized.append(current)
+        return normalized
 
     @field_validator("label", mode="before")
     @classmethod
@@ -222,6 +279,47 @@ def _format_date(value: Any) -> str:
         except Exception:
             return ""
     return "" 
+
+
+def _parse_resignation_request_payload(row: dict[str, Any] | None) -> dict[str, Any]:
+    payload_raw = str((row or {}).get("purpose_text") or "").strip()
+    payload: dict[str, Any] = {}
+    if payload_raw:
+        try:
+            parsed = json.loads(payload_raw)
+            if isinstance(parsed, dict):
+                payload = parsed
+            else:
+                payload = {"resignation_reason": payload_raw}
+        except Exception:
+            payload = {"resignation_reason": payload_raw}
+    return {
+        "resignation_type": str((row or {}).get("purpose_code") or payload.get("resignation_type") or "PERSONAL").strip().upper() or "PERSONAL",
+        "expected_last_working_date": str(payload.get("expected_last_working_date") or "").strip() or None,
+        "resignation_reason": str(payload.get("resignation_reason") or "").strip() or "",
+        "handover_notes": str(payload.get("handover_notes") or "").strip() or None,
+    }
+
+
+def _serialize_resignation_request_row(row: dict[str, Any] | None) -> dict[str, Any]:
+    detail = _parse_resignation_request_payload(row)
+    return {
+        "id": str((row or {}).get("id") or "").strip(),
+        "status": str((row or {}).get("status") or "").strip().lower() or "requested",
+        "requested_at": (row or {}).get("requested_at"),
+        "approved_at": (row or {}).get("approved_at"),
+        "rejection_reason": (row or {}).get("rejection_reason"),
+        "employee_code": (row or {}).get("employee_code"),
+        "employee_name": (row or {}).get("employee_name"),
+        "company_name": (row or {}).get("company_name"),
+        "org": (row or {}).get("org_name"),
+        "resignation_type": detail["resignation_type"],
+        "expected_last_working_date": detail["expected_last_working_date"],
+        "resignation_reason": detail["resignation_reason"],
+        "handover_notes": detail["handover_notes"],
+        "approval_progress": (row or {}).get("approval_progress") or {},
+        "can_delegate": bool((row or {}).get("can_delegate")),
+    }
 
 
 def _json_dumps(value: Any) -> str:
@@ -514,30 +612,6 @@ def _normalize_approval_policy_document_type(value: str | None) -> str:
 
 def _resolve_document_approval_policy_state(document_type: str) -> dict[str, Any]:
     normalized_document_type = _normalize_approval_policy_document_type(document_type)
-    if normalized_document_type == DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE:
-        return {
-            "document_type": normalized_document_type,
-            "editable": False,
-            "unsupported_reason": "재직증명서는 즉시 발급 문서라 승인 절차를 편집하지 않습니다.",
-            "rule_form_key": None,
-            "fallback_form_key": None,
-        }
-    if normalized_document_type == DOCUMENT_TYPE_CAREER_CERTIFICATE:
-        return {
-            "document_type": normalized_document_type,
-            "editable": False,
-            "unsupported_reason": "경력증명서는 즉시 발급 문서라 승인 절차를 편집하지 않습니다.",
-            "rule_form_key": None,
-            "fallback_form_key": None,
-        }
-    if normalized_document_type == "resignation_form":
-        return {
-            "document_type": normalized_document_type,
-            "editable": False,
-            "unsupported_reason": "사직서는 기존 검토 흐름을 유지하므로 이 화면에서 승인 절차를 편집하지 않습니다.",
-            "rule_form_key": None,
-            "fallback_form_key": None,
-        }
     if normalized_document_type not in APPROVAL_POLICY_SUPPORTED_DOCUMENT_TYPES:
         return {
             "document_type": normalized_document_type,
@@ -599,16 +673,25 @@ def _serialize_document_approval_policy_row(row: dict[str, Any]) -> dict[str, An
     if step_kind not in {"site_supervisor", "explicit_user", "rank"}:
         step_kind = "explicit_user" if str(row.get("approver_user_id") or "").strip() else "site_supervisor"
     approver_user_id = str(row.get("approver_user_id") or "").strip()
+    member_user_ids = [
+        str(value or "").strip()
+        for value in (conditions.get("member_user_ids") or [])
+        if str(value or "").strip()
+    ]
+    if step_kind == "explicit_user" and approver_user_id and approver_user_id not in member_user_ids:
+        member_user_ids.insert(0, approver_user_id)
     raw_approver_role = str(conditions.get("site_role") or row.get("approver_role") or "").strip()
     approver_role = normalize_user_role(raw_approver_role) if raw_approver_role else "supervisor"
     return {
         "id": str(row.get("id") or "").strip(),
+        "stage_order": int(row.get("rule_order") or 0) or None,
         "step_kind": step_kind,
         "label": str(row.get("rule_name") or "").strip(),
         "site_role": approver_role or "supervisor",
         "approval_group_id": str(conditions.get("approval_group_id") or "").strip(),
         "approval_rank_id": str(conditions.get("approval_rank_id") or "").strip(),
         "explicit_user_id": approver_user_id,
+        "member_user_ids": member_user_ids,
         "allow_delegate": bool(conditions.get("allow_delegate")),
         "is_required": conditions.get("is_required") is not False,
     }
@@ -618,13 +701,18 @@ def _list_document_approval_policy_user_options(conn, *, tenant_id: str) -> list
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, username, full_name, role
-            FROM arls_users
-            WHERE tenant_id = %s
-              AND is_active = TRUE
-              AND COALESCE(is_deleted, FALSE) = FALSE
-              AND lower(role) = ANY(%s)
-            ORDER BY created_at ASC, username ASC
+            SELECT au.id,
+                   au.username,
+                   au.full_name,
+                   au.role,
+                   COALESCE(e.employee_code, '') AS employee_code
+            FROM arls_users au
+            LEFT JOIN employees e ON e.id = au.employee_id
+            WHERE au.tenant_id = %s
+              AND au.is_active = TRUE
+              AND COALESCE(au.is_deleted, FALSE) = FALSE
+              AND lower(au.role) = ANY(%s)
+            ORDER BY au.created_at ASC, au.username ASC
             """,
             (tenant_id, list(APPROVAL_POLICY_ALLOWED_USER_ROLES)),
         )
@@ -634,6 +722,7 @@ def _list_document_approval_policy_user_options(conn, *, tenant_id: str) -> list
             "id": str(row.get("id") or "").strip(),
             "username": str(row.get("username") or "").strip(),
             "full_name": str(row.get("full_name") or "").strip(),
+            "employee_code": str(row.get("employee_code") or "").strip(),
             "role": normalize_user_role(row.get("role")),
         }
         for row in rows
@@ -686,11 +775,72 @@ def _build_document_approval_policy_response(
         "unsupported_reason": str(policy_state["unsupported_reason"] or "").strip(),
         "items": items,
         "resolved_form_key": matched_form_key,
+        "uses_fallback_policy": bool(
+            policy_state["editable"]
+            and matched_form_key
+            and matched_form_key == policy_state["fallback_form_key"]
+        ),
         "user_options": _list_document_approval_policy_user_options(conn, tenant_id=tenant_id),
         "site_options": _list_document_approval_policy_site_options(conn, tenant_id=tenant_id),
         "group_options": [],
         "rank_options": [],
         "site_role_options": list(APPROVAL_POLICY_SITE_ROLE_OPTIONS),
+    }
+
+
+def _has_document_custom_approval_policy(
+    conn,
+    *,
+    tenant_id: str,
+    document_type: str,
+) -> bool:
+    policy_state = _resolve_document_approval_policy_state(document_type)
+    if not policy_state["editable"]:
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM approval_line_rules
+            WHERE tenant_id = %s
+              AND form_key = %s
+              AND is_active = TRUE
+            LIMIT 1
+            """,
+            (tenant_id, policy_state["rule_form_key"]),
+        )
+        row = cur.fetchone()
+    return bool(row)
+
+
+@router.get("/hr/documents/request-approval-guard")
+def get_document_request_approval_guard(
+    document_type: str = Query(default=DOCUMENT_TYPE_EMPLOYMENT_CERTIFICATE),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    tenant = resolve_scoped_tenant(
+        conn,
+        user,
+        header_tenant_id=x_tenant_id,
+        require_dev_context=False,
+    )
+    tenant_id = str(tenant.get("id") or "").strip()
+    normalized_document_type = _normalize_approval_policy_document_type(document_type)
+    has_custom_policy = _has_document_custom_approval_policy(
+        conn,
+        tenant_id=tenant_id,
+        document_type=normalized_document_type,
+    )
+    return {
+        "document_type": normalized_document_type,
+        "approval_required": True,
+        "has_custom_policy": has_custom_policy,
+        "uses_fallback_policy": not has_custom_policy,
+        "warning_message": "현재 별도의 승인 단계가 없어 기본 승인단계로 진행됩니다. 필요할 경우 승인단계를 설정 해 주세요",
+        "accept_label": "다음",
+        "cancel_label": "취소",
     }
 
 
@@ -1390,6 +1540,145 @@ def list_my_employment_certificate_requests(
     ]
 
 
+@router.post("/hr/documents/resignation-requests")
+def create_resignation_request(
+    payload: ResignationRequestCreate,
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    employee_id = _ensure_employee_role(user)
+    tenant = resolve_scoped_tenant(
+        conn,
+        user,
+        header_tenant_id=x_tenant_id,
+        require_dev_context=True,
+    )
+    tenant_id = str(tenant.get("id") or "").strip()
+    employee_row = _get_employee_scope_row(conn, employee_id=employee_id, tenant_id=tenant_id)
+
+    request_id = uuid.uuid4()
+    now_utc = datetime.now(timezone.utc)
+    company_id = employee_row.get("company_id")
+    payload_json = _json_dumps(
+        {
+            "resignation_type": payload.resignation_type,
+            "expected_last_working_date": payload.expected_last_working_date,
+            "resignation_reason": payload.resignation_reason,
+            "handover_notes": payload.handover_notes,
+        }
+    )
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO document_requests (
+                id, tenant_id, company_id, employee_id, document_type, status,
+                purpose_code, purpose_text, requested_at, created_at, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, 'requested', %s, %s, %s, %s, %s)
+            RETURNING id, status, requested_at, approved_at, rejection_reason
+            """,
+            (
+                request_id,
+                tenant_id,
+                company_id,
+                employee_row.get("id"),
+                DOCUMENT_TYPE_RESIGNATION_FORM,
+                payload.resignation_type,
+                payload_json,
+                now_utc,
+                now_utc,
+                now_utc,
+            ),
+        )
+        row = cur.fetchone() or {}
+
+    serialized = _serialize_resignation_request_row(
+        {
+            **row,
+            "purpose_code": payload.resignation_type,
+            "purpose_text": payload_json,
+            "employee_code": str(user.get("employee_code") or "").strip() or None,
+            "employee_name": employee_row.get("full_name"),
+            "company_name": employee_row.get("company_name"),
+            "org_name": employee_row.get("site_name") or "본사",
+        }
+    )
+    _run_noncritical_db_step(
+        conn,
+        step_name="resignation_request_approval_adapter",
+        callback=lambda: create_certificate_request_approval_adapter(
+            conn,
+            tenant_id=tenant_id,
+            document_request_id=str(request_id),
+            employee_id=str(employee_row.get("id") or "").strip(),
+            company_id=str(company_id or "").strip() or None,
+            actor_user=user,
+            certificate_type_key=DOCUMENT_TYPE_RESIGNATION_FORM,
+            certificate_type_name="사직서",
+            purpose_code=payload.resignation_type,
+            purpose_text=payload_json,
+            site_id=str(employee_row.get("site_id") or "").strip() or None,
+            legacy_source_type="certificate_request",
+        ),
+    )
+    return {"item": serialized}
+
+
+@router.get("/hr/documents/resignation-requests")
+def list_my_resignation_requests(
+    page: int = Query(default=1, ge=1),
+    pageSize: int = Query(default=20, ge=1, le=100),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    employee_id = _ensure_employee_role(user)
+    tenant = resolve_scoped_tenant(
+        conn,
+        user,
+        header_tenant_id=x_tenant_id,
+        require_dev_context=True,
+    )
+    tenant_id = str(tenant.get("id") or "").strip()
+    _get_employee_scope_row(conn, employee_id=employee_id, tenant_id=tenant_id)
+    limit = int(pageSize)
+    offset = (int(page) - 1) * limit
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT dr.id,
+                   dr.status,
+                   dr.purpose_code,
+                   dr.purpose_text,
+                   dr.requested_at,
+                   dr.approved_at,
+                   dr.rejection_reason
+            FROM document_requests dr
+            WHERE dr.tenant_id = %s
+              AND dr.employee_id = %s
+              AND dr.document_type = %s
+            ORDER BY dr.requested_at DESC
+            LIMIT %s OFFSET %s
+            """,
+            (tenant_id, employee_id, DOCUMENT_TYPE_RESIGNATION_FORM, limit, offset),
+        )
+        rows = cur.fetchall() or []
+
+    items = [
+        _serialize_resignation_request_row(
+            {
+                **row,
+                "employee_code": str(user.get("employee_code") or "").strip() or None,
+                "employee_name": str(user.get("full_name") or "").strip() or None,
+            }
+        )
+        for row in rows
+    ]
+    return {"items": items}
+
+
 @router.get("/hr/documents/requests/{request_id}/download")
 def download_employment_certificate_pdf(
     request_id: str,
@@ -1554,6 +1843,82 @@ def list_admin_employment_certificate_requests(
     ]
 
 
+@router.get("/admin/hr/documents/resignation-requests")
+def list_admin_resignation_requests(
+    status_filter: str | None = Query(default=None, alias="status"),
+    q: str | None = Query(default=None, max_length=120),
+    limit: int | None = Query(default=None, ge=1, le=200),
+    page: int = Query(default=1, ge=1),
+    pageSize: int | None = Query(default=None, ge=1, le=200),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    _ensure_admin_role(user)
+    tenant = resolve_scoped_tenant(
+        conn,
+        user,
+        header_tenant_id=x_tenant_id,
+        require_dev_context=True,
+    )
+    tenant_id = str(tenant.get("id") or "").strip()
+
+    normalized_status = str(status_filter or "").strip().lower()
+    normalized_q = str(q or "").strip()
+    effective_limit = int(limit or pageSize or 30)
+    effective_offset = (int(page) - 1) * effective_limit if pageSize else 0
+
+    clauses = ["dr.tenant_id = %s", "dr.document_type = %s"]
+    params: list[Any] = [tenant_id, DOCUMENT_TYPE_RESIGNATION_FORM]
+
+    if normalized_status and normalized_status != "all":
+        clauses.append("lower(dr.status) = %s")
+        params.append(normalized_status)
+
+    if normalized_q:
+        clauses.append(
+            """
+            (
+              e.full_name ILIKE %s
+              OR COALESCE(e.employee_code, '') ILIKE %s
+              OR COALESCE(c.company_name, t.tenant_name, '') ILIKE %s
+              OR COALESCE(s.site_name, '') ILIKE %s
+            )
+            """
+        )
+        like = f"%{normalized_q}%"
+        params.extend([like, like, like, like])
+
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT dr.id,
+                   dr.status,
+                   dr.purpose_code,
+                   dr.purpose_text,
+                   dr.requested_at,
+                   dr.approved_at,
+                   dr.rejection_reason,
+                   e.employee_code,
+                   e.full_name AS employee_name,
+                   COALESCE(c.company_name, t.tenant_name) AS company_name,
+                   COALESCE(s.site_name, '본사') AS org_name
+            FROM document_requests dr
+            JOIN employees e ON e.id = dr.employee_id
+            JOIN tenants t ON t.id = dr.tenant_id
+            LEFT JOIN sites s ON s.id = e.site_id
+            LEFT JOIN companies c ON c.id = COALESCE(dr.company_id, e.company_id, s.company_id)
+            WHERE {' AND '.join(clauses)}
+            ORDER BY dr.requested_at DESC
+            LIMIT %s OFFSET %s
+            """,
+            tuple(params + [effective_limit, effective_offset]),
+        )
+        rows = cur.fetchall() or []
+
+    return {"items": [_serialize_resignation_request_row(row) for row in rows]}
+
+
 @router.post("/admin/hr/documents/requests/{request_id}/approve")
 def approve_employment_certificate_request(
     request_id: str,
@@ -1653,6 +2018,58 @@ def approve_employment_certificate_request(
     return {"ok": True}
 
 
+@router.post("/admin/hr/documents/resignation-requests/{request_id}/approve")
+def approve_resignation_request(
+    request_id: str,
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    _ensure_admin_role(user)
+    tenant = resolve_scoped_tenant(
+        conn,
+        user,
+        header_tenant_id=x_tenant_id,
+        require_dev_context=True,
+    )
+    tenant_id = str(tenant.get("id") or "").strip()
+    request_uuid = _parse_uuid(request_id, field_name="request_id")
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE document_requests
+            SET status = 'approved',
+                approved_at = timezone('utc', now()),
+                approved_by = %s,
+                rejection_reason = NULL,
+                updated_at = timezone('utc', now())
+            WHERE id = %s
+              AND tenant_id = %s
+              AND document_type = %s
+              AND status = 'requested'
+            RETURNING id
+            """,
+            (user.get("id"), request_uuid, tenant_id, DOCUMENT_TYPE_RESIGNATION_FORM),
+        )
+        row = cur.fetchone()
+    if not row:
+        _raise_api_error(status.HTTP_409_CONFLICT, "INVALID_STATUS", "현재 상태에서는 승인할 수 없습니다.")
+    _run_noncritical_db_step(
+        conn,
+        step_name="resignation_request_status_sync",
+        callback=lambda: sync_legacy_approval_status(
+            conn,
+            tenant_id=tenant_id,
+            legacy_source_type="certificate_request",
+            legacy_source_id=str(request_uuid),
+            status_value="approved",
+            actor_user_id=str(user.get("id") or "").strip() or None,
+            actor_role=str(user.get("role") or "").strip() or None,
+        ),
+    )
+    return {"ok": True}
+
+
 @router.post("/admin/hr/documents/requests/{request_id}/reject")
 def reject_employment_certificate_request(
     request_id: str,
@@ -1735,6 +2152,81 @@ def reject_employment_certificate_request(
         ),
     )
     return {"ok": True}
+
+
+@router.post("/admin/hr/documents/resignation-requests/{request_id}/reject")
+def reject_resignation_request(
+    request_id: str,
+    payload: EmploymentCertificateRejectRequest,
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    _ensure_admin_role(user)
+    tenant = resolve_scoped_tenant(
+        conn,
+        user,
+        header_tenant_id=x_tenant_id,
+        require_dev_context=True,
+    )
+    tenant_id = str(tenant.get("id") or "").strip()
+    request_uuid = _parse_uuid(request_id, field_name="request_id")
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE document_requests
+            SET status = 'rejected',
+                rejection_reason = %s,
+                approved_by = %s,
+                approved_at = timezone('utc', now()),
+                updated_at = timezone('utc', now())
+            WHERE id = %s
+              AND tenant_id = %s
+              AND document_type = %s
+              AND status = 'requested'
+            RETURNING id
+            """,
+            (
+                payload.rejection_reason,
+                user.get("id"),
+                request_uuid,
+                tenant_id,
+                DOCUMENT_TYPE_RESIGNATION_FORM,
+            ),
+        )
+        row = cur.fetchone()
+    if not row:
+        _raise_api_error(status.HTTP_409_CONFLICT, "INVALID_STATUS", "현재 상태에서는 반려할 수 없습니다.")
+    _run_noncritical_db_step(
+        conn,
+        step_name="resignation_request_rejection_sync",
+        callback=lambda: sync_legacy_approval_status(
+            conn,
+            tenant_id=tenant_id,
+            legacy_source_type="certificate_request",
+            legacy_source_id=str(request_uuid),
+            status_value="rejected",
+            actor_user_id=str(user.get("id") or "").strip() or None,
+            actor_role=str(user.get("role") or "").strip() or None,
+            comment_text=payload.rejection_reason,
+        ),
+    )
+    return {"ok": True}
+
+
+@router.post("/admin/hr/documents/resignation-requests/{request_id}/delegate-approve")
+def delegate_approve_resignation_request(
+    request_id: str,
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    return approve_resignation_request(
+        request_id=request_id,
+        x_tenant_id=x_tenant_id,
+        conn=conn,
+        user=user,
+    )
 
 
 @router.get("/admin/hr/documents/templates")
@@ -1870,12 +2362,12 @@ def update_document_approval_policy(
             "최소 1개의 승인 단계를 저장해야 합니다.",
             fields={"items": "min_1"},
         )
-    if len(items) > 6:
+    if len(items) > 7:
         _raise_api_error(
             status.HTTP_400_BAD_REQUEST,
             "VALIDATION_ERROR",
             "입력값을 확인해주세요.",
-            fields={"items": "max_6"},
+            fields={"items": "max_7"},
         )
 
     for index, item in enumerate(items, start=1):
@@ -1887,14 +2379,16 @@ def update_document_approval_policy(
                 fields={f"items[{index - 1}].step_kind": "unsupported"},
             )
         if item.step_kind == "explicit_user":
-            if not item.explicit_user_id:
+            member_user_ids = item.member_user_ids or ([item.explicit_user_id] if item.explicit_user_id else [])
+            if not member_user_ids:
                 _raise_api_error(
                     status.HTTP_400_BAD_REQUEST,
                     "VALIDATION_ERROR",
                     "입력값을 확인해주세요.",
                     fields={f"items[{index - 1}].explicit_user_id": "required"},
                 )
-            _parse_uuid(item.explicit_user_id, field_name=f"items[{index - 1}].explicit_user_id")
+            for member_index, member_user_id in enumerate(member_user_ids):
+                _parse_uuid(member_user_id, field_name=f"items[{index - 1}].member_user_ids[{member_index}]")
 
     ensure_default_approval_line_rules(conn, tenant_id=tenant_id, actor_user_id=actor_user_id)
     with conn.cursor() as cur:
@@ -1907,8 +2401,10 @@ def update_document_approval_policy(
             (tenant_id, policy_state["rule_form_key"]),
         )
         for index, item in enumerate(items, start=1):
+            stage_order = max(1, min(7, int(item.stage_order or index)))
             approver_role = item.site_role if item.step_kind == "site_supervisor" else None
-            approver_user_id = item.explicit_user_id if item.step_kind == "explicit_user" else None
+            member_user_ids = item.member_user_ids or ([item.explicit_user_id] if item.explicit_user_id else [])
+            approver_user_id = member_user_ids[0] if item.step_kind == "explicit_user" and member_user_ids else None
             scope_type = "site_or_tenant" if item.step_kind == "site_supervisor" else "tenant"
             cur.execute(
                 """
@@ -1937,8 +2433,8 @@ def update_document_approval_policy(
                     str(uuid.uuid4()),
                     tenant_id,
                     policy_state["rule_form_key"],
-                    index,
-                    item.label or f"승인 {index}",
+                    stage_order,
+                    item.label or f"승인 {stage_order}",
                     approver_role,
                     approver_user_id,
                     scope_type,
@@ -1946,11 +2442,13 @@ def update_document_approval_policy(
                         {
                             "step_kind": item.step_kind,
                             "site_role": item.site_role,
+                            "member_user_ids": member_user_ids,
                             "approval_group_id": item.approval_group_id,
                             "approval_rank_id": item.approval_rank_id,
                             "allow_delegate": bool(item.allow_delegate),
                             "is_required": bool(item.is_required),
                             "document_type": normalized_document_type,
+                            "stage_order": stage_order,
                         }
                     ),
                     actor_user_id,
