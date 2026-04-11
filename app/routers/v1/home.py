@@ -17,7 +17,7 @@ from ...schemas import (
     HomeBriefingWeekSummaryOut,
 )
 from ...services.attendance_runtime import fetch_today_status, get_kst_day_bounds_utc
-from ...utils.schema_introspection import table_column_exists
+from ...utils.schema_introspection import table_column_exists, table_exists as schema_table_exists
 from ...utils.permissions import (
     ROLE_DEVELOPER,
     ROLE_HQ_ADMIN,
@@ -45,20 +45,7 @@ SHIFT_LABELS = {
 
 
 def _table_exists(conn, table_name: str) -> bool:
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT EXISTS (
-                SELECT 1
-                FROM information_schema.tables
-                WHERE table_schema = 'public'
-                  AND table_name = %s
-            ) AS exists
-            """,
-            (table_name,),
-        )
-        row = cur.fetchone() or {}
-    return bool(row.get("exists"))
+    return schema_table_exists(conn, table_name)
 
 
 def _table_column_exists(conn, table_name: str, column_name: str) -> bool:
@@ -387,7 +374,8 @@ def _fetch_today_staff_snapshot(
             target_date,
             target_date,
             tenant_id,
-            target_date,
+            day_start_utc,
+            day_end_utc,
         ]
     )
     with conn.cursor() as cur:
@@ -410,6 +398,38 @@ def _fetch_today_staff_snapshot(
                            WHEN 'night' THEN 3
                            ELSE 9
                          END ASC
+            ),
+            checkins AS (
+                SELECT DISTINCT ar.employee_id
+                FROM attendance_records ar
+                WHERE ar.tenant_id = %s
+                  AND ar.event_type = 'check_in'
+                  AND ar.event_at >= %s
+                  AND ar.event_at < %s
+            ),
+            approved_leaves AS (
+                SELECT DISTINCT lr.employee_id
+                FROM leave_requests lr
+                WHERE lr.tenant_id = %s
+                  AND lower(COALESCE(lr.status, '')) = 'approved'
+                  AND lr.start_at::date <= %s
+                  AND lr.end_at::date >= %s
+            ),
+            pending_leaves AS (
+                SELECT DISTINCT lr.employee_id
+                FROM leave_requests lr
+                WHERE lr.tenant_id = %s
+                  AND lower(COALESCE(lr.status, '')) = 'pending'
+                  AND lr.start_at::date <= %s
+                  AND lr.end_at::date >= %s
+            ),
+            pending_attendance AS (
+                SELECT DISTINCT arq.employee_id
+                FROM attendance_requests arq
+                WHERE arq.tenant_id = %s
+                  AND lower(COALESCE(arq.status, '')) = 'pending'
+                  AND arq.requested_at >= %s
+                  AND arq.requested_at < %s
             )
             SELECT e.id AS employee_id,
                    e.employee_code,
@@ -417,44 +437,17 @@ def _fetch_today_staff_snapshot(
                    COALESCE(s.site_code, '') AS site_code,
                    COALESCE(s.site_name, '') AS site_name,
                    scheduled.shift_type,
-                   EXISTS (
-                       SELECT 1
-                       FROM attendance_records ar
-                       WHERE ar.tenant_id = %s
-                         AND ar.employee_id = scheduled.employee_id
-                         AND ar.event_type = 'check_in'
-                         AND ar.event_at >= %s
-                         AND ar.event_at < %s
-                   ) AS has_check_in,
-                   EXISTS (
-                       SELECT 1
-                       FROM leave_requests lr
-                       WHERE lr.tenant_id = %s
-                         AND lr.employee_id = scheduled.employee_id
-                         AND lower(COALESCE(lr.status, '')) = 'approved'
-                         AND lr.start_at::date <= %s
-                         AND lr.end_at::date >= %s
-                   ) AS approved_leave,
-                   EXISTS (
-                       SELECT 1
-                       FROM leave_requests lr
-                       WHERE lr.tenant_id = %s
-                         AND lr.employee_id = scheduled.employee_id
-                         AND lower(COALESCE(lr.status, '')) = 'pending'
-                         AND lr.start_at::date <= %s
-                         AND lr.end_at::date >= %s
-                   ) AS pending_leave,
-                   EXISTS (
-                       SELECT 1
-                       FROM attendance_requests arq
-                       WHERE arq.tenant_id = %s
-                         AND arq.employee_id = scheduled.employee_id
-                         AND lower(COALESCE(arq.status, '')) = 'pending'
-                         AND (arq.requested_at AT TIME ZONE 'Asia/Seoul')::date = %s
-                   ) AS pending_attendance
+                   (checkins.employee_id IS NOT NULL) AS has_check_in,
+                   (approved_leaves.employee_id IS NOT NULL) AS approved_leave,
+                   (pending_leaves.employee_id IS NOT NULL) AS pending_leave,
+                   (pending_attendance.employee_id IS NOT NULL) AS pending_attendance
             FROM scheduled
             JOIN employees e ON e.id = scheduled.employee_id
             LEFT JOIN sites s ON s.id = scheduled.site_id
+            LEFT JOIN checkins ON checkins.employee_id = scheduled.employee_id
+            LEFT JOIN approved_leaves ON approved_leaves.employee_id = scheduled.employee_id
+            LEFT JOIN pending_leaves ON pending_leaves.employee_id = scheduled.employee_id
+            LEFT JOIN pending_attendance ON pending_attendance.employee_id = scheduled.employee_id
             ORDER BY s.site_name ASC, employee_name ASC
             """,
             tuple(params),
