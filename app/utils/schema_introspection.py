@@ -3,11 +3,11 @@ from __future__ import annotations
 import re
 import threading
 import time
-from typing import Tuple
 
 _CACHE_TTL_SECONDS = 300.0
 _CACHE_LOCK = threading.Lock()
 _COLUMN_EXISTS_CACHE: dict[tuple[str, str], tuple[float, bool]] = {}
+_TABLE_EXISTS_CACHE: dict[str, tuple[float, bool]] = {}
 _SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -52,6 +52,63 @@ def _query_column_exists_sqlite(conn, table_name: str, column_name: str) -> bool
     return False
 
 
+def _query_table_exists_postgres(conn, table_name: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = %s
+            LIMIT 1
+            """,
+            (table_name,),
+        )
+        return bool(cur.fetchone())
+
+
+def _query_table_exists_sqlite(conn, table_name: str) -> bool:
+    if not _is_safe_identifier(table_name):
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM sqlite_master
+            WHERE type IN ('table', 'view')
+              AND lower(name) = lower(?)
+            LIMIT 1
+            """,
+            (table_name,),
+        )
+        return bool(cur.fetchone())
+
+
+def table_exists(conn, table_name: str) -> bool:
+    normalized_table = _normalize_identifier(table_name)
+    if not normalized_table:
+        return False
+
+    now = time.monotonic()
+    with _CACHE_LOCK:
+        cached = _TABLE_EXISTS_CACHE.get(normalized_table)
+        if cached and cached[0] > now:
+            return cached[1]
+
+    exists = False
+    try:
+        exists = _query_table_exists_postgres(conn, normalized_table)
+    except Exception:
+        try:
+            exists = _query_table_exists_sqlite(conn, normalized_table)
+        except Exception:
+            exists = False
+
+    with _CACHE_LOCK:
+        _TABLE_EXISTS_CACHE[normalized_table] = (now + _CACHE_TTL_SECONDS, exists)
+    return exists
+
+
 def table_column_exists(conn, table_name: str, column_name: str) -> bool:
     normalized_table = _normalize_identifier(table_name)
     normalized_column = _normalize_identifier(column_name)
@@ -82,3 +139,14 @@ def table_column_exists(conn, table_name: str, column_name: str) -> bool:
 def clear_table_column_exists_cache() -> None:
     with _CACHE_LOCK:
         _COLUMN_EXISTS_CACHE.clear()
+
+
+def clear_table_exists_cache() -> None:
+    with _CACHE_LOCK:
+        _TABLE_EXISTS_CACHE.clear()
+
+
+def clear_schema_introspection_cache() -> None:
+    with _CACHE_LOCK:
+        _COLUMN_EXISTS_CACHE.clear()
+        _TABLE_EXISTS_CACHE.clear()
