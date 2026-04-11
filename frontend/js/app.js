@@ -67297,6 +67297,44 @@ function isEmployeeRowsCacheTrustedForCurrentDirectory() {
   );
 }
 
+function syncEmployeeDetailCacheAfterDirectoryRefresh(
+  rows = [],
+  { previousScopeKey = "", nextScopeKey = "" } = {},
+) {
+  const employeeAdmin = state.employeeAdmin;
+  if (!employeeAdmin || typeof employeeAdmin !== "object") return;
+  const detailCache =
+    employeeAdmin.detailCache instanceof Map
+      ? employeeAdmin.detailCache
+      : new Map();
+  if (!detailCache.size) {
+    employeeAdmin.detailCache = new Map();
+    return;
+  }
+  const previousKey = String(previousScopeKey || "").trim();
+  const nextKey = String(nextScopeKey || getEmployeeRowsScopeKey()).trim();
+  if (previousKey && previousKey !== nextKey) {
+    employeeAdmin.detailCache = new Map();
+    return;
+  }
+  const rowById = new Map();
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const id = String(row?.id || "").trim();
+    if (id) rowById.set(id, row);
+  });
+  const nextCache = new Map();
+  detailCache.forEach((detail, id) => {
+    const cacheId = String(id || "").trim();
+    const refreshedEmployee = rowById.get(cacheId);
+    if (!refreshedEmployee) return;
+    nextCache.set(cacheId, {
+      ...(detail && typeof detail === "object" ? detail : {}),
+      employee: refreshedEmployee,
+    });
+  });
+  employeeAdmin.detailCache = nextCache;
+}
+
 function shouldRecoverEmployeeRowsForSelectedSite(filteredRows = []) {
   const rows = Array.isArray(state.employeeAdmin?.rows)
     ? state.employeeAdmin.rows
@@ -69906,7 +69944,11 @@ async function loadEmployeeDirectoryDetail(
       `/employees/${encodeURIComponent(cacheKey)}/drawer-summary`,
       tenantCode,
     );
-    const summary = await apiRequest(detailPath);
+    const detailTenantId = String(employee?.tenant_id || "").trim();
+    const summary = await apiRequest(
+      detailPath,
+      detailTenantId ? { ctxTenantId: detailTenantId } : {},
+    );
     const detail = {
       ...(summary && typeof summary === "object" ? summary : {}),
       employeeId: cacheKey,
@@ -72778,6 +72820,10 @@ async function loadEmployees({
   try {
     const fetchStartedAt = getPerfNowMs();
     const tenantSelection = getEmployeeTenantFilterSelection();
+    const previousRowsScopeKey = String(
+      state.employeeAdmin?.rowsScopeKey || "",
+    ).trim();
+    const nextRowsScopeKey = getEmployeeRowsScopeKey();
     const isDevRole = getNavigationRole() === "DEV";
     const isDevAllTenants = isDevRole && tenantSelection.isAll;
     const { tenantCode: siteTenantCodeFilter } = getEmployeeSiteFilterScope();
@@ -72820,10 +72866,13 @@ async function loadEmployees({
         : [];
       markEmployeeRowsCache({
         source: "directory",
-        scopeKey: getEmployeeRowsScopeKey(),
+        scopeKey: nextRowsScopeKey,
         tenantWide: true,
       });
-      state.employeeAdmin.detailCache = new Map();
+      syncEmployeeDetailCacheAfterDirectoryRefresh(state.employeeAdmin.rows, {
+        previousScopeKey: previousRowsScopeKey,
+        nextScopeKey: nextRowsScopeKey,
+      });
       const apiElapsedMs = getPerfNowMs() - fetchStartedAt;
       const renderStartedAt = getPerfNowMs();
       renderEmployeesFromCache();
@@ -72857,10 +72906,13 @@ async function loadEmployees({
       : [];
     markEmployeeRowsCache({
       source: "directory",
-      scopeKey: getEmployeeRowsScopeKey(),
+      scopeKey: nextRowsScopeKey,
       tenantWide: true,
     });
-    state.employeeAdmin.detailCache = new Map();
+    syncEmployeeDetailCacheAfterDirectoryRefresh(state.employeeAdmin.rows, {
+      previousScopeKey: previousRowsScopeKey,
+      nextScopeKey: nextRowsScopeKey,
+    });
     const apiElapsedMs = getPerfNowMs() - fetchStartedAt;
     const renderStartedAt = getPerfNowMs();
     renderEmployeesFromCache();
