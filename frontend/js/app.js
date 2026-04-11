@@ -731,6 +731,7 @@ let pendingOpsViewPresenterRefresh = null;
 let pendingReportsViewPresenterRefresh = null;
 let pendingRequestsViewPresenterRefresh = null;
 let pendingHomeDataRefresh = null;
+let pendingHomeBriefingDeferredRefresh = null;
 let pendingLeaveViewPresenterRefresh = null;
 let pendingScheduleViewPresenterRefresh = null;
 const ROADMAP_ITEMS_P1 = [
@@ -32161,6 +32162,15 @@ function readCachedHomeBriefing(audience = resolveHomeAudience()) {
   return readCachedHomeBriefingEntry(audience)?.payload || null;
 }
 
+function isHomeBriefingHqHeavyDeferred(briefing = state.home?.briefing) {
+  return (
+    String(briefing?.audience || state.home?.audience || resolveHomeAudience())
+      .trim()
+      .toLowerCase() === "hq" &&
+    !briefing?.ops_summary
+  );
+}
+
 function isHomeBriefingRefreshFresh() {
   const fetchedAt = Number(state.home?.briefingFetchedAt || 0);
   return (
@@ -32168,6 +32178,20 @@ function isHomeBriefingRefreshFresh() {
     fetchedAt > 0 &&
     Date.now() - fetchedAt < HOME_VIEW_CACHE_TTL_MS
   );
+}
+
+function applyHomeBriefingPayload(payload = null) {
+  state.home.briefing =
+    payload && typeof payload === "object" ? payload : null;
+  state.home.audience =
+    String(payload?.audience || resolveHomeAudience())
+      .trim()
+      .toLowerCase() || resolveHomeAudience();
+  state.home.briefingFetchedAt = Date.now();
+  state.home.briefingError = "";
+  writeCachedHomeBriefing(state.home.briefing);
+  renderHomeAudienceSurface();
+  return state.home.briefing;
 }
 
 function writeCachedHomeBriefing(payload = null) {
@@ -32185,13 +32209,43 @@ function writeCachedHomeBriefing(payload = null) {
   }
 }
 
-async function fetchHomeBriefing({ force = false } = {}) {
+async function fetchHomeBriefing({
+  force = false,
+  deferHqHeavy = false,
+} = {}) {
   const params = new URLSearchParams();
   if (force) {
     params.set("ts", String(Date.now()));
   }
+  if (deferHqHeavy) {
+    params.set("defer_hq_heavy", "true");
+  }
   const query = params.toString();
   return apiRequest(`/home/briefing${query ? `?${query}` : ""}`);
+}
+
+function queueHomeBriefingDeferredRefresh({ force = true } = {}) {
+  if (pendingHomeBriefingDeferredRefresh) {
+    return pendingHomeBriefingDeferredRefresh;
+  }
+  pendingHomeBriefingDeferredRefresh = Promise.resolve()
+    .then(() => fetchHomeBriefing({ force, deferHqHeavy: false }))
+    .then((payload) => {
+      if (String(payload?.audience || "").trim().toLowerCase() !== "hq") {
+        return payload;
+      }
+      applyHomeBriefingPayload(payload);
+      queueViewSnapshotPersist("home", { allowInactive: true });
+      return payload;
+    })
+    .catch((error) => {
+      console.warn("[RG ARLS][Home] deferred briefing refresh failed", error);
+      return null;
+    })
+    .finally(() => {
+      pendingHomeBriefingDeferredRefresh = null;
+    });
+  return pendingHomeBriefingDeferredRefresh;
 }
 
 async function loadHomeBriefing({ force = false } = {}) {
@@ -32211,24 +32265,24 @@ async function loadHomeBriefing({ force = false } = {}) {
     state.home.briefingLoading = false;
     state.home.briefingError = "";
     renderHomeAudienceSurface();
+    if (isHomeBriefingHqHeavyDeferred()) {
+      queueHomeBriefingDeferredRefresh({ force: true });
+    }
     return state.home.briefing;
   }
   state.home.briefingLoading = true;
   state.home.briefingError = "";
   renderHomeAudienceSurface();
   try {
-    const payload = await fetchHomeBriefing({ force });
-    state.home.briefing =
-      payload && typeof payload === "object" ? payload : null;
-    state.home.audience =
-      String(payload?.audience || resolveHomeAudience())
-        .trim()
-        .toLowerCase() || resolveHomeAudience();
-    state.home.briefingFetchedAt = Date.now();
-    state.home.briefingError = "";
-    writeCachedHomeBriefing(state.home.briefing);
-    renderHomeAudienceSurface();
-    return state.home.briefing;
+    const payload = await fetchHomeBriefing({
+      force,
+      deferHqHeavy: !force && state.home.audience === "hq",
+    });
+    const briefing = applyHomeBriefingPayload(payload);
+    if (!force && isHomeBriefingHqHeavyDeferred(briefing)) {
+      queueHomeBriefingDeferredRefresh({ force: true });
+    }
+    return briefing;
   } catch (err) {
     state.home.briefingError = normalizeActionError(
       err,
