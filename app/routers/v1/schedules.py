@@ -7892,6 +7892,7 @@ def _build_support_roster_hq_workspace_site_payload(
         selectable=selectable,
         selected=site_code in selected_site_codes if selectable else False,
         last_uploaded_at=site.get("source_uploaded_at") if isinstance(site.get("source_uploaded_at"), datetime) else None,
+        source_uploaded_at=site.get("source_uploaded_at") if isinstance(site.get("source_uploaded_at"), datetime) else None,
         note=note,
         stale=stale,
         stale_reason="최신 source revision과 다릅니다." if stale else None,
@@ -12003,6 +12004,47 @@ def _find_schedule_import_batch_id_for_source_signature(
         if str(candidate_signature or "").strip().lower() == target_signature:
             return batch_id
     return None
+
+
+def _build_support_roundtrip_stale_comparison_basis(
+    conn,
+    *,
+    tenant_id: str,
+    site_code: str,
+    month_key: str,
+    current_source_row: dict[str, Any] | None,
+    latest_hq_batch_row: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    current = dict(current_source_row or {})
+    latest_hq_batch = dict(latest_hq_batch_row or {})
+    source_revision = str(latest_hq_batch.get("source_revision") or "").strip()
+    source_batch_id = ""
+    if source_revision:
+        source_batch_id = str(
+            _find_schedule_import_batch_id_for_source_revision(
+                conn,
+                tenant_id=str(tenant_id or "").strip(),
+                site_code=str(site_code or "").strip(),
+                month_key=str(month_key or "").strip(),
+                source_revision=source_revision,
+            )
+            or ""
+        ).strip()
+    if not source_batch_id:
+        source_batch_id = str(current.get("source_batch_id") or "").strip()
+        source_revision = source_revision or str(current.get("source_revision") or "").strip()
+    source_meta = _load_schedule_import_batch_source_meta(
+        conn,
+        batch_id=source_batch_id or None,
+        tenant_id=str(tenant_id or "").strip(),
+    )
+    payload_rows = _load_schedule_import_payload_rows(conn, batch_id=source_batch_id or None)
+    return {
+        "source_batch_id": source_batch_id,
+        "source_revision": source_revision,
+        "raw_workbook_sha256": str(source_meta.get("raw_workbook_sha256") or "").strip() or None,
+        "source_signature": _build_support_roundtrip_source_signature_from_import_payloads(payload_rows),
+    }
 
 
 def _maybe_restore_support_roundtrip_source_state(
