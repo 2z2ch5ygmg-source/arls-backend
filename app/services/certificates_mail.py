@@ -26,7 +26,7 @@ CERTIFICATE_TYPE_DEFINITIONS: tuple[dict[str, Any], ...] = (
     {
         "type_key": EMPLOYMENT_CERTIFICATE_TYPE_KEY,
         "display_name": "재직증명서",
-        "requires_approval": False,
+        "requires_approval": True,
         "auto_mail_enabled": False,
         "meta_json": {
             "legacy_document_type": "employment_certificate",
@@ -37,7 +37,7 @@ CERTIFICATE_TYPE_DEFINITIONS: tuple[dict[str, Any], ...] = (
     {
         "type_key": CAREER_CERTIFICATE_TYPE_KEY,
         "display_name": "경력증명서",
-        "requires_approval": False,
+        "requires_approval": True,
         "auto_mail_enabled": False,
         "meta_json": {"rollout": "live", "template_scope": "company_per_type"},
     },

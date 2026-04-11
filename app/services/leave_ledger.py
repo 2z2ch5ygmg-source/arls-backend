@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from .groupware_foundation import GroupwareAuditService
+from ..utils.schema_introspection import table_column_exists
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,21 @@ def _normalize_date(value: Any) -> date | None:
     if isinstance(value, datetime):
         return value.date()
     return None
+
+
+def _table_exists(conn, table_name: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = %s
+            LIMIT 1
+            """,
+            (str(table_name or "").strip().lower(),),
+        )
+        return bool(cur.fetchone())
 
 
 def calculate_leave_duration_days(start_at: Any, end_at: Any, half_day_slot: str | None) -> Decimal:
@@ -111,6 +127,34 @@ def ensure_default_leave_policy(conn, *, tenant_id: str, actor_user_id: str | No
     return dict(row or {})
 
 
+def _leave_grants_reference_upsert_supported(conn) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT EXISTS (
+              SELECT 1
+              FROM pg_indexes
+              WHERE schemaname = 'public'
+                AND indexname = 'uq_leave_grants_tenant_employee_reference'
+            ) AS exists_flag
+            """
+        )
+        row = cur.fetchone() or {}
+    return bool(row.get("exists_flag"))
+
+
+def _leave_ledger_schema_available(conn) -> bool:
+    required_tables = ("leave_policies", "leave_grants", "leave_ledger")
+    if not all(_table_exists(conn, table_name) for table_name in required_tables):
+        return False
+    return (
+        table_column_exists(conn, "leave_grants", "reference_key")
+        and table_column_exists(conn, "leave_ledger", "effective_date")
+        and table_column_exists(conn, "leave_ledger", "entry_type")
+        and table_column_exists(conn, "leave_ledger", "amount")
+    )
+
+
 def ensure_default_leave_grant(
     conn,
     *,
@@ -123,6 +167,77 @@ def ensure_default_leave_grant(
     reference_key = f"annual_default:{grant_year}"
     effective_from = date(grant_year, 1, 1)
     effective_to = date(grant_year, 12, 31)
+    if not _leave_grants_reference_upsert_supported(conn):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, policy_id, employee_id, granted_days, effective_from, effective_to, reference_key
+                FROM leave_grants
+                WHERE tenant_id = %s
+                  AND employee_id = %s
+                  AND reference_key = %s
+                LIMIT 1
+                """,
+                (tenant_id, employee_id, reference_key),
+            )
+            existing = cur.fetchone()
+            if existing:
+                cur.execute(
+                    """
+                    UPDATE leave_grants
+                    SET policy_id = %s,
+                        grant_type = 'annual',
+                        granted_days = %s,
+                        granted_hours = 0,
+                        effective_from = %s,
+                        effective_to = %s,
+                        meta_json = '{}'::jsonb
+                    WHERE id = %s
+                    RETURNING id, policy_id, employee_id, granted_days, effective_from, effective_to, reference_key
+                    """,
+                    (
+                        policy.get("id"),
+                        DEFAULT_ANNUAL_ALLOWANCE_DAYS,
+                        effective_from,
+                        effective_to,
+                        existing.get("id"),
+                    ),
+                )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO leave_grants (
+                        id,
+                        tenant_id,
+                        policy_id,
+                        employee_id,
+                        grant_type,
+                        granted_days,
+                        granted_hours,
+                        effective_from,
+                        effective_to,
+                        reference_key,
+                        meta_json,
+                        created_at
+                    )
+                    VALUES (
+                        %s, %s, %s, %s, 'annual', %s, 0, %s, %s, %s, '{}'::jsonb, timezone('utc', now())
+                    )
+                    RETURNING id, policy_id, employee_id, granted_days, effective_from, effective_to, reference_key
+                    """,
+                    (
+                        str(uuid.uuid4()),
+                        tenant_id,
+                        policy.get("id"),
+                        employee_id,
+                        DEFAULT_ANNUAL_ALLOWANCE_DAYS,
+                        effective_from,
+                        effective_to,
+                        reference_key,
+                    ),
+                )
+            row = cur.fetchone()
+        return dict(row or {})
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -277,6 +392,61 @@ def _upsert_leave_balance_snapshot(
         )
 
 
+def _compute_legacy_employee_leave_balance_summary(
+    conn,
+    *,
+    tenant_id: str,
+    employee_id: str,
+    target_year: int,
+) -> dict[str, Any]:
+    used_days = Decimal("0")
+    if _table_exists(conn, "leave_requests"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT leave_type, start_at, end_at, half_day_slot
+                FROM leave_requests
+                WHERE tenant_id = %s
+                  AND employee_id = %s
+                  AND status = 'approved'
+                  AND start_at <= %s
+                  AND end_at >= %s
+                """,
+                (
+                    tenant_id,
+                    employee_id,
+                    date(target_year, 12, 31),
+                    date(target_year, 1, 1),
+                ),
+            )
+            rows = cur.fetchall() or []
+        for row in rows:
+            leave_type = str((row or {}).get("leave_type") or "").strip().lower()
+            if leave_type not in LEAVE_CONSUMING_TYPES:
+                continue
+            buckets = bucket_leave_duration_by_year(
+                (row or {}).get("start_at"),
+                (row or {}).get("end_at"),
+                (row or {}).get("half_day_slot"),
+            )
+            used_days += buckets.get(target_year, Decimal("0"))
+
+    granted_days = DEFAULT_ANNUAL_ALLOWANCE_DAYS
+    remaining_days = max(granted_days - used_days, Decimal("0"))
+    return {
+        "tenant_id": tenant_id,
+        "employee_id": employee_id,
+        "policy_id": None,
+        "policy_key": DEFAULT_ANNUAL_POLICY_KEY,
+        "policy_name": DEFAULT_ANNUAL_POLICY_NAME,
+        "year": target_year,
+        "granted_days": _round_decimal(granted_days),
+        "used_days": _round_decimal(used_days),
+        "remaining_days": _round_decimal(remaining_days),
+        "restored_days": 0.0,
+    }
+
+
 def compute_employee_leave_balance_summary(
     conn,
     *,
@@ -286,44 +456,79 @@ def compute_employee_leave_balance_summary(
     actor_user_id: str | None = None,
 ) -> dict[str, Any]:
     target_year = int(grant_year or _today().year)
-    policy = ensure_default_leave_policy(conn, tenant_id=tenant_id, actor_user_id=actor_user_id)
-    ensure_default_leave_grant(
-        conn,
-        tenant_id=tenant_id,
-        employee_id=employee_id,
-        grant_year=target_year,
-        actor_user_id=actor_user_id,
-    )
-    components = _aggregate_leave_balance_components(
-        conn,
-        tenant_id=tenant_id,
-        employee_id=employee_id,
-        policy_id=str(policy.get("id") or ""),
-        grant_year=target_year,
-    )
-    granted_days = components["granted_days"] + components["granted_ledger_days"]
-    used_days = max(components["consumed_days"] - components["restored_days"], Decimal("0"))
-    remaining_days = max(granted_days - used_days, Decimal("0"))
-    _upsert_leave_balance_snapshot(
-        conn,
-        tenant_id=tenant_id,
-        employee_id=employee_id,
-        policy_id=str(policy.get("id") or ""),
-        snapshot_date=_today(),
-        remaining_days=remaining_days,
-    )
-    return {
-        "tenant_id": tenant_id,
-        "employee_id": employee_id,
-        "policy_id": policy.get("id"),
-        "policy_key": policy.get("policy_key"),
-        "policy_name": policy.get("display_name"),
-        "year": target_year,
-        "granted_days": _round_decimal(granted_days),
-        "used_days": _round_decimal(used_days),
-        "remaining_days": _round_decimal(remaining_days),
-        "restored_days": _round_decimal(components["restored_days"]),
-    }
+    if not _leave_ledger_schema_available(conn):
+        return _compute_legacy_employee_leave_balance_summary(
+            conn,
+            tenant_id=tenant_id,
+            employee_id=employee_id,
+            target_year=target_year,
+        )
+    try:
+        policy = ensure_default_leave_policy(conn, tenant_id=tenant_id, actor_user_id=actor_user_id)
+        ensure_default_leave_grant(
+            conn,
+            tenant_id=tenant_id,
+            employee_id=employee_id,
+            grant_year=target_year,
+            actor_user_id=actor_user_id,
+        )
+        components = _aggregate_leave_balance_components(
+            conn,
+            tenant_id=tenant_id,
+            employee_id=employee_id,
+            policy_id=str(policy.get("id") or ""),
+            grant_year=target_year,
+        )
+        granted_days = components["granted_days"] + components["granted_ledger_days"]
+        used_days = max(components["consumed_days"] - components["restored_days"], Decimal("0"))
+        remaining_days = max(granted_days - used_days, Decimal("0"))
+        try:
+            _upsert_leave_balance_snapshot(
+                conn,
+                tenant_id=tenant_id,
+                employee_id=employee_id,
+                policy_id=str(policy.get("id") or ""),
+                snapshot_date=_today(),
+                remaining_days=remaining_days,
+            )
+        except Exception as exc:
+            logger.warning(
+                "[LEAVE][LEDGER] snapshot upsert skipped tenant_id=%s employee_id=%s year=%s",
+                tenant_id,
+                employee_id,
+                target_year,
+                exc_info=exc,
+            )
+        return {
+            "tenant_id": tenant_id,
+            "employee_id": employee_id,
+            "policy_id": policy.get("id"),
+            "policy_key": policy.get("policy_key"),
+            "policy_name": policy.get("display_name"),
+            "year": target_year,
+            "granted_days": _round_decimal(granted_days),
+            "used_days": _round_decimal(used_days),
+            "remaining_days": _round_decimal(remaining_days),
+            "restored_days": _round_decimal(components["restored_days"]),
+        }
+    except Exception as exc:
+        logger.warning(
+            "[LEAVE][LEDGER] summary fallback tenant_id=%s employee_id=%s year=%s",
+            tenant_id,
+            employee_id,
+            target_year,
+            exc_info=exc,
+        )
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return _compute_legacy_employee_leave_balance_summary(
+            conn,
+            tenant_id=tenant_id,
+            employee_id=employee_id,
+            target_year=target_year,
+        )
 
 
 def _find_approval_document_id_for_leave(conn, *, tenant_id: str, leave_request_id: str) -> str | None:

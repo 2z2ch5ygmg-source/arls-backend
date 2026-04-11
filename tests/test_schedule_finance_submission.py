@@ -16,6 +16,8 @@ from app.routers.v1.schedules import (
     _can_upload_finance_final,
     _can_view_finance_download_workspace,
     _can_view_finance_submission,
+    _finance_preview_row_has_real_protected_change,
+    _is_supported_import_source_version,
     apply_finance_final_upload,
     download_finance_final_excel,
     get_finance_submission_status,
@@ -72,6 +74,23 @@ class ScheduleFinanceSubmissionHelpersTests(unittest.TestCase):
         self.assertTrue(_can_read_schedule_import_mapping_profile({"role": "Supervisor"}))
         self.assertTrue(_can_read_schedule_import_mapping_profile({"role": "Vice_Supervisor"}))
         self.assertFalse(_can_read_schedule_import_mapping_profile({"role": "Officer"}))
+
+    def test_finance_review_workbook_source_version_is_supported_for_final_upload(self):
+        self.assertTrue(_is_supported_import_source_version("schedule_export.phase2.roundtrip"))
+        self.assertTrue(_is_supported_import_source_version("schedule_export.phase2.roundtrip:finance-review"))
+        self.assertTrue(_is_supported_import_source_version("schedule_export.phase2.roundtrip:finance-review:all-sites"))
+
+    def test_finance_protected_change_helper_ignores_unchanged_protected_rows(self):
+        self.assertFalse(_finance_preview_row_has_real_protected_change({
+            "diff_category": "ignored_protected",
+            "work_value": "0",
+            "current_work_value": "0",
+        }))
+        self.assertTrue(_finance_preview_row_has_real_protected_change({
+            "diff_category": "ignored_protected",
+            "work_value": "1",
+            "current_work_value": "0",
+        }))
 
     def test_final_download_streams_stored_uploaded_artifact(self):
         target_tenant = {"id": "tenant-1", "tenant_code": "SRS_KOREA"}

@@ -285,6 +285,8 @@ SUPPORT_DAY_REASON_DETAIL_KEYS = (
 )
 ARLS_SUPPORTED_IMPORT_SOURCE_VERSIONS = {
     "schedule_export.phase2.roundtrip",
+    "schedule_export.phase2.roundtrip:finance-review",
+    "schedule_export.phase2.roundtrip:finance-review:all-sites",
 }
 ARLS_TEMPLATE_SEARCH_PATHS = (
     Path(__file__).resolve().parents[2] / "templates" / "monthly_schedule_template.xlsx",
@@ -1626,6 +1628,14 @@ def _is_supported_import_template_version(value: str | None) -> bool:
 def _is_supported_import_source_version(value: str | None) -> bool:
     text = str(value or "").strip()
     return text in ARLS_SUPPORTED_IMPORT_SOURCE_VERSIONS
+
+
+def _finance_preview_row_has_real_protected_change(row: Any) -> bool:
+    payload = row.model_dump() if hasattr(row, "model_dump") else dict(row or {})
+    diff_category = str(payload.get("diff_category") or "").strip().lower()
+    if diff_category != "ignored_protected":
+        return False
+    return _normalize_workbook_display_value(payload.get("work_value")) != _normalize_workbook_display_value(payload.get("current_work_value"))
 
 
 def _validate_arls_import_metadata(
@@ -15559,9 +15569,6 @@ def preview_finance_final_upload(
     blocked_reasons = list(preview_result.blocked_reasons or [])
     diff_counts = dict(preview_result.diff_counts or {})
     preview_rows = list(preview_result.preview_rows or [])
-    ignored_protected_count = int(diff_counts.get("ignored_protected") or 0)
-    if ignored_protected_count > 0:
-        blocked_reasons.append(f"보호 영역 변경 {ignored_protected_count}건은 Finance 최종 업로드로 반영할 수 없습니다.")
     blocking_row_count = sum(1 for row in preview_rows if bool(getattr(row, "is_blocking", False)))
     if blocking_row_count > 0:
         blocked_reasons.append(f"충돌/차단 행 {blocking_row_count}건을 먼저 해결해야 합니다.")

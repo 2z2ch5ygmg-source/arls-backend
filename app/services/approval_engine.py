@@ -488,6 +488,150 @@ def _resolve_approver_from_rule(
     return dict(row) if row else None
 
 
+def _find_first_approver_by_roles(
+    conn,
+    *,
+    tenant_id: str,
+    role_names: list[str],
+    site_id: str | None = None,
+    prefer_site: bool = False,
+    exclude_user_ids: list[str] | None = None,
+) -> dict[str, Any] | None:
+    role_variants = []
+    for role_name in role_names:
+        role_variants.extend(list(user_role_sql_variants(role_name)))
+    role_variants = [value for value in dict.fromkeys(role_variants) if value]
+    if not role_variants:
+        return None
+    excluded = [str(value or '').strip() for value in (exclude_user_ids or []) if str(value or '').strip()]
+    params: list[Any] = [tenant_id, role_variants]
+    exclusion_sql = ""
+    if excluded:
+        exclusion_sql = "AND id::text <> ALL(%s)"
+        params.append(excluded)
+    with conn.cursor() as cur:
+        if prefer_site and site_id:
+            cur.execute(
+            f"""
+            SELECT id, employee_id, site_id, username, full_name, role
+            FROM arls_users
+            WHERE tenant_id = %s
+              AND is_active = TRUE
+              AND COALESCE(is_deleted, FALSE) = FALSE
+              AND lower(role) = ANY(%s)
+              {exclusion_sql}
+              AND (site_id = %s OR site_id IS NULL)
+            ORDER BY CASE WHEN site_id = %s THEN 0 ELSE 1 END, created_at ASC
+            LIMIT 1
+            """,
+            (*params, site_id, site_id),
+        )
+        else:
+            cur.execute(
+            f"""
+            SELECT id, employee_id, site_id, username, full_name, role
+            FROM arls_users
+            WHERE tenant_id = %s
+              AND is_active = TRUE
+              AND COALESCE(is_deleted, FALSE) = FALSE
+              AND lower(role) = ANY(%s)
+              {exclusion_sql}
+            ORDER BY CASE WHEN site_id IS NULL THEN 0 ELSE 1 END, created_at ASC
+            LIMIT 1
+            """,
+            tuple(params),
+        )
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def _build_certificate_request_fallback_steps(
+    conn,
+    *,
+    tenant_id: str,
+    site_id: str | None,
+    requester_user_id: str | None,
+    requester_role: str | None,
+) -> list[dict[str, Any]]:
+    normalized_requester_role = normalize_user_role(requester_role)
+    requester_id = str(requester_user_id or "").strip() or None
+    hq_roles = ["hq_admin", "developer"]
+    steps: list[dict[str, Any]] = []
+
+    def append_step(approver: dict[str, Any] | None, *, rule_name: str, approver_role: str, scope_type: str) -> None:
+        if not approver:
+            return
+        approver_id = str(approver.get("id") or "").strip() or None
+        if not approver_id:
+            return
+        if steps and steps[-1].get("approver_user_id") == approver_id:
+            return
+        steps.append(
+            {
+                "rule_name": rule_name,
+                "step_order": len(steps) + 1,
+                "approver_user_id": approver_id,
+                "approver_employee_id": str(approver.get("employee_id") or "").strip() or None,
+                "meta_json": {
+                    "scope_type": scope_type,
+                    "approver_role": approver_role,
+                    "resolved_username": approver.get("username"),
+                    "resolved_full_name": approver.get("full_name"),
+                    "fallback_generated": True,
+                },
+            }
+        )
+
+    if normalized_requester_role in {"officer", "vice_supervisor"}:
+        supervisor = _find_first_approver_by_roles(
+            conn,
+            tenant_id=tenant_id,
+            role_names=["supervisor"],
+            site_id=site_id,
+            prefer_site=True,
+        )
+        append_step(supervisor, rule_name="증명서 기본 결재선 1", approver_role="supervisor", scope_type="site_or_tenant")
+        hq = _find_first_approver_by_roles(
+            conn,
+            tenant_id=tenant_id,
+            role_names=hq_roles,
+        )
+        append_step(hq, rule_name="증명서 기본 결재선 2", approver_role="hq_admin", scope_type="tenant")
+        return steps
+
+    if normalized_requester_role == "supervisor":
+        hq = _find_first_approver_by_roles(
+            conn,
+            tenant_id=tenant_id,
+            role_names=hq_roles,
+            exclude_user_ids=[requester_id] if requester_id else None,
+        )
+        if not hq:
+            hq = _find_first_approver_by_roles(conn, tenant_id=tenant_id, role_names=hq_roles)
+        append_step(hq, rule_name="증명서 기본 결재선 1", approver_role="hq_admin", scope_type="tenant")
+        return steps
+
+    if normalized_requester_role in {"hq_admin", "developer"}:
+        hq = _find_first_approver_by_roles(
+            conn,
+            tenant_id=tenant_id,
+            role_names=hq_roles,
+            exclude_user_ids=[requester_id] if requester_id else None,
+        )
+        if not hq and requester_id:
+            hq = _find_first_approver_by_roles(
+                conn,
+                tenant_id=tenant_id,
+                role_names=hq_roles,
+            )
+        append_step(hq, rule_name="증명서 기본 결재선 1", approver_role="hq_admin", scope_type="tenant")
+        return steps
+
+    hq = _find_first_approver_by_roles(conn, tenant_id=tenant_id, role_names=hq_roles)
+    append_step(hq, rule_name="증명서 기본 결재선 1", approver_role="hq_admin", scope_type="tenant")
+    return steps
+
+
 def _resolve_approval_rule_form_keys(
     *,
     form_key: str,
@@ -541,7 +685,42 @@ def _resolve_auto_approval_steps(
 
     resolved_steps: list[dict[str, Any]] = []
     for rule in rules:
+        conditions = rule.get("conditions_json") if isinstance(rule.get("conditions_json"), dict) else {}
+        member_user_ids = [
+            str(value or "").strip()
+            for value in (conditions.get("member_user_ids") or [])
+            if str(value or "").strip()
+        ]
         rule_site_id = str(rule.get("site_id") or "").strip() or None
+        if member_user_ids:
+            for member_user_id in member_user_ids:
+                approver = _resolve_approver_from_rule(
+                    conn,
+                    tenant_id=tenant_id,
+                    site_id=rule_site_id or site_id,
+                    approver_user_id=member_user_id,
+                    approver_role=None,
+                    scope_type="tenant",
+                )
+                if not approver:
+                    continue
+                resolved_steps.append(
+                    {
+                        "rule_name": str(rule.get("rule_name") or "").strip() or f"{form_key}-{rule.get('rule_order')}",
+                        "step_order": int(rule.get("rule_order") or len(resolved_steps) + 1),
+                        "approver_user_id": str(approver.get("id") or "").strip() or None,
+                        "approver_employee_id": str(approver.get("employee_id") or "").strip() or None,
+                        "meta_json": {
+                            "scope_type": "tenant",
+                            "approver_role": "explicit_user",
+                            "resolved_username": approver.get("username"),
+                            "resolved_full_name": approver.get("full_name"),
+                            "stage_member_count": len(member_user_ids),
+                        },
+                    }
+                )
+            continue
+
         approver = _resolve_approver_from_rule(
             conn,
             tenant_id=tenant_id,
@@ -729,6 +908,29 @@ def _fetch_first_pending_step(conn, *, document_id: str) -> dict[str, Any] | Non
     return dict(row) if row else None
 
 
+def _fetch_pending_stage_steps(conn, *, document_id: str, step_order: int) -> list[dict[str, Any]]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id,
+                   tenant_id,
+                   document_id,
+                   step_order,
+                   status,
+                   approver_user_id,
+                   approver_employee_id
+            FROM approval_steps
+            WHERE document_id = %s
+              AND step_order = %s
+              AND status = %s
+            ORDER BY created_at ASC, id ASC
+            """,
+            (document_id, step_order, STEP_STATUS_PENDING),
+        )
+        rows = cur.fetchall() or []
+    return [dict(row) for row in rows]
+
+
 def _fetch_next_queued_step(conn, *, document_id: str, after_step_order: int) -> dict[str, Any] | None:
     with conn.cursor() as cur:
         cur.execute(
@@ -751,6 +953,32 @@ def _fetch_next_queued_step(conn, *, document_id: str, after_step_order: int) ->
         )
         row = cur.fetchone()
     return dict(row) if row else None
+
+
+def _fetch_next_queued_stage_steps(conn, *, document_id: str, after_step_order: int) -> list[dict[str, Any]]:
+    next_step = _fetch_next_queued_step(conn, document_id=document_id, after_step_order=after_step_order)
+    if not next_step:
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id,
+                   tenant_id,
+                   document_id,
+                   step_order,
+                   status,
+                   approver_user_id,
+                   approver_employee_id
+            FROM approval_steps
+            WHERE document_id = %s
+              AND step_order = %s
+              AND status = %s
+            ORDER BY created_at ASC, id ASC
+            """,
+            (document_id, int(next_step["step_order"]), STEP_STATUS_QUEUED),
+        )
+        rows = cur.fetchall() or []
+    return [dict(row) for row in rows]
 
 
 def _fetch_document_row(conn, *, tenant_id: str, document_id: str) -> dict[str, Any] | None:
@@ -1038,6 +1266,7 @@ def create_approval_document(
     company_id: str | None = None,
     payload: dict[str, Any] | None = None,
     watcher_user_ids: list[str] | None = None,
+    resolved_steps_override: list[dict[str, Any]] | None = None,
     submit: bool = True,
     legacy_source_type: str | None = None,
     legacy_source_id: str | None = None,
@@ -1053,7 +1282,7 @@ def create_approval_document(
     if not bundle:
         raise _http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "결재 양식 초기화에 실패했습니다.")
 
-    steps = _resolve_auto_approval_steps(
+    steps = list(resolved_steps_override or []) or _resolve_auto_approval_steps(
         conn,
         tenant_id=tenant_id,
         form_key=normalized_form_key,
@@ -1069,6 +1298,7 @@ def create_approval_document(
         submitted_at = _utc_now()
 
     with conn.cursor() as cur:
+        first_step_order = min((int(step.get("step_order") or 0) for step in steps), default=0)
         cur.execute(
             """
             INSERT INTO approval_documents (
@@ -1145,7 +1375,7 @@ def create_approval_document(
                     tenant_id,
                     document_id,
                     step["step_order"],
-                    STEP_STATUS_PENDING if submit and idx == 0 else STEP_STATUS_QUEUED,
+                    STEP_STATUS_PENDING if submit and int(step.get("step_order") or 0) == first_step_order else STEP_STATUS_QUEUED,
                     step.get("approver_user_id"),
                     step.get("approver_employee_id"),
                     _json_dumps(step.get("meta_json")),
@@ -1177,33 +1407,44 @@ def create_approval_document(
     if submit:
         first_step = _fetch_first_pending_step(conn, document_id=document_id)
         if first_step and first_step.get("approver_user_id"):
-            _run_noncritical_side_effect(
+            first_stage_steps = _fetch_pending_stage_steps(
                 conn,
-                log_message=f"[APPROVAL][NOTIFY] failed to dispatch review request doc={document_id}",
-                callback=lambda: GroupwareNotificationDispatcher(conn).dispatch_in_app(
-                    tenant_id=tenant_id,
-                    user_id=str(first_step["approver_user_id"]),
-                    message=f"결재 요청이 도착했습니다: {title}",
-                    category="approval",
-                    dedupe_key=f"approval:doc:{document_id}:pending:{first_step['step_order']}",
-                    payload={"document_id": document_id, "form_key": normalized_form_key},
-                ),
-            )
-            _run_noncritical_side_effect(
-                conn,
-                log_message=f"[APPROVAL][MAIL] failed to queue review request doc={document_id}",
-                callback=lambda: queue_approval_notification_mail(
+                document_id=document_id,
+                step_order=int(first_step["step_order"]),
+            ) or [first_step]
+            notified_user_ids: set[str] = set()
+            for pending_step in first_stage_steps:
+                pending_user_id = str(pending_step.get("approver_user_id") or "").strip()
+                if not pending_user_id or pending_user_id in notified_user_ids:
+                    continue
+                notified_user_ids.add(pending_user_id)
+                _run_noncritical_side_effect(
                     conn,
-                    tenant_id=tenant_id,
-                    template_key="approval_review_requested",
-                    document_id=document_id,
-                    recipient_user_id=str(first_step["approver_user_id"]),
-                    render_context={
-                        "title": str(title or "").strip() or bundle.get("display_name") or normalized_form_key,
-                        "form_display_name": bundle.get("display_name") or normalized_form_key,
-                    },
-                ),
-            )
+                    log_message=f"[APPROVAL][NOTIFY] failed to dispatch review request doc={document_id}",
+                    callback=lambda pending_user_id=pending_user_id, pending_step=pending_step: GroupwareNotificationDispatcher(conn).dispatch_in_app(
+                        tenant_id=tenant_id,
+                        user_id=pending_user_id,
+                        message=f"결재 요청이 도착했습니다: {title}",
+                        category="approval",
+                        dedupe_key=f"approval:doc:{document_id}:pending:{pending_step['step_order']}:{pending_user_id}",
+                        payload={"document_id": document_id, "form_key": normalized_form_key},
+                    ),
+                )
+                _run_noncritical_side_effect(
+                    conn,
+                    log_message=f"[APPROVAL][MAIL] failed to queue review request doc={document_id}",
+                    callback=lambda pending_user_id=pending_user_id: queue_approval_notification_mail(
+                        conn,
+                        tenant_id=tenant_id,
+                        template_key="approval_review_requested",
+                        document_id=document_id,
+                        recipient_user_id=pending_user_id,
+                        render_context={
+                            "title": str(title or "").strip() or bundle.get("display_name") or normalized_form_key,
+                            "form_display_name": bundle.get("display_name") or normalized_form_key,
+                        },
+                    ),
+                )
     _run_noncritical_side_effect(
         conn,
         log_message=f"[APPROVAL][AUDIT] failed to write document_created doc={document_id}",
@@ -1388,6 +1629,7 @@ def record_approval_action(
 
     with conn.cursor() as cur:
         if normalized_action == ACTION_APPROVE:
+            current_step_order = int(current_step["step_order"])
             cur.execute(
                 """
                 UPDATE approval_steps
@@ -1397,15 +1639,35 @@ def record_approval_action(
                 """,
                 (STEP_STATUS_APPROVED, current_step["id"]),
             )
-            next_step = _fetch_next_queued_step(conn, document_id=document_id, after_step_order=int(current_step["step_order"]))
-            if next_step:
+            cur.execute(
+                """
+                UPDATE approval_steps
+                SET status = %s
+                WHERE document_id = %s
+                  AND step_order = %s
+                  AND status IN (%s, %s)
+                  AND id <> %s
+                """,
+                (
+                    STEP_STATUS_SKIPPED,
+                    document_id,
+                    current_step_order,
+                    STEP_STATUS_PENDING,
+                    STEP_STATUS_QUEUED,
+                    current_step["id"],
+                ),
+            )
+            next_steps = _fetch_next_queued_stage_steps(conn, document_id=document_id, after_step_order=current_step_order)
+            if next_steps:
                 cur.execute(
                     """
                     UPDATE approval_steps
                     SET status = %s
-                    WHERE id = %s
+                    WHERE document_id = %s
+                      AND step_order = %s
+                      AND status = %s
                     """,
-                    (STEP_STATUS_PENDING, next_step["id"]),
+                    (STEP_STATUS_PENDING, document_id, int(next_steps[0]["step_order"]), STEP_STATUS_QUEUED),
                 )
                 cur.execute(
                     """
@@ -1512,33 +1774,44 @@ def record_approval_action(
     updated = fetch_approval_document_detail(conn, tenant_id=tenant_id, document_id=document_id)
     next_pending = _fetch_first_pending_step(conn, document_id=document_id)
     if normalized_action == ACTION_APPROVE and next_pending and next_pending.get("approver_user_id"):
-        _run_noncritical_side_effect(
+        next_stage_steps = _fetch_pending_stage_steps(
             conn,
-            log_message=f"[APPROVAL][NOTIFY] failed to dispatch next review request doc={document_id}",
-            callback=lambda: GroupwareNotificationDispatcher(conn).dispatch_in_app(
-                tenant_id=tenant_id,
-                user_id=str(next_pending["approver_user_id"]),
-                message=f"결재 요청이 도착했습니다: {updated.get('title')}",
-                category="approval",
-                dedupe_key=f"approval:doc:{document_id}:pending:{next_pending['step_order']}",
-                payload={"document_id": document_id, "form_key": updated.get("form_key")},
-            ),
-        )
-        _run_noncritical_side_effect(
-            conn,
-            log_message=f"[APPROVAL][MAIL] failed to queue next review request doc={document_id}",
-            callback=lambda: queue_approval_notification_mail(
+            document_id=document_id,
+            step_order=int(next_pending["step_order"]),
+        ) or [next_pending]
+        notified_user_ids: set[str] = set()
+        for pending_step in next_stage_steps:
+            pending_user_id = str(pending_step.get("approver_user_id") or "").strip()
+            if not pending_user_id or pending_user_id in notified_user_ids:
+                continue
+            notified_user_ids.add(pending_user_id)
+            _run_noncritical_side_effect(
                 conn,
-                tenant_id=tenant_id,
-                template_key="approval_review_requested",
-                document_id=document_id,
-                recipient_user_id=str(next_pending["approver_user_id"]),
-                render_context={
-                    "title": str(updated.get("title") or ""),
-                    "form_display_name": str(updated.get("form_display_name") or updated.get("form_key") or ""),
-                },
-            ),
-        )
+                log_message=f"[APPROVAL][NOTIFY] failed to dispatch next review request doc={document_id}",
+                callback=lambda pending_user_id=pending_user_id, pending_step=pending_step: GroupwareNotificationDispatcher(conn).dispatch_in_app(
+                    tenant_id=tenant_id,
+                    user_id=pending_user_id,
+                    message=f"결재 요청이 도착했습니다: {updated.get('title')}",
+                    category="approval",
+                    dedupe_key=f"approval:doc:{document_id}:pending:{pending_step['step_order']}:{pending_user_id}",
+                    payload={"document_id": document_id, "form_key": updated.get("form_key")},
+                ),
+            )
+            _run_noncritical_side_effect(
+                conn,
+                log_message=f"[APPROVAL][MAIL] failed to queue next review request doc={document_id}",
+                callback=lambda pending_user_id=pending_user_id: queue_approval_notification_mail(
+                    conn,
+                    tenant_id=tenant_id,
+                    template_key="approval_review_requested",
+                    document_id=document_id,
+                    recipient_user_id=pending_user_id,
+                    render_context={
+                        "title": str(updated.get("title") or ""),
+                        "form_display_name": str(updated.get("form_display_name") or updated.get("form_key") or ""),
+                    },
+                ),
+            )
 
     if normalized_action == ACTION_APPROVE and str(updated.get("status") or "").strip().lower() == DOCUMENT_STATUS_APPROVED:
         requester_user_id = str(document.get("requester_user_id") or "").strip()
@@ -1848,10 +2121,34 @@ def create_certificate_request_approval_adapter(
     )
     if existing:
         return fetch_approval_document_detail(conn, tenant_id=tenant_id, document_id=str(existing["id"]))
+    normalized_type_key = str(certificate_type_key or "employment_certificate").strip().lower() or "employment_certificate"
+    custom_rule_form_key = f"certificate_request:{normalized_type_key}"
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM approval_line_rules
+            WHERE tenant_id = %s
+              AND form_key = %s
+              AND is_active = TRUE
+            LIMIT 1
+            """,
+            (tenant_id, custom_rule_form_key),
+        )
+        has_custom_rules = bool(cur.fetchone())
+    resolved_steps_override = None
+    if not has_custom_rules:
+        resolved_steps_override = _build_certificate_request_fallback_steps(
+            conn,
+            tenant_id=tenant_id,
+            site_id=site_id,
+            requester_user_id=str(actor_user.get("id") or "").strip() or None,
+            requester_role=str(actor_user.get("role") or "").strip() or None,
+        )
     return create_approval_document(
         conn,
         tenant_id=tenant_id,
-        form_key="employment_certificate" if certificate_type_key == "employment_certificate" and legacy_source_type == "employment_certificate_request" else "certificate_request",
+        form_key="certificate_request",
         title=f"{certificate_type_name or '증명서'} 발급",
         requester_user_id=str(actor_user.get("id") or "").strip() or None,
         requester_role=str(actor_user.get("role") or "").strip() or None,
@@ -1868,7 +2165,9 @@ def create_certificate_request_approval_adapter(
             "copy_count": int(copy_count or 1),
             "include_address": bool(include_address),
             "include_phone": bool(include_phone),
+            "approval_policy_mode": "custom" if has_custom_rules else "default",
         },
+        resolved_steps_override=resolved_steps_override,
         submit=True,
         legacy_source_type=legacy_source_type,
         legacy_source_id=document_request_id,

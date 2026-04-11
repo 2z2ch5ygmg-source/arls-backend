@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import json
+import mimetypes
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 
 from ...config import settings
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
+from ...services.groupware_foundation import GroupwareAttachmentStorage
 from ...schemas import (
     UserAdminActiveUpdate,
     UserAdminCreate,
@@ -26,6 +31,12 @@ from ...utils.permissions import (
 )
 
 router = APIRouter(prefix="/users", tags=["users"], dependencies=[Depends(apply_rate_limit)])
+PROFILE_SIGNATURE_ALLOWED_ROLES = {"supervisor", "vice_supervisor", "hq_admin", "developer"}
+PROFILE_SIGNATURE_ALLOWED_SOURCE_TYPES = {"drawn", "uploaded"}
+PROFILE_SIGNATURE_ALLOWED_MIME_TYPES = {"image/png", "image/jpeg"}
+PROFILE_SIGNATURE_MAX_BYTES = 2 * 1024 * 1024
+PROFILE_SIGNATURE_RESOURCE_TYPE = "profile_signature"
+PROFILE_SIGNATURE_MODULE_KEY = "profile"
 
 
 def _require_account_manager(user: dict) -> str:
@@ -176,6 +187,64 @@ def _row_to_out(row) -> UserAdminOut:
     )
 
 
+def _ensure_profile_signature_permission(user: dict) -> None:
+    if normalize_user_role(user.get("role")) not in PROFILE_SIGNATURE_ALLOWED_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+
+def _normalize_profile_signature_source_type(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized not in PROFILE_SIGNATURE_ALLOWED_SOURCE_TYPES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid source_type")
+    return normalized
+
+
+def _resolve_profile_signature_mime(upload: UploadFile) -> str:
+    content_type = str(upload.content_type or "").strip().lower()
+    if content_type in PROFILE_SIGNATURE_ALLOWED_MIME_TYPES:
+        return content_type
+    guessed_type, _ = mimetypes.guess_type(str(upload.filename or "").strip())
+    normalized_guess = str(guessed_type or "").strip().lower()
+    if normalized_guess in PROFILE_SIGNATURE_ALLOWED_MIME_TYPES:
+        return normalized_guess
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="unsupported signature mime_type")
+
+
+def _build_profile_signature_data_url(mime_type: str, raw_bytes: bytes) -> str:
+    encoded = base64.b64encode(raw_bytes).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
+
+
+def _fetch_profile_signature_row(conn, *, tenant_id: str, user_id: str):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, file_name, mime_type, byte_size, metadata_json, created_at, updated_at
+            FROM groupware_attachment_objects
+            WHERE tenant_id = %s
+              AND resource_type = %s
+              AND resource_id = %s
+            ORDER BY updated_at DESC NULLS LAST, created_at DESC
+            LIMIT 1
+            """,
+            (tenant_id, PROFILE_SIGNATURE_RESOURCE_TYPE, user_id),
+        )
+        return cur.fetchone()
+
+
+def _serialize_profile_signature_row(row) -> dict:
+    metadata = row.get("metadata_json") if isinstance(row, dict) else {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+    return {
+        "has_signature": bool(row),
+        "preview_data_url": str(metadata.get("preview_data_url") or "").strip(),
+        "source_type": str(metadata.get("source_type") or "drawn").strip() or "drawn",
+        "file_name": str((row or {}).get("file_name") or "").strip() or None,
+        "mime_type": str((row or {}).get("mime_type") or "").strip() or None,
+    }
+
+
 @router.get("", response_model=list[UserAdminOut])
 def list_users(
     tenant_code: str | None = Query(default=None, max_length=64),
@@ -312,6 +381,118 @@ def change_own_password(
             (hash_password(payload.new_password), user["id"]),
         )
     return {"ok": True}
+
+
+@router.get("/me/signature")
+def get_my_signature(
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    _ensure_profile_signature_permission(user)
+    row = _fetch_profile_signature_row(
+        conn,
+        tenant_id=str(user.get("tenant_id") or ""),
+        user_id=str(user.get("id") or ""),
+    )
+    return {"item": _serialize_profile_signature_row(row)}
+
+
+@router.post("/me/signature")
+async def save_my_signature(
+    source_type: str = Form(...),
+    file: UploadFile = File(...),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    _ensure_profile_signature_permission(user)
+    normalized_source_type = _normalize_profile_signature_source_type(source_type)
+    mime_type = _resolve_profile_signature_mime(file)
+    raw_bytes = await file.read()
+    if not raw_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="signature file is empty")
+    if len(raw_bytes) > PROFILE_SIGNATURE_MAX_BYTES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="signature file is too large")
+
+    tenant_id = str(user.get("tenant_id") or "")
+    user_id = str(user.get("id") or "")
+    file_name = str(file.filename or "signature.png").strip() or "signature.png"
+    file_ext = ""
+    if "." in file_name:
+        file_ext = f".{file_name.rsplit('.', 1)[-1].strip().lower()}"
+    preview_data_url = _build_profile_signature_data_url(mime_type, raw_bytes)
+    metadata = {
+        "preview_data_url": preview_data_url,
+        "source_type": normalized_source_type,
+    }
+    sha256 = hashlib.sha256(raw_bytes).hexdigest()
+    existing = _fetch_profile_signature_row(conn, tenant_id=tenant_id, user_id=user_id)
+    if existing:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE groupware_attachment_objects
+                SET storage_backend = 'database',
+                    storage_key = NULL,
+                    blob_url = NULL,
+                    file_name = %s,
+                    file_ext = %s,
+                    mime_type = %s,
+                    byte_size = %s,
+                    sha256 = %s,
+                    metadata_json = %s::jsonb,
+                    uploaded_by = %s,
+                    updated_at = timezone('utc', now())
+                WHERE id = %s
+                """,
+                (
+                    file_name,
+                    file_ext or None,
+                    mime_type,
+                    len(raw_bytes),
+                    sha256,
+                    json.dumps(metadata, ensure_ascii=False),
+                    user_id,
+                    existing["id"],
+                ),
+            )
+    else:
+        GroupwareAttachmentStorage(conn).register_attachment_object(
+            tenant_id=tenant_id,
+            module_key=PROFILE_SIGNATURE_MODULE_KEY,
+            resource_type=PROFILE_SIGNATURE_RESOURCE_TYPE,
+            resource_id=user_id,
+            file_name=file_name,
+            mime_type=mime_type,
+            byte_size=len(raw_bytes),
+            uploaded_by=user_id,
+            sha256=sha256,
+            metadata=metadata,
+        )
+    row = _fetch_profile_signature_row(conn, tenant_id=tenant_id, user_id=user_id)
+    return {"item": _serialize_profile_signature_row(row)}
+
+
+@router.delete("/me/signature")
+def delete_my_signature(
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    _ensure_profile_signature_permission(user)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM groupware_attachment_objects
+            WHERE tenant_id = %s
+              AND resource_type = %s
+              AND resource_id = %s
+            """,
+            (
+                str(user.get("tenant_id") or ""),
+                PROFILE_SIGNATURE_RESOURCE_TYPE,
+                str(user.get("id") or ""),
+            ),
+        )
+    return {"item": _serialize_profile_signature_row(None)}
 
 
 @router.patch("/{user_id}/role", response_model=UserAdminOut)

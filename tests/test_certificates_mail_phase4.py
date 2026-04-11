@@ -83,8 +83,8 @@ class CertificatesMailPhase4Tests(unittest.TestCase):
             for item in certificates_mail.CERTIFICATE_TYPE_DEFINITIONS
         }
 
-        self.assertFalse(definitions["employment_certificate"]["requires_approval"])
-        self.assertFalse(definitions["career_certificate"]["requires_approval"])
+        self.assertTrue(definitions["employment_certificate"]["requires_approval"])
+        self.assertTrue(definitions["career_certificate"]["requires_approval"])
         self.assertTrue(definitions["retirement_certificate"]["requires_approval"])
         self.assertTrue(definitions["leave_of_absence_certificate"]["requires_approval"])
         self.assertFalse(definitions["employment_certificate"]["auto_mail_enabled"])

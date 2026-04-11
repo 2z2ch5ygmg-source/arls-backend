@@ -38,9 +38,13 @@ class _FakeConn:
         self.fetchone_queue = list(fetchone_queue or [])
         self.fetchall_queue = list(fetchall_queue or [])
         self.executed: list[tuple[str, object]] = []
+        self.rollback_count = 0
 
     def cursor(self):
         return _FakeCursor(self)
+
+    def rollback(self):
+        self.rollback_count += 1
 
 
 class _FakeAuditService:
@@ -78,6 +82,10 @@ class LeaveLedgerPhase3Tests(unittest.TestCase):
         conn = _FakeConn()
         with patch.object(
             leave_ledger,
+            "_leave_ledger_schema_available",
+            return_value=True,
+        ), patch.object(
+            leave_ledger,
             "ensure_default_leave_policy",
             return_value={"id": "policy-1", "policy_key": "annual_default", "display_name": "기본 연차 정책"},
         ), patch.object(
@@ -109,6 +117,108 @@ class LeaveLedgerPhase3Tests(unittest.TestCase):
         self.assertEqual(summary["granted_days"], 15.0)
         self.assertEqual(summary["used_days"], 2.0)
         self.assertEqual(summary["remaining_days"], 13.0)
+
+    def test_default_leave_grant_falls_back_without_reference_upsert_index(self):
+        conn = _FakeConn(
+            fetchone_queue=[
+                {"exists_flag": False},
+                None,
+                {
+                    "id": "grant-1",
+                    "policy_id": "policy-1",
+                    "employee_id": "emp-1",
+                    "granted_days": Decimal("15.0"),
+                    "effective_from": date(2026, 1, 1),
+                    "effective_to": date(2026, 12, 31),
+                    "reference_key": "annual_default:2026",
+                },
+            ]
+        )
+        with patch.object(
+            leave_ledger,
+            "ensure_default_leave_policy",
+            return_value={"id": "policy-1", "policy_key": "annual_default", "display_name": "기본 연차 정책"},
+        ):
+            result = leave_ledger.ensure_default_leave_grant(
+                conn,
+                tenant_id="tenant-1",
+                employee_id="emp-1",
+                grant_year=2026,
+                actor_user_id="user-1",
+            )
+
+        self.assertEqual(result["reference_key"], "annual_default:2026")
+        self.assertTrue(any("INSERT INTO leave_grants" in sql for sql, _ in conn.executed))
+        self.assertFalse(any("ON CONFLICT (tenant_id, employee_id, reference_key)" in sql for sql, _ in conn.executed))
+
+    def test_compute_balance_summary_falls_back_to_legacy_when_ledger_path_fails(self):
+        conn = _FakeConn()
+        legacy_summary = {
+            "tenant_id": "tenant-1",
+            "employee_id": "emp-1",
+            "policy_id": None,
+            "policy_key": "annual_default",
+            "policy_name": "기본 연차 정책",
+            "year": 2026,
+            "granted_days": 15.0,
+            "used_days": 2.0,
+            "remaining_days": 13.0,
+            "restored_days": 0.0,
+        }
+        with patch.object(
+            leave_ledger,
+            "_leave_ledger_schema_available",
+            return_value=True,
+        ), patch.object(
+            leave_ledger,
+            "ensure_default_leave_policy",
+            side_effect=RuntimeError("schema drift"),
+        ), patch.object(
+            leave_ledger,
+            "_compute_legacy_employee_leave_balance_summary",
+            return_value=legacy_summary,
+        ) as legacy_mock:
+            result = leave_ledger.compute_employee_leave_balance_summary(
+                conn,
+                tenant_id="tenant-1",
+                employee_id="emp-1",
+                grant_year=2026,
+                actor_user_id="user-1",
+            )
+
+        self.assertEqual(result, legacy_summary)
+        self.assertEqual(conn.rollback_count, 1)
+        legacy_mock.assert_called_once()
+
+    def test_legacy_balance_summary_uses_approved_leave_requests(self):
+        conn = _FakeConn(
+            fetchone_queue=[{"exists_flag": True}],
+            fetchall_queue=[[
+                {
+                    "leave_type": "annual",
+                    "start_at": date(2026, 3, 1),
+                    "end_at": date(2026, 3, 2),
+                    "half_day_slot": None,
+                },
+                {
+                    "leave_type": "half",
+                    "start_at": date(2026, 4, 10),
+                    "end_at": date(2026, 4, 10),
+                    "half_day_slot": "pm",
+                },
+            ]],
+        )
+
+        summary = leave_ledger._compute_legacy_employee_leave_balance_summary(
+            conn,
+            tenant_id="tenant-1",
+            employee_id="emp-1",
+            target_year=2026,
+        )
+
+        self.assertEqual(summary["granted_days"], 15.0)
+        self.assertEqual(summary["used_days"], 2.5)
+        self.assertEqual(summary["remaining_days"], 12.5)
 
     def test_approved_leave_request_creates_consume_entries(self):
         conn = _FakeConn()

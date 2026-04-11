@@ -36,6 +36,40 @@ from ...utils.tenant_context import resolve_scoped_tenant
 
 router = APIRouter(prefix="/certificates", tags=["certificates"], dependencies=[Depends(apply_rate_limit)])
 TZ_KST = timezone(timedelta(hours=9))
+FORCED_APPROVAL_CERTIFICATE_TYPES = {
+    "employment_certificate",
+    "career_certificate",
+    "retirement_certificate",
+    "leave_of_absence_certificate",
+    "resignation_form",
+}
+
+
+def _certificate_type_requires_approval(type_key: str | None, current_value: bool) -> bool:
+    normalized = str(type_key or "").strip().lower()
+    if normalized in FORCED_APPROVAL_CERTIFICATE_TYPES:
+        return True
+    return bool(current_value)
+
+
+def _get_certificate_approval_policy_mode(conn, *, tenant_id: str, type_key: str | None) -> str:
+    normalized = str(type_key or "").strip().lower()
+    if normalized not in FORCED_APPROVAL_CERTIFICATE_TYPES:
+        return ""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM approval_line_rules
+            WHERE tenant_id = %s
+              AND form_key = %s
+              AND is_active = TRUE
+            LIMIT 1
+            """,
+            (tenant_id, f"certificate_request:{normalized}"),
+        )
+        row = cur.fetchone()
+    return "custom" if row else "default"
 
 
 class CertificateRequestCreate(BaseModel):
@@ -243,7 +277,7 @@ def _public_certificate_request_item(row: dict[str, Any] | None) -> dict[str, An
         "file_mime_type": row.get("file_mime_type"),
         "certificate_type_key": row.get("type_key"),
         "certificate_type_name": row.get("certificate_type_name"),
-        "requires_approval": bool(row.get("requires_approval")),
+        "requires_approval": _certificate_type_requires_approval(row.get("type_key"), bool(row.get("requires_approval"))),
         "auto_mail_enabled": bool(row.get("auto_mail_enabled")),
         "approval_status": row.get("approval_status") or None,
         "issue_job_id": row.get("issue_job_id") or None,
@@ -503,12 +537,21 @@ def get_certificate_types(
 ):
     tenant = resolve_scoped_tenant(conn, user, header_tenant_id=x_tenant_id, require_dev_context=True)
     employee_id = str(user.get("employee_id") or "").strip() or None
+    tenant_id = str(tenant.get("id") or "").strip()
+    items = list_certificate_types(
+        conn,
+        tenant_id=tenant_id,
+        employee_id=employee_id,
+    )
+    for item in items:
+        item["requires_approval"] = _certificate_type_requires_approval(item.get("type_key"), bool(item.get("requires_approval")))
+        policy_mode = _get_certificate_approval_policy_mode(conn, tenant_id=tenant_id, type_key=item.get("type_key"))
+        if policy_mode:
+            item["approval_policy_mode"] = policy_mode
+            if policy_mode == "default":
+                item["approval_policy_warning"] = "현재 별도의 승인 단계가 없어 기본 승인단계로 진행됩니다. 필요할 경우 승인단계를 설정 해 주세요"
     return {
-        "items": list_certificate_types(
-            conn,
-            tenant_id=str(tenant.get("id") or "").strip(),
-            employee_id=employee_id,
-        )
+        "items": items
     }
 
 
@@ -566,7 +609,7 @@ def post_certificate_request(
         _raise_api_error(status.HTTP_400_BAD_REQUEST, "DAILY_LIMIT_REACHED", "일일 발급 요청 한도를 초과했습니다.")
 
     request_id = str(uuid.uuid4())
-    approval_required = bool(type_row.get("requires_approval"))
+    approval_required = _certificate_type_requires_approval(payload.type_key, bool(type_row.get("requires_approval")))
     initial_status = "requested" if approval_required else "generating"
     with conn.cursor() as cur:
         cur.execute(

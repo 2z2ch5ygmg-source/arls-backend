@@ -1,17 +1,19 @@
 from __future__ import annotations
 
+from datetime import date
 import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ...deps import apply_rate_limit, get_current_user, get_db_conn
-from ...schemas import LeaveRequestCreate, LeaveRequestOut, LeaveRequestReview
+from ...schemas import LeaveGrantCreate, LeaveGrantOut, LeaveRequestCreate, LeaveRequestOut, LeaveRequestReview
 from ...services.approval_engine import (
     create_leave_request_approval_adapter,
     sync_legacy_approval_status,
 )
 from ...services.leave_ledger import (
+    _compute_legacy_employee_leave_balance_summary,
     compute_employee_leave_balance_summary,
     list_holiday_calendar_entries,
     list_leave_blackout_rules,
@@ -20,10 +22,12 @@ from ...services.leave_ledger import (
 )
 from ...utils.permissions import (
     ROLE_BRANCH_MANAGER,
+    can_manage_leave_grants,
     can_request_leave,
     can_review_leave_request,
     is_super_admin,
 )
+from ...utils.tenant_context import ensure_tenant_active, fetch_tenant_row_any
 
 router = APIRouter(prefix="/leaves", tags=["leaves"], dependencies=[Depends(apply_rate_limit)])
 logger = logging.getLogger(__name__)
@@ -76,10 +80,22 @@ def _lookup_emp_by_id(conn, tenant_id, employee_id):
         return cur.fetchone()
 
 
+def _normalize_tenant_scope_code(value: str | None) -> str:
+    return str(value or "").strip().upper()
+
+
+def _tenant_codes_match(left: str | None, right: str | None) -> bool:
+    normalized_left = _normalize_tenant_scope_code(left)
+    normalized_right = _normalize_tenant_scope_code(right)
+    if not normalized_left or not normalized_right:
+        return normalized_left == normalized_right
+    return normalized_left == normalized_right
+
+
 def _resolve_target_tenant(conn, user, tenant_code: str | None):
     own_tenant_id = user["tenant_id"]
-    own_tenant_code = str(user.get("tenant_code") or "").strip().upper()
-    requested_tenant_code = str(tenant_code or "").strip().upper()
+    own_tenant_code = _normalize_tenant_scope_code(user.get("tenant_code"))
+    requested_tenant_code = _normalize_tenant_scope_code(tenant_code)
 
     if not is_super_admin(user["role"]):
         if requested_tenant_code and requested_tenant_code != own_tenant_code:
@@ -89,21 +105,8 @@ def _resolve_target_tenant(conn, user, tenant_code: str | None):
     if not requested_tenant_code:
         return {"id": own_tenant_id, "tenant_code": own_tenant_code}
 
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT id, tenant_code
-            FROM tenants
-            WHERE tenant_code = %s
-              AND COALESCE(is_active, TRUE) = TRUE
-            LIMIT 1
-            """,
-            (requested_tenant_code,),
-        )
-        row = cur.fetchone()
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="tenant not found")
-    return row
+    row = ensure_tenant_active(fetch_tenant_row_any(conn, requested_tenant_code))
+    return {"id": row["id"], "tenant_code": _normalize_tenant_scope_code(row.get("tenant_code"))}
 
 
 def _resolve_user_scope_site_id(conn, user) -> str | None:
@@ -189,6 +192,25 @@ def _row_to_out(row) -> LeaveRequestOut:
     )
 
 
+def _row_to_leave_grant_out(row) -> LeaveGrantOut:
+    return LeaveGrantOut(
+        id=row["id"],
+        tenant_code=row["tenant_code"],
+        employee_code=row["employee_code"],
+        employee_name=row.get("employee_name"),
+        site_code=row.get("site_code"),
+        site_name=row.get("site_name"),
+        policy_id=row.get("policy_id"),
+        policy_name=row.get("policy_name"),
+        grant_type=row.get("grant_type") or "manual",
+        granted_days=row.get("granted_days") or 0,
+        effective_from=row["effective_from"],
+        effective_to=row.get("effective_to"),
+        reference_key=row.get("reference_key"),
+        created_at=row.get("created_at"),
+    )
+
+
 def _fetch_leave_out(conn, leave_id, tenant_id=None, for_update: bool = False):
     with conn.cursor() as cur:
         clauses = ["lr.id = %s"]
@@ -228,6 +250,48 @@ def _fetch_leave_out(conn, leave_id, tenant_id=None, for_update: bool = False):
         return cur.fetchone()
 
 
+def _fetch_leave_grant_out(conn, grant_id, tenant_id=None):
+    with conn.cursor() as cur:
+        clauses = ["lg.id = %s"]
+        params: list = [grant_id]
+        if tenant_id is not None:
+            clauses.append("lg.tenant_id = %s")
+            params.append(tenant_id)
+        cur.execute(
+            f"""
+            SELECT lg.id, t.tenant_code, e.employee_code, e.full_name AS employee_name,
+                   s.site_code, s.site_name,
+                   lg.policy_id, lp.display_name AS policy_name,
+                   lg.grant_type, lg.granted_days,
+                   lg.effective_from, lg.effective_to, lg.reference_key, lg.created_at
+            FROM leave_grants lg
+            JOIN tenants t ON t.id = lg.tenant_id
+            JOIN employees e ON e.id = lg.employee_id
+            LEFT JOIN sites s ON s.id = e.site_id
+            LEFT JOIN leave_policies lp ON lp.id = lg.policy_id
+            WHERE {" AND ".join(clauses)}
+            """,
+            tuple(params),
+        )
+        return cur.fetchone()
+
+
+def _resolve_leave_grant_policy(conn, *, tenant_id: str, policy_id):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, display_name
+            FROM leave_policies
+            WHERE tenant_id = %s
+              AND id = %s
+              AND COALESCE(is_active, TRUE) = TRUE
+            LIMIT 1
+            """,
+            (tenant_id, policy_id),
+        )
+        return cur.fetchone()
+
+
 @router.get("", response_model=list[LeaveRequestOut])
 def list_leaves(
     status_filter: str | None = Query(default=None, alias="status"),
@@ -246,7 +310,7 @@ def list_leaves(
     if not is_super_admin(user["role"]):
         clauses.append("lr.tenant_id = %s")
         params.append(user["tenant_id"])
-        if tenant_code and tenant_code != user.get("tenant_code"):
+        if tenant_code and not _tenant_codes_match(tenant_code, user.get("tenant_code")):
             raise HTTPException(status_code=403, detail="tenant mismatch")
     elif tenant_code:
         clauses.append("t.tenant_code = %s")
@@ -297,13 +361,36 @@ def get_leave_balance(
 ):
     tenant = _resolve_target_tenant(conn, user, tenant_code)
     employee = _resolve_leave_balance_employee(conn, tenant_id=str(tenant["id"]), user=user, employee_code=employee_code)
-    summary = compute_employee_leave_balance_summary(
-        conn,
-        tenant_id=str(tenant["id"]),
-        employee_id=str(employee["id"]),
-        grant_year=year,
-        actor_user_id=str(user.get("id") or "").strip() or None,
-    )
+    tenant_id = str(tenant["id"])
+    employee_id = str(employee["id"])
+    target_year = int(year) if year is not None else None
+    try:
+        summary = compute_employee_leave_balance_summary(
+            conn,
+            tenant_id=tenant_id,
+            employee_id=employee_id,
+            grant_year=target_year,
+            actor_user_id=str(user.get("id") or "").strip() or None,
+        )
+    except Exception as exc:
+        logger.warning(
+            "[LEAVE] balance fallback tenant_id=%s employee_id=%s employee_code=%s year=%s",
+            tenant_id,
+            employee_id,
+            employee.get("employee_code"),
+            target_year,
+            exc_info=exc,
+        )
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        summary = _compute_legacy_employee_leave_balance_summary(
+            conn,
+            tenant_id=tenant_id,
+            employee_id=employee_id,
+            target_year=target_year or date.today().year,
+        )
     return {
         "employee_code": employee.get("employee_code"),
         "year": summary["year"],
@@ -314,6 +401,40 @@ def get_leave_balance(
         "remaining_days": summary["remaining_days"],
         "restored_days": summary["restored_days"],
     }
+
+
+@router.get("/grants", response_model=dict[str, list[LeaveGrantOut]])
+def list_leave_grants(
+    tenant_code: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=300),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    if not can_manage_leave_grants(user.get("role")):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+    tenant = _resolve_target_tenant(conn, user, tenant_code)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT lg.id, t.tenant_code, e.employee_code, e.full_name AS employee_name,
+                   s.site_code, s.site_name,
+                   lg.policy_id, lp.display_name AS policy_name,
+                   lg.grant_type, lg.granted_days,
+                   lg.effective_from, lg.effective_to, lg.reference_key, lg.created_at
+            FROM leave_grants lg
+            JOIN tenants t ON t.id = lg.tenant_id
+            JOIN employees e ON e.id = lg.employee_id
+            LEFT JOIN sites s ON s.id = e.site_id
+            LEFT JOIN leave_policies lp ON lp.id = lg.policy_id
+            WHERE lg.tenant_id = %s
+            ORDER BY lg.created_at DESC, e.employee_code ASC
+            LIMIT %s
+            """,
+            (str(tenant["id"]), limit),
+        )
+        rows = cur.fetchall()
+    return {"items": [_row_to_leave_grant_out(row) for row in rows]}
 
 
 @router.get("/policies")
@@ -330,6 +451,76 @@ def get_leave_policies(
             actor_user_id=str(user.get("id") or "").strip() or None,
         )
     }
+
+
+@router.post("/grants", response_model=LeaveGrantOut)
+def create_leave_grant(
+    payload: LeaveGrantCreate,
+    tenant_code: str | None = Query(default=None),
+    conn=Depends(get_db_conn),
+    user=Depends(get_current_user),
+):
+    if not can_manage_leave_grants(user.get("role")):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+    tenant = _resolve_target_tenant(conn, user, tenant_code)
+    tenant_id = str(tenant["id"])
+    policy = _resolve_leave_grant_policy(conn, tenant_id=tenant_id, policy_id=payload.policy_id)
+    if not policy:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="leave policy not found")
+
+    employee = _lookup_emp(conn, tenant_id, payload.employee_code)
+    if not employee:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="employee not found")
+
+    grant_id = uuid.uuid4()
+    reference_key = f"manual:{grant_id}"
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO leave_grants (
+                id,
+                tenant_id,
+                policy_id,
+                employee_id,
+                grant_type,
+                granted_days,
+                granted_hours,
+                effective_from,
+                effective_to,
+                reference_key,
+                meta_json,
+                created_at
+            )
+            VALUES (
+                %s, %s, %s, %s, %s, %s, 0, %s, %s, %s, %s::jsonb, timezone('utc', now())
+            )
+            """,
+            (
+                grant_id,
+                tenant_id,
+                policy["id"],
+                employee["id"],
+                payload.grant_type,
+                payload.granted_days,
+                payload.effective_from,
+                payload.effective_to,
+                reference_key,
+                '{"source":"manual_leave_grant"}',
+            ),
+        )
+
+    compute_employee_leave_balance_summary(
+        conn,
+        tenant_id=tenant_id,
+        employee_id=str(employee["id"]),
+        grant_year=payload.effective_from.year,
+        actor_user_id=str(user.get("id") or "").strip() or None,
+    )
+    row = _fetch_leave_grant_out(conn, grant_id, tenant_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="failed to create leave grant")
+    return _row_to_leave_grant_out(row)
 
 
 @router.get("/holiday-calendar")
@@ -452,7 +643,7 @@ def list_pending_leaves(
     if not is_super_admin(user["role"]):
         clauses.append("lr.tenant_id = %s")
         params.append(user["tenant_id"])
-        if tenant_code and tenant_code != user.get("tenant_code"):
+        if tenant_code and not _tenant_codes_match(tenant_code, user.get("tenant_code")):
             raise HTTPException(status_code=403, detail="tenant mismatch")
     elif tenant_code:
         clauses.append("t.tenant_code = %s")
@@ -511,7 +702,7 @@ def list_review_queue_leaves(
     if not is_super_admin(user["role"]):
         clauses.append("lr.tenant_id = %s")
         params.append(user["tenant_id"])
-        if tenant_code and tenant_code != user.get("tenant_code"):
+        if tenant_code and not _tenant_codes_match(tenant_code, user.get("tenant_code")):
             raise HTTPException(status_code=403, detail="tenant mismatch")
     elif tenant_code:
         clauses.append("t.tenant_code = %s")

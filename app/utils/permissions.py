@@ -192,6 +192,10 @@ def can_manage_leave(user_role: str) -> bool:
     return can_request_leave(user_role)
 
 
+def can_manage_leave_grants(user_role: str | None) -> bool:
+    return normalize_user_role(user_role) in {ROLE_DEVELOPER, ROLE_HQ_ADMIN}
+
+
 def can_manage_schedule(user_role: str) -> bool:
     return normalize_role(user_role) in SUPERVISOR_ROLES
 

@@ -866,6 +866,51 @@ class LeaveRequestReview(BaseModel):
         return normalized
 
 
+class LeaveGrantCreate(BaseModel):
+    employee_code: str = Field(min_length=1, max_length=64)
+    policy_id: UUID
+    grant_type: str = Field(default="manual", min_length=1, max_length=32)
+    granted_days: float = Field(gt=0, le=366)
+    effective_from: date
+    effective_to: Optional[date] = None
+
+    @field_validator("employee_code", mode="before")
+    @classmethod
+    def _trim_employee_code(cls, value: Optional[str]) -> str:
+        return str(value or "").strip()
+
+    @field_validator("grant_type")
+    @classmethod
+    def _grant_type(cls, value: str) -> str:
+        normalized = str(value or "").strip().lower()
+        if normalized not in {"manual", "annual"}:
+            raise ValueError("grant_type must be manual/annual")
+        return normalized
+
+    @model_validator(mode="after")
+    def _validate_dates(self) -> "LeaveGrantCreate":
+        if self.effective_to and self.effective_to < self.effective_from:
+            raise ValueError("effective_to must be after or equal to effective_from")
+        return self
+
+
+class LeaveGrantOut(BaseModel):
+    id: UUID
+    tenant_code: str
+    employee_code: str
+    employee_name: Optional[str] = None
+    site_code: Optional[str] = None
+    site_name: Optional[str] = None
+    policy_id: Optional[UUID] = None
+    policy_name: Optional[str] = None
+    grant_type: str
+    granted_days: float
+    effective_from: date
+    effective_to: Optional[date] = None
+    reference_key: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
 class ScheduleCreateRow(BaseModel):
     tenant_code: str
     company_code: str
