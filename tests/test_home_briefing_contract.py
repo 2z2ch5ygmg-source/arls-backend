@@ -319,6 +319,8 @@ def test_fetch_today_staff_snapshot_uses_set_joins_and_utc_request_bounds(monkey
     assert rows[0]["employee_id"] == "employee-1"
     assert "LEFT JOIN checkins" in snapshot_sql
     assert "LEFT JOIN pending_attendance" in snapshot_sql
+    assert "JOIN scheduled ON scheduled.employee_id = ar.employee_id" in snapshot_sql
+    assert "JOIN scheduled ON scheduled.employee_id = arq.employee_id" in snapshot_sql
     assert "arq.requested_at >=" in snapshot_sql
     assert "AT TIME ZONE" not in snapshot_sql
     assert day_start in params
