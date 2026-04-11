@@ -40229,15 +40229,11 @@ function buildLeaveWorkspaceReadCacheKey({
   desktopWorkspace = false,
   managerMode = false,
 } = {}) {
-  const activeSection = normalizeLeaveWorkspaceSection(
-    state.leaveView?.workspaceSection || "status",
-  );
   return JSON.stringify({
     tenant: getLeaveScopedTenantCode(),
     employee: String(state.user?.employee_code || "").trim().toUpperCase(),
     user: String(state.user?.id || state.user?.username || "").trim(),
     role: normalizeRoleValue(state.user?.role || ""),
-    section: activeSection,
     scope: normalizeLeaveManagerScope(scope),
     status: normalizeLeaveStatusFilter(statusFilter),
     desktop: Boolean(desktopWorkspace),
