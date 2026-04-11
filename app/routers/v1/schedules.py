@@ -14053,10 +14053,11 @@ def _build_finance_download_workspace_site_payload(
     month_key: str,
     active_state: dict[str, Any] | None = None,
     active_batch_filename: str | None = None,
+    state_preloaded: bool = False,
 ) -> FinanceDownloadWorkspaceSiteOut:
     tenant_id = str(target_tenant.get("id") or "").strip()
     existing_state = dict(active_state or {})
-    if not existing_state:
+    if not existing_state and not state_preloaded:
         existing_state = _get_finance_submission_state(
             conn,
             tenant_id=tenant_id,
@@ -14184,6 +14185,7 @@ def _build_finance_download_workspace_payload(
             active_batch_filename=batch_filename_by_id.get(
                 str(dict(state_by_site_id.get(str(site_row.get("id") or "").strip()) or {}).get("active_final_batch_id") or "").strip()
             ),
+            state_preloaded=True,
         )
         for site_row in site_rows
     ]

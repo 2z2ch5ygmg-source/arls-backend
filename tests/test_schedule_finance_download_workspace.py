@@ -117,6 +117,33 @@ class FinanceDownloadWorkspaceTests(unittest.TestCase):
         self.assertEqual(payload.downloadable_site_count, 1)
         self.assertEqual([row.site_code for row in payload.sites], ["R692", "R738"])
 
+    def test_workspace_payload_does_not_refetch_missing_preloaded_states(self):
+        target_tenant = {
+            "id": "tenant-1",
+            "tenant_code": "SRS_KOREA",
+            "tenant_name": "SRS Korea",
+        }
+        site_rows = [
+            {"id": "site-1", "site_code": "R692", "site_name": "Apple 명동"},
+            {"id": "site-2", "site_code": "R738", "site_name": "Apple 가로수길"},
+        ]
+
+        with patch("app.routers.v1.schedules._list_finance_download_workspace_sites", return_value=site_rows), \
+             patch("app.routers.v1.schedules._list_finance_submission_states_for_workspace", return_value={}), \
+             patch("app.routers.v1.schedules._list_finance_submission_batch_filenames", return_value={}), \
+             patch("app.routers.v1.schedules._get_finance_submission_state") as get_state:
+            payload = _build_finance_download_workspace_payload(
+                conn=object(),
+                target_tenant=target_tenant,
+                user={"role": "HQ_Admin"},
+                month_key="2026-03",
+            )
+
+        get_state.assert_not_called()
+        self.assertEqual(payload.total_site_count, 2)
+        self.assertEqual(payload.uploaded_site_count, 0)
+        self.assertEqual([row.status for row in payload.sites], ["not_uploaded", "not_uploaded"])
+
     def test_site_payload_uses_preloaded_state_without_revision_refresh(self):
         site_row = {"id": "site-1", "site_code": "R692", "site_name": "Apple 명동"}
         target_tenant = {"id": "tenant-1", "tenant_code": "SRS_KOREA"}
