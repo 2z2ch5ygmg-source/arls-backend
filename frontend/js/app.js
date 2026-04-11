@@ -911,6 +911,7 @@ function createInitialHomeState() {
   return {
     audience: "officer",
     briefing: null,
+    briefingFetchedAt: 0,
     briefingLoading: false,
     briefingError: "",
     activePanels: {
@@ -32136,7 +32137,7 @@ function getHomeBriefingCacheKey(audience = resolveHomeAudience()) {
   return `${HOME_BRIEFING_CACHE_KEY}:${tenant}:${userId}:${role}`;
 }
 
-function readCachedHomeBriefing(audience = resolveHomeAudience()) {
+function readCachedHomeBriefingEntry(audience = resolveHomeAudience()) {
   try {
     const raw = localStorage.getItem(getHomeBriefingCacheKey(audience));
     if (!raw) return null;
@@ -32150,10 +32151,23 @@ function readCachedHomeBriefing(audience = resolveHomeAudience()) {
     if (cachedAt > 0 && Date.now() - cachedAt > HOME_BRIEFING_CACHE_TTL_MS) {
       return null;
     }
-    return payload;
+    return { payload, cachedAt };
   } catch {
     return null;
   }
+}
+
+function readCachedHomeBriefing(audience = resolveHomeAudience()) {
+  return readCachedHomeBriefingEntry(audience)?.payload || null;
+}
+
+function isHomeBriefingRefreshFresh() {
+  const fetchedAt = Number(state.home?.briefingFetchedAt || 0);
+  return (
+    Boolean(state.home?.briefing) &&
+    fetchedAt > 0 &&
+    Date.now() - fetchedAt < HOME_VIEW_CACHE_TTL_MS
+  );
 }
 
 function writeCachedHomeBriefing(payload = null) {
@@ -32183,14 +32197,21 @@ async function fetchHomeBriefing({ force = false } = {}) {
 async function loadHomeBriefing({ force = false } = {}) {
   state.home.audience = resolveHomeAudience();
   if (!force && !state.home.briefing) {
-    const cached = readCachedHomeBriefing(state.home.audience);
-    if (cached) {
-      state.home.briefing = cached;
+    const cached = readCachedHomeBriefingEntry(state.home.audience);
+    if (cached?.payload) {
+      state.home.briefing = cached.payload;
+      state.home.briefingFetchedAt = Number(cached.cachedAt || 0) || Date.now();
       state.home.audience =
-        String(cached?.audience || state.home.audience)
+        String(cached.payload?.audience || state.home.audience)
           .trim()
           .toLowerCase() || state.home.audience;
     }
+  }
+  if (!force && isHomeBriefingRefreshFresh()) {
+    state.home.briefingLoading = false;
+    state.home.briefingError = "";
+    renderHomeAudienceSurface();
+    return state.home.briefing;
   }
   state.home.briefingLoading = true;
   state.home.briefingError = "";
@@ -32203,6 +32224,7 @@ async function loadHomeBriefing({ force = false } = {}) {
       String(payload?.audience || resolveHomeAudience())
         .trim()
         .toLowerCase() || resolveHomeAudience();
+    state.home.briefingFetchedAt = Date.now();
     state.home.briefingError = "";
     writeCachedHomeBriefing(state.home.briefing);
     renderHomeAudienceSurface();
