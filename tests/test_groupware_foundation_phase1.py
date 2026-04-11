@@ -12,7 +12,6 @@ from app.services.groupware_foundation import (
     build_groupware_foundation_status,
 )
 
-
 class _FakeCursor:
     def __init__(self, conn) -> None:
         self.conn = conn
@@ -36,7 +35,6 @@ class _FakeCursor:
             return self.conn.fetchall_queue.pop(0)
         return []
 
-
 class _FakeConn:
     def __init__(self, *, fetchone_queue=None, fetchall_queue=None) -> None:
         self.fetchone_queue = list(fetchone_queue or [])
@@ -46,9 +44,8 @@ class _FakeConn:
     def cursor(self):
         return _FakeCursor(self)
 
-
 class GroupwareFoundationPhase1Tests(unittest.TestCase):
-    def test_groupware_foundation_migration_defines_phase1_tables(self):
+    def test_groupware_foundation_migration_defines_surviving_phase1_tables(self):
         migration_sql = (
             Path(__file__).resolve().parent.parent
             / "migrations"
@@ -60,8 +57,24 @@ class GroupwareFoundationPhase1Tests(unittest.TestCase):
         self.assertIn("CREATE TABLE IF NOT EXISTS leave_ledger", migration_sql)
         self.assertIn("CREATE TABLE IF NOT EXISTS certificate_requests", migration_sql)
         self.assertIn("CREATE TABLE IF NOT EXISTS outbound_mail_jobs", migration_sql)
-        self.assertIn("CREATE TABLE IF NOT EXISTS chat_messages", migration_sql)
-        self.assertIn("CREATE TABLE IF NOT EXISTS meeting_rooms", migration_sql)
+
+    def test_status_contract_excludes_retired_chat_and_meetings_groups(self):
+        conn = _FakeConn(fetchall_queue=[[]])
+
+        payload = build_groupware_foundation_status(conn)
+
+        database_groups = payload["database"]["groups"]
+        self.assertNotIn("chat", database_groups)
+        self.assertNotIn("meetings", database_groups)
+        self.assertEqual(
+            sorted(database_groups),
+            ["approvals", "attachments", "certificates", "leave", "mail"],
+        )
+        phase_names = [phase["name"] for phase in payload["rollout_phases"]]
+        self.assertNotIn("messenger", phase_names)
+        self.assertNotIn("video-and-rollout", phase_names)
+        self.assertEqual([boundary["service"] for boundary in payload["service_boundaries"]], ["core-api"])
+        self.assertEqual(list(payload["deployment_topology"].keys()), ["core_api"])
 
     def test_build_status_reports_ready_and_missing_groups(self):
         conn = _FakeConn(
@@ -161,7 +174,6 @@ class GroupwareFoundationPhase1Tests(unittest.TestCase):
         build_payload.assert_called_once()
         self.assertEqual(result["phase"], 1)
         self.assertEqual(result["legacy_compatibility_routes"][0]["legacy_prefix"], "/api/v1/leaves")
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -42,24 +42,6 @@ GROUPWARE_FOUNDATION_TABLE_GROUPS: dict[str, list[str]] = {
         "outbound_mail_jobs",
         "mail_delivery_events",
     ],
-    "chat": [
-        "chat_conversations",
-        "chat_members",
-        "chat_messages",
-        "chat_attachments",
-        "chat_reads",
-        "chat_reactions",
-        "chat_polls",
-        "presence_sessions",
-        "announcement_rooms",
-    ],
-    "meetings": [
-        "meeting_rooms",
-        "meeting_participants",
-        "meeting_sessions",
-        "meeting_events",
-        "meeting_chat_links",
-    ],
 }
 
 GROUPWARE_COMPATIBILITY_ROUTES: list[dict[str, Any]] = [
@@ -104,34 +86,6 @@ GROUPWARE_SERVICE_BOUNDARIES: list[dict[str, Any]] = [
         ],
         "status": "active",
     },
-    {
-        "service": "rt-gateway",
-        "runtime": "websocket",
-        "responsibilities": [
-            "chat-presence",
-            "meeting-signaling",
-            "read-receipts",
-            "typing-state",
-        ],
-        "status": "planned",
-    },
-    {
-        "service": "media-sfu",
-        "runtime": "pion-or-equivalent-sfu",
-        "responsibilities": [
-            "meeting-media",
-            "screen-share",
-            "reconnect",
-            "network-adaptation",
-        ],
-        "status": "planned",
-    },
-    {
-        "service": "coturn",
-        "runtime": "turn-server",
-        "responsibilities": ["nat-traversal", "webrtc-relay"],
-        "status": "planned",
-    },
 ]
 
 GROUPWARE_ROLLOUT_PHASES: list[dict[str, Any]] = [
@@ -160,22 +114,10 @@ GROUPWARE_ROLLOUT_PHASES: list[dict[str, Any]] = [
         "name": "certificates-and-mail",
         "outcomes": ["certificate requests", "mail accounts", "delivery jobs"],
     },
-    {
-        "phase": 5,
-        "name": "messenger",
-        "outcomes": ["chat conversations", "presence", "announcement rooms"],
-    },
-    {
-        "phase": 6,
-        "name": "video-and-rollout",
-        "outcomes": ["meeting rooms", "meeting sessions", "rt-gateway/media-sfu cutover"],
-    },
 ]
-
 
 def _normalize_json_payload(value: dict[str, Any] | None) -> str:
     return json.dumps(value or {}, ensure_ascii=False, default=str)
-
 
 def _query_existing_tables(conn, table_names: list[str]) -> set[str]:
     with conn.cursor() as cur:
@@ -190,7 +132,6 @@ def _query_existing_tables(conn, table_names: list[str]) -> set[str]:
         )
         rows = cur.fetchall() or []
     return {str((row or {}).get("table_name") or "").strip() for row in rows}
-
 
 class GroupwareAuditService:
     """Shared write interface for future groupware modules."""
@@ -231,7 +172,6 @@ class GroupwareAuditService:
             "backed_by": ["integration_audit_logs", "audit_log"],
             "status": "active",
         }
-
 
 class GroupwareNotificationDispatcher:
     """Shared notification write interface for approval/mail/certificate flows."""
@@ -322,9 +262,8 @@ class GroupwareNotificationDispatcher:
             "status": "active",
         }
 
-
 class GroupwareAttachmentStorage:
-    """Storage abstraction for future document/chat/certificate attachments."""
+    """Storage abstraction for document and certificate attachments."""
 
     def __init__(self, conn=None):
         self.conn = conn
@@ -427,7 +366,6 @@ class GroupwareAttachmentStorage:
             "status": "active",
         }
 
-
 def build_groupware_foundation_status(conn) -> dict[str, Any]:
     all_tables = sorted(
         {
@@ -470,26 +408,10 @@ def build_groupware_foundation_status(conn) -> dict[str, Any]:
                 "runtime": "fastapi",
                 "status": "active",
             },
-            "rt_gateway": {
-                "runtime": "websocket",
-                "status": "planned",
-                "public_url": str(settings.rt_gateway_public_url or "").strip() or None,
-            },
-            "media_sfu": {
-                "runtime": "sfu",
-                "status": "planned",
-                "public_url": str(settings.media_sfu_public_url or "").strip() or None,
-            },
-            "coturn": {
-                "runtime": "turn",
-                "status": "planned",
-                "uris": list(settings.coturn_server_uris or []),
-            },
         },
         "service_boundaries": GROUPWARE_SERVICE_BOUNDARIES,
         "rollout_phases": GROUPWARE_ROLLOUT_PHASES,
     }
-
 
 def build_groupware_compatibility_payload(conn) -> dict[str, Any]:
     status = build_groupware_foundation_status(conn)

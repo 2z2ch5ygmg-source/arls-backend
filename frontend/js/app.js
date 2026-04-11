@@ -478,8 +478,6 @@ const ROUTE_REQUESTS = "/requests";
 const ROUTE_LEAVE = "/leave";
 const ROUTE_HR = "/hr";
 const ROUTE_PROFILE = "/profile";
-const ROUTE_MESSENGER = "/messenger";
-const ROUTE_MEETINGS = "/meetings";
 const ROUTE_APPROVALS = "/branch/approvals";
 const ROUTE_REQUESTS_CORRECTION = "/requests/correction";
 const ROUTE_ADMIN_SITES = "/branch/sites";
@@ -1422,10 +1420,8 @@ function createInitialIntegrationState() {
     mailFetchedAt: 0,
     groupwareFoundation: null,
     groupwareCompatibility: null,
-    groupwareRollout: null,
     groupwareFoundationError: "",
     groupwareCompatibilityError: "",
-    groupwareRolloutError: "",
     groupwareFetchedAt: 0,
   };
 }
@@ -1658,77 +1654,6 @@ function createInitialProfileViewState() {
     signatureUploadFile: null,
     signatureUploadFileName: "",
     signatureCanvasBound: false,
-  };
-}
-
-function createInitialMessengerState() {
-  return {
-    rows: [],
-    fetchedAt: 0,
-    detailById: {},
-    messagesByConversationId: {},
-    selectedConversationId: "",
-    loading: false,
-    detailLoading: false,
-    searchLoading: false,
-    directoryLoading: false,
-    sending: false,
-    searchResults: [],
-    searchQuery: "",
-    messageSearchQuery: "",
-    typeFilter: "all",
-    composerBody: "",
-    createOpen: false,
-    createType: "group",
-    createTitle: "",
-    createDescription: "",
-    createRoomKey: "",
-    createScopeType: "tenant",
-    createSearch: "",
-    createMemberUserIds: [],
-    directoryRows: [],
-    directoryError: "",
-    error: "",
-    searchError: "",
-    presenceSessionKey: "",
-  };
-}
-
-function createInitialMeetingsState() {
-  return {
-    rows: [],
-    detailById: {},
-    rollout: null,
-    selectedRoomId: "",
-    loading: false,
-    detailLoading: false,
-    rolloutLoading: false,
-    directoryLoading: false,
-    saving: false,
-    searchQuery: "",
-    stateFilter: "all",
-    createOpen: false,
-    createTitle: "",
-    createScheduledFor: "",
-    createSearch: "",
-    createLinkedConversationId: "",
-    createParticipantUserIds: [],
-    directoryRows: [],
-    directoryQuery: "",
-    directoryError: "",
-    conversationRows: [],
-    conversationFetchedAt: 0,
-    conversationLoading: false,
-    conversationError: "",
-    linkConversationId: "",
-    linkStatusMessage: "",
-    linkStatusLevel: "info",
-    participantUserId: "",
-    participantStatusMessage: "",
-    participantStatusLevel: "info",
-    error: "",
-    createStatusMessage: "",
-    createStatusLevel: "info",
   };
 }
 
@@ -2059,8 +1984,6 @@ const state = {
   reports: createInitialReportsState(),
   hrDocs: createInitialHrDocumentsState(),
   profile: createInitialProfileViewState(),
-  messenger: createInitialMessengerState(),
-  meetings: createInitialMeetingsState(),
   notices: createInitialNoticesState(),
   reminder: createInitialReminderState(),
   devAdmin: createInitialDevAdminState(),
@@ -15087,8 +15010,6 @@ const ROLE_PERMISSIONS = {
     userManage: true,
     auditRead: true,
     crossTenant: true,
-    messenger: true,
-    meetings: true,
   },
   hq_admin: {
     employees: true,
@@ -15114,8 +15035,6 @@ const ROLE_PERMISSIONS = {
     userManage: false,
     auditRead: true,
     crossTenant: false,
-    messenger: true,
-    meetings: true,
   },
   supervisor: {
     employees: false,
@@ -15141,8 +15060,6 @@ const ROLE_PERMISSIONS = {
     userManage: false,
     auditRead: false,
     crossTenant: false,
-    messenger: true,
-    meetings: true,
   },
   vice_supervisor: {
     employees: false,
@@ -15168,8 +15085,6 @@ const ROLE_PERMISSIONS = {
     userManage: false,
     auditRead: false,
     crossTenant: false,
-    messenger: true,
-    meetings: true,
   },
   officer: {
     employees: false,
@@ -15195,8 +15110,6 @@ const ROLE_PERMISSIONS = {
     userManage: false,
     auditRead: false,
     crossTenant: false,
-    messenger: true,
-    meetings: true,
   },
 };
 
@@ -15224,24 +15137,6 @@ function resolveDrawerIconName(item) {
 }
 
 const AZURE_TOPBAR_TAB_ICON_GROUPS = Object.freeze({
-  messengerTypeTabs: {
-    dataKey: "type",
-    icons: {
-      all: "grid",
-      dm: "message",
-      group: "users",
-      announcement: "megaphone",
-    },
-  },
-  meetingsStateTabs: {
-    dataKey: "state",
-    icons: {
-      all: "video",
-      live: "activity",
-      scheduled: "calendar",
-      ended: "check",
-    },
-  },
   opsWorkspaceTabs: {
     dataKey: "tab",
     icons: {
@@ -15382,8 +15277,6 @@ const AZURE_TOPBAR_LABEL_ICON_FALLBACKS = Object.freeze({
 });
 
 const AZURE_TOPBAR_ICON_SELECTORS = Object.freeze([
-  "#messengerTypeTabs",
-  "#meetingsStateTabs",
   "#opsWorkspaceTabs",
   "#requestsWorkspaceSegments",
   "#leaveWorkspaceTabs",
@@ -16852,12 +16745,6 @@ function invalidateSnapshotsForMutation(method = "GET", rawPath = "") {
   }
   if (pathname.startsWith("/calendar")) {
     targets.add("calendar");
-  }
-  if (pathname.startsWith("/messenger")) {
-    targets.add("messenger");
-  }
-  if (pathname.startsWith("/meetings")) {
-    targets.add("meetings");
   }
   if (pathname.startsWith("/notices")) {
     targets.add("notices");
@@ -32823,8 +32710,6 @@ function resolveBottomTabActiveView(viewName) {
     target === "ops" ||
     target === "support-status" ||
     target === "reports" ||
-    target === "messenger" ||
-    target === "meetings" ||
     target === "profile" ||
     target === "roadmap" ||
     target === "org" ||
@@ -36227,8 +36112,6 @@ function resolveRouteForView(viewName = "") {
   }
   if (raw === "hr") return ROUTE_HR;
   if (raw === "leave") return getLeaveTabRoute();
-  if (raw === "messenger") return ROUTE_MESSENGER;
-  if (raw === "meetings") return ROUTE_MEETINGS;
   if (raw === "notices") return buildNoticesRoute();
   if (raw === "ops") return ROUTE_OPS;
   if (raw === "support-status") return ROUTE_SUPPORT_STATUS;
@@ -36257,8 +36140,6 @@ function resolveViewForRoute(routePath = "") {
   if (route === ROUTE_FEATURE_NOTICES) return "notices";
   if (route === ROUTE_HR) return "hr";
   if (route === ROUTE_LEAVE) return "leave";
-  if (route === ROUTE_MESSENGER) return "messenger";
-  if (route === ROUTE_MEETINGS) return "meetings";
   if (route === ROUTE_SUPPORT_STATUS) return "support-status";
   if (route === ROUTE_OPS) return "ops";
   if (
@@ -36308,8 +36189,6 @@ function isKnownRoute(routePath = "") {
     ROUTE_REPORTS,
     ROUTE_REPORTS_FINANCE_DOWNLOAD,
     ROUTE_ATTENDANCE,
-    ROUTE_MESSENGER,
-    ROUTE_MEETINGS,
     ROUTE_CALENDAR_DAY,
     ROUTE_CALENDAR_WEEK,
     ROUTE_CALENDAR_MONTH,
@@ -36366,8 +36245,6 @@ function isRouteAllowed(
     route === ROUTE_NOTIFICATIONS
   )
     return true;
-  if (route === ROUTE_MESSENGER) return Boolean(perms.messenger);
-  if (route === ROUTE_MEETINGS) return Boolean(perms.meetings);
   if (route === ROUTE_HR) return true;
   if (route === ROUTE_LEAVE)
     return Boolean(perms.leave || perms.leaveWrite || perms.leaveReview);
@@ -36953,14 +36830,6 @@ async function navigateToRoute(
   const masterRoute = parseMasterRoute(route);
   if (masterRoute) syncMasterRouteContext(masterRoute);
 
-  if (route === ROUTE_MESSENGER) {
-    ensureMessengerState();
-  }
-
-  if (route === ROUTE_MEETINGS) {
-    ensureMeetingsState();
-  }
-
   let forceViewReload = false;
 
   if (route === ROUTE_REQUESTS) {
@@ -37075,14 +36944,6 @@ async function navigateToRoute(
     scrollToSelector("#view-reports");
   }
 
-  if (route === ROUTE_MESSENGER) {
-    scrollToSelector("#view-messenger");
-  }
-
-  if (route === ROUTE_MEETINGS) {
-    scrollToSelector("#view-meetings");
-  }
-
   if (FEATURE_SKELETON_ROUTES.has(route)) {
     openFeatureSkeletonSheet(route);
   }
@@ -37156,8 +37017,6 @@ function isViewAllowed(view, perms = getRolePermissions()) {
   if (raw === "ops") return isManagerShellRole(getNavigationRole());
   if (raw === "support-status") return isManagerShellRole(getNavigationRole());
   if (raw === "reports") return canViewReportsCenter();
-  if (raw === "messenger") return Boolean(perms.messenger);
-  if (raw === "meetings") return Boolean(perms.meetings);
   if (raw === "calendar") return Boolean(perms.calendar);
   const target = mapLegacyViewName(view);
   if (target === "dev-console") return Boolean(perms.tenantManage);
@@ -47859,18 +47718,6 @@ function getDesktopGlobalSearchItems() {
       keywords: ["근태", "attendance", "타임시트", "예외"],
     },
     {
-      label: "메신저",
-      route: ROUTE_MESSENGER,
-      hint: "대화와 공지방",
-      keywords: ["메신저", "채팅", "대화", "공지방", "messenger", "chat"],
-    },
-    {
-      label: "화상대화",
-      route: ROUTE_MEETINGS,
-      hint: "회의방과 세션",
-      keywords: ["회의", "화상", "미팅", "meeting", "video", "meetings"],
-    },
-    {
       label: role === "EMPLOYEE" ? "요청" : "승인",
       route: ROUTE_REQUESTS,
       hint: "요청 inbox",
@@ -48671,18 +48518,6 @@ function getGroupwareFoundationSummaryLabel() {
   return "조회 대기";
 }
 
-function getGroupwareMeetingsRolloutLabel() {
-  const rollout = state.integration.groupwareRollout;
-  const status = String(rollout?.readiness?.status || "")
-    .trim()
-    .toLowerCase();
-  if (status === "ready" || status === "passed") return "준비";
-  if (status === "blocked" || status === "failed") return "차단";
-  if (status === "pending") return "대기";
-  if (state.integration.groupwareRolloutError) return "조회 실패";
-  return "조회 대기";
-}
-
 function renderProfileSettingsRail() {
   const roleValue = $("#profileRailRoleValue");
   const tenantValue = $("#profileRailTenantValue");
@@ -48691,7 +48526,6 @@ function renderProfileSettingsRail() {
   const integrationValue = $("#profileRailIntegrationValue");
   const profileValue = $("#profileRailProfileValue");
   const groupwareValue = $("#profileRailGroupwareValue");
-  const meetingsValue = $("#profileRailMeetingsValue");
   const noteValue = $("#profileRailStatusNote");
 
   const roleLabel = state.user ? getRoleDisplayLabel(state.user.role) : "-";
@@ -48723,7 +48557,6 @@ function renderProfileSettingsRail() {
   const hasFlags = Object.keys(state.integration.flags || {}).length > 0;
   const selectedProfile = getSelectedGoogleSheetProfile();
   const groupwareLabel = getGroupwareFoundationSummaryLabel();
-  const rolloutLabel = getGroupwareMeetingsRolloutLabel();
 
   if (roleValue) roleValue.textContent = roleLabel;
   if (tenantValue) tenantValue.textContent = tenantLabel;
@@ -48746,9 +48579,6 @@ function renderProfileSettingsRail() {
   if (groupwareValue) {
     groupwareValue.textContent = canManageIntegrations() ? groupwareLabel : "-";
   }
-  if (meetingsValue) {
-    meetingsValue.textContent = canManageIntegrations() ? rolloutLabel : "-";
-  }
   if (noteValue) {
     if (!state.user) {
       noteValue.textContent = "로그인 후 설정을 확인할 수 있습니다.";
@@ -48757,8 +48587,8 @@ function renderProfileSettingsRail() {
         ? `활성 링크 ${String(selectedProfile.profile_name).trim()}`
         : "활성 링크 선택 대기";
       noteValue.textContent = canViewGroupwareFoundationPanel()
-        ? `${profilePhrase} · 그룹웨어 ${groupwareLabel} · 회의 rollout ${rolloutLabel}`
-        : `${profilePhrase} · 회의 rollout ${rolloutLabel}`;
+        ? `${profilePhrase} · 그룹웨어 ${groupwareLabel}`
+        : profilePhrase;
     } else if (!state.reminder.available) {
       noteValue.textContent = "현재 기기에서는 예약 알림을 지원하지 않습니다.";
     } else if (isReminderPermissionDenied()) {
@@ -48781,7 +48611,7 @@ function renderProfileSettingsRail() {
     ? {
         operations: ["role", "tenant", "integration", "lock"],
         integration: ["role", "tenant", "profile"],
-        advanced: ["role", "tenant", "groupware", "meetings"],
+        advanced: ["role", "tenant", "groupware"],
         account: ["role", "tenant"],
       }[activeSection] || ["role", "tenant"]
     : ["role", "tenant", "notification", "sync"];
@@ -48793,7 +48623,6 @@ function renderProfileSettingsRail() {
     integration: integrationValue?.closest(".profile-settings-rail-item"),
     profile: profileValue?.closest(".profile-settings-rail-item"),
     groupware: groupwareValue?.closest(".profile-settings-rail-item"),
-    meetings: meetingsValue?.closest(".profile-settings-rail-item"),
   };
   Object.entries(itemByKey).forEach(([key, element]) => {
     if (!(element instanceof HTMLElement)) return;
@@ -50207,8 +50036,6 @@ function getGroupwareFoundationGroupLabel(groupKey = "") {
   if (normalized === "leave") return "연차 ledger";
   if (normalized === "certificates") return "증명서";
   if (normalized === "mail") return "메일 허브";
-  if (normalized === "chat") return "메신저";
-  if (normalized === "meetings") return "화상대화";
   return normalized || "-";
 }
 
@@ -50256,7 +50083,6 @@ function renderGroupwareOpsSummary() {
   if (!(target instanceof HTMLElement)) return;
   const foundation = state.integration.groupwareFoundation;
   const compatibility = state.integration.groupwareCompatibility;
-  const rollout = state.integration.groupwareRollout;
   const readyGroups = Number(foundation?.database?.ready_group_count || 0);
   const totalGroups = Number(foundation?.database?.total_group_count || 0);
   const compatibilityCount = Array.isArray(
@@ -50264,115 +50090,17 @@ function renderGroupwareOpsSummary() {
   )
     ? compatibility.legacy_compatibility_routes.length
     : 0;
-  const rolloutChecks = Array.isArray(rollout?.rollout_checks)
-    ? rollout.rollout_checks.length
-    : 0;
-  const liveRooms = Number(rollout?.runtime?.live_room_count || 0);
-  const readinessLabel = getGroupwareStatusMeta(
-    rollout?.readiness?.status,
-  ).label;
 
   target.innerHTML = "";
   [
-    ["Foundation", totalGroups ? `${readyGroups}/${totalGroups}` : "-"],
-    ["호환 경로", `${compatibilityCount}개`],
-    ["회의 준비도", readinessLabel],
-    ["실시간 회의", `${liveRooms}개`],
-    ["Rollout 체크", `${rolloutChecks}건`],
+    ["Foundation", totalGroups ? String(readyGroups) + "/" + String(totalGroups) : "-"],
+    ["호환 경로", String(compatibilityCount) + "개"],
   ].forEach(([label, value]) => {
     const card = document.createElement("article");
     card.className = "profile-mail-summary-card";
-    card.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+    card.innerHTML = "<span>" + escapeHtml(label) + "</span><strong>" + escapeHtml(value) + "</strong>";
     target.appendChild(card);
   });
-}
-
-function renderGroupwareRolloutComposer() {
-  const composer = $("#groupwareRolloutComposer");
-  if (!(composer instanceof HTMLElement)) return;
-  const canWrite = canViewGroupwareFoundationPanel();
-  composer.classList.toggle("hidden", !canWrite);
-  const status = $("#groupwareRolloutCheckStatus");
-  if (status) {
-    status.textContent = canWrite
-      ? String(status.textContent || "").trim() ||
-        "관리자는 rollout 체크를 기록할 수 있습니다."
-      : "Developer / HQ Admin만 rollout 체크를 기록할 수 있습니다.";
-  }
-}
-
-function applyRecordedGroupwareRolloutCheck(row) {
-  const payload = row && typeof row === "object" ? row : null;
-  if (!payload) return;
-  const rollout =
-    state.integration.groupwareRollout &&
-    typeof state.integration.groupwareRollout === "object"
-      ? state.integration.groupwareRollout
-      : {
-          rollout_checks: [],
-          readiness: {},
-          runtime: {},
-          deployment_topology: {},
-        };
-  const nextChecks = Array.isArray(rollout.rollout_checks)
-    ? [...rollout.rollout_checks]
-    : [];
-  const nextRow = {
-    ...payload,
-    check_type: String(payload.check_type || "").trim(),
-    status: String(payload.status || "").trim(),
-    summary: String(payload.summary || "").trim(),
-  };
-  nextChecks.unshift(nextRow);
-  rollout.rollout_checks = nextChecks;
-
-  const passingChecks = nextChecks.filter((item) =>
-    ["ready", "passed"].includes(
-      String(item?.status || "")
-        .trim()
-        .toLowerCase(),
-    ),
-  );
-  const failingChecks = nextChecks.filter((item) =>
-    ["blocked", "failed"].includes(
-      String(item?.status || "")
-        .trim()
-        .toLowerCase(),
-    ),
-  );
-  rollout.readiness = {
-    ...(rollout.readiness || {}),
-    status: failingChecks.length
-      ? "blocked"
-      : passingChecks.length
-        ? "ready"
-        : "pending",
-    passing_check_count: passingChecks.length,
-    failing_check_count: failingChecks.length,
-    load_test_recorded: nextChecks.some(
-      (item) =>
-        String(item?.check_type || "")
-          .trim()
-          .toLowerCase() === "load_test" &&
-        ["ready", "passed"].includes(
-          String(item?.status || "")
-            .trim()
-            .toLowerCase(),
-        ),
-    ),
-    tenant_isolation_recorded: nextChecks.some(
-      (item) =>
-        String(item?.check_type || "")
-          .trim()
-          .toLowerCase() === "tenant_isolation" &&
-        ["ready", "passed"].includes(
-          String(item?.status || "")
-            .trim()
-            .toLowerCase(),
-        ),
-    ),
-  };
-  state.integration.groupwareRollout = rollout;
 }
 
 function renderGroupwareOpsCard() {
@@ -50384,27 +50112,21 @@ function renderGroupwareOpsCard() {
   }
 
   renderGroupwareOpsSummary();
-  renderGroupwareRolloutComposer();
 
   const foundationList = $("#groupwareFoundationList");
   const compatibilityList = $("#groupwareCompatibilityList");
-  const rolloutList = $("#groupwareRolloutList");
   const foundation = state.integration.groupwareFoundation;
   const compatibility = state.integration.groupwareCompatibility;
-  const rollout = state.integration.groupwareRollout;
   const foundationError = String(
     state.integration.groupwareFoundationError || "",
   ).trim();
   const compatibilityError = String(
     state.integration.groupwareCompatibilityError || "",
   ).trim();
-  const rolloutError = String(
-    state.integration.groupwareRolloutError || "",
-  ).trim();
 
   if ($("#groupwareFoundationStatus")) {
     const summary = foundation?.database
-      ? `준비 그룹 ${Number(foundation.database.ready_group_count || 0)}/${Number(foundation.database.total_group_count || 0)}`
+      ? "준비 그룹 " + String(Number(foundation.database.ready_group_count || 0)) + "/" + String(Number(foundation.database.total_group_count || 0))
       : foundationError ||
         (!canViewGroupwareFoundationPanel()
           ? "Developer / HQ Admin 전용"
@@ -50416,20 +50138,11 @@ function renderGroupwareOpsCard() {
       ? compatibility.legacy_compatibility_routes.length
       : 0;
     $("#groupwareCompatibilityStatus").textContent = compatibility
-      ? `legacy 호환 ${count}건`
+      ? "legacy 호환 " + String(count) + "건"
       : compatibilityError ||
         (!canViewGroupwareFoundationPanel()
           ? "Developer / HQ Admin 전용"
           : "호환 경로 조회 대기");
-  }
-  if ($("#groupwareRolloutStatus")) {
-    const readiness = getGroupwareStatusMeta(rollout?.readiness?.status);
-    const checks = Array.isArray(rollout?.rollout_checks)
-      ? rollout.rollout_checks.length
-      : 0;
-    $("#groupwareRolloutStatus").textContent = rollout
-      ? `준비도 ${readiness.label} · 체크 ${checks}건`
-      : rolloutError || "rollout 상태 조회 대기";
   }
 
   if (foundationList instanceof HTMLElement) {
@@ -50448,8 +50161,8 @@ function renderGroupwareOpsCard() {
             : [];
           const readyCount = Math.max(tables.length - missing.length, 0);
           const meta = missing.length
-            ? `테이블 ${readyCount}/${tables.length} · 누락 ${missing.slice(0, 2).join(", ")}${missing.length > 2 ? " 외" : ""}`
-            : `테이블 ${readyCount}/${tables.length} · 준비 완료`;
+            ? "테이블 " + String(readyCount) + "/" + String(tables.length) + " · 누락 " + missing.slice(0, 2).join(", ") + (missing.length > 2 ? " 외" : "")
+            : "테이블 " + String(readyCount) + "/" + String(tables.length) + " · 준비 완료";
           const pill = getGroupwareStatusMeta(
             groupValue?.ready
               ? "ready"
@@ -50471,7 +50184,7 @@ function renderGroupwareOpsCard() {
       renderCompactListEmpty(
         foundationList,
         "Developer / HQ Admin만 foundation을 볼 수 있습니다.",
-        "현재 계정에서는 회의 rollout만 확인할 수 있습니다.",
+        "현재 계정에서는 foundation 요약만 확인할 수 있습니다.",
       );
     } else if (foundationError) {
       renderCompactListEmpty(
@@ -50497,8 +50210,8 @@ function renderGroupwareOpsCard() {
         compatibilityList.appendChild(
           createMailHubListRow({
             title: String(row?.legacy_prefix || "-").trim() || "-",
-            meta: `${String(row?.future_module || "-").trim()} · Phase ${Number(row?.cutover_phase || 0) || "-"} · ${String(row?.adapter_strategy || "").trim()}`,
-            pillLabel: `P${Number(row?.cutover_phase || 0) || "-"}`,
+            meta: String(row?.future_module || "-").trim() + " · Phase " + String(Number(row?.cutover_phase || 0) || "-") + " · " + String(row?.adapter_strategy || "").trim(),
+            pillLabel: "P" + String(Number(row?.cutover_phase || 0) || "-"),
             pillClass: "status-pill status-pill-neutral",
           }),
         );
@@ -50522,155 +50235,7 @@ function renderGroupwareOpsCard() {
       );
     }
   }
-
-  if (rolloutList instanceof HTMLElement) {
-    clearList(rolloutList);
-    if (rollout) {
-      const readiness = getGroupwareStatusMeta(rollout?.readiness?.status);
-      const readinessMeta = [
-        `통과 ${Number(rollout?.readiness?.passing_check_count || 0)}건`,
-        `실패 ${Number(rollout?.readiness?.failing_check_count || 0)}건`,
-        rollout?.readiness?.load_test_recorded
-          ? "부하 테스트 완료"
-          : "부하 테스트 대기",
-        rollout?.readiness?.tenant_isolation_recorded
-          ? "테넌트 분리 확인"
-          : "테넌트 분리 대기",
-      ].join(" · ");
-      rolloutList.appendChild(
-        createMailHubListRow({
-          title: "회의 rollout 준비도",
-          meta: readinessMeta,
-          pillLabel: readiness.label,
-          pillClass: readiness.className,
-        }),
-      );
-
-      [
-        [
-          "RT Gateway",
-          rollout?.deployment_topology?.rt_gateway?.status,
-          String(
-            rollout?.deployment_topology?.rt_gateway?.public_url || "",
-          ).trim() || "public url 미설정",
-        ],
-        [
-          "Media SFU",
-          rollout?.deployment_topology?.media_sfu?.status,
-          String(
-            rollout?.deployment_topology?.media_sfu?.public_url || "",
-          ).trim() || "public url 미설정",
-        ],
-        [
-          "TURN",
-          rollout?.deployment_topology?.coturn?.status,
-          Array.isArray(rollout?.deployment_topology?.coturn?.uris) &&
-          rollout.deployment_topology.coturn.uris.length
-            ? `${rollout.deployment_topology.coturn.uris.length}개 URI`
-            : "TURN URI 미설정",
-        ],
-        [
-          "실행 중 런타임",
-          "active",
-          `room ${Number(rollout?.runtime?.room_count || 0)} · live ${Number(rollout?.runtime?.live_room_count || 0)} · session ${Number(rollout?.runtime?.live_session_count || 0)}`,
-        ],
-      ].forEach(([title, status, meta]) => {
-        const pill = getGroupwareStatusMeta(status);
-        rolloutList.appendChild(
-          createMailHubListRow({
-            title,
-            meta,
-            pillLabel: pill.label,
-            pillClass: pill.className,
-          }),
-        );
-      });
-
-      const checkRows = Array.isArray(rollout?.rollout_checks)
-        ? rollout.rollout_checks.slice(0, 4)
-        : [];
-      checkRows.forEach((item) => {
-        const pill = getGroupwareStatusMeta(item?.status);
-        const checkedAt = formatProfileStatusDateTime(
-          item?.checked_at || item?.created_at || "",
-        );
-        rolloutList.appendChild(
-          createMailHubListRow({
-            title: `${String(item?.check_type || "rollout_check").trim()} · ${String(item?.environment_key || "default").trim()}`,
-            meta: `${String(item?.summary || "").trim() || "요약 없음"} · ${checkedAt}`,
-            pillLabel: pill.label,
-            pillClass: pill.className,
-          }),
-        );
-      });
-    } else if (rolloutError) {
-      renderCompactListEmpty(
-        rolloutList,
-        "회의 rollout 상태를 불러오지 못했습니다.",
-        rolloutError,
-      );
-    } else {
-      renderCompactListEmpty(
-        rolloutList,
-        "회의 rollout 상태를 불러오는 중입니다.",
-      );
-    }
-  }
   renderProfileSettingsSections();
-}
-
-async function recordGroupwareRolloutCheck() {
-  if (!canViewGroupwareFoundationPanel()) {
-    showToast("rollout 체크 기록 권한이 없습니다.", "error", 2200);
-    return;
-  }
-  const environmentKey =
-    String($("#groupwareRolloutEnvironment")?.value || "default").trim() ||
-    "default";
-  const checkType = String($("#groupwareRolloutCheckType")?.value || "").trim();
-  const statusValue = String(
-    $("#groupwareRolloutCheckState")?.value || "",
-  ).trim();
-  const summary = String(
-    $("#groupwareRolloutCheckSummary")?.value || "",
-  ).trim();
-  if (!checkType || !statusValue || !summary) {
-    setInlineStatus(
-      "#groupwareRolloutCheckStatus",
-      "환경, 체크 종류, 상태, 요약을 모두 입력해 주세요.",
-      "error",
-    );
-    return;
-  }
-
-  setInlineStatus(
-    "#groupwareRolloutCheckStatus",
-    "rollout 체크를 기록하는 중...",
-    "info",
-  );
-  const created = await apiRequest("/meetings/rollout/checks", {
-    method: "POST",
-    body: {
-      environment_key: environmentKey,
-      check_type: checkType,
-      status: statusValue,
-      summary,
-      detail_json: {},
-    },
-  });
-  if ($("#groupwareRolloutCheckSummary")) {
-    $("#groupwareRolloutCheckSummary").value = "";
-  }
-  applyRecordedGroupwareRolloutCheck(created);
-  renderGroupwareOpsCard();
-  renderProfileSettingsRail();
-  setInlineStatus(
-    "#groupwareRolloutCheckStatus",
-    "rollout 체크를 기록했습니다.",
-    "success",
-  );
-  showToast("회의 rollout 체크를 기록했습니다.", "success", 1800);
-  await loadGroupwareAdminData({ force: true });
 }
 
 function renderMailHubCard() {
@@ -50918,10 +50483,8 @@ async function loadGroupwareAdminData({ force = false } = {}) {
   const hasCachedPayload = Boolean(
     state.integration.groupwareFoundation ||
     state.integration.groupwareCompatibility ||
-    state.integration.groupwareRollout ||
     state.integration.groupwareFoundationError ||
-    state.integration.groupwareCompatibilityError ||
-    state.integration.groupwareRolloutError,
+    state.integration.groupwareCompatibilityError,
   );
   const isFresh =
     !force &&
@@ -50934,18 +50497,16 @@ async function loadGroupwareAdminData({ force = false } = {}) {
     return {
       foundation: state.integration.groupwareFoundation,
       compatibility: state.integration.groupwareCompatibility,
-      rollout: state.integration.groupwareRollout,
     };
   }
 
   state.integration.groupwareFoundationError = "";
   state.integration.groupwareCompatibilityError = "";
-  state.integration.groupwareRolloutError = "";
   renderGroupwareOpsCard();
 
-  const tasks = [apiRequest("/meetings/rollout/status")];
+  const tasks = [];
   if (canViewGroupwareFoundationPanel()) {
-    tasks.unshift(
+    tasks.push(
       apiRequest("/groupware/foundation/status"),
       apiRequest("/groupware/foundation/compatibility"),
     );
@@ -50956,7 +50517,7 @@ async function loadGroupwareAdminData({ force = false } = {}) {
 
   const results = await Promise.allSettled(tasks);
   if (canViewGroupwareFoundationPanel()) {
-    const [foundationResult, compatibilityResult, rolloutResult] = results;
+    const [foundationResult, compatibilityResult] = results;
     if (foundationResult?.status === "fulfilled") {
       state.integration.groupwareFoundation =
         foundationResult.value && typeof foundationResult.value === "object"
@@ -50983,33 +50544,6 @@ async function loadGroupwareAdminData({ force = false } = {}) {
         "호환 경로를 불러오지 못했습니다.",
       );
     }
-
-    if (rolloutResult?.status === "fulfilled") {
-      state.integration.groupwareRollout =
-        rolloutResult.value && typeof rolloutResult.value === "object"
-          ? rolloutResult.value
-          : null;
-    } else {
-      state.integration.groupwareRollout = null;
-      state.integration.groupwareRolloutError = normalizeActionError(
-        rolloutResult?.reason,
-        "회의 rollout 상태를 불러오지 못했습니다.",
-      );
-    }
-  } else {
-    const [rolloutResult] = results;
-    if (rolloutResult?.status === "fulfilled") {
-      state.integration.groupwareRollout =
-        rolloutResult.value && typeof rolloutResult.value === "object"
-          ? rolloutResult.value
-          : null;
-    } else {
-      state.integration.groupwareRollout = null;
-      state.integration.groupwareRolloutError = normalizeActionError(
-        rolloutResult?.reason,
-        "회의 rollout 상태를 불러오지 못했습니다.",
-      );
-    }
   }
 
   state.integration.groupwareFetchedAt = Date.now();
@@ -51018,7 +50552,6 @@ async function loadGroupwareAdminData({ force = false } = {}) {
   return {
     foundation: state.integration.groupwareFoundation,
     compatibility: state.integration.groupwareCompatibility,
-    rollout: state.integration.groupwareRollout,
   };
 }
 
@@ -51945,8 +51478,6 @@ function clearSession() {
   state.reminder = createInitialReminderState();
   state.devAdmin = createInitialDevAdminState();
   state.integration = createInitialIntegrationState();
-  state.messenger = createInitialMessengerState();
-  state.meetings = createInitialMeetingsState();
   state.uiContext = createInitialUiContextState();
   state.viewRuntime = createInitialViewRuntimeState();
   state.taskProgress = createInitialTaskProgressState();
@@ -55393,8 +54924,6 @@ function showView(
   const panelTarget = targetView;
   [
     "home",
-    "messenger",
-    "meetings",
     "attendance-check",
     "ops",
     "support-status",
@@ -65310,2694 +64839,6 @@ function renderAttendanceViewFromCache() {
   queueViewSnapshotPersist("attendance");
 }
 
-const MESSENGER_REACTION_CHOICES = Object.freeze(["👍", "👀", "✅"]);
-const MESSENGER_SEARCH_MIN_CHARS = 2;
-
-function ensureMessengerState() {
-  if (!state.messenger || typeof state.messenger !== "object") {
-    state.messenger = createInitialMessengerState();
-  }
-  return state.messenger;
-}
-
-function getMessengerCurrentUserId() {
-  return String(
-    state.user?.id || state.user?.user_id || state.user?.account_id || "",
-  ).trim();
-}
-
-function normalizeMessengerConversationType(value = "") {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
-  return ["dm", "group", "announcement"].includes(normalized)
-    ? normalized
-    : "all";
-}
-
-function canCreateMessengerConversation() {
-  return Boolean(state.user && state.token && getRolePermissions()?.messenger);
-}
-
-function canCreateMessengerAnnouncement() {
-  return Boolean(
-    canCreateMessengerConversation() &&
-    (isManagerShellRole() ||
-      can("tenantAdmin") ||
-      can("attendanceReview") ||
-      can("leaveReview") ||
-      can("employeeWrite")),
-  );
-}
-
-function getMessengerPresenceSessionKey() {
-  const messenger = ensureMessengerState();
-  if (String(messenger.presenceSessionKey || "").trim()) {
-    return messenger.presenceSessionKey;
-  }
-  let nextKey = "";
-  try {
-    nextKey = String(
-      localStorage.getItem("RG_ARLS_MESSENGER_PRESENCE_SESSION") || "",
-    ).trim();
-  } catch {
-    nextKey = "";
-  }
-  if (!nextKey) {
-    nextKey = `messenger-${crypto.randomUUID()}`;
-    try {
-      localStorage.setItem("RG_ARLS_MESSENGER_PRESENCE_SESSION", nextKey);
-    } catch {
-      // ignore storage failure
-    }
-  }
-  messenger.presenceSessionKey = nextKey;
-  return nextKey;
-}
-
-async function ensureMessengerPresenceSession() {
-  if (!canCreateMessengerConversation()) return null;
-  const messenger = ensureMessengerState();
-  const sessionKey = getMessengerPresenceSessionKey();
-  const payload = await apiRequest("/messenger/presence/session", {
-    method: "PUT",
-    body: {
-      session_key: sessionKey,
-      status: "online",
-      device_type: "web",
-      meta_json: {
-        route: state.currentRoute || ROUTE_MESSENGER,
-        view: state.currentView || "messenger",
-      },
-    },
-  });
-  messenger.presenceSessionKey = sessionKey;
-  return payload;
-}
-
-function setMessengerStatusHint(message = "", level = "info") {
-  const el = $("#messengerStatusHint");
-  if (!(el instanceof HTMLElement)) return;
-  const text = String(message || "").trim();
-  if (!text) {
-    el.classList.add("hidden");
-    el.textContent = "";
-    return;
-  }
-  el.classList.remove("hidden");
-  setInlineStatus("#messengerStatusHint", text, level);
-}
-
-function syncMessengerCreateStatus(message = "", level = "info") {
-  const messenger = ensureMessengerState();
-  messenger.createStatusMessage = String(message || "").trim();
-  messenger.createStatusLevel = level;
-  const el = $("#messengerCreateStatus");
-  if (!(el instanceof HTMLElement)) return;
-  setInlineStatus(
-    "#messengerCreateStatus",
-    messenger.createStatusMessage,
-    level,
-  );
-}
-
-function resetMessengerCreateDraft({
-  createType = "",
-  preserveOpen = true,
-} = {}) {
-  const messenger = ensureMessengerState();
-  const nextType = normalizeMessengerConversationType(
-    createType || messenger.createType || "group",
-  );
-  messenger.createType = nextType === "all" ? "group" : nextType;
-  messenger.createTitle = "";
-  messenger.createDescription = "";
-  messenger.createRoomKey = "";
-  messenger.createScopeType = "tenant";
-  messenger.createSearch = "";
-  messenger.createMemberUserIds = [];
-  messenger.directoryRows = [];
-  messenger.directoryQuery = "";
-  messenger.directoryError = "";
-  messenger.createStatusMessage = "";
-  messenger.createStatusLevel = "info";
-  if (!preserveOpen) {
-    messenger.createOpen = false;
-  }
-}
-
-function getMessengerConversationTitle(conversation = {}) {
-  const type = String(conversation?.conversation_type || "")
-    .trim()
-    .toLowerCase();
-  const title = String(conversation?.title || "").trim();
-  if (title) return title;
-  const currentUserId = getMessengerCurrentUserId();
-  const members = Array.isArray(conversation?.members)
-    ? conversation.members
-    : [];
-  if (type === "dm") {
-    const other =
-      members.find(
-        (member) => String(member?.user_id || "").trim() !== currentUserId,
-      ) || members[0];
-    return (
-      String(other?.full_name || other?.username || "직접 메시지").trim() ||
-      "직접 메시지"
-    );
-  }
-  return type === "announcement" ? "공지방" : "새 그룹방";
-}
-
-function getMessengerConversationSummary(conversation = {}) {
-  const members = Array.isArray(conversation?.members)
-    ? conversation.members
-    : [];
-  const currentUserId = getMessengerCurrentUserId();
-  const otherNames = members
-    .filter((member) => String(member?.user_id || "").trim() !== currentUserId)
-    .map((member) => String(member?.full_name || member?.username || "").trim())
-    .filter(Boolean);
-  const lastMessage =
-    conversation?.last_message && typeof conversation.last_message === "object"
-      ? conversation.last_message
-      : null;
-  if (lastMessage) {
-    const sender = String(
-      lastMessage?.sender_name || lastMessage?.sender_username || "",
-    ).trim();
-    const body = String(lastMessage?.body || "").trim();
-    const preview =
-      body ||
-      (String(lastMessage?.message_type || "").trim() === "poll"
-        ? "투표 메시지"
-        : "새 메시지");
-    return [sender, preview].filter(Boolean).join(" · ");
-  }
-  if (
-    String(conversation?.conversation_type || "")
-      .trim()
-      .toLowerCase() === "dm"
-  ) {
-    return otherNames[0] || "직접 메시지";
-  }
-  const siteName = String(conversation?.site_name || "").trim();
-  return (
-    [siteName, otherNames.slice(0, 3).join(", ")].filter(Boolean).join(" · ") ||
-    "참여자 정보 없음"
-  );
-}
-
-function getMessengerConversationRowsForRender() {
-  const messenger = ensureMessengerState();
-  const query = String(messenger.searchQuery || "")
-    .trim()
-    .toLowerCase();
-  const typeFilter = normalizeMessengerConversationType(
-    messenger.typeFilter || "all",
-  );
-  const rows = Array.isArray(messenger.rows) ? messenger.rows : [];
-  return rows.filter((row) => {
-    const type = String(row?.conversation_type || "")
-      .trim()
-      .toLowerCase();
-    if (typeFilter !== "all" && type !== typeFilter) return false;
-    if (!query) return true;
-    const haystack = [
-      getMessengerConversationTitle(row),
-      row?.description,
-      row?.site_name,
-      ...(Array.isArray(row?.members)
-        ? row.members.flatMap((member) => [
-            member?.full_name,
-            member?.username,
-            member?.site_name,
-          ])
-        : []),
-    ]
-      .map((value) =>
-        String(value || "")
-          .trim()
-          .toLowerCase(),
-      )
-      .filter(Boolean)
-      .join(" ");
-    return haystack.includes(query);
-  });
-}
-
-async function loadMessengerConversations({ force = false } = {}) {
-  const messenger = ensureMessengerState();
-  messenger.loading = true;
-  messenger.error = "";
-  renderMessengerWorkspace();
-  try {
-    const payload = await apiRequest("/messenger/conversations?limit=120");
-    const rows = Array.isArray(payload?.items) ? payload.items : [];
-    messenger.rows = rows;
-    messenger.fetchedAt = Date.now();
-    const selectedId = String(messenger.selectedConversationId || "").trim();
-    const hasSelected = rows.some(
-      (row) => String(row?.id || "").trim() === selectedId,
-    );
-    messenger.selectedConversationId = hasSelected
-      ? selectedId
-      : String(rows[0]?.id || "").trim();
-    messenger.error = "";
-    setMessengerStatusHint(
-      rows.length ? `대화 ${rows.length}개` : "참여 중인 대화가 없습니다.",
-      rows.length ? "success" : "info",
-    );
-    renderMessengerWorkspace();
-    return rows;
-  } catch (error) {
-    messenger.error = normalizeActionError(
-      error,
-      "메신저 대화 목록을 불러오지 못했습니다.",
-    );
-    setMessengerStatusHint(messenger.error, "error");
-    renderMessengerWorkspace();
-    return [];
-  } finally {
-    messenger.loading = false;
-    renderMessengerWorkspace();
-  }
-}
-
-async function loadMessengerConversationDetail(
-  conversationId,
-  { force = false } = {},
-) {
-  const messenger = ensureMessengerState();
-  const id = String(conversationId || "").trim();
-  if (!id) return null;
-  if (!force && messenger.detailById && messenger.detailById[id]) {
-    return messenger.detailById[id];
-  }
-  messenger.detailLoading = true;
-  renderMessengerWorkspace();
-  try {
-    const detail = await apiRequest(
-      `/messenger/conversations/${encodeURIComponent(id)}`,
-    );
-    messenger.detailById = messenger.detailById || {};
-    messenger.detailById[id] =
-      detail && typeof detail === "object" ? detail : {};
-    renderMessengerWorkspace();
-    return messenger.detailById[id];
-  } catch (error) {
-    setMessengerStatusHint(
-      normalizeActionError(error, "대화 상세를 불러오지 못했습니다."),
-      "error",
-    );
-    throw error;
-  } finally {
-    messenger.detailLoading = false;
-    renderMessengerWorkspace();
-  }
-}
-
-async function markMessengerConversationRead(conversationId, messageId = "") {
-  const messenger = ensureMessengerState();
-  const id = String(conversationId || "").trim();
-  if (!id) return null;
-  const normalizedMessageId = String(messageId || "").trim();
-  const result = await apiRequest(
-    `/messenger/conversations/${encodeURIComponent(id)}/read`,
-    {
-      method: "POST",
-      body: {
-        message_id: normalizedMessageId || null,
-      },
-    },
-  );
-  messenger.rows = (Array.isArray(messenger.rows) ? messenger.rows : []).map(
-    (row) =>
-      String(row?.id || "").trim() === id ? { ...row, unread_count: 0 } : row,
-  );
-  if (messenger.detailById?.[id]) {
-    messenger.detailById[id] = {
-      ...messenger.detailById[id],
-      unread_count: 0,
-    };
-  }
-  return result;
-}
-
-async function loadMessengerMessages(conversationId, { force = false } = {}) {
-  const messenger = ensureMessengerState();
-  const id = String(conversationId || "").trim();
-  if (!id) return [];
-  if (
-    !force &&
-    messenger.messagesByConversationId &&
-    Array.isArray(messenger.messagesByConversationId[id])
-  ) {
-    renderMessengerWorkspace();
-    return messenger.messagesByConversationId[id];
-  }
-  messenger.detailLoading = true;
-  renderMessengerWorkspace();
-  try {
-    const payload = await apiRequest(
-      `/messenger/conversations/${encodeURIComponent(id)}/messages?limit=120`,
-    );
-    const rows = Array.isArray(payload?.items) ? payload.items : [];
-    messenger.messagesByConversationId =
-      messenger.messagesByConversationId || {};
-    messenger.messagesByConversationId[id] = rows;
-    const lastMessageId = String(rows[rows.length - 1]?.id || "").trim();
-    if (lastMessageId) {
-      await markMessengerConversationRead(id, lastMessageId);
-    }
-    renderMessengerWorkspace();
-    return rows;
-  } catch (error) {
-    setMessengerStatusHint(
-      normalizeActionError(error, "메시지를 불러오지 못했습니다."),
-      "error",
-    );
-    throw error;
-  } finally {
-    messenger.detailLoading = false;
-    renderMessengerWorkspace();
-  }
-}
-
-async function loadMessengerSearchResults(query = "") {
-  const messenger = ensureMessengerState();
-  const normalizedQuery = String(query || "").trim();
-  messenger.messageSearchQuery = normalizedQuery;
-  if (normalizedQuery.length < MESSENGER_SEARCH_MIN_CHARS) {
-    messenger.searchResults = [];
-    messenger.searchError = "";
-    messenger.searchLoading = false;
-    renderMessengerWorkspace();
-    return [];
-  }
-  messenger.searchLoading = true;
-  messenger.searchError = "";
-  renderMessengerWorkspace();
-  try {
-    const payload = await apiRequest(
-      `/messenger/search/messages?q=${encodeURIComponent(normalizedQuery)}&limit=20`,
-    );
-    messenger.searchResults = Array.isArray(payload?.items)
-      ? payload.items
-      : [];
-    renderMessengerWorkspace();
-    return messenger.searchResults;
-  } catch (error) {
-    messenger.searchResults = [];
-    messenger.searchError = normalizeActionError(
-      error,
-      "메시지 검색에 실패했습니다.",
-    );
-    renderMessengerWorkspace();
-    return [];
-  } finally {
-    messenger.searchLoading = false;
-    renderMessengerWorkspace();
-  }
-}
-
-async function loadMessengerDirectory({ force = false } = {}) {
-  const messenger = ensureMessengerState();
-  const query = String(messenger.createSearch || "").trim();
-  const cacheKey = `${query}`.toLowerCase();
-  if (
-    !force &&
-    messenger.directoryQuery === cacheKey &&
-    Array.isArray(messenger.directoryRows) &&
-    messenger.directoryRows.length
-  ) {
-    return messenger.directoryRows;
-  }
-  messenger.directoryLoading = true;
-  messenger.directoryError = "";
-  renderMessengerWorkspace();
-  try {
-    const rows = await getScheduleDataProvider().listEmployees({
-      search: query,
-      includeAccount: true,
-    });
-    const currentUserId = getMessengerCurrentUserId();
-    const filtered = (Array.isArray(rows) ? rows : [])
-      .filter((row) => {
-        const userId = String(row?.user_id || "").trim();
-        const linkedUsername = getEmployeeLinkedAccountUsername(row);
-        if (!userId && !linkedUsername) return false;
-        if (currentUserId && userId === currentUserId) return false;
-        return true;
-      })
-      .map((row) => ({
-        ...row,
-        __messengerUserId: String(row?.user_id || "").trim(),
-        __messengerAccount: getEmployeeLinkedAccountUsername(row),
-      }))
-      .sort((a, b) =>
-        String(a?.full_name || a?.name || "").localeCompare(
-          String(b?.full_name || b?.name || ""),
-          "ko",
-        ),
-      );
-    messenger.directoryRows = filtered;
-    messenger.directoryQuery = cacheKey;
-    renderMessengerWorkspace();
-    return filtered;
-  } catch (error) {
-    messenger.directoryRows = [];
-    messenger.directoryError = normalizeActionError(
-      error,
-      "참여자 목록을 불러오지 못했습니다.",
-    );
-    renderMessengerWorkspace();
-    return [];
-  } finally {
-    messenger.directoryLoading = false;
-    renderMessengerWorkspace();
-  }
-}
-
-function renderMessengerTypeTabs() {
-  const messenger = ensureMessengerState();
-  const activeType = normalizeMessengerConversationType(
-    messenger.typeFilter || "all",
-  );
-  document
-    .querySelectorAll('[data-action="messenger-filter-type"]')
-    .forEach((button) => {
-      const type = normalizeMessengerConversationType(
-        button.getAttribute("data-type") || "all",
-      );
-      button.classList.toggle("active", type === activeType);
-    });
-}
-
-function renderMessengerCreatePanel() {
-  const messenger = ensureMessengerState();
-  const panel = $("#messengerCreatePanel");
-  if (!(panel instanceof HTMLElement)) return;
-  const canCreate = canCreateMessengerConversation();
-  panel.classList.toggle("hidden", !messenger.createOpen || !canCreate);
-  const toggleBtn = $("#messengerCreateToggleBtn");
-  if (toggleBtn instanceof HTMLButtonElement) {
-    toggleBtn.disabled = !canCreate;
-    toggleBtn.textContent = messenger.createOpen ? "대화 닫기" : "대화 시작";
-  }
-
-  const createType = normalizeMessengerConversationType(
-    messenger.createType || "group",
-  );
-  if (createType === "announcement" && !canCreateMessengerAnnouncement()) {
-    messenger.createType = "group";
-  }
-  const normalizedCreateType = normalizeMessengerConversationType(
-    messenger.createType || "group",
-  );
-  document
-    .querySelectorAll('[data-action="messenger-create-type"]')
-    .forEach((button) => {
-      const type = normalizeMessengerConversationType(
-        button.getAttribute("data-type") || "group",
-      );
-      const isAnnouncement = type === "announcement";
-      button.classList.toggle("active", type === normalizedCreateType);
-      button.classList.toggle(
-        "hidden",
-        isAnnouncement && !canCreateMessengerAnnouncement(),
-      );
-    });
-
-  const titleInput = $("#messengerCreateTitle");
-  const roomKeyInput = $("#messengerCreateRoomKey");
-  const descriptionInput = $("#messengerCreateDescription");
-  const scopeSelect = $("#messengerCreateScopeType");
-  const searchInput = $("#messengerCreateSearch");
-  if (titleInput instanceof HTMLInputElement) {
-    titleInput.value = String(messenger.createTitle || "");
-    titleInput.disabled = normalizedCreateType === "dm";
-    titleInput
-      .closest("label")
-      ?.classList.toggle("hidden", normalizedCreateType === "dm");
-  }
-  if (roomKeyInput instanceof HTMLInputElement) {
-    roomKeyInput.value = String(messenger.createRoomKey || "");
-    roomKeyInput.disabled = normalizedCreateType !== "announcement";
-    roomKeyInput
-      .closest("label")
-      ?.classList.toggle("hidden", normalizedCreateType !== "announcement");
-  }
-  if (descriptionInput instanceof HTMLTextAreaElement) {
-    descriptionInput.value = String(messenger.createDescription || "");
-  }
-  if (scopeSelect instanceof HTMLSelectElement) {
-    scopeSelect.value = String(messenger.createScopeType || "tenant");
-    scopeSelect.disabled = normalizedCreateType !== "announcement";
-    scopeSelect
-      .closest("label")
-      ?.classList.toggle("hidden", normalizedCreateType !== "announcement");
-  }
-  if (searchInput instanceof HTMLInputElement) {
-    searchInput.value = String(messenger.createSearch || "");
-  }
-
-  const memberList = $("#messengerCreateMemberList");
-  const selectedIds = new Set(
-    (Array.isArray(messenger.createMemberUserIds)
-      ? messenger.createMemberUserIds
-      : []
-    )
-      .map((value) => String(value || "").trim())
-      .filter(Boolean),
-  );
-  const memberMeta = $("#messengerCreateMemberMeta");
-  if (memberMeta instanceof HTMLElement) {
-    memberMeta.textContent =
-      normalizedCreateType === "dm"
-        ? `${selectedIds.size}명 선택 · 1명 필요`
-        : `${selectedIds.size}명 선택`;
-  }
-  if (memberList instanceof HTMLElement) {
-    clearList(memberList);
-    if (messenger.directoryLoading) {
-      renderSkeleton(memberList, 4);
-    } else if (messenger.directoryError) {
-      renderCompactListEmpty(
-        memberList,
-        "참여자 목록을 불러오지 못했습니다.",
-        messenger.directoryError,
-      );
-    } else if (
-      !(
-        Array.isArray(messenger.directoryRows) && messenger.directoryRows.length
-      )
-    ) {
-      renderCompactListEmpty(
-        memberList,
-        "선택 가능한 참여자가 없습니다.",
-        "계정 연결된 직원만 대화에 추가할 수 있습니다.",
-      );
-    } else {
-      messenger.directoryRows.forEach((row) => {
-        const userId = String(
-          row?.__messengerUserId || row?.user_id || "",
-        ).trim();
-        if (!userId) return;
-        const li = document.createElement("li");
-        li.className = `messenger-member-row${selectedIds.has(userId) ? " is-selected" : ""}`;
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "messenger-member-button";
-        button.dataset.action = "messenger-toggle-member";
-        button.dataset.userId = userId;
-        const main = document.createElement("div");
-        main.className = "messenger-member-main";
-        const name = document.createElement("strong");
-        name.textContent =
-          String(
-            row?.full_name ||
-              row?.name ||
-              row?.employee_name ||
-              row?.employee_code ||
-              "직원",
-          ).trim() || "직원";
-        const account = document.createElement("span");
-        account.className = "messenger-member-account";
-        account.textContent =
-          [
-            String(row?.employee_code || "").trim(),
-            String(row?.site_name || row?.site_code || "").trim(),
-            String(row?.__messengerAccount || "").trim(),
-          ]
-            .filter(Boolean)
-            .join(" · ") || "계정 연결됨";
-        main.append(name, account);
-        const check = document.createElement("span");
-        check.className = "messenger-member-check";
-        check.textContent = selectedIds.has(userId) ? "선택됨" : "선택";
-        button.append(main, check);
-        li.appendChild(button);
-        memberList.appendChild(li);
-      });
-    }
-  }
-
-  const defaultStatusMessage =
-    normalizedCreateType === "dm"
-      ? "상대 1명을 선택하면 바로 DM을 만듭니다."
-      : normalizedCreateType === "announcement"
-        ? "공지방은 관리자 권한과 room key가 필요합니다."
-        : "그룹방 이름 없이도 먼저 만들고 대화 안에서 정리할 수 있습니다.";
-  syncMessengerCreateStatus(
-    String(messenger.createStatusMessage || "").trim() || defaultStatusMessage,
-    messenger.createStatusLevel || "info",
-  );
-}
-
-function renderMessengerConversationList() {
-  const messenger = ensureMessengerState();
-  const list = $("#messengerConversationList");
-  const meta = $("#messengerListMeta");
-  if (!(list instanceof HTMLElement)) return;
-  const rows = getMessengerConversationRowsForRender();
-  if (meta instanceof HTMLElement) {
-    meta.textContent = `${rows.length}개`;
-  }
-  clearList(list);
-  if (
-    messenger.loading &&
-    !(Array.isArray(messenger.rows) && messenger.rows.length)
-  ) {
-    renderSkeleton(list, 5);
-    return;
-  }
-  if (!rows.length) {
-    renderCompactListEmpty(
-      list,
-      "표시할 대화가 없습니다.",
-      "새 대화를 만들거나 검색어를 비워 주세요.",
-    );
-    return;
-  }
-  rows.forEach((row) => {
-    const conversationId = String(row?.id || "").trim();
-    if (!conversationId) return;
-    const isSelected =
-      conversationId === String(messenger.selectedConversationId || "").trim();
-    const li = document.createElement("li");
-    li.className = `messenger-conversation-item${isSelected ? " is-selected" : ""}`;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `messenger-conversation-row${isSelected ? " active" : ""}`;
-    button.dataset.action = "messenger-open-conversation";
-    button.dataset.conversationId = conversationId;
-    button.setAttribute("aria-current", isSelected ? "true" : "false");
-    const main = document.createElement("div");
-    main.className = "messenger-conversation-main";
-    const titleRow = document.createElement("div");
-    titleRow.className = "messenger-conversation-title-row";
-    const title = document.createElement("strong");
-    title.className = "messenger-conversation-title";
-    title.textContent = getMessengerConversationTitle(row);
-    titleRow.appendChild(title);
-    const updatedAt = document.createElement("span");
-    updatedAt.className = "messenger-conversation-updated";
-    updatedAt.textContent = formatIsoToLocalLabel(
-      row?.updated_at || row?.created_at || "",
-    );
-    titleRow.appendChild(updatedAt);
-    const metaRow = document.createElement("div");
-    metaRow.className = "messenger-conversation-meta";
-    metaRow.textContent = getMessengerConversationSummary(row);
-    main.append(titleRow, metaRow);
-    button.appendChild(main);
-    const side = document.createElement("div");
-    side.className = "messenger-conversation-side";
-    const conversationType = String(row?.conversation_type || "group")
-      .trim()
-      .toLowerCase();
-    const typePill = document.createElement("span");
-    typePill.className = `status-pill ${conversationType === "announcement" ? "status-pill-warn" : "status-pill-neutral"}`;
-    typePill.textContent =
-      conversationType === "dm"
-        ? "DM"
-        : conversationType === "announcement"
-          ? "공지방"
-          : "그룹";
-    side.appendChild(typePill);
-    const unread = Math.max(Number(row?.unread_count || 0), 0);
-    if (unread > 0) {
-      const unreadBadge = document.createElement("span");
-      unreadBadge.className = "messenger-unread-badge";
-      unreadBadge.textContent = unread > 99 ? "99+" : String(unread);
-      side.appendChild(unreadBadge);
-    }
-    button.appendChild(side);
-    li.appendChild(button);
-    list.appendChild(li);
-  });
-}
-
-function renderMessengerThreadHead() {
-  const messenger = ensureMessengerState();
-  const target = $("#messengerThreadHead");
-  if (!(target instanceof HTMLElement)) return;
-  const conversationId = String(messenger.selectedConversationId || "").trim();
-  const detail = messenger.detailById?.[conversationId] || null;
-  if (!conversationId || !detail) {
-    target.innerHTML = `
-      <div>
-        <strong>대화를 선택해 주세요.</strong>
-        <p class="muted">좌측 목록에서 대화를 열면 메시지가 이 영역에 표시됩니다.</p>
-      </div>
-    `;
-    return;
-  }
-  const members = Array.isArray(detail?.members) ? detail.members : [];
-  const memberText = members
-    .map((member) => String(member?.full_name || member?.username || "").trim())
-    .filter(Boolean)
-    .join(", ");
-  const conversationType = String(detail?.conversation_type || "")
-    .trim()
-    .toLowerCase();
-  const scopeType = String(detail?.announcement_room?.scope_type || "")
-    .trim()
-    .toLowerCase();
-  const metaParts = [
-    conversationType === "dm"
-      ? "DM"
-      : conversationType === "announcement"
-        ? "공지방"
-        : "그룹",
-    detail?.site_name ? `현장 ${String(detail.site_name).trim()}` : "",
-    conversationType === "announcement" && detail?.announcement_room?.room_key
-      ? `키 ${String(detail.announcement_room.room_key).trim()} · ${scopeType === "site" ? "현장 범위" : "회사 범위"}`
-      : "",
-  ].filter(Boolean);
-  target.innerHTML = "";
-  const main = document.createElement("div");
-  main.className = "messenger-thread-title";
-  const title = document.createElement("strong");
-  title.textContent = getMessengerConversationTitle(detail);
-  const sub = document.createElement("p");
-  sub.className = "muted";
-  sub.textContent =
-    [String(detail?.description || "").trim(), memberText]
-      .filter(Boolean)
-      .join(" · ") || "참여자 정보 없음";
-  main.append(title, sub);
-  const side = document.createElement("div");
-  side.className = "messenger-thread-side";
-  metaParts.forEach((item) => {
-    const span = document.createElement("span");
-    span.className = "messenger-thread-meta";
-    span.textContent = item;
-    side.appendChild(span);
-  });
-  target.append(main, side);
-}
-
-function renderMessengerSearchResults() {
-  const messenger = ensureMessengerState();
-  const list = $("#messengerSearchResults");
-  if (!(list instanceof HTMLElement)) return;
-  const query = String(messenger.messageSearchQuery || "").trim();
-  const results = Array.isArray(messenger.searchResults)
-    ? messenger.searchResults
-    : [];
-  list.classList.toggle(
-    "hidden",
-    !query && !messenger.searchLoading && !messenger.searchError,
-  );
-  clearList(list);
-  if (!query) {
-    list.classList.add("hidden");
-    return;
-  }
-  list.classList.remove("hidden");
-  if (messenger.searchLoading) {
-    renderSkeleton(list, 2);
-    return;
-  }
-  if (messenger.searchError) {
-    renderCompactListEmpty(
-      list,
-      "메시지 검색에 실패했습니다.",
-      messenger.searchError,
-    );
-    return;
-  }
-  if (!results.length) {
-    renderCompactListEmpty(
-      list,
-      "검색 결과가 없습니다.",
-      "검색어를 바꿔 다시 확인해 주세요.",
-    );
-    return;
-  }
-  results.forEach((entry) => {
-    const message =
-      entry?.message && typeof entry.message === "object" ? entry.message : {};
-    const conversation =
-      entry?.conversation && typeof entry.conversation === "object"
-        ? entry.conversation
-        : {};
-    const li = document.createElement("li");
-    li.className = "messenger-search-result-item";
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "messenger-search-result";
-    button.dataset.action = "messenger-search-result-open";
-    button.dataset.conversationId = String(
-      message?.conversation_id || conversation?.id || "",
-    ).trim();
-    button.dataset.messageId = String(message?.id || "").trim();
-    const title = document.createElement("strong");
-    title.textContent = getMessengerConversationTitle(conversation);
-    const body = document.createElement("span");
-    body.textContent = String(message?.body || "").trim() || "본문 없음";
-    const meta = document.createElement("span");
-    meta.className = "messenger-search-result-meta";
-    meta.textContent = [
-      String(message?.sender_name || message?.sender_username || "").trim(),
-      formatIsoToLocalLabel(message?.created_at || ""),
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    button.append(title, body, meta);
-    li.appendChild(button);
-    list.appendChild(li);
-  });
-}
-
-function renderMessengerMessages() {
-  const messenger = ensureMessengerState();
-  const list = $("#messengerMessageList");
-  if (!(list instanceof HTMLElement)) return;
-  const conversationId = String(messenger.selectedConversationId || "").trim();
-  const rows = Array.isArray(
-    messenger.messagesByConversationId?.[conversationId],
-  )
-    ? messenger.messagesByConversationId[conversationId]
-    : [];
-  clearList(list);
-  if (!conversationId) {
-    renderCompactListEmpty(
-      list,
-      "대화를 선택해 주세요.",
-      "좌측에서 대화를 열면 스레드가 표시됩니다.",
-    );
-    return;
-  }
-  if (messenger.detailLoading && !rows.length) {
-    renderSkeleton(list, 4);
-    return;
-  }
-  if (!rows.length) {
-    renderCompactListEmpty(
-      list,
-      "아직 메시지가 없습니다.",
-      "첫 메시지로 대화를 시작해 보세요.",
-    );
-    return;
-  }
-  const currentUserId = getMessengerCurrentUserId();
-  rows.forEach((message) => {
-    const li = document.createElement("li");
-    const isMine = Boolean(
-      message?.is_mine ||
-      (currentUserId &&
-        String(message?.sender_user_id || "").trim() === currentUserId),
-    );
-    li.className = `messenger-message-row${isMine ? " is-mine" : ""}${String(messenger.highlightMessageId || "").trim() === String(message?.id || "").trim() ? " is-highlighted" : ""}`;
-    li.dataset.messageId = String(message?.id || "").trim();
-
-    const stack = document.createElement("div");
-    stack.className = "messenger-message-stack";
-    const meta = document.createElement("div");
-    meta.className = "messenger-message-meta";
-    meta.textContent = [
-      !isMine
-        ? String(
-            message?.sender_name || message?.sender_username || "사용자",
-          ).trim()
-        : "나",
-      formatIsoToLocalLabel(message?.created_at || ""),
-      message?.edited_at ? "수정됨" : "",
-    ]
-      .filter(Boolean)
-      .join(" · ");
-
-    const bubble = document.createElement("div");
-    bubble.className = "messenger-message-bubble";
-    bubble.textContent =
-      String(
-        message?.deleted_at ? "삭제된 메시지입니다." : message?.body || "",
-      ).trim() ||
-      (String(message?.message_type || "").trim() === "poll"
-        ? "투표 메시지"
-        : "메시지 없음");
-
-    const reactions = document.createElement("div");
-    reactions.className = "messenger-message-reactions";
-    const reactionMap = new Map();
-    (Array.isArray(message?.reactions) ? message.reactions : []).forEach(
-      (item) => {
-        reactionMap.set(String(item?.reaction || "").trim(), item);
-      },
-    );
-    MESSENGER_REACTION_CHOICES.forEach((reaction) => {
-      const reactionInfo = reactionMap.get(reaction) || null;
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `messenger-reaction-chip${reactionInfo?.reacted_by_me ? " is-active" : ""}`;
-      button.dataset.action = "messenger-reaction-toggle";
-      button.dataset.messageId = String(message?.id || "").trim();
-      button.dataset.reaction = reaction;
-      button.dataset.reacted = reactionInfo?.reacted_by_me ? "true" : "false";
-      button.textContent =
-        `${reaction} ${reactionInfo?.count ? reactionInfo.count : ""}`.trim();
-      reactions.appendChild(button);
-    });
-
-    stack.append(meta, bubble, reactions);
-    li.appendChild(stack);
-    list.appendChild(li);
-  });
-
-  const highlighted = String(messenger.highlightMessageId || "").trim();
-  if (highlighted) {
-    const target = list.querySelector(`[data-message-id="${highlighted}"]`);
-    if (target instanceof HTMLElement) {
-      requestAnimationFrame(() => {
-        target.scrollIntoView({ behavior: "smooth", block: "center" });
-      });
-    }
-  }
-}
-
-function renderMessengerComposer() {
-  const messenger = ensureMessengerState();
-  const input = $("#messengerComposerInput");
-  const meta = $("#messengerComposerMeta");
-  const sendBtn = document.querySelector(
-    '[data-action="messenger-submit-message"]',
-  );
-  const conversationId = String(messenger.selectedConversationId || "").trim();
-  const disabled = !conversationId || messenger.sending;
-  if (input instanceof HTMLTextAreaElement) {
-    input.disabled = disabled;
-    input.value = String(messenger.composerBody || "");
-    input.placeholder = conversationId
-      ? "메시지를 입력하세요."
-      : "대화를 선택하면 입력할 수 있습니다.";
-  }
-  if (sendBtn instanceof HTMLButtonElement) {
-    sendBtn.disabled = disabled || !String(messenger.composerBody || "").trim();
-  }
-  if (meta instanceof HTMLElement) {
-    meta.textContent = conversationId
-      ? messenger.sending
-        ? "메시지 전송 중..."
-        : "Enter 대신 버튼으로 전송합니다."
-      : "대화를 선택하면 전송할 수 있습니다.";
-  }
-}
-
-function renderMessengerWorkspace() {
-  const messenger = ensureMessengerState();
-  renderMessengerTypeTabs();
-  renderMessengerCreatePanel();
-  renderMessengerConversationList();
-  renderMessengerThreadHead();
-  renderMessengerSearchResults();
-  renderMessengerMessages();
-  renderMessengerComposer();
-  const subtitle = $("#messengerListSubtitle");
-  if (subtitle instanceof HTMLElement) {
-    subtitle.textContent = messenger.loading
-      ? "대화 목록을 불러오는 중입니다."
-      : "최근 업데이트 순으로 정렬됩니다.";
-  }
-  queueViewSnapshotPersist("messenger");
-}
-
-async function openMessengerConversation(
-  conversationId,
-  { force = false } = {},
-) {
-  const messenger = ensureMessengerState();
-  const id = String(conversationId || "").trim();
-  if (!id) return null;
-  messenger.selectedConversationId = id;
-  messenger.highlightMessageId = "";
-  renderMessengerWorkspace();
-  await Promise.all([
-    loadMessengerConversationDetail(id, { force }),
-    loadMessengerMessages(id, { force }),
-  ]);
-  return messenger.detailById?.[id] || null;
-}
-
-async function submitMessengerMessage() {
-  const messenger = ensureMessengerState();
-  const conversationId = String(messenger.selectedConversationId || "").trim();
-  const body = String(messenger.composerBody || "").trim();
-  if (!conversationId) {
-    showToast("메시지를 보낼 대화를 먼저 선택해 주세요.", "info", 2200);
-    return;
-  }
-  if (!body) {
-    showToast("메시지를 입력해 주세요.", "info", 1800);
-    return;
-  }
-  messenger.sending = true;
-  renderMessengerWorkspace();
-  try {
-    await apiRequest(
-      `/messenger/conversations/${encodeURIComponent(conversationId)}/messages`,
-      {
-        method: "POST",
-        body: {
-          body,
-          message_type: "text",
-          mentioned_user_ids: [],
-        },
-      },
-    );
-    messenger.composerBody = "";
-    await Promise.all([
-      loadMessengerMessages(conversationId, { force: true }),
-      loadMessengerConversations({ force: true }),
-      loadMessengerConversationDetail(conversationId, { force: true }),
-    ]);
-    showToast("메시지를 보냈습니다.", "success", 1800);
-  } finally {
-    messenger.sending = false;
-    renderMessengerWorkspace();
-  }
-}
-
-async function submitMessengerConversation() {
-  const messenger = ensureMessengerState();
-  const createType = normalizeMessengerConversationType(
-    messenger.createType || "group",
-  );
-  const selectedIds = (
-    Array.isArray(messenger.createMemberUserIds)
-      ? messenger.createMemberUserIds
-      : []
-  )
-    .map((value) => String(value || "").trim())
-    .filter(Boolean);
-  if (createType === "dm" && selectedIds.length !== 1) {
-    syncMessengerCreateStatus("DM은 상대 1명을 선택해야 합니다.", "error");
-    return;
-  }
-  if (createType !== "dm" && !selectedIds.length) {
-    syncMessengerCreateStatus("참여자를 한 명 이상 선택해 주세요.", "error");
-    return;
-  }
-  if (createType === "announcement" && !canCreateMessengerAnnouncement()) {
-    syncMessengerCreateStatus("공지방 생성 권한이 없습니다.", "error");
-    return;
-  }
-  const roomKey = String(messenger.createRoomKey || "").trim();
-  if (createType === "announcement" && !roomKey) {
-    syncMessengerCreateStatus("공지방 키를 입력해 주세요.", "error");
-    return;
-  }
-  syncMessengerCreateStatus("대화를 생성하는 중...", "info");
-  const payload = {
-    conversation_type: createType === "all" ? "group" : createType,
-    member_user_ids: selectedIds,
-    title: String(messenger.createTitle || "").trim() || null,
-    description: String(messenger.createDescription || "").trim() || null,
-    announcement_room_key: createType === "announcement" ? roomKey : null,
-    announcement_scope_type:
-      createType === "announcement"
-        ? String(messenger.createScopeType || "tenant")
-            .trim()
-            .toLowerCase()
-        : null,
-  };
-  const created = await apiRequest("/messenger/conversations", {
-    method: "POST",
-    body: payload,
-  });
-  resetMessengerCreateDraft({ createType: "group", preserveOpen: false });
-  syncMessengerCreateStatus("", "info");
-  await loadMessengerConversations({ force: true });
-  messenger.selectedConversationId =
-    String(created?.id || "").trim() || messenger.selectedConversationId;
-  await openMessengerConversation(messenger.selectedConversationId, {
-    force: true,
-  });
-  showToast("새 대화를 만들었습니다.", "success", 1800);
-}
-
-async function toggleMessengerReaction(
-  messageId,
-  reaction,
-  reactedByMe = false,
-) {
-  const messenger = ensureMessengerState();
-  const normalizedMessageId = String(messageId || "").trim();
-  const normalizedReaction = String(reaction || "").trim();
-  if (!normalizedMessageId || !normalizedReaction) return;
-  const path = `/messenger/messages/${encodeURIComponent(normalizedMessageId)}/reactions${reactedByMe ? `/${encodeURIComponent(normalizedReaction)}` : ""}`;
-  const payload = reactedByMe
-    ? await apiRequest(path, { method: "DELETE" })
-    : await apiRequest(path, {
-        method: "POST",
-        body: { reaction: normalizedReaction },
-      });
-  const conversationId = String(
-    payload?.conversation_id || messenger.selectedConversationId || "",
-  ).trim();
-  if (!conversationId) return;
-  const rows = Array.isArray(
-    messenger.messagesByConversationId?.[conversationId],
-  )
-    ? messenger.messagesByConversationId[conversationId]
-    : [];
-  messenger.messagesByConversationId[conversationId] = rows.map((row) =>
-    String(row?.id || "").trim() === normalizedMessageId ? payload : row,
-  );
-  const conversationRows = Array.isArray(messenger.rows) ? messenger.rows : [];
-  messenger.rows = conversationRows.map((row) => {
-    if (String(row?.id || "").trim() !== conversationId) return row;
-    const lastMessage =
-      row?.last_message &&
-      String(row.last_message?.id || "").trim() === normalizedMessageId
-        ? payload
-        : row?.last_message;
-    return { ...row, last_message: lastMessage };
-  });
-  renderMessengerWorkspace();
-}
-
-async function loadMessengerViewPresenter() {
-  const messenger = ensureMessengerState();
-  renderMessengerWorkspace();
-  await Promise.allSettled([
-    loadMessengerConversations(),
-    ensureMessengerPresenceSession(),
-  ]);
-  if (!Array.isArray(messenger.rows) || !messenger.rows.length) {
-    if (String(messenger.error || "").trim()) {
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      await loadMessengerConversations({ force: true });
-    }
-  }
-  if (!messenger.selectedConversationId) {
-    messenger.selectedConversationId = String(
-      (Array.isArray(messenger.rows) ? messenger.rows[0]?.id : "") || "",
-    ).trim();
-  }
-  if (messenger.selectedConversationId) {
-    await Promise.allSettled([
-      loadMessengerConversationDetail(messenger.selectedConversationId),
-      loadMessengerMessages(messenger.selectedConversationId),
-    ]);
-  }
-  loadMessengerDirectory({ force: true }).catch(() => {});
-  renderMessengerWorkspace();
-}
-
-const MEETINGS_STATE_FILTER_OPTIONS = Object.freeze([
-  "all",
-  "live",
-  "scheduled",
-  "ended",
-]);
-
-function ensureMeetingsState() {
-  if (!state.meetings || typeof state.meetings !== "object") {
-    state.meetings = createInitialMeetingsState();
-  }
-  return state.meetings;
-}
-
-function getMeetingsCurrentUserId() {
-  return String(
-    state.user?.id || state.user?.user_id || state.user?.account_id || "",
-  ).trim();
-}
-
-function canUseMeetings() {
-  return Boolean(state.user && state.token && getRolePermissions()?.meetings);
-}
-
-function normalizeMeetingsStateFilter(value = "") {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
-  return MEETINGS_STATE_FILTER_OPTIONS.includes(normalized)
-    ? normalized
-    : "all";
-}
-
-function normalizeMeetingsScheduledForValue(value = "") {
-  const text = String(value || "").trim();
-  if (!text) return "";
-  const parsed = new Date(text);
-  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
-}
-
-function formatMeetingsScheduledForInput(value = "") {
-  const text = String(value || "").trim();
-  if (!text) return "";
-  const parsed = new Date(text);
-  if (Number.isNaN(parsed.getTime())) return "";
-  const offset = parsed.getTimezoneOffset() * 60 * 1000;
-  return new Date(parsed.getTime() - offset).toISOString().slice(0, 16);
-}
-
-function getMeetingsRoomStateLabel(value = "") {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
-  if (normalized === "live") return "진행중";
-  if (normalized === "scheduled") return "예약";
-  if (normalized === "ended") return "종료";
-  return "대기";
-}
-
-function getMeetingsReadinessLabel(value = "") {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
-  if (normalized === "ready" || normalized === "passed") return "준비 완료";
-  if (normalized === "blocked" || normalized === "failed") return "점검 필요";
-  return "준비 중";
-}
-
-function getMeetingsRoomRowsForRender() {
-  const meetings = ensureMeetingsState();
-  const search = String(meetings.searchQuery || "")
-    .trim()
-    .toLowerCase();
-  const stateFilter = normalizeMeetingsStateFilter(
-    meetings.stateFilter || "all",
-  );
-  return (Array.isArray(meetings.rows) ? meetings.rows : []).filter((row) => {
-    const roomState =
-      String(row?.state || "")
-        .trim()
-        .toLowerCase() || "scheduled";
-    if (stateFilter !== "all" && roomState !== stateFilter) return false;
-    if (!search) return true;
-    const haystack = [
-      row?.title,
-      row?.host_name,
-      row?.room_key,
-      ...(Array.isArray(row?.participants)
-        ? row.participants.flatMap((participant) => [
-            participant?.full_name,
-            participant?.username,
-            participant?.site_name,
-          ])
-        : []),
-    ]
-      .map((item) =>
-        String(item || "")
-          .trim()
-          .toLowerCase(),
-      )
-      .filter(Boolean)
-      .join(" ");
-    return haystack.includes(search);
-  });
-}
-
-function getMeetingsCurrentParticipant(room = null) {
-  const userId = getMeetingsCurrentUserId();
-  if (!userId) return null;
-  const participants = Array.isArray(room?.participants)
-    ? room.participants
-    : [];
-  return (
-    participants.find(
-      (participant) => String(participant?.user_id || "").trim() === userId,
-    ) || null
-  );
-}
-
-function setMeetingsStatusHint(message = "", level = "info") {
-  const text = String(message || "").trim();
-  const el = $("#meetingsStatusHint");
-  if (!(el instanceof HTMLElement)) return;
-  if (!text) {
-    el.classList.add("hidden");
-    el.textContent = "";
-    return;
-  }
-  el.classList.remove("hidden");
-  setInlineStatus("#meetingsStatusHint", text, level);
-}
-
-function syncMeetingsCreateStatus(message = "", level = "info") {
-  const meetings = ensureMeetingsState();
-  meetings.createStatusMessage = String(message || "").trim();
-  meetings.createStatusLevel = level;
-  const el = $("#meetingsCreateStatus");
-  if (!(el instanceof HTMLElement)) return;
-  setInlineStatus("#meetingsCreateStatus", meetings.createStatusMessage, level);
-}
-
-function syncMeetingsLinkStatus(message = "", level = "info") {
-  const meetings = ensureMeetingsState();
-  meetings.linkStatusMessage = String(message || "").trim();
-  meetings.linkStatusLevel = level;
-  const el = $("#meetingsChatLinkStatus");
-  if (!(el instanceof HTMLElement)) return;
-  if (!meetings.linkStatusMessage) {
-    el.classList.add("hidden");
-    el.textContent = "";
-    return;
-  }
-  el.classList.remove("hidden");
-  setInlineStatus("#meetingsChatLinkStatus", meetings.linkStatusMessage, level);
-}
-
-function syncMeetingsParticipantStatus(message = "", level = "info") {
-  const meetings = ensureMeetingsState();
-  meetings.participantStatusMessage = String(message || "").trim();
-  meetings.participantStatusLevel = level;
-  const el = $("#meetingsParticipantStatus");
-  if (!(el instanceof HTMLElement)) return;
-  if (!meetings.participantStatusMessage) {
-    el.classList.add("hidden");
-    el.textContent = "";
-    return;
-  }
-  el.classList.remove("hidden");
-  setInlineStatus(
-    "#meetingsParticipantStatus",
-    meetings.participantStatusMessage,
-    level,
-  );
-}
-
-function getMeetingsConversationOptionLabel(conversation = {}) {
-  const title = getMessengerConversationTitle(conversation);
-  const type = String(conversation?.conversation_type || "")
-    .trim()
-    .toLowerCase();
-  const siteName = String(conversation?.site_name || "").trim();
-  const parts = [
-    title,
-    type === "dm" ? "DM" : type === "announcement" ? "공지방" : "그룹",
-    siteName,
-  ].filter(Boolean);
-  return parts.join(" · ") || "연결 가능한 대화";
-}
-
-function populateMeetingsConversationSelect(
-  select,
-  {
-    selectedId = "",
-    placeholder = "연결 안 함",
-    excludeIds = [],
-    disabled = false,
-  } = {},
-) {
-  if (!(select instanceof HTMLSelectElement)) return;
-  const meetings = ensureMeetingsState();
-  const excluded = new Set(
-    (Array.isArray(excludeIds) ? excludeIds : [])
-      .map((value) => String(value || "").trim())
-      .filter(Boolean),
-  );
-  const rows = (
-    Array.isArray(meetings.conversationRows) ? meetings.conversationRows : []
-  ).filter((row) => {
-    const conversationId = String(row?.id || "").trim();
-    if (!conversationId) return false;
-    if (conversationId === String(selectedId || "").trim()) return true;
-    return !excluded.has(conversationId);
-  });
-  const nextSelectedId = String(selectedId || "").trim();
-  select.innerHTML = "";
-  const placeholderOption = document.createElement("option");
-  placeholderOption.value = "";
-  placeholderOption.textContent = placeholder;
-  select.appendChild(placeholderOption);
-  rows.forEach((row) => {
-    const option = document.createElement("option");
-    option.value = String(row?.id || "").trim();
-    option.textContent = getMeetingsConversationOptionLabel(row);
-    select.appendChild(option);
-  });
-  select.value = rows.some(
-    (row) => String(row?.id || "").trim() === nextSelectedId,
-  )
-    ? nextSelectedId
-    : "";
-  select.disabled = Boolean(disabled);
-}
-
-function getMeetingsDirectoryUserIdSet() {
-  const meetings = ensureMeetingsState();
-  return new Set(
-    (Array.isArray(meetings.directoryRows) ? meetings.directoryRows : [])
-      .map((row) => String(row?.__meetingsUserId || row?.user_id || "").trim())
-      .filter(Boolean),
-  );
-}
-
-function populateMeetingsParticipantSelect(
-  select,
-  {
-    selectedId = "",
-    placeholder = "추가할 직원을 선택하세요",
-    excludeIds = [],
-    disabled = false,
-  } = {},
-) {
-  if (!(select instanceof HTMLSelectElement)) return;
-  const meetings = ensureMeetingsState();
-  const excluded = new Set(
-    (Array.isArray(excludeIds) ? excludeIds : [])
-      .map((value) => String(value || "").trim())
-      .filter(Boolean),
-  );
-  const rows = (
-    Array.isArray(meetings.directoryRows) ? meetings.directoryRows : []
-  ).filter((row) => {
-    const userId = String(row?.__meetingsUserId || row?.user_id || "").trim();
-    if (!userId) return false;
-    if (userId === String(selectedId || "").trim()) return true;
-    return !excluded.has(userId);
-  });
-  const nextSelectedId = String(selectedId || "").trim();
-  select.innerHTML = "";
-  const placeholderOption = document.createElement("option");
-  placeholderOption.value = "";
-  placeholderOption.textContent = placeholder;
-  select.appendChild(placeholderOption);
-  rows.forEach((row) => {
-    const userId = String(row?.__meetingsUserId || row?.user_id || "").trim();
-    const option = document.createElement("option");
-    option.value = userId;
-    option.textContent = [
-      String(
-        row?.full_name ||
-          row?.name ||
-          row?.employee_name ||
-          row?.employee_code ||
-          "직원",
-      ).trim() || "직원",
-      String(row?.site_name || row?.site_code || "").trim(),
-      String(row?.employee_code || "").trim(),
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    select.appendChild(option);
-  });
-  select.value = rows.some(
-    (row) =>
-      String(row?.__meetingsUserId || row?.user_id || "").trim() ===
-      nextSelectedId,
-  )
-    ? nextSelectedId
-    : "";
-  select.disabled = Boolean(disabled);
-}
-
-async function loadMeetingsRooms({ force = false } = {}) {
-  const meetings = ensureMeetingsState();
-  meetings.loading = true;
-  meetings.error = "";
-  renderMeetingsWorkspace();
-  try {
-    const stateFilter = normalizeMeetingsStateFilter(
-      meetings.stateFilter || "all",
-    );
-    const query =
-      stateFilter === "all" ? "" : `?state=${encodeURIComponent(stateFilter)}`;
-    const payload = await apiRequest(`/meetings/rooms${query}`);
-    const rows = Array.isArray(payload?.items) ? payload.items : [];
-    meetings.rows = rows;
-    const selectedRoomId = String(meetings.selectedRoomId || "").trim();
-    const hasSelected = rows.some(
-      (row) => String(row?.id || "").trim() === selectedRoomId,
-    );
-    meetings.selectedRoomId = hasSelected
-      ? selectedRoomId
-      : String(rows[0]?.id || "").trim();
-    setMeetingsStatusHint(
-      rows.length ? `회의 ${rows.length}개` : "표시할 회의가 없습니다.",
-      rows.length ? "success" : "info",
-    );
-    renderMeetingsWorkspace();
-    return rows;
-  } catch (error) {
-    meetings.error = normalizeActionError(
-      error,
-      "회의 목록을 불러오지 못했습니다.",
-    );
-    setMeetingsStatusHint(meetings.error, "error");
-    renderMeetingsWorkspace();
-    return [];
-  } finally {
-    meetings.loading = false;
-    renderMeetingsWorkspace();
-  }
-}
-
-async function loadMeetingsRoomDetail(roomId, { force = false } = {}) {
-  const meetings = ensureMeetingsState();
-  const id = String(roomId || "").trim();
-  if (!id) return null;
-  if (!force && meetings.detailById && meetings.detailById[id]) {
-    return meetings.detailById[id];
-  }
-  meetings.detailLoading = true;
-  renderMeetingsWorkspace();
-  try {
-    const detail = await apiRequest(
-      `/meetings/rooms/${encodeURIComponent(id)}`,
-    );
-    meetings.detailById = meetings.detailById || {};
-    meetings.detailById[id] =
-      detail && typeof detail === "object" ? detail : {};
-    renderMeetingsWorkspace();
-    return meetings.detailById[id];
-  } catch (error) {
-    setMeetingsStatusHint(
-      normalizeActionError(error, "회의 상세를 불러오지 못했습니다."),
-      "error",
-    );
-    throw error;
-  } finally {
-    meetings.detailLoading = false;
-    renderMeetingsWorkspace();
-  }
-}
-
-async function loadMeetingsRolloutStatus() {
-  const meetings = ensureMeetingsState();
-  meetings.rolloutLoading = true;
-  renderMeetingsWorkspace();
-  try {
-    const payload = await apiRequest("/meetings/rollout/status");
-    meetings.rollout = payload && typeof payload === "object" ? payload : null;
-    renderMeetingsWorkspace();
-    return meetings.rollout;
-  } catch (error) {
-    setMeetingsStatusHint(
-      normalizeActionError(error, "회의 rollout 상태를 불러오지 못했습니다."),
-      "error",
-    );
-    return null;
-  } finally {
-    meetings.rolloutLoading = false;
-    renderMeetingsWorkspace();
-  }
-}
-
-async function loadMeetingsDirectory({ force = false } = {}) {
-  const meetings = ensureMeetingsState();
-  const query = String(meetings.createSearch || "").trim();
-  const cacheKey = query.toLowerCase();
-  if (
-    !force &&
-    meetings.directoryQuery === cacheKey &&
-    Array.isArray(meetings.directoryRows) &&
-    meetings.directoryRows.length
-  ) {
-    return meetings.directoryRows;
-  }
-  meetings.directoryLoading = true;
-  meetings.directoryError = "";
-  renderMeetingsWorkspace();
-  try {
-    const rows = await getScheduleDataProvider().listEmployees({
-      search: query,
-      includeAccount: true,
-    });
-    const currentUserId = getMeetingsCurrentUserId();
-    const filtered = (Array.isArray(rows) ? rows : [])
-      .filter((row) => {
-        const userId = String(row?.user_id || "").trim();
-        if (!userId || (currentUserId && currentUserId === userId))
-          return false;
-        return true;
-      })
-      .map((row) => ({
-        ...row,
-        __meetingsUserId: String(row?.user_id || "").trim(),
-        __meetingsAccount: getEmployeeLinkedAccountUsername(row),
-      }))
-      .sort((a, b) =>
-        String(a?.full_name || a?.name || "").localeCompare(
-          String(b?.full_name || b?.name || ""),
-          "ko",
-        ),
-      );
-    meetings.directoryRows = filtered;
-    meetings.directoryQuery = cacheKey;
-    renderMeetingsWorkspace();
-    return filtered;
-  } catch (error) {
-    meetings.directoryRows = [];
-    meetings.directoryError = normalizeActionError(
-      error,
-      "참여자 목록을 불러오지 못했습니다.",
-    );
-    renderMeetingsWorkspace();
-    return [];
-  } finally {
-    meetings.directoryLoading = false;
-    renderMeetingsWorkspace();
-  }
-}
-
-async function loadMeetingsConversationOptions({ force = false } = {}) {
-  const meetings = ensureMeetingsState();
-  if (
-    !force &&
-    Array.isArray(meetings.conversationRows) &&
-    meetings.conversationRows.length
-  ) {
-    return meetings.conversationRows;
-  }
-  meetings.conversationLoading = true;
-  meetings.conversationError = "";
-  renderMeetingsWorkspace();
-  try {
-    const payload = await apiRequest("/messenger/conversations?limit=120");
-    const rows = Array.isArray(payload?.items) ? payload.items : [];
-    meetings.conversationRows = rows;
-    meetings.conversationFetchedAt = Date.now();
-    renderMeetingsWorkspace();
-    return rows;
-  } catch (error) {
-    meetings.conversationRows = [];
-    meetings.conversationError = normalizeActionError(
-      error,
-      "연결 가능한 메신저 대화를 불러오지 못했습니다.",
-    );
-    renderMeetingsWorkspace();
-    return [];
-  } finally {
-    meetings.conversationLoading = false;
-    renderMeetingsWorkspace();
-  }
-}
-
-function renderMeetingsStateTabs() {
-  const meetings = ensureMeetingsState();
-  const activeState = normalizeMeetingsStateFilter(
-    meetings.stateFilter || "all",
-  );
-  document
-    .querySelectorAll('[data-action="meetings-filter-state"]')
-    .forEach((button) => {
-      const targetState = normalizeMeetingsStateFilter(
-        button.getAttribute("data-state") || "all",
-      );
-      button.classList.toggle("active", targetState === activeState);
-    });
-}
-
-function renderMeetingsRolloutInline() {
-  const meetings = ensureMeetingsState();
-  const target = $("#meetingsRolloutInline");
-  if (!(target instanceof HTMLElement)) return;
-  const rollout =
-    meetings.rollout && typeof meetings.rollout === "object"
-      ? meetings.rollout
-      : null;
-  if (meetings.rolloutLoading && !rollout) {
-    target.innerHTML =
-      '<span class="status-pill status-pill-neutral">rollout 확인 중</span>';
-    return;
-  }
-  if (!rollout) {
-    target.innerHTML =
-      '<span class="status-pill status-pill-neutral">rollout 데이터 없음</span>';
-    return;
-  }
-  const readiness =
-    rollout.readiness && typeof rollout.readiness === "object"
-      ? rollout.readiness
-      : {};
-  const runtime =
-    rollout.runtime && typeof rollout.runtime === "object"
-      ? rollout.runtime
-      : {};
-  const readinessStatus = String(readiness.status || "")
-    .trim()
-    .toLowerCase();
-  const readinessClass =
-    readinessStatus === "ready" || readinessStatus === "passed"
-      ? "status-pill-ok"
-      : readinessStatus === "blocked" || readinessStatus === "failed"
-        ? "status-pill-warn"
-        : "status-pill-neutral";
-  target.innerHTML = `
-    <span class="status-pill ${readinessClass}">${escapeHtml(getMeetingsReadinessLabel(readinessStatus))}</span>
-    <span class="meetings-rollout-meta">활성 회의 ${Number(runtime.live_room_count || 0)}개 · 세션 ${Number(runtime.live_session_count || 0)}개 · 점검 통과 ${Number(readiness.passing_check_count || 0)}건</span>
-  `;
-}
-
-function renderMeetingsCreatePanel() {
-  const meetings = ensureMeetingsState();
-  const canCreate = canUseMeetings();
-  const panel = $("#meetingsCreatePanel");
-  if (!(panel instanceof HTMLElement)) return;
-  panel.classList.toggle("hidden", !meetings.createOpen || !canCreate);
-  const toggleBtn = $("#meetingsCreateToggleBtn");
-  if (toggleBtn instanceof HTMLButtonElement) {
-    toggleBtn.disabled = !canCreate;
-    toggleBtn.textContent = meetings.createOpen ? "닫기" : "회의 시작";
-  }
-
-  const titleInput = $("#meetingsCreateTitle");
-  const scheduledInput = $("#meetingsCreateScheduledFor");
-  const searchInput = $("#meetingsCreateSearch");
-  const linkedConversationSelect = $("#meetingsCreateLinkedConversation");
-  if (titleInput instanceof HTMLInputElement) {
-    titleInput.value = String(meetings.createTitle || "");
-  }
-  if (scheduledInput instanceof HTMLInputElement) {
-    scheduledInput.value = formatMeetingsScheduledForInput(
-      meetings.createScheduledFor || "",
-    );
-  }
-  if (searchInput instanceof HTMLInputElement) {
-    searchInput.value = String(meetings.createSearch || "");
-  }
-  populateMeetingsConversationSelect(linkedConversationSelect, {
-    selectedId: meetings.createLinkedConversationId,
-    placeholder: meetings.conversationLoading
-      ? "대화 불러오는 중..."
-      : "연결 안 함",
-    disabled:
-      !canCreate ||
-      meetings.conversationLoading ||
-      Boolean(meetings.conversationError),
-  });
-  if (linkedConversationSelect instanceof HTMLSelectElement) {
-    meetings.createLinkedConversationId = String(
-      linkedConversationSelect.value || "",
-    ).trim();
-  }
-
-  const selectedIds = new Set(
-    (Array.isArray(meetings.createParticipantUserIds)
-      ? meetings.createParticipantUserIds
-      : []
-    )
-      .map((value) => String(value || "").trim())
-      .filter(Boolean),
-  );
-  const meta = $("#meetingsCreateMemberMeta");
-  if (meta instanceof HTMLElement) {
-    meta.textContent = selectedIds.size
-      ? `추가 ${selectedIds.size}명`
-      : "호스트만 참여";
-  }
-  const list = $("#meetingsCreateMemberList");
-  if (list instanceof HTMLElement) {
-    clearList(list);
-    if (meetings.directoryLoading) {
-      renderSkeleton(list, 4);
-    } else if (meetings.directoryError) {
-      renderCompactListEmpty(
-        list,
-        "참여자 목록을 불러오지 못했습니다.",
-        meetings.directoryError,
-      );
-    } else if (
-      !(Array.isArray(meetings.directoryRows) && meetings.directoryRows.length)
-    ) {
-      renderCompactListEmpty(
-        list,
-        "선택 가능한 참여자가 없습니다.",
-        "계정 연결된 직원만 회의 참여자로 추가할 수 있습니다.",
-      );
-    } else {
-      meetings.directoryRows.forEach((row) => {
-        const userId = String(
-          row?.__meetingsUserId || row?.user_id || "",
-        ).trim();
-        if (!userId) return;
-        const li = document.createElement("li");
-        li.className = `meetings-member-row${selectedIds.has(userId) ? " is-selected" : ""}`;
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "meetings-member-button";
-        button.dataset.action = "meetings-toggle-member";
-        button.dataset.userId = userId;
-        const main = document.createElement("div");
-        main.className = "meetings-member-main";
-        const name = document.createElement("strong");
-        name.textContent =
-          String(
-            row?.full_name ||
-              row?.name ||
-              row?.employee_name ||
-              row?.employee_code ||
-              "직원",
-          ).trim() || "직원";
-        const metaText = document.createElement("span");
-        metaText.className = "meetings-member-account";
-        metaText.textContent =
-          [
-            String(row?.employee_code || "").trim(),
-            String(row?.site_name || row?.site_code || "").trim(),
-            String(row?.__meetingsAccount || "").trim(),
-          ]
-            .filter(Boolean)
-            .join(" · ") || "계정 연결됨";
-        main.append(name, metaText);
-        const check = document.createElement("span");
-        check.className = "meetings-member-check";
-        check.textContent = selectedIds.has(userId) ? "선택됨" : "선택";
-        button.append(main, check);
-        li.appendChild(button);
-        list.appendChild(li);
-      });
-    }
-  }
-  const linkedConversation = (
-    Array.isArray(meetings.conversationRows) ? meetings.conversationRows : []
-  ).find(
-    (row) =>
-      String(row?.id || "").trim() ===
-      String(meetings.createLinkedConversationId || "").trim(),
-  );
-  syncMeetingsCreateStatus(
-    String(meetings.createStatusMessage || "").trim() ||
-      (linkedConversation
-        ? `${getMeetingsConversationOptionLabel(linkedConversation)} 와(과) 함께 생성됩니다.`
-        : "즉시 회의는 바로 열 수 있고, 예약 회의는 시간을 지정해 만들 수 있습니다."),
-    meetings.createStatusLevel || "info",
-  );
-}
-
-function renderMeetingsRoomList() {
-  const meetings = ensureMeetingsState();
-  const list = $("#meetingsRoomList");
-  const subtitle = $("#meetingsListSubtitle");
-  const meta = $("#meetingsListMeta");
-  if (!(list instanceof HTMLElement)) return;
-  const rows = getMeetingsRoomRowsForRender();
-  if (subtitle instanceof HTMLElement) {
-    subtitle.textContent = meetings.loading
-      ? "회의 목록을 불러오는 중입니다."
-      : "진행중, 예약, 종료 순으로 보여줍니다.";
-  }
-  if (meta instanceof HTMLElement) {
-    meta.textContent = `${rows.length}개`;
-  }
-  clearList(list);
-  if (
-    meetings.loading &&
-    !(Array.isArray(meetings.rows) && meetings.rows.length)
-  ) {
-    renderSkeleton(list, 5);
-    return;
-  }
-  if (!rows.length) {
-    renderCompactListEmpty(
-      list,
-      "표시할 회의가 없습니다.",
-      "우측 상단에서 새 회의를 시작하거나 예약해 보세요.",
-    );
-    return;
-  }
-  rows.forEach((row) => {
-    const roomId = String(row?.id || "").trim();
-    if (!roomId) return;
-    const li = document.createElement("li");
-    li.className = "meetings-room-item";
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `meetings-room-row${roomId === String(meetings.selectedRoomId || "").trim() ? " active" : ""}`;
-    button.dataset.action = "meetings-open-room";
-    button.dataset.roomId = roomId;
-    const main = document.createElement("div");
-    main.className = "meetings-room-main";
-    const titleRow = document.createElement("div");
-    titleRow.className = "meetings-room-title-row";
-    const title = document.createElement("strong");
-    title.className = "meetings-room-title";
-    title.textContent = String(row?.title || "회의").trim() || "회의";
-    const updatedAt = document.createElement("span");
-    updatedAt.className = "meetings-room-updated";
-    updatedAt.textContent = formatIsoToLocalLabel(
-      row?.scheduled_for || row?.updated_at || row?.created_at || "",
-    );
-    titleRow.append(title, updatedAt);
-    const summary = document.createElement("div");
-    summary.className = "meetings-room-meta";
-    summary.textContent =
-      [
-        row?.host_name ? `호스트 ${String(row.host_name).trim()}` : "",
-        Number(row?.participant_count || 0)
-          ? `참여 ${Number(row.participant_count || 0)}명`
-          : "",
-        row?.room_key ? `링크 ${String(row.room_key).trim()}` : "",
-      ]
-        .filter(Boolean)
-        .join(" · ") || "회의 정보 없음";
-    main.append(titleRow, summary);
-    const side = document.createElement("div");
-    side.className = "meetings-room-side";
-    const pill = document.createElement("span");
-    const roomState =
-      String(row?.state || "")
-        .trim()
-        .toLowerCase() || "scheduled";
-    pill.className = `status-pill ${roomState === "live" ? "status-pill-warn" : roomState === "ended" ? "status-pill-neutral" : "status-pill-ok"}`;
-    pill.textContent = getMeetingsRoomStateLabel(roomState);
-    side.appendChild(pill);
-    button.append(main, side);
-    li.appendChild(button);
-    list.appendChild(li);
-  });
-}
-
-function renderMeetingsDetailHead() {
-  const meetings = ensureMeetingsState();
-  const target = $("#meetingsDetailHead");
-  if (!(target instanceof HTMLElement)) return;
-  const roomId = String(meetings.selectedRoomId || "").trim();
-  const detail = meetings.detailById?.[roomId] || null;
-  if (!roomId || !detail) {
-    target.innerHTML = `
-      <div>
-        <strong>회의를 선택해 주세요.</strong>
-        <p class="muted">좌측 목록에서 회의를 열면 상세와 세션 상태가 표시됩니다.</p>
-      </div>
-    `;
-    return;
-  }
-  const stateLabel = getMeetingsRoomStateLabel(detail?.state);
-  target.innerHTML = `
-    <div class="meetings-detail-title">
-      <strong>${escapeHtml(String(detail?.title || "회의").trim() || "회의")}</strong>
-      <p class="muted">${escapeHtml(
-        [
-          detail?.host_name ? `호스트 ${String(detail.host_name).trim()}` : "",
-          detail?.room_key ? `링크 ${String(detail.room_key).trim()}` : "",
-          detail?.scheduled_for
-            ? `예약 ${formatIsoToLocalLabel(detail.scheduled_for)}`
-            : "",
-        ]
-          .filter(Boolean)
-          .join(" · ") || "회의 메타 없음",
-      )}</p>
-    </div>
-    <div class="meetings-detail-side">
-      <span class="status-pill ${
-        String(detail?.state || "")
-          .trim()
-          .toLowerCase() === "live"
-          ? "status-pill-warn"
-          : "status-pill-neutral"
-      }">${escapeHtml(stateLabel)}</span>
-    </div>
-  `;
-}
-
-function renderMeetingsDetailSummary() {
-  const meetings = ensureMeetingsState();
-  const target = $("#meetingsDetailSummary");
-  if (!(target instanceof HTMLElement)) return;
-  const detail =
-    meetings.detailById?.[String(meetings.selectedRoomId || "").trim()] || null;
-  target.innerHTML = "";
-  if (!detail) return;
-  const runtime = [
-    { label: "참여자", value: `${Number(detail?.participant_count || 0)}명` },
-    {
-      label: "세션",
-      value: `${Array.isArray(detail?.sessions) ? detail.sessions.length : 0}개`,
-    },
-    {
-      label: "채팅 링크",
-      value: `${Array.isArray(detail?.chat_links) ? detail.chat_links.length : 0}개`,
-    },
-  ];
-  runtime.forEach((item) => {
-    const card = document.createElement("div");
-    card.className = "meetings-summary-card";
-    const label = document.createElement("span");
-    label.className = "meetings-summary-label";
-    label.textContent = item.label;
-    const value = document.createElement("strong");
-    value.className = "meetings-summary-value";
-    value.textContent = item.value;
-    card.append(label, value);
-    target.appendChild(card);
-  });
-}
-
-function renderMeetingsParticipants() {
-  const meetings = ensureMeetingsState();
-  const list = $("#meetingsParticipantsList");
-  const meta = $("#meetingsParticipantsMeta");
-  const actions = $("#meetingsParticipantActions");
-  const select = $("#meetingsParticipantSelect");
-  if (!(list instanceof HTMLElement)) return;
-  const detail =
-    meetings.detailById?.[String(meetings.selectedRoomId || "").trim()] || null;
-  const rows = Array.isArray(detail?.participants) ? detail.participants : [];
-  if (meta instanceof HTMLElement) meta.textContent = `${rows.length}명`;
-  if (actions instanceof HTMLElement) {
-    const participantIds = rows
-      .map((participant) => String(participant?.user_id || "").trim())
-      .filter(Boolean);
-    actions.classList.toggle("hidden", !detail);
-    populateMeetingsParticipantSelect(select, {
-      selectedId: meetings.participantUserId,
-      placeholder: meetings.directoryLoading
-        ? "직원 불러오는 중..."
-        : "추가할 직원을 선택하세요",
-      excludeIds: participantIds,
-      disabled:
-        !detail ||
-        meetings.directoryLoading ||
-        Boolean(meetings.directoryError),
-    });
-    if (select instanceof HTMLSelectElement) {
-      meetings.participantUserId = String(select.value || "").trim();
-    }
-  }
-  clearList(list);
-  if (!detail) {
-    syncMeetingsParticipantStatus("", "info");
-    renderCompactListEmpty(list, "회의를 선택해 주세요.", "");
-    return;
-  }
-  if (meetings.directoryError) {
-    syncMeetingsParticipantStatus(meetings.directoryError, "error");
-  } else if (!rows.length) {
-    syncMeetingsParticipantStatus(
-      "호스트만 참여 중입니다. 필요한 직원을 선택해 바로 초대할 수 있습니다.",
-      "info",
-    );
-  } else {
-    syncMeetingsParticipantStatus("", "info");
-  }
-  if (!rows.length) {
-    renderCompactListEmpty(
-      list,
-      "참여자가 없습니다.",
-      "새 회의 생성 시 참여자를 추가해 주세요.",
-    );
-    return;
-  }
-  rows.forEach((participant) => {
-    const li = document.createElement("li");
-    li.className = "meetings-detail-row";
-    const main = document.createElement("div");
-    main.className = "meetings-detail-main";
-    const title = document.createElement("strong");
-    title.textContent =
-      String(
-        participant?.full_name || participant?.username || "참여자",
-      ).trim() || "참여자";
-    const sub = document.createElement("span");
-    sub.textContent =
-      [
-        participant?.participant_role
-          ? `역할 ${String(participant.participant_role).trim()}`
-          : "",
-        participant?.site_name ? String(participant.site_name).trim() : "",
-      ]
-        .filter(Boolean)
-        .join(" · ") || "회의 참여자";
-    main.append(title, sub);
-    const side = document.createElement("div");
-    side.className = "meetings-detail-side-pill";
-    const joined = Boolean(participant?.joined_at) && !participant?.left_at;
-    side.innerHTML = `<span class="status-pill ${joined ? "status-pill-ok" : "status-pill-neutral"}">${joined ? "참여중" : "대기"}</span>`;
-    li.append(main, side);
-    list.appendChild(li);
-  });
-}
-
-function renderMeetingsChatLinks() {
-  const meetings = ensureMeetingsState();
-  const list = $("#meetingsChatLinksList");
-  const meta = $("#meetingsChatLinksMeta");
-  const actions = $("#meetingsChatLinkActions");
-  const select = $("#meetingsLinkConversationSelect");
-  if (!(list instanceof HTMLElement)) return;
-  const detail =
-    meetings.detailById?.[String(meetings.selectedRoomId || "").trim()] || null;
-  const rows = Array.isArray(detail?.chat_links) ? detail.chat_links : [];
-  if (meta instanceof HTMLElement) meta.textContent = `${rows.length}개`;
-  if (actions instanceof HTMLElement) {
-    const linkedIds = rows
-      .map((row) => String(row?.conversation_id || "").trim())
-      .filter(Boolean);
-    actions.classList.toggle("hidden", !detail);
-    populateMeetingsConversationSelect(select, {
-      selectedId: meetings.linkConversationId,
-      placeholder: meetings.conversationLoading
-        ? "대화 불러오는 중..."
-        : "연결할 대화를 선택하세요",
-      excludeIds: linkedIds,
-      disabled:
-        !detail ||
-        meetings.conversationLoading ||
-        Boolean(meetings.conversationError),
-    });
-    if (select instanceof HTMLSelectElement) {
-      meetings.linkConversationId = String(select.value || "").trim();
-    }
-  }
-  clearList(list);
-  if (!detail) {
-    syncMeetingsLinkStatus("", "info");
-    renderCompactListEmpty(list, "회의를 선택해 주세요.", "");
-    return;
-  }
-  if (meetings.conversationError) {
-    syncMeetingsLinkStatus(meetings.conversationError, "error");
-  } else if (!rows.length) {
-    syncMeetingsLinkStatus(
-      "연결된 대화가 없으면 메신저 방을 하나 연결해 회의 문맥을 모을 수 있습니다.",
-      "info",
-    );
-  } else {
-    syncMeetingsLinkStatus("", "info");
-  }
-  if (!rows.length) {
-    renderCompactListEmpty(
-      list,
-      "연결된 채팅이 없습니다.",
-      "위 선택창에서 대화를 골라 회의와 연결해 주세요.",
-    );
-    return;
-  }
-  rows.forEach((row) => {
-    const conversationId = String(row?.conversation_id || "").trim();
-    const li = document.createElement("li");
-    li.className = "meetings-detail-row";
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "meetings-linked-chat-button";
-    button.dataset.action = "meetings-open-chat";
-    button.dataset.conversationId = conversationId;
-    const main = document.createElement("div");
-    main.className = "meetings-detail-main";
-    const title = document.createElement("strong");
-    title.textContent =
-      String(row?.conversation_title || "연결된 대화").trim() || "연결된 대화";
-    const sub = document.createElement("span");
-    sub.textContent =
-      [
-        String(row?.conversation_type || "").trim(),
-        String(row?.link_type || "").trim(),
-      ]
-        .filter(Boolean)
-        .join(" · ") || "메신저 연결";
-    main.append(title, sub);
-    const side = document.createElement("span");
-    side.className = "meetings-detail-link";
-    side.textContent = "열기";
-    button.append(main, side);
-    li.appendChild(button);
-    list.appendChild(li);
-  });
-}
-
-function renderMeetingsSessions() {
-  const meetings = ensureMeetingsState();
-  const list = $("#meetingsSessionsList");
-  const meta = $("#meetingsSessionsMeta");
-  if (!(list instanceof HTMLElement)) return;
-  const detail =
-    meetings.detailById?.[String(meetings.selectedRoomId || "").trim()] || null;
-  const rows = Array.isArray(detail?.sessions) ? detail.sessions : [];
-  if (meta instanceof HTMLElement) meta.textContent = `${rows.length}개`;
-  clearList(list);
-  if (!detail) {
-    renderCompactListEmpty(list, "회의를 선택해 주세요.", "");
-    return;
-  }
-  if (!rows.length) {
-    renderCompactListEmpty(
-      list,
-      "시작된 세션이 없습니다.",
-      "즉시 회의를 시작하거나 예약 회의를 열어 주세요.",
-    );
-    return;
-  }
-  rows.forEach((session) => {
-    const li = document.createElement("li");
-    li.className = "meetings-detail-row";
-    const main = document.createElement("div");
-    main.className = "meetings-detail-main";
-    const title = document.createElement("strong");
-    title.textContent = [
-      String(session?.session_key || "").trim() || "세션",
-      String(session?.media_backend || "")
-        .trim()
-        .toLowerCase() === "external"
-        ? "외부"
-        : "Pion",
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    const sub = document.createElement("span");
-    sub.textContent =
-      [
-        session?.started_at
-          ? `시작 ${formatIsoToLocalLabel(session.started_at)}`
-          : "",
-        session?.ended_at
-          ? `종료 ${formatIsoToLocalLabel(session.ended_at)}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" · ") || "세션 메타 없음";
-    main.append(title, sub);
-    const side = document.createElement("div");
-    side.className = "meetings-detail-side-pill";
-    side.innerHTML = `<span class="status-pill ${String(session?.state || "").trim() === "live" ? "status-pill-warn" : "status-pill-neutral"}">${escapeHtml(getMeetingsRoomStateLabel(session?.state || "scheduled"))}</span>`;
-    li.append(main, side);
-    list.appendChild(li);
-  });
-}
-
-function renderMeetingsActionBar() {
-  const meetings = ensureMeetingsState();
-  const target = $("#meetingsActionBar");
-  if (!(target instanceof HTMLElement)) return;
-  target.innerHTML = "";
-  const roomId = String(meetings.selectedRoomId || "").trim();
-  const detail = meetings.detailById?.[roomId] || null;
-  if (!detail) return;
-  const activeSession =
-    detail?.active_session && typeof detail.active_session === "object"
-      ? detail.active_session
-      : null;
-  const currentParticipant = getMeetingsCurrentParticipant(detail);
-  const joined =
-    Boolean(currentParticipant?.joined_at) && !currentParticipant?.left_at;
-  const isHost =
-    String(detail?.host_user_id || "").trim() === getMeetingsCurrentUserId();
-  const buttons = [];
-  if (
-    !activeSession &&
-    String(detail?.state || "")
-      .trim()
-      .toLowerCase() !== "ended"
-  ) {
-    buttons.push({
-      label: "세션 시작",
-      action: "meetings-session-start",
-      variant: "btn-primary",
-    });
-  }
-  if (activeSession && !joined) {
-    buttons.push({
-      label: "회의 입장",
-      action: "meetings-session-join",
-      variant: "btn-primary",
-    });
-  }
-  if (activeSession && joined) {
-    buttons.push({
-      label: "회의 나가기",
-      action: "meetings-session-leave",
-      variant: "btn-secondary",
-    });
-  }
-  if (activeSession && isHost) {
-    buttons.push({
-      label: "회의 종료",
-      action: "meetings-session-end",
-      variant: "btn-secondary",
-    });
-  }
-  if (detail?.room_key) {
-    buttons.push({
-      label: "링크 복사",
-      action: "meetings-copy-link",
-      variant: "btn-secondary",
-    });
-  }
-  buttons.forEach((item) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `btn ${item.variant}`;
-    button.dataset.action = item.action;
-    if (activeSession?.id)
-      button.dataset.sessionId = String(activeSession.id || "").trim();
-    button.textContent = item.label;
-    target.appendChild(button);
-  });
-}
-
-function renderMeetingsWorkspace() {
-  const meetings = ensureMeetingsState();
-  renderMeetingsStateTabs();
-  renderMeetingsRolloutInline();
-  renderMeetingsCreatePanel();
-  renderMeetingsRoomList();
-  renderMeetingsDetailHead();
-  renderMeetingsDetailSummary();
-  renderMeetingsParticipants();
-  renderMeetingsChatLinks();
-  renderMeetingsSessions();
-  renderMeetingsActionBar();
-  const quickEvents = $(".meetings-quick-events");
-  if (quickEvents instanceof HTMLElement) {
-    const detail =
-      meetings.detailById?.[String(meetings.selectedRoomId || "").trim()] ||
-      null;
-    const activeSession =
-      detail?.active_session && typeof detail.active_session === "object"
-        ? detail.active_session
-        : null;
-    quickEvents.classList.toggle("hidden", !activeSession);
-  }
-  queueViewSnapshotPersist("meetings");
-}
-
-async function openMeetingsRoom(roomId, { force = false } = {}) {
-  const meetings = ensureMeetingsState();
-  const id = String(roomId || "").trim();
-  if (!id) return null;
-  meetings.selectedRoomId = id;
-  renderMeetingsWorkspace();
-  await loadMeetingsRoomDetail(id, { force });
-  return meetings.detailById?.[id] || null;
-}
-
-async function submitMeetingsRoom({ startNow = false } = {}) {
-  const meetings = ensureMeetingsState();
-  const validDirectoryIds = getMeetingsDirectoryUserIdSet();
-  const participantUserIds = (
-    Array.isArray(meetings.createParticipantUserIds)
-      ? meetings.createParticipantUserIds
-      : []
-  )
-    .map((value) => String(value || "").trim())
-    .filter((value) => !validDirectoryIds.size || validDirectoryIds.has(value));
-  const scheduledFor = normalizeMeetingsScheduledForValue(
-    meetings.createScheduledFor || "",
-  );
-  const linkedConversationId = String(
-    meetings.createLinkedConversationId || "",
-  ).trim();
-  if (!startNow && !scheduledFor) {
-    syncMeetingsCreateStatus("예약 회의는 일시를 지정해야 합니다.", "error");
-    return;
-  }
-  if (
-    Array.isArray(meetings.createParticipantUserIds) &&
-    meetings.createParticipantUserIds.length &&
-    !participantUserIds.length
-  ) {
-    syncMeetingsCreateStatus(
-      "선택한 참여자 정보를 새로 불러와야 합니다. 다시 선택해 주세요.",
-      "error",
-    );
-    return;
-  }
-  const title =
-    String(meetings.createTitle || "").trim() ||
-    (startNow ? "즉시 회의" : "예약 회의");
-  syncMeetingsCreateStatus(
-    startNow ? "즉시 회의를 시작하는 중..." : "예약 회의를 만드는 중...",
-    "info",
-  );
-  const created = await apiRequest("/meetings/rooms", {
-    method: "POST",
-    body: {
-      title,
-      participant_user_ids: participantUserIds,
-      scheduled_for: startNow ? null : scheduledFor,
-      start_now: Boolean(startNow),
-      linked_conversation_id: linkedConversationId || null,
-      settings_json: {
-        created_from: "web",
-      },
-    },
-  });
-  meetings.createOpen = false;
-  meetings.createTitle = "";
-  meetings.createScheduledFor = "";
-  meetings.createSearch = "";
-  meetings.createLinkedConversationId = "";
-  meetings.createParticipantUserIds = [];
-  syncMeetingsCreateStatus("", "info");
-  await loadMeetingsRooms({ force: true });
-  meetings.selectedRoomId =
-    String(created?.id || "").trim() || meetings.selectedRoomId;
-  await openMeetingsRoom(meetings.selectedRoomId, { force: true });
-  showToast(
-    startNow ? "회의를 시작했습니다." : "회의를 예약했습니다.",
-    "success",
-    1800,
-  );
-}
-
-async function addMeetingsParticipants(roomId, participantUserId) {
-  const id = String(roomId || "").trim();
-  const userId = String(participantUserId || "").trim();
-  if (!id) return;
-  if (!userId) {
-    syncMeetingsParticipantStatus("추가할 직원을 먼저 선택해 주세요.", "error");
-    return;
-  }
-  const validDirectoryIds = getMeetingsDirectoryUserIdSet();
-  if (validDirectoryIds.size && !validDirectoryIds.has(userId)) {
-    syncMeetingsParticipantStatus(
-      "선택한 직원 정보가 오래되었습니다. 목록을 다시 불러온 뒤 다시 선택해 주세요.",
-      "error",
-    );
-    await loadMeetingsDirectory({ force: true });
-    renderMeetingsWorkspace();
-    return;
-  }
-  syncMeetingsParticipantStatus("참가자를 추가하는 중...", "info");
-  const updatedDetail = await apiRequest(
-    `/meetings/rooms/${encodeURIComponent(id)}/participants`,
-    {
-      method: "POST",
-      body: {
-        participant_user_ids: [userId],
-      },
-    },
-  );
-  const meetings = ensureMeetingsState();
-  if (
-    updatedDetail &&
-    typeof updatedDetail === "object" &&
-    String(updatedDetail.id || "").trim() === id
-  ) {
-    meetings.detailById = meetings.detailById || {};
-    meetings.detailById[id] = updatedDetail;
-    renderMeetingsWorkspace();
-  }
-  meetings.participantUserId = "";
-  await Promise.all([
-    loadMeetingsDirectory({ force: true }),
-    loadMeetingsRooms({ force: true }),
-    openMeetingsRoom(id, { force: true }),
-  ]);
-  syncMeetingsParticipantStatus("참가자를 회의에 추가했습니다.", "success");
-  showToast("참가자를 추가했습니다.", "success", 1800);
-}
-
-async function linkMeetingsConversation(roomId, conversationId) {
-  const id = String(roomId || "").trim();
-  const linkedConversationId = String(conversationId || "").trim();
-  if (!id) return;
-  if (!linkedConversationId) {
-    syncMeetingsLinkStatus("연결할 메신저 대화를 먼저 선택해 주세요.", "error");
-    return;
-  }
-  syncMeetingsLinkStatus("메신저 대화를 회의에 연결하는 중...", "info");
-  await apiRequest(`/meetings/rooms/${encodeURIComponent(id)}/chat-links`, {
-    method: "POST",
-    body: {
-      conversation_id: linkedConversationId,
-      link_type: "primary",
-    },
-  });
-  const meetings = ensureMeetingsState();
-  meetings.linkConversationId = "";
-  await Promise.all([
-    loadMeetingsConversationOptions({ force: true }),
-    openMeetingsRoom(id, { force: true }),
-  ]);
-  syncMeetingsLinkStatus("메신저 대화를 회의에 연결했습니다.", "success");
-  showToast("메신저 연계를 추가했습니다.", "success", 1800);
-}
-
-async function startMeetingsSession(roomId) {
-  const meetings = ensureMeetingsState();
-  const id = String(roomId || meetings.selectedRoomId || "").trim();
-  if (!id) return;
-  await apiRequest(`/meetings/rooms/${encodeURIComponent(id)}/sessions/start`, {
-    method: "POST",
-    body: {
-      media_backend: "pion",
-      meta_json: { source: "web" },
-    },
-  });
-  await Promise.all([
-    loadMeetingsRooms({ force: true }),
-    openMeetingsRoom(id, { force: true }),
-  ]);
-  showToast("회의 세션을 시작했습니다.", "success", 1800);
-}
-
-async function joinMeetingsSession(roomId, sessionId) {
-  const id = String(roomId || "").trim();
-  const sid = String(sessionId || "").trim();
-  if (!id || !sid) return;
-  await apiRequest(
-    `/meetings/rooms/${encodeURIComponent(id)}/sessions/${encodeURIComponent(sid)}/join`,
-    {
-      method: "POST",
-      body: {
-        reconnect: false,
-        device_type: "web",
-      },
-    },
-  );
-  await Promise.all([
-    loadMeetingsRooms({ force: true }),
-    openMeetingsRoom(id, { force: true }),
-  ]);
-  showToast("회의에 입장했습니다.", "success", 1800);
-}
-
-async function leaveMeetingsSession(roomId, sessionId) {
-  const id = String(roomId || "").trim();
-  const sid = String(sessionId || "").trim();
-  if (!id || !sid) return;
-  await apiRequest(
-    `/meetings/rooms/${encodeURIComponent(id)}/sessions/${encodeURIComponent(sid)}/leave`,
-    {
-      method: "POST",
-    },
-  );
-  await Promise.all([
-    loadMeetingsRooms({ force: true }),
-    openMeetingsRoom(id, { force: true }),
-  ]);
-  showToast("회의에서 나갔습니다.", "success", 1800);
-}
-
-async function endMeetingsSession(roomId, sessionId) {
-  const id = String(roomId || "").trim();
-  const sid = String(sessionId || "").trim();
-  if (!id || !sid) return;
-  await apiRequest(
-    `/meetings/rooms/${encodeURIComponent(id)}/sessions/${encodeURIComponent(sid)}/end`,
-    {
-      method: "POST",
-    },
-  );
-  await Promise.all([
-    loadMeetingsRooms({ force: true }),
-    openMeetingsRoom(id, { force: true }),
-    loadMeetingsRolloutStatus(),
-  ]);
-  showToast("회의를 종료했습니다.", "success", 1800);
-}
-
-async function recordMeetingsQuickEvent(roomId, sessionId, eventType) {
-  const id = String(roomId || "").trim();
-  const sid = String(sessionId || "").trim();
-  const rawType = String(eventType || "").trim();
-  if (!id || !sid || !rawType) return;
-  const mappedType =
-    rawType === "mute_toggle"
-      ? "mute_on"
-      : rawType === "camera_toggle"
-        ? "camera_on"
-        : rawType === "screen_share_start"
-          ? "screen_share_on"
-          : rawType;
-  await apiRequest(
-    `/meetings/rooms/${encodeURIComponent(id)}/sessions/${encodeURIComponent(sid)}/events`,
-    {
-      method: "POST",
-      body: {
-        event_type: mappedType,
-        payload_json: {
-          source: "web",
-          requested_event: rawType,
-        },
-      },
-    },
-  );
-  await openMeetingsRoom(id, { force: true });
-  showToast("회의 이벤트를 기록했습니다.", "success", 1500);
-}
-
-async function openMeetingsLinkedChat(conversationId) {
-  const id = String(conversationId || "").trim();
-  if (!id) return;
-  const messenger = ensureMessengerState();
-  messenger.selectedConversationId = id;
-  messenger.highlightMessageId = "";
-  await navigateToRoute(ROUTE_MESSENGER);
-  await openMessengerConversation(id, { force: true });
-}
-
-async function copyMeetingsLink(roomKey = "") {
-  const text = String(roomKey || "").trim();
-  if (!text) return;
-  const full = `${window.location.origin}${window.location.pathname}#${ROUTE_MEETINGS}?room=${encodeURIComponent(text)}`;
-  if (
-    navigator.clipboard &&
-    typeof navigator.clipboard.writeText === "function"
-  ) {
-    await navigator.clipboard.writeText(full);
-  } else {
-    const textarea = document.createElement("textarea");
-    textarea.value = full;
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand("copy");
-    document.body.removeChild(textarea);
-  }
-  showToast("회의 링크를 복사했습니다.", "success", 1800);
-}
-
-async function loadMeetingsViewPresenter() {
-  const meetings = ensureMeetingsState();
-  renderMeetingsWorkspace();
-  await Promise.allSettled([
-    loadMeetingsRooms(),
-    loadMeetingsRolloutStatus(),
-    loadMeetingsDirectory(),
-    loadMeetingsConversationOptions(),
-  ]);
-  const currentRoute = parseRouteCandidate(getCurrentRouteWithQuery() || "");
-  const requestedRoomKey = String(
-    new URLSearchParams(currentRoute.query || "").get("room") || "",
-  )
-    .trim()
-    .toLowerCase();
-  if (requestedRoomKey) {
-    try {
-      const linked = await apiRequest(
-        `/meetings/links/${encodeURIComponent(requestedRoomKey)}`,
-      );
-      const linkedRoomId = String(linked?.id || "").trim();
-      if (linkedRoomId) {
-        meetings.selectedRoomId = linkedRoomId;
-        meetings.detailById[linkedRoomId] = linked;
-      }
-    } catch (error) {
-      setMeetingsStatusHint(
-        normalizeActionError(error, "회의 링크를 찾지 못했습니다."),
-        "error",
-      );
-    }
-  }
-  if (!meetings.selectedRoomId) {
-    meetings.selectedRoomId = String(
-      (Array.isArray(meetings.rows) ? meetings.rows[0]?.id : "") || "",
-    ).trim();
-  }
-  if (meetings.selectedRoomId) {
-    await loadMeetingsRoomDetail(meetings.selectedRoomId);
-  }
-  renderMeetingsWorkspace();
-}
-
 function cloneArrayValue(value, fallback = []) {
   const cloned = cloneSerializableValue(
     Array.isArray(value) ? value : fallback,
@@ -69004,132 +65845,6 @@ function restoreEmployeesViewSnapshotPayload(payload = {}) {
   refreshEmployeeBulkDeleteButtonState();
 }
 
-function serializeMessengerViewSnapshotPayload() {
-  const messenger = ensureMessengerState();
-  const selectedId = String(messenger.selectedConversationId || "").trim();
-  return {
-    messenger: {
-      ...pickSerializableFields(messenger, [
-        "rows",
-        "fetchedAt",
-        "selectedConversationId",
-        "searchQuery",
-        "messageSearchQuery",
-        "typeFilter",
-      ]),
-      selectedDetail: selectedId
-        ? cloneSerializableValue(
-            messenger.detailById?.[selectedId] || null,
-            null,
-          )
-        : null,
-      selectedMessages: selectedId
-        ? cloneArrayValue(messenger.messagesByConversationId?.[selectedId], [])
-        : [],
-    },
-  };
-}
-
-function restoreMessengerViewSnapshotPayload(payload = {}) {
-  const snapshot = cloneObjectValue(payload.messenger, {});
-  state.messenger = {
-    ...createInitialMessengerState(),
-    ...(state.messenger || {}),
-    ...pickSerializableFields(snapshot, [
-      "rows",
-      "fetchedAt",
-      "selectedConversationId",
-      "searchQuery",
-      "messageSearchQuery",
-      "typeFilter",
-    ]),
-    detailById: {},
-    messagesByConversationId: {},
-    loading: false,
-    detailLoading: false,
-    searchLoading: false,
-    directoryLoading: false,
-    sending: false,
-    searchResults: [],
-    directoryRows: [],
-    directoryError: "",
-    error: "",
-    searchError: "",
-  };
-  const selectedId = String(
-    state.messenger.selectedConversationId || "",
-  ).trim();
-  if (selectedId) {
-    if (snapshot.selectedDetail) {
-      state.messenger.detailById[selectedId] = snapshot.selectedDetail;
-    }
-    if (
-      Array.isArray(snapshot.selectedMessages) &&
-      snapshot.selectedMessages.length
-    ) {
-      state.messenger.messagesByConversationId[selectedId] =
-        snapshot.selectedMessages;
-    }
-  }
-  renderMessengerWorkspace();
-}
-
-function serializeMeetingsViewSnapshotPayload() {
-  const meetings = ensureMeetingsState();
-  const selectedId = String(meetings.selectedRoomId || "").trim();
-  return {
-    meetings: {
-      ...pickSerializableFields(meetings, [
-        "rows",
-        "rollout",
-        "selectedRoomId",
-        "searchQuery",
-        "stateFilter",
-      ]),
-      selectedDetail: selectedId
-        ? cloneSerializableValue(
-            meetings.detailById?.[selectedId] || null,
-            null,
-          )
-        : null,
-    },
-  };
-}
-
-function restoreMeetingsViewSnapshotPayload(payload = {}) {
-  const snapshot = cloneObjectValue(payload.meetings, {});
-  state.meetings = {
-    ...createInitialMeetingsState(),
-    ...(state.meetings || {}),
-    ...pickSerializableFields(snapshot, [
-      "rows",
-      "rollout",
-      "selectedRoomId",
-      "searchQuery",
-      "stateFilter",
-    ]),
-    detailById: {},
-    loading: false,
-    detailLoading: false,
-    rolloutLoading: false,
-    directoryLoading: false,
-    saving: false,
-    directoryRows: [],
-    directoryQuery: "",
-    directoryError: "",
-    conversationRows: [],
-    conversationFetchedAt: 0,
-    conversationLoading: false,
-    conversationError: "",
-    error: "",
-  };
-  const selectedId = String(state.meetings.selectedRoomId || "").trim();
-  if (selectedId && snapshot.selectedDetail) {
-    state.meetings.detailById[selectedId] = snapshot.selectedDetail;
-  }
-  renderMeetingsWorkspace();
-}
-
 function serializeNoticesViewSnapshotPayload() {
   const notices = ensureNoticesState();
   const mode =
@@ -69323,16 +66038,6 @@ const VIEW_SNAPSHOT_CONFIG = Object.freeze({
     serialize: () => serializeEmployeesViewSnapshotPayload(),
     restore: (payload) => restoreEmployeesViewSnapshotPayload(payload),
   },
-  messenger: {
-    ttlMs: 30 * 1000,
-    serialize: () => serializeMessengerViewSnapshotPayload(),
-    restore: (payload) => restoreMessengerViewSnapshotPayload(payload),
-  },
-  meetings: {
-    ttlMs: 30 * 1000,
-    serialize: () => serializeMeetingsViewSnapshotPayload(),
-    restore: (payload) => restoreMeetingsViewSnapshotPayload(payload),
-  },
   notices: {
     ttlMs: 30 * 1000,
     serialize: () => serializeNoticesViewSnapshotPayload(),
@@ -69352,22 +66057,6 @@ const VIEW_PRESENTERS = {
     backgroundLoad: ({ force = false } = {}) =>
       loadHomeData({ quiet: true, force }),
     load: loadHomeViewPresenter,
-  },
-  messenger: {
-    loadingMessage: "메신저를 불러오는 중입니다...",
-    errorMessage: "메신저 데이터를 불러오지 못했습니다.",
-    onCacheHit: () => {
-      renderMessengerWorkspace();
-    },
-    load: loadMessengerViewPresenter,
-  },
-  meetings: {
-    loadingMessage: "화상대화를 불러오는 중입니다...",
-    errorMessage: "화상대화 데이터를 불러오지 못했습니다.",
-    onCacheHit: () => {
-      renderMeetingsWorkspace();
-    },
-    load: loadMeetingsViewPresenter,
   },
   ops: {
     loadingMessage: "운영 요약을 불러오는 중입니다...",
@@ -69580,8 +66269,6 @@ function buildViewPrewarmTargets() {
     { view: "calendar", routeOverride: resolveRouteForView("calendar") },
     { view: "reports", routeOverride: resolveRouteForView("reports") },
     { view: "employees", routeOverride: ROUTE_ADMIN_EMPLOYEES },
-    { view: "messenger", routeOverride: ROUTE_MESSENGER },
-    { view: "meetings", routeOverride: ROUTE_MEETINGS },
     { view: "notices", routeOverride: buildNoticesRoute() },
     { view: "profile", routeOverride: resolveRouteForView("profile") },
   ].filter((item) => isViewAllowed(item.view, perms));
@@ -95795,6 +92482,15 @@ async function runScheduleLiveFallbackCycle() {
     scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
     return;
   }
+  const streamPath = buildScheduleLiveStreamPath();
+  const hasActiveMatchingStream =
+    state.scheduleLiveStreamConnected &&
+    state.scheduleLiveStreamPromise &&
+    state.scheduleLiveStreamPath === streamPath;
+  if (hasActiveMatchingStream) {
+    scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
+    return;
+  }
   if (state.scheduleLiveRefreshInFlight) {
     scheduleNextScheduleLiveFallbackPoll(SCHEDULE_LIVE_FALLBACK_POLL_MS);
     return;
@@ -100709,342 +97405,6 @@ function bindUiEvents() {
         return;
       }
 
-      if (action === "messenger-refresh") {
-        runWithBusy(() => loadMessengerViewPresenter(), "메신저 갱신 중...");
-        return;
-      }
-
-      if (action === "messenger-toggle-create") {
-        const messenger = ensureMessengerState();
-        messenger.createOpen = !messenger.createOpen;
-        if (messenger.createOpen) {
-          resetMessengerCreateDraft({
-            createType: canCreateMessengerAnnouncement()
-              ? normalizeMessengerConversationType(
-                  messenger.createType || "group",
-                )
-              : "group",
-            preserveOpen: true,
-          });
-          syncMessengerCreateStatus("", "info");
-          renderMessengerWorkspace();
-          runActionSafely(
-            loadMessengerDirectory({ force: true }),
-            "참여자 목록을 불러오지 못했습니다.",
-          );
-        } else {
-          resetMessengerCreateDraft({
-            createType: canCreateMessengerAnnouncement()
-              ? messenger.createType || "group"
-              : "group",
-            preserveOpen: false,
-          });
-          renderMessengerWorkspace();
-        }
-        return;
-      }
-
-      if (action === "messenger-filter-type") {
-        const messenger = ensureMessengerState();
-        messenger.typeFilter = normalizeMessengerConversationType(
-          actionEl.dataset.type || "all",
-        );
-        renderMessengerWorkspace();
-        return;
-      }
-
-      if (action === "messenger-open-conversation") {
-        const conversationId = String(
-          actionEl.dataset.conversationId || "",
-        ).trim();
-        runWithBusy(
-          () => openMessengerConversation(conversationId, { force: true }),
-          "대화 여는 중...",
-        );
-        return;
-      }
-
-      if (action === "messenger-create-type") {
-        const messenger = ensureMessengerState();
-        const nextType = normalizeMessengerConversationType(
-          actionEl.dataset.type || "group",
-        );
-        if (nextType === "announcement" && !canCreateMessengerAnnouncement()) {
-          showToast("공지방 생성 권한이 없습니다.", "error", 2200);
-          return;
-        }
-        messenger.createType = nextType === "all" ? "group" : nextType;
-        messenger.createMemberUserIds = [];
-        if (messenger.createType !== "announcement") {
-          messenger.createRoomKey = "";
-          messenger.createScopeType = "tenant";
-        }
-        if (messenger.createType === "dm") {
-          messenger.createTitle = "";
-        }
-        syncMessengerCreateStatus("", "info");
-        renderMessengerWorkspace();
-        return;
-      }
-
-      if (action === "messenger-toggle-member") {
-        const messenger = ensureMessengerState();
-        const userId = String(actionEl.dataset.userId || "").trim();
-        if (!userId) return;
-        const current = new Set(
-          (Array.isArray(messenger.createMemberUserIds)
-            ? messenger.createMemberUserIds
-            : []
-          )
-            .map((value) => String(value || "").trim())
-            .filter(Boolean),
-        );
-        if (current.has(userId)) {
-          current.delete(userId);
-        } else if (
-          normalizeMessengerConversationType(
-            messenger.createType || "group",
-          ) === "dm"
-        ) {
-          current.clear();
-          current.add(userId);
-        } else {
-          current.add(userId);
-        }
-        messenger.createMemberUserIds = Array.from(current);
-        renderMessengerWorkspace();
-        return;
-      }
-
-      if (action === "messenger-create-submit") {
-        runWithBusy(() => submitMessengerConversation(), "대화 생성 중...");
-        return;
-      }
-
-      if (action === "messenger-submit-message") {
-        runWithBusy(() => submitMessengerMessage(), "메시지 전송 중...");
-        return;
-      }
-
-      if (action === "messenger-search-result-open") {
-        const conversationId = String(
-          actionEl.dataset.conversationId || "",
-        ).trim();
-        const messageId = String(actionEl.dataset.messageId || "").trim();
-        const messenger = ensureMessengerState();
-        messenger.highlightMessageId = messageId;
-        runWithBusy(async () => {
-          await openMessengerConversation(conversationId, { force: true });
-        }, "검색 결과 여는 중...");
-        return;
-      }
-
-      if (action === "messenger-search-clear") {
-        const messenger = ensureMessengerState();
-        messenger.messageSearchQuery = "";
-        messenger.searchResults = [];
-        messenger.searchError = "";
-        const input = $("#messengerMessageSearch");
-        if (input instanceof HTMLInputElement) input.value = "";
-        renderMessengerWorkspace();
-        return;
-      }
-
-      if (action === "messenger-reaction-toggle") {
-        const messageId = String(actionEl.dataset.messageId || "").trim();
-        const reaction = String(actionEl.dataset.reaction || "").trim();
-        const reacted =
-          String(actionEl.dataset.reacted || "").trim() === "true";
-        runActionSafely(
-          toggleMessengerReaction(messageId, reaction, reacted),
-          "리액션 처리에 실패했습니다.",
-        );
-        return;
-      }
-
-      if (action === "meetings-refresh") {
-        runWithBusy(() => loadMeetingsViewPresenter(), "회의 갱신 중...");
-        return;
-      }
-
-      if (action === "meetings-toggle-create") {
-        const meetings = ensureMeetingsState();
-        meetings.createOpen = !meetings.createOpen;
-        if (meetings.createOpen) {
-          meetings.createSearch = "";
-          meetings.createLinkedConversationId = "";
-          meetings.createParticipantUserIds = [];
-          syncMeetingsCreateStatus("", "info");
-          renderMeetingsWorkspace();
-          const shouldRefreshDirectory = !(
-            Array.isArray(meetings.directoryRows) &&
-            meetings.directoryRows.length
-          );
-          const shouldRefreshConversations = !(
-            Array.isArray(meetings.conversationRows) &&
-            meetings.conversationRows.length
-          );
-          runActionSafely(
-            Promise.allSettled([
-              loadMeetingsDirectory({ force: shouldRefreshDirectory }),
-              loadMeetingsConversationOptions({
-                force: shouldRefreshConversations,
-              }),
-            ]),
-            "회의 생성 데이터를 불러오지 못했습니다.",
-          );
-        } else {
-          renderMeetingsWorkspace();
-        }
-        return;
-      }
-
-      if (action === "meetings-filter-state") {
-        const meetings = ensureMeetingsState();
-        meetings.stateFilter = normalizeMeetingsStateFilter(
-          actionEl.dataset.state || "all",
-        );
-        runWithBusy(
-          () => loadMeetingsRooms({ force: true }),
-          "회의 목록 갱신 중...",
-        );
-        return;
-      }
-
-      if (action === "meetings-open-room") {
-        const roomId = String(actionEl.dataset.roomId || "").trim();
-        runWithBusy(
-          () => openMeetingsRoom(roomId, { force: true }),
-          "회의 여는 중...",
-        );
-        return;
-      }
-
-      if (action === "meetings-add-participant") {
-        const meetings = ensureMeetingsState();
-        const roomId = String(meetings.selectedRoomId || "").trim();
-        runWithBusy(
-          () => addMeetingsParticipants(roomId, meetings.participantUserId),
-          "참가자 추가 중...",
-        );
-        return;
-      }
-
-      if (action === "meetings-toggle-member") {
-        const meetings = ensureMeetingsState();
-        const userId = String(actionEl.dataset.userId || "").trim();
-        if (!userId) return;
-        const current = new Set(
-          (Array.isArray(meetings.createParticipantUserIds)
-            ? meetings.createParticipantUserIds
-            : []
-          )
-            .map((value) => String(value || "").trim())
-            .filter(Boolean),
-        );
-        if (current.has(userId)) current.delete(userId);
-        else current.add(userId);
-        meetings.createParticipantUserIds = Array.from(current);
-        renderMeetingsWorkspace();
-        return;
-      }
-
-      if (action === "meetings-create-submit") {
-        const startNow =
-          String(actionEl.dataset.startNow || "").trim() === "true";
-        runWithBusy(
-          () => submitMeetingsRoom({ startNow }),
-          startNow ? "즉시 회의 시작 중..." : "예약 회의 생성 중...",
-        );
-        return;
-      }
-
-      if (action === "meetings-session-start") {
-        const meetings = ensureMeetingsState();
-        const roomId = String(meetings.selectedRoomId || "").trim();
-        runWithBusy(() => startMeetingsSession(roomId), "회의 세션 시작 중...");
-        return;
-      }
-
-      if (action === "meetings-session-join") {
-        const meetings = ensureMeetingsState();
-        const roomId = String(meetings.selectedRoomId || "").trim();
-        const sessionId = String(actionEl.dataset.sessionId || "").trim();
-        runWithBusy(
-          () => joinMeetingsSession(roomId, sessionId),
-          "회의 입장 중...",
-        );
-        return;
-      }
-
-      if (action === "meetings-session-leave") {
-        const meetings = ensureMeetingsState();
-        const roomId = String(meetings.selectedRoomId || "").trim();
-        const sessionId = String(actionEl.dataset.sessionId || "").trim();
-        runWithBusy(
-          () => leaveMeetingsSession(roomId, sessionId),
-          "회의 종료 처리 중...",
-        );
-        return;
-      }
-
-      if (action === "meetings-session-end") {
-        const meetings = ensureMeetingsState();
-        const roomId = String(meetings.selectedRoomId || "").trim();
-        const sessionId = String(actionEl.dataset.sessionId || "").trim();
-        runWithBusy(
-          () => endMeetingsSession(roomId, sessionId),
-          "회의 종료 중...",
-        );
-        return;
-      }
-
-      if (action === "meetings-record-event") {
-        const meetings = ensureMeetingsState();
-        const roomId = String(meetings.selectedRoomId || "").trim();
-        const detail = meetings.detailById?.[roomId] || null;
-        const sessionId = String(detail?.active_session?.id || "").trim();
-        const eventType = String(actionEl.dataset.eventType || "").trim();
-        runActionSafely(
-          recordMeetingsQuickEvent(roomId, sessionId, eventType),
-          "회의 이벤트 기록에 실패했습니다.",
-        );
-        return;
-      }
-
-      if (action === "meetings-open-chat") {
-        const conversationId = String(
-          actionEl.dataset.conversationId || "",
-        ).trim();
-        runWithBusy(
-          () => openMeetingsLinkedChat(conversationId),
-          "연결된 채팅 여는 중...",
-        );
-        return;
-      }
-
-      if (action === "meetings-link-chat") {
-        const meetings = ensureMeetingsState();
-        const roomId = String(meetings.selectedRoomId || "").trim();
-        runWithBusy(
-          () => linkMeetingsConversation(roomId, meetings.linkConversationId),
-          "메신저 연계 중...",
-        );
-        return;
-      }
-
-      if (action === "meetings-copy-link") {
-        const meetings = ensureMeetingsState();
-        const detail =
-          meetings.detailById?.[String(meetings.selectedRoomId || "").trim()] ||
-          null;
-        runActionSafely(
-          copyMeetingsLink(detail?.room_key || ""),
-          "회의 링크 복사에 실패했습니다.",
-        );
-        return;
-      }
-
       if (action === "open-notifications") {
         closeDrawer();
         runActionSafely(
@@ -102989,22 +99349,6 @@ function bindUiEvents() {
         runWithBusy(
           () => loadGroupwareAdminData({ force: true }),
           "그룹웨어 상태 새로고침 중...",
-        );
-        return;
-      }
-
-      if (action === "groupware-open-meetings") {
-        runActionSafely(
-          navigateToRoute(ROUTE_MEETINGS),
-          "화상대화 화면을 여는 중 오류가 발생했습니다.",
-        );
-        return;
-      }
-
-      if (action === "groupware-rollout-save") {
-        runWithBusy(
-          () => recordGroupwareRolloutCheck(),
-          "rollout 체크 기록 중...",
         );
         return;
       }
@@ -107439,64 +103783,6 @@ function bindUiEvents() {
         return;
       }
 
-      if (target.id === "messengerCreateScopeType") {
-        const messenger = ensureMessengerState();
-        messenger.createScopeType =
-          target instanceof HTMLSelectElement
-            ? String(target.value || "tenant")
-                .trim()
-                .toLowerCase()
-            : "tenant";
-        renderMessengerWorkspace();
-        return;
-      }
-
-      if (target.id === "meetingsCreateLinkedConversation") {
-        const meetings = ensureMeetingsState();
-        meetings.createLinkedConversationId =
-          target instanceof HTMLSelectElement
-            ? String(target.value || "").trim()
-            : "";
-        renderMeetingsWorkspace();
-        return;
-      }
-
-      if (target.id === "meetingsLinkConversationSelect") {
-        const meetings = ensureMeetingsState();
-        meetings.linkConversationId =
-          target instanceof HTMLSelectElement
-            ? String(target.value || "").trim()
-            : "";
-        if (meetings.linkConversationId) {
-          syncMeetingsLinkStatus("", "info");
-        }
-        renderMeetingsWorkspace();
-        return;
-      }
-
-      if (target.id === "meetingsParticipantSelect") {
-        const meetings = ensureMeetingsState();
-        meetings.participantUserId =
-          target instanceof HTMLSelectElement
-            ? String(target.value || "").trim()
-            : "";
-        if (meetings.participantUserId) {
-          syncMeetingsParticipantStatus("", "info");
-        }
-        renderMeetingsWorkspace();
-        return;
-      }
-
-      if (target.id === "meetingsSearchInput") {
-        const meetings = ensureMeetingsState();
-        meetings.searchQuery =
-          target instanceof HTMLInputElement
-            ? String(target.value || "").trim()
-            : "";
-        renderMeetingsWorkspace();
-        return;
-      }
-
       if (targetAction === "employee-roster-site-change") {
         const rowId = String(target.dataset.rowId || "").trim();
         const siteCode =
@@ -108865,133 +105151,6 @@ function bindUiEvents() {
             ? String(target.value || "").trim()
             : "";
         renderEmployeesFromCache();
-        return;
-      }
-      if (target.id === "messengerConversationSearch") {
-        const messenger = ensureMessengerState();
-        messenger.searchQuery =
-          target instanceof HTMLInputElement
-            ? String(target.value || "").trim()
-            : "";
-        renderMessengerWorkspace();
-        return;
-      }
-      if (target.id === "meetingsSearchInput") {
-        const meetings = ensureMeetingsState();
-        meetings.searchQuery =
-          target instanceof HTMLInputElement
-            ? String(target.value || "").trim()
-            : "";
-        renderMeetingsWorkspace();
-        return;
-      }
-      if (target.id === "messengerMessageSearch") {
-        const messenger = ensureMessengerState();
-        const query =
-          target instanceof HTMLInputElement
-            ? String(target.value || "").trim()
-            : "";
-        messenger.messageSearchQuery = query;
-        runActionSafely(
-          loadMessengerSearchResults(query),
-          "메시지 검색에 실패했습니다.",
-        );
-        return;
-      }
-      if (target.id === "messengerComposerInput") {
-        const messenger = ensureMessengerState();
-        messenger.composerBody =
-          target instanceof HTMLTextAreaElement
-            ? String(target.value || "")
-            : "";
-        renderMessengerComposer();
-        return;
-      }
-      if (target.id === "messengerCreateSearch") {
-        const messenger = ensureMessengerState();
-        messenger.createSearch =
-          target instanceof HTMLInputElement
-            ? String(target.value || "").trim()
-            : "";
-        runActionSafely(
-          loadMessengerDirectory({ force: true }),
-          "참여자 목록을 불러오지 못했습니다.",
-        );
-        return;
-      }
-      if (target.id === "messengerCreateTitle") {
-        const messenger = ensureMessengerState();
-        messenger.createTitle =
-          target instanceof HTMLInputElement ? String(target.value || "") : "";
-        return;
-      }
-      if (target.id === "messengerCreateDescription") {
-        const messenger = ensureMessengerState();
-        messenger.createDescription =
-          target instanceof HTMLTextAreaElement
-            ? String(target.value || "")
-            : "";
-        return;
-      }
-      if (target.id === "messengerCreateRoomKey") {
-        const messenger = ensureMessengerState();
-        messenger.createRoomKey =
-          target instanceof HTMLInputElement
-            ? String(target.value || "")
-                .trim()
-                .toLowerCase()
-            : "";
-        if (
-          target instanceof HTMLInputElement &&
-          target.value !== messenger.createRoomKey
-        ) {
-          target.value = messenger.createRoomKey;
-        }
-        return;
-      }
-      if (target.id === "messengerCreateScopeType") {
-        const messenger = ensureMessengerState();
-        messenger.createScopeType =
-          target instanceof HTMLSelectElement
-            ? String(target.value || "tenant")
-                .trim()
-                .toLowerCase()
-            : "tenant";
-        return;
-      }
-      if (target.id === "meetingsCreateTitle") {
-        const meetings = ensureMeetingsState();
-        meetings.createTitle =
-          target instanceof HTMLInputElement ? String(target.value || "") : "";
-        return;
-      }
-      if (target.id === "meetingsCreateScheduledFor") {
-        const meetings = ensureMeetingsState();
-        meetings.createScheduledFor =
-          target instanceof HTMLInputElement
-            ? String(target.value || "").trim()
-            : "";
-        return;
-      }
-      if (target.id === "meetingsCreateSearch") {
-        const meetings = ensureMeetingsState();
-        meetings.createSearch =
-          target instanceof HTMLInputElement
-            ? String(target.value || "").trim()
-            : "";
-        runActionSafely(
-          loadMeetingsDirectory({ force: true }),
-          "참여자 목록을 불러오지 못했습니다.",
-        );
-        return;
-      }
-      if (target.id === "meetingsCreateLinkedConversation") {
-        const meetings = ensureMeetingsState();
-        meetings.createLinkedConversationId =
-          target instanceof HTMLSelectElement
-            ? String(target.value || "").trim()
-            : "";
-        renderMeetingsWorkspace();
         return;
       }
       if (target.id === "leaveEmployeePickerSearch") {
