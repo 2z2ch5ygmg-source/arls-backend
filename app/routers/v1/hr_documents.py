@@ -639,31 +639,44 @@ def _fetch_document_approval_policy_rows(
     if not policy_state["editable"]:
         return [], None
 
-    for form_key in (policy_state["rule_form_key"], policy_state["fallback_form_key"]):
-        if not form_key:
-            continue
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id,
-                       rule_order,
-                       rule_name,
-                       approver_role,
-                       approver_user_id,
-                       scope_type,
-                       site_id,
-                       conditions_json
-                FROM approval_line_rules
-                WHERE tenant_id = %s
-                  AND form_key = %s
-                  AND is_active = TRUE
-                ORDER BY rule_order ASC, created_at ASC
-                """,
-                (tenant_id, form_key),
-            )
-            rows = [dict(row) for row in (cur.fetchall() or [])]
-        if rows:
-            return rows, form_key
+    form_keys = [policy_state["rule_form_key"]]
+    fallback_form_key = policy_state["fallback_form_key"]
+    if fallback_form_key and fallback_form_key not in form_keys:
+        form_keys.append(fallback_form_key)
+    form_keys = [form_key for form_key in form_keys if form_key]
+    if not form_keys:
+        return [], None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id,
+                   form_key,
+                   rule_order,
+                   rule_name,
+                   approver_role,
+                   approver_user_id,
+                   scope_type,
+                   site_id,
+                   conditions_json
+            FROM approval_line_rules
+            WHERE tenant_id = %s
+              AND form_key = ANY(%s::text[])
+              AND is_active = TRUE
+            ORDER BY array_position(%s::text[], form_key) ASC,
+                     rule_order ASC,
+                     created_at ASC
+            """,
+            (tenant_id, form_keys, form_keys),
+        )
+        rows = [dict(row) for row in (cur.fetchall() or [])]
+    if rows:
+        matched_form_key = str(rows[0].get("form_key") or form_keys[0]).strip()
+        matched_rows = [
+            row
+            for row in rows
+            if str(row.get("form_key") or matched_form_key).strip() == matched_form_key
+        ]
+        return matched_rows, matched_form_key
     return [], policy_state["rule_form_key"]
 
 
@@ -762,12 +775,18 @@ def _build_document_approval_policy_response(
     items: list[dict[str, Any]] = []
     matched_form_key = None
     if policy_state["editable"]:
-        ensure_default_approval_line_rules(conn, tenant_id=tenant_id)
         rows, matched_form_key = _fetch_document_approval_policy_rows(
             conn,
             tenant_id=tenant_id,
             document_type=document_type,
         )
+        if not rows:
+            ensure_default_approval_line_rules(conn, tenant_id=tenant_id)
+            rows, matched_form_key = _fetch_document_approval_policy_rows(
+                conn,
+                tenant_id=tenant_id,
+                document_type=document_type,
+            )
         items = [_serialize_document_approval_policy_row(row) for row in rows]
     return {
         "document_type": policy_state["document_type"],

@@ -91,10 +91,10 @@ class HrDocumentsApprovalPolicyTests(unittest.TestCase):
     def test_build_document_approval_policy_response_falls_back_to_generic_rules(self):
         conn = _FakeConn(
             fetchall_queue=[
-                [],
                 [
                     {
                         "id": "rule-1",
+                        "form_key": "certificate_request",
                         "rule_order": 1,
                         "rule_name": "기본 결재선 1",
                         "approver_role": "supervisor",
@@ -122,19 +122,60 @@ class HrDocumentsApprovalPolicyTests(unittest.TestCase):
             ]
         )
 
-        with patch.object(hr_documents, "ensure_default_approval_line_rules"):
+        with patch.object(hr_documents, "ensure_default_approval_line_rules") as ensure_defaults:
             result = hr_documents._build_document_approval_policy_response(
                 conn,
                 tenant_id="tenant-1",
                 document_type=hr_documents.DOCUMENT_TYPE_RETIREMENT_CERTIFICATE,
             )
 
+        ensure_defaults.assert_not_called()
+        self.assertEqual(
+            sum("FROM approval_line_rules" in sql for sql, _ in conn.executed),
+            1,
+        )
         self.assertTrue(result["editable"])
         self.assertEqual(result["resolved_form_key"], "certificate_request")
         self.assertTrue(result["uses_fallback_policy"])
         self.assertEqual(result["items"][0]["step_kind"], "site_supervisor")
         self.assertEqual(result["user_options"][0]["id"], "user-1")
         self.assertEqual(result["site_options"][0]["id"], "site-1")
+
+    def test_build_document_approval_policy_response_ensures_defaults_only_when_no_rows(self):
+        conn = _FakeConn(
+            fetchall_queue=[
+                [],
+                [
+                    {
+                        "id": "rule-default",
+                        "form_key": "certificate_request",
+                        "rule_order": 1,
+                        "rule_name": "기본 결재선",
+                        "approver_role": "hq_admin",
+                        "approver_user_id": None,
+                        "scope_type": "tenant",
+                        "site_id": None,
+                        "conditions_json": {},
+                    }
+                ],
+                [],
+                [],
+            ]
+        )
+
+        with patch.object(hr_documents, "ensure_default_approval_line_rules") as ensure_defaults:
+            result = hr_documents._build_document_approval_policy_response(
+                conn,
+                tenant_id="tenant-1",
+                document_type=hr_documents.DOCUMENT_TYPE_RETIREMENT_CERTIFICATE,
+            )
+
+        ensure_defaults.assert_called_once_with(conn, tenant_id="tenant-1")
+        self.assertEqual(
+            sum("FROM approval_line_rules" in sql for sql, _ in conn.executed),
+            2,
+        )
+        self.assertEqual(result["items"][0]["id"], "rule-default")
 
     def test_update_document_approval_policy_inserts_type_specific_rules(self):
         conn = _FakeConn()

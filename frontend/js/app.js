@@ -730,6 +730,7 @@ let lastNormalizedRouteOutput = "";
 let pendingOpsViewPresenterRefresh = null;
 let pendingReportsViewPresenterRefresh = null;
 let pendingRequestsViewPresenterRefresh = null;
+let pendingHomeDataRefresh = null;
 let pendingLeaveViewPresenterRefresh = null;
 let pendingScheduleViewPresenterRefresh = null;
 const ROADMAP_ITEMS_P1 = [
@@ -5671,6 +5672,9 @@ async function fetchAttendanceOvertimeByDateKeys(
 
 function prefetchAttendanceCalendarRecordsInBackground({ force = false } = {}) {
   if (!canUseAttendanceManagerFilter()) return;
+  if (normalizeViewSnapshotName(state.currentView || "") !== "attendance") {
+    return;
+  }
   if (!state.attendanceView) {
     state.attendanceView = createInitialAttendanceViewState();
   }
@@ -55402,6 +55406,27 @@ function waitForViewShellPaint() {
   });
 }
 
+function queueHomeDataRefresh({ quiet = true, force = false } = {}) {
+  const pending = pendingHomeDataRefresh;
+  if (pending?.promise && (!force || pending.force)) {
+    return pending.promise;
+  }
+  const promise = loadDashboard({ quiet, force });
+  pendingHomeDataRefresh = {
+    promise,
+    force: Boolean(force),
+    startedAt: Date.now(),
+  };
+  promise
+    .finally(() => {
+      if (pendingHomeDataRefresh?.promise === promise) {
+        pendingHomeDataRefresh = null;
+      }
+    })
+    .catch(() => {});
+  return promise;
+}
+
 async function loadHomeViewPresenter() {
   state.home.audience = resolveHomeAudience();
   if (!state.home.briefing) {
@@ -55420,7 +55445,10 @@ async function loadHomeViewPresenter() {
   renderHomeSitePickerSummary();
   updateHomeCtaState();
   markHomeCriticalUiReady({ apiMs: 0 });
-  runActionSafely(loadDashboard(), "홈 데이터를 동기화하지 못했습니다.");
+  runActionSafely(
+    queueHomeDataRefresh({ quiet: true, force: false }),
+    "홈 데이터를 동기화하지 못했습니다.",
+  );
 
   if (isManagerShellRole()) {
     if (canManageIntegrations()) {
@@ -60434,10 +60462,9 @@ async function loadHrViewPresenter() {
     if (
       canAccessHrManageSegment() &&
       normalizeHrWorkspaceSegment(hrState.workspaceSegment || "apply") ===
-        "manage" &&
-      isHrApprovalPolicyManagerRole()
+        "manage"
     ) {
-      await loadHrDocumentApprovalRules({ force: true });
+      await Promise.allSettled(buildHrManageLoadTasks({ force: false }));
     }
     renderHrViewFromCache();
   }
@@ -66422,7 +66449,7 @@ const VIEW_PRESENTERS = {
     loadingMessage: "홈 데이터를 불러오는 중입니다...",
     errorMessage: "홈 데이터를 불러오지 못했습니다.",
     backgroundLoad: ({ force = false } = {}) =>
-      loadHomeData({ quiet: true, force }),
+      queueHomeDataRefresh({ quiet: true, force }),
     load: loadHomeViewPresenter,
   },
   ops: {
@@ -66483,6 +66510,9 @@ const VIEW_PRESENTERS = {
   attendance: {
     loadingMessage: "출퇴근 기록을 불러오는 중입니다...",
     errorMessage: "출퇴근 기록을 불러오지 못했습니다.",
+    // Attendance manager hydration can fan out one records request per day;
+    // keep post-login/Home prewarm from warming this heavy view.
+    prewarm: false,
     onCacheHit: () => {
       renderAttendanceViewFromCache();
     },
@@ -66638,7 +66668,11 @@ function buildViewPrewarmTargets() {
     { view: "employees", routeOverride: ROUTE_ADMIN_EMPLOYEES },
     { view: "notices", routeOverride: buildNoticesRoute() },
     { view: "profile", routeOverride: resolveRouteForView("profile") },
-  ].filter((item) => isViewAllowed(item.view, perms));
+  ].filter(
+    (item) =>
+      isViewAllowed(item.view, perms) &&
+      VIEW_PRESENTERS[item.view]?.prewarm !== false,
+  );
 }
 
 function queuePostLoginViewPrewarm({ delayMs = VIEW_PREWARM_DELAY_MS } = {}) {
