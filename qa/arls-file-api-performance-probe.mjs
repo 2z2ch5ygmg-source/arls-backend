@@ -25,6 +25,8 @@ const DEFAULT_API_TIMEOUT_MS = 8_000;
 const DEFAULT_VISIBLE_TIMEOUT_MS = 4_000;
 const DEFAULT_THRESHOLD_MS = 200;
 const DEFAULT_MAX_DOWNLOAD_BYTES = 8 * 1024 * 1024;
+const DEFAULT_HR_APPROVAL_POLICY_WARN_MS = 1_000;
+const DEFAULT_HR_DOCUMENT_TYPE = "employment_certificate";
 
 const BACKGROUND_ROUTE_SPECS = Object.freeze([
   { id: "home", hash: "#/home", selector: "#view-home:not(.hidden)" },
@@ -112,6 +114,8 @@ function parseArgs(argv) {
     thresholdMs: Number(process.env.ARLS_FIRST_VISIBLE_THRESHOLD_MS || DEFAULT_THRESHOLD_MS),
     maxDownloadBytes: Number(process.env.ARLS_PROBE_MAX_DOWNLOAD_BYTES || DEFAULT_MAX_DOWNLOAD_BYTES),
     duplicateThreshold: Number(process.env.ARLS_PROBE_DUPLICATE_THRESHOLD || 2),
+    approvalPolicyWarnMs: Number(process.env.ARLS_HR_APPROVAL_POLICY_WARN_MS || DEFAULT_HR_APPROVAL_POLICY_WARN_MS),
+    hrDocumentType: process.env.ARLS_PROBE_HR_DOCUMENT_TYPE || DEFAULT_HR_DOCUMENT_TYPE,
     only: "",
     dryRun: false,
     softFail: false,
@@ -163,6 +167,12 @@ function parseArgs(argv) {
     } else if (key === "--duplicate-threshold") {
       args.duplicateThreshold = Number(next);
       i += 1;
+    } else if (key === "--approval-policy-warn-ms") {
+      args.approvalPolicyWarnMs = Number(next);
+      i += 1;
+    } else if (key === "--hr-document-type") {
+      args.hrDocumentType = String(next || "").trim() || DEFAULT_HR_DOCUMENT_TYPE;
+      i += 1;
     } else if (key === "--only") {
       args.only = next;
       i += 1;
@@ -182,7 +192,7 @@ function parseArgs(argv) {
   }
   args.apiBase = normalizeApiBase(args.apiBase || deriveApiBaseFromUrl(args.baseUrl));
   if (!args.apiBase) throw new Error("Unable to resolve API base; pass --api-base or use --base-url with ?api=");
-  for (const [name, value] of Object.entries({ apiQuietMs: args.apiQuietMs, apiTimeoutMs: args.apiTimeoutMs, visibleTimeoutMs: args.visibleTimeoutMs, thresholdMs: args.thresholdMs, maxDownloadBytes: args.maxDownloadBytes })) {
+  for (const [name, value] of Object.entries({ apiQuietMs: args.apiQuietMs, apiTimeoutMs: args.apiTimeoutMs, visibleTimeoutMs: args.visibleTimeoutMs, thresholdMs: args.thresholdMs, maxDownloadBytes: args.maxDownloadBytes, approvalPolicyWarnMs: args.approvalPolicyWarnMs })) {
     if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number`);
   }
   if (!["", "api", "browser", "background"].includes(args.only)) {
@@ -250,6 +260,16 @@ async function loadStorageState(storageStatePath) {
 
 function buildSafeApiSpecs(config) {
   const specs = [
+    {
+      id: "hr-approval-policy",
+      method: "GET",
+      path: "/admin/hr/documents/approval-policy",
+      params: { document_type: config.hrDocumentType },
+      kind: "focused-safe-read",
+      okStatuses: [200, 403],
+      performanceWarnMs: config.approvalPolicyWarnMs,
+      note: "Focused HR approval-policy timing probe; 403 is accepted for unauthenticated/insufficient-role runs.",
+    },
     {
       id: "finance-download-workspace",
       method: "GET",
@@ -368,6 +388,8 @@ async function runSafeApiProbes(config, accessToken) {
         bytesRead: body.bytesRead,
         truncated: body.truncated,
         authBlocked: [401, 403].includes(response.status),
+        performanceOk: !spec.performanceWarnMs || headerMs <= spec.performanceWarnMs,
+        performanceWarnMs: spec.performanceWarnMs || undefined,
       });
     } catch (error) {
       results.push({ ...spec, url: redactUrl(url), ok: false, error: String(error?.message || error), totalMs: performance.now() - startedAt });
@@ -653,6 +675,8 @@ function publicConfig(config) {
     thresholdMs: config.thresholdMs,
     maxDownloadBytes: config.maxDownloadBytes,
     duplicateThreshold: config.duplicateThreshold,
+    approvalPolicyWarnMs: config.approvalPolicyWarnMs,
+    hrDocumentType: config.hrDocumentType,
     only: config.only || "all",
     includeStatefulDownloads: config.includeStatefulDownloads,
   };
@@ -674,8 +698,18 @@ function buildReportMarkdown(report) {
   if (report.directApi) {
     lines.push("## Safe direct API/file-operation probes", "", "| id | kind | status | totalMs | bytes | result | notes |", "| --- | --- | ---: | ---: | ---: | --- | --- |");
     for (const row of report.directApi.results || []) {
-      lines.push(`| ${row.id} | ${row.kind || "-"} | ${row.status ?? "-"} | ${formatMs(row.totalMs)} | ${row.bytesRead ?? "-"}${row.truncated ? "+" : ""} | ${row.ok ? "PASS" : "FAIL"} | ${escapeCell(row.note || row.error || (row.authBlocked ? "auth/permission-blocked" : ""))} |`);
+      const perfNote = row.performanceOk === false ? `over ${formatMs(row.performanceWarnMs)} warning` : "";
+      const notes = [row.error, perfNote, row.authBlocked ? "auth/permission-blocked" : "", row.note].filter(Boolean).join("; ");
+      lines.push(`| ${row.id} | ${row.kind || "-"} | ${row.status ?? "-"} | ${formatMs(row.totalMs)} | ${row.bytesRead ?? "-"}${row.truncated ? "+" : ""} | ${row.ok ? "PASS" : "FAIL"} | ${escapeCell(notes)} |`);
     }
+    lines.push("");
+  }
+  if (report.focusedHomeHr) {
+    lines.push("## Focused Home/HR performance summary", "");
+    const home = report.focusedHomeHr.home || {};
+    lines.push(`- Home attendance-records requests: ${home.attendanceRecordsRequestCount ?? 0} (${home.classification || "unknown"}); total Home requests: ${home.requestCount ?? 0}; api settle: ${home.apiSettleOk ? "PASS" : "TIMEOUT/UNKNOWN"}`);
+    const hr = report.focusedHomeHr.hrApprovalPolicy || {};
+    lines.push(`- HR approval-policy direct timing: ${formatMs(hr.directTotalMs)} (status ${hr.directStatus ?? "-"}, ${hr.classification || (hr.directPerformanceOk === false ? "over-warning-threshold" : "within/unknown-threshold")}); browser family requests: ${hr.browserRequestCount ?? 0}`);
     lines.push("");
   }
   if (report.browser?.backgroundRoutes?.length) {
@@ -704,6 +738,62 @@ function buildReportMarkdown(report) {
     lines.push("## Dry-run plan", "", `- Safe API probes: ${report.safeApiSpecs?.length || 0}`, `- Background routes: ${report.backgroundRouteSpecs?.length || 0}`, `- UI flow probes: ${report.safeUiFlowSpecs?.length || 0}`, "");
   }
   return `${lines.join("\n")}\n`;
+}
+
+function buildFocusedHomeHrSummary(report) {
+  const homeRoute = (report.browser?.backgroundRoutes || []).find((row) => row.id === "home");
+  const hrRoute = (report.browser?.backgroundRoutes || []).find((row) => row.id === "hr");
+  const hrDirect = (report.directApi?.results || []).find((row) => row.id === "hr-approval-policy");
+  const homeAttendanceFamilies = filterRequestFamilies(homeRoute, "/attendance/records");
+  const hrApprovalPolicyFamilies = filterRequestFamilies(hrRoute, "/admin/hr/documents/approval-policy");
+  const attendanceRecordsRequestCount = sumFamilyCounts(homeAttendanceFamilies);
+  const hrBrowserRequestCount = sumFamilyCounts(hrApprovalPolicyFamilies);
+  return {
+    home: {
+      routeObserved: Boolean(homeRoute),
+      requestCount: homeRoute?.requestCount ?? 0,
+      firstVisibleMs: homeRoute?.firstVisibleMs,
+      apiSettleOk: homeRoute ? Boolean(homeRoute.apiSettleOk) : false,
+      attendanceRecordsRequestCount,
+      attendanceRecordsFamilies: homeAttendanceFamilies,
+      classification: classifyHomeAttendanceFanout(attendanceRecordsRequestCount),
+    },
+    hrApprovalPolicy: {
+      routeObserved: Boolean(hrRoute),
+      directObserved: Boolean(hrDirect),
+      directStatus: hrDirect?.status,
+      directHeaderMs: hrDirect?.headerMs,
+      directTotalMs: hrDirect?.totalMs,
+      directPerformanceOk: hrDirect?.performanceOk,
+      performanceWarnMs: hrDirect?.performanceWarnMs,
+      browserRequestCount: hrBrowserRequestCount,
+      browserFamilies: hrApprovalPolicyFamilies,
+      browserMaxMs: hrApprovalPolicyFamilies.reduce((max, family) => Math.max(max, Number(family.maxMs || 0)), 0),
+      classification: classifyHrApprovalPolicyTiming(hrDirect, hrBrowserRequestCount),
+    },
+  };
+}
+
+function filterRequestFamilies(route, needle) {
+  return (route?.requestFamilies || []).filter((family) => String(family.family || "").includes(needle));
+}
+
+function sumFamilyCounts(families) {
+  return (families || []).reduce((sum, family) => sum + Number(family.count || 0), 0);
+}
+
+function classifyHomeAttendanceFanout(count) {
+  if (count <= 0) return "not-observed";
+  if (count === 1) return "single-request";
+  return "fanout-or-repeated-request";
+}
+
+function classifyHrApprovalPolicyTiming(row, browserRequestCount) {
+  if (!row && browserRequestCount <= 0) return "not-observed";
+  if (row?.error) return "fetch-failed-or-unavailable";
+  if (row?.authBlocked) return "auth-or-role-blocked";
+  if (row?.performanceOk === false) return "over-warning-threshold";
+  return "measured";
 }
 
 function formatMs(value) {
@@ -743,6 +833,7 @@ async function run(config) {
   const directOk = (report.directApi.results || []).every((item) => item.ok);
   const backgroundOk = (report.browser.backgroundRoutes || []).every((item) => item.ok && !(item.requestFamilies || []).some((family) => family.has429));
   const uiOk = (report.browser.uiFlows || []).every((item) => item.ok);
+  report.focusedHomeHr = buildFocusedHomeHrSummary(report);
   report.ok = directOk && backgroundOk && uiOk;
   return report;
 }
