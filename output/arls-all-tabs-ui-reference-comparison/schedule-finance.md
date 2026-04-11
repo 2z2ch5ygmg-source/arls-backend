@@ -1,8 +1,8 @@
 # Schedule + Finance UI Reference Comparison
 
-Date: 2026-04-12 KST  
-Worker: worker-2  
-Scope: ARLS Schedule screens (monthly calendar, list, upload wizard, templates), Finance submit/download screens  
+Date: 2026-04-12 KST
+Worker: worker-2
+Scope: ARLS Schedule screens (monthly calendar, list, upload wizard, templates), Finance submit/download screens
 Mode: read-only analysis; no product source edits
 
 ## Evidence used
