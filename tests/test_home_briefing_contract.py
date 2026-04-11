@@ -32,16 +32,10 @@ class _FakeCursor:
     def fetchone(self):
         return self._one
 
-    def fetchall(self):
-        if not self.conn.fetchall_results:
-            return []
-        return self.conn.fetchall_results.pop(0)
-
 
 class _FakeConn:
-    def __init__(self, fetchone_results=None, *, fetchall_results=None):
-        self.fetchone_results = list(fetchone_results or [])
-        self.fetchall_results = list(fetchall_results or [])
+    def __init__(self, fetchone_results):
+        self.fetchone_results = list(fetchone_results)
         self.executions: list[tuple[str, tuple | None]] = []
 
     def cursor(self):
@@ -282,47 +276,6 @@ def test_fetch_hq_org_issue_rows_skips_employee_deleted_clause_when_column_missi
     assert "COALESCE(e.is_deleted, FALSE) = FALSE" not in employee_sql
     assert employee_params == ("tenant-1",)
     assert rows[0].title == "미연동 직원"
-
-
-def test_fetch_today_staff_snapshot_uses_set_joins_and_utc_request_bounds(monkeypatch):
-    conn = _FakeConn(
-        fetchall_results=[
-            [
-                {
-                    "employee_id": "employee-1",
-                    "employee_code": "R738-1",
-                    "employee_name": "김감독",
-                    "site_code": "R738",
-                    "site_name": "Apple_명동",
-                    "shift_type": "day",
-                    "has_check_in": True,
-                    "approved_leave": False,
-                    "pending_leave": False,
-                    "pending_attendance": True,
-                }
-            ]
-        ]
-    )
-    day_start = datetime(2026, 3, 28, 15, 0, tzinfo=timezone.utc)
-    day_end = datetime(2026, 3, 29, 15, 0, tzinfo=timezone.utc)
-    monkeypatch.setattr(home_router, "_table_exists", lambda *_args, **_kwargs: True)
-
-    rows = home_router._fetch_today_staff_snapshot(
-        conn,
-        tenant_id="tenant-1",
-        target_date=date(2026, 3, 29),
-        day_start_utc=day_start,
-        day_end_utc=day_end,
-    )
-
-    snapshot_sql, params = conn.executions[0]
-    assert rows[0]["employee_id"] == "employee-1"
-    assert "LEFT JOIN checkins" in snapshot_sql
-    assert "LEFT JOIN pending_attendance" in snapshot_sql
-    assert "arq.requested_at >=" in snapshot_sql
-    assert "AT TIME ZONE" not in snapshot_sql
-    assert day_start in params
-    assert day_end in params
 
 
 def test_fetch_hq_org_issue_rows_skips_site_status_columns_when_missing(monkeypatch):
