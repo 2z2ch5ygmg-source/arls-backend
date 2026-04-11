@@ -247,8 +247,8 @@ const VIEW_SNAPSHOT_STORAGE_PREFIX = "rg-arls-view-snapshot:";
 const VIEW_SNAPSHOT_DEFAULT_MAX_BYTES = 1024 * 1024;
 const VIEW_SNAPSHOT_EMPLOYEES_MAX_BYTES = 800000;
 const VIEW_SNAPSHOT_PERSIST_DEBOUNCE_MS = 140;
-const VIEW_PREWARM_DELAY_MS = 260;
-const VIEW_PREWARM_CONCURRENCY = 2;
+const VIEW_PREWARM_DELAY_MS = 1500;
+const VIEW_PREWARM_CONCURRENCY = 1;
 const TENANT_CHECK_DEBOUNCE_MS = 320;
 const TENANT_CHECK_REQUEST_TIMEOUT_MS = 4500;
 const TENANT_CODE_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
@@ -24373,7 +24373,7 @@ async function onScheduleSupportHqDownload(progressController = null) {
     return `${parts.year || ""}${parts.month || ""}${parts.day || ""}`;
   })();
   const requestPath =
-    siteCode === "ALL"
+    isAllSites || isMultiSelection
       ? `${state.activeApiBase}/schedules/support-roundtrip/hq-roster-workbook?${params.toString()}`
       : `${state.activeApiBase}/schedules/support-roundtrip/hq-workbook?${params.toString()}`;
   await downloadAuthorizedFile({
