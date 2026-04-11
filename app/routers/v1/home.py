@@ -626,6 +626,17 @@ def get_home_briefing(
     audience = _resolve_home_audience(user)
     role_label = _role_label(user)
     _, _, today_kst = _today_context()
+    if audience == "hq" and defer_hq_heavy:
+        request_summary = HomeBriefingRequestSummaryOut()
+        return HomeBriefingOut(
+            audience=audience,
+            date=today_kst.isoformat(),
+            role_label=role_label,
+            scope_label="전체 운영 범위",
+            request_summary=request_summary,
+            approval_summary=request_summary,
+        )
+
     day_start_utc, day_end_utc = _kst_day_bounds_for_date(today_kst)
     own_site = _lookup_site_row(
         conn,

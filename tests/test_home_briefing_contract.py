@@ -210,6 +210,21 @@ def test_home_briefing_hq_can_defer_heavy_sections(monkeypatch):
         "_fetch_hq_org_issue_rows",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("org rows should be deferred")),
     )
+    monkeypatch.setattr(
+        home_router,
+        "_fetch_notice_summaries",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("notices should be deferred")),
+    )
+    monkeypatch.setattr(
+        home_router,
+        "_build_request_summary",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("request summary should be deferred")),
+    )
+    monkeypatch.setattr(
+        home_router,
+        "_lookup_site_row",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("site lookup should be deferred")),
+    )
 
     result = home_router.get_home_briefing(
         defer_hq_heavy=True,
@@ -221,6 +236,8 @@ def test_home_briefing_hq_can_defer_heavy_sections(monkeypatch):
     assert result.scope_label == "전체 운영 범위"
     assert result.request_summary is not None
     assert result.approval_summary is result.request_summary
+    assert result.request_summary.total_pending_count == 0
+    assert result.notice_rows == []
     assert result.ops_summary is None
     assert result.attendance_issue_rows == []
     assert result.schedule_risk_rows == []
