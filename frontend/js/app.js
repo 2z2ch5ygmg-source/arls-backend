@@ -728,6 +728,9 @@ const MAX_ROUTE_PATH_INPUT_LENGTH = 2048;
 let lastNormalizedRouteInput = "";
 let lastNormalizedRouteOutput = "";
 let pendingOpsViewPresenterRefresh = null;
+let pendingReportsViewPresenterRefresh = null;
+let pendingRequestsViewPresenterRefresh = null;
+let pendingLeaveViewPresenterRefresh = null;
 let pendingScheduleViewPresenterRefresh = null;
 const ROADMAP_ITEMS_P1 = [
   {
@@ -1446,6 +1449,8 @@ function createInitialViewRuntimeState() {
   return {
     loadedByKey: new Map(),
     loadingByKey: new Map(),
+    generationSeq: 0,
+    activeGeneration: null,
     statsByView: {},
     perf: createInitialViewPerfState(),
     backgroundToastDepth: 0,
@@ -2330,6 +2335,15 @@ function ensureViewRuntimeState() {
   if (!(state.viewRuntime.loadingByKey instanceof Map)) {
     state.viewRuntime.loadingByKey = new Map();
   }
+  if (!Number.isFinite(Number(state.viewRuntime.generationSeq))) {
+    state.viewRuntime.generationSeq = 0;
+  }
+  if (
+    state.viewRuntime.activeGeneration &&
+    typeof state.viewRuntime.activeGeneration !== "object"
+  ) {
+    state.viewRuntime.activeGeneration = null;
+  }
   if (
     !state.viewRuntime.statsByView ||
     typeof state.viewRuntime.statsByView !== "object"
@@ -2786,6 +2800,100 @@ function markViewActivated(viewName = "") {
   }
 }
 
+function beginViewRuntimeGeneration({
+  viewName = "",
+  routeOverride = "",
+  cacheKey = "",
+} = {}) {
+  const runtime = ensureViewRuntimeState();
+  const normalizedView =
+    normalizeViewSnapshotName(viewName) || String(viewName || "").trim();
+  const routeKey = resolveViewRouteKey(normalizedView, routeOverride);
+  const resolvedCacheKey = String(
+    cacheKey || resolveViewRuntimeCacheKey(normalizedView, routeOverride),
+  ).trim();
+  const id = Number(runtime.generationSeq || 0) + 1;
+  runtime.generationSeq = id;
+  runtime.activeGeneration = {
+    id,
+    viewName: normalizedView,
+    routeKey,
+    cacheKey: resolvedCacheKey,
+    routeOverride: String(routeOverride || "").trim(),
+    startedAt: Date.now(),
+  };
+  return id;
+}
+
+function getViewRuntimeLoadingTask(entry) {
+  if (!entry) return null;
+  if (typeof entry.then === "function") return entry;
+  if (entry.task && typeof entry.task.then === "function") return entry.task;
+  return null;
+}
+
+function getViewRuntimeLoadingGeneration(entry) {
+  if (!entry) return 0;
+  if (Number.isFinite(Number(entry.generation))) {
+    return Number(entry.generation);
+  }
+  if (Number.isFinite(Number(entry.viewGeneration))) {
+    return Number(entry.viewGeneration);
+  }
+  return 0;
+}
+
+function isCurrentViewRuntimeGeneration({
+  generation = 0,
+  viewName = "",
+  cacheKey = "",
+} = {}) {
+  const normalizedGeneration = Number(generation || 0);
+  if (!normalizedGeneration) return false;
+  const runtime = ensureViewRuntimeState();
+  const active = runtime.activeGeneration;
+  if (!active || Number(active.id || 0) !== normalizedGeneration) {
+    return false;
+  }
+  const normalizedView =
+    normalizeViewSnapshotName(viewName) || String(viewName || "").trim();
+  if (
+    normalizedView &&
+    normalizeViewSnapshotName(active.viewName || "") !== normalizedView
+  ) {
+    return false;
+  }
+  if (cacheKey && String(active.cacheKey || "") !== String(cacheKey || "")) {
+    return false;
+  }
+  if (
+    normalizedView &&
+    normalizeViewSnapshotName(state.currentView || "") !== normalizedView
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function canTouchViewRuntimeUi({
+  background = false,
+  generation = 0,
+  viewName = "",
+  cacheKey = "",
+} = {}) {
+  if (background) return false;
+  const normalizedView =
+    normalizeViewSnapshotName(viewName) || String(viewName || "").trim();
+  if (
+    normalizedView &&
+    normalizeViewSnapshotName(state.currentView || "") !== normalizedView
+  ) {
+    return false;
+  }
+  if (!generation) return true;
+  return isCurrentViewRuntimeGeneration({ generation, viewName, cacheKey });
+}
+
 function clearViewRuntimeCache(viewName = "") {
   const runtime = ensureViewRuntimeState();
   const target = String(viewName || "").trim();
@@ -2800,6 +2908,8 @@ function clearViewRuntimeCache(viewName = "") {
     }
     runtime.loadedByKey.clear();
     runtime.loadingByKey.clear();
+    runtime.generationSeq = 0;
+    runtime.activeGeneration = null;
     runtime.statsByView = {};
     runtime.perf = createInitialViewPerfState();
     runtime.backgroundToastDepth = 0;
@@ -2823,6 +2933,13 @@ function clearViewRuntimeCache(viewName = "") {
       runtime.loadingByKey.delete(key);
     }
   });
+  if (
+    runtime.activeGeneration &&
+    normalizeViewSnapshotName(runtime.activeGeneration.viewName || "") ===
+      normalizeViewSnapshotName(target)
+  ) {
+    runtime.activeGeneration = null;
+  }
   if (runtime.snapshotTimers instanceof Map) {
     Array.from(runtime.snapshotTimers.keys()).forEach((key) => {
       if (!String(key || "").startsWith(prefix)) return;
@@ -14645,6 +14762,33 @@ async function onReportsAppleRun({
   renderReportsWorkspacePanels();
 }
 
+function queueReportsViewPresenterRefresh() {
+  if (pendingReportsViewPresenterRefresh) {
+    return null;
+  }
+  const task = (async () => {
+    if (shouldLoadReportsSiteOptionsForTab()) {
+      await Promise.allSettled([
+        refreshScheduleImportSiteOptions({ force: true }),
+      ]);
+    }
+    updateOpsAppleActionVisibility();
+    await loadReportsDataForActiveTab();
+    state.reports.lastSyncedAt = new Date().toISOString();
+    renderReportsSupportHandoffPanel();
+    renderReportsWorkspacePanels();
+  })();
+  pendingReportsViewPresenterRefresh = task;
+  task
+    .finally(() => {
+      if (pendingReportsViewPresenterRefresh === task) {
+        pendingReportsViewPresenterRefresh = null;
+      }
+    })
+    .catch(() => {});
+  return task;
+}
+
 async function loadReportsViewPresenter() {
   if (!state.reports) state.reports = createInitialReportsState();
   applyUiTheme(readStoredUiTheme());
@@ -14653,17 +14797,22 @@ async function loadReportsViewPresenter() {
     { syncInputs: true },
   );
   applyAppleTenantScopedUiVisibility();
-  renderReportsWorkspacePanels();
-  if (shouldLoadReportsSiteOptionsForTab()) {
-    await Promise.allSettled([
-      refreshScheduleImportSiteOptions({ force: true }),
-    ]);
-  }
   updateOpsAppleActionVisibility();
-  await loadReportsDataForActiveTab();
-  state.reports.lastSyncedAt = new Date().toISOString();
   renderReportsSupportHandoffPanel();
   renderReportsWorkspacePanels();
+  const task = queueReportsViewPresenterRefresh();
+  if (task) {
+    task.catch((error) => {
+      console.error("[RG ARLS] reports presenter refresh failed", error);
+      if (state.currentView === "reports") {
+        showToast(
+          normalizeActionError(error, "보고 데이터를 불러오지 못했습니다."),
+          "error",
+          4200,
+        );
+      }
+    });
+  }
 }
 
 async function refreshReportsCenterData({ force = false } = {}) {
@@ -36648,7 +36797,7 @@ function openRequestsCorrectionEntry() {
 
 async function navigateToRoute(
   rawRoute,
-  { replace = false, silentDeniedModal = false } = {},
+  { replace = false, silentDeniedModal = false, waitForData = false } = {},
 ) {
   const parsed = parseRouteCandidate(rawRoute);
   let parsedParams = new URLSearchParams(parsed.query || "");
@@ -36739,6 +36888,7 @@ async function navigateToRoute(
       showView("calendar-public", {
         skipRouteSync: true,
         replaceRoute: true,
+        waitForData: true,
       }).catch((error) => {
         console.error("[RG ARLS] public booking bootstrap route failed", error);
       });
@@ -36762,6 +36912,7 @@ async function navigateToRoute(
       await navigateToRoute(fallback, {
         replace: true,
         silentDeniedModal: true,
+        waitForData,
       });
       return true;
     }
@@ -36782,6 +36933,7 @@ async function navigateToRoute(
     await showView("calendar-public", {
       skipRouteSync: true,
       replaceRoute: replace,
+      waitForData: true,
     });
     return true;
   }
@@ -36925,11 +37077,11 @@ async function navigateToRoute(
     skipRouteSync: true,
     replaceRoute: replace,
     forceLoad: forceViewReload,
+    waitForData,
   });
 
   if (route === ROUTE_FEATURE_NOTICES) {
     applyNoticesRouteStateFromQuery(route, parsedParams);
-    await loadNoticesViewPresenter();
   }
 
   if (route === ROUTE_NOTIFICATIONS) {
@@ -54999,7 +55151,12 @@ function resetWorkspaceScrollPosition() {
 
 function showView(
   name,
-  { skipRouteSync = false, replaceRoute = false, forceLoad = false } = {},
+  {
+    skipRouteSync = false,
+    replaceRoute = false,
+    forceLoad = false,
+    waitForData = false,
+  } = {},
 ) {
   stopPolling();
   const perms = getRolePermissions();
@@ -55097,6 +55254,13 @@ function showView(
   const perfRoute = normalizeRoutePath(
     state.currentRoute || resolveRouteForView(targetView) || "",
   );
+  const dataRouteOverride = state.currentRoute || "";
+  const dataCacheKey = resolveViewRuntimeCacheKey(targetView, dataRouteOverride);
+  const viewGeneration = beginViewRuntimeGeneration({
+    viewName: targetView,
+    routeOverride: dataRouteOverride,
+    cacheKey: dataCacheKey,
+  });
   if (
     !getActiveViewPerfSession(resolvePerfScreenFromView(targetView, perfRoute))
   ) {
@@ -55141,21 +55305,41 @@ function showView(
     }
   }
 
-  return loadViewData(targetView, {
+  const dataReadyTask = loadViewData(targetView, {
     force: Boolean(forceLoad),
-    cacheKey: resolveViewRuntimeCacheKey(targetView, state.currentRoute || ""),
-    routeOverride: state.currentRoute || "",
+    cacheKey: dataCacheKey,
+    routeOverride: dataRouteOverride,
+    generation: viewGeneration,
+    waitForData,
   })
     .catch((err) => {
       console.error(err);
-      showToast(normalizeActionError(err), "error", 4000);
+      if (
+        isCurrentViewRuntimeGeneration({
+          generation: viewGeneration,
+          viewName: targetView,
+          cacheKey: dataCacheKey,
+        })
+      ) {
+        showToast(normalizeActionError(err), "error", 4000);
+      }
     })
     .finally(() => {
-      decorateAzureTopbarTabs(document);
-      ensurePolling();
-      ensureScheduleLiveRefresh();
+      if (
+        isCurrentViewRuntimeGeneration({
+          generation: viewGeneration,
+          viewName: targetView,
+          cacheKey: dataCacheKey,
+        })
+      ) {
+        decorateAzureTopbarTabs(document);
+        ensurePolling();
+        ensureScheduleLiveRefresh();
+      }
       queuePostLoginViewPrewarm();
     });
+  if (waitForData) return dataReadyTask;
+  return Promise.resolve(true);
 }
 
 function getViewPanel(name) {
@@ -55206,6 +55390,16 @@ function setViewLoading(name, loading) {
   const panel = getViewPanel(name);
   if (!panel) return;
   panel.setAttribute("aria-busy", loading ? "true" : "false");
+}
+
+function waitForViewShellPaint() {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => resolve());
+      return;
+    }
+    setTimeout(resolve, 0);
+  });
 }
 
 async function loadHomeViewPresenter() {
@@ -55637,19 +55831,69 @@ async function refreshRequestsForCurrentRole({ silent = false } = {}) {
   return loadRequestsWorkspaceCurrentTab({ silent });
 }
 
+function queueRequestsViewPresenterRefresh() {
+  if (pendingRequestsViewPresenterRefresh) {
+    return null;
+  }
+  const task = refreshRequestsForCurrentRole({ silent: true });
+  pendingRequestsViewPresenterRefresh = task;
+  task
+    .finally(() => {
+      if (pendingRequestsViewPresenterRefresh === task) {
+        pendingRequestsViewPresenterRefresh = null;
+      }
+    })
+    .catch(() => {});
+  return task;
+}
+
 async function loadRequestsViewPresenter() {
   ensureCorrectionRequestDefaults();
   ensureRequestsWorkspaceFilters();
   renderRequestsTabSections();
-  await refreshRequestsForCurrentRole({ silent: true });
+  renderRequestsWorkspaceLoading();
   focusRequestsEntrySection();
+  const task = queueRequestsViewPresenterRefresh();
+  if (task) {
+    task.catch((error) => {
+      console.error("[RG ARLS] requests presenter refresh failed", error);
+    });
+  }
+}
+
+function queueLeaveViewPresenterRefresh() {
+  if (pendingLeaveViewPresenterRefresh) {
+    return null;
+  }
+  const task = loadLeaves();
+  pendingLeaveViewPresenterRefresh = task;
+  task
+    .finally(() => {
+      if (pendingLeaveViewPresenterRefresh === task) {
+        pendingLeaveViewPresenterRefresh = null;
+      }
+    })
+    .catch(() => {});
+  return task;
 }
 
 async function loadLeaveViewPresenter() {
   if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
   renderLeaveManagementWorkspace();
-  await loadLeaves();
   focusLeaveEntrySection();
+  const task = queueLeaveViewPresenterRefresh();
+  if (task) {
+    task.catch((error) => {
+      console.error("[RG ARLS] leave presenter refresh failed", error);
+      if (state.currentView === "leave") {
+        showToast(
+          normalizeActionError(error, "휴가 데이터를 불러오지 못했습니다."),
+          "error",
+          4200,
+        );
+      }
+    });
+  }
 }
 
 async function loadScheduleViewPresenter() {
@@ -55765,20 +56009,35 @@ async function loadScheduleViewPresenter() {
   }
 }
 
+function runProfilePresenterRefresh(task, fallbackMessage) {
+  return Promise.resolve(task).catch((error) => {
+    console.error(error);
+    if (state.currentView === "profile") {
+      showToast(normalizeActionError(error, fallbackMessage), "error", 4500);
+    }
+  });
+}
+
 async function loadProfileViewPresenter() {
   renderProfileSummary();
   renderProfileWorkspaceSegments();
   resetProfilePasswordForm();
   setInlineStatus("#profilePasswordStatus", "", "info");
-  await refreshReminderPermissionState();
   renderReminderSettings();
   renderProfileThemeState();
+  runProfilePresenterRefresh(
+    (async () => {
+      await refreshReminderPermissionState();
+      renderReminderSettings();
+    })(),
+    "알림 권한 상태를 확인하지 못했습니다.",
+  );
   // 연동 카드 로딩은 백그라운드로 처리해 프로필 탭 첫 진입 체감을 줄인다.
-  runActionSafely(
+  runProfilePresenterRefresh(
     loadProfileIntegrationData(),
     "프로필 연동 데이터를 동기화하지 못했습니다.",
   );
-  runActionSafely(
+  runProfilePresenterRefresh(
     loadProfileSignatureProfile({ force: false }),
     "서명 정보를 불러오지 못했습니다.",
   );
@@ -66471,7 +66730,14 @@ async function runPostLoginViewPrewarm(expectedSignature = "") {
 
 async function loadViewData(
   name,
-  { force = false, cacheKey = "", routeOverride = "", background = false } = {},
+  {
+    force = false,
+    cacheKey = "",
+    routeOverride = "",
+    background = false,
+    generation = 0,
+    waitForData = false,
+  } = {},
 ) {
   const viewName = String(name || "").trim();
   const presenter = VIEW_PRESENTERS[viewName];
@@ -66491,32 +66757,39 @@ async function loadViewData(
     cacheKey || resolveViewRuntimeCacheKey(viewName, routeOverride),
   ).trim();
   if (!resolvedCacheKey) return;
-  const isActiveView =
-    normalizeViewSnapshotName(state.currentView || "") ===
-    normalizeViewSnapshotName(viewName);
-  const shouldTouchUi = !background && isActiveView;
+  const canTouchUi = () =>
+    canTouchViewRuntimeUi({
+      background,
+      generation,
+      viewName,
+      cacheKey: resolvedCacheKey,
+    });
 
   if (!force && runtime.loadedByKey.has(resolvedCacheKey)) {
     stats.cacheHits += 1;
-    if (shouldTouchUi) {
+    if (canTouchUi()) {
       setViewRuntimeHint(viewName, "", "info");
     }
-    if (typeof presenter.onCacheHit === "function") {
+    if (canTouchUi() && typeof presenter.onCacheHit === "function") {
       try {
         presenter.onCacheHit(runtime.loadedByKey.get(resolvedCacheKey)?.result);
       } catch (cacheHitError) {
         console.error("[RG ARLS] cache-hit render failed", cacheHitError);
       }
     }
-    markViewPerfStage("critical_ui_ready", {
-      routePath: perfRoute,
-      viewName,
-    });
-    requestAnimationFrame(() => {
-      markViewPerfStage("fully_interactive", {
+    if (canTouchUi()) {
+      markViewPerfStage("critical_ui_ready", {
         routePath: perfRoute,
         viewName,
       });
+    }
+    requestAnimationFrame(() => {
+      if (canTouchUi()) {
+        markViewPerfStage("fully_interactive", {
+          routePath: perfRoute,
+          viewName,
+        });
+      }
     });
     return runtime.loadedByKey.get(resolvedCacheKey)?.result;
   }
@@ -66528,18 +66801,22 @@ async function loadViewData(
         loadedAt: Date.now(),
         result: restoredPayload,
       });
-      if (shouldTouchUi) {
+      if (canTouchUi()) {
         setViewRuntimeHint(viewName, "", "info");
       }
-      markViewPerfStage("critical_ui_ready", {
-        routePath: perfRoute,
-        viewName,
-      });
-      requestAnimationFrame(() => {
-        markViewPerfStage("fully_interactive", {
+      if (canTouchUi()) {
+        markViewPerfStage("critical_ui_ready", {
           routePath: perfRoute,
           viewName,
         });
+      }
+      requestAnimationFrame(() => {
+        if (canTouchUi()) {
+          markViewPerfStage("fully_interactive", {
+            routePath: perfRoute,
+            viewName,
+          });
+        }
       });
       if (!runtime.loadingByKey.has(resolvedCacheKey)) {
         void loadViewData(viewName, {
@@ -66559,13 +66836,20 @@ async function loadViewData(
     }
   }
 
-  const pendingTask = runtime.loadingByKey.get(resolvedCacheKey);
-  if (pendingTask) {
+  const pendingEntry = runtime.loadingByKey.get(resolvedCacheKey);
+  const pendingTask = getViewRuntimeLoadingTask(pendingEntry);
+  const pendingGeneration = getViewRuntimeLoadingGeneration(pendingEntry);
+  if (
+    pendingTask &&
+    (background ||
+      !generation ||
+      pendingGeneration === Number(generation || 0))
+  ) {
     return pendingTask;
   }
 
-  const task = (async () => {
-    if (shouldTouchUi) {
+ const task = (async () => {
+    if (canTouchUi()) {
       setViewLoading(viewName, true);
       if (presenter.skeletonOnlyLoading) {
         setViewRuntimeHint(viewName, "", "info");
@@ -66575,6 +66859,12 @@ async function loadViewData(
           presenter.loadingMessage || "데이터를 불러오는 중입니다...",
           "info",
         );
+      }
+    }
+    if (!background) {
+      await waitForViewShellPaint();
+      if (!waitForData && generation && !canTouchUi()) {
+        return null;
       }
     }
     try {
@@ -66591,17 +66881,20 @@ async function loadViewData(
         loadedAt: stats.lastLoadAt,
         result,
       });
+      const isActiveView =
+        normalizeViewSnapshotName(state.currentView || "") ===
+        normalizeViewSnapshotName(viewName);
       persistViewSnapshot(viewName, {
         routeOverride,
         allowInactive: background || !isActiveView,
       });
-      if (shouldTouchUi) {
+      if (canTouchUi()) {
         setViewRuntimeHint(viewName, "", "info");
       }
       return result;
     } catch (err) {
       stats.loadErrors += 1;
-      if (shouldTouchUi) {
+      if (canTouchUi()) {
         const message = normalizeActionError(
           err,
           presenter.errorMessage || "화면 데이터를 불러오지 못했습니다.",
@@ -66610,8 +66903,13 @@ async function loadViewData(
       }
       throw err;
     } finally {
-      runtime.loadingByKey.delete(resolvedCacheKey);
-      if (shouldTouchUi) {
+      if (
+        getViewRuntimeLoadingTask(runtime.loadingByKey.get(resolvedCacheKey)) ===
+        task
+      ) {
+        runtime.loadingByKey.delete(resolvedCacheKey);
+      }
+      if (canTouchUi()) {
         setViewLoading(viewName, false);
         const panel = getViewPanel(viewName);
         applyAccessibilityDefaults(panel || document);
@@ -66623,7 +66921,14 @@ async function loadViewData(
     }
   })();
 
-  runtime.loadingByKey.set(resolvedCacheKey, task);
+  runtime.loadingByKey.set(resolvedCacheKey, {
+    task,
+    generation: Number(generation || 0),
+    background: Boolean(background),
+    viewName,
+    routeOverride,
+    startedAt: Date.now(),
+  });
   return task;
 }
 
