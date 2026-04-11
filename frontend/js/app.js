@@ -89007,9 +89007,11 @@ function normalizeScheduleViewMode(value = "") {
   return SCHEDULE_VIEW_MODE_CALENDAR;
 }
 
-function getScheduleMonthValue() {
+function getScheduleMonthValue({ preferState = false } = {}) {
   const inputMonth = normalizeMonthKey($("#scheduleMonth")?.value || "");
-  return inputMonth || toMonthKey(new Date());
+  const stateMonth = normalizeMonthKey(state.schedule?.month || "");
+  if (preferState) return stateMonth || inputMonth || toMonthKey(new Date());
+  return inputMonth || stateMonth || toMonthKey(new Date());
 }
 
 function getScheduleViewModeValue() {
@@ -89071,12 +89073,32 @@ function formatScheduleMonthTitle(month = "") {
   return `${yearPart}년 ${monthPart}월`;
 }
 
-function renderScheduleMonthToolbar() {
-  const month = normalizeMonthKey(
-    state.schedule?.month || getScheduleMonthValue(),
+function setScheduleMonthValue(monthValue, { syncInput = true } = {}) {
+  const normalized = normalizeMonthKey(monthValue) || toMonthKey(new Date());
+  state.schedule.month = normalized;
+  state.schedule.monthTitle = formatScheduleMonthTitle(normalized);
+  if (syncInput) {
+    const monthInput = $("#scheduleMonth");
+    if (monthInput instanceof HTMLInputElement) {
+      monthInput.value = normalized;
+    }
+  }
+  return normalized;
+}
+
+function isCurrentScheduleLoad(loadGeneration, month, tenantCode) {
+  return (
+    Number(state.schedule?.loadGeneration || 0) === Number(loadGeneration) &&
+    normalizeMonthKey(state.schedule?.month || "") === normalizeMonthKey(month) &&
+    ensureScheduleTenantCode(state.schedule?.tenantCode || "") ===
+      ensureScheduleTenantCode(tenantCode)
   );
-  state.schedule.month = month;
-  state.schedule.monthTitle = formatScheduleMonthTitle(month);
+}
+
+function renderScheduleMonthToolbar() {
+  const month = setScheduleMonthValue(
+    state.schedule?.month || getScheduleMonthValue({ preferState: true }),
+  );
 
   const monthTitle = $("#scheduleMonthTitle");
   if (monthTitle) {
@@ -91199,12 +91221,10 @@ function shiftMonthKey(monthKey, deltaMonths = 0) {
 async function onScheduleShiftMonth(deltaMonths) {
   const step = Number(deltaMonths);
   if (!Number.isFinite(step) || !step) return;
-  const current = getScheduleMonthValue();
+  const current = getScheduleMonthValue({ preferState: true });
   const next = shiftMonthKey(current, step);
   if (!next) return;
-  const monthInput = $("#scheduleMonth");
-  if (monthInput) monthInput.value = next;
-  state.schedule.month = next;
+  setScheduleMonthValue(next);
   state.schedule.monthSwitchStartedAt = getPerfNowMs();
   state.schedule.monthNavBusyText =
     step > 0 ? "다음 달 불러오는 중" : "이전 달 불러오는 중";
@@ -91214,10 +91234,12 @@ async function onScheduleShiftMonth(deltaMonths) {
   ensureScheduleSelectedDate();
   renderScheduleMonthToolbar();
   try {
-    await loadSchedule();
+    await loadSchedule({ month: next });
   } finally {
-    state.schedule.monthNavBusyText = "";
-    renderScheduleMonthToolbar();
+    if (normalizeMonthKey(state.schedule?.month || "") === next) {
+      state.schedule.monthNavBusyText = "";
+      renderScheduleMonthToolbar();
+    }
   }
 }
 
@@ -92023,14 +92045,12 @@ async function onScheduleJumpToday() {
   const today = new Date();
   const month = toMonthKey(today);
   const dateKey = toLocalDateKey(today);
-  const monthInput = $("#scheduleMonth");
-  if (monthInput) monthInput.value = month;
-  state.schedule.month = month;
+  setScheduleMonthValue(month);
   state.schedule.monthSwitchStartedAt = getPerfNowMs();
   state.schedule.selectedDateKey = dateKey;
   state.schedule.desktopDrawerOpen = false;
   resetScheduleExpandedDays();
-  await loadSchedule();
+  await loadSchedule({ month });
   onScheduleSelectDate(dateKey, { openSheetOnSelect: false });
 }
 
@@ -92130,6 +92150,7 @@ async function loadSchedule({
   force = false,
   deferDetailHydration = false,
   background = false,
+  month: requestedMonth = "",
 } = {}) {
   const scheduleLoadStartedAt = getPerfNowMs();
   const monthSwitchStartedAt = Number(
@@ -92156,14 +92177,11 @@ async function loadSchedule({
     return [];
   }
 
-  const month = getScheduleMonthValue();
+  const month = setScheduleMonthValue(requestedMonth || getScheduleMonthValue());
   const tenantCode = getScheduleTenantValue();
-  const monthInput = $("#scheduleMonth");
   const tenantInput = $("#scheduleTenant");
-  if (monthInput) monthInput.value = month;
   if (tenantInput) tenantInput.value = tenantCode;
 
-  state.schedule.month = month;
   state.schedule.tenantCode = tenantCode;
   resetScheduleExpandedDays();
   renderScheduleMonthToolbar();
@@ -92205,6 +92223,9 @@ async function loadSchedule({
       tenantCode,
       force,
     });
+    if (!isCurrentScheduleLoad(loadGeneration, month, tenantCode)) {
+      return state.schedule.rows;
+    }
     const liteApiElapsedMs = getPerfNowMs() - liteFetchStartedAt;
     const liteRows = normalizeScheduleRows(
       Array.isArray(liteBundle?.rows) ? liteBundle.rows : [],
@@ -92299,9 +92320,7 @@ async function loadSchedule({
         ]);
       const detailApiElapsedMs = getPerfNowMs() - detailFetchStartedAt;
       if (
-        Number(state.schedule?.loadGeneration || 0) !== loadGeneration ||
-        String(state.schedule?.month || "") !== month ||
-        String(state.schedule?.tenantCode || "") !== tenantCode
+        !isCurrentScheduleLoad(loadGeneration, month, tenantCode)
       ) {
         return state.schedule.rows;
       }
@@ -92435,6 +92454,9 @@ async function loadSchedule({
     }
     return await hydrateDetailData();
   } catch (err) {
+    if (!isCurrentScheduleLoad(loadGeneration, month, tenantCode)) {
+      return state.schedule.rows;
+    }
     if (background) {
       throw err;
     }
@@ -104486,9 +104508,10 @@ function bindUiEvents() {
       }
 
       if (target.id === "scheduleMonth") {
-        applyScheduleExportDateFromMonth(
+        const nextMonth = setScheduleMonthValue(
           target instanceof HTMLInputElement ? target.value : "",
         );
+        applyScheduleExportDateFromMonth(nextMonth);
         refreshScheduleExportLink();
         state.schedule.monthSwitchStartedAt = getPerfNowMs();
         state.schedule.monthNavBusyText = "월간 일정 불러오는 중";
@@ -104499,11 +104522,13 @@ function bindUiEvents() {
         state.schedule.supportStatus = null;
         state.schedule.financeStatus = null;
         runActionSafely(
-          loadSchedule(),
+          loadSchedule({ month: nextMonth }),
           "스케줄 월 조회 중 오류가 발생했습니다.",
         ).finally(() => {
-          state.schedule.monthNavBusyText = "";
-          renderScheduleMonthToolbar();
+          if (normalizeMonthKey(state.schedule?.month || "") === nextMonth) {
+            state.schedule.monthNavBusyText = "";
+            renderScheduleMonthToolbar();
+          }
         });
         if (state.schedule.hqTab === SCHEDULE_TAB_REPORTS) {
           runActionSafely(
@@ -104514,10 +104539,7 @@ function bindUiEvents() {
           );
         }
         if (state.currentView === "reports") {
-          setReportsOwnerMonthValue(
-            target instanceof HTMLInputElement ? target.value : "",
-            { syncInputs: true },
-          );
+          setReportsOwnerMonthValue(nextMonth, { syncInputs: true });
           runActionSafely(
             refreshReportsCenterData({ force: true }),
             "보고 월 정보를 갱신하지 못했습니다.",
