@@ -185,6 +185,48 @@ def test_home_briefing_hq_payload_is_tenant_wide(monkeypatch):
     assert result.site_readiness_summary is None
 
 
+def test_home_briefing_hq_can_defer_heavy_sections(monkeypatch):
+    _patch_common(monkeypatch)
+    user = {
+        "id": "user-hq",
+        "role": "hq_admin",
+        "tenant_id": "tenant-1",
+        "active_tenant_id": "tenant-1",
+        "site_id": "site-1",
+        "site_code": "R738",
+    }
+    monkeypatch.setattr(
+        home_router,
+        "_fetch_today_staff_snapshot",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("heavy snapshot should be deferred")),
+    )
+    monkeypatch.setattr(
+        home_router,
+        "_fetch_assignment_flags",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("assignment flags should be deferred")),
+    )
+    monkeypatch.setattr(
+        home_router,
+        "_fetch_hq_org_issue_rows",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("org rows should be deferred")),
+    )
+
+    result = home_router.get_home_briefing(
+        defer_hq_heavy=True,
+        conn=object(),
+        user=user,
+    )
+
+    assert result.audience == "hq"
+    assert result.scope_label == "전체 운영 범위"
+    assert result.request_summary is not None
+    assert result.approval_summary is result.request_summary
+    assert result.ops_summary is None
+    assert result.attendance_issue_rows == []
+    assert result.schedule_risk_rows == []
+    assert result.org_issue_rows == []
+
+
 def test_home_briefing_supervisor_sees_named_team_attention(monkeypatch):
     _patch_common(monkeypatch)
     user = {

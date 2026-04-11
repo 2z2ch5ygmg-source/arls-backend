@@ -612,6 +612,7 @@ def _fetch_hq_org_issue_rows(conn, *, tenant_id: str) -> list[HomeBriefingListRo
 
 @router.get("/briefing", response_model=HomeBriefingOut)
 def get_home_briefing(
+    defer_hq_heavy: bool = False,
     conn=Depends(get_db_conn),
     user=Depends(get_current_user),
 ):
@@ -650,6 +651,10 @@ def get_home_briefing(
     )
 
     if audience == "hq":
+        payload.approval_summary = request_summary
+        if defer_hq_heavy:
+            return payload
+
         snapshot = _fetch_today_staff_snapshot(
             conn,
             tenant_id=tenant_id,
@@ -680,7 +685,6 @@ def get_home_briefing(
             site_count=assignment_flags["site_count"],
         )
         payload.attendance_issue_rows = _build_attention_rows(snapshot, include_names=True)
-        payload.approval_summary = request_summary
         payload.schedule_risk_rows = [
             HomeBriefingListRowOut(
                 title="배정 누락",
