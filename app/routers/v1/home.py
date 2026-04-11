@@ -402,7 +402,6 @@ def _fetch_today_staff_snapshot(
             checkins AS (
                 SELECT DISTINCT ar.employee_id
                 FROM attendance_records ar
-                JOIN scheduled ON scheduled.employee_id = ar.employee_id
                 WHERE ar.tenant_id = %s
                   AND ar.event_type = 'check_in'
                   AND ar.event_at >= %s
@@ -411,7 +410,6 @@ def _fetch_today_staff_snapshot(
             approved_leaves AS (
                 SELECT DISTINCT lr.employee_id
                 FROM leave_requests lr
-                JOIN scheduled ON scheduled.employee_id = lr.employee_id
                 WHERE lr.tenant_id = %s
                   AND lower(COALESCE(lr.status, '')) = 'approved'
                   AND lr.start_at::date <= %s
@@ -420,7 +418,6 @@ def _fetch_today_staff_snapshot(
             pending_leaves AS (
                 SELECT DISTINCT lr.employee_id
                 FROM leave_requests lr
-                JOIN scheduled ON scheduled.employee_id = lr.employee_id
                 WHERE lr.tenant_id = %s
                   AND lower(COALESCE(lr.status, '')) = 'pending'
                   AND lr.start_at::date <= %s
@@ -429,7 +426,6 @@ def _fetch_today_staff_snapshot(
             pending_attendance AS (
                 SELECT DISTINCT arq.employee_id
                 FROM attendance_requests arq
-                JOIN scheduled ON scheduled.employee_id = arq.employee_id
                 WHERE arq.tenant_id = %s
                   AND lower(COALESCE(arq.status, '')) = 'pending'
                   AND arq.requested_at >= %s
