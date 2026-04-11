@@ -16996,6 +16996,14 @@ function apiRequest(path, options = {}) {
     }
 
     invalidateSnapshotsForMutation(method, normalizedPath);
+    const normalizedMethod = String(method || "GET").toUpperCase();
+    if (
+      normalizedMethod !== "GET" &&
+      normalizedMethod !== "HEAD" &&
+      normalizedPath.startsWith("/leaves")
+    ) {
+      clearLeaveReadCaches();
+    }
     return envelope.data;
   })();
 
@@ -27744,7 +27752,7 @@ function handleLeaveRequestStatusSignal(rawPayload) {
   }
 
   if (state.user && state.token && can("leave")) {
-    loadLeaves().catch((err) => {
+    loadLeaves({ force: true }).catch((err) => {
       console.error("[RG ARLS] leave request status sync failed", err);
     });
     if (state.currentView === "schedule") {
@@ -40195,6 +40203,107 @@ function setLeaveWorkspaceSection(section = "requests") {
   state.leaveView.workspaceSection = normalizeLeaveWorkspaceSection(section);
 }
 
+function ensureLeaveReadCacheMap(cacheName = "workspace") {
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  const prop =
+    cacheName === "grants" ? "grantsReadCacheByKey" : "workspaceReadCacheByKey";
+  if (!(state.leaveView[prop] instanceof Map)) {
+    state.leaveView[prop] = new Map();
+  }
+  return state.leaveView[prop];
+}
+
+function clearLeaveReadCaches() {
+  if (!state.leaveView) return;
+  if (state.leaveView.workspaceReadCacheByKey instanceof Map) {
+    state.leaveView.workspaceReadCacheByKey.clear();
+  }
+  if (state.leaveView.grantsReadCacheByKey instanceof Map) {
+    state.leaveView.grantsReadCacheByKey.clear();
+  }
+}
+
+function buildLeaveWorkspaceReadCacheKey({
+  scope = "mine",
+  statusFilter = "all",
+  desktopWorkspace = false,
+  managerMode = false,
+} = {}) {
+  const activeSection = normalizeLeaveWorkspaceSection(
+    state.leaveView?.workspaceSection || "status",
+  );
+  return JSON.stringify({
+    tenant: getLeaveScopedTenantCode(),
+    employee: String(state.user?.employee_code || "").trim().toUpperCase(),
+    user: String(state.user?.id || state.user?.username || "").trim(),
+    role: normalizeRoleValue(state.user?.role || ""),
+    section: activeSection,
+    scope: normalizeLeaveManagerScope(scope),
+    status: normalizeLeaveStatusFilter(statusFilter),
+    desktop: Boolean(desktopWorkspace),
+    manager: Boolean(managerMode),
+    canReview: Boolean(can("leaveReview")),
+    canManageGrants: Boolean(canManageLeaveGrants()),
+  });
+}
+
+function buildLeaveGrantsReadCacheKey() {
+  return JSON.stringify({
+    tenant: getLeaveScopedTenantCode(),
+    user: String(state.user?.id || state.user?.username || "").trim(),
+    role: normalizeRoleValue(state.user?.role || ""),
+    canManageGrants: Boolean(canManageLeaveGrants()),
+  });
+}
+
+function applyLeaveWorkspaceReadPayload(
+  payload = {},
+  {
+    scope = "mine",
+    target = null,
+    desktopWorkspace = false,
+    syncNotifications = false,
+  } = {},
+) {
+  if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  const normalizedRows = Array.isArray(payload.rows) ? payload.rows : [];
+  state.leaveView.rows = normalizedRows;
+  state.leaveView.rowMap = new Map(
+    normalizedRows.map((row) => [String(row?.id || ""), row]),
+  );
+  state.leaveView.balanceSummary =
+    payload.balanceSummary && typeof payload.balanceSummary === "object"
+      ? payload.balanceSummary
+      : null;
+  state.leaveView.policyRows = Array.isArray(payload.policyRows)
+    ? payload.policyRows
+    : [];
+  state.leaveView.grantsRows = Array.isArray(payload.grantsRows)
+    ? payload.grantsRows
+    : [];
+  state.leaveView.updatedAt = payload.updatedAt || new Date().toISOString();
+
+  if (syncNotifications && scope === "mine") {
+    syncLeaveStatusNotifications(normalizedRows);
+  }
+
+  const summary = buildLeaveSummary(normalizedRows, {
+    scope,
+    balanceSummary: state.leaveView.balanceSummary,
+  });
+  renderLeaveSummary(summary);
+  if (target) {
+    renderLeaveHistoryRows(normalizedRows, { scope, loading: false });
+  }
+  renderLeaveScopeTabs();
+  renderLeaveStatusFilterTabs();
+  setLeaveHint(`${normalizedRows.length}건`, "info");
+  if (desktopWorkspace) {
+    renderLeaveManagementWorkspace({ loading: false });
+  }
+  return normalizedRows;
+}
+
 function setLeaveWorkspaceDrawerOpen(open = false) {
   if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
   state.leaveView.workspaceDrawerOpen = Boolean(open);
@@ -43488,7 +43597,7 @@ async function submitLeavePolicyEditor() {
     "success",
     2200,
   );
-  await loadLeaves();
+  await loadLeaves({ force: true });
   setLeaveWorkspaceSection("settings");
   renderLeaveManagementWorkspace();
 }
@@ -43694,7 +43803,10 @@ async function submitLeaveGrant() {
     "success",
     2200,
   );
-  await Promise.all([loadLeaveGrants(), loadLeaves()]);
+  await Promise.all([
+    loadLeaveGrants({ force: true }),
+    loadLeaves({ force: true }),
+  ]);
   renderLeaveManagementWorkspace();
 }
 
@@ -82486,7 +82598,7 @@ async function loadAttendance() {
   return loadAttendanceView({ force: true });
 }
 
-async function loadLeaves() {
+async function loadLeaves({ force = false } = {}) {
   const target = $("#leaveList");
   const desktopWorkspace = isDesktopLeaveWorkspaceMode();
   if (!target && !desktopWorkspace) return [];
@@ -82514,10 +82626,28 @@ async function loadLeaves() {
   state.leaveView.statusFilter = statusFilter;
   const scope = resolveLeaveManagerScope();
   state.leaveView.managerScope = scope;
+  const cacheKey = buildLeaveWorkspaceReadCacheKey({
+    scope,
+    statusFilter,
+    desktopWorkspace,
+    managerMode,
+  });
+  const cache = ensureLeaveReadCacheMap("workspace");
 
   renderLeaveScopeTabs();
   renderLeaveStatusFilterTabs();
   renderLeaveApplySection();
+
+  if (!force && cache.has(cacheKey)) {
+    return applyLeaveWorkspaceReadPayload(cache.get(cacheKey), {
+      scope,
+      target,
+      desktopWorkspace,
+      syncNotifications: false,
+    });
+  }
+  if (force) clearLeaveReadCaches();
+
   renderLeaveSummary(null);
   setLeaveHint("휴가 데이터를 불러오는 중입니다...", "info");
   if (target) {
@@ -82600,35 +82730,26 @@ async function loadLeaves() {
         : [];
     }
 
-    const normalizedRows = Array.isArray(rows) ? rows : [];
-    state.leaveView.rows = normalizedRows;
-    state.leaveView.rowMap = new Map(
-      normalizedRows.map((row) => [String(row?.id || ""), row]),
-    );
-    state.leaveView.balanceSummary = balanceSummary;
-    state.leaveView.policyRows = Array.isArray(policyRows) ? policyRows : [];
-    state.leaveView.grantsRows = Array.isArray(grantsRows) ? grantsRows : [];
-    state.leaveView.updatedAt = new Date().toISOString();
-
-    if (scope === "mine") {
-      syncLeaveStatusNotifications(normalizedRows);
+    const payload = {
+      rows: Array.isArray(rows) ? rows : [],
+      balanceSummary,
+      policyRows: Array.isArray(policyRows) ? policyRows : [],
+      grantsRows: Array.isArray(grantsRows) ? grantsRows : [],
+      updatedAt: new Date().toISOString(),
+    };
+    cache.set(cacheKey, payload);
+    if (canManageLeaveGrants()) {
+      ensureLeaveReadCacheMap("grants").set(buildLeaveGrantsReadCacheKey(), {
+        rows: payload.grantsRows,
+        updatedAt: payload.updatedAt,
+      });
     }
-
-    const summary = buildLeaveSummary(normalizedRows, {
+    return applyLeaveWorkspaceReadPayload(payload, {
       scope,
-      balanceSummary: state.leaveView.balanceSummary,
+      target,
+      desktopWorkspace,
+      syncNotifications: true,
     });
-    renderLeaveSummary(summary);
-    if (target) {
-      renderLeaveHistoryRows(normalizedRows, { scope, loading: false });
-    }
-    renderLeaveScopeTabs();
-    renderLeaveStatusFilterTabs();
-    setLeaveHint(`${normalizedRows.length}건`, "info");
-    if (desktopWorkspace) {
-      renderLeaveManagementWorkspace({ loading: false });
-    }
-    return normalizedRows;
   } catch (err) {
     const message = mapLeaveErrorMessage(
       err,
@@ -82657,9 +82778,21 @@ async function loadLeaves() {
   }
 }
 
-async function loadLeaveGrants() {
+async function loadLeaveGrants({ force = false } = {}) {
   if (!canManageLeaveGrants()) return [];
   if (!state.leaveView) state.leaveView = createInitialLeaveViewState();
+  const cacheKey = buildLeaveGrantsReadCacheKey();
+  const cache = ensureLeaveReadCacheMap("grants");
+  if (!force && cache.has(cacheKey)) {
+    const cached = cache.get(cacheKey) || {};
+    const rows = Array.isArray(cached.rows) ? cached.rows : [];
+    state.leaveView.grantsRows = rows;
+    state.leaveView.updatedAt = cached.updatedAt || state.leaveView.updatedAt;
+    renderLeaveManagementWorkspace({ loading: false });
+    return rows;
+  }
+  if (force) cache.delete(cacheKey);
+
   renderLeaveManagementWorkspace({ loading: true });
   try {
     const payload = await apiRequest(
@@ -82667,6 +82800,7 @@ async function loadLeaveGrants() {
     );
     const rows = Array.isArray(payload?.items) ? payload.items : [];
     state.leaveView.grantsRows = rows;
+    cache.set(cacheKey, { rows, updatedAt: new Date().toISOString() });
     renderLeaveManagementWorkspace({ loading: false });
     return rows;
   } catch (err) {
@@ -84407,7 +84541,10 @@ async function onLeaveRequestReview(requestId, nextStatus, reviewNote = null) {
     2800,
   );
   closeSheet();
-  const tasks = [refreshRequestsForCurrentRole({ silent: true }), loadLeaves()];
+  const tasks = [
+    refreshRequestsForCurrentRole({ silent: true }),
+    loadLeaves({ force: true }),
+  ];
   if (state.currentView === "schedule") {
     tasks.push(loadSchedule({ force: true }));
   }
@@ -94154,7 +94291,7 @@ async function onLeaveSubmit(event) {
     });
     setLeaveStatusFilter("all");
     renderLeaveStatusFilterTabs();
-    await loadLeaves();
+    await loadLeaves({ force: true });
     if (state.currentView === "requests" && !isManagerShellRole()) {
       await loadEmployeeRequestsView({ silent: true });
     }
@@ -94283,7 +94420,7 @@ async function onLeaveWorkspaceSubmit(event) {
     if (state.sheetContext?.mode === "leave-workspace-create") {
       closeSheet();
     }
-    await loadLeaves();
+    await loadLeaves({ force: true });
     if (state.currentView === "requests" && !isManagerShellRole()) {
       await loadEmployeeRequestsView({ silent: true });
     }
@@ -99762,7 +99899,7 @@ function bindUiEvents() {
         if (isDesktopLeaveWorkspaceMode()) {
           setLeaveWorkspaceDrawerOpen(false);
           setLeaveWorkspaceComposerOpen(false);
-          runWithBusy(() => loadLeaves(), "새로고침 중...");
+          runWithBusy(() => loadLeaves({ force: true }), "새로고침 중...");
           return;
         }
         setRequestsWorkspaceDrawerOpen(false);
@@ -100429,7 +100566,7 @@ function bindUiEvents() {
       }
 
       if (action === "leave-refresh") {
-        runWithBusy(() => loadLeaves(), "새로고침 중...");
+        runWithBusy(() => loadLeaves({ force: true }), "새로고침 중...");
         return;
       }
 
@@ -100438,10 +100575,10 @@ function bindUiEvents() {
           state.leaveView?.workspaceSection || "status",
         );
         if (activeSection === "grants") {
-          runWithBusy(() => loadLeaveGrants(), "조회 중...");
+          runWithBusy(() => loadLeaveGrants({ force: true }), "조회 중...");
           return;
         }
-        runWithBusy(() => loadLeaves(), "조회 중...");
+        runWithBusy(() => loadLeaves({ force: true }), "조회 중...");
         return;
       }
 
