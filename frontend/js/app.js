@@ -49043,7 +49043,7 @@ function renderProfileSettingsRail() {
 }
 
 function getDefaultProfileSettingsSection() {
-  return canManageIntegrations() ? "operations" : "account";
+  return "account";
 }
 
 function normalizeProfileSettingsSection(value = "") {

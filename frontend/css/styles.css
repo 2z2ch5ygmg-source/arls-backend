@@ -55960,3 +55960,97 @@ html[data-ui-theme="dark"]
   .attendance-v2-summary-value {
   color: #f8fafc !important;
 }
+
+/* 2026-04-12 remaining sweep overflow fixes */
+#view-leave #leavePolicySection {
+  min-width: 0 !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+}
+
+#view-leave #leavePolicySection .leave-policy-grid-header,
+#view-leave #leavePolicyList .leave-policy-row {
+  min-width: 0 !important;
+  width: 100% !important;
+  grid-template-columns:
+    minmax(150px, 1.05fr)
+    minmax(190px, 1.55fr)
+    minmax(108px, 0.84fr)
+    minmax(102px, 0.78fr)
+    minmax(92px, 0.7fr)
+    minmax(86px, 0.66fr)
+    minmax(96px, 0.72fr) !important;
+  column-gap: 10px !important;
+}
+
+#view-leave #leavePolicySection .leave-grid-cell,
+#view-leave #leavePolicySection .leave-policy-grid-header > span {
+  min-width: 0 !important;
+}
+
+#view-notices .notices-toolbar-row {
+  min-width: 0 !important;
+  overflow-x: clip !important;
+}
+
+#view-notices .notices-search-form {
+  min-width: 0 !important;
+  max-width: min(280px, 100%) !important;
+}
+
+#view-notices .notices-search-input-wrap,
+#view-notices .notices-search-form.is-expanded .notices-search-input-wrap {
+  width: min(252px, 26vw) !important;
+  max-width: 100% !important;
+}
+
+#view-leave #leaveHistoryChartCard {
+  order: 3 !important;
+}
+
+#view-leave #leaveWorkspaceRequestsCard {
+  order: 2 !important;
+}
+
+#view-leave #leavePolicyStatusTabs {
+  gap: 10px !important;
+  padding: 8px 0 10px !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+}
+
+#view-leave #leavePolicyStatusTabs .approval-tab {
+  min-height: 28px !important;
+  padding: 0 10px !important;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  color: var(--ui-text-secondary) !important;
+}
+
+#view-leave #leavePolicyStatusTabs .approval-tab.active {
+  border-color: rgba(255, 122, 26, 0.22) !important;
+  background: rgba(255, 122, 26, 0.06) !important;
+  color: var(--ui-accent) !important;
+}
+
+#view-employees #employeeDirectorySummaryStrip {
+  display: none !important;
+}
+
+#view-employees #employeeBulkDeleteSiteBtn:disabled {
+  display: none !important;
+}
+
+#view-employees #employeeTopActionHint {
+  display: none !important;
+}
+
+#view-org .site-directory-table th:nth-child(3),
+#view-org .site-directory-table td:nth-child(3) {
+  display: none !important;
+}
+
+#view-profile .profile-identity-copy .muted,
+#view-profile .profile-identity-side .muted,
+#view-profile #profileRailStatusNote {
+  display: none !important;
+}
