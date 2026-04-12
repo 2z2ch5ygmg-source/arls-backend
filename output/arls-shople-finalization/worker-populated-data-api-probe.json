@@ -1,0 +1,662 @@
+{
+  "at": "2026-04-12T13:02:23.990Z",
+  "api": "https://rg-arls-backend.azurewebsites.net/api/v1",
+  "login": {
+    "ok": true,
+    "status": 200,
+    "user": {
+      "username": "platform_admin",
+      "role": "developer",
+      "tenant_code": "master"
+    }
+  },
+  "tenants": {
+    "status": 200,
+    "count": 12,
+    "selected": [
+      {
+        "code": "SRS_KOREA",
+        "id": "7d3997c3-346a-407e-a416-687fe0827992",
+        "name": "SRS Korea",
+        "is_active": true,
+        "is_deleted": false
+      },
+      {
+        "code": "phase13_09011819",
+        "id": "304f444d-ebd0-4a2e-98c8-3d13a568adce",
+        "name": "Phase13 회사 09011819",
+        "is_active": true,
+        "is_deleted": false
+      },
+      {
+        "code": "phase13_09694533",
+        "id": "a8f1d3b9-e69d-426e-b810-2cdfa4278ff3",
+        "name": "Phase13 회사 09694533",
+        "is_active": true,
+        "is_deleted": false
+      }
+    ]
+  },
+  "probes": [
+    {
+      "tenant": {
+        "code": "SRS_KOREA",
+        "id": "7d3997c3-346a-407e-a416-687fe0827992",
+        "name": "SRS Korea",
+        "is_active": true,
+        "is_deleted": false
+      },
+      "endpoints": [
+        {
+          "path": "/employees?tenant_code=SRS_KOREA&limit=5&include_inactive=true&include_deleted=true",
+          "status": 200,
+          "ok": true,
+          "ms": 574,
+          "count": 5,
+          "keys": [],
+          "sample": {
+            "id": "e1111ba4-a639-46b6-851d-1d2e4492860d",
+            "tenant_code": "SRS_KOREA",
+            "tenant_name": "SRS Korea",
+            "employee_code": "R0022-220",
+            "full_name": "코덱스경력0220",
+            "site_code": "R0022",
+            "site_name": "Codex_증명서_다종_0022"
+          }
+        },
+        {
+          "path": "/sites?tenant_code=SRS_KOREA&limit=5&include_inactive=true&include_deleted=true",
+          "status": 200,
+          "ok": true,
+          "ms": 626,
+          "count": 5,
+          "keys": [],
+          "sample": {
+            "id": "9b3ae54e-2c87-424c-b0ae-0e4e4d6dc82b",
+            "tenant_code": "SRS_KOREA",
+            "site_code": "R0022",
+            "site_name": "Codex_증명서_다종_0022"
+          }
+        },
+        {
+          "path": "/schedules/monthly-lite?month=2026-04&tenant_code=SRS_KOREA",
+          "status": 200,
+          "ok": true,
+          "ms": 771,
+          "count": 6,
+          "keys": [
+            "month",
+            "tenant_code",
+            "employees",
+            "rows"
+          ],
+          "sample": {
+            "id": "ee646e85-78c7-48f6-93e0-54029a8817aa",
+            "employee_code": "R692-1",
+            "employee_name": "서성원",
+            "site_code": "R692",
+            "site_name": "Apple_가로수길",
+            "schedule_date": "2026-04-01",
+            "shift_type": "night",
+            "schedule_display_label": "야간근무"
+          }
+        },
+        {
+          "path": "/schedules/monthly-board-lite?month=2026-04&tenant_code=SRS_KOREA",
+          "status": 200,
+          "ok": true,
+          "ms": 1009,
+          "count": 6,
+          "keys": [
+            "month",
+            "tenant_code",
+            "employees",
+            "rows",
+            "days",
+            "metrics"
+          ],
+          "sample": {
+            "employee_code": "R692-1",
+            "employee_name": "서성원",
+            "site_code": "R692",
+            "site_name": "Apple_가로수길",
+            "schedule_date": "2026-04-01",
+            "shift_type": "night",
+            "schedule_display_label": "야간근무"
+          }
+        },
+        {
+          "path": "/schedules/monthly-lite?month=2026-03&tenant_code=SRS_KOREA",
+          "status": 200,
+          "ok": true,
+          "ms": 733,
+          "count": 186,
+          "keys": [
+            "month",
+            "tenant_code",
+            "employees",
+            "rows"
+          ],
+          "sample": {
+            "id": "df8ffbe5-f955-4d0c-9c5f-739541c2033c",
+            "employee_code": "R692-1",
+            "employee_name": "서성원",
+            "site_code": "R692",
+            "site_name": "Apple_가로수길",
+            "schedule_date": "2026-03-25",
+            "shift_type": "day",
+            "schedule_display_label": "주간근무"
+          }
+        },
+        {
+          "path": "/schedules/monthly-board-lite?month=2026-03&tenant_code=SRS_KOREA",
+          "status": 200,
+          "ok": true,
+          "ms": 1690,
+          "count": 186,
+          "keys": [
+            "month",
+            "tenant_code",
+            "employees",
+            "rows",
+            "days",
+            "metrics"
+          ],
+          "sample": {
+            "employee_code": "R692-100",
+            "employee_name": "최미강",
+            "site_code": "R692",
+            "site_name": "Apple_가로수길",
+            "schedule_date": "2026-03-01",
+            "shift_type": "day",
+            "schedule_display_label": "주간근무"
+          }
+        },
+        {
+          "path": "/leaves?tenant_code=SRS_KOREA&limit=10",
+          "status": 200,
+          "ok": true,
+          "ms": 557,
+          "count": 0,
+          "keys": [],
+          "sample": null
+        },
+        {
+          "path": "/leaves/grants?tenant_code=SRS_KOREA&limit=10",
+          "status": 200,
+          "ok": true,
+          "ms": 549,
+          "count": 2,
+          "keys": [
+            "items"
+          ],
+          "sample": {
+            "id": "a53e2e81-c9bc-40ac-9065-f3b306f4d323",
+            "tenant_code": "srs_korea",
+            "employee_code": "R0022-220",
+            "employee_name": "코덱스경력0220",
+            "site_code": "R0022",
+            "site_name": "Codex_증명서_다종_0022"
+          }
+        },
+        {
+          "path": "/leaves/policies?tenant_code=SRS_KOREA",
+          "status": 200,
+          "ok": true,
+          "ms": 721,
+          "count": 1,
+          "keys": [
+            "items"
+          ],
+          "sample": {
+            "id": "216bc3e9-d82c-4574-8518-0151ee8aa028"
+          }
+        },
+        {
+          "path": "/notices?limit=10",
+          "tenantHeader": "SRS_KOREA",
+          "status": 200,
+          "ok": true,
+          "ms": 559,
+          "count": 10,
+          "keys": [
+            "items"
+          ],
+          "sample": {
+            "id": "89657b6a-09a0-4a28-a6f6-a33408efa89f",
+            "title": "[Phase1 검증] 공지센터 생성/상세/홈 티저 확인 2026-03-23 10:28",
+            "category": "system"
+          }
+        },
+        {
+          "path": "/notices/home-teaser?limit=6",
+          "tenantHeader": "SRS_KOREA",
+          "status": 200,
+          "ok": true,
+          "ms": 750,
+          "count": 6,
+          "keys": [
+            "items"
+          ],
+          "sample": {
+            "id": "89657b6a-09a0-4a28-a6f6-a33408efa89f",
+            "title": "[Phase1 검증] 공지센터 생성/상세/홈 티저 확인 2026-03-23 10:28",
+            "category": "system"
+          }
+        },
+        {
+          "path": "/home/briefing?defer_hq_heavy=false",
+          "tenantHeader": "SRS_KOREA",
+          "status": 200,
+          "ok": true,
+          "ms": 3180,
+          "count": null,
+          "keys": [
+            "audience",
+            "date",
+            "role_label",
+            "scope_label",
+            "notice_rows",
+            "ops_summary",
+            "attendance_issue_rows",
+            "schedule_risk_rows",
+            "approval_summary",
+            "org_issue_rows",
+            "site_summary",
+            "team_attention_rows",
+            "site_readiness_summary",
+            "personal_summary",
+            "week_summary",
+            "request_summary"
+          ],
+          "sample": {
+            "request_summary": {
+              "total_pending_count": 0,
+              "leave_pending_count": 0,
+              "attendance_pending_count": 0,
+              "correction_pending_count": 0,
+              "unread_count": 0
+            },
+            "attendance_summary": null,
+            "schedule_summary": null
+          }
+        }
+      ]
+    },
+    {
+      "tenant": {
+        "code": "phase13_09011819",
+        "id": "304f444d-ebd0-4a2e-98c8-3d13a568adce",
+        "name": "Phase13 회사 09011819",
+        "is_active": true,
+        "is_deleted": false
+      },
+      "endpoints": [
+        {
+          "path": "/employees?tenant_code=phase13_09011819&limit=5&include_inactive=true&include_deleted=true",
+          "status": 200,
+          "ok": true,
+          "ms": 749,
+          "count": 0,
+          "keys": [],
+          "sample": null
+        },
+        {
+          "path": "/sites?tenant_code=phase13_09011819&limit=5&include_inactive=true&include_deleted=true",
+          "status": 200,
+          "ok": true,
+          "ms": 561,
+          "count": 0,
+          "keys": [],
+          "sample": null
+        },
+        {
+          "path": "/schedules/monthly-lite?month=2026-04&tenant_code=phase13_09011819",
+          "status": 200,
+          "ok": true,
+          "ms": 659,
+          "count": 0,
+          "keys": [
+            "month",
+            "tenant_code",
+            "employees",
+            "rows"
+          ],
+          "sample": null
+        },
+        {
+          "path": "/schedules/monthly-board-lite?month=2026-04&tenant_code=phase13_09011819",
+          "status": 200,
+          "ok": true,
+          "ms": 911,
+          "count": 0,
+          "keys": [
+            "month",
+            "tenant_code",
+            "employees",
+            "rows",
+            "days",
+            "metrics"
+          ],
+          "sample": null
+        },
+        {
+          "path": "/schedules/monthly-lite?month=2026-03&tenant_code=phase13_09011819",
+          "status": 200,
+          "ok": true,
+          "ms": 548,
+          "count": 0,
+          "keys": [
+            "month",
+            "tenant_code",
+            "employees",
+            "rows"
+          ],
+          "sample": null
+        },
+        {
+          "path": "/schedules/monthly-board-lite?month=2026-03&tenant_code=phase13_09011819",
+          "status": 200,
+          "ok": true,
+          "ms": 910,
+          "count": 0,
+          "keys": [
+            "month",
+            "tenant_code",
+            "employees",
+            "rows",
+            "days",
+            "metrics"
+          ],
+          "sample": null
+        },
+        {
+          "path": "/leaves?tenant_code=phase13_09011819&limit=10",
+          "status": 200,
+          "ok": true,
+          "ms": 560,
+          "count": 0,
+          "keys": [],
+          "sample": null
+        },
+        {
+          "path": "/leaves/grants?tenant_code=phase13_09011819&limit=10",
+          "status": 200,
+          "ok": true,
+          "ms": 750,
+          "count": 0,
+          "keys": [
+            "items"
+          ],
+          "sample": null
+        },
+        {
+          "path": "/leaves/policies?tenant_code=phase13_09011819",
+          "status": 200,
+          "ok": true,
+          "ms": 719,
+          "count": 1,
+          "keys": [
+            "items"
+          ],
+          "sample": {
+            "id": "25826ff2-9e7b-43a4-8f6f-4ba96c96b23d"
+          }
+        },
+        {
+          "path": "/notices?limit=10",
+          "tenantHeader": "phase13_09011819",
+          "status": 200,
+          "ok": true,
+          "ms": 551,
+          "count": 0,
+          "keys": [
+            "items"
+          ],
+          "sample": null
+        },
+        {
+          "path": "/notices/home-teaser?limit=6",
+          "tenantHeader": "phase13_09011819",
+          "status": 200,
+          "ok": true,
+          "ms": 570,
+          "count": 0,
+          "keys": [
+            "items"
+          ],
+          "sample": null
+        },
+        {
+          "path": "/home/briefing?defer_hq_heavy=false",
+          "tenantHeader": "phase13_09011819",
+          "status": 200,
+          "ok": true,
+          "ms": 3710,
+          "count": null,
+          "keys": [
+            "audience",
+            "date",
+            "role_label",
+            "scope_label",
+            "notice_rows",
+            "ops_summary",
+            "attendance_issue_rows",
+            "schedule_risk_rows",
+            "approval_summary",
+            "org_issue_rows",
+            "site_summary",
+            "team_attention_rows",
+            "site_readiness_summary",
+            "personal_summary",
+            "week_summary",
+            "request_summary"
+          ],
+          "sample": {
+            "request_summary": {
+              "total_pending_count": 0,
+              "leave_pending_count": 0,
+              "attendance_pending_count": 0,
+              "correction_pending_count": 0,
+              "unread_count": 0
+            },
+            "attendance_summary": null,
+            "schedule_summary": null
+          }
+        }
+      ]
+    },
+    {
+      "tenant": {
+        "code": "phase13_09694533",
+        "id": "a8f1d3b9-e69d-426e-b810-2cdfa4278ff3",
+        "name": "Phase13 회사 09694533",
+        "is_active": true,
+        "is_deleted": false
+      },
+      "endpoints": [
+        {
+          "path": "/employees?tenant_code=phase13_09694533&limit=5&include_inactive=true&include_deleted=true",
+          "status": 200,
+          "ok": true,
+          "ms": 950,
+          "count": 0,
+          "keys": [],
+          "sample": null
+        },
+        {
+          "path": "/sites?tenant_code=phase13_09694533&limit=5&include_inactive=true&include_deleted=true",
+          "status": 200,
+          "ok": true,
+          "ms": 551,
+          "count": 0,
+          "keys": [],
+          "sample": null
+        },
+        {
+          "path": "/schedules/monthly-lite?month=2026-04&tenant_code=phase13_09694533",
+          "status": 200,
+          "ok": true,
+          "ms": 568,
+          "count": 0,
+          "keys": [
+            "month",
+            "tenant_code",
+            "employees",
+            "rows"
+          ],
+          "sample": null
+        },
+        {
+          "path": "/schedules/monthly-board-lite?month=2026-04&tenant_code=phase13_09694533",
+          "status": 200,
+          "ok": true,
+          "ms": 1291,
+          "count": 0,
+          "keys": [
+            "month",
+            "tenant_code",
+            "employees",
+            "rows",
+            "days",
+            "metrics"
+          ],
+          "sample": null
+        },
+        {
+          "path": "/schedules/monthly-lite?month=2026-03&tenant_code=phase13_09694533",
+          "status": 200,
+          "ok": true,
+          "ms": 570,
+          "count": 0,
+          "keys": [
+            "month",
+            "tenant_code",
+            "employees",
+            "rows"
+          ],
+          "sample": null
+        },
+        {
+          "path": "/schedules/monthly-board-lite?month=2026-03&tenant_code=phase13_09694533",
+          "status": 200,
+          "ok": true,
+          "ms": 900,
+          "count": 0,
+          "keys": [
+            "month",
+            "tenant_code",
+            "employees",
+            "rows",
+            "days",
+            "metrics"
+          ],
+          "sample": null
+        },
+        {
+          "path": "/leaves?tenant_code=phase13_09694533&limit=10",
+          "status": 200,
+          "ok": true,
+          "ms": 560,
+          "count": 0,
+          "keys": [],
+          "sample": null
+        },
+        {
+          "path": "/leaves/grants?tenant_code=phase13_09694533&limit=10",
+          "status": 200,
+          "ok": true,
+          "ms": 569,
+          "count": 0,
+          "keys": [
+            "items"
+          ],
+          "sample": null
+        },
+        {
+          "path": "/leaves/policies?tenant_code=phase13_09694533",
+          "status": 200,
+          "ok": true,
+          "ms": 761,
+          "count": 1,
+          "keys": [
+            "items"
+          ],
+          "sample": {
+            "id": "68fc90e4-41ab-4074-b7de-e85a89ee53b8"
+          }
+        },
+        {
+          "path": "/notices?limit=10",
+          "tenantHeader": "phase13_09694533",
+          "status": 200,
+          "ok": true,
+          "ms": 559,
+          "count": 0,
+          "keys": [
+            "items"
+          ],
+          "sample": null
+        },
+        {
+          "path": "/notices/home-teaser?limit=6",
+          "tenantHeader": "phase13_09694533",
+          "status": 200,
+          "ok": true,
+          "ms": 550,
+          "count": 0,
+          "keys": [
+            "items"
+          ],
+          "sample": null
+        },
+        {
+          "path": "/home/briefing?defer_hq_heavy=false",
+          "tenantHeader": "phase13_09694533",
+          "status": 200,
+          "ok": true,
+          "ms": 3184,
+          "count": null,
+          "keys": [
+            "audience",
+            "date",
+            "role_label",
+            "scope_label",
+            "notice_rows",
+            "ops_summary",
+            "attendance_issue_rows",
+            "schedule_risk_rows",
+            "approval_summary",
+            "org_issue_rows",
+            "site_summary",
+            "team_attention_rows",
+            "site_readiness_summary",
+            "personal_summary",
+            "week_summary",
+            "request_summary"
+          ],
+          "sample": {
+            "request_summary": {
+              "total_pending_count": 0,
+              "leave_pending_count": 0,
+              "attendance_pending_count": 0,
+              "correction_pending_count": 0,
+              "unread_count": 0
+            },
+            "attendance_summary": null,
+            "schedule_summary": null
+          }
+        }
+      ]
+    }
+  ],
+  "srsAttendance": {
+    "loginOk": false,
+    "loginStatus": 401,
+    "endpoints": [],
+    "error": {
+      "code": "UNAUTHORIZED",
+      "message": "invalid credentials"
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "at": "2026-04-12T13:05:27.858Z",
+  "frontend": "https://rgarlsfront50018.z12.web.core.windows.net/?api=https%3A%2F%2Frg-arls-backend.azurewebsites.net&worker2Populated=1775999062217",
+  "tenant": {
+    "id": "7d3997c3-346a-407e-a416-687fe0827992",
+    "code": "SRS_KOREA",
+    "name": "SRS Korea"
+  },
+  "consoleErrors": [
+    "Blocked call to navigator.vibrate because user hasn't tapped on the frame or any embedded frame yet: https://www.chromestatus.com/feature/5644273861001216."
+  ],
+  "failedRequests": [
+    "https://rg-arls-backend.azurewebsites.net/api/v1/sites?active=all&limit=500&offset=0",
+    "https://rg-arls-backend.azurewebsites.net/api/v1/attendance/records?date=2026-04-12",
+    "https://rg-arls-backend.azurewebsites.net/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "https://rg-arls-backend.azurewebsites.net/api/v1/employees?limit=500&offset=0",
+    "https://rg-arls-backend.azurewebsites.net/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "https://rg-arls-backend.azurewebsites.net/api/v1/auth/me",
+    "https://rg-arls-backend.azurewebsites.net/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea"
+  ],
+  "httpApiErrors": [],
+  "results": [
+    {
+      "route": "#/attendance?section=period&mode=list",
+      "url": "https://rgarlsfront50018.z12.web.core.windows.net/?api=https%3A%2F%2Frg-arls-backend.azurewebsites.net&worker2Populated=1775999062217#/attendance?section=period&mode=list",
+      "title": null,
+      "screenshot": "output/arls-shople-finalization/populated-captures/attendance-period-list.png",
+      "rowHints": 97,
+      "overflowX": false,
+      "textSample": "Developer 내 정보 화면 모드 전환 Developer 조회 테넌트 Phase13 회사 09011819 (PHASE13_09011819) Phase13 회사 09694533 (PHASE13_09694533) SRS Korea (SRS_KOREA) 홈 홈 운영 스케줄 월간 근무표 스케쥴 업로드 지원근무자 업로드 근무 템플릿 캘린더 Finance 출퇴근 날짜별 기간별 통계 휴가 현황 사용 이력 부여 설정 승인 출퇴근 예외 문서 문서 승인 절차 조직/인력 구성원 직원 근무지 회사 공지 공지 설정 설정 관리자 감사 로그아웃 출퇴근 기간별 리스트 캘린더 2026.04.12 (일) 직원 근무지 전체 정상 지각 조퇴 미출근 미퇴근 휴가 정정대기 기간별 출퇴근 기간 안의 예외와 출퇴근 기록을 같은 지표로 먼저 좁힙니다. 2026-04-12 ~ 2026-04-12 총 0건 근무 대상 0 출근 완료 0 미출근 0 미퇴근 0 지각 0 조퇴 0 정정 대기 0 휴가 0 기간별 출퇴근 직원 직무·직급 근무상태 스케줄 출퇴근시각 특이사항 지각 조퇴 상세 기록이 없습니다. 선택한 기간에 맞는 출퇴근 기록이 없습니다."
+    },
+    {
+      "route": "#/schedules/list",
+      "url": "https://rgarlsfront50018.z12.web.core.windows.net/?api=https%3A%2F%2Frg-arls-backend.azurewebsites.net&worker2Populated=1775999062217#/schedules/list",
+      "title": null,
+      "screenshot": "output/arls-shople-finalization/populated-captures/schedule-list.png",
+      "rowHints": 176,
+      "overflowX": false,
+      "textSample": "Developer 내 정보 화면 모드 전환 Developer 조회 테넌트 Phase13 회사 09011819 (PHASE13_09011819) Phase13 회사 09694533 (PHASE13_09694533) SRS Korea (SRS_KOREA) 홈 홈 운영 스케줄 월간 근무표 스케쥴 업로드 지원근무자 업로드 근무 템플릿 캘린더 Finance 출퇴근 날짜별 기간별 통계 휴가 현황 사용 이력 부여 설정 승인 출퇴근 예외 문서 문서 승인 절차 조직/인력 구성원 직원 근무지 회사 공지 공지 설정 설정 관리자 감사 로그아웃 월간 근무표 ? ← 2026년 4월 → 보기 월 목록 전체 지점 R692 · Apple_가로수길 전체 근무 주간근무 야간 휴가 표시 다운로드 업로드 근무일정 추가 2026년 4월 · 전체 지점 · 전체 근무 · 전체 직원 · 휴가 표시 배정 6 휴가 0 미배정 일자 26 근무(주간) 주야(주간+야간) 야간(야간근무) 휴무(휴가/공휴일) 근무자 현장 시간 / 메모 상태 / 작업 2026-04-01 (수) 2건 서성원 R692-1 Apple_가로수길 night 22:00-08:00 리더 송원석 야간근무 (night) SOC 수정 삭제 송원석 R692-3 Apple_가로수길 night 22:00-08:00 리더 송원석 야간근무 (night) SOC 수정 삭제 2026-04-10 (금) 2건 서성원 R692-1 Apple_가로수길 night 22:00-08:00 야간근무 (night) SOC 수정 삭제 송원석 R692-3 Apple_가로수길 night 22:00-08:00 야간근무 (night) SOC 수정 삭제 2026-04-15 (수) 1건 조남길 R692-28 Apple_가로수길 day 10:00-22:00 주간근무 (day) 수정 삭제 2026-04-18 (토) 1건 박동훈 R692-20 Apple_가로수길 day 10:00-22:00 주간근무 (day) 수정 삭제"
+    },
+    {
+      "route": "#/schedules/calendar",
+      "url": "https://rgarlsfront50018.z12.web.core.windows.net/?api=https%3A%2F%2Frg-arls-backend.azurewebsites.net&worker2Populated=1775999062217#/schedules/calendar",
+      "title": null,
+      "screenshot": "output/arls-shople-finalization/populated-captures/schedule-calendar.png",
+      "rowHints": 176,
+      "overflowX": false,
+      "textSample": "Developer 내 정보 화면 모드 전환 Developer 조회 테넌트 Phase13 회사 09011819 (PHASE13_09011819) Phase13 회사 09694533 (PHASE13_09694533) SRS Korea (SRS_KOREA) 홈 홈 운영 스케줄 월간 근무표 스케쥴 업로드 지원근무자 업로드 근무 템플릿 캘린더 Finance 출퇴근 날짜별 기간별 통계 휴가 현황 사용 이력 부여 설정 승인 출퇴근 예외 문서 문서 승인 절차 조직/인력 구성원 직원 근무지 회사 공지 공지 설정 설정 관리자 감사 로그아웃 월간 근무표 ? ← 2026년 4월 → 보기 월 목록 전체 지점 R692 · Apple_가로수길 전체 근무 주간근무 야간 휴가 표시 다운로드 업로드 근무일정 추가 2026년 4월 · 전체 지점 · 전체 근무 · 전체 직원 · 휴가 표시 배정 6 휴가 0 미배정 일자 26 근무(주간) 주야(주간+야간) 야간(야간근무) 휴무(휴가/공휴일) 일 월 화 수 목 금 토 29 박동훈 Apple_가로수길 10:00 - 22:00 이보한 Apple_가로수길 10:00 - 22:00 조태환 Apple_가로수길 10:00 - 08:00 30 박동훈 Apple_가로수길 10:00 - 22:00 송원석 Apple_가로수길 10:00 - 22:00 이보한 Apple_가로수길 10:00 - 22:00 31 송원석 Apple_가로수길 10:00 - 22:00 이보한 Apple_가로수길 10:00 - 22:00 최미강 Apple_가로수길 10:00 - 22:00 1 2명 서성원 Apple_가로수길 22:00 - 08:00 송원석 Apple_가로수길 22:00 - 08:00 2 3 4 5 6 7 8 9 10 2명 서성원 Apple_가로수길 22:00 - 08:00 송원석 Apple_가로수길 22:00 - 08:00 11 12 13 14 15 1명 조남길 Apple_가로수길 10:00 - 22:00 16 17 18 1명 박동훈 Apple_가로수길 10:00 - 22:00 19 20 21 22 23 24 25 26 27 28 29 30 1 2"
+    },
+    {
+      "route": "#/leave?tab=grants",
+      "url": "https://rgarlsfront50018.z12.web.core.windows.net/?api=https%3A%2F%2Frg-arls-backend.azurewebsites.net&worker2Populated=1775999062217#/leave?tab=grants",
+      "title": null,
+      "screenshot": "output/arls-shople-finalization/populated-captures/leave-grants.png",
+      "rowHints": 176,
+      "overflowX": false,
+      "textSample": "Developer 내 정보 화면 모드 전환 Developer 조회 테넌트 Phase13 회사 09011819 (PHASE13_09011819) Phase13 회사 09694533 (PHASE13_09694533) SRS Korea (SRS_KOREA) 홈 홈 운영 스케줄 월간 근무표 스케쥴 업로드 지원근무자 업로드 근무 템플릿 캘린더 Finance 출퇴근 날짜별 기간별 통계 휴가 현황 사용 이력 부여 설정 승인 출퇴근 예외 문서 문서 승인 절차 조직/인력 구성원 직원 근무지 회사 공지 공지 설정 설정 관리자 감사 로그아웃 휴가 부여 현황 사용 이력 부여 설정 휴가 부여 부여 내역 구성원별 휴가 유형 전체 유형 기본 연차 정책 직원 검색 직원 유형 지급 사용 가능 기간 부여 방식 코덱스경력0220 (R0022-220) 기본 연차 정책 15일 2026. 1. 1. ~ 2026. 12. 31. 연차 자동 서성원 (R692-1) 기본 연차 정책 15일 2026. 1. 1. ~ 2026. 12. 31. 연차 자동"
+    },
+    {
+      "route": "#/feature/notices",
+      "url": "https://rgarlsfront50018.z12.web.core.windows.net/?api=https%3A%2F%2Frg-arls-backend.azurewebsites.net&worker2Populated=1775999062217#/feature/notices",
+      "title": null,
+      "screenshot": "output/arls-shople-finalization/populated-captures/notices.png",
+      "rowHints": 176,
+      "overflowX": false,
+      "textSample": "Developer 내 정보 화면 모드 전환 Developer 조회 테넌트 Phase13 회사 09011819 (PHASE13_09011819) Phase13 회사 09694533 (PHASE13_09694533) SRS Korea (SRS_KOREA) 홈 홈 운영 스케줄 월간 근무표 스케쥴 업로드 지원근무자 업로드 근무 템플릿 캘린더 Finance 출퇴근 날짜별 기간별 통계 휴가 현황 사용 이력 부여 설정 승인 출퇴근 예외 문서 문서 승인 절차 조직/인력 구성원 직원 근무지 회사 공지 공지 설정 설정 관리자 감사 로그아웃 공지사항 공지 쓰기 전체 운영 출퇴근 스케줄 인사 시스템 이벤트 공지 검색 시스템 [Phase1 검증] 공지센터 생성/상세/홈 티저 확인 2026-03-23 10:28 상단고정 2026. 3. 23. 운영 ㄷㄷ 2026. 3. 25. 운영 ㄴㄴ 2026. 3. 25. 운영 ㄷㄷ 2026. 3. 25. 운영 [Phase1 검증] 공지센터 생성/상세/홈 티저 확인 2026-03-23 10:28 2026. 3. 25. 운영 제목 입력했다고 2026. 3. 23. 운영 Phase1 title only 1774251246851 수정 2026. 3. 23. 운영 Phase1 title only 1774251070170 2026. 3. 23. 운영 Phase0 body verify 1774249607941 2026. 3. 23. 운영 Phase0 edit verify 1774249600751 수정 2026. 3. 23. 운영 Phase0 longwait title only 1774249536230 edited 2026. 3. 23. 운영 Phase0 제목만 발행 1774249464537 수정 2026. 3. 23. 운영 Phase0 제목만 발행 1774249405408 2026. 3. 23. 시스템 phase0 title only 2 2026. 3. 23. 시스템 phase0 title only 2026. 3. 23. 운영 2번째 공지 2026. 3. 23."
+    }
+  ]
+}
