@@ -55540,6 +55540,168 @@ html[data-ui-theme="light"]
   min-width: 132px;
 }
 
+/* 2026-04-12 Finance mobile dark overflow repair */
+@media (max-width: 720px) {
+  #view-reports #scheduleFinanceSubmissionPanel,
+  #view-reports #financeDownloadPanel {
+    padding: 16px !important;
+    overflow-x: hidden !important;
+  }
+
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-download-header,
+  #view-reports #financeDownloadPanel .reports-finance-download-header,
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-download-title-row,
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-submit-actions,
+  #view-reports #financeDownloadPanel .reports-finance-download-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-submit-actions
+    .input-field,
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-submit-actions
+    .btn,
+  #view-reports #financeDownloadPanel .reports-finance-download-actions .btn {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-submit-table-wrap,
+  #view-reports #financeDownloadPanel .reports-finance-download-table-wrap {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  #view-reports #scheduleFinanceSubmissionPanel .reports-finance-download-table,
+  #view-reports #financeDownloadPanel .reports-finance-download-table {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-download-table
+    thead,
+  #view-reports #financeDownloadPanel .reports-finance-download-table thead {
+    display: none !important;
+  }
+
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-download-table
+    tbody,
+  #view-reports #financeDownloadPanel .reports-finance-download-table tbody {
+    display: grid !important;
+    gap: 0 !important;
+    width: 100% !important;
+  }
+
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-download-row,
+  #view-reports #financeDownloadPanel .reports-finance-download-row {
+    display: grid !important;
+    grid-template-columns: 28px minmax(0, 1fr) auto !important;
+    gap: 4px 10px !important;
+    width: 100% !important;
+    padding: 12px 0 !important;
+    border-bottom: 1px solid var(--ui-border-subtle) !important;
+  }
+
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-download-row
+    td,
+  #view-reports #financeDownloadPanel .reports-finance-download-row td {
+    display: block !important;
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-download-row
+    td:first-child,
+  #view-reports
+    #financeDownloadPanel
+    .reports-finance-download-row
+    td:first-child {
+    grid-row: 1 / span 3;
+    align-self: start;
+    padding-top: 4px !important;
+  }
+
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-download-row
+    td:nth-child(2),
+  #view-reports #financeDownloadPanel .reports-finance-download-row td:nth-child(2) {
+    grid-column: 2;
+    font-weight: 800;
+  }
+
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-download-row
+    td:nth-child(3),
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-download-row
+    td:nth-child(4),
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-download-row
+    td:nth-child(5),
+  #view-reports
+    #financeDownloadPanel
+    .reports-finance-download-row
+    td:nth-child(3),
+  #view-reports
+    #financeDownloadPanel
+    .reports-finance-download-row
+    td:nth-child(4),
+  #view-reports
+    #financeDownloadPanel
+    .reports-finance-download-row
+    td:nth-child(5) {
+    grid-column: 2;
+    color: var(--ui-text-secondary);
+    font-size: 12px;
+  }
+
+  #view-reports
+    #scheduleFinanceSubmissionPanel
+    .reports-finance-download-row
+    td:last-child,
+  #view-reports #financeDownloadPanel .reports-finance-download-row td:last-child {
+    grid-column: 3;
+    grid-row: 1 / span 3;
+    align-self: start;
+    justify-self: end;
+  }
+}
+
 /* 2026-04-12 Attendance Shople visual slice: period/stat zero-state refinement */
 #view-attendance
   #attendanceManagerWorkspace.is-attendance-v2-list
@@ -55628,4 +55790,536 @@ html[data-ui-theme="dark"]
   .attendance-v2-summary-item-compact {
   background: rgba(15, 23, 42, 0.84);
   border-color: rgba(51, 65, 85, 0.92);
+}
+
+/* 2026-04-12 Shople-like visual second pass */
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-strip-queue-first,
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-list
+  .attendance-v2-summary-strip-period {
+  display: grid !important;
+  grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  min-height: 0 !important;
+  padding: 10px 0 !important;
+  border-top: 1px solid var(--ui-border-subtle) !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 0 !important;
+  background: #fff !important;
+  overflow: visible !important;
+}
+
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item,
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-list
+  .attendance-v2-summary-strip-period
+  .attendance-v2-summary-item {
+  display: grid !important;
+  align-content: center !important;
+  gap: 6px !important;
+  min-height: 64px !important;
+  padding: 8px 12px !important;
+  border: 0 !important;
+  border-left: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 0 !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  color: var(--ui-text-primary) !important;
+}
+
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item:first-child,
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-list
+  .attendance-v2-summary-strip-period
+  .attendance-v2-summary-item:first-child {
+  border-left: 0 !important;
+}
+
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item:first-child
+  .attendance-v2-summary-label,
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item:first-child
+  .attendance-v2-card-label-text,
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item:first-child
+  .attendance-v2-summary-value,
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item:first-child
+  .attendance-v2-summary-meta {
+  color: var(--ui-accent) !important;
+}
+
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-item
+  .attendance-v2-card-icon,
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-list
+  .attendance-v2-summary-item
+  .attendance-v2-card-icon {
+  display: inline-flex !important;
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 8px !important;
+}
+
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-card-label-row,
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-list
+  .attendance-v2-card-label-row {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-label,
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-list
+  .attendance-v2-summary-label {
+  font-size: 12px !important;
+  line-height: 1.3 !important;
+  font-weight: 700 !important;
+  color: #475569 !important;
+}
+
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-value,
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-list
+  .attendance-v2-summary-value {
+  font-size: 20px !important;
+  line-height: 1 !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+}
+
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-section-copy,
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-list
+  .attendance-v2-section-copy {
+  margin-top: 2px !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+}
+
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-empty,
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-list
+  .attendance-v2-empty {
+  min-height: 54px !important;
+  padding: 12px 0 !important;
+}
+
+#view-schedule .schedule-ops-toolbar {
+  padding: 12px 16px 10px !important;
+  border-radius: 14px !important;
+}
+
+#view-schedule .schedule-ops-toolbar-main {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  grid-template-areas:
+    "primary actions"
+    "filters filters" !important;
+  gap: 10px 14px !important;
+  align-items: center !important;
+}
+
+#view-schedule .schedule-toolbar-primary {
+  gap: 12px !important;
+}
+
+#view-schedule .schedule-month-nav {
+  gap: 8px !important;
+}
+
+#view-schedule .schedule-nav-arrow {
+  width: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  border-radius: 10px !important;
+  font-size: 20px !important;
+}
+
+#view-schedule .schedule-month-trigger {
+  min-height: 36px !important;
+  padding: 0 10px !important;
+}
+
+#view-schedule .schedule-month-title {
+  font-size: 18px !important;
+  line-height: 22px !important;
+  letter-spacing: 0 !important;
+}
+
+#view-schedule .schedule-view-mode-row .btn {
+  min-height: 32px !important;
+  height: 32px !important;
+  padding-inline: 12px !important;
+}
+
+#view-schedule .schedule-ops-actions {
+  justify-content: flex-end !important;
+  align-self: center !important;
+}
+
+#view-schedule .schedule-action-btn {
+  min-height: 36px !important;
+  padding-inline: 12px !important;
+}
+
+#view-schedule .schedule-calendar-tools {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 8px 10px !important;
+}
+
+#view-schedule .schedule-toolbar-filter-cluster {
+  grid-template-columns:
+    minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(180px, 1fr) !important;
+  gap: 8px !important;
+}
+
+#view-schedule .schedule-calendar-tools select,
+#view-schedule .schedule-calendar-tools input,
+#view-schedule .schedule-leave-toggle {
+  min-height: 34px !important;
+  height: 34px !important;
+  border-radius: 8px !important;
+}
+
+#view-schedule .schedule-ops-toolbar-footer {
+  gap: 8px !important;
+  padding-top: 8px !important;
+}
+
+#view-schedule .schedule-summary-item {
+  min-height: 26px !important;
+  padding: 0 8px !important;
+}
+
+#view-schedule .schedule-upload-step-rail {
+  padding: 12px 20px 7px !important;
+}
+
+#view-schedule .schedule-wizard-progress {
+  gap: 0 8px !important;
+}
+
+#view-schedule .schedule-wizard-step {
+  min-height: 38px !important;
+  padding-top: 20px !important;
+  font-size: 12px !important;
+}
+
+#view-schedule .schedule-excel-workflow-section {
+  gap: 10px !important;
+}
+
+#view-schedule #scheduleTemplatePanel {
+  gap: 0 !important;
+}
+
+#view-schedule #scheduleTemplatePanel .approval-head {
+  padding: 14px 18px !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-wrap {
+  border: 0 !important;
+  border-radius: 0 0 14px 14px !important;
+}
+
+#view-schedule #scheduleTemplatePanel .admin-table thead th {
+  background: #f4f6f8 !important;
+}
+
+#view-schedule #scheduleTemplatePanel .admin-table-empty-row td {
+  padding: 18px 16px !important;
+}
+
+@media (max-width: 1080px) {
+  #view-attendance
+    #attendanceManagerWorkspace.is-attendance-v2-status
+    .attendance-v2-summary-strip-queue-first,
+  #view-attendance
+    #attendanceManagerWorkspace.is-attendance-v2-list
+    .attendance-v2-summary-strip-period {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  #view-schedule .schedule-ops-toolbar-main,
+  #view-schedule .schedule-calendar-tools,
+  #view-schedule .schedule-toolbar-filter-cluster {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #view-schedule .schedule-ops-toolbar-main {
+    grid-template-areas:
+      "primary"
+      "actions"
+      "filters" !important;
+  }
+
+  #view-schedule .schedule-ops-actions {
+    justify-content: flex-start !important;
+  }
+}
+
+html[data-ui-theme="dark"]
+  #view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-strip-queue-first,
+html[data-ui-theme="dark"]
+  #view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-list
+  .attendance-v2-summary-strip-period,
+html[data-ui-theme="dark"]
+  #view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-strip-queue-first
+  .attendance-v2-summary-item,
+html[data-ui-theme="dark"]
+  #view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-list
+  .attendance-v2-summary-strip-period
+  .attendance-v2-summary-item {
+  background: rgba(15, 23, 42, 0.84) !important;
+  border-color: rgba(51, 65, 85, 0.92) !important;
+}
+
+html[data-ui-theme="dark"]
+  #view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  .attendance-v2-summary-value,
+html[data-ui-theme="dark"]
+  #view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-list
+  .attendance-v2-summary-value {
+  color: #f8fafc !important;
+}
+
+/* 2026-04-12 calendar selected-day interpretation rail */
+#view-calendar .calendar-outlook-shell.has-selected-day-rail {
+  grid-template-columns: 182px minmax(0, 1fr) minmax(238px, 276px);
+}
+
+#view-calendar .calendar-selected-day-rail {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  height: 100%;
+  padding: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 10px;
+  background: #fff;
+  overflow: auto;
+}
+
+#view-calendar .calendar-selected-day-head {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+#view-calendar .calendar-selected-day-head strong {
+  color: #111827;
+  font-size: 16px;
+  line-height: 1.3;
+  font-weight: 800;
+}
+
+#view-calendar .calendar-selected-day-head p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#view-calendar .calendar-selected-day-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+#view-calendar .calendar-selected-day-list {
+  display: grid;
+  gap: 8px;
+}
+
+#view-calendar .calendar-selected-day-empty {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#view-calendar .calendar-selected-day-empty strong {
+  color: #111827;
+  font-size: 14px;
+}
+
+#view-calendar .calendar-selected-day-more {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#view-calendar .calendar-selected-day-create {
+  width: 100%;
+  margin-top: 2px;
+}
+
+html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-rail {
+  background: #1f1f1f;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-head {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-head strong,
+html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-empty strong {
+  color: #f8fafc;
+}
+
+html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-head p,
+html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-empty,
+html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
+  color: #94a3b8;
+}
+
+@media (max-width: 1180px) {
+  #view-calendar .calendar-outlook-shell.has-selected-day-rail {
+    grid-template-columns: 1fr;
+  }
+
+  #view-calendar .calendar-selected-day-rail {
+    min-height: 180px;
+    height: auto;
+  }
+}
+
+/* 2026-04-12 remaining sweep overflow fixes */
+#view-leave #leavePolicySection {
+  min-width: 0 !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+}
+
+#view-leave #leavePolicySection .leave-policy-grid-header,
+#view-leave #leavePolicyList .leave-policy-row {
+  min-width: 0 !important;
+  width: 100% !important;
+  grid-template-columns:
+    minmax(150px, 1.05fr)
+    minmax(190px, 1.55fr)
+    minmax(108px, 0.84fr)
+    minmax(102px, 0.78fr)
+    minmax(92px, 0.7fr)
+    minmax(86px, 0.66fr)
+    minmax(96px, 0.72fr) !important;
+  column-gap: 10px !important;
+}
+
+#view-leave #leavePolicySection .leave-grid-cell,
+#view-leave #leavePolicySection .leave-policy-grid-header > span {
+  min-width: 0 !important;
+}
+
+#view-notices .notices-toolbar-row {
+  min-width: 0 !important;
+  overflow-x: clip !important;
+}
+
+#view-notices .notices-search-form {
+  min-width: 0 !important;
+  max-width: min(280px, 100%) !important;
+}
+
+#view-notices .notices-search-input-wrap,
+#view-notices .notices-search-form.is-expanded .notices-search-input-wrap {
+  width: min(252px, 26vw) !important;
+  max-width: 100% !important;
+}
+
+#view-leave #leaveHistoryChartCard {
+  order: 3 !important;
+}
+
+#view-leave #leaveWorkspaceRequestsCard {
+  order: 2 !important;
+}
+
+#view-leave #leavePolicyStatusTabs {
+  gap: 10px !important;
+  padding: 8px 0 10px !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+}
+
+#view-leave #leavePolicyStatusTabs .approval-tab {
+  min-height: 28px !important;
+  padding: 0 10px !important;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  color: var(--ui-text-secondary) !important;
+}
+
+#view-leave #leavePolicyStatusTabs .approval-tab.active {
+  border-color: rgba(255, 122, 26, 0.22) !important;
+  background: rgba(255, 122, 26, 0.06) !important;
+  color: var(--ui-accent) !important;
+}
+
+#view-employees #employeeDirectorySummaryStrip {
+  display: none !important;
+}
+
+#view-employees #employeeBulkDeleteSiteBtn:disabled {
+  display: none !important;
+}
+
+#view-employees #employeeTopActionHint {
+  display: none !important;
+}
+
+#view-org .site-directory-table th:nth-child(3),
+#view-org .site-directory-table td:nth-child(3) {
+  display: none !important;
+}
+
+#view-profile .profile-identity-copy .muted,
+#view-profile .profile-identity-side .muted,
+#view-profile #profileRailStatusNote {
+  display: none !important;
 }

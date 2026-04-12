@@ -45,6 +45,22 @@ def _db_conn(conninfo: str | None = None):
         pytest.skip(f"database unavailable for integration test: {exc}")
 
 
+def _table_column_exists(conn, table_name: str, column_name: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = %s
+              AND column_name = %s
+            LIMIT 1
+            """,
+            (table_name, column_name),
+        )
+        return cur.fetchone() is not None
+
+
 def _api_json(response) -> dict[str, Any]:
     try:
         payload = response.json()
@@ -60,6 +76,21 @@ def _api_data(response) -> dict[str, Any]:
     if "success" in payload and "data" in payload and isinstance(payload["data"], dict):
         return payload["data"]
     return payload
+
+
+def _api_rows(response) -> list[dict[str, Any]]:
+    payload = _api_json(response)
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        if isinstance(payload.get("data"), list):
+            return payload["data"]
+        if isinstance(payload.get("items"), list):
+            return payload["items"]
+        data = payload.get("data")
+        if isinstance(data, dict) and isinstance(data.get("items"), list):
+            return data["items"]
+    return []
 
 
 def _assert_status(response, expected_status: int):
@@ -134,6 +165,7 @@ def _create_tenant_scope(conn, *, tenant_code: str, tenant_name: str, site_code:
     tenant_id = str(uuid.uuid4())
     company_id = str(uuid.uuid4())
     site_id = str(uuid.uuid4())
+    has_site_deleted = _table_column_exists(conn, "sites", "is_deleted")
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -149,19 +181,34 @@ def _create_tenant_scope(conn, *, tenant_code: str, tenant_name: str, site_code:
             """,
             (company_id, tenant_id, f"CMP_{site_code}", f"{tenant_name} Company"),
         )
-        cur.execute(
-            """
-            INSERT INTO sites (
-                id, tenant_id, company_id, site_code, site_name, latitude, longitude, radius_meters,
-                address, is_active, is_deleted, created_at, updated_at, employee_sequence_seed
+        if has_site_deleted:
+            cur.execute(
+                """
+                INSERT INTO sites (
+                    id, tenant_id, company_id, site_code, site_name, latitude, longitude, radius_meters,
+                    address, is_active, is_deleted, created_at, updated_at, employee_sequence_seed
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, 37.5665, 126.9780, 80,
+                    %s, TRUE, FALSE, timezone('utc', now()), timezone('utc', now()), 0
+                )
+                """,
+                (site_id, tenant_id, company_id, site_code, site_name, f"{site_name} Address"),
             )
-            VALUES (
-                %s, %s, %s, %s, %s, 37.5665, 126.9780, 80,
-                %s, TRUE, FALSE, timezone('utc', now()), timezone('utc', now()), 0
+        else:
+            cur.execute(
+                """
+                INSERT INTO sites (
+                    id, tenant_id, company_id, site_code, site_name, latitude, longitude, radius_meters,
+                    address, is_active, created_at, updated_at, employee_sequence_seed
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, 37.5665, 126.9780, 80,
+                    %s, TRUE, timezone('utc', now()), timezone('utc', now()), 0
+                )
+                """,
+                (site_id, tenant_id, company_id, site_code, site_name, f"{site_name} Address"),
             )
-            """,
-            (site_id, tenant_id, company_id, site_code, site_name, f"{site_name} Address"),
-        )
     return {
         "tenant_id": tenant_id,
         "tenant_code": tenant_code,
@@ -269,7 +316,7 @@ def test_employee_list_repairs_missing_row_from_active_arls_user(client: TestCli
             headers={"Authorization": f"Bearer {actor_token}"},
         )
         _assert_status(dev_list, 200)
-        dev_payload = dev_list.json()
+        dev_payload = _api_rows(dev_list)
         dev_names = [str(item.get("full_name") or "") for item in dev_payload]
         assert "김민규" in dev_names
 
@@ -278,7 +325,7 @@ def test_employee_list_repairs_missing_row_from_active_arls_user(client: TestCli
             headers={"Authorization": f"Bearer {actor_token}"},
         )
         _assert_status(employee_list, 200)
-        employee_payload = employee_list.json()
+        employee_payload = _api_rows(employee_list)
         employee_names = [str(item.get("full_name") or "") for item in employee_payload]
         assert "김민규" in employee_names
 

@@ -1,0 +1,114 @@
+{
+  "generatedAt": "2026-04-12T13:01:53.801Z",
+  "frontend": "https://rgarlsfront50018.z12.web.core.windows.net/?api=%3Capi%3E",
+  "viewport": {
+    "width": 1366,
+    "height": 900
+  },
+  "checks": [
+    {
+      "name": "employee-row-detail",
+      "route": "#/branch/employees",
+      "count": 85,
+      "clicked": true,
+      "screenshot": "/Users/mark/Desktop/rg-arls-dev/output/arls-shople-finalization/worker4-live-nondestructive/employee-row-detail.png",
+      "after": {
+        "detailEmployeeId": "",
+        "drawerOpen": false,
+        "panelVisible": true,
+        "detailText": "현재 상태출퇴근 예외0연차 잔여15요청 대기0기본 정보직원번호R0022-220소속 지점Codex_증명서_다종_0022 (R0022)연락처01003280023입사일2023. 1. 10.계정/권한연동 상태연결됨로그인 ID01003280023권한Officer",
+        "overflowX": false
+      }
+    },
+    {
+      "name": "site-row-detail",
+      "route": "#/branch/sites",
+      "count": 50,
+      "clicked": true,
+      "screenshot": "/Users/mark/Desktop/rg-arls-dev/output/arls-shople-finalization/worker4-live-nondestructive/site-row-detail.png",
+      "after": {
+        "detailId": "",
+        "panelVisible": true,
+        "detailText": "SRS Korea Codex_증명서_다종_0022 운영중1명준비 완료 ✕ 현장 개요운영 상태활성출퇴근 기준준비 완료직원 수1명반경120mWi-Fi미등록회사SRS Korea현장번호R0022주소서울특별시 중구 을지로 100좌표37.566500, 126.978000출퇴근 준비주소서울특별시 중구 을지로 100완료좌표37.566500, 126.978000완료반경120m완료Wi-Fi미등록확인 필요 지점 수정비활성 전환지점 삭제",
+        "overflowX": false
+      }
+    },
+    {
+      "name": "notice-detail-row",
+      "route": "#/feature/notices",
+      "count": 0,
+      "clicked": false,
+      "screenshot": "/Users/mark/Desktop/rg-arls-dev/output/arls-shople-finalization/worker4-live-nondestructive/notice-detail-row.png",
+      "after": {
+        "mode": "",
+        "selectedNoticeId": "",
+        "detailVisible": false,
+        "detailText": "공지 상세 공지 목록에서 항목을 선택하면 상세가 열립니다. 수정 삭제 목록으로 데이터 없음 공지 상세를 선택해 주세요. 목록에서 항목을 열면 제목, 날짜, 본문을 이 화면에서 확인할 수 있습니다.",
+        "overflowX": false
+      }
+    },
+    {
+      "name": "notice-compose-open",
+      "route": "#/feature/notices",
+      "count": 2,
+      "clicked": true,
+      "screenshot": "/Users/mark/Desktop/rg-arls-dev/output/arls-shople-finalization/worker4-live-nondestructive/notice-compose-open.png",
+      "after": {
+        "hash": "#/feature/notices?mode=new",
+        "mode": "",
+        "composeVisible": true,
+        "toolLabels": [
+          "꺼짐",
+          "발행",
+          "사진",
+          "표",
+          "투표",
+          "구분선",
+          "링크",
+          "삭제",
+          "목록으로"
+        ],
+        "overflowX": false
+      }
+    },
+    {
+      "name": "calendar-new-event-modal-open",
+      "route": "#/calendar/month",
+      "count": 2,
+      "clicked": true,
+      "screenshot": "/Users/mark/Desktop/rg-arls-dev/output/arls-shople-finalization/worker4-live-nondestructive/calendar-new-event-modal-open.png",
+      "after": {
+        "hash": "#/calendar/month",
+        "view": "",
+        "title": "캘린더",
+        "overflowX": false,
+        "scrollWidth": 1366,
+        "clientWidth": 1366,
+        "sheetOpen": true,
+        "sheetTitle": "새 일정",
+        "textSample": "캘린더 오늘 ‹ › 2026년 4월 필터 일 주 월 새 일정 2026년 4월 일월화수목금토 293031123456789101112131415161718192021222324252627282930123456789 일 월 화 수 목 금 토 29 30 31 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 1 2 3 4 5 6 7 8 9 선택 날짜 2026년 4월 12일 일 공유 캘린더 · 0개 일정 0개 종일 0 외부 0 일정이 없습니다. 이 날짜의 일정은 아직 비어 있습니다. 새 일정 추가"
+      }
+    },
+    {
+      "name": "finance-download-tab-switch",
+      "route": "#/reports",
+      "count": 1,
+      "clicked": true,
+      "screenshot": "/Users/mark/Desktop/rg-arls-dev/output/arls-shople-finalization/worker4-live-nondestructive/finance-download-tab-switch.png",
+      "after": {
+        "hash": "#/reports/finance-download",
+        "view": "",
+        "activeReportsTab": "",
+        "title": "Finance",
+        "tabLabels": [
+          "제출",
+          "다운로드"
+        ],
+        "overflowX": false
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "failedRequests": [],
+  "httpApiErrors": []
+}

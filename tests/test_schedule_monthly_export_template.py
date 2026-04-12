@@ -19,7 +19,7 @@ from app.routers.v1.schedules import (
 )
 
 
-TEMPLATE_PATH = Path("/Users/seoseong-won/Documents/rg-arls-dev/backend/app/templates/monthly_schedule_template.xlsx")
+TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "app" / "templates" / "monthly_schedule_template.xlsx"
 
 
 class MonthlyScheduleTemplateExportTests(unittest.TestCase):
