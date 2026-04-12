@@ -6322,15 +6322,24 @@ function buildHomeMetricTilesHtml(items = [], { compact = false } = {}) {
   return `
     <div class="home-metric-tiles${compact ? " home-metric-tiles-compact" : ""}">
       ${rows
-        .map(
-          (item) => `
-        <article class="home-metric-tile${item?.tone ? ` home-metric-tile-${escapeHomeHtml(item.tone)}` : ""}">
-          <span>${escapeHomeHtml(item.label || "-")}</span>
+        .map((item) => {
+          const iconKey = String(item?.iconKey || item?.icon || "").trim();
+          const iconTone = normalizeHomeVisualTone(item?.iconTone || item?.tone || "neutral");
+          return `
+        <article class="home-metric-tile${item?.tone ? ` home-metric-tile-${escapeHomeHtml(item.tone)}` : ""}${iconKey ? " has-home-metric-icon" : ""}">
+          <div class="home-metric-tile-head">
+            ${
+              iconKey
+                ? `<i class="home-metric-icon is-${escapeHomeHtml(iconTone)}" aria-hidden="true">${buildAzureTopbarIconSvg(iconKey)}</i>`
+                : ""
+            }
+            <span>${escapeHomeHtml(item.label || "-")}</span>
+          </div>
           <strong>${escapeHomeHtml(item.value || "-")}</strong>
           ${String(item.meta || "").trim() ? `<small>${escapeHomeHtml(item.meta || "")}</small>` : ""}
         </article>
-      `,
-        )
+      `;
+        })
         .join("")}
     </div>
   `;
@@ -7217,12 +7226,14 @@ function buildHomeSelfCardHtml({ audience = "officer", briefing = null } = {}) {
                 value: toDateLabel(briefing?.date || new Date()),
                 meta: "KST 기준",
                 tone: "neutral",
+                iconKey: "calendar",
               },
               {
                 label: "근무 현장",
                 value: personal?.site_name || personal?.site_code || "-",
                 meta: personal?.site_code || "현장 미지정",
                 tone: "neutral",
+                iconKey: "grid",
               },
               {
                 label: "내 요청",
@@ -7232,6 +7243,7 @@ function buildHomeSelfCardHtml({ audience = "officer", briefing = null } = {}) {
                   Number(requestSummary?.total_pending_count || 0) > 0
                     ? "warn"
                     : "neutral",
+                iconKey: "message",
               },
             ],
             { compact: true },
@@ -7278,18 +7290,21 @@ function buildHomeWeekCardHtml({
               value: `${Number(weekSummary?.scheduled_days || 0)}일`,
               meta: "주간 근무",
               tone: "neutral",
+              iconKey: "calendar",
             },
             {
               label: "근무",
               value: `${Number(weekSummary?.worked_days || 0)}일`,
               meta: "실제 기록",
               tone: "teal",
+              iconKey: "check",
             },
             {
               label: "휴무",
               value: `${Number(weekSummary?.off_days || 0)}일`,
               meta: "비근무",
               tone: "neutral",
+              iconKey: "clock",
             },
           ],
           { compact: true },
@@ -7311,15 +7326,24 @@ function buildHomeModuleSummaryBand(items = []) {
   return `
     <div class="home-module-summary-band">
       ${normalized
-        .map(
-          (item) => `
+        .map((item) => {
+          const iconKey = String(item?.iconKey || item?.icon || "").trim();
+          const iconTone = normalizeHomeVisualTone(item?.iconTone || item?.tone || "neutral");
+          return `
         <article class="home-module-summary-item" data-tone="${escapeHomeHtml(item.tone || "neutral")}">
-          <span>${escapeHomeHtml(item.label || "")}</span>
+          <div class="home-module-summary-label">
+            ${
+              iconKey
+                ? `<i class="home-summary-icon is-${escapeHomeHtml(iconTone)}" aria-hidden="true">${buildAzureTopbarIconSvg(iconKey)}</i>`
+                : ""
+            }
+            <span>${escapeHomeHtml(item.label || "")}</span>
+          </div>
           <strong>${escapeHomeHtml(item.value || "0")}</strong>
           ${String(item.meta || "").trim() ? `<small>${escapeHomeHtml(item.meta || "")}</small>` : ""}
         </article>
-      `,
-        )
+      `;
+        })
         .join("")}
     </div>
   `;
@@ -7382,18 +7406,21 @@ function buildHomeRequestCardHtml({
           value: `${total}건`,
           meta: total > 0 ? "승인 필요" : "",
           tone: total > 0 ? "warn" : "neutral",
+          iconKey: "list",
         },
         {
           label: "승인 대기",
           value: `${leavePending + attendancePending}건`,
           meta: total > 0 ? "휴가·출퇴근" : "",
           tone: leavePending + attendancePending > 0 ? "warn" : "neutral",
+          iconKey: "check",
         },
         {
           label: "미확인 알림",
           value: `${unread}건`,
           meta: unread > 0 ? "알림 확인" : "",
           tone: unread > 0 ? "warn" : "neutral",
+          iconKey: "message",
         },
       ])}
       <div class="home-card-scroll">
@@ -7493,18 +7520,21 @@ function buildHomeScheduleCardHtml({
           value: `${vacancySiteCount}곳`,
           meta: vacancySiteCount > 0 || missingCount > 0 ? "즉시 확인" : "",
           tone: vacancySiteCount > 0 ? "warn" : "neutral",
+          iconKey: "shield",
         },
         {
           label: "승인 대기",
           value: `${pendingApprovalCount}건`,
           meta: pendingApprovalCount > 0 ? "휴가·출퇴근 요청" : "",
           tone: pendingApprovalCount > 0 ? "warn" : "neutral",
+          iconKey: "check",
         },
         {
           label: "운영 지점",
           value: `${siteCount}곳`,
           meta: "",
           tone: "neutral",
+          iconKey: "grid",
         },
       ])}
       <div class="home-card-scroll">
@@ -7582,18 +7612,21 @@ function buildHomeScheduleAnalyticsCardHtml({
             value: `${riskTotal}건`,
             meta: `운영 ${Number(normalizedOps?.site_count || 0)}곳`,
             tone: riskTotal > 0 ? "warn" : "neutral",
+            iconKey: "activity",
           },
           {
             label: "운영 지점",
             value: `${Number(normalizedOps?.site_count || 0)}곳`,
             meta: "오늘 기준",
             tone: "neutral",
+            iconKey: "grid",
           },
           {
             label: "결원 지점",
             value: `${vacancySiteCount}곳`,
             meta: missingCount > 0 ? "즉시 확인" : "정상",
             tone: vacancySiteCount > 0 ? "warn" : "neutral",
+            iconKey: "shield",
           },
           {
             label: "승인 대기",
@@ -7603,6 +7636,7 @@ function buildHomeScheduleAnalyticsCardHtml({
               Number(normalizedRequest?.total_pending_count || 0) > 0
                 ? "warn"
                 : "neutral",
+            iconKey: "check",
           },
         ],
         { compact: true },
@@ -7691,6 +7725,7 @@ function buildHomeSiteReadinessCardHtml({ briefing = null } = {}) {
             value: `${Number(readiness?.present_count || 0)}명`,
             meta: `예정 ${Number(readiness?.scheduled_count || 0)}명`,
             tone: "teal",
+            iconKey: "check",
           },
           {
             label: "미출근",
@@ -7698,6 +7733,7 @@ function buildHomeSiteReadinessCardHtml({ briefing = null } = {}) {
             meta: "확인 필요",
             tone:
               Number(readiness?.missing_count || 0) > 0 ? "warn" : "neutral",
+            iconKey: "clock",
           },
           {
             label: "요청 대기",
@@ -7707,6 +7743,7 @@ function buildHomeSiteReadinessCardHtml({ briefing = null } = {}) {
               Number(readiness?.pending_request_count || 0) > 0
                 ? "warn"
                 : "neutral",
+            iconKey: "message",
           },
           {
             label: "준비도 경고",
@@ -7716,6 +7753,7 @@ function buildHomeSiteReadinessCardHtml({ briefing = null } = {}) {
               Number(readiness?.readiness_issue_count || 0) > 0
                 ? "warn"
                 : "neutral",
+            iconKey: "shield",
           },
         ],
         { compact: true },
@@ -7832,18 +7870,21 @@ function buildHomeHqFocusCardHtml({ briefing = null } = {}) {
           value: `${pendingCount}건`,
           meta: "휴가·출퇴근",
           tone: pendingCount > 0 ? "warn" : "neutral",
+          iconKey: "check",
         },
         {
           label: "구성원 현황",
           value: `${Math.max(0, Number(organizationSummary?.activeEmployeeCount || 0))}명`,
           meta: `재직 ${Math.max(0, Number(organizationSummary?.employeeTotal || 0))}명`,
           tone: "neutral",
+          iconKey: "users",
         },
         {
           label: "근무지 현황",
           value: `${Math.max(0, Number(ops?.site_count || 0))}곳`,
           meta: `결원 ${Math.max(0, Number(ops?.vacancy_site_count || 0))}곳`,
           tone: Number(ops?.vacancy_site_count || 0) > 0 ? "warn" : "neutral",
+          iconKey: "grid",
         },
       ])}
       <div class="home-card-scroll home-hq-focus-queue">
@@ -7891,10 +7932,12 @@ function buildHomeHqStatusComboCardHtml({ briefing = null } = {}) {
           {
             label: "재직",
             value: `${Math.max(0, Number(organizationSummary?.employeeTotal || 0))}명`,
+            iconKey: "users",
           },
           {
             label: "활성",
             value: `${Math.max(0, Number(organizationSummary?.activeEmployeeCount || 0))}명`,
+            iconKey: "check",
           },
           {
             label: "미연결",
@@ -7903,6 +7946,7 @@ function buildHomeHqStatusComboCardHtml({ briefing = null } = {}) {
               Number(organizationSummary?.unlinkedCount || 0) > 0
                 ? "warn"
                 : "neutral",
+            iconKey: "link",
           },
         ])}
         ${buildHomeListRowsHtml(orgRows, {
@@ -80647,7 +80691,7 @@ async function openAttendanceSiteFilterSheet() {
         <aside class="attendance-picker-modal-nav">
           <button type="button" class="attendance-picker-modal-nav-item active" disabled>
             <strong>근무지</strong>
-            <span>attendance 공통 선택</span>
+            <span>근무지별 정렬</span>
           </button>
         </aside>
         <div class="attendance-picker-modal-panel">
@@ -80945,7 +80989,6 @@ function renderAttendanceManagerPanelVisibility() {
     v2ManagerReady &&
     canUseAttendanceManagerFilter() &&
     section !== "stats" &&
-    !(section === "period" && periodMode === "calendar") &&
     ["status", "list", "calendar"].includes(tab);
   if (
     canUseAttendanceManagerFilter() &&
@@ -81955,8 +81998,7 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
   const emptyOverlayHtml = hasNonZeroValues
     ? ""
     : `
-      <div class="attendance-stats-empty-overlay" aria-hidden="true">
-        <span class="attendance-stats-empty-icon">${buildAzureTopbarIconSvg("chart")}</span>
+      <div class="attendance-stats-empty-inline" role="status">
         <strong>표시할 통계가 없습니다.</strong>
         <span>선택한 조건에서 집계 가능한 출퇴근 데이터가 없습니다.</span>
       </div>
@@ -82035,9 +82077,9 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
         <div class="attendance-stats-composed-shell">
           <div class="attendance-stats-main-graph">
             ${summaryTilesHtml}
-            <div class="attendance-stats-chart-shell">
+            <div class="attendance-stats-chart-shell${hasNonZeroValues ? "" : " is-empty"}">
               <div class="attendance-stats-chart-wrap" data-export-name="${escapeHtml(dataset.fileStem)}">
-                ${svgMarkup}
+                ${hasNonZeroValues ? svgMarkup : ""}
                 ${emptyOverlayHtml}
               </div>
             </div>
@@ -90576,9 +90618,12 @@ function buildScheduleListSheetNote(row) {
 function createScheduleListSheetRow(row, { interactive = false } = {}) {
   const li = document.createElement("li");
   li.className = "schedule-list-sheet-item content-fade-in";
+  const rowVariant = getScheduleCardVariant(row);
+  li.classList.add(`schedule-list-sheet-item-${rowVariant}`);
 
   const wrapper = document.createElement("div");
   wrapper.className = "schedule-list-sheet-row";
+  wrapper.dataset.scheduleVariant = rowVariant;
 
   const employeeCell = document.createElement("div");
   employeeCell.className =
@@ -91395,6 +91440,24 @@ function ScheduleDayCell({
   dayLabel.textContent = String(Number.isFinite(dayNumber) ? dayNumber : "");
   headBtn.appendChild(dayLabel);
 
+  if (inMonth && allItems.length > 0) {
+    const leaveCount = allItems.filter(
+      (item) => getScheduleCardVariant(item) === "leave",
+    ).length;
+    const assignedCount = Math.max(allItems.length - leaveCount, 0);
+    const signal = document.createElement("span");
+    signal.className = leaveCount
+      ? "schedule-day-signal has-leave"
+      : "schedule-day-signal";
+    if (allItems.length >= SCHEDULE_DAY_CARD_MAX) {
+      signal.classList.add("is-busy");
+    }
+    signal.textContent = leaveCount
+      ? `근무 ${assignedCount} · 휴가 ${leaveCount}`
+      : `${assignedCount}명`;
+    headBtn.appendChild(signal);
+  }
+
   if (holidayName) {
     const holidayEl = document.createElement("span");
     holidayEl.className = "schedule-day-holiday";
@@ -91549,9 +91612,15 @@ function renderScheduleListView(target, month) {
     const title = document.createElement("h3");
     title.textContent = toDateLabel(dateKey);
     header.appendChild(title);
+    const assignedCount = rows.filter((row) => !isLeaveScheduleRow(row)).length;
+    const leaveCount = rows.filter((row) => isLeaveScheduleRow(row)).length;
     const countPill = document.createElement("span");
-    countPill.className = "status-pill status-pill-neutral";
-    countPill.textContent = `${rows.length}건`;
+    countPill.className = leaveCount
+      ? "status-pill status-pill-warn schedule-list-date-count"
+      : "status-pill status-pill-neutral schedule-list-date-count";
+    countPill.textContent = leaveCount
+      ? `근무 ${assignedCount} · 휴가 ${leaveCount}`
+      : `${assignedCount}건`;
     header.appendChild(countPill);
     section.appendChild(header);
 
@@ -106362,14 +106431,7 @@ document.addEventListener("compositionend", (event) => {
       typeof getAttendanceWorkspaceSection === "function"
         ? getAttendanceWorkspaceSection()
         : "daily";
-    const periodMode =
-      typeof normalizeAttendancePeriodMode === "function"
-        ? normalizeAttendancePeriodMode(
-            state?.attendanceView?.periodMode || "list",
-          )
-        : "list";
     if (section === "stats") return false;
-    if (section === "period" && periodMode === "calendar") return false;
     return Boolean(managerMode) && ["status", "list", "calendar"].includes(tab);
   }
 
@@ -107224,9 +107286,37 @@ document.addEventListener("compositionend", (event) => {
         tone: "warning",
       },
     ];
+    const periodMode =
+      typeof normalizeAttendancePeriodMode === "function"
+        ? normalizeAttendancePeriodMode(
+            state?.attendanceView?.periodMode || "list",
+          )
+        : "list";
     if (loading) {
       if (section === "period") {
-        return "";
+        return `
+          <div class="attendance-v2-section-head attendance-v2-section-head-period">
+            ${v2SectionTitleMarkup(
+              periodMode === "calendar" ? "기간별 캘린더" : "기간별 출퇴근",
+              {
+                iconKey: periodMode === "calendar" ? "calendar" : "list",
+                tone: "slate",
+              },
+            )}
+            <span class="attendance-v2-inline-meta">집계 중</span>
+          </div>
+          <div class="attendance-v2-summary-strip attendance-v2-summary-strip-period is-loading" aria-hidden="true">
+            ${Array.from(
+              { length: 6 },
+              () => `
+              <div class="attendance-v2-summary-item is-loading">
+                <span class="attendance-v2-skeleton-line is-short"></span>
+                <span class="attendance-v2-skeleton-line is-value"></span>
+              </div>
+            `,
+            ).join("")}
+          </div>
+        `;
       }
       return `
         <div class="attendance-v2-section-head">
@@ -107265,9 +107355,6 @@ document.addEventListener("compositionend", (event) => {
         </div>
       `;
     }
-    if (section === "period") {
-      return "";
-    }
     const renderButtonCard = (item, extraClass = "") => {
       const isActive = attendanceStatusV2FilterKey === item.filterKey;
       const iconKey = v2IconKeyForSummaryItem(item);
@@ -107295,6 +107382,99 @@ document.addEventListener("compositionend", (event) => {
         </button>
       `;
     };
+    const periodRange =
+      typeof getAttendanceManagerFetchRange === "function"
+        ? getAttendanceManagerFetchRange()
+        : { start: "", end: "" };
+    const periodRangeLabel =
+      periodMode === "calendar"
+        ? v2Text(
+            state?.attendanceView?.calendarMonth,
+            periodRange.start,
+            "기간 미정",
+          )
+        : [periodRange.start, periodRange.end].filter(Boolean).join(" ~ ") ||
+          "기간 미정";
+    const periodSummaryItems = [
+      {
+        filterKey: "target",
+        label: "근무 대상",
+        value: dashboard.workingTarget,
+        tone: "neutral",
+      },
+      {
+        filterKey: "complete",
+        label: "출근 완료",
+        value: dashboard.checkedIn,
+        tone: "success",
+      },
+      {
+        filterKey: "missing",
+        label: "미출근",
+        value: dashboard.missingIn,
+        tone: "danger",
+      },
+      {
+        filterKey: "missing_out",
+        label: "미퇴근",
+        value: dashboard.missingOut,
+        tone: "warning",
+      },
+      {
+        filterKey: "late",
+        label: "지각",
+        value: dashboard.late,
+        tone: "warning",
+      },
+      {
+        filterKey: "early",
+        label: "조퇴",
+        value: dashboard.earlyLeave,
+        tone: "warning",
+      },
+      {
+        filterKey: "correction",
+        label: "정정 대기",
+        value: dashboard.correctionNeeded,
+        tone: "warning",
+      },
+      {
+        filterKey: "leave",
+        label: "휴가",
+        value: dashboard.leaveCount,
+        tone: "muted",
+      },
+    ];
+    if (section === "period") {
+      return `
+        <div class="attendance-v2-section-head attendance-v2-section-head-period">
+          <div class="attendance-v2-headline-block">
+            ${v2SectionTitleMarkup(
+              periodMode === "calendar" ? "기간별 캘린더" : "기간별 출퇴근",
+              {
+                iconKey: periodMode === "calendar" ? "calendar" : "list",
+                tone: "slate",
+              },
+            )}
+            <p class="attendance-v2-section-copy">기간 안의 예외와 출퇴근 기록을 같은 지표로 먼저 좁힙니다.</p>
+          </div>
+          <div class="attendance-v2-head-meta">
+            <span class="attendance-v2-inline-meta">${escapeValue(periodRangeLabel)}</span>
+            <span class="attendance-v2-inline-meta">총 ${escapeValue(String(rows.length))}건</span>
+          </div>
+        </div>
+        <div class="attendance-v2-summary-strip attendance-v2-summary-strip-period">
+          ${periodSummaryItems
+            .map((item) =>
+              renderButtonCard(
+                item,
+                `attendance-v2-summary-item attendance-v2-summary-item-compact is-${escapeValue(item.tone || "neutral")}`,
+              ),
+            )
+            .join("")}
+        </div>
+      `;
+    }
     const totalPeopleLabel = `${dashboard.totalPeople}명`;
     const compactItems = [
       {
