@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 
 from ...deps import apply_rate_limit, get_db_conn, require_roles
+from .employees import _repair_active_employee_rows_for_scope
 from ...utils.employee_identity import build_employee_directory_identity_key, build_canonical_employee_code, extract_management_no_from_employee_code, normalize_employee_code, normalize_management_no
 from ...utils.permissions import ROLE_DEV, normalize_user_role
 from ...utils.schema_introspection import table_column_exists
@@ -260,6 +261,12 @@ def list_dev_employees(
             )
             tenant_row = cur.fetchone()
         resolved_tenant_id = str((tenant_row or {}).get("id") or "").strip() or None
+        if resolved_tenant_id:
+            _repair_active_employee_rows_for_scope(
+                conn,
+                tenant_id=resolved_tenant_id,
+                site_code=normalized_site_code,
+            )
 
     account_join_sql = ""
     account_select_sql = "NULL::uuid AS user_id, NULL::text AS username, NULL::text AS user_role"

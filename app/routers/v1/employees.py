@@ -681,6 +681,7 @@ def _repair_active_employee_rows_for_scope(
     has_user_deleted = _table_column_exists(conn, "arls_users", "is_deleted")
     has_employee_active = _table_column_exists(conn, "employees", "is_active")
     has_employee_deleted = _table_column_exists(conn, "employees", "is_deleted")
+    has_employee_updated = _table_column_exists(conn, "employees", "updated_at")
 
     user_clauses = [
         "tenant_id = %s",
@@ -823,43 +824,81 @@ def _repair_active_employee_rows_for_scope(
             employee_id = uuid.uuid4()
             employee_uuid = str(uuid.uuid4())
             with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO employees (
-                        id,
-                        employee_uuid,
-                        tenant_id,
-                        company_id,
-                        site_id,
-                        sequence_no,
-                        employee_code,
-                        full_name,
-                        phone,
-                        duty_role,
-                        soc_role,
-                        created_at,
-                        updated_at
+                if has_employee_updated:
+                    cur.execute(
+                        """
+                        INSERT INTO employees (
+                            id,
+                            employee_uuid,
+                            tenant_id,
+                            company_id,
+                            site_id,
+                            sequence_no,
+                            employee_code,
+                            full_name,
+                            phone,
+                            duty_role,
+                            soc_role,
+                            created_at,
+                            updated_at
+                        )
+                        VALUES (
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, 'GUARD', %s,
+                            timezone('utc', now()), timezone('utc', now())
+                        )
+                        ON CONFLICT (tenant_id, employee_code) DO NOTHING
+                        RETURNING id, site_id, full_name
+                        """,
+                        (
+                            employee_id,
+                            employee_uuid,
+                            tenant_id,
+                            company_id,
+                            user_site_id,
+                            next_seq,
+                            employee_code,
+                            full_name,
+                            str(user_row.get("phone") or "").strip() or None,
+                            normalize_user_role(user_row.get("role")),
+                        ),
                     )
-                    VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, 'GUARD', %s,
-                        timezone('utc', now()), timezone('utc', now())
+                else:
+                    cur.execute(
+                        """
+                        INSERT INTO employees (
+                            id,
+                            employee_uuid,
+                            tenant_id,
+                            company_id,
+                            site_id,
+                            sequence_no,
+                            employee_code,
+                            full_name,
+                            phone,
+                            duty_role,
+                            soc_role,
+                            created_at
+                        )
+                        VALUES (
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, 'GUARD', %s,
+                            timezone('utc', now())
+                        )
+                        ON CONFLICT (tenant_id, employee_code) DO NOTHING
+                        RETURNING id, site_id, full_name
+                        """,
+                        (
+                            employee_id,
+                            employee_uuid,
+                            tenant_id,
+                            company_id,
+                            user_site_id,
+                            next_seq,
+                            employee_code,
+                            full_name,
+                            str(user_row.get("phone") or "").strip() or None,
+                            normalize_user_role(user_row.get("role")),
+                        ),
                     )
-                    ON CONFLICT (tenant_id, employee_code) DO NOTHING
-                    RETURNING id, site_id, full_name
-                    """,
-                    (
-                        employee_id,
-                        employee_uuid,
-                        tenant_id,
-                        company_id,
-                        user_site_id,
-                        next_seq,
-                        employee_code,
-                        full_name,
-                        str(user_row.get("phone") or "").strip() or None,
-                        normalize_user_role(user_row.get("role")),
-                    ),
-                )
                 inserted = cur.fetchone()
             if inserted:
                 created_row = {
@@ -4098,14 +4137,15 @@ def bulk_delete_employees_by_site(
                 }
             )
     if sync_failures:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={
-                "error": "SOC_EMPLOYEE_DELETE_SYNC_FAILED",
-                "message": "SOC 직원 삭제 동기화에 실패했습니다. 삭제가 롤백되었습니다.",
-                "failures": sync_failures[:10],
-            },
-        )
+        if bool(settings.soc_integration_enabled) and str(settings.soc_employee_sync_url or "").strip():
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={
+                    "error": "SOC_EMPLOYEE_DELETE_SYNC_FAILED",
+                    "message": "SOC 직원 삭제 동기화에 실패했습니다. 삭제가 롤백되었습니다.",
+                    "failures": sync_failures[:10],
+                },
+            )
     return {
         "success": True,
         "site_code": str(site_row.get("site_code") or "").strip(),
@@ -4207,13 +4247,14 @@ def delete_employee(
         event_type="EMPLOYEE_DELETED",
     )
     if not sync_ok:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={
-                "error": "SOC_EMPLOYEE_DELETE_SYNC_FAILED",
-                "message": "SOC 직원 삭제 동기화에 실패했습니다. 삭제가 롤백되었습니다.",
-                "soc_status": sync_status,
-                "soc_reason": sync_reason,
-            },
-        )
+        if bool(settings.soc_integration_enabled) and str(settings.soc_employee_sync_url or "").strip():
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={
+                    "error": "SOC_EMPLOYEE_DELETE_SYNC_FAILED",
+                    "message": "SOC 직원 삭제 동기화에 실패했습니다. 삭제가 롤백되었습니다.",
+                    "soc_status": sync_status,
+                    "soc_reason": sync_reason,
+                },
+            )
     return {"success": True, "employee_code": target["employee_code"]}

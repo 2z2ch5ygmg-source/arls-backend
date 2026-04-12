@@ -20217,6 +20217,7 @@ def _apply_canonical_schedule_import_batch(
 
     desired_base_rows: dict[tuple[str, str, str], dict[str, Any]] = {}
     desired_support_internal_rows: dict[tuple[str, str, str], dict[str, Any]] = {}
+    protected_support_internal_keys: set[tuple[str, str, str]] = set()
     desired_support_request_rows: dict[tuple[str, str], dict[str, Any]] = {}
     desired_day_need_rows: dict[str, dict[str, Any]] = {}
     blocking_failures: list[str] = []
@@ -20257,6 +20258,10 @@ def _apply_canonical_schedule_import_batch(
         if employee_issue_code or not employee_row:
             append_blocking_failure(employee_issue_message or "직원을 매칭할 수 없습니다.", payload=payload, shift_type=str(payload.get("shift_type") or "").strip())
             continue
+        employee_id = str(employee_row.get("id") or "").strip()
+        key = (employee_id, schedule_date.isoformat(), duty_type)
+        if duty_type in {"day", "night"}:
+            protected_support_internal_keys.add(key)
         if not workbook_value:
             continue
         shift_type = _normalize_shift_type(payload.get("shift_type") or _resolve_shift_type_from_duty_type(duty_type))
@@ -20266,7 +20271,6 @@ def _apply_canonical_schedule_import_batch(
         if str(payload.get("parsed_semantic_type") or "").strip() == "numeric_hours" and not str(payload.get("template_id") or "").strip():
             append_blocking_failure("이 시간값과 연결된 근무시간 설정을 찾지 못했습니다.", payload=payload, shift_type=shift_type)
             continue
-        key = (str(employee_row.get("id") or "").strip(), schedule_date.isoformat(), duty_type)
         if key in desired_base_rows:
             append_blocking_failure("같은 직원의 같은 날짜 근무가 파일 안에서 중복되었습니다.", payload=payload, shift_type=shift_type)
             continue
@@ -20365,7 +20369,7 @@ def _apply_canonical_schedule_import_batch(
         key = (employee_id, schedule_date.isoformat(), shift_kind)
         if key in desired_support_internal_rows:
             append_blocking_failure(
-                "같은 직원의 같은 날짜 지원근무가 파일 안에서 중복되었습니다.",
+                "같은 직원/날짜/지원근무유형이 업로드 결과에 중복되어 있습니다.",
                 payload=payload,
                 shift_type=shift_kind,
             )
@@ -20555,7 +20559,7 @@ def _apply_canonical_schedule_import_batch(
             support_internal_update_ops.append({**desired, "schedule_id": str(current_row.get("schedule_id") or "").strip()})
 
     for key, current_rows in support_internal_existing_by_key.items():
-        if key in desired_support_internal_rows:
+        if key in desired_support_internal_rows or key in protected_support_internal_keys:
             continue
         for current_row in current_rows:
             support_internal_delete_ops.append(dict(current_row))
