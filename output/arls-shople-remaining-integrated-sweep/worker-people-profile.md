@@ -1,8 +1,8 @@
 # Worker 2 — People / Workplace / Profile evidence
 
-Date: 2026-04-12  
-Team: `arls-shople-remaining-sweep`  
-Task: `People Workplace Profile evidence`  
+Date: 2026-04-12
+Team: `arls-shople-remaining-sweep`
+Task: `People Workplace Profile evidence`
 Scope: analysis/report only. Product source was inspected but not modified.
 
 ## Sources inspected
