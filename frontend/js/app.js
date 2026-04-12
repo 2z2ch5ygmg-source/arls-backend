@@ -15465,6 +15465,8 @@ const AZURE_TOPBAR_LABEL_ICON_FALLBACKS = Object.freeze({
   Finance: "chart",
   "Finance 제출": "chart",
   "Finance 다운로드": "download",
+  제출: "chart",
+  다운로드: "download",
   "일 보기": "calendar",
   "주 보기": "calendar",
   "월 보기": "grid",
