@@ -48819,6 +48819,119 @@ html[data-ui-theme="light"]
   min-width: 132px;
 }
 
+/* 2026-04-12 Home Shople visual slice: compact semantic KPI markers */
+#view-home .home-metric-tile-head,
+#view-home .home-module-summary-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+#view-home .home-metric-tile-head > span,
+#view-home .home-module-summary-label > span {
+  min-width: 0;
+}
+
+#view-home .home-metric-icon,
+#view-home .home-summary-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  color: #64748b;
+}
+
+#view-home .home-metric-icon {
+  width: 22px;
+  height: 22px;
+}
+
+#view-home .home-summary-icon {
+  width: 18px;
+  height: 18px;
+}
+
+#view-home .home-metric-icon svg,
+#view-home .home-summary-icon svg {
+  display: block;
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.8;
+}
+
+#view-home .home-summary-icon svg {
+  width: 11px;
+  height: 11px;
+}
+
+#view-home .home-metric-icon.is-accent,
+#view-home .home-summary-icon.is-accent {
+  background: rgba(255, 122, 26, 0.12);
+  color: var(--ui-accent);
+}
+
+#view-home .home-metric-icon.is-teal,
+#view-home .home-summary-icon.is-teal {
+  background: rgba(13, 148, 136, 0.12);
+  color: #0f766e;
+}
+
+#view-home .home-metric-icon.is-slate,
+#view-home .home-metric-icon.is-neutral,
+#view-home .home-summary-icon.is-slate,
+#view-home .home-summary-icon.is-neutral {
+  background: rgba(148, 163, 184, 0.16);
+  color: #64748b;
+}
+
+#view-home .home-role-root-hq-refined .home-module-summary-label {
+  gap: 7px;
+}
+
+#view-home .home-role-root-hq-refined .home-module-summary-label span {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+@media (max-width: 1180px) {
+  #view-home .home-metric-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  #view-home .home-summary-icon {
+    width: 17px;
+    height: 17px;
+  }
+}
+
+:root[data-ui-theme="dark"] #view-home .home-metric-icon,
+:root[data-ui-theme="dark"] #view-home .home-summary-icon,
+html[data-ui-theme="dark"] #view-home .home-metric-icon,
+html[data-ui-theme="dark"] #view-home .home-summary-icon {
+  background: rgba(148, 163, 184, 0.16);
+  color: #cbd5e1;
+}
+
+:root[data-ui-theme="dark"] #view-home .home-metric-icon.is-accent,
+:root[data-ui-theme="dark"] #view-home .home-summary-icon.is-accent,
+html[data-ui-theme="dark"] #view-home .home-metric-icon.is-accent,
+html[data-ui-theme="dark"] #view-home .home-summary-icon.is-accent {
+  background: rgba(255, 122, 26, 0.18);
+  color: #fdba74;
+}
+
+:root[data-ui-theme="dark"] #view-home .home-metric-icon.is-teal,
+:root[data-ui-theme="dark"] #view-home .home-summary-icon.is-teal,
+html[data-ui-theme="dark"] #view-home .home-metric-icon.is-teal,
+html[data-ui-theme="dark"] #view-home .home-summary-icon.is-teal {
+  background: rgba(20, 184, 166, 0.18);
+  color: #5eead4;
+}
+
 /* 2026-04-11 settings manager surface cleanup */
 #shell[data-shell-mode="manager"] #view-profile .profile-surface,
 #shell[data-shell-mode="manager"] #view-profile .profile-settings-rail {
@@ -55425,4 +55538,94 @@ html[data-ui-theme="light"]
 
 #view-reports #financeDownloadPanel .reports-finance-download-actions .btn {
   min-width: 132px;
+}
+
+/* 2026-04-12 Attendance Shople visual slice: period/stat zero-state refinement */
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-list
+  .attendance-v2-summary-strip-period,
+#view-attendance
+  #attendanceCalendarPanel.is-attendance-v2-calendar
+  .attendance-v2-summary-strip-period {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  border: 0;
+  background: transparent;
+}
+
+#view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-list
+  .attendance-v2-summary-strip-period
+  .attendance-v2-summary-item-compact,
+#view-attendance
+  #attendanceCalendarPanel.is-attendance-v2-calendar
+  .attendance-v2-summary-strip-period
+  .attendance-v2-summary-item-compact {
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 14px;
+  background: #fff;
+}
+
+#view-attendance
+  #attendanceCalendarPanel.is-attendance-v2-calendar
+  #attendanceCalendarV2SummaryHost {
+  margin-bottom: 12px;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-chart-shell.is-empty {
+  padding: 10px 0 0 !important;
+  border-top: 1px solid var(--ui-border-subtle) !important;
+}
+
+#view-attendance
+  #attendanceStatsPanel
+  .attendance-stats-chart-shell.is-empty
+  .attendance-stats-chart-wrap {
+  min-height: auto !important;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-empty-inline {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0 4px;
+  text-align: left;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-empty-inline strong {
+  color: var(--ui-text-primary);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-empty-inline span {
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@media (max-width: 1023px) {
+  #view-attendance
+    #attendanceManagerWorkspace.is-attendance-v2-list
+    .attendance-v2-summary-strip-period,
+  #view-attendance
+    #attendanceCalendarPanel.is-attendance-v2-calendar
+    .attendance-v2-summary-strip-period {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+html[data-ui-theme="dark"]
+  #view-attendance
+  #attendanceManagerWorkspace.is-attendance-v2-list
+  .attendance-v2-summary-strip-period
+  .attendance-v2-summary-item-compact,
+html[data-ui-theme="dark"]
+  #view-attendance
+  #attendanceCalendarPanel.is-attendance-v2-calendar
+  .attendance-v2-summary-strip-period
+  .attendance-v2-summary-item-compact {
+  background: rgba(15, 23, 42, 0.84);
+  border-color: rgba(51, 65, 85, 0.92);
 }
