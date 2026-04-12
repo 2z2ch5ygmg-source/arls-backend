@@ -62861,6 +62861,74 @@ function renderCalendarCenterSurface(workspace, selectedContainer) {
   return renderCalendarWeekShell(workspace, selectedContainer);
 }
 
+function renderCalendarSelectedDayRail(workspace, selectedContainer) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const selectedDate =
+    normalizeAttendanceDate(
+      calendarState.selectedDate ||
+        workspace?.selected_date ||
+        workspace?.anchor_date ||
+        "",
+    ) || toLocalDateKey(new Date());
+  const eventsByDate = groupCalendarEventsByDate(workspace?.events || []);
+  const rows = Array.isArray(eventsByDate[selectedDate])
+    ? eventsByDate[selectedDate]
+    : [];
+  const allDayCount = rows.filter((event) => Boolean(event?.is_all_day)).length;
+  const readOnlyCount = rows.filter((event) =>
+    isCalendarEventReadOnly(workspace, event),
+  ).length;
+  const canCreate = Boolean(workspace?.capabilities?.can_create);
+  const selectedEventId = String(
+    calendarState.selectedEventId || workspace?.selected_event?.id || "",
+  ).trim();
+  const containerLabel =
+    String(selectedContainer?.name || selectedContainer?.display_name || "")
+      .trim() || "전체 캘린더";
+  return `
+    <aside class="calendar-selected-day-rail" aria-label="선택 날짜 요약">
+      <div class="calendar-selected-day-head">
+        <span class="calendar-eyebrow">선택 날짜</span>
+        <strong>${escapeHtml(formatCalendarLongDateLabel(selectedDate))}</strong>
+        <p>${escapeHtml(containerLabel)} · ${rows.length}개 일정</p>
+      </div>
+      <div class="calendar-selected-day-chips" aria-label="선택 날짜 지표">
+        <span class="calendar-inline-chip">${escapeHtml(`${rows.length}개`)}</span>
+        <span class="calendar-inline-chip">${escapeHtml(`종일 ${allDayCount}`)}</span>
+        <span class="calendar-inline-chip">${escapeHtml(`외부 ${readOnlyCount}`)}</span>
+      </div>
+      <div class="calendar-selected-day-list">
+        ${
+          rows.length
+            ? rows
+                .slice(0, 5)
+                .map((event) =>
+                  renderCalendarEventCard(workspace, event, {
+                    compact: true,
+                    selected: String(event?.id || "") === selectedEventId,
+                  }),
+                )
+                .join("")
+            : `<div class="calendar-selected-day-empty">
+                <strong>일정이 없습니다.</strong>
+                <span>이 날짜의 일정은 아직 비어 있습니다.</span>
+              </div>`
+        }
+      </div>
+      ${
+        rows.length > 5
+          ? `<span class="calendar-selected-day-more">외 ${rows.length - 5}개 일정</span>`
+          : ""
+      }
+      ${
+        canCreate
+          ? '<button class="btn btn-primary calendar-selected-day-create" type="button" data-action="calendar-new-event">새 일정 추가</button>'
+          : ""
+      }
+    </aside>
+  `;
+}
+
 function renderCalendarReminderCheckboxes(reminders = []) {
   const selectedPreset = new Set(
     (Array.isArray(reminders) ? reminders : [])
@@ -64962,11 +65030,12 @@ function renderCalendarWorkspace() {
   }
   const selectedContainer = getCalendarSelectedContainer(workspace);
   root.innerHTML = `
-    <div class="calendar-outlook-shell">
+    <div class="calendar-outlook-shell has-selected-day-rail">
       ${renderCalendarLeftRail(workspace)}
       <section class="calendar-outlook-main">
         ${renderCalendarCenterSurface(workspace, selectedContainer)}
       </section>
+      ${renderCalendarSelectedDayRail(workspace, selectedContainer)}
     </div>
   `;
   requestAnimationFrame(() => {

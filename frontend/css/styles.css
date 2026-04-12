@@ -55961,6 +55961,113 @@ html[data-ui-theme="dark"]
   color: #f8fafc !important;
 }
 
+/* 2026-04-12 calendar selected-day interpretation rail */
+#view-calendar .calendar-outlook-shell.has-selected-day-rail {
+  grid-template-columns: 182px minmax(0, 1fr) minmax(238px, 276px);
+}
+
+#view-calendar .calendar-selected-day-rail {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  height: 100%;
+  padding: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 10px;
+  background: #fff;
+  overflow: auto;
+}
+
+#view-calendar .calendar-selected-day-head {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+#view-calendar .calendar-selected-day-head strong {
+  color: #111827;
+  font-size: 16px;
+  line-height: 1.3;
+  font-weight: 800;
+}
+
+#view-calendar .calendar-selected-day-head p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#view-calendar .calendar-selected-day-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+#view-calendar .calendar-selected-day-list {
+  display: grid;
+  gap: 8px;
+}
+
+#view-calendar .calendar-selected-day-empty {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#view-calendar .calendar-selected-day-empty strong {
+  color: #111827;
+  font-size: 14px;
+}
+
+#view-calendar .calendar-selected-day-more {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#view-calendar .calendar-selected-day-create {
+  width: 100%;
+  margin-top: 2px;
+}
+
+html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-rail {
+  background: #1f1f1f;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-head {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-head strong,
+html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-empty strong {
+  color: #f8fafc;
+}
+
+html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-head p,
+html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-empty,
+html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
+  color: #94a3b8;
+}
+
+@media (max-width: 1180px) {
+  #view-calendar .calendar-outlook-shell.has-selected-day-rail {
+    grid-template-columns: 1fr;
+  }
+
+  #view-calendar .calendar-selected-day-rail {
+    min-height: 180px;
+    height: auto;
+  }
+}
+
 /* 2026-04-12 remaining sweep overflow fixes */
 #view-leave #leavePolicySection {
   min-width: 0 !important;
