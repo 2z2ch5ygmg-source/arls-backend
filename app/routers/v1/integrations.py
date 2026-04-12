@@ -56,7 +56,7 @@ from ...schemas import (
     SupportSheetWebhookIn,
 )
 from .employees import _post_employee_sync_to_soc, _to_soc_sync_role
-from .schedules import _fetch_schedule_templates, _format_schedule_template_row, _resolve_site_context_by_code
+from .schedules import _fetch_schedule_templates, _format_schedule_template_row
 from ...services.closing_overtime import apply_closing_overtime_from_checkout
 from ...services.p1_schedule import (
     build_apple_total_shift_rows,
@@ -2038,8 +2038,8 @@ def _resolve_employee_by_site_full_name(
             FROM employees
             WHERE tenant_id = %s
               AND site_id = %s
-              AND regexp_replace(lower(full_name), '\s+', '', 'g')
-                  = regexp_replace(lower(%s), '\s+', '', 'g')
+              AND regexp_replace(lower(full_name), '\\s+', '', 'g')
+                  = regexp_replace(lower(%s), '\\s+', '', 'g')
             ORDER BY employee_code ASC
             """,
             (tenant_id, site_id, normalized_name),
@@ -2199,6 +2199,60 @@ def _resolve_site_by_code(conn, tenant_id, site_code: str):
             (tenant_id, site_code, site_code),
         )
         return cur.fetchone()
+
+
+def _resolve_soc_site_context_by_hint(conn, *, tenant_id: str, site_hint: str) -> dict | None:
+    normalized_hint = str(site_hint or "").strip()
+    if not normalized_hint:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT s.id,
+                   s.site_code,
+                   s.site_name,
+                   COALESCE(s.address, '') AS address,
+                   s.company_id,
+                   c.company_code,
+                   CASE
+                       WHEN s.site_code = %s THEN 0
+                       WHEN s.id::text = %s THEN 1
+                       WHEN upper(trim(s.site_code)) = upper(trim(%s)) THEN 2
+                       ELSE 3
+                   END AS _match_rank
+            FROM sites s
+            JOIN companies c ON c.id = s.company_id
+            WHERE s.tenant_id = %s
+              AND (
+                  s.site_code = %s
+                  OR s.id::text = %s
+                  OR upper(trim(s.site_code)) = upper(trim(%s))
+                  OR upper(trim(COALESCE(s.site_name, ''))) = upper(trim(%s))
+              )
+            ORDER BY _match_rank, s.site_code
+            LIMIT 2
+            """,
+            (
+                normalized_hint,
+                normalized_hint,
+                normalized_hint,
+                tenant_id,
+                normalized_hint,
+                normalized_hint,
+                normalized_hint,
+                normalized_hint,
+            ),
+        )
+        rows = cur.fetchall()
+    if not rows:
+        return None
+    first = dict(rows[0])
+    first_rank = int(first.pop("_match_rank", 0) or 0)
+    if len(rows) > 1 and first_rank == 3:
+        second_rank = int(dict(rows[1]).get("_match_rank", -1) or -1)
+        if second_rank == 3:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="site name is ambiguous")
+    return first
 
 
 def _resolve_site_by_id(conn, tenant_id, site_id):
@@ -5824,10 +5878,10 @@ async def backfill_soc_employees(
 
     site_row = None
     if str(payload.site_code or "").strip():
-        site_row = _resolve_site_context_by_code(
+        site_row = _resolve_soc_site_context_by_hint(
             conn,
             tenant_id=str(tenant["id"]),
-            site_code=str(payload.site_code).strip(),
+            site_hint=str(payload.site_code).strip(),
         )
         if not site_row:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="site not found")
@@ -5924,10 +5978,10 @@ async def list_soc_work_templates(
     tenant = fetch_tenant_row_any(conn, payload.tenant_code)
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="tenant not found")
-    site_row = _resolve_site_context_by_code(
+    site_row = _resolve_soc_site_context_by_hint(
         conn,
         tenant_id=str(tenant["id"]),
-        site_code=str(payload.site_code).strip(),
+        site_hint=str(payload.site_code).strip(),
     )
     if not site_row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="site not found")
