@@ -1,8 +1,8 @@
 # Calendar / Reports / Notices remaining sweep evidence
 
-Date: 2026-04-12  
-Worker: worker-4  
-Task: `Calendar Reports Notices verification evidence`  
+Date: 2026-04-12
+Worker: worker-4
+Task: `Calendar Reports Notices verification evidence`
 Scope: read-only product-source analysis; output artifact only.
 
 ## Inputs inspected
