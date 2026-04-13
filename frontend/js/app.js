@@ -20894,19 +20894,52 @@ function renderScheduleUploadModeTabs() {
     });
 }
 
+function ensureScheduleWizardStepStructure(button) {
+  if (!(button instanceof HTMLElement)) return;
+  const stepIndex = String(button.dataset.stepIndex || "").trim();
+  const existingLabel = button.querySelector(".schedule-wizard-step-label");
+  const labelText = String(
+    existingLabel?.textContent || button.textContent || "",
+  ).trim();
+  let marker = button.querySelector(".schedule-wizard-step-marker");
+  if (!(marker instanceof HTMLElement)) {
+    marker = document.createElement("span");
+    marker.className = "schedule-wizard-step-marker";
+    marker.setAttribute("aria-hidden", "true");
+  }
+  marker.textContent = stepIndex || marker.textContent || "";
+  let connector = button.querySelector(".schedule-wizard-step-connector");
+  if (!(connector instanceof HTMLElement)) {
+    connector = document.createElement("span");
+    connector.className = "schedule-wizard-step-connector";
+    connector.setAttribute("aria-hidden", "true");
+  }
+  let label = existingLabel;
+  if (!(label instanceof HTMLElement)) {
+    label = document.createElement("span");
+    label.className = "schedule-wizard-step-label";
+  }
+  label.textContent = labelText;
+  button.replaceChildren(marker, connector, label);
+}
+
 function renderScheduleWizardProgress(containerSelector, steps, activeStep) {
   const wrap = document.querySelector(containerSelector);
   if (!(wrap instanceof HTMLElement)) return;
+  const activeIndex = steps.findIndex((item) => item.key === activeStep);
   wrap.querySelectorAll(".schedule-wizard-step").forEach((button) => {
+    ensureScheduleWizardStepStructure(button);
     const step = String(button?.dataset?.step || "")
       .trim()
       .toLowerCase();
     const active = step === activeStep;
-    const activeIndex = steps.findIndex((item) => item.key === activeStep);
     const buttonIndex = steps.findIndex((item) => item.key === step);
     const completed = buttonIndex >= 0 && activeIndex > buttonIndex;
+    const stateName = active ? "active" : completed ? "complete" : "pending";
     button.classList.toggle("active", active);
     button.classList.toggle("is-complete", completed);
+    button.dataset.stepState = stateName;
+    button.setAttribute("aria-current", active ? "step" : "false");
     button.setAttribute("aria-pressed", active ? "true" : "false");
     button.disabled = !(active || completed);
   });
