@@ -59251,6 +59251,8 @@ function buildHrApprovalStageCardMarkup(
   { interactive = false, saved = false } = {},
 ) {
   const normalizedStage = createHrApprovalProcedureStage(stage);
+  const stageLabel =
+    normalizedStage.label || `${normalizedStage.stageOrder}단계`;
   const memberCount = normalizedStage.memberUserIds.length;
   const memberMarkup = normalizedStage.memberUserIds.length
     ? normalizedStage.memberUserIds
@@ -59286,7 +59288,7 @@ function buildHrApprovalStageCardMarkup(
       <div class="hr-approval-stage-topbar is-saved">
         <span class="hr-approval-stage-topbar-spacer" aria-hidden="true"></span>
         <div class="hr-approval-stage-title-block is-saved">
-          <strong class="hr-approval-stage-title-centered">${escapeHtml(normalizedStage.label || `${normalizedStage.stageOrder}단계`)}</strong>
+          <strong class="hr-approval-stage-title-centered">${escapeHtml(stageLabel)}</strong>
         </div>
         <span class="hr-approval-stage-summary">${summaryLabel}</span>
       </div>
@@ -59294,7 +59296,7 @@ function buildHrApprovalStageCardMarkup(
     : `
       <div class="hr-approval-stage-topbar">
         <div class="hr-approval-stage-title-block">
-          <strong>${escapeHtml(normalizedStage.label || `${normalizedStage.stageOrder}단계`)}</strong>
+          <strong>${escapeHtml(stageLabel)}</strong>
         </div>
         ${topbarActions}
       </div>
@@ -59303,11 +59305,15 @@ function buildHrApprovalStageCardMarkup(
     ? ` style="--saved-stage-max-width:${memberCount <= 1 ? 260 : memberCount === 2 ? 540 : memberCount === 3 ? 760 : 940}px"`
     : "";
   return `
-    <section class="hr-approval-stage-flow${interactive ? " is-interactive" : ""}${saved ? " is-saved" : ""}" data-stage-order="${normalizedStage.stageOrder}" data-member-count="${memberCount}"${savedStageStyle}>
-      <div class="hr-approval-stage-card${interactive ? " is-dropzone" : ""}${saved ? " is-saved" : ""}">
-        ${topbarMarkup}
-        <div class="hr-approval-stage-body${saved ? " is-saved" : ""}">
-          <div class="hr-approval-stage-member-list">${memberMarkup}</div>
+    <section class="hr-approval-stage-flow${interactive ? " is-interactive" : ""}${saved ? " is-saved" : ""}" data-stage-order="${normalizedStage.stageOrder}" data-member-count="${memberCount}" data-stage-label="${escapeHtml(stageLabel)}"${savedStageStyle}>
+      <span class="hr-approval-stage-flow-connector" aria-hidden="true"></span>
+      <div class="hr-approval-stage-node">
+        <span class="hr-approval-stage-marker" aria-hidden="true">${escapeHtml(String(normalizedStage.stageOrder))}</span>
+        <div class="hr-approval-stage-card${interactive ? " is-dropzone" : ""}${saved ? " is-saved" : ""}">
+          ${topbarMarkup}
+          <div class="hr-approval-stage-body${saved ? " is-saved" : ""}">
+            <div class="hr-approval-stage-member-list">${memberMarkup}</div>
+          </div>
         </div>
       </div>
     </section>
