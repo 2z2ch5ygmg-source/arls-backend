@@ -1,8 +1,8 @@
 # ARLS Targeted UI Cleanup Selector Audit
 
-Worker: `worker-1`  
-Scope: read-only selector audit + artifact write only  
-Inputs: `/Users/mark/Desktop/rg-arls-dev/.omx/plans/prd-arls-targeted-ui-cleanup-20260413T0850Z.md`, `/Users/mark/Desktop/rg-arls-dev/.omx/plans/test-spec-arls-targeted-ui-cleanup-20260413T0850Z.md`  
+Worker: `worker-1`
+Scope: read-only selector audit + artifact write only
+Inputs: `/Users/mark/Desktop/rg-arls-dev/.omx/plans/prd-arls-targeted-ui-cleanup-20260413T0850Z.md`, `/Users/mark/Desktop/rg-arls-dev/.omx/plans/test-spec-arls-targeted-ui-cleanup-20260413T0850Z.md`
 Source snapshot: worktree HEAD on 2026-04-13; line numbers refer to the current worker-1 worktree.
 
 ## Cleanup plan followed before artifact write
