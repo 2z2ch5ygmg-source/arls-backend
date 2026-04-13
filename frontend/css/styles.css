@@ -3385,15 +3385,15 @@ button:disabled,
 }
 
 .status-pill-success {
-  background: var(--state-success-bg);
-  border-color: var(--state-success-border);
-  color: var(--state-success-text);
+  background: rgba(22, 163, 74, 0.08);
+  border-color: rgba(22, 163, 74, 0.36);
+  color: #15803d;
 }
 
 .status-pill-warn {
-  background: var(--state-warning-bg);
-  border-color: var(--state-warning-border);
-  color: var(--state-warning-text);
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(217, 119, 6, 0.36);
+  color: #b45309;
 }
 
 .status-pill-neutral {
@@ -3403,9 +3403,9 @@ button:disabled,
 }
 
 .status-pill-error {
-  background: var(--state-danger-bg);
-  border-color: var(--state-danger-border);
-  color: var(--state-danger-text);
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.34);
+  color: #b91c1c;
 }
 
 .schedule-row {
@@ -11301,6 +11301,18 @@ a:hover {
   padding: 12px;
 }
 
+.ui-filterbar,
+#view-requests .requests-filter-controls,
+#view-leave .leave-requests-filter-controls,
+#view-leave .leave-usage-toolbar,
+#view-attendance #attendanceOpsToolbar .attendance-ops-toolbar-main,
+#view-schedule .schedule-toolbar-filter-cluster,
+#view-employees .employee-toolbar,
+#view-org .site-filter-grid {
+  align-items: end;
+  gap: 8px 10px;
+}
+
 :root {
   --ui-filter-control-h: 44px;
   --ui-filter-control-px: 14px;
@@ -11333,7 +11345,13 @@ a:hover {
 .attendance-filter-row input,
 .attendance-filter-row select,
 .attendance-ops-field input,
-.attendance-ops-field select {
+.attendance-ops-field select,
+#view-requests .requests-filter-controls input,
+#view-requests .requests-filter-controls select,
+#view-schedule .schedule-toolbar-filter-cluster input,
+#view-schedule .schedule-toolbar-filter-cluster select,
+#view-org .site-filter-grid input,
+#view-org .site-filter-grid select {
   min-height: var(--ui-filter-control-h);
   height: var(--ui-filter-control-h);
   padding-top: 0;
@@ -11345,7 +11363,12 @@ a:hover {
 
 .ui-filterbar .btn,
 .attendance-range-presets .btn,
-#view-requests .requests-range-shortcuts .btn {
+#view-requests .requests-range-shortcuts .btn,
+#view-requests .requests-filter-controls .btn,
+#view-leave .leave-requests-filter-controls .btn,
+#view-schedule .schedule-toolbar-filter-cluster .btn,
+#view-employees .employee-toolbar .btn,
+#view-org .site-filter-grid .btn {
   min-height: var(--ui-filter-control-h);
   height: var(--ui-filter-control-h);
   padding-inline: var(--ui-filter-control-px);
@@ -15000,10 +15023,10 @@ textarea::placeholder {
   color: var(--ui-accent);
 }
 
-/* Phase 2: Azure-style internal tab bars */
+/* Canonical internal tab bars: contained orange-active pills, no bottom-border-only tabs. */
 .workspace-tabbar-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
 }
@@ -15022,13 +15045,13 @@ textarea::placeholder {
 .workspace-tabs,
 .approval-tabs.azure-tabbar {
   display: flex;
-  align-items: flex-end;
-  gap: 0;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   min-width: 0;
   flex-wrap: wrap;
   overflow: visible;
-  border-bottom: 1px solid var(--ui-border-subtle);
+  border-bottom: 0;
 }
 
 .workspace-tab,
@@ -15041,14 +15064,13 @@ textarea::placeholder {
   gap: 6px;
   min-height: 44px;
   height: 44px;
-  padding: 0 18px;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  border-radius: 0;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 12px;
   background: transparent;
   color: var(--ui-text-secondary);
   box-shadow: none;
-  margin-bottom: -1px;
+  margin-bottom: 0;
   white-space: nowrap;
 }
 
@@ -15056,17 +15078,18 @@ textarea::placeholder {
 .workspace-tab:focus-visible,
 .approval-tabs.azure-tabbar .approval-tab:hover,
 .approval-tabs.azure-tabbar .approval-tab:focus-visible {
-  background: transparent;
+  background: var(--ui-bg-surface-2);
   color: var(--ui-text-primary);
-  border-color: transparent;
+  border-color: rgba(255, 107, 0, 0.16);
   box-shadow: none;
 }
 
 .workspace-tab.active,
 .approval-tabs.azure-tabbar .approval-tab.active {
-  color: var(--ui-text-primary);
-  border-bottom-color: var(--ui-accent);
-  background: transparent;
+  color: var(--ui-accent);
+  border-color: rgba(255, 107, 0, 0.28);
+  background: var(--ui-accent-weak);
+  box-shadow: inset 0 0 0 1px rgba(255, 107, 0, 0.12);
 }
 
 .workspace-tabs-azure-icons .workspace-tab,
@@ -15128,10 +15151,10 @@ textarea::placeholder {
 .wizard-step-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 0;
+  gap: 8px;
   width: 100%;
   overflow: visible;
-  border-bottom: 1px solid var(--ui-border-subtle);
+  border-bottom: 0;
 }
 
 .wizard-step-chip {
@@ -15139,24 +15162,23 @@ textarea::placeholder {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
-  padding: 0 18px;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  border-radius: 0;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 12px;
   background: transparent;
   color: var(--ui-text-secondary);
   font-size: var(--ui-type-body-sm-size);
   line-height: var(--ui-type-body-sm-line);
   font-weight: var(--ui-weight-semibold);
-  margin-bottom: -1px;
+  margin-bottom: 0;
   white-space: nowrap;
 }
 
 .wizard-step-chip.active {
-  background: transparent;
-  color: var(--ui-text-primary);
-  border-bottom-color: var(--ui-accent);
+  background: var(--ui-accent-weak);
+  color: var(--ui-accent);
+  border-color: rgba(255, 107, 0, 0.28);
 }
 
 @media (max-width: 1023px) {
@@ -15196,9 +15218,10 @@ textarea::placeholder {
 #attendanceApprovalTabs.approval-tabs.azure-tabbar {
   display: flex;
   align-items: center;
+  gap: 8px;
   min-height: 44px;
   overflow: visible;
-  border-bottom: 1px solid var(--ui-border-subtle);
+  border-bottom: 0;
 }
 
 #requestsWorkspaceSegments .workspace-tab,
@@ -15208,26 +15231,25 @@ textarea::placeholder {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  height: 44px;
-  min-height: 44px;
+  height: 40px;
+  min-height: 40px;
   padding: 0 16px;
   font-size: 14px;
   line-height: 20px;
   font-weight: var(--ui-weight-semibold);
   white-space: nowrap;
-  border-radius: 0;
-  background: none;
+  border-radius: 12px;
+  background: transparent;
   overflow: visible;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  margin-bottom: -1px;
+  border: 1px solid transparent;
+  margin-bottom: 0;
 }
 
 #requestsWorkspaceSegments .workspace-tab.active,
 #attendanceApprovalTabs.approval-tabs.azure-tabbar .approval-tab.active {
-  color: var(--ui-text-primary);
-  background: none;
-  border-bottom-color: var(--ui-accent);
+  color: var(--ui-accent);
+  background: var(--ui-accent-weak);
+  border-color: rgba(255, 107, 0, 0.28);
 }
 
 #requestsWorkspaceSegments .workspace-tab:not(.active),
@@ -17452,9 +17474,10 @@ textarea::placeholder {
 #view-leave #leaveWorkspaceTabs {
   display: flex;
   align-items: center;
+  gap: 8px;
   min-height: 44px;
   overflow: visible;
-  border-bottom: 1px solid var(--ui-border-subtle);
+  border-bottom: 0;
 }
 
 #view-leave #leaveWorkspaceTabs .workspace-tab {
@@ -17463,20 +17486,20 @@ textarea::placeholder {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  min-height: 44px;
-  height: 44px;
-  padding: 0 18px;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  border-radius: 0;
-  background: none;
-  margin-bottom: -1px;
+  min-height: 40px;
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  margin-bottom: 0;
   color: var(--ui-text-secondary);
 }
 
 #view-leave #leaveWorkspaceTabs .workspace-tab.active {
-  color: var(--ui-text-primary);
-  border-bottom-color: var(--ui-accent);
+  color: var(--ui-accent);
+  border-color: rgba(255, 107, 0, 0.28);
+  background: var(--ui-accent-weak);
 }
 
 #view-leave .leave-workspace-section {
@@ -19386,10 +19409,10 @@ textarea::placeholder {
 .employee-directory-detail-tabs {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-height: 44px;
   padding: 0 18px;
-  border-bottom: 1px solid var(--ui-border-subtle);
+  border-bottom: 0;
   overflow: visible;
 }
 
@@ -19401,11 +19424,11 @@ textarea::placeholder {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
+  min-height: 38px;
   padding: 0 14px;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  background: none;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
   color: var(--ui-text-secondary);
   font-size: var(--ui-type-body-sm-size);
   line-height: var(--ui-type-body-sm-line);
@@ -19415,11 +19438,13 @@ textarea::placeholder {
 
 .employee-directory-detail-tab:hover {
   color: var(--ui-text-primary);
+  background: var(--ui-bg-surface-2);
 }
 
 .employee-directory-detail-tab.active {
-  color: var(--ui-text-primary);
-  border-bottom-color: var(--ui-accent);
+  color: var(--ui-accent);
+  border-color: rgba(255, 107, 0, 0.28);
+  background: var(--ui-accent-weak);
 }
 
 .employee-directory-drawer-body {
@@ -38493,9 +38518,10 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #view-home .home-deck-tabs .workspace-tab.active {
-  background: var(--ui-bg-surface-2);
-  color: var(--ui-text-primary);
-  box-shadow: inset 3px 0 0 var(--ui-accent);
+  border-color: rgba(255, 107, 0, 0.28);
+  background: var(--ui-accent-weak);
+  color: var(--ui-accent);
+  box-shadow: none;
 }
 
 #view-home .home-request-breakdown-copy small,
@@ -39193,7 +39219,8 @@ body.calendar-public-shell #view-calendar-public {
 #view-attendance .attendance-workspace-tabs {
   align-self: flex-start;
   min-height: 36px;
-  border-bottom: 1px solid var(--ui-border-subtle);
+  gap: 8px;
+  border-bottom: 0;
 }
 
 #view-attendance .attendance-workspace-tabs .workspace-tab {
@@ -39201,18 +39228,17 @@ body.calendar-public-shell #view-calendar-public {
   min-height: 36px;
   height: 36px;
   padding: 0 14px;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  border-radius: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
   background: transparent;
   color: var(--ui-text-secondary);
-  margin-bottom: -1px;
+  margin-bottom: 0;
 }
 
 #view-attendance .attendance-workspace-tabs .workspace-tab.active {
-  color: var(--ui-text-primary);
-  border-bottom-color: var(--ui-accent);
-  background: transparent;
+  color: var(--ui-accent);
+  border-color: rgba(255, 107, 0, 0.28);
+  background: var(--ui-accent-weak);
 }
 
 #view-attendance #attendanceOpsToolbar {
@@ -40301,9 +40327,9 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #view-attendance #attendanceMobileSegments .workspace-tab.active {
-  color: var(--ui-text-primary);
-  border-bottom-color: var(--ui-accent);
-  background: transparent;
+  color: var(--ui-accent);
+  border-color: rgba(255, 107, 0, 0.28);
+  background: var(--ui-accent-weak);
   box-shadow: none;
 }
 
@@ -41741,17 +41767,16 @@ body.calendar-public-shell #view-calendar-public {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0;
+  gap: 8px;
 }
 
 #view-notices #noticesCategoryTabs .workspace-tab {
   min-height: 36px;
   height: 36px;
-  padding: 0 14px 10px;
+  padding: 0 14px;
   margin: 0;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
   background: transparent;
   color: var(--ui-text-secondary);
 }
@@ -41759,12 +41784,13 @@ body.calendar-public-shell #view-calendar-public {
 #view-notices #noticesCategoryTabs .workspace-tab:hover,
 #view-notices #noticesCategoryTabs .workspace-tab:focus-visible {
   color: var(--ui-text-primary);
-  background: transparent;
+  background: var(--ui-bg-surface-2);
 }
 
 #view-notices #noticesCategoryTabs .workspace-tab.active {
-  color: var(--ui-text-primary);
-  border-bottom-color: var(--ui-accent);
+  color: var(--ui-accent);
+  border-color: rgba(255, 107, 0, 0.28);
+  background: var(--ui-accent-weak);
 }
 
 #view-notices .notices-search-form {
@@ -48624,13 +48650,7 @@ html[data-ui-theme="light"]
 }
 
 #view-schedule .schedule-wizard-step:not(:last-child)::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 10px;
-  width: calc(100% - 18px);
-  height: 1px;
-  background: rgba(203, 213, 225, 0.88);
+  display: none;
 }
 
 #view-schedule .schedule-wizard-step.active,
@@ -54875,36 +54895,54 @@ body[data-current-view="attendance"]
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-step-rail-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0 10px;
+  align-items: start;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-step-rail-list::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 10px;
+  height: 1px;
+  background: rgba(203, 213, 225, 0.88);
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-step-rail-item {
-  grid-template-columns: auto auto;
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid var(--ui-border-subtle) !important;
-  border-radius: 999px !important;
-  background: var(--ui-bg-surface-muted) !important;
-  gap: 8px;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  align-content: start;
+  min-height: 44px;
+  padding: 24px 10px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  gap: 4px;
+  color: var(--ui-text-secondary);
 }
 
 #view-reports
   #scheduleFinanceSubmissionPanel
   .reports-finance-step-rail-item::after {
-  display: none !important;
+  display: none;
 }
 
 #view-reports
   #scheduleFinanceSubmissionPanel
   .reports-finance-step-rail-item
   .reports-panel-stepper-index {
-  width: auto;
-  height: auto;
-  border: 0;
-  background: transparent;
-  box-shadow: none !important;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid rgba(203, 213, 225, 0.94);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 4px #fff;
   color: inherit;
   font-size: 11px;
 }
@@ -54924,17 +54962,36 @@ body[data-current-view="attendance"]
 #view-reports
   #scheduleFinanceSubmissionPanel
   .reports-finance-step-rail-item[data-step-state="active"] {
-  border-color: rgba(255, 107, 0, 0.24) !important;
-  background: var(--ui-accent-weak) !important;
-  color: var(--ui-accent) !important;
+  color: var(--ui-accent);
+}
+
+#view-reports
+  #scheduleFinanceSubmissionPanel
+  .reports-finance-step-rail-item.is-current
+  .reports-panel-stepper-index,
+#view-reports
+  #scheduleFinanceSubmissionPanel
+  .reports-finance-step-rail-item[data-step-state="active"]
+  .reports-panel-stepper-index {
+  border-color: rgba(249, 115, 22, 0.94);
+  background: #fff7ed;
+  box-shadow:
+    0 0 0 4px #fff,
+    0 0 0 8px rgba(249, 115, 22, 0.1);
 }
 
 #view-reports
   #scheduleFinanceSubmissionPanel
   .reports-finance-step-rail-item[data-step-state="complete"] {
-  border-color: rgba(22, 163, 74, 0.18) !important;
-  background: rgba(22, 163, 74, 0.08) !important;
-  color: #15803d !important;
+  color: #15803d;
+}
+
+#view-reports
+  #scheduleFinanceSubmissionPanel
+  .reports-finance-step-rail-item[data-step-state="complete"]
+  .reports-panel-stepper-index {
+  border-color: rgba(22, 163, 74, 0.36);
+  background: #ecfdf5;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-main-head,
@@ -55994,22 +56051,22 @@ html[data-ui-theme="dark"]
 }
 
 #view-schedule .schedule-calendar-tools {
-  grid-template-columns: minmax(0, 1fr) auto !important;
-  gap: 8px 10px !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 10px;
 }
 
 #view-schedule .schedule-toolbar-filter-cluster {
   grid-template-columns:
-    minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(180px, 1fr) !important;
-  gap: 8px !important;
+    minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(180px, 1fr);
+  gap: 8px;
 }
 
 #view-schedule .schedule-calendar-tools select,
 #view-schedule .schedule-calendar-tools input,
 #view-schedule .schedule-leave-toggle {
-  min-height: 34px !important;
-  height: 34px !important;
-  border-radius: 8px !important;
+  min-height: var(--ui-filter-control-h);
+  height: var(--ui-filter-control-h);
+  border-radius: 10px;
 }
 
 #view-schedule .schedule-ops-toolbar-footer {
@@ -56023,17 +56080,17 @@ html[data-ui-theme="dark"]
 }
 
 #view-schedule .schedule-upload-step-rail {
-  padding: 12px 20px 7px !important;
+  padding: 14px 20px 10px;
 }
 
 #view-schedule .schedule-wizard-progress {
-  gap: 0 8px !important;
+  gap: 0 10px;
 }
 
 #view-schedule .schedule-wizard-step {
-  min-height: 38px !important;
-  padding-top: 20px !important;
-  font-size: 12px !important;
+  min-height: 44px;
+  padding-top: 24px;
+  font-size: 12px;
 }
 
 #view-schedule .schedule-excel-workflow-section {
