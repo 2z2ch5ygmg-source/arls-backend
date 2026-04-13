@@ -1,7 +1,7 @@
 # ARLS Targeted UI Cleanup Verifier Report
 
-Generated: 2026-04-13T09:12Z UTC  
-Worker: worker-5  
+Generated: 2026-04-13T09:12Z UTC
+Worker: worker-5
 Scope: verification artifacts only; no frontend source edits.
 
 ## Integration State
