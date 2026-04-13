@@ -69400,7 +69400,7 @@ function buildEmployeeDirectoryCompactEmpty(
   description = "",
 ) {
   const wrapper = document.createElement("div");
-  wrapper.className = "employee-directory-compact-empty";
+  wrapper.className = "employee-directory-compact-empty detail-rail-empty";
   const titleEl = document.createElement("div");
   titleEl.className = "employee-directory-compact-empty-title";
   titleEl.textContent = title;
@@ -69416,7 +69416,8 @@ function buildEmployeeDirectoryCompactEmpty(
 
 function createEmployeeDirectorySection(title = "", bodyNode = null) {
   const section = document.createElement("section");
-  section.className = "employee-directory-drawer-section";
+  section.className = "employee-directory-drawer-section detail-rail-section";
+  section.dataset.detailRailSection = "employee";
   const header = document.createElement("h4");
   header.textContent = title;
   section.appendChild(header);
@@ -69506,13 +69507,13 @@ function buildEmployeeDirectoryBadge(
 
 function buildEmployeeDirectoryFactGrid(items = []) {
   const grid = document.createElement("div");
-  grid.className = "employee-directory-fact-grid";
+  grid.className = "employee-directory-fact-grid detail-rail-fact-grid";
   (Array.isArray(items) ? items : []).forEach((item) => {
     const label = String(item?.label || "").trim();
     const value = String(item?.value || "").trim();
     if (!label || !value) return;
     const cell = document.createElement("div");
-    cell.className = "employee-directory-fact-card";
+    cell.className = "employee-directory-fact-card detail-rail-fact-card";
     if (String(item?.className || "").trim()) {
       cell.classList.add(...String(item.className).trim().split(/\s+/));
     }
@@ -69664,13 +69665,13 @@ function getEmployeeDrawerStatusBadge(
 
 function buildEmployeeDirectoryKpiGrid(items = []) {
   const grid = document.createElement("div");
-  grid.className = "employee-directory-kpi-grid";
+  grid.className = "employee-directory-kpi-grid detail-rail-kpi-grid";
   (Array.isArray(items) ? items : []).forEach((item) => {
     const label = String(item?.label || "").trim();
     if (!label) return;
     const metric = normalizeEmployeeDrawerMetric(item?.metric ?? item);
     const card = document.createElement("div");
-    card.className = "employee-directory-kpi-card";
+    card.className = "employee-directory-kpi-card detail-rail-kpi-card";
     if (metric.state === "ok" && item?.tone) {
       card.classList.add(`is-${item.tone}`);
     } else if (metric.state === "empty") {
@@ -69724,10 +69725,10 @@ function buildEmployeeDirectoryFeed(
     return buildEmployeeDirectoryCompactEmpty(emptyTitle, emptyDescription);
   }
   const list = document.createElement("div");
-  list.className = "employee-directory-feed";
+  list.className = "employee-directory-feed detail-rail-feed";
   items.forEach((item) => {
     const row = document.createElement("article");
-    row.className = "employee-directory-feed-item";
+    row.className = "employee-directory-feed-item detail-rail-feed-item";
     const main = document.createElement("div");
     main.className = "employee-directory-feed-main";
     const titleRow = document.createElement("div");
