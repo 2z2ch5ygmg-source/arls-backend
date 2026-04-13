@@ -22203,7 +22203,7 @@ button.attendance-status-special-card.active {
   .workspace-tab.active,
   #attendanceApprovalTabs.approval-tabs.azure-tabbar .approval-tab.active,
   .employee-directory-detail-tab.active {
-    color: var(--ui-text-primary);
+    color: var(--ui-accent);
   }
 
   .schedule-toolbar-primary {
@@ -34885,10 +34885,10 @@ body[data-current-view="schedule"] .topbar.app-topbar {
 }
 
 #view-home .home-deck-tabs .workspace-tab.active {
-  border-color: rgba(255, 106, 0, 0.22);
-  background: #fff;
+  border-color: rgba(255, 106, 0, 0.28);
+  background: var(--ui-accent-weak);
   color: var(--home-orange);
-  box-shadow: inset 0 -2px 0 var(--home-orange);
+  box-shadow: none;
 }
 
 #view-home .home-deck-panel {
@@ -43294,9 +43294,9 @@ body.calendar-public-shell #view-calendar-public {
   min-width: max-content;
   min-height: 40px;
   flex: 0 0 auto;
-  gap: 2px;
+  gap: 8px;
   flex-wrap: nowrap;
-  border-bottom: 1px solid var(--ui-border-subtle);
+  border-bottom: 0;
 }
 
 #view-requests #requestsWorkspaceSegments .workspace-tab {
@@ -43307,12 +43307,15 @@ body.calendar-public-shell #view-calendar-public {
   font-size: 13px;
   line-height: 18px;
   font-weight: var(--ui-weight-semibold);
-  border-bottom: 2px solid transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
   margin-bottom: 0;
 }
 
 #view-requests #requestsWorkspaceSegments .workspace-tab.active {
-  border-bottom-color: var(--ui-accent);
+  border-color: rgba(255, 107, 0, 0.28);
+  background: var(--ui-accent-weak);
+  color: var(--ui-accent);
 }
 
 #view-requests
@@ -43800,9 +43803,9 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #view-requests #requestsSecondaryTabs .approval-tab.active {
-  border-color: rgba(37, 99, 235, 0.14);
-  background: rgba(37, 99, 235, 0.08);
-  color: #2563eb;
+  border-color: rgba(255, 107, 0, 0.28);
+  background: var(--ui-accent-weak);
+  color: var(--ui-accent);
 }
 
 #view-requests #requestsMainListCard .requests-grid-header,
@@ -44251,16 +44254,15 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #view-leave #leaveWorkspaceTabs {
-  gap: 0;
+  gap: 8px;
 }
 
 #view-leave #leaveWorkspaceTabs .workspace-tab {
   min-height: 40px;
   height: 40px;
-  padding: 0 16px 0 0;
-  border-radius: 0;
-  border: 0;
-  border-bottom: 2px solid transparent;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--ui-text-secondary);
   font-size: 13px;
@@ -44268,9 +44270,9 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #view-leave #leaveWorkspaceTabs .workspace-tab.active {
-  border-color: var(--ui-accent);
-  background: transparent;
-  color: var(--ui-text-primary);
+  border-color: rgba(255, 107, 0, 0.28);
+  background: var(--ui-accent-weak);
+  color: var(--ui-accent);
 }
 
 #view-leave #leavePolicySection,
@@ -55387,13 +55389,7 @@ html[data-ui-theme="light"]
 }
 
 #view-schedule .schedule-wizard-step:not(:last-child)::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 10px;
-  width: calc(100% - 18px);
-  height: 1px;
-  background: rgba(203, 213, 225, 0.88);
+  display: none;
 }
 
 #view-schedule .schedule-wizard-step.active,
