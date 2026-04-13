@@ -1,0 +1,331 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-04-13T09:16:18.574Z",
+  "artifactRoot": "artifacts/ui-sweep/20260413-1816-arls-ui-cleanup",
+  "baseUrl": "http://127.0.0.1:64108/frontend/index.html",
+  "apiBase": "http://127.0.0.1:64108",
+  "mockedAuth": true,
+  "mockedApi": true,
+  "requiredRoutes": [
+    "/home",
+    "/attendance",
+    "/attendance?section=period&mode=list",
+    "/attendance?section=stats&scope=attendance",
+    "/requests",
+    "/requests?section=documents",
+    "/leave?tab=status",
+    "/leave?tab=history",
+    "/leave?tab=settings",
+    "/schedules/calendar",
+    "/schedules/upload",
+    "/schedules/hq-upload",
+    "/reports",
+    "/reports/finance-download",
+    "/branch/employees",
+    "/branch/sites",
+    "/hr?segment=apply",
+    "/hr?segment=manage",
+    "/ops/support-workers",
+    "/profile"
+  ],
+  "sweptRoutes": [
+    "/home"
+  ],
+  "viewports": {
+    "375": {
+      "width": 375,
+      "height": 812
+    },
+    "768": {
+      "width": 768,
+      "height": 1024
+    },
+    "desktop": {
+      "width": 1366,
+      "height": 900
+    }
+  },
+  "expectedPairCount": 3,
+  "actualPairCount": 3,
+  "missingPairs": [
+    {
+      "route": "/home",
+      "viewport": "375",
+      "error": "route panel not visible or screenshot missing"
+    }
+  ],
+  "ok": false,
+  "entries": [
+    {
+      "route": "/home",
+      "routePath": "/home",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/home.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:16:15.637Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": false,
+        "visiblePanels": [],
+        "hash": "#/home",
+        "title": "Sentrix HR",
+        "bodyView": ""
+      },
+      "status": "fail",
+      "error": ""
+    },
+    {
+      "route": "/home",
+      "routePath": "/home",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/home.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:16:17.315Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 10,
+          "samples": [
+            {
+              "selector": "[class*='metric']",
+              "tag": "div",
+              "id": "",
+              "className": "home-metric-tiles home-metric-tiles-compact",
+              "text": "오늘 조정 필요 0건 운영 0곳 운영 지점 0곳 오늘 기준 결원 지점 0곳 정상 승인 대기 0건 휴가·출퇴근 요청"
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "article",
+              "id": "",
+              "className": "home-metric-tile home-metric-tile-neutral has-home-metric-icon",
+              "text": "오늘 조정 필요 0건 운영 0곳"
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "div",
+              "id": "",
+              "className": "home-metric-tile-head",
+              "text": "오늘 조정 필요"
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "i",
+              "id": "",
+              "className": "home-metric-icon is-neutral",
+              "text": ""
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "article",
+              "id": "",
+              "className": "home-metric-tile home-metric-tile-neutral has-home-metric-icon",
+              "text": "운영 지점 0곳 오늘 기준"
+            }
+          ]
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-home"
+        ],
+        "hash": "#/home",
+        "title": "Sentrix HR",
+        "bodyView": "home"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/home",
+      "routePath": "/home",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/home.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:16:18.008Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 10,
+          "samples": [
+            {
+              "selector": "[class*='metric']",
+              "tag": "div",
+              "id": "",
+              "className": "home-metric-tiles home-metric-tiles-compact",
+              "text": "오늘 조정 필요 0건 운영 0곳 운영 지점 0곳 오늘 기준 결원 지점 0곳 정상 승인 대기 0건 휴가·출퇴근 요청"
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "article",
+              "id": "",
+              "className": "home-metric-tile home-metric-tile-neutral has-home-metric-icon",
+              "text": "오늘 조정 필요 0건 운영 0곳"
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "div",
+              "id": "",
+              "className": "home-metric-tile-head",
+              "text": "오늘 조정 필요"
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "i",
+              "id": "",
+              "className": "home-metric-icon is-neutral",
+              "text": ""
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "article",
+              "id": "",
+              "className": "home-metric-tile home-metric-tile-neutral has-home-metric-icon",
+              "text": "운영 지점 0곳 오늘 기준"
+            }
+          ]
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-home"
+        ],
+        "hash": "#/home",
+        "title": "Sentrix HR",
+        "bodyView": "home"
+      },
+      "status": "pass",
+      "error": ""
+    }
+  ]
+}

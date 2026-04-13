@@ -1,0 +1,14 @@
+{
+  "generatedAt": "2026-04-13T09:16:18.574Z",
+  "artifactRoot": "artifacts/ui-sweep/20260413-1816-arls-ui-cleanup",
+  "ok": false,
+  "expectedPairCount": 3,
+  "capturedPairCount": 2,
+  "missingPairs": [
+    {
+      "route": "/home",
+      "viewport": "375",
+      "error": "route panel not visible or screenshot missing"
+    }
+  ]
+}

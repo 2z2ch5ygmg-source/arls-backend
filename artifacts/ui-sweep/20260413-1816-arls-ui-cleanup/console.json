@@ -1,0 +1,530 @@
+[
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[RG ARLS] API base {\n  \"activeApiBase\": \"http://127.0.0.1:64108/api/v1\",\n  \"source\": \"query\",\n  \"inlineApiBase\": \"https://arls-wonseo-prod-260402.azurewebsites.net\",\n  \"queryApi\": \"http://127.0.0.1:64108\",\n  \"origin\": \"http://127.0.0.1:64108\"\n}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 2156,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:16.603Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "debug",
+    "text": "[RG ARLS][PERF] view activated {view: home, activations: 1, loads: 0, cacheHits: 0}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 2796,
+      "columnNumber": 12
+    },
+    "timestamp": "2026-04-13T09:16:16.653Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[RG ARLS][Auth] stored token check {hasAccessToken: true, hasRefreshToken: true}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 52279,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:16.676Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[RG ARLS][Auth] skipped eager refresh during background hydrate because stored access token exists",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 52302,
+      "columnNumber": 12
+    },
+    "timestamp": "2026-04-13T09:16:16.676Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[PERF][HOME] click->mount: 14.1ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:16.681Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[PERF][HOME] mount->first_ui: 23.3ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:16.681Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[PERF][HOME] mount->critical_ui: 25.9ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:16.682Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[PERF][HOME] total_to_interactive: 40.0ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:16.682Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[RG ARLS][Auth] token stored {hasAccessToken: true, hasRefreshToken: true}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 51848,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:16.684Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[RG ARLS][HOME][API] {stage: core-ready, quiet: true, force: false, total_calls: 1, order: Array(1)}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 38841,
+      "columnNumber": 16
+    },
+    "timestamp": "2026-04-13T09:16:16.704Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[RG ARLS][HOME][API] {stage: background-complete, quiet: true, force: false, total_calls: 1, order: Array(1)}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 38841,
+      "columnNumber": 16
+    },
+    "timestamp": "2026-04-13T09:16:16.704Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[RG ARLS] API base {\n  \"activeApiBase\": \"http://127.0.0.1:64108/api/v1\",\n  \"source\": \"query\",\n  \"inlineApiBase\": \"https://arls-wonseo-prod-260402.azurewebsites.net\",\n  \"queryApi\": \"http://127.0.0.1:64108\",\n  \"origin\": \"http://127.0.0.1:64108\"\n}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 2156,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:17.186Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "debug",
+    "text": "[RG ARLS][PERF] view activated {view: home, activations: 1, loads: 0, cacheHits: 0}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 2796,
+      "columnNumber": 12
+    },
+    "timestamp": "2026-04-13T09:16:17.230Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[RG ARLS][Auth] stored token check {hasAccessToken: true, hasRefreshToken: true}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 52279,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:17.236Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[RG ARLS][Auth] skipped eager refresh during background hydrate because stored access token exists",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 52302,
+      "columnNumber": 12
+    },
+    "timestamp": "2026-04-13T09:16:17.236Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[PERF][HOME] click->mount: 14.9ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:17.238Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[PERF][HOME] mount->first_ui: 7.1ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:17.238Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[PERF][HOME] mount->critical_ui: 5.5ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:17.238Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[PERF][HOME] total_to_interactive: 22.0ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:17.238Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[RG ARLS][Auth] token stored {hasAccessToken: true, hasRefreshToken: true}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 51848,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:17.240Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[RG ARLS][HOME][API] {stage: core-ready, quiet: true, force: true, total_calls: 1, order: Array(1)}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 38841,
+      "columnNumber": 16
+    },
+    "timestamp": "2026-04-13T09:16:17.257Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "375",
+    "type": "info",
+    "text": "[RG ARLS][HOME][API] {stage: background-complete, quiet: true, force: true, total_calls: 1, order: Array(1)}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 38841,
+      "columnNumber": 16
+    },
+    "timestamp": "2026-04-13T09:16:17.257Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "768",
+    "type": "info",
+    "text": "[RG ARLS] API base {\n  \"activeApiBase\": \"http://127.0.0.1:64108/api/v1\",\n  \"source\": \"query\",\n  \"inlineApiBase\": \"https://arls-wonseo-prod-260402.azurewebsites.net\",\n  \"queryApi\": \"http://127.0.0.1:64108\",\n  \"origin\": \"http://127.0.0.1:64108\"\n}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 2156,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:17.720Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "768",
+    "type": "debug",
+    "text": "[RG ARLS][PERF] view activated {view: home, activations: 1, loads: 0, cacheHits: 0}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 2796,
+      "columnNumber": 12
+    },
+    "timestamp": "2026-04-13T09:16:17.773Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "768",
+    "type": "info",
+    "text": "[RG ARLS][Auth] stored token check {hasAccessToken: true, hasRefreshToken: true}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 52279,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:17.797Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "768",
+    "type": "info",
+    "text": "[RG ARLS][Auth] skipped eager refresh during background hydrate because stored access token exists",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 52302,
+      "columnNumber": 12
+    },
+    "timestamp": "2026-04-13T09:16:17.797Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "768",
+    "type": "info",
+    "text": "[PERF][HOME] click->mount: 15.9ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:17.802Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "768",
+    "type": "info",
+    "text": "[PERF][HOME] mount->first_ui: 25.4ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:17.802Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "768",
+    "type": "info",
+    "text": "[PERF][HOME] mount->critical_ui: 28.1ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:17.803Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "768",
+    "type": "info",
+    "text": "[PERF][HOME] total_to_interactive: 44.0ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:17.803Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "768",
+    "type": "info",
+    "text": "[RG ARLS][Auth] token stored {hasAccessToken: true, hasRefreshToken: true}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 51848,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:17.809Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "768",
+    "type": "info",
+    "text": "[RG ARLS][HOME][API] {stage: core-ready, quiet: true, force: false, total_calls: 1, order: Array(1)}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 38841,
+      "columnNumber": 16
+    },
+    "timestamp": "2026-04-13T09:16:17.827Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "768",
+    "type": "info",
+    "text": "[RG ARLS][HOME][API] {stage: background-complete, quiet: true, force: false, total_calls: 1, order: Array(1)}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 38841,
+      "columnNumber": 16
+    },
+    "timestamp": "2026-04-13T09:16:17.827Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "desktop",
+    "type": "info",
+    "text": "[RG ARLS] API base {\n  \"activeApiBase\": \"http://127.0.0.1:64108/api/v1\",\n  \"source\": \"query\",\n  \"inlineApiBase\": \"https://arls-wonseo-prod-260402.azurewebsites.net\",\n  \"queryApi\": \"http://127.0.0.1:64108\",\n  \"origin\": \"http://127.0.0.1:64108\"\n}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 2156,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:18.292Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "desktop",
+    "type": "debug",
+    "text": "[RG ARLS][PERF] view activated {view: home, activations: 1, loads: 0, cacheHits: 0}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 2796,
+      "columnNumber": 12
+    },
+    "timestamp": "2026-04-13T09:16:18.342Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "desktop",
+    "type": "info",
+    "text": "[RG ARLS][Auth] stored token check {hasAccessToken: true, hasRefreshToken: true}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 52279,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:18.349Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "desktop",
+    "type": "info",
+    "text": "[RG ARLS][Auth] skipped eager refresh during background hydrate because stored access token exists",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 52302,
+      "columnNumber": 12
+    },
+    "timestamp": "2026-04-13T09:16:18.349Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "desktop",
+    "type": "info",
+    "text": "[PERF][HOME] click->mount: 15.0ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:18.355Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "desktop",
+    "type": "info",
+    "text": "[PERF][HOME] mount->first_ui: 8.7ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:18.355Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "desktop",
+    "type": "info",
+    "text": "[PERF][HOME] mount->critical_ui: 11.5ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:18.355Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "desktop",
+    "type": "info",
+    "text": "[PERF][HOME] total_to_interactive: 26.5ms",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 206,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:18.355Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "desktop",
+    "type": "info",
+    "text": "[RG ARLS][Auth] token stored {hasAccessToken: true, hasRefreshToken: true}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 51848,
+      "columnNumber": 10
+    },
+    "timestamp": "2026-04-13T09:16:18.360Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "desktop",
+    "type": "info",
+    "text": "[RG ARLS][HOME][API] {stage: core-ready, quiet: true, force: false, total_calls: 1, order: Array(1)}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 38841,
+      "columnNumber": 16
+    },
+    "timestamp": "2026-04-13T09:16:18.379Z"
+  },
+  {
+    "route": "/home",
+    "viewport": "desktop",
+    "type": "info",
+    "text": "[RG ARLS][HOME][API] {stage: background-complete, quiet: true, force: false, total_calls: 1, order: Array(1)}",
+    "location": {
+      "url": "http://127.0.0.1:64108/frontend/js/app.js?v=20260408-layout-audit-live-03",
+      "lineNumber": 38841,
+      "columnNumber": 16
+    },
+    "timestamp": "2026-04-13T09:16:18.379Z"
+  }
+]
