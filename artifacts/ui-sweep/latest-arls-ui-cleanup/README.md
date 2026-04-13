@@ -1,6 +1,6 @@
 # Latest ARLS UI cleanup sweep
 
-- Generated: 2026-04-13T09:16:50.057Z
+- Generated: 2026-04-13T09:17:35.516Z
 - Artifact root: `artifacts/ui-sweep/20260413-1816-arls-ui-cleanup`
 - Overall: PASS
 
