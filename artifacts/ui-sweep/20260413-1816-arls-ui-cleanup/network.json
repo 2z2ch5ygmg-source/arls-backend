@@ -1,0 +1,218 @@
+[
+  {
+    "url": "http://127.0.0.1:64131/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:48.515Z",
+    "durationMs": 1
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/home/briefing?defer_hq_heavy=true",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:48.517Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/integrations/feature-flags",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:48.517Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/integrations/soc/events?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:48.519Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/integrations/google-sheets/logs?status=FAIL&limit=20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:48.519Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:48.539Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/home/briefing?ts=1776071808539",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:48.542Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:48.830Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/home/briefing?ts=1776071808829",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:48.830Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:48.846Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:49.251Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/home/briefing?defer_hq_heavy=true",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:49.256Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/integrations/feature-flags",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:49.256Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/integrations/soc/events?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:49.256Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/integrations/google-sheets/logs?status=FAIL&limit=20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:49.256Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:49.278Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/home/briefing?ts=1776071809278",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:49.281Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:49.831Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/home/briefing?defer_hq_heavy=true",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:49.835Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/integrations/feature-flags",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:49.835Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/integrations/soc/events?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:49.836Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/integrations/google-sheets/logs?status=FAIL&limit=20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:49.836Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:49.858Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64131/api/v1/home/briefing?ts=1776071809859",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:16:49.862Z",
+    "durationMs": 0
+  }
+]
