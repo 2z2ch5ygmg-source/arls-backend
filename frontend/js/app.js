@@ -20178,6 +20178,9 @@ function getScheduleHqWizardSteps() {
 }
 
 function getScheduleUploadWorkspaceMode() {
+  const activeTopTab = getScheduleActiveTopTab();
+  if (activeTopTab === SCHEDULE_TAB_HQ_UPLOAD) return SCHEDULE_UPLOAD_MODE_HQ;
+  if (activeTopTab === SCHEDULE_TAB_UPLOAD) return SCHEDULE_UPLOAD_MODE_BASE;
   return normalizeScheduleUploadWorkspaceMode(
     state.schedule?.uploadWorkspaceMode || SCHEDULE_UPLOAD_MODE_BASE,
   );
@@ -20978,10 +20981,37 @@ function renderScheduleHqWizardPages() {
   persistScheduleHqWizardResume();
 }
 
+function getScheduleUploadSectionParking(mainCanvas = null) {
+  const uploadPanel = $("#scheduleUploadPanel");
+  const host =
+    uploadPanel instanceof HTMLElement
+      ? uploadPanel
+      : mainCanvas instanceof HTMLElement
+        ? mainCanvas.parentElement
+        : null;
+  if (!(host instanceof HTMLElement)) return null;
+
+  let parking = document.getElementById("scheduleUploadSectionParking");
+  if (!(parking instanceof HTMLElement)) {
+    parking = scheduleDetachedNodeCache.get("scheduleUploadSectionParking");
+  }
+  if (!(parking instanceof HTMLElement)) {
+    parking = document.createElement("div");
+    parking.id = "scheduleUploadSectionParking";
+    parking.className = "hidden";
+    parking.setAttribute("aria-hidden", "true");
+  }
+  if (parking.parentElement !== host) host.appendChild(parking);
+  parking.classList.add("hidden");
+  parking.setAttribute("aria-hidden", "true");
+  return parking;
+}
+
 function renderScheduleUploadWorkflowSections() {
   renderScheduleUploadModeTabs();
   const mode = getScheduleUploadWorkspaceMode();
   const mainCanvas = $("#scheduleUploadMainCanvas");
+  const parking = getScheduleUploadSectionParking(mainCanvas);
   const mappingSection = $("#scheduleExcelWorkflowMappingSection");
   const baseSection = $("#scheduleExcelWorkflowBaseSection");
   const exportSection = $("#scheduleExcelWorkflowExportSection");
@@ -21002,7 +21032,9 @@ function renderScheduleUploadWorkflowSections() {
   );
   if (mainCanvas instanceof HTMLElement) {
     allSections.forEach((section) => {
-      if (section.parentElement === mainCanvas) {
+      if (parking instanceof HTMLElement) {
+        if (section.parentElement !== parking) parking.appendChild(section);
+      } else if (section.parentElement === mainCanvas) {
         mainCanvas.removeChild(section);
       }
       section.classList.add("hidden");
@@ -85251,9 +85283,14 @@ function normalizeScheduleUploadWorkflowSection(value = "") {
 }
 
 function normalizeScheduleUploadWorkspaceMode(value = "") {
-  return String(value || "")
+  const mode = String(value || "")
     .trim()
-    .toLowerCase() === SCHEDULE_UPLOAD_MODE_HQ
+    .toLowerCase();
+  return mode === SCHEDULE_UPLOAD_MODE_HQ ||
+    mode === SCHEDULE_TAB_HQ_UPLOAD ||
+    mode === "hqupload" ||
+    mode === "support" ||
+    mode === "support-upload"
     ? SCHEDULE_UPLOAD_MODE_HQ
     : SCHEDULE_UPLOAD_MODE_BASE;
 }
