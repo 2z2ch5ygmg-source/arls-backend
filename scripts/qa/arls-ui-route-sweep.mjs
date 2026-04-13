@@ -484,8 +484,7 @@ async function visiblePanelInfo(page, selector) {
     const visible = (node) => {
       if (!(node instanceof HTMLElement)) return false;
       const style = window.getComputedStyle(node);
-      const rect = node.getBoundingClientRect();
-      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+      return style.display !== "none" && style.visibility !== "hidden" && !node.classList.contains("hidden");
     };
     const target = Array.from(document.querySelectorAll(targetSelector)).find(visible) || null;
     const visiblePanels = Array.from(document.querySelectorAll(".view:not(.hidden)"))
