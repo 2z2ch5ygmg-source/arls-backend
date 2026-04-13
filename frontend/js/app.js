@@ -54288,7 +54288,7 @@ function buildSiteDirectoryCompactEmpty(
   description = "",
 ) {
   const wrapper = document.createElement("div");
-  wrapper.className = "site-directory-empty";
+  wrapper.className = "site-directory-empty detail-rail-empty";
   const titleEl = document.createElement("div");
   titleEl.className = "site-directory-empty-title";
   titleEl.textContent = title;
@@ -54304,7 +54304,8 @@ function buildSiteDirectoryCompactEmpty(
 
 function buildSiteDirectorySection(title = "", bodyNode = null) {
   const section = document.createElement("section");
-  section.className = "site-directory-section";
+  section.className = "site-directory-section detail-rail-section";
+  section.dataset.detailRailSection = "site";
   const heading = document.createElement("h5");
   heading.textContent = title;
   section.appendChild(heading);
@@ -54314,13 +54315,13 @@ function buildSiteDirectorySection(title = "", bodyNode = null) {
 
 function buildSiteDirectoryFactGrid(items = []) {
   const grid = document.createElement("div");
-  grid.className = "site-directory-fact-grid";
+  grid.className = "site-directory-fact-grid detail-rail-fact-grid";
   (Array.isArray(items) ? items : []).forEach((item) => {
     const label = String(item?.label || "").trim();
     const value = String(item?.value || "").trim();
     if (!label || !value) return;
     const card = document.createElement("div");
-    card.className = "site-directory-fact-card";
+    card.className = "site-directory-fact-card detail-rail-fact-card";
     if (String(item?.tone || "").trim()) {
       card.dataset.tone = String(item.tone).trim();
     }
@@ -54480,10 +54481,10 @@ function buildSiteDirectoryHeaderPayload(site = null) {
 
 function buildSiteDirectoryChecklist(items = []) {
   const list = document.createElement("div");
-  list.className = "site-directory-checklist";
+  list.className = "site-directory-checklist detail-rail-checklist";
   (Array.isArray(items) ? items : []).forEach((item) => {
     const row = document.createElement("div");
-    row.className = "site-directory-check-row";
+    row.className = "site-directory-check-row detail-rail-check-row";
     const label = document.createElement("strong");
     label.textContent = String(item?.label || "").trim();
     const meta = document.createElement("span");
