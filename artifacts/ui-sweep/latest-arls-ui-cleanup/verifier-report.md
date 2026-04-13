@@ -1,6 +1,6 @@
 # ARLS Targeted UI Cleanup Verifier Report
 
-Generated: 2026-04-13T09:30Z UTC
+Generated: 2026-04-13T09:24Z UTC
 Worker: worker-5
 Scope: final verifier pass, verification artifacts only; no frontend source edits.
 Integrated checkout verified: `/Users/mark/Desktop/rg-arls-dev`
@@ -8,8 +8,6 @@ Integrated checkout verified: `/Users/mark/Desktop/rg-arls-dev`
 ## Verdict
 
 **FAIL — final acceptance is blocked by a confirmed responsive overflow in the Playwright sweep.**
-
-Lifecycle recommendation: transition task 5 to `failed` with this report as evidence; verification work is complete, but product acceptance is not.
 
 Tasks 1-4 are complete and their artifacts/commits are present in the leader checkout:
 
@@ -26,11 +24,10 @@ The integrated syntax, whitespace, business-regression, manifest, console, and n
 
 | Check | Result | Evidence |
 |---|---:|---|
-| `npx --yes --package typescript tsc --allowJs --checkJs false --noEmit --skipLibCheck --lib DOM,ES2022 --target ES2022 frontend/js/app.js` | PASS | exit 0, `PASS tsc js noEmit` |
 | `node --check frontend/js/app.js` | PASS | exit 0, no output |
 | `node --check scripts/qa/arls-ui-route-sweep.mjs` | PASS | exit 0, no output |
 | `git diff --check` in leader checkout | PASS | exit 0, no output |
-| `/Users/mark/Desktop/rg-arls-dev/.venv/bin/python -m pytest tests/test_schedule_support_roundtrip_status.py tests/test_schedule_support_roundtrip.py -q` | PASS | `54 passed, 3 warnings in 2.43s` |
+| `/Users/mark/Desktop/rg-arls-dev/.venv/bin/python -m pytest tests/test_schedule_support_roundtrip_status.py tests/test_schedule_support_roundtrip.py -q` | PASS | `54 passed, 3 warnings in 2.37s` |
 | Playwright artifact manifest parse | PASS | `ok: true`, `expectedPairCount: 60`, `actualPairCount: 60`, `missingPairs: []`, `entries: 60` |
 | Screenshot path completeness | PASS | `screenshotMissing: 0` across 60 manifest entries |
 | Console errors | PASS | `consoleErrors: 0` across 456 captured console entries |
