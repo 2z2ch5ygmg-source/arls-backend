@@ -1,73 +1,100 @@
 # ARLS Targeted UI Cleanup Verifier Report
 
-Generated: 2026-04-13T09:12Z UTC
+Generated: 2026-04-13T09:24Z UTC
 Worker: worker-5
-Scope: verification artifacts only; no frontend source edits.
+Scope: final verifier pass, verification artifacts only; no frontend source edits.
+Integrated checkout verified: `/Users/mark/Desktop/rg-arls-dev`
 
-## Integration State
+## Verdict
 
-- **Status:** BLOCKED / waiting for implementation integration.
-- Worker task files still show tasks 1-5 as `in_progress`; no worker-1 through worker-4 implementation commits are present in their local worktrees or this worker worktree yet.
-- No `artifacts/ui-sweep/**/manifest.json`, `console.json`, `network.json`, or `verdict.md` Playwright sweep artifacts were present in the leader checkout or worker worktrees at this checkpoint.
-- Current verification below is therefore a **baseline/pre-integration check**, not a final acceptance verdict.
+**FAIL — final acceptance is blocked by a confirmed responsive overflow in the Playwright sweep.**
 
-## Static / Regression Checks
+Tasks 1-4 are complete and their artifacts/commits are present in the leader checkout:
+
+| Lane | Evidence |
+|---|---|
+| Worker 1 selector audit | `artifacts/ui-sweep/latest-arls-ui-cleanup/selector-audit.md`, commit `d0f4771` |
+| Worker 2 CSS consolidation | `frontend/css/styles.css`, commit `47995cc` |
+| Worker 3 renderer hooks | `frontend/js/app.js`, `frontend/index.html`, commit `af93d61` |
+| Worker 4 sweep harness/artifacts | `scripts/qa/arls-ui-route-sweep.mjs`, `artifacts/ui-sweep/20260413-1816-arls-ui-cleanup/`, commit `1e97e15` |
+
+The integrated syntax, whitespace, business-regression, manifest, console, and network checks pass. The fail condition is visual/responsive: `/ops/support-workers` overflows horizontally at `375` and `768` viewports (`scrollWidth: 979`). The 375px screenshot visibly contains a wide desktop panel extending into blank right-side canvas.
+
+## Verification Commands
 
 | Check | Result | Evidence |
 |---|---:|---|
-| `node --check frontend/js/app.js` | PASS | exit 0, no stdout/stderr |
-| `git diff --check` | PASS | exit 0, no stdout/stderr |
-| `/Users/mark/Desktop/rg-arls-dev/.venv/bin/python -m pytest tests/test_schedule_support_roundtrip_status.py -q` | PASS | `2 passed, 3 warnings in 0.91s` |
-| `/Users/mark/Desktop/rg-arls-dev/.venv/bin/python -m pytest tests/test_schedule_support_roundtrip.py -q` | PASS | `52 passed, 3 warnings in 2.46s` |
-| package lint/typecheck script | NOT RUN | `package.json` only defines placeholder `test`; no `lint`/`typecheck` script discovered |
-
-## Pre/Post Grep Assertions (baseline snapshot)
-
-| Assertion | Baseline result | Verdict |
-|---|---:|---|
-| `schedule-wizard-progress|schedule-wizard-step` in `frontend/css/styles.css` | present in multiple duplicate regions including ~6257, ~48575, ~54675, ~55281, ~56029 | PENDING consolidation |
-| `workspace-tab.*active|approval-tab.*active|border-bottom|box-shadow.*inset` in `frontend/css/styles.css` | numerous matches; bottom-border/inset-active candidates remain | PENDING consolidation |
-| `ui-filterbar|leave-requests-filter-controls|requests-filter-controls|attendance-ops-toolbar` in `frontend/css/styles.css` | numerous route-specific filterbar/toolbar matches | PENDING consolidation |
-| `hr-approval-stage|hr-approval-saved-stage-stack` in `frontend/css/styles.css frontend/js/app.js` | approval flow hooks exist in CSS around ~52486 and ~54093 and JS around ~59233-59322 | PENDING implementation review |
-| `rg -n "!important" frontend/css/styles.css \| wc -l` | `1284` | FAIL against final budget until CSS owner reduces/documents exceptions |
+| `node --check frontend/js/app.js` | PASS | exit 0, no output |
+| `node --check scripts/qa/arls-ui-route-sweep.mjs` | PASS | exit 0, no output |
+| `git diff --check` in leader checkout | PASS | exit 0, no output |
+| `/Users/mark/Desktop/rg-arls-dev/.venv/bin/python -m pytest tests/test_schedule_support_roundtrip_status.py tests/test_schedule_support_roundtrip.py -q` | PASS | `54 passed, 3 warnings in 2.37s` |
+| Playwright artifact manifest parse | PASS | `ok: true`, `expectedPairCount: 60`, `actualPairCount: 60`, `missingPairs: []`, `entries: 60` |
+| Screenshot path completeness | PASS | `screenshotMissing: 0` across 60 manifest entries |
+| Console errors | PASS | `consoleErrors: 0` across 456 captured console entries |
+| Failed network requests | PASS | `networkFailures: 0` across 560 captured network entries |
+| Required route/viewport matrix | PASS | 20 routes × 3 viewports present; `requiredMissing: []` |
+| `!important` budget | PARTIAL PASS | `1284 -> 1261`; unique new `!important` content: `0`; still high legacy absolute count remains |
 
 ## Playwright Sweep Artifact Review
 
-| Required artifact | Result |
-|---|---|
-| `artifacts/ui-sweep/YYYYMMDD-HHMM-arls-ui-cleanup/manifest.json` | MISSING |
-| `console.json` | MISSING |
-| `network.json` | MISSING |
-| `verdict.md` | MISSING |
-| `desktop/`, `375/`, `768/` screenshots | MISSING |
+Artifact root: `artifacts/ui-sweep/20260413-1816-arls-ui-cleanup`
 
-Because no manifest exists, route/viewport completeness cannot pass yet.
+| Required artifact | Result |
+|---|---:|
+| `manifest.json` | PASS |
+| `console.json` | PASS |
+| `network.json` | PASS |
+| `verdict.md` | PASS, with warnings |
+| `desktop/`, `375/`, `768/` screenshot folders | PASS |
+| `latest-run.json` pointer | PASS — points to `artifacts/ui-sweep/20260413-1816-arls-ui-cleanup` |
+
+`latest-run.json` reports:
+
+```json
+{
+  "ok": true,
+  "expectedPairCount": 60,
+  "capturedPairCount": 60,
+  "missingPairs": []
+}
+```
 
 ## Route / Component Family Verdict
 
-| Family | Verdict | Notes |
+| Family | Verdict | Evidence / Notes |
 |---|---|---|
-| Tabs | PENDING / likely fail on current baseline | Bottom-border/inset active candidates still exist in current CSS; final verdict requires post-worker-2 CSS and screenshots. |
-| Filter bars | PENDING | Multiple route-specific filterbar definitions remain in baseline; final verdict requires post-consolidation sweep. |
-| Wizard steppers | PENDING | Duplicate schedule wizard regions remain in baseline; final verdict requires post-worker CSS/renderer integration and screenshots. |
-| KPI/status strips | PENDING | Not visually verifiable without route sweep artifacts. |
-| Detail rails/tables | PENDING | Not visually verifiable without route sweep artifacts. |
-| Approval flow | PENDING | Hooks exist, but final structured-flow behavior requires post-worker-3/worker-2 integration and screenshots. |
-| Business regressions | PARTIAL PASS | Schedule support roundtrip pytest checks pass on baseline; UI route/deep-link/upload/download checks need Playwright sweep. |
+| Tabs | WARN | Harness found tab presence on 31 expected route/viewport entries and missing on 26. Global active treatment was consolidated by CSS worker, but screenshot-level family detection still records many `WARN missing` entries. |
+| Filter bars | WARN | Harness found filter presence on 11 expected route/viewport entries and missing on 40. Needs either selector expansion in harness or route-specific follow-up if those controls should be visible in mocked states. |
+| Wizard steppers | WARN | Harness found steppers on 2 expected route/viewport entries and missing on 7. Desktop `/schedules/upload` passed; schedule mobile/HQ/report finance expected detections still warn. |
+| KPI/status strips | WARN | Harness found KPI/status presence on 2 expected route/viewport entries and missing on 31. Some mocked states likely lack populated KPI data, but final visual acceptance should document this explicitly. |
+| Detail rails/tables | WARN | Harness found detail panels on 4 expected entries and missing on 18; mocked empty states may explain some misses. |
+| Approval flow | WARN | Harness found approval flow on 3 expected entries and missing on 3; `/hr?segment=manage` passed, `/hr?segment=apply` warned missing. |
+| Responsive overflow | FAIL | `/ops/support-workers` has horizontal overflow at 375px and 768px (`scrollWidth: 979`, `innerWidth: 375/768`). |
+| Business regression checks | PASS | Schedule support roundtrip status + roundtrip tests: `54 passed, 3 warnings`. |
 
-## Blockers / Next Required Inputs
+## Blocking Defect
 
-1. Worker-1 selector audit artifact: `artifacts/ui-sweep/latest-arls-ui-cleanup/selector-audit.md`.
-2. Worker-2 CSS consolidation commit for `frontend/css/styles.css`.
-3. Worker-3 renderer-hook commit if needed for `frontend/js/app.js` / `frontend/index.html`.
-4. Worker-4 Playwright sweep harness and a concrete `artifacts/ui-sweep/YYYYMMDD-HHMM-arls-ui-cleanup/` run with manifest/console/network/verdict/screenshots.
-5. Re-run this verifier report after those commits/artifacts are integrated.
+| Route | Viewport | Evidence | Impact |
+|---|---:|---|---|
+| `/ops/support-workers` | `375` | `pageProblems.horizontalOverflow: true`, `scrollWidth: 979`, `innerWidth: 375`, screenshot `375/ops-support-workers.jpg` | Violates mobile no-horizontal-overflow acceptance. |
+| `/ops/support-workers` | `768` | `pageProblems.horizontalOverflow: true`, `scrollWidth: 979`, `innerWidth: 768`, screenshot `768/ops-support-workers.jpg` | Violates tablet no-horizontal-overflow acceptance. |
 
-## !important Budget
+## Grep Assertion Snapshot
 
-- Current baseline count: **1284** in `frontend/css/styles.css`.
-- Final acceptance requires newly introduced undocumented `!important` usage count of `0`, absolute max `3` documented exceptions; current integrated state does **not** yet satisfy the intended final budget.
+| Assertion | Final integrated result |
+|---|---|
+| `schedule-wizard-progress|schedule-wizard-step` | Multiple canonical/route-scoped blocks remain; worker-2 reduced conflict but did not reduce to a single region. |
+| `workspace-tab.*active|approval-tab.*active|border-bottom|box-shadow.*inset` | Active tab candidates remain across route-specific CSS; CSS worker reports canonicalized contained orange active grammar and no unique new `!important`. |
+| `ui-filterbar|leave-requests-filter-controls|requests-filter-controls|attendance-ops-toolbar` | Shared `.ui-filterbar` token group now includes request/leave/attendance controls; route-specific layout blocks remain. |
+| `hr-approval-stage|hr-approval-saved-stage-stack` | Renderer hooks are present in `frontend/js/app.js` and flow CSS remains in `frontend/css/styles.css`. |
+| `rg -n "!important" frontend/css/styles.css | wc -l` | `1261` final vs `1284` baseline; no unique new `!important` content found. |
+
+## Remaining Blockers / Recommended Next Step
+
+1. Return `/ops/support-workers` responsive overflow to the CSS owner. The likely target is the support-worker list/filter/table container width behavior under mobile/tablet.
+2. Re-run `node scripts/qa/arls-ui-route-sweep.mjs --route-delay-ms 150` after the overflow fix and confirm `/ops/support-workers` no longer reports `horizontalOverflow` at `375` or `768`.
+3. Decide whether the many component-family `WARN missing` entries in `verdict.md` are acceptable harness limitations for mocked empty states, or expand selectors/data seeding so the final report can mark each expected family pass or justified exception.
 
 ## Summary
 
-Baseline syntax and schedule-support regression checks pass, but final ARLS targeted UI cleanup verification is blocked because the implementation commits and Playwright sweep artifacts are not available in this worker checkout yet.
+The integrated ARLS UI cleanup is syntactically and regression-test clean, and the Playwright sweep covers all 60 required route/viewport pairs with zero console or network failures. Final verifier status is **failed** because the sweep still shows clear horizontal overflow on `/ops/support-workers` at 375px and 768px, plus unresolved component-family warning coverage that should be justified or fixed before release acceptance.
