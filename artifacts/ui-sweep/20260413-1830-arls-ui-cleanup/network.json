@@ -1,0 +1,5105 @@
+[
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:27.157Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/home/briefing?defer_hq_heavy=true",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:27.160Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/feature-flags",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:27.160Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/soc/events?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:27.161Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/google-sheets/logs?status=FAIL&limit=20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:27.161Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:27.181Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/home/briefing?ts=1776072627181",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:27.185Z",
+    "durationMs": 1
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:27.473Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/home/briefing?ts=1776072627472",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:27.473Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:27.489Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.593Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.600Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.601Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.601Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.601Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?active=all&limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.602Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.618Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-01",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.625Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-02",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.626Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-03",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.626Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-04",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.626Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-05",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.627Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-06",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.627Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-07",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.627Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-08",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.627Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-09",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.628Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-10",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.628Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-11",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.628Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-12",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.628Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-14",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.629Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-15",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.630Z",
+    "durationMs": 1
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-16",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.630Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-17",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.630Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-18",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.630Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-19",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.631Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.631Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-21",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.631Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-22",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.631Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-23",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.632Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-24",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.632Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-25",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.632Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-26",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.633Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-27",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.633Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-28",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.633Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-29",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.633Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-30",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.634Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/requests/review-queue?limit=200&status=pending",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.634Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:28.635Z",
+    "durationMs": 1
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:29.996Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:30.003Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:30.003Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:30.004Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:30.004Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?active=all&limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:30.004Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:30.020Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/requests/review-queue?limit=200&status=pending",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:30.028Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:30.028Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.781Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.787Z",
+    "durationMs": 1
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.787Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.787Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-14",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.788Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-15",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.788Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-16",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.789Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-17",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.789Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-18",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.789Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.790Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?active=all&limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.790Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.805Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-19",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.807Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-01",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.819Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-02",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.819Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-03",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.819Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-04",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.819Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-05",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.820Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-06",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.820Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-07",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.821Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-08",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.821Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-09",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.821Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-10",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.822Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-11",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.822Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-12",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.823Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.823Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-21",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.823Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-22",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.824Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-23",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.824Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-24",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.824Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-25",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.824Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-26",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.825Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-27",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.825Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-28",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.825Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-29",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.826Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-30",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.826Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/requests/review-queue?limit=200&status=pending",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.826Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.827Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-14",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.827Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-15",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.827Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-16",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.828Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-17",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.828Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-18",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.829Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-19",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:32.831Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:34.188Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/requests/review-queue?limit=200&status=pending%2Capproved%2Crejected%2Ccancelled",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:34.192Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:34.209Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:35.637Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/admin/requests?status=requested&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:35.641Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/admin/requests?status=generating&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:35.641Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/admin/requests?status=issued&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:35.642Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/admin/requests?status=rejected&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:35.642Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/admin/hr/documents/resignation-requests?status=requested&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:35.643Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/admin/hr/documents/resignation-requests?status=approved&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:35.643Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/admin/hr/documents/resignation-requests?status=rejected&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:35.644Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:35.659Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:38.697Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:38.718Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:40.094Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:40.114Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:41.467Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:41.487Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:44.354Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?page=1&page_size=500",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:44.361Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly-board-lite?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:44.362Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:44.383Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:44.383Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:44.385Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:44.385Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:44.385Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:44.386Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:44.393Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:45.407Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:45.778Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?page=1&page_size=500",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:45.786Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly-board-lite?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:45.786Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:45.807Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:45.808Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:45.809Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:45.810Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:45.810Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:45.810Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:45.818Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:46.837Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:47.214Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?page=1&page_size=500",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:47.222Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly-board-lite?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:47.222Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:47.243Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:47.244Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:47.246Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:47.246Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:47.247Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:47.247Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:47.254Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:48.270Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/finance-submission/overview-workspace?month=2026-04&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:50.209Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:50.234Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:50.254Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/finance-submission/download-workspace?month=2026-04&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:51.599Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:51.623Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:51.643Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:53.008Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:53.013Z",
+    "durationMs": 1
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?include_account=true&limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:53.013Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:53.030Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:55.353Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?detail=true&limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:55.357Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:55.375Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:56.763Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/types",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:56.769Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/requests?limit=20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:56.769Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:56.785Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:58.218Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/types",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:58.225Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/requests?limit=20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:58.225Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/admin/hr/documents/approval-policy?document_type=employment_certificate",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:58.226Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:58.242Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:59.755Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?detail=true&limit=300&active=active&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:59.759Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:59.777Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/support-status-workspace?month=2026-04",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:59.778Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/support-roundtrip/hq-workspace?month=2026-04",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:30:59.779Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:01.908Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/feature-flags",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:01.915Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/google-sheets/profiles",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:01.915Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/mail/accounts",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:01.915Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/mail/sender-profiles",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:01.916Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/mail/templates",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:01.916Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/mail/jobs?limit=80",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:01.916Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/groupware/foundation/status",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:01.917Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/groupware/foundation/compatibility",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:01.917Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/soc/events?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:01.917Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/users/me/signature",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:01.918Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:01.931Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/google-sheets/logs?status=FAIL&limit=20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:01.936Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:03.328Z",
+    "durationMs": 1
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/home/briefing?defer_hq_heavy=true",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:03.331Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/feature-flags",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:03.332Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/soc/events?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:03.332Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/google-sheets/logs?status=FAIL&limit=20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:03.332Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:03.353Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/home/briefing?ts=1776072663354",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:03.357Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.728Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.735Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.735Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.736Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.736Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?active=all&limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.736Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.753Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-01",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.761Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-02",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.761Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-03",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.761Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-04",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.762Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-05",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.762Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-06",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.762Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-07",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.762Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-08",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.763Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-09",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.763Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-10",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.763Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-11",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.763Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-12",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.763Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-14",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.764Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-15",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.764Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-16",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.765Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-17",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.765Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-18",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.766Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-19",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.766Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.766Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-21",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.766Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-22",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.767Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-23",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.767Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-24",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.767Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-25",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.767Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-26",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.767Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-27",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.768Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-28",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.768Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-29",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.768Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-30",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.768Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/requests/review-queue?limit=200&status=pending",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.769Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:04.769Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:07.686Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:07.692Z",
+    "durationMs": 1
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:07.692Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:07.692Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:07.693Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?active=all&limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:07.693Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:07.710Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/requests/review-queue?limit=200&status=pending",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:07.718Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:07.718Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.099Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.104Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.104Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.104Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-14",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.104Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-15",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.105Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-16",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.105Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-17",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.106Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-18",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.106Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.106Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?active=all&limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.106Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.121Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-19",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.123Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-01",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.135Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-02",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.135Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-03",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.135Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-04",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.135Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-05",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.135Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-06",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.135Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-07",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.136Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-08",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.136Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-09",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.136Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-10",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.136Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-11",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.136Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-12",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.137Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.137Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-21",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.137Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-22",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.138Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-23",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.138Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-24",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.138Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-25",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.138Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-26",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.139Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-27",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.139Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-28",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.139Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-29",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.139Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-30",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.139Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/requests/review-queue?limit=200&status=pending",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.139Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.140Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-14",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.140Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-15",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.140Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-16",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.140Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-17",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.141Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-18",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.141Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-19",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:09.143Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:10.496Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/requests/review-queue?limit=200&status=pending%2Capproved%2Crejected%2Ccancelled",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:10.500Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:10.518Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:13.467Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/admin/requests?status=requested&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:13.472Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/admin/requests?status=generating&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:13.472Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/admin/requests?status=issued&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:13.472Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/admin/requests?status=rejected&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:13.473Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/admin/hr/documents/resignation-requests?status=requested&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:13.474Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/admin/hr/documents/resignation-requests?status=approved&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:13.474Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/admin/hr/documents/resignation-requests?status=rejected&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:13.475Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:13.489Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:14.862Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:14.883Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:16.252Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:16.273Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:17.867Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:17.889Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:19.333Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?page=1&page_size=500",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:19.340Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly-board-lite?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:19.341Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:19.363Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:19.363Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:19.365Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:19.366Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:19.366Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:19.366Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:19.373Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:20.387Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:20.809Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?page=1&page_size=500",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:20.816Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly-board-lite?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:20.817Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:20.838Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:20.839Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:20.840Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:20.841Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:20.841Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:20.841Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:20.848Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:21.863Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:22.245Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?page=1&page_size=500",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:22.254Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly-board-lite?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:22.254Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:22.275Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:22.276Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:22.278Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:22.278Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:22.279Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:22.279Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:22.285Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:23.301Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/finance-submission/overview-workspace?month=2026-04&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:25.038Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:25.065Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:25.088Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/finance-submission/download-workspace?month=2026-04&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:26.408Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:26.433Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:26.454Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:27.816Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:27.820Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?include_account=true&limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:27.821Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:27.837Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:29.406Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?detail=true&limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:29.410Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:29.428Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:30.997Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/types",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:31.003Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/requests?limit=20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:31.004Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:31.020Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:32.403Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/types",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:32.411Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/requests?limit=20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:32.411Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/admin/hr/documents/approval-policy?document_type=employment_certificate",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:32.412Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:32.428Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:33.782Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?detail=true&limit=300&active=active&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:33.785Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:33.803Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/support-status-workspace?month=2026-04",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:33.804Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/support-roundtrip/hq-workspace?month=2026-04",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:33.805Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:36.700Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/feature-flags",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:36.707Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/google-sheets/profiles",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:36.708Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/mail/accounts",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:36.709Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/mail/sender-profiles",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:36.709Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/mail/templates",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:36.709Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/mail/jobs?limit=80",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:36.711Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/groupware/foundation/status",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:36.711Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/groupware/foundation/compatibility",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:36.712Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/soc/events?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:36.712Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/users/me/signature",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:36.712Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:36.724Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/google-sheets/logs?status=FAIL&limit=20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:36.729Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:38.116Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/home/briefing?defer_hq_heavy=true",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:38.120Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/feature-flags",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:38.120Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/soc/events?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:38.120Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/google-sheets/logs?status=FAIL&limit=20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:38.120Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:38.142Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/home/briefing?ts=1776072698142",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:38.145Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.576Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.585Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.586Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.587Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.587Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?active=all&limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.588Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.604Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-01",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.614Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-02",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.615Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-03",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.616Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-04",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.616Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-05",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.618Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-06",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.619Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-07",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.619Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-08",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.619Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-09",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.620Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-10",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.620Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-11",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.620Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-12",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.620Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-14",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.621Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-15",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.621Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-16",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.621Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-17",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.621Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-18",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.622Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-19",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.622Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.622Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-21",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.622Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-22",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.622Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-23",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.623Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-24",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.623Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-25",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.623Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-26",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.623Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-27",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.623Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-28",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.624Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-29",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.624Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-30",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.624Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/requests/review-queue?limit=200&status=pending",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.624Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:39.625Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:42.637Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:42.644Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:42.644Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:42.645Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:42.645Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?active=all&limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:42.646Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:42.661Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/requests/review-queue?limit=200&status=pending",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:42.671Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:42.671Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.024Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.029Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.030Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.031Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-14",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.032Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-15",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.032Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-16",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.032Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-17",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.032Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-18",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.033Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.033Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?active=all&limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.033Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.046Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-19",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.050Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-01",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.061Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-02",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.061Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-03",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.061Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-04",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.061Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-05",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.062Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-06",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.062Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-07",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.062Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-08",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.062Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-09",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.062Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-10",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.063Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-11",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.063Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-12",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.063Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.063Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-21",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.063Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-22",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.064Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-23",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.064Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-24",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.064Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-25",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.064Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-26",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.065Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-27",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.065Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-28",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.065Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-29",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.065Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/records?date=2026-04-30",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.065Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/requests/review-queue?limit=200&status=pending",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.066Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-13",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.066Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-14",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.066Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-15",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.066Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-16",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.067Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-17",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.068Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-18",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.068Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/overtime-daily?date=2026-04-19",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:44.070Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:45.419Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/attendance/requests/review-queue?limit=200&status=pending%2Capproved%2Crejected%2Ccancelled",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:45.423Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:45.441Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:48.329Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/admin/requests?status=requested&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:48.334Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/admin/requests?status=generating&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:48.335Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/admin/requests?status=issued&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:48.336Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/admin/requests?status=rejected&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:48.336Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/admin/hr/documents/resignation-requests?status=requested&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:48.337Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/admin/hr/documents/resignation-requests?status=approved&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:48.337Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/admin/hr/documents/resignation-requests?status=rejected&limit=120",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:48.338Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:48.352Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:49.731Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?limit=300&employee_code=HQ001&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:49.744Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves/balance?employee_code=HQ001&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:49.744Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves/policies?tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:49.745Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves/grants?limit=200&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:49.745Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:49.760Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:51.142Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves/review-queue?limit=200&status=pending%2Capproved%2Crejected%2Ccancelled&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:51.152Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves/policies?tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:51.153Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves/grants?limit=200&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:51.154Z",
+    "durationMs": 1
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:51.169Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:54.066Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?limit=300&employee_code=HQ001&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:54.072Z",
+    "durationMs": 1
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves/balance?employee_code=HQ001&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:54.073Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves/policies?tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:54.074Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves/grants?limit=200&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:54.074Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:54.090Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:55.449Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?page=1&page_size=500",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:55.456Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly-board-lite?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:55.456Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:55.480Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:55.481Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:55.483Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/monthly?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:55.483Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/leaves?status=approved&limit=300&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:55.484Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:55.484Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:55.495Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/events/stream?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:56.536Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:56.928Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?page=1&page_size=500",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:56.933Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/import-mapping-profile?tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:56.934Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:56.956Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:56.957Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:59.940Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/support-roundtrip/hq-workspace?month=2026-04&tenant_code=srs_korea",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:59.946Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:31:59.970Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/finance-submission/overview-workspace?month=2026-04&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:01.335Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:01.346Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:01.367Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/finance-submission/download-workspace?month=2026-04&tenant_code=SRS_KOREA",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:02.715Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:02.726Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:02.747Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:05.712Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:05.716Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/employees?include_account=true&limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:05.717Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:05.734Z",
+    "durationMs": 1
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:07.107Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?detail=true&limit=500&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:07.112Z",
+    "durationMs": 1
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:07.129Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:08.487Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/types",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:08.493Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/requests?limit=20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:08.493Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:08.510Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:11.513Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/types",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:11.522Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/certificates/requests?limit=20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:11.523Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/admin/hr/documents/approval-policy?document_type=employment_certificate",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:11.523Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:11.538Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:12.905Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/sites?detail=true&limit=300&active=active&offset=0",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:12.909Z",
+    "durationMs": 1
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:12.927Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/support-status-workspace?month=2026-04",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:12.928Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/schedules/support-roundtrip/hq-workspace?month=2026-04",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:12.928Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/auth/me",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:14.308Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/feature-flags",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:14.314Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/google-sheets/profiles",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:14.314Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/mail/accounts",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:14.315Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/mail/sender-profiles",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:14.316Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/mail/templates",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:14.316Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/mail/jobs?limit=80",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:14.317Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/groupware/foundation/status",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:14.317Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/groupware/foundation/compatibility",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:14.318Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/soc/events?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:14.318Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/users/me/signature",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:14.318Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/notifications/in-app?limit=50",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:14.332Z",
+    "durationMs": 0
+  },
+  {
+    "url": "http://127.0.0.1:64432/api/v1/integrations/google-sheets/logs?status=FAIL&limit=20",
+    "method": "GET",
+    "status": 200,
+    "failed": false,
+    "mocked": true,
+    "timestamp": "2026-04-13T09:32:14.336Z",
+    "durationMs": 0
+  }
+]

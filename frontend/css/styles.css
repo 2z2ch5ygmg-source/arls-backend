@@ -21899,6 +21899,70 @@ button.attendance-status-special-card.active {
 }
 
 @media (max-width: 1023px) {
+  #view-support-status {
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .support-status-toolbar-card,
+  .support-status-list-card {
+    min-width: 0;
+  }
+
+  .support-status-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .support-status-toolbar-main {
+    grid-template-columns: minmax(0, 1fr);
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .support-status-toolbar-actions {
+    justify-content: stretch;
+  }
+
+  .support-status-toolbar-actions .btn {
+    width: 100%;
+  }
+
+  .support-status-toolbar-footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .support-status-count-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+  }
+
+  .support-status-count-chip {
+    min-width: 0;
+  }
+
+  .support-status-table-wrap {
+    max-width: 100%;
+  }
+
+  .support-status-hq-control-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .support-status-hq-download-action {
+    justify-content: stretch;
+  }
+
+  .support-status-hq-download-action .btn {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 1023px) {
   #scheduleOpsToolbar,
   #scheduleDesktopDrawer,
   #scheduleDesktopDrawerBackdrop {

@@ -1,0 +1,5351 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-04-13T09:32:15.423Z",
+  "artifactRoot": "artifacts/ui-sweep/20260413-1830-arls-ui-cleanup",
+  "baseUrl": "http://127.0.0.1:64432/frontend/index.html",
+  "apiBase": "http://127.0.0.1:64432",
+  "mockedAuth": true,
+  "mockedApi": true,
+  "requiredRoutes": [
+    "/home",
+    "/attendance",
+    "/attendance?section=period&mode=list",
+    "/attendance?section=stats&scope=attendance",
+    "/requests",
+    "/requests?section=documents",
+    "/leave?tab=status",
+    "/leave?tab=history",
+    "/leave?tab=settings",
+    "/schedules/calendar",
+    "/schedules/upload",
+    "/schedules/hq-upload",
+    "/reports",
+    "/reports/finance-download",
+    "/branch/employees",
+    "/branch/sites",
+    "/hr?segment=apply",
+    "/hr?segment=manage",
+    "/ops/support-workers",
+    "/profile"
+  ],
+  "sweptRoutes": [
+    "/home",
+    "/attendance",
+    "/attendance?section=period&mode=list",
+    "/attendance?section=stats&scope=attendance",
+    "/requests",
+    "/requests?section=documents",
+    "/leave?tab=status",
+    "/leave?tab=history",
+    "/leave?tab=settings",
+    "/schedules/calendar",
+    "/schedules/upload",
+    "/schedules/hq-upload",
+    "/reports",
+    "/reports/finance-download",
+    "/branch/employees",
+    "/branch/sites",
+    "/hr?segment=apply",
+    "/hr?segment=manage",
+    "/ops/support-workers",
+    "/profile"
+  ],
+  "viewports": {
+    "375": {
+      "width": 375,
+      "height": 812
+    },
+    "768": {
+      "width": 768,
+      "height": 1024
+    },
+    "desktop": {
+      "width": 1366,
+      "height": 900
+    }
+  },
+  "expectedPairCount": 60,
+  "actualPairCount": 60,
+  "missingPairs": [],
+  "ok": true,
+  "entries": [
+    {
+      "route": "/home",
+      "routePath": "/home",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/home.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:26.695Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 10,
+          "samples": [
+            {
+              "selector": "[class*='metric']",
+              "tag": "div",
+              "id": "",
+              "className": "home-metric-tiles home-metric-tiles-compact",
+              "text": "오늘 조정 필요 0건 운영 0곳 운영 지점 0곳 오늘 기준 결원 지점 0곳 정상 승인 대기 0건 휴가·출퇴근 요청"
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "article",
+              "id": "",
+              "className": "home-metric-tile home-metric-tile-neutral has-home-metric-icon",
+              "text": "오늘 조정 필요 0건 운영 0곳"
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "div",
+              "id": "",
+              "className": "home-metric-tile-head",
+              "text": "오늘 조정 필요"
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "i",
+              "id": "",
+              "className": "home-metric-icon is-neutral",
+              "text": ""
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "article",
+              "id": "",
+              "className": "home-metric-tile home-metric-tile-neutral has-home-metric-icon",
+              "text": "운영 지점 0곳 오늘 기준"
+            }
+          ]
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-home"
+        ],
+        "hash": "#/home",
+        "title": "Sentrix HR",
+        "bodyView": "home"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/attendance",
+      "routePath": "/attendance",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/attendance.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:28.278Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-attendance"
+        ],
+        "hash": "#/attendance",
+        "title": "Sentrix HR",
+        "bodyView": "attendance"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/attendance?section=period&mode=list",
+      "routePath": "/attendance",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/attendance-section-period-mode-list.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:29.710Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-attendance"
+        ],
+        "hash": "#/attendance?section=period&mode=list",
+        "title": "Sentrix HR",
+        "bodyView": "attendance"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/attendance?section=stats&scope=attendance",
+      "routePath": "/attendance",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/attendance-section-stats-scope-attendance.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:32.488Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "present",
+          "visibleCount": 1,
+          "samples": [
+            {
+              "selector": "[class*='detail-panel']",
+              "tag": "section",
+              "id": "",
+              "className": "attendance-stats-detail-panel attendance-stats-side-card attendance-stats-side-card-table",
+              "text": "세부 지표 비율4.13(월)4.14(화)4.15(수)4.16(목)4.17(금)4.18(토)4.19(일) 출근율0.0%0.0%0.0%0.0%0.0%0.0%0.0%"
+            }
+          ]
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-attendance"
+        ],
+        "hash": "#/attendance?section=stats&scope=attendance",
+        "title": "Sentrix HR",
+        "bodyView": "attendance"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/requests",
+      "routePath": "/requests",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/requests.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:33.899Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 4,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "요청"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "HR 문서"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "출퇴근 예외"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "문서"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-requests"
+        ],
+        "hash": "#/requests",
+        "title": "Sentrix HR",
+        "bodyView": "requests"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/requests?section=documents",
+      "routePath": "/requests",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/requests-section-documents.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:35.297Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 10,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "요청"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "HR 문서"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "출퇴근 예외"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "문서"
+            },
+            {
+              "selector": ".approval-tabs .approval-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary approval-tab active",
+              "text": "승인 대기"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-requests"
+        ],
+        "hash": "#/requests?section=documents",
+        "title": "Sentrix HR",
+        "bodyView": "requests"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/leave?tab=status",
+      "routePath": "/leave",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/leave-tab-status.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:38.278Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-leave"
+        ],
+        "hash": "#/leave?tab=status",
+        "title": "Sentrix HR",
+        "bodyView": "leave"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/leave?tab=history",
+      "routePath": "/leave",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/leave-tab-history.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:39.770Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-leave"
+        ],
+        "hash": "#/leave?tab=history",
+        "title": "Sentrix HR",
+        "bodyView": "leave"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/leave?tab=settings",
+      "routePath": "/leave",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/leave-tab-settings.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:41.171Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-leave"
+        ],
+        "hash": "#/leave?tab=settings",
+        "title": "Sentrix HR",
+        "bodyView": "leave"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/schedules/calendar",
+      "routePath": "/schedules/calendar",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/schedules-calendar.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:44.047Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "리스트"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "달력"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-schedule"
+        ],
+        "hash": "#/schedules/list",
+        "title": "Sentrix HR",
+        "bodyView": "schedule"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/schedules/upload",
+      "routePath": "/schedules/upload",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/schedules-upload.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:45.479Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "리스트"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "달력"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-schedule"
+        ],
+        "hash": "#/schedules/list",
+        "title": "Sentrix HR",
+        "bodyView": "schedule"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/schedules/hq-upload",
+      "routePath": "/schedules/hq-upload",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/schedules-hq-upload.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:46.897Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "리스트"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "달력"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-schedule"
+        ],
+        "hash": "#/schedules/list",
+        "title": "Sentrix HR",
+        "bodyView": "schedule"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/reports",
+      "routePath": "/reports",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/reports.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:49.861Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "제출"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "다운로드"
+            }
+          ]
+        },
+        "filters": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-reports"
+        ],
+        "hash": "#/reports",
+        "title": "Sentrix HR",
+        "bodyView": "reports"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/reports/finance-download",
+      "routePath": "/reports/finance-download",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/reports-finance-download.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:51.328Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "제출"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "다운로드"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-reports"
+        ],
+        "hash": "#/reports/finance-download",
+        "title": "Sentrix HR",
+        "bodyView": "reports"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/branch/employees",
+      "routePath": "/branch/employees",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/branch-employees.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:52.719Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 4,
+          "samples": [
+            {
+              "selector": ".ui-filterbar",
+              "tag": "div",
+              "id": "employeeToolbar",
+              "className": "employee-toolbar employee-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 현장 전체(활성)서울 센터 역할 전체 역할HQ Admin 재직 상태 전체 재직 상태 재직중 비활성 퇴직 삭제됨 직원 등록 대량 등록 비활성 포함 삭제 포함"
+            },
+            {
+              "selector": ".command-bar",
+              "tag": "div",
+              "id": "employeeTopActionBar",
+              "className": "employee-top-action-bar employee-console-topbar command-bar",
+              "text": "직원 디렉터리 직원을 선택하면 오른쪽 상세 패널에서 계정, 출퇴근, 스케줄을 이어서 확인합니다. 선택 현장 전체 삭제"
+            },
+            {
+              "selector": ".command-bar",
+              "tag": "div",
+              "id": "employeeToolbar",
+              "className": "employee-toolbar employee-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 현장 전체(활성)서울 센터 역할 전체 역할HQ Admin 재직 상태 전체 재직 상태 재직중 비활성 퇴직 삭제됨 직원 등록 대량 등록 비활성 포함 삭제 포함"
+            },
+            {
+              "selector": ".employee-toolbar",
+              "tag": "div",
+              "id": "employeeToolbar",
+              "className": "employee-toolbar employee-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 현장 전체(활성)서울 센터 역할 전체 역할HQ Admin 재직 상태 전체 재직 상태 재직중 비활성 퇴직 삭제됨 직원 등록 대량 등록 비활성 포함 삭제 포함"
+            }
+          ]
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-employees"
+        ],
+        "hash": "#/branch/employees",
+        "title": "Sentrix HR",
+        "bodyView": "employees"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/branch/sites",
+      "routePath": "/branch/sites",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/branch-sites.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:55.070Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 3,
+          "samples": [
+            {
+              "selector": ".ui-filterbar",
+              "tag": "div",
+              "id": "siteFilterGrid",
+              "className": "site-filter-grid site-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 상태 전체(활성) 활성 비활성 비활성 포함 삭제 포함 새로고침 지점 등록"
+            },
+            {
+              "selector": ".command-bar",
+              "tag": "div",
+              "id": "siteFilterGrid",
+              "className": "site-filter-grid site-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 상태 전체(활성) 활성 비활성 비활성 포함 삭제 포함 새로고침 지점 등록"
+            },
+            {
+              "selector": ".site-filter-grid",
+              "tag": "div",
+              "id": "siteFilterGrid",
+              "className": "site-filter-grid site-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 상태 전체(활성) 활성 비활성 비활성 포함 삭제 포함 새로고침 지점 등록"
+            }
+          ]
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-org"
+        ],
+        "hash": "#/branch/sites",
+        "title": "Sentrix HR",
+        "bodyView": "org"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/hr?segment=apply",
+      "routePath": "/hr",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/hr-segment-apply.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:56.461Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 5,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "요청"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "HR 문서"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "문서 발급"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "내 문서"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab shell-manager-only",
+              "text": "승인 절차"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-hr"
+        ],
+        "hash": "#/hr?segment=apply",
+        "title": "Sentrix HR",
+        "bodyView": "hr"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/hr?segment=manage",
+      "routePath": "/hr",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/hr-segment-manage.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:57.870Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 5,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "요청"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "HR 문서"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "문서 발급"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "내 문서"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab shell-manager-only active",
+              "text": "승인 절차"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".hr-approval-saved-stage-stack",
+              "tag": "div",
+              "id": "",
+              "className": "hr-approval-saved-stage-stack is-placeholder",
+              "text": "현재 승인 단계 재직증명서 승인 절차가 아직 없습니다. 생성 버튼을 눌러 직원을 바로 단계에 배치하세요. 승인절차 생성하기"
+            },
+            {
+              "selector": "[id*='ApprovalProcedure']",
+              "tag": "div",
+              "id": "hrApprovalProcedureEditor",
+              "className": "hr-approval-procedure-editor",
+              "text": "현재 승인 단계 재직증명서 승인 절차가 아직 없습니다. 생성 버튼을 눌러 직원을 바로 단계에 배치하세요. 승인절차 생성하기"
+            }
+          ]
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-hr"
+        ],
+        "hash": "#/hr?segment=manage",
+        "title": "Sentrix HR",
+        "bodyView": "hr"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/ops/support-workers",
+      "routePath": "/ops/support-workers",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/ops-support-workers.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:30:59.394Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 5,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "지원근무 현황"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "HQ 엑셀 워크스페이스"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "전체"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "주간"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "야간"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-support-status"
+        ],
+        "hash": "#/ops/support-workers",
+        "title": "Sentrix HR",
+        "bodyView": "support-status"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/profile",
+      "routePath": "/profile",
+      "viewport": "375",
+      "width": 375,
+      "height": 812,
+      "screenshotPath": "375/profile.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:01.584Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 7,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "기본 설정"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "작업 로그"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "모드 변경"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "개인"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "운영"
+            }
+          ]
+        },
+        "filters": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "innerWidth": 375
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-profile"
+        ],
+        "hash": "#/profile",
+        "title": "Sentrix HR",
+        "bodyView": "profile"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/home",
+      "routePath": "/home",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/home.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:03.012Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 10,
+          "samples": [
+            {
+              "selector": "[class*='metric']",
+              "tag": "div",
+              "id": "",
+              "className": "home-metric-tiles home-metric-tiles-compact",
+              "text": "오늘 조정 필요 0건 운영 0곳 운영 지점 0곳 오늘 기준 결원 지점 0곳 정상 승인 대기 0건 휴가·출퇴근 요청"
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "article",
+              "id": "",
+              "className": "home-metric-tile home-metric-tile-neutral has-home-metric-icon",
+              "text": "오늘 조정 필요 0건 운영 0곳"
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "div",
+              "id": "",
+              "className": "home-metric-tile-head",
+              "text": "오늘 조정 필요"
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "i",
+              "id": "",
+              "className": "home-metric-icon is-neutral",
+              "text": ""
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "article",
+              "id": "",
+              "className": "home-metric-tile home-metric-tile-neutral has-home-metric-icon",
+              "text": "운영 지점 0곳 오늘 기준"
+            }
+          ]
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-home"
+        ],
+        "hash": "#/home",
+        "title": "Sentrix HR",
+        "bodyView": "home"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/attendance",
+      "routePath": "/attendance",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/attendance.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:04.443Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-attendance"
+        ],
+        "hash": "#/attendance",
+        "title": "Sentrix HR",
+        "bodyView": "attendance"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/attendance?section=period&mode=list",
+      "routePath": "/attendance",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/attendance-section-period-mode-list.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:07.394Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-attendance"
+        ],
+        "hash": "#/attendance?section=period&mode=list",
+        "title": "Sentrix HR",
+        "bodyView": "attendance"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/attendance?section=stats&scope=attendance",
+      "routePath": "/attendance",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/attendance-section-stats-scope-attendance.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:08.795Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "present",
+          "visibleCount": 1,
+          "samples": [
+            {
+              "selector": "[class*='detail-panel']",
+              "tag": "section",
+              "id": "",
+              "className": "attendance-stats-detail-panel attendance-stats-side-card attendance-stats-side-card-table",
+              "text": "세부 지표 비율4.13(월)4.14(화)4.15(수)4.16(목)4.17(금)4.18(토)4.19(일) 출근율0.0%0.0%0.0%0.0%0.0%0.0%0.0%"
+            }
+          ]
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-attendance"
+        ],
+        "hash": "#/attendance?section=stats&scope=attendance",
+        "title": "Sentrix HR",
+        "bodyView": "attendance"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/requests",
+      "routePath": "/requests",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/requests.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:10.193Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 4,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "요청"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "HR 문서"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "출퇴근 예외"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "문서"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-requests"
+        ],
+        "hash": "#/requests",
+        "title": "Sentrix HR",
+        "bodyView": "requests"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/requests?section=documents",
+      "routePath": "/requests",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/requests-section-documents.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:13.176Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 10,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "요청"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "HR 문서"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "출퇴근 예외"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "문서"
+            },
+            {
+              "selector": ".approval-tabs .approval-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary approval-tab active",
+              "text": "승인 대기"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-requests"
+        ],
+        "hash": "#/requests?section=documents",
+        "title": "Sentrix HR",
+        "bodyView": "requests"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/leave?tab=status",
+      "routePath": "/leave",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/leave-tab-status.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:14.549Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-leave"
+        ],
+        "hash": "#/leave?tab=status",
+        "title": "Sentrix HR",
+        "bodyView": "leave"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/leave?tab=history",
+      "routePath": "/leave",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/leave-tab-history.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:15.944Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-leave"
+        ],
+        "hash": "#/leave?tab=history",
+        "title": "Sentrix HR",
+        "bodyView": "leave"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/leave?tab=settings",
+      "routePath": "/leave",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/leave-tab-settings.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:17.581Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-leave"
+        ],
+        "hash": "#/leave?tab=settings",
+        "title": "Sentrix HR",
+        "bodyView": "leave"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/schedules/calendar",
+      "routePath": "/schedules/calendar",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/schedules-calendar.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:19.036Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "리스트"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "달력"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-schedule"
+        ],
+        "hash": "#/schedules/list",
+        "title": "Sentrix HR",
+        "bodyView": "schedule"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/schedules/upload",
+      "routePath": "/schedules/upload",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/schedules-upload.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:20.449Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "리스트"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "달력"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-schedule"
+        ],
+        "hash": "#/schedules/list",
+        "title": "Sentrix HR",
+        "bodyView": "schedule"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/schedules/hq-upload",
+      "routePath": "/schedules/hq-upload",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/schedules-hq-upload.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:21.926Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "리스트"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "달력"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-schedule"
+        ],
+        "hash": "#/schedules/list",
+        "title": "Sentrix HR",
+        "bodyView": "schedule"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/reports",
+      "routePath": "/reports",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/reports.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:24.777Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "제출"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "다운로드"
+            }
+          ]
+        },
+        "filters": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-reports"
+        ],
+        "hash": "#/reports",
+        "title": "Sentrix HR",
+        "bodyView": "reports"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/reports/finance-download",
+      "routePath": "/reports/finance-download",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/reports-finance-download.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:26.149Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "제출"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "다운로드"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-reports"
+        ],
+        "hash": "#/reports/finance-download",
+        "title": "Sentrix HR",
+        "bodyView": "reports"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/branch/employees",
+      "routePath": "/branch/employees",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/branch-employees.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:27.529Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 4,
+          "samples": [
+            {
+              "selector": ".ui-filterbar",
+              "tag": "div",
+              "id": "employeeToolbar",
+              "className": "employee-toolbar employee-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 현장 전체(활성)서울 센터 역할 전체 역할HQ Admin 재직 상태 전체 재직 상태 재직중 비활성 퇴직 삭제됨 직원 등록 대량 등록 비활성 포함 삭제 포함"
+            },
+            {
+              "selector": ".command-bar",
+              "tag": "div",
+              "id": "employeeTopActionBar",
+              "className": "employee-top-action-bar employee-console-topbar command-bar",
+              "text": "직원 디렉터리 직원을 선택하면 오른쪽 상세 패널에서 계정, 출퇴근, 스케줄을 이어서 확인합니다. 선택 현장 전체 삭제"
+            },
+            {
+              "selector": ".command-bar",
+              "tag": "div",
+              "id": "employeeToolbar",
+              "className": "employee-toolbar employee-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 현장 전체(활성)서울 센터 역할 전체 역할HQ Admin 재직 상태 전체 재직 상태 재직중 비활성 퇴직 삭제됨 직원 등록 대량 등록 비활성 포함 삭제 포함"
+            },
+            {
+              "selector": ".employee-toolbar",
+              "tag": "div",
+              "id": "employeeToolbar",
+              "className": "employee-toolbar employee-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 현장 전체(활성)서울 센터 역할 전체 역할HQ Admin 재직 상태 전체 재직 상태 재직중 비활성 퇴직 삭제됨 직원 등록 대량 등록 비활성 포함 삭제 포함"
+            }
+          ]
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-employees"
+        ],
+        "hash": "#/branch/employees",
+        "title": "Sentrix HR",
+        "bodyView": "employees"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/branch/sites",
+      "routePath": "/branch/sites",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/branch-sites.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:29.120Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 3,
+          "samples": [
+            {
+              "selector": ".ui-filterbar",
+              "tag": "div",
+              "id": "siteFilterGrid",
+              "className": "site-filter-grid site-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 상태 전체(활성) 활성 비활성 비활성 포함 삭제 포함 새로고침 지점 등록"
+            },
+            {
+              "selector": ".command-bar",
+              "tag": "div",
+              "id": "siteFilterGrid",
+              "className": "site-filter-grid site-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 상태 전체(활성) 활성 비활성 비활성 포함 삭제 포함 새로고침 지점 등록"
+            },
+            {
+              "selector": ".site-filter-grid",
+              "tag": "div",
+              "id": "siteFilterGrid",
+              "className": "site-filter-grid site-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 상태 전체(활성) 활성 비활성 비활성 포함 삭제 포함 새로고침 지점 등록"
+            }
+          ]
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-org"
+        ],
+        "hash": "#/branch/sites",
+        "title": "Sentrix HR",
+        "bodyView": "org"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/hr?segment=apply",
+      "routePath": "/hr",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/hr-segment-apply.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:30.643Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 5,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "요청"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "HR 문서"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "문서 발급"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "내 문서"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab shell-manager-only",
+              "text": "승인 절차"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-hr"
+        ],
+        "hash": "#/hr?segment=apply",
+        "title": "Sentrix HR",
+        "bodyView": "hr"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/hr?segment=manage",
+      "routePath": "/hr",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/hr-segment-manage.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:32.103Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 5,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "요청"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "HR 문서"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "문서 발급"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "내 문서"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab shell-manager-only active",
+              "text": "승인 절차"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".hr-approval-saved-stage-stack",
+              "tag": "div",
+              "id": "",
+              "className": "hr-approval-saved-stage-stack is-placeholder",
+              "text": "현재 승인 단계 재직증명서 승인 절차가 아직 없습니다. 생성 버튼을 눌러 직원을 바로 단계에 배치하세요. 승인절차 생성하기"
+            },
+            {
+              "selector": "[id*='ApprovalProcedure']",
+              "tag": "div",
+              "id": "hrApprovalProcedureEditor",
+              "className": "hr-approval-procedure-editor",
+              "text": "현재 승인 단계 재직증명서 승인 절차가 아직 없습니다. 생성 버튼을 눌러 직원을 바로 단계에 배치하세요. 승인절차 생성하기"
+            }
+          ]
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-hr"
+        ],
+        "hash": "#/hr?segment=manage",
+        "title": "Sentrix HR",
+        "bodyView": "hr"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/ops/support-workers",
+      "routePath": "/ops/support-workers",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/ops-support-workers.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:33.503Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 5,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "지원근무 현황"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "HQ 엑셀 워크스페이스"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "전체"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "주간"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "야간"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-support-status"
+        ],
+        "hash": "#/ops/support-workers",
+        "title": "Sentrix HR",
+        "bodyView": "support-status"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/profile",
+      "routePath": "/profile",
+      "viewport": "768",
+      "width": 768,
+      "height": 1024,
+      "screenshotPath": "768/profile.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:36.401Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 7,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "기본 설정"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "작업 로그"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "모드 변경"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "개인"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "운영"
+            }
+          ]
+        },
+        "filters": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-profile"
+        ],
+        "hash": "#/profile",
+        "title": "Sentrix HR",
+        "bodyView": "profile"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/home",
+      "routePath": "/home",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/home.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:37.803Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 10,
+          "samples": [
+            {
+              "selector": "[class*='metric']",
+              "tag": "div",
+              "id": "",
+              "className": "home-metric-tiles home-metric-tiles-compact",
+              "text": "오늘 조정 필요 0건 운영 0곳 운영 지점 0곳 오늘 기준 결원 지점 0곳 정상 승인 대기 0건 휴가·출퇴근 요청"
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "article",
+              "id": "",
+              "className": "home-metric-tile home-metric-tile-neutral has-home-metric-icon",
+              "text": "오늘 조정 필요 0건 운영 0곳"
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "div",
+              "id": "",
+              "className": "home-metric-tile-head",
+              "text": "오늘 조정 필요"
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "i",
+              "id": "",
+              "className": "home-metric-icon is-neutral",
+              "text": ""
+            },
+            {
+              "selector": "[class*='metric']",
+              "tag": "article",
+              "id": "",
+              "className": "home-metric-tile home-metric-tile-neutral has-home-metric-icon",
+              "text": "운영 지점 0곳 오늘 기준"
+            }
+          ]
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-home"
+        ],
+        "hash": "#/home",
+        "title": "Sentrix HR",
+        "bodyView": "home"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/attendance",
+      "routePath": "/attendance",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/attendance.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:39.242Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 1,
+          "samples": [
+            {
+              "selector": ".attendance-ops-toolbar",
+              "tag": "section",
+              "id": "attendanceOpsToolbar",
+              "className": "attendance-ops-toolbar",
+              "text": "날짜 < > 리스트 캘린더 2026.04.13 (월) 기준 월 < > 2026.04.13 (월) ~ 2026.04.19 (일) 직원 근무지 상태 전체 정상 지각 조퇴 미출근 미퇴근 휴가 정정대기 전체 현장SEOUL0"
+            }
+          ]
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-attendance"
+        ],
+        "hash": "#/attendance",
+        "title": "Sentrix HR",
+        "bodyView": "attendance"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/attendance?section=period&mode=list",
+      "routePath": "/attendance",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/attendance-section-period-mode-list.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:42.283Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 1,
+          "samples": [
+            {
+              "selector": ".attendance-ops-toolbar",
+              "tag": "section",
+              "id": "attendanceOpsToolbar",
+              "className": "attendance-ops-toolbar",
+              "text": "날짜 < > 리스트 캘린더 2026.04.13 (월) 기준 월 < > 2026.04.13 (월) ~ 2026.04.19 (일) 직원 근무지 상태 전체 정상 지각 조퇴 미출근 미퇴근 휴가 정정대기 전체 현장SEOUL0"
+            }
+          ]
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-attendance"
+        ],
+        "hash": "#/attendance?section=period&mode=list",
+        "title": "Sentrix HR",
+        "bodyView": "attendance"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/attendance?section=stats&scope=attendance",
+      "routePath": "/attendance",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/attendance-section-stats-scope-attendance.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:43.760Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 1,
+          "samples": [
+            {
+              "selector": ".attendance-ops-toolbar",
+              "tag": "section",
+              "id": "attendanceOpsToolbar",
+              "className": "attendance-ops-toolbar",
+              "text": "날짜 < > 리스트 캘린더 2026.04.13 (월) 기준 월 < > 2026.04.13 (월) ~ 2026.04.19 (일) 직원 근무지 상태 전체 정상 지각 조퇴 미출근 미퇴근 휴가 정정대기 전체 현장SEOUL0"
+            }
+          ]
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "present",
+          "visibleCount": 1,
+          "samples": [
+            {
+              "selector": "[class*='detail-panel']",
+              "tag": "section",
+              "id": "",
+              "className": "attendance-stats-detail-panel attendance-stats-side-card attendance-stats-side-card-table",
+              "text": "세부 지표 비율4.13(월)4.14(화)4.15(수)4.16(목)4.17(금)4.18(토)4.19(일) 출근율0.0%0.0%0.0%0.0%0.0%0.0%0.0%"
+            }
+          ]
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-attendance"
+        ],
+        "hash": "#/attendance?section=stats&scope=attendance",
+        "title": "Sentrix HR",
+        "bodyView": "attendance"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/requests",
+      "routePath": "/requests",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/requests.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:45.132Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "출퇴근 예외"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "문서"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-requests"
+        ],
+        "hash": "#/requests",
+        "title": "Sentrix HR",
+        "bodyView": "requests"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/requests?section=documents",
+      "routePath": "/requests",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/requests-section-documents.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:48.034Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 8,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "출퇴근 예외"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "문서"
+            },
+            {
+              "selector": ".approval-tabs .approval-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary approval-tab active",
+              "text": "승인 대기"
+            },
+            {
+              "selector": ".approval-tabs .approval-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary approval-tab",
+              "text": "진행중"
+            },
+            {
+              "selector": ".approval-tabs .approval-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary approval-tab",
+              "text": "처리완료"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-requests"
+        ],
+        "hash": "#/requests?section=documents",
+        "title": "Sentrix HR",
+        "bodyView": "requests"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/leave?tab=status",
+      "routePath": "/leave",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/leave-tab-status.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:49.428Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 4,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "현황"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "사용 이력"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "부여"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "설정"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-leave"
+        ],
+        "hash": "#/leave?tab=status",
+        "title": "Sentrix HR",
+        "bodyView": "leave"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/leave?tab=history",
+      "routePath": "/leave",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/leave-tab-history.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:50.843Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 4,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "현황"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "사용 이력"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "부여"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "설정"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 1,
+          "samples": [
+            {
+              "selector": ".leave-requests-filter-controls",
+              "tag": "div",
+              "id": "",
+              "className": "leave-requests-filter-controls",
+              "text": "내 휴가 팀 휴가 기간 2026.01.01 (목) ~ 2026.12.31 (목) 상태 전체 대기 승인 반려 취소 직원 직원 현장 필터 0"
+            }
+          ]
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-leave"
+        ],
+        "hash": "#/leave?tab=history",
+        "title": "Sentrix HR",
+        "bodyView": "leave"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/leave?tab=settings",
+      "routePath": "/leave",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/leave-tab-settings.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:53.794Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 6,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "현황"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "사용 이력"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "부여"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "설정"
+            },
+            {
+              "selector": ".approval-tabs .approval-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary approval-tab active",
+              "text": "활성"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-leave"
+        ],
+        "hash": "#/leave?tab=settings",
+        "title": "Sentrix HR",
+        "bodyView": "leave"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/schedules/calendar",
+      "routePath": "/schedules/calendar",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/schedules-calendar.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:55.177Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 1,
+          "samples": [
+            {
+              "selector": ".ui-filterbar",
+              "tag": "div",
+              "id": "scheduleCalendarFilterRow",
+              "className": "schedule-calendar-tools ui-filterbar",
+              "text": "전체 지점SEOUL01 · 서울 센터 전체 근무주간근무 휴가 표시"
+            }
+          ]
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-schedule"
+        ],
+        "hash": "#/schedules/calendar",
+        "title": "Sentrix HR",
+        "bodyView": "schedule"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/schedules/upload",
+      "routePath": "/schedules/upload",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/schedules-upload.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:56.585Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 5,
+          "samples": [
+            {
+              "selector": ".schedule-wizard-progress .schedule-wizard-step",
+              "tag": "button",
+              "id": "",
+              "className": "schedule-wizard-step active",
+              "text": "1근무 템플릿"
+            },
+            {
+              "selector": ".schedule-wizard-progress .schedule-wizard-step",
+              "tag": "button",
+              "id": "",
+              "className": "schedule-wizard-step",
+              "text": "2대상 선택"
+            },
+            {
+              "selector": ".schedule-wizard-progress .schedule-wizard-step",
+              "tag": "button",
+              "id": "",
+              "className": "schedule-wizard-step",
+              "text": "3파일 준비"
+            },
+            {
+              "selector": ".schedule-wizard-progress .schedule-wizard-step",
+              "tag": "button",
+              "id": "",
+              "className": "schedule-wizard-step",
+              "text": "4반영 검토"
+            },
+            {
+              "selector": ".schedule-wizard-progress .schedule-wizard-step",
+              "tag": "button",
+              "id": "",
+              "className": "schedule-wizard-step",
+              "text": "5적용 완료"
+            }
+          ]
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "present",
+          "visibleCount": 1,
+          "samples": [
+            {
+              "selector": "[id*='Detail']",
+              "tag": "details",
+              "id": "scheduleImportProfileLibraryDetails",
+              "className": "schedule-mapping-manager-details",
+              "text": "템플릿 라이브러리 근무 템플릿 생성 등록된 프로필이 없습니다. 프로필명 설명 적용 범위 상태 기본 프로필 여부 규칙 수 마지막 수정일 작업 등록된 근무 템플릿이 없습니다. 템플릿 생성으로 스케쥴 업로드 규칙을 먼저 "
+            }
+          ]
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-schedule"
+        ],
+        "hash": "#/schedules/upload",
+        "title": "Sentrix HR",
+        "bodyView": "schedule"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/schedules/hq-upload",
+      "routePath": "/schedules/hq-upload",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/schedules-hq-upload.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:31:59.593Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 4,
+          "samples": [
+            {
+              "selector": ".schedule-wizard-progress .schedule-wizard-step",
+              "tag": "button",
+              "id": "",
+              "className": "schedule-wizard-step active",
+              "text": "1지점 선택 확인"
+            },
+            {
+              "selector": ".schedule-wizard-progress .schedule-wizard-step",
+              "tag": "button",
+              "id": "",
+              "className": "schedule-wizard-step",
+              "text": "2작성본 업로드"
+            },
+            {
+              "selector": ".schedule-wizard-progress .schedule-wizard-step",
+              "tag": "button",
+              "id": "",
+              "className": "schedule-wizard-step",
+              "text": "3미리보기"
+            },
+            {
+              "selector": ".schedule-wizard-progress .schedule-wizard-step",
+              "tag": "button",
+              "id": "",
+              "className": "schedule-wizard-step",
+              "text": "4업로드 완료"
+            }
+          ]
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-schedule"
+        ],
+        "hash": "#/schedules/hq-upload",
+        "title": "Sentrix HR",
+        "bodyView": "schedule"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/reports",
+      "routePath": "/reports",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/reports.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:32:01.062Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "제출"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "다운로드"
+            }
+          ]
+        },
+        "filters": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-reports"
+        ],
+        "hash": "#/reports",
+        "title": "Sentrix HR",
+        "bodyView": "reports"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/reports/finance-download",
+      "routePath": "/reports/finance-download",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/reports-finance-download.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:32:02.449Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "제출"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "다운로드"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-reports"
+        ],
+        "hash": "#/reports/finance-download",
+        "title": "Sentrix HR",
+        "bodyView": "reports"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/branch/employees",
+      "routePath": "/branch/employees",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/branch-employees.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:32:05.419Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 4,
+          "samples": [
+            {
+              "selector": ".ui-filterbar",
+              "tag": "div",
+              "id": "employeeToolbar",
+              "className": "employee-toolbar employee-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 현장 전체(활성)서울 센터 역할 전체 역할HQ Admin 재직 상태 전체 재직 상태 재직중 비활성 퇴직 삭제됨 직원 등록 대량 등록 비활성 포함 삭제 포함"
+            },
+            {
+              "selector": ".command-bar",
+              "tag": "div",
+              "id": "employeeTopActionBar",
+              "className": "employee-top-action-bar employee-console-topbar command-bar",
+              "text": "직원 디렉터리 직원을 선택하면 오른쪽 상세 패널에서 계정, 출퇴근, 스케줄을 이어서 확인합니다. 선택 현장 전체 삭제"
+            },
+            {
+              "selector": ".command-bar",
+              "tag": "div",
+              "id": "employeeToolbar",
+              "className": "employee-toolbar employee-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 현장 전체(활성)서울 센터 역할 전체 역할HQ Admin 재직 상태 전체 재직 상태 재직중 비활성 퇴직 삭제됨 직원 등록 대량 등록 비활성 포함 삭제 포함"
+            },
+            {
+              "selector": ".employee-toolbar",
+              "tag": "div",
+              "id": "employeeToolbar",
+              "className": "employee-toolbar employee-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 현장 전체(활성)서울 센터 역할 전체 역할HQ Admin 재직 상태 전체 재직 상태 재직중 비활성 퇴직 삭제됨 직원 등록 대량 등록 비활성 포함 삭제 포함"
+            }
+          ]
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-employees"
+        ],
+        "hash": "#/branch/employees",
+        "title": "Sentrix HR",
+        "bodyView": "employees"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/branch/sites",
+      "routePath": "/branch/sites",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/branch-sites.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:32:06.835Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 3,
+          "samples": [
+            {
+              "selector": ".ui-filterbar",
+              "tag": "div",
+              "id": "siteFilterGrid",
+              "className": "site-filter-grid site-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 상태 전체(활성) 활성 비활성 비활성 포함 삭제 포함 새로고침 지점 등록"
+            },
+            {
+              "selector": ".command-bar",
+              "tag": "div",
+              "id": "siteFilterGrid",
+              "className": "site-filter-grid site-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 상태 전체(활성) 활성 비활성 비활성 포함 삭제 포함 새로고침 지점 등록"
+            },
+            {
+              "selector": ".site-filter-grid",
+              "tag": "div",
+              "id": "siteFilterGrid",
+              "className": "site-filter-grid site-console-toolbar command-bar ui-filterbar",
+              "text": "검색 회사 SRS Korea 상태 전체(활성) 활성 비활성 비활성 포함 삭제 포함 새로고침 지점 등록"
+            }
+          ]
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-org"
+        ],
+        "hash": "#/branch/sites",
+        "title": "Sentrix HR",
+        "bodyView": "org"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/hr?segment=apply",
+      "routePath": "/hr",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/hr-segment-apply.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:32:08.218Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-hr"
+        ],
+        "hash": "#/hr?segment=apply",
+        "title": "Sentrix HR",
+        "bodyView": "hr"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/hr?segment=manage",
+      "routePath": "/hr",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/hr-segment-manage.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:32:11.234Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 2,
+          "samples": [
+            {
+              "selector": ".hr-approval-saved-stage-stack",
+              "tag": "div",
+              "id": "",
+              "className": "hr-approval-saved-stage-stack is-placeholder",
+              "text": "현재 승인 단계 재직증명서 승인 절차가 아직 없습니다. 생성 버튼을 눌러 직원을 바로 단계에 배치하세요. 승인절차 생성하기"
+            },
+            {
+              "selector": "[id*='ApprovalProcedure']",
+              "tag": "div",
+              "id": "hrApprovalProcedureEditor",
+              "className": "hr-approval-procedure-editor",
+              "text": "현재 승인 단계 재직증명서 승인 절차가 아직 없습니다. 생성 버튼을 눌러 직원을 바로 단계에 배치하세요. 승인절차 생성하기"
+            }
+          ]
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-hr"
+        ],
+        "hash": "#/hr?segment=manage",
+        "title": "Sentrix HR",
+        "bodyView": "hr"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/ops/support-workers",
+      "routePath": "/ops/support-workers",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/ops-support-workers.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:32:12.633Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 5,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "지원근무 현황"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "HQ 엑셀 워크스페이스"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "전체"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "주간"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "야간"
+            }
+          ]
+        },
+        "filters": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": true,
+          "status": "missing",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-support-status"
+        ],
+        "hash": "#/ops/support-workers",
+        "title": "Sentrix HR",
+        "bodyView": "support-status"
+      },
+      "status": "pass",
+      "error": ""
+    },
+    {
+      "route": "/profile",
+      "routePath": "/profile",
+      "viewport": "desktop",
+      "width": 1366,
+      "height": 900,
+      "screenshotPath": "desktop/profile.jpg",
+      "screenshotExists": true,
+      "timestamp": "2026-04-13T09:32:14.035Z",
+      "consoleErrorCount": 0,
+      "failedNetworkRequestCount": 0,
+      "checklist": {
+        "tabs": {
+          "expected": true,
+          "status": "present",
+          "visibleCount": 7,
+          "samples": [
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active workspace-tab-with-icon",
+              "text": "기본 설정"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "작업 로그"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab workspace-tab-with-icon",
+              "text": "모드 변경"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab active",
+              "text": "개인"
+            },
+            {
+              "selector": ".workspace-tabs .workspace-tab",
+              "tag": "button",
+              "id": "",
+              "className": "btn btn-secondary workspace-tab",
+              "text": "운영"
+            }
+          ]
+        },
+        "filters": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "steppers": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "kpi": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "detailPanels": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        },
+        "approvalFlow": {
+          "expected": false,
+          "status": "not-applicable",
+          "visibleCount": 0,
+          "samples": []
+        }
+      },
+      "pageProblems": {
+        "alerts": [],
+        "horizontalOverflow": false,
+        "scrollWidth": 1366,
+        "innerWidth": 1366
+      },
+      "visiblePanel": {
+        "found": true,
+        "visiblePanels": [
+          "view-profile"
+        ],
+        "hash": "#/profile",
+        "title": "Sentrix HR",
+        "bodyView": "profile"
+      },
+      "status": "pass",
+      "error": ""
+    }
+  ]
+}

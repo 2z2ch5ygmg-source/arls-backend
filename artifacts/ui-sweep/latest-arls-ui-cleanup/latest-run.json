@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-04-13T09:17:35.516Z",
-  "artifactRoot": "artifacts/ui-sweep/20260413-1816-arls-ui-cleanup",
+  "generatedAt": "2026-04-13T09:32:15.423Z",
+  "artifactRoot": "artifacts/ui-sweep/20260413-1830-arls-ui-cleanup",
   "ok": true,
   "expectedPairCount": 60,
   "capturedPairCount": 60,
