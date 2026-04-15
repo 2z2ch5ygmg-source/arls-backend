@@ -58124,6 +58124,273 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   }
 }
 
+/* 2026-04-15 Phase 3 queue/detail and leave list-first pass */
+@media (min-width: 980px) {
+  #view-requests:not(.hidden) {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 420px) !important;
+    gap: 14px 20px !important;
+    align-items: start !important;
+  }
+
+  #view-requests > .workspace-head,
+  #view-requests > #workMobileSegmentsRequests,
+  #view-requests > .workspace-tabbar-row,
+  #view-requests > #requestsFilterBar,
+  #view-requests > #requestsKpiStrip {
+    grid-column: 1 / -1 !important;
+  }
+
+  #view-requests > #requestsWorkspaceShell {
+    grid-column: 1 !important;
+    min-width: 0 !important;
+  }
+
+  #view-requests > #requestsUnifiedDetailPanel.requests-detail-drawer {
+    grid-column: 2 !important;
+    grid-row: 5 / span 2 !important;
+    position: sticky !important;
+    top: 96px !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    max-height: calc(100vh - 120px) !important;
+    margin: 0 !important;
+    padding: 0 0 0 18px !important;
+    border: 0 !important;
+    border-left: 1px solid rgba(203, 213, 225, 0.86) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+    z-index: 1 !important;
+    overflow: auto !important;
+  }
+
+  #view-requests > #requestsUnifiedDetailBackdrop {
+    display: none !important;
+  }
+
+  #view-leave > #leaveWorkspaceDetailPanel.requests-detail-drawer.is-open {
+    position: sticky !important;
+    top: 96px !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: auto !important;
+    max-height: calc(100vh - 120px) !important;
+    margin: 18px 0 0 !important;
+    padding: 18px 0 0 !important;
+    border: 0 !important;
+    border-top: 1px solid rgba(203, 213, 225, 0.86) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+    z-index: 1 !important;
+    overflow: auto !important;
+  }
+
+  #view-leave > #leaveWorkspaceDetailBackdrop {
+    display: none !important;
+  }
+}
+
+#view-requests.hidden,
+#view-leave.hidden {
+  display: none !important;
+}
+
+#view-requests.hidden #requestsUnifiedDetailPanel,
+#view-requests.hidden #requestsUnifiedDetailBackdrop,
+#view-leave.hidden #leaveWorkspaceDetailPanel,
+#view-leave.hidden #leaveWorkspaceDetailBackdrop {
+  display: none !important;
+}
+
+#view-requests #requestsFilterBar,
+#view-requests #requestsPriorityQueueCard,
+#view-requests #requestsMainListCard,
+#view-leave #leaveRequestsToolbar,
+#view-leave #leaveWorkspaceRequestsCard,
+#view-leave #leaveUsageGridCard,
+#view-leave #leavePolicySection,
+#view-leave #leaveGrantsSection > .module-card,
+#view-leave #leaveHistoryChartCard {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-requests #requestsFilterBar,
+#view-leave #leaveRequestsToolbar {
+  padding-bottom: 14px !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.86) !important;
+}
+
+#view-requests .requests-kpi-strip {
+  gap: 0 !important;
+  padding: 0 0 12px !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.86) !important;
+}
+
+#view-requests .requests-kpi-item {
+  min-height: 30px !important;
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-left: 1px solid rgba(203, 213, 225, 0.86) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-requests .requests-kpi-item:first-child {
+  padding-left: 0 !important;
+  border-left: 0 !important;
+}
+
+#view-requests #requestsPriorityQueueCard,
+#view-requests #requestsMainListCard,
+#view-leave #leaveWorkspaceRequestsCard,
+#view-leave #leaveUsageGridCard,
+#view-leave #leavePolicySection,
+#view-leave #leaveGrantsSection > .module-card {
+  padding-top: 18px !important;
+  border-top: 1px solid rgba(203, 213, 225, 0.86) !important;
+}
+
+#view-requests #requestsPriorityQueueCard .approval-head,
+#view-requests #requestsMainListCard .requests-list-head,
+#view-leave #leaveWorkspaceRequestsCard .requests-list-head,
+#view-leave #leaveUsageGridCard .requests-list-head,
+#view-leave .leave-grants-head {
+  padding-bottom: 10px !important;
+  border-bottom: 0 !important;
+}
+
+#view-requests .requests-heading-block p,
+#view-leave .requests-heading-block p,
+#view-leave #leaveViewDescription {
+  display: none !important;
+}
+
+#view-requests .requests-priority-help {
+  display: none !important;
+}
+
+#view-requests .requests-workspace-row,
+#view-requests .requests-priority-row,
+#view-leave #leaveWorkspaceRequestsCard .leave-grid-row,
+#view-leave #leaveUsageList .leave-usage-row,
+#view-leave #leavePolicyList .leave-policy-row,
+#view-leave #leaveGrantsList .leave-grants-row {
+  border-radius: 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.96) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-requests .requests-workspace-row:hover,
+#view-requests .requests-priority-row:hover,
+#view-leave #leaveWorkspaceRequestsCard .leave-grid-row:hover,
+#view-leave #leaveUsageList .leave-usage-row:hover,
+#view-leave #leavePolicyList .leave-policy-row:hover,
+#view-leave #leaveGrantsList .leave-grants-row:hover {
+  background: rgba(248, 250, 252, 0.92) !important;
+}
+
+#view-requests .requests-workspace-row.is-selected,
+#view-requests .requests-priority-row.is-selected,
+#view-leave #leaveWorkspaceRequestsCard .leave-grid-row.is-selected,
+#view-leave #leaveUsageList .leave-usage-row.is-selected,
+#view-leave #leavePolicyList .leave-policy-row.is-selected,
+#view-leave #leaveGrantsList .leave-grants-row.is-selected {
+  background: rgba(219, 234, 254, 0.62) !important;
+}
+
+#view-requests #requestsUnifiedDetailPanel .requests-detail-head,
+#view-leave #leaveWorkspaceDetailPanel .requests-detail-head {
+  padding-bottom: 12px !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.86) !important;
+}
+
+#view-requests #requestsUnifiedDetailPanel .requests-detail-field,
+#view-leave #leaveWorkspaceDetailPanel .requests-detail-field {
+  border-bottom: 1px solid rgba(226, 232, 240, 0.96) !important;
+}
+
+#view-leave #leaveRequestsSection:not(.hidden),
+#view-leave #leaveUsageSection:not(.hidden),
+#view-leave #leaveGrantsSection:not(.hidden) {
+  display: grid !important;
+  gap: 0 !important;
+}
+
+#view-leave #leaveRequestsToolbar {
+  order: 0;
+}
+
+#view-leave #leaveWorkspaceRequestsCard {
+  order: 1;
+}
+
+#view-leave #leaveHistoryChartCard {
+  order: 2;
+  margin-top: 18px !important;
+  padding-top: 18px !important;
+  border-top: 1px solid rgba(203, 213, 225, 0.86) !important;
+}
+
+#view-leave .leave-history-chart-head {
+  padding-bottom: 8px !important;
+}
+
+#view-leave .leave-history-chart {
+  min-height: 92px !important;
+}
+
+#view-leave .leave-usage-summary-strip {
+  order: 0;
+  gap: 0 !important;
+  padding: 0 0 12px !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.86) !important;
+}
+
+#view-leave .leave-usage-summary-item {
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-left: 1px solid rgba(203, 213, 225, 0.86) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-leave .leave-usage-summary-item:first-child {
+  padding-left: 0 !important;
+  border-left: 0 !important;
+}
+
+@media (max-width: 979px) {
+  #view-requests #requestsFilterBar,
+  #view-requests #requestsPriorityQueueCard,
+  #view-requests #requestsMainListCard,
+  #view-leave #leaveRequestsToolbar,
+  #view-leave #leaveWorkspaceRequestsCard,
+  #view-leave #leaveUsageGridCard,
+  #view-leave #leavePolicySection,
+  #view-leave #leaveGrantsSection > .module-card,
+  #view-leave #leaveHistoryChartCard {
+    padding: 14px !important;
+    border: 1px solid rgba(226, 232, 240, 0.96) !important;
+    border-radius: 8px !important;
+    background: #fff !important;
+  }
+}
+
 /* 2026-04-15 Phase 2 attendance daily/period list-first pass */
 #view-attendance[data-attendance-section="daily"]
   #attendanceManagerWorkspace.is-attendance-v2-status,
