@@ -61767,3 +61767,305 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 #view-reports #financeDownloadPageButtons {
   justify-content: center !important;
 }
+
+/* 2026-04-16 phase 5: home command workspace */
+#view-home .home-role-root-hq-command {
+  gap: 14px;
+}
+
+#view-home .home-command-plane {
+  display: grid;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid rgba(226, 232, 240, 0.96);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+#view-home .home-command-plane-secondary {
+  padding-block: 16px;
+}
+
+#view-home .home-command-head,
+#view-home .home-command-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+#view-home .home-command-head h3,
+#view-home .home-command-section-head h4 {
+  margin: 0;
+  color: var(--ui-text-primary);
+  letter-spacing: 0;
+}
+
+#view-home .home-command-head h3 {
+  font-size: 22px;
+  line-height: 1.18;
+}
+
+#view-home .home-command-section-head h4 {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+#view-home .home-command-head-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#view-home .home-command-metrics {
+  display: grid;
+  grid-template: auto / repeat(4, minmax(0, 1fr));
+  padding-block: 10px;
+  border-block-start: 1px solid rgba(226, 232, 240, 0.96);
+  border-block-end: 1px solid rgba(226, 232, 240, 0.96);
+}
+
+#view-home .home-command-metric {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding-inline: 16px;
+  border-inline-start: 1px solid rgba(226, 232, 240, 0.96);
+}
+
+#view-home .home-command-metric:first-child {
+  padding-inline-start: 0;
+  border-inline-start: 0;
+}
+
+#view-home .home-command-metric span,
+#view-home .home-command-metric small,
+#view-home .home-command-action span,
+#view-home .home-command-action small {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+#view-home .home-command-metric strong,
+#view-home .home-command-action strong {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 20px;
+  line-height: 1.08;
+  font-weight: 800;
+  letter-spacing: 0;
+  word-break: keep-all;
+}
+
+#view-home .home-command-metric.is-warn strong,
+#view-home .home-command-action.is-warn strong {
+  color: #b45309;
+}
+
+#view-home .home-command-metric.is-teal strong {
+  color: #0f766e;
+}
+
+#view-home .home-command-body,
+#view-home .home-command-support {
+  display: grid;
+  grid-template: auto / minmax(0, 1.1fr) minmax(300px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+}
+
+#view-home .home-command-main,
+#view-home .home-command-side,
+#view-home .home-command-support > section {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+#view-home .home-command-side {
+  padding-inline-start: 18px;
+  border-inline-start: 1px solid rgba(226, 232, 240, 0.96);
+}
+
+#view-home .home-command-list .home-role-list,
+#view-home .home-command-support .home-role-list {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+#view-home .home-command-list .home-role-list-row,
+#view-home .home-command-support .home-role-list-row {
+  align-items: center;
+  min-height: 52px;
+  padding: 10px 0;
+  border: 0;
+  box-shadow: inset 0 -1px 0 rgba(226, 232, 240, 0.96);
+}
+
+#view-home .home-command-list .home-role-list-row:last-child,
+#view-home .home-command-support .home-role-list-row:last-child {
+  box-shadow: none;
+}
+
+#view-home .home-command-list .home-role-list-copy strong,
+#view-home .home-command-support .home-role-list-copy strong {
+  font-size: 14px;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+#view-home .home-command-list .home-role-list-copy span,
+#view-home .home-command-support .home-role-list-copy span {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+#view-home .home-command-action-list {
+  display: grid;
+  gap: 0;
+}
+
+#view-home .home-command-action {
+  width: 100%;
+  min-width: 0;
+  min-height: 58px;
+  display: grid;
+  grid-template: auto auto / minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: center;
+  padding: 10px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: inset 0 -1px 0 rgba(226, 232, 240, 0.96);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+#view-home .home-command-action:hover,
+#view-home .home-command-action:focus-visible {
+  background: rgba(248, 250, 252, 0.92);
+  outline: 2px solid rgba(37, 99, 235, 0.18);
+  outline-offset: 2px;
+}
+
+#view-home .home-command-action strong {
+  justify-self: end;
+  text-align: end;
+}
+
+#view-home .home-command-action small {
+  grid-column: 1 / -1;
+  font-weight: 600;
+}
+
+#view-home .home-command-text-action {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+#view-home .home-command-text-action:hover,
+#view-home .home-command-text-action:focus-visible {
+  color: #0f172a;
+  text-decoration-color: currentColor;
+}
+
+#view-home .home-command-plane .home-role-empty,
+#view-home .home-command-plane .home-empty-state {
+  min-height: 76px;
+  padding: 8px 0;
+  justify-items: start;
+  text-align: start;
+}
+
+@media (max-width: 1180px) {
+  #view-home .home-command-body,
+  #view-home .home-command-support {
+    grid-template: auto / minmax(0, 1fr);
+  }
+
+  #view-home .home-command-side {
+    padding-inline-start: 0;
+    border-inline-start: 0;
+    border-block-start: 1px solid rgba(226, 232, 240, 0.96);
+    padding-block-start: 14px;
+  }
+}
+
+@media (max-width: 760px) {
+  #view-home .home-workspace-head {
+    margin-block-end: 0;
+  }
+
+  #view-home .home-command-plane {
+    gap: 14px;
+    padding: 16px;
+  }
+
+  #view-home .home-command-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  #view-home .home-command-head-actions {
+    width: 100%;
+  }
+
+  #view-home .home-command-head-actions .btn {
+    flex: 1 1 0;
+  }
+
+  #view-home .home-command-metrics {
+    display: flex;
+    gap: 8px;
+    overflow: auto hidden;
+    padding-block: 0;
+    border-block-start: 0;
+    border-block-end: 0;
+  }
+
+  #view-home .home-command-metric {
+    flex: 0 0 128px;
+    padding: 10px 12px;
+    border: 1px solid rgba(226, 232, 240, 0.96);
+    border-radius: 8px;
+  }
+
+  #view-home .home-command-metric:first-child {
+    padding-inline-start: 12px;
+    border-inline-start: 1px solid rgba(226, 232, 240, 0.96);
+  }
+
+  #view-home .home-command-metric strong,
+  #view-home .home-command-action strong {
+    font-size: 18px;
+  }
+
+#view-home .home-command-action {
+    min-height: 54px;
+  }
+}
+
+#view-hr.hidden[data-hr-layout="apply"],
+#view-hr.hidden[data-hr-layout="my-docs"] {
+  display: none !important;
+}
