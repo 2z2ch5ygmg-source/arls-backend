@@ -19,6 +19,370 @@
   color: var(--soc-text);
 }
 
+/* 2026-04-15 phase 5: notice workspace cleanup */
+#view-notices.panel.card.view {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-notices .sentrix-announcement-workspace {
+  --soc-primary: #ea580c;
+  --soc-primary-deep: #c2410c;
+  --soc-primary-soft-bg: rgba(234, 88, 12, 0.06);
+  --soc-accent: #ea580c;
+}
+
+#view-notices .sentrix-announcement-workspace #announcementPanel {
+  gap: 18px !important;
+}
+
+#view-notices .sentrix-announcement-workspace #announcementPanel .workspace-head {
+  align-items: center !important;
+  gap: 16px !important;
+  padding: 0 0 12px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+}
+
+#view-notices .sentrix-announcement-workspace #announcementPanel .workspace-head-main .muted {
+  display: none !important;
+}
+
+#view-notices .sentrix-announcement-workspace #announcementPanel .workspace-head-actions {
+  justify-content: flex-end !important;
+}
+
+#view-notices .sentrix-announcement-workspace #announcementPanel #noticesCreateBtn {
+  min-height: 40px !important;
+  padding: 0 18px !important;
+  border-radius: 8px !important;
+}
+
+#view-notices .sentrix-announcement-workspace #announcementPanel .notices-toolbar-row,
+#view-notices .sentrix-announcement-workspace #announcementPanel .workspace-tabbar-row {
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 0 10px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+}
+
+#view-notices .sentrix-announcement-workspace #announcementPanel .workspace-tabs,
+#view-notices .sentrix-announcement-workspace #announcementPanel #noticesCategoryTabs {
+  gap: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+#view-notices .sentrix-announcement-workspace #announcementPanel .workspace-tab,
+#view-notices .sentrix-announcement-workspace #announcementPanel #noticesCategoryTabs .workspace-tab {
+  position: relative !important;
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 0 16px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #64748b !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+}
+
+#view-notices .sentrix-announcement-workspace #announcementPanel .workspace-tab::after,
+#view-notices .sentrix-announcement-workspace #announcementPanel #noticesCategoryTabs .workspace-tab::after {
+  position: absolute;
+  right: 12px;
+  bottom: -11px;
+  left: 12px;
+  height: 2px;
+  border-radius: 999px;
+  background: transparent;
+  content: "";
+}
+
+#view-notices .sentrix-announcement-workspace #announcementPanel .workspace-tab.active,
+#view-notices .sentrix-announcement-workspace #announcementPanel #noticesCategoryTabs .workspace-tab.active {
+  color: #ea580c !important;
+}
+
+#view-notices .sentrix-announcement-workspace #announcementPanel .workspace-tab.active::after,
+#view-notices .sentrix-announcement-workspace #announcementPanel #noticesCategoryTabs .workspace-tab.active::after {
+  background: #ea580c !important;
+}
+
+#view-notices .sentrix-announcement-workspace #announcementPanel .notices-list-panel,
+#view-notices .sentrix-announcement-workspace #announcementPanel .notices-detail-panel,
+#view-notices .sentrix-announcement-workspace #announcementPanel .notices-compose-panel {
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-list-button {
+  grid-template-columns: minmax(84px, 0.16fr) minmax(0, 1fr) minmax(92px, 0.12fr) !important;
+  gap: 18px !important;
+  min-height: 58px !important;
+  padding: 14px 0 !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-list-title {
+  font-size: 16px !important;
+  line-height: 23px !important;
+  letter-spacing: 0 !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notice-meta-tag-accent,
+#view-notices .sentrix-announcement-workspace .notices-poll-complete-pill {
+  border-color: rgba(234, 88, 12, 0.2) !important;
+  background: rgba(234, 88, 12, 0.08) !important;
+  color: #ea580c !important;
+}
+
+#view-notices .sentrix-announcement-workspace #announcementPanel .notices-search-form.is-expanded .notices-search-input-wrap {
+  width: min(280px, 30vw) !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-detail-panel > .notices-section-head,
+#view-notices .sentrix-announcement-workspace .notices-detail-panel > .notices-detail-body,
+#view-notices .sentrix-announcement-workspace .notices-compose-settings-panel,
+#view-notices .sentrix-announcement-workspace .notices-compose-document,
+#view-notices .sentrix-announcement-workspace .notices-compose-panel .notices-compose-settings-panel,
+#view-notices .sentrix-announcement-workspace .notices-compose-panel .notices-compose-document {
+  width: 100% !important;
+  margin: 0 !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-detail-panel .notices-section-head {
+  padding: 0 0 12px !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-detail-panel .notices-section-head .muted {
+  display: none !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-detail-prose {
+  padding-top: 16px !important;
+  border-block-start: 0 !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-compose-panel {
+  gap: 16px !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-compose-settings-panel {
+  display: grid !important;
+  grid-template: auto / minmax(180px, 240px) minmax(220px, 1fr) auto !important;
+  align-items: end !important;
+  gap: 12px !important;
+  padding: 0 0 14px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+  background: transparent !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-compose-setting-field,
+#view-notices .sentrix-announcement-workspace .notices-compose-setting-field-inline,
+#view-notices .sentrix-announcement-workspace .notices-compose-setting-field-actions {
+  width: auto !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-compose-setting-field-inline::before {
+  content: none !important;
+}
+
+#view-notices .sentrix-announcement-workspace #noticesPublishBtn {
+  min-width: 132px !important;
+  min-height: 40px !important;
+  border-radius: 8px !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-compose-document {
+  display: grid !important;
+  gap: 12px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-compose-title-input {
+  min-height: 52px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #0f172a !important;
+  font-size: 20px !important;
+  line-height: 28px !important;
+  font-weight: 900 !important;
+  box-shadow: none !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-compose-toolbar {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0 !important;
+  padding: 0 0 12px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-compose-toolbar-group {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 4px !important;
+  padding: 0 10px 0 0 !important;
+  border: 0 !important;
+  border-inline-end: 1px solid rgba(226, 232, 240, 0.96) !important;
+  background: transparent !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-compose-toolbar-group:last-child {
+  border-inline-end: 0 !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-toolbar-item,
+#view-notices .sentrix-announcement-workspace .notices-toolbar-floating-toggle,
+#view-notices .sentrix-announcement-workspace .notices-toolbar-color-trigger,
+#view-notices .sentrix-announcement-workspace .notices-toolbar-highlight-trigger {
+  min-height: 34px !important;
+  height: 34px !important;
+  padding: 0 8px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #475569 !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-toolbar-item:hover,
+#view-notices .sentrix-announcement-workspace .notices-toolbar-floating-toggle:hover,
+#view-notices .sentrix-announcement-workspace .notices-toolbar-color-trigger:hover,
+#view-notices .sentrix-announcement-workspace .notices-toolbar-highlight-trigger:hover {
+  background: rgba(248, 250, 252, 0.95) !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-compose-document-flow {
+  display: grid !important;
+  gap: 12px !important;
+  min-height: 120px !important;
+  padding: 8px 0 0 !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-compose-body-input,
+#view-notices .sentrix-announcement-workspace .notices-compose-rich-editor {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-table-picker,
+#view-notices .sentrix-announcement-workspace .notices-toolbar-popover {
+  border-radius: 8px !important;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12) !important;
+}
+
+#view-notices .sentrix-announcement-workspace #noticesPollModal,
+#view-notices .sentrix-announcement-workspace #noticesLinkModal {
+  border-radius: 12px !important;
+  box-shadow: 0 24px 72px rgba(15, 23, 42, 0.24) !important;
+}
+
+#view-notices .sentrix-announcement-workspace #noticesPollModal .muted,
+#view-notices .sentrix-announcement-workspace #noticesLinkModal .muted {
+  display: none !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-compose-poll-modal-head,
+#view-notices .sentrix-announcement-workspace .notices-compose-poll-modal-actions {
+  border-color: rgba(203, 213, 225, 0.9) !important;
+}
+
+#view-notices .sentrix-announcement-workspace .notices-poll-option,
+#view-notices .sentrix-announcement-workspace .notices-poll-option-item,
+#view-notices .sentrix-announcement-workspace .notices-image-item {
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 720px) {
+  #view-notices .sentrix-announcement-workspace #announcementPanel {
+    gap: 14px !important;
+  }
+
+  #view-notices .sentrix-announcement-workspace #announcementPanel .workspace-head {
+    align-items: stretch !important;
+    flex-direction: column !important;
+  }
+
+  #view-notices .sentrix-announcement-workspace #announcementPanel .workspace-head-actions,
+  #view-notices .sentrix-announcement-workspace #announcementPanel #noticesCreateBtn {
+    width: 100% !important;
+  }
+
+  #view-notices .sentrix-announcement-workspace #announcementPanel .notices-toolbar-row {
+    align-items: stretch !important;
+    flex-direction: column !important;
+  }
+
+  #view-notices .sentrix-announcement-workspace #announcementPanel #noticesCategoryTabs {
+    overflow: auto hidden !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  #view-notices .sentrix-announcement-workspace .notices-list-button {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+    padding: 12px 0 !important;
+  }
+
+  #view-notices .sentrix-announcement-workspace .notices-compose-settings-panel {
+    grid-template: auto / 1fr !important;
+  }
+
+  #view-notices .sentrix-announcement-workspace #noticesPublishBtn,
+  #view-notices .sentrix-announcement-workspace .notices-compose-setting-field-actions {
+    width: 100% !important;
+  }
+
+  #view-notices .sentrix-announcement-workspace .notices-compose-toolbar-group {
+    width: 100% !important;
+    padding: 6px 0 !important;
+    border-inline-end: 0 !important;
+    border-block-end: 1px solid rgba(226, 232, 240, 0.96) !important;
+  }
+
+  #view-notices .sentrix-announcement-workspace .notices-compose-toolbar-group:last-child {
+    border-block-end: 0 !important;
+  }
+
+  #view-notices .sentrix-announcement-workspace .notices-compose-panel,
+  #view-notices .sentrix-announcement-workspace .notices-list-panel,
+  #view-notices .sentrix-announcement-workspace .notices-detail-panel > .notices-section-head,
+  #view-notices .sentrix-announcement-workspace .notices-detail-panel > .notices-detail-body,
+  #view-notices .sentrix-announcement-workspace .notices-compose-settings-panel,
+  #view-notices .sentrix-announcement-workspace .notices-compose-document {
+    width: 100% !important;
+    padding: 0 !important;
+  }
+}
+
 #view-notices .sentrix-announcement-workspace #announcementPanel {
   display: grid;
   gap: 18px;
