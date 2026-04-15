@@ -60666,3 +60666,340 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
     min-width: 0 !important;
   }
 }
+
+/* 2026-04-15 phase 5: HR document issue/my-docs cleanup */
+#view-hr[data-hr-layout="apply"] > #hrDocumentHomeCard,
+#view-hr[data-hr-layout="apply"] > #hrEmploymentEmployeeCard,
+#view-hr[data-hr-layout="my-docs"] > #hrEmploymentMyRequestsCard {
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-hr[data-hr-layout="apply"] > #hrDocumentHomeCard {
+  position: static !important;
+}
+
+#view-hr[data-hr-layout="apply"] > #hrDocumentHomeCard .approval-head,
+#view-hr[data-hr-layout="apply"] > #hrEmploymentEmployeeCard .approval-head,
+#view-hr[data-hr-layout="my-docs"] > #hrEmploymentMyRequestsCard .approval-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  min-height: 40px !important;
+  padding: 0 0 10px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+  background: transparent !important;
+}
+
+#view-hr[data-hr-layout="apply"] > #hrDocumentHomeCard .approval-head h3,
+#view-hr[data-hr-layout="apply"] > #hrEmploymentEmployeeCard .approval-head h3,
+#view-hr[data-hr-layout="my-docs"]
+  > #hrEmploymentMyRequestsCard
+  .approval-head
+  h3 {
+  margin: 0 !important;
+  color: #0f172a !important;
+  font-size: 18px !important;
+  line-height: 24px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+}
+
+#view-hr #hrEmploymentRequestStatus {
+  display: none !important;
+}
+
+#view-hr .hr-doc-card-grid {
+  display: grid !important;
+  grid-template: auto / minmax(0, 1fr) !important;
+  gap: 0 !important;
+}
+
+#view-hr .hr-doc-card-group-label {
+  display: flex !important;
+  min-height: 30px !important;
+  align-items: center !important;
+  padding: 10px 0 4px !important;
+  border: 0 !important;
+  color: #64748b !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+}
+
+#view-hr .hr-doc-card-group-label[data-group-gap="true"] {
+  margin-top: 8px !important;
+  padding-top: 12px !important;
+  border: 0 !important;
+  border-block-start: 1px solid rgba(226, 232, 240, 0.96) !important;
+}
+
+#view-hr .hr-doc-card {
+  display: grid !important;
+  grid-template: auto / minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 12px !important;
+  min-height: 58px !important;
+  padding: 10px 0 !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(226, 232, 240, 0.96) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #0f172a !important;
+  text-align: left !important;
+}
+
+#view-hr .hr-doc-card.active {
+  background: rgba(234, 88, 12, 0.045) !important;
+}
+
+#view-hr .hr-doc-card:hover,
+#view-hr .hr-doc-card:focus-visible {
+  background: rgba(248, 250, 252, 0.96) !important;
+}
+
+#view-hr .hr-doc-card-copy {
+  display: grid !important;
+  min-width: 0 !important;
+  gap: 2px !important;
+}
+
+#view-hr .hr-doc-card strong {
+  color: #0f172a !important;
+  font-size: 14px !important;
+  line-height: 20px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+}
+
+#view-hr .hr-doc-card span {
+  color: #64748b !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  font-weight: 700 !important;
+}
+
+#view-hr .hr-doc-card-state {
+  min-height: 24px !important;
+  padding: 0 8px !important;
+  border: 1px solid rgba(226, 232, 240, 0.96) !important;
+  border-radius: 999px !important;
+  background: #fff !important;
+  color: #64748b !important;
+}
+
+#view-hr .hr-doc-card-state.is-live {
+  border-color: rgba(234, 88, 12, 0.18) !important;
+  background: rgba(234, 88, 12, 0.06) !important;
+  color: #ea580c !important;
+}
+
+#view-hr .hr-purpose-group {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  padding: 0 0 12px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(226, 232, 240, 0.96) !important;
+}
+
+#view-hr .hr-purpose-group .btn {
+  min-height: 34px !important;
+  height: 34px !important;
+  padding: 0 12px !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+#view-hr .hr-purpose-group .btn.active {
+  border-color: rgba(234, 88, 12, 0.24) !important;
+  background: rgba(234, 88, 12, 0.06) !important;
+  color: #ea580c !important;
+}
+
+#view-hr #hrCertificateRequestFields,
+#view-hr #hrResignationFormFields {
+  display: grid !important;
+  grid-template: auto / minmax(0, 1fr) minmax(120px, 0.34fr) !important;
+  gap: 12px !important;
+  padding: 0 !important;
+}
+
+#view-hr #hrResignationFormFields.hidden,
+#view-hr #hrCertificateRequestFields.hidden {
+  display: none !important;
+}
+
+#view-hr #hrResignationFormFields .input-field-span-2 {
+  grid-column: 1 / -1 !important;
+}
+
+#view-hr #hrCertificateRequestFields .input-field,
+#view-hr #hrResignationFormFields .input-field,
+#view-hr #hrPurposeOtherField {
+  min-width: 0 !important;
+}
+
+#view-hr #hrCertificateRequestFields input,
+#view-hr #hrResignationFormFields input,
+#view-hr #hrResignationFormFields select,
+#view-hr #hrResignationFormFields textarea,
+#view-hr #hrPurposeOtherField input {
+  min-height: 42px !important;
+  border-radius: 8px !important;
+}
+
+#view-hr #hrCertificateToggleFields {
+  display: grid !important;
+  grid-template: auto / repeat(2, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  border: 0 !important;
+  border-block-start: 1px solid rgba(226, 232, 240, 0.96) !important;
+}
+
+#view-hr #hrCertificateToggleFields.hidden {
+  display: none !important;
+}
+
+#view-hr #hrCertificateToggleFields .ui-switch {
+  min-height: 46px !important;
+  padding: 10px 12px 10px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+#view-hr #hrCertificateToggleFields .ui-switch + .ui-switch {
+  padding-left: 12px !important;
+  border-inline-start: 1px solid rgba(226, 232, 240, 0.96) !important;
+}
+
+#view-hr #hrEmploymentRequestSubmitBtn {
+  width: min(240px, 100%) !important;
+  min-height: 42px !important;
+  border-radius: 8px !important;
+  justify-self: end !important;
+}
+
+#view-hr #hrEmploymentRequestSubmitBtn:disabled {
+  border-color: rgba(203, 213, 225, 0.9) !important;
+  background: #f8fafc !important;
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+#view-hr[data-hr-layout="apply"] > #hrEmploymentEmployeeCard > .inline-actions {
+  justify-content: flex-end !important;
+}
+
+#view-hr[data-hr-layout="my-docs"] > #hrEmploymentMyRequestsCard .table-wrap {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: auto hidden !important;
+}
+
+#view-hr[data-hr-layout="my-docs"] > #hrEmploymentMyRequestsCard table {
+  width: 100% !important;
+  min-width: 840px !important;
+  border-collapse: collapse !important;
+  background: transparent !important;
+}
+
+#view-hr[data-hr-layout="my-docs"] > #hrEmploymentMyRequestsCard thead th {
+  height: 40px !important;
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+  background: transparent !important;
+  color: #64748b !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  font-weight: 800 !important;
+  text-align: left !important;
+  letter-spacing: 0 !important;
+}
+
+#view-hr[data-hr-layout="my-docs"] > #hrEmploymentMyRequestsCard tbody td {
+  min-height: 52px !important;
+  padding: 12px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(226, 232, 240, 0.96) !important;
+  background: transparent !important;
+  color: #0f172a !important;
+  font-size: 13px !important;
+  line-height: 20px !important;
+  vertical-align: middle !important;
+}
+
+#view-hr[data-hr-layout="my-docs"]
+  > #hrEmploymentMyRequestsCard
+  tbody
+  tr:hover
+  td {
+  background: rgba(248, 250, 252, 0.92) !important;
+}
+
+#view-hr[data-hr-layout="my-docs"] > #hrEmploymentMyRequestsCard tbody .btn {
+  min-height: 32px !important;
+  height: 32px !important;
+  padding: 0 10px !important;
+  border-radius: 8px !important;
+}
+
+#view-hr[data-hr-layout="my-docs"]
+  > #hrEmploymentMyRequestsCard
+  tbody
+  tr[class*="empty"]
+  td {
+  height: 72px !important;
+  color: #64748b !important;
+  text-align: left !important;
+}
+
+@media (max-width: 1023px) {
+  #view-hr[data-hr-layout="apply"],
+  #view-hr[data-hr-layout="my-docs"] {
+    display: grid !important;
+    grid-template: auto / minmax(0, 1fr) !important;
+    padding-block-end: 100px !important;
+  }
+
+  #view-hr[data-hr-layout="apply"] > #hrDocumentHomeCard,
+  #view-hr[data-hr-layout="apply"] > #hrEmploymentEmployeeCard,
+  #view-hr[data-hr-layout="my-docs"] > #hrEmploymentMyRequestsCard {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+  }
+
+  #view-hr #hrCertificateRequestFields,
+  #view-hr #hrResignationFormFields,
+  #view-hr #hrCertificateToggleFields {
+    grid-template: auto / 1fr !important;
+  }
+
+  #view-hr #hrCertificateToggleFields .ui-switch + .ui-switch {
+    padding-left: 0 !important;
+    border-inline-start: 0 !important;
+    border-block-start: 1px solid rgba(226, 232, 240, 0.96) !important;
+  }
+
+  #view-hr #hrEmploymentRequestSubmitBtn {
+    width: 100% !important;
+    justify-self: stretch !important;
+  }
+
+  #view-hr .hr-doc-card-grid {
+    grid-template: auto / minmax(0, 1fr) !important;
+  }
+}
