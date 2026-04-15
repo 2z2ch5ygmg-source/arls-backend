@@ -2124,10 +2124,10 @@ button:disabled,
 }
 
 .bottom-tab.active {
-  background: transparent;
+  background: var(--ui-accent-weak);
   color: var(--ui-accent);
-  border-color: transparent;
-  border-bottom-color: var(--ui-accent);
+  border-color: rgba(255, 107, 0, 0.28);
+  border-bottom-color: rgba(255, 107, 0, 0.28);
 }
 
 .stats {
@@ -6815,9 +6815,9 @@ button:disabled,
 .schedule-hq-site-matrix-wrap {
   overflow: auto;
   max-height: min(52vh, 520px);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-12);
-  background: var(--bg-surface-elevated);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .schedule-hq-site-matrix {
@@ -6832,11 +6832,12 @@ button:disabled,
 }
 
 .schedule-hq-site-select-all {
-  display: inline-flex;
+  display: inline-grid;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 24px;
+  min-width: 32px;
+  min-height: 32px;
+  margin-inline: auto;
 }
 
 .schedule-hq-site-select-all span {
@@ -6848,12 +6849,12 @@ button:disabled,
 
 .schedule-hq-site-matrix thead th:first-child,
 .schedule-hq-site-matrix tbody tr td:first-child {
-  width: 72px;
-  min-width: 72px;
+  width: 52px;
+  min-width: 52px;
   text-align: center;
   vertical-align: middle;
-  padding-left: 10px;
-  padding-right: 10px;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .schedule-hq-site-matrix thead input[type="checkbox"] {
@@ -6866,11 +6867,12 @@ button:disabled,
   position: relative;
   display: inline-grid;
   place-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
+  aspect-ratio: 1 / 1;
   margin: 0;
   border: 1.5px solid rgba(148, 163, 184, 0.9);
-  border-radius: 5px;
+  border-radius: 3px;
   background: #fff;
   cursor: pointer;
   vertical-align: middle;
@@ -6882,14 +6884,11 @@ button:disabled,
 
 .schedule-hq-site-matrix input[type="checkbox"]::after {
   content: "";
-  position: absolute;
-  left: 5px;
-  top: 1.5px;
-  width: 4px;
+  width: 5px;
   height: 9px;
   border: solid #fff;
   border-width: 0 2px 2px 0;
-  transform: rotate(45deg) scale(0);
+  transform: translateY(-1px) rotate(45deg) scale(0);
   transform-origin: center;
   transition: transform 140ms ease;
 }
@@ -6901,7 +6900,7 @@ button:disabled,
 }
 
 .schedule-hq-site-matrix input[type="checkbox"]:checked::after {
-  transform: rotate(45deg) scale(1);
+  transform: translateY(-1px) rotate(45deg) scale(1);
 }
 
 .schedule-hq-site-row-disabled {
@@ -7097,10 +7096,10 @@ button:disabled,
 .schedule-template-mapping-summary {
   display: grid;
   gap: 8px;
-  padding: 14px 16px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-12);
-  background: var(--bg-surface-elevated);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .schedule-template-mapping-summary-head {
@@ -8335,7 +8334,8 @@ a:hover {
 
 .schedule-create-tab.active {
   color: var(--text-primary);
-  border-bottom-color: var(--brand-orange);
+  border-color: rgba(234, 88, 12, 0.32);
+  background: rgba(234, 88, 12, 0.08);
 }
 
 .schedule-create-tab:disabled {
@@ -9280,9 +9280,8 @@ a:hover {
   }
 
   .desktop-secondary-tab.active {
-    border-color: transparent;
-    border-bottom-color: var(--ui-accent);
-    background: transparent;
+    border-color: rgba(234, 88, 12, 0.32);
+    background: rgba(234, 88, 12, 0.08);
     color: var(--ui-accent);
   }
 
@@ -11681,8 +11680,8 @@ a:hover {
 
   .bottom-tab.active {
     color: var(--ui-accent);
-    border-bottom-color: var(--ui-accent);
-    background: transparent;
+    border-color: rgba(234, 88, 12, 0.32);
+    background: rgba(234, 88, 12, 0.08);
   }
 
   #view-home,
@@ -12209,7 +12208,8 @@ a:hover {
 
   .desktop-secondary-tab.active {
     color: var(--ui-accent);
-    border-bottom-color: var(--ui-accent);
+    border-color: rgba(234, 88, 12, 0.32);
+    background: rgba(234, 88, 12, 0.08);
   }
 
   #view-home .home-stack {
@@ -19775,6 +19775,463 @@ textarea::placeholder {
   .employee-directory-kpi-grid,
   .employee-directory-fact-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* 2026-04-15 unified upload wizard shell */
+#view-schedule .arls-upload-wizard,
+#view-reports .arls-upload-wizard {
+  --wizard-accent: #f97316;
+  --wizard-accent-weak: rgba(249, 115, 22, 0.13);
+  --wizard-complete: #059669;
+  --wizard-border: rgba(203, 213, 225, 0.82);
+  --wizard-track: rgba(203, 213, 225, 0.72);
+  --wizard-surface: #ffffff;
+  width: min(100%, 1480px);
+  margin-inline: auto;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+#view-schedule .arls-upload-wizard__layout,
+#view-reports .arls-upload-wizard__layout {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0;
+  min-height: 0;
+}
+
+#view-schedule .arls-upload-wizard__progress,
+#view-reports .arls-upload-wizard__progress {
+  width: 100%;
+  padding: 20px 28px 16px !important;
+  border-right: 0 !important;
+  border-bottom: 1px solid var(--wizard-border);
+  background: transparent !important;
+}
+
+#view-schedule .arls-upload-wizard__steps,
+#view-reports .arls-upload-wizard__steps {
+  position: relative;
+  display: grid !important;
+  grid-template-columns: repeat(var(--wizard-step-count, 4), minmax(0, 1fr));
+  gap: 0;
+  align-items: start;
+  padding: 0 !important;
+  list-style: none;
+}
+
+#view-schedule .arls-upload-wizard__steps.hidden,
+#view-reports .arls-upload-wizard__steps.hidden {
+  display: none !important;
+}
+
+#view-schedule #scheduleBaseWizardProgress {
+  --wizard-step-count: 5;
+}
+
+#view-schedule #scheduleHqWizardProgress {
+  --wizard-step-count: 4;
+}
+
+#view-reports .reports-finance-step-rail-list {
+  --wizard-step-count: 3;
+}
+
+#view-schedule .arls-upload-wizard__steps::before,
+#view-reports .arls-upload-wizard__steps::before {
+  content: "";
+  position: absolute;
+  top: 15px !important;
+  right: calc((100% / var(--wizard-step-count, 4) / 2) + 15px);
+  left: calc((100% / var(--wizard-step-count, 4) / 2) + 15px);
+  display: block !important;
+  height: 2px !important;
+  border-radius: 999px;
+  background: var(--wizard-track) !important;
+}
+
+#view-schedule .arls-upload-wizard__steps::after,
+#view-reports .arls-upload-wizard__steps::after {
+  content: "";
+  position: absolute;
+  top: 15px;
+  left: calc((100% / var(--wizard-step-count, 4) / 2) + 15px);
+  display: block;
+  width: var(--arls-upload-wizard-progress, 0%);
+  max-width: calc(100% - (100% / var(--wizard-step-count, 4)) - 30px);
+  height: 2px;
+  border-radius: 999px;
+  background: var(--wizard-accent);
+  transition: width 180ms ease;
+}
+
+#view-schedule .arls-upload-wizard__step,
+#view-reports .arls-upload-wizard__step,
+#view-reports .reports-finance-step-rail-item.arls-upload-wizard__step {
+  position: relative !important;
+  z-index: 1;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  justify-items: center !important;
+  align-content: start !important;
+  min-width: 0 !important;
+  min-height: 58px !important;
+  padding: 30px 8px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #64748b !important;
+  font-size: 13px !important;
+  line-height: 1.32 !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+  white-space: normal !important;
+  word-break: keep-all !important;
+}
+
+#view-schedule .arls-upload-wizard__step::after,
+#view-reports .arls-upload-wizard__step::after,
+#view-reports .reports-finance-step-rail-list::before,
+#view-reports .reports-finance-step-rail-item::after {
+  display: none !important;
+}
+
+#view-schedule .arls-upload-wizard__step::before {
+  display: none !important;
+}
+
+#view-schedule .schedule-wizard-step-marker,
+#view-reports .arls-upload-wizard__step .reports-panel-stepper-index {
+  position: absolute !important;
+  top: 0 !important;
+  left: 50% !important;
+  z-index: 2;
+  display: grid !important;
+  width: 30px !important;
+  height: 30px !important;
+  place-items: center !important;
+  transform: translateX(-50%) !important;
+  border: 1.5px solid var(--wizard-border) !important;
+  border-radius: 999px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  color: #64748b !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+}
+
+#view-schedule .schedule-wizard-step-marker {
+  position: absolute !important;
+}
+
+#view-schedule .schedule-wizard-step-connector {
+  display: none !important;
+}
+
+#view-schedule .schedule-wizard-step-label,
+#view-reports .reports-panel-stepper-copy,
+#view-reports .reports-panel-stepper-label {
+  display: block !important;
+  max-width: 100%;
+  color: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  text-align: center !important;
+}
+
+#view-schedule .arls-upload-wizard__step.active,
+#view-schedule .arls-upload-wizard__step[aria-current="step"],
+#view-reports .arls-upload-wizard__step.is-current,
+#view-reports .arls-upload-wizard__step[aria-current="step"] {
+  color: #111827 !important;
+}
+
+#view-schedule .arls-upload-wizard__step.active .schedule-wizard-step-marker,
+#view-reports
+  .arls-upload-wizard__step.is-current
+  .reports-panel-stepper-index,
+#view-reports
+  .arls-upload-wizard__step[aria-current="step"]
+  .reports-panel-stepper-index {
+  border-color: var(--wizard-accent) !important;
+  background: #fff7ed !important;
+  color: #c2410c !important;
+  box-shadow:
+    inset 0 0 0 4px #fff,
+    0 0 0 1px var(--wizard-accent) !important;
+}
+
+#view-schedule .arls-upload-wizard__step.is-complete,
+#view-reports .arls-upload-wizard__step[data-step-state="complete"] {
+  color: #14532d !important;
+}
+
+#view-schedule .arls-upload-wizard__step.is-complete .schedule-wizard-step-marker,
+#view-reports
+  .arls-upload-wizard__step[data-step-state="complete"]
+  .reports-panel-stepper-index {
+  border-color: rgba(5, 150, 105, 0.42) !important;
+  background: #059669 !important;
+  color: #fff !important;
+}
+
+#view-schedule .arls-upload-wizard__canvas,
+#view-reports .arls-upload-wizard__canvas {
+  min-width: 0;
+  width: min(100%, 1180px);
+  margin-inline: auto;
+  padding: 24px 28px 30px;
+}
+
+#view-schedule .arls-upload-wizard .schedule-excel-workflow-section,
+#view-reports .arls-upload-wizard .reports-finance-canvas-step {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-schedule .arls-upload-wizard .schedule-template-mapping-summary,
+#view-schedule .arls-upload-wizard .schedule-mapping-manager-card,
+#view-schedule .arls-upload-wizard .schedule-upload-template-card,
+#view-schedule .arls-upload-wizard .schedule-support-action-section,
+#view-schedule .arls-upload-wizard .schedule-upload-apply-bar,
+#view-schedule .arls-upload-wizard .support-status-hq-apply-bar,
+#view-schedule .arls-upload-wizard .schedule-upload-placeholder,
+#view-reports .arls-upload-wizard .reports-finance-content-canvas,
+#view-reports .arls-upload-wizard .reports-finance-wizard-context-bar,
+#view-reports .arls-upload-wizard .reports-finance-guidance-note {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-schedule .arls-upload-wizard .status-pill,
+#view-schedule .arls-upload-wizard .schedule-mapping-rule-summary-item span,
+#view-schedule .arls-upload-wizard .schedule-mapping-rule-summary-item strong {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  width: auto;
+  max-width: none;
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+#view-schedule .arls-upload-wizard .schedule-mapping-rule-summary {
+  grid-template-columns: repeat(auto-fit, minmax(220px, max-content));
+  justify-content: start;
+}
+
+#view-schedule .arls-upload-wizard .schedule-mapping-rule-summary-item {
+  min-width: max-content;
+  align-items: center;
+}
+
+#view-schedule .arls-upload-wizard .schedule-wizard-actions,
+#view-schedule .arls-upload-wizard .schedule-support-upload-actions,
+#view-reports .arls-upload-wizard__footer,
+#view-reports .arls-upload-wizard .reports-wizard-step-actions {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+}
+
+#view-schedule .arls-upload-wizard__target-list {
+  display: grid;
+  gap: 14px;
+}
+
+#view-schedule .arls-upload-wizard__pager {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid var(--wizard-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+#view-schedule .arls-upload-wizard__pager.hidden {
+  display: none !important;
+}
+
+#view-schedule .arls-upload-wizard__pager-summary,
+#view-schedule .arls-upload-wizard__pager-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+#view-schedule .arls-upload-wizard__pager-actions {
+  justify-content: center;
+}
+
+#view-reports .reports-finance-pager {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px 0 0;
+  border-top: 1px solid rgba(203, 213, 225, 0.82);
+}
+
+#view-reports .reports-finance-pager.hidden {
+  display: none !important;
+}
+
+#view-reports .reports-finance-pager .arls-upload-wizard__pager-actions {
+  justify-content: center;
+}
+
+#view-reports .reports-finance-pager .arls-upload-wizard__pager-summary {
+  justify-content: flex-start;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+#view-schedule .arls-upload-wizard__pager-summary {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+#view-schedule .arls-upload-wizard__pager-summary strong {
+  color: #111827;
+}
+
+#view-schedule .arls-upload-wizard__page-btn {
+  display: inline-grid;
+  min-width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid rgba(203, 213, 225, 0.92);
+  border-radius: 6px;
+  background: #fff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+#view-reports .arls-upload-wizard__page-btn {
+  display: inline-grid;
+  min-width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid rgba(203, 213, 225, 0.92);
+  border-radius: 6px;
+  background: #fff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+#view-schedule .arls-upload-wizard__page-btn[aria-current="page"],
+#view-schedule .arls-upload-wizard__page-btn:disabled,
+#view-reports .arls-upload-wizard__page-btn[aria-current="page"],
+#view-reports .arls-upload-wizard__page-btn:disabled {
+  border-color: #f97316;
+  background: #fff7ed;
+  color: #c2410c;
+  cursor: default;
+}
+
+@media (max-width: 900px) {
+  #view-schedule .arls-upload-wizard,
+  #view-reports .arls-upload-wizard {
+    width: min(100%, 760px);
+  }
+
+  #view-schedule .arls-upload-wizard__progress,
+  #view-reports .arls-upload-wizard__progress {
+    padding: 16px !important;
+  }
+
+  #view-schedule .arls-upload-wizard__steps,
+  #view-reports .arls-upload-wizard__steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  #view-schedule .arls-upload-wizard__steps::before,
+  #view-schedule .arls-upload-wizard__steps::after,
+  #view-reports .arls-upload-wizard__steps::before,
+  #view-reports .arls-upload-wizard__steps::after {
+    display: none !important;
+  }
+
+  #view-schedule .arls-upload-wizard__step,
+  #view-reports .arls-upload-wizard__step,
+  #view-reports .reports-finance-step-rail-item.arls-upload-wizard__step {
+    min-height: 48px !important;
+    padding: 10px 12px 10px 48px !important;
+    justify-items: start !important;
+    align-content: center !important;
+    border: 1px solid var(--wizard-border) !important;
+    border-radius: 8px !important;
+    background: #fff !important;
+    text-align: left !important;
+  }
+
+  #view-schedule .schedule-wizard-step-marker,
+  #view-reports .arls-upload-wizard__step .reports-panel-stepper-index {
+    top: 50% !important;
+    left: 16px !important;
+    width: 24px !important;
+    height: 24px !important;
+    transform: translateY(-50%) !important;
+    box-shadow: none !important;
+  }
+
+  #view-schedule .schedule-wizard-step-label,
+  #view-reports .reports-panel-stepper-copy,
+  #view-reports .reports-panel-stepper-label {
+    text-align: left !important;
+  }
+
+  #view-schedule .arls-upload-wizard__canvas,
+  #view-reports .arls-upload-wizard__canvas {
+    width: 100%;
+    padding: 18px 16px 22px;
+  }
+}
+
+@media (max-width: 620px) {
+  #view-schedule .arls-upload-wizard__steps,
+  #view-reports .arls-upload-wizard__steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #view-schedule .arls-upload-wizard .schedule-wizard-actions,
+  #view-schedule .arls-upload-wizard .schedule-support-upload-actions,
+  #view-reports .arls-upload-wizard__footer,
+  #view-reports .arls-upload-wizard .reports-wizard-step-actions,
+  #view-schedule .arls-upload-wizard__pager,
+  #view-schedule .arls-upload-wizard__pager-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  #view-schedule .arls-upload-wizard .btn,
+  #view-reports .arls-upload-wizard .btn {
+    width: 100%;
   }
 }
 
@@ -33077,19 +33534,20 @@ body[data-current-view="schedule"] .topbar.app-topbar {
   position: relative;
   display: inline-grid;
   place-content: center;
-  width: 18px;
-  height: 18px;
-  min-width: 18px;
-  min-height: 18px;
-  max-width: 18px;
-  max-height: 18px;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  max-width: 16px;
+  max-height: 16px;
+  aspect-ratio: 1 / 1;
   margin: 0;
   padding: 0;
   border: 1.5px solid rgba(148, 163, 184, 0.9);
-  border-radius: 4px;
+  border-radius: 3px;
   background: #fff;
   line-height: 0;
-  flex: 0 0 18px;
+  flex: 0 0 16px;
   cursor: pointer;
   transition:
     border-color 140ms ease,
@@ -33100,14 +33558,11 @@ body[data-current-view="schedule"] .topbar.app-topbar {
 #view-reports #financeDownloadSelectAllToggle::after,
 #view-reports .reports-finance-download-checkbox::after {
   content: "";
-  position: absolute;
-  left: 5px;
-  top: 1.5px;
-  width: 4px;
+  width: 5px;
   height: 9px;
   border: solid #fff;
   border-width: 0 2px 2px 0;
-  transform: rotate(45deg) scale(0);
+  transform: translateY(-1px) rotate(45deg) scale(0);
   transform-origin: center;
   transition: transform 140ms ease;
 }
@@ -33121,7 +33576,7 @@ body[data-current-view="schedule"] .topbar.app-topbar {
 
 #view-reports #financeDownloadSelectAllToggle:checked::after,
 #view-reports .reports-finance-download-checkbox:checked::after {
-  transform: rotate(45deg) scale(1);
+  transform: translateY(-1px) rotate(45deg) scale(1);
 }
 
 #view-reports .reports-finance-submit-checkbox:disabled {
@@ -37359,6 +37814,41 @@ body[data-current-view="schedule"] .topbar.app-topbar {
 #view-calendar.is-calendar-fullscreen .calendar-outlook-shell {
   min-height: calc(100vh - 132px);
   height: calc(100vh - 132px);
+}
+
+#view-calendar:fullscreen .calendar-workspace-head,
+#view-calendar.is-calendar-fullscreen .calendar-workspace-head,
+#view-calendar:fullscreen .calendar-outlook-sidebar,
+#view-calendar.is-calendar-fullscreen .calendar-outlook-sidebar,
+#view-calendar:fullscreen .calendar-selected-day-rail,
+#view-calendar.is-calendar-fullscreen .calendar-selected-day-rail,
+#view-calendar:fullscreen .calendar-toolbar-filter-wrap,
+#view-calendar.is-calendar-fullscreen .calendar-toolbar-filter-wrap,
+#view-calendar:fullscreen [data-action="calendar-go-today"],
+#view-calendar.is-calendar-fullscreen [data-action="calendar-go-today"],
+#view-calendar:fullscreen [data-action="calendar-toggle-fullscreen"],
+#view-calendar.is-calendar-fullscreen [data-action="calendar-toggle-fullscreen"] {
+  display: none !important;
+}
+
+#view-calendar:fullscreen .calendar-workspace-root,
+#view-calendar.is-calendar-fullscreen .calendar-workspace-root {
+  min-height: calc(100vh - 72px);
+}
+
+#view-calendar:fullscreen .calendar-outlook-shell,
+#view-calendar.is-calendar-fullscreen .calendar-outlook-shell,
+#view-calendar:fullscreen .calendar-outlook-shell.has-selected-day-rail,
+#view-calendar.is-calendar-fullscreen .calendar-outlook-shell.has-selected-day-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) !important;
+  min-height: calc(100vh - 72px);
+  height: calc(100vh - 72px);
+}
+
+#view-calendar:fullscreen .calendar-toolbar-shell,
+#view-calendar.is-calendar-fullscreen .calendar-toolbar-shell {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .calendar-outlook-sidebar .calendar-mini-month-cell.is-today:not(.is-selected) {
@@ -49193,11 +49683,6 @@ html[data-ui-theme="dark"] #view-home .home-summary-icon.is-teal {
   padding-top: 12px !important;
 }
 
-#shell[data-shell-mode="manager"]
-  #view-profile
-  #groupwareOpsCard
-}
-
 /* 2026-04-11 leave global law retrofit */
 #view-leave #leaveWorkspaceTabs {
   gap: 8px;
@@ -56403,7 +56888,7 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
 #view-leave #leavePolicyStatusTabs {
   gap: 10px !important;
   padding: 8px 0 10px !important;
-  border-bottom: 1px solid var(--ui-border-subtle) !important;
+  border-bottom: 0 !important;
 }
 
 #view-leave #leavePolicyStatusTabs .approval-tab {
@@ -56441,4 +56926,1200 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
 #view-profile .profile-identity-side .muted,
 #view-profile #profileRailStatusNote {
   display: none !important;
+}
+
+/* 2026-04-13 Ralph photo-closure pass: tabs, filters, steppers, KPI, rails */
+:root {
+  --arls-photo-accent: #ea580c;
+  --arls-photo-accent-strong: #f97316;
+  --arls-photo-success: #16a34a;
+  --arls-photo-warning: #d97706;
+  --arls-photo-danger: #dc2626;
+  --arls-photo-control-h: 44px;
+  --arls-photo-radius: 10px;
+}
+
+.workspace-tabs,
+.approval-tabs,
+.approval-tabs.azure-tabbar,
+.employee-directory-detail-tabs,
+.attendance-stats-panel-tabs {
+  border-bottom: 0;
+  gap: 8px;
+}
+
+.workspace-tab,
+.approval-tab,
+.approval-tabs.azure-tabbar .approval-tab,
+.employee-directory-detail-tab,
+.attendance-stats-panel-tab,
+.attendance-kpi-mini {
+  min-height: var(--arls-photo-control-h);
+  border: 1px solid transparent;
+  border-radius: var(--arls-photo-radius);
+  background: transparent;
+  color: var(--ui-text-secondary);
+  box-shadow: none;
+  text-decoration: none;
+}
+
+.workspace-tab.active,
+.approval-tab.active,
+.approval-tabs.azure-tabbar .approval-tab.active,
+.employee-directory-detail-tab.active,
+.attendance-stats-panel-tab.active,
+.attendance-kpi-mini.active {
+  border-color: rgba(234, 88, 12, 0.32);
+  background: rgba(234, 88, 12, 0.08);
+  color: var(--arls-photo-accent);
+  box-shadow: inset 0 0 0 1px rgba(234, 88, 12, 0.08);
+}
+
+.workspace-tab.active::after,
+.approval-tab.active::after,
+.employee-directory-detail-tab.active::after {
+  display: none;
+  content: none;
+}
+
+#view-requests #requestsSecondaryTabs,
+#view-leave #leavePolicyStatusTabs,
+#view-leave #leaveGrantsTabs,
+#view-leave #leaveWorkspaceSecondaryTabs,
+#view-attendance #attendanceStatsPanelTabs {
+  border-bottom: 0;
+  justify-content: flex-start;
+}
+
+.ui-filterbar,
+.command-bar,
+#view-requests .requests-filter-controls,
+#view-leave .leave-requests-filter-controls,
+#view-leave .leave-usage-toolbar,
+#view-attendance #attendanceOpsToolbar .attendance-ops-toolbar-main,
+#view-employees .employee-toolbar,
+#view-org .site-filter-grid,
+#view-schedule .schedule-toolbar-filter-cluster {
+  align-items: end;
+  gap: 10px 12px;
+}
+
+.ui-filterbar .input-field,
+#view-leave .leave-filter-field,
+.attendance-ops-field,
+#view-requests .requests-filter-field,
+#view-employees .employee-toolbar-field,
+#view-org .input-field,
+#view-schedule .schedule-toolbar-filter-cluster .input-field {
+  display: grid;
+  align-content: end;
+  gap: 5px;
+  min-width: 0;
+}
+
+.ui-filterbar .input-field > span,
+#view-leave .leave-filter-field > span,
+.attendance-ops-field > span,
+#view-requests .requests-filter-field > span,
+#view-employees .employee-toolbar-field > span,
+#view-org .input-field > span,
+#view-schedule .schedule-toolbar-filter-cluster .input-field > span {
+  min-height: 16px;
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+}
+
+.ui-filterbar input,
+.ui-filterbar select,
+.ui-filterbar .btn,
+.command-bar input,
+.command-bar select,
+.command-bar .btn,
+#view-requests .requests-filter-controls input,
+#view-requests .requests-filter-controls select,
+#view-requests .requests-filter-controls .btn,
+#view-leave .leave-requests-filter-controls input,
+#view-leave .leave-requests-filter-controls select,
+#view-leave .leave-requests-filter-controls .btn,
+#view-leave .leave-usage-toolbar input,
+#view-leave .leave-usage-toolbar select,
+#view-leave .leave-usage-toolbar .btn,
+#attendanceOpsToolbar input,
+#attendanceOpsToolbar select,
+#attendanceOpsToolbar .btn {
+  min-height: var(--arls-photo-control-h);
+  height: var(--arls-photo-control-h);
+  border-radius: var(--arls-photo-radius);
+  line-height: 1.25;
+}
+
+#view-schedule .schedule-wizard-progress {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 8px;
+  align-items: start;
+  padding-top: 2px;
+}
+
+#view-schedule .schedule-wizard-progress::before,
+#view-schedule .schedule-wizard-step::before,
+#view-schedule .schedule-wizard-step::after {
+  display: none;
+  content: none;
+}
+
+#view-schedule .schedule-wizard-step {
+  position: relative;
+  display: grid;
+  grid-template-rows: 28px auto;
+  justify-items: center;
+  align-content: start;
+  gap: 7px;
+  min-height: 58px;
+  padding: 0 8px;
+  color: var(--ui-text-secondary);
+  text-align: center;
+  white-space: normal;
+  word-break: keep-all;
+}
+
+#view-schedule .schedule-wizard-step-marker {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1.5px solid rgba(148, 163, 184, 0.52);
+  border-radius: 999px;
+  background: #fff;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 0 0 6px #fff;
+}
+
+#view-schedule .schedule-wizard-step-connector {
+  position: absolute;
+  z-index: 1;
+  top: 13px;
+  left: 50%;
+  right: -50%;
+  height: 2px;
+  background: rgba(148, 163, 184, 0.34);
+  transform: translateX(14px);
+  pointer-events: none;
+}
+
+#view-schedule .schedule-wizard-step:last-child .schedule-wizard-step-connector {
+  display: none;
+}
+
+#view-schedule .schedule-wizard-step.active .schedule-wizard-step-marker {
+  border-color: rgba(234, 88, 12, 0.9);
+  background: #fff;
+  color: var(--arls-photo-accent);
+  box-shadow:
+    0 0 0 6px #fff,
+    0 0 0 10px rgba(234, 88, 12, 0.12);
+}
+
+#view-schedule .schedule-wizard-step.is-complete .schedule-wizard-step-marker {
+  border-color: rgba(22, 163, 74, 0.72);
+  background: #fff;
+  color: var(--arls-photo-success);
+}
+
+#view-schedule .schedule-wizard-step.is-complete .schedule-wizard-step-connector {
+  background: rgba(22, 163, 74, 0.48);
+}
+
+#view-schedule .schedule-wizard-step-label {
+  display: block;
+  max-width: 18ch;
+  color: currentColor;
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
+.attendance-kpi-rack,
+.attendance-v2-summary-strip,
+.attendance-kpi-strip,
+.leave-usage-summary-strip,
+.requests-kpi-strip,
+.reports-finance-submit-summary-bar,
+.employee-directory-drawer-meta-grid,
+.site-directory-fact-grid {
+  align-items: stretch;
+}
+
+.attendance-kpi-item,
+.attendance-status-matrix-card,
+.attendance-status-special-card,
+.attendance-v2-summary-item,
+.leave-usage-summary-item,
+.requests-kpi-item,
+.employee-directory-drawer-meta-item,
+.site-directory-fact-card {
+  background: #fff;
+  border-color: var(--ui-border-subtle);
+}
+
+.attendance-kpi-item[data-tone="success"],
+.attendance-status-matrix-card[data-tone="success"],
+.attendance-status-special-card[data-tone="success"],
+.attendance-v2-summary-item.is-success,
+.site-directory-fact-card[data-tone="success"] {
+  border-color: rgba(22, 163, 74, 0.32);
+  box-shadow: inset 3px 0 0 var(--arls-photo-success);
+}
+
+.attendance-kpi-item[data-tone="warn"],
+.attendance-status-matrix-card[data-tone="warn"],
+.attendance-status-special-card[data-tone="warn"],
+.attendance-v2-summary-item.is-warning,
+.site-directory-fact-card[data-tone="warn"] {
+  border-color: rgba(217, 119, 6, 0.34);
+  box-shadow: inset 3px 0 0 var(--arls-photo-warning);
+}
+
+.attendance-kpi-item[data-tone="danger"],
+.attendance-status-matrix-card[data-tone="danger"],
+.attendance-v2-summary-item.is-danger,
+.site-directory-fact-card[data-tone="danger"] {
+  border-color: rgba(220, 38, 38, 0.32);
+  box-shadow: inset 3px 0 0 var(--arls-photo-danger);
+}
+
+.attendance-kpi-item[data-tone="accent"],
+.attendance-kpi-item.active,
+.attendance-v2-summary-item.is-accent,
+.attendance-v2-summary-item.is-active {
+  border-color: rgba(234, 88, 12, 0.36);
+  box-shadow: inset 3px 0 0 var(--arls-photo-accent);
+}
+
+.hr-approval-saved-stage-stack {
+  justify-items: stretch;
+}
+
+.hr-approval-stage-flow.is-saved {
+  justify-self: stretch;
+}
+
+.hr-approval-stage-flow:not(:last-child)::after {
+  left: 50%;
+  top: calc(100% + 1px);
+  width: 2px;
+  height: 16px;
+  transform: translateX(-1px);
+  background: rgba(234, 88, 12, 0.36);
+}
+
+.hr-approval-stage-card {
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.hr-approval-stage-topbar.is-saved {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.hr-approval-stage-title-centered,
+.hr-approval-stage-title-block.is-saved {
+  justify-self: start;
+}
+
+.detail-rail .detail-rail-body,
+.employee-directory-drawer-body,
+.site-directory-detail-body {
+  align-content: start;
+}
+
+.detail-rail .detail-rail-actions,
+.employee-directory-drawer-actions,
+.site-directory-detail-actions {
+  justify-content: flex-start;
+}
+
+@media (max-width: 767px) {
+  #view-schedule .schedule-wizard-progress {
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  }
+
+  #view-schedule .schedule-wizard-step-label {
+    max-width: 12ch;
+    font-size: 11px;
+  }
+
+  .workspace-tabs,
+  .approval-tabs,
+  .approval-tabs.azure-tabbar,
+  .employee-directory-detail-tabs,
+  .attendance-stats-panel-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+}
+
+/* 2026-04-13 Ralph closure pass 2: remove remaining bottom-line tab states and icon-only filters */
+.schedule-create-tab-row,
+.desktop-secondary-tab-row {
+  gap: 8px;
+  border-bottom: 0;
+}
+
+.schedule-create-tab,
+.desktop-secondary-tab,
+.bottom-tab {
+  border: 1px solid transparent;
+  border-bottom-color: transparent;
+  border-radius: var(--arls-photo-radius);
+  background: transparent;
+  box-shadow: none;
+  color: var(--ui-text-secondary);
+}
+
+.schedule-create-tab.active,
+.desktop-secondary-tab.active,
+.bottom-tab.active {
+  border-color: rgba(234, 88, 12, 0.32);
+  border-bottom-color: rgba(234, 88, 12, 0.32);
+  background: rgba(234, 88, 12, 0.08);
+  color: var(--arls-photo-accent);
+  box-shadow: inset 0 0 0 1px rgba(234, 88, 12, 0.08);
+}
+
+.bottom-tab {
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 8px;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-topbar-row-primary,
+#view-attendance #attendanceStatsPanel .attendance-stats-topbar-row-secondary {
+  border-bottom: 0;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-topbar-row-primary {
+  padding-bottom: 4px;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-topbar-row-secondary {
+  justify-content: flex-start;
+  width: fit-content;
+  max-width: 100%;
+  gap: 8px;
+  padding: 4px;
+  border: 1px solid rgba(226, 232, 240, 0.96);
+  border-radius: 12px;
+  background: #fff;
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-primary-tab,
+#view-attendance #attendanceStatsPanel .attendance-stats-bookmark-tab {
+  min-height: 36px;
+  border: 1px solid transparent;
+  border-bottom: 1px solid transparent;
+  border-radius: var(--arls-photo-radius);
+  background: transparent;
+  box-shadow: none;
+  color: var(--ui-text-secondary);
+}
+
+#view-attendance #attendanceStatsPanel .attendance-stats-primary-tab.active,
+#view-attendance #attendanceStatsPanel .attendance-stats-bookmark-tab.active {
+  border-color: rgba(234, 88, 12, 0.32);
+  background: rgba(234, 88, 12, 0.08);
+  color: var(--arls-photo-accent);
+  box-shadow: inset 0 0 0 1px rgba(234, 88, 12, 0.08);
+}
+
+#view-requests .requests-filter-icon-button,
+#view-leave .requests-filter-icon-button {
+  width: auto;
+  min-width: 104px;
+  padding: 0 14px;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 700;
+}
+
+#view-requests .requests-filter-site-label,
+#view-leave .requests-filter-site-label {
+  display: inline-flex;
+  align-items: center;
+  color: currentColor;
+}
+
+#view-requests .requests-filter-icon-button svg,
+#view-leave .requests-filter-icon-button svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.72;
+}
+
+#view-leave .leave-usage-period-controls {
+  align-items: end;
+  gap: 4px;
+}
+
+#view-leave .leave-usage-period-controls .btn-icon {
+  width: 28px;
+  min-width: 28px;
+  min-height: var(--arls-photo-control-h);
+  height: var(--arls-photo-control-h);
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ui-text-secondary);
+  font-size: 18px;
+}
+
+#view-leave .leave-usage-period-controls .btn-icon:hover,
+#view-leave .leave-usage-period-controls .btn-icon:focus-visible {
+  background: rgba(234, 88, 12, 0.08);
+  color: var(--arls-photo-accent);
+}
+
+#view-schedule .schedule-wizard-step-connector {
+  left: calc(50% + 20px);
+  right: calc(-50% + 20px);
+  transform: none;
+}
+
+#view-schedule .schedule-upload-main-canvas,
+#view-schedule .schedule-upload-step-rail {
+  min-width: 0;
+}
+
+.detail-rail .detail-rail-fact-grid,
+.employee-directory-drawer-meta-grid,
+.site-directory-fact-grid {
+  gap: 10px;
+}
+
+.detail-rail .detail-rail-fact-card,
+.employee-directory-drawer-meta-item,
+.site-directory-fact-card {
+  align-content: center;
+  min-height: 62px;
+  background: #fff;
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+#view-hr
+  .hr-approval-procedure-workspace.is-saved-unified
+  #hrApprovalProcedureEditor {
+  justify-items: center;
+}
+
+#view-hr .hr-approval-saved-stage-stack {
+  width: min(100%, 720px);
+  margin-inline: auto;
+  justify-items: stretch;
+}
+
+#view-hr .hr-approval-saved-stage-stack-head {
+  justify-content: center;
+  text-align: center;
+}
+
+#view-hr .hr-approval-stage-flow.is-saved {
+  width: min(100%, 620px);
+  justify-self: center;
+}
+
+#view-hr .hr-approval-stage-node {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+#view-hr .hr-approval-stage-marker {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(234, 88, 12, 0.36);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--arls-photo-accent);
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 0 0 5px #fff;
+}
+
+#view-hr .hr-approval-stage-flow:not(:last-child)::after {
+  left: 16px;
+  top: calc(100% + 1px);
+  transform: none;
+  background: rgba(234, 88, 12, 0.36);
+}
+
+#view-hr .hr-approval-stage-card.is-saved {
+  min-height: 84px;
+  border-radius: 14px;
+}
+
+@media (max-width: 1023px) {
+  #view-leave #leaveWorkspaceDesktop {
+    display: grid !important;
+    gap: 12px !important;
+    min-width: 0 !important;
+  }
+
+  #view-leave .leave-workspace-tabbar-row,
+  #view-leave .leave-workspace-header-nav,
+  #view-leave #leaveWorkspaceTabs {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  #view-leave .leave-workspace-tabbar-row {
+    align-items: stretch !important;
+    gap: 10px !important;
+    flex-wrap: wrap !important;
+  }
+
+  #view-leave .leave-workspace-header-actions {
+    width: 100% !important;
+  }
+
+  #view-leave .leave-workspace-header-actions .btn {
+    width: 100% !important;
+  }
+
+  #view-leave .leave-usage-toolbar,
+  #view-leave .leave-requests-filter-controls {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
+  }
+}
+
+@media (max-width: 767px) {
+  #view-requests #requestsUnifiedDetailBackdrop:not(.hidden),
+  #view-leave #leaveWorkspaceDetailBackdrop:not(.hidden) {
+    display: block;
+  }
+
+  #view-requests #requestsUnifiedDetailPanel.requests-detail-drawer.is-open,
+  #view-leave #leaveWorkspaceDetailPanel.requests-detail-drawer.is-open {
+    position: fixed;
+    top: calc(var(--sat, 0px) + 58px);
+    right: 12px;
+    bottom: calc(var(--sab, 0px) + 72px);
+    left: 12px;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    margin: 0;
+    padding: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+    transform: none;
+    overflow: auto;
+    z-index: 80;
+  }
+
+  #view-requests
+    #requestsUnifiedDetailPanel.requests-detail-drawer.is-open
+    .requests-drawer-close,
+  #view-leave
+    #leaveWorkspaceDetailPanel.requests-detail-drawer.is-open
+    .requests-drawer-close {
+    display: inline-flex;
+  }
+
+  #view-requests .requests-detail-field,
+  #view-leave .requests-detail-field {
+    grid-template-columns: minmax(88px, 0.38fr) minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+  }
+
+  #view-reports .reports-finance-submit-table-wrap,
+  #view-reports .reports-finance-download-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #view-reports .reports-finance-submit-table,
+  #view-reports .reports-finance-download-table {
+    min-width: 680px;
+  }
+
+  #view-reports .reports-finance-submit-table .admin-table-empty-row td,
+  #view-reports .reports-finance-download-table .admin-table-empty-row td {
+    min-width: 360px;
+    text-align: center;
+    white-space: nowrap;
+    word-break: keep-all;
+    overflow-wrap: normal;
+  }
+}
+
+/* Unified upload wizard final overrides: keep this after legacy rail rules. */
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-wizard-layout.arls-upload-wizard__layout,
+#view-schedule #scheduleUploadPanel.arls-upload-wizard
+  .schedule-upload-wizard-layout.arls-upload-wizard__layout {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-step-rail.arls-upload-wizard__progress,
+#view-schedule #scheduleUploadPanel.arls-upload-wizard
+  .schedule-upload-step-rail.arls-upload-wizard__progress {
+  width: 100% !important;
+  padding: 20px 28px 16px !important;
+  border-right: 0 !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.82) !important;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%) !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-step-rail-list.arls-upload-wizard__steps,
+#view-schedule #scheduleUploadPanel.arls-upload-wizard
+  .schedule-wizard-progress.arls-upload-wizard__steps {
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: repeat(var(--wizard-step-count, 4), minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  padding: 0 !important;
+}
+
+#view-schedule #scheduleUploadPanel.arls-upload-wizard
+  .schedule-wizard-progress.arls-upload-wizard__steps.hidden,
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-step-rail-list.arls-upload-wizard__steps.hidden {
+  display: none !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-step-rail-list.arls-upload-wizard__steps {
+  --wizard-step-count: 3;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-step-rail-list.arls-upload-wizard__steps::before,
+#view-schedule #scheduleUploadPanel.arls-upload-wizard
+  .schedule-wizard-progress.arls-upload-wizard__steps::before {
+  content: "";
+  position: absolute !important;
+  top: 15px !important;
+  right: calc((100% / var(--wizard-step-count, 4) / 2) + 15px) !important;
+  left: calc((100% / var(--wizard-step-count, 4) / 2) + 15px) !important;
+  display: block !important;
+  width: auto !important;
+  height: 2px !important;
+  background: rgba(203, 213, 225, 0.72) !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-step-rail-list.arls-upload-wizard__steps::after,
+#view-schedule #scheduleUploadPanel.arls-upload-wizard
+  .schedule-wizard-progress.arls-upload-wizard__steps::after {
+  content: "";
+  position: absolute !important;
+  top: 15px !important;
+  left: calc((100% / var(--wizard-step-count, 4) / 2) + 15px) !important;
+  display: block !important;
+  width: var(--arls-upload-wizard-progress, 0%) !important;
+  max-width: calc(100% - (100% / var(--wizard-step-count, 4)) - 30px) !important;
+  height: 2px !important;
+  background: #f97316 !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-step-rail-list::before,
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-step-rail-item::after,
+#view-schedule #scheduleUploadPanel.arls-upload-wizard
+  .schedule-wizard-step:not(:last-child)::after {
+  display: none !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-step-rail-item.arls-upload-wizard__step,
+#view-schedule #scheduleUploadPanel.arls-upload-wizard
+  .schedule-wizard-step.arls-upload-wizard__step {
+  position: relative !important;
+  z-index: 1 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  justify-items: center !important;
+  min-height: 58px !important;
+  padding: 30px 8px 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #64748b !important;
+  text-align: center !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-step-rail-item.arls-upload-wizard__step
+  .reports-panel-stepper-index,
+#view-schedule #scheduleUploadPanel.arls-upload-wizard
+  .schedule-wizard-step.arls-upload-wizard__step
+  .schedule-wizard-step-marker {
+  position: absolute !important;
+  top: 0 !important;
+  left: 50% !important;
+  width: 30px !important;
+  height: 30px !important;
+  transform: translateX(-50%) !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-main-canvas.arls-upload-wizard__canvas,
+#view-schedule #scheduleUploadPanel.arls-upload-wizard
+  .schedule-upload-main-canvas.arls-upload-wizard__canvas {
+  width: min(100%, 1180px) !important;
+  margin-inline: auto !important;
+}
+
+@media (max-width: 900px) {
+  #view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+    .reports-finance-step-rail-list.arls-upload-wizard__steps,
+  #view-schedule #scheduleUploadPanel.arls-upload-wizard
+    .schedule-wizard-progress.arls-upload-wizard__steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  #view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+    .reports-finance-step-rail-list.arls-upload-wizard__steps::before,
+  #view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+    .reports-finance-step-rail-list.arls-upload-wizard__steps::after,
+  #view-schedule #scheduleUploadPanel.arls-upload-wizard
+    .schedule-wizard-progress.arls-upload-wizard__steps::before,
+  #view-schedule #scheduleUploadPanel.arls-upload-wizard
+    .schedule-wizard-progress.arls-upload-wizard__steps::after {
+    display: none !important;
+  }
+
+  #view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+    .reports-finance-step-rail-item.arls-upload-wizard__step,
+  #view-schedule #scheduleUploadPanel.arls-upload-wizard
+    .schedule-wizard-step.arls-upload-wizard__step {
+    justify-items: start !important;
+    min-height: 48px !important;
+    padding: 10px 12px 10px 48px !important;
+    border: 1px solid rgba(203, 213, 225, 0.82) !important;
+    border-radius: 8px !important;
+    text-align: left !important;
+  }
+
+  #view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+    .reports-finance-step-rail-item.arls-upload-wizard__step
+    .reports-panel-stepper-index,
+  #view-schedule #scheduleUploadPanel.arls-upload-wizard
+    .schedule-wizard-step.arls-upload-wizard__step
+    .schedule-wizard-step-marker {
+    top: 50% !important;
+    left: 16px !important;
+    width: 24px !important;
+    height: 24px !important;
+    transform: translateY(-50%) !important;
+  }
+}
+
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-step-rail-item.arls-upload-wizard__step[data-step-state="active"]:not(
+    [aria-current="step"]
+  )
+  .reports-panel-stepper-index {
+  border-color: rgba(203, 213, 225, 0.82) !important;
+  background: #fff !important;
+  color: #64748b !important;
+  box-shadow: 0 0 0 6px #fff !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-step-rail-item.arls-upload-wizard__step[data-step-state="complete"]
+  .reports-panel-stepper-index {
+  border-color: rgba(5, 150, 105, 0.42) !important;
+  background: #059669 !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-step-rail-item.arls-upload-wizard__step[aria-current="step"]
+  .reports-panel-stepper-index {
+  border-color: #f97316 !important;
+  background: #fff7ed !important;
+  color: #c2410c !important;
+  box-shadow:
+    inset 0 0 0 4px #fff,
+    0 0 0 1px #f97316 !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
+  .reports-finance-step-rail-item.arls-upload-wizard__step[aria-current="step"]
+  .reports-panel-stepper-label {
+  color: #111827 !important;
+}
+
+/* 2026-04-15 Phase 2 attendance statistics Shople-parity pass */
+#view-attendance[data-attendance-section="stats"] #attendanceStatsPanel {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-grid-head {
+  padding: 0 0 14px !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.86) !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  #attendanceStatsPanelTabs {
+  display: grid !important;
+  gap: 0 !important;
+  padding: 0 0 18px !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-topbar-row-primary {
+  min-height: 44px;
+  padding: 0 0 8px !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.86) !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-primary-tab {
+  position: relative;
+  min-height: 36px;
+  padding: 0 2px 10px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #475569 !important;
+  box-shadow: none !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-primary-tab::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -9px;
+  left: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-primary-tab.active {
+  color: #1d4ed8 !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-primary-tab.active::after {
+  background: #2563eb;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-topbar-row-secondary {
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 12px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-bookmark-tab {
+  min-height: 38px;
+  padding: 0 16px !important;
+  border: 1px solid rgba(203, 213, 225, 0.9) !important;
+  border-bottom: 0 !important;
+  border-radius: 8px 8px 0 0 !important;
+  background: #f8fafc !important;
+  color: #475569 !important;
+  box-shadow: none !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-bookmark-tab.active {
+  border-top-color: #2563eb !important;
+  background: #ffffff !important;
+  color: #1d4ed8 !important;
+  box-shadow: inset 0 2px 0 #2563eb !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-shell,
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-composed-shell {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0 !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-card,
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-card-primary,
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-card-composed,
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-detail-panel {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-card-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  margin: 0 !important;
+  padding: 0 0 14px !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-card-head h4 {
+  margin: 0 !important;
+  font-size: 18px !important;
+  line-height: 1.25 !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-meta {
+  min-height: 30px !important;
+  padding: 0 12px !important;
+  border-radius: 999px !important;
+  background: rgba(255, 247, 237, 0.82) !important;
+  color: #c2410c !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-summary-strip {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  padding: 0 0 14px !important;
+  border: 0 !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-summary-item {
+  min-height: 28px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  display: inline-flex !important;
+  align-items: baseline !important;
+  gap: 6px !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-summary-item:not(:last-child)::after {
+  content: "";
+  width: 1px;
+  height: 14px;
+  margin-left: 8px;
+  background: rgba(203, 213, 225, 0.86);
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-summary-item span {
+  color: #64748b !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-summary-item strong {
+  color: #0f172a !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-chart-shell {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-chart-wrap {
+  position: relative !important;
+  min-height: 360px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  overflow: visible !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-chart-wrap
+  svg {
+  display: block !important;
+  width: 100% !important;
+  height: 360px !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-empty-inline {
+  position: absolute;
+  top: 18px;
+  right: 0;
+  display: grid;
+  gap: 2px;
+  max-width: 320px;
+  padding: 8px 0;
+  text-align: right;
+  pointer-events: none;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-legend {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 12px !important;
+  padding: 8px 0 18px !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-detail-panel {
+  padding-top: 18px !important;
+  border-top: 1px solid rgba(203, 213, 225, 0.86) !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-table-head {
+  margin-bottom: 8px !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-table-wrap-wide {
+  max-height: none !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-table-wide {
+  width: 100% !important;
+  min-width: 760px !important;
+  border-collapse: collapse !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-table-wide
+  th,
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-table-wide
+  td {
+  min-width: 88px !important;
+  padding: 10px 12px !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.96) !important;
+  white-space: nowrap !important;
+  text-align: left !important;
+}
+
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-table-wide
+  th:first-child,
+#view-attendance[data-attendance-section="stats"]
+  #attendanceStatsPanel
+  .attendance-stats-table-wide
+  td:first-child {
+  min-width: 112px !important;
+  background: #fff !important;
+}
+
+@media (max-width: 768px) {
+  #view-attendance[data-attendance-section="stats"]
+    #attendanceStatsPanel
+    .attendance-stats-card-head {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+  }
+
+  #view-attendance[data-attendance-section="stats"]
+    #attendanceStatsPanel
+    .attendance-stats-chart-wrap,
+  #view-attendance[data-attendance-section="stats"]
+    #attendanceStatsPanel
+    .attendance-stats-chart-wrap
+    svg {
+    min-height: 280px !important;
+    height: 280px !important;
+  }
+
+  #view-attendance[data-attendance-section="stats"]
+    #attendanceStatsPanel
+    .attendance-stats-empty-inline {
+    position: static;
+    max-width: none;
+    text-align: left;
+  }
 }

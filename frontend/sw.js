@@ -1,4 +1,4 @@
-const SW_VERSION = 'rg-arls-sw-v20260413-ui-cleanup-01';
+const SW_VERSION = 'rg-arls-sw-v20260415-sentrix-notices-frontend-01';
 const SHELL_CACHE = `${SW_VERSION}-shell`;
 const STATIC_CACHE = `${SW_VERSION}-static`;
 const ACTIVE_CACHES = new Set([SHELL_CACHE, STATIC_CACHE]);
@@ -9,7 +9,9 @@ const SHELL_ASSETS = [
   './config.js',
   './manifest.json',
   './css/styles.css',
+  './css/announcement-workspace.css',
   './js/app.js',
+  './js/announcement-workspace.js',
 ];
 
 function isCacheableStatic(pathname) {

@@ -79,7 +79,16 @@
     />
     <link
       rel="stylesheet"
-      href="css/styles.css?v=20260413-ui-cleanup-01"
+      href="css/styles.css?v=20260415-sentrix-notices-frontend-01"
+    />
+    <link
+      rel="stylesheet"
+      href="css/announcement-workspace.css?v=20260415-sentrix-notices-frontend-01"
+    />
+    <link
+      rel="preload"
+      href="js/announcement-workspace.js?v=20260415-sentrix-notices-frontend-01"
+      as="script"
     />
   </head>
   <body>
@@ -1325,6 +1334,7 @@
                     data-action="requests-open-site-filter"
                     aria-label="현장 필터"
                   >
+                    <span class="requests-filter-site-label">현장</span>
                     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
                       <path
                         d="M3.5 5h13M6 10h8M8.5 15h3"
@@ -2041,6 +2051,7 @@
                           data-action="leave-open-site-filter"
                           aria-label="현장 필터"
                         >
+                          <span class="requests-filter-site-label">현장</span>
                           <svg
                             viewBox="0 0 20 20"
                             fill="none"
@@ -4648,22 +4659,22 @@
               ></div>
             </aside>
 
-            <div
-              id="scheduleUploadPanel"
-              class="stack schedule-tab-panel hidden schedule-upload-workspace"
-            >
-              <div class="schedule-upload-wizard-layout">
+              <div
+                id="scheduleUploadPanel"
+                class="stack schedule-tab-panel hidden schedule-upload-workspace arls-upload-wizard"
+              >
+              <div class="schedule-upload-wizard-layout arls-upload-wizard__layout">
                 <aside
-                  class="schedule-upload-step-rail"
+                  class="schedule-upload-step-rail arls-upload-wizard__progress"
                   aria-label="업로드 단계"
                 >
                   <div
                     id="scheduleBaseWizardProgress"
-                    class="schedule-wizard-progress"
+                    class="schedule-wizard-progress arls-upload-wizard__steps"
                     aria-label="기본 월간 업로드 단계"
                   >
                     <button
-                      class="schedule-wizard-step active"
+                      class="schedule-wizard-step arls-upload-wizard__step active"
                       type="button"
                       data-action="schedule-base-wizard-step"
                       data-step="mapping"
@@ -4672,7 +4683,7 @@
                       근무 템플릿
                     </button>
                     <button
-                      class="schedule-wizard-step"
+                      class="schedule-wizard-step arls-upload-wizard__step"
                       type="button"
                       data-action="schedule-base-wizard-step"
                       data-step="context"
@@ -4681,7 +4692,7 @@
                       대상 선택
                     </button>
                     <button
-                      class="schedule-wizard-step"
+                      class="schedule-wizard-step arls-upload-wizard__step"
                       type="button"
                       data-action="schedule-base-wizard-step"
                       data-step="file"
@@ -4690,7 +4701,7 @@
                       파일 준비
                     </button>
                     <button
-                      class="schedule-wizard-step"
+                      class="schedule-wizard-step arls-upload-wizard__step"
                       type="button"
                       data-action="schedule-base-wizard-step"
                       data-step="review"
@@ -4699,7 +4710,7 @@
                       반영 검토
                     </button>
                     <button
-                      class="schedule-wizard-step"
+                      class="schedule-wizard-step arls-upload-wizard__step"
                       type="button"
                       data-action="schedule-base-wizard-step"
                       data-step="apply"
@@ -4711,11 +4722,11 @@
 
                   <div
                     id="scheduleHqWizardProgress"
-                    class="schedule-wizard-progress hidden"
+                    class="schedule-wizard-progress arls-upload-wizard__steps hidden"
                     aria-label="HQ 지원근무 업로드 단계"
                   >
                     <button
-                      class="schedule-wizard-step active"
+                      class="schedule-wizard-step arls-upload-wizard__step active"
                       type="button"
                       data-action="schedule-hq-wizard-step"
                       data-step="export"
@@ -4724,7 +4735,7 @@
                       지점 선택 확인
                     </button>
                     <button
-                      class="schedule-wizard-step"
+                      class="schedule-wizard-step arls-upload-wizard__step"
                       type="button"
                       data-action="schedule-hq-wizard-step"
                       data-step="upload"
@@ -4733,7 +4744,7 @@
                       작성본 업로드
                     </button>
                     <button
-                      class="schedule-wizard-step"
+                      class="schedule-wizard-step arls-upload-wizard__step"
                       type="button"
                       data-action="schedule-hq-wizard-step"
                       data-step="preview"
@@ -4742,7 +4753,7 @@
                       미리보기
                     </button>
                     <button
-                      class="schedule-wizard-step"
+                      class="schedule-wizard-step arls-upload-wizard__step"
                       type="button"
                       data-action="schedule-hq-wizard-step"
                       data-step="complete"
@@ -4755,7 +4766,7 @@
 
                 <section
                   id="scheduleUploadMainCanvas"
-                  class="schedule-upload-main-canvas"
+                  class="schedule-upload-main-canvas arls-upload-wizard__canvas"
                 >
                   <section
                     id="scheduleExcelWorkflowMappingSection"
@@ -5269,7 +5280,7 @@
                       id="scheduleSupportBlockedReasons"
                       class="list hidden"
                     ></ul>
-                    <div class="schedule-hq-site-selection-shell">
+                    <div class="schedule-hq-site-selection-shell arls-upload-wizard__target-list">
                       <div class="schedule-upload-step-head">
                         <div>
                           <h4>지점 선택 확인</h4>
@@ -5283,15 +5294,17 @@
                           <thead>
                             <tr>
                               <th>
-                                <label class="schedule-hq-site-select-all">
-                                  <input
-                                    id="scheduleSupportHqSelectAllToggle"
-                                    type="checkbox"
-                                    data-action="schedule-support-hq-select-all"
-                                    aria-label="지점 전체 선택"
-                                  />
-                                  <span>선택</span>
-                                </label>
+	                        <label class="schedule-hq-site-select-all">
+	                                  <input
+	                                    id="scheduleSupportHqSelectAllToggle"
+	                                    type="checkbox"
+	                                    data-action="schedule-support-hq-select-all"
+	                                    aria-label="필터 결과 전체 선택"
+	                                  />
+	                                  <span class="sr-only"
+	                                    >필터 결과 전체 선택</span
+	                                  >
+	                                </label>
                               </th>
                               <th>지점명</th>
                               <th>상태</th>
@@ -5301,6 +5314,26 @@
                           </thead>
                           <tbody id="scheduleSupportHqSiteTableBody"></tbody>
                         </table>
+                      </div>
+                      <div
+                        id="scheduleSupportHqPager"
+                        class="arls-upload-wizard__pager hidden"
+                        aria-label="지원근무자 지점 페이지"
+                      >
+                        <div class="arls-upload-wizard__pager-summary">
+                          <strong id="scheduleSupportHqPagerSummary"
+                            >1페이지</strong
+                          >
+                          <span id="scheduleSupportHqPagerRange"
+                            >표시할 지점이 없습니다.</span
+                          >
+                        </div>
+	                        <div
+	                          id="scheduleSupportHqPageButtons"
+	                          class="arls-upload-wizard__pager-actions"
+	                          aria-label="지원근무자 지점 페이지 번호"
+	                        >
+	                        </div>
                       </div>
                       <div
                         class="schedule-wizard-actions schedule-hq-export-actions"
@@ -5696,428 +5729,390 @@
           </section>
 
           <section id="view-notices" class="panel card view hidden">
-            <div class="workspace-head notices-workspace-head">
-              <div class="workspace-head-main">
-                <h2 id="noticesViewTitle">공지사항</h2>
-                <p id="noticesViewSubtitle" class="muted">
-                  운영 공지와 안내를 한곳에서 확인합니다.
-                </p>
-              </div>
-              <div class="workspace-head-actions">
-                <span
-                  id="noticesReadonlyPill"
-                  class="status-pill status-pill-neutral hidden"
-                  >읽기 전용</span
-                >
-                <button
-                  id="noticesCreateBtn"
-                  class="btn btn-primary hidden"
-                  type="button"
-                  data-action="notices-open-compose"
-                >
-                  공지 쓰기
-                </button>
-              </div>
-            </div>
-            <div class="workspace-tabbar-row notices-toolbar-row">
-              <div
-                id="noticesCategoryTabs"
-                class="workspace-tabs"
-                aria-label="공지 카테고리"
-              ></div>
-              <form
-                id="noticesSearchForm"
-                class="notices-search-form"
-                role="search"
-              >
-                <div
-                  id="noticesSearchInputWrap"
-                  class="notices-search-input-wrap"
-                  aria-hidden="true"
-                >
-                  <label class="sr-only" for="noticesSearchInput"
-                    >공지 검색</label
-                  >
-                  <input
-                    id="noticesSearchInput"
-                    type="search"
-                    placeholder="검색어를 입력하세요."
-                  />
-                </div>
-                <button
-                  id="noticesSearchToggleBtn"
-                  class="notices-search-toggle"
-                  type="button"
-                  data-action="notices-search-toggle"
-                  aria-label="검색 열기"
-                >
-                  <span
-                    id="noticesSearchIconSearch"
-                    class="notices-search-toggle-icon"
-                    aria-hidden="true"
-                  >
-                    <svg
-                      viewBox="0 0 20 20"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.7"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      focusable="false"
-                    >
-                      <circle cx="9" cy="9" r="5.5"></circle>
-                      <path d="m13 13 4 4"></path>
-                    </svg>
-                  </span>
-                  <span
-                    id="noticesSearchIconClear"
-                    class="notices-search-toggle-icon hidden"
-                    aria-hidden="true"
-                  >
-                    <svg
-                      viewBox="0 0 20 20"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.7"
-                      stroke-linecap="round"
-                      focusable="false"
-                    >
-                      <path d="M5 5 15 15"></path>
-                      <path d="M15 5 5 15"></path>
-                    </svg>
-                  </span>
-                </button>
-              </form>
-            </div>
+            <div class="sentrix-announcement-workspace">
+              <section class="soc-workspace-panel soc-workspace-system soc-announcement-panel" id="announcementPanel" aria-label="공지사항">
+                    <div id="noticesWorkspace" class="soc-notices-workspace">
+                      <div class="workspace-head notices-workspace-head">
+                        <div class="workspace-head-main">
+                          <h2 id="noticesViewTitle" class="soc-workspace-page-title">공지사항</h2>
+                          <p id="noticesViewSubtitle" class="muted hidden">운영 공지와 안내를 한곳에서 확인합니다.</p>
+                        </div>
+                        <div class="workspace-head-actions">
+                          <span id="noticesReadonlyPill" class="status-pill status-pill-neutral hidden">읽기 전용</span>
+                          <button id="noticesCreateBtn" class="btn btn-primary hidden" type="button" data-action="notices-open-compose">공지 작성</button>
+                        </div>
+                      </div>
 
-            <div id="noticesListPanel" class="notices-panel notices-list-panel">
-              <ul
-                id="noticesList"
-                class="list compact-list notices-list-rows"
-              ></ul>
-            </div>
+                      <div class="workspace-tabbar-row notices-toolbar-row">
+                        <div id="noticesCategoryTabs" class="workspace-tabs" aria-label="공지 카테고리"></div>
+                        <form id="noticesSearchForm" class="notices-search-form" role="search">
+                          <div id="noticesSearchInputWrap" class="notices-search-input-wrap" aria-hidden="true">
+                            <label class="sr-only" for="noticesSearchInput">공지 검색</label>
+                            <input id="noticesSearchInput" type="search" placeholder="검색어를 입력하세요." />
+                          </div>
+                          <button
+                            id="noticesSearchToggleBtn"
+                            class="notices-search-toggle"
+                            type="button"
+                            data-action="notices-search-toggle"
+                            aria-label="검색 열기"
+                          >
+                            <span id="noticesSearchIconSearch" class="notices-search-toggle-icon" aria-hidden="true">
+                              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                                <circle cx="9" cy="9" r="5.5"></circle>
+                                <path d="m13 13 4 4"></path>
+                              </svg>
+                            </span>
+                            <span id="noticesSearchIconClear" class="notices-search-toggle-icon hidden" aria-hidden="true">
+                              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" focusable="false">
+                                <path d="M5 5 15 15"></path>
+                                <path d="M15 5 5 15"></path>
+                              </svg>
+                            </span>
+                          </button>
+                        </form>
+                      </div>
 
-            <div
-              id="noticesDetailPanel"
-              class="notices-panel notices-detail-panel hidden"
-            >
-              <div class="notices-section-head">
-                <div>
-                  <h3 id="noticesDetailTitle">공지 상세</h3>
-                  <p id="noticesDetailMeta" class="muted">
-                    선택한 공지를 준비하는 중입니다.
-                  </p>
-                </div>
-                <div class="notices-detail-actions">
-                  <button
-                    id="noticesDetailEditBtn"
-                    class="btn btn-ghost hidden"
-                    type="button"
-                    data-action="notices-open-edit"
-                  >
-                    수정
-                  </button>
-                  <button
-                    id="noticesDetailDeleteBtn"
-                    class="btn btn-ghost hidden"
-                    type="button"
-                    data-action="notices-delete"
-                  >
-                    삭제
-                  </button>
-                  <button
-                    class="btn btn-ghost"
-                    type="button"
-                    data-action="notices-go-list"
-                  >
-                    목록으로
-                  </button>
-                </div>
-              </div>
-              <div id="noticesDetailBody" class="notices-detail-body"></div>
-            </div>
+                      <div id="noticesListPanel" class="notices-panel notices-list-panel">
+                        <ul id="noticesList" class="list compact-list notices-list-rows"></ul>
+                      </div>
 
-            <div
-              id="noticesComposePanel"
-              class="notices-panel notices-compose-panel hidden"
-            >
-              <section
-                id="noticesComposeSettingsPanel"
-                class="notices-compose-settings-panel"
-                aria-label="게시 설정"
-              >
-                <label
-                  class="input-field notices-compose-setting-field notices-compose-setting-field-compact"
-                  for="noticesComposeCategory"
-                >
-                  <span>카테고리</span>
-                  <select id="noticesComposeCategory"></select>
-                </label>
-                <div
-                  class="notices-compose-setting-field notices-compose-setting-field-inline"
-                >
-                  <span class="notices-compose-setting-label">상단고정</span>
-                  <div class="notices-compose-setting-switchrow">
-                    <button
-                      type="button"
-                      id="noticesComposePinnedToggle"
-                      class="notices-switch-button"
-                      data-action="notices-toggle-pinned"
-                      aria-pressed="false"
-                    >
-                      <span
-                        class="notices-switch-track"
-                        aria-hidden="true"
-                      ></span>
-                      <span class="notices-switch-copy">꺼짐</span>
-                    </button>
-                    <span class="notices-compose-setting-caption"
-                      >최대 3개</span
-                    >
-                  </div>
-                </div>
-                <div
-                  class="notices-compose-setting-field notices-compose-setting-field-actions"
-                >
-                  <button
-                    id="noticesPublishBtn"
-                    class="btn btn-primary notices-command-publish"
-                    type="button"
-                    data-action="notices-publish"
-                  >
-                    발행
-                  </button>
-                </div>
-              </section>
+                      <div id="noticesDetailPanel" class="notices-panel notices-detail-panel hidden">
+                        <div class="notices-section-head">
+                          <div>
+                            <h3 id="noticesDetailTitle">공지 상세</h3>
+                            <p id="noticesDetailMeta" class="muted">선택한 공지를 준비하는 중입니다.</p>
+                          </div>
+                          <div class="notices-detail-actions">
+                            <button id="noticesDetailEditBtn" class="btn btn-ghost hidden" type="button" data-action="notices-open-edit">수정</button>
+                            <button id="noticesDetailDeleteBtn" class="btn btn-ghost hidden" type="button" data-action="notices-delete">삭제</button>
+                            <button class="btn btn-ghost" type="button" data-action="notices-go-list">목록으로</button>
+                          </div>
+                        </div>
+                        <div id="noticesDetailBody" class="notices-detail-body"></div>
+                      </div>
 
-              <div class="notices-compose-document">
-                <label class="sr-only" for="noticesComposeTitle"
-                  >공지 제목</label
-                >
-                <input
-                  id="noticesComposeTitle"
-                  class="notices-compose-title-input"
-                  type="text"
-                  placeholder="공지 제목을 입력하세요."
-                />
+                      <div id="noticesComposePanel" class="notices-panel notices-compose-panel hidden">
+                        <section id="noticesComposeSettingsPanel" class="notices-compose-settings-panel" aria-label="게시 설정">
+                          <label class="input-field notices-compose-setting-field notices-compose-setting-field-compact" for="noticesComposeCategory">
+                            <span>카테고리</span>
+                            <select id="noticesComposeCategory"></select>
+                          </label>
+                          <div class="notices-compose-setting-field notices-compose-setting-field-inline">
+                            <span class="notices-compose-setting-label">상단고정</span>
+                            <div class="notices-compose-setting-switchrow">
+                              <button type="button" id="noticesComposePinnedToggle" class="notices-switch-button" data-action="notices-toggle-pinned" aria-pressed="false">
+                                <span class="notices-switch-track" aria-hidden="true"></span>
+                                <span class="notices-switch-copy">꺼짐</span>
+                              </button>
+                              <span class="notices-compose-setting-caption">최대 3개</span>
+                            </div>
+                          </div>
+                          <div class="notices-compose-setting-field notices-compose-setting-field-actions">
+                            <button id="noticesPublishBtn" class="btn btn-primary notices-command-publish" type="button" data-action="notices-publish">발행</button>
+                            <p id="noticesComposeDraftMeta" class="muted notices-compose-draft-meta hidden" aria-live="polite"></p>
+                          </div>
+                        </section>
 
-                <div
-                  class="notices-compose-toolbar"
-                  role="toolbar"
-                  aria-label="공지 블록 삽입"
-                >
-                  <button
-                    id="noticesComposeInsertImageBtn"
-                    class="notices-toolbar-item"
-                    type="button"
-                    data-action="notices-insert-image-block"
-                    aria-pressed="false"
-                  >
-                    <span class="notices-toolbar-item-icon" aria-hidden="true">
-                      <svg
-                        viewBox="0 0 20 20"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <rect
-                          x="2.5"
-                          y="3.5"
-                          width="15"
-                          height="13"
-                          rx="2.5"
-                        ></rect>
-                        <circle cx="7.2" cy="8" r="1.2"></circle>
-                        <path
-                          d="M4.5 14l3.6-3.8 2.7 2.6 2.1-2.2 2.6 3.4"
-                        ></path>
-                      </svg>
-                    </span>
-                    <span>사진</span>
-                  </button>
-                  <button
-                    id="noticesComposeInsertTableBtn"
-                    class="notices-toolbar-item"
-                    type="button"
-                    data-action="notices-insert-table-block"
-                    aria-pressed="false"
-                  >
-                    <span class="notices-toolbar-item-icon" aria-hidden="true">
-                      <svg
-                        viewBox="0 0 20 20"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <rect
-                          x="2.5"
-                          y="3.5"
-                          width="15"
-                          height="13"
-                          rx="2"
-                        ></rect>
-                        <path d="M2.5 8h15M7.5 3.5v13M12.5 3.5v13"></path>
-                      </svg>
-                    </span>
-                    <span>표</span>
-                  </button>
-                  <button
-                    id="noticesComposeInsertPollBtn"
-                    class="notices-toolbar-item"
-                    type="button"
-                    data-action="notices-insert-poll-block"
-                    aria-pressed="false"
-                  >
-                    <span class="notices-toolbar-item-icon" aria-hidden="true">
-                      <svg
-                        viewBox="0 0 20 20"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M4 16V9"></path>
-                        <path d="M10 16V5"></path>
-                        <path d="M16 16v-7"></path>
-                      </svg>
-                    </span>
-                    <span>투표</span>
-                  </button>
-                  <button
-                    id="noticesComposeInsertDividerBtn"
-                    class="notices-toolbar-item"
-                    type="button"
-                    data-action="notices-insert-divider"
-                  >
-                    <span class="notices-toolbar-item-icon" aria-hidden="true">
-                      <svg
-                        viewBox="0 0 20 20"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                      >
-                        <path d="M3 10h14"></path>
-                        <path d="M3 6h4"></path>
-                        <path d="M13 14h4"></path>
-                      </svg>
-                    </span>
-                    <span>구분선</span>
-                  </button>
-                  <button
-                    id="noticesComposeInsertLinkBtn"
-                    class="notices-toolbar-item"
-                    type="button"
-                    data-action="notices-insert-link"
-                  >
-                    <span class="notices-toolbar-item-icon" aria-hidden="true">
-                      <svg
-                        viewBox="0 0 20 20"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M8 12l4-4"></path>
-                        <path
-                          d="M6.2 13.8 4.8 15.2a2.5 2.5 0 1 1-3.5-3.5l1.4-1.4"
-                        ></path>
-                        <path
-                          d="M13.8 6.2 15.2 4.8a2.5 2.5 0 1 1 3.5 3.5l-1.4 1.4"
-                        ></path>
-                      </svg>
-                    </span>
-                    <span>링크</span>
-                  </button>
-                </div>
+                        <div class="notices-compose-document">
+                          <label class="sr-only" for="noticesComposeTitle">공지 제목</label>
+                          <input id="noticesComposeTitle" class="notices-compose-title-input" type="text" placeholder="공지 제목을 입력하세요." />
 
-                <div
-                  id="noticesComposeTablePicker"
-                  class="notices-table-picker hidden"
-                  aria-label="표 삽입"
-                >
-                  <div class="notices-table-picker-head">
-                    <strong>표 삽입</strong>
-                    <span id="noticesComposeTablePickerLabel">2 x 2 표</span>
-                  </div>
-                  <div
-                    id="noticesComposeTablePickerGrid"
-                    class="notices-table-picker-grid"
-                    role="grid"
-                    aria-label="표 크기 선택"
-                  ></div>
-                </div>
+                          <div class="notices-compose-toolbar" role="toolbar" aria-label="공지 편집 도구">
+                            <div class="notices-compose-toolbar-group notices-compose-toolbar-group--format" aria-label="텍스트 서식">
+                              <button id="noticesComposeFormatBoldBtn" class="notices-toolbar-item notices-toolbar-item-compact" type="button" data-action="notices-format-bold" data-notice-rich-toolbar="true" aria-label="굵게">
+                                <span class="notices-toolbar-item-icon notices-toolbar-item-glyph" aria-hidden="true">B</span>
+                                <span>굵게</span>
+                              </button>
+                              <button id="noticesComposeFormatItalicBtn" class="notices-toolbar-item notices-toolbar-item-compact" type="button" data-action="notices-format-italic" data-notice-rich-toolbar="true" aria-label="기울임">
+                                <span class="notices-toolbar-item-icon notices-toolbar-item-glyph notices-toolbar-item-glyph-italic" aria-hidden="true">I</span>
+                                <span>기울임</span>
+                              </button>
+                              <button id="noticesComposeFormatUnderlineBtn" class="notices-toolbar-item notices-toolbar-item-compact" type="button" data-action="notices-format-underline" data-notice-rich-toolbar="true" aria-label="밑줄">
+                                <span class="notices-toolbar-item-icon notices-toolbar-item-glyph notices-toolbar-item-glyph-underline" aria-hidden="true">U</span>
+                                <span>밑줄</span>
+                              </button>
+                              <button id="noticesComposeInsertLinkBtn" class="notices-toolbar-item notices-toolbar-item-compact" type="button" data-action="notices-format-link" data-notice-rich-toolbar="true">
+                                <span class="notices-toolbar-item-icon" aria-hidden="true">
+                                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M8 12l4-4"></path>
+                                    <path d="M6.2 13.8 4.8 15.2a2.5 2.5 0 1 1-3.5-3.5l1.4-1.4"></path>
+                                    <path d="M13.8 6.2 15.2 4.8a2.5 2.5 0 1 1 3.5 3.5l-1.4 1.4"></path>
+                                  </svg>
+                                </span>
+                                <span>링크</span>
+                              </button>
+                              <div class="notices-toolbar-floating-control notices-toolbar-size-control">
+                                <label class="sr-only" for="noticesComposeFontSizeInput">글자 크기</label>
+                                <div class="notices-toolbar-size-input-wrap">
+                                  <input
+                                    id="noticesComposeFontSizeInput"
+                                    class="notices-toolbar-size-input"
+                                    type="text"
+                                    inputmode="decimal"
+                                    autocomplete="off"
+                                    value="14"
+                                    data-notice-rich-toolbar="true"
+                                    aria-label="글자 크기"
+                                  />
+                                  <button
+                                    id="noticesComposeFontSizeToggleBtn"
+                                    class="notices-toolbar-floating-toggle"
+                                    type="button"
+                                    data-action="notices-toggle-font-size-menu"
+                                    data-notice-rich-toolbar="true"
+                                    aria-haspopup="dialog"
+                                    aria-expanded="false"
+                                    aria-label="글자 크기 목록"
+                                  >
+                                    <span class="notices-toolbar-chevron" aria-hidden="true"></span>
+                                  </button>
+                                </div>
+                                <div id="noticesComposeFontSizeMenu" class="notices-toolbar-popover notices-toolbar-size-menu hidden" role="dialog" aria-label="글자 크기 선택">
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="8" data-notice-rich-toolbar="true">8</button>
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="10" data-notice-rich-toolbar="true">10</button>
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="11" data-notice-rich-toolbar="true">11</button>
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="11.5" data-notice-rich-toolbar="true">11.5</button>
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="12" data-notice-rich-toolbar="true">12</button>
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="14" data-notice-rich-toolbar="true">14</button>
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="16" data-notice-rich-toolbar="true">16</button>
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="18" data-notice-rich-toolbar="true">18</button>
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="20" data-notice-rich-toolbar="true">20</button>
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="22" data-notice-rich-toolbar="true">22</button>
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="24" data-notice-rich-toolbar="true">24</button>
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="26" data-notice-rich-toolbar="true">26</button>
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="28" data-notice-rich-toolbar="true">28</button>
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="36" data-notice-rich-toolbar="true">36</button>
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="48" data-notice-rich-toolbar="true">48</button>
+                                  <button type="button" class="notices-toolbar-size-option" data-action="notices-apply-font-size" data-value="72" data-notice-rich-toolbar="true">72</button>
+                                </div>
+                              </div>
+                              <div class="notices-toolbar-floating-control notices-toolbar-color-control">
+                                <button
+                                  id="noticesComposeTextColorBtn"
+                                  class="notices-toolbar-color-trigger"
+                                  type="button"
+                                  data-action="notices-toggle-text-color-palette"
+                                  data-notice-rich-toolbar="true"
+                                  aria-haspopup="dialog"
+                                  aria-expanded="false"
+                                  aria-label="글자색"
+                                >
+                                  <span class="notices-toolbar-color-glyph" aria-hidden="true">A</span>
+                                  <span class="notices-toolbar-color-line" aria-hidden="true"></span>
+                                  <span class="notices-toolbar-chevron" aria-hidden="true"></span>
+                                </button>
+                                <div id="noticesComposeTextColorPalette" class="notices-toolbar-popover notices-color-palette hidden" role="dialog" aria-label="글자색 선택">
+                                  <button type="button" class="notices-color-swatch notices-color-swatch-default" data-action="notices-apply-text-color" data-value="default" data-notice-rich-toolbar="true" aria-label="기본 글자색"></button>
+                                  <button type="button" class="notices-color-swatch notices-color-swatch-orange" data-action="notices-apply-text-color" data-value="orange" data-notice-rich-toolbar="true" aria-label="주황 글자색"></button>
+                                  <button type="button" class="notices-color-swatch notices-color-swatch-red" data-action="notices-apply-text-color" data-value="red" data-notice-rich-toolbar="true" aria-label="빨강 글자색"></button>
+                                  <button type="button" class="notices-color-swatch notices-color-swatch-blue" data-action="notices-apply-text-color" data-value="blue" data-notice-rich-toolbar="true" aria-label="파랑 글자색"></button>
+                                  <button type="button" class="notices-color-swatch notices-color-swatch-green" data-action="notices-apply-text-color" data-value="green" data-notice-rich-toolbar="true" aria-label="초록 글자색"></button>
+                                  <button type="button" class="notices-color-swatch notices-color-swatch-gray" data-action="notices-apply-text-color" data-value="gray" data-notice-rich-toolbar="true" aria-label="회색 글자색"></button>
+                                </div>
+                              </div>
+                              <div class="notices-toolbar-floating-control notices-toolbar-highlight-control">
+                                <button
+                                  id="noticesComposeHighlightBtn"
+                                  class="notices-toolbar-highlight-trigger"
+                                  type="button"
+                                  data-action="notices-toggle-highlight-palette"
+                                  data-notice-rich-toolbar="true"
+                                  aria-haspopup="dialog"
+                                  aria-expanded="false"
+                                  aria-label="배경색"
+                                >
+                                  <span class="notices-toolbar-highlight-chip" aria-hidden="true"></span>
+                                  <span class="notices-toolbar-chevron" aria-hidden="true"></span>
+                                </button>
+                                <div id="noticesComposeHighlightPalette" class="notices-toolbar-popover notices-color-palette notices-color-palette-highlight hidden" role="dialog" aria-label="배경색 선택">
+                                  <button type="button" class="notices-color-swatch notices-color-swatch-none" data-action="notices-apply-highlight-color" data-value="none" data-notice-rich-toolbar="true" aria-label="배경색 없음"></button>
+                                  <button type="button" class="notices-color-swatch notices-color-swatch-yellow" data-action="notices-apply-highlight-color" data-value="yellow-soft" data-notice-rich-toolbar="true" aria-label="노란 배경색"></button>
+                                  <button type="button" class="notices-color-swatch notices-color-swatch-orange-soft" data-action="notices-apply-highlight-color" data-value="orange-soft" data-notice-rich-toolbar="true" aria-label="주황 배경색"></button>
+                                  <button type="button" class="notices-color-swatch notices-color-swatch-red-soft" data-action="notices-apply-highlight-color" data-value="red-soft" data-notice-rich-toolbar="true" aria-label="빨강 배경색"></button>
+                                  <button type="button" class="notices-color-swatch notices-color-swatch-blue-soft" data-action="notices-apply-highlight-color" data-value="blue-soft" data-notice-rich-toolbar="true" aria-label="파랑 배경색"></button>
+                                  <button type="button" class="notices-color-swatch notices-color-swatch-green-soft" data-action="notices-apply-highlight-color" data-value="green-soft" data-notice-rich-toolbar="true" aria-label="초록 배경색"></button>
+                                  <button type="button" class="notices-color-swatch notices-color-swatch-gray-soft" data-action="notices-apply-highlight-color" data-value="gray-soft" data-notice-rich-toolbar="true" aria-label="회색 배경색"></button>
+                                </div>
+                              </div>
+                              <button id="noticesComposeAlignLeftBtn" class="notices-toolbar-item notices-toolbar-item-compact" type="button" data-action="notices-format-align-left" data-notice-rich-toolbar="true">
+                                <span class="notices-toolbar-item-icon" aria-hidden="true">
+                                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+                                    <path d="M3 5h14"></path>
+                                    <path d="M3 9h10"></path>
+                                    <path d="M3 13h14"></path>
+                                    <path d="M3 17h9"></path>
+                                  </svg>
+                                </span>
+                                <span>왼쪽</span>
+                              </button>
+                              <button id="noticesComposeAlignCenterBtn" class="notices-toolbar-item notices-toolbar-item-compact" type="button" data-action="notices-format-align-center" data-notice-rich-toolbar="true">
+                                <span class="notices-toolbar-item-icon" aria-hidden="true">
+                                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+                                    <path d="M3 5h14"></path>
+                                    <path d="M5 9h10"></path>
+                                    <path d="M3 13h14"></path>
+                                    <path d="M6 17h8"></path>
+                                  </svg>
+                                </span>
+                                <span>가운데</span>
+                              </button>
+                              <button id="noticesComposeAlignRightBtn" class="notices-toolbar-item notices-toolbar-item-compact" type="button" data-action="notices-format-align-right" data-notice-rich-toolbar="true">
+                                <span class="notices-toolbar-item-icon" aria-hidden="true">
+                                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+                                    <path d="M3 5h14"></path>
+                                    <path d="M7 9h10"></path>
+                                    <path d="M3 13h14"></path>
+                                    <path d="M8 17h9"></path>
+                                  </svg>
+                                </span>
+                                <span>오른쪽</span>
+                              </button>
+                            </div>
+                            <div class="notices-compose-toolbar-group notices-compose-toolbar-group--insert" aria-label="블록 삽입">
+                            <button id="noticesComposeInsertImageBtn" class="notices-toolbar-item" type="button" data-action="notices-insert-image-block" aria-pressed="false">
+                              <span class="notices-toolbar-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                                  <rect x="2.5" y="3.5" width="15" height="13" rx="2.5"></rect>
+                                  <circle cx="7.2" cy="8" r="1.2"></circle>
+                                  <path d="M4.5 14l3.6-3.8 2.7 2.6 2.1-2.2 2.6 3.4"></path>
+                                </svg>
+                              </span>
+                              <span>사진</span>
+                            </button>
+                            <button id="noticesComposeInsertTableBtn" class="notices-toolbar-item" type="button" data-action="notices-insert-table-block" aria-pressed="false">
+                              <span class="notices-toolbar-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                                  <rect x="2.5" y="3.5" width="15" height="13" rx="2"></rect>
+                                  <path d="M2.5 8h15M7.5 3.5v13M12.5 3.5v13"></path>
+                                </svg>
+                              </span>
+                              <span>표</span>
+                            </button>
+                            <button id="noticesComposeInsertPollBtn" class="notices-toolbar-item" type="button" data-action="notices-insert-poll-block" aria-pressed="false">
+                              <span class="notices-toolbar-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                                  <path d="M4 16V9"></path>
+                                  <path d="M10 16V5"></path>
+                                  <path d="M16 16v-7"></path>
+                                </svg>
+                              </span>
+                              <span>투표</span>
+                            </button>
+                            <button id="noticesComposeInsertDividerBtn" class="notices-toolbar-item" type="button" data-action="notices-insert-divider">
+                              <span class="notices-toolbar-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+                                  <path d="M3 10h14"></path>
+                                  <path d="M3 6h4"></path>
+                                  <path d="M13 14h4"></path>
+                                </svg>
+                              </span>
+                              <span>구분선</span>
+                            </button>
+                            </div>
+                          </div>
 
-                <div
-                  id="noticesComposeDocumentFlow"
-                  class="notices-compose-document-flow"
-                ></div>
+                          <div id="noticesComposeTablePicker" class="notices-table-picker hidden" aria-label="표 삽입">
+                            <div class="notices-table-picker-head">
+                              <strong>표 삽입</strong>
+                              <span id="noticesComposeTablePickerLabel">2 x 2 표</span>
+                            </div>
+                            <div id="noticesComposeTablePickerGrid" class="notices-table-picker-grid" role="grid" aria-label="표 크기 선택"></div>
+                          </div>
 
-                <section
-                  id="noticesComposeImageBlock"
-                  class="notices-compose-inline-block hidden"
-                  aria-label="이미지 블록"
-                  data-notice-inline-kind="image"
-                >
-                  <div class="notices-compose-inline-meta">
-                    <span class="notices-compose-inline-kind">사진</span>
-                    <button
-                      type="button"
-                      class="notices-inline-remove"
-                      data-action="notices-remove-image-block"
-                    >
-                      삭제
-                    </button>
-                  </div>
-                  <div
-                    id="noticesComposeImagesPanel"
-                    class="notices-images-panel"
-                  >
-                    <input
-                      id="noticesComposeImageInput"
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      class="sr-only"
-                    />
-                    <div
-                      id="noticesComposeImageDropzone"
-                      class="notices-image-dropzone"
-                      data-action="notices-image-pick"
-                      tabindex="0"
-                      role="button"
-                      aria-label="공지 이미지 추가"
-                    >
-                      <span class="notices-image-dropzone-label"
-                        >이미지 추가</span
-                      >
-                      <span class="notices-image-dropzone-helper"
-                        >클릭, 드래그, 붙여넣기</span
-                      >
+                          <div id="noticesComposeDocumentFlow" class="notices-compose-document-flow"></div>
+
+                          <section id="noticesComposeImageBlock" class="notices-compose-inline-block notices-compose-image-flow-block hidden" aria-label="이미지 블록" data-notice-inline-kind="image">
+                            <input id="noticesComposeImageInput" type="file" accept="image/*" multiple class="sr-only" />
+                            <div id="noticesComposeImageDropzone" class="notices-image-dropzone" data-action="notices-image-pick" tabindex="0" role="button" aria-label="공지 이미지 추가">
+                              <span class="notices-image-dropzone-label">이미지 추가</span>
+                              <span class="notices-image-dropzone-helper">클릭, 드래그, 붙여넣기</span>
+                            </div>
+                            <div id="noticesComposeImageList" class="notices-image-list" role="list"></div>
+                          </section>
+
+                          <div class="notices-compose-footer">
+                            <button class="btn btn-ghost notices-command-link" type="button" data-action="notices-go-list">목록으로</button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <ul
-                      id="noticesComposeImageList"
-                      class="notices-image-list"
-                    ></ul>
+                  </section>
+              <div id="noticesPollModalBackdrop" class="sheet-backdrop hidden" data-action="notices-poll-modal-close"></div>
+              <section id="noticesPollModal" class="notices-compose-poll-modal hidden" role="dialog" aria-modal="true" aria-labelledby="noticesPollModalTitle">
+                  <div class="notices-compose-poll-modal-head">
+                    <div>
+                      <h3 id="noticesPollModalTitle">투표 설정</h3>
+                      <p class="muted">질문과 선택지를 정리한 뒤 문서 안에 투표를 넣습니다.</p>
+                    </div>
+                    <button type="button" class="btn btn-ghost" data-action="notices-poll-modal-close">닫기</button>
+                  </div>
+                  <div class="notices-compose-poll-modal-body">
+                    <label class="input-field notices-compose-inline-input-field" for="noticesComposePollModalQuestion">
+                      <span>질문</span>
+                      <input id="noticesComposePollModalQuestion" type="text" placeholder="예: 이번 주 야간 근무 희망 여부를 알려주세요." />
+                    </label>
+
+                    <div class="notices-compose-setting-cluster notices-compose-setting-cluster-modal">
+                      <label class="input-field notices-compose-setting-field" for="noticesComposePollModalVisibility">
+                        <span>결과 공개</span>
+                        <select id="noticesComposePollModalVisibility">
+                          <option value="always">즉시 공개</option>
+                          <option value="after_close">마감 후 공개</option>
+                        </select>
+                      </label>
+
+                      <label class="input-field notices-compose-setting-field" for="noticesComposePollModalClosesAt">
+                        <span>마감 시각</span>
+                        <input id="noticesComposePollModalClosesAt" type="datetime-local" />
+                      </label>
+                    </div>
+
+                    <div class="notices-compose-toggle-stack">
+                      <div class="notices-compose-toggle-row">
+                        <div class="notices-compose-toggle-copy">
+                          <strong>재투표 허용</strong>
+                        </div>
+                        <button type="button" id="noticesComposePollModalAllowChangeToggle" class="notices-switch-button" data-action="notices-toggle-poll-modal-allow-change" aria-pressed="false">
+                          <span class="notices-switch-track" aria-hidden="true"></span>
+                          <span class="notices-switch-copy">허용 안 함</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="notices-poll-editor-head">
+                      <strong>선택지</strong>
+                      <button id="noticesComposePollModalAddOptionBtn" class="notices-editor-action" type="button" data-action="notices-poll-modal-add-option">선택지 추가</button>
+                    </div>
+                    <ul id="noticesComposePollModalOptionList" class="notices-poll-option-list"></ul>
+                  </div>
+                  <div class="notices-compose-poll-modal-actions">
+                    <button type="button" class="btn btn-ghost" data-action="notices-poll-modal-close">취소</button>
+                    <button type="button" class="btn btn-primary" data-action="notices-poll-modal-save">투표 넣기</button>
                   </div>
                 </section>
-
-                <div class="notices-compose-footer">
-                  <button
-                    class="btn btn-ghost notices-command-link"
-                    type="button"
-                    data-action="notices-go-list"
-                  >
-                    목록으로
-                  </button>
-                </div>
-              </div>
+              <div id="noticesLinkModalBackdrop" class="sheet-backdrop hidden" data-action="notices-link-modal-close"></div>
+              <section id="noticesLinkModal" class="notices-compose-link-modal hidden" role="dialog" aria-modal="true" aria-labelledby="noticesLinkModalTitle">
+                  <div class="notices-compose-poll-modal-head">
+                    <div>
+                      <h3 id="noticesLinkModalTitle">링크 설정</h3>
+                      <p class="muted">선택한 텍스트에 연결할 주소를 입력하거나 기존 링크를 수정하세요.</p>
+                    </div>
+                    <button type="button" class="btn btn-ghost" data-action="notices-link-modal-close">닫기</button>
+                  </div>
+                  <div class="notices-compose-poll-modal-body">
+                    <label class="input-field notices-compose-inline-input-field" for="noticesComposeLinkUrl">
+                      <span>링크 URL</span>
+                      <input id="noticesComposeLinkUrl" type="url" placeholder="https://example.com" />
+                    </label>
+                    <p class="muted notices-link-modal-note">빈 값으로 적용하면 링크가 해제됩니다.</p>
+                  </div>
+                  <div class="notices-compose-poll-modal-actions">
+                    <button type="button" class="btn btn-secondary" id="noticesLinkRemoveBtn" data-action="notices-link-modal-remove">링크 해제</button>
+                    <button type="button" class="btn btn-ghost" data-action="notices-link-modal-close">취소</button>
+                    <button type="button" class="btn btn-primary" data-action="notices-link-modal-apply">적용</button>
+                  </div>
+                </section>
             </div>
           </section>
 
@@ -7920,21 +7915,40 @@
                     </tbody>
                   </table>
                 </div>
+                <div
+                  id="scheduleFinanceOverviewPager"
+                  class="arls-upload-wizard__pager reports-finance-pager hidden"
+                  aria-label="Finance 제출 지점 페이지"
+                >
+                  <div class="arls-upload-wizard__pager-summary">
+                    <strong id="scheduleFinanceOverviewPagerSummary"
+                      >1페이지</strong
+                    >
+                    <span id="scheduleFinanceOverviewPagerRange"
+                      >표시할 지점이 없습니다.</span
+                    >
+                  </div>
+                  <div
+                    id="scheduleFinanceOverviewPageButtons"
+                    class="arls-upload-wizard__pager-actions"
+                    aria-label="Finance 제출 지점 페이지 번호"
+                  ></div>
+                </div>
               </section>
 
               <section
                 id="scheduleFinanceWizardView"
-                class="reports-finance-wizard-view hidden"
+                class="reports-finance-wizard-view arls-upload-wizard hidden"
               >
-                <div class="reports-finance-wizard-layout">
+                <div class="reports-finance-wizard-layout arls-upload-wizard__layout">
                   <aside
-                    class="reports-finance-step-rail"
+                    class="reports-finance-step-rail arls-upload-wizard__progress"
                     aria-label="Finance 제출 단계"
                   >
-                    <ol class="reports-finance-step-rail-list">
+                    <ol class="reports-finance-step-rail-list arls-upload-wizard__steps">
                       <li
                         id="reportsFinanceNavScope"
-                        class="reports-finance-step-rail-item"
+                        class="reports-finance-step-rail-item arls-upload-wizard__step"
                         data-step="scope"
                       >
                         <span
@@ -7950,7 +7964,7 @@
                       </li>
                       <li
                         id="reportsFinanceNavReview"
-                        class="reports-finance-step-rail-item"
+                        class="reports-finance-step-rail-item arls-upload-wizard__step"
                         data-step="review"
                       >
                         <span
@@ -7966,7 +7980,7 @@
                       </li>
                       <li
                         id="reportsFinanceNavUpload"
-                        class="reports-finance-step-rail-item"
+                        class="reports-finance-step-rail-item arls-upload-wizard__step"
                         data-step="upload"
                       >
                         <span
@@ -7982,7 +7996,7 @@
                       </li>
                     </ol>
                   </aside>
-                  <section class="reports-finance-main-canvas">
+                  <section class="reports-finance-main-canvas arls-upload-wizard__canvas">
                     <div class="reports-finance-main-head">
                       <div class="reports-finance-main-title-group hidden">
                         <h3>Finance 제출</h3>
@@ -8096,7 +8110,7 @@
                         </div>
                       </section>
                     </div>
-                    <div class="reports-wizard-footer">
+                    <div class="reports-wizard-footer arls-upload-wizard__footer">
                       <button
                         class="btn btn-secondary"
                         type="button"
@@ -8248,6 +8262,23 @@
                     </tr>
                   </tbody>
                 </table>
+              </div>
+              <div
+                id="financeDownloadPager"
+                class="arls-upload-wizard__pager reports-finance-pager hidden"
+                aria-label="Finance 다운로드 지점 페이지"
+              >
+                <div class="arls-upload-wizard__pager-summary">
+                  <strong id="financeDownloadPagerSummary">1페이지</strong>
+                  <span id="financeDownloadPagerRange"
+                    >표시할 지점이 없습니다.</span
+                  >
+                </div>
+                <div
+                  id="financeDownloadPageButtons"
+                  class="arls-upload-wizard__pager-actions"
+                  aria-label="Finance 다운로드 지점 페이지 번호"
+                ></div>
               </div>
             </article>
           </section>
@@ -11066,123 +11097,6 @@
         </div>
       </section>
       <div
-        id="noticesPollModalBackdrop"
-        class="sheet-backdrop hidden"
-        data-action="notices-poll-modal-close"
-      ></div>
-      <section
-        id="noticesPollModal"
-        class="notices-compose-poll-modal hidden"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="noticesPollModalTitle"
-      >
-        <div class="notices-compose-poll-modal-head">
-          <div>
-            <h3 id="noticesPollModalTitle">투표 설정</h3>
-            <p class="muted">
-              질문과 선택지를 정리한 뒤 문서 안에 투표를 넣습니다.
-            </p>
-          </div>
-          <button
-            type="button"
-            class="btn btn-ghost"
-            data-action="notices-poll-modal-close"
-          >
-            닫기
-          </button>
-        </div>
-        <div class="notices-compose-poll-modal-body">
-          <label
-            class="input-field notices-compose-inline-input-field"
-            for="noticesComposePollModalQuestion"
-          >
-            <span>질문</span>
-            <input
-              id="noticesComposePollModalQuestion"
-              type="text"
-              placeholder="예: 이번 주 야간 근무 희망 여부를 알려주세요."
-            />
-          </label>
-
-          <div
-            class="notices-compose-setting-cluster notices-compose-setting-cluster-modal"
-          >
-            <label
-              class="input-field notices-compose-setting-field"
-              for="noticesComposePollModalVisibility"
-            >
-              <span>결과 공개</span>
-              <select id="noticesComposePollModalVisibility">
-                <option value="always">즉시 공개</option>
-                <option value="after_close">마감 후 공개</option>
-              </select>
-            </label>
-
-            <label
-              class="input-field notices-compose-setting-field"
-              for="noticesComposePollModalClosesAt"
-            >
-              <span>마감 시각</span>
-              <input
-                id="noticesComposePollModalClosesAt"
-                type="datetime-local"
-              />
-            </label>
-          </div>
-
-          <div class="notices-compose-toggle-stack">
-            <div class="notices-compose-toggle-row">
-              <div class="notices-compose-toggle-copy">
-                <strong>재투표 허용</strong>
-              </div>
-              <button
-                type="button"
-                id="noticesComposePollModalAllowChangeToggle"
-                class="notices-switch-button"
-                data-action="notices-toggle-poll-modal-allow-change"
-                aria-pressed="false"
-              >
-                <span class="notices-switch-track" aria-hidden="true"></span>
-                <span class="notices-switch-copy">허용 안 함</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="notices-poll-editor-head">
-            <strong>선택지</strong>
-            <button
-              id="noticesComposePollModalAddOptionBtn"
-              class="notices-editor-action"
-              type="button"
-              data-action="notices-poll-modal-add-option"
-            >
-              선택지 추가
-            </button>
-          </div>
-          <ul
-            id="noticesComposePollModalOptionList"
-            class="notices-poll-option-list"
-          ></ul>
-        </div>
-        <div class="notices-compose-poll-modal-actions">
-          <button
-            type="button"
-            class="btn btn-ghost"
-            data-action="notices-poll-modal-close"
-          >
-            취소
-          </button>
-          <button
-            type="button"
-            class="btn btn-primary"
-            data-action="notices-poll-modal-save"
-          >
-            투표 넣기
-          </button>
-        </div>
-      </section>
-      <div
         id="taskProgressBackdrop"
         class="task-progress-backdrop hidden"
       ></div>
@@ -11279,7 +11193,7 @@
     <script src="config.js"></script>
     <script>
       window.__RG_ARLS_ASSET_BUILD_ID__ =
-        window.ENV_BUILD_ID || "20260413-ui-cleanup-01";
+        window.ENV_BUILD_ID || "20260415-sentrix-notices-frontend-01";
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
       window.ENV_BUILD_ID =
@@ -11588,7 +11502,7 @@
 
         window.addEventListener("load", () => {
           navigator.serviceWorker
-            .register("./sw.js?v=20260413-ui-cleanup-01", {
+            .register("./sw.js?v=20260415-sentrix-notices-frontend-01", {
               updateViaCache: "none",
             })
             .then((registration) => {

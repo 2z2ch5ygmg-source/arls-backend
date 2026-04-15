@@ -1561,6 +1561,8 @@ function createInitialScheduleSupportHqWorkspaceState() {
     stale: false,
     staleFields: [],
     successBanner: null,
+    sitePage: 1,
+    sitePageSize: 10,
   };
 }
 
@@ -1572,6 +1574,8 @@ function createInitialReportsState() {
     financeView: "overview",
     financeStep: "scope",
     financeSelectedSiteCode: "",
+    financeOverviewPage: 1,
+    financeOverviewPageSize: 10,
     financeOverviewWorkspace: null,
     financeOverviewLoading: false,
     financeOverviewError: "",
@@ -1579,6 +1583,8 @@ function createInitialReportsState() {
     financeDownloadLoading: false,
     financeDownloadError: "",
     financeDownloadSelectedSiteCodes: [],
+    financeDownloadPage: 1,
+    financeDownloadPageSize: 10,
     supportStep: "overview",
     month: toMonthKey(new Date()),
     appleStatus: null,
@@ -5677,6 +5683,7 @@ function prefetchAttendanceCalendarRecordsInBackground({ force = false } = {}) {
   if (normalizeViewSnapshotName(state.currentView || "") !== "attendance") {
     return;
   }
+  if (getAttendanceWorkspaceSection() === "stats") return;
   if (!state.attendanceView) {
     state.attendanceView = createInitialAttendanceViewState();
   }
@@ -13705,6 +13712,7 @@ function applyReportsWizardSectionSelection(
     if (!(section instanceof HTMLElement)) return;
     section.classList.toggle("hidden", key !== currentStep);
     section.dataset.stepState = stateMap[key]?.state || "idle";
+    section.dataset.stateKey = key;
   });
 }
 
@@ -13713,11 +13721,18 @@ function applyReportsWizardNavSelection(
   currentStep = "",
   stateMap = {},
 ) {
-  Object.entries(navMap).forEach(([key, selector]) => {
+  Object.entries(navMap).forEach(([key, selector], index) => {
     const button = $(selector);
     if (!(button instanceof HTMLElement)) return;
     const stepState = stateMap[key]?.state || "idle";
+    const marker = button.querySelector(".reports-panel-stepper-index");
+    if (marker instanceof HTMLElement) {
+      marker.textContent =
+        stepState === "complete" ? "✓" : String(index + 1);
+    }
+    button.classList.add("arls-upload-wizard__step");
     button.dataset.stepState = stepState;
+    button.dataset.stateKey = key;
     button.classList.toggle("is-current", key === currentStep);
     button.setAttribute("aria-current", key === currentStep ? "step" : "false");
     button.setAttribute(
@@ -13859,8 +13874,22 @@ function renderReportsFinanceDownloadWorkspace() {
   const selectionHint = $("#financeDownloadSelectionHint");
   const downloadBtn = $("#financeDownloadPrimaryBtn");
   const selectAllToggle = $("#financeDownloadSelectAllToggle");
+  const pager = $("#financeDownloadPager");
+  const pagerSummary = $("#financeDownloadPagerSummary");
+  const pagerRange = $("#financeDownloadPagerRange");
+  const pageButtons = $("#financeDownloadPageButtons");
   const loading = Boolean(state.reports.financeDownloadLoading);
   const errorMessage = String(state.reports.financeDownloadError || "").trim();
+  const pagination = getWizardPaginationModel(
+    rows,
+    createWizardPaginationState({
+      page: state.reports.financeDownloadPage,
+      pageSize: state.reports.financeDownloadPageSize,
+    }),
+  );
+  state.reports.financeDownloadPage = pagination.page;
+  state.reports.financeDownloadPageSize = pagination.pageSize;
+  const visibleRows = pagination.visibleItems;
   let selectedSiteCodes = getReportsFinanceDownloadSelectedSiteCodes();
   const validSelectedSiteCodes = selectedSiteCodes.filter((siteCode) =>
     rows.some(
@@ -13982,7 +14011,7 @@ function renderReportsFinanceDownloadWorkspace() {
     return;
   }
 
-  rows.forEach((row) => {
+  visibleRows.forEach((row) => {
     const siteCode = String(row?.site_code || "")
       .trim()
       .toUpperCase();
@@ -14062,6 +14091,27 @@ function renderReportsFinanceDownloadWorkspace() {
     );
     tableBody.appendChild(tr);
   });
+  if (pager instanceof HTMLElement) {
+    pager.classList.toggle("hidden", rows.length <= pagination.pageSize);
+    pager.dataset.page = String(pagination.page);
+    pager.dataset.pageSize = String(pagination.pageSize);
+    pager.dataset.totalItems = String(pagination.totalItems);
+    pager.dataset.totalPages = String(pagination.totalPages);
+  }
+  if (pagerSummary instanceof HTMLElement) {
+    pagerSummary.textContent = `${pagination.page} / ${pagination.totalPages}페이지`;
+  }
+  if (pagerRange instanceof HTMLElement) {
+    const start = pagination.totalItems ? pagination.startIndex + 1 : 0;
+    pagerRange.textContent = `${start}-${pagination.endIndex} / ${pagination.totalItems}개 지점`;
+  }
+  if (pageButtons instanceof HTMLElement) {
+    renderWizardNumericPagination(
+      pageButtons,
+      pagination,
+      "reports-finance-download-page",
+    );
+  }
 }
 
 function getAppleReportMetricValue(metrics = {}, keys = [], fallback = "-") {
@@ -17083,6 +17133,19 @@ function apiRequest(path, options = {}) {
       !options.skipRefreshRetry && !isLoginRequest && !isRefreshRequest;
 
     let authToken = getActiveAccessToken();
+    if (
+      authToken &&
+      allowRefreshRetry &&
+      isAccessTokenNearExpiry(authToken, 120) &&
+      getActiveRefreshToken()
+    ) {
+      const refreshed = await requestTokenRefresh({
+        source: "api_preflight",
+      });
+      if (refreshed) {
+        authToken = getActiveAccessToken();
+      }
+    }
     let result = await sendRequest(authToken);
     if (result.response.status === 401 && allowRefreshRetry) {
       const refreshed = await requestTokenRefresh();
@@ -17213,6 +17276,148 @@ function apiRequest(path, options = {}) {
   return request;
 }
 
+function getApiRootBase() {
+  return String(state.activeApiBase || API_BASE || "/api/v1")
+    .trim()
+    .replace(/\/api\/v1\/?$/i, "")
+    .replace(/\/+$/, "");
+}
+
+function apiRootRequest(path, options = {}) {
+  const normalizedPath = String(path || "").trim().startsWith("/")
+    ? String(path || "").trim()
+    : `/${String(path || "").trim()}`;
+  if (!normalizedPath.startsWith("/api/")) {
+    return apiRequest(normalizedPath, options);
+  }
+
+  const controller = new AbortController();
+  const request = (async () => {
+    const method = options.method || "GET";
+    const baseHeaders = { ...(options.headers || {}) };
+    const contextTenantHeader = String(
+      options.ctxTenantId || options.contextTenantId || "",
+    ).trim();
+    const activeTenantHeader = String(
+      getActiveTenantHeaderValue() || "",
+    ).trim();
+    const resolvedTenantHeader = contextTenantHeader || activeTenantHeader;
+    if (
+      resolvedTenantHeader &&
+      !baseHeaders["X-Tenant-Id"] &&
+      !baseHeaders["x-tenant-id"]
+    ) {
+      baseHeaders["X-Tenant-Id"] = resolvedTenantHeader;
+    }
+    const requestBody =
+      options.body instanceof FormData
+        ? options.body
+        : options.body
+          ? JSON.stringify(options.body)
+          : undefined;
+    if (
+      !baseHeaders["Content-Type"] &&
+      options.body &&
+      !(options.body instanceof FormData)
+    ) {
+      baseHeaders["Content-Type"] = "application/json";
+    }
+    if (
+      method !== "GET" &&
+      method !== "HEAD" &&
+      !baseHeaders["Idempotency-Key"]
+    ) {
+      baseHeaders["Idempotency-Key"] = crypto.randomUUID();
+    }
+
+    const sendRequest = async (authToken = "") => {
+      const headers = { ...baseHeaders };
+      if (authToken) headers.Authorization = `Bearer ${authToken}`;
+      const response = await fetch(`${getApiRootBase()}${normalizedPath}`, {
+        method,
+        headers,
+        body: requestBody,
+        signal: controller.signal,
+        credentials: "omit",
+        mode: "cors",
+        cache: options.noStore ? "no-store" : "default",
+      });
+      const text = await response.text();
+      let payload = null;
+      try {
+        payload = text ? JSON.parse(text) : null;
+      } catch {
+        payload = text;
+      }
+      return {
+        response,
+        text,
+        payload,
+        envelope: normalizeApiEnvelope(payload, response.ok),
+      };
+    };
+
+    const allowRefreshRetry = !options.skipRefreshRetry;
+    let authToken = getActiveAccessToken();
+    if (
+      authToken &&
+      allowRefreshRetry &&
+      isAccessTokenNearExpiry(authToken, 120) &&
+      getActiveRefreshToken()
+    ) {
+      const refreshed = await requestTokenRefresh({
+        source: "announcement_api_preflight",
+      });
+      if (refreshed) authToken = getActiveAccessToken();
+    }
+    let result = await sendRequest(authToken);
+    if (result.response.status === 401 && allowRefreshRetry) {
+      const refreshed = await requestTokenRefresh({
+        source: "announcement_api_retry",
+      });
+      if (refreshed) {
+        authToken = getActiveAccessToken();
+        result = await sendRequest(authToken);
+      }
+    }
+
+    const { response, text, payload, envelope } = result;
+    if (response.status === 401) {
+      const authError = new Error(
+        getApiErrorMessage(
+          envelope,
+          "세션이 만료되었습니다. 다시 로그인해 주세요.",
+        ),
+      );
+      authError.code = "UNAUTHORIZED";
+      authError.status = 401;
+      if (!options.suppressUnauthorizedRedirect) {
+        clearSession();
+        stopPolling();
+        showAuthPanel();
+      }
+      throw authError;
+    }
+    if (!response.ok) {
+      const requestError = new Error(
+        getApiErrorMessage(envelope, `요청 실패 (${response.status})`),
+      );
+      requestError.status = response.status;
+      requestError.response = envelope?.data ?? payload ?? null;
+      requestError.error = envelope?.error ?? null;
+      requestError.envelope = envelope;
+      requestError.responseText = text;
+      requestError.path = normalizedPath;
+      requestError.method = method;
+      throw requestError;
+    }
+    invalidateSnapshotsForMutation(method, normalizedPath);
+    return envelope.data;
+  })();
+
+  return request;
+}
+
 function isApiEnvelope(payload) {
   return Boolean(
     payload &&
@@ -17262,6 +17467,99 @@ function getApiErrorMessage(
 
   return fallbackMessage;
 }
+
+function askArlsAnnouncementConfirm(message = "") {
+  return new Promise((resolve) => {
+    openConfirmDialog({
+      title: "확인",
+      message: String(message || "계속 진행하시겠습니까?").trim(),
+      acceptLabel: "확인",
+      cancelLabel: "취소",
+      onAccept: () => resolve(true),
+      onClose: () => resolve(false),
+    });
+  });
+}
+
+function getArlsAnnouncementAttachmentUrl(source = "", options = {}) {
+  const path = String(source || "").trim();
+  if (!path) return "";
+  if (/^https?:\/\//i.test(path) || path.startsWith("data:")) return path;
+  const url = `${getApiRootBase()}${path.startsWith("/") ? path : `/${path}`}`;
+  if (!options?.download) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}download=1`;
+}
+
+function isArlsAnnouncementRouteActive() {
+  if (normalizeViewSnapshotName(state.currentView || "") === "notices") {
+    return true;
+  }
+  const currentRoute = normalizeRoutePath(
+    parseRouteCandidate(
+      getCurrentRouteWithQuery() || state.currentRoute || "",
+    ).path,
+  );
+  if (currentRoute === ROUTE_FEATURE_NOTICES) {
+    return true;
+  }
+  const hashRoute = normalizeRoutePath(
+    parseRouteCandidate(String(window.location.hash || "").replace(/^#/, ""))
+      .path,
+  );
+  return hashRoute === ROUTE_FEATURE_NOTICES;
+}
+
+function installArlsAnnouncementWorkspaceAdapter() {
+  window.__RG_ARLS_ANNOUNCEMENTS_ADAPTER__ = {
+    api: (path, options = {}) => apiRootRequest(path, options),
+    canManageAnnouncements: () => canManageNotices(),
+    canViewAnnouncements: () => isViewAllowed("notices", getRolePermissions()),
+    confirm: (message) => askArlsAnnouncementConfirm(message),
+    ensurePanelVisible: (panel) => {
+      const view = $("#view-notices");
+      if (!isArlsAnnouncementRouteActive()) {
+        if (view instanceof HTMLElement) {
+          view.classList.add("hidden");
+        }
+        if (panel instanceof HTMLElement) {
+          panel.classList.add("hidden");
+          panel.setAttribute("inert", "");
+          panel.setAttribute("aria-hidden", "true");
+        }
+        return;
+      }
+      if (view instanceof HTMLElement) {
+        view.classList.remove("hidden");
+      }
+      if (panel instanceof HTMLElement) {
+        panel.classList.remove("hidden");
+        panel.removeAttribute("inert");
+        panel.setAttribute("aria-hidden", "false");
+      }
+    },
+    getAttachmentUrl: (source, options = {}) =>
+      getArlsAnnouncementAttachmentUrl(source, options),
+    getRoutePath: () => ROUTE_FEATURE_NOTICES,
+    openRoute: () => {
+      closeSheet();
+      closeDrawer();
+      if (normalizeViewSnapshotName(state.currentView || "") !== "notices") {
+        navigateToRoute(ROUTE_FEATURE_NOTICES, {
+          replace: false,
+          silentDeniedModal: true,
+        }).catch((error) => {
+          console.error("[RG ARLS] announcement route open failed", error);
+        });
+      }
+    },
+    toast: (message, variant = "info", durationMs = 1600) => {
+      const level = variant === "warn" ? "info" : variant;
+      showToast(message, level, durationMs);
+    },
+  };
+}
+
+installArlsAnnouncementWorkspaceAdapter();
 
 function formatInt(value) {
   return (Number(value) || 0).toLocaleString("ko-KR");
@@ -19265,7 +19563,111 @@ function ensureScheduleSupportHqWorkspaceDefaults() {
   if (!workspace.month) workspace.month = toMonthKey(new Date());
   if (!Array.isArray(workspace.selectedSiteCodes))
     workspace.selectedSiteCodes = [];
+  const sitePageSize = Number.parseInt(String(workspace.sitePageSize || 10), 10);
+  workspace.sitePageSize =
+    Number.isFinite(sitePageSize) && sitePageSize > 0 ? sitePageSize : 10;
+  const sitePage = Number.parseInt(String(workspace.sitePage || 1), 10);
+  workspace.sitePage = Number.isFinite(sitePage) && sitePage > 0 ? sitePage : 1;
   return workspace;
+}
+
+function createWizardPaginationState({ page = 1, pageSize = 10 } = {}) {
+  const normalizedPage = Math.max(
+    1,
+    Number.parseInt(String(page || 1), 10) || 1,
+  );
+  const normalizedPageSize = Math.max(
+    1,
+    Number.parseInt(String(pageSize || 10), 10) || 10,
+  );
+  return {
+    page: normalizedPage,
+    pageSize: normalizedPageSize,
+  };
+}
+
+function getWizardPaginationModel(items = [], paginationState = {}) {
+  const rows = Array.isArray(items) ? items : [];
+  const pageSize = Math.max(
+    1,
+    Number.parseInt(String(paginationState.pageSize || 10), 10) || 10,
+  );
+  const totalItems = rows.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const page = Math.max(
+    1,
+    Math.min(
+      totalPages,
+      Number.parseInt(String(paginationState.page || 1), 10) || 1,
+    ),
+  );
+  const startIndex = (page - 1) * pageSize;
+  const endIndex = Math.min(totalItems, startIndex + pageSize);
+  return {
+    page,
+    pageSize,
+    totalItems,
+    totalPages,
+    startIndex,
+    endIndex,
+    visibleItems: rows.slice(startIndex, endIndex),
+  };
+}
+
+function getWizardVisiblePageNumbers(currentPage = 1, totalPages = 1, limit = 5) {
+  const total = Math.max(1, Number.parseInt(String(totalPages || 1), 10) || 1);
+  const count = Math.max(1, Number.parseInt(String(limit || 5), 10) || 5);
+  const current = Math.max(
+    1,
+    Math.min(total, Number.parseInt(String(currentPage || 1), 10) || 1),
+  );
+  if (total <= count) return Array.from({ length: total }, (_, index) => index + 1);
+  const half = Math.floor(count / 2);
+  let start = Math.max(1, current - half);
+  let end = Math.min(total, start + count - 1);
+  start = Math.max(1, end - count + 1);
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+}
+
+function renderWizardNumericPagination(container, pagination, actionName) {
+  if (!(container instanceof HTMLElement)) return;
+  container.innerHTML = "";
+  const page = Number.parseInt(String(pagination?.page || 1), 10) || 1;
+  const totalPages = Number.parseInt(String(pagination?.totalPages || 1), 10) || 1;
+  const pages = getWizardVisiblePageNumbers(page, totalPages, 5);
+  const appendButton = ({ label, targetPage, disabled = false, current = false }) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "arls-upload-wizard__page-btn";
+    button.dataset.action = actionName;
+    button.dataset.page = String(targetPage);
+    button.textContent = String(label);
+    button.setAttribute("aria-label", `${label} 페이지`);
+    button.setAttribute("aria-current", current ? "page" : "false");
+    button.disabled = disabled || current;
+    container.appendChild(button);
+  };
+  if (totalPages > 5) {
+    appendButton({
+      label: "<",
+      targetPage: Math.max(1, page - 1),
+      disabled: page <= 1,
+    });
+  }
+  pages.forEach((item) => {
+    appendButton({
+      label: item,
+      targetPage: item,
+      current: item === page,
+    });
+  });
+  if (totalPages > 5) {
+    appendButton({
+      label: ">",
+      targetPage: Math.min(totalPages, page + 1),
+      disabled: page >= totalPages,
+    });
+  }
 }
 
 function getScheduleHqTenantCode() {
@@ -20926,7 +21328,13 @@ function ensureScheduleWizardStepStructure(button) {
 function renderScheduleWizardProgress(containerSelector, steps, activeStep) {
   const wrap = document.querySelector(containerSelector);
   if (!(wrap instanceof HTMLElement)) return;
+  wrap.classList.add("arls-upload-wizard__steps");
   const activeIndex = steps.findIndex((item) => item.key === activeStep);
+  const progressPercent =
+    steps.length > 1 && activeIndex >= 0
+      ? Math.max(0, Math.min(100, (activeIndex / (steps.length - 1)) * 100))
+      : 0;
+  wrap.style.setProperty("--arls-upload-wizard-progress", `${progressPercent}%`);
   wrap.querySelectorAll(".schedule-wizard-step").forEach((button) => {
     ensureScheduleWizardStepStructure(button);
     const step = String(button?.dataset?.step || "")
@@ -20936,9 +21344,17 @@ function renderScheduleWizardProgress(containerSelector, steps, activeStep) {
     const buttonIndex = steps.findIndex((item) => item.key === step);
     const completed = buttonIndex >= 0 && activeIndex > buttonIndex;
     const stateName = active ? "active" : completed ? "complete" : "pending";
+    const marker = button.querySelector(".schedule-wizard-step-marker");
+    if (marker instanceof HTMLElement) {
+      marker.textContent = completed
+        ? "✓"
+        : String(button.dataset.stepIndex || buttonIndex + 1 || "");
+    }
+    button.classList.add("arls-upload-wizard__step");
     button.classList.toggle("active", active);
     button.classList.toggle("is-complete", completed);
     button.dataset.stepState = stateName;
+    button.dataset.stateKey = step;
     button.setAttribute("aria-current", active ? "step" : "false");
     button.setAttribute("aria-pressed", active ? "true" : "false");
     button.disabled = !(active || completed);
@@ -22012,9 +22428,23 @@ function renderScheduleSupportHqSiteSelectionTable() {
   const summary = $("#scheduleSupportHqSelectionSummary");
   const downloadBtn = $("#scheduleSupportHqDownloadBtn");
   const selectAllToggle = $("#scheduleSupportHqSelectAllToggle");
+  const pager = $("#scheduleSupportHqPager");
+  const pagerSummary = $("#scheduleSupportHqPagerSummary");
+  const pagerRange = $("#scheduleSupportHqPagerRange");
+  const pageButtons = $("#scheduleSupportHqPageButtons");
   if (!(tableBody instanceof HTMLElement)) return;
   const workspace = ensureScheduleSupportHqWorkspaceDefaults();
   const sites = getScheduleSupportHqWorkspaceSites();
+  const pagination = getWizardPaginationModel(
+    sites,
+    createWizardPaginationState({
+      page: workspace.sitePage,
+      pageSize: workspace.sitePageSize,
+    }),
+  );
+  workspace.sitePage = pagination.page;
+  workspace.sitePageSize = pagination.pageSize;
+  const visibleSites = pagination.visibleItems;
   const readySiteCodes = sites
     .filter((site) => site.selectable)
     .map((site) => site.siteCode);
@@ -22023,6 +22453,9 @@ function renderScheduleSupportHqSiteSelectionTable() {
   );
   workspace.selectedSiteCodes = selectedSiteCodes;
   const selectedSet = new Set(selectedSiteCodes);
+  const visibleReadySiteCodes = visibleSites
+    .filter((site) => site.selectable)
+    .map((site) => site.siteCode);
   tableBody.innerHTML = "";
   if (!sites.length) {
     const tr = document.createElement("tr");
@@ -22037,7 +22470,7 @@ function renderScheduleSupportHqSiteSelectionTable() {
     tr.appendChild(td);
     tableBody.appendChild(tr);
   } else {
-    sites.forEach((site) => {
+    visibleSites.forEach((site) => {
       const tr = document.createElement("tr");
       if (!site.selectable) tr.classList.add("schedule-hq-site-row-disabled");
       if (selectedSet.has(site.siteCode)) tr.classList.add("is-selected");
@@ -22081,8 +22514,33 @@ function renderScheduleSupportHqSiteSelectionTable() {
     });
   }
   if (summary instanceof HTMLElement) {
-    summary.textContent = "";
-    summary.classList.add("hidden");
+    const selectedCount = selectedSiteCodes.length;
+    const readyCount = readySiteCodes.length;
+    summary.textContent = readyCount
+      ? `선택 ${selectedCount}개 / 다운로드 가능 ${readyCount}개`
+      : "다운로드 가능한 지점이 없습니다.";
+    summary.classList.remove("hidden");
+  }
+  if (pager instanceof HTMLElement) {
+    pager.classList.toggle("hidden", sites.length <= pagination.pageSize);
+    pager.dataset.page = String(pagination.page);
+    pager.dataset.pageSize = String(pagination.pageSize);
+    pager.dataset.totalItems = String(pagination.totalItems);
+    pager.dataset.totalPages = String(pagination.totalPages);
+  }
+  if (pagerSummary instanceof HTMLElement) {
+    pagerSummary.textContent = `${pagination.page} / ${pagination.totalPages}페이지`;
+  }
+  if (pagerRange instanceof HTMLElement) {
+    const start = pagination.totalItems ? pagination.startIndex + 1 : 0;
+    pagerRange.textContent = `${start}-${pagination.endIndex} / ${pagination.totalItems}개 지점`;
+  }
+  if (pageButtons instanceof HTMLElement) {
+    renderWizardNumericPagination(
+      pageButtons,
+      pagination,
+      "schedule-support-hq-page",
+    );
   }
   if (selectAllToggle instanceof HTMLInputElement) {
     const allSelected =
@@ -24904,6 +25362,20 @@ function renderScheduleFinanceSubmissionStatus() {
   const overviewSelectionHint = $("#scheduleFinanceOverviewSelectionHint");
   const overviewStartBtn = $("#scheduleFinanceOverviewStartBtn");
   const overviewTableBody = $("#scheduleFinanceOverviewTableBody");
+  const overviewPager = $("#scheduleFinanceOverviewPager");
+  const overviewPagerSummary = $("#scheduleFinanceOverviewPagerSummary");
+  const overviewPagerRange = $("#scheduleFinanceOverviewPagerRange");
+  const overviewPageButtons = $("#scheduleFinanceOverviewPageButtons");
+  const overviewPagination = getWizardPaginationModel(
+    overviewRows,
+    createWizardPaginationState({
+      page: state.reports.financeOverviewPage,
+      pageSize: state.reports.financeOverviewPageSize,
+    }),
+  );
+  state.reports.financeOverviewPage = overviewPagination.page;
+  state.reports.financeOverviewPageSize = overviewPagination.pageSize;
+  const visibleOverviewRows = overviewPagination.visibleItems;
 
   if (overviewSummary instanceof HTMLElement) {
     if (overviewWorkspace) {
@@ -24980,7 +25452,7 @@ function renderScheduleFinanceSubmissionStatus() {
       tr.innerHTML = '<td colspan="8">표시할 제출 대상이 없습니다.</td>';
       overviewTableBody.appendChild(tr);
     } else {
-      overviewRows.forEach((row) => {
+      visibleOverviewRows.forEach((row) => {
         const siteCode = String(row?.site_code || "")
           .trim()
           .toUpperCase();
@@ -25075,6 +25547,31 @@ function renderScheduleFinanceSubmissionStatus() {
         overviewTableBody.appendChild(tr);
       });
     }
+  }
+
+  if (overviewPager instanceof HTMLElement) {
+    overviewPager.classList.toggle(
+      "hidden",
+      overviewRows.length <= overviewPagination.pageSize,
+    );
+    overviewPager.dataset.page = String(overviewPagination.page);
+    overviewPager.dataset.pageSize = String(overviewPagination.pageSize);
+    overviewPager.dataset.totalItems = String(overviewPagination.totalItems);
+    overviewPager.dataset.totalPages = String(overviewPagination.totalPages);
+  }
+  if (overviewPagerSummary instanceof HTMLElement) {
+    overviewPagerSummary.textContent = `${overviewPagination.page} / ${overviewPagination.totalPages}페이지`;
+  }
+  if (overviewPagerRange instanceof HTMLElement) {
+    const start = overviewPagination.totalItems ? overviewPagination.startIndex + 1 : 0;
+    overviewPagerRange.textContent = `${start}-${overviewPagination.endIndex} / ${overviewPagination.totalItems}개 지점`;
+  }
+  if (overviewPageButtons instanceof HTMLElement) {
+    renderWizardNumericPagination(
+      overviewPageButtons,
+      overviewPagination,
+      "reports-finance-overview-page",
+    );
   }
 
   if (activeView !== "wizard") {
@@ -29090,6 +29587,17 @@ function isNoticesComposeActive() {
     return false;
   const panel = $("#noticesComposePanel");
   return panel instanceof HTMLElement && !panel.classList.contains("hidden");
+}
+
+function isSentrixAnnouncementWorkspaceTarget(target = null) {
+  const node =
+    target instanceof Event
+      ? target.target
+      : target && typeof target === "object"
+        ? target
+        : null;
+  if (!(node instanceof Element)) return false;
+  return Boolean(node.closest("#view-notices .sentrix-announcement-workspace"));
 }
 
 function normalizeNoticePollResultVisibility(value = "") {
@@ -55419,8 +55927,14 @@ function showView(
     !isDesktopViewport() &&
     !state.schedule.mobileListInitialized
   ) {
-    state.schedule.viewMode = SCHEDULE_VIEW_MODE_LIST;
-    state.schedule.hqTab = SCHEDULE_TAB_LIST;
+    const currentScheduleTab = normalizeScheduleHqTab(
+      state.schedule?.hqTab ||
+        resolveScheduleTabFromRoutePath(state.currentRoute || ""),
+    );
+    if (!isScheduleUploadOwnerTab(currentScheduleTab)) {
+      state.schedule.viewMode = SCHEDULE_VIEW_MODE_LIST;
+      state.schedule.hqTab = SCHEDULE_TAB_LIST;
+    }
     state.schedule.mobileListInitialized = true;
   }
 
@@ -57315,6 +57829,14 @@ function shouldReloadNoticesOnCacheHit() {
 }
 
 function handleNoticesCacheHit() {
+  if (window.__RG_ARLS_ANNOUNCEMENT_WORKSPACE_READY__) {
+    window
+      .applyAnnouncementRouteState?.()
+      ?.catch?.((error) => {
+        console.error("[RG ARLS] Sentrix notices cache-hit reload failed", error);
+      });
+    return;
+  }
   if (shouldReloadNoticesOnCacheHit()) {
     loadNoticesViewPresenter().catch((error) => {
       console.error("[RG ARLS] notices cache-hit reload failed", error);
@@ -57324,62 +57846,58 @@ function handleNoticesCacheHit() {
   renderNoticesView();
 }
 
+let announcementWorkspaceModuleLoadPromise = null;
+
+function ensureAnnouncementWorkspaceModuleLoaded() {
+  if (window.__RG_ARLS_ANNOUNCEMENT_WORKSPACE_READY__) {
+    return Promise.resolve(true);
+  }
+  if (announcementWorkspaceModuleLoadPromise) {
+    return announcementWorkspaceModuleLoadPromise;
+  }
+  announcementWorkspaceModuleLoadPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector(
+      'script[data-arls-announcement-workspace="true"]',
+    );
+    if (existing instanceof HTMLScriptElement) {
+      existing.addEventListener("load", () => resolve(true), { once: true });
+      existing.addEventListener(
+        "error",
+        () => reject(new Error("공지 모듈을 불러오지 못했습니다.")),
+        { once: true },
+      );
+      return;
+    }
+    const buildId =
+      window.__RG_ARLS_ASSET_BUILD_ID__ || window.ENV_BUILD_ID || Date.now();
+    const script = document.createElement("script");
+    script.src = `js/announcement-workspace.js?v=${encodeURIComponent(buildId)}`;
+    script.defer = true;
+    script.async = false;
+    script.dataset.arlsAnnouncementWorkspace = "true";
+    script.onload = () => resolve(true);
+    script.onerror = () => reject(new Error("공지 모듈을 불러오지 못했습니다."));
+    document.head.appendChild(script);
+  }).finally(() => {
+    if (!window.__RG_ARLS_ANNOUNCEMENT_WORKSPACE_READY__) {
+      announcementWorkspaceModuleLoadPromise = null;
+    }
+  });
+  return announcementWorkspaceModuleLoadPromise;
+}
+
 async function loadNoticesViewPresenter() {
   const contextReady = await ensureNoticesTenantContext();
   if (!contextReady) {
-    renderNoticesView();
     setViewRuntimeHint("notices", "작업회사를 먼저 선택해 주세요.", "info");
     return ensureNoticesState();
   }
-  const notices = ensureNoticesState();
-  setViewRuntimeHint(
-    "notices",
-    String(notices.manageAccessHint || "").trim(),
-    "info",
-  );
-  if (notices.mode === NOTICE_VIEW_MODE_DETAIL && notices.selectedNoticeId) {
-    try {
-      await loadNoticeDetailState(notices.selectedNoticeId);
-    } catch {
-      // renderNoticesView handles error state
-    }
-  } else if (
-    notices.mode === NOTICE_VIEW_MODE_COMPOSE &&
-    notices.selectedNoticeId &&
-    canManageNotices()
-  ) {
-    try {
-      if (
-        String(notices.composeSourceNoticeId || "").trim() !==
-        String(notices.selectedNoticeId || "").trim()
-      ) {
-        const row = await loadNoticeDetailState(notices.selectedNoticeId);
-        if (row) {
-          fillNoticeComposeDraftFromRow(row);
-        }
-        restoreSavedNoticeComposeDraft({
-          noticeId: notices.selectedNoticeId,
-          fallbackCategory:
-            notices.selectedRow?.category || notices.category || "ops",
-        });
-      } else {
-        renderNoticesView();
-      }
-    } catch {
-      // renderNoticesView handles error state
-    }
-  } else if (notices.mode === NOTICE_VIEW_MODE_COMPOSE && canManageNotices()) {
-    clearNoticeComposeDraftStorage({ noticeId: "" });
-    resetNoticeComposeDraft(notices.category || "ops");
-    renderNoticesView();
-  } else if (notices.mode === NOTICE_VIEW_MODE_LIST) {
-    try {
-      await loadNoticeListState();
-    } catch {
-      // renderNoticesView handles error state
-    }
-  } else {
-    renderNoticesView();
+  await ensureAnnouncementWorkspaceModuleLoaded();
+  installArlsAnnouncementWorkspaceAdapter();
+  if (typeof window.applyAnnouncementRouteState === "function") {
+    await window.applyAnnouncementRouteState();
+  } else if (typeof window.openAnnouncementsPage === "function") {
+    await window.openAnnouncementsPage({ syncRoute: false });
   }
   return ensureNoticesState();
 }
@@ -61828,18 +62346,18 @@ function renderCalendarWorkspaceTabs() {
     const isFullscreen = Boolean(calendarState.fullscreen);
     tabs.innerHTML = `
       <div class="calendar-toolbar-shell">
-        <div class="calendar-toolbar-left">
-          <div class="calendar-toolbar-nav">
-            <button class="calendar-toolbar-chip" type="button" data-action="calendar-go-today">오늘</button>
-            <button class="calendar-toolbar-icon" type="button" aria-label="이전" data-action="calendar-shift-range" data-direction="-1">‹</button>
-            <button class="calendar-toolbar-icon" type="button" aria-label="다음" data-action="calendar-shift-range" data-direction="1">›</button>
-          </div>
+	        <div class="calendar-toolbar-left">
+	          <div class="calendar-toolbar-nav">
+	            ${isFullscreen ? "" : '<button class="calendar-toolbar-chip" type="button" data-action="calendar-go-today">오늘</button>'}
+	            <button class="calendar-toolbar-icon" type="button" aria-label="이전" data-action="calendar-shift-range" data-direction="-1">‹</button>
+	            <button class="calendar-toolbar-icon" type="button" aria-label="다음" data-action="calendar-shift-range" data-direction="1">›</button>
+	          </div>
           <div class="calendar-toolbar-copy">
             <strong>${escapeHtml(label)}</strong>
           </div>
         </div>
         <div class="calendar-toolbar-right">
-          <button
+          ${isFullscreen ? "" : `<button
             class="calendar-toolbar-icon ${isFullscreen ? "is-active" : ""}"
             type="button"
             data-action="calendar-toggle-fullscreen"
@@ -61852,8 +62370,8 @@ function renderCalendarWorkspaceTabs() {
               <path d="M17 13v4h-4"></path>
               <path d="M3 13v4h4"></path>
             </svg>
-          </button>
-          <div class="calendar-toolbar-filter-wrap">
+          </button>`}
+          ${isFullscreen ? "" : `<div class="calendar-toolbar-filter-wrap">
             <button
               class="calendar-toolbar-chip ${calendarState.filterOpen ? "is-active" : ""}"
               type="button"
@@ -61863,7 +62381,7 @@ function renderCalendarWorkspaceTabs() {
               필터
             </button>
             ${calendarState.filterOpen ? renderCalendarFilterPopover(workspace) : ""}
-          </div>
+          </div>`}
           <div class="calendar-toolbar-segment" role="tablist" aria-label="캘린더 보기">
             ${[
               ["day", "일"],
@@ -65101,13 +65619,14 @@ function renderCalendarWorkspace() {
     return;
   }
   const selectedContainer = getCalendarSelectedContainer(workspace);
+  const fullscreen = Boolean(calendarState.fullscreen);
   root.innerHTML = `
-    <div class="calendar-outlook-shell has-selected-day-rail">
-      ${renderCalendarLeftRail(workspace)}
+    <div class="calendar-outlook-shell ${fullscreen ? "is-fullscreen-calendar" : "has-selected-day-rail"}">
+      ${fullscreen ? "" : renderCalendarLeftRail(workspace)}
       <section class="calendar-outlook-main">
         ${renderCalendarCenterSurface(workspace, selectedContainer)}
       </section>
-      ${renderCalendarSelectedDayRail(workspace, selectedContainer)}
+      ${fullscreen ? "" : renderCalendarSelectedDayRail(workspace, selectedContainer)}
     </div>
   `;
   requestAnimationFrame(() => {
@@ -79648,7 +80167,7 @@ function renderAttendanceManagerKpiStrip(summary = null, rows = []) {
       meta: "가장 먼저 확인",
     },
     {
-      label: "출근 대상",
+      label: "근무 대상",
       value: dashboard.workingTarget,
       filter: "",
       tone: "accent",
@@ -81691,6 +82210,12 @@ function buildAttendanceStatsAttendanceMetricSeries(
     early: "조퇴율",
     special: "출퇴근 특이사항",
   };
+  const colorMap = {
+    rate: "#2563eb",
+    late: "#d97706",
+    early: "#0891b2",
+    special: "#dc2626",
+  };
   const descriptionMap = {
     rate: "기간별 출근 완료 비율입니다.",
     late: "예정 근무 대비 지각 비율입니다.",
@@ -81722,7 +82247,7 @@ function buildAttendanceStatsAttendanceMetricSeries(
       {
         key: normalizedMetric,
         label: titleMap[normalizedMetric] || "출퇴근 통계",
-        color: "#ff7a1a",
+        color: colorMap[normalizedMetric] || "#2563eb",
         active: true,
       },
     ],
@@ -81793,7 +82318,7 @@ function buildAttendanceStatsStaffMetricSeries(rows = [], metric = "weekday") {
       values,
       percent: true,
       legend: [
-        { key: "staff-hour", label: "전체", color: "#ff7a1a", active: true },
+        { key: "staff-hour", label: "전체", color: "#2563eb", active: true },
       ],
       tableHeader: ["시간", "비율"],
       tableRows: labels.map((label, index) => [
@@ -81826,7 +82351,7 @@ function buildAttendanceStatsStaffMetricSeries(rows = [], metric = "weekday") {
     values,
     percent: true,
     legend: [
-      { key: "staff-weekday", label: "전체", color: "#ff7a1a", active: true },
+      { key: "staff-weekday", label: "전체", color: "#2563eb", active: true },
     ],
     tableHeader: ["요일", "비율"],
     tableRows: weekdayLabels.map((label, index) => [
@@ -81845,7 +82370,7 @@ function buildAttendanceStatsLineSvg({
 } = {}) {
   const chartWidth = 1180;
   const chartHeight = 148;
-  const padding = { top: 8, right: 10, bottom: 24, left: 30 };
+  const padding = { top: 8, right: 10, bottom: 24, left: 54 };
   const innerWidth = chartWidth - padding.left - padding.right;
   const innerHeight = chartHeight - padding.top - padding.bottom;
   const list = Array.isArray(values)
@@ -82136,7 +82661,7 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
   const svgMarkup = buildAttendanceStatsLineSvg({
     labels: dataset.labels,
     values: dataset.values,
-    color: "#ff7a1a",
+    color: dataset.legend?.[0]?.color || "#2563eb",
     percent: dataset.percent !== false,
   });
   const emptyOverlayHtml = hasNonZeroValues
@@ -82223,7 +82748,7 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
             ${summaryTilesHtml}
             <div class="attendance-stats-chart-shell${hasNonZeroValues ? "" : " is-empty"}">
               <div class="attendance-stats-chart-wrap" data-export-name="${escapeHtml(dataset.fileStem)}">
-                ${hasNonZeroValues ? svgMarkup : ""}
+                ${svgMarkup}
                 ${emptyOverlayHtml}
               </div>
             </div>
@@ -82892,6 +83417,10 @@ async function loadAttendanceManagerView({ force = false } = {}) {
       loading: false,
     });
     queueViewSnapshotPersist("attendance", { allowInactive: true });
+
+    if (getAttendanceWorkspaceSection() === "stats") {
+      return filteredRows;
+    }
 
     prefetchAttendanceCalendarRecordsInBackground({ force: false });
 
@@ -85651,6 +86180,7 @@ function renderScheduleHqTabs() {
   toggleVisibility("#scheduleCalendarFilterRow", boardFiltersVisible);
   toggleVisibility("#scheduleCalendarToggleRow", boardFiltersVisible);
   toggleVisibility("#scheduleOpsToolbar", boardFiltersVisible);
+  toggleVisibility("#scheduleMobileViewTabs", boardFiltersVisible);
 
   const host = scheduleTabPanelRefs.host;
   const boardPanel = scheduleTabPanelRefs.board;
@@ -93293,6 +93823,17 @@ function buildScheduleLiveStreamPath() {
   return `/schedules/events/stream?${params.toString()}`;
 }
 
+function handleScheduleLiveUnauthorized(authToken = "") {
+  const currentAuthToken = normalizeStoredJwtToken(getActiveAccessToken());
+  const requestAuthToken = normalizeStoredJwtToken(authToken);
+  const requestBelongsToCurrentSession =
+    Boolean(currentAuthToken) && currentAuthToken === requestAuthToken;
+  if (!requestBelongsToCurrentSession) return;
+  clearSession();
+  stopPolling();
+  showAuthPanel();
+}
+
 function stopScheduleLiveRefresh() {
   if (state.scheduleLiveRefreshTimer) {
     clearTimeout(state.scheduleLiveRefreshTimer);
@@ -93602,33 +94143,58 @@ async function runScheduleLiveRefreshCycle() {
   const streamPath = buildScheduleLiveStreamPath();
   if (!streamPath) return null;
 
-  const authToken = getActiveAccessToken();
+  let authToken = getActiveAccessToken();
   if (!authToken) {
     scheduleNextScheduleLiveRefresh(SCHEDULE_LIVE_STREAM_RETRY_MS);
     return null;
   }
+  if (isAccessTokenNearExpiry(authToken, 120) && getActiveRefreshToken()) {
+    const refreshed = await requestTokenRefresh({
+      source: "schedule_stream_preflight",
+    });
+    if (refreshed) {
+      authToken = getActiveAccessToken();
+    }
+  }
 
   const controller = new AbortController();
-  const tenantHeader = String(getActiveTenantHeaderValue() || "").trim();
-  const headers = {
-    Accept: "text/event-stream",
+  const buildHeaders = (token = "") => {
+    const tenantHeader = String(getActiveTenantHeaderValue() || "").trim();
+    const headers = {
+      Accept: "text/event-stream",
+    };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (tenantHeader) headers["X-Tenant-Id"] = tenantHeader;
+    return headers;
   };
-  headers.Authorization = `Bearer ${authToken}`;
-  if (tenantHeader) {
-    headers["X-Tenant-Id"] = tenantHeader;
-  }
+  const fetchStream = (token = "") =>
+    fetch(`${state.activeApiBase}${streamPath}`, {
+      method: "GET",
+      headers: buildHeaders(token),
+      signal: controller.signal,
+      credentials: "omit",
+      mode: "cors",
+    });
 
   const streamPromise = (async () => {
     try {
-      const response = await fetch(`${state.activeApiBase}${streamPath}`, {
-        method: "GET",
-        headers,
-        signal: controller.signal,
-        credentials: "omit",
-        mode: "cors",
-      });
+      let requestToken = authToken;
+      let response = await fetchStream(requestToken);
+      if (response.status === 401 && getActiveRefreshToken()) {
+        const refreshed = await requestTokenRefresh({
+          source: "schedule_stream_unauthorized",
+        });
+        if (refreshed) {
+          requestToken = getActiveAccessToken();
+          response = await fetchStream(requestToken);
+        }
+      }
       if (!response.ok) {
         const text = await response.text();
+        if (response.status === 401) {
+          handleScheduleLiveUnauthorized(requestToken);
+          return null;
+        }
         throw new Error(text || `stream failed (${response.status})`);
       }
       state.scheduleLiveStreamConnected = true;
@@ -97300,6 +97866,7 @@ function bindUiEvents() {
       const form =
         event.target instanceof HTMLFormElement ? event.target : null;
       if (!form) return;
+      if (isSentrixAnnouncementWorkspaceTarget(form)) return;
 
       if (form.id === "employeeForm") {
         event.preventDefault();
@@ -97441,6 +98008,7 @@ function bindUiEvents() {
       if (window.__RG_ARLS_HANDLERS_BOUND__ !== true) return;
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      if (isSentrixAnnouncementWorkspaceTarget(target)) return;
 
       if (
         target.closest(".calendar-shell-detail, [data-calendar-editor-root]")
@@ -97822,6 +98390,7 @@ function bindUiEvents() {
   document.addEventListener(
     "paste",
     (event) => {
+      if (isSentrixAnnouncementWorkspaceTarget(event)) return;
       if (!isNoticesComposeActive()) return;
       const items = Array.from(event.clipboardData?.items || []);
       const files = items
@@ -97842,6 +98411,7 @@ function bindUiEvents() {
   document.addEventListener(
     "dragover",
     (event) => {
+      if (isSentrixAnnouncementWorkspaceTarget(event)) return;
       if (!isNoticesComposeActive()) return;
       const dropzone = $("#noticesComposeImageDropzone");
       if (!(dropzone instanceof HTMLElement)) return;
@@ -97857,7 +98427,8 @@ function bindUiEvents() {
 
   document.addEventListener(
     "dragleave",
-    () => {
+    (event) => {
+      if (isSentrixAnnouncementWorkspaceTarget(event)) return;
       const dropzone = $("#noticesComposeImageDropzone");
       if (dropzone instanceof HTMLElement) {
         dropzone.classList.remove("is-dragover");
@@ -97869,6 +98440,7 @@ function bindUiEvents() {
   document.addEventListener(
     "drop",
     (event) => {
+      if (isSentrixAnnouncementWorkspaceTarget(event)) return;
       const dropzone = $("#noticesComposeImageDropzone");
       if (dropzone instanceof HTMLElement) {
         dropzone.classList.remove("is-dragover");
@@ -97889,6 +98461,7 @@ function bindUiEvents() {
     "keydown",
     (event) => {
       const target = event.target instanceof HTMLElement ? event.target : null;
+      if (isSentrixAnnouncementWorkspaceTarget(target)) return;
       if (!target || target.id !== "noticesComposeImageDropzone") return;
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
@@ -97917,6 +98490,7 @@ function bindUiEvents() {
   document.addEventListener(
     "mouseover",
     (event) => {
+      if (isSentrixAnnouncementWorkspaceTarget(event)) return;
       if (!isNoticesComposeActive()) return;
       const cell =
         event.target instanceof Element
@@ -97962,6 +98536,7 @@ function bindUiEvents() {
   document.addEventListener(
     "mousedown",
     (event) => {
+      if (isSentrixAnnouncementWorkspaceTarget(event)) return;
       if (!isNoticesComposeActive() || event.button !== 0) return;
       const actionEl =
         event.target instanceof Element
@@ -98007,6 +98582,7 @@ function bindUiEvents() {
   document.addEventListener(
     "mousemove",
     (event) => {
+      if (isSentrixAnnouncementWorkspaceTarget(event)) return;
       handleNoticeComposeInlinePointerMove(event);
     },
     { signal },
@@ -98014,7 +98590,8 @@ function bindUiEvents() {
 
   document.addEventListener(
     "mouseup",
-    () => {
+    (event) => {
+      if (isSentrixAnnouncementWorkspaceTarget(event)) return;
       finishNoticeComposeInlinePointerSession();
       captureNoticeComposeInsertionAnchorFromInput();
     },
@@ -98024,6 +98601,7 @@ function bindUiEvents() {
   document.addEventListener(
     "keyup",
     (event) => {
+      if (isSentrixAnnouncementWorkspaceTarget(event)) return;
       if (!isNoticesComposeActive()) return;
       const target = event.target;
       if (!(target instanceof HTMLTextAreaElement)) return;
@@ -98037,6 +98615,7 @@ function bindUiEvents() {
     "focusin",
     (event) => {
       const target = event.target;
+      if (isSentrixAnnouncementWorkspaceTarget(target)) return;
       if (!(target instanceof HTMLTextAreaElement)) return;
       if (target.dataset.noticeComposeParagraphInput !== "true") return;
       syncNoticeComposeActiveBodyInput(target);
@@ -98056,6 +98635,12 @@ function bindUiEvents() {
           ? event.target.closest("[data-action]")
           : null;
       const action = actionEl?.dataset?.action || "";
+      if (
+        String(action || "").startsWith("notices-") &&
+        isSentrixAnnouncementWorkspaceTarget(actionEl)
+      ) {
+        return;
+      }
       if (!action) {
         if (
           ensureCalendarWorkspaceState().filterOpen &&
@@ -98312,6 +98897,28 @@ function bindUiEvents() {
         return;
       }
 
+      if (action === "reports-finance-overview-page") {
+        if (!state.reports) state.reports = createInitialReportsState();
+        const rows = getReportsFinanceOverviewRows();
+        const current = getWizardPaginationModel(
+          rows,
+          createWizardPaginationState({
+            page: state.reports.financeOverviewPage,
+            pageSize: state.reports.financeOverviewPageSize,
+          }),
+        );
+        const requestedPage = Number.parseInt(
+          String(actionEl.dataset.page || ""),
+          10,
+        );
+        state.reports.financeOverviewPage =
+          Number.isFinite(requestedPage) && requestedPage > 0
+            ? Math.min(current.totalPages, requestedPage)
+            : current.page;
+        renderScheduleFinanceSubmissionStatus();
+        return;
+      }
+
       if (action === "reports-finance-overview-start") {
         const selectedRow = getReportsFinanceSelectedRow();
         if (!selectedRow) {
@@ -98401,6 +99008,30 @@ function bindUiEvents() {
           .trim()
           .toUpperCase();
         toggleReportsFinanceDownloadSelectedSiteCode(siteCode);
+        renderReportsFinanceDownloadWorkspace();
+        return;
+      }
+
+      if (action === "reports-finance-download-page") {
+        if (!state.reports) state.reports = createInitialReportsState();
+        const rows = Array.isArray(state.reports?.financeDownloadWorkspace?.sites)
+          ? state.reports.financeDownloadWorkspace.sites
+          : [];
+        const current = getWizardPaginationModel(
+          rows,
+          createWizardPaginationState({
+            page: state.reports.financeDownloadPage,
+            pageSize: state.reports.financeDownloadPageSize,
+          }),
+        );
+        const requestedPage = Number.parseInt(
+          String(actionEl.dataset.page || ""),
+          10,
+        );
+        state.reports.financeDownloadPage =
+          Number.isFinite(requestedPage) && requestedPage > 0
+            ? Math.min(current.totalPages, requestedPage)
+            : current.page;
         renderReportsFinanceDownloadWorkspace();
         return;
       }
@@ -103077,6 +103708,28 @@ function bindUiEvents() {
         return;
       }
 
+      if (action === "schedule-support-hq-page") {
+        const workspace = ensureScheduleSupportHqWorkspaceDefaults();
+        const sites = getScheduleSupportHqWorkspaceSites();
+        const current = getWizardPaginationModel(
+          sites,
+          createWizardPaginationState({
+            page: workspace.sitePage,
+            pageSize: workspace.sitePageSize,
+          }),
+        );
+        const requestedPage = Number.parseInt(
+          String(actionEl.dataset.page || ""),
+          10,
+        );
+        workspace.sitePage =
+          Number.isFinite(requestedPage) && requestedPage > 0
+            ? Math.min(current.totalPages, requestedPage)
+            : current.page;
+        renderScheduleSupportHqSiteSelectionTable();
+        return;
+      }
+
       if (action === "schedule-support-hq-select-all") {
         const toggle = actionEl instanceof HTMLInputElement ? actionEl : null;
         const workspace = ensureScheduleSupportHqWorkspaceDefaults();
@@ -104534,6 +105187,7 @@ function bindUiEvents() {
       if (window.__RG_ARLS_HANDLERS_BOUND__ !== true) return;
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      if (isSentrixAnnouncementWorkspaceTarget(target)) return;
 
       if (
         target.closest(".calendar-shell-detail, [data-calendar-editor-root]")
@@ -106483,12 +107137,10 @@ async function initializeApp() {
       clearApplyDetails: true,
     });
 
-    const storedSessionCandidate = loadSession();
-    const hasSnapshot = bootstrapSessionFromStorage(storedSessionCandidate);
     const { requestedRoute, requestedRouteRaw } =
       resolveRequestedRouteCandidate();
+    const storedSessionCandidate = loadSession();
     if (
-      !hasSnapshot &&
       !storedSessionCandidate &&
       requestedRoute === ROUTE_CALENDAR_PUBLIC_BOOKING
     ) {
@@ -106502,16 +107154,15 @@ async function initializeApp() {
         replace: true,
         silentDeniedModal: true,
       });
-    } else if (!hasSnapshot && !storedSessionCandidate) {
+    } else if (!storedSessionCandidate) {
       showAuthPanel();
     }
     loadLoginPreferences().catch((err) => {
       console.error("[RG ARLS] loadLoginPreferences failed", err);
     });
-    hydrateSession({ background: true }).catch((err) => {
-      console.error("[RG ARLS] hydrateSession background failed", err);
-      showAuthPanel();
-    });
+    if (storedSessionCandidate) {
+      await hydrateSession({ background: false });
+    }
     runStandardDiagnosticBlock();
   } finally {
     state.initializing = false;
@@ -106532,6 +107183,7 @@ if (document.readyState === "loading") {
 
 document.addEventListener("compositionend", (event) => {
   const target = event.target;
+  if (isSentrixAnnouncementWorkspaceTarget(target)) return;
   if (!isNoticeComposeTextField(target)) return;
   syncNoticeComposeDraftFromFields();
   markNoticeComposeDraftDirty();
@@ -107056,7 +107708,7 @@ document.addEventListener("compositionend", (event) => {
       case "rate":
         return "출근율";
       case "target":
-        return "출근 대상";
+        return "근무 대상";
       case "complete":
         return "출근 완료";
       case "missing":
@@ -107290,7 +107942,8 @@ document.addEventListener("compositionend", (event) => {
     const filterKey = String(item?.filterKey || "").trim();
     const label = String(item?.label || "").trim();
     if (filterKey === "rate" || /출근율/.test(label)) return "activity";
-    if (filterKey === "target" || /출근 대상/.test(label)) return "users";
+    if (filterKey === "target" || /(?:출근|근무) 대상/.test(label))
+      return "users";
     if (filterKey === "complete" || /^출근$/.test(label)) return "check";
     if (filterKey === "missing" || /미출근/.test(label)) return "clock";
     if (
@@ -107397,7 +108050,7 @@ document.addEventListener("compositionend", (event) => {
     const scheduleItems = [
       {
         filterKey: "target",
-        label: "출근 대상",
+        label: "근무 대상",
         value: dashboard.workingTarget,
         meta: "",
       },
@@ -107635,7 +108288,7 @@ document.addEventListener("compositionend", (event) => {
       },
       {
         filterKey: "target",
-        label: "출근 대상",
+        label: "근무 대상",
         value: dashboard.workingTarget,
         tone: "neutral",
       },
