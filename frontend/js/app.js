@@ -5688,7 +5688,9 @@ function prefetchAttendanceCalendarRecordsInBackground({ force = false } = {}) {
     state.attendanceView = createInitialAttendanceViewState();
   }
   const currentTab = getAttendanceManagerTab();
-  if (currentTab !== "status") return;
+  if (currentTab !== "calendar" && !isAttendancePeriodCalendarViewActive()) {
+    return;
+  }
   const month =
     normalizeMonthKey(state.attendanceView.calendarMonth || "") ||
     getMonthFromDateKey(getAttendanceActiveDate()) ||
