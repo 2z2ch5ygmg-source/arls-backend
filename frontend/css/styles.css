@@ -56662,7 +56662,7 @@ html[data-ui-theme="dark"]
   background: #f4f6f8 !important;
 }
 
-#view-schedule #scheduleTemplatePanel .admin-table-empty-row td {
+#view-schedule #scheduleTemplatePanel [class*="empty-row"] td {
   padding: 18px 16px !important;
 }
 
@@ -61478,6 +61478,181 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   #view-employees .registration-workspace,
   #view-org .registration-workspace {
     grid-template: auto / minmax(0, 1fr) !important;
+  }
+}
+
+/* 2026-04-16 phase 5: schedule template manager cleanup */
+#view-schedule #scheduleTemplatePanel.schedule-template-surface {
+  display: grid !important;
+  gap: 14px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-schedule #scheduleTemplatePanel .approval-head {
+  align-items: center !important;
+  min-height: 42px !important;
+  padding: 0 0 12px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+  background: transparent !important;
+}
+
+#view-schedule #scheduleTemplatePanel .approval-head h3 {
+  margin: 0 !important;
+  color: #0f172a !important;
+  font-size: 22px !important;
+  line-height: 28px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+}
+
+#view-schedule #scheduleTemplatePanel .quick-actions {
+  gap: 8px !important;
+}
+
+#view-schedule #scheduleTemplatePanel .quick-actions .btn {
+  min-height: 40px !important;
+  height: 40px !important;
+  border-radius: 8px !important;
+}
+
+#view-schedule #scheduleTemplateTemplatesSection,
+#view-schedule #scheduleTemplatePanel .table-wrap {
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-wrap {
+  overflow: auto hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-wrap table {
+  width: 100% !important;
+  min-width: 980px !important;
+  border-collapse: collapse !important;
+  background: transparent !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-wrap thead th {
+  height: 42px !important;
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+  background: transparent !important;
+  color: #64748b !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+  text-align: left !important;
+  white-space: nowrap !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-wrap tbody td {
+  min-height: 54px !important;
+  padding: 12px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(226, 232, 240, 0.96) !important;
+  background: transparent !important;
+  color: #0f172a !important;
+  font-size: 13px !important;
+  line-height: 20px !important;
+  vertical-align: middle !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-wrap tbody tr:hover td {
+  background: rgba(248, 250, 252, 0.92) !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-actions {
+  justify-content: flex-end !important;
+  gap: 6px !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-actions .btn {
+  min-height: 32px !important;
+  height: 32px !important;
+  padding: 0 10px !important;
+  border-radius: 8px !important;
+}
+
+#view-schedule #scheduleTemplatePanel .admin-table-empty-row td {
+  padding: 18px 12px !important;
+  color: #64748b !important;
+  text-align: left !important;
+}
+
+.modal-sheet.sheet-layout-schedule-template {
+  width: min(94vw, 860px) !important;
+  max-height: min(92dvh, 820px) !important;
+  padding: 20px 22px !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+}
+
+.modal-sheet.sheet-layout-schedule-template .sheet-content {
+  max-width: none !important;
+  overflow: auto !important;
+}
+
+.schedule-template-editor-form {
+  display: grid !important;
+  grid-template:
+    auto /
+    minmax(0, 1fr)
+    minmax(0, 1fr) !important;
+  gap: 14px 16px !important;
+}
+
+.schedule-template-editor-form .input-field {
+  min-width: 0 !important;
+  gap: 6px !important;
+}
+
+.schedule-template-editor-form .input-field:first-child,
+.schedule-template-editor-form .input-field:nth-child(7) {
+  grid-column: 1 / -1 !important;
+}
+
+.schedule-template-editor-form .input-field input,
+.schedule-template-editor-form .input-field select {
+  min-height: 42px !important;
+  height: 42px !important;
+  border-radius: 8px !important;
+}
+
+.schedule-template-editor-form .choice-row {
+  min-height: 42px !important;
+  padding: 8px 0 !important;
+  border: 0 !important;
+  border-block-start: 1px solid rgba(226, 232, 240, 0.96) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+@media (max-width: 768px) {
+  .modal-sheet.sheet-layout-schedule-template {
+    width: calc(100vw - 24px) !important;
+    max-height: calc(100dvh - 40px) !important;
+    padding: 16px !important;
+  }
+
+  .schedule-template-editor-form {
+    grid-template: auto / minmax(0, 1fr) !important;
+  }
+
+  .schedule-template-editor-form .input-field:first-child,
+  .schedule-template-editor-form .input-field:nth-child(7) {
+    grid-column: auto !important;
   }
 }
 

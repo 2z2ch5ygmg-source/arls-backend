@@ -36578,7 +36578,7 @@ function renderManagerRequestDetailPanel() {
 function openRequestsNewRequestSheet() {
   const managerMode = isManagerShellRole();
   const content = document.createElement("div");
-  content.className = "stack";
+  content.className = "stack schedule-template-editor-form";
   const hint = document.createElement("p");
   hint.className = "muted";
   hint.textContent = managerMode
@@ -90146,6 +90146,7 @@ async function openScheduleTemplateEditor(
         action: "schedule-template-save",
       },
     ],
+    layoutClass: "sheet-layout-schedule-template",
   });
   state.sheetContext = {
     type: "schedule-template-editor",
