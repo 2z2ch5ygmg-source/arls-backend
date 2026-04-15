@@ -61480,3 +61480,115 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
     grid-template: auto / minmax(0, 1fr) !important;
   }
 }
+
+/* 2026-04-16 phase 5: finance submit/download mobile axis lock */
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-overview-view,
+#view-reports #financeDownloadPanel {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-table-wrap,
+#view-reports #financeDownloadPanel .reports-finance-download-table-wrap {
+  width: 100% !important;
+  max-width: 100% !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: auto hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-table,
+#view-reports #financeDownloadPanel .reports-finance-download-table {
+  display: table !important;
+  width: max-content !important;
+  table-layout: auto !important;
+  border-collapse: collapse !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-table {
+  min-width: 1120px !important;
+}
+
+#view-reports #financeDownloadPanel .reports-finance-download-table {
+  min-width: 980px !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-table thead,
+#view-reports #financeDownloadPanel .reports-finance-download-table thead {
+  display: table-header-group !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-table tbody,
+#view-reports #financeDownloadPanel .reports-finance-download-table tbody {
+  display: table-row-group !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-row,
+#view-reports #financeDownloadPanel .reports-finance-download-row {
+  display: table-row !important;
+  width: auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-table th,
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-row td,
+#view-reports #financeDownloadPanel .reports-finance-download-table th,
+#view-reports #financeDownloadPanel .reports-finance-download-row td {
+  display: table-cell !important;
+  width: auto !important;
+  min-width: 0 !important;
+  padding: 11px 14px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(226, 232, 240, 0.96) !important;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+  vertical-align: middle !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-table th,
+#view-reports #financeDownloadPanel .reports-finance-download-table th {
+  height: 42px !important;
+  color: #64748b !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  font-weight: 800 !important;
+  background: transparent !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-table th:first-child,
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-row td:first-child,
+#view-reports #financeDownloadPanel .reports-finance-download-table th:first-child,
+#view-reports #financeDownloadPanel .reports-finance-download-row td:first-child {
+  width: 56px !important;
+  min-width: 56px !important;
+  max-width: 56px !important;
+  text-align: center !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-row.is-selected td,
+#view-reports #financeDownloadPanel .reports-finance-download-row.is-selected td {
+  background: rgba(234, 88, 12, 0.045) !important;
+  box-shadow: none !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-row:hover td,
+#view-reports #financeDownloadPanel .reports-finance-download-row:hover td {
+  background: rgba(248, 250, 252, 0.92) !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-pager,
+#view-reports #financeDownloadPanel .reports-finance-pager {
+  justify-content: center !important;
+}
+
+#view-reports #scheduleFinanceOverviewPageButtons,
+#view-reports #financeDownloadPageButtons {
+  justify-content: center !important;
+}
