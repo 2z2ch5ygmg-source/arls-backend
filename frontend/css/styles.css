@@ -59025,3 +59025,605 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
     border-radius: 8px !important;
   }
 }
+
+/* 2026-04-15 phase 5: profile/settings IA split */
+#view-profile.panel.card.view {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-profile {
+  gap: 18px !important;
+}
+
+#view-profile .workspace-head {
+  padding-bottom: 0 !important;
+  border-block-end: 0 !important;
+}
+
+#view-profile > .workspace-head .muted,
+#view-profile .profile-identity-copy > .muted,
+#view-profile .profile-identity-side > .muted,
+#view-profile .profile-control-title > .muted,
+#view-profile .settings-flag-group-head > .muted,
+#view-profile .settings-form-group-head > .muted,
+#view-profile #profileRailStatusNote {
+  display: none !important;
+}
+
+#view-profile .workspace-tabs,
+#view-profile .profile-workspace-tabs,
+#view-profile .profile-settings-section-tabs,
+#view-profile .profile-google-workspace-tabs {
+  display: flex !important;
+  width: 100% !important;
+  align-items: center !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-profile .profile-workspace-tabs {
+  margin-top: 2px !important;
+}
+
+#view-profile .profile-settings-section-tabs {
+  margin-top: 4px !important;
+}
+
+#view-profile .workspace-tab,
+#view-profile .profile-settings-section-tabs .workspace-tab,
+#view-profile .profile-google-workspace-tabs .workspace-tab {
+  position: relative !important;
+  min-width: 0 !important;
+  min-height: 40px !important;
+  height: 40px !important;
+  padding: 0 18px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #64748b !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+}
+
+#view-profile .workspace-tab::after,
+#view-profile .profile-settings-section-tabs .workspace-tab::after,
+#view-profile .profile-google-workspace-tabs .workspace-tab::after {
+  position: absolute;
+  right: 14px;
+  bottom: -1px;
+  left: 14px;
+  height: 2px;
+  border-radius: 999px;
+  background: transparent;
+  content: "";
+}
+
+#view-profile .workspace-tab.active,
+#view-profile .profile-settings-section-tabs .workspace-tab.active,
+#view-profile .profile-google-workspace-tabs .workspace-tab.active {
+  color: #ea580c !important;
+}
+
+#view-profile .workspace-tab.active::after,
+#view-profile .profile-settings-section-tabs .workspace-tab.active::after,
+#view-profile .profile-google-workspace-tabs .workspace-tab.active::after {
+  background: #ea580c;
+}
+
+#view-profile .profile-segment-panel,
+#view-profile .profile-settings-workspace,
+#view-profile .profile-command-stage,
+#view-profile .profile-surface,
+#view-profile .profile-settings-rail {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-profile .profile-command-stage {
+  display: grid !important;
+  gap: 18px !important;
+  max-width: none !important;
+  padding: 0 !important;
+}
+
+#view-profile .profile-identity-strip {
+  display: grid !important;
+  grid-template: auto / minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 16px !important;
+  padding: 0 0 14px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+  background: transparent !important;
+}
+
+#view-profile .profile-identity-main {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  min-width: 0 !important;
+}
+
+#view-profile .profile-identity-mark {
+  display: grid !important;
+  width: 40px !important;
+  height: 40px !important;
+  place-items: center !important;
+  border: 1px solid rgba(234, 88, 12, 0.2) !important;
+  border-radius: 8px !important;
+  background: rgba(234, 88, 12, 0.06) !important;
+  color: #ea580c !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+}
+
+#view-profile .profile-identity-copy {
+  min-width: 0 !important;
+  gap: 0 !important;
+}
+
+#view-profile .profile-eyebrow {
+  display: block !important;
+  color: #64748b !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+#view-profile .profile-identity-copy h3 {
+  margin: 0 !important;
+  color: #0f172a !important;
+  font-size: 22px !important;
+  line-height: 28px !important;
+  letter-spacing: 0 !important;
+}
+
+#view-profile .profile-identity-side {
+  display: flex !important;
+  justify-content: flex-end !important;
+  min-width: 0 !important;
+}
+
+#view-profile .profile-fact-strip {
+  display: grid !important;
+  grid-template: auto / repeat(4, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  padding: 0 0 14px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+}
+
+#view-profile .profile-fact {
+  min-width: 0 !important;
+  gap: 3px !important;
+  padding: 0 16px !important;
+  border: 0 !important;
+  border-left: 1px solid rgba(203, 213, 225, 0.9) !important;
+  background: transparent !important;
+}
+
+#view-profile .profile-fact:first-child {
+  padding-left: 0 !important;
+  border-left: 0 !important;
+}
+
+#view-profile .profile-fact span,
+#view-profile .profile-settings-rail-item span {
+  color: #64748b !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+#view-profile .profile-fact strong,
+#view-profile .profile-settings-rail-item strong {
+  min-width: 0 !important;
+  overflow-wrap: normal !important;
+  word-break: keep-all !important;
+  color: #0f172a !important;
+  font-size: 15px !important;
+  line-height: 22px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+}
+
+#view-profile .profile-settings-columns {
+  display: grid !important;
+  grid-template: auto / minmax(0, 1fr) !important;
+  gap: 18px !important;
+}
+
+#view-profile .profile-settings-main {
+  display: grid !important;
+  gap: 0 !important;
+}
+
+#view-profile .profile-settings-main > [data-profile-settings-section]:not(.hidden),
+#view-profile .profile-manager-settings-shell:not(.hidden) {
+  display: grid !important;
+}
+
+#view-profile #profilePasswordCard,
+#view-profile #profileSignatureCard,
+#view-profile .notification-settings-card,
+#view-profile #integrationFlagsCard,
+#view-profile #googleSheetProfileCard,
+#view-profile #mailHubCard,
+#view-profile #groupwareOpsCard {
+  gap: 14px !important;
+  padding: 22px 0 !important;
+  border: 0 !important;
+  border-block-start: 1px solid rgba(203, 213, 225, 0.9) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-profile #profilePasswordCard:first-child {
+  padding-top: 0 !important;
+  border-block-start: 0 !important;
+}
+
+#view-profile .profile-control-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+#view-profile .profile-control-title {
+  min-width: 0 !important;
+  gap: 2px !important;
+}
+
+#view-profile .profile-section-kicker {
+  display: block !important;
+  color: #64748b !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+#view-profile .profile-control-title h3,
+#view-profile .settings-flag-group-head h4,
+#view-profile .settings-form-group-head h4 {
+  margin: 0 !important;
+  color: #0f172a !important;
+  font-size: 18px !important;
+  line-height: 24px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+}
+
+#view-profile .profile-control-pills {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+}
+
+#view-profile .profile-password-form,
+#view-profile .settings-inline-grid,
+#view-profile .settings-profile-subgrid,
+#view-profile .settings-profile-form,
+#view-profile .profile-google-sync-criteria {
+  gap: 12px !important;
+}
+
+#view-profile .input-field {
+  min-width: 0 !important;
+}
+
+#view-profile .input-field input,
+#view-profile .input-field select,
+#view-profile .input-field textarea {
+  min-height: 42px !important;
+  border-radius: 8px !important;
+}
+
+#view-profile .settings-switch-list {
+  gap: 0 !important;
+  border: 0 !important;
+}
+
+#view-profile .settings-switch-row {
+  min-height: 58px !important;
+  padding: 13px 0 !important;
+  border: 0 !important;
+  border-block-start: 1px solid rgba(226, 232, 240, 0.96) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-profile .settings-switch-row:first-child {
+  border-block-start: 0 !important;
+}
+
+#view-profile .settings-switch-copy {
+  min-width: 0 !important;
+}
+
+#view-profile .settings-switch-copy strong {
+  color: #0f172a !important;
+  font-size: 14px !important;
+  line-height: 20px !important;
+  font-weight: 800 !important;
+}
+
+#view-profile .settings-switch-copy span {
+  color: #64748b !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+}
+
+#view-profile .settings-switch-track {
+  width: 42px !important;
+  height: 24px !important;
+  border-radius: 999px !important;
+}
+
+#view-profile .settings-section-footer {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 12px !important;
+  padding-top: 14px !important;
+  border-block-start: 1px solid rgba(226, 232, 240, 0.96) !important;
+}
+
+#view-profile .settings-section-status-block,
+#view-profile .settings-section-status {
+  min-width: 0 !important;
+  margin-right: auto !important;
+}
+
+#view-profile .profile-signature-workspace,
+#view-profile .profile-google-links-layout,
+#view-profile .profile-mail-layout {
+  display: grid !important;
+  grid-template: auto / minmax(0, 0.85fr) minmax(0, 1.15fr) !important;
+  gap: 18px !important;
+}
+
+#view-profile .profile-signature-panel,
+#view-profile .profile-signature-preview-panel,
+#view-profile .settings-form-group,
+#view-profile .settings-flag-group,
+#view-profile .profile-google-links-library,
+#view-profile .profile-google-links-editor {
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-profile .profile-signature-preview-frame,
+#view-profile .profile-signature-panel canvas,
+#view-profile .table-wrap {
+  border-radius: 8px !important;
+}
+
+#view-profile .profile-manager-settings-shell {
+  gap: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+#view-profile #integrationFlagsCard .settings-flag-groups {
+  display: grid !important;
+  grid-template: auto / repeat(3, minmax(0, 1fr)) !important;
+  gap: 22px !important;
+}
+
+#view-profile .settings-flag-group-head,
+#view-profile .settings-form-group-head {
+  padding-bottom: 10px !important;
+  border-block-end: 1px solid rgba(226, 232, 240, 0.96) !important;
+}
+
+#view-profile .profile-google-panel:not(.hidden) {
+  display: grid !important;
+  gap: 16px !important;
+}
+
+#view-profile .profile-google-sync-shell {
+  gap: 16px !important;
+}
+
+#view-profile .profile-settings-rail {
+  order: -1 !important;
+  display: grid !important;
+  gap: 10px !important;
+  padding: 0 0 16px !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+}
+
+#view-profile .profile-settings-rail > .profile-control-head {
+  display: none !important;
+}
+
+#view-profile .profile-settings-rail-grid {
+  display: grid !important;
+  grid-template: auto / repeat(auto-fit, minmax(160px, 1fr)) !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+#view-profile .profile-settings-rail-item {
+  min-width: 0 !important;
+  gap: 2px !important;
+  padding: 0 16px !important;
+  border: 0 !important;
+  border-left: 1px solid rgba(203, 213, 225, 0.9) !important;
+  background: transparent !important;
+}
+
+#view-profile .profile-settings-rail-item:first-child {
+  padding-left: 0 !important;
+  border-left: 0 !important;
+}
+
+#view-profile .profile-settings-rail-actions,
+#view-profile .profile-settings-rail-actions.quick-actions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+#view-profile .profile-settings-rail-actions.hidden {
+  display: none !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile .profile-identity-strip {
+  display: none !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile .profile-settings-section-tabs {
+  justify-content: flex-start !important;
+}
+
+#shell[data-shell-mode="manager"]
+  #view-profile
+  .profile-settings-section-tabs
+  .workspace-tab:first-child {
+  padding-left: 0 !important;
+}
+
+#shell[data-shell-mode="manager"] #view-profile .profile-settings-rail-grid {
+  grid-template: auto / repeat(auto-fit, minmax(180px, 1fr)) !important;
+}
+
+:root[data-ui-theme="dark"] #view-profile.panel.card.view,
+html[data-ui-theme="dark"] #view-profile.panel.card.view,
+:root[data-ui-theme="dark"] #view-profile .profile-segment-panel,
+:root[data-ui-theme="dark"] #view-profile .profile-command-stage,
+:root[data-ui-theme="dark"] #view-profile .profile-surface,
+html[data-ui-theme="dark"] #view-profile .profile-segment-panel,
+html[data-ui-theme="dark"] #view-profile .profile-command-stage,
+html[data-ui-theme="dark"] #view-profile .profile-surface {
+  background: transparent !important;
+}
+
+:root[data-ui-theme="dark"] #view-profile .profile-identity-copy h3,
+:root[data-ui-theme="dark"] #view-profile .profile-control-title h3,
+:root[data-ui-theme="dark"] #view-profile .settings-switch-copy strong,
+:root[data-ui-theme="dark"] #view-profile .profile-fact strong,
+:root[data-ui-theme="dark"] #view-profile .profile-settings-rail-item strong,
+html[data-ui-theme="dark"] #view-profile .profile-identity-copy h3,
+html[data-ui-theme="dark"] #view-profile .profile-control-title h3,
+html[data-ui-theme="dark"] #view-profile .settings-switch-copy strong,
+html[data-ui-theme="dark"] #view-profile .profile-fact strong,
+html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item strong {
+  color: #f8fafc !important;
+}
+
+:root[data-ui-theme="dark"] #view-profile .profile-eyebrow,
+:root[data-ui-theme="dark"] #view-profile .profile-section-kicker,
+:root[data-ui-theme="dark"] #view-profile .settings-switch-copy span,
+:root[data-ui-theme="dark"] #view-profile .profile-fact span,
+:root[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span,
+html[data-ui-theme="dark"] #view-profile .profile-eyebrow,
+html[data-ui-theme="dark"] #view-profile .profile-section-kicker,
+html[data-ui-theme="dark"] #view-profile .settings-switch-copy span,
+html[data-ui-theme="dark"] #view-profile .profile-fact span,
+html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
+  color: #94a3b8 !important;
+}
+
+@media (max-width: 1024px) {
+  #view-profile .profile-fact-strip,
+  #view-profile #integrationFlagsCard .settings-flag-groups,
+  #view-profile .profile-signature-workspace,
+  #view-profile .profile-google-links-layout,
+  #view-profile .profile-mail-layout {
+    grid-template: auto / 1fr !important;
+  }
+
+  #view-profile .profile-fact {
+    padding: 10px 0 !important;
+    border-left: 0 !important;
+    border-block-start: 1px solid rgba(226, 232, 240, 0.96) !important;
+  }
+
+  #view-profile .profile-fact:first-child {
+    border-block-start: 0 !important;
+  }
+}
+
+@media (max-width: 768px) {
+  #view-profile {
+    gap: 14px !important;
+  }
+
+  #view-profile .profile-identity-strip,
+  #view-profile .profile-control-head,
+  #view-profile .settings-section-footer {
+    align-items: stretch !important;
+    grid-template: auto / 1fr !important;
+    flex-direction: column !important;
+  }
+
+  #view-profile .profile-workspace-tabs,
+  #view-profile .profile-settings-section-tabs,
+  #view-profile .profile-google-workspace-tabs {
+    overflow: auto hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  #view-profile .workspace-tab,
+  #view-profile .profile-settings-section-tabs .workspace-tab,
+  #view-profile .profile-google-workspace-tabs .workspace-tab {
+    flex: 0 0 auto !important;
+    padding: 0 14px !important;
+  }
+
+  #view-profile .profile-settings-rail-grid {
+    grid-template: auto / 1fr !important;
+    row-gap: 10px !important;
+  }
+
+  #shell[data-shell-mode="manager"] #view-profile .profile-settings-rail-grid {
+    grid-template: auto / 1fr !important;
+  }
+
+  #view-profile .profile-settings-rail-item,
+  #view-profile .profile-settings-rail-item:first-child {
+    padding: 10px 0 0 !important;
+    border-left: 0 !important;
+    border-block-start: 1px solid rgba(226, 232, 240, 0.96) !important;
+  }
+
+  #view-profile .profile-settings-rail-item:first-child {
+    padding-top: 0 !important;
+    border-block-start: 0 !important;
+  }
+}
