@@ -103426,11 +103426,7 @@ function bindUiEvents() {
       }
 
       if (action === "site-edit") {
-        runWithBusy(async () => {
-          const ok = await navigateToRoute(ROUTE_ADMIN_SITES_EDIT);
-          if (!ok) return;
-          onSiteEdit(actionEl.dataset.siteId);
-        }, "편집기 준비 중...");
+        runWithBusy(() => onSiteEdit(actionEl.dataset.siteId), "편집기 준비 중...");
         return;
       }
 

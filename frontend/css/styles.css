@@ -58391,6 +58391,190 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   }
 }
 
+/* 2026-04-15 Phase 4 employee/site edit form flattening */
+#shell.desktop-route-employees-new #view-employees > #employeeFormCard,
+#shell.desktop-route-sites-new #view-org #siteEditorCard,
+#shell.desktop-route-sites-edit #view-org #siteEditorCard {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#shell.desktop-route-employees-new #employeeFormCard .wizard-card-head,
+#shell.desktop-route-sites-new #siteEditorCard .site-editor-head,
+#shell.desktop-route-sites-edit #siteEditorCard .site-editor-head {
+  align-items: center !important;
+  padding: 0 0 14px !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.86) !important;
+}
+
+#shell.desktop-route-employees-new #employeeFormCard .wizard-card-head h3,
+#shell.desktop-route-sites-new #siteEditorCard .wizard-card-head h3,
+#shell.desktop-route-sites-edit #siteEditorCard .wizard-card-head h3 {
+  margin: 0 !important;
+  font-size: 22px !important;
+  line-height: 1.25 !important;
+}
+
+#shell.desktop-route-employees-new #employeeFormCard .wizard-step-strip,
+#shell.desktop-route-sites-new #siteEditorCard .wizard-step-strip,
+#shell.desktop-route-sites-edit #siteEditorCard .wizard-step-strip {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 18px !important;
+  padding: 12px 0 14px !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.86) !important;
+}
+
+#shell.desktop-route-employees-new #employeeFormCard .wizard-step-chip,
+#shell.desktop-route-sites-new #siteEditorCard .wizard-step-chip,
+#shell.desktop-route-sites-edit #siteEditorCard .wizard-step-chip {
+  min-height: 0 !important;
+  padding: 0 0 8px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #64748b !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+}
+
+#shell.desktop-route-employees-new #employeeFormCard .wizard-step-chip.active,
+#shell.desktop-route-sites-new #siteEditorCard .wizard-step-chip.active,
+#shell.desktop-route-sites-edit #siteEditorCard .wizard-step-chip.active {
+  color: #1d4ed8 !important;
+  box-shadow: inset 0 -2px 0 #2563eb !important;
+}
+
+#shell.desktop-route-employees-new #employeeFormCard .registration-workspace,
+#shell.desktop-route-sites-new #siteEditorCard .registration-workspace,
+#shell.desktop-route-sites-edit #siteEditorCard .registration-workspace {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px) !important;
+  gap: 18px !important;
+  align-items: start !important;
+  padding-top: 18px !important;
+}
+
+#shell.desktop-route-employees-new #employeeFormCard .registration-main,
+#shell.desktop-route-sites-new #siteEditorCard .registration-main,
+#shell.desktop-route-sites-edit #siteEditorCard .registration-main {
+  gap: 0 !important;
+}
+
+#shell.desktop-route-employees-new #employeeFormCard .registration-step-section,
+#shell.desktop-route-sites-new #siteEditorCard .registration-step-section,
+#shell.desktop-route-sites-edit #siteEditorCard .registration-step-section {
+  padding: 18px 0 !important;
+  border: 0 !important;
+  border-top: 1px solid rgba(203, 213, 225, 0.86) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#shell.desktop-route-employees-new
+  #employeeFormCard
+  .registration-step-section:first-child,
+#shell.desktop-route-sites-new
+  #siteEditorCard
+  .registration-step-section:first-child,
+#shell.desktop-route-sites-edit
+  #siteEditorCard
+  .registration-step-section:first-child {
+  padding-top: 0 !important;
+  border-top: 0 !important;
+}
+
+#shell.desktop-route-employees-new #employeeFormCard .wizard-form-divider,
+#shell.desktop-route-sites-new #siteEditorCard .wizard-form-divider,
+#shell.desktop-route-sites-edit #siteEditorCard .wizard-form-divider {
+  display: flex !important;
+  align-items: baseline !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 0 0 12px !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+#shell.desktop-route-employees-new #employeeFormCard .wizard-form-divider span,
+#shell.desktop-route-sites-new #siteEditorCard .wizard-form-divider span,
+#shell.desktop-route-sites-edit #siteEditorCard .wizard-form-divider span {
+  color: #64748b !important;
+  font-size: 12px !important;
+}
+
+#shell.desktop-route-employees-new #employeeFormCard .registration-grid,
+#shell.desktop-route-sites-new #siteEditorCard .registration-grid,
+#shell.desktop-route-sites-edit #siteEditorCard .registration-grid {
+  gap: 12px !important;
+}
+
+#shell.desktop-route-employees-new #employeeFormCard .registration-rail,
+#shell.desktop-route-sites-new #siteEditorCard .registration-rail,
+#shell.desktop-route-sites-edit #siteEditorCard .registration-rail {
+  position: sticky !important;
+  top: 96px !important;
+  gap: 0 !important;
+  padding-left: 18px !important;
+  border-left: 1px solid rgba(203, 213, 225, 0.86) !important;
+}
+
+#shell.desktop-route-employees-new #employeeFormCard .registration-rail-card,
+#shell.desktop-route-sites-new #siteEditorCard .registration-rail-card,
+#shell.desktop-route-sites-edit #siteEditorCard .registration-rail-card,
+#shell.desktop-route-employees-new #employeeFormCard .registration-action-rail,
+#shell.desktop-route-sites-new #siteEditorCard .registration-action-rail,
+#shell.desktop-route-sites-edit #siteEditorCard .registration-action-rail {
+  padding: 16px 0 !important;
+  border: 0 !important;
+  border-top: 1px solid rgba(203, 213, 225, 0.86) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#shell.desktop-route-employees-new
+  #employeeFormCard
+  .registration-rail-card:first-child,
+#shell.desktop-route-sites-new #siteEditorCard .registration-rail-card:first-child,
+#shell.desktop-route-sites-edit
+  #siteEditorCard
+  .registration-rail-card:first-child {
+  padding-top: 0 !important;
+  border-top: 0 !important;
+}
+
+#shell.desktop-route-employees-new #employeeFormCard .registration-action-buttons,
+#shell.desktop-route-sites-new #siteEditorCard .registration-action-buttons,
+#shell.desktop-route-sites-edit #siteEditorCard .registration-action-buttons,
+#shell.desktop-route-employees-new #employeeFormCard .registration-download-buttons {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 8px !important;
+}
+
+@media (max-width: 979px) {
+  #shell.desktop-route-employees-new #employeeFormCard .registration-workspace,
+  #shell.desktop-route-sites-new #siteEditorCard .registration-workspace,
+  #shell.desktop-route-sites-edit #siteEditorCard .registration-workspace {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #shell.desktop-route-employees-new #employeeFormCard .registration-rail,
+  #shell.desktop-route-sites-new #siteEditorCard .registration-rail,
+  #shell.desktop-route-sites-edit #siteEditorCard .registration-rail {
+    position: static !important;
+    padding-left: 0 !important;
+    border-left: 0 !important;
+    border-top: 1px solid rgba(203, 213, 225, 0.86) !important;
+  }
+}
+
 /* 2026-04-15 Phase 2 attendance daily/period list-first pass */
 #view-attendance[data-attendance-section="daily"]
   #attendanceManagerWorkspace.is-attendance-v2-status,
