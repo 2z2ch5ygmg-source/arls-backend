@@ -55028,6 +55028,7 @@ function renderSiteDirectoryDetail(site = null) {
   const panel = getSiteDirectoryDetailPanel();
   const body = getSiteDirectoryDetailBody();
   const actions = getSiteDirectoryDetailActions();
+  const headerEditButton = $("#siteDirectoryDetailEditButton");
   const eyebrow = $("#siteDirectoryDetailEyebrow");
   const title = $("#siteDirectoryDetailTitle");
   const subtitle = $("#siteDirectoryDetailSubtitle");
@@ -55054,6 +55055,11 @@ function renderSiteDirectoryDetail(site = null) {
         "왼쪽 목록에서 지점을 클릭하면 상태, 기준값, 수정 액션을 확인할 수 있습니다.",
       ),
     );
+    if (headerEditButton instanceof HTMLButtonElement) {
+      headerEditButton.classList.add("hidden");
+      headerEditButton.disabled = true;
+      delete headerEditButton.dataset.siteId;
+    }
     actions.innerHTML = "";
     actions.classList.add("hidden");
     panel.classList.add("is-empty");
@@ -55087,6 +55093,18 @@ function renderSiteDirectoryDetail(site = null) {
       : "status-pill status-pill-warn";
     readiness.textContent = header.readiness.readinessLabel;
     badges.appendChild(readiness);
+  }
+  if (headerEditButton instanceof HTMLButtonElement) {
+    const canEdit = can("siteWrite") && Boolean(header.id);
+    headerEditButton.classList.toggle("hidden", !canEdit);
+    headerEditButton.disabled = !canEdit;
+    if (canEdit) {
+      headerEditButton.dataset.siteId = header.id;
+      headerEditButton.setAttribute("aria-label", `${header.siteName} 수정`);
+    } else {
+      delete headerEditButton.dataset.siteId;
+      headerEditButton.removeAttribute("aria-label");
+    }
   }
 
   const statusFacts = [
@@ -70616,6 +70634,7 @@ function renderEmployeeDirectoryHeader(detail = null) {
   const titleEl = $("#employeeDirectoryDetailTitle");
   const subtitleEl = $("#employeeDirectoryDetailSubtitle");
   const eyebrowEl = $("#employeeDirectoryDetailEyebrow");
+  const headerEditButton = $("#employeeDirectoryDetailEditButton");
   const badgesEl = getEmployeeDirectoryDetailBadges();
   const metaEl = getEmployeeDirectoryDetailMeta();
   const avatarEl = getEmployeeDirectoryDetailAvatar();
@@ -70636,10 +70655,21 @@ function renderEmployeeDirectoryHeader(detail = null) {
       metaEl.classList.add("hidden");
     }
     if (avatarEl) avatarEl.textContent = "직";
+    if (headerEditButton instanceof HTMLButtonElement) {
+      headerEditButton.classList.add("hidden");
+      headerEditButton.disabled = true;
+      delete headerEditButton.dataset.employeeId;
+    }
     return;
   }
 
   const header = getEmployeeDirectoryHeaderPayload(detail);
+  const employeeId = String(
+    detail?.header?.employee_id ||
+      detail?.employee?.id ||
+      state.employeeAdmin?.detailEmployeeId ||
+      "",
+  ).trim();
   titleEl.textContent = header.employee_name;
   subtitleEl.textContent = header.subtitle || "핵심 상태를 확인합니다.";
   eyebrowEl.textContent =
@@ -70690,6 +70720,21 @@ function renderEmployeeDirectoryHeader(detail = null) {
       );
     }
     badgesEl.append(...badgeNodes);
+  }
+  if (headerEditButton instanceof HTMLButtonElement) {
+    const canEdit = can("employeeWrite") && Boolean(employeeId);
+    headerEditButton.classList.toggle("hidden", !canEdit);
+    headerEditButton.disabled = !canEdit;
+    if (canEdit) {
+      headerEditButton.dataset.employeeId = employeeId;
+      headerEditButton.setAttribute(
+        "aria-label",
+        `${header.employee_name} 수정`,
+      );
+    } else {
+      delete headerEditButton.dataset.employeeId;
+      headerEditButton.removeAttribute("aria-label");
+    }
   }
 }
 
