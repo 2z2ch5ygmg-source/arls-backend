@@ -17720,7 +17720,7 @@ textarea::placeholder {
   padding: 0 12px;
 }
 
-#view-leave .leave-usage-summary-strip {
+#view-leave #leaveUsageSummaryStrip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
@@ -39280,7 +39280,7 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #view-requests #requestsKpiStrip,
-#view-leave .leave-usage-summary-strip {
+#view-leave #leaveUsageSummaryStrip {
   gap: 8px;
 }
 
@@ -59625,5 +59625,473 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   #view-profile .profile-settings-rail-item:first-child {
     padding-top: 0 !important;
     border-block-start: 0 !important;
+  }
+}
+
+/* 2026-04-15 phase 5: leave settings/grants control-plane cleanup */
+#view-leave.panel.card.view {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-leave {
+  gap: 18px !important;
+}
+
+#view-leave > .workspace-head {
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+#view-leave > .workspace-head .muted,
+#view-leave #leavePermissionHint,
+#view-leave #leavePolicySection .approval-head,
+#view-leave #leaveGrantsSection .leave-grants-head .requests-heading-block,
+#view-leave #leaveUsageGridCard .requests-heading-block,
+#view-leave #leaveWorkspaceRequestsCard .requests-heading-block {
+  display: none !important;
+}
+
+#view-leave #leaveModule,
+#view-leave #leaveWorkspaceDesktop,
+#view-leave .leave-workspace-section {
+  display: grid !important;
+  gap: 18px !important;
+  min-width: 0 !important;
+}
+
+#view-leave .leave-workspace-tabbar-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 18px !important;
+  min-width: 0 !important;
+  padding: 0 0 12px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+  background: transparent !important;
+}
+
+#view-leave .leave-workspace-header-nav {
+  min-width: 0 !important;
+}
+
+#view-leave #leaveWorkspaceTabs {
+  display: flex !important;
+  width: auto !important;
+  min-width: 0 !important;
+  min-height: 40px !important;
+  align-items: center !important;
+  gap: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-leave #leaveWorkspaceTabs .workspace-tab {
+  position: relative !important;
+  min-height: 40px !important;
+  height: 40px !important;
+  padding: 0 18px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #64748b !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+}
+
+#view-leave #leaveWorkspaceTabs .workspace-tab::after {
+  position: absolute;
+  right: 14px;
+  bottom: -13px;
+  left: 14px;
+  height: 2px;
+  border-radius: 999px;
+  background: transparent;
+  content: "";
+}
+
+#view-leave #leaveWorkspaceTabs .workspace-tab.active {
+  color: #ea580c !important;
+}
+
+#view-leave #leaveWorkspaceTabs .workspace-tab.active::after {
+  background: #ea580c;
+}
+
+#view-leave .leave-workspace-header-actions {
+  display: flex !important;
+  justify-content: flex-end !important;
+  flex: 0 0 auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+
+#view-leave #leaveWorkspacePrimaryAction {
+  width: auto !important;
+  min-width: 132px !important;
+  min-height: 40px !important;
+  padding: 0 18px !important;
+  border-radius: 8px !important;
+}
+
+#view-leave #leavePolicySection,
+#view-leave #leaveGrantsSection > article,
+#view-leave #leaveUsageGridCard,
+#view-leave #leaveHistoryChartCard,
+#view-leave #leaveWorkspaceRequestsCard,
+#view-leave #leaveRequestsToolbar {
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-leave #leavePolicyStatusTabs,
+#view-leave #leaveGrantsTabs,
+#view-leave #leaveWorkspaceSecondaryTabs {
+  display: flex !important;
+  width: 100% !important;
+  min-height: 40px !important;
+  align-items: center !important;
+  gap: 0 !important;
+  padding: 0 0 10px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-leave [data-action="leave-policy-status-tab"],
+#view-leave [data-action="leave-grants-tab"],
+#view-leave [data-action="leave-workspace-queue-tab"] {
+  position: relative !important;
+  min-height: 36px !important;
+  height: 36px !important;
+  padding: 0 16px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #64748b !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+}
+
+#view-leave [data-action="leave-policy-status-tab"]::after,
+#view-leave [data-action="leave-grants-tab"]::after,
+#view-leave [data-action="leave-workspace-queue-tab"]::after {
+  position: absolute;
+  right: 12px;
+  bottom: -11px;
+  left: 12px;
+  height: 2px;
+  border-radius: 999px;
+  background: transparent;
+  content: "";
+}
+
+#view-leave [data-action="leave-policy-status-tab"].active,
+#view-leave [data-action="leave-grants-tab"].active,
+#view-leave [data-action="leave-workspace-queue-tab"].active {
+  color: #ea580c !important;
+}
+
+#view-leave [data-action="leave-policy-status-tab"].active::after,
+#view-leave [data-action="leave-grants-tab"].active::after,
+#view-leave [data-action="leave-workspace-queue-tab"].active::after {
+  background: #ea580c;
+}
+
+#view-leave #leavePolicySection,
+#view-leave #leaveGrantsSection > article,
+#view-leave #leaveUsageGridCard,
+#view-leave #leaveWorkspaceRequestsCard {
+  overflow: auto !important;
+}
+
+#view-leave #leavePolicySection .leave-policy-grid-header,
+#view-leave #leavePolicyList .leave-policy-row {
+  display: grid !important;
+  grid-template:
+    auto /
+    minmax(154px, 1.04fr)
+    minmax(230px, 1.56fr)
+    minmax(128px, 0.86fr)
+    minmax(124px, 0.82fr)
+    minmax(112px, 0.72fr)
+    minmax(104px, 0.68fr)
+    minmax(116px, 0.74fr) !important;
+  min-width: 1010px !important;
+  align-items: center !important;
+  column-gap: 14px !important;
+}
+
+#view-leave #leaveGrantsSection .leave-grants-grid-header,
+#view-leave #leaveGrantsList .leave-grants-row {
+  display: grid !important;
+  grid-template:
+    auto /
+    minmax(174px, 1.12fr)
+    minmax(148px, 0.98fr)
+    minmax(104px, 0.72fr)
+    minmax(188px, 1.08fr)
+    minmax(144px, 0.92fr) !important;
+  min-width: 780px !important;
+  align-items: center !important;
+  column-gap: 14px !important;
+}
+
+#view-leave #leaveUsageGridCard .leave-usage-grid-header,
+#view-leave #leaveUsageList .leave-usage-row {
+  display: grid !important;
+  grid-template:
+    auto /
+    minmax(168px, 1.16fr)
+    minmax(128px, 0.9fr)
+    minmax(104px, 0.72fr)
+    minmax(104px, 0.72fr)
+    minmax(118px, 0.82fr)
+    minmax(104px, 0.72fr)
+    minmax(132px, 0.86fr) !important;
+  min-width: 880px !important;
+  align-items: center !important;
+  column-gap: 14px !important;
+}
+
+#view-leave #leaveWorkspaceRequestsCard .leave-request-grid-header,
+#view-leave #leaveWorkspaceRequestList .leave-request-row {
+  display: grid !important;
+  grid-template:
+    auto /
+    minmax(138px, 1fr)
+    minmax(136px, 1fr)
+    minmax(126px, 0.9fr)
+    minmax(166px, 1.16fr)
+    minmax(138px, 0.92fr)
+    minmax(116px, 0.82fr)
+    minmax(116px, 0.82fr)
+    minmax(104px, 0.76fr) !important;
+  min-width: 1020px !important;
+  align-items: center !important;
+  column-gap: 14px !important;
+}
+
+#view-leave #leavePolicySection .leave-policy-grid-header,
+#view-leave #leaveGrantsSection .leave-grants-grid-header,
+#view-leave #leaveUsageGridCard .leave-usage-grid-header,
+#view-leave #leaveWorkspaceRequestsCard .leave-request-grid-header {
+  padding: 10px 0 !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+  background: transparent !important;
+  color: #64748b !important;
+}
+
+#view-leave #leavePolicyList,
+#view-leave #leaveGrantsList,
+#view-leave #leaveUsageList,
+#view-leave #leaveWorkspaceRequestList {
+  display: grid !important;
+  gap: 0 !important;
+  min-width: max-content !important;
+}
+
+#view-leave #leavePolicyList .leave-policy-row,
+#view-leave #leaveGrantsList .leave-grants-row,
+#view-leave #leaveUsageList .leave-usage-row,
+#view-leave #leaveWorkspaceRequestList .leave-request-row {
+  min-height: 56px !important;
+  padding: 12px 0 !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(226, 232, 240, 0.96) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-leave #leavePolicyList .leave-policy-row:hover,
+#view-leave #leaveGrantsList .leave-grants-row:hover,
+#view-leave #leaveUsageList .leave-usage-row:hover,
+#view-leave #leaveWorkspaceRequestList .leave-request-row:hover {
+  background: rgba(248, 250, 252, 0.9) !important;
+}
+
+#view-leave .requests-inline-empty,
+#view-leave .empty-state {
+  min-height: 58px !important;
+  padding: 14px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  justify-items: start !important;
+  align-content: center !important;
+  text-align: left !important;
+}
+
+#view-leave .requests-inline-empty .empty-state-icon,
+#view-leave .empty-state .empty-state-icon {
+  display: none !important;
+}
+
+#view-leave .leave-grid-cell {
+  min-width: 0 !important;
+  gap: 3px !important;
+}
+
+#view-leave .leave-grid-cell .requests-row-primary,
+#view-leave .leave-grid-cell .requests-row-secondary,
+#view-leave .leave-grid-header span,
+#view-leave .leave-grid-header .admin-sort-btn {
+  letter-spacing: 0 !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+}
+
+#view-leave .leave-grid-cell .requests-row-primary {
+  color: #0f172a !important;
+  font-size: 14px !important;
+  line-height: 21px !important;
+  font-weight: 800 !important;
+}
+
+#view-leave .leave-grid-cell .requests-row-secondary,
+#view-leave .leave-grid-header span,
+#view-leave .leave-grid-header .admin-sort-btn {
+  color: #64748b !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  font-weight: 700 !important;
+}
+
+#view-leave .leave-grants-toolbar,
+#view-leave .leave-usage-toolbar,
+#view-leave .leave-requests-filter-controls,
+#view-leave .leave-requests-toolbar-actions {
+  gap: 10px !important;
+  padding: 0 0 12px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+}
+
+#view-leave .leave-grants-toolbar {
+  display: grid !important;
+  grid-template: auto / minmax(180px, 240px) minmax(240px, 1fr) !important;
+  align-items: end !important;
+}
+
+#view-leave .leave-usage-summary-strip {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0 !important;
+  padding: 0 0 12px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+}
+
+#view-leave .leave-usage-summary-item {
+  min-height: 0 !important;
+  padding: 0 16px !important;
+  border: 0 !important;
+  border-inline-start: 1px solid rgba(203, 213, 225, 0.9) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-leave .leave-usage-summary-item:first-child {
+  padding-left: 0 !important;
+  border-inline-start: 0 !important;
+}
+
+#view-leave .modal-sheet.sheet-layout-leave-policy,
+.modal-sheet.sheet-layout-leave-policy {
+  border-radius: 12px !important;
+}
+
+.leave-policy-editor .leave-policy-editor-section {
+  gap: 12px !important;
+  padding: 16px 0 0 !important;
+  border: 0 !important;
+  border-block-start: 1px solid rgba(203, 213, 225, 0.9) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.leave-policy-editor .leave-policy-editor-section:first-child {
+  padding-top: 0 !important;
+  border-block-start: 0 !important;
+}
+
+.leave-policy-editor .leave-policy-inline-grid,
+.leave-policy-editor .leave-policy-inline-grid-wide,
+.leave-policy-editor .leave-policy-tenure-row {
+  grid-template: auto / repeat(auto-fit, minmax(180px, 1fr)) !important;
+}
+
+@media (max-width: 1023px) {
+  #view-leave #leaveWorkspaceDesktop {
+    display: grid !important;
+    gap: 16px !important;
+  }
+
+  #view-leave .leave-workspace-tabbar-row {
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  #view-leave #leaveWorkspaceTabs {
+    width: 100% !important;
+    overflow: auto hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  #view-leave #leaveWorkspaceTabs .workspace-tab {
+    flex: 0 0 auto !important;
+    padding: 0 14px !important;
+  }
+
+  #view-leave .leave-workspace-header-actions,
+  #view-leave .leave-workspace-header-actions .btn {
+    width: auto !important;
+  }
+
+  #view-leave #leaveWorkspacePrimaryAction {
+    width: auto !important;
+    max-width: 100% !important;
+  }
+
+  #view-leave #leavePolicyStatusTabs,
+  #view-leave #leaveGrantsTabs,
+  #view-leave #leaveWorkspaceSecondaryTabs {
+    overflow: auto hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  #view-leave [data-action="leave-policy-status-tab"],
+  #view-leave [data-action="leave-grants-tab"],
+  #view-leave [data-action="leave-workspace-queue-tab"] {
+    flex: 0 0 auto !important;
+  }
+
+  #view-leave .leave-grants-toolbar {
+    grid-template: auto / 1fr !important;
+  }
+
+  #view-leave #leavePolicySection,
+  #view-leave #leaveGrantsSection > article,
+  #view-leave #leaveUsageGridCard,
+  #view-leave #leaveWorkspaceRequestsCard {
+    padding: 0 !important;
   }
 }
