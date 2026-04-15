@@ -58391,6 +58391,135 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   }
 }
 
+/* 2026-04-15 Phase 4 employee import/create continuation */
+#shell.desktop-route-employees-import #employeeRosterImportCard {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#shell.desktop-route-employees-import #employeeRosterImportCard .employee-import-head {
+  align-items: center !important;
+  padding: 0 0 14px !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.86) !important;
+}
+
+#shell.desktop-route-employees-import #employeeRosterImportCard .employee-import-head h3 {
+  margin: 0 !important;
+  font-size: 22px !important;
+  line-height: 1.25 !important;
+}
+
+#shell.desktop-route-employees-import #employeeRosterImportCard .wizard-step-strip {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 18px !important;
+  padding: 12px 0 14px !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.86) !important;
+}
+
+#shell.desktop-route-employees-import #employeeRosterImportCard .wizard-step-chip {
+  min-height: 0 !important;
+  padding: 0 0 8px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #64748b !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+}
+
+#shell.desktop-route-employees-import #employeeRosterImportCard .wizard-step-chip.active {
+  color: #1d4ed8 !important;
+  box-shadow: inset 0 -2px 0 #2563eb !important;
+}
+
+#shell.desktop-route-employees-import #employeeRosterImportCard .employee-import-toolbar {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 12px !important;
+  align-items: center !important;
+  padding: 14px 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.86) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#shell.desktop-route-employees-import
+  #employeeRosterImportCard
+  .employee-import-toolbar
+  > .inline-actions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+}
+
+#shell.desktop-route-employees-import #employeeRosterImportStatus {
+  margin: 10px 0 0 !important;
+  min-height: 24px !important;
+  color: #475569 !important;
+  font-weight: 700 !important;
+}
+
+#shell.desktop-route-employees-import
+  #employeeRosterImportProgressStrip:not(.hidden) {
+  margin-top: 14px !important;
+  padding: 12px 0 !important;
+  border: 0 !important;
+  border-top: 1px solid rgba(203, 213, 225, 0.86) !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.86) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+#shell.desktop-route-employees-import #employeeRosterImportCard .employee-table-wrap {
+  margin-top: 16px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow-x: auto !important;
+}
+
+#shell.desktop-route-employees-import #employeeRosterImportCard .guard-import-table {
+  min-width: 1480px !important;
+  border-collapse: collapse !important;
+}
+
+#shell.desktop-route-employees-import #employeeRosterImportCard .guard-import-table th,
+#shell.desktop-route-employees-import #employeeRosterImportCard .guard-import-table td {
+  padding: 10px 12px !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.96) !important;
+}
+
+@media (max-width: 720px) {
+  #shell.desktop-route-employees-import #employeeRosterImportCard .employee-import-toolbar {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #shell.desktop-route-employees-import
+    #employeeRosterImportCard
+    .employee-import-toolbar
+    > .inline-actions {
+    justify-content: stretch !important;
+  }
+
+  #shell.desktop-route-employees-import
+    #employeeRosterImportCard
+    .employee-import-toolbar
+    .btn {
+    width: 100% !important;
+  }
+}
+
 /* 2026-04-15 Phase 4 employee/site edit form flattening */
 #shell.desktop-route-employees-new #view-employees > #employeeFormCard,
 #shell.desktop-route-sites-new #view-org #siteEditorCard,
