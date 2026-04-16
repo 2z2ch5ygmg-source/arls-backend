@@ -58383,7 +58383,7 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   #view-leave #leaveUsageGridCard,
   #view-leave #leavePolicySection,
   #view-leave #leaveGrantsSection > .module-card,
-  #view-leave #leaveHistoryChartCard {
+  #view-leave #leaveHistory\43 hartCard {
     padding: 14px !important;
     border: 1px solid rgba(226, 232, 240, 0.96) !important;
     border-radius: 8px !important;
@@ -62268,9 +62268,227 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
     padding: 12px 0 !important;
   }
 
-  #view-requests
+#view-requests
     #requestsUnifiedDetailPanel.requests-detail-drawer.is-open
     .requests-drawer-close {
     display: inline-flex !important;
+  }
+}
+
+/* 2026-04-16 phase 5: leave mobile list axis and history density */
+#view-leave #leaveWorkspaceRequestsCard,
+#view-leave #leaveUsageGridCard {
+  overflow: auto visible;
+  -webkit-overflow-scrolling: touch;
+}
+
+#view-leave #leaveWorkspaceRequestsCard .leave-request-grid-header,
+#view-leave #leaveWorkspaceRequestList {
+  min-width: 1040px;
+}
+
+#view-leave #leaveUsageGridCard .leave-usage-grid-header,
+#view-leave #leaveUsageList {
+  min-width: 880px;
+}
+
+#view-leave #leaveWorkspaceRequestsCard .leave-request-grid-header,
+#view-leave #leaveWorkspaceRequestList .leave-request-row {
+  grid-template:
+    auto /
+    minmax(126px, 1fr)
+    minmax(126px, 0.96fr)
+    minmax(124px, 0.92fr)
+    minmax(148px, 1.14fr)
+    minmax(92px, 0.7fr)
+    minmax(128px, 0.94fr)
+    minmax(88px, 0.66fr)
+    minmax(118px, 0.9fr) !important;
+}
+
+#view-leave #leaveUsageGridCard .leave-usage-grid-header,
+#view-leave #leaveUsageList .leave-usage-row {
+  grid-template:
+    auto /
+    minmax(168px, 1.2fr)
+    minmax(128px, 0.9fr)
+    minmax(104px, 0.74fr)
+    minmax(104px, 0.74fr)
+    minmax(118px, 0.84fr)
+    minmax(104px, 0.74fr)
+    minmax(132px, 0.94fr) !important;
+}
+
+#view-leave .leave-grid-cell .requests-row-primary,
+#view-leave .leave-grid-cell .requests-row-secondary {
+  word-break: keep-all;
+}
+
+@media (max-width: 767px) {
+  #view-leave #leaveWorkspaceTabs {
+    width: 100%;
+    overflow: auto hidden;
+    flex-wrap: nowrap;
+    padding-block-end: 2px;
+  }
+
+  #view-leave #leaveWorkspaceTabs .workspace-tab {
+    flex: 0 0 auto;
+  }
+
+  #view-leave .leave-workspace-tabbar-row {
+    gap: 10px;
+  }
+
+  #view-leave .leave-workspace-header-actions,
+  #view-leave .leave-workspace-primary-cta {
+    width: 100%;
+  }
+
+  #view-leave #leaveUsageGridCard {
+    gap: 10px !important;
+  }
+
+  #view-leave #leaveUsageGridCard .requests-list-head,
+  #view-leave #leaveUsageSummaryStrip,
+  #view-leave #leaveUsageGridCard .leave-usage-toolbar {
+    inline-size: calc(100dvw - 32px) !important;
+    max-inline-size: calc(100dvw - 32px) !important;
+  }
+
+  #view-leave #leaveUsageGridCard .requests-list-head {
+    padding: 10px 0 8px !important;
+  }
+
+  #view-leave #leaveUsageSummaryStrip {
+    display: grid !important;
+    grid-template: auto / repeat(4, minmax(0, 1fr)) !important;
+    margin: 0 !important;
+    padding-block-end: 8px !important;
+  }
+
+  #view-leave .leave-usage-summary-item {
+    min-height: 44px !important;
+    padding: 0 8px !important;
+  }
+
+  #view-leave .leave-usage-summary-label {
+    font-size: 11px !important;
+    line-height: 16px !important;
+  }
+
+  #view-leave .leave-usage-summary-value {
+    font-size: 18px !important;
+    line-height: 24px !important;
+  }
+
+  #view-leave #leaveUsageGridCard .leave-usage-toolbar {
+    display: grid !important;
+    grid-template: auto / minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 10px !important;
+    padding: 0 !important;
+  }
+
+  #view-leave .leave-usage-period-controls {
+    display: grid !important;
+    grid-template: auto / 34px minmax(0, 1fr) 34px !important;
+    gap: 8px !important;
+    width: auto !important;
+  }
+
+  #view-leave .leave-filter-field-year,
+  #view-leave .leave-filter-field-reference,
+  #view-leave .leave-filter-field-policy,
+  #view-leave .leave-filter-field-employee {
+    width: auto !important;
+  }
+
+  #view-leave #leaveUsageToolbarMeta {
+    grid-column: 1 / -1;
+    display: grid !important;
+    grid-template: auto / repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    min-height: 0 !important;
+  }
+
+  #view-leave #leaveUsageToolbarMeta .btn,
+  #view-leave #leaveUsageToolbarMeta .input-field,
+  #view-leave #leaveUsageToolbarMeta .leave-inline-search {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  #view-leave #leaveUsageToolbarMeta .leave-inline-search {
+    grid-column: 1 / -1;
+  }
+
+  #view-leave #leaveUsageToolbarMeta #leaveUsageCount {
+    justify-self: start;
+  }
+
+  #view-leave #leaveUsageGridCard .leave-usage-grid-header {
+    position: static !important;
+    top: auto !important;
+    padding-block: 8px !important;
+  }
+
+  #view-leave #leaveUsageList {
+    margin: 0 !important;
+  }
+
+  #view-leave #leaveUsageList .leave-usage-row,
+  #view-leave #leaveWorkspaceRequestList .leave-request-row {
+    min-height: 58px !important;
+    padding-block: 11px !important;
+  }
+
+  #view-leave #leaveWorkspaceRequestsCard {
+    margin-inline: -16px;
+    border-inline: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  #view-leave #leaveWorkspaceRequestsCard .requests-list-head,
+  #view-leave #leaveWorkspaceSecondaryTabsWrap,
+  #view-leave #leaveWorkspaceRequestsCard .leave-request-grid-header,
+  #view-leave #leaveWorkspaceRequestList .leave-request-row {
+    padding-inline: 16px !important;
+  }
+
+  #view-leave #leaveHistoryChartCard {
+    margin-block-start: 10px !important;
+    padding-block-start: 10px !important;
+  }
+
+  #view-leave .leave-history-\63 hart-head {
+    align-items: flex-start !important;
+    gap: 8px !important;
+    padding-block-end: 4px !important;
+  }
+
+  #view-leave .leave-history-legend {
+    gap: 8px !important;
+  }
+
+  #view-leave .leave-history-\63 hart {
+    display: flex !important;
+    gap: 8px !important;
+    min-height: 116px !important;
+    overflow: auto hidden;
+    padding-block-end: 4px;
+  }
+
+  #view-leave .leave-history-\63 hart-column {
+    flex: 0 0 56px;
+  }
+
+  #view-leave .leave-history-\63 hart-track {
+    height: 68px;
+    border-radius: 8px;
+    padding: 7px 6px;
+  }
+
+  #view-leave .leave-history-\63 hart-bar {
+    width: 7px;
   }
 }
