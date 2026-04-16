@@ -62795,3 +62795,206 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
     padding-block: 11px !important;
   }
 }
+
+/* 2026-04-16 phase 5: leave employee picker sheet flattening */
+.modal-sheet.sheet-layout-leave-employee-picker {
+  width: min(94vw, 900px) !important;
+  max-height: min(90dvh, 820px) !important;
+  padding: 18px 20px !important;
+  border-radius: 8px !important;
+}
+
+.modal-sheet.sheet-layout-leave-employee-picker .sheet-title {
+  margin: 0 !important;
+  font-size: 18px !important;
+  line-height: 26px !important;
+  letter-spacing: 0 !important;
+}
+
+.modal-sheet.sheet-layout-leave-employee-picker .sheet-content {
+  max-width: none !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  padding-right: 2px !important;
+}
+
+.modal-sheet.sheet-layout-leave-employee-picker .sheet-actions {
+  display: grid !important;
+  grid-template: auto / minmax(0, 1fr) minmax(0, 1fr) !important;
+  gap: 10px !important;
+  padding-block-start: 12px !important;
+  border-block-start: 1px solid rgba(226, 232, 240, 0.96) !important;
+}
+
+.leave-employee-picker {
+  gap: 14px !important;
+}
+
+.leave-employee-picker-toolbar {
+  display: grid !important;
+  grid-template: auto / minmax(0, 1.4fr) minmax(160px, 0.8fr) minmax(160px, 0.8fr) !important;
+  gap: 10px 12px !important;
+  padding-block-end: 12px !important;
+  border-block-end: 1px solid rgba(226, 232, 240, 0.96) !important;
+}
+
+.leave-employee-picker-toolbar .input-field {
+  gap: 5px !important;
+}
+
+.leave-employee-picker-toolbar .input-field > span {
+  color: #64748b !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+}
+
+.leave-employee-picker-toolbar input,
+.leave-employee-picker-toolbar select {
+  min-height: 40px !important;
+  border-radius: 8px !important;
+}
+
+.leave-employee-picker-grid {
+  display: grid !important;
+  grid-template: auto / minmax(0, 1fr) minmax(0, 0.86fr) !important;
+  gap: 18px !important;
+  min-height: 0 !important;
+}
+
+.leave-employee-picker-list {
+  min-height: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  overflow: visible !important;
+}
+
+.leave-employee-picker-selected {
+  padding-inline-start: 18px !important;
+  border-inline-start: 1px solid rgba(226, 232, 240, 0.96) !important;
+}
+
+.leave-employee-picker-list-head {
+  min-height: 40px !important;
+  padding: 0 0 10px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(226, 232, 240, 0.96) !important;
+  background: transparent !important;
+}
+
+.leave-employee-picker-list-head strong {
+  color: #0f172a !important;
+  font-size: 14px !important;
+  line-height: 20px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+}
+
+.leave-employee-picker-list-head span {
+  color: #64748b !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  font-weight: 700 !important;
+}
+
+.leave-employee-picker-list-body {
+  display: grid !important;
+  gap: 0 !important;
+  max-height: min(48dvh, 420px) !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  padding: 0 !important;
+}
+
+.leave-employee-picker-item,
+.leave-employee-picker-selected-item {
+  min-height: 52px !important;
+  padding: 10px 0 !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(226, 232, 240, 0.96) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.leave-employee-picker-item {
+  grid-template: auto / 24px minmax(0, 1fr) !important;
+}
+
+.leave-employee-picker-selected-item {
+  grid-template: auto / minmax(0, 1fr) 34px !important;
+}
+
+.leave-employee-picker-item:hover,
+.leave-employee-picker-item.is-selected {
+  background: rgba(248, 250, 252, 0.9) !important;
+}
+
+.leave-employee-picker-item-check {
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 4px !important;
+  background: #fff !important;
+  color: #ea580c !important;
+}
+
+.leave-employee-picker-item-copy strong,
+.leave-employee-picker-selected-copy strong {
+  color: #0f172a !important;
+  font-size: 13px !important;
+  line-height: 19px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+}
+
+.leave-employee-picker-item-copy span,
+.leave-employee-picker-selected-copy span,
+.leave-employee-picker-empty {
+  color: #64748b !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  font-weight: 600 !important;
+}
+
+.leave-employee-picker-empty {
+  min-height: 72px !important;
+  padding: 14px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  justify-items: start !important;
+  text-align: left !important;
+}
+
+@media (max-width: 767px) {
+  .modal-sheet.sheet-layout-leave-employee-picker {
+    width: auto !important;
+    max-height: calc(100dvh - 20px) !important;
+    top: 10px !important;
+    right: 10px !important;
+    bottom: 10px !important;
+    left: 10px !important;
+    padding: 16px !important;
+    transform: none !important;
+  }
+
+  .modal-sheet.sheet-layout-leave-employee-picker.hidden {
+    transform: translateY(14px) !important;
+  }
+
+  .leave-employee-picker-toolbar,
+  .leave-employee-picker-grid {
+    grid-template: auto / minmax(0, 1fr) !important;
+  }
+
+  .leave-employee-picker-selected {
+    padding-inline-start: 0 !important;
+    border-inline-start: 0 !important;
+  }
+
+  .leave-employee-picker-list-body {
+    max-height: 260px !important;
+  }
+}
