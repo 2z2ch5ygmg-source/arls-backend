@@ -62492,3 +62492,114 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
     width: 7px;
   }
 }
+
+/* 2026-04-16 phase 5: leave grants/settings axis and panel flattening */
+#view-leave #leaveGrantsSection,
+#view-leave #leavePolicySection {
+  min-width: 0 !important;
+}
+
+#view-leave #leaveGrantsSection > article,
+#view-leave #leavePolicySection {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-leave #leaveGrantsSection > article.module-\63 ard {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-leave #leaveGrantsSection .leave-grants-head,
+#view-leave #leavePolicySection .approval-head {
+  display: flex !important;
+  padding: 0 0 10px !important;
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+}
+
+#view-leave #leaveGrantsSection .leave-grants-head .requests-heading-block,
+#view-leave #leavePolicySection .approval-head .requests-heading-block {
+  display: none !important;
+}
+
+#view-leave #leaveGrantsTabs,
+#view-leave #leavePolicyStatusTabs {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#view-leave #leaveGrantsSection .leave-grants-toolbar {
+  border: 0 !important;
+  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
+}
+
+#view-leave #leavePolicySection .leave-policy-grid-header,
+#view-leave #leavePolicyList .leave-policy-row {
+  min-width: 1010px !important;
+}
+
+#view-leave #leaveGrantsSection .leave-grants-grid-header,
+#view-leave #leaveGrantsList .leave-grants-row {
+  min-width: 780px !important;
+}
+
+#view-leave #leavePolicyList,
+#view-leave #leaveGrantsList {
+  min-width: max-content !important;
+}
+
+@media (max-width: 767px) {
+  #view-leave #leaveGrantsSection > article,
+  #view-leave #leavePolicySection {
+    margin-inline: 0 !important;
+    padding-inline: 16px !important;
+  }
+
+  #view-leave #leaveGrantsSection > article.module-\63 ard {
+    margin-inline: 0 !important;
+    padding-inline: 0 !important;
+  }
+
+  #view-leave #leaveGrantsSection .leave-grants-head,
+  #view-leave #leaveGrantsSection .leave-grants-toolbar {
+    inline-size: calc(100dvw - 32px) !important;
+    max-inline-size: calc(100dvw - 32px) !important;
+  }
+
+  #view-leave #leaveGrantsTabs,
+  #view-leave #leavePolicyStatusTabs {
+    overflow: auto hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #view-leave #leaveGrantsSection .leave-grants-toolbar {
+    display: grid !important;
+    grid-template: auto / minmax(0, 1fr) !important;
+    gap: 10px !important;
+    padding: 0 0 10px !important;
+  }
+
+  #view-leave #leaveGrantsSection .leave-grants-toolbar .input-field,
+  #view-leave #leaveGrantsSection .leave-grants-toolbar input,
+  #view-leave #leaveGrantsSection .leave-grants-toolbar select {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  #view-leave #leavePolicySection .leave-policy-grid-header,
+  #view-leave #leaveGrantsSection .leave-grants-grid-header {
+    padding-block: 8px !important;
+  }
+
+  #view-leave #leavePolicyList .leave-policy-row,
+  #view-leave #leaveGrantsList .leave-grants-row {
+    min-height: 56px !important;
+    padding-block: 11px !important;
+  }
+}
