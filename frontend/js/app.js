@@ -43447,7 +43447,7 @@ function renderLeaveWorkspaceDrawer() {
 
 function buildLeaveWorkspaceCreateSheetContent() {
   const content = document.createElement("div");
-  content.className = "stack";
+  content.className = "stack leave-grant-editor";
   content.innerHTML = `
     <div class="approval-head">
       <div class="requests-heading-block">
@@ -44478,6 +44478,7 @@ function openLeaveGrantSheet({ draft = null } = {}) {
       { label: "취소", variant: "btn-secondary", action: "sheet-close" },
       { label: "부여", variant: "btn-primary", action: "leave-grant-save" },
     ],
+    layoutClass: "sheet-layout-leave-grant",
   });
   const policyIdSelect = $("#leaveGrantPolicyId");
   if (policyIdSelect instanceof HTMLSelectElement) {

@@ -248,6 +248,198 @@ html[data-platform-font="apple"] {
   }
 }
 
+/* 2026-04-16 phase 5: leave grant and policy sheet controls */
+.modal-sheet.sheet-layout-leave-grant,
+.modal-sheet.sheet-layout-leave-policy {
+  left: 50% !important;
+  right: auto !important;
+  top: 50% !important;
+  bottom: auto !important;
+  width: min(94vw, 760px) !important;
+  max-height: min(92dvh, 820px) !important;
+  padding: 18px 20px !important;
+  border-radius: 8px !important;
+  transform: translate(-50%, -50%) !important;
+}
+
+.modal-sheet.sheet-layout-leave-policy {
+  width: min(94vw, 920px) !important;
+}
+
+.modal-sheet.sheet-layout-leave-grant.hidden,
+.modal-sheet.sheet-layout-leave-policy.hidden {
+  transform: translate(-50%, calc(-50% + 14px)) !important;
+}
+
+.modal-sheet.sheet-layout-leave-grant .sheet-title,
+.modal-sheet.sheet-layout-leave-policy .sheet-title {
+  margin: 0 !important;
+  font-size: 18px !important;
+  line-height: 26px !important;
+  letter-spacing: 0 !important;
+}
+
+.modal-sheet.sheet-layout-leave-grant .sheet-content,
+.modal-sheet.sheet-layout-leave-policy .sheet-content {
+  max-width: none !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  padding-right: 2px !important;
+}
+
+.modal-sheet.sheet-layout-leave-grant .sheet-actions,
+.modal-sheet.sheet-layout-leave-policy .sheet-actions {
+  display: grid !important;
+  grid-template: auto / minmax(0, 1fr) minmax(0, 1fr) !important;
+  gap: 10px !important;
+  padding-block-start: 12px !important;
+  border-block-start: 1px solid rgba(226, 232, 240, 0.96) !important;
+}
+
+.leave-grant-editor,
+.leave-policy-editor {
+  gap: 14px !important;
+}
+
+.leave-grant-editor .leave-policy-selection-row,
+.leave-policy-editor .leave-policy-selection-row {
+  display: grid !important;
+  grid-template: auto / minmax(132px, 0.22fr) minmax(0, 1fr) !important;
+  gap: 10px !important;
+  align-items: stretch !important;
+}
+
+.leave-grant-editor .leave-policy-selection-summary,
+.leave-policy-editor .leave-policy-selection-summary {
+  min-height: 40px !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 12px !important;
+  border: 1px solid rgba(226, 232, 240, 0.96) !important;
+  border-radius: 8px !important;
+  background: #f8fafc !important;
+  color: #64748b !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+}
+
+.leave-grant-editor .leave-policy-inline-grid,
+.leave-policy-editor .leave-policy-inline-grid,
+.leave-policy-editor .leave-policy-inline-grid-wide {
+  display: grid !important;
+  grid-template: auto / repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px 12px !important;
+}
+
+.leave-grant-editor > .input-field {
+  width: 100% !important;
+}
+
+.leave-grant-editor .input-field,
+.leave-policy-editor .input-field {
+  gap: 5px !important;
+}
+
+.leave-grant-editor .input-field > span,
+.leave-policy-editor .input-field > span {
+  color: #64748b !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+}
+
+.leave-grant-editor input,
+.leave-grant-editor select,
+.leave-policy-editor input,
+.leave-policy-editor select,
+.leave-policy-editor textarea {
+  min-height: 40px !important;
+  border-radius: 8px !important;
+}
+
+.leave-policy-editor textarea {
+  min-height: 96px !important;
+}
+
+.leave-policy-editor .leave-policy-editor-section {
+  gap: 10px !important;
+  padding: 14px 0 0 !important;
+  border: 0 !important;
+  border-block-start: 1px solid rgba(226, 232, 240, 0.96) !important;
+  background: transparent !important;
+}
+
+.leave-policy-editor .leave-policy-editor-section:first-child {
+  padding-block-start: 0 !important;
+  border-block-start: 0 !important;
+}
+
+.leave-policy-editor .leave-policy-editor-section-head h4,
+.leave-policy-editor .leave-policy-tenure-head strong {
+  margin: 0 !important;
+  color: #0f172a !important;
+  font-size: 14px !important;
+  line-height: 20px !important;
+  letter-spacing: 0 !important;
+}
+
+.leave-policy-editor .leave-policy-tenure-block {
+  display: grid !important;
+  gap: 10px !important;
+}
+
+.leave-policy-editor .leave-policy-tenure-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+}
+
+.leave-policy-editor .leave-policy-tenure-list {
+  display: grid !important;
+  gap: 8px !important;
+}
+
+.leave-policy-editor .leave-policy-tenure-row {
+  display: grid !important;
+  grid-template: auto / repeat(2, minmax(0, 1fr)) 40px !important;
+  gap: 10px !important;
+  align-items: end !important;
+}
+
+@media (max-width: 767px) {
+  .modal-sheet.sheet-layout-leave-grant,
+  .modal-sheet.sheet-layout-leave-policy {
+    width: auto !important;
+    max-height: calc(100dvh - 20px) !important;
+    top: 10px !important;
+    bottom: 10px !important;
+    right: 10px !important;
+    left: 10px !important;
+    padding: 16px !important;
+    transform: none !important;
+  }
+
+  .modal-sheet.sheet-layout-leave-grant.hidden,
+  .modal-sheet.sheet-layout-leave-policy.hidden {
+    transform: translateY(14px) !important;
+  }
+
+  .leave-grant-editor .leave-policy-selection-row,
+  .leave-policy-editor .leave-policy-selection-row,
+  .leave-grant-editor .leave-policy-inline-grid,
+  .leave-policy-editor .leave-policy-inline-grid,
+  .leave-policy-editor .leave-policy-inline-grid-wide,
+  .leave-policy-editor .leave-policy-tenure-row {
+    grid-template: auto / minmax(0, 1fr) !important;
+  }
+
+  .leave-policy-editor .leave-policy-tenure-row .btn-icon {
+    width: 100% !important;
+  }
+}
+
 :root[data-ui-theme="dark"] {
   color-scheme: dark;
   --ui-bg-canvas: #171b22;
