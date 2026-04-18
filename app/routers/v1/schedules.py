@@ -18972,11 +18972,22 @@ def _build_schedule_import_preview_result(
         diff_category = "unchanged"
         apply_action = "none"
         current_is_active = str(current_ticket.get("status") or SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS).strip() == SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS
+        valid_filled_count_for_block = int(block.get("valid_filled_count") or 0)
+        invalid_filled_count_for_block = int(block.get("invalid_filled_count") or 0)
+        external_count_numeric_for_block = block.get("external_count_numeric")
         has_pending_support_payload = (
-            int(block.get("valid_filled_count") or 0) > 0
-            or int(block.get("invalid_filled_count") or 0) > 0
-            or bool(block.get("external_count_numeric"))
+            valid_filled_count_for_block > 0
+            or invalid_filled_count_for_block > 0
+            or bool(external_count_numeric_for_block)
         )
+        if request_count_numeric is None and not block.get("required_row_no"):
+            inferred_count = valid_filled_count_for_block + max(
+                0,
+                int(external_count_numeric_for_block or 0),
+            )
+            if inferred_count > 0 and invalid_filled_count_for_block == 0:
+                request_count_numeric = inferred_count
+                required_count_state = "inferred_from_workers"
         if required_count_state == "no_demand":
             if current_ticket and current_is_active:
                 diff_category = "delete"
