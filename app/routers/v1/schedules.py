@@ -6856,10 +6856,12 @@ def _build_support_current_value_match_index(
 
 def _build_import_current_body_index_from_existing_schedule_rows(
     rows: list[dict],
+    *,
+    base_source_only: bool = True,
 ) -> dict[tuple[Any, ...], dict[str, Any]]:
     index: dict[tuple[Any, ...], dict[str, Any]] = {}
     for row in rows:
-        if not _is_monthly_base_schedule_source(row.get("source")):
+        if base_source_only and not _is_monthly_base_schedule_source(row.get("source")):
             continue
         schedule_date = row.get("schedule_date")
         employee_name = str(row.get("employee_name") or row.get("employee_code") or "").strip()
@@ -18477,9 +18479,13 @@ def _build_schedule_import_preview_result(
         overnight_rows=export_ctx["overnight_rows"],
         employee_overnight_rows=export_ctx["employee_overnight_rows"],
     )
+    all_current_body_index = _build_import_current_body_index_from_existing_schedule_rows(
+        existing_schedule_rows,
+        base_source_only=False,
+    )
     base_current_body_index = _build_import_current_body_index_from_existing_schedule_rows(existing_schedule_rows)
     if not current_body_index and existing_schedule_rows:
-        current_body_index = dict(base_current_body_index)
+        current_body_index = dict(all_current_body_index)
     timings_ms["existing_state_preload"] = _rounded_timing_ms(existing_preload_started_at)
 
     resolved_rows: list[dict[str, Any]] = []
