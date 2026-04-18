@@ -1,5 +1,5 @@
 window.ENV_API_BASE = window.ENV_API_BASE || 'https://arls-wonseo-prod-260402.azurewebsites.net';
-window.ENV_BUILD_ID = window.ENV_BUILD_ID || '20260418-schedule-upload-restructure-02';
+window.ENV_BUILD_ID = window.ENV_BUILD_ID || '20260418-schedule-upload-restructure-03';
 window.ENV_GOOGLE_MAPS_API_KEY = window.ENV_GOOGLE_MAPS_API_KEY || '';
 window.ENV_SENTRIX_APP_BASE_URL = window.ENV_SENTRIX_APP_BASE_URL || 'https://sentrix-wonseo-prod-260402.azurewebsites.net';
 

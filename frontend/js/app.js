@@ -20461,6 +20461,37 @@ function createScheduleUploadStackCell(primary = "-", secondary = "") {
   return wrapper;
 }
 
+function getScheduleImportCellRef(row = {}) {
+  const rowNo = Number(row?.row_no || row?.required_row_no || 0);
+  const sourceCol = String(row?.source_col || row?.sourceCol || "").trim();
+  if (sourceCol && rowNo > 0) return `${sourceCol}${rowNo}`;
+  if (rowNo > 0) return `행 ${rowNo}`;
+  return "-";
+}
+
+function getScheduleImportWrittenValue(row = {}) {
+  const value = String(
+    row?.work_value ??
+      row?.parsed_display_value ??
+      row?.required_count_raw ??
+      row?.external_count_raw ??
+      "",
+  ).trim();
+  if (value) return value;
+  const sourceBlock = String(row?.source_block || "")
+    .trim()
+    .toLowerCase();
+  if (
+    sourceBlock.includes("required_count") ||
+    sourceBlock.includes("external_count") ||
+    String(row?.validation_code || "").trim()
+  ) {
+    return "빈 값";
+  }
+  const employee = String(row?.employee_name || row?.employee_code || "").trim();
+  return employee || "-";
+}
+
 function formatScheduleImportDutyLabel(value = "") {
   const normalized = String(value || "")
     .trim()
@@ -20635,8 +20666,7 @@ function getScheduleImportSupportDecisionMessage(row = {}) {
 
 function getScheduleImportRowReasonLabel(row = {}) {
   const supportDecisionMessage = getScheduleImportSupportDecisionMessage(row);
-  if (supportDecisionMessage) return supportDecisionMessage;
-  return (
+  const reason = supportDecisionMessage || (
     String(
       row?.validation_error ||
         row?.protected_reason ||
@@ -20645,12 +20675,22 @@ function getScheduleImportRowReasonLabel(row = {}) {
         "-",
     ).trim() || "-"
   );
+  const ref = getScheduleImportCellRef(row);
+  if (ref && ref !== "-" && reason && !reason.includes(`(${ref})`)) {
+    return reason.replace(
+      /(필요 ?인원 수|외부인원 투입 수|지원근무자|셀 값|값)/,
+      `$1 (${ref})`,
+    );
+  }
+  return reason;
 }
 
 function formatScheduleImportRowExample(row = {}) {
   const parts = [];
+  const ref = getScheduleImportCellRef(row);
+  if (ref && ref !== "-") parts.push(ref);
   const rowNo = Number(row?.row_no || 0);
-  if (rowNo > 0) parts.push(`행 ${rowNo}`);
+  if (rowNo > 0 && (!ref || ref === "-")) parts.push(`행 ${rowNo}`);
   if (row?.schedule_date) parts.push(String(row.schedule_date));
   const employee = String(
     row?.employee_name || row?.employee_code || "",
@@ -20670,6 +20710,18 @@ function buildScheduleImportIssueGroups(preview = state.preview) {
   const previewRows = Array.isArray(preview?.preview_rows)
     ? preview.preview_rows
     : [];
+  const examplesByCode = new Map();
+  previewRows.forEach((row) => {
+    const code = normalizeScheduleImportIssueCode(row?.validation_code || "");
+    if (!code) return;
+    const ref = getScheduleImportCellRef(row);
+    if (!ref || ref === "-") return;
+    const list = examplesByCode.get(code) || [];
+    if (!list.includes(ref)) {
+      list.push(ref);
+      examplesByCode.set(code, list);
+    }
+  });
   const nonSupportCodes = new Set(
     previewRows
       .filter((row) => !isScheduleImportSupportWorkerRow(row))
@@ -20705,6 +20757,7 @@ function buildScheduleImportIssueGroups(preview = state.preview) {
       const exampleRows = Array.isArray(item?.example_rows)
         ? item.example_rows.filter((value) => Number(value) > 0).slice(0, 3)
         : [];
+      const coordinateExamples = examplesByCode.get(code) || [];
       const description = String(
         item?.message || meta.description || "",
       ).trim();
@@ -20724,7 +20777,9 @@ function buildScheduleImportIssueGroups(preview = state.preview) {
         guidance: needsMappingHelp
           ? `${guidance} 근무 템플릿 탭에서 근무 템플릿을 설정한 뒤 다시 분석하세요.`
           : guidance,
-        examples: exampleRows.map((rowNo) => `행 ${rowNo}`),
+        examples: coordinateExamples.length
+          ? coordinateExamples.slice(0, 3)
+          : exampleRows.map((rowNo) => `행 ${rowNo}`),
         level: code === "blocked_reason" ? "warning" : "neutral",
       };
     })
@@ -20822,16 +20877,6 @@ function renderScheduleImportIssueGroups(preview = state.preview) {
 
   const groups = buildScheduleImportIssueGroups(preview);
   if (!groups.length) {
-    const card = document.createElement("article");
-    card.className = "schedule-upload-issue-card";
-    const title = document.createElement("strong");
-    title.textContent = "이슈 없음";
-    const desc = document.createElement("p");
-    desc.className = "muted";
-    desc.textContent = "추가 검토가 필요한 항목이 없습니다.";
-    card.appendChild(title);
-    card.appendChild(desc);
-    wrap.appendChild(card);
     return;
   }
 
@@ -21081,7 +21126,7 @@ function renderScheduleUploadApplyBar() {
     } else {
       summary = `반영 예정 ${validRows}건 / 검토 필요 ${reviewRows}건`;
       if (Boolean(uploadUi.canApply)) {
-        reason = `${getScheduleImportSiteLabel(selectedSite)} · ${formatScheduleMonthTitle(selectedMonth)}`;
+        reason = "";
         canApply = true;
       } else {
         reason = "검토 후 적용을 진행하세요.";
@@ -21091,6 +21136,8 @@ function renderScheduleUploadApplyBar() {
 
   summaryEl.textContent = summary;
   reasonEl.textContent = reason;
+  reasonEl.classList.toggle("hidden", !String(reason || "").trim());
+  reasonEl.setAttribute("aria-hidden", String(reason || "").trim() ? "false" : "true");
   if (applyBtn instanceof HTMLButtonElement) {
     applyBtn.disabled = !canApply;
     applyBtn.textContent = uploadUi.analysisInFlight
@@ -21938,8 +21985,8 @@ function renderScheduleUploadProgress(containerSelector, steps, activeStep) {
   wrap.style.setProperty("--schedule-upload-step-count", String(steps.length));
   const activeIndex = steps.findIndex((item) => item.key === activeStep);
   const progressPercent =
-    steps.length > 1 && activeIndex >= 0
-      ? Math.max(0, Math.min(100, (activeIndex / (steps.length - 1)) * 100))
+    steps.length > 0 && activeIndex >= 0
+      ? Math.max(0, Math.min(100, (activeIndex / steps.length) * 100))
       : 0;
   wrap.style.setProperty(SCHEDULE_UPLOAD_FLOW_PROGRESS_VAR, `${progressPercent}%`);
   wrap.style.setProperty("--schedule-upload-progress", `${progressPercent}%`);
@@ -22744,7 +22791,7 @@ function renderSchedulePreviewTable(previewRows = []) {
     if (pager instanceof HTMLElement) pager.classList.add("hidden");
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 8;
+    td.colSpan = 5;
     td.appendChild(
       createScheduleUploadStackCell(
         previewMode === "actionable"
@@ -22793,18 +22840,9 @@ function renderSchedulePreviewTable(previewRows = []) {
       tr.classList.add("schedule-upload-preview-row-apply");
     else tr.classList.add("schedule-upload-preview-row-neutral");
 
-    const dateLabel = String(row?.schedule_date || "-").trim() || "-";
     const sectionLabel =
       String(row?.section_label || row?.source_block || "-").trim() || "-";
     const sourceBlock = String(row?.source_block || "").trim();
-    const dutyLabel = formatScheduleImportDutyLabel(
-      row?.duty_type || row?.shift_type || "-",
-    );
-    const employeeLabel =
-      String(row?.employee_name || row?.employee_code || "-").trim() || "-";
-    const workValue = String(row?.work_value || "-").trim() || "-";
-    const currentValueLabel =
-      String(row?.current_work_value || "-").trim() || "-";
     const resultLabel =
       String(
         row?.status_label || getScheduleImportRowActionLabel(row),
@@ -22812,26 +22850,20 @@ function renderSchedulePreviewTable(previewRows = []) {
     const reasonLabel = getScheduleImportRowReasonLabel(row);
 
     const cells = [
-      { primary: row?.row_no ?? "-", secondary: "" },
-      { primary: dateLabel, secondary: "" },
+      { primary: getScheduleImportCellRef(row), secondary: "" },
+      { primary: getScheduleImportWrittenValue(row), secondary: "" },
       {
         primary: sectionLabel,
         secondary:
           sourceBlock && sourceBlock !== sectionLabel ? sourceBlock : "",
       },
-      {
-        primary: dutyLabel,
-        secondary: row?.template_name || row?.mapping_key || "",
-      },
-      { primary: employeeLabel, secondary: `셀 값 ${workValue}` },
-      { primary: currentValueLabel, secondary: "" },
       null,
       { primary: reasonLabel, secondary: "" },
     ];
 
     cells.forEach((cell, index) => {
       const td = document.createElement("td");
-      if (index === 6) {
+      if (index === 3) {
         const resultCell = document.createElement("div");
         resultCell.className = "schedule-upload-preview-cell";
         const chip = document.createElement("span");
@@ -22839,12 +22871,8 @@ function renderSchedulePreviewTable(previewRows = []) {
         chip.textContent = rowState.chipLabel;
         const resultStrong = document.createElement("strong");
         resultStrong.textContent = resultLabel;
-        const sub = document.createElement("span");
-        sub.className = "muted";
-        sub.textContent = getScheduleImportRowActionLabel(row);
         resultCell.appendChild(chip);
         resultCell.appendChild(resultStrong);
-        resultCell.appendChild(sub);
         td.appendChild(resultCell);
       } else {
         td.appendChild(
@@ -97448,39 +97476,18 @@ async function onSchedulePreview(progressController = null) {
       ? result.blocked_reasons.filter(Boolean)
       : [];
     const canApply = Boolean(result.batch_id) && Boolean(result?.can_apply);
-    const metaParts = [];
-    if (metadata.site_code) metaParts.push(`지점 ${metadata.site_code}`);
-    if (metadata.month) metaParts.push(`대상월 ${metadata.month}`);
-    if (metadata.template_version)
-      metaParts.push(`템플릿 ${metadata.template_version}`);
-    if (metadata.export_revision)
-      metaParts.push(`리비전 ${String(metadata.export_revision).slice(0, 12)}`);
-    if (metadata.is_stale) metaParts.push("구버전 파일");
 
     completeScheduleImportAnalysis(metadata, analysisContext);
     setScheduleBaseWizardStep(SCHEDULE_BASE_WIZARD_STEP_REVIEW, {
       scroll: false,
     });
     setScheduleImportUI({
-      batchInfo: [
-        `요약: 전체 ${result.total_rows}건, 적용 가능 ${result.valid_rows}건, 차단 ${result.invalid_rows}건`,
-        diffCounts ? `변경(${diffCounts})` : "",
-        errorCounts ? `오류유형(${errorCounts})` : "",
-        metaParts.length ? `메타(${metaParts.join(" · ")})` : "",
-      ]
-        .filter(Boolean)
-        .join(" · "),
+      batchInfo: "",
       issues: [...(result.invalid_samples || []), ...blockedReasons],
       canApply: canApply && !getScheduleUploadUiState().stale,
       previewRows: result.preview_rows || [],
       clearApplyDetails: true,
-      applyResult: canApply
-        ? "검증 완료. 요약과 행 미리보기를 검토한 뒤 적용할 수 있습니다."
-        : blockedReasons.length
-          ? "적용이 차단되었습니다. 파일 상태 또는 차단 사유를 먼저 해결해 주세요."
-          : Number(result?.applicable_rows || result?.valid_rows || 0) > 0
-            ? "검증 완료. 이번 단계에서는 실제 반영 없이 미리보기와 이슈 검토만 제공합니다."
-            : "적용 가능한 변경이 없습니다. 파일을 수정한 뒤 다시 분석하세요.",
+      applyResult: "",
     });
 
     state.ops.excelImportStatus = "VALIDATED";
@@ -97500,8 +97507,6 @@ async function onSchedulePreview(progressController = null) {
         "error",
         4000,
       );
-    } else {
-      showToast("검증 완료: 반영 가능한 데이터입니다.", "success", 2500);
     }
   } catch (error) {
     if (getScheduleUploadUiState().requestToken === requestToken) {

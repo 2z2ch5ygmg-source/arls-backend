@@ -40218,6 +40218,12 @@ body.calendar-public-shell #view-calendar-public {
   white-space: nowrap !important;
 }
 
+#view-schedule #scheduleUploadPanel button[data-step].is-complete [class$="step-marker"] {
+  font-size: 18px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+
 #view-schedule #scheduleUploadPanel button[data-step].active,
 #view-schedule #scheduleUploadPanel button[data-step][aria-current="step"] {
   color: var(--ui-text-primary) !important;
@@ -40414,6 +40420,43 @@ body.calendar-public-shell #view-calendar-public {
 
 #view-schedule #scheduleUploadPanel .schedule-upload-issues-panel > .schedule-preview-head {
   display: none !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-preview-head {
+  align-items: center !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-preview-head h3 {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+}
+
+#view-schedule #scheduleUploadPanel #schedulePreviewModeSwitch {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0 !important;
+  min-height: 40px !important;
+  padding: 3px !important;
+  border: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+}
+
+#view-schedule #scheduleUploadPanel #schedulePreviewModeSwitch .workspace-tab {
+  min-height: 34px !important;
+  height: 34px !important;
+  padding: 0 16px !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: var(--ui-text-muted) !important;
+  white-space: nowrap !important;
+}
+
+#view-schedule #scheduleUploadPanel #schedulePreviewModeSwitch .workspace-tab.active {
+  background: var(--ui-accent-weak, #fff7ed) !important;
+  color: var(--ui-accent, #f97316) !important;
 }
 
 #view-schedule #scheduleUploadPanel #scheduleBaseReviewStage,
