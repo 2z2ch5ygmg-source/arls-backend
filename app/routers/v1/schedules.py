@@ -639,9 +639,9 @@ def _build_support_worker_match_message(
 def _parse_support_worker_cell(value: object) -> dict[str, Any]:
     raw_text = _normalize_workbook_display_value(value)
     external_entry = _parse_affiliated_external_support_entry(raw_text)
-    if not raw_text:
+    if not raw_text or _is_placeholder_employee_name(raw_text):
         return {
-            "raw_value": "",
+            "raw_value": raw_text,
             "semantic_type": "blank",
             "is_filled": False,
             "issue_code": None,

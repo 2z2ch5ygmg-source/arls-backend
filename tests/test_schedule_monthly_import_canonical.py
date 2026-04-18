@@ -708,6 +708,13 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
         self.assertEqual(parsed["issue_code"], "WORKER_CELL_INVALID")
         self.assertTrue(parsed["is_filled"])
 
+    def test_parse_support_worker_cell_treats_zero_as_blank(self):
+        parsed = _parse_support_worker_cell("0")
+
+        self.assertEqual(parsed["semantic_type"], "blank")
+        self.assertFalse(parsed["is_filled"])
+        self.assertIsNone(parsed["issue_code"])
+
     def test_validate_support_shift_worker_applies_same_store_internal_candidate(self):
         employee_index = _build_employee_name_index(
             [
