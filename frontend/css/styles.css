@@ -60151,7 +60151,7 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   .schedule-wizard-progress.arls-upload-wizard__steps::before {
   content: "";
   position: absolute !important;
-  top: 35px !important;
+  top: 15px !important;
   right: calc((100% / var(--wizard-step-count, 4) / 2) + 15px) !important;
   left: calc((100% / var(--wizard-step-count, 4) / 2) + 15px) !important;
   display: block !important;
@@ -60166,7 +60166,7 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   .schedule-wizard-progress.arls-upload-wizard__steps::after {
   content: "";
   position: absolute !important;
-  top: 35px !important;
+  top: 15px !important;
   left: calc((100% / var(--wizard-step-count, 4) / 2) + 15px) !important;
   display: block !important;
   width: var(--arls-upload-wizard-progress, 0%) !important;
@@ -60193,8 +60193,8 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) !important;
   justify-items: center !important;
-  min-height: 78px !important;
-  padding: 50px 8px 0 !important;
+  min-height: 58px !important;
+  padding: 30px 8px 0 !important;
   border: 0 !important;
   background: transparent !important;
   color: #64748b !important;
@@ -60208,7 +60208,7 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   .schedule-wizard-step.arls-upload-wizard__step
   .schedule-wizard-step-marker {
   position: absolute !important;
-  top: 20px !important;
+  top: 0 !important;
   left: 50% !important;
   width: 30px !important;
   height: 30px !important;
