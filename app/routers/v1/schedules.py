@@ -18972,14 +18972,26 @@ def _build_schedule_import_preview_result(
         diff_category = "unchanged"
         apply_action = "none"
         current_is_active = str(current_ticket.get("status") or SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS).strip() == SENTRIX_SUPPORT_REQUEST_ACTIVE_STATUS
+        has_pending_support_payload = (
+            int(block.get("valid_filled_count") or 0) > 0
+            or int(block.get("invalid_filled_count") or 0) > 0
+            or bool(block.get("external_count_numeric"))
+        )
         if required_count_state == "no_demand":
             if current_ticket and current_is_active:
                 diff_category = "delete"
                 apply_action = "retract_sentrix_ticket"
         elif request_count_numeric is None:
-            validation_code = "SUPPORT_BLOCK_REQUIRED_COUNT_INVALID"
-            validation_error = "필요 인원 수를 해석할 수 없습니다."
-            is_blocking = True
+            if not block.get("required_row_no") and not has_pending_support_payload:
+                if current_ticket and current_is_active:
+                    diff_category = "delete"
+                    apply_action = "retract_sentrix_ticket"
+                else:
+                    continue
+            else:
+                validation_code = "SUPPORT_BLOCK_REQUIRED_COUNT_INVALID"
+                validation_error = "필요 인원 수를 해석할 수 없습니다."
+                is_blocking = True
         else:
             desired_request_count = max(0, int(request_count_numeric))
             desired_work_purpose = str(block.get("purpose_text") or "").strip()
