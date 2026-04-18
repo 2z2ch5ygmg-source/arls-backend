@@ -6670,6 +6670,81 @@ def _build_support_value_index(rows: list[dict]) -> dict[tuple[str, str, int, in
     return index
 
 
+def _build_current_need_value_index_from_state(
+    *,
+    daytime_need_rows: list[dict[str, Any]] | None = None,
+    support_request_rows: list[dict[str, Any]] | None = None,
+) -> dict[tuple[str, str], dict[str, Any]]:
+    index: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in daytime_need_rows or []:
+        work_date = row.get("work_date")
+        if not isinstance(work_date, date):
+            continue
+        raw_text = str(row.get("raw_text") or "").strip()
+        required_count = int(row.get("required_count") or 0)
+        value = raw_text or (f"섭외 {required_count}인 요청" if required_count > 0 else "")
+        index[("day_support_required_count", work_date.isoformat())] = {
+            "work_value": value,
+            "required_count": required_count,
+            "raw_text": raw_text,
+            "source_block": "day_support_required_count",
+            "schedule_date": work_date,
+        }
+    for row in support_request_rows or []:
+        work_date = row.get("work_date")
+        if not isinstance(work_date, date):
+            continue
+        shift_kind = "night" if str(row.get("shift_kind") or "day").strip().lower() == "night" else "day"
+        detail = dict(row.get("detail_json") or {})
+        required_count = int(row.get("request_count") or 0)
+        raw_text = str(detail.get("required_count_raw") or "").strip()
+        value = raw_text or (str(required_count) if required_count > 0 else "")
+        index[(f"{shift_kind}_support_required_count", work_date.isoformat())] = {
+            "work_value": value,
+            "request_count": required_count,
+            "raw_text": raw_text,
+            "source_block": f"{shift_kind}_support_required_count",
+            "schedule_date": work_date,
+        }
+    return index
+
+
+def _build_support_current_slot_value_index(
+    support_rows: list[dict[str, Any]] | None,
+) -> dict[tuple[str, str, int], dict[str, Any]]:
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in support_rows or []:
+        work_date = row.get("work_date")
+        if not isinstance(work_date, date):
+            continue
+        display_value = _support_assignment_display_value(row, include_internal=False)
+        if not display_value:
+            continue
+        period = "night" if str(row.get("support_period") or "day").strip().lower() == "night" else "day"
+        grouped.setdefault((f"{period}_support_worker", work_date.isoformat()), []).append(dict(row))
+
+    index: dict[tuple[str, str, int], dict[str, Any]] = {}
+    for (source_block, date_key), rows in grouped.items():
+        for slot_index, row in enumerate(
+            sorted(
+                rows,
+                key=lambda item: (
+                    int(item.get("slot_index") or 0),
+                    str(item.get("worker_name") or item.get("employee_name") or item.get("name") or ""),
+                ),
+            ),
+            start=1,
+        ):
+            index[(source_block, date_key, slot_index)] = {
+                **dict(row),
+                "work_value": _support_assignment_display_value(row, include_internal=False),
+                "source_block": source_block,
+                "schedule_date": row.get("work_date"),
+                "slot_index": slot_index,
+            }
+    return index
+
+
 def _normalize_support_value_match_token(value: object) -> str:
     return re.sub(r"\s+", " ", str(_normalize_workbook_display_value(value) or "").strip()).lower()
 
@@ -18315,6 +18390,7 @@ def _build_schedule_import_preview_result(
         site_row=scope_site,
         month_key=selected_month,
         user=user,
+        build_workbook=False,
         allow_empty_employee_blocks=True,
         include_board_fallback=False,
     )
@@ -18335,11 +18411,19 @@ def _build_schedule_import_preview_result(
     if parse_timings.get("section_parse") is not None:
         timings_ms["section_parse"] = float(parse_timings["section_parse"])
 
-    current_parsed = export_ctx["parsed_sheet"]
+    current_parsed = export_ctx.get("parsed_sheet") or {}
     current_index_started_at = time.perf_counter()
     current_body_index = _build_visible_value_index(current_parsed.get("body_cells") or [])
     current_need_index = _build_visible_value_index(current_parsed.get("need_cells") or [], include_employee=False)
+    if not current_need_index:
+        current_need_index = _build_current_need_value_index_from_state(
+            daytime_need_rows=list(export_ctx.get("daytime_need_rows") or []),
+            support_request_rows=list(export_ctx.get("support_request_rows") or []),
+        )
     current_support_index = _build_support_value_index(current_parsed.get("support_cells") or [])
+    current_support_slot_index = _build_support_current_slot_value_index(
+        list(export_ctx.get("support_rows") or [])
+    )
     current_support_match_index = _build_support_current_value_match_index(
         list(parsed_uploaded.get("support_cells") or []),
         list(current_parsed.get("support_cells") or []),
@@ -18787,7 +18871,17 @@ def _build_schedule_import_preview_result(
         if current_key in current_support_match_index:
             current_row = dict(current_support_match_index.get(current_key) or {})
         else:
-            current_row = current_support_index.get(current_key) or {}
+            current_row = (
+                current_support_index.get(current_key)
+                or current_support_slot_index.get(
+                    (
+                        source_block,
+                        schedule_date.isoformat(),
+                        int(row.get("slot_index") or 0),
+                    )
+                )
+                or {}
+            )
         current_value = str(current_row.get("work_value") or "").strip()
         validation_code = _normalize_import_issue_code(row.get("issue_code")) or None
         validation_error = str(row.get("issue_message") or "").strip() or None
