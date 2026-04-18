@@ -31,8 +31,10 @@ from .v1.calendar import router as calendar_router
 from .v1.notifications import router as notifications_router
 from .v1.notices import router as notices_router
 from .v1.push import router as push_router
+from .announcement_compat import router as announcement_compat_router
 
 __all__ = [
+    "announcement_compat_router",
     "auth_router",
     "auth_public_router",
     "me_router",

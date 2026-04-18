@@ -22,6 +22,7 @@ from .routers import (
     admin_soc_router,
     admin_reset_router,
     admin_tenants_router,
+    announcement_compat_router,
     approvals_router,
     apple_weekly_truth_router,
     attendance_router,
@@ -364,6 +365,7 @@ app.include_router(calendar_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(notices_router, prefix="/api/v1")
 app.include_router(push_router, prefix="/api/v1")
+app.include_router(announcement_compat_router, prefix="/api")
 
 
 @app.get("/health")
