@@ -20507,22 +20507,22 @@ function getScheduleImportRowActionLabel(row = {}) {
   const decisionStage = String(row?.decision_stage || "")
     .trim()
     .toLowerCase();
-  if (decisionStage === "apply") return "즉시 반영";
+  if (decisionStage === "apply") return "반영 예정";
   if (decisionStage === "review") return "검토 필요";
-  if (decisionStage === "block") return "차단";
+  if (decisionStage === "block") return "차단 사유";
   const applyAction = String(row?.apply_action || "").trim();
   const diffCategory = String(row?.diff_category || "").trim();
   const isProtected =
     Boolean(row?.is_protected) || diffCategory === "ignored_protected";
   const isBlocking = Boolean(row?.is_blocking);
-  if (isBlocking) return "반영 불가";
-  if (isProtected) return "검토 전용";
-  if (applyAction === "create") return "생성";
-  if (applyAction === "update") return "수정";
-  if (applyAction === "delete") return "삭제";
+  if (isBlocking) return "차단 사유";
+  if (isProtected) return "검토 참고";
+  if (applyAction === "create") return "신규 반영";
+  if (applyAction === "update") return "수정 반영";
+  if (applyAction === "delete") return "삭제 반영";
   if (applyAction === "upsert_need_count") return "필요인원 반영";
   if (applyAction === "delete_need_count") return "필요인원 삭제";
-  if (diffCategory === "ignored_protected") return "보호영역 유지";
+  if (diffCategory === "ignored_protected") return "검토 참고";
   if (diffCategory === "unchanged") return "변경 없음";
   return "검토";
 }
@@ -20534,7 +20534,7 @@ function getScheduleImportRowState(row = {}) {
   if (decisionStage === "block") {
     return {
       key: "blocked",
-      chipLabel: "차단",
+      chipLabel: "반영 불가능",
       chipClass:
         "schedule-upload-result-chip schedule-upload-result-chip-error",
     };
@@ -20542,14 +20542,14 @@ function getScheduleImportRowState(row = {}) {
   if (decisionStage === "review") {
     return {
       key: "review",
-      chipLabel: "검토 필요",
-      chipClass: "schedule-upload-result-chip schedule-upload-result-chip-warn",
+      chipLabel: "반영 가능",
+      chipClass: "schedule-upload-result-chip schedule-upload-result-chip-apply",
     };
   }
   if (decisionStage === "apply") {
     return {
       key: "apply",
-      chipLabel: "즉시 반영",
+      chipLabel: "반영 가능",
       chipClass:
         "schedule-upload-result-chip schedule-upload-result-chip-apply",
     };
@@ -20564,14 +20564,14 @@ function getScheduleImportRowState(row = {}) {
   if (isProtected) {
     return {
       key: "protected",
-      chipLabel: "보호영역 무시",
-      chipClass: "schedule-upload-result-chip schedule-upload-result-chip-warn",
+      chipLabel: "반영 가능",
+      chipClass: "schedule-upload-result-chip schedule-upload-result-chip-apply",
     };
   }
   if (isBlocking) {
     return {
       key: "blocked",
-      chipLabel: "차단",
+      chipLabel: "반영 불가능",
       chipClass:
         "schedule-upload-result-chip schedule-upload-result-chip-error",
     };
@@ -20579,14 +20579,14 @@ function getScheduleImportRowState(row = {}) {
   if (diffCategory === "review") {
     return {
       key: "review",
-      chipLabel: "검토 필요",
-      chipClass: "schedule-upload-result-chip schedule-upload-result-chip-warn",
+      chipLabel: "반영 가능",
+      chipClass: "schedule-upload-result-chip schedule-upload-result-chip-apply",
     };
   }
   if (diffCategory === "unchanged") {
     return {
       key: "unchanged",
-      chipLabel: "변경 없음",
+      chipLabel: "반영 가능",
       chipClass:
         "schedule-upload-result-chip schedule-upload-result-chip-neutral",
     };
@@ -20594,15 +20594,15 @@ function getScheduleImportRowState(row = {}) {
   if (String(row?.apply_action || "").trim()) {
     return {
       key: "apply",
-      chipLabel: "반영 예정",
+      chipLabel: "반영 가능",
       chipClass:
         "schedule-upload-result-chip schedule-upload-result-chip-apply",
     };
   }
   return {
     key: "review",
-    chipLabel: "검토 필요",
-    chipClass: "schedule-upload-result-chip schedule-upload-result-chip-warn",
+    chipLabel: "반영 가능",
+    chipClass: "schedule-upload-result-chip schedule-upload-result-chip-apply",
   };
 }
 
@@ -22843,10 +22843,7 @@ function renderSchedulePreviewTable(previewRows = []) {
     const sectionLabel =
       String(row?.section_label || row?.source_block || "-").trim() || "-";
     const sourceBlock = String(row?.source_block || "").trim();
-    const resultLabel =
-      String(
-        row?.status_label || getScheduleImportRowActionLabel(row),
-      ).trim() || "-";
+    const resultLabel = getScheduleImportRowActionLabel(row);
     const reasonLabel = getScheduleImportRowReasonLabel(row);
 
     const cells = [
@@ -22863,6 +22860,9 @@ function renderSchedulePreviewTable(previewRows = []) {
 
     cells.forEach((cell, index) => {
       const td = document.createElement("td");
+      if (index === 4 && rowState.key === "blocked") {
+        td.classList.add("schedule-preview-blocking-reason");
+      }
       if (index === 3) {
         const resultCell = document.createElement("div");
         resultCell.className = "schedule-upload-preview-cell";

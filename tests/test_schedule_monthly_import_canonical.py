@@ -1041,7 +1041,7 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
         sheet = workbook[ARLS_SHEET_NAME]
         rows_meta = _locate_support_section_rows(sheet)
         sheet.cell(row=rows_meta["day_need_row"], column=4).value = None
-        sheet.cell(row=rows_meta["weekly_rows"][0], column=4, value="홍길동")
+        sheet.cell(row=rows_meta["day_vendor_count_row"], column=4, value=2)
 
         parsed = _parse_arls_canonical_import_sheet(sheet)
         block = next(
@@ -1357,6 +1357,65 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
         self.assertEqual(self_staff_support_row["decision_stage"], "apply")
         self.assertFalse(self_staff_support_row["is_blocking"])
         self.assertIsNone(self_staff_support_row["validation_code"])
+        workbook.close()
+
+    def test_build_schedule_import_preview_result_exposes_blocking_support_ticket_rows(self):
+        workbook = self._build_sample_workbook()
+        sheet = workbook[ARLS_SHEET_NAME]
+        rows_meta = _locate_support_section_rows(sheet)
+        sheet.cell(row=rows_meta["day_need_row"], column=4).value = None
+        sheet.cell(row=rows_meta["day_vendor_count_row"], column=4, value=2)
+
+        export_ctx = {
+            "export_revision": "rev-20260309",
+            "parsed_sheet": {"body_cells": [], "need_cells": [], "support_cells": []},
+            "support_rows": [],
+            "overnight_rows": [],
+            "employee_overnight_rows": [],
+        }
+
+        with patch("app.routers.v1.schedules._collect_monthly_export_context", return_value=export_ctx), patch(
+            "app.routers.v1.schedules._fetch_schedule_templates",
+            return_value=self._build_preview_template_rows(),
+        ), patch(
+            "app.routers.v1.schedules._fetch_active_schedule_import_mapping_profile",
+            return_value=self._build_preview_mapping_profile(),
+        ), patch(
+            "app.routers.v1.schedules._load_site_employees",
+            return_value=self._build_preview_employee_rows(),
+        ), patch(
+            "app.routers.v1.schedules._load_existing_schedule_rows_for_import",
+            return_value=[],
+        ), patch(
+            "app.routers.v1.schedules._read_monthly_support_request_rows_for_export",
+            return_value=[],
+        ):
+            preview = _build_schedule_import_preview_result(
+                None,
+                workbook=workbook,
+                target_tenant={"id": "tenant-1", "tenant_code": "srs_korea"},
+                scope_site={"id": "site-1", "site_code": "R692", "company_id": "company-1", "company_code": "APPLE"},
+                selected_month="2026-03",
+                user={"id": "user-1", "role": "developer"},
+                filename="preview.xlsx",
+                file_sha256="sha-preview",
+            )
+
+        blocking_ticket = next(
+            row
+            for row in preview["preview_rows"]
+            if row["source_block"] == "sentrix_support_ticket"
+            and row["schedule_date"] == date(2026, 3, 1)
+            and row["shift_type"] == "day"
+        )
+
+        self.assertGreater(preview["blocked_rows"], 0)
+        self.assertTrue(blocking_ticket["is_blocking"])
+        self.assertEqual(
+            blocking_ticket["validation_code"],
+            "SUPPORT_BLOCK_REQUIRED_COUNT_INVALID",
+        )
+        self.assertEqual(blocking_ticket["source_col"], "D")
         workbook.close()
 
     def test_build_schedule_import_preview_result_hides_internal_support_row_when_same_slot_is_already_covered_by_body_schedule(self):

@@ -19107,6 +19107,30 @@ def _build_schedule_import_preview_result(
         preview_row["actionable"] = actionable
         preview_row["protected_info_only"] = protected_info_only
         preview_rows.append(preview_row)
+    for row in support_ticket_rows:
+        include_row = (
+            bool(row.get("is_blocking"))
+            or row.get("validation_code")
+            or str(row.get("diff_category") or "").strip().lower()
+            not in {"unchanged", ""}
+            or str(row.get("apply_action") or "").strip()
+            not in {"", "none"}
+        )
+        if not include_row:
+            continue
+        visibility_class, actionable, protected_info_only = _classify_import_preview_visibility(row)
+        preview_row = dict(row)
+        preview_row["preview_visibility_class"] = visibility_class
+        preview_row["actionable"] = actionable
+        preview_row["protected_info_only"] = protected_info_only
+        preview_rows.append(preview_row)
+    preview_rows.sort(
+        key=lambda row: (
+            0 if bool(row.get("is_blocking")) else 1,
+            int(row.get("row_no") or 0),
+            str(row.get("source_col") or ""),
+        )
+    )
     if not preview_rows:
         preview_rows = []
         for row in resolved_rows[: min(len(resolved_rows), 20)]:
