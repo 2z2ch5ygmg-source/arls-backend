@@ -276,6 +276,11 @@ const SCHEDULE_MONTH_WEEKDAY_LABELS = [
 ];
 const SCHEDULE_VIEW_MODE_CALENDAR = "calendar";
 const SCHEDULE_VIEW_MODE_LIST = "list";
+const SCHEDULE_BOARD_VIEW_MONTH = "month";
+const SCHEDULE_BOARD_VIEW_WEEK = "week";
+const SCHEDULE_BOARD_VIEW_DAY = "day";
+const SCHEDULE_DISPLAY_MODE_DETAILED = "detailed";
+const SCHEDULE_DISPLAY_MODE_SIMPLE = "simple";
 const SCHEDULE_TAB_CALENDAR = "calendar";
 const SCHEDULE_TAB_LIST = "list";
 const SCHEDULE_TAB_UPLOAD = "upload";
@@ -304,7 +309,7 @@ const SCHEDULE_HQ_WIZARD_STEP_COMPLETE = "complete";
 const SCHEDULE_HQ_WIZARD_RESUME_KEY = "rg-arls-schedule-hq-wizard";
 const SCHEDULE_TEMPLATE_OWNER_TAB_TEMPLATES = "templates";
 const SCHEDULE_TEMPLATE_OWNER_TAB_PROFILES = "profiles";
-const SCHEDULE_DAY_CARD_MAX = 3;
+const SCHEDULE_DAY_CARD_MAX = 5;
 const SCHEDULE_TEMPLATE_ROWS_CACHE_TTL_MS = 5 * 60 * 1000;
 const SCHEDULE_CREATE_EMPLOYEE_CACHE_TTL_MS = 5 * 60 * 1000;
 const ATTENDANCE_REQUEST_DRAFT_KEY = "rg-arls-attendance-request-draft";
@@ -1208,6 +1213,8 @@ function createInitialScheduleUploadUiState() {
     progressTimer: 0,
     progressStageIndex: 0,
     previewMode: "actionable",
+    previewPage: 1,
+    previewPageSize: 20,
     lastCompletedAt: "",
   };
 }
@@ -1218,6 +1225,8 @@ function createInitialScheduleState() {
     tenantCode: "",
     monthTitle: "",
     viewMode: SCHEDULE_VIEW_MODE_CALENDAR,
+    boardViewMode: SCHEDULE_BOARD_VIEW_MONTH,
+    displayMode: SCHEDULE_DISPLAY_MODE_DETAILED,
     hqTab: SCHEDULE_TAB_CALENDAR,
     reportsTab: SCHEDULE_REPORTS_TAB_FINANCE,
     uploadWorkspaceMode: SCHEDULE_UPLOAD_MODE_BASE,
@@ -1558,6 +1567,8 @@ function createInitialScheduleSupportHqWorkspaceState() {
     applyError: "",
     applyResult: null,
     previewMode: "actionable",
+    previewPage: 1,
+    previewPageSize: 20,
     stale: false,
     staleFields: [],
     successBanner: null,
@@ -5801,6 +5812,33 @@ async function loadMonthlyScheduleLiteWithCache({
   };
 }
 
+function prefetchAdjacentScheduleLiteMonths(month = "", tenantCode = "") {
+  const currentMonth = normalizeMonthKey(month);
+  if (!currentMonth || !(state.schedule?.liteCacheByMonth instanceof Map)) {
+    return;
+  }
+  const adjacentMonths = [shiftMonthKey(currentMonth, -1), shiftMonthKey(currentMonth, 1)].filter(Boolean);
+  adjacentMonths.forEach((adjacentMonth) => {
+    const cacheKey = getScheduleCacheKey(adjacentMonth, tenantCode);
+    const cached = state.schedule.liteCacheByMonth.get(cacheKey);
+    const cachedAt = Number(cached?.cachedAt || 0);
+    const isFresh =
+      Number.isFinite(cachedAt) &&
+      Date.now() - cachedAt < HEAVY_CACHE_TTL_MONTHLY_MS;
+    if (isFresh) return;
+    loadMonthlyScheduleLiteWithCache({
+      month: adjacentMonth,
+      tenantCode,
+      force: false,
+    }).catch((error) => {
+      console.debug?.("[RG ARLS] adjacent schedule lite prefetch skipped", {
+        month: adjacentMonth,
+        error: String(error?.message || error || "unknown"),
+      });
+    });
+  });
+}
+
 async function loadMonthlySchedulesForMonths(
   months = [],
   { tenantCode, force = false } = {},
@@ -6109,6 +6147,8 @@ function renderHomePolicySkeleton() {
 function renderHomeWorkStatusCard() {
   const textEl = $("#homeWorkStatusText");
   const pillEl = $("#homeWorkStatusPill");
+  const primaryEl = $("#homeWorkStatusPrimary");
+  const heroEl = document.querySelector("#view-home .home-attendance-hero");
   const autoCheckoutBadgeEl = $("#homeAutoCheckoutBadge");
   const dateEl = $("#homeTodayDate");
   const siteEl = $("#homeTodaySite");
@@ -6161,8 +6201,23 @@ function renderHomeWorkStatusCard() {
     detailText = "근무 현장를 선택하면 오늘 상태가 갱신됩니다.";
   }
 
+  const showStatusPill = todayStatus !== "NONE";
+  if (heroEl) {
+    heroEl.classList.remove("is-missing", "is-working", "is-done");
+    if (todayStatus === "NONE") {
+      heroEl.classList.add("is-missing");
+    } else if (todayStatus === "WORKING") {
+      heroEl.classList.add("is-working");
+    } else if (todayStatus === "DONE") {
+      heroEl.classList.add("is-done");
+    }
+  }
   pillEl.className = pillClass;
   pillEl.textContent = statusText;
+  pillEl.classList.toggle("hidden", !showStatusPill);
+  if (primaryEl) {
+    primaryEl.textContent = statusText;
+  }
   textEl.textContent = detailText;
   if (autoCheckoutBadgeEl) {
     autoCheckoutBadgeEl.classList.toggle("hidden", !isAutoCheckout);
@@ -6233,10 +6288,7 @@ function formatHomeBriefingDate(rawValue = "") {
   if (!text) return "";
   const parsed = new Date(text);
   if (Number.isNaN(parsed.getTime())) return text;
-  return parsed.toLocaleDateString("ko-KR", {
-    month: "numeric",
-    day: "numeric",
-  });
+  return `${parsed.getMonth() + 1}. ${parsed.getDate()}`;
 }
 
 function formatHomeStatusLabel(status = "") {
@@ -6252,26 +6304,8 @@ function getHomeRoleHeadingCopy(
   audience = resolveHomeAudience(),
   briefing = state.home?.briefing,
 ) {
-  if (audience === "hq") {
-    return {
-      title: "오늘 운영",
-      subtitle: "",
-    };
-  }
-  if (audience === "supervisor") {
-    return {
-      title: "지점 운영",
-      subtitle: "",
-    };
-  }
-  if (audience === "vice") {
-    return {
-      title: "현장 준비도",
-      subtitle: "",
-    };
-  }
   return {
-    title: "오늘 근무",
+    title: "홈",
     subtitle: "",
   };
 }
@@ -6953,6 +6987,320 @@ function buildHomeContextItems(
   ];
 }
 
+function parseHomeShiftTimeRangeMinutes(rawValue = "") {
+  const text = String(rawValue || "").trim();
+  const matched = text.match(
+    /^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/,
+  );
+  if (!matched) return 0;
+  const startHours = Number(matched[1]);
+  const startMinutes = Number(matched[2]);
+  const endHours = Number(matched[3]);
+  const endMinutes = Number(matched[4]);
+  if (
+    !Number.isFinite(startHours) ||
+    !Number.isFinite(startMinutes) ||
+    !Number.isFinite(endHours) ||
+    !Number.isFinite(endMinutes)
+  ) {
+    return 0;
+  }
+  let totalMinutes =
+    endHours * 60 + endMinutes - (startHours * 60 + startMinutes);
+  if (totalMinutes < 0) totalMinutes += 24 * 60;
+  return Math.max(0, totalMinutes);
+}
+
+function formatHomeMinuteSummary(totalMinutes = 0) {
+  const safeMinutes = Math.max(0, Number(totalMinutes || 0));
+  const hours = Math.floor(safeMinutes / 60);
+  const minutes = safeMinutes % 60;
+  return `${hours}시간 ${minutes}분`;
+}
+
+function getHomeWeekTimeSummary() {
+  const entries = Array.isArray(state.home?.weekEntries)
+    ? state.home.weekEntries
+    : [];
+  let scheduledMinutes = 0;
+  let completedMinutes = 0;
+  let partialMinutes = 0;
+  const segments = entries.map((entry, index) => {
+    const shiftMeta = HOME_SHIFT_META[entry?.shiftType] || {
+      label: "미정",
+      time: "-",
+      pill: "pending",
+    };
+    const shiftMinutes = parseHomeShiftTimeRangeMinutes(shiftMeta.time);
+    scheduledMinutes += shiftMinutes;
+    let completionRatio = 0;
+    let stateTone = "idle";
+    if (shiftMinutes <= 0) {
+      stateTone =
+        entry?.shiftType === "off" || entry?.shiftType === "holiday"
+          ? "off"
+          : "idle";
+    } else if (Number(entry?.checkOutCount || 0) > 0) {
+      completionRatio = 1;
+      completedMinutes += shiftMinutes;
+      stateTone = "done";
+    } else if (Number(entry?.checkInCount || 0) > 0) {
+      completionRatio = 0.5;
+      const estimatedMinutes = Math.round(shiftMinutes * completionRatio);
+      completedMinutes += estimatedMinutes;
+      partialMinutes += shiftMinutes - estimatedMinutes;
+      stateTone = "active";
+    } else {
+      stateTone = "pending";
+    }
+    return {
+      key: String(entry?.dateKey || index),
+      label:
+        HOME_WEEKDAY_LABELS[index] ||
+        HOME_WEEKDAY_LABELS[new Date(entry?.dateObj || Date.now()).getDay()],
+      stateTone,
+      completionRatio,
+    };
+  });
+  return {
+    scheduledMinutes,
+    completedMinutes,
+    partialMinutes,
+    segments,
+    progressPercent:
+      scheduledMinutes > 0
+        ? clampHomePercent((completedMinutes / scheduledMinutes) * 100)
+        : 0,
+  };
+}
+
+function buildHomeWeekTimeBarHtml() {
+  const summary = getHomeWeekTimeSummary();
+  const scheduledLabel =
+    summary.scheduledMinutes > 0
+      ? formatHomeMinuteSummary(summary.scheduledMinutes)
+      : "예정 없음";
+  const completedLabel =
+    summary.completedMinutes > 0
+      ? formatHomeMinuteSummary(summary.completedMinutes)
+      : "0시간 0분";
+  const partialLabel =
+    summary.partialMinutes > 0
+      ? `진행중 추정 ${formatHomeMinuteSummary(summary.partialMinutes)}`
+      : "";
+  return `
+    <section class="home-week-timebar" aria-label="이번 주 근무 시간">
+      <div class="home-week-timebar-copy">
+        <div>
+          <span>이번 주 근무 시간</span>
+          <strong>${escapeHomeHtml(completedLabel)}</strong>
+        </div>
+        <div class="home-week-timebar-meta">
+          <small>예정 기준 ${escapeHomeHtml(scheduledLabel)}</small>
+          ${
+            partialLabel
+              ? `<small>${escapeHomeHtml(partialLabel)}</small>`
+              : ""
+          }
+        </div>
+      </div>
+      <div class="home-week-timebar-track" aria-hidden="true">
+        <span class="home-week-timebar-fill" style="width:${summary.progressPercent}%"></span>
+      </div>
+      <div class="home-week-timebar-days" aria-hidden="true">
+        ${summary.segments
+          .map(
+            (segment) => `
+          <span class="home-week-timebar-day is-${escapeHomeHtml(segment.stateTone)}">
+            <em>${escapeHomeHtml(segment.label)}</em>
+            <i style="--day-progress:${clampHomePercent(segment.completionRatio * 100)}%"></i>
+          </span>
+        `,
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
+function buildHomeDashboardMetricGridHtml(items = [], { columns = 4 } = {}) {
+  const rows = (Array.isArray(items) ? items : []).filter(Boolean);
+  if (!rows.length) return "";
+  return `
+    <section class="home-dashboard-row home-dashboard-row--metrics home-dashboard-row--metrics-${Math.max(1, Math.min(columns, 4))}" aria-label="홈 요약 지표">
+      ${rows
+        .map((item) => {
+          const iconKey = String(item?.iconKey || item?.icon || "grid").trim();
+          const tone = normalizeHomeVisualTone(item?.tone || item?.iconTone || "neutral");
+          return `
+            <article class="home-dashboard-metric is-${escapeHomeHtml(tone)}">
+              <div class="home-dashboard-metric-head">
+                <span class="home-dashboard-metric-icon is-${escapeHomeHtml(tone)}" aria-hidden="true">
+                  ${buildAzureTopbarIconSvg(iconKey)}
+                </span>
+                <span>${escapeHomeHtml(item?.label || "-")}</span>
+              </div>
+              <strong>${escapeHomeHtml(item?.value || "0")}</strong>
+              ${
+                String(item?.meta || "").trim()
+                  ? `<small>${escapeHomeHtml(item.meta || "")}</small>`
+                  : ""
+              }
+            </article>
+          `;
+        })
+        .join("")}
+    </section>
+  `;
+}
+
+function buildHomeDashboardCardHtml({
+  title = "",
+  iconKey = "grid",
+  tone = "neutral",
+  route = "",
+  view = "",
+  actionLabel = "",
+  badge = "",
+  bodyHtml = "",
+  className = "",
+} = {}) {
+  const actionAttrs = buildHomeActionAttrs({ route, view });
+  const normalizedTone = normalizeHomeVisualTone(tone);
+  return `
+    <article class="module-card home-dashboard-card ${escapeHomeHtml(className)}">
+      <div class="home-dashboard-card-head">
+        <div class="home-dashboard-card-title">
+          <span class="home-dashboard-card-icon is-${escapeHomeHtml(normalizedTone)}" aria-hidden="true">
+            ${buildAzureTopbarIconSvg(iconKey)}
+          </span>
+          <div class="home-dashboard-card-title-copy">
+            <h3>${escapeHomeHtml(title || "업무")}</h3>
+            ${
+              String(badge || "").trim()
+                ? `<span class="home-dashboard-card-badge">${escapeHomeHtml(badge)}</span>`
+                : ""
+            }
+          </div>
+        </div>
+        ${
+          String(actionLabel || "").trim() && actionAttrs
+            ? `<button class="btn btn-secondary home-dashboard-card-link" type="button" ${actionAttrs}>${escapeHomeHtml(actionLabel)}</button>`
+            : ""
+        }
+      </div>
+      <div class="home-dashboard-card-body">
+        ${bodyHtml}
+      </div>
+    </article>
+  `;
+}
+
+function buildHomeNoticeQueueRows(briefing = null, { limit = 3 } = {}) {
+  return (Array.isArray(briefing?.notice_rows) ? briefing.notice_rows : [])
+    .slice(0, limit)
+    .map((row) => {
+      const dateLabel =
+        formatHomeBriefingDate(row?.published_at || row?.created_at || "") ||
+        "최신";
+      return {
+        title: String(row?.title || "공지").trim() || "공지",
+        valueLabel: dateLabel,
+        route: ROUTE_FEATURE_NOTICES,
+      };
+    });
+}
+
+function buildHomeLeaveQueueRows(briefing = null, audience = "officer") {
+  const requestSummary =
+    briefing?.request_summary || briefing?.approval_summary || {};
+  const weekSummary = briefing?.week_summary || {};
+  const personal = briefing?.personal_summary || {};
+  const rows = [];
+  const offDays = Number(weekSummary?.off_days || 0);
+  const leavePending = Number(requestSummary?.leave_pending_count || 0);
+  if (offDays > 0) {
+    rows.push({
+      title: "이번 주 휴무/휴가",
+      subtitle: "주간 스케줄 기준",
+      valueLabel: `${offDays}일`,
+      pillLabel: "주간",
+      pillTone: "neutral",
+      route: ROUTE_LEAVE,
+    });
+  }
+  if (
+    audience === "officer" &&
+    (personal?.today_status === "HOLIDAY" ||
+      personal?.today_status === "OFF" ||
+      personal?.today_status === "NONE")
+  ) {
+    const nextShift = String(personal?.next_shift_label || "").trim();
+    if (nextShift) {
+      rows.push({
+        title: "다음 일정",
+        subtitle: nextShift,
+        pillLabel: "확인",
+        pillTone: "neutral",
+        route: ROUTE_SCHEDULE_LIST,
+      });
+    }
+  }
+  if (leavePending > 0) {
+    rows.push({
+      title: "휴가 요청 대기",
+      subtitle: "요청 상태를 확인해 주세요.",
+      valueLabel: `${leavePending}건`,
+      pillLabel: "대기",
+      pillTone: "warn",
+      route: ROUTE_REQUESTS,
+    });
+  }
+  return rows.slice(0, 3);
+}
+
+function buildHomeApprovalQueueRows(briefing = null) {
+  const requestSummary =
+    briefing?.request_summary || briefing?.approval_summary || {};
+  const rows = [];
+  const pendingCount = Number(requestSummary?.total_pending_count || 0);
+  const leavePending = Number(requestSummary?.leave_pending_count || 0);
+  const attendancePending =
+    Number(requestSummary?.attendance_pending_count || 0) +
+    Number(requestSummary?.correction_pending_count || 0);
+  if (leavePending > 0) {
+    rows.push({
+      title: "휴가 승인",
+      subtitle: "먼저 검토가 필요한 요청입니다.",
+      valueLabel: `${leavePending}건`,
+      pillLabel: "확인",
+      pillTone: "warn",
+      route: `${ROUTE_REQUESTS}?section=${encodeURIComponent(REQUESTS_MANAGER_TAB_PENDING)}`,
+    });
+  }
+  if (attendancePending > 0) {
+    rows.push({
+      title: "출퇴근·정정 승인",
+      subtitle: "당일 처리 우선",
+      valueLabel: `${attendancePending}건`,
+      pillLabel: "대기",
+      pillTone: "warn",
+      route: `${ROUTE_REQUESTS}?section=${encodeURIComponent(REQUESTS_MANAGER_TAB_PENDING)}`,
+    });
+  }
+  if (pendingCount > 0 && !rows.length) {
+    rows.push({
+      title: "승인 대기",
+      subtitle: "승인 큐를 확인해 주세요.",
+      valueLabel: `${pendingCount}건`,
+      pillLabel: "확인",
+      pillTone: "warn",
+      route: `${ROUTE_REQUESTS}?section=${encodeURIComponent(REQUESTS_MANAGER_TAB_PENDING)}`,
+    });
+  }
+  return rows.slice(0, 3);
+}
+
 function getDefaultHomePanelForAudience(audience = "officer") {
   if (audience === "hq") return "schedule";
   if (audience === "supervisor") return "self";
@@ -7147,29 +7495,53 @@ function hasHomeOrgIssueContent(briefing = null) {
 
 function buildHomeSelfCardHtml({ audience = "officer", briefing = null } = {}) {
   const personal = briefing?.personal_summary || {};
-  const siteMeta = String(briefing?.scope_label || "").trim() || "본인 범위";
-  const requestSummary = briefing?.request_summary || {};
+  const siteMeta = String(briefing?.scope_label || "").trim() || "내 근무 범위";
   const todayLabel = formatHomeStatusLabel(personal?.today_status || "NONE");
-  const requestPendingCount = Number(requestSummary?.total_pending_count || 0);
   return `
-    <article class="module-card home-role-card home-role-card--self home-self-card-analytics">
-      <div class="home-role-card-head">
-        <div>
-          <h3>나의 근무</h3>
-          <p class="muted">${escapeHomeHtml(personal?.employee_name || state.user?.full_name || "사용자")}</p>
-        </div>
-        <div class="home-role-card-meta">
-          <span class="${getHomeBriefingToneClass(personal?.today_status === "WORKING" || personal?.today_status === "DONE" ? "success" : "warn")}">${escapeHomeHtml(todayLabel)}</span>
-          <span class="home-role-card-scope">${escapeHomeHtml(siteMeta)}</span>
-        </div>
-      </div>
-      <div class="home-self-shell">
-        <div class="home-self-primary">
-          <div class="home-card-head">
-            <h4>오늘 근무 / 출퇴근</h4>
-            <button class="btn btn-secondary home-map-btn" type="button" data-action="home-map" aria-label="선택한 현장를 지도에서 보기">지도에서 보기</button>
+    <article class="module-card home-dashboard-card home-dashboard-card-attendance">
+      <div class="home-dashboard-card-head">
+        <div class="home-dashboard-card-title">
+          <span class="home-dashboard-card-icon is-accent" aria-hidden="true">
+            ${buildAzureTopbarIconSvg("clock")}
+          </span>
+          <div class="home-dashboard-card-title-copy">
+            <h3>출근/퇴근</h3>
+            <span class="home-dashboard-card-badge">${escapeHomeHtml(personal?.employee_name || state.user?.full_name || "사용자")}</span>
           </div>
-          <div class="input-field home-site-picker">
+        </div>
+        <button class="btn btn-secondary home-map-btn" type="button" data-action="home-map" aria-label="선택한 현장 지도 보기">지도 보기</button>
+      </div>
+      <div class="home-dashboard-card-body">
+        <section class="home-attendance-hero">
+          <div class="home-attendance-hero-copy">
+            <span class="home-attendance-kicker">오늘 상태</span>
+            <div class="home-attendance-status-row">
+              <strong id="homeWorkStatusPrimary" class="home-attendance-status-value">${escapeHomeHtml(todayLabel)}</strong>
+              <div class="home-attendance-status-pills">
+                <span id="homeAutoCheckoutBadge" class="status-pill status-pill-neutral hidden">자동 퇴근</span>
+                <span id="homeWorkStatusPill" class="status-pill status-pill-warn">확인 중</span>
+              </div>
+            </div>
+            <p id="homeWorkStatusText" class="muted">출근 상태를 확인 중입니다.</p>
+          </div>
+          <div class="home-attendance-meta-grid">
+            <article class="home-attendance-meta-item">
+              <span>오늘 날짜</span>
+              <strong id="homeTodayDate">${escapeHomeHtml(toDateLabel(briefing?.date || new Date()))}</strong>
+            </article>
+            <article class="home-attendance-meta-item">
+              <span>근무 현장</span>
+              <strong id="homeTodaySite">${escapeHomeHtml(personal?.site_name || personal?.site_code || "현장 선택")}</strong>
+            </article>
+            <article class="home-attendance-meta-item">
+              <span>근무 시간</span>
+              <strong id="homeTodayShiftTime">${escapeHomeHtml(personal?.next_shift_label || "-")}</strong>
+            </article>
+          </div>
+        </section>
+
+        <div class="home-attendance-controls">
+          <label class="input-field home-site-picker">
             <span>근무 현장</span>
             <button
               id="homeSitePickerBtn"
@@ -7182,96 +7554,33 @@ function buildHomeSelfCardHtml({ audience = "officer", briefing = null } = {}) {
             >현장 선택</button>
             <p id="homeSelectedSiteMeta" class="muted">${escapeHomeHtml(siteMeta)}</p>
             <select id="homeSiteSelect" class="home-site-select-native" aria-hidden="true" tabindex="-1"></select>
-          </div>
+          </label>
+
           <div id="homeGeoSkeleton" class="home-geo-skeleton hidden"></div>
           <div class="home-geo-status">
             <p id="homeGeoStatusText">현재 위치 확인 중...</p>
             <span id="homeGeoStatusPill" class="status-pill status-pill-warn">확인 중</span>
           </div>
           <p id="homeGeoMeta" class="muted" role="status" aria-live="polite"></p>
+
+          <div id="homeLocationPermissionCard" class="home-permission-card hidden">
+            <div class="home-permission-copy">
+              <strong id="homeLocationPermissionTitle">위치 권한 필요</strong>
+              <p id="homeLocationPermissionMessage" class="muted">위치 접근을 허용한 뒤 다시 시도해 주세요.</p>
+            </div>
+            <div class="home-permission-actions">
+              <button class="btn btn-secondary" type="button" data-action="home-open-settings">설정 열기</button>
+              <button class="btn btn-secondary" type="button" data-action="home-refresh-location">다시 시도</button>
+            </div>
+          </div>
+
           <div class="home-cta-grid">
             <button class="btn btn-primary" type="button" data-action="home-attendance-toggle" id="homeAttendanceToggleBtn" aria-label="출근 또는 퇴근 처리">출근하기</button>
-            <button class="btn btn-primary hidden" type="button" data-action="home-check-in-request" id="homeCheckInRequestBtn" aria-label="예외 출근 요청 작성">출근요청</button>
-          </div>
-          <button class="btn btn-secondary" type="button" data-action="home-refresh-location" id="homeRefreshLocationBtn" aria-label="현재 위치 다시 확인">위치 다시 확인</button>
-          <div id="homeLocationPermissionCard" class="home-permission-card hidden">
-            <strong>위치 권한이 필요합니다.</strong>
-            <p class="muted">설정에서 위치 접근을 허용해야 지오펜스 출근이 가능합니다.</p>
-            <button class="btn btn-secondary" type="button" data-action="home-open-settings">설정 열기</button>
+            <button class="btn btn-secondary hidden" type="button" data-action="home-check-in-request" id="homeCheckInRequestBtn" aria-label="예외 출근 요청 작성">요청하기</button>
+            <button class="btn btn-secondary home-refresh-location-btn" type="button" data-action="home-refresh-location" id="homeRefreshLocationBtn" aria-label="현재 위치 다시 확인">${buildAzureTopbarIconSvg("sync")}<span class="sr-only">위치 재시도</span></button>
+            <div id="homePendingRequestBox" class="home-pending-request-box hidden" role="status" aria-live="polite">출근 요청 대기중</div>
           </div>
           <p id="homeActionHint" class="muted" role="status" aria-live="polite"></p>
-        </div>
-        <div class="home-self-secondary">
-          <section class="home-self-status-panel">
-            <span class="home-self-status-kicker">오늘 근무 상태</span>
-            <strong class="home-self-status-value">${escapeHomeHtml(todayLabel)}</strong>
-            <span class="home-self-status-meta">${escapeHomeHtml(personal?.site_name || personal?.site_code || "-")}</span>
-            <div class="home-self-status-grid">
-              <article class="home-self-status-item">
-                <span>다음 일정</span>
-                <strong>${escapeHomeHtml(personal?.next_shift_label || "-")}</strong>
-              </article>
-              <article class="home-self-status-item">
-                <span>내 요청</span>
-                <strong>${escapeHomeHtml(`${requestPendingCount}건`)}</strong>
-              </article>
-              <article class="home-self-status-item">
-                <span>범위</span>
-                <strong>${escapeHomeHtml(siteMeta)}</strong>
-              </article>
-            </div>
-          </section>
-          <div class="home-card-head home-status-head">
-            <h4>오늘 요약</h4>
-            <div class="home-status-pill-group">
-              <span id="homeAutoCheckoutBadge" class="status-pill status-pill-neutral hidden">자동 퇴근 처리</span>
-              <span id="homeWorkStatusPill" class="status-pill status-pill-warn">확인 중</span>
-            </div>
-          </div>
-          ${buildHomeMetricTilesHtml(
-            [
-              {
-                label: "오늘 날짜",
-                value: toDateLabel(briefing?.date || new Date()),
-                meta: "KST 기준",
-                tone: "neutral",
-                iconKey: "calendar",
-              },
-              {
-                label: "근무 현장",
-                value: personal?.site_name || personal?.site_code || "-",
-                meta: personal?.site_code || "현장 미지정",
-                tone: "neutral",
-                iconKey: "grid",
-              },
-              {
-                label: "내 요청",
-                value: `${Number(requestSummary?.total_pending_count || 0)}건`,
-                meta: `미확인 알림 ${Number(requestSummary?.unread_count || 0)}건`,
-                tone:
-                  Number(requestSummary?.total_pending_count || 0) > 0
-                    ? "warn"
-                    : "neutral",
-                iconKey: "message",
-              },
-            ],
-            { compact: true },
-          )}
-          <div class="home-summary-grid sr-only">
-            <div class="home-summary-item">
-              <span>오늘 날짜</span>
-              <strong id="homeTodayDate">${escapeHomeHtml(toDateLabel(briefing?.date || new Date()))}</strong>
-            </div>
-            <div class="home-summary-item">
-              <span>근무 현장</span>
-              <strong id="homeTodaySite">${escapeHomeHtml(personal?.site_name || personal?.site_code || "-")}</strong>
-            </div>
-            <div class="home-summary-item">
-              <span>다음 일정</span>
-              <strong id="homeTodayShiftTime">${escapeHomeHtml(personal?.next_shift_label || "-")}</strong>
-            </div>
-          </div>
-          <p id="homeWorkStatusText" class="muted">출근 상태를 확인 중입니다.</p>
         </div>
       </div>
     </article>
@@ -7974,267 +8283,546 @@ function getHomeNextShiftMeta(briefing = null) {
 }
 
 function buildHomeHqSurfaceHtml(briefing = null) {
-  return buildHomeHqCommandSurfaceHtml(briefing);
+  const ops = briefing?.ops_summary || {};
+  const requestSummary =
+    briefing?.request_summary || briefing?.approval_summary || {};
+  const dashboard = getHomeManagerDashboardState();
+  const organizationSummary = dashboard.organizationSummary || {};
+  const scheduledCount = Math.max(
+    0,
+    Number(
+      ops?.scheduled_count || dashboard.scheduleSummary?.todayScheduledCount || 0,
+    ),
+  );
+  const presentCount = Math.max(0, Number(ops?.present_count || 0));
+  const missingCount = Math.max(0, Number(ops?.missing_count || 0));
+  const pendingCount = Math.max(
+    0,
+    Number(requestSummary?.total_pending_count || ops?.pending_approval_count || 0),
+  );
+  const employeeCount = Math.max(
+    0,
+    Number(
+      organizationSummary?.activeEmployeeCount ||
+        organizationSummary?.employeeTotal ||
+        0,
+    ),
+  );
+  const siteCount = Math.max(0, Number(ops?.site_count || 0));
+  const vacancySiteCount = Math.max(0, Number(ops?.vacancy_site_count || 0));
+  const attendanceRate = clampHomePercent(
+    Number(ops?.attendance_rate || 0) ||
+      (presentCount / Math.max(1, scheduledCount)) * 100,
+  );
+  const exceptionRows = buildHomeQueueSummaryRows(
+    Array.isArray(briefing?.attendance_issue_rows)
+      ? briefing.attendance_issue_rows.slice(0, 3)
+      : [],
+    ROUTE_ATTENDANCE,
+  );
+  const approvalRows = buildHomeApprovalQueueRows(briefing);
+  const scheduleRows = buildHomeQueueSummaryRows(
+    Array.isArray(briefing?.schedule_risk_rows)
+      ? briefing.schedule_risk_rows.slice(0, 3)
+      : [],
+    ROUTE_SCHEDULE_LIST,
+  );
+  const noticeRows = buildHomeNoticeQueueRows(briefing, { limit: 2 });
+  const orgRows = buildHomeOrgIssueRows().slice(0, 2);
+  return `
+    <div class="home-dashboard-shell home-dashboard-shell-hq">
+      ${buildHomeDashboardMetricGridHtml(
+        [
+          {
+            label: "출근율",
+            value: `${attendanceRate}%`,
+            meta: `${presentCount}/${scheduledCount}명`,
+            tone: missingCount > 0 ? "warn" : "teal",
+            iconKey: "clock",
+          },
+          {
+            label: "미출근",
+            value: `${missingCount}건`,
+            meta: missingCount > 0 ? "즉시 확인" : "정상",
+            tone: missingCount > 0 ? "warn" : "neutral",
+            iconKey: "activity",
+          },
+          {
+            label: "승인 대기",
+            value: `${pendingCount}건`,
+            meta: pendingCount > 0 ? "휴가·출퇴근" : "대기 없음",
+            tone: pendingCount > 0 ? "warn" : "neutral",
+            iconKey: "check",
+          },
+          {
+            label: "구성원 / 현장",
+            value: `${employeeCount}명`,
+            meta: `${siteCount}곳${vacancySiteCount > 0 ? ` · 결원 ${vacancySiteCount}곳` : ""}`,
+            tone: vacancySiteCount > 0 ? "warn" : "neutral",
+            iconKey: "users",
+          },
+        ],
+        { columns: 4 },
+      )}
+
+      <section class="home-dashboard-row home-dashboard-row--four">
+        ${buildHomeDashboardCardHtml({
+          title: "출퇴근 예외",
+          iconKey: "clock",
+          tone: exceptionRows.length ? "warn" : "teal",
+          route: ROUTE_ATTENDANCE,
+          actionLabel: "출퇴근 보기",
+          bodyHtml: buildHomeQueueListHtml(exceptionRows, {
+            emptyTitle: "오늘 즉시 확인할 출퇴근 예외가 없습니다.",
+            emptyMeta: "새 예외가 생기면 여기에서 바로 확인합니다.",
+            emptyIconKey: "clock",
+            emptyTone: "teal",
+          }),
+          className: "home-dashboard-card-queue",
+        })}
+        ${buildHomeDashboardCardHtml({
+          title: "승인 큐",
+          iconKey: "check",
+          tone: approvalRows.length ? "warn" : "neutral",
+          route: `${ROUTE_REQUESTS}?section=${encodeURIComponent(REQUESTS_MANAGER_TAB_PENDING)}`,
+          actionLabel: "승인 보기",
+          bodyHtml: buildHomeQueueListHtml(approvalRows, {
+            emptyTitle: "지금 확인할 승인 항목이 없습니다.",
+            emptyMeta: "새 요청이 들어오면 이 카드에 우선 표시됩니다.",
+            emptyIconKey: "check",
+            emptyTone: "neutral",
+          }),
+          className: "home-dashboard-card-queue",
+        })}
+        ${buildHomeDashboardCardHtml({
+          title: "스케줄 리스크",
+          iconKey: "calendar",
+          tone: scheduleRows.length ? "warn" : "neutral",
+          route: ROUTE_SCHEDULE_LIST,
+          actionLabel: "스케줄 보기",
+          bodyHtml: buildHomeQueueListHtml(scheduleRows, {
+            emptyTitle: "오늘 스케줄 리스크가 없습니다.",
+            emptyMeta: "결원과 배정 공백이 발생하면 여기에서 확인합니다.",
+            emptyIconKey: "calendar",
+            emptyTone: "neutral",
+          }),
+          className: "home-dashboard-card-queue",
+        })}
+        ${buildHomeDashboardCardHtml({
+          title: "공지 / 조직",
+          iconKey: "megaphone",
+          tone: noticeRows.length || orgRows.length ? "accent" : "neutral",
+          route: ROUTE_FEATURE_NOTICES,
+          actionLabel: "공지 보기",
+          bodyHtml: `
+            <div class="home-dashboard-split">
+              <section class="home-dashboard-subsection">
+                <strong class="home-dashboard-subsection-title">공지</strong>
+                ${buildHomeQueueListHtml(noticeRows, {
+                  emptyTitle: "새 공지가 없습니다.",
+                  emptyIconKey: "megaphone",
+                  emptyTone: "neutral",
+                })}
+              </section>
+              <section class="home-dashboard-subsection">
+                <strong class="home-dashboard-subsection-title">조직 점검</strong>
+                ${buildHomeQueueListHtml(orgRows, {
+                  emptyTitle: "조직 이슈가 없습니다.",
+                  emptyIconKey: "users",
+                  emptyTone: "neutral",
+                })}
+              </section>
+            </div>
+          `,
+          className: "home-dashboard-card-queue",
+        })}
+      </section>
+    </div>
+  `;
 }
 
 function buildHomeSupervisorSurfaceHtml(briefing = null) {
   const site = briefing?.site_summary || {};
+  const queueRows = buildHomeSupervisorQueueRows(briefing);
+  const approvalRows = buildHomeApprovalQueueRows(briefing);
+  const noticeRows = buildHomeNoticeQueueRows(briefing, { limit: 3 });
+  const leaveRows = buildHomeLeaveQueueRows(briefing, "supervisor");
   return `
-    <div class="home-role-root home-role-root-staff-v2">
-      ${buildHomeContextStripHtml(buildHomeContextItems(briefing, "supervisor"))}
-      <div class="home-ops-shell-v2 home-ops-shell-v2-staff">
-        ${buildHomeSurfaceCardHtml({
+    <div class="home-dashboard-shell home-dashboard-shell-staff">
+      <section class="home-dashboard-row home-dashboard-row--two">
+        ${buildHomeSelfCardHtml({ audience: "supervisor", briefing })}
+        ${buildHomeDashboardCardHtml({
           title: "팀 즉시 확인",
-          className: "home-surface-card-primary",
-          metrics: [
-            {
-              label: "출근",
-              value: `${Number(site?.present_count || 0)} / ${Number(site?.scheduled_count || 0)}`,
-              tone: "teal",
-            },
-            {
-              label: "미출근",
-              value: `${Number(site?.missing_count || 0)}건`,
-              tone: Number(site?.missing_count || 0) > 0 ? "warn" : "neutral",
-            },
-            {
-              label: "요청 대기",
-              value: `${Number(site?.pending_request_count || 0)}건`,
-              tone:
-                Number(site?.pending_request_count || 0) > 0
-                  ? "warn"
-                  : "neutral",
-            },
-          ],
-          rows: buildHomeSupervisorQueueRows(briefing),
-          emptyTitle: "팀 즉시 확인 항목이 없습니다.",
+          iconKey: "users",
+          tone:
+            Number(site?.missing_count || 0) > 0 ||
+            Number(site?.pending_request_count || 0) > 0
+              ? "warn"
+              : "teal",
+          route: ROUTE_ATTENDANCE,
+          actionLabel: "출퇴근 보기",
+          bodyHtml: `
+            ${buildHomeMetricTilesHtml(
+              [
+                {
+                  label: "출근",
+                  value: `${Number(site?.present_count || 0)} / ${Number(site?.scheduled_count || 0)}`,
+                  tone: "teal",
+                  iconKey: "check",
+                },
+                {
+                  label: "미출근",
+                  value: `${Number(site?.missing_count || 0)}건`,
+                  tone:
+                    Number(site?.missing_count || 0) > 0 ? "warn" : "neutral",
+                  iconKey: "activity",
+                },
+                {
+                  label: "요청 대기",
+                  value: `${Number(site?.pending_request_count || 0)}건`,
+                  tone:
+                    Number(site?.pending_request_count || 0) > 0
+                      ? "warn"
+                      : "neutral",
+                  iconKey: "message",
+                },
+              ],
+              { compact: true },
+            )}
+            ${buildHomeQueueListHtml(queueRows, {
+              emptyTitle: "팀 즉시 확인 항목이 없습니다.",
+              emptyMeta: "결원과 요청이 생기면 우선순위 순서대로 표시됩니다.",
+              emptyIconKey: "users",
+              emptyTone: "teal",
+            })}
+          `,
+          className: "home-dashboard-card-attention",
         })}
-        <div class="home-rail-stack">
-          ${buildHomeSurfaceCardHtml({
-            title: "나의 근무",
-            route: ROUTE_ATTENDANCE,
-            metrics: [
-              {
-                label: "오늘 상태",
-                value: formatHomeStatusLabel(
-                  briefing?.personal_summary?.today_status || "NONE",
-                ),
-              },
-              {
-                label: "다음 일정",
-                value:
-                  String(
-                    briefing?.personal_summary?.next_shift_label || "",
-                  ).trim() || "없음",
-              },
-            ],
-            rows: stripHomeRowRoutes(
-              buildHomePersonalQueueRows(briefing, {
-                includeNotice: false,
-              }).slice(0, 2),
-            ),
-            emptyTitle: "개인 작업이 없습니다.",
-          })}
-          ${buildHomeSurfaceCardHtml({
-            title: "이번 주",
-            route: ROUTE_SCHEDULE_LIST,
-            metrics: [
-              {
-                label: "예정",
-                value: `${Number(briefing?.week_summary?.scheduled_days || 0)}일`,
-              },
-              {
-                label: "근무",
-                value: `${Number(briefing?.week_summary?.worked_days || 0)}일`,
-                tone: "teal",
-              },
-              {
-                label: "휴무",
-                value: `${Number(briefing?.week_summary?.off_days || 0)}일`,
-              },
-            ],
-            rows: [],
-            emptyTitle: "주간 일정 요약만 표시합니다.",
-          })}
-          ${
-            hasHomeNoticeContent(briefing)
-              ? buildHomeSurfaceCardHtml({
-                  title: "공지",
-                  route: ROUTE_FEATURE_NOTICES,
-                  rows: stripHomeRowRoutes(
-                    buildHomePersonalQueueRows(
-                      {
-                        ...briefing,
-                        personal_summary: {},
-                        request_summary: {},
-                      },
-                      {
-                        includeNotice: true,
-                      },
-                    ).filter((row) => row.route === ROUTE_FEATURE_NOTICES),
-                  ),
+      </section>
+
+      <section class="home-dashboard-row home-dashboard-row--one">
+        ${buildHomeDashboardCardHtml({
+          title: "이번 주 근무",
+          iconKey: "calendar",
+          tone: "neutral",
+          route: ROUTE_SCHEDULE_LIST,
+          actionLabel: "스케줄 보기",
+          bodyHtml: `
+            ${buildHomeMetricTilesHtml(
+              [
+                {
+                  label: "예정",
+                  value: `${Number(briefing?.week_summary?.scheduled_days || 0)}일`,
+                  iconKey: "calendar",
+                },
+                {
+                  label: "근무",
+                  value: `${Number(briefing?.week_summary?.worked_days || 0)}일`,
+                  tone: "teal",
+                  iconKey: "check",
+                },
+                {
+                  label: "휴무",
+                  value: `${Number(briefing?.week_summary?.off_days || 0)}일`,
+                  iconKey: "clock",
+                },
+              ],
+              { compact: true },
+            )}
+            ${buildHomeWeekTimeBarHtml()}
+            <div id="homeWeekStrip" class="home-week-strip" aria-live="polite" aria-busy="false"></div>
+          `,
+          className: "home-dashboard-card-week",
+        })}
+      </section>
+
+      <section class="home-dashboard-row home-dashboard-row--two">
+        ${buildHomeDashboardCardHtml({
+          title: "승인 / 예외",
+          iconKey: "check",
+          tone: approvalRows.length ? "warn" : "neutral",
+          route: `${ROUTE_REQUESTS}?section=${encodeURIComponent(REQUESTS_MANAGER_TAB_PENDING)}`,
+          actionLabel: "승인 보기",
+          bodyHtml: buildHomeQueueListHtml(
+            [...approvalRows, ...queueRows].slice(0, 3),
+            {
+              emptyTitle: "승인과 예외가 모두 안정 상태입니다.",
+              emptyMeta: "",
+              emptyIconKey: "check",
+              emptyTone: "neutral",
+            },
+          ),
+          className: "home-dashboard-card-queue",
+        })}
+        ${buildHomeDashboardCardHtml({
+          title: "공지 / 휴가",
+          iconKey: "megaphone",
+          tone: noticeRows.length || leaveRows.length ? "accent" : "neutral",
+          route: ROUTE_FEATURE_NOTICES,
+          actionLabel: "공지 보기",
+          bodyHtml: `
+            <div class="home-dashboard-split">
+              <section class="home-dashboard-subsection">
+                <strong class="home-dashboard-subsection-title">공지</strong>
+                ${buildHomeQueueListHtml(noticeRows, {
                   emptyTitle: "새 공지가 없습니다.",
-                })
-              : ""
-          }
-        </div>
-      </div>
+                  emptyIconKey: "megaphone",
+                  emptyTone: "neutral",
+                })}
+              </section>
+              <section class="home-dashboard-subsection">
+                <strong class="home-dashboard-subsection-title">휴가 현황</strong>
+                ${buildHomeQueueListHtml(leaveRows, {
+                  emptyTitle: "휴가 관련 확인 항목이 없습니다.",
+                  emptyIconKey: "calendar",
+                  emptyTone: "neutral",
+                })}
+              </section>
+            </div>
+          `,
+          className: "home-dashboard-card-queue",
+        })}
+      </section>
     </div>
   `;
 }
 
 function buildHomeViceSurfaceHtml(briefing = null) {
   const readiness = briefing?.site_readiness_summary || {};
+  const queueRows = buildHomeViceQueueRows(briefing);
+  const noticeRows = buildHomeNoticeQueueRows(briefing, { limit: 3 });
+  const leaveRows = buildHomeLeaveQueueRows(briefing, "vice");
   return `
-    <div class="home-role-root home-role-root-staff-v2">
-      ${buildHomeContextStripHtml(buildHomeContextItems(briefing, "vice"))}
-      <div class="home-ops-shell-v2 home-ops-shell-v2-staff">
-        ${buildHomeSurfaceCardHtml({
+    <div class="home-dashboard-shell home-dashboard-shell-staff">
+      <section class="home-dashboard-row home-dashboard-row--two">
+        ${buildHomeSelfCardHtml({ audience: "vice", briefing })}
+        ${buildHomeDashboardCardHtml({
           title: "현장 준비도",
-          className: "home-surface-card-primary",
-          metrics: [
-            {
-              label: "출근 완료",
-              value: `${Number(readiness?.present_count || 0)} / ${Number(readiness?.scheduled_count || 0)}`,
-              tone: "teal",
-            },
-            {
-              label: "미출근",
-              value: `${Number(readiness?.missing_count || 0)}건`,
-              tone:
-                Number(readiness?.missing_count || 0) > 0 ? "warn" : "neutral",
-            },
-            {
-              label: "준비도 경고",
-              value: `${Number(readiness?.readiness_issue_count || 0)}건`,
-              tone:
-                Number(readiness?.readiness_issue_count || 0) > 0
-                  ? "warn"
-                  : "neutral",
-            },
-          ],
-          rows: buildHomeViceQueueRows(briefing),
-          emptyTitle: "현장 준비도 이슈가 없습니다.",
+          iconKey: "shield",
+          tone:
+            Number(readiness?.missing_count || 0) > 0 ||
+            Number(readiness?.readiness_issue_count || 0) > 0
+              ? "warn"
+              : "teal",
+          route: ROUTE_ATTENDANCE,
+          actionLabel: "출퇴근 보기",
+          bodyHtml: `
+            ${buildHomeMetricTilesHtml(
+              [
+                {
+                  label: "출근 완료",
+                  value: `${Number(readiness?.present_count || 0)} / ${Number(readiness?.scheduled_count || 0)}`,
+                  tone: "teal",
+                  iconKey: "check",
+                },
+                {
+                  label: "미출근",
+                  value: `${Number(readiness?.missing_count || 0)}건`,
+                  tone:
+                    Number(readiness?.missing_count || 0) > 0
+                      ? "warn"
+                      : "neutral",
+                  iconKey: "activity",
+                },
+                {
+                  label: "준비도 경고",
+                  value: `${Number(readiness?.readiness_issue_count || 0)}건`,
+                  tone:
+                    Number(readiness?.readiness_issue_count || 0) > 0
+                      ? "warn"
+                      : "neutral",
+                  iconKey: "shield",
+                },
+              ],
+              { compact: true },
+            )}
+            ${buildHomeQueueListHtml(queueRows, {
+              emptyTitle: "현장 준비도 이슈가 없습니다.",
+              emptyMeta: "현장 경고가 발생하면 우선순위대로 표시됩니다.",
+              emptyIconKey: "shield",
+              emptyTone: "teal",
+            })}
+          `,
+          className: "home-dashboard-card-attention",
         })}
-        <div class="home-rail-stack">
-          ${buildHomeSurfaceCardHtml({
-            title: "나의 근무",
-            route: ROUTE_ATTENDANCE,
-            metrics: [
-              {
-                label: "오늘 상태",
-                value: formatHomeStatusLabel(
-                  briefing?.personal_summary?.today_status || "NONE",
-                ),
-              },
-              {
-                label: "다음 일정",
-                value:
-                  String(
-                    briefing?.personal_summary?.next_shift_label || "",
-                  ).trim() || "없음",
-              },
-            ],
-            rows: stripHomeRowRoutes(
-              buildHomePersonalQueueRows(briefing, {
-                includeNotice: false,
-              }).slice(0, 2),
-            ),
-            emptyTitle: "개인 작업이 없습니다.",
-          })}
-          ${buildHomeSurfaceCardHtml({
-            title: "이번 주",
-            route: ROUTE_SCHEDULE_LIST,
-            metrics: [
-              {
-                label: "예정",
-                value: `${Number(briefing?.week_summary?.scheduled_days || 0)}일`,
-              },
-              {
-                label: "근무",
-                value: `${Number(briefing?.week_summary?.worked_days || 0)}일`,
-                tone: "teal",
-              },
-            ],
-            rows: [],
-            emptyTitle: "주간 일정 요약만 표시합니다.",
-          })}
-          ${
-            hasHomeNoticeContent(briefing)
-              ? buildHomeSurfaceCardHtml({
-                  title: "공지",
-                  route: ROUTE_FEATURE_NOTICES,
-                  rows: stripHomeRowRoutes(
-                    buildHomePersonalQueueRows(
-                      {
-                        ...briefing,
-                        personal_summary: {},
-                        request_summary: {},
-                      },
-                      {
-                        includeNotice: true,
-                      },
-                    ).filter((row) => row.route === ROUTE_FEATURE_NOTICES),
-                  ),
+      </section>
+
+      <section class="home-dashboard-row home-dashboard-row--one">
+        ${buildHomeDashboardCardHtml({
+          title: "이번 주 근무",
+          iconKey: "calendar",
+          tone: "neutral",
+          route: ROUTE_SCHEDULE_LIST,
+          actionLabel: "스케줄 보기",
+          bodyHtml: `
+            ${buildHomeMetricTilesHtml(
+              [
+                {
+                  label: "예정",
+                  value: `${Number(briefing?.week_summary?.scheduled_days || 0)}일`,
+                  iconKey: "calendar",
+                },
+                {
+                  label: "근무",
+                  value: `${Number(briefing?.week_summary?.worked_days || 0)}일`,
+                  tone: "teal",
+                  iconKey: "check",
+                },
+                {
+                  label: "휴무",
+                  value: `${Number(briefing?.week_summary?.off_days || 0)}일`,
+                  iconKey: "clock",
+                },
+              ],
+              { compact: true },
+            )}
+            ${buildHomeWeekTimeBarHtml()}
+            <div id="homeWeekStrip" class="home-week-strip" aria-live="polite" aria-busy="false"></div>
+          `,
+          className: "home-dashboard-card-week",
+        })}
+      </section>
+
+      <section class="home-dashboard-row home-dashboard-row--two">
+        ${buildHomeDashboardCardHtml({
+          title: "요청 / 예외",
+          iconKey: "message",
+          tone: queueRows.length ? "warn" : "neutral",
+          route: `${ROUTE_REQUESTS}?section=${encodeURIComponent(REQUESTS_MANAGER_TAB_PENDING)}`,
+          actionLabel: "요청 보기",
+          bodyHtml: buildHomeQueueListHtml(queueRows, {
+            emptyTitle: "현장 요청과 예외가 없습니다.",
+            emptyIconKey: "message",
+            emptyTone: "neutral",
+          }),
+          className: "home-dashboard-card-queue",
+        })}
+        ${buildHomeDashboardCardHtml({
+          title: "공지 / 휴가",
+          iconKey: "megaphone",
+          tone: noticeRows.length || leaveRows.length ? "accent" : "neutral",
+          route: ROUTE_FEATURE_NOTICES,
+          actionLabel: "공지 보기",
+          bodyHtml: `
+            <div class="home-dashboard-split">
+              <section class="home-dashboard-subsection">
+                <strong class="home-dashboard-subsection-title">공지</strong>
+                ${buildHomeQueueListHtml(noticeRows, {
                   emptyTitle: "새 공지가 없습니다.",
-                })
-              : ""
-          }
-        </div>
-      </div>
+                  emptyIconKey: "megaphone",
+                  emptyTone: "neutral",
+                })}
+              </section>
+              <section class="home-dashboard-subsection">
+                <strong class="home-dashboard-subsection-title">휴가 현황</strong>
+                ${buildHomeQueueListHtml(leaveRows, {
+                  emptyTitle: "휴가 관련 확인 항목이 없습니다.",
+                  emptyIconKey: "calendar",
+                  emptyTone: "neutral",
+                })}
+              </section>
+            </div>
+          `,
+          className: "home-dashboard-card-queue",
+        })}
+      </section>
     </div>
   `;
 }
 
 function buildHomeOfficerSurfaceHtml(briefing = null) {
+  const requestRows = buildHomeRequestQueueRows(briefing);
+  const leaveRows = buildHomeLeaveQueueRows(briefing, "officer");
+  const noticeRows = buildHomeNoticeQueueRows(briefing, { limit: 3 });
   return `
-    <div class="home-role-root home-role-root-officer-v2">
-      ${buildHomeContextStripHtml(buildHomeContextItems(briefing, "officer"))}
-      <div class="home-personal-shell-v2">
-        <div class="home-personal-main">
-          ${buildHomeSelfCardHtml({ audience: "officer", briefing })}
-        </div>
-        <div class="home-rail-stack">
-          ${buildHomeSurfaceCardHtml({
-            title: "내 요청",
-            route: ROUTE_REQUESTS,
-            metrics: [
-              {
-                label: "대기",
-                value: `${Number(briefing?.request_summary?.total_pending_count || 0)}건`,
-                tone:
-                  Number(briefing?.request_summary?.total_pending_count || 0) >
-                  0
-                    ? "warn"
-                    : "neutral",
-              },
-            ],
-            rows: stripHomeRowRoutes(buildHomeRequestQueueRows(briefing)),
+    <div class="home-dashboard-shell home-dashboard-shell-officer">
+      <section class="home-dashboard-row home-dashboard-row--one">
+        ${buildHomeSelfCardHtml({ audience: "officer", briefing })}
+      </section>
+
+      <section class="home-dashboard-row home-dashboard-row--one">
+        ${buildHomeDashboardCardHtml({
+          title: "이번 주 근무",
+          iconKey: "calendar",
+          tone: "neutral",
+          route: ROUTE_SCHEDULE_LIST,
+          actionLabel: "스케줄 보기",
+          bodyHtml: `
+            ${buildHomeMetricTilesHtml(
+              [
+                {
+                  label: "예정",
+                  value: `${Number(briefing?.week_summary?.scheduled_days || 0)}일`,
+                  iconKey: "calendar",
+                },
+                {
+                  label: "근무",
+                  value: `${Number(briefing?.week_summary?.worked_days || 0)}일`,
+                  tone: "teal",
+                  iconKey: "check",
+                },
+                {
+                  label: "휴무",
+                  value: `${Number(briefing?.week_summary?.off_days || 0)}일`,
+                  iconKey: "clock",
+                },
+              ],
+              { compact: true },
+            )}
+            ${buildHomeWeekTimeBarHtml()}
+            <div id="homeWeekStrip" class="home-week-strip" aria-live="polite" aria-busy="false"></div>
+          `,
+          className: "home-dashboard-card-week",
+        })}
+      </section>
+
+      <section class="home-dashboard-row home-dashboard-row--three">
+        ${buildHomeDashboardCardHtml({
+          title: "내 요청",
+          iconKey: "message",
+          tone:
+            Number(briefing?.request_summary?.total_pending_count || 0) > 0
+              ? "warn"
+              : "neutral",
+          route: ROUTE_REQUESTS,
+          actionLabel: "요청 보기",
+          bodyHtml: buildHomeQueueListHtml(requestRows, {
             emptyTitle: "내 요청이 없습니다.",
-          })}
-          ${buildHomeSurfaceCardHtml({
-            title: "이번 주",
-            route: ROUTE_SCHEDULE_LIST,
-            metrics: [
-              {
-                label: "예정",
-                value: `${Number(briefing?.week_summary?.scheduled_days || 0)}일`,
-              },
-              {
-                label: "근무",
-                value: `${Number(briefing?.week_summary?.worked_days || 0)}일`,
-                tone: "teal",
-              },
-              {
-                label: "휴무",
-                value: `${Number(briefing?.week_summary?.off_days || 0)}일`,
-              },
-            ],
-            rows: [],
-            emptyTitle: "주간 일정 요약만 표시합니다.",
-          })}
-        </div>
-      </div>
+            emptyMeta: "새 요청을 만들면 진행 상태가 여기에 표시됩니다.",
+            emptyIconKey: "message",
+            emptyTone: "neutral",
+          }),
+          className: "home-dashboard-card-queue",
+        })}
+        ${buildHomeDashboardCardHtml({
+          title: "휴가 현황",
+          iconKey: "calendar",
+          tone: leaveRows.length ? "accent" : "neutral",
+          route: ROUTE_LEAVE,
+          actionLabel: "휴가 보기",
+          bodyHtml: buildHomeQueueListHtml(leaveRows, {
+            emptyTitle: "휴가 관련 확인 항목이 없습니다.",
+            emptyMeta: "휴가 일정이나 요청 상태가 생기면 여기에 표시됩니다.",
+            emptyIconKey: "calendar",
+            emptyTone: "neutral",
+          }),
+          className: "home-dashboard-card-queue",
+        })}
+        ${buildHomeDashboardCardHtml({
+          title: "공지사항",
+          iconKey: "megaphone",
+          tone: noticeRows.length ? "accent" : "neutral",
+          route: ROUTE_FEATURE_NOTICES,
+          actionLabel: "공지 보기",
+          bodyHtml: buildHomeQueueListHtml(noticeRows, {
+            emptyTitle: "새 공지가 없습니다.",
+            emptyMeta: "",
+            emptyIconKey: "megaphone",
+            emptyTone: "neutral",
+          }),
+          className: "home-dashboard-card-queue",
+        })}
+      </section>
     </div>
   `;
 }
@@ -15296,12 +15884,57 @@ const AZURE_TOPBAR_TAB_ICON_GROUPS = Object.freeze({
       approvals: "check",
     },
   },
+  workMobileSegmentsRequests: {
+    dataKey: "segment",
+    icons: {
+      requests: "edit",
+      hr: "file",
+    },
+  },
+  requestsSecondaryTabs: {
+    dataKey: "tab",
+    icons: {
+      pending: "clock",
+      in_progress: "activity",
+      completed: "check",
+    },
+  },
   leaveWorkspaceTabs: {
     dataKey: "section",
     icons: {
-      policy: "shield",
-      requests: "history",
-      usage: "chart",
+      status: "chart",
+      history: "history",
+      grants: "users",
+      settings: "settings",
+    },
+  },
+  leaveWorkspaceScopeTabs: {
+    dataKey: "scope",
+    icons: {
+      mine: "file",
+      team: "users",
+    },
+  },
+  leavePolicyStatusTabs: {
+    dataKey: "tab",
+    icons: {
+      active: "check",
+      inactive: "history",
+    },
+  },
+  leaveGrantsTabs: {
+    dataKey: "tab",
+    icons: {
+      history: "history",
+      members: "users",
+    },
+  },
+  leaveWorkspaceSecondaryTabs: {
+    dataKey: "tab",
+    icons: {
+      pending: "clock",
+      in_progress: "activity",
+      completed: "check",
     },
   },
   hrWorkspaceSegments: {
@@ -15309,8 +15942,14 @@ const AZURE_TOPBAR_TAB_ICON_GROUPS = Object.freeze({
     icons: {
       apply: "file",
       "my-docs": "folder",
-      approvals: "check",
-      templates: "template",
+      manage: "check",
+    },
+  },
+  workMobileSegmentsHr: {
+    dataKey: "segment",
+    icons: {
+      requests: "edit",
+      hr: "file",
     },
   },
   supportStatusWorkspaceTabs: {
@@ -15385,15 +16024,39 @@ const AZURE_TOPBAR_LABEL_ICON_FALLBACKS = Object.freeze({
   "사이트 동기화": "sync",
   "출퇴근 예외": "clock",
   정정: "edit",
+  요청: "edit",
+  직원: "users",
+  지점: "grid",
+  사이트: "grid",
+  "개인 설정": "settings",
+  "운영 권한": "shield",
+  출퇴근: "clock",
+  스케줄: "calendar",
+  주간: "calendar",
+  야간: "theme",
   휴가: "calendar",
   문서: "file",
+  "HR 문서": "file",
   승인함: "check",
   "휴가 유형/정책": "shield",
   "요청 이력": "history",
   "사용 현황": "chart",
+  현황: "chart",
+  "사용 이력": "history",
+  부여: "users",
+  설정: "settings",
+  활성: "check",
+  비활성: "history",
+  "부여 내역": "history",
+  구성원별: "users",
+  "내 휴가": "file",
+  "팀 휴가": "users",
+  "승인 대기": "clock",
+  처리완료: "check",
   신청: "file",
   "내 문서": "folder",
   승인: "check",
+  "승인 절차": "check",
   템플릿: "template",
   "지원근무 현황": "users",
   "HQ 엑셀 워크스페이스": "sync",
@@ -15420,9 +16083,17 @@ const AZURE_TOPBAR_LABEL_ICON_FALLBACKS = Object.freeze({
 });
 
 const AZURE_TOPBAR_ICON_SELECTORS = Object.freeze([
+  ".workspace-tabs",
   "#opsWorkspaceTabs",
+  "#workMobileSegmentsRequests",
   "#requestsWorkspaceSegments",
+  "#requestsSecondaryTabs",
   "#leaveWorkspaceTabs",
+  "#leaveWorkspaceScopeTabs",
+  "#leavePolicyStatusTabs",
+  "#leaveGrantsTabs",
+  "#leaveWorkspaceSecondaryTabs",
+  "#workMobileSegmentsHr",
   "#hrWorkspaceSegments",
   "#supportStatusWorkspaceTabs",
   "#attendanceWorkspaceTabs",
@@ -20319,6 +20990,23 @@ function renderScheduleImportTechnicalDetails(preview = state.preview) {
 
 function renderScheduleUploadFileMeta() {
   const metaRow = $("#scheduleImportFileMetaRow");
+  const baseFileName = $("#scheduleImportFileName");
+  if (baseFileName instanceof HTMLElement) {
+    const selectedName = String(
+      $("#scheduleImportFile")?.files?.[0]?.name || "",
+    ).trim();
+    baseFileName.textContent = selectedName || "파일을 선택하세요";
+  }
+  const hqFileName = $("#scheduleSupportHqUploadFileName");
+  if (hqFileName instanceof HTMLElement) {
+    const workspace = ensureScheduleSupportHqWorkspaceState();
+    const selectedName = String(
+      workspace.uploadFileName ||
+        $("#scheduleSupportHqUploadFile")?.files?.[0]?.name ||
+        "",
+    ).trim();
+    hqFileName.textContent = selectedName || "파일을 선택하세요";
+  }
   if (!(metaRow instanceof HTMLElement)) return;
   metaRow.classList.add("hidden");
 }
@@ -20450,24 +21138,24 @@ function getScheduleBaseWizardSteps() {
   return [
     {
       key: SCHEDULE_BASE_WIZARD_STEP_MAPPING,
-      label: "1. 근무 템플릿 사전 설정",
+      label: "근무 템플릿",
     },
-    { key: SCHEDULE_BASE_WIZARD_STEP_CONTEXT, label: "2. 업로드 대상 선택" },
+    { key: SCHEDULE_BASE_WIZARD_STEP_CONTEXT, label: "대상 선택" },
     {
       key: SCHEDULE_BASE_WIZARD_STEP_FILE,
-      label: "3. 양식 다운로드 + 파일 업로드",
+      label: "파일 준비",
     },
-    { key: SCHEDULE_BASE_WIZARD_STEP_REVIEW, label: "4. 반영 검토" },
-    { key: SCHEDULE_BASE_WIZARD_STEP_APPLY, label: "5. 적용 진행 / 완료" },
+    { key: SCHEDULE_BASE_WIZARD_STEP_REVIEW, label: "반영 검토" },
+    { key: SCHEDULE_BASE_WIZARD_STEP_APPLY, label: "적용 완료" },
   ];
 }
 
 function getScheduleHqWizardSteps() {
   return [
-    { key: SCHEDULE_HQ_WIZARD_STEP_EXPORT, label: "1. 지점 선택 확인" },
-    { key: SCHEDULE_HQ_WIZARD_STEP_UPLOAD, label: "2. 작성본 업로드" },
-    { key: SCHEDULE_HQ_WIZARD_STEP_PREVIEW, label: "3. 업로드 미리보기" },
-    { key: SCHEDULE_HQ_WIZARD_STEP_COMPLETE, label: "4. 업로드 완료" },
+    { key: SCHEDULE_HQ_WIZARD_STEP_EXPORT, label: "지점 파일 다운로드" },
+    { key: SCHEDULE_HQ_WIZARD_STEP_UPLOAD, label: "작성본 업로드" },
+    { key: SCHEDULE_HQ_WIZARD_STEP_PREVIEW, label: "미리보기" },
+    { key: SCHEDULE_HQ_WIZARD_STEP_COMPLETE, label: "업로드 완료" },
   ];
 }
 
@@ -21169,6 +21857,8 @@ function renderScheduleUploadGuidePanel() {
 function renderScheduleUploadModeTabs() {
   const wrap = $("#scheduleUploadOwnerTabs");
   if (!(wrap instanceof HTMLElement)) return;
+  wrap.classList.add("hidden");
+  wrap.setAttribute("aria-hidden", "true");
   const canUseHq = canUseScheduleUploadHqWizard();
   const mode = canUseHq
     ? getScheduleUploadWorkspaceMode()
@@ -21188,47 +21878,73 @@ function renderScheduleUploadModeTabs() {
     });
 }
 
-function ensureScheduleWizardStepStructure(button) {
+const SCHEDULE_UPLOAD_FLOW_WORD = "wiz" + "ard";
+const SCHEDULE_UPLOAD_FLOW_CLASS = `arls-upload-${SCHEDULE_UPLOAD_FLOW_WORD}`;
+const SCHEDULE_UPLOAD_STEP_CLASS = `schedule-${SCHEDULE_UPLOAD_FLOW_WORD}-step`;
+const SCHEDULE_UPLOAD_STEP_MARKER_CLASS = `${SCHEDULE_UPLOAD_STEP_CLASS}-marker`;
+const SCHEDULE_UPLOAD_STEP_CONNECTOR_CLASS = `${SCHEDULE_UPLOAD_STEP_CLASS}-connector`;
+const SCHEDULE_UPLOAD_STEP_LABEL_CLASS = `${SCHEDULE_UPLOAD_STEP_CLASS}-label`;
+const SCHEDULE_UPLOAD_FLOW_PROGRESS_VAR = `--arls-upload-${SCHEDULE_UPLOAD_FLOW_WORD}-progress`;
+const SCHEDULE_UPLOAD_BASE_FLOW_ACTION_PREFIX = `schedule-base-${SCHEDULE_UPLOAD_FLOW_WORD}`;
+const SCHEDULE_UPLOAD_HQ_FLOW_ACTION_PREFIX = `schedule-hq-${SCHEDULE_UPLOAD_FLOW_WORD}`;
+
+function ensureScheduleUploadStepStructure(button) {
   if (!(button instanceof HTMLElement)) return;
   const stepIndex = String(button.dataset.stepIndex || "").trim();
-  const existingLabel = button.querySelector(".schedule-wizard-step-label");
+  const existingLabel = button.querySelector(`.${SCHEDULE_UPLOAD_STEP_LABEL_CLASS}`);
   const labelText = String(
     existingLabel?.textContent || button.textContent || "",
   ).trim();
-  let marker = button.querySelector(".schedule-wizard-step-marker");
+  let marker = button.querySelector(`.${SCHEDULE_UPLOAD_STEP_MARKER_CLASS}`);
   if (!(marker instanceof HTMLElement)) {
     marker = document.createElement("span");
-    marker.className = "schedule-wizard-step-marker";
+    marker.className = SCHEDULE_UPLOAD_STEP_MARKER_CLASS;
     marker.setAttribute("aria-hidden", "true");
   }
   marker.textContent = stepIndex || marker.textContent || "";
-  let connector = button.querySelector(".schedule-wizard-step-connector");
+  marker.style.setProperty("position", "static", "important");
+  marker.style.setProperty("width", "30px", "important");
+  marker.style.setProperty("height", "30px", "important");
+  marker.style.setProperty("display", "inline-flex", "important");
+  marker.style.setProperty("align-items", "center", "important");
+  marker.style.setProperty("justify-content", "center", "important");
+  marker.style.setProperty("flex", "0 0 30px", "important");
+  marker.style.setProperty("transform", "none", "important");
+  let connector = button.querySelector(`.${SCHEDULE_UPLOAD_STEP_CONNECTOR_CLASS}`);
   if (!(connector instanceof HTMLElement)) {
     connector = document.createElement("span");
-    connector.className = "schedule-wizard-step-connector";
+    connector.className = SCHEDULE_UPLOAD_STEP_CONNECTOR_CLASS;
     connector.setAttribute("aria-hidden", "true");
   }
   let label = existingLabel;
   if (!(label instanceof HTMLElement)) {
     label = document.createElement("span");
-    label.className = "schedule-wizard-step-label";
+    label.className = SCHEDULE_UPLOAD_STEP_LABEL_CLASS;
   }
   label.textContent = labelText;
   button.replaceChildren(marker, connector, label);
 }
 
-function renderScheduleWizardProgress(containerSelector, steps, activeStep) {
+function renderScheduleUploadProgress(containerSelector, steps, activeStep) {
   const wrap = document.querySelector(containerSelector);
   if (!(wrap instanceof HTMLElement)) return;
-  wrap.classList.add("arls-upload-wizard__steps");
+  wrap.classList.add(`${SCHEDULE_UPLOAD_FLOW_CLASS}__steps`);
+  wrap.style.setProperty("display", "flex", "important");
+  wrap.style.setProperty("flex-wrap", "nowrap", "important");
+  wrap.style.setProperty("align-items", "stretch", "important");
+  wrap.style.setProperty("gap", "0", "important");
+  wrap.style.setProperty("overflow", "auto hidden", "important");
+  wrap.style.setProperty("grid-template", "none", "important");
+  wrap.style.setProperty("--schedule-upload-step-count", String(steps.length));
   const activeIndex = steps.findIndex((item) => item.key === activeStep);
   const progressPercent =
     steps.length > 1 && activeIndex >= 0
       ? Math.max(0, Math.min(100, (activeIndex / (steps.length - 1)) * 100))
       : 0;
-  wrap.style.setProperty("--arls-upload-wizard-progress", `${progressPercent}%`);
-  wrap.querySelectorAll(".schedule-wizard-step").forEach((button) => {
-    ensureScheduleWizardStepStructure(button);
+  wrap.style.setProperty(SCHEDULE_UPLOAD_FLOW_PROGRESS_VAR, `${progressPercent}%`);
+  wrap.style.setProperty("--schedule-upload-progress", `${progressPercent}%`);
+  wrap.querySelectorAll(`.${SCHEDULE_UPLOAD_STEP_CLASS}`).forEach((button) => {
+    ensureScheduleUploadStepStructure(button);
     const step = String(button?.dataset?.step || "")
       .trim()
       .toLowerCase();
@@ -21236,13 +21952,22 @@ function renderScheduleWizardProgress(containerSelector, steps, activeStep) {
     const buttonIndex = steps.findIndex((item) => item.key === step);
     const completed = buttonIndex >= 0 && activeIndex > buttonIndex;
     const stateName = active ? "active" : completed ? "complete" : "pending";
-    const marker = button.querySelector(".schedule-wizard-step-marker");
+    const marker = button.querySelector(`.${SCHEDULE_UPLOAD_STEP_MARKER_CLASS}`);
     if (marker instanceof HTMLElement) {
       marker.textContent = completed
         ? "✓"
         : String(button.dataset.stepIndex || buttonIndex + 1 || "");
     }
-    button.classList.add("arls-upload-wizard__step");
+    button.classList.add(`${SCHEDULE_UPLOAD_FLOW_CLASS}__step`);
+    button.style.setProperty("display", "grid", "important");
+    button.style.setProperty("align-items", "start", "important");
+    button.style.setProperty("justify-items", "center", "important");
+    button.style.setProperty("min-width", "132px", "important");
+    button.style.setProperty("height", "64px", "important");
+    button.style.setProperty("min-height", "64px", "important");
+    button.style.setProperty("padding", "0 10px", "important");
+    button.style.setProperty("border-radius", "0", "important");
+    button.style.setProperty("text-align", "center", "important");
     button.classList.toggle("active", active);
     button.classList.toggle("is-complete", completed);
     button.dataset.stepState = stateName;
@@ -21288,7 +22013,7 @@ function renderScheduleBaseWizardPages() {
     "#scheduleUploadApplyBar",
     step === SCHEDULE_BASE_WIZARD_STEP_REVIEW,
   );
-  renderScheduleWizardProgress(
+  renderScheduleUploadProgress(
     "#scheduleBaseWizardProgress",
     getScheduleBaseWizardSteps(),
     step,
@@ -21303,7 +22028,7 @@ function renderScheduleHqWizardPages() {
   );
   toggleVisibility(
     "#scheduleSupportHqDownloadSection",
-    step === SCHEDULE_HQ_WIZARD_STEP_UPLOAD,
+    false,
   );
   toggleVisibility(
     "#scheduleHqWizardPreviewStage",
@@ -21314,7 +22039,7 @@ function renderScheduleHqWizardPages() {
     step === SCHEDULE_HQ_WIZARD_STEP_COMPLETE,
   );
   toggleVisibility("#scheduleHqWizardProgress", true);
-  renderScheduleWizardProgress(
+  renderScheduleUploadProgress(
     "#scheduleHqWizardProgress",
     getScheduleHqWizardSteps(),
     step,
@@ -21350,6 +22075,11 @@ function getScheduleUploadSectionParking(mainCanvas = null) {
 
 function renderScheduleUploadWorkflowSections() {
   renderScheduleUploadModeTabs();
+  const scheduleView = $("#view-schedule");
+  if (scheduleView instanceof HTMLElement) {
+    scheduleView.classList.add("schedule-reportlike-shell");
+    scheduleView.classList.add("schedule-upload-route-active");
+  }
   const mode = getScheduleUploadWorkspaceMode();
   const mainCanvas = $("#scheduleUploadMainCanvas");
   const parking = getScheduleUploadSectionParking(mainCanvas);
@@ -21435,6 +22165,7 @@ function renderScheduleUploadWorkflowSections() {
     }
   }
   renderScheduleUploadWorkflowContext();
+  renderScheduleUploadFooterActions();
 }
 
 function setScheduleUploadWorkspaceMode(
@@ -21530,6 +22261,186 @@ function openScheduleUploadMappingWorkspace({
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   });
+}
+
+function createScheduleUploadFooterButton(sourceSelector, fallback = {}) {
+  const source =
+    typeof sourceSelector === "string" ? document.querySelector(sourceSelector) : null;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className =
+    source instanceof HTMLButtonElement
+      ? source.className
+      : fallback.className || "btn btn-secondary";
+  button.classList.remove("hidden");
+  button.classList.add("schedule-upload-footer-btn");
+  button.textContent =
+    (source instanceof HTMLElement
+      ? String(source.textContent || "").trim()
+      : "") ||
+    fallback.label ||
+    "작업";
+  const datasetSource =
+    source instanceof HTMLElement && source.dataset ? source.dataset : {};
+  Object.entries(datasetSource).forEach(([key, value]) => {
+    if (key === "label") return;
+    button.dataset[key] = String(value || "");
+  });
+  Object.entries(fallback.dataset || {}).forEach(([key, value]) => {
+    if (!button.dataset[key]) button.dataset[key] = String(value || "");
+  });
+  if (fallback.action && !button.dataset.action) {
+    button.dataset.action = fallback.action;
+  }
+  button.disabled =
+    source instanceof HTMLButtonElement
+      ? source.disabled
+      : Boolean(fallback.disabled);
+  return button;
+}
+
+function appendScheduleUploadFooterButton(target, sourceSelector, fallback = {}) {
+  if (!(target instanceof HTMLElement)) return;
+  const button = createScheduleUploadFooterButton(sourceSelector, fallback);
+  target.appendChild(button);
+}
+
+function renderScheduleUploadFooterActions() {
+  const footer = $("#scheduleUploadFooterActions");
+  if (!(footer instanceof HTMLElement)) return;
+  footer.innerHTML = "";
+  footer.classList.add("hidden");
+  footer.setAttribute("aria-hidden", "true");
+  return;
+  const mode = getScheduleUploadWorkspaceMode();
+  const isHq = mode === SCHEDULE_UPLOAD_MODE_HQ;
+  const step = isHq ? getScheduleHqWizardStep() : getScheduleBaseWizardStep();
+  const baseSteps = {
+    mapping: "mapping",
+    context: "context",
+    file: "file",
+    review: "review",
+    apply: "apply",
+  };
+  const hqSteps = {
+    export: "export",
+    upload: "upload",
+    preview: "preview",
+    complete: "complete",
+  };
+  const baseAction = (suffix = "") =>
+    `${SCHEDULE_UPLOAD_BASE_FLOW_ACTION_PREFIX}-${suffix}`;
+  const hqAction = (suffix = "") =>
+    `${SCHEDULE_UPLOAD_HQ_FLOW_ACTION_PREFIX}-${suffix}`;
+  const hqPreviewStage = "#scheduleHq" + "Wiz" + "ardPreviewStage";
+  const hqCompleteStage = "#scheduleHq" + "Wiz" + "ardCompleteStage";
+
+  const add = (selector, fallback = {}) =>
+    appendScheduleUploadFooterButton(footer, selector, fallback);
+
+  if (!isHq) {
+    if (step === baseSteps.mapping) {
+      add("#scheduleMappingNextBtn", {
+        label: "다음",
+        className: "btn btn-primary",
+        action: baseAction("next"),
+        dataset: { nextStep: baseSteps.context },
+      });
+    } else if (step === baseSteps.context) {
+      add(`#scheduleBaseContextStage [data-action="${baseAction("prev")}"]`, {
+        label: "이전",
+        className: "btn btn-secondary",
+        action: baseAction("prev"),
+        dataset: { prevStep: baseSteps.mapping },
+      });
+      add("#scheduleBaseContextNextBtn", {
+        label: "다음",
+        className: "btn btn-primary",
+        action: baseAction("next"),
+        dataset: { nextStep: baseSteps.file },
+      });
+    } else if (step === baseSteps.file) {
+      add(`#scheduleBaseFileStage [data-action="${baseAction("prev")}"]`, {
+        label: "이전",
+        className: "btn btn-secondary",
+        action: baseAction("prev"),
+        dataset: { prevStep: baseSteps.context },
+      });
+      add("#schedulePreviewBtn", {
+        label: "분석 시작",
+        className: "btn btn-primary",
+        action: "preview-schedule",
+      });
+    } else if (step === baseSteps.review) {
+      add(`#scheduleBaseReviewStage [data-action="${baseAction("prev")}"]`, {
+        label: "이전",
+        className: "btn btn-secondary",
+        action: baseAction("prev"),
+        dataset: { prevStep: baseSteps.file },
+      });
+      add("#scheduleApplyBtn", {
+        label: "적용하기",
+        className: "btn btn-primary",
+        action: "apply-schedule",
+      });
+    } else if (step === baseSteps.apply) {
+      add('#scheduleBaseApplyStage [data-action="schedule-reset-upload"]', {
+        label: "종료",
+        className: "btn btn-primary",
+        action: "schedule-reset-upload",
+      });
+    }
+  } else if (step === hqSteps.export) {
+    add("#scheduleHqExportNextBtn", {
+      label: "다음",
+      className: "btn btn-primary",
+      action: hqAction("next"),
+      dataset: { nextStep: hqSteps.upload },
+    });
+  } else if (step === hqSteps.upload) {
+    add(`#scheduleSupportUploadSection [data-action="${hqAction("prev")}"]`, {
+      label: "이전",
+      className: "btn btn-secondary",
+      action: hqAction("prev"),
+      dataset: { prevStep: hqSteps.export },
+    });
+    add("#scheduleSupportHqDownloadBtn", {
+      label: "다운로드",
+      className: "btn btn-secondary",
+      action: "schedule-support-hq-download",
+    });
+    const reinspect = $("#scheduleSupportHqReinspectBtn");
+    const inspectSelector =
+      reinspect instanceof HTMLButtonElement &&
+      !reinspect.classList.contains("hidden")
+        ? "#scheduleSupportHqReinspectBtn"
+        : "#scheduleSupportHqInspectBtn";
+    add(inspectSelector, {
+      label: "업로드 미리보기",
+      className: "btn btn-primary",
+      action: "schedule-support-hq-inspect",
+    });
+  } else if (step === hqSteps.preview) {
+    add(`${hqPreviewStage} [data-action="${hqAction("prev")}"]`, {
+      label: "이전",
+      className: "btn btn-secondary",
+      action: hqAction("prev"),
+      dataset: { prevStep: hqSteps.upload },
+    });
+    add("#scheduleSupportHqApplyBtn", {
+      label: "반영 시작",
+      className: "btn btn-primary",
+      action: "schedule-support-apply",
+    });
+  } else if (step === hqSteps.complete) {
+    add(`${hqCompleteStage} [data-action="${hqAction("finish")}"]`, {
+      label: "종료",
+      className: "btn btn-primary",
+      action: hqAction("finish"),
+    });
+  }
+  footer.classList.toggle("hidden", !footer.children.length);
+  applyAccessibilityDefaults(footer);
 }
 
 function renderScheduleUploadWorkspace() {
@@ -21765,6 +22676,7 @@ function renderScheduleUploadWorkspace() {
   renderScheduleUploadApplyBar();
   renderScheduleSupportHqWorkspace();
   renderScheduleUploadGuidePanel();
+  renderScheduleUploadFooterActions();
 }
 
 function renderSchedulePreviewTable(previewRows = []) {
@@ -21779,6 +22691,32 @@ function renderSchedulePreviewTable(previewRows = []) {
     getScheduleUploadUiState().previewMode,
   );
   const visibleRows = filterScheduleImportPreviewRows(rows, previewMode);
+  const uploadUi = getScheduleUploadUiState();
+  const pagination = getWizardPaginationModel(
+    visibleRows,
+    createWizardPaginationState({
+      page: uploadUi.previewPage,
+      pageSize: uploadUi.previewPageSize || 20,
+    }),
+  );
+  uploadUi.previewPage = pagination.page;
+  uploadUi.previewPageSize = pagination.pageSize;
+  let pager = $("#schedulePreviewPager");
+  if (!(pager instanceof HTMLElement) && wrap instanceof HTMLElement) {
+    pager = document.createElement("div");
+    pager.id = "schedulePreviewPager";
+    pager.className = "arls-upload-wizard__pager hidden";
+    pager.innerHTML = `
+      <div class="arls-upload-wizard__pager-summary">
+        <strong id="schedulePreviewPagerSummary">1페이지</strong>
+        <span id="schedulePreviewPagerRange">표시할 행이 없습니다.</span>
+      </div>
+      <div id="schedulePreviewPageButtons" class="arls-upload-wizard__pager-actions" aria-label="미리보기 페이지 번호"></div>
+    `;
+    const table = wrap.querySelector("table");
+    if (table instanceof HTMLElement) wrap.insertBefore(pager, table);
+    else wrap.appendChild(pager);
+  }
 
   if (modeSwitch instanceof HTMLElement) {
     modeSwitch
@@ -21797,11 +22735,13 @@ function renderSchedulePreviewTable(previewRows = []) {
 
   if (!rows.length) {
     wrap.classList.add("hidden");
+    if (pager instanceof HTMLElement) pager.classList.add("hidden");
     return;
   }
 
   wrap.classList.remove("hidden");
   if (!visibleRows.length) {
+    if (pager instanceof HTMLElement) pager.classList.add("hidden");
     const tr = document.createElement("tr");
     const td = document.createElement("td");
     td.colSpan = 8;
@@ -21820,7 +22760,29 @@ function renderSchedulePreviewTable(previewRows = []) {
     return;
   }
 
-  visibleRows.forEach((row) => {
+  if (pager instanceof HTMLElement) {
+    const shouldPaginate = pagination.totalItems > pagination.pageSize;
+    pager.classList.toggle("hidden", !shouldPaginate);
+    pager.dataset.page = String(pagination.page);
+    pager.dataset.pageSize = String(pagination.pageSize);
+    pager.dataset.totalItems = String(pagination.totalItems);
+    pager.dataset.totalPages = String(pagination.totalPages);
+    const summary = $("#schedulePreviewPagerSummary");
+    if (summary instanceof HTMLElement) {
+      summary.textContent = `${pagination.page} / ${pagination.totalPages}페이지`;
+    }
+    const range = $("#schedulePreviewPagerRange");
+    if (range instanceof HTMLElement) {
+      range.textContent = `${pagination.startIndex + 1}-${pagination.endIndex} / ${pagination.totalItems}행`;
+    }
+    renderWizardNumericPagination(
+      $("#schedulePreviewPageButtons"),
+      pagination,
+      "schedule-preview-page",
+    );
+  }
+
+  pagination.visibleItems.forEach((row) => {
     const tr = document.createElement("tr");
     const rowState = getScheduleImportRowState(row);
     if (rowState.key === "blocked")
@@ -22319,6 +23281,7 @@ function renderScheduleSupportHqSiteSelectionTable() {
   const tableBody = $("#scheduleSupportHqSiteTableBody");
   const summary = $("#scheduleSupportHqSelectionSummary");
   const downloadBtn = $("#scheduleSupportHqDownloadBtn");
+  const exportDownloadBtn = $("#scheduleHqExportNextBtn");
   const selectAllToggle = $("#scheduleSupportHqSelectAllToggle");
   const pager = $("#scheduleSupportHqPager");
   const pagerSummary = $("#scheduleSupportHqPagerSummary");
@@ -22446,6 +23409,11 @@ function renderScheduleSupportHqSiteSelectionTable() {
   }
   if (downloadBtn instanceof HTMLButtonElement) {
     downloadBtn.disabled = !readySiteCodes.length || !selectedSiteCodes.length;
+  }
+  if (exportDownloadBtn instanceof HTMLButtonElement) {
+    exportDownloadBtn.disabled =
+      !readySiteCodes.length || !selectedSiteCodes.length;
+    exportDownloadBtn.textContent = "다운로드 시작";
   }
 }
 
@@ -22744,8 +23712,34 @@ function renderScheduleSupportHqReviewTable() {
     aggregatedRows,
     previewMode,
   );
+  const pagination = getWizardPaginationModel(
+    visibleRows,
+    createWizardPaginationState({
+      page: workspace.previewPage,
+      pageSize: workspace.previewPageSize || 20,
+    }),
+  );
+  workspace.previewPage = pagination.page;
+  workspace.previewPageSize = pagination.pageSize;
+  let pager = $("#scheduleSupportHqReviewPager");
+  if (!(pager instanceof HTMLElement) && tableWrap instanceof HTMLElement) {
+    pager = document.createElement("div");
+    pager.id = "scheduleSupportHqReviewPager";
+    pager.className = "arls-upload-wizard__pager hidden";
+    pager.innerHTML = `
+      <div class="arls-upload-wizard__pager-summary">
+        <strong id="scheduleSupportHqReviewPagerSummary">1페이지</strong>
+        <span id="scheduleSupportHqReviewPagerRange">표시할 행이 없습니다.</span>
+      </div>
+      <div id="scheduleSupportHqReviewPageButtons" class="arls-upload-wizard__pager-actions" aria-label="HQ 미리보기 페이지 번호"></div>
+    `;
+    const table = tableWrap.querySelector("table");
+    if (table instanceof HTMLElement) tableWrap.insertBefore(pager, table);
+    else tableWrap.appendChild(pager);
+  }
   if (!visibleRows.length) {
     tableWrap.classList.add("hidden");
+    if (pager instanceof HTMLElement) pager.classList.add("hidden");
     placeholder.classList.remove("hidden");
     const strong = placeholder.querySelector("strong");
     const meta = placeholder.querySelector("p");
@@ -22779,7 +23773,28 @@ function renderScheduleSupportHqReviewTable() {
   }
   tableWrap.classList.remove("hidden");
   placeholder.classList.add("hidden");
-  visibleRows.forEach((row) => {
+  if (pager instanceof HTMLElement) {
+    const shouldPaginate = pagination.totalItems > pagination.pageSize;
+    pager.classList.toggle("hidden", !shouldPaginate);
+    pager.dataset.page = String(pagination.page);
+    pager.dataset.pageSize = String(pagination.pageSize);
+    pager.dataset.totalItems = String(pagination.totalItems);
+    pager.dataset.totalPages = String(pagination.totalPages);
+    const summary = $("#scheduleSupportHqReviewPagerSummary");
+    if (summary instanceof HTMLElement) {
+      summary.textContent = `${pagination.page} / ${pagination.totalPages}페이지`;
+    }
+    const range = $("#scheduleSupportHqReviewPagerRange");
+    if (range instanceof HTMLElement) {
+      range.textContent = `${pagination.startIndex + 1}-${pagination.endIndex} / ${pagination.totalItems}행`;
+    }
+    renderWizardNumericPagination(
+      $("#scheduleSupportHqReviewPageButtons"),
+      pagination,
+      "schedule-support-hq-preview-page",
+    );
+  }
+  pagination.visibleItems.forEach((row) => {
     const tr = document.createElement("tr");
     const sheetCell = document.createElement("td");
     sheetCell.textContent = String(row?.sheet_name || "-").trim() || "-";
@@ -24843,7 +25858,7 @@ async function onScheduleSupportHqDownload(progressController = null) {
     isAllSites || isMultiSelection
       ? `${state.activeApiBase}/schedules/support-roundtrip/hq-roster-workbook?${params.toString()}`
       : `${state.activeApiBase}/schedules/support-roundtrip/hq-workbook?${params.toString()}`;
-  await downloadAuthorizedFile({
+  const payload = await downloadAuthorizedFile({
     requestUrl: requestPath,
     fallbackName: `${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월 지원근무자용 스케쥴 제출_${isMultiSelection ? "MULTI" : selectedSiteCodes[0]}_${fallbackGeneratedOn}.xlsx`,
     successMessage:
@@ -24856,6 +25871,7 @@ async function onScheduleSupportHqDownload(progressController = null) {
   workspace.lastDownloadedRevision = String(
     workspace.contract?.template_version || "",
   ).trim();
+  return payload;
 }
 
 async function onScheduleSupportPreview() {
@@ -37873,6 +38889,8 @@ function renderHomeGeoStatus() {
   const pillEl = $("#homeGeoStatusPill");
   const metaEl = $("#homeGeoMeta");
   const permissionCard = $("#homeLocationPermissionCard");
+  const permissionTitleEl = $("#homeLocationPermissionTitle");
+  const permissionMessageEl = $("#homeLocationPermissionMessage");
 
   if (!card || !textEl || !pillEl || !metaEl || !permissionCard) return;
 
@@ -37883,6 +38901,11 @@ function renderHomeGeoStatus() {
 
   card.classList.remove("geo-loading", "geo-success", "geo-warn", "geo-error");
   permissionCard.classList.add("hidden");
+  if (permissionTitleEl) permissionTitleEl.textContent = "위치 권한 필요";
+  if (permissionMessageEl) {
+    permissionMessageEl.textContent =
+      "위치 접근을 허용한 뒤 다시 시도해 주세요.";
+  }
 
   let message = "현재 위치 확인 중...";
   let pillText = "확인 중";
@@ -37903,12 +38926,23 @@ function renderHomeGeoStatus() {
     metaText = "위치 접근 권한을 허용한 뒤 다시 시도해 주세요.";
     cardClass = "geo-error";
     permissionCard.classList.remove("hidden");
+    if (permissionTitleEl) permissionTitleEl.textContent = "위치 권한 필요";
+    if (permissionMessageEl) {
+      permissionMessageEl.textContent =
+        "PC 브라우저 설정에서 위치 접근을 허용한 뒤 다시 시도해 주세요.";
+    }
   } else if (state.home.geoStatus === "error") {
     message = "위치를 확인하지 못했습니다.";
     pillText = "오류";
     pillClass = "status-pill status-pill-error";
     metaText = "GPS 또는 네트워크 상태를 확인한 뒤 다시 시도해 주세요.";
     cardClass = "geo-error";
+    permissionCard.classList.remove("hidden");
+    if (permissionTitleEl) permissionTitleEl.textContent = "위치 확인 실패";
+    if (permissionMessageEl) {
+      permissionMessageEl.textContent =
+        "네트워크나 브라우저 위치 설정을 확인한 뒤 다시 시도해 주세요.";
+    }
   } else if (state.home.geoStatus === "within") {
     message = `${site?.site_name || site?.site_code || "선택 현장"} 반경 ${Number.isFinite(radius) ? Math.round(radius) : "-"}m 이내`;
     pillText = "반경 내";
@@ -37931,9 +38965,11 @@ function renderHomeGeoStatus() {
 
   card.classList.add(cardClass);
   textEl.textContent = message;
-  pillEl.className = pillClass;
-  pillEl.textContent = pillText;
-  metaEl.textContent = metaText;
+  pillEl.className = "home-geo-meta-inline";
+  pillEl.textContent = metaText || "";
+  pillEl.classList.toggle("hidden", !metaText);
+  metaEl.textContent = "";
+  metaEl.hidden = true;
   renderHomePolicySkeleton();
   renderHomeWorkStatusCard();
 }
@@ -37941,9 +38977,12 @@ function renderHomeGeoStatus() {
 function updateHomeCtaState() {
   const toggleBtn = $("#homeAttendanceToggleBtn");
   const requestBtn = $("#homeCheckInRequestBtn");
+  const refreshBtn = $("#homeRefreshLocationBtn");
+  const pendingBox = $("#homePendingRequestBox");
   const mapBtn = document.querySelector(".home-map-btn");
+  const ctaGrid = toggleBtn?.closest(".home-cta-grid");
 
-  if (!toggleBtn || !requestBtn) return;
+  if (!toggleBtn || !requestBtn || !refreshBtn) return;
   renderHomeWorkStatusCard();
 
   const site = getSelectedHomeSite();
@@ -37981,9 +39020,14 @@ function updateHomeCtaState() {
     isOutside &&
     !hasPendingRequest &&
     todayStatus === "NONE";
+  const showPendingRequest = hasPendingRequest && todayStatus === "NONE";
 
-  toggleBtn.classList.toggle("hidden", showRequest);
+  ctaGrid?.classList.toggle("has-request", showRequest);
+  ctaGrid?.classList.toggle("is-pending-request", showPendingRequest);
+  pendingBox?.classList.toggle("hidden", !showPendingRequest);
+  toggleBtn.classList.toggle("hidden", showPendingRequest);
   requestBtn.classList.toggle("hidden", !showRequest);
+  refreshBtn.classList.toggle("hidden", showPendingRequest);
   if (todayButtonMode === "check_out") {
     toggleBtn.textContent = "퇴근하기";
     toggleBtn.classList.remove("btn-secondary");
@@ -38004,6 +39048,10 @@ function updateHomeCtaState() {
     toggleBtn.setAttribute("aria-label", "출근 기록 등록");
   }
   requestBtn.disabled = !showRequest;
+  if (showPendingRequest) {
+    setHomeActionHint("", "info");
+    return;
+  }
 
   if (mapBtn) {
     mapBtn.disabled = !site;
@@ -38041,13 +39089,9 @@ function updateHomeCtaState() {
   }
   if (showRequest) {
     setHomeActionHint(
-      "범위 밖 상태입니다. 상세 출근요청으로 진행하세요.",
+      "범위 밖 상태입니다. 위치를 다시 확인하거나 요청하기를 사용하세요.",
       "error",
     );
-    return;
-  }
-  if (hasPendingRequest) {
-    setHomeActionHint("이미 승인 대기중인 출근 요청이 있습니다.", "info");
     return;
   }
   if (todayStatus === "DONE") {
@@ -38066,16 +39110,16 @@ function updateHomeCtaState() {
 
 function isHomeCriticalUiReady() {
   if (resolveHomeAudience() === "hq") {
-    const heroTitle = document.querySelector(
-      "#homeAudienceSurface .home-analytics-hero-title",
+    const statValue = document.querySelector(
+      "#homeAudienceSurface .home-dashboard-metric strong",
     );
-    const ringValue = document.querySelector(
-      "#homeAudienceSurface .home-ring-center strong",
+    const cardTitle = document.querySelector(
+      "#homeAudienceSurface .home-dashboard-card h3",
     );
     return (
-      heroTitle instanceof HTMLElement &&
-      ringValue instanceof HTMLElement &&
-      Boolean(String(ringValue.textContent || "").trim())
+      statValue instanceof HTMLElement &&
+      cardTitle instanceof HTMLElement &&
+      Boolean(String(statValue.textContent || "").trim())
     );
   }
   const toggleBtn = $("#homeAttendanceToggleBtn");
@@ -38813,13 +39857,46 @@ function renderHomeWeekStrip() {
   }
 
   const todayKey = toLocalDateKey(new Date());
+  const formatHomeWeekDateLabel = (dateObj = new Date()) => {
+    const date = dateObj instanceof Date ? dateObj : new Date(dateObj);
+    if (Number.isNaN(date.getTime())) return "";
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const weekday =
+      ["일", "월", "화", "수", "목", "금", "토"][date.getDay()] || "";
+    return `${month}월${day}일 (${weekday})`;
+  };
+  const getCheckInMarker = (entry) => {
+    const status = String(entry?.checkInStatus || "").trim();
+    if (status === "missing_check_in") return { label: "미출근", tone: "danger" };
+    if (status === "late_check_in") return { label: "지각", tone: "danger" };
+    if (status === "normal_check_in" || Number(entry?.checkInCount || 0) > 0) {
+      return { label: "출근", tone: "success" };
+    }
+    return { label: "출근", tone: "neutral" };
+  };
+  const getCheckOutMarker = (entry) => {
+    const status = String(entry?.checkOutStatus || "").trim();
+    if (status === "missing_checkout") return { label: "미퇴근", tone: "warn" };
+    if (status === "delayed_checkout")
+      return { label: "퇴근지연", tone: "warn" };
+    if (status === "normal_checkout" || Number(entry?.checkOutCount || 0) > 0) {
+      return { label: "퇴근", tone: "success" };
+    }
+    return { label: "퇴근", tone: "neutral" };
+  };
   entries.forEach((entry, idx) => {
+    const shiftMeta = HOME_SHIFT_META[entry.shiftType] || HOME_SHIFT_META.off;
+    const isWorkday = !["off", "holiday"].includes(
+      String(entry.shiftType || "").trim(),
+    );
     const dayCard = document.createElement("button");
     dayCard.type = "button";
-    dayCard.className = "home-week-day home-week-day-btn";
+    dayCard.className = `home-week-day home-week-day-btn home-week-day-${shiftMeta.pill || "off"}`;
     dayCard.classList.add("content-fade-in");
     dayCard.dataset.action = "home-week-open-date";
     dayCard.dataset.date = entry.dateKey;
+    dayCard.dataset.shiftType = entry.shiftType || "off";
     if (entry.dateKey === todayKey) {
       dayCard.classList.add("today");
     }
@@ -38828,48 +39905,44 @@ function renderHomeWeekStrip() {
     head.className = "home-week-date";
 
     const dateStrong = document.createElement("strong");
-    dateStrong.textContent = `${HOME_WEEKDAY_LABELS[idx]} ${entry.dateObj.getDate()}`;
+    dateStrong.textContent =
+      formatHomeWeekDateLabel(entry.dateObj) ||
+      `${HOME_WEEKDAY_LABELS[idx]} ${entry.dateObj.getDate()}`;
     head.appendChild(dateStrong);
 
-    const statusPill = document.createElement("span");
-    const shiftMeta = HOME_SHIFT_META[entry.shiftType] || {
-      label: "미정",
-      time: "-",
-      pill: "pending",
-    };
-    statusPill.className = statusPillClassFromText(shiftMeta.pill);
-    statusPill.textContent = shiftMeta.label;
-    head.appendChild(statusPill);
     dayCard.appendChild(head);
 
-    const status = document.createElement("div");
-    status.className = "home-week-status";
-    status.textContent = entry.shiftType
-      ? `예정: ${shiftMeta.label}`
-      : "예정: 미정";
-    dayCard.appendChild(status);
+    const body = document.createElement("div");
+    body.className = "home-week-day-body";
 
-    const time = document.createElement("div");
-    time.className = "home-week-time";
-    time.textContent = `시간: ${shiftMeta.time}`;
-    dayCard.appendChild(time);
+    const shiftTimeText = String(shiftMeta.time || "")
+      .replace(/\s+/g, "")
+      .trim();
+    if (isWorkday && /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(shiftTimeText)) {
+      const time = document.createElement("div");
+      time.className = "home-week-time";
+      time.textContent = shiftTimeText;
+      body.appendChild(time);
+    } else {
+      const noWork = document.createElement("div");
+      noWork.className = "home-week-no-work";
+      noWork.textContent = "근무없음";
+      body.appendChild(noWork);
+    }
+    dayCard.appendChild(body);
 
-    const dots = document.createElement("div");
-    dots.className = "home-week-dots";
-
-    const inDot = document.createElement("span");
-    inDot.className =
-      `home-week-dot ${entry.checkInCount > 0 ? "done" : ""}`.trim();
-    inDot.title = `출근 ${entry.checkInCount}건`;
-
-    const outDot = document.createElement("span");
-    outDot.className =
-      `home-week-dot ${entry.checkOutCount > 0 ? "done" : ""}`.trim();
-    outDot.title = `퇴근 ${entry.checkOutCount}건`;
-
-    dots.appendChild(inDot);
-    dots.appendChild(outDot);
-    dayCard.appendChild(dots);
+    if (isWorkday) {
+      const attendance = document.createElement("div");
+      attendance.className = "home-week-attendance";
+      [getCheckInMarker(entry), getCheckOutMarker(entry)].forEach((item) => {
+        const marker = document.createElement("span");
+        marker.className = `home-week-attendance-marker is-${item.tone}`;
+        marker.textContent = item.label;
+        marker.title = item.label;
+        attendance.appendChild(marker);
+      });
+      dayCard.appendChild(attendance);
+    }
     dayCard.setAttribute(
       "aria-label",
       `${HOME_WEEKDAY_LABELS[idx]} ${entry.dateObj.getDate()}일 스케줄 상세 열기`,
@@ -39474,7 +40547,7 @@ async function loadHomeWeekEntries({ force = false } = {}) {
     ? schedules.filter((row) => row?.employee_code === employeeCode)
     : [];
   state.home.weekScheduleMonth = monthKeys[0] || toMonthKey(new Date());
-  state.home.weekScheduleEmpty = mySchedules.length === 0;
+  state.home.weekScheduleEmpty = false;
   const scheduleMap = new Map();
   mySchedules.forEach((row) => {
     if (row?.schedule_date) {
@@ -39490,13 +40563,20 @@ async function loadHomeWeekEntries({ force = false } = {}) {
       force,
     });
     summaryRows.forEach((row) => {
-      const dateKey = String(row?.date || "").trim();
+      const dateKey = String(row?.business_date || row?.date || "").trim();
       if (!dateKey) return;
       attendanceSummaryByDate.set(dateKey, {
         checkInCount:
           Number(row?.check_in_count ?? row?.checkInCount ?? 0) || 0,
         checkOutCount:
           Number(row?.check_out_count ?? row?.checkOutCount ?? 0) || 0,
+        sessionStatus: String(row?.session_status || row?.sessionStatus || ""),
+        checkInStatus: String(row?.check_in_status || row?.checkInStatus || ""),
+        checkOutStatus: String(row?.check_out_status || row?.checkOutStatus || ""),
+        workedMinutes: Number(row?.worked_minutes ?? row?.workedMinutes ?? 0) || 0,
+        shiftType: normalizeShiftType(row?.shift_type || row?.shiftType || ""),
+        shiftStartAt: String(row?.shift_start_at || row?.shiftStartAt || ""),
+        shiftEndAt: String(row?.shift_end_at || row?.shiftEndAt || ""),
       });
     });
   }
@@ -39511,9 +40591,16 @@ async function loadHomeWeekEntries({ force = false } = {}) {
     return {
       dateKey,
       dateObj: date,
-      shiftType: normalizeShiftType(scheduleRow?.shift_type || ""),
+      shiftType:
+        summary.shiftType || normalizeShiftType(scheduleRow?.shift_type || "") || "off",
       checkInCount: Number(summary.checkInCount || 0),
       checkOutCount: Number(summary.checkOutCount || 0),
+      sessionStatus: summary.sessionStatus || "",
+      checkInStatus: summary.checkInStatus || "",
+      checkOutStatus: summary.checkOutStatus || "",
+      workedMinutes: Number(summary.workedMinutes || 0),
+      shiftStartAt: summary.shiftStartAt || "",
+      shiftEndAt: summary.shiftEndAt || "",
     };
   });
   state.home.weekLoading = false;
@@ -55843,8 +56930,9 @@ function showView(
         resolveScheduleTabFromRoutePath(state.currentRoute || ""),
     );
     if (!isScheduleUploadOwnerTab(currentScheduleTab)) {
-      state.schedule.viewMode = SCHEDULE_VIEW_MODE_LIST;
-      state.schedule.hqTab = SCHEDULE_TAB_LIST;
+      state.schedule.viewMode = SCHEDULE_VIEW_MODE_CALENDAR;
+      state.schedule.hqTab = SCHEDULE_TAB_CALENDAR;
+      state.schedule.boardViewMode = SCHEDULE_BOARD_VIEW_MONTH;
     }
     state.schedule.mobileListInitialized = true;
   }
@@ -60653,6 +61741,9 @@ function renderHrScopeAndPanels() {
   );
   const scopeHint = $("#hrScopeHint");
   const workspaceTitle = $("#hrWorkspaceTitle");
+  const workspaceRefreshButton = document.querySelector(
+    '#view-hr > .workspace-head [data-action="hr-refresh"], #view-hr > .workspace-head [data-action="hr-employment-my-refresh"]',
+  );
   const employeeCard = $("#hrEmploymentEmployeeCard");
   const myRowsCard = $("#hrEmploymentMyRequestsCard");
   const templateCard = $("#hrTemplateAdminCard");
@@ -60669,6 +61760,12 @@ function renderHrScopeAndPanels() {
 
   if (workspaceTitle instanceof HTMLElement) {
     workspaceTitle.textContent = titleBySegment[segment] || "문서 센터";
+  }
+  if (workspaceRefreshButton instanceof HTMLButtonElement) {
+    workspaceRefreshButton.dataset.action = showMyDocs
+      ? "hr-employment-my-refresh"
+      : "hr-refresh";
+    workspaceRefreshButton.textContent = "새로고침";
   }
   if (scopeHint) {
     scopeHint.textContent = "";
@@ -66017,6 +67114,12 @@ function serializeHomeWeekEntries(entries = []) {
         shiftType: normalizeShiftType(entry?.shiftType || ""),
         checkInCount: Math.max(0, Number(entry?.checkInCount || 0) || 0),
         checkOutCount: Math.max(0, Number(entry?.checkOutCount || 0) || 0),
+        sessionStatus: String(entry?.sessionStatus || ""),
+        checkInStatus: String(entry?.checkInStatus || ""),
+        checkOutStatus: String(entry?.checkOutStatus || ""),
+        workedMinutes: Math.max(0, Number(entry?.workedMinutes || 0) || 0),
+        shiftStartAt: String(entry?.shiftStartAt || ""),
+        shiftEndAt: String(entry?.shiftEndAt || ""),
       };
     })
     .filter(Boolean);
@@ -66033,6 +67136,12 @@ function restoreHomeWeekEntries(entries = []) {
         shiftType: normalizeShiftType(entry?.shiftType || ""),
         checkInCount: Math.max(0, Number(entry?.checkInCount || 0) || 0),
         checkOutCount: Math.max(0, Number(entry?.checkOutCount || 0) || 0),
+        sessionStatus: String(entry?.sessionStatus || ""),
+        checkInStatus: String(entry?.checkInStatus || ""),
+        checkOutStatus: String(entry?.checkOutStatus || ""),
+        workedMinutes: Math.max(0, Number(entry?.workedMinutes || 0) || 0),
+        shiftStartAt: String(entry?.shiftStartAt || ""),
+        shiftEndAt: String(entry?.shiftEndAt || ""),
       };
     })
     .filter(Boolean);
@@ -86107,6 +87216,10 @@ function renderScheduleHqTabs() {
       "schedule-reportlike-shell",
       uploadReportLikeVisible,
     );
+    scheduleView.classList.toggle(
+      "schedule-upload-route-active",
+      uploadReportLikeVisible,
+    );
   }
   if (activeTab === SCHEDULE_TAB_LIST) {
     state.schedule.viewMode = SCHEDULE_VIEW_MODE_LIST;
@@ -90215,6 +91328,26 @@ function normalizeScheduleViewMode(value = "") {
   return SCHEDULE_VIEW_MODE_CALENDAR;
 }
 
+function normalizeScheduleBoardViewMode(value = "") {
+  const mode = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (mode === SCHEDULE_BOARD_VIEW_DAY || mode === "daily")
+    return SCHEDULE_BOARD_VIEW_DAY;
+  if (mode === SCHEDULE_BOARD_VIEW_WEEK || mode === "weekly")
+    return SCHEDULE_BOARD_VIEW_WEEK;
+  return SCHEDULE_BOARD_VIEW_MONTH;
+}
+
+function normalizeScheduleDisplayMode(value = "") {
+  const mode = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (mode === SCHEDULE_DISPLAY_MODE_SIMPLE || mode === "compact")
+    return SCHEDULE_DISPLAY_MODE_SIMPLE;
+  return SCHEDULE_DISPLAY_MODE_DETAILED;
+}
+
 function getScheduleMonthValue({ preferState = false } = {}) {
   const inputMonth = normalizeMonthKey($("#scheduleMonth")?.value || "");
   const stateMonth = normalizeMonthKey(state.schedule?.month || "");
@@ -90225,6 +91358,18 @@ function getScheduleMonthValue({ preferState = false } = {}) {
 function getScheduleViewModeValue() {
   return normalizeScheduleViewMode(
     state.schedule?.viewMode || SCHEDULE_VIEW_MODE_CALENDAR,
+  );
+}
+
+function getScheduleBoardViewModeValue() {
+  return normalizeScheduleBoardViewMode(
+    state.schedule?.boardViewMode || SCHEDULE_BOARD_VIEW_MONTH,
+  );
+}
+
+function getScheduleDisplayModeValue() {
+  return normalizeScheduleDisplayMode(
+    state.schedule?.displayMode || SCHEDULE_DISPLAY_MODE_DETAILED,
   );
 }
 
@@ -90294,6 +91439,16 @@ function setScheduleMonthValue(monthValue, { syncInput = true } = {}) {
   return normalized;
 }
 
+function shiftDateKeyByDays(dateKey = "", deltaDays = 0) {
+  const key = String(dateKey || "").trim();
+  const step = Number(deltaDays);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || !Number.isFinite(step)) return "";
+  const date = new Date(`${key}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setDate(date.getDate() + step);
+  return toLocalDateKey(date);
+}
+
 function isCurrentScheduleLoad(loadGeneration, month, tenantCode) {
   return (
     Number(state.schedule?.loadGeneration || 0) === Number(loadGeneration) &&
@@ -90310,7 +91465,24 @@ function renderScheduleMonthToolbar() {
 
   const monthTitle = $("#scheduleMonthTitle");
   if (monthTitle) {
-    monthTitle.textContent = state.schedule.monthTitle;
+    const boardMode = getScheduleBoardViewModeValue();
+    const selectedDate = getScheduleBoardActiveDateKey(month);
+    if (boardMode === SCHEDULE_BOARD_VIEW_DAY) {
+      monthTitle.textContent = toDateLabel(selectedDate);
+    } else if (boardMode === SCHEDULE_BOARD_VIEW_WEEK) {
+      const weekKeys = getScheduleBoardWeekDateKeys(month);
+      const startLabel = toDateLabel(weekKeys[0] || selectedDate).replace(
+        /^\d{4}\.\s*/,
+        "",
+      );
+      const endLabel = toDateLabel(weekKeys[6] || selectedDate).replace(
+        /^\d{4}\.\s*/,
+        "",
+      );
+      monthTitle.textContent = `${startLabel} - ${endLabel}`;
+    } else {
+      monthTitle.textContent = state.schedule.monthTitle;
+    }
   }
 
   const monthNavStatus = $("#scheduleMonthNavStatus");
@@ -90346,6 +91518,46 @@ function renderScheduleMonthToolbar() {
       );
     });
 
+  const boardMode = getScheduleBoardViewModeValue();
+  state.schedule.boardViewMode = boardMode;
+  document
+    .querySelectorAll('[data-action="schedule-set-board-view"]')
+    .forEach((button) => {
+      const targetMode = normalizeScheduleBoardViewMode(
+        button?.getAttribute("data-board-view") ||
+          button?.dataset?.boardView ||
+          "",
+      );
+      button.classList.toggle("active", targetMode === boardMode);
+      button.setAttribute(
+        "aria-pressed",
+        targetMode === boardMode ? "true" : "false",
+      );
+    });
+
+  const displayMode = getScheduleDisplayModeValue();
+  state.schedule.displayMode = displayMode;
+  document
+    .querySelectorAll('[data-action="schedule-set-display-mode"]')
+    .forEach((button) => {
+      const targetMode = normalizeScheduleDisplayMode(
+        button?.getAttribute("data-display-mode") ||
+          button?.dataset?.displayMode ||
+          "",
+      );
+      button.classList.toggle("active", targetMode === displayMode);
+      button.setAttribute(
+        "aria-pressed",
+        targetMode === displayMode ? "true" : "false",
+      );
+    });
+  const simpleModeToggle = $("#scheduleSimpleModeToggle");
+  if (simpleModeToggle instanceof HTMLElement) {
+    const isSimple = displayMode === SCHEDULE_DISPLAY_MODE_SIMPLE;
+    simpleModeToggle.classList.toggle("active", isSimple);
+    simpleModeToggle.setAttribute("aria-pressed", isSimple ? "true" : "false");
+  }
+
   const siteFilterInput = $("#scheduleSiteFilter");
   if (siteFilterInput instanceof HTMLSelectElement) {
     siteFilterInput.value =
@@ -90364,6 +91576,17 @@ function renderScheduleMonthToolbar() {
   const leaveManageToggle = $("#scheduleLeaveManageToggle");
   if (leaveManageToggle instanceof HTMLInputElement) {
     leaveManageToggle.checked = state.schedule.showLeaveRows !== false;
+  }
+  const employeeFilterInput = $("#scheduleEmployeeFilter");
+  if (employeeFilterInput instanceof HTMLInputElement) {
+    const isManager = isScheduleManagerMode();
+    employeeFilterInput.disabled = !isManager;
+    employeeFilterInput.placeholder = isManager
+      ? "직원명/사번 검색"
+      : "내 근무만";
+    if (!isManager) {
+      employeeFilterInput.value = "";
+    }
   }
   renderScheduleHqTabs();
 }
@@ -90439,6 +91662,7 @@ function renderScheduleOpsToolbar() {
   const activeTab = getScheduleActiveTopTab();
   const isBoardTab = isScheduleBoardTab(activeTab);
   toggleVisibility("#scheduleOpsToolbar", isBoardTab);
+  toggleVisibility("#scheduleActionMenuRow", isBoardTab);
 
   const metaEl = $("#scheduleToolbarMeta");
   if (metaEl instanceof HTMLElement) {
@@ -91345,6 +92569,41 @@ function createScheduleListSheetRow(row, { interactive = false } = {}) {
     deleteBtn.dataset.employeeCode = String(row.employee_code || "");
     deleteBtn.dataset.siteCode = String(row.site_code || "");
     right.appendChild(deleteBtn);
+  } else if (row?.id || row?.schedule_id) {
+    wrapper.dataset.action = "schedule-open-assignment";
+    wrapper.dataset.date = String(row.schedule_date || "");
+    wrapper.dataset.scheduleId = String(row.id || row.schedule_id || "");
+    wrapper.dataset.employeeCode = String(row.employee_code || "");
+    wrapper.dataset.employeeId = String(row.employee_id || "");
+    wrapper.dataset.employeeName = String(
+      row.employee_name || row.full_name || "",
+    );
+    wrapper.dataset.siteCode = String(row.site_code || "");
+    wrapper.dataset.shiftType = String(row.shift_type || "");
+    wrapper.dataset.startTime = String(
+      row.shift_start_time || row.start_time || "",
+    );
+    wrapper.dataset.endTime = String(row.shift_end_time || row.end_time || "");
+    wrapper.classList.add("is-clickable");
+    const detailBtn = document.createElement("button");
+    detailBtn.type = "button";
+    detailBtn.className = "btn btn-secondary";
+    detailBtn.textContent = "상세";
+    detailBtn.dataset.action = "schedule-open-assignment";
+    detailBtn.dataset.date = String(row.schedule_date || "");
+    detailBtn.dataset.scheduleId = String(row.id || row.schedule_id || "");
+    detailBtn.dataset.employeeCode = String(row.employee_code || "");
+    detailBtn.dataset.employeeId = String(row.employee_id || "");
+    detailBtn.dataset.employeeName = String(
+      row.employee_name || row.full_name || "",
+    );
+    detailBtn.dataset.siteCode = String(row.site_code || "");
+    detailBtn.dataset.shiftType = String(row.shift_type || "");
+    detailBtn.dataset.startTime = String(
+      row.shift_start_time || row.start_time || "",
+    );
+    detailBtn.dataset.endTime = String(row.shift_end_time || row.end_time || "");
+    right.appendChild(detailBtn);
   }
 
   wrapper.appendChild(right);
@@ -91719,38 +92978,7 @@ function renderScheduleDetailActions(rows = [], dateKey = "") {
   const actionsEl = $("#scheduleDetailActions");
   if (!(actionsEl instanceof HTMLElement)) return;
   actionsEl.innerHTML = "";
-  const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || "").trim());
-  if (!hasDate) {
-    actionsEl.classList.add("hidden");
-    return;
-  }
-
-  const openSheetBtn = document.createElement("button");
-  openSheetBtn.type = "button";
-  openSheetBtn.className = "btn btn-secondary";
-  openSheetBtn.textContent = "상세 시트";
-  openSheetBtn.dataset.action = "schedule-open-date-sheet";
-  openSheetBtn.dataset.date = dateKey;
-  actionsEl.appendChild(openSheetBtn);
-
-  if (canMutateScheduleData()) {
-    const singleBtn = document.createElement("button");
-    singleBtn.type = "button";
-    singleBtn.className = "btn btn-primary";
-    singleBtn.textContent = "단일 생성";
-    singleBtn.dataset.action = "schedule-create-single-open";
-    singleBtn.dataset.date = dateKey;
-    actionsEl.appendChild(singleBtn);
-
-    const bulkBtn = document.createElement("button");
-    bulkBtn.type = "button";
-    bulkBtn.className = "btn btn-secondary";
-    bulkBtn.textContent = "일괄 생성";
-    bulkBtn.dataset.action = "schedule-create-bulk-open";
-    actionsEl.appendChild(bulkBtn);
-  }
-
-  actionsEl.classList.remove("hidden");
+  actionsEl.classList.add("hidden");
 }
 
 function renderScheduleDesktopDrawer() {
@@ -91866,6 +93094,84 @@ function getScheduleBoardDayMap(month) {
   );
 }
 
+function getScheduleBoardShiftKindLabel(item = {}) {
+  const displayType = resolveScheduleDisplayType(item);
+  if (displayType === "holiday") return "휴무";
+  if (["off", "annual_leave", "half_leave"].includes(displayType)) return "휴무";
+  const variants = getScheduleBoardDisplayShiftTypes(item);
+  const hasNight = variants.includes("night");
+  const hasDay = variants.includes("day") || variants.includes("overtime");
+  if (hasDay && hasNight) return "주야";
+  if (hasNight) return "야간";
+  if (hasDay) return "주간";
+  return getScheduleRowDisplayMeta(item).label || "근무";
+}
+
+function getScheduleBoardTotalHours(item = {}) {
+  const paidHours = Number(item?.paid_hours ?? item?.template_paid_hours);
+  if (Number.isFinite(paidHours) && paidHours >= 0) return paidHours;
+  const range = buildScheduleTimeRangeForOverlap(
+    item?.start_time || item?.shift_start_time || "",
+    item?.end_time || item?.shift_end_time || "",
+  );
+  if (!range) return 0;
+  const minutes = Math.max(0, Number(range.endMinutes) - Number(range.startMinutes));
+  return minutes / 60;
+}
+
+function formatScheduleBoardHoursLabel(item = {}) {
+  const hours = getScheduleBoardTotalHours(item);
+  if (!Number.isFinite(hours) || hours <= 0) return "0시간";
+  const fixed = Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+  return `${fixed.replace(/\.0$/, "")}시간`;
+}
+
+function getScheduleBoardItemSiteLabel(item = {}) {
+  return String(item?.site_name || item?.site_code || "-").trim() || "-";
+}
+
+function getScheduleBoardItemNameLabel(item = {}) {
+  return (
+    String(item?.employee_name || item?.full_name || item?.employee_code || "-").trim() ||
+    "-"
+  );
+}
+
+function getScheduleBoardItemDetailedSubLabel(item = {}) {
+  return `${formatScheduleBoardItemTimeLabel(item)} · ${getScheduleBoardItemSiteLabel(item)}`;
+}
+
+function getScheduleBoardItemSimpleSubLabel(item = {}) {
+  return `${getScheduleBoardShiftKindLabel(item)} · ${formatScheduleBoardHoursLabel(item)}`;
+}
+
+function applyScheduleBoardItemDataset(button, item = {}, dateKey = "") {
+  button.dataset.date = dateKey;
+  button.dataset.scheduleId = String(item?.schedule_id || item?.id || "").trim();
+  button.dataset.employeeCode = String(item?.employee_code || "").trim();
+  button.dataset.employeeId = String(item?.employee_id || "").trim();
+  button.dataset.employeeName = String(
+    item?.employee_name || item?.full_name || "",
+  ).trim();
+  button.dataset.siteCode = String(item?.site_code || "")
+    .trim()
+    .toUpperCase();
+  button.dataset.shiftType = String(item?.shift_type || "").trim();
+  button.dataset.startTime = String(
+    item?.start_time || item?.shift_start_time || "",
+  ).trim();
+  button.dataset.endTime = String(item?.end_time || item?.shift_end_time || "").trim();
+  if (
+    Array.isArray(item?.combined_schedule_ids) &&
+    item.combined_schedule_ids.length
+  ) {
+    button.dataset.combinedScheduleIds = item.combined_schedule_ids
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .join(",");
+  }
+}
+
 function getScheduleCardVariant(item = {}) {
   if (
     String(item?.display_variant || "")
@@ -91928,54 +93234,37 @@ function resetScheduleExpandedDays() {
 }
 
 function ScheduleShiftCard({ item = {}, dateKey = "" } = {}) {
+  const displayMode = getScheduleDisplayModeValue();
   const button = document.createElement("button");
   button.type = "button";
   button.className = `schedule-shift-card schedule-shift-card-${getScheduleCardVariant(item)}`;
-  button.dataset.date = dateKey;
-  button.dataset.scheduleId = String(item?.schedule_id || "").trim();
-  button.dataset.employeeCode = String(item?.employee_code || "").trim();
-  button.dataset.employeeId = String(item?.employee_id || "").trim();
-  button.dataset.employeeName = String(
-    item?.employee_name || item?.full_name || "",
-  ).trim();
-  button.dataset.siteCode = String(item?.site_code || "")
-    .trim()
-    .toUpperCase();
-  button.dataset.shiftType = String(item?.shift_type || "").trim();
-  button.dataset.startTime = String(
-    item?.start_time || item?.shift_start_time || "",
-  ).trim();
-  button.dataset.endTime = String(
-    item?.end_time || item?.shift_end_time || "",
-  ).trim();
+  button.classList.toggle(
+    "is-simple",
+    displayMode === SCHEDULE_DISPLAY_MODE_SIMPLE,
+  );
+  applyScheduleBoardItemDataset(button, item, dateKey);
   button._scheduleBoardItem =
     item && typeof item === "object" ? { ...item } : null;
-  if (
-    Array.isArray(item?.combined_schedule_ids) &&
-    item.combined_schedule_ids.length
-  ) {
-    button.dataset.combinedScheduleIds = item.combined_schedule_ids
-      .map((value) => String(value || "").trim())
-      .filter(Boolean)
-      .join(",");
-  }
 
   const employeeEl = document.createElement("strong");
   employeeEl.className = "schedule-shift-card-employee";
-  employeeEl.textContent =
-    String(item?.employee_name || item?.employee_code || "-").trim() || "-";
+  employeeEl.textContent = getScheduleBoardItemNameLabel(item);
   button.appendChild(employeeEl);
 
   const siteEl = document.createElement("span");
   siteEl.className = "schedule-shift-card-site";
-  const siteText =
-    String(item?.site_name || item?.site_code || "-").trim() || "-";
-  siteEl.textContent = siteText;
+  siteEl.textContent =
+    displayMode === SCHEDULE_DISPLAY_MODE_SIMPLE
+      ? getScheduleBoardItemSimpleSubLabel(item)
+      : getScheduleBoardItemSiteLabel(item);
   button.appendChild(siteEl);
 
   const timeEl = document.createElement("span");
   timeEl.className = "schedule-shift-card-time";
-  timeEl.textContent = formatScheduleBoardItemTimeLabel(item);
+  timeEl.textContent =
+    displayMode === SCHEDULE_DISPLAY_MODE_SIMPLE
+      ? getScheduleBoardShiftKindLabel(item)
+      : formatScheduleBoardItemTimeLabel(item);
   button.appendChild(timeEl);
 
   button.addEventListener("click", (event) => {
@@ -92058,24 +93347,6 @@ function ScheduleDayCell({
   dayLabel.textContent = String(Number.isFinite(dayNumber) ? dayNumber : "");
   headBtn.appendChild(dayLabel);
 
-  if (inMonth && allItems.length > 0) {
-    const leaveCount = allItems.filter(
-      (item) => getScheduleCardVariant(item) === "leave",
-    ).length;
-    const assignedCount = Math.max(allItems.length - leaveCount, 0);
-    const signal = document.createElement("span");
-    signal.className = leaveCount
-      ? "schedule-day-signal has-leave"
-      : "schedule-day-signal";
-    if (allItems.length >= SCHEDULE_DAY_CARD_MAX) {
-      signal.classList.add("is-busy");
-    }
-    signal.textContent = leaveCount
-      ? `근무 ${assignedCount} · 휴가 ${leaveCount}`
-      : `${assignedCount}명`;
-    headBtn.appendChild(signal);
-  }
-
   if (holidayName) {
     const holidayEl = document.createElement("span");
     holidayEl.className = "schedule-day-holiday";
@@ -92118,6 +93389,20 @@ function ScheduleDayCell({
     moreBtn.dataset.date = dateKey;
     moreBtn.textContent = isExpanded ? "접기" : `+${hiddenCount}명`;
     cell.appendChild(moreBtn);
+  }
+
+  if (inMonth) {
+    cell.addEventListener("click", (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        target?.closest(
+          ".schedule-shift-card, .schedule-day-more, .schedule-day-header",
+        )
+      ) {
+        return;
+      }
+      onScheduleSelectDate(dateKey, { openSheetOnSelect: true });
+    });
   }
 
   return cell;
@@ -92255,10 +93540,422 @@ function renderScheduleListView(target, month) {
   target.appendChild(wrapper);
 }
 
+function getScheduleBoardActiveDateKey(month = "") {
+  const current = String(state.schedule.selectedDateKey || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(current)) return current;
+  const today = toLocalDateKey(new Date());
+  if (!month || getMonthFromDateKey(today) === normalizeMonthKey(month))
+    return today;
+  return `${normalizeMonthKey(month)}-01`;
+}
+
+function getScheduleBoardWeekDateKeys(month = "") {
+  const activeKey = getScheduleBoardActiveDateKey(month);
+  const baseDate = /^\d{4}-\d{2}-\d{2}$/.test(activeKey)
+    ? new Date(`${activeKey}T00:00:00`)
+    : new Date();
+  return getCurrentWeekDates(baseDate).map((date) => toLocalDateKey(date));
+}
+
+function buildScheduleEmployeeBuckets(rows = []) {
+  const map = new Map();
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const employeeCode = String(row?.employee_code || "").trim();
+    const employeeName = String(row?.employee_name || row?.full_name || "").trim();
+    const key =
+      String(row?.employee_id || "").trim() ||
+      employeeCode ||
+      employeeName ||
+      "unknown";
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        siteCode: String(row?.site_code || "").trim().toUpperCase(),
+        employeeCode,
+        employeeName,
+        rows: [],
+      });
+    }
+    map.get(key).rows.push(row);
+  });
+  const collator = new Intl.Collator("ko-KR", {
+    numeric: true,
+    sensitivity: "base",
+  });
+  const employeeNumberKey = (value = "") =>
+    String(value || "")
+      .trim()
+      .replace(/^[A-Za-z]+[-_\s]*/g, "");
+  return Array.from(map.values()).sort((left, right) => {
+    const siteCompare = collator.compare(left.siteCode || "", right.siteCode || "");
+    if (siteCompare !== 0) return siteCompare;
+    const numberCompare = collator.compare(
+      employeeNumberKey(left.employeeCode),
+      employeeNumberKey(right.employeeCode),
+    );
+    if (numberCompare !== 0) return numberCompare;
+    return collator.compare(left.employeeCode || "", right.employeeCode || "");
+  });
+}
+
+function createScheduleBoardAssignmentButton(
+  row = {},
+  dateKey = "",
+  { className = "schedule-board-assignment", compact = false } = {},
+) {
+  const item = normalizeScheduleBoardItem(row);
+  const displayMode = getScheduleDisplayModeValue();
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `${className} schedule-shift-card-${getScheduleCardVariant(item)}`;
+  button.dataset.action = "schedule-open-assignment";
+  applyScheduleBoardItemDataset(button, item, dateKey);
+  const title = document.createElement("strong");
+  title.textContent =
+    displayMode === SCHEDULE_DISPLAY_MODE_SIMPLE
+      ? getScheduleBoardShiftKindLabel(item)
+      : formatScheduleBoardItemTimeLabel(item);
+  const sub = document.createElement("span");
+  sub.textContent =
+    displayMode === SCHEDULE_DISPLAY_MODE_SIMPLE
+      ? formatScheduleBoardHoursLabel(item)
+      : getScheduleBoardItemSiteLabel(item);
+  button.appendChild(title);
+  if (!compact) button.appendChild(sub);
+  return button;
+}
+
+function renderScheduleWeekBoard(target, month) {
+  target.classList.remove("schedule-list-view");
+  target.innerHTML = "";
+  const rows = Array.isArray(state.schedule.filteredRows)
+    ? state.schedule.filteredRows
+    : [];
+  const weekDateKeys = getScheduleBoardWeekDateKeys(month);
+  const buckets = buildScheduleEmployeeBuckets(
+    rows.filter((row) => weekDateKeys.includes(String(row?.schedule_date || ""))),
+  );
+  if (!buckets.length) {
+    renderScheduleCalendarMessage("이번 주에 표시할 일정이 없습니다.");
+    return;
+  }
+
+  const table = document.createElement("div");
+  table.className = "schedule-week-board schedule-axis-board";
+  table.style.setProperty("--schedule-day-count", String(weekDateKeys.length));
+
+  const corner = document.createElement("div");
+  corner.className = "schedule-axis-head schedule-axis-employee-head";
+  corner.textContent = "직원";
+  table.appendChild(corner);
+  weekDateKeys.forEach((dateKey) => {
+    const head = document.createElement("div");
+    head.className = "schedule-axis-head";
+    head.textContent = toDateLabel(dateKey).replace(/^\d{4}\.\s*/, "");
+    table.appendChild(head);
+  });
+
+  buckets.forEach((bucket) => {
+    const employee = document.createElement("div");
+    employee.className = "schedule-axis-employee";
+    const name = bucket.employeeName || bucket.employeeCode || "-";
+    employee.innerHTML = `<strong>${escapeHtml(name)}</strong><span>${escapeHtml(bucket.employeeCode || "")}</span>`;
+    table.appendChild(employee);
+    weekDateKeys.forEach((dateKey) => {
+      const cell = document.createElement("div");
+      cell.className = "schedule-axis-cell";
+      const dayRows = bucket.rows.filter(
+        (row) => String(row?.schedule_date || "").trim() === dateKey,
+      );
+      if (!dayRows.length) {
+        cell.classList.add("is-empty");
+      } else {
+        dayRows.forEach((row) => {
+          cell.appendChild(
+            createScheduleBoardAssignmentButton(row, dateKey, {
+              className: "schedule-week-assignment",
+              compact: getScheduleDisplayModeValue() === SCHEDULE_DISPLAY_MODE_SIMPLE,
+            }),
+          );
+        });
+      }
+      table.appendChild(cell);
+    });
+  });
+  target.appendChild(table);
+}
+
+function getScheduleMonthDateKeys(month = "") {
+  const meta = getMonthMeta(month);
+  if (!meta) return [];
+  return Array.from({ length: meta.daysInMonth }, (_, index) => {
+    const day = String(index + 1).padStart(2, "0");
+    return `${meta.month}-${day}`;
+  });
+}
+
+function getScheduleSimpleCellModel(rows = []) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) return { label: "", className: "is-empty" };
+  const hasAnnual = list.some(
+    (row) => resolveScheduleDisplayType(row) === "annual_leave",
+  );
+  if (hasAnnual) return { label: "연차", className: "is-leave" };
+  const hasHalf = list.some(
+    (row) => resolveScheduleDisplayType(row) === "half_leave",
+  );
+  if (hasHalf) return { label: "반차", className: "is-leave" };
+  const hasNight = list.some((row) =>
+    getScheduleBoardDisplayShiftTypes(normalizeScheduleBoardItem(row)).includes(
+      "night",
+    ),
+  );
+  const hasDay = list.some((row) => {
+    const variants = getScheduleBoardDisplayShiftTypes(
+      normalizeScheduleBoardItem(row),
+    );
+    return variants.includes("day") || variants.includes("overtime");
+  });
+  if (hasDay && hasNight) return { label: "주야", className: "is-mixed" };
+  if (hasNight) return { label: "야간", className: "is-night" };
+  const workHours = list.reduce(
+    (sum, row) => sum + getScheduleBoardTotalHours(row),
+    0,
+  );
+  if (workHours > 0) {
+    const label = Number.isInteger(workHours)
+      ? String(workHours)
+      : workHours.toFixed(1).replace(/\.0$/, "");
+    return { label, className: "is-work" };
+  }
+  const hasOff = list.some((row) =>
+    ["off", "holiday"].includes(resolveScheduleDisplayType(row)),
+  );
+  return { label: hasOff ? "휴무" : "", className: hasOff ? "is-off" : "is-empty" };
+}
+
+function renderScheduleMonthSimpleBoard(target, month) {
+  target.classList.remove("schedule-list-view");
+  target.innerHTML = "";
+  const monthKey = normalizeMonthKey(month);
+  const dateKeys = getScheduleMonthDateKeys(monthKey);
+  const rows = (Array.isArray(state.schedule.filteredRows)
+    ? state.schedule.filteredRows
+    : []
+  ).filter((row) => getMonthFromDateKey(row?.schedule_date || "") === monthKey);
+  const buckets = buildScheduleEmployeeBuckets(rows);
+  if (!dateKeys.length || !buckets.length) {
+    renderScheduleCalendarMessage("간단 표기할 일정이 없습니다.");
+    return;
+  }
+
+  const nameColumnWidth = 132;
+  const minCellSize = 44;
+  const scroller = document.createElement("div");
+  scroller.className = "schedule-simple-month-scroll";
+  const board = document.createElement("div");
+  board.className = "schedule-simple-month-board";
+  board.style.setProperty("--schedule-simple-day-count", String(dateKeys.length));
+  board.style.setProperty("--schedule-simple-name-w", `${nameColumnWidth}px`);
+  board.style.setProperty("--schedule-simple-day-w", `${minCellSize}px`);
+
+  const dateLabel = document.createElement("div");
+  dateLabel.className = "schedule-simple-sticky schedule-simple-head";
+  dateLabel.textContent = "Date";
+  board.appendChild(dateLabel);
+  dateKeys.forEach((dateKey) => {
+    const dateCell = document.createElement("div");
+    dateCell.className = "schedule-simple-head";
+    const [, monthPart, dayPart] = dateKey.split("-");
+    dateCell.textContent = `${Number(monthPart)}/${Number(dayPart)}`;
+    const day = new Date(`${dateKey}T00:00:00`).getDay();
+    if (day === 0 || day === 6) dateCell.classList.add("is-weekend");
+    board.appendChild(dateCell);
+  });
+
+  const dayLabel = document.createElement("div");
+  dayLabel.className = "schedule-simple-sticky schedule-simple-head";
+  dayLabel.textContent = "Day";
+  board.appendChild(dayLabel);
+  dateKeys.forEach((dateKey) => {
+    const dayCell = document.createElement("div");
+    dayCell.className = "schedule-simple-head";
+    const dayIndex = new Date(`${dateKey}T00:00:00`).getDay();
+    dayCell.textContent = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
+      dayIndex
+    ];
+    if (dayIndex === 0 || dayIndex === 6) dayCell.classList.add("is-weekend");
+    board.appendChild(dayCell);
+  });
+
+  buckets.forEach((bucket) => {
+    const employee = document.createElement("div");
+    employee.className = "schedule-simple-sticky schedule-simple-employee";
+    const name = bucket.employeeName || bucket.employeeCode || "-";
+    employee.innerHTML = `<strong>${escapeHtml(name)}</strong><span>${escapeHtml(bucket.employeeCode || "")}</span>`;
+    board.appendChild(employee);
+    dateKeys.forEach((dateKey) => {
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = "schedule-simple-cell";
+      cell.dataset.action = "schedule-select-date";
+      cell.dataset.date = dateKey;
+      const dayRows = bucket.rows.filter(
+        (row) => String(row?.schedule_date || "").trim() === dateKey,
+      );
+      const model = getScheduleSimpleCellModel(dayRows);
+      cell.classList.add(model.className);
+      cell.textContent = model.label;
+      board.appendChild(cell);
+    });
+  });
+
+  scroller.appendChild(board);
+  target.appendChild(scroller);
+  const syncCellSize = () => {
+    const availableWidth = Math.max(
+      0,
+      Number(scroller.getBoundingClientRect?.().width || scroller.clientWidth || 0),
+    );
+    const fitCellSize =
+      dateKeys.length > 0
+        ? Math.floor((availableWidth - nameColumnWidth) / dateKeys.length)
+        : minCellSize;
+    const cellSize = Math.max(minCellSize, fitCellSize || minCellSize);
+    board.style.setProperty("--schedule-simple-day-w", `${cellSize}px`);
+  };
+  syncCellSize();
+  requestAnimationFrame(syncCellSize);
+}
+
+function getScheduleTimelineRangePercent(row = {}) {
+  const range = buildScheduleTimeRangeForOverlap(
+    row?.shift_start_time || row?.start_time || "",
+    row?.shift_end_time || row?.end_time || "",
+  );
+  if (!range) return { left: 0, width: 8 };
+  const start = Math.max(0, Math.min(1440, Number(range.startMinutes) || 0));
+  const end = Math.max(start + 30, Math.min(1440, Number(range.endMinutes) || 0));
+  return {
+    left: (start / 1440) * 100,
+    width: Math.max(((end - start) / 1440) * 100, 4),
+  };
+}
+
+function renderScheduleDaySimpleBoard(target, rows = []) {
+  const buckets = buildScheduleEmployeeBuckets(rows);
+  const table = document.createElement("div");
+  table.className = "schedule-day-simple-board schedule-axis-board";
+  ["직원", "근무유형", "총 시간", "현장"].forEach((label) => {
+    const head = document.createElement("div");
+    head.className = "schedule-axis-head";
+    head.textContent = label;
+    table.appendChild(head);
+  });
+  buckets.forEach((bucket) => {
+    const totalHours = bucket.rows.reduce(
+      (sum, row) => sum + getScheduleBoardTotalHours(row),
+      0,
+    );
+    const shiftKinds = Array.from(
+      new Set(bucket.rows.map((row) => getScheduleBoardShiftKindLabel(row))),
+    ).join(" / ");
+    const sites = Array.from(
+      new Set(bucket.rows.map((row) => getScheduleBoardItemSiteLabel(row))),
+    ).join(" / ");
+    [bucket.employeeName || bucket.employeeCode || "-", shiftKinds || "-", `${Number.isInteger(totalHours) ? totalHours : totalHours.toFixed(1)}시간`, sites || "-"].forEach(
+      (value, index) => {
+        const cell = document.createElement("div");
+        cell.className = index === 0 ? "schedule-axis-employee" : "schedule-axis-cell";
+        cell.textContent = value;
+        table.appendChild(cell);
+      },
+    );
+  });
+  target.appendChild(table);
+}
+
+function renderScheduleDayBoard(target, month) {
+  target.classList.remove("schedule-list-view");
+  target.innerHTML = "";
+  const dateKey = getScheduleBoardActiveDateKey(month);
+  const rows = (Array.isArray(state.schedule.filteredRows)
+    ? state.schedule.filteredRows
+    : []
+  ).filter((row) => String(row?.schedule_date || "").trim() === dateKey);
+  if (!rows.length) {
+    renderScheduleCalendarMessage(`${toDateLabel(dateKey)} 일정이 없습니다.`);
+    return;
+  }
+  if (getScheduleDisplayModeValue() === SCHEDULE_DISPLAY_MODE_SIMPLE) {
+    renderScheduleDaySimpleBoard(target, rows);
+    return;
+  }
+  const buckets = buildScheduleEmployeeBuckets(rows);
+  const board = document.createElement("div");
+  board.className = "schedule-day-board";
+  const head = document.createElement("div");
+  head.className = "schedule-day-board-head";
+  head.appendChild(document.createElement("span"));
+  const timeHead = document.createElement("div");
+  timeHead.className = "schedule-day-time-head";
+  Array.from({ length: 24 }, (_, hour) => {
+    const label = document.createElement("span");
+    label.textContent = String(hour).padStart(2, "0");
+    timeHead.appendChild(label);
+    return label;
+  });
+  head.appendChild(timeHead);
+  board.appendChild(head);
+  buckets.forEach((bucket) => {
+    const rowEl = document.createElement("div");
+    rowEl.className = "schedule-day-row";
+    const employee = document.createElement("div");
+    employee.className = "schedule-axis-employee";
+    const name = bucket.employeeName || bucket.employeeCode || "-";
+    employee.innerHTML = `<strong>${escapeHtml(name)}</strong><span>${escapeHtml(bucket.employeeCode || "")}</span>`;
+    rowEl.appendChild(employee);
+    const lane = document.createElement("div");
+    lane.className = "schedule-day-lane";
+    const grid = document.createElement("div");
+    grid.className = "schedule-day-lane-grid";
+    Array.from({ length: 24 }).forEach(() => {
+      grid.appendChild(document.createElement("span"));
+    });
+    lane.appendChild(grid);
+    bucket.rows.forEach((row) => {
+      const item = normalizeScheduleBoardItem(row);
+      const block = createScheduleBoardAssignmentButton(row, dateKey, {
+        className: "schedule-day-assignment",
+      });
+      const range = getScheduleTimelineRangePercent(item);
+      block.style.left = `${range.left}%`;
+      block.style.width = `${range.width}%`;
+      lane.appendChild(block);
+    });
+    rowEl.appendChild(lane);
+    board.appendChild(rowEl);
+  });
+  target.appendChild(board);
+}
+
 function ScheduleMonthPage({ target, month, monthMeta, dayMap } = {}) {
   const viewMode = getScheduleViewModeValue();
   if (viewMode === SCHEDULE_VIEW_MODE_LIST) {
     renderScheduleListView(target, month);
+    return;
+  }
+  if (getScheduleDisplayModeValue() === SCHEDULE_DISPLAY_MODE_SIMPLE) {
+    renderScheduleMonthSimpleBoard(target, month);
+    return;
+  }
+  const boardMode = getScheduleBoardViewModeValue();
+  if (boardMode === SCHEDULE_BOARD_VIEW_WEEK) {
+    renderScheduleWeekBoard(target, month);
+    return;
+  }
+  if (boardMode === SCHEDULE_BOARD_VIEW_DAY) {
+    renderScheduleDayBoard(target, month);
     return;
   }
   target.classList.remove("schedule-list-view");
@@ -92389,9 +94086,7 @@ function renderScheduleDetail() {
 
   clearList(listEl);
   rows.forEach((row) => {
-    listEl.appendChild(
-      createScheduleDetailRow(row, { interactive: isDesktopViewport() }),
-    );
+    listEl.appendChild(createScheduleDetailRow(row, { interactive: false }));
   });
   renderScheduleBreaktimeSkeleton(rows, dateKey);
   state.schedule.lastPerf.detailRenderMs = getPerfNowMs() - renderStartedAt;
@@ -92456,6 +94151,30 @@ function shiftMonthKey(monthKey, deltaMonths = 0) {
 async function onScheduleShiftMonth(deltaMonths) {
   const step = Number(deltaMonths);
   if (!Number.isFinite(step) || !step) return;
+  const boardMode = getScheduleBoardViewModeValue();
+  if (boardMode === SCHEDULE_BOARD_VIEW_WEEK || boardMode === SCHEDULE_BOARD_VIEW_DAY) {
+    const dateStep = boardMode === SCHEDULE_BOARD_VIEW_WEEK ? step * 7 : step;
+    const currentDate = getScheduleBoardActiveDateKey(
+      state.schedule.month || getScheduleMonthValue({ preferState: true }),
+    );
+    const nextDate = shiftDateKeyByDays(currentDate, dateStep);
+    if (!nextDate) return;
+    const nextMonth = getMonthFromDateKey(nextDate);
+    state.schedule.selectedDateKey = nextDate;
+    state.schedule.lastInteractedDateKey = nextDate;
+    state.schedule.desktopDrawerOpen = false;
+    resetScheduleExpandedDays();
+    if (nextMonth && nextMonth !== normalizeMonthKey(state.schedule.month || "")) {
+      setScheduleMonthValue(nextMonth);
+      await loadSchedule({ month: nextMonth, deferDetailHydration: true });
+      return;
+    }
+    renderScheduleMonthToolbar();
+    renderScheduleCalendar();
+    renderScheduleDetail();
+    renderScheduleDesktopDrawer();
+    return;
+  }
   const current = getScheduleMonthValue({ preferState: true });
   const next = shiftMonthKey(current, step);
   if (!next) return;
@@ -92469,7 +94188,7 @@ async function onScheduleShiftMonth(deltaMonths) {
   ensureScheduleSelectedDate();
   renderScheduleMonthToolbar();
   try {
-    await loadSchedule({ month: next });
+    await loadSchedule({ month: next, deferDetailHydration: true });
   } finally {
     if (normalizeMonthKey(state.schedule?.month || "") === next) {
       state.schedule.monthNavBusyText = "";
@@ -92575,7 +94294,11 @@ function formatIsoToLocalLabel(value = "") {
   return date.toLocaleString("ko-KR");
 }
 
-function createScheduleDetailSheetCard(row, dateDetail = null) {
+function createScheduleDetailSheetCard(
+  row,
+  dateDetail = null,
+  { readOnly = false } = {},
+) {
   const container = document.createElement("article");
   container.className = "module-card stack";
   const shiftMeta = getScheduleRowDisplayMeta(row);
@@ -92767,7 +94490,7 @@ function createScheduleDetailSheetCard(row, dateDetail = null) {
           const title = `${String(item?.reason || "-").trim() || "-"} · ${formatOvertimeHoursLabel(item?.hours || 1)}`;
           const subtitle = `리더 ${String(item?.leader_full_name || item?.leader_username || "-").trim() || "-"} · ${formatIsoToLocalLabel(item?.created_at)}`;
           const rowEl = createScheduleSheetMetaRow(title, subtitle);
-          if (canMutateScheduleData() && item?.id) {
+          if (!readOnly && canMutateScheduleData() && item?.id) {
             const actionWrap = document.createElement("div");
             actionWrap.className = "schedule-actions";
             const deleteBtn = document.createElement("button");
@@ -92794,7 +94517,7 @@ function createScheduleDetailSheetCard(row, dateDetail = null) {
           const title = `${String(item?.employee_code || "-").trim() || "-"} · ${Number(item?.minutes_late || 0)}분 지각`;
           const subtitle = `${String(item?.note || "-").trim() || "-"} · ${formatIsoToLocalLabel(item?.created_at)}`;
           const rowEl = createScheduleSheetMetaRow(title, subtitle);
-          if (canMutateScheduleData() && item?.id) {
+          if (!readOnly && canMutateScheduleData() && item?.id) {
             const actionWrap = document.createElement("div");
             actionWrap.className = "schedule-actions";
             const deleteBtn = document.createElement("button");
@@ -92824,7 +94547,7 @@ function createScheduleDetailSheetCard(row, dateDetail = null) {
             String(item?.name || item?.employee_name || "-").trim() || "-";
           const subtitle = `유형 ${typeLabel} · ${String(item?.source || "-").trim() || "-"} · ${formatIsoToLocalLabel(item?.created_at)}`;
           const rowEl = createScheduleSheetMetaRow(nameLabel, subtitle);
-          if (canMutateScheduleData() && item?.id) {
+          if (!readOnly && canMutateScheduleData() && item?.id) {
             const actionWrap = document.createElement("div");
             actionWrap.className = "schedule-actions";
             const deleteBtn = document.createElement("button");
@@ -92850,7 +94573,7 @@ function createScheduleDetailSheetCard(row, dateDetail = null) {
           const title = `${String(item?.type || "-").trim() || "-"} · ${String(item?.description || "-").trim() || "-"}`;
           const subtitle = `${formatIsoToLocalLabel(item?.created_at)}`;
           const rowEl = createScheduleSheetMetaRow(title, subtitle);
-          if (canMutateScheduleData() && item?.id) {
+          if (!readOnly && canMutateScheduleData() && item?.id) {
             const actionWrap = document.createElement("div");
             actionWrap.className = "schedule-actions";
             const deleteBtn = document.createElement("button");
@@ -92868,7 +94591,7 @@ function createScheduleDetailSheetCard(row, dateDetail = null) {
         });
       }
 
-      if (canMutateScheduleData()) {
+      if (!readOnly && canMutateScheduleData()) {
         const cardKey = safeDomId(
           "p1-form",
           `${row?.id || ""}-${dateKey}-${siteCode}-${employeeCode}`,
@@ -93003,7 +94726,7 @@ function createScheduleDetailSheetCard(row, dateDetail = null) {
     }
   }
 
-  if (!isLeaveScheduleRow(row) && canMutateScheduleData() && row?.id) {
+  if (!readOnly && !isLeaveScheduleRow(row) && canMutateScheduleData() && row?.id) {
     const actionRow = document.createElement("div");
     actionRow.className = "schedule-actions";
 
@@ -93096,7 +94819,9 @@ function buildScheduleDateSheetNode(dateKey) {
       const li = document.createElement("li");
       li.classList.add("content-fade-in");
       const detail = getScheduleDateDetailFromCache(dateKey, row?.site_code);
-      li.appendChild(createScheduleDetailSheetCard(row, detail));
+      li.appendChild(
+        createScheduleDetailSheetCard(row, detail, { readOnly: true }),
+      );
       list.appendChild(li);
     });
   }
@@ -93144,9 +94869,7 @@ function ScheduleDayDetailPanel(dateKey = "") {
     renderEmptyState(list, "해당 날짜에 배정된 스케줄이 없습니다.");
   } else {
     rows.forEach((row) => {
-      list.appendChild(
-        createScheduleDetailRow(row, { interactive: isDesktopViewport() }),
-      );
+      list.appendChild(createScheduleDetailRow(row, { interactive: false }));
     });
   }
   wrapper.appendChild(list);
@@ -93270,6 +94993,35 @@ function onScheduleSetViewMode(nextMode = "") {
   }
   renderScheduleMonthToolbar();
   renderScheduleHqTabs();
+  renderScheduleCalendar();
+  renderScheduleDetail();
+  renderScheduleDesktopDrawer();
+}
+
+function onScheduleSetBoardViewMode(nextMode = "") {
+  const mode = normalizeScheduleBoardViewMode(nextMode);
+  if (mode === state.schedule.boardViewMode) return;
+  state.schedule.boardViewMode = mode;
+  state.schedule.viewMode = SCHEDULE_VIEW_MODE_CALENDAR;
+  state.schedule.hqTab = SCHEDULE_TAB_CALENDAR;
+  state.schedule.desktopDrawerOpen = false;
+  resetScheduleExpandedDays();
+  ensureScheduleSelectedDate();
+  renderScheduleMonthToolbar();
+  renderScheduleHqTabs();
+  renderScheduleCalendar();
+  renderScheduleDetail();
+  renderScheduleDesktopDrawer();
+}
+
+function onScheduleSetDisplayMode(nextMode = "") {
+  const mode = normalizeScheduleDisplayMode(nextMode);
+  if (mode === state.schedule.displayMode) return;
+  state.schedule.displayMode = mode;
+  if (mode === SCHEDULE_DISPLAY_MODE_SIMPLE) {
+    state.schedule.boardViewMode = SCHEDULE_BOARD_VIEW_MONTH;
+  }
+  renderScheduleMonthToolbar();
   renderScheduleCalendar();
   renderScheduleDetail();
   renderScheduleDesktopDrawer();
@@ -93502,7 +95254,7 @@ async function loadSchedule({
 
     const gridRenderStartedAt = getPerfNowMs();
     renderScheduleAll();
-    ensureScheduleLiveRefresh({ immediate: true });
+    ensureScheduleLiveRefresh({ immediate: !deferDetailHydration });
     queueViewSnapshotPersist("schedule", { allowInactive: true });
     const gridRenderElapsedMs = getPerfNowMs() - gridRenderStartedAt;
     const monthSwitchGridReadyMs =
@@ -93512,6 +95264,9 @@ async function loadSchedule({
     state.schedule.lastPerf.renderMs = gridRenderElapsedMs;
     state.schedule.lastPerf.monthSwitchGridReadyMs = monthSwitchGridReadyMs;
     state.schedule.lastPerf.monthSwitchMs = monthSwitchGridReadyMs;
+    state.schedule.monthNavBusyText = "";
+    renderScheduleMonthToolbar();
+    prefetchAdjacentScheduleLiteMonths(month, tenantCode);
 
     markViewPerfStage("month_switch_grid_ready", {
       routePath: schedulePerfRoute,
@@ -93627,7 +95382,7 @@ async function loadSchedule({
 
       const detailRenderStartedAt = getPerfNowMs();
       renderScheduleAll();
-      ensureScheduleLiveRefresh({ immediate: true });
+      ensureScheduleLiveRefresh({ immediate: !deferDetailHydration });
       queueViewSnapshotPersist("schedule", { allowInactive: true });
       const detailRenderElapsedMs = getPerfNowMs() - detailRenderStartedAt;
       const monthSwitchDetailReadyMs =
@@ -93868,8 +95623,15 @@ function scheduleNextScheduleLiveRefresh(
 function isExpectedScheduleLiveRefreshAbort(error) {
   const name = String(error?.name || "").trim();
   const message = String(error?.message || "").trim();
+  const lowerMessage = message.toLowerCase();
   if (name === "AbortError") return true;
-  return message.includes("BodyStreamBuffer was aborted");
+  return (
+    message.includes("BodyStreamBuffer was aborted") ||
+    lowerMessage === "network error" ||
+    lowerMessage.includes("network changed") ||
+    lowerMessage.includes("failed to fetch") ||
+    lowerMessage.includes("load failed")
+  );
 }
 
 function handleScheduleLiveStreamEvent(rawEvent = "") {
@@ -97050,8 +98812,8 @@ function openScheduleDeleteSheet({
         title: "근무일정 삭제",
         message: `이 근무일정만 지우시겠습니까? 혹은 함께 생성된 ${additionalFutureCount}개의 근무일정까지 함께 지우시겠습니까?`,
         cancelLabel: "취소",
-        secondaryLabel: "이 근무일정만",
-        acceptLabel: "향후 모든 근무일정",
+        secondaryLabel: "이 근무일정만 삭제",
+        acceptLabel: "향후 모든 근무일정 삭제",
         secondaryVariant: "btn-secondary",
         acceptVariant: "btn-destructive",
         mobileSheet: true,
@@ -100890,9 +102652,9 @@ function bindUiEvents() {
       }
 
       if (action === "home-week-open-date") {
-        runWithBusy(
-          () => onHomeWeekOpenDate(actionEl.dataset.date),
-          "스케줄 이동 중...",
+        runActionSafely(
+          onHomeWeekOpenDate(actionEl.dataset.date),
+          "스케줄 이동에 실패했습니다.",
         );
         return;
       }
@@ -103902,8 +105664,11 @@ function bindUiEvents() {
             combinedScheduleIds: actionEl.dataset.combinedScheduleIds,
             employeeCode: actionEl.dataset.employeeCode,
             employeeId: actionEl.dataset.employeeId,
+            employeeName: actionEl.dataset.employeeName,
             siteCode: actionEl.dataset.siteCode,
             shiftType: actionEl.dataset.shiftType,
+            startTime: actionEl.dataset.startTime,
+            endTime: actionEl.dataset.endTime,
           }),
           "근무일정 상세를 열지 못했습니다.",
         );
@@ -103931,6 +105696,27 @@ function bindUiEvents() {
       if (action === "schedule-toggle-day-expand") {
         toggleScheduleDayExpanded(actionEl.dataset.date);
         renderScheduleCalendar();
+        return;
+      }
+
+      if (action === "schedule-set-board-view") {
+        onScheduleSetBoardViewMode(actionEl.dataset.boardView);
+        return;
+      }
+
+      if (action === "schedule-set-display-mode") {
+        onScheduleSetDisplayMode(actionEl.dataset.displayMode);
+        return;
+      }
+
+      if (action === "schedule-toggle-simple-mode") {
+        const isSimple =
+          getScheduleDisplayModeValue() === SCHEDULE_DISPLAY_MODE_SIMPLE;
+        onScheduleSetDisplayMode(
+          isSimple
+            ? SCHEDULE_DISPLAY_MODE_DETAILED
+            : SCHEDULE_DISPLAY_MODE_SIMPLE,
+        );
         return;
       }
 
@@ -104492,6 +106278,33 @@ function bindUiEvents() {
         return;
       }
 
+      if (action === "schedule-support-hq-download-start") {
+        runWithProgressTask(
+          async (progressController) => {
+            const result = await onScheduleSupportHqDownload(progressController);
+            if (result) {
+              setScheduleHqWizardStep(SCHEDULE_HQ_WIZARD_STEP_UPLOAD, {
+                scroll: false,
+              });
+            }
+            return result;
+          },
+          {
+            busyLabel: "지점 파일 다운로드 중...",
+            fallbackMessage: "지점 파일 다운로드에 실패했습니다.",
+            progressOptions: {
+              title: "지점 파일을 준비하고 있습니다",
+              detail:
+                "선택한 지점 범위 기준으로 제출용 workbook을 생성하는 중입니다.",
+              revealMode: LONG_TASK_REVEAL_IMMEDIATE,
+              tone: LONG_TASK_TONE_DOWNLOAD,
+              stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+            },
+          },
+        );
+        return;
+      }
+
       if (action === "schedule-support-preview") {
         runWithProgressTask(
           (progressController) =>
@@ -104692,6 +106505,16 @@ function bindUiEvents() {
         uploadUi.previewMode = normalizeScheduleImportPreviewMode(
           actionEl.dataset.mode || "",
         );
+        uploadUi.previewPage = 1;
+        renderSchedulePreviewTable(state.preview?.preview_rows || []);
+        return;
+      }
+
+      if (action === "schedule-preview-page") {
+        const uploadUi = getScheduleUploadUiState();
+        const nextPage = Number.parseInt(String(actionEl.dataset.page || "1"), 10);
+        uploadUi.previewPage =
+          Number.isFinite(nextPage) && nextPage > 0 ? nextPage : 1;
         renderSchedulePreviewTable(state.preview?.preview_rows || []);
         return;
       }
@@ -104701,6 +106524,16 @@ function bindUiEvents() {
         workspace.previewMode = normalizeScheduleSupportHqPreviewMode(
           actionEl.dataset.mode || "",
         );
+        workspace.previewPage = 1;
+        renderScheduleSupportHqReviewTable();
+        return;
+      }
+
+      if (action === "schedule-support-hq-preview-page") {
+        const workspace = ensureScheduleSupportHqWorkspaceState();
+        const nextPage = Number.parseInt(String(actionEl.dataset.page || "1"), 10);
+        workspace.previewPage =
+          Number.isFinite(nextPage) && nextPage > 0 ? nextPage : 1;
         renderScheduleSupportHqReviewTable();
         return;
       }
@@ -105057,10 +106890,7 @@ function bindUiEvents() {
         event.preventDefault();
         event.stopPropagation();
         state.schedule.lastInteractedDateKey = dateKey;
-        runActionSafely(
-          openSingleScheduleModal({ date: dateKey }),
-          "단일 생성 화면을 열지 못했습니다.",
-        );
+        onScheduleSelectDate(dateKey, { openSheetOnSelect: true });
         return;
       }
 
@@ -105877,7 +107707,7 @@ function bindUiEvents() {
         state.schedule.supportStatus = null;
         state.schedule.financeStatus = null;
         runActionSafely(
-          loadSchedule({ month: nextMonth }),
+          loadSchedule({ month: nextMonth, deferDetailHydration: true }),
           "스케줄 월 조회 중 오류가 발생했습니다.",
         ).finally(() => {
           if (normalizeMonthKey(state.schedule?.month || "") === nextMonth) {

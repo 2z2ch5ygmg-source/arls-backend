@@ -85,11 +85,6 @@
       rel="stylesheet"
       href="css/announcement-workspace.css?v=20260415-sentrix-notices-frontend-01"
     />
-    <link
-      rel="preload"
-      href="js/announcement-workspace.js?v=20260415-sentrix-notices-frontend-01"
-      as="script"
-    />
   </head>
   <body>
     <div id="app">
@@ -441,7 +436,7 @@
         </aside>
 
         <main class="shell-content">
-          <section id="view-home" class="panel card view">
+          <section id="view-home" class="panel view home-view">
             <div class="workspace-head home-workspace-head">
               <div class="workspace-head-main">
                 <h2 id="homeViewTitle">홈</h2>
@@ -2071,34 +2066,8 @@
                           >
                         </button>
                       </div>
-                    </div>
-                    <div class="leave-requests-toolbar-actions">
-                      <button
-                        class="btn btn-secondary"
-                        type="button"
-                        data-action="leave-refresh-current-view"
-                      >
-                        휴가 동기화
-                      </button>
-                      <button
-                        class="btn btn-secondary"
-                        type="button"
-                        data-action="leave-export-history"
-                      >
-                        다운로드
-                      </button>
-                      <label
-                        class="input-field leave-inline-select leave-inline-select-compact"
-                      >
-                        <span>단위</span>
-                        <select id="leaveHistoryUnitSelect">
-                          <option value="default">기본</option>
-                          <option value="days">일</option>
-                          <option value="requests">건</option>
-                        </select>
-                      </label>
-                      <label class="input-field leave-inline-search">
-                        <span class="sr-only">이력 검색</span>
+                      <label class="input-field leave-filter-field leave-inline-search">
+                        <span>검색</span>
                         <input
                           id="leaveWorkspaceSearch"
                           type="search"
@@ -2391,38 +2360,6 @@
                         <h3>휴가 현황</h3>
                       </div>
                       <div class="leave-status-list-actions">
-                        <button
-                          class="btn btn-secondary"
-                          type="button"
-                          data-action="leave-refresh-current-view"
-                        >
-                          휴가 동기화
-                        </button>
-                        <button
-                          class="btn btn-secondary"
-                          type="button"
-                          data-action="leave-export-usage"
-                        >
-                          다운로드
-                        </button>
-                        <label
-                          class="input-field leave-inline-select leave-inline-select-compact"
-                        >
-                          <span>단위</span>
-                          <select id="leaveUsageUnitSelect">
-                            <option value="default">기본</option>
-                            <option value="days">일</option>
-                            <option value="people">명</option>
-                          </select>
-                        </label>
-                        <label class="input-field leave-inline-search">
-                          <span class="sr-only">현황 검색</span>
-                          <input
-                            id="leaveUsageSearch"
-                            type="search"
-                            placeholder="직원명/현장 검색"
-                          />
-                        </label>
                         <span
                           id="leaveUsageCount"
                           class="status-pill status-pill-neutral"
@@ -2485,6 +2422,14 @@
                         <select id="leaveUsagePolicyFilter">
                           <option value="all">전체 정책</option>
                         </select>
+                      </label>
+                      <label class="input-field leave-filter-field leave-inline-search">
+                        <span>검색</span>
+                        <input
+                          id="leaveUsageSearch"
+                          type="search"
+                          placeholder="직원명/현장 검색"
+                        />
                       </label>
                     </div>
                     <div
@@ -2890,17 +2835,11 @@
               <input id="hrPurposeCode" type="hidden" value="BANK" />
             </article>
 
-            <article id="hrEmploymentMyRequestsCard" class="module-card stack">
-              <div class="approval-head">
-                <h3>내 문서</h3>
-                <button
-                  type="button"
-                  class="btn btn-secondary"
-                  data-action="hr-employment-my-refresh"
-                >
-                  새로고침
-                </button>
-              </div>
+            <article
+              id="hrEmploymentMyRequestsCard"
+              class="module-card stack"
+              aria-label="내 문서 목록"
+            >
               <div class="table-wrap">
                 <table class="admin-table">
                   <thead>
@@ -3468,7 +3407,7 @@
                         검토한 뒤 적용합니다.</span
                       >
                     </div>
-                    <div class="schedule-upload-apply-actions">
+                    <div class="schedule-upload-apply-actions schedule-source-actions">
                       <button
                         id="supportStatusHqReinspectBtn"
                         class="btn btn-secondary"
@@ -4375,6 +4314,29 @@
                   월간 배치 기준 작업면
                 </p>
               </div>
+              <div id="scheduleActionMenuRow" class="schedule-ops-actions">
+                <button
+                  class="btn btn-secondary schedule-action-btn"
+                  type="button"
+                  data-action="schedule-open-download-monthly-excel"
+                >
+                  다운로드
+                </button>
+                <button
+                  class="btn btn-secondary schedule-action-btn shell-manager-only hidden"
+                  type="button"
+                  data-action="schedule-open-upload-list"
+                >
+                  업로드
+                </button>
+                <button
+                  class="btn btn-primary schedule-action-btn shell-manager-only hidden"
+                  type="button"
+                  data-action="schedule-create-bulk-open"
+                >
+                  근무일정 추가
+                </button>
+              </div>
             </div>
             <p
               id="schedulePermissionHint"
@@ -4390,7 +4352,17 @@
                 data-action="schedule-set-view"
                 data-view="list"
               >
-                리스트
+                <span class="schedule-topbar-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                    <path d="M4.5 4h8" />
+                    <path d="M4.5 8h8" />
+                    <path d="M4.5 12h8" />
+                    <path d="M2.5 4h.01" />
+                    <path d="M2.5 8h.01" />
+                    <path d="M2.5 12h.01" />
+                  </svg>
+                </span>
+                <span>목록</span>
               </button>
               <button
                 class="btn btn-secondary workspace-tab active"
@@ -4398,7 +4370,15 @@
                 data-action="schedule-set-view"
                 data-view="calendar"
               >
-                달력
+                <span class="schedule-topbar-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                    <rect x="2.5" y="3" width="11" height="10.5" rx="1.5" />
+                    <path d="M5 1.8v2.4" />
+                    <path d="M11 1.8v2.4" />
+                    <path d="M2.5 6h11" />
+                  </svg>
+                </span>
+                <span>월간 근무표</span>
               </button>
             </div>
             <section id="scheduleOpsToolbar" class="schedule-ops-toolbar">
@@ -4440,15 +4420,15 @@
                   <div class="schedule-toolbar-view">
                     <span class="schedule-toolbar-group-label">보기</span>
                     <div
-                      class="schedule-view-mode-row"
+                      class="schedule-board-mode-row"
                       role="group"
-                      aria-label="보기 전환"
+                      aria-label="근무표 보기 전환"
                     >
                       <button
                         class="btn btn-secondary active"
                         type="button"
-                        data-action="schedule-set-view"
-                        data-view="calendar"
+                        data-action="schedule-set-board-view"
+                        data-board-view="month"
                         aria-pressed="true"
                       >
                         월
@@ -4456,11 +4436,20 @@
                       <button
                         class="btn btn-secondary"
                         type="button"
-                        data-action="schedule-set-view"
-                        data-view="list"
+                        data-action="schedule-set-board-view"
+                        data-board-view="week"
                         aria-pressed="false"
                       >
-                        목록
+                        주
+                      </button>
+                      <button
+                        class="btn btn-secondary"
+                        type="button"
+                        data-action="schedule-set-board-view"
+                        data-board-view="day"
+                        aria-pressed="false"
+                      >
+                        일
                       </button>
                     </div>
                   </div>
@@ -4485,47 +4474,17 @@
                       placeholder="직원 검색"
                     />
                   </div>
-                  <label
-                    class="choice-row notification-toggle-row schedule-leave-toggle"
-                    for="scheduleLeaveManageToggle"
-                  >
-                    <span>휴가 표시</span>
-                    <input id="scheduleLeaveManageToggle" type="checkbox" />
-                  </label>
-                </div>
-                <div id="scheduleActionMenuRow" class="schedule-ops-actions">
                   <button
-                    class="btn btn-secondary schedule-action-btn"
+                    id="scheduleSimpleModeToggle"
+                    class="schedule-simple-toggle"
                     type="button"
-                    data-action="schedule-open-download-monthly-excel"
+                    data-action="schedule-toggle-simple-mode"
+                    aria-pressed="false"
                   >
-                    다운로드
-                  </button>
-                  <button
-                    class="btn btn-secondary schedule-action-btn shell-manager-only hidden"
-                    type="button"
-                    data-action="schedule-open-upload-list"
-                  >
-                    업로드
-                  </button>
-                  <button
-                    class="btn btn-primary schedule-action-btn shell-manager-only hidden"
-                    type="button"
-                    data-action="schedule-create-bulk-open"
-                  >
-                    근무일정 추가
+                    <span class="schedule-simple-toggle-box" aria-hidden="true"></span>
+                    <span>간단 표기</span>
                   </button>
                 </div>
-              </div>
-              <div class="schedule-ops-toolbar-footer">
-                <p id="scheduleToolbarMeta" class="muted">
-                  필터: 전체 지점 · 전체 근무 · 전체 직원
-                </p>
-                <div
-                  id="scheduleToolbarSummaryStrip"
-                  class="schedule-summary-strip"
-                  aria-live="polite"
-                ></div>
               </div>
             </section>
             <div class="stack schedule-head hidden" aria-hidden="true">
@@ -4566,22 +4525,6 @@
                 <input id="scheduleExportEnd" type="date" />
                 <input id="scheduleExportCompany" />
                 <input id="scheduleExportSite" />
-              </div>
-              <div class="schedule-legend-row">
-                <div class="schedule-legend">
-                  <span class="status-pill status-pill-success"
-                    >근무(주간)</span
-                  >
-                  <span class="status-pill status-pill-combined"
-                    >주야(주간+야간)</span
-                  >
-                  <span class="status-pill status-pill-warn"
-                    >야간(야간근무)</span
-                  >
-                  <span class="status-pill status-pill-error"
-                    >휴무(휴가/공휴일)</span
-                  >
-                </div>
               </div>
               <article class="module-card stack schedule-calendar-surface">
                 <div
@@ -4663,6 +4606,52 @@
                 id="scheduleUploadPanel"
                 class="stack schedule-tab-panel hidden schedule-upload-workspace arls-upload-wizard"
               >
+              <header class="schedule-upload-shell-head">
+                <div>
+                  <h3 id="scheduleUploadHeaderTitle">스케쥴 업로드</h3>
+                  <p id="scheduleUploadHeaderText" class="muted hidden"></p>
+                </div>
+                <div
+                  id="scheduleUploadOwnerTabs"
+                  class="workspace-tabs schedule-upload-owner-tabs hidden"
+                  role="tablist"
+                  aria-label="스케쥴 업로드 모드"
+                  aria-hidden="true"
+                >
+                  <button
+                    class="btn btn-secondary workspace-tab active"
+                    type="button"
+                    data-action="schedule-upload-mode-tab"
+                    data-mode="base"
+                    aria-pressed="true"
+                  >
+                    <span class="schedule-topbar-icon" aria-hidden="true">
+                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                        <path d="M3 3.5h10" />
+                        <path d="M3 8h10" />
+                        <path d="M3 12.5h6" />
+                      </svg>
+                    </span>
+                    <span>기본 업로드</span>
+                  </button>
+                  <button
+                    class="btn btn-secondary workspace-tab"
+                    type="button"
+                    data-action="schedule-upload-mode-tab"
+                    data-mode="hq"
+                    aria-pressed="false"
+                  >
+                    <span class="schedule-topbar-icon" aria-hidden="true">
+                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                        <path d="M8 2.5v11" />
+                        <path d="M3.5 6h9" />
+                        <path d="M4 10.5h8" />
+                      </svg>
+                    </span>
+                    <span>지원근무 업로드</span>
+                  </button>
+                </div>
+              </header>
               <div class="schedule-upload-wizard-layout arls-upload-wizard__layout">
                 <aside
                   class="schedule-upload-step-rail arls-upload-wizard__progress"
@@ -4732,7 +4721,7 @@
                       data-step="export"
                       data-step-index="1"
                     >
-                      지점 선택 확인
+                      지점 파일 다운로드
                     </button>
                     <button
                       class="schedule-wizard-step arls-upload-wizard__step"
@@ -4852,7 +4841,7 @@
                         </div>
                       </div>
                     </details>
-                    <div class="schedule-wizard-actions">
+                    <div class="schedule-wizard-actions schedule-source-actions">
                       <button
                         class="btn btn-primary"
                         type="button"
@@ -4915,7 +4904,7 @@
                             id="scheduleImportSiteHint"
                             class="muted hidden"
                           ></p>
-                          <div class="schedule-wizard-actions">
+                          <div class="schedule-wizard-actions schedule-source-actions">
                             <button
                               class="btn btn-secondary"
                               type="button"
@@ -4937,10 +4926,14 @@
                         </div>
 
                         <div id="scheduleBaseFileStage" class="stack hidden">
-                          <div class="schedule-upload-template-grid">
-                            <article class="schedule-upload-template-card">
+                          <form
+                            id="scheduleImportForm"
+                            class="stack schedule-upload-file-form"
+                          >
+                            <div class="schedule-upload-file-card-head">
                               <div>
-                                <h5>빈 양식</h5>
+                                <h4>월간 근무표 파일</h4>
+                                <p class="muted">작성된 workbook을 선택하세요.</p>
                               </div>
                               <button
                                 class="btn btn-secondary"
@@ -4950,24 +4943,22 @@
                               >
                                 양식 다운로드
                               </button>
-                            </article>
-                          </div>
-
-                          <form
-                            id="scheduleImportForm"
-                            class="stack schedule-upload-file-form"
-                          >
+                            </div>
                             <div class="schedule-upload-file-row">
                               <label
-                                class="input-field schedule-upload-file-field"
+                                class="input-field schedule-upload-file-field schedule-upload-dropzone"
                               >
-                                <span>업로드 파일</span>
+                                <span class="schedule-upload-dropzone-kicker">업로드 파일</span>
+                                <strong id="scheduleImportFileName">파일을 선택하세요</strong>
+                                <small>xlsx 파일을 선택하면 분석 준비 상태로 전환됩니다.</small>
                                 <input
                                   id="scheduleImportFile"
                                   type="file"
                                   accept=".xlsx"
                                 />
                               </label>
+                            </div>
+                            <div class="schedule-upload-file-actions schedule-source-actions">
                               <button
                                 class="btn btn-secondary"
                                 type="button"
@@ -5095,7 +5086,7 @@
                                   지점, 월, 파일을 준비한 뒤 분석하세요.
                                 </p>
                               </div>
-                              <div class="schedule-upload-apply-actions">
+                              <div class="schedule-upload-apply-actions schedule-source-actions">
                                 <button
                                   class="btn btn-secondary"
                                   type="button"
@@ -5191,7 +5182,7 @@
                           </div>
                         </div>
                         <ul id="scheduleApplyDetails" class="list hidden"></ul>
-                        <div class="schedule-wizard-actions">
+                        <div class="schedule-wizard-actions schedule-source-actions">
                           <button
                             class="btn btn-primary"
                             type="button"
@@ -5283,7 +5274,7 @@
                     <div class="schedule-hq-site-selection-shell arls-upload-wizard__target-list">
                       <div class="schedule-upload-step-head">
                         <div>
-                          <h4>지점 선택 확인</h4>
+                          <h4>지점 파일 다운로드</h4>
                           <p class="muted hidden"></p>
                         </div>
                       </div>
@@ -5336,7 +5327,7 @@
 	                        </div>
                       </div>
                       <div
-                        class="schedule-wizard-actions schedule-hq-export-actions"
+                        class="schedule-wizard-actions schedule-source-actions schedule-hq-export-actions"
                       >
                         <span
                           id="scheduleSupportHqSelectionSummary"
@@ -5345,11 +5336,11 @@
                         <button
                           class="btn btn-primary"
                           type="button"
-                          id="scheduleHqExportNextBtn"
-                          data-action="schedule-hq-wizard-next"
-                          data-next-step="upload"
-                        >
-                          다음
+	                          id="scheduleHqExportNextBtn"
+	                          data-action="schedule-support-hq-download-start"
+	                          data-next-step="upload"
+	                        >
+	                          다운로드 시작
                         </button>
                       </div>
                     </div>
@@ -5372,7 +5363,7 @@
                         >
                       </div>
                       <p class="muted hidden"></p>
-                      <div class="schedule-support-upload-actions">
+                      <div class="schedule-support-upload-actions schedule-source-actions">
                         <button
                           class="btn btn-secondary"
                           type="button"
@@ -5431,10 +5422,12 @@
                       </details>
                       <div class="schedule-upload-file-row">
                         <label
-                          class="input-field schedule-upload-file-field"
+                          class="input-field schedule-upload-file-field schedule-upload-dropzone"
                           for="scheduleSupportHqUploadFile"
                         >
-                          <span>HQ 작성본 업로드 파일</span>
+                          <span class="schedule-upload-dropzone-kicker">작성본 업로드 파일</span>
+                          <strong id="scheduleSupportHqUploadFileName">파일을 선택하세요</strong>
+                          <small>다운로드한 지원근무자 제출 workbook을 업로드하세요.</small>
                           <input
                             id="scheduleSupportHqUploadFile"
                             type="file"
@@ -5458,7 +5451,7 @@
                         id="scheduleSupportHqUploadMeta"
                         class="schedule-upload-file-meta"
                       ></div>
-                      <div class="schedule-support-upload-actions">
+                      <div class="schedule-support-upload-actions schedule-source-actions">
                         <button
                           class="btn btn-secondary"
                           type="button"
@@ -5592,7 +5585,7 @@
                         id="scheduleSupportHqBatchIssues"
                         class="list hidden"
                       ></ul>
-                      <div class="schedule-wizard-actions">
+                      <div class="schedule-wizard-actions schedule-source-actions">
                         <button
                           class="btn btn-secondary"
                           type="button"
@@ -5626,7 +5619,7 @@
                             >HQ 작성본 workbook을 반영하고 있습니다.</span
                           >
                         </div>
-                        <div class="schedule-upload-apply-actions">
+                        <div class="schedule-upload-apply-actions schedule-source-actions">
                           <button
                             class="btn btn-primary"
                             type="button"
@@ -5647,6 +5640,11 @@
                   </section>
                 </section>
               </div>
+              <footer
+                id="scheduleUploadFooterActions"
+                class="schedule-upload-footer-actions"
+                aria-label="업로드 단계 작업"
+              ></footer>
             </div>
 
             <div
@@ -11197,7 +11195,7 @@
     <script src="config.js"></script>
     <script>
       window.__RG_ARLS_ASSET_BUILD_ID__ =
-        window.ENV_BUILD_ID || "20260415-sentrix-notices-frontend-01";
+        window.ENV_BUILD_ID || "20260418-schedule-upload-restructure-01";
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
       window.ENV_BUILD_ID =
@@ -11506,7 +11504,7 @@
 
         window.addEventListener("load", () => {
           navigator.serviceWorker
-            .register("./sw.js?v=20260415-sentrix-notices-frontend-01", {
+            .register("./sw.js?v=20260418-schedule-upload-restructure-01", {
               updateViaCache: "none",
             })
             .then((registration) => {
