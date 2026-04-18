@@ -36,6 +36,7 @@ from app.routers.v1.schedules import (
     _select_arls_import_visible_sheet_name,
     _parse_arls_canonical_import_sheet,
     _parse_daytime_need_value,
+    _parse_support_count_value,
     _parse_support_worker_cell,
     _read_monthly_support_request_rows_for_export,
     _read_arls_export_metadata,
@@ -1059,6 +1060,34 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
         self.assertIsNone(block["required_count_numeric"])
         self.assertEqual(need_cell["issue_code"], "SUPPORT_BLOCK_REQUIRED_COUNT_INVALID")
         self.assertIn("SUPPORT_BLOCK_REQUIRED_COUNT_INVALID", block["issues"])
+
+    def test_support_external_count_unknown_marker_is_non_blocking(self):
+        self.assertEqual(_parse_support_count_value("미정"), (0, "미정"))
+
+        workbook = self._build_sample_workbook()
+        sheet = workbook[ARLS_SHEET_NAME]
+        rows_meta = _locate_support_section_rows(sheet)
+        sheet.cell(row=rows_meta["day_need_row"], column=4, value="섭외 2인 요청")
+        sheet.cell(row=rows_meta["day_vendor_count_row"], column=4, value="미정")
+
+        parsed = _parse_arls_canonical_import_sheet(sheet)
+        block = next(
+            row for row in parsed["support_blocks"]
+            if row["target_date"].isoformat() == "2026-03-01"
+            and row["block_type"] == "day_support"
+        )
+        external_cell = next(
+            row for row in parsed["support_cells"]
+            if row["schedule_date"].isoformat() == "2026-03-01"
+            and row["source_block"] == "day_support_external_count"
+        )
+
+        self.assertEqual(block["required_count_numeric"], 2)
+        self.assertEqual(block["external_count_numeric"], 0)
+        self.assertEqual(external_cell["parsed_semantic_type"], "numeric_count")
+        self.assertIsNone(external_cell["issue_code"])
+        self.assertNotIn("UNSUPPORTED_CELL_FORMAT", block["issues"])
+        workbook.close()
 
     def test_build_import_current_body_index_uses_base_rows_only(self):
         index = _build_import_current_body_index_from_existing_schedule_rows(

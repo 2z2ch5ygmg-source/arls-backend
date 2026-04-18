@@ -166,6 +166,7 @@ For Wizard Type slices, also reject if any item is true:
 - blocker counts are non-zero but default preview does not expose the blocker rows/reasons,
 - `검토 필요` rows disable next/apply by themselves,
 - `반영 불가능` is used for non-blocking review/protected rows or is not red,
+- `미정` or blank support assignment fields are treated as blocking when a parseable `필요인원수` exists,
 - completed step checkmarks are visually weak,
 - active/completed stepper line extends beyond the current marker center,
 - step marker is clipped by the stepper container.

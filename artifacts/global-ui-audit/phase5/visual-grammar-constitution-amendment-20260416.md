@@ -110,6 +110,7 @@ The following patterns are explicitly banned for Wizard Type screens, especially
 17. Completed step checkmarks must be visually stronger than ordinary numeric markers. A tiny faint checkmark fails.
 18. `차단` means a wizard-blocking reason that prevents applying/advancing. Every blocked count must have visible row-level or grouped blocker evidence in the review step. `검토 필요` is non-blocking and must not disable the next/apply action by itself.
 19. Upload review result chips use only `반영 가능` and `반영 불가능`. `반영 불가능` is reserved for true blocker rows and must use red visual treatment; all non-blocking review/protected/reference rows use `반영 가능`.
+20. In schedule upload, `미정`, `미확정`, empty support-worker/request-person slots, and empty worker assignment cells are non-blocking placeholders when `필요인원수` already states the request size. They must not become `차단` or `UNSUPPORTED_CELL_FORMAT` by themselves.
 
 ### 4. Document / Form Type
 

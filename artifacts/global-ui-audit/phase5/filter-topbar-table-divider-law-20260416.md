@@ -267,6 +267,7 @@ For upload/review preview tables:
 - Blocker rows are the only rows that may show `반영 불가능`, and their reason text must be visually red.
 - A non-zero blocker summary with no visible blocker rows in the default review preview fails.
 - `검토 필요` rows are not blockers and must remain able to proceed unless a separate true blocker exists.
+- `미정` or blank support assignment/count fields are displayed only as non-blocking pending/unknown values when the required headcount is already parseable.
 
 ### Default Action Visibility
 

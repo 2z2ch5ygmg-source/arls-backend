@@ -734,10 +734,17 @@ def _parse_support_worker_cell(value: object) -> dict[str, Any]:
     }
 
 
+def _is_support_unknown_count_value(value: object) -> bool:
+    text = _normalize_workbook_display_value(value)
+    return text in {"미정", "미확정", "미배정", "추후", "추후확정", "TBD", "tbd"}
+
+
 def _parse_support_count_value(value: object) -> tuple[int | None, str]:
     text = _normalize_workbook_display_value(value)
     if not text:
         return 0, ""
+    if _is_support_unknown_count_value(text):
+        return 0, text
     numeric = _parse_numeric_hours(text)
     if numeric is not None:
         return max(0, int(numeric)), text
@@ -786,7 +793,8 @@ def _support_block_has_meaningful_demand(
         return True
     if external_count_numeric not in (None, 0):
         return True
-    if str(external_count_raw or "").strip():
+    external_count_text = str(external_count_raw or "").strip()
+    if external_count_text and not _is_support_unknown_count_value(external_count_text):
         return True
     return bool(str(purpose_text or "").strip())
 
