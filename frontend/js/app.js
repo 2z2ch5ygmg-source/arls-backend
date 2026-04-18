@@ -27059,10 +27059,12 @@ async function onScheduleFinanceReviewDownload(progressController = null) {
     successMessage: "Finance 1차 확인본을 다운로드했습니다.",
     progressController,
   });
-  await Promise.allSettled([
+  Promise.allSettled([
     loadScheduleFinanceSubmissionStatus(),
     loadReportsFinanceOverviewWorkspace({ force: true }),
-  ]);
+  ]).catch((refreshError) => {
+    console.error("[RG ARLS] finance review background refresh failed", refreshError);
+  });
 }
 
 async function onScheduleFinancePreview(progressController = null) {
@@ -27205,8 +27207,8 @@ async function onScheduleFinanceApply(progressController = null) {
     }
     progressController?.update({
       stageKey: "finance_refreshing",
-      progress: 92,
-      detail: "제출 상태와 후속 다운로드 정보를 새로고침하고 있습니다.",
+      progress: 98,
+      detail: "반영 결과를 정리하고 있습니다.",
     });
     setScheduleFinanceUI({
       batchInfo: safeText("#scheduleFinanceBatchInfo"),
@@ -27218,11 +27220,13 @@ async function onScheduleFinanceApply(progressController = null) {
       applyResult: `반영 완료: 적용 ${Number(result?.applied || 0)}건, 건너뜀 ${Number(result?.skipped || 0)}건`,
     });
     resetScheduleFinancePreview();
-    await Promise.allSettled([
+    Promise.allSettled([
       loadScheduleFinanceSubmissionStatus(),
       loadReportsFinanceOverviewWorkspace({ force: true }),
       loadScheduleSupportRoundtripStatus(),
-    ]);
+    ]).catch((refreshError) => {
+      console.error("[RG ARLS] finance apply background refresh failed", refreshError);
+    });
     showToast(
       `Finance 최종 업로드 완료: 적용 ${Number(result?.applied || 0)}건`,
       "success",

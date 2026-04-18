@@ -152,7 +152,8 @@ class ScheduleFinanceSubmissionHelpersTests(unittest.TestCase):
         with patch("app.routers.v1.schedules._resolve_target_tenant", return_value={"id": "tenant-1", "tenant_code": "SRS_KOREA"}), \
              patch("app.routers.v1.schedules._get_finance_submission_batch", return_value=finance_batch), \
              patch("app.routers.v1.schedules._resolve_site_context_by_code", return_value={"id": "site-1", "site_code": "R692"}), \
-             patch("app.routers.v1.schedules._sync_finance_submission_state", return_value=({"id": "state-1"}, "rev-current")), \
+             patch("app.routers.v1.schedules._ensure_finance_submission_state", return_value={"id": "state-1"}), \
+             patch("app.routers.v1.schedules._sync_finance_submission_state") as sync_state, \
              patch("app.routers.v1.schedules.apply_import", return_value=result), \
              patch("app.routers.v1.schedules._build_schedule_export_revision", return_value="rev-final"):
             response = apply_finance_final_upload(
@@ -162,6 +163,7 @@ class ScheduleFinanceSubmissionHelpersTests(unittest.TestCase):
                 user={"id": "user-1", "role": "Supervisor", "site_id": "site-1", "site_code": "R692"},
             )
 
+        sync_state.assert_not_called()
         self.assertEqual(response.applied, 3)
         state_update = next(
             params

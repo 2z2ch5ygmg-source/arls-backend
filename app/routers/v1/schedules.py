@@ -5940,6 +5940,7 @@ def _collect_finance_review_export_context(
         user=user,
         build_workbook=False,
         allow_empty_employee_blocks=True,
+        include_board_fallback=False,
     )
     if _monthly_export_context_has_visible_employee_blocks(export_ctx):
         return export_ctx
@@ -5968,6 +5969,7 @@ def _collect_finance_review_all_site_export_contexts(
             user=user,
             build_workbook=False,
             allow_empty_employee_blocks=True,
+            include_board_fallback=False,
         )
         if _monthly_export_context_has_visible_employee_blocks(export_ctx):
             export_contexts.append(export_ctx)
@@ -15720,10 +15722,11 @@ def preview_finance_final_upload(
     )
     if not site_row:
         raise HTTPException(status_code=404, detail="site not found")
-    submission_row, current_revision = _sync_finance_submission_state(
+    submission_row = _ensure_finance_submission_state(
         conn,
-        target_tenant=target_tenant,
-        site_row=site_row,
+        tenant_id=str(target_tenant["id"]),
+        site_id=str(site_row["id"]),
+        site_code=str(site_row["site_code"]),
         month_key=str(month).strip(),
     )
     review_download_revision = str(submission_row.get("review_download_revision") or "").strip()
@@ -15746,6 +15749,13 @@ def preview_finance_final_upload(
     if blocking_row_count > 0:
         blocked_reasons.append(f"충돌/차단 행 {blocking_row_count}건을 먼저 해결해야 합니다.")
     metadata = preview_result.metadata
+    current_revision = str(getattr(metadata, "current_revision", "") or "").strip()
+    if current_revision:
+        submission_row = _refresh_finance_submission_state_row(
+            conn,
+            state_row=submission_row,
+            current_revision=current_revision,
+        )
     if metadata and bool(metadata.is_stale):
         blocked_reasons.append("업로드한 파일이 현재 ARLS 리비전보다 오래되어 최종 업로드를 진행할 수 없습니다.")
     if review_download_revision != current_revision:
@@ -15754,7 +15764,7 @@ def preview_finance_final_upload(
         conn,
         submission_row=submission_row,
         batch_kind="final_upload",
-        source_revision=str((metadata or {}).export_revision or current_revision),
+        source_revision=str(getattr(metadata, "export_revision", "") or current_revision),
         filename=file.filename or _build_finance_final_filename(month_key=str(month).strip(), site_code=str(site_row["site_code"]).strip()),
         actor_id=str(user["id"]),
         actor_role=_finance_submission_normalize_role(user),
@@ -15813,10 +15823,11 @@ def apply_finance_final_upload(
     )
     if not site_row:
         raise HTTPException(status_code=404, detail="site not found")
-    submission_row, current_revision = _sync_finance_submission_state(
+    submission_row = _ensure_finance_submission_state(
         conn,
-        target_tenant=target_tenant,
-        site_row=site_row,
+        tenant_id=str(target_tenant["id"]),
+        site_id=str(site_row["id"]),
+        site_code=str(site_row["site_code"]),
         month_key=str(finance_batch.get("month_key") or "").strip(),
     )
     blocked_reasons = list(dict.fromkeys(
@@ -15824,8 +15835,6 @@ def apply_finance_final_upload(
         for item in (finance_batch.get("blocked_reasons_json") or [])
         if str(item).strip()
     ))
-    if str(finance_batch.get("source_revision") or "").strip() != current_revision:
-        blocked_reasons.append("최종 업로드 파일이 최신 assembled revision 기준이 아닙니다.")
     if blocked_reasons:
         with conn.cursor() as cur:
             cur.execute(
