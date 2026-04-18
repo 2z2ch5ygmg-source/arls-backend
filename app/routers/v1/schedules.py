@@ -15983,20 +15983,19 @@ def download_finance_final_excel(
     )
     if not site_row:
         raise HTTPException(status_code=404, detail="site not found")
-    status_payload = _build_finance_submission_status_payload(
-        conn,
-        target_tenant=target_tenant,
-        site_row=site_row,
-        month_key=month,
-    )
-    if not status_payload.final_download_enabled:
-        raise HTTPException(status_code=409, detail="finance final workbook not available")
     submission_row = _get_finance_submission_state(
         conn,
         tenant_id=str(target_tenant["id"]),
         site_id=str(site_row["id"]),
         month_key=month,
     )
+    if (
+        not submission_row
+        or not bool(submission_row.get("final_download_enabled"))
+        or bool(submission_row.get("final_upload_stale"))
+        or bool(submission_row.get("conflict_required"))
+    ):
+        raise HTTPException(status_code=409, detail="finance final workbook not available")
     active_batch_id = str((submission_row or {}).get("active_final_batch_id") or "").strip()
     if not active_batch_id:
         raise HTTPException(status_code=409, detail="finance final artifact missing")

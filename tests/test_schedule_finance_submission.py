@@ -95,18 +95,21 @@ class ScheduleFinanceSubmissionHelpersTests(unittest.TestCase):
     def test_final_download_streams_stored_uploaded_artifact(self):
         target_tenant = {"id": "tenant-1", "tenant_code": "SRS_KOREA"}
         site_row = {"id": "site-1", "site_code": "R692"}
-        submission_row = {"active_final_batch_id": "batch-1"}
+        submission_row = {
+            "active_final_batch_id": "batch-1",
+            "final_download_enabled": True,
+            "final_upload_stale": False,
+            "conflict_required": False,
+        }
         stored_bytes = b"finance-final-artifact"
         finance_batch = {
             "id": "batch-1",
             "filename": "finance-final-original.xlsx",
             "artifact_bytes": stored_bytes,
         }
-        status_payload = type("StatusPayload", (), {"final_download_enabled": True})()
 
         with patch("app.routers.v1.schedules._resolve_target_tenant", return_value=target_tenant), \
              patch("app.routers.v1.schedules._resolve_site_context_by_code", return_value=site_row), \
-             patch("app.routers.v1.schedules._build_finance_submission_status_payload", return_value=status_payload), \
              patch("app.routers.v1.schedules._get_finance_submission_state", return_value=submission_row), \
              patch("app.routers.v1.schedules._get_finance_submission_batch", return_value=finance_batch):
             response = download_finance_final_excel(
@@ -120,6 +123,36 @@ class ScheduleFinanceSubmissionHelpersTests(unittest.TestCase):
         streamed = asyncio.run(self._read_streaming_response(response))
         self.assertEqual(streamed, stored_bytes)
         self.assertIn("finance-final-original.xlsx", response.headers.get("Content-Disposition", ""))
+
+    def test_final_download_skips_revision_sync_for_stored_artifact(self):
+        target_tenant = {"id": "tenant-1", "tenant_code": "SRS_KOREA"}
+        site_row = {"id": "site-1", "site_code": "R692"}
+        submission_row = {
+            "active_final_batch_id": "batch-1",
+            "final_download_enabled": True,
+            "final_upload_stale": False,
+            "conflict_required": False,
+        }
+        finance_batch = {
+            "id": "batch-1",
+            "filename": "finance-final-original.xlsx",
+            "artifact_bytes": b"finance-final-artifact",
+        }
+
+        with patch("app.routers.v1.schedules._resolve_target_tenant", return_value=target_tenant), \
+             patch("app.routers.v1.schedules._resolve_site_context_by_code", return_value=site_row), \
+             patch("app.routers.v1.schedules._get_finance_submission_state", return_value=submission_row), \
+             patch("app.routers.v1.schedules._get_finance_submission_batch", return_value=finance_batch), \
+             patch("app.routers.v1.schedules._build_finance_submission_status_payload") as build_status:
+            download_finance_final_excel(
+                month="2026-03",
+                site_code="R692",
+                tenant_code="SRS_KOREA",
+                conn=object(),
+                user={"role": "HQ_Admin"},
+            )
+
+        build_status.assert_not_called()
 
     async def _read_streaming_response(self, response) -> bytes:
         chunks = []
