@@ -110912,3 +110912,55 @@ document.addEventListener("compositionend", (event) => {
     }
   }
 })();
+
+function getScheduleUploadDropzoneInput(target) {
+  const zone =
+    target instanceof HTMLElement
+      ? target.closest(".schedule-upload-dropzone")
+      : null;
+  if (!(zone instanceof HTMLElement)) return null;
+  const input = zone.querySelector('input[type="file"]');
+  return input instanceof HTMLInputElement ? input : null;
+}
+
+function setScheduleUploadInputFiles(input, fileList) {
+  if (!(input instanceof HTMLInputElement) || !fileList?.length) return false;
+  try {
+    const transfer = new DataTransfer();
+    Array.from(fileList).forEach((file) => transfer.items.add(file));
+    input.files = transfer.files;
+  } catch {
+    return false;
+  }
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  if (input.id === "scheduleImportFile") {
+    invalidateScheduleImportAnalysis?.(["file"]);
+  }
+  if (typeof renderScheduleUploadWorkspace === "function") {
+    renderScheduleUploadWorkspace();
+  }
+  return true;
+}
+
+document.addEventListener("dragover", (event) => {
+  const input = getScheduleUploadDropzoneInput(event.target);
+  if (!input) return;
+  event.preventDefault();
+  input.closest(".schedule-upload-dropzone")?.classList.add("is-drag-over");
+});
+
+document.addEventListener("dragleave", (event) => {
+  const zone =
+    event.target instanceof HTMLElement
+      ? event.target.closest(".schedule-upload-dropzone")
+      : null;
+  if (zone instanceof HTMLElement) zone.classList.remove("is-drag-over");
+});
+
+document.addEventListener("drop", (event) => {
+  const input = getScheduleUploadDropzoneInput(event.target);
+  if (!input) return;
+  event.preventDefault();
+  input.closest(".schedule-upload-dropzone")?.classList.remove("is-drag-over");
+  setScheduleUploadInputFiles(input, event.dataTransfer?.files);
+});

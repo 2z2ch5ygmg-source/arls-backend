@@ -40362,6 +40362,7 @@ body.calendar-public-shell #view-calendar-public {
 
 #view-schedule #scheduleUploadPanel .schedule-upload-review-shell {
   display: grid !important;
+  grid: auto / minmax(0, 1fr) !important;
   gap: 14px !important;
 }
 
@@ -40386,6 +40387,66 @@ body.calendar-public-shell #view-calendar-public {
   align-items: center !important;
   justify-content: space-between !important;
   width: 100% !important;
+}
+
+/* Final schedule upload review fixes: keep after all legacy schedule rules. */
+#view-schedule #scheduleUploadPanel .schedule-upload-step-rail {
+  padding-block-start: 14px !important;
+  overflow: visible !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-upload-step-rail > div {
+  border: 0 !important;
+  background: transparent !important;
+  overflow: visible !important;
+  padding-block-start: 2px !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-upload-step-rail button[data-step] {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-upload-step-rail button[data-step] [class$="step-marker"] {
+  margin-block-start: 0 !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-upload-issues-panel > .schedule-preview-head {
+  display: none !important;
+}
+
+#view-schedule #scheduleUploadPanel #scheduleBaseReviewStage,
+#view-schedule #scheduleUploadPanel [id$="PreviewStage"] {
+  max-height: calc(100vh - 300px) !important;
+  min-height: 360px !important;
+  overflow: auto !important;
+  overscroll-behavior: contain !important;
+  padding-bottom: 24px !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-upload-dropzone.is-drag-over {
+  border-color: var(--ui-accent) !important;
+  background: #fff1e7 !important;
+}
+
+#view-schedule #scheduleUploadPanel button[data-step],
+#view-schedule #scheduleUploadPanel.schedule-upload-workspace.schedule-tab-panel button[data-step],
+#view-schedule #scheduleUploadPanel button[data-step]:hover,
+#view-schedule #scheduleUploadPanel.schedule-upload-workspace.schedule-tab-panel button[data-step]:hover,
+#view-schedule #scheduleUploadPanel button[data-step]:focus-visible,
+#view-schedule #scheduleUploadPanel.schedule-upload-workspace.schedule-tab-panel button[data-step]:focus-visible {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+#view-schedule #scheduleUploadPanel button[data-step]::before,
+#view-schedule #scheduleUploadPanel button[data-step]::after {
+  display: none !important;
+  border: 0 !important;
+  background: transparent !important;
 }
 
 #view-schedule #scheduleUploadPanel .schedule-preview-wrap,
@@ -66265,7 +66326,6 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 
 #view-schedule #scheduleUploadPanel .schedule-upload-review-shell {
   display: grid !important;
-  grid-template: auto / minmax(0, 1fr) !important;
   gap: 14px !important;
 }
 
