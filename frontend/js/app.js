@@ -20462,8 +20462,20 @@ function createScheduleUploadStackCell(primary = "-", secondary = "") {
 }
 
 function getScheduleImportCellRef(row = {}) {
-  const rowNo = Number(row?.row_no || row?.required_row_no || 0);
-  const sourceCol = String(row?.source_col || row?.sourceCol || "").trim();
+  const detailJson =
+    row?.detail_json && typeof row.detail_json === "object"
+      ? row.detail_json
+      : {};
+  const rowNo = Number(
+    row?.row_no ||
+      row?.required_row_no ||
+      detailJson?.required_row_no ||
+      detailJson?.required_row ||
+      0,
+  );
+  const sourceCol = String(
+    row?.source_col || row?.sourceCol || detailJson?.source_col || "",
+  ).trim();
   if (sourceCol && rowNo > 0) return `${sourceCol}${rowNo}`;
   if (rowNo > 0) return `행 ${rowNo}`;
   return "-";
