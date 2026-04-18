@@ -1933,7 +1933,7 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
         )
         workbook.close()
 
-    def test_load_canonical_schedule_import_apply_payload_rows_rebuilds_from_raw_workbook(self):
+    def test_load_canonical_schedule_import_apply_payload_rows_rebuilds_from_raw_workbook_when_preview_rows_missing(self):
         workbook = self._build_sample_workbook()
         rebuilt_rows = {
             "resolved_rows": [
@@ -1947,7 +1947,7 @@ class MonthlyScheduleCanonicalImportTests(unittest.TestCase):
 
         with patch(
             "app.routers.v1.schedules._load_schedule_import_payload_rows",
-            return_value=[{"source_block": "body", "row_no": 999}],
+            return_value=[],
         ), patch(
             "app.routers.v1.schedules._load_schedule_import_batch_raw_workbook",
             return_value={

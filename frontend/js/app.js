@@ -24550,15 +24550,29 @@ async function onScheduleSupportHqInspect(progressController = null) {
     showToast("업로드할 지점을 먼저 선택해 주세요.", "error");
     return;
   }
-  const status =
+  let status =
     state.schedule.supportStatus &&
     typeof state.schedule.supportStatus === "object"
       ? state.schedule.supportStatus
-      : await loadScheduleSupportRoundtripStatus();
-  const artifactContext = buildScheduleSupportArtifactContext(
+      : null;
+  let artifactContext = buildScheduleSupportArtifactContext(
     status,
     context.siteCode || "ALL",
   );
+  if (!artifactContext.artifact_id && !workspace.contract) {
+    await loadScheduleSupportHqWorkspaceContract({ force: false });
+    artifactContext = buildScheduleSupportArtifactContext(
+      status,
+      context.siteCode || "ALL",
+    );
+  }
+  if (!artifactContext.artifact_id && !status) {
+    status = await loadScheduleSupportRoundtripStatus();
+    artifactContext = buildScheduleSupportArtifactContext(
+      status,
+      context.siteCode || "ALL",
+    );
+  }
   if (!artifactContext.artifact_id) {
     showToast("현재 month/site 기준 source artifact가 아직 없습니다.", "error");
     return;
@@ -24737,12 +24751,8 @@ async function onScheduleSupportHqApply(progressController = null) {
     progressController?.update({
       stageKey: "handoff_refresh",
       progress: 98,
-      detail: "반영 결과와 최신 지원근무 상태를 새로고침하고 있습니다.",
+      detail: "반영 결과를 정리하고 있습니다.",
     });
-    await Promise.allSettled([
-      loadScheduleSupportRoundtripStatus(),
-      loadScheduleSupportHqWorkspaceContract({ force: true }),
-    ]);
     renderScheduleUploadWorkspace();
     if (result?.applied) {
       showToast("HQ 지원근무자 반영 apply를 완료했습니다.", "success", 2600);
@@ -24782,6 +24792,17 @@ async function onScheduleSupportHqApply(progressController = null) {
     } else {
       showToast("HQ 지원근무자 반영 apply 결과를 확인해 주세요.", "info", 2400);
     }
+    Promise.allSettled([
+      loadScheduleSupportRoundtripStatus(),
+      loadScheduleSupportHqWorkspaceContract({ force: true }),
+    ])
+      .then(() => renderScheduleUploadWorkspace())
+      .catch((refreshError) => {
+        console.error(
+          "[RG ARLS] support hq apply background refresh failed",
+          refreshError,
+        );
+      });
   } catch (error) {
     workspace.applyLoading = false;
     workspace.applyError = normalizeActionError(
@@ -97617,12 +97638,11 @@ async function onScheduleApply(progressController = null) {
     }
     progressController?.update({
       stageKey: "refreshing",
-      progress: 92,
-      detail: "반영 결과와 연계 상태를 다시 불러오고 있습니다.",
+      progress: 98,
+      detail: "반영 결과를 정리하고 있습니다.",
     });
     state.previewBatchId = "";
     invalidateScheduleCache();
-    await Promise.allSettled([loadSchedule({ force: true }), loadDashboard()]);
     setScheduleImportUI({
       batchInfo: uploadUi.batchInfo,
       issues: [
@@ -97639,12 +97659,18 @@ async function onScheduleApply(progressController = null) {
     state.ops.excelImportAt = new Date().toISOString();
     state.ops.excelImportMessage = `적용 ${Number(result.applied || 0)}건`;
     renderOpsAutomationStatus();
-    await Promise.allSettled([loadScheduleSupportRoundtripStatus()]);
     showToast(
       `반영 완료: 적용 ${result.applied}건, 실패/건너뜀 ${result.skipped}건`,
       "success",
       3500,
     );
+    Promise.allSettled([
+      loadSchedule({ force: true }),
+      loadDashboard(),
+      loadScheduleSupportRoundtripStatus(),
+    ]).catch((refreshError) => {
+      console.error("[RG ARLS] schedule apply background refresh failed", refreshError);
+    });
   } catch (error) {
     state.ops.excelImportStatus = "FAIL";
     state.ops.excelImportAt = new Date().toISOString();
@@ -105413,12 +105439,6 @@ function bindUiEvents() {
         });
         workspace.selectedSiteCodes = Array.from(nextSet);
         renderScheduleUploadWorkspace();
-        runActionSafely(
-          loadScheduleSupportRoundtripStatus().then(() =>
-            renderScheduleUploadWorkspace(),
-          ),
-          "지점 상태를 갱신하지 못했습니다.",
-        );
         return;
       }
 
@@ -105456,12 +105476,6 @@ function bindUiEvents() {
           ? getScheduleSupportHqSelectableSiteCodes()
           : [];
         renderScheduleUploadWorkspace();
-        runActionSafely(
-          loadScheduleSupportRoundtripStatus().then(() =>
-            renderScheduleUploadWorkspace(),
-          ),
-          "지점 상태를 갱신하지 못했습니다.",
-        );
         return;
       }
 

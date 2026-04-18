@@ -4346,8 +4346,15 @@ def _describe_arls_template_version(template_path: Path) -> str:
     return f"{ARLS_EXPORT_TEMPLATE_VERSION}:{template_path.name}:{int(stat.st_mtime)}"
 
 
-def _read_monthly_board_rows_for_export(conn, *, tenant_id: str, month_key: str) -> list[dict]:
+def _read_monthly_board_rows_for_export(
+    conn,
+    *,
+    tenant_id: str,
+    month_key: str,
+    site_id: str | None = None,
+) -> list[dict]:
     start_date, end_date = _month_bounds(month_key)
+    normalized_site_id = str(site_id or "").strip()
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -4384,16 +4391,29 @@ def _read_monthly_board_rows_for_export(conn, *, tenant_id: str, month_key: str)
             WHERE ms.tenant_id = %s
               AND ms.schedule_date >= %s
               AND ms.schedule_date < %s
+              AND (%s = '' OR ms.site_id::text = %s)
             ORDER BY ms.schedule_date ASC, s.site_code ASC, e.employee_code ASC
             """,
-            (tenant_id, start_date, end_date),
+            (tenant_id, start_date, end_date, normalized_site_id, normalized_site_id),
         )
         return [dict(row) for row in cur.fetchall()]
 
 
-def _read_monthly_support_assignment_rows_for_export(conn, *, tenant_id: str, site_code: str, month_key: str) -> list[dict]:
+def _read_monthly_support_assignment_rows_for_export(
+    conn,
+    *,
+    tenant_id: str,
+    site_code: str,
+    month_key: str,
+    site_id: str | None = None,
+) -> list[dict]:
     start_date, end_date = _month_bounds(month_key)
-    rows = list_support_assignments(conn, tenant_id=tenant_id, work_date=None, site_id=None)
+    rows = list_support_assignments(
+        conn,
+        tenant_id=tenant_id,
+        work_date=None,
+        site_id=str(site_id or "").strip() or None,
+    )
     filtered: list[dict] = []
     for row in rows:
         work_date = row.get("work_date")
@@ -4406,9 +4426,21 @@ def _read_monthly_support_assignment_rows_for_export(conn, *, tenant_id: str, si
     return filtered
 
 
-def _read_monthly_overnight_rows_for_export(conn, *, tenant_id: str, site_code: str, month_key: str) -> list[dict]:
+def _read_monthly_overnight_rows_for_export(
+    conn,
+    *,
+    tenant_id: str,
+    site_code: str,
+    month_key: str,
+    site_id: str | None = None,
+) -> list[dict]:
     start_date, end_date = _month_bounds(month_key)
-    rows = list_apple_report_overnight_records(conn, tenant_id=tenant_id, work_date=None, site_id=None)
+    rows = list_apple_report_overnight_records(
+        conn,
+        tenant_id=tenant_id,
+        work_date=None,
+        site_id=str(site_id or "").strip() or None,
+    )
     filtered: list[dict] = []
     for row in rows:
         work_date = row.get("work_date")
@@ -4883,7 +4915,12 @@ def _build_schedule_export_revision(
 ) -> str:
     board_rows = [
         row
-        for row in _read_monthly_board_rows_for_export(conn, tenant_id=tenant_id, month_key=month_key)
+        for row in _read_monthly_board_rows_for_export(
+            conn,
+            tenant_id=tenant_id,
+            month_key=month_key,
+            site_id=site_id,
+        )
         if str(row.get("site_code") or "").strip() == site_code
     ]
     support_rows = _read_monthly_support_assignment_rows_for_export(
@@ -4891,12 +4928,14 @@ def _build_schedule_export_revision(
         tenant_id=tenant_id,
         site_code=site_code,
         month_key=month_key,
+        site_id=site_id,
     )
     overnight_rows = _read_monthly_overnight_rows_for_export(
         conn,
         tenant_id=tenant_id,
         site_code=site_code,
         month_key=month_key,
+        site_id=site_id,
     )
     employee_overnight_rows = _read_monthly_employee_overnight_rows_for_export(
         conn,
@@ -6784,6 +6823,7 @@ def _collect_monthly_export_context(
     user: dict,
     build_workbook: bool = True,
     allow_empty_employee_blocks: bool = False,
+    include_board_fallback: bool = True,
 ) -> dict[str, Any]:
     rows = [
         row
@@ -6791,24 +6831,26 @@ def _collect_monthly_export_context(
             conn,
             tenant_id=str(target_tenant["id"]),
             month_key=month_key,
+            site_id=str(site_row.get("id") or "").strip() or None,
         )
         if str(row.get("site_code") or "").strip() == str(site_row.get("site_code") or "").strip()
     ]
-    board_payload = monthly_board_lite(
-        month=month_key,
-        tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
-        conn=conn,
-        user=user,
-    )
-    rows = _merge_export_rows_with_board_fallback(
-        rows,
-        _build_export_rows_from_board_payload(
-            conn,
-            tenant_id=str(target_tenant["id"]),
-            board_payload=board_payload,
-            site_code=str(site_row.get("site_code") or "").strip(),
-        ),
-    )
+    if include_board_fallback:
+        board_payload = monthly_board_lite(
+            month=month_key,
+            tenant_code=str(target_tenant.get("tenant_code") or "").strip(),
+            conn=conn,
+            user=user,
+        )
+        rows = _merge_export_rows_with_board_fallback(
+            rows,
+            _build_export_rows_from_board_payload(
+                conn,
+                tenant_id=str(target_tenant["id"]),
+                board_payload=board_payload,
+                site_code=str(site_row.get("site_code") or "").strip(),
+            ),
+        )
     support_request_rows = _read_monthly_support_request_rows_for_export(
         conn,
         tenant_id=str(target_tenant["id"]),
@@ -6820,6 +6862,7 @@ def _collect_monthly_export_context(
         tenant_id=str(target_tenant["id"]),
         site_code=str(site_row["site_code"]),
         month_key=month_key,
+        site_id=str(site_row.get("id") or "").strip() or None,
     )
     support_rows = _filter_support_assignment_rows_for_active_scopes(
         support_rows,
@@ -6830,6 +6873,7 @@ def _collect_monthly_export_context(
         tenant_id=str(target_tenant["id"]),
         site_code=str(site_row["site_code"]),
         month_key=month_key,
+        site_id=str(site_row.get("id") or "").strip() or None,
     )
     employee_overnight_rows = _read_monthly_employee_overnight_rows_for_export(
         conn,
@@ -18272,6 +18316,7 @@ def _build_schedule_import_preview_result(
         month_key=selected_month,
         user=user,
         allow_empty_employee_blocks=True,
+        include_board_fallback=False,
     )
     timings_ms["current_export_context"] = _rounded_timing_ms(export_ctx_started_at)
     current_revision = str(export_ctx.get("export_revision") or "").strip()
@@ -19856,6 +19901,9 @@ def _load_canonical_schedule_import_apply_payload_rows(
     user: dict[str, Any],
 ) -> list[dict[str, Any]]:
     persisted_payload_rows = _load_schedule_import_payload_rows(conn, batch_id=batch_id)
+    if persisted_payload_rows:
+        return persisted_payload_rows
+
     month_key = str(batch.get("month_key") or "").strip()
     if not month_key:
         return persisted_payload_rows
