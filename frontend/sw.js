@@ -1,4 +1,4 @@
-const SW_VERSION = 'rg-arls-sw-v20260419-upload-railcircle-01';
+const SW_VERSION = 'rg-arls-sw-v20260419-upload-railclearance-01';
 const SHELL_CACHE = `${SW_VERSION}-shell`;
 const STATIC_CACHE = `${SW_VERSION}-static`;
 const ACTIVE_CACHES = new Set([SHELL_CACHE, STATIC_CACHE]);

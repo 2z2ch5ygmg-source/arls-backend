@@ -60106,6 +60106,7 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   .schedule-upload-wizard-layout.arls-upload-wizard__layout {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) !important;
+  overflow: visible !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
@@ -60113,10 +60114,11 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
 #view-schedule #scheduleUploadPanel.arls-upload-wizard
   .schedule-upload-step-rail.arls-upload-wizard__progress {
   width: 100% !important;
-  padding: 8px 28px 12px !important;
+  padding: 20px 28px 12px !important;
   border-right: 0 !important;
   border-bottom: 1px solid rgba(203, 213, 225, 0.72) !important;
   background: transparent !important;
+  overflow: visible !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
@@ -60149,7 +60151,7 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   .schedule-wizard-progress.arls-upload-wizard__steps::before {
   content: "";
   position: absolute !important;
-  top: 23px !important;
+  top: 35px !important;
   right: calc((100% / var(--wizard-step-count, 4) / 2) + 15px) !important;
   left: calc((100% / var(--wizard-step-count, 4) / 2) + 15px) !important;
   display: block !important;
@@ -60164,7 +60166,7 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   .schedule-wizard-progress.arls-upload-wizard__steps::after {
   content: "";
   position: absolute !important;
-  top: 23px !important;
+  top: 35px !important;
   left: calc((100% / var(--wizard-step-count, 4) / 2) + 15px) !important;
   display: block !important;
   width: var(--arls-upload-wizard-progress, 0%) !important;
@@ -60191,8 +60193,8 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) !important;
   justify-items: center !important;
-  min-height: 66px !important;
-  padding: 38px 8px 0 !important;
+  min-height: 78px !important;
+  padding: 50px 8px 0 !important;
   border: 0 !important;
   background: transparent !important;
   color: #64748b !important;
@@ -60206,7 +60208,7 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   .schedule-wizard-step.arls-upload-wizard__step
   .schedule-wizard-step-marker {
   position: absolute !important;
-  top: 8px !important;
+  top: 20px !important;
   left: 50% !important;
   width: 30px !important;
   height: 30px !important;
