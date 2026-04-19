@@ -22037,7 +22037,32 @@ function renderScheduleUploadProgress(containerSelector, steps, activeStep) {
   });
 }
 
+function setScheduleUploadProgressVisible(element, visible) {
+  if (!(element instanceof HTMLElement)) return;
+  element.classList.toggle("hidden", !visible);
+  element.setAttribute("aria-hidden", visible ? "false" : "true");
+  if (visible) {
+    element.style.removeProperty("display");
+  } else {
+    element.style.setProperty("display", "none", "important");
+  }
+}
+
+function getScheduleUploadProgressElement(prefix) {
+  const flowName =
+    SCHEDULE_UPLOAD_FLOW_WORD.charAt(0).toUpperCase() +
+    SCHEDULE_UPLOAD_FLOW_WORD.slice(1);
+  return document.getElementById(`schedule${prefix}${flowName}Progress`);
+}
+
 function renderScheduleBaseWizardPages() {
+  if (getScheduleUploadWorkspaceMode() !== SCHEDULE_UPLOAD_MODE_BASE) {
+    setScheduleUploadProgressVisible(
+      getScheduleUploadProgressElement("Base"),
+      false,
+    );
+    return;
+  }
   const step = getScheduleBaseWizardStep();
   toggleVisibility(
     "#scheduleExcelWorkflowMappingSection",
@@ -22080,6 +22105,13 @@ function renderScheduleBaseWizardPages() {
 }
 
 function renderScheduleHqWizardPages() {
+  if (getScheduleUploadWorkspaceMode() !== SCHEDULE_UPLOAD_MODE_HQ) {
+    setScheduleUploadProgressVisible(
+      getScheduleUploadProgressElement("Hq"),
+      false,
+    );
+    return;
+  }
   const step = getScheduleHqWizardStep();
   toggleVisibility(
     "#scheduleSupportUploadSection",
@@ -22152,12 +22184,14 @@ function renderScheduleUploadWorkflowSections() {
     exportSection,
     handoffSection,
   ].filter((section) => section instanceof HTMLElement);
-  toggleVisibility(
-    "#scheduleBaseWizardProgress",
+  const baseProgress = getScheduleUploadProgressElement("Base");
+  const hqProgress = getScheduleUploadProgressElement("Hq");
+  setScheduleUploadProgressVisible(
+    baseProgress,
     mode === SCHEDULE_UPLOAD_MODE_BASE,
   );
-  toggleVisibility(
-    "#scheduleHqWizardProgress",
+  setScheduleUploadProgressVisible(
+    hqProgress,
     mode === SCHEDULE_UPLOAD_MODE_HQ,
   );
   if (mainCanvas instanceof HTMLElement) {

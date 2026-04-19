@@ -35604,11 +35604,11 @@ body[data-current-view="schedule"] .topbar.app-topbar {
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-overview-view,
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-wizard-view {
-  border: 1px solid var(--border-subtle);
-  border-radius: 20px;
-  background: var(--ui-bg-surface);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-overview-view {
@@ -58083,7 +58083,7 @@ body[data-current-view="attendance"]
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-download-header {
   align-items: center;
   gap: 12px;
-  padding: 14px 20px 0;
+  padding: 0;
 }
 
 #view-reports
@@ -58096,6 +58096,20 @@ body[data-current-view="attendance"]
   margin-left: auto;
   justify-content: flex-end;
   gap: 8px;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-overview-view {
+  display: grid;
+  gap: 16px;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-overview-view .reports-finance-download-copy h3 {
+  display: none !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-wizard-view .reports-finance-main-head {
+  min-height: 40px;
+  padding: 0 0 12px;
 }
 
 #view-reports
@@ -58136,7 +58150,7 @@ body[data-current-view="attendance"]
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-content-canvas {
-  padding: 12px 20px 20px;
+  padding: 0 0 16px;
 }
 
 #view-reports
@@ -60108,6 +60122,8 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   .schedule-upload-wizard-layout.arls-upload-wizard__layout {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) !important;
+  min-height: 0 !important;
+  gap: 16px !important;
   overflow: visible !important;
 }
 
@@ -60224,6 +60240,8 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   .schedule-upload-main-canvas.arls-upload-wizard__canvas {
   width: min(100%, 1180px) !important;
   margin-inline: auto !important;
+  min-height: 0 !important;
+  padding: 0 28px 24px !important;
 }
 
 @media (max-width: 900px) {
