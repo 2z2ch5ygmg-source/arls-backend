@@ -16009,6 +16009,12 @@ const AZURE_TOPBAR_TAB_ICON_GROUPS = Object.freeze({
       apple: "bar-chart-3",
     },
   },
+  reportsWorkspaceActions: {
+    dataKey: "action",
+    icons: {
+      "reports-refresh": "sync",
+    },
+  },
 });
 
 const AZURE_TOPBAR_LABEL_ICON_FALLBACKS = Object.freeze({
@@ -16102,6 +16108,7 @@ const AZURE_TOPBAR_ICON_SELECTORS = Object.freeze([
   "#profileWorkspaceTabs",
   "#googleSheetWorkspaceTabs",
   "#reportsWorkspaceTabs",
+  "#reportsWorkspaceActions",
 ]);
 
 function normalizeAzureTopbarLookupValue(value = "") {
