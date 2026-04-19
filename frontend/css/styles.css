@@ -468,7 +468,7 @@ html[data-platform-font="apple"] {
   padding: 14px 0 0 !important;
   border: 0 !important;
   border-block-start: 1px solid rgba(226, 232, 240, 0.96) !important;
-  background: transparent !important;
+  background: #f8fafc !important;
 }
 
 .leave-policy-editor .leave-policy-editor-section:first-child {
@@ -60134,7 +60134,7 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   width: 100% !important;
   padding: 20px 28px 12px !important;
   border-right: 0 !important;
-  border-bottom: 1px solid rgba(203, 213, 225, 0.72) !important;
+  border-bottom: 0 !important;
   background: transparent !important;
   overflow: visible !important;
 }
@@ -64240,7 +64240,7 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-table {
-  min-width: 1120px !important;
+  min-width: 980px !important;
 }
 
 #view-reports #financeDownloadPanel .reports-finance-download-table {
@@ -64288,7 +64288,7 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   font-size: 12px !important;
   line-height: 18px !important;
   font-weight: 800 !important;
-  background: transparent !important;
+  background: #f8fafc !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-table th:first-child,
@@ -65383,6 +65383,10 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   background: var(--ui-bg-surface, #fff) !important;
 }
 
+#view-reports {
+  padding: 28px 32px 32px !important;
+}
+
 #view-leave > .workspace-head,
 #view-hr > .workspace-head,
 #view-requests > .workspace-head,
@@ -66278,7 +66282,7 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-overview-view,
 #view-reports #financeDownloadPanel {
   gap: var(--arls-grammar-title-gap, 16px) !important;
-  padding: 20px 24px !important;
+  padding: 24px 28px 28px !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-download-header,
@@ -66307,6 +66311,10 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 #view-reports #financeDownloadPanel .reports-finance-download-copy h3 {
   margin: 0 !important;
   line-height: 24px !important;
+}
+
+#view-reports #financeDownloadPanel .reports-finance-download-copy h3 {
+  display: none !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-inline-summary {
@@ -66342,10 +66350,26 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-summary-bar,
 #view-reports #financeDownloadPanel .reports-finance-inline-meta {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: 0 !important;
   min-height: var(--arls-grammar-topbar-h, 40px) !important;
   align-items: center !important;
-  padding: 0 0 10px !important;
+  padding: 0 !important;
   border-block-end: 1px solid var(--ui-border-subtle) !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-summary-item {
+  flex: 1 1 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  min-height: 52px !important;
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-download-table-wrap,

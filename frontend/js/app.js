@@ -26449,17 +26449,17 @@ function renderScheduleFinanceSubmissionStatus() {
     if (overviewLoading && !overviewRows.length) {
       const tr = document.createElement("tr");
       tr.className = "admin-table-empty-row";
-      tr.innerHTML = '<td colspan="8">제출 상태를 불러오는 중입니다.</td>';
+      tr.innerHTML = '<td colspan="7">제출 상태를 불러오는 중입니다.</td>';
       overviewTableBody.appendChild(tr);
     } else if (overviewError && !overviewRows.length) {
       const tr = document.createElement("tr");
       tr.className = "admin-table-empty-row";
-      tr.innerHTML = `<td colspan="8">${overviewError}</td>`;
+      tr.innerHTML = `<td colspan="7">${overviewError}</td>`;
       overviewTableBody.appendChild(tr);
     } else if (!overviewRows.length) {
       const tr = document.createElement("tr");
       tr.className = "admin-table-empty-row";
-      tr.innerHTML = '<td colspan="8">표시할 제출 대상이 없습니다.</td>';
+      tr.innerHTML = '<td colspan="7">표시할 제출 대상이 없습니다.</td>';
       overviewTableBody.appendChild(tr);
     } else {
       visibleOverviewRows.forEach((row) => {
@@ -26503,11 +26503,6 @@ function renderScheduleFinanceSubmissionStatus() {
         siteSub.textContent = siteCode || "-";
         siteCell.append(siteMain, siteSub);
 
-        const monthCell = document.createElement("td");
-        monthCell.textContent = formatScheduleMonthTitle(
-          String(row?.month || getReportsMonthValue()).trim(),
-        );
-
         const submissionCell = document.createElement("td");
         const submissionPill = document.createElement("span");
         submissionPill.className = getReportsFinanceOverviewPillClass(
@@ -26547,7 +26542,6 @@ function renderScheduleFinanceSubmissionStatus() {
         tr.append(
           selectCell,
           siteCell,
-          monthCell,
           submissionCell,
           reviewCell,
           finalCell,
