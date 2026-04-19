@@ -20322,16 +20322,18 @@ textarea::placeholder {
   position: absolute !important;
   top: 0 !important;
   left: 50% !important;
-  z-index: 2;
+  z-index: 2 !important;
   display: grid !important;
   width: 30px !important;
   height: 30px !important;
   place-items: center !important;
   transform: translateX(-50%) !important;
-  border: 1.5px solid var(--wizard-border) !important;
+  border: 0 !important;
   border-radius: 999px !important;
   background: #fff !important;
-  box-shadow: none !important;
+  box-shadow:
+    inset 0 0 0 2px var(--wizard-border),
+    0 0 0 4px #f8fafc !important;
   color: #64748b !important;
   font-size: 12px !important;
   font-weight: 800 !important;
@@ -20370,12 +20372,12 @@ textarea::placeholder {
 #view-reports
   .arls-upload-wizard__step[aria-current="step"]
   .reports-panel-stepper-index {
-  border-color: var(--wizard-accent) !important;
+  border: 0 !important;
   background: #fff7ed !important;
   color: #c2410c !important;
   box-shadow:
-    inset 0 0 0 4px #fff,
-    0 0 0 1px var(--wizard-accent) !important;
+    inset 0 0 0 3px var(--wizard-accent),
+    0 0 0 4px #f8fafc !important;
 }
 
 #view-schedule .arls-upload-wizard__step.is-complete,
@@ -60212,6 +60214,7 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
   left: 50% !important;
   width: 30px !important;
   height: 30px !important;
+  box-shadow: 0 0 0 4px #f8fafc !important;
   transform: translateX(-50%) !important;
 }
 
@@ -60292,12 +60295,12 @@ html[data-ui-theme="dark"] #view-calendar .calendar-selected-day-more {
 #view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
   .reports-finance-step-rail-item.arls-upload-wizard__step[aria-current="step"]
   .reports-panel-stepper-index {
-  border-color: #f97316 !important;
+  border: 0 !important;
   background: #fff7ed !important;
   color: #c2410c !important;
   box-shadow:
-    inset 0 0 0 4px #fff,
-    0 0 0 1px #f97316 !important;
+    inset 0 0 0 3px #f97316,
+    0 0 0 4px #f8fafc !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceWizardView.arls-upload-wizard
