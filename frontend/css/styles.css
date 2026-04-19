@@ -64234,8 +64234,8 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-table,
 #view-reports #financeDownloadPanel .reports-finance-download-table {
   display: table !important;
-  width: max-content !important;
-  table-layout: auto !important;
+  width: 100% !important;
+  table-layout: fixed !important;
   border-collapse: collapse !important;
 }
 
