@@ -1,8 +1,10 @@
 from pathlib import Path
+import inspect
 import unittest
 
 from app.db import SCHEDULE_TEMPLATE_DELETE_CONSTRAINT_SQL
 from app.routers.v1.schedules import _build_schedule_import_mapping_summary
+from app.routers.v1.schedules import delete_schedule_work_template
 from app.routers.v1.schedules import _unlink_schedule_template_mapping_entries
 
 
@@ -96,6 +98,13 @@ class ScheduleTemplateDeleteRuntimeTests(unittest.TestCase):
         self.assertTrue(
             any(call.startswith("DELETE FROM schedule_import_mapping_entries e") for call in sql_calls)
         )
+
+    def test_delete_profile_lookup_avoids_distinct_order_by_runtime_error(self):
+        source = inspect.getsource(delete_schedule_work_template)
+
+        self.assertNotIn("SELECT DISTINCT p.id, p.profile_name", source)
+        self.assertIn("GROUP BY p.id, p.profile_name", source)
+        self.assertIn("ORDER BY MAX(p.updated_at) DESC", source)
 
 
 if __name__ == "__main__":

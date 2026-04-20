@@ -16372,13 +16372,14 @@ def delete_schedule_work_template(
 
         cur.execute(
             """
-            SELECT DISTINCT p.id, p.profile_name
+            SELECT p.id, p.profile_name
             FROM schedule_import_mapping_profiles p
             JOIN schedule_import_mapping_entries e
               ON e.profile_id = p.id
             WHERE p.tenant_id = %s
               AND e.template_id = %s
-            ORDER BY p.updated_at DESC, p.created_at DESC
+            GROUP BY p.id, p.profile_name
+            ORDER BY MAX(p.updated_at) DESC, MAX(p.created_at) DESC
             """,
             (target_tenant_id, normalized_template_id),
         )
