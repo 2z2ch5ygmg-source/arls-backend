@@ -64142,9 +64142,42 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 
 #view-schedule #scheduleTemplatePanel .table-wrap table {
   width: 100% !important;
-  min-width: 980px !important;
+  min-width: 0 !important;
+  table-layout: fixed !important;
   border-collapse: collapse !important;
   background: #fff !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-wrap th:nth-child(1),
+#view-schedule #scheduleTemplatePanel .table-wrap td:nth-child(1) {
+  width: 20% !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-wrap th:nth-child(2),
+#view-schedule #scheduleTemplatePanel .table-wrap td:nth-child(2) {
+  width: 12% !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-wrap th:nth-child(3),
+#view-schedule #scheduleTemplatePanel .table-wrap td:nth-child(3) {
+  width: 16% !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-wrap th:nth-child(4),
+#view-schedule #scheduleTemplatePanel .table-wrap td:nth-child(4),
+#view-schedule #scheduleTemplatePanel .table-wrap th:nth-child(5),
+#view-schedule #scheduleTemplatePanel .table-wrap td:nth-child(5) {
+  width: 7% !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-wrap th:nth-child(6),
+#view-schedule #scheduleTemplatePanel .table-wrap td:nth-child(6) {
+  width: 13% !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-wrap th:nth-child(7),
+#view-schedule #scheduleTemplatePanel .table-wrap td:nth-child(7) {
+  width: 24% !important;
 }
 
 #view-schedule #scheduleTemplatePanel .table-wrap thead th {
@@ -64173,6 +64206,7 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   font-size: 13px !important;
   line-height: 20px !important;
   text-align: center !important;
+  white-space: nowrap !important;
   vertical-align: middle !important;
 }
 
@@ -64183,6 +64217,13 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 #view-schedule #scheduleTemplatePanel .schedule-table-cell-stack {
   justify-items: center !important;
   text-align: center !important;
+}
+
+#view-schedule #scheduleTemplatePanel .schedule-table-cell-stack > * {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 #view-schedule #scheduleTemplatePanel .table-wrap tbody tr:hover td {
@@ -64204,6 +64245,24 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   height: 32px !important;
   padding: 0 10px !important;
   border-radius: 8px !important;
+}
+
+@media (max-width: 1100px) {
+  #view-schedule #scheduleTemplatePanel .table-wrap thead th,
+  #view-schedule #scheduleTemplatePanel .table-wrap tbody td {
+    padding-inline: 4px !important;
+    font-size: 12px !important;
+  }
+
+  #view-schedule #scheduleTemplatePanel .table-actions {
+    gap: 4px !important;
+  }
+
+  #view-schedule #scheduleTemplatePanel .table-actions .btn {
+    height: 30px !important;
+    min-height: 30px !important;
+    padding-inline: 7px !important;
+  }
 }
 
 #view-schedule #scheduleTemplatePanel .admin-table-empty-row td {

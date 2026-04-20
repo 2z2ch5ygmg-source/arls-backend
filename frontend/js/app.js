@@ -88085,7 +88085,7 @@ function renderScheduleTemplateTable() {
     const tr = document.createElement("tr");
     tr.className = "admin-table-empty-row";
     const td = document.createElement("td");
-    td.colSpan = 8;
+    td.colSpan = 7;
     td.textContent = "등록된 근무 템플릿이 없습니다.";
     tr.appendChild(td);
     tableBody.appendChild(tr);
@@ -88098,7 +88098,6 @@ function renderScheduleTemplateTable() {
 
   rows.forEach((row) => {
     const tr = document.createElement("tr");
-    const isActive = row?.is_active !== false;
     const templateId = String(row?.id || "").trim();
     const usageCount = Number(usageMap.get(templateId) || 0);
 
@@ -88125,15 +88124,6 @@ function renderScheduleTemplateTable() {
         ? "-"
         : `${String(row?.paid_hours ?? row?.paidHours)}시간`;
     tr.appendChild(totalTd);
-
-    const statusTd = document.createElement("td");
-    const templateStatusPill = document.createElement("span");
-    templateStatusPill.className = isActive
-      ? "status-pill status-pill-success"
-      : "status-pill status-pill-neutral";
-    templateStatusPill.textContent = isActive ? "활성" : "비활성";
-    statusTd.appendChild(templateStatusPill);
-    tr.appendChild(statusTd);
 
     const mappingCountTd = document.createElement("td");
     mappingCountTd.textContent = usageCount > 0 ? String(usageCount) : "-";
@@ -88165,17 +88155,6 @@ function renderScheduleTemplateTable() {
       duplicateBtn.textContent = "복제";
       actionsWrap.appendChild(duplicateBtn);
 
-      const toggleBtn = document.createElement("button");
-      toggleBtn.type = "button";
-      toggleBtn.className = isActive
-        ? "btn btn-destructive"
-        : "btn btn-secondary";
-      toggleBtn.dataset.action = "schedule-template-toggle-active";
-      toggleBtn.dataset.templateId = templateId;
-      toggleBtn.dataset.nextActive = isActive ? "0" : "1";
-      toggleBtn.textContent = isActive ? "비활성화" : "활성화";
-      actionsWrap.appendChild(toggleBtn);
-
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
       deleteBtn.className = "btn btn-destructive";
@@ -88183,9 +88162,7 @@ function renderScheduleTemplateTable() {
       deleteBtn.dataset.templateId = templateId;
       deleteBtn.textContent = "삭제";
       if (usageCount > 0) {
-        deleteBtn.title = `삭제 시 연결된 근무 템플릿 ${usageCount}개가 비활성화됩니다.`;
-      } else if (isActive) {
-        deleteBtn.title = "활성 템플릿도 바로 삭제할 수 있습니다.";
+        deleteBtn.title = `삭제 시 연결된 근무 템플릿 ${usageCount}개는 다시 설정해야 합니다.`;
       }
       actionsWrap.appendChild(deleteBtn);
 
@@ -88228,7 +88205,6 @@ async function loadScheduleTemplateRows({ force = false } = {}) {
   }
   const params = new URLSearchParams();
   params.set("tenant_code", getScheduleBaseTenantCode());
-  params.set("include_inactive", "true");
   const siteFilterCode = String($("#scheduleSiteFilter")?.value || "").trim();
   if (siteFilterCode && siteFilterCode.toLowerCase() !== "all") {
     params.set("site_code", siteFilterCode);
@@ -91209,26 +91185,6 @@ async function openScheduleTemplateEditor(
   siteSelect.value = String(baseTemplate?.site_id || "").trim();
   content.appendChild(createField("적용 지점", siteSelect));
 
-  const defaultWrap = document.createElement("label");
-  defaultWrap.className = "choice-row";
-  const defaultInput = document.createElement("input");
-  defaultInput.type = "checkbox";
-  defaultInput.id = "scheduleTemplateDefaultInput";
-  defaultInput.checked = duplicate ? false : Boolean(baseTemplate?.is_default);
-  defaultWrap.appendChild(defaultInput);
-  defaultWrap.appendChild(document.createTextNode("기본 템플릿"));
-  content.appendChild(defaultWrap);
-
-  const activeWrap = document.createElement("label");
-  activeWrap.className = "choice-row";
-  const activeInput = document.createElement("input");
-  activeInput.type = "checkbox";
-  activeInput.id = "scheduleTemplateActiveInput";
-  activeInput.checked = baseTemplate ? baseTemplate?.is_active !== false : true;
-  activeWrap.appendChild(activeInput);
-  activeWrap.appendChild(document.createTextNode("활성"));
-  content.appendChild(activeWrap);
-
   openSheet({
     title: duplicate
       ? "근무 템플릿 복제"
@@ -91274,8 +91230,19 @@ async function onScheduleTemplateSave() {
     $("#scheduleTemplateBreakInput")?.value || "",
   ).trim();
   const siteId = String($("#scheduleTemplateSiteInput")?.value || "").trim();
-  const isDefault = Boolean($("#scheduleTemplateDefaultInput")?.checked);
-  const isActive = Boolean($("#scheduleTemplateActiveInput")?.checked);
+  const templateId = String(state.sheetContext?.templateId || "").trim();
+  const existingTemplate =
+    templateId && Array.isArray(state.schedule?.templateRows)
+      ? state.schedule.templateRows.find(
+          (item) => String(item?.id || "").trim() === templateId,
+        )
+      : null;
+  const isDefault = templateId
+    ? Boolean(existingTemplate?.is_default)
+    : false;
+  const isActive = templateId
+    ? existingTemplate?.is_active !== false
+    : true;
   if (!templateName || !dutyType) {
     showToast("템플릿명과 근무구분을 입력해 주세요.", "error");
     return;
@@ -91291,7 +91258,6 @@ async function onScheduleTemplateSave() {
     is_default: isDefault,
     is_active: isActive,
   };
-  const templateId = String(state.sheetContext?.templateId || "").trim();
   if (templateId) {
     await apiRequest(
       `/schedules/work-templates/${encodeURIComponent(templateId)}?tenant_code=${encodeURIComponent(getScheduleTenantValue())}`,
@@ -91405,7 +91371,7 @@ async function onScheduleTemplateDelete(templateId = "") {
   const message = [
     `${String(result?.template_name || "템플릿").trim() || "템플릿"}을(를) 삭제했습니다.`,
     deactivatedCount > 0
-      ? `연결된 근무 템플릿 ${deactivatedCount}개 비활성화`
+      ? `연결된 근무 템플릿 ${deactivatedCount}개 재설정 필요`
       : "",
     profileNames.length ? profileNames.join(", ") : "",
   ]
@@ -105619,18 +105585,6 @@ function bindUiEvents() {
         return;
       }
 
-      if (action === "schedule-template-toggle-active") {
-        runWithBusy(
-          () =>
-            onScheduleTemplateToggleActive(
-              actionEl.dataset.templateId,
-              String(actionEl.dataset.nextActive || "") === "1",
-            ),
-          "상태 변경 중...",
-        );
-        return;
-      }
-
       if (action === "schedule-template-delete") {
         const templateId = String(actionEl.dataset.templateId || "").trim();
         const rows = Array.isArray(state.schedule?.templateRows)
@@ -105653,7 +105607,7 @@ function bindUiEvents() {
         const warningLines = [
           "삭제 후에는 이 템플릿을 복구할 수 없습니다.",
           usageCount > 0
-            ? `이 템플릿을 사용하는 근무 템플릿 ${usageCount}개가 자동으로 비활성화됩니다.`
+            ? `이 템플릿을 사용하는 근무 템플릿 ${usageCount}개는 다시 설정해야 합니다.`
             : "연결된 근무 템플릿은 없습니다.",
           "삭제된 템플릿을 참조하던 업로드는 근무 템플릿을 다시 설정할 때까지 계속 차단됩니다.",
         ];

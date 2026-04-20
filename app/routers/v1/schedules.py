@@ -3081,6 +3081,49 @@ def _format_schedule_template_row(row: dict) -> ScheduleTemplateOut:
     )
 
 
+def _unlink_schedule_template_mapping_entries(
+    cur,
+    *,
+    tenant_id: str,
+    template_id: str,
+) -> None:
+    """Detach upload mapping rows before deleting a work template.
+
+    Newer databases have ON DELETE SET NULL, but production may temporarily lag
+    behind that constraint. The fallback deletes mapping rows only when an older
+    NOT NULL shape rejects the null-detach path.
+    """
+
+    cur.execute("SAVEPOINT schedule_template_mapping_unlink")
+    try:
+        cur.execute(
+            """
+            UPDATE schedule_import_mapping_entries e
+            SET template_id = NULL,
+                updated_at = timezone('utc', now())
+            FROM schedule_import_mapping_profiles p
+            WHERE e.profile_id = p.id
+              AND p.tenant_id = %s
+              AND e.template_id = %s
+            """,
+            (tenant_id, template_id),
+        )
+        cur.execute("RELEASE SAVEPOINT schedule_template_mapping_unlink")
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT schedule_template_mapping_unlink")
+        cur.execute("RELEASE SAVEPOINT schedule_template_mapping_unlink")
+        cur.execute(
+            """
+            DELETE FROM schedule_import_mapping_entries e
+            USING schedule_import_mapping_profiles p
+            WHERE e.profile_id = p.id
+              AND p.tenant_id = %s
+              AND e.template_id = %s
+            """,
+            (tenant_id, template_id),
+        )
+
+
 def _fetch_schedule_templates(conn, *, tenant_id: str, site_id: str | None = None, include_inactive: bool = False) -> list[dict]:
     with conn.cursor() as cur:
         cur.execute(
@@ -16344,10 +16387,13 @@ def delete_schedule_work_template(
         cur.execute(
             """
             SELECT COUNT(*) AS cnt
-            FROM schedule_import_mapping_entries
-            WHERE template_id = %s
+            FROM schedule_import_mapping_entries e
+            JOIN schedule_import_mapping_profiles p
+              ON p.id = e.profile_id
+            WHERE p.tenant_id = %s
+              AND e.template_id = %s
             """,
-            (normalized_template_id,),
+            (target_tenant_id, normalized_template_id),
         )
         invalidated_entry_count = int((cur.fetchone() or {}).get("cnt") or 0)
 
@@ -16365,6 +16411,12 @@ def delete_schedule_work_template(
               )
             """,
             (target_tenant_id, normalized_template_id),
+        )
+
+        _unlink_schedule_template_mapping_entries(
+            cur,
+            tenant_id=target_tenant_id,
+            template_id=normalized_template_id,
         )
 
         cur.execute(
@@ -16386,7 +16438,7 @@ def delete_schedule_work_template(
     ]
     deactivated_profile_count = len(deactivated_profiles)
     profile_notice = (
-        f"연결된 매핑 프로필 {deactivated_profile_count}개가 비활성화되었습니다. "
+        f"연결된 매핑 프로필 {deactivated_profile_count}개를 다시 설정해야 합니다. "
         "템플릿이 삭제되어 매핑 프로필을 다시 설정해야 업로드를 진행할 수 있습니다."
         if deactivated_profile_count > 0
         else None
