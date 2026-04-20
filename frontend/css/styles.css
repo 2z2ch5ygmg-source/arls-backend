@@ -1251,7 +1251,7 @@ h3 {
   font-weight: 700;
   text-align: left;
   padding: 10px 12px;
-  border-bottom: 1px solid var(--border-subtle);
+  box-shadow: inset 0 -1px 0 var(--border-subtle);
   position: sticky;
   top: 0;
   z-index: 1;
@@ -6188,31 +6188,52 @@ button:disabled,
 
 .schedule-list-sheet {
   display: grid;
-  gap: 12px;
+  --schedule-list-sheet-template: minmax(180px, 1fr) minmax(240px, 1.25fr) minmax(240px, 1.25fr) minmax(280px, 1fr);
+  gap: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-12);
+  background: var(--bg-surface);
+  overflow: hidden;
 }
 
 .schedule-list-sheet-head {
   display: grid;
-  grid-template-columns:
-    minmax(220px, 1.2fr) minmax(180px, 1fr) minmax(220px, 1.1fr)
-    auto;
-  gap: 12px;
-  padding: 0 14px 2px;
+  grid-template: auto / var(--schedule-list-sheet-template);
+  gap: 0;
+  min-height: 44px;
+  padding: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface-muted);
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
   line-height: 16px;
 }
 
+.schedule-list-sheet-head span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 14px;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .schedule-list-sheet-head span:last-child {
+  justify-content: flex-end;
   text-align: right;
 }
 
 .schedule-list-date-group {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-12);
+  border: 0;
+  border-radius: 0;
   background: var(--bg-surface);
   overflow: hidden;
+}
+
+.schedule-list-date-group + .schedule-list-date-group {
+  box-shadow: inset 0 1px 0 var(--border-subtle);
 }
 
 .schedule-list-date-head {
@@ -6250,18 +6271,20 @@ button:disabled,
 
 .schedule-list-sheet-row {
   display: grid;
-  grid-template-columns:
-    minmax(220px, 1.2fr) minmax(180px, 1fr) minmax(220px, 1.1fr)
-    auto;
-  gap: 12px;
+  grid-template: auto / var(--schedule-list-sheet-template);
+  gap: 0;
   align-items: center;
-  padding: 10px 14px;
+  min-height: 56px;
+  padding: 0;
 }
 
 .schedule-list-sheet-col {
   min-width: 0;
   display: grid;
+  justify-items: center;
   gap: 2px;
+  padding: 10px 14px;
+  text-align: center;
 }
 
 .schedule-list-sheet-primary {
@@ -6293,6 +6316,8 @@ button:disabled,
   line-height: 20px;
   font-weight: 700;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .schedule-list-sheet-actions {
@@ -6300,7 +6325,18 @@ button:disabled,
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
+  padding: 8px 14px;
+  text-align: right;
+}
+
+.schedule-list-sheet-actions .status-pill {
+  max-width: 150px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .schedule-list-sheet-actions .btn {
@@ -40571,6 +40607,11 @@ body.calendar-public-shell #view-calendar-public {
   align-items: center !important;
   justify-content: space-between !important;
   gap: 16px !important;
+}
+
+#view-schedule:not(.schedule-reportlike-shell) > .schedule-page-head {
+  display: flex !important;
+  visibility: visible !important;
 }
 
 #view-schedule .schedule-page-head #scheduleActionMenuRow {

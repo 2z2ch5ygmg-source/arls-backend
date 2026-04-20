@@ -22173,11 +22173,16 @@ function getScheduleUploadSectionParking(mainCanvas = null) {
 
 function renderScheduleUploadWorkflowSections() {
   renderScheduleUploadModeTabs();
+  const activeTopTab = getScheduleActiveTopTab();
+  const uploadRouteActive =
+    activeTopTab === SCHEDULE_TAB_UPLOAD ||
+    activeTopTab === SCHEDULE_TAB_HQ_UPLOAD;
   const scheduleView = $("#view-schedule");
   if (scheduleView instanceof HTMLElement) {
-    scheduleView.classList.add("schedule-reportlike-shell");
-    scheduleView.classList.add("schedule-upload-route-active");
+    scheduleView.classList.toggle("schedule-reportlike-shell", uploadRouteActive);
+    scheduleView.classList.toggle("schedule-upload-route-active", uploadRouteActive);
   }
+  if (!uploadRouteActive) return;
   const mode = getScheduleUploadWorkspaceMode();
   const mainCanvas = $("#scheduleUploadMainCanvas");
   const parking = getScheduleUploadSectionParking(mainCanvas);
@@ -87095,6 +87100,10 @@ function toggleScheduleActionDropdown(menuId = "") {
 }
 
 function getScheduleActiveTopTab() {
+  const routeTab = resolveScheduleTabFromRoutePath(state.currentRoute || "");
+  if (routeTab) {
+    return routeTab;
+  }
   const current = normalizeScheduleHqTab(
     state.schedule?.hqTab || SCHEDULE_TAB_CALENDAR,
   );
@@ -92620,7 +92629,8 @@ function createScheduleListSheetRow(row, { interactive = false } = {}) {
     : displayType || row?.shift_type || "-";
   const shiftPill = document.createElement("span");
   shiftPill.className = statusPillClassFromText(shiftMeta.pill);
-  shiftPill.textContent = `${shiftMeta.label} (${shiftCodeLabel})`;
+  shiftPill.title = `${shiftMeta.label} (${shiftCodeLabel})`;
+  shiftPill.textContent = shiftMeta.label;
   right.appendChild(shiftPill);
 
   if (isSocScheduleRow(row)) {
