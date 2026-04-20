@@ -24372,31 +24372,12 @@ function renderScheduleSupportHqWorkspace() {
     userMetaGrid.innerHTML = "";
     userMetaGrid.hidden = true;
   }
-  const uploadMetaItems = [
-    {
-      label: "파일명",
-      value:
-        String(
-          uploadMeta?.file_name || workspace.uploadFileName || "선택 전",
-        ).trim() || "선택 전",
-    },
-    {
-      label: "대상월",
-      value: formatScheduleMonthTitle(
-        String(uploadMeta?.month || context.month || ""),
-      ),
-    },
-    { label: "업로드 범위", value: selectedSiteLabel },
-    {
-      label: "기준 상태",
-      value: uploadMeta
-        ? getSupportStatusHqLatestStatusLabel(uploadMeta.latest_status || "")
-        : artifactContext.artifact_id
-          ? "최신 기준 사용 가능"
-          : "source 대기",
-    },
-  ];
-  renderSupportStatusHqMetaGrid(uploadMetaGrid, uploadMetaItems);
+  if (uploadMetaGrid instanceof HTMLElement) {
+    uploadMetaGrid.innerHTML = "";
+    uploadMetaGrid.hidden = true;
+    uploadMetaGrid.classList.add("hidden");
+    uploadMetaGrid.setAttribute("aria-hidden", "true");
+  }
 
   if (batchInfoEl) {
     if (!allowed) {
