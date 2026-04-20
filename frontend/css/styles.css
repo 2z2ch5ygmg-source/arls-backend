@@ -66659,3 +66659,30 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   word-break: keep-all !important;
   line-height: 18px !important;
 }
+
+/* Finance download column balance for full note visibility. */
+#view-reports #financeDownloadPanel .reports-finance-download-table th:nth-child(1),
+#view-reports #financeDownloadPanel .reports-finance-download-table td:nth-child(1) {
+  width: 22% !important;
+}
+
+#view-reports #financeDownloadPanel .reports-finance-download-table th:nth-child(2),
+#view-reports #financeDownloadPanel .reports-finance-download-table td:nth-child(2) {
+  width: 18% !important;
+}
+
+#view-reports #financeDownloadPanel .reports-finance-download-table th:nth-child(3),
+#view-reports #financeDownloadPanel .reports-finance-download-table td:nth-child(3) {
+  width: 12% !important;
+}
+
+#view-reports #financeDownloadPanel .reports-finance-download-table th:nth-child(4),
+#view-reports #financeDownloadPanel .reports-finance-download-table td:nth-child(4) {
+  width: 10% !important;
+}
+
+#view-reports #financeDownloadPanel .reports-finance-download-table th:nth-child(5),
+#view-reports #financeDownloadPanel .reports-finance-download-table td:nth-child(5) {
+  width: 38% !important;
+  font-size: 12px !important;
+}
