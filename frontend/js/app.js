@@ -14370,33 +14370,10 @@ function renderReportsFinanceDownloadWorkspace() {
   state.reports.financeDownloadPage = pagination.page;
   state.reports.financeDownloadPageSize = pagination.pageSize;
   const visibleRows = pagination.visibleItems;
-  let selectedSiteCodes = getReportsFinanceDownloadSelectedSiteCodes();
-  const validSelectedSiteCodes = selectedSiteCodes.filter((siteCode) =>
-    rows.some(
-      (row) =>
-        String(row?.site_code || "")
-          .trim()
-          .toUpperCase() === siteCode,
-    ),
-  );
-  if (selectedSiteCodes.length !== validSelectedSiteCodes.length) {
-    setReportsFinanceDownloadSelectedSiteCodes(validSelectedSiteCodes);
-    selectedSiteCodes = validSelectedSiteCodes;
-  }
-  const selectedRows = getReportsFinanceDownloadSelectedRows();
-  const downloadableSelectedRows =
-    getReportsFinanceDownloadDownloadableSelectedRows();
-  const blockedSelectedRows = selectedRows.filter(
-    (row) => !row?.download_enabled,
-  );
-  const downloadableRows = rows.filter((row) => Boolean(row?.download_enabled));
 
   if (summary instanceof HTMLElement) {
     if (workspace) {
-      const baseSummary = `총 ${Number(workspace.total_site_count || rows.length || 0)} · 완료 ${Number(workspace.uploaded_site_count || 0)} · 가능 ${Number(workspace.downloadable_site_count || 0)}`;
-      summary.textContent = selectedRows.length
-        ? `${baseSummary} · 선택 ${selectedRows.length}`
-        : baseSummary;
+      summary.textContent = `총 ${Number(workspace.total_site_count || rows.length || 0)} · 완료 ${Number(workspace.uploaded_site_count || 0)} · 다운로드 가능 ${Number(workspace.downloadable_site_count || 0)}`;
     } else if (loading) {
       summary.textContent = "업로드 현황을 불러오는 중입니다.";
     } else if (errorMessage) {
@@ -14411,48 +14388,20 @@ function renderReportsFinanceDownloadWorkspace() {
       selectionHint.textContent = "";
     } else if (loading) {
       selectionHint.textContent = "";
-    } else if (downloadableSelectedRows.length && !blockedSelectedRows.length) {
-      selectionHint.textContent =
-        downloadableSelectedRows.length > 1
-          ? `선택 ${downloadableSelectedRows.length}개 지점 원본 다운로드 가능`
-          : `${String(downloadableSelectedRows[0].site_name || downloadableSelectedRows[0].site_code || "").trim()} 원본 다운로드 가능`;
-    } else if (selectedRows.length) {
-      selectionHint.textContent = `선택 ${selectedRows.length} · 가능 ${downloadableSelectedRows.length} · 불가 ${blockedSelectedRows.length}`;
     } else {
-      selectionHint.textContent = "다운로드할 지점을 선택하세요.";
+      selectionHint.textContent = "필요한 지점 행에서 바로 다운로드하세요.";
     }
   }
 
   if (downloadBtn instanceof HTMLButtonElement) {
-    downloadBtn.disabled = loading || !downloadableSelectedRows.length;
-    downloadBtn.textContent =
-      downloadableSelectedRows.length > 1
-        ? `다운로드 (${downloadableSelectedRows.length})`
-        : "다운로드";
+    downloadBtn.classList.add("hidden");
+    downloadBtn.disabled = true;
   }
 
   if (selectAllToggle instanceof HTMLInputElement) {
-    const allDownloadableSelected =
-      Boolean(downloadableRows.length) &&
-      downloadableRows.every((row) =>
-        selectedSiteCodes.includes(
-          String(row?.site_code || "")
-            .trim()
-            .toUpperCase(),
-        ),
-      );
-    const partiallySelected =
-      !allDownloadableSelected &&
-      downloadableRows.some((row) =>
-        selectedSiteCodes.includes(
-          String(row?.site_code || "")
-            .trim()
-            .toUpperCase(),
-        ),
-      );
-    selectAllToggle.checked = allDownloadableSelected;
-    selectAllToggle.indeterminate = partiallySelected;
-    selectAllToggle.disabled = loading || !downloadableRows.length;
+    selectAllToggle.checked = false;
+    selectAllToggle.indeterminate = false;
+    selectAllToggle.disabled = true;
   }
 
   if (!(tableBody instanceof HTMLElement)) return;
@@ -14462,7 +14411,7 @@ function renderReportsFinanceDownloadWorkspace() {
     const tr = document.createElement("tr");
     tr.className = "admin-table-empty-row";
     const td = document.createElement("td");
-    td.colSpan = 7;
+    td.colSpan = 5;
     td.textContent = "업로드 현황을 불러오는 중입니다.";
     tr.appendChild(td);
     tableBody.appendChild(tr);
@@ -14473,7 +14422,7 @@ function renderReportsFinanceDownloadWorkspace() {
     const tr = document.createElement("tr");
     tr.className = "admin-table-empty-row";
     const td = document.createElement("td");
-    td.colSpan = 7;
+    td.colSpan = 5;
     td.textContent = errorMessage;
     tr.appendChild(td);
     tableBody.appendChild(tr);
@@ -14484,7 +14433,7 @@ function renderReportsFinanceDownloadWorkspace() {
     const tr = document.createElement("tr");
     tr.className = "admin-table-empty-row";
     const td = document.createElement("td");
-    td.colSpan = 7;
+    td.colSpan = 5;
     td.textContent = "표시할 다운로드 대상이 없습니다.";
     tr.appendChild(td);
     tableBody.appendChild(tr);
@@ -14495,41 +14444,22 @@ function renderReportsFinanceDownloadWorkspace() {
     const siteCode = String(row?.site_code || "")
       .trim()
       .toUpperCase();
-    const isSelected = selectedSiteCodes.includes(siteCode);
     const tr = document.createElement("tr");
-    tr.className = `reports-finance-download-row${isSelected ? " is-selected" : ""}`;
-    tr.dataset.action = "reports-finance-download-toggle";
+    tr.className = "reports-finance-download-row";
     tr.dataset.siteCode = siteCode;
-    tr.setAttribute("aria-selected", isSelected ? "true" : "false");
-    tr.tabIndex = 0;
 
-    const selectCell = document.createElement("td");
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.className = "reports-finance-download-checkbox";
-    checkbox.checked = isSelected;
-    checkbox.tabIndex = -1;
-    checkbox.setAttribute("aria-hidden", "true");
-    selectCell.appendChild(checkbox);
-
-    const siteCell = document.createElement("td");
+    const statusCell = document.createElement("td");
     const siteMain = document.createElement("div");
     siteMain.className = "reports-finance-download-site-name";
     siteMain.textContent =
       String(row?.site_name || siteCode || "-").trim() || "-";
-    const siteSub = document.createElement("div");
-    siteSub.className = "reports-finance-download-site-meta";
-    siteSub.textContent = siteCode || "-";
-    siteCell.append(siteMain, siteSub);
-
-    const statusCell = document.createElement("td");
     const statusPill = document.createElement("span");
     statusPill.className = getReportsFinanceDownloadStatusPillClass(
       row?.status,
     );
     statusPill.textContent =
       String(row?.status_label || "미업로드").trim() || "미업로드";
-    statusCell.appendChild(statusPill);
+    statusCell.append(siteMain, statusPill);
 
     const uploadedAtCell = document.createElement("td");
     uploadedAtCell.textContent = row?.final_uploaded_at
@@ -14540,34 +14470,29 @@ function renderReportsFinanceDownloadWorkspace() {
     uploadedByCell.textContent =
       String(row?.final_uploaded_by || "-").trim() || "-";
 
-    const fileNameCell = document.createElement("td");
-    const fileNameMain = document.createElement("div");
-    fileNameMain.className = "reports-finance-download-file-name";
-    fileNameMain.textContent =
-      String(row?.active_final_filename || "-").trim() || "-";
-    fileNameCell.appendChild(fileNameMain);
-
     const downloadCell = document.createElement("td");
-    const downloadPill = document.createElement("span");
-    downloadPill.className = getReportsFinanceDownloadAvailabilityPillClass(
-      Boolean(row?.download_enabled),
-    );
-    downloadPill.textContent = row?.download_enabled
-      ? "다운로드 가능"
-      : "다운로드 불가";
-    if (!row?.download_enabled && row?.download_blocked_reason) {
-      downloadPill.title = String(row.download_blocked_reason || "").trim();
+    const downloadButton = document.createElement("button");
+    downloadButton.type = "button";
+    downloadButton.className = "btn btn-secondary";
+    downloadButton.dataset.action = "reports-finance-download-run";
+    downloadButton.dataset.siteCode = siteCode;
+    downloadButton.textContent = "다운로드";
+    downloadButton.disabled = !row?.download_enabled;
+    if (!row?.download_enabled) {
+      downloadButton.title =
+        String(row?.download_blocked_reason || "다운로드 가능 상태가 아닙니다.").trim();
     }
-    downloadCell.appendChild(downloadPill);
+    downloadCell.appendChild(downloadButton);
+
+    const noteCell = document.createElement("td");
+    noteCell.textContent = getReportsFinanceDownloadNote(row) || "-";
 
     tr.append(
-      selectCell,
-      siteCell,
       statusCell,
       uploadedAtCell,
       uploadedByCell,
-      fileNameCell,
       downloadCell,
+      noteCell,
     );
     tableBody.appendChild(tr);
   });
@@ -14773,7 +14698,7 @@ function renderReportsSupportHandoffPanel() {
   if (!supportVisible) return;
   mountReportsCenterContext("#reportsSupportScopeContextMount");
 
-  const siteCode = getReportsFinanceSelectedSiteCode();
+  const siteCode = getScheduleSupportSelectedSiteCode();
   const status =
     state.schedule?.supportStatus &&
     typeof state.schedule.supportStatus === "object"
@@ -15229,26 +15154,27 @@ function shouldLoadReportsSiteOptionsForTab(tab = getActiveReportsViewTab()) {
 
 async function loadReportsDataForActiveTab({ force = false } = {}) {
   const activeTab = getActiveReportsViewTab();
-  const tasks = [];
   if (activeTab === "finance-download") {
     if (canViewReportsFinanceDownloadTab()) {
-      tasks.push(loadReportsFinanceDownloadWorkspace({ force }));
+      return Promise.allSettled([loadReportsFinanceDownloadWorkspace({ force })]);
     }
   } else if (activeTab === "finance") {
     if (canViewReportsFinanceTab()) {
-      tasks.push(loadReportsFinanceOverviewWorkspace({ force }));
-      if (
-        normalizeReportsFinanceView(
-          state.reports?.financeView || "overview",
-        ) === "wizard" &&
-        getReportsFinanceSelectedSiteCode()
-      ) {
-        tasks.push(loadScheduleFinanceSubmissionStatus());
+      const results = [];
+      results.push(await Promise.resolve(loadReportsFinanceOverviewWorkspace({ force })).then(
+        (value) => ({ status: "fulfilled", value }),
+        (reason) => ({ status: "rejected", reason }),
+      ));
+      if (getReportsFinanceSelectedSiteCode()) {
+        results.push(await Promise.resolve(loadScheduleFinanceSubmissionStatus()).then(
+          (value) => ({ status: "fulfilled", value }),
+          (reason) => ({ status: "rejected", reason }),
+        ));
       }
+      return results;
     }
   }
-  if (!tasks.length) return [];
-  return Promise.allSettled(tasks);
+  return [];
 }
 
 async function loadAppleReportStatus({ force = false } = {}) {
@@ -26013,7 +25939,7 @@ async function onScheduleSupportOpenSentrix() {
 }
 
 async function onScheduleSupportCopyArtifact() {
-  const siteCode = getReportsFinanceSelectedSiteCode();
+  const siteCode = getScheduleSupportSelectedSiteCode();
   const status =
     state.schedule.supportStatus &&
     typeof state.schedule.supportStatus === "object"
@@ -26034,7 +25960,7 @@ async function onScheduleSupportFinalDownload(progressController = null) {
     showToast("병합 완료본 다운로드 권한이 없습니다.", "error");
     return;
   }
-  const siteCode = getReportsFinanceSelectedSiteCode();
+  const siteCode = getScheduleSupportSelectedSiteCode();
   if (!siteCode) {
     showToast("업로드 지점을 먼저 선택해 주세요.", "error");
     return;
@@ -26307,6 +26233,134 @@ function getReportsFinanceOverviewPillClass(statusCode = "") {
   return "status-pill status-pill-neutral";
 }
 
+function formatReportsFinanceFriendlyReason(status = null, row = null) {
+  const stateValue = String(status?.state || row?.final_status || row?.submission_status || "")
+    .trim()
+    .toLowerCase();
+  const rawReasons = Array.isArray(status?.blocked_reasons)
+    ? status.blocked_reasons
+    : [row?.blocked_reason].filter(Boolean);
+  const rawText = rawReasons.map((item) => String(item || "").trim()).find(Boolean) || "";
+  if (stateValue === "final_upload_stale" || status?.final_upload_stale) {
+    return "근무표가 변경되어 업로드한 보고서가 최신 상태가 아닙니다.";
+  }
+  if (stateValue === "conflict_manual_review_required" || rawText.includes("충돌")) {
+    return "확인이 필요한 항목이 있어 보고서를 다시 확인해야 합니다.";
+  }
+  if (stateValue === "waiting_final_upload" || status?.review_download_revision) {
+    return "1차 확인본을 다운로드했습니다. 수정한 최종본을 업로드해 주세요.";
+  }
+  if (stateValue === "hq_final_download_ready" || status?.final_download_enabled) {
+    return "최종 업로드본이 제출되었습니다.";
+  }
+  return rawText
+    .replace(/truth/gi, "근무표")
+    .replace(/stale/gi, "최신 상태가 아님")
+    .replace(/revision/gi, "버전")
+    .replace(/review download/gi, "1차 확인본")
+    .replace(/assembled/gi, "생성된");
+}
+
+function getReportsFinanceSubmitStatusModel(status = null, row = null) {
+  const hasReview = Boolean(status?.review_download_revision || row?.review_status === "downloaded");
+  const hasFinal = Boolean(status?.final_uploaded_at || row?.final_status === "uploaded" || row?.final_status === "stale");
+  const stateValue = String(status?.state || row?.final_status || row?.submission_status || "")
+    .trim()
+    .toLowerCase();
+  if (status?.final_upload_stale || stateValue === "final_upload_stale" || row?.final_status === "stale") {
+    return {
+      mode: "status",
+      label: "재업로드 필요",
+      title: "Finance Report 재업로드가 필요합니다.",
+      reason: formatReportsFinanceFriendlyReason(status, row),
+      actionLabel: "재업로드 진행",
+      canFinalDownload: false,
+    };
+  }
+  if (stateValue === "conflict_manual_review_required" || row?.final_status === "review_required") {
+    return {
+      mode: "status",
+      label: "검토 필요",
+      title: "Finance Report 확인이 필요합니다.",
+      reason: formatReportsFinanceFriendlyReason(status, row),
+      actionLabel: "다시 확인하기",
+      canFinalDownload: false,
+    };
+  }
+  if (hasFinal && status?.final_download_enabled) {
+    return {
+      mode: "status",
+      label: "제출 완료",
+      title: "Finance Report 제출이 완료되었습니다.",
+      reason: formatReportsFinanceFriendlyReason(status, row),
+      actionLabel: "재업로드 진행",
+      canFinalDownload: true,
+    };
+  }
+  if (hasReview) {
+    return {
+      mode: "status",
+      label: "최종본 업로드 필요",
+      title: "최종본 업로드를 이어서 진행하세요.",
+      reason: formatReportsFinanceFriendlyReason(status, row),
+      actionLabel: "최종본 업로드 진행",
+      canFinalDownload: false,
+    };
+  }
+  return {
+    mode: "cta",
+    label: "미제출",
+    title: "Finance Report 미제출",
+    reason: `아직 ${formatScheduleMonthTitle(getReportsMonthValue())} 보고서를 제출하지 않았습니다.`,
+    actionLabel: "제출 시작하기",
+    canFinalDownload: false,
+  };
+}
+
+function getReportsFinanceDownloadNote(row = {}) {
+  const status = String(row?.status || "").trim().toLowerCase();
+  const note = String(row?.note || "").trim();
+  if (note) return note;
+  if (status === "reuploaded" || Number(row?.final_upload_count || 0) > 1) {
+    return "Report 업데이트로 재 다운로드 필요";
+  }
+  if (status === "stale") {
+    return "근무표가 변경되어 재업로드가 필요합니다.";
+  }
+  if (status === "review_required") {
+    return "확인이 필요한 항목이 있습니다.";
+  }
+  return String(row?.download_blocked_reason || "")
+    .trim()
+    .replace(/truth/gi, "근무표")
+    .replace(/stale/gi, "최신 상태가 아님")
+    .replace(/revision/gi, "버전");
+}
+
+function enforceReportsFinanceDocumentWorkspaceLayout() {
+  const scopeSection = $("#scheduleFinanceStepScope");
+  const reviewSection = $("#scheduleFinanceStepReview");
+  const uploadSection = $("#scheduleFinanceStepUpload");
+  const contextBar = document.querySelector(
+    "#scheduleFinanceSubmissionPanel .finance-submit-context-bar",
+  );
+  const footer = document.querySelector(
+    "#scheduleFinanceSubmissionPanel .finance-submit-footer",
+  );
+  [contextBar, footer, scopeSection].forEach((element) => {
+    if (element instanceof HTMLElement) {
+      element.classList.add("hidden");
+      element.style.display = "none";
+    }
+  });
+  [reviewSection, uploadSection].forEach((element) => {
+    if (element instanceof HTMLElement) {
+      element.classList.remove("hidden");
+      element.style.display = "grid";
+    }
+  });
+}
+
 function renderScheduleFinanceSubmissionStatus() {
   const panel = $("#scheduleFinanceSubmissionPanel");
   if (!(panel instanceof HTMLElement)) return;
@@ -26351,217 +26405,76 @@ function renderScheduleFinanceSubmissionStatus() {
     ? Boolean(overviewWorkspace.tenant_wide)
     : !ownSiteCode;
 
-  const overviewSummary = $("#scheduleFinanceOverviewSummary");
   const overviewMonthLabel = $("#scheduleFinanceOverviewMonthLabel");
-  const overviewScopeLabel = $("#scheduleFinanceOverviewScopeLabel");
   const overviewStatusSummary = $("#scheduleFinanceOverviewStatusSummary");
-  const overviewSelectionHint = $("#scheduleFinanceOverviewSelectionHint");
   const overviewStartBtn = $("#scheduleFinanceOverviewStartBtn");
-  const overviewTableBody = $("#scheduleFinanceOverviewTableBody");
-  const overviewPager = $("#scheduleFinanceOverviewPager");
-  const overviewPagerSummary = $("#scheduleFinanceOverviewPagerSummary");
-  const overviewPagerRange = $("#scheduleFinanceOverviewPagerRange");
-  const overviewPageButtons = $("#scheduleFinanceOverviewPageButtons");
-  const overviewPagination = getWizardPaginationModel(
-    overviewRows,
-    createWizardPaginationState({
-      page: state.reports.financeOverviewPage,
-      pageSize: state.reports.financeOverviewPageSize,
-    }),
+  const entryKicker = $("#scheduleFinanceSubmitEntryKicker");
+  const entryTitle = $("#scheduleFinanceSubmitEntryTitle");
+  const entryReason = $("#scheduleFinanceSubmitEntryReason");
+  const lastUploadLabel = $("#scheduleFinanceLastUploadLabel");
+  const reporterLabel = $("#scheduleFinanceReporterLabel");
+  const finalDownloadBtn = $("#scheduleFinanceEntryFinalDownloadBtn");
+  const status =
+    state.schedule?.financeStatus &&
+    typeof state.schedule.financeStatus === "object"
+      ? state.schedule.financeStatus
+      : null;
+  const submitModel = getReportsFinanceSubmitStatusModel(
+    status,
+    selectedOverviewRow,
   );
-  state.reports.financeOverviewPage = overviewPagination.page;
-  state.reports.financeOverviewPageSize = overviewPagination.pageSize;
-  const visibleOverviewRows = overviewPagination.visibleItems;
 
-  if (overviewSummary instanceof HTMLElement) {
-    if (overviewWorkspace) {
-      overviewSummary.textContent = tenantWide
-        ? `총 ${Number(overviewWorkspace.total_site_count || overviewRows.length || 0)} · 제출 ${Number(overviewWorkspace.submitted_site_count || 0)} · 1차 ${Number(overviewWorkspace.review_ready_site_count || 0)} · 최종 ${Number(overviewWorkspace.final_uploaded_site_count || 0)}`
-        : "본인 지점 제출 상태";
-    } else if (overviewLoading) {
-      overviewSummary.textContent = "제출 상태를 불러오는 중입니다.";
-    } else if (overviewError) {
-      overviewSummary.textContent = overviewError;
-    } else {
-      overviewSummary.textContent = "대상 월 기준 제출 상태";
-    }
-  }
   if (overviewMonthLabel instanceof HTMLElement) {
     overviewMonthLabel.textContent = formatScheduleMonthTitle(
       getReportsMonthValue(),
     );
   }
-  if (overviewScopeLabel instanceof HTMLElement) {
-    overviewScopeLabel.textContent = ownSiteCode
-      ? `${selectedOverviewRow?.site_name || ownSiteCode}`
-      : overviewWorkspace?.scope_label || "전체";
-  }
   if (overviewStatusSummary instanceof HTMLElement) {
-    if (selectedOverviewRow) {
-      overviewStatusSummary.textContent = `${selectedOverviewRow.submission_status_label} · ${selectedOverviewRow.review_status_label} · ${selectedOverviewRow.final_status_label}`;
-    } else if (overviewWorkspace) {
-      overviewStatusSummary.textContent = tenantWide
-        ? `${Number(overviewWorkspace.submitted_site_count || 0)} / ${Number(overviewWorkspace.total_site_count || overviewRows.length || 0)}`
-        : "제출 상태";
+    overviewStatusSummary.textContent = overviewLoading
+      ? "조회 중"
+      : overviewError
+        ? "조회 실패"
+        : submitModel.label;
+  }
+  if (entryKicker instanceof HTMLElement) {
+    entryKicker.textContent = selectedOverviewRow
+      ? String(selectedOverviewRow.site_name || selectedOverviewRow.site_code || "Finance Report").trim()
+      : "Finance Report";
+  }
+  if (entryTitle instanceof HTMLElement) {
+    if (overviewLoading) {
+      entryTitle.textContent = "Finance 제출 상태를 불러오는 중입니다.";
+    } else if (overviewError) {
+      entryTitle.textContent = "Finance 제출 상태를 확인하지 못했습니다.";
     } else {
-      overviewStatusSummary.textContent = overviewLoading ? "조회 중" : "-";
+      entryTitle.textContent = submitModel.title;
     }
   }
-  if (overviewSelectionHint instanceof HTMLElement) {
-    if (overviewError) {
-      overviewSelectionHint.textContent = "";
-    } else if (overviewLoading) {
-      overviewSelectionHint.textContent = "";
-    } else if (selectedOverviewRow) {
-      overviewSelectionHint.textContent = ownSiteCode
-        ? `${String(selectedOverviewRow.site_name || selectedOverviewRow.site_code || "").trim()} 자동 선택`
-        : `${String(selectedOverviewRow.site_name || selectedOverviewRow.site_code || "").trim()} · ${selectedOverviewRow.submission_status_label}`;
-    } else if (tenantWide) {
-      overviewSelectionHint.textContent = "제출할 지점을 선택하세요.";
-    } else {
-      overviewSelectionHint.textContent = "본인 지점이 자동 선택됩니다.";
-    }
+  if (entryReason instanceof HTMLElement) {
+    entryReason.textContent = overviewError || submitModel.reason;
+  }
+  if (lastUploadLabel instanceof HTMLElement) {
+    lastUploadLabel.textContent = status?.final_uploaded_at
+      ? formatOpsDateTime(status.final_uploaded_at)
+      : selectedOverviewRow?.last_updated_at &&
+          selectedOverviewRow?.final_status !== "not_uploaded"
+        ? formatOpsDateTime(selectedOverviewRow.last_updated_at)
+        : "-";
+  }
+  if (reporterLabel instanceof HTMLElement) {
+    reporterLabel.textContent =
+      String(status?.final_uploaded_by || status?.review_downloaded_by || "-").trim() || "-";
   }
   if (overviewStartBtn instanceof HTMLButtonElement) {
     overviewStartBtn.disabled =
       overviewLoading || Boolean(overviewError) || !selectedOverviewRow;
-    overviewStartBtn.textContent = selectedOverviewRow
-      ? "제출 시작"
-      : "지점 선택";
+    overviewStartBtn.textContent = submitModel.actionLabel;
   }
-
-  if (overviewTableBody instanceof HTMLElement) {
-    overviewTableBody.innerHTML = "";
-    if (overviewLoading && !overviewRows.length) {
-      const tr = document.createElement("tr");
-      tr.className = "admin-table-empty-row";
-      tr.innerHTML = '<td colspan="7">제출 상태를 불러오는 중입니다.</td>';
-      overviewTableBody.appendChild(tr);
-    } else if (overviewError && !overviewRows.length) {
-      const tr = document.createElement("tr");
-      tr.className = "admin-table-empty-row";
-      tr.innerHTML = `<td colspan="7">${overviewError}</td>`;
-      overviewTableBody.appendChild(tr);
-    } else if (!overviewRows.length) {
-      const tr = document.createElement("tr");
-      tr.className = "admin-table-empty-row";
-      tr.innerHTML = '<td colspan="7">표시할 제출 대상이 없습니다.</td>';
-      overviewTableBody.appendChild(tr);
-    } else {
-      visibleOverviewRows.forEach((row) => {
-        const siteCode = String(row?.site_code || "")
-          .trim()
-          .toUpperCase();
-        const isSelected = siteCode === selectedSiteCode;
-        const isFixedOwnSite = Boolean(ownSiteCode) && siteCode === ownSiteCode;
-        const tr = document.createElement("tr");
-        tr.className = `reports-finance-download-row reports-finance-submit-row${isSelected ? " is-selected" : ""}`;
-        tr.dataset.action = "reports-finance-overview-select";
-        tr.dataset.siteCode = siteCode;
-        tr.setAttribute("aria-selected", isSelected ? "true" : "false");
-        tr.tabIndex = 0;
-
-        const selectCell = document.createElement("td");
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.className =
-          "reports-finance-download-checkbox reports-finance-submit-checkbox";
-        checkbox.checked = isSelected;
-        checkbox.dataset.action = "reports-finance-overview-select";
-        checkbox.dataset.siteCode = siteCode;
-        checkbox.setAttribute(
-          "aria-label",
-          `${String(row?.site_name || siteCode || "지점").trim()} 선택`,
-        );
-        if (isFixedOwnSite) {
-          checkbox.disabled = true;
-          checkbox.title = "본인 지점이 자동 선택됩니다.";
-        }
-        selectCell.appendChild(checkbox);
-
-        const siteCell = document.createElement("td");
-        const siteMain = document.createElement("div");
-        siteMain.className = "reports-finance-download-site-name";
-        siteMain.textContent =
-          String(row?.site_name || siteCode || "-").trim() || "-";
-        const siteSub = document.createElement("div");
-        siteSub.className = "reports-finance-download-site-meta";
-        siteSub.textContent = siteCode || "-";
-        siteCell.append(siteMain, siteSub);
-
-        const submissionCell = document.createElement("td");
-        const submissionPill = document.createElement("span");
-        submissionPill.className = getReportsFinanceOverviewPillClass(
-          row?.submission_status,
-        );
-        submissionPill.textContent =
-          String(row?.submission_status_label || "제출 전").trim() || "제출 전";
-        submissionCell.appendChild(submissionPill);
-
-        const reviewCell = document.createElement("td");
-        const reviewPill = document.createElement("span");
-        reviewPill.className = getReportsFinanceOverviewPillClass(
-          row?.review_status,
-        );
-        reviewPill.textContent =
-          String(row?.review_status_label || "미다운로드").trim() ||
-          "미다운로드";
-        reviewCell.appendChild(reviewPill);
-
-        const finalCell = document.createElement("td");
-        const finalPill = document.createElement("span");
-        finalPill.className = getReportsFinanceOverviewPillClass(
-          row?.final_status,
-        );
-        finalPill.textContent =
-          String(row?.final_status_label || "미업로드").trim() || "미업로드";
-        finalCell.appendChild(finalPill);
-
-        const updatedCell = document.createElement("td");
-        updatedCell.textContent = row?.last_updated_at
-          ? formatOpsDateTime(row.last_updated_at)
-          : "-";
-
-        const noteCell = document.createElement("td");
-        noteCell.textContent = String(row?.blocked_reason || "-").trim() || "-";
-
-        tr.append(
-          selectCell,
-          siteCell,
-          submissionCell,
-          reviewCell,
-          finalCell,
-          updatedCell,
-          noteCell,
-        );
-        overviewTableBody.appendChild(tr);
-      });
-    }
-  }
-
-  if (overviewPager instanceof HTMLElement) {
-    overviewPager.classList.toggle(
-      "hidden",
-      overviewRows.length <= overviewPagination.pageSize,
-    );
-    overviewPager.dataset.page = String(overviewPagination.page);
-    overviewPager.dataset.pageSize = String(overviewPagination.pageSize);
-    overviewPager.dataset.totalItems = String(overviewPagination.totalItems);
-    overviewPager.dataset.totalPages = String(overviewPagination.totalPages);
-  }
-  if (overviewPagerSummary instanceof HTMLElement) {
-    overviewPagerSummary.textContent = `${overviewPagination.page} / ${overviewPagination.totalPages}페이지`;
-  }
-  if (overviewPagerRange instanceof HTMLElement) {
-    const start = overviewPagination.totalItems ? overviewPagination.startIndex + 1 : 0;
-    overviewPagerRange.textContent = `${start}-${overviewPagination.endIndex} / ${overviewPagination.totalItems}개 지점`;
-  }
-  if (overviewPageButtons instanceof HTMLElement) {
-    renderWizardNumericPagination(
-      overviewPageButtons,
-      overviewPagination,
-      "reports-finance-overview-page",
-    );
+  if (finalDownloadBtn instanceof HTMLButtonElement) {
+    const showFinalDownload =
+      Boolean(selectedOverviewRow) && Boolean(submitModel.canFinalDownload);
+    finalDownloadBtn.classList.toggle("hidden", !showFinalDownload);
+    finalDownloadBtn.disabled = !showFinalDownload;
   }
 
   if (activeView !== "wizard") {
@@ -26569,11 +26482,6 @@ function renderScheduleFinanceSubmissionStatus() {
     return;
   }
 
-  const status =
-    state.schedule?.financeStatus &&
-    typeof state.schedule.financeStatus === "object"
-      ? state.schedule.financeStatus
-      : null;
   const selectedSiteLabel =
     String(
       selectedOverviewRow?.site_name ||
@@ -26588,11 +26496,13 @@ function renderScheduleFinanceSubmissionStatus() {
   const reviewBtn = $("#scheduleFinanceReviewDownloadBtn");
   const previewBtn = $("#scheduleFinancePreviewBtn");
   const applyBtn = $("#scheduleFinanceApplyBtn");
+  const fileInput = $("#scheduleFinanceUploadFile");
   const wizardMonthLabel = $("#scheduleFinanceWizardMonthLabel");
   const wizardSiteLabel = $("#scheduleFinanceWizardSiteLabel");
   const wizardRoleLabel = $("#scheduleFinanceWizardRoleLabel");
   const wizardGuidance = $("#scheduleFinanceWizardGuidance");
   const reviewGuide = $("#scheduleFinanceReviewGuide");
+  const uploadGuide = $("#scheduleFinanceUploadGuide");
   const order = ["scope", "review", "upload"];
   const financeStepStates = {};
 
@@ -26695,9 +26605,13 @@ function renderScheduleFinanceSubmissionStatus() {
         "선택한 지점의 제출 상태를 불러오는 중입니다.";
     if (reviewGuide instanceof HTMLElement)
       reviewGuide.textContent = "1차 확인본을 내려받을 준비 중입니다.";
+    if (uploadGuide instanceof HTMLElement)
+      uploadGuide.textContent =
+        "1차 확인본을 다운로드한 뒤 수정한 최종본을 업로드할 수 있습니다.";
     if (reviewBtn instanceof HTMLButtonElement) reviewBtn.disabled = true;
     if (previewBtn instanceof HTMLButtonElement) previewBtn.disabled = true;
     if (applyBtn instanceof HTMLButtonElement) applyBtn.disabled = true;
+    if (fileInput instanceof HTMLInputElement) fileInput.disabled = true;
     setFinanceStep("scope", { state: "active" });
     setFinanceStep("review", { state: "blocked" });
     setFinanceStep("upload", { state: "blocked" });
@@ -26707,6 +26621,7 @@ function renderScheduleFinanceSubmissionStatus() {
       review: false,
       upload: false,
     });
+    enforceReportsFinanceDocumentWorkspaceLayout();
     renderScheduleFinanceProgress();
     return;
   }
@@ -26742,6 +26657,13 @@ function renderScheduleFinanceSubmissionStatus() {
     wizardGuidance.textContent = scopeGuidance;
   if (reviewGuide instanceof HTMLElement)
     reviewGuide.textContent = reviewStepGuidance;
+  if (uploadGuide instanceof HTMLElement) {
+    uploadGuide.textContent = canPreviewUpload
+      ? "수정한 최종본을 선택한 뒤 미리보기로 차이를 확인하세요."
+      : status.review_download_revision
+        ? "최신 1차 확인본을 다시 다운로드한 뒤 최종본을 업로드할 수 있습니다."
+        : "1차 확인본을 먼저 다운로드해야 최종본 업로드를 시작할 수 있습니다.";
+  }
 
   if (reviewBtn instanceof HTMLButtonElement)
     reviewBtn.disabled = !canDownloadScheduleFinanceReview();
@@ -26749,6 +26671,7 @@ function renderScheduleFinanceSubmissionStatus() {
     previewBtn.disabled = !canPreviewUpload;
   if (applyBtn instanceof HTMLButtonElement)
     applyBtn.disabled = !state.schedule.financePreviewBatchId;
+  if (fileInput instanceof HTMLInputElement) fileInput.disabled = !canPreviewUpload;
 
   setFinanceStep("scope", { state: "complete" });
   setFinanceStep("review", {
@@ -26768,6 +26691,7 @@ function renderScheduleFinanceSubmissionStatus() {
     review: Boolean(status.review_download_revision),
     upload: uploadApplied,
   });
+  enforceReportsFinanceDocumentWorkspaceLayout();
   renderScheduleFinanceProgress();
 }
 
@@ -26880,7 +26804,7 @@ async function loadScheduleFinanceSubmissionStatus() {
   state.schedule.financeStatus = null;
   renderScheduleFinanceSubmissionStatus();
   const params = new URLSearchParams();
-  params.set("month", getScheduleMonthValue());
+  params.set("month", getReportsMonthValue());
   params.set("site_code", siteCode);
   params.set("tenant_code", getScheduleTenantValue());
   const status = await apiRequest(
@@ -26956,14 +26880,27 @@ async function loadReportsFinanceDownloadWorkspace({ force = false } = {}) {
   }
 }
 
-async function onReportsFinanceDownload(progressController = null) {
+async function onReportsFinanceDownload(progressController = null, siteCodeArg = "") {
   if (!canViewReportsFinanceDownloadTab()) {
     showToast("Finance 다운로드 권한이 없습니다.", "error");
     return;
   }
-  const selectedRows = getReportsFinanceDownloadSelectedRows();
+  const directSiteCode = String(siteCodeArg || "")
+    .trim()
+    .toUpperCase();
+  const workspaceRows = Array.isArray(state.reports?.financeDownloadWorkspace?.sites)
+    ? state.reports.financeDownloadWorkspace.sites
+    : [];
+  const selectedRows = directSiteCode
+    ? workspaceRows.filter(
+        (row) =>
+          String(row?.site_code || "")
+            .trim()
+            .toUpperCase() === directSiteCode,
+      )
+    : getReportsFinanceDownloadSelectedRows();
   if (!selectedRows.length) {
-    showToast("다운로드할 지점을 하나 이상 선택해 주세요.", "error");
+    showToast("다운로드할 지점을 찾을 수 없습니다.", "error");
     return;
   }
   const downloadableRows = selectedRows.filter((row) =>
@@ -27051,7 +26988,7 @@ async function onScheduleFinanceReviewDownload(progressController = null) {
     showToast("업로드 지점을 먼저 선택해 주세요.", "error");
     return;
   }
-  const month = getScheduleMonthValue();
+  const month = getReportsMonthValue();
   const params = new URLSearchParams();
   params.set("month", month);
   params.set("site_code", siteCode === "ALL" ? "all" : siteCode);
@@ -27094,7 +27031,7 @@ async function onScheduleFinancePreview(progressController = null) {
     return;
   }
   const fileInput = $("#scheduleFinanceUploadFile");
-  const siteCode = getScheduleSupportSelectedSiteCode();
+  const siteCode = getReportsFinanceSelectedSiteCode();
   if (!(fileInput instanceof HTMLInputElement) || !fileInput.files?.length) {
     setScheduleFinanceUI({
       batchInfo: "최종 업로드 workbook 파일을 먼저 선택해 주세요.",
@@ -27121,10 +27058,10 @@ async function onScheduleFinancePreview(progressController = null) {
   const body = new FormData();
   body.append("file", fileInput.files[0]);
   body.append("site_code", siteCode);
-  body.append("month", getScheduleMonthValue());
+  body.append("month", getReportsMonthValue());
   body.append("tenant_code", getScheduleTenantValue());
   progressController?.update({
-    detail: `${siteCode} · ${formatScheduleMonthTitle(getScheduleMonthValue())} 기준으로 diff를 계산하고 있습니다.`,
+    detail: `${siteCode} · ${formatScheduleMonthTitle(getReportsMonthValue())} 기준으로 diff를 계산하고 있습니다.`,
     stageKey: "finance_file_check",
   });
   setScheduleFinanceUI({
@@ -27271,7 +27208,7 @@ async function onScheduleFinanceFinalDownload(progressController = null) {
     showToast("Finance 최종 다운로드 권한이 없습니다.", "error");
     return;
   }
-  const siteCode = getScheduleSupportSelectedSiteCode();
+  const siteCode = getReportsFinanceSelectedSiteCode();
   if (!siteCode) {
     showToast("업로드 지점을 먼저 선택해 주세요.", "error");
     return;
@@ -27283,7 +27220,7 @@ async function onScheduleFinanceFinalDownload(progressController = null) {
     );
     return;
   }
-  const month = getScheduleMonthValue();
+  const month = getReportsMonthValue();
   const params = new URLSearchParams();
   params.set("month", month);
   params.set("site_code", siteCode);
@@ -38102,7 +38039,7 @@ function isRouteAllowed(
   if (route === ROUTE_SUPPORT_STATUS) return isManagerShellRole(navRole);
   if (route === ROUTE_REPORTS) return canViewReportsCenter();
   if (route === ROUTE_REPORTS_FINANCE_DOWNLOAD)
-    return canViewReportsFinanceDownloadTab();
+    return canViewReportsFinanceDownloadTab() || canViewReportsFinanceTab();
   if (route === ROUTE_REPORTS_APPLE) return false;
   if (route === ROUTE_ATTENDANCE)
     return Boolean(
@@ -38540,6 +38477,14 @@ async function navigateToRoute(
   if (route === ROUTE_REPORTS && requestedReportsTab === "finance-download") {
     parsedParams.delete("tab");
     route = ROUTE_REPORTS_FINANCE_DOWNLOAD;
+  }
+  if (
+    route === ROUTE_REPORTS_FINANCE_DOWNLOAD &&
+    !canViewReportsFinanceDownloadTab() &&
+    canViewReportsFinanceTab()
+  ) {
+    route = ROUTE_REPORTS;
+    parsedParams = new URLSearchParams();
   }
   if (route === ROUTE_REPORTS && requestedReportsTab === "apple") {
     parsedParams.delete("tab");
@@ -86876,35 +86821,25 @@ function canManageScheduleImportMappingProfile() {
 function canViewScheduleFinanceSubmission() {
   if (getScheduleDataProvider().mode !== "real") return false;
   const role = normalizeRoleValue(state.user?.role || "");
-  return (
-    role === "developer" ||
-    role === "hq_admin" ||
-    role === "supervisor" ||
-    role === "vice_supervisor"
-  );
+  return role === "developer" || role === "supervisor";
 }
 
 function canViewReportsWizardRole() {
   if (getScheduleDataProvider().mode !== "real") return false;
   const role = normalizeRoleValue(state.user?.role || "");
-  return (
-    role === "developer" ||
-    role === "hq_admin" ||
-    role === "supervisor" ||
-    role === "vice_supervisor"
-  );
+  return role === "developer" || role === "supervisor";
 }
 
 function canDownloadScheduleFinanceReview() {
   if (getScheduleDataProvider().mode !== "real") return false;
   const role = normalizeRoleValue(state.user?.role || "");
-  return role === "developer" || role === "hq_admin" || role === "supervisor";
+  return role === "developer" || role === "supervisor";
 }
 
 function canUploadScheduleFinanceFinal() {
   if (getScheduleDataProvider().mode !== "real") return false;
   const role = normalizeRoleValue(state.user?.role || "");
-  return role === "developer" || role === "hq_admin" || role === "supervisor";
+  return role === "developer" || role === "supervisor";
 }
 
 function canViewReportsFinanceDownloadTab() {
@@ -86912,11 +86847,13 @@ function canViewReportsFinanceDownloadTab() {
 }
 
 function canDownloadScheduleFinanceFinal() {
-  return canViewReportsFinanceDownloadTab();
+  if (getScheduleDataProvider().mode !== "real") return false;
+  const role = normalizeRoleValue(state.user?.role || "");
+  return role === "developer" || role === "hq_admin" || role === "supervisor";
 }
 
 function canViewScheduleReportsWorkspace() {
-  return canViewScheduleFinanceSubmission();
+  return canViewReportsCenter();
 }
 
 function canViewReportsFinanceTab() {
@@ -100819,8 +100756,12 @@ function bindUiEvents() {
       }
 
       if (action === "reports-finance-download-run") {
+        const siteCode = String(actionEl.dataset.siteCode || "")
+          .trim()
+          .toUpperCase();
         runWithProgressTask(
-          (progressController) => onReportsFinanceDownload(progressController),
+          (progressController) =>
+            onReportsFinanceDownload(progressController, siteCode),
           {
             busyLabel: "Finance 자료 다운로드 중...",
             fallbackMessage: "Finance 자료 다운로드에 실패했습니다.",
@@ -106445,6 +106386,25 @@ function bindUiEvents() {
             progressOptions: {
               title: "Finance 1차 확인본을 준비하고 있습니다",
               detail: "검토용 workbook을 생성해 브라우저에 전달하는 중입니다.",
+              revealMode: LONG_TASK_REVEAL_IMMEDIATE,
+              tone: LONG_TASK_TONE_DOWNLOAD,
+              stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,
+            },
+          },
+        );
+        return;
+      }
+
+      if (action === "schedule-finance-final-download") {
+        runWithProgressTask(
+          (progressController) =>
+            onScheduleFinanceFinalDownload(progressController),
+          {
+            busyLabel: "최종 업로드본 다운로드 중...",
+            fallbackMessage: "Finance 최종 업로드본 다운로드에 실패했습니다.",
+            progressOptions: {
+              title: "Finance 최종 업로드본을 준비하고 있습니다",
+              detail: "제출된 최종 workbook을 브라우저에 전달하는 중입니다.",
               revealMode: LONG_TASK_REVEAL_IMMEDIATE,
               tone: LONG_TASK_TONE_DOWNLOAD,
               stages: LONG_TASK_STAGES_WORKBOOK_DOWNLOAD,

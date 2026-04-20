@@ -79,7 +79,7 @@
     />
     <link
       rel="stylesheet"
-      href="css/styles.css?v=20260420-template-delete-clean-01"
+      href="css/styles.css?v=20260420-finance-role-split-01"
     />
     <link
       rel="stylesheet"
@@ -7837,105 +7837,74 @@
                 id="scheduleFinanceOverviewView"
                 class="reports-finance-overview-view"
               >
-                <div
-                  class="reports-finance-download-header reports-finance-submit-header"
-                >
-                  <div class="reports-finance-download-title-row">
-                    <div class="reports-finance-download-copy">
-                      <h3>Finance 제출</h3>
+                <div class="reports-finance-submit-entry">
+                  <div class="reports-finance-submit-entry-head">
+                    <div>
+                      <span
+                        id="scheduleFinanceSubmitEntryKicker"
+                        class="reports-finance-entry-kicker"
+                        >Finance Report</span
+                      >
+                      <h3 id="scheduleFinanceSubmitEntryTitle">
+                        Finance 제출
+                      </h3>
                       <p
-                        id="scheduleFinanceOverviewSummary"
-                        class="reports-finance-inline-summary muted"
-                      ></p>
-                      <p
-                        id="scheduleFinanceOverviewSelectionHint"
-                        class="reports-finance-inline-summary muted"
-                      ></p>
+                        id="scheduleFinanceSubmitEntryReason"
+                        class="muted"
+                      >
+                        제출 상태를 불러오는 중입니다.
+                      </p>
                     </div>
-                  </div>
-                  <div
-                    class="reports-finance-download-actions reports-finance-submit-actions"
-                  >
                     <label
                       class="input-field reports-finance-submit-month-field"
                     >
                       <span>대상 월</span>
                       <input id="scheduleFinanceOverviewMonth" type="month" />
                     </label>
+                  </div>
+                  <div
+                    id="scheduleFinanceSubmitEntryMeta"
+                    class="reports-finance-submit-entry-meta"
+                  >
+                    <div class="reports-finance-submit-entry-meta-item">
+                      <span>현재 상태</span>
+                      <strong id="scheduleFinanceOverviewStatusSummary">-</strong>
+                    </div>
+                    <div class="reports-finance-submit-entry-meta-item">
+                      <span>최종 업로드</span>
+                      <strong id="scheduleFinanceLastUploadLabel">-</strong>
+                    </div>
+                    <div class="reports-finance-submit-entry-meta-item">
+                      <span>보고자</span>
+                      <strong id="scheduleFinanceReporterLabel">-</strong>
+                    </div>
+                  </div>
+                  <div class="reports-finance-submit-entry-actions">
                     <button
                       class="btn btn-primary"
                       type="button"
                       id="scheduleFinanceOverviewStartBtn"
                       data-action="reports-finance-overview-start"
                     >
-                      제출 시작
+                      제출 시작하기
+                    </button>
+                    <button
+                      class="btn btn-secondary hidden"
+                      type="button"
+                      id="scheduleFinanceEntryFinalDownloadBtn"
+                      data-action="schedule-finance-final-download"
+                    >
+                      최종 업로드본 다운로드
                     </button>
                   </div>
-                </div>
-                <div class="reports-finance-submit-summary-bar">
-                  <div class="reports-finance-submit-summary-item">
-                    <span>대상 월</span>
-                    <strong id="scheduleFinanceOverviewMonthLabel">-</strong>
-                  </div>
-                  <div class="reports-finance-submit-summary-item">
-                    <span>조회 범위</span>
-                    <strong id="scheduleFinanceOverviewScopeLabel">-</strong>
-                  </div>
-                  <div class="reports-finance-submit-summary-item">
-                    <span>현재 상태 요약</span>
-                    <strong id="scheduleFinanceOverviewStatusSummary">-</strong>
-                  </div>
-                </div>
-                <div
-                  class="reports-finance-download-table-wrap reports-finance-submit-table-wrap"
-                >
-                  <table
-                    class="admin-table reports-finance-download-table reports-finance-submit-table"
-                  >
-                    <thead>
-                      <tr>
-                        <th class="reports-finance-submit-select-col">선택</th>
-                        <th>지점명</th>
-                        <th>제출 현황</th>
-                        <th>1차 확인본 상태</th>
-                        <th>최종 업로드 상태</th>
-                        <th>마지막 갱신</th>
-                        <th>비고</th>
-                      </tr>
-                    </thead>
-                    <tbody id="scheduleFinanceOverviewTableBody">
-                      <tr class="admin-table-empty-row">
-                        <td colspan="7">제출 현황을 불러오는 중입니다.</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <div
-                  id="scheduleFinanceOverviewPager"
-                  class="arls-upload-wizard__pager reports-finance-pager hidden"
-                  aria-label="Finance 제출 지점 페이지"
-                >
-                  <div class="arls-upload-wizard__pager-summary">
-                    <strong id="scheduleFinanceOverviewPagerSummary"
-                      >1페이지</strong
-                    >
-                    <span id="scheduleFinanceOverviewPagerRange"
-                      >표시할 지점이 없습니다.</span
-                    >
-                  </div>
-                  <div
-                    id="scheduleFinanceOverviewPageButtons"
-                    class="arls-upload-wizard__pager-actions"
-                    aria-label="Finance 제출 지점 페이지 번호"
-                  ></div>
                 </div>
               </section>
 
               <section
                 id="scheduleFinanceWizardView"
-                class="reports-finance-wizard-view arls-upload-wizard hidden"
+                class="reports-finance-wizard-view arls-upload-wizard finance-submit-workspace hidden"
               >
-                <div class="reports-finance-wizard-layout arls-upload-wizard__layout">
+                <div class="reports-finance-wizard-layout arls-upload-wizard__layout finance-submit-layout">
                   <aside
                     class="reports-finance-step-rail arls-upload-wizard__progress"
                     aria-label="Finance 제출 단계"
@@ -7991,7 +7960,7 @@
                       </li>
                     </ol>
                   </aside>
-                  <section class="reports-finance-main-canvas arls-upload-wizard__canvas">
+                  <section class="reports-finance-main-canvas arls-upload-wizard__canvas finance-submit-canvas">
                     <div class="reports-finance-main-head">
                       <div class="reports-finance-main-title-group hidden">
                         <h3>Finance 제출</h3>
@@ -8006,42 +7975,11 @@
                         </button>
                       </div>
                     </div>
-                    <div
-                      class="reports-finance-submit-summary-bar reports-finance-wizard-context-bar"
-                    >
-                      <div class="reports-finance-submit-summary-item">
-                        <span>대상 월</span>
-                        <strong id="scheduleFinanceWizardMonthLabel">-</strong>
-                      </div>
-                      <div class="reports-finance-submit-summary-item">
-                        <span>선택 지점</span>
-                        <strong id="scheduleFinanceWizardSiteLabel">-</strong>
-                      </div>
-                      <div class="reports-finance-submit-summary-item">
-                        <span>권한 범위</span>
-                        <strong id="scheduleFinanceWizardRoleLabel">-</strong>
-                      </div>
-                    </div>
                     <ul
                       id="scheduleFinanceBlockedReasons"
                       class="list hidden reports-finance-blocked-list"
                     ></ul>
                     <div class="reports-finance-content-canvas">
-                      <section
-                        id="scheduleFinanceStepScope"
-                        class="reports-wizard-step reports-finance-canvas-step"
-                        data-step-state="idle"
-                      >
-                        <div class="reports-finance-step-head">
-                          <h4>제출 현황</h4>
-                        </div>
-                        <div
-                          id="scheduleFinanceWizardGuidance"
-                          class="reports-finance-guidance-note"
-                        >
-                          선택한 지점의 제출 상태를 불러오는 중입니다.
-                        </div>
-                      </section>
                       <section
                         id="scheduleFinanceStepReview"
                         class="reports-wizard-step reports-finance-canvas-step"
@@ -8050,6 +7988,12 @@
                         <div class="reports-finance-step-head">
                           <h4>1차 확인본 다운로드</h4>
                         </div>
+                        <p
+                          id="scheduleFinanceReviewGuide"
+                          class="reports-finance-guidance-note"
+                        >
+                          검토용 파일을 내려받은 뒤 필요한 내용을 확인해 주세요.
+                        </p>
                         <div
                           class="schedule-support-upload-actions reports-wizard-step-actions"
                         >
@@ -8071,6 +8015,13 @@
                         <div class="reports-finance-step-head">
                           <h4>최종 업로드</h4>
                         </div>
+                        <p
+                          id="scheduleFinanceUploadGuide"
+                          class="reports-finance-guidance-note"
+                        >
+                          1차 확인본을 다운로드한 뒤 수정한 최종본을 업로드할 수
+                          있습니다.
+                        </p>
                         <input
                           id="scheduleFinanceUploadFile"
                           type="file"
@@ -8098,7 +8049,7 @@
                         </div>
                       </section>
                     </div>
-                    <div class="reports-wizard-footer arls-upload-wizard__footer">
+                    <div class="reports-wizard-footer arls-upload-wizard__footer finance-submit-footer">
                       <button
                         class="btn btn-secondary"
                         type="button"
@@ -8226,25 +8177,16 @@
                 <table class="admin-table reports-finance-download-table">
                   <thead>
                     <tr>
-                      <th class="reports-finance-download-select-col">
-                        <input
-                          id="financeDownloadSelectAllToggle"
-                          type="checkbox"
-                          data-action="reports-finance-download-select-all"
-                          aria-label="다운로드 가능 지점 전체 선택"
-                        />
-                      </th>
-                      <th>사이트명</th>
                       <th>상태</th>
                       <th>최종 업로드 일시</th>
-                      <th>업로드 사용자</th>
-                      <th>파일명</th>
+                      <th>보고자</th>
                       <th>다운로드</th>
+                      <th>비고</th>
                     </tr>
                   </thead>
                   <tbody id="financeDownloadTableBody">
                     <tr class="admin-table-empty-row">
-                      <td colspan="7">
+                      <td colspan="5">
                         지점별 업로드 현황을 불러오는 중입니다.
                       </td>
                     </tr>
@@ -11197,7 +11139,7 @@
     <script src="config.js"></script>
     <script>
       window.__RG_ARLS_ASSET_BUILD_ID__ =
-        window.ENV_BUILD_ID || "20260420-template-delete-clean-01";
+        window.ENV_BUILD_ID || "20260420-finance-role-split-01";
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
       window.ENV_BUILD_ID =
@@ -11506,7 +11448,7 @@
 
         window.addEventListener("load", () => {
           navigator.serviceWorker
-            .register("./sw.js?v=20260420-template-delete-clean-01", {
+            .register("./sw.js?v=20260420-finance-role-split-01", {
               updateViaCache: "none",
             })
             .then((registration) => {

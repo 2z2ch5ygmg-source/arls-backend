@@ -2761,8 +2761,10 @@ class FinanceDownloadWorkspaceSiteOut(BaseModel):
     final_uploaded_at: Optional[datetime] = None
     final_uploaded_by: Optional[str] = None
     active_final_filename: Optional[str] = None
+    final_upload_count: int = 0
     download_enabled: bool = False
     download_blocked_reason: Optional[str] = None
+    note: Optional[str] = None
 
 
 class FinanceDownloadWorkspaceOut(BaseModel):

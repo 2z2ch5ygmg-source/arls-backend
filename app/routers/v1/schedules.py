@@ -1065,7 +1065,7 @@ def _can_view_finance_download_workspace(user: dict | None) -> bool:
 
 
 def _can_download_finance_final(user: dict | None) -> bool:
-    return _can_view_finance_download_workspace(user)
+    return _finance_submission_normalize_role(user) in {"developer", "hq_admin", "supervisor"}
 
 
 def _build_schedule_overlap_range(start_time: object, end_time: object) -> tuple[int, int] | None:
@@ -14170,10 +14170,18 @@ def _list_finance_submission_states_for_workspace(
             """
             SELECT fss.*,
                    review_user.username AS review_downloaded_by_username,
-                   final_user.username AS final_uploaded_by_username
+                   final_user.username AS final_uploaded_by_username,
+                   COALESCE(final_stats.final_upload_count, 0) AS final_upload_count
             FROM schedule_finance_submission_states fss
             LEFT JOIN arls_users review_user ON review_user.id = fss.review_downloaded_by
             LEFT JOIN arls_users final_user ON final_user.id = fss.final_uploaded_by
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*)::int AS final_upload_count
+                FROM schedule_finance_submission_batches b
+                WHERE b.submission_id = fss.id
+                  AND b.batch_kind = 'final_upload'
+                  AND b.status = 'applied'
+            ) final_stats ON TRUE
             WHERE fss.tenant_id = %s
               AND fss.month_key = %s
             """,
@@ -14260,6 +14268,7 @@ def _build_finance_download_workspace_site_payload(
     ]
     active_final_batch_id = str(active_state.get("active_final_batch_id") or "").strip()
     uploaded = bool(active_final_batch_id and active_state.get("final_uploaded_at"))
+    final_upload_count = int(active_state.get("final_upload_count") or 0)
     final_upload_stale = bool(active_state.get("final_upload_stale"))
     conflict_required = bool(active_state.get("conflict_required"))
     download_enabled = bool(
@@ -14286,12 +14295,23 @@ def _build_finance_download_workspace_site_payload(
     elif uploaded and conflict_required:
         status = "review_required"
         status_label = "검토 필요"
+    elif uploaded and final_upload_count > 1:
+        status = "reuploaded"
+        status_label = "재업로드됨"
     elif uploaded:
         status = "uploaded"
         status_label = "업로드 완료"
     else:
         status = "not_uploaded"
         status_label = "미업로드"
+
+    note = None
+    if uploaded and final_upload_count > 1 and not final_upload_stale and not conflict_required:
+        note = "Report 업데이트로 재 다운로드 필요"
+    elif final_upload_stale:
+        note = "근무표가 변경되어 업로드한 보고서가 최신 상태가 아닙니다."
+    elif conflict_required:
+        note = "확인이 필요한 항목이 있어 다운로드가 제한됩니다."
 
     if download_enabled:
         blocked_reason = None
@@ -14300,9 +14320,9 @@ def _build_finance_download_workspace_site_payload(
     elif not uploaded:
         blocked_reason = "업로드된 파일 없음"
     elif final_upload_stale:
-        blocked_reason = "최신 revision 기준 재업로드 필요"
+        blocked_reason = "근무표가 변경되어 재업로드가 필요합니다."
     elif conflict_required:
-        blocked_reason = "차단 이슈 확인 필요"
+        blocked_reason = "확인이 필요한 항목이 있습니다."
     else:
         blocked_reason = "다운로드 가능 상태가 아닙니다."
 
@@ -14319,8 +14339,10 @@ def _build_finance_download_workspace_site_payload(
             or ""
         ).strip() or None,
         active_final_filename=filename,
+        final_upload_count=final_upload_count,
         download_enabled=download_enabled,
         download_blocked_reason=blocked_reason,
+        note=note,
     )
 
 
