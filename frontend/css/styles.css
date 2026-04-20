@@ -66651,3 +66651,11 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
     width: min(260px, 100%) !important;
   }
 }
+
+/* Finance download note must remain readable. */
+#view-reports #financeDownloadPanel .reports-finance-download-table th:nth-child(5),
+#view-reports #financeDownloadPanel .reports-finance-download-table td:nth-child(5) {
+  white-space: normal !important;
+  word-break: keep-all !important;
+  line-height: 18px !important;
+}
