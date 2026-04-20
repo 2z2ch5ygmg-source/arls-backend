@@ -87310,6 +87310,10 @@ function renderScheduleHqTabs() {
       "schedule-upload-route-active",
       uploadReportLikeVisible,
     );
+    scheduleView.classList.toggle(
+      "schedule-template-route-active",
+      activeTab === SCHEDULE_TAB_TEMPLATES,
+    );
   }
   if (activeTab === SCHEDULE_TAB_LIST) {
     state.schedule.viewMode = SCHEDULE_VIEW_MODE_LIST;
@@ -91107,7 +91111,7 @@ async function openScheduleTemplateEditor(
   const baseTemplate = current && duplicate ? { ...current } : current;
 
   const content = document.createElement("div");
-  content.className = "stack";
+  content.className = "schedule-template-editor-form";
   const createField = (label, input) => {
     const field = document.createElement("label");
     field.className = "input-field";
@@ -91751,8 +91755,9 @@ function buildScheduleToolbarSummary(month = "") {
 function renderScheduleOpsToolbar() {
   const activeTab = getScheduleActiveTopTab();
   const isBoardTab = isScheduleBoardTab(activeTab);
+  const isTemplateTab = activeTab === SCHEDULE_TAB_TEMPLATES;
   toggleVisibility("#scheduleOpsToolbar", isBoardTab);
-  toggleVisibility("#scheduleActionMenuRow", isBoardTab);
+  toggleVisibility("#scheduleActionMenuRow", isBoardTab || isTemplateTab);
 
   const metaEl = $("#scheduleToolbarMeta");
   if (metaEl instanceof HTMLElement) {
@@ -91775,9 +91780,19 @@ function renderScheduleOpsToolbar() {
 
   const canWrite = canMutateScheduleData();
   document
-    .querySelectorAll("#scheduleActionMenuRow .shell-manager-only")
+    .querySelectorAll("#scheduleActionMenuRow .schedule-board-page-action")
     .forEach((node) => {
-      node.classList.toggle("hidden", !canWrite);
+      const managerOnly = node.classList.contains("shell-manager-only");
+      node.classList.toggle("hidden", !isBoardTab || (managerOnly && !canWrite));
+    });
+  document
+    .querySelectorAll("#scheduleActionMenuRow .schedule-template-page-action")
+    .forEach((node) => {
+      const managerOnly = node.classList.contains("shell-manager-only");
+      node.classList.toggle(
+        "hidden",
+        !isTemplateTab || (managerOnly && !canWrite),
+      );
     });
 }
 

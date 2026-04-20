@@ -40146,6 +40146,11 @@ body.calendar-public-shell #view-calendar-public {
 #view-schedule:has(#scheduleUploadPanel:not(.hidden)) > .workspace-tabs,
 #view-schedule:has(#scheduleUploadPanel:not(.hidden)) #scheduleTabContent > .workspace-tabs,
 #view-schedule:has(#scheduleUploadPanel:not(.hidden)) [data-action="schedule-set-view"],
+#view-schedule.schedule-template-route-active #scheduleMobileViewTabs,
+#view-schedule.schedule-template-route-active #scheduleCalendarFilterRow,
+#view-schedule.schedule-template-route-active #scheduleCalendarToggleRow,
+#view-schedule.schedule-template-route-active #scheduleOpsToolbar,
+#view-schedule.schedule-template-route-active [data-action="schedule-set-view"],
 #view-schedule #scheduleUploadOwnerTabs,
 #view-schedule #scheduleUploadFooterActions {
   display: none !important;
@@ -40583,6 +40588,11 @@ body.calendar-public-shell #view-calendar-public {
 @media (min-width: 1024px) {
   #view-schedule > #scheduleMobileViewTabs.schedule-mobile-view-tabs {
     display: flex !important;
+  }
+
+  #view-schedule.schedule-template-route-active
+    > #scheduleMobileViewTabs.schedule-mobile-view-tabs {
+    display: none !important;
   }
 }
 
@@ -64079,7 +64089,7 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 /* 2026-04-16 phase 5: schedule template manager cleanup */
 #view-schedule #scheduleTemplatePanel.schedule-template-surface {
   display: grid !important;
-  gap: 14px !important;
+  gap: 0 !important;
   padding: 0 !important;
   border: 0 !important;
   border-radius: 0 !important;
@@ -64088,12 +64098,7 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 }
 
 #view-schedule #scheduleTemplatePanel .approval-head {
-  align-items: center !important;
-  min-height: 42px !important;
-  padding: 0 0 12px !important;
-  border: 0 !important;
-  border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
-  background: transparent !important;
+  display: none !important;
 }
 
 #view-schedule #scheduleTemplatePanel .approval-head h3 {
@@ -64115,8 +64120,7 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   border-radius: 8px !important;
 }
 
-#view-schedule #scheduleTemplateTemplatesSection,
-#view-schedule #scheduleTemplatePanel .table-wrap {
+#view-schedule #scheduleTemplateTemplatesSection {
   min-width: 0 !important;
   padding: 0 !important;
   border: 0 !important;
@@ -64126,6 +64130,12 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 }
 
 #view-schedule #scheduleTemplatePanel .table-wrap {
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 1px solid rgba(226, 232, 240, 0.96) !important;
+  border-radius: 0 !important;
+  background: #fff !important;
+  box-shadow: none !important;
   overflow: auto hidden !important;
   -webkit-overflow-scrolling: touch !important;
 }
@@ -64134,26 +64144,27 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   width: 100% !important;
   min-width: 980px !important;
   border-collapse: collapse !important;
-  background: transparent !important;
+  background: #fff !important;
 }
 
 #view-schedule #scheduleTemplatePanel .table-wrap thead th {
-  height: 42px !important;
+  height: 48px !important;
   padding: 0 12px !important;
   border: 0 !important;
   border-block-end: 1px solid rgba(203, 213, 225, 0.9) !important;
-  background: transparent !important;
-  color: #64748b !important;
+  background: #f8fafc !important;
+  color: #475569 !important;
   font-size: 12px !important;
   line-height: 18px !important;
   font-weight: 800 !important;
   letter-spacing: 0 !important;
-  text-align: left !important;
+  text-align: center !important;
   white-space: nowrap !important;
+  vertical-align: middle !important;
 }
 
 #view-schedule #scheduleTemplatePanel .table-wrap tbody td {
-  min-height: 54px !important;
+  height: 58px !important;
   padding: 12px !important;
   border: 0 !important;
   border-block-end: 1px solid rgba(226, 232, 240, 0.96) !important;
@@ -64161,16 +64172,31 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   color: #0f172a !important;
   font-size: 13px !important;
   line-height: 20px !important;
+  text-align: center !important;
   vertical-align: middle !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-wrap tbody td:first-child {
+  text-align: center !important;
+}
+
+#view-schedule #scheduleTemplatePanel .schedule-table-cell-stack {
+  justify-items: center !important;
+  text-align: center !important;
 }
 
 #view-schedule #scheduleTemplatePanel .table-wrap tbody tr:hover td {
   background: rgba(248, 250, 252, 0.92) !important;
 }
 
+#view-schedule #scheduleTemplatePanel .actions-cell {
+  text-align: right !important;
+}
+
 #view-schedule #scheduleTemplatePanel .table-actions {
   justify-content: flex-end !important;
   gap: 6px !important;
+  flex-wrap: nowrap !important;
 }
 
 #view-schedule #scheduleTemplatePanel .table-actions .btn {
@@ -64181,9 +64207,9 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 }
 
 #view-schedule #scheduleTemplatePanel .admin-table-empty-row td {
-  padding: 18px 12px !important;
+  padding: 28px 12px !important;
   color: #64748b !important;
-  text-align: left !important;
+  text-align: center !important;
 }
 
 .modal-sheet.sheet-layout-schedule-template {

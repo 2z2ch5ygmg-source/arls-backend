@@ -79,7 +79,7 @@
     />
     <link
       rel="stylesheet"
-      href="css/styles.css?v=20260420-hq-upload-meta-clean-01"
+      href="css/styles.css?v=20260420-schedule-template-ui-01"
     />
     <link
       rel="stylesheet"
@@ -4316,25 +4316,39 @@
               </div>
               <div id="scheduleActionMenuRow" class="schedule-ops-actions">
                 <button
-                  class="btn btn-secondary schedule-action-btn"
+                  class="btn btn-secondary schedule-action-btn schedule-board-page-action"
                   type="button"
                   data-action="schedule-open-download-monthly-excel"
                 >
                   다운로드
                 </button>
                 <button
-                  class="btn btn-secondary schedule-action-btn shell-manager-only hidden"
+                  class="btn btn-secondary schedule-action-btn schedule-board-page-action shell-manager-only hidden"
                   type="button"
                   data-action="schedule-open-upload-list"
                 >
                   업로드
                 </button>
                 <button
-                  class="btn btn-primary schedule-action-btn shell-manager-only hidden"
+                  class="btn btn-primary schedule-action-btn schedule-board-page-action shell-manager-only hidden"
                   type="button"
                   data-action="schedule-create-bulk-open"
                 >
                   근무일정 추가
+                </button>
+                <button
+                  class="btn btn-secondary schedule-action-btn schedule-template-page-action hidden"
+                  type="button"
+                  data-action="schedule-template-refresh"
+                >
+                  새로고침
+                </button>
+                <button
+                  class="btn btn-primary schedule-action-btn schedule-template-page-action shell-manager-only hidden"
+                  type="button"
+                  data-action="schedule-template-create"
+                >
+                  템플릿 생성
                 </button>
               </div>
             </div>
@@ -11184,7 +11198,7 @@
     <script src="config.js"></script>
     <script>
       window.__RG_ARLS_ASSET_BUILD_ID__ =
-        window.ENV_BUILD_ID || "20260420-hq-upload-meta-clean-01";
+        window.ENV_BUILD_ID || "20260420-schedule-template-ui-01";
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
       window.ENV_BUILD_ID =
@@ -11493,7 +11507,7 @@
 
         window.addEventListener("load", () => {
           navigator.serviceWorker
-            .register("./sw.js?v=20260420-hq-upload-meta-clean-01", {
+            .register("./sw.js?v=20260420-schedule-template-ui-01", {
               updateViaCache: "none",
             })
             .then((registration) => {
