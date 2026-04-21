@@ -746,6 +746,13 @@ h3 {
   background: var(--app-topbar-bg);
 }
 
+body[data-current-view="reports"] .shell-content {
+  max-width: none !important;
+  width: 100% !important;
+  background: #ffffff !important;
+  padding-inline: 0 !important;
+}
+
 .topbar-brand {
   display: inline-flex;
   align-items: center;
@@ -66578,6 +66585,9 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   border: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
 }
 
 #view-reports > article,

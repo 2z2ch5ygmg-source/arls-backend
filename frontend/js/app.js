@@ -13994,19 +13994,20 @@ function renderReportsScopeHint() {
     state.reports?.viewTab || getDefaultReportsViewTab(),
   );
   const title = $("#reportsWorkspaceTitle");
-  if (currentTab === "finance" || currentTab === "finance-download") {
+  if (currentTab === "finance") {
     hint.textContent = "";
     hint.classList.add("hidden");
-    if (title instanceof HTMLElement) title.textContent = "Finance";
+    if (title instanceof HTMLElement) title.textContent = "Finance 제출";
+    return;
+  }
+  if (currentTab === "finance-download") {
+    hint.textContent = "";
+    hint.classList.add("hidden");
+    if (title instanceof HTMLElement) title.textContent = "Finance 다운로드";
     return;
   }
   hint.classList.remove("hidden");
   if (title instanceof HTMLElement) title.textContent = "보고";
-  if (currentTab === "finance-download") {
-    hint.textContent =
-      "HQ 전용 Finance 다운로드 작업공간에서 tenant 전체 지점의 최종 업로드 원본 파일을 확인합니다.";
-    return;
-  }
   hint.textContent =
     "Finance 제출 상태를 먼저 확인한 뒤 필요한 지점만 선택해 제출 workflow를 시작합니다.";
 }
