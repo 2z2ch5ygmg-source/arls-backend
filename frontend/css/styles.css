@@ -66569,6 +66569,20 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 
 
 /* Finance role split final guard. */
+#view-reports.panel.card {
+  background: #f7f9fc !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel,
+#view-reports #financeDownloadPanel,
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-overview-view,
+#view-reports #scheduleFinanceSubmissionPanel .finance-submit-workspace {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 #view-reports #scheduleFinanceSubmissionPanel .finance-submit-workspace .finance-submit-context-bar,
 #view-reports #scheduleFinanceSubmissionPanel .finance-submit-workspace .finance-submit-footer,
 #view-reports #scheduleFinanceSubmissionPanel .finance-submit-workspace .reports-finance-step-rail,
@@ -66652,23 +66666,15 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   }
 }
 
-/* Finance download note must remain readable. */
-#view-reports #financeDownloadPanel .reports-finance-download-table th:nth-child(5),
-#view-reports #financeDownloadPanel .reports-finance-download-table td:nth-child(5) {
-  white-space: normal !important;
-  word-break: keep-all !important;
-  line-height: 18px !important;
-}
-
 /* Finance download column balance for full note visibility. */
 #view-reports #financeDownloadPanel .reports-finance-download-table th:nth-child(1),
 #view-reports #financeDownloadPanel .reports-finance-download-table td:nth-child(1) {
-  width: 22% !important;
+  width: 20% !important;
 }
 
 #view-reports #financeDownloadPanel .reports-finance-download-table th:nth-child(2),
 #view-reports #financeDownloadPanel .reports-finance-download-table td:nth-child(2) {
-  width: 18% !important;
+  width: 12% !important;
 }
 
 #view-reports #financeDownloadPanel .reports-finance-download-table th:nth-child(3),
@@ -66678,11 +66684,24 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 
 #view-reports #financeDownloadPanel .reports-finance-download-table th:nth-child(4),
 #view-reports #financeDownloadPanel .reports-finance-download-table td:nth-child(4) {
-  width: 10% !important;
+  width: 16% !important;
 }
 
 #view-reports #financeDownloadPanel .reports-finance-download-table th:nth-child(5),
 #view-reports #financeDownloadPanel .reports-finance-download-table td:nth-child(5) {
-  width: 38% !important;
+  width: 12% !important;
+}
+
+#view-reports #financeDownloadPanel .reports-finance-download-table th:nth-child(6),
+#view-reports #financeDownloadPanel .reports-finance-download-table td:nth-child(6) {
+  width: 10% !important;
+}
+
+#view-reports #financeDownloadPanel .reports-finance-download-table th:nth-child(7),
+#view-reports #financeDownloadPanel .reports-finance-download-table td:nth-child(7) {
+  width: 18% !important;
+  white-space: normal !important;
+  word-break: keep-all !important;
+  line-height: 18px !important;
   font-size: 12px !important;
 }

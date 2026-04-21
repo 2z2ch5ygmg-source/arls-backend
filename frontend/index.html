@@ -79,7 +79,7 @@
     />
     <link
       rel="stylesheet"
-      href="css/styles.css?v=20260420-finance-role-split-01"
+      href="css/styles.css?v=20260421-finance-flat-integrated-01"
     />
     <link
       rel="stylesheet"
@@ -8177,6 +8177,8 @@
                 <table class="admin-table reports-finance-download-table">
                   <thead>
                     <tr>
+                      <th>지점명</th>
+                      <th>업로드 여부</th>
                       <th>상태</th>
                       <th>최종 업로드 일시</th>
                       <th>보고자</th>
@@ -8186,7 +8188,7 @@
                   </thead>
                   <tbody id="financeDownloadTableBody">
                     <tr class="admin-table-empty-row">
-                      <td colspan="5">
+                      <td colspan="7">
                         지점별 업로드 현황을 불러오는 중입니다.
                       </td>
                     </tr>
@@ -11139,7 +11141,7 @@
     <script src="config.js"></script>
     <script>
       window.__RG_ARLS_ASSET_BUILD_ID__ =
-        window.ENV_BUILD_ID || "20260420-finance-role-split-01";
+        window.ENV_BUILD_ID || "20260421-finance-flat-integrated-01";
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
       window.ENV_BUILD_ID =
@@ -11448,7 +11450,7 @@
 
         window.addEventListener("load", () => {
           navigator.serviceWorker
-            .register("./sw.js?v=20260420-finance-role-split-01", {
+            .register("./sw.js?v=20260421-finance-flat-integrated-01", {
               updateViaCache: "none",
             })
             .then((registration) => {

@@ -14322,6 +14322,24 @@ function getReportsFinanceDownloadStatusPillClass(status = "") {
   return "status-pill status-pill-neutral";
 }
 
+function getReportsFinanceUploadStatusLabel(row = {}) {
+  return row?.uploaded ? "업로드됨" : "미업로드";
+}
+
+function getReportsFinanceUploadStatusPillClass(row = {}) {
+  return row?.uploaded
+    ? "status-pill status-pill-success"
+    : "status-pill status-pill-neutral";
+}
+
+function getReportsFinanceWorkflowStatusLabel(row = {}) {
+  const status = String(row?.status || "").trim().toLowerCase();
+  if (status === "reuploaded") return "재업로드됨";
+  if (status === "stale") return "재업로드 필요";
+  if (status === "review_required") return "검토 필요";
+  return "-";
+}
+
 function getReportsFinanceDownloadAvailabilityPillClass(
   downloadEnabled = false,
 ) {
@@ -14411,7 +14429,7 @@ function renderReportsFinanceDownloadWorkspace() {
     const tr = document.createElement("tr");
     tr.className = "admin-table-empty-row";
     const td = document.createElement("td");
-    td.colSpan = 5;
+    td.colSpan = 7;
     td.textContent = "업로드 현황을 불러오는 중입니다.";
     tr.appendChild(td);
     tableBody.appendChild(tr);
@@ -14422,7 +14440,7 @@ function renderReportsFinanceDownloadWorkspace() {
     const tr = document.createElement("tr");
     tr.className = "admin-table-empty-row";
     const td = document.createElement("td");
-    td.colSpan = 5;
+    td.colSpan = 7;
     td.textContent = errorMessage;
     tr.appendChild(td);
     tableBody.appendChild(tr);
@@ -14433,7 +14451,7 @@ function renderReportsFinanceDownloadWorkspace() {
     const tr = document.createElement("tr");
     tr.className = "admin-table-empty-row";
     const td = document.createElement("td");
-    td.colSpan = 5;
+    td.colSpan = 7;
     td.textContent = "표시할 다운로드 대상이 없습니다.";
     tr.appendChild(td);
     tableBody.appendChild(tr);
@@ -14448,18 +14466,34 @@ function renderReportsFinanceDownloadWorkspace() {
     tr.className = "reports-finance-download-row";
     tr.dataset.siteCode = siteCode;
 
-    const statusCell = document.createElement("td");
+    const siteCell = document.createElement("td");
     const siteMain = document.createElement("div");
     siteMain.className = "reports-finance-download-site-name";
     siteMain.textContent =
       String(row?.site_name || siteCode || "-").trim() || "-";
-    const statusPill = document.createElement("span");
-    statusPill.className = getReportsFinanceDownloadStatusPillClass(
-      row?.status,
-    );
-    statusPill.textContent =
-      String(row?.status_label || "미업로드").trim() || "미업로드";
-    statusCell.append(siteMain, statusPill);
+    siteCell.appendChild(siteMain);
+
+    const uploadCell = document.createElement("td");
+    const uploadPill = document.createElement("span");
+    uploadPill.className = getReportsFinanceUploadStatusPillClass(row);
+    uploadPill.textContent = getReportsFinanceUploadStatusLabel(row);
+    uploadCell.appendChild(uploadPill);
+
+    const statusCell = document.createElement("td");
+    const statusLabel = getReportsFinanceWorkflowStatusLabel(row);
+    if (statusLabel === "-") {
+      const muted = document.createElement("span");
+      muted.className = "muted";
+      muted.textContent = "-";
+      statusCell.appendChild(muted);
+    } else {
+      const statusPill = document.createElement("span");
+      statusPill.className = getReportsFinanceDownloadStatusPillClass(
+        row?.status,
+      );
+      statusPill.textContent = statusLabel;
+      statusCell.appendChild(statusPill);
+    }
 
     const uploadedAtCell = document.createElement("td");
     uploadedAtCell.textContent = row?.final_uploaded_at
@@ -14488,6 +14522,8 @@ function renderReportsFinanceDownloadWorkspace() {
     noteCell.textContent = getReportsFinanceDownloadNote(row) || "-";
 
     tr.append(
+      siteCell,
+      uploadCell,
       statusCell,
       uploadedAtCell,
       uploadedByCell,
