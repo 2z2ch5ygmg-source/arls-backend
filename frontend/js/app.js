@@ -14371,6 +14371,7 @@ function renderReportsFinanceDownloadWorkspace() {
   const tableBody = $("#financeDownloadTableBody");
   const summary = $("#financeDownloadSummary");
   const selectionHint = $("#financeDownloadSelectionHint");
+  const inlineMeta = panel.querySelector(".reports-finance-inline-meta");
   const downloadBtn = $("#financeDownloadPrimaryBtn");
   const selectAllToggle = $("#financeDownloadSelectAllToggle");
   const pager = $("#financeDownloadPager");
@@ -14391,25 +14392,17 @@ function renderReportsFinanceDownloadWorkspace() {
   const visibleRows = pagination.visibleItems;
 
   if (summary instanceof HTMLElement) {
-    if (workspace) {
-      summary.textContent = `총 ${Number(workspace.total_site_count || rows.length || 0)} · 완료 ${Number(workspace.uploaded_site_count || 0)} · 다운로드 가능 ${Number(workspace.downloadable_site_count || 0)}`;
-    } else if (loading) {
-      summary.textContent = "업로드 현황을 불러오는 중입니다.";
-    } else if (errorMessage) {
-      summary.textContent = errorMessage;
-    } else {
-      summary.textContent = "대상 월 기준 최종 업로드 상태";
-    }
+    summary.textContent = "";
+    summary.classList.add("hidden");
   }
 
   if (selectionHint instanceof HTMLElement) {
-    if (errorMessage) {
-      selectionHint.textContent = "";
-    } else if (loading) {
-      selectionHint.textContent = "";
-    } else {
-      selectionHint.textContent = "필요한 지점 행에서 바로 다운로드하세요.";
-    }
+    selectionHint.textContent = "";
+    selectionHint.classList.add("hidden");
+  }
+
+  if (inlineMeta instanceof HTMLElement) {
+    inlineMeta.classList.add("hidden");
   }
 
   if (downloadBtn instanceof HTMLButtonElement) {
