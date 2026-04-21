@@ -1,4 +1,4 @@
-const SW_VERSION = 'rg-arls-sw-v20260421-finance-flat-integrated-01';
+const SW_VERSION = 'rg-arls-sw-v20260421-finance-no-box-01';
 const SHELL_CACHE = `${SW_VERSION}-shell`;
 const STATIC_CACHE = `${SW_VERSION}-static`;
 const ACTIVE_CACHES = new Set([SHELL_CACHE, STATIC_CACHE]);

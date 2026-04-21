@@ -66569,14 +66569,35 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 
 
 /* Finance role split final guard. */
-#view-reports.panel.card {
-  background: #f7f9fc !important;
+#view-reports,
+#view-reports.panel.card,
+#view-reports.panel.card.view {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+#view-reports > article,
+#view-reports > .workspace-head,
+#view-reports > .workspace-tabbar-row,
+#view-reports > .reports-center-context-card {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-reports > .reports-center-context-card {
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel,
 #view-reports #financeDownloadPanel,
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-overview-view,
-#view-reports #scheduleFinanceSubmissionPanel .finance-submit-workspace {
+#view-reports #scheduleFinanceSubmissionPanel .finance-submit-workspace,
+#view-reports #financeDownloadHeaderContextMount #reportsCenterContextCard,
+#view-reports #reportsCenterContextCard.reports-center-context-card-inline {
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
