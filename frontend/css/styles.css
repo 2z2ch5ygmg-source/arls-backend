@@ -66667,6 +66667,7 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry {
   display: grid !important;
   gap: 10px !important;
+  padding-top: 18px !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-head {
@@ -66736,6 +66737,7 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   gap: 6px 20px !important;
   align-items: center !important;
   justify-content: center !important;
+  margin-top: 10px !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-meta-item {
@@ -66785,6 +66787,10 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-actions,
   #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-meta {
     justify-content: flex-start !important;
+  }
+
+  #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry {
+    padding-top: 14px !important;
   }
 
   #view-reports #financeDownloadPanel .reports-finance-download-header {
