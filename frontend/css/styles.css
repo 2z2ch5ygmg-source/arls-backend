@@ -66737,7 +66737,7 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   gap: 6px 20px !important;
   align-items: center !important;
   justify-content: center !important;
-  margin-top: 10px !important;
+  margin-top: 28px !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-meta-item {
@@ -66772,6 +66772,11 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   max-width: 58ch !important;
   margin: 0 !important;
   font-family: inherit !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-meta
+  + .reports-finance-submit-entry-actions {
+  margin-top: 12px !important;
 }
 
 @media (max-width: 1100px) {
