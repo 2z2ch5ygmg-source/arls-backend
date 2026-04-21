@@ -6006,7 +6006,7 @@ def _collect_finance_review_export_context(
         return export_ctx
     if _monthly_export_context_has_employee_source_rows(export_ctx):
         raise HTTPException(status_code=422, detail="employee mapping unavailable for monthly export")
-    raise HTTPException(status_code=404, detail="monthly schedule export data not found")
+    return export_ctx
 
 
 def _collect_finance_review_all_site_export_contexts(
@@ -6039,8 +6039,9 @@ def _collect_finance_review_all_site_export_contexts(
                 status_code=422,
                 detail=f"employee mapping unavailable for monthly export: {str(site_row.get('site_code') or '').strip()}",
             )
+        export_contexts.append(export_ctx)
     if not export_contexts:
-        raise HTTPException(status_code=404, detail="monthly schedule export data not found")
+        raise HTTPException(status_code=404, detail="site not found")
     return export_contexts
 
 

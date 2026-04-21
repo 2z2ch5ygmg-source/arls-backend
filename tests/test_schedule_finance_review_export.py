@@ -10,6 +10,7 @@ from app.routers.v1.schedules import (
     ARLS_METADATA_SHEET_NAME,
     _build_monthly_export_workbook_from_contexts,
     _collect_finance_review_export_context,
+    _collect_finance_review_all_site_export_contexts,
     _extract_arls_date_columns,
     _locate_support_section_rows,
 )
@@ -251,6 +252,86 @@ class FinanceReviewExportTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 422)
         self.assertEqual(str(ctx.exception.detail), "employee mapping unavailable for monthly export")
+
+    @patch("app.routers.v1.schedules._collect_monthly_export_context")
+    def test_finance_review_export_allows_blank_workbook_context(self, collect_export_context) -> None:
+        export_ctx = {
+            "rows": [],
+            "support_rows": [],
+            "employee_overnight_rows": [],
+            "employee_blocks": [],
+            "site_id": "site-1",
+            "site_code": "R738",
+            "site_name": "Apple_명동",
+            "site_address": "명동 주소",
+            "support_request_rows": [],
+            "overnight_rows": [],
+            "daytime_need_rows": [],
+            "export_revision": "blank-revision",
+        }
+        collect_export_context.return_value = export_ctx
+
+        resolved = _collect_finance_review_export_context(
+            None,
+            target_tenant={"id": "tenant-1"},
+            site_row={"id": "site-1", "site_code": "R738", "site_name": "Apple_명동"},
+            month_key="2026-04",
+            user={"role": "supervisor"},
+        )
+
+        self.assertEqual(resolved["site_code"], "R738")
+        self.assertEqual(resolved["export_revision"], "blank-revision")
+
+    @patch("app.routers.v1.schedules._list_site_contexts_for_export")
+    @patch("app.routers.v1.schedules._collect_monthly_export_context")
+    def test_finance_review_all_site_export_keeps_blank_site_contexts(
+        self,
+        collect_export_context,
+        list_site_contexts,
+    ) -> None:
+        list_site_contexts.return_value = [
+            {"id": "site-1", "site_code": "R738", "site_name": "Apple_명동"},
+            {"id": "site-2", "site_code": "R739", "site_name": "Apple_가로수길"},
+        ]
+        collect_export_context.side_effect = [
+            {
+                "rows": [],
+                "support_rows": [],
+                "employee_overnight_rows": [],
+                "employee_blocks": [],
+                "site_id": "site-1",
+                "site_code": "R738",
+                "site_name": "Apple_명동",
+                "site_address": "명동 주소",
+                "support_request_rows": [],
+                "overnight_rows": [],
+                "daytime_need_rows": [],
+                "export_revision": "blank-a",
+            },
+            {
+                "rows": [],
+                "support_rows": [],
+                "employee_overnight_rows": [],
+                "employee_blocks": [],
+                "site_id": "site-2",
+                "site_code": "R739",
+                "site_name": "Apple_가로수길",
+                "site_address": "가로수길 주소",
+                "support_request_rows": [],
+                "overnight_rows": [],
+                "daytime_need_rows": [],
+                "export_revision": "blank-b",
+            },
+        ]
+
+        contexts = _collect_finance_review_all_site_export_contexts(
+            None,
+            target_tenant={"id": "tenant-1"},
+            month_key="2026-04",
+            user={"role": "hq_admin"},
+        )
+
+        self.assertEqual([ctx["site_code"] for ctx in contexts], ["R738", "R739"])
 
     def test_finance_review_workbook_populates_support_blocks_from_sentrix_status(self) -> None:
         workbook, _template_path, _template_version = _build_monthly_export_workbook_from_contexts(
