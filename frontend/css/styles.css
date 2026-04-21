@@ -66660,20 +66660,21 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-overview-view {
   width: 100% !important;
   box-sizing: border-box !important;
-  max-width: 980px !important;
+  max-width: 860px !important;
   margin: 0 auto !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry {
   display: grid !important;
-  gap: 14px !important;
+  gap: 10px !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-head {
   display: grid !important;
-  grid-template: auto / minmax(0, 1fr) minmax(196px, 220px) !important;
+  grid-template: auto / minmax(360px, 520px) minmax(196px, 220px) !important;
+  justify-content: space-between !important;
   align-items: end !important;
-  gap: 12px !important;
+  gap: 10px !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry h3 {
@@ -66681,6 +66682,8 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   font-size: 30px !important;
   line-height: 34px !important;
   letter-spacing: -0.03em !important;
+  font-family: inherit !important;
+  font-weight: 800 !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-head > div,
@@ -66701,15 +66704,16 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   font-size: 12px !important;
   line-height: 18px !important;
   font-weight: 700 !important;
+  font-family: inherit !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-actions {
   display: flex !important;
-  justify-content: flex-start !important;
+  justify-content: center !important;
   align-items: center !important;
   width: 100% !important;
   gap: 10px !important;
-  margin-top: 4px !important;
+  margin-top: 2px !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceOverviewStartBtn {
@@ -66717,19 +66721,21 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   min-width: 184px !important;
   min-height: 44px !important;
   height: 44px !important;
+  align-items: center !important;
   justify-content: center !important;
   text-align: center !important;
   padding-inline: 22px !important;
   font-weight: 700 !important;
+  line-height: 1 !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-meta {
   display: flex !important;
   flex-wrap: wrap !important;
   grid-template: none !important;
-  gap: 8px 24px !important;
+  gap: 6px 20px !important;
   align-items: center !important;
-  justify-content: flex-start !important;
+  justify-content: center !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-meta-item {
@@ -66747,11 +66753,13 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-meta-item span {
   color: var(--ui-text-secondary) !important;
   font-size: 12px !important;
+  font-family: inherit !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-meta-item strong {
   font-size: 14px !important;
   font-weight: 700 !important;
+  font-family: inherit !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-month-field {
@@ -66761,6 +66769,7 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry p.muted {
   max-width: 58ch !important;
   margin: 0 !important;
+  font-family: inherit !important;
 }
 
 @media (max-width: 1100px) {
@@ -66771,6 +66780,11 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-month-field {
     width: min(260px, 100%) !important;
     justify-self: start !important;
+  }
+
+  #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-actions,
+  #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-meta {
+    justify-content: flex-start !important;
   }
 
   #view-reports #financeDownloadPanel .reports-finance-download-header {
