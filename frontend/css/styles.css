@@ -66572,7 +66572,7 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 #view-reports,
 #view-reports.panel.card,
 #view-reports.panel.card.view {
-  background: transparent !important;
+  background: #f7f9fc !important;
   border: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
