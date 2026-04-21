@@ -66660,13 +66660,27 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-overview-view {
   width: 100% !important;
   box-sizing: border-box !important;
+  max-width: 980px !important;
+  margin: 0 auto !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry {
+  display: grid !important;
+  gap: 14px !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-head {
   display: grid !important;
-  grid-template: auto / minmax(420px, 1fr) minmax(180px, 220px) !important;
-  align-items: center !important;
+  grid-template: auto / minmax(0, 1fr) minmax(196px, 220px) !important;
+  align-items: end !important;
   gap: 12px !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry h3 {
+  margin: 0 !important;
+  font-size: 30px !important;
+  line-height: 34px !important;
+  letter-spacing: -0.03em !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-head > div,
@@ -66683,6 +66697,10 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-entry-kicker {
   white-space: nowrap !important;
+  color: var(--ui-text-secondary) !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  font-weight: 700 !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-actions {
@@ -66696,7 +66714,13 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 
 #view-reports #scheduleFinanceSubmissionPanel #scheduleFinanceOverviewStartBtn {
   display: inline-flex !important;
-  min-width: 148px !important;
+  min-width: 184px !important;
+  min-height: 44px !important;
+  height: 44px !important;
+  justify-content: center !important;
+  text-align: center !important;
+  padding-inline: 22px !important;
+  font-weight: 700 !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-meta {
@@ -66712,11 +66736,31 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   display: inline-flex !important;
   align-items: center !important;
   gap: 6px !important;
+  min-height: 20px !important;
 }
 
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-meta-item span,
 #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-meta-item strong {
   line-height: 20px !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-meta-item span {
+  color: var(--ui-text-secondary) !important;
+  font-size: 12px !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry-meta-item strong {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-month-field {
+  justify-self: end !important;
+}
+
+#view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-entry p.muted {
+  max-width: 58ch !important;
+  margin: 0 !important;
 }
 
 @media (max-width: 1100px) {
@@ -66726,6 +66770,7 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 
   #view-reports #scheduleFinanceSubmissionPanel .reports-finance-submit-month-field {
     width: min(260px, 100%) !important;
+    justify-self: start !important;
   }
 
   #view-reports #financeDownloadPanel .reports-finance-download-header {

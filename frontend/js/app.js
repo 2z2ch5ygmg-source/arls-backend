@@ -67950,8 +67950,6 @@ function serializeReportsViewSnapshotPayload() {
       [
         "tenantCode",
         "viewTab",
-        "financeView",
-        "financeStep",
         "financeSelectedSiteCode",
         "financeOverviewWorkspace",
         "financeOverviewError",
@@ -67989,8 +67987,6 @@ function restoreReportsViewSnapshotPayload(payload = {}) {
     ...pickSerializableFields(cloneObjectValue(payload.reports, {}), [
       "tenantCode",
       "viewTab",
-      "financeView",
-      "financeStep",
       "financeSelectedSiteCode",
       "financeOverviewWorkspace",
       "financeOverviewError",
@@ -68007,6 +68003,8 @@ function restoreReportsViewSnapshotPayload(payload = {}) {
     loading: false,
     financeOverviewLoading: false,
     financeDownloadLoading: false,
+    financeView: "overview",
+    financeStep: "scope",
   };
   if (!state.schedule || typeof state.schedule !== "object") {
     state.schedule = createInitialScheduleState();

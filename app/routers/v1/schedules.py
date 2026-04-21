@@ -3546,6 +3546,9 @@ def _choose_template_by_duty_hours(
 
 
 def _resolve_site_context_by_code(conn, *, tenant_id: str, site_code: str) -> dict | None:
+    normalized_site_code = str(site_code or "").strip()
+    if not normalized_site_code:
+        return None
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -3553,12 +3556,26 @@ def _resolve_site_context_by_code(conn, *, tenant_id: str, site_code: str) -> di
             FROM sites s
             JOIN companies c ON c.id = s.company_id
             WHERE s.tenant_id = %s
-              AND s.site_code = %s
+              AND upper(s.site_code) = upper(%s)
             LIMIT 1
             """,
-            (tenant_id, site_code),
+            (tenant_id, normalized_site_code),
         )
         row = cur.fetchone()
+        if not row:
+            cur.execute(
+                """
+                SELECT s.id, s.site_code, s.site_name, COALESCE(s.address, '') AS address, s.company_id, c.company_code
+                FROM sites s
+                JOIN companies c ON c.id = s.company_id
+                WHERE s.tenant_id = %s
+                  AND upper(COALESCE(c.company_code, '')) = upper(%s)
+                ORDER BY s.site_code ASC
+                LIMIT 1
+                """,
+                (tenant_id, normalized_site_code),
+            )
+            row = cur.fetchone()
     return dict(row) if row else None
 
 

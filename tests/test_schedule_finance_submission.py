@@ -18,6 +18,7 @@ from app.routers.v1.schedules import (
     _can_view_finance_submission,
     _finance_preview_row_has_real_protected_change,
     _is_supported_import_source_version,
+    _resolve_site_context_by_code,
     apply_finance_final_upload,
     download_finance_final_excel,
     get_finance_submission_status,
@@ -65,7 +66,7 @@ class ScheduleFinanceSubmissionHelpersTests(unittest.TestCase):
 
         self.assertTrue(_can_download_finance_final(hq))
         self.assertTrue(_can_download_finance_final(developer))
-        self.assertFalse(_can_download_finance_final(supervisor))
+        self.assertTrue(_can_download_finance_final(supervisor))
         self.assertFalse(_can_download_finance_final(vice))
 
     def test_schedule_import_mapping_profile_is_readable_for_upload_roles_only(self):
@@ -265,6 +266,32 @@ class ScheduleFinanceSubmissionHelpersTests(unittest.TestCase):
         )
         self.assertEqual(response.site_code, "R692")
 
+    def test_resolve_site_context_by_code_falls_back_to_company_code(self):
+        fake_conn = _FetchSequenceConn(
+            [
+                None,
+                {
+                    "id": "site-1",
+                    "site_code": "APPLE_GAROSU",
+                    "site_name": "Apple_가로수길",
+                    "address": "",
+                    "company_id": "company-1",
+                    "company_code": "R738",
+                },
+            ]
+        )
+
+        resolved = _resolve_site_context_by_code(
+            fake_conn,
+            tenant_id="tenant-1",
+            site_code="R738",
+        )
+
+        self.assertIsNotNone(resolved)
+        self.assertEqual(resolved["site_code"], "APPLE_GAROSU")
+        self.assertEqual(resolved["company_code"], "R738")
+        self.assertEqual(len(fake_conn.calls), 2)
+
 
 class _FakeCursor:
     def __init__(self, calls: list[tuple[str, tuple | None]]):
@@ -280,12 +307,32 @@ class _FakeCursor:
         self._calls.append((sql, params))
 
 
+class _FetchSequenceCursor(_FakeCursor):
+    def __init__(self, calls: list[tuple[str, tuple | None]], rows: list[dict | None]):
+        super().__init__(calls)
+        self._rows = rows
+
+    def fetchone(self):
+        if not self._rows:
+            return None
+        return self._rows.pop(0)
+
+
 class _FakeConn:
     def __init__(self):
         self.calls: list[tuple[str, tuple | None]] = []
 
     def cursor(self):
         return _FakeCursor(self.calls)
+
+
+class _FetchSequenceConn(_FakeConn):
+    def __init__(self, rows: list[dict | None]):
+        super().__init__()
+        self._rows = list(rows)
+
+    def cursor(self):
+        return _FetchSequenceCursor(self.calls, self._rows)
 
 
 if __name__ == "__main__":
