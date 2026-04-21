@@ -38080,10 +38080,10 @@ function isRouteAllowed(
     route === ROUTE_SCHEDULE ||
     route === ROUTE_SCHEDULE_CALENDAR ||
     route === ROUTE_SCHEDULE_LIST ||
-    route === ROUTE_SCHEDULE_UPLOAD ||
-    route === ROUTE_SCHEDULE_TEMPLATES
+    route === ROUTE_SCHEDULE_UPLOAD
   )
     return Boolean(perms.schedule);
+  if (route === ROUTE_SCHEDULE_TEMPLATES) return isScheduleTemplateTabVisible();
   if (route === ROUTE_SCHEDULE_HQ_UPLOAD) return canUseScheduleUploadHqWizard();
   if (route === ROUTE_SCHEDULE_REPORTS) return canViewReportsCenter();
   if (route === ROUTE_REQUESTS) {
@@ -86800,12 +86800,7 @@ function canMutateScheduleData() {
 function canReadScheduleTemplateData() {
   if (getScheduleDataProvider().mode !== "real") return false;
   const role = normalizeRoleValue(state.user?.role || "");
-  return (
-    role === "developer" ||
-    role === "hq_admin" ||
-    role === "supervisor" ||
-    role === "vice_supervisor"
-  );
+  return role === "developer" || role === "hq_admin" || isMasterDeveloperAccount();
 }
 
 function canUseScheduleSupportRoundtripSource() {
@@ -87048,6 +87043,18 @@ function toggleScheduleActionDropdown(menuId = "") {
 function getScheduleActiveTopTab() {
   const routeTab = resolveScheduleTabFromRoutePath(state.currentRoute || "");
   if (routeTab) {
+    if (routeTab === SCHEDULE_TAB_TEMPLATES && !isScheduleTemplateTabVisible()) {
+      return SCHEDULE_TAB_CALENDAR;
+    }
+    if (routeTab === SCHEDULE_TAB_UPLOAD && !canOpenScheduleUploadWorkspace()) {
+      return SCHEDULE_TAB_CALENDAR;
+    }
+    if (routeTab === SCHEDULE_TAB_HQ_UPLOAD && !canUseScheduleUploadHqWizard()) {
+      return SCHEDULE_TAB_CALENDAR;
+    }
+    if (routeTab === SCHEDULE_TAB_REPORTS && !canViewScheduleReportsWorkspace()) {
+      return SCHEDULE_TAB_CALENDAR;
+    }
     return routeTab;
   }
   const current = normalizeScheduleHqTab(
