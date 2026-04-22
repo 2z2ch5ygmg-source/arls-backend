@@ -33755,7 +33755,7 @@ async function loadHomeBriefing({ force = false } = {}) {
   try {
     const payload = await fetchHomeBriefing({
       force,
-      deferHqHeavy: !force && state.home.audience === "hq",
+      deferHqHeavy: false,
     });
     const briefing = applyHomeBriefingPayload(payload);
     if (!force && isHomeBriefingHqHeavyDeferred(briefing)) {
