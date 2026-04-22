@@ -58,7 +58,8 @@ class FinanceDownloadWorkspacePayloadTests(unittest.TestCase):
         self.assertEqual(row.status, "stale")
         self.assertEqual(row.status_label, "재업로드 필요")
         self.assertEqual(row.note, "근무표가 변경되어 업로드한 보고서가 최신 상태가 아닙니다.")
-        self.assertEqual(row.download_blocked_reason, "근무표가 변경되어 재업로드가 필요합니다.")
+        self.assertTrue(row.download_enabled)
+        self.assertIsNone(row.download_blocked_reason)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,14 @@ from ...schemas import (
     AttendanceRecordUpsertOut,
     AttendanceTodayStatusOut,
 )
+from ...services.attendance_sessions import (
+    build_sessions,
+    build_weekly_summary as build_attendance_weekly_summary,
+    ensure_kst,
+    fetch_schedule_windows,
+    find_existing_checkin_session,
+    resolve_event_context,
+)
 from ...services.attendance_runtime import (
     fetch_today_status,
     get_kst_day_bounds_utc,
@@ -122,12 +130,23 @@ def _build_home_status_out(user: dict[str, Any], status_row: dict[str, Any] | No
         check_out_at=row.get("check_out_at"),
         today_record_id=row.get("today_record_id"),
         button_mode=button_mode,
+        button_label=row.get("button_label"),
         auto_checkout=row.get("auto_checkout"),
         site_id=row.get("site_id"),
         site_code=row.get("site_code"),
         site_name=row.get("site_name"),
         employee_id=user.get("employee_id"),
         employee_name=user.get("full_name"),
+        business_date=row.get("business_date"),
+        schedule_id=row.get("schedule_id"),
+        shift_type=row.get("shift_type"),
+        shift_start_at=row.get("shift_start_at"),
+        shift_end_at=row.get("shift_end_at"),
+        session_status=row.get("session_status"),
+        check_in_status=row.get("check_in_status"),
+        check_out_status=row.get("check_out_status"),
+        worked_minutes=row.get("worked_minutes"),
+        open_session=bool(row.get("open_session")),
     )
 
 
@@ -203,43 +222,32 @@ def create_record(
     )
     within = distance <= float(site["radius_meters"])
     event_at_utc = _ensure_utc(payload.event_at)
-    day_start_utc, day_end_utc, _ = get_kst_day_bounds_utc(event_at_utc)
+    event_context = resolve_event_context(
+        conn,
+        tenant_id=str(user["tenant_id"]),
+        employee_id=str(emp["id"]),
+        event_at=event_at_utc,
+    )
 
     with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT id, event_type, event_at
-            FROM attendance_records
-            WHERE tenant_id = %s
-              AND employee_id = %s
-              AND event_type IN ('check_in', 'check_out')
-              AND event_at >= %s
-              AND event_at < %s
-            ORDER BY event_at ASC
-            """,
-            (
-                user["tenant_id"],
-                emp["id"],
-                day_start_utc,
-                day_end_utc,
-            ),
-        )
-        day_rows = cur.fetchall() or []
-        check_in_row = next((row for row in day_rows if str(row.get("event_type")) == "check_in"), None)
-        check_out_candidates = [row for row in day_rows if str(row.get("event_type")) == "check_out"]
-        check_out_row = check_out_candidates[-1] if check_out_candidates else None
-
-        if payload.event_type == "check_in" and check_in_row:
-            existing_out = _fetch_record_out_by_id(conn, str(check_in_row["id"]))
-            return AttendanceRecordUpsertOut(record=existing_out, already_exists=True)
+        if payload.event_type == "check_in":
+            existing_session = find_existing_checkin_session(
+                event_context["sessions"],
+                event_context["checkin_window"],
+                event_at_utc,
+            )
+            if existing_session and existing_session.get("check_in_id"):
+                existing_out = _fetch_record_out_by_id(conn, str(existing_session["check_in_id"]))
+                return AttendanceRecordUpsertOut(record=existing_out, already_exists=True)
         if payload.event_type == "check_out":
-            if not check_in_row:
+            open_session = event_context.get("open_session")
+            if not open_session or not open_session.get("check_in_id"):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="check_in required before check_out",
                 )
-            if check_out_row:
-                existing_out = _fetch_record_out_by_id(conn, str(check_out_row["id"]))
+            if open_session.get("check_out_id"):
+                existing_out = _fetch_record_out_by_id(conn, str(open_session["check_out_id"]))
                 return AttendanceRecordUpsertOut(record=existing_out, already_exists=True)
         # 신규 출퇴근 기록은 지점 반경 내에서만 허용한다.
         if not within:
@@ -280,17 +288,14 @@ def create_record(
                 WHERE tenant_id = %s
                   AND employee_id = %s
                   AND event_type = %s
-                  AND event_at >= %s
-                  AND event_at < %s
-                ORDER BY event_at DESC
+                  AND event_at = %s
                 LIMIT 1
                 """,
                 (
                     user["tenant_id"],
                     emp["id"],
                     payload.event_type,
-                    day_start_utc,
-                    day_end_utc,
+                    event_at_utc,
                 ),
             )
             fallback_row = cur.fetchone()
@@ -317,7 +322,6 @@ def create_record(
                 fallback_user_id=user.get("id"),
                 source_event_uid=f"attendance_record:{inserted['id']}",
             )
-
     inserted_out = _fetch_record_out_by_id(conn, str(inserted["id"]))
     try:
         send_attendance_push_notification(
@@ -356,13 +360,15 @@ def get_home_status(conn=Depends(get_db_conn), user=Depends(get_current_user)):
 def list_records(date: str | None = None, conn=Depends(get_db_conn), user=Depends(get_current_user)):
     _, _, today_kst = get_kst_day_bounds_utc(datetime.now(timezone.utc))
     target_date = _parse_iso_date(date, field_name="date") if date else today_kst
-    day_start_utc, day_end_utc = _kst_day_bounds_for_date(target_date)
+    query_start_utc, _ = _kst_day_bounds_for_date(target_date - timedelta(days=1))
+    _, query_end_utc = _kst_day_bounds_for_date(target_date + timedelta(days=1))
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT ar.id, ar.event_type, ar.event_at, ar.distance_meters, ar.is_within_radius,
                    COALESCE(ar.auto_checkout, FALSE) AS auto_checkout,
-                   e.employee_code, e.full_name, s.site_code, s.site_name
+                   ar.employee_id,
+                   e.employee_code, e.full_name, s.id AS site_id, s.site_code, s.site_name
             FROM attendance_records ar
             JOIN employees e ON e.id = ar.employee_id
             JOIN sites s ON s.id = ar.site_id
@@ -372,9 +378,41 @@ def list_records(date: str | None = None, conn=Depends(get_db_conn), user=Depend
             ORDER BY ar.event_at DESC
             LIMIT 300
             """,
-            (user["tenant_id"], day_start_utc, day_end_utc),
+            (user["tenant_id"], query_start_utc, query_end_utc),
         )
-        return [dict(r) for r in cur.fetchall()]
+        raw_rows = [dict(r) for r in cur.fetchall()]
+
+    rows_by_employee: dict[str, list[dict[str, Any]]] = {}
+    for row in raw_rows:
+        employee_id = str(row.get("employee_id") or "").strip()
+        if employee_id:
+            rows_by_employee.setdefault(employee_id, []).append(row)
+
+    included_ids: set[str] = set()
+    for employee_id, employee_rows in rows_by_employee.items():
+        windows = fetch_schedule_windows(
+            conn,
+            tenant_id=str(user["tenant_id"]),
+            employee_id=employee_id,
+            start_date=target_date - timedelta(days=1),
+            end_date=target_date + timedelta(days=1),
+        )
+        sessions = build_sessions(windows, employee_rows, now_utc=datetime.now(timezone.utc))
+        for session in sessions:
+            if session.get("business_date") == target_date:
+                for key in ("check_in_id", "check_out_id"):
+                    if session.get(key):
+                        included_ids.add(str(session[key]))
+
+    result = []
+    for row in raw_rows:
+        row_id = str(row.get("id") or "")
+        if row_id in included_ids:
+            result.append(row)
+            continue
+        if not included_ids and ensure_kst(row.get("event_at")).date() == target_date:
+            result.append(row)
+    return result
 
 
 @router.get("/weekly-summary")
@@ -397,54 +435,14 @@ def get_weekly_summary(
             "entries": entries,
         }
 
-    range_start_utc, _ = _kst_day_bounds_for_date(range_start)
-    _, range_end_utc = _kst_day_bounds_for_date(range_end)
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT
-                (ar.event_at AT TIME ZONE 'Asia/Seoul')::date AS work_date,
-                COUNT(*) FILTER (WHERE ar.event_type = 'check_in') AS check_in_count,
-                COUNT(*) FILTER (WHERE ar.event_type = 'check_out') AS check_out_count
-            FROM attendance_records ar
-            WHERE ar.tenant_id = %s
-              AND ar.employee_id = %s
-              AND ar.event_at >= %s
-              AND ar.event_at < %s
-              AND ar.event_type IN ('check_in', 'check_out')
-            GROUP BY work_date
-            ORDER BY work_date
-            """,
-            (user["tenant_id"], employee_id, range_start_utc, range_end_utc),
-        )
-        rows = cur.fetchall() or []
-
-    summary_by_date: dict[str, dict[str, int]] = {}
-    for row in rows:
-        work_date = row.get("work_date")
-        if isinstance(work_date, dt_date):
-            key = work_date.isoformat()
-        else:
-            key = str(work_date or "").strip()
-        if not key:
-            continue
-        summary_by_date[key] = {
-            "check_in_count": int(row.get("check_in_count") or 0),
-            "check_out_count": int(row.get("check_out_count") or 0),
-        }
-
-    current = range_start
-    while current <= range_end:
-        key = current.isoformat()
-        summary = summary_by_date.get(key) or {"check_in_count": 0, "check_out_count": 0}
-        entries.append(
-            {
-                "date": key,
-                "check_in_count": int(summary.get("check_in_count") or 0),
-                "check_out_count": int(summary.get("check_out_count") or 0),
-            }
-        )
-        current += timedelta(days=1)
+    entries = build_attendance_weekly_summary(
+        conn,
+        tenant_id=str(user["tenant_id"]),
+        employee_id=employee_id,
+        start_date=range_start,
+        end_date=range_end,
+        now_utc=datetime.now(timezone.utc),
+    )
 
     return {
         "start_date": range_start.isoformat(),

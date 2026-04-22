@@ -179,6 +179,10 @@ def test_home_briefing_hq_payload_is_tenant_wide(monkeypatch):
     assert result.scope_label == "전체 운영 범위"
     assert result.ops_summary is not None
     assert result.approval_summary is not None
+    assert result.notice_highlight is None
+    assert result.support_work_summary is not None
+    assert result.task_summary is not None
+    assert any(item.field == "attendance_trend" for item in result.data_source_register)
     assert result.org_issue_rows[0].title == "미연동 직원"
     assert result.attendance_issue_rows[0].title == "김감독"
     assert result.site_summary is None
@@ -265,9 +269,11 @@ def test_home_briefing_supervisor_sees_named_team_attention(monkeypatch):
     assert result.approval_summary is None
     assert result.org_issue_rows == []
     assert result.personal_summary is not None
+    assert result.team_attendance_breakdown is not None
+    assert result.support_work_summary is not None
 
 
-def test_home_briefing_vice_is_count_only(monkeypatch):
+def test_home_briefing_vice_uses_officer_home_contract(monkeypatch):
     _patch_common(monkeypatch)
     user = {
         "id": "user-vice",
@@ -281,13 +287,15 @@ def test_home_briefing_vice_is_count_only(monkeypatch):
 
     result = home_router.get_home_briefing(conn=object(), user=user)
 
-    assert result.audience == "vice"
-    assert result.site_readiness_summary is not None
+    assert result.audience == "officer"
+    assert result.site_readiness_summary is None
     assert result.team_attention_rows == []
     assert result.approval_summary is None
     assert result.org_issue_rows == []
-    assert "현장 준비도" in result.scope_label
+    assert result.scope_label == "본인 근무 기준"
     assert result.personal_summary is not None
+    assert len(result.week_rows) == 7
+    assert result.leave_balance is not None
 
 
 def test_home_briefing_officer_is_self_only(monkeypatch):
@@ -308,6 +316,8 @@ def test_home_briefing_officer_is_self_only(monkeypatch):
     assert result.scope_label == "본인 근무 기준"
     assert result.personal_summary is not None
     assert result.week_summary is not None
+    assert result.leave_balance is not None
+    assert result.next_shift is None
     assert result.site_summary is None
     assert result.site_readiness_summary is None
     assert result.team_attention_rows == []

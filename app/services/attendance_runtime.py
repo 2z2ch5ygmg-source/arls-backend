@@ -7,6 +7,7 @@ from datetime import date, datetime, time as dt_time, timedelta, timezone
 from typing import Any
 
 from ..db import get_connection
+from .attendance_sessions import resolve_home_status
 from .push_notifications import send_attendance_push_notification
 
 logger = logging.getLogger(__name__)
@@ -258,64 +259,12 @@ def fetch_today_status(
     employee_id: str,
     now_utc: datetime | None = None,
 ) -> dict[str, Any]:
-    ref_utc = _ensure_utc(now_utc)
-    day_start_utc, day_end_utc, _ = _bounds_for_kst_day(ref_utc)
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT
-                ar.id,
-                ar.site_id,
-                ar.event_type,
-                ar.event_at,
-                COALESCE(ar.auto_checkout, FALSE) AS auto_checkout,
-                COALESCE(ar.auto_checkout_reason, '') AS auto_checkout_reason,
-                s.site_code,
-                s.site_name
-            FROM attendance_records ar
-            LEFT JOIN sites s ON s.id = ar.site_id
-            WHERE ar.tenant_id = %s
-              AND ar.employee_id = %s
-              AND ar.event_at >= %s
-              AND ar.event_at < %s
-              AND ar.event_type IN ('check_in', 'check_out')
-            ORDER BY ar.event_at ASC
-            """,
-            (tenant_id, employee_id, day_start_utc, day_end_utc),
-        )
-        rows = cur.fetchall() or []
-
-    check_in_row = next((row for row in rows if str(row.get("event_type")) == "check_in"), None)
-    check_out_candidates = [row for row in rows if str(row.get("event_type")) == "check_out"]
-    check_out_row = check_out_candidates[-1] if check_out_candidates else None
-
-    if check_in_row and check_out_row:
-        status = "DONE"
-    elif check_in_row:
-        status = "WORKING"
-    else:
-        status = "NONE"
-
-    site_row = check_in_row or check_out_row or {}
-    last_row = check_out_row or check_in_row or {}
-    if status == "DONE":
-        button_mode = "done"
-    elif status == "WORKING":
-        button_mode = "check_out"
-    else:
-        button_mode = "check_in"
-    return {
-        "status": status,
-        "check_in_at": check_in_row.get("event_at") if check_in_row else None,
-        "check_out_at": check_out_row.get("event_at") if check_out_row else None,
-        "today_record_id": last_row.get("id"),
-        "button_mode": button_mode,
-        "auto_checkout": bool(check_out_row.get("auto_checkout")) if check_out_row else None,
-        "auto_checkout_reason": str(check_out_row.get("auto_checkout_reason") or "").strip() if check_out_row else "",
-        "site_id": site_row.get("site_id"),
-        "site_code": site_row.get("site_code"),
-        "site_name": site_row.get("site_name"),
-    }
+    return resolve_home_status(
+        conn,
+        tenant_id=tenant_id,
+        employee_id=employee_id,
+        now_utc=now_utc,
+    )
 
 
 def _try_acquire_auto_checkout_lock(conn) -> bool:

@@ -81,6 +81,11 @@ class FakeConn:
 def test_create_record_allows_case_insensitive_tenant_code(monkeypatch):
     monkeypatch.setattr(attendance_router, "haversine_meters", lambda *args, **kwargs: 0.0)
     monkeypatch.setattr(attendance_router, "send_attendance_push_notification", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        attendance_router,
+        "resolve_event_context",
+        lambda *args, **kwargs: {"sessions": [], "checkin_window": None, "open_session": None},
+    )
 
     conn = FakeConn()
     payload = AttendanceCreate(

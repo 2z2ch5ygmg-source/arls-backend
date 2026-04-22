@@ -14289,12 +14289,7 @@ def _build_finance_download_workspace_site_payload(
     final_upload_count = int(active_state.get("final_upload_count") or 0)
     final_upload_stale = bool(active_state.get("final_upload_stale"))
     conflict_required = bool(active_state.get("conflict_required"))
-    download_enabled = bool(
-        uploaded
-        and active_final_batch_id
-        and active_state.get("final_download_enabled")
-        and not final_upload_stale
-    )
+    download_enabled = bool(uploaded and active_final_batch_id)
 
     filename = str(active_state.get("active_final_filename") or "").strip() or None
     if not filename:
@@ -16072,12 +16067,7 @@ def download_finance_final_excel(
         site_id=str(site_row["id"]),
         month_key=month,
     )
-    if (
-        not submission_row
-        or not bool(submission_row.get("final_download_enabled"))
-        or bool(submission_row.get("final_upload_stale"))
-        or bool(submission_row.get("conflict_required"))
-    ):
+    if not submission_row:
         raise HTTPException(status_code=409, detail="finance final workbook not available")
     active_batch_id = str((submission_row or {}).get("active_final_batch_id") or "").strip()
     if not active_batch_id:

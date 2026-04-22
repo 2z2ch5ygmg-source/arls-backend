@@ -659,12 +659,23 @@ class AttendanceTodayStatusOut(BaseModel):
     check_out_at: Optional[datetime] = None
     today_record_id: Optional[UUID] = None
     button_mode: Optional[str] = None
+    button_label: Optional[str] = None
     auto_checkout: Optional[bool] = None
     site_id: Optional[UUID] = None
     site_code: Optional[str] = None
     site_name: Optional[str] = None
     employee_id: Optional[UUID] = None
     employee_name: Optional[str] = None
+    business_date: Optional[str] = None
+    schedule_id: Optional[UUID] = None
+    shift_type: Optional[str] = None
+    shift_start_at: Optional[datetime] = None
+    shift_end_at: Optional[datetime] = None
+    session_status: Optional[str] = None
+    check_in_status: Optional[str] = None
+    check_out_status: Optional[str] = None
+    worked_minutes: Optional[int] = None
+    open_session: bool = False
 
 
 class PushDeviceRegisterIn(BaseModel):
@@ -2087,6 +2098,122 @@ class HomeBriefingWeekSummaryOut(BaseModel):
     off_days: int = 0
 
 
+class HomeNoticeHighlightOut(BaseModel):
+    notice_id: Optional[UUID] = None
+    title: str = ""
+    summary: str = ""
+    category: Optional[NOTICE_CATEGORY_LITERAL] = None
+    date_label: Optional[str] = None
+    published_at: Optional[datetime] = None
+    is_pinned: bool = False
+
+
+class HomeAttendanceTrendPointOut(BaseModel):
+    date: str
+    label: str
+    completed: int = 0
+    missing: int = 0
+    late: int = 0
+
+
+class HomeSiteAttendanceOut(BaseModel):
+    site_code: Optional[str] = None
+    site_name: Optional[str] = None
+    scheduled: int = 0
+    present: int = 0
+    missing: int = 0
+    late: int = 0
+    attendance_rate: int = 0
+
+
+class HomeSupportWorkSummaryOut(BaseModel):
+    requested: int = 0
+    assigned: int = 0
+    confirmed: int = 0
+    cancelled: int = 0
+    total: int = 0
+    source_label: Optional[str] = None
+
+
+class HomeTaskSummaryOut(BaseModel):
+    approval_pending: int = 0
+    leave_request: int = 0
+    schedule_change_request: int = 0
+    support_work_request: int = 0
+
+
+class HomeTeamAttendanceBreakdownOut(BaseModel):
+    total: int = 0
+    normal: int = 0
+    late: int = 0
+    early: int = 0
+    missing: int = 0
+    other: int = 0
+    normal_rate: int = 0
+    late_rate: int = 0
+    early_rate: int = 0
+    missing_rate: int = 0
+
+
+class HomeMissingStaffOut(BaseModel):
+    employee_id: Optional[UUID] = None
+    employee_code: Optional[str] = None
+    employee_name: str
+    role_label: Optional[str] = None
+    site_code: Optional[str] = None
+    site_name: Optional[str] = None
+    phone: Optional[str] = None
+    avatar_initials: Optional[str] = None
+    photo_attachment_id: Optional[str] = None
+
+
+class HomeWorkTimeSummaryOut(BaseModel):
+    today_worked_minutes: int = 0
+    today_expected_minutes: int = 0
+    week_worked_minutes: int = 0
+    week_target_minutes: int = 0
+    today_progress_percent: int = 0
+    week_progress_percent: int = 0
+
+
+class HomeNextShiftOut(BaseModel):
+    date: Optional[str] = None
+    weekday: Optional[str] = None
+    site_code: Optional[str] = None
+    site_name: Optional[str] = None
+    shift_type: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    label: Optional[str] = None
+
+
+class HomeWeekDayOut(BaseModel):
+    date: str
+    weekday: str
+    work_status: str = "-"
+    check_in: Optional[str] = None
+    check_out: Optional[str] = None
+    worked_minutes: int = 0
+    shift_type: Optional[str] = None
+    site_name: Optional[str] = None
+
+
+class HomeLeaveBalanceSummaryOut(BaseModel):
+    remaining_days: Optional[float] = None
+    used_days: Optional[float] = None
+    total_days: Optional[float] = None
+    pending_count: int = 0
+    source_label: Optional[str] = None
+    source_available: bool = False
+
+
+class HomeDataSourceRegisterItemOut(BaseModel):
+    field: str
+    source_type: Literal["aggregate-only", "client-runtime", "domain-owned source addition required", "approved fallback-only"]
+    source: str
+    notes: Optional[str] = None
+
+
 class HomeBriefingOut(BaseModel):
     audience: HOME_BRIEFING_AUDIENCE_LITERAL
     date: str
@@ -2104,6 +2231,19 @@ class HomeBriefingOut(BaseModel):
     personal_summary: Optional[HomeBriefingPersonalSummaryOut] = None
     week_summary: Optional[HomeBriefingWeekSummaryOut] = None
     request_summary: Optional[HomeBriefingRequestSummaryOut] = None
+    notice_highlight: Optional[HomeNoticeHighlightOut] = None
+    attendance_trend: list[HomeAttendanceTrendPointOut] = Field(default_factory=list)
+    site_attendance_rows: list[HomeSiteAttendanceOut] = Field(default_factory=list)
+    support_work_summary: Optional[HomeSupportWorkSummaryOut] = None
+    task_summary: Optional[HomeTaskSummaryOut] = None
+    team_attendance_breakdown: Optional[HomeTeamAttendanceBreakdownOut] = None
+    team_trend: list[HomeAttendanceTrendPointOut] = Field(default_factory=list)
+    missing_staff_rows: list[HomeMissingStaffOut] = Field(default_factory=list)
+    work_time_summary: Optional[HomeWorkTimeSummaryOut] = None
+    next_shift: Optional[HomeNextShiftOut] = None
+    week_rows: list[HomeWeekDayOut] = Field(default_factory=list)
+    leave_balance: Optional[HomeLeaveBalanceSummaryOut] = None
+    data_source_register: list[HomeDataSourceRegisterItemOut] = Field(default_factory=list)
 
 
 CALENDAR_AUDIENCE_LITERAL = Literal["hq", "supervisor", "vice", "officer"]

@@ -70,6 +70,38 @@ class FinanceDownloadWorkspaceTests(unittest.TestCase):
         self.assertEqual(payload.active_final_filename, "finance-final.xlsx")
         self.assertIsNone(payload.download_blocked_reason)
 
+    def test_site_payload_keeps_stale_uploaded_file_downloadable(self):
+        site_row = {"id": "site-1", "site_code": "R692", "site_name": "Apple 명동"}
+        target_tenant = {"id": "tenant-1", "tenant_code": "SRS_KOREA"}
+        refreshed_state = {
+            "id": "state-1",
+            "tenant_id": "tenant-1",
+            "site_id": "site-1",
+            "month_key": "2026-03",
+            "active_final_batch_id": "batch-1",
+            "active_final_filename": "finance-final.xlsx",
+            "final_uploaded_at": datetime(2026, 3, 27, 1, 30, tzinfo=timezone.utc),
+            "final_uploaded_by_username": "hq_admin",
+            "final_download_enabled": False,
+            "final_upload_stale": True,
+            "conflict_required": False,
+            "_derived_blocked_reasons": [],
+        }
+
+        payload = _build_finance_download_workspace_site_payload(
+            conn=object(),
+            target_tenant=target_tenant,
+            site_row=site_row,
+            month_key="2026-03",
+            active_state=refreshed_state,
+            state_preloaded=True,
+        )
+
+        self.assertEqual(payload.status, "stale")
+        self.assertTrue(payload.uploaded)
+        self.assertTrue(payload.download_enabled)
+        self.assertIsNone(payload.download_blocked_reason)
+
     def test_workspace_payload_summarizes_uploaded_and_downloadable_counts(self):
         target_tenant = {
             "id": "tenant-1",
