@@ -2076,6 +2076,8 @@ class HomeBriefingSiteReadinessOut(BaseModel):
 
 
 class HomeBriefingPersonalSummaryOut(BaseModel):
+    employee_id: Optional[UUID] = None
+    employee_code: Optional[str] = None
     employee_name: Optional[str] = None
     site_code: Optional[str] = None
     site_name: Optional[str] = None

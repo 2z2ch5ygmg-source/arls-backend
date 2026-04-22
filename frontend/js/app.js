@@ -33834,9 +33834,78 @@ function getHomeBriefingCacheKey(audience = resolveHomeAudience()) {
   return `${HOME_BRIEFING_CACHE_KEY}:${tenant}:${userId}:${role}`;
 }
 
+function clearHomeBriefingCaches() {
+  try {
+    const keys = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = String(localStorage.key(index) || "");
+      if (key.startsWith(`${HOME_BRIEFING_CACHE_KEY}:`)) keys.push(key);
+    }
+    keys.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // ignore storage cleanup failures
+  }
+}
+
+function resetHomeStateForSessionChange() {
+  state.home = createInitialHomeState();
+  state.home.audience = resolveHomeAudience();
+  homeMiniMapRuntime.entries = new WeakMap();
+}
+
+function isHomeBriefingSessionCompatible(payload = null) {
+  if (!payload || typeof payload !== "object") return false;
+  const expectedAudience = String(resolveHomeAudience() || "")
+    .trim()
+    .toLowerCase();
+  const payloadAudience = String(payload?.audience || "")
+    .trim()
+    .toLowerCase();
+  if (expectedAudience && payloadAudience && expectedAudience !== payloadAudience) {
+    return false;
+  }
+  const personal =
+    payload?.personal_summary && typeof payload.personal_summary === "object"
+      ? payload.personal_summary
+      : null;
+  if (!personal || !state.user) return true;
+  const payloadEmployeeId = String(
+    personal.employee_id || personal.employeeId || "",
+  ).trim();
+  const userEmployeeId = String(state.user.employee_id || "").trim();
+  if (payloadEmployeeId && userEmployeeId && payloadEmployeeId !== userEmployeeId) {
+    return false;
+  }
+  const payloadEmployeeCode = String(
+    personal.employee_code || personal.employeeCode || "",
+  )
+    .trim()
+    .toUpperCase();
+  const userEmployeeCode = String(state.user.employee_code || "")
+    .trim()
+    .toUpperCase();
+  if (
+    payloadEmployeeCode &&
+    userEmployeeCode &&
+    payloadEmployeeCode !== userEmployeeCode
+  ) {
+    return false;
+  }
+  if (!payloadEmployeeId && !payloadEmployeeCode) {
+    const payloadName = String(personal.employee_name || personal.employeeName || "")
+      .trim();
+    const userName = String(state.user.full_name || "").trim();
+    if (payloadName && userName && payloadName !== userName) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function readCachedHomeBriefingEntry(audience = resolveHomeAudience()) {
   try {
-    const raw = localStorage.getItem(getHomeBriefingCacheKey(audience));
+    const cacheKey = getHomeBriefingCacheKey(audience);
+    const raw = localStorage.getItem(cacheKey);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     const cachedAt = Number(parsed?.cachedAt || 0);
@@ -33846,6 +33915,11 @@ function readCachedHomeBriefingEntry(audience = resolveHomeAudience()) {
         : null;
     if (!payload) return null;
     if (cachedAt > 0 && Date.now() - cachedAt > HOME_BRIEFING_CACHE_TTL_MS) {
+      localStorage.removeItem(cacheKey);
+      return null;
+    }
+    if (!isHomeBriefingSessionCompatible(payload)) {
+      localStorage.removeItem(cacheKey);
       return null;
     }
     return { payload, cachedAt };
@@ -33871,12 +33945,24 @@ function isHomeBriefingRefreshFresh() {
   const fetchedAt = Number(state.home?.briefingFetchedAt || 0);
   return (
     Boolean(state.home?.briefing) &&
+    isHomeBriefingSessionCompatible(state.home.briefing) &&
     fetchedAt > 0 &&
     Date.now() - fetchedAt < HOME_VIEW_CACHE_TTL_MS
   );
 }
 
 function applyHomeBriefingPayload(payload = null) {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    !isHomeBriefingSessionCompatible(payload)
+  ) {
+    state.home.briefing = null;
+    state.home.briefingFetchedAt = 0;
+    state.home.briefingError = "홈 브리핑 세션이 현재 사용자와 일치하지 않습니다.";
+    renderHomeAudienceSurface();
+    return null;
+  }
   state.home.briefing =
     payload && typeof payload === "object" ? payload : null;
   state.home.audience =
@@ -33895,6 +33981,8 @@ function applyHomeBriefingPayload(payload = null) {
       auto_checkout: payload.personal_summary.auto_checkout,
       site_code: payload.personal_summary.site_code,
       site_name: payload.personal_summary.site_name,
+      employee_id: payload.personal_summary.employee_id,
+      employee_code: payload.personal_summary.employee_code,
       employee_name: payload.personal_summary.employee_name,
     });
   }
@@ -33958,6 +34046,10 @@ function queueHomeBriefingDeferredRefresh({ force = true } = {}) {
 
 async function loadHomeBriefing({ force = false } = {}) {
   state.home.audience = resolveHomeAudience();
+  if (state.home.briefing && !isHomeBriefingSessionCompatible(state.home.briefing)) {
+    state.home.briefing = null;
+    state.home.briefingFetchedAt = 0;
+  }
   if (!force && !state.home.briefing) {
     const cached = readCachedHomeBriefingEntry(state.home.audience);
     if (cached?.payload) {
@@ -53624,6 +53716,7 @@ function clearSession() {
   state.loginTenantBeforeSuperAdmin = "";
   state.superAdminLoginMode = false;
   state.home = createInitialHomeState();
+  clearHomeBriefingCaches();
   state.attendanceRequest = createInitialAttendanceRequestState();
   state.attendanceView = createInitialAttendanceViewState();
   state.leaveView = createInitialLeaveViewState();
@@ -96576,6 +96669,8 @@ async function onLoginSubmit(event) {
     state.token = result.access_token;
     state.refreshToken = String(result?.refresh_token || "").trim();
     state.user = resolveSessionUser(result.access_token, result.user);
+    clearHomeBriefingCaches();
+    resetHomeStateForSessionChange();
     persistSession();
     try {
       await saveLoginPreferences();

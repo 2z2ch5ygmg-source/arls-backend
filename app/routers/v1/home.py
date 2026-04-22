@@ -391,6 +391,8 @@ def _build_personal_summary(
             tenant_id=str(user["tenant_id"]),
         ) or fallback_site
     return HomeBriefingPersonalSummaryOut(
+        employee_id=employee_id,
+        employee_code=str(user.get("employee_code") or "").strip() or None,
         employee_name=str(user.get("full_name") or user.get("username") or "").strip() or None,
         site_code=site_code,
         site_name=site_name,
