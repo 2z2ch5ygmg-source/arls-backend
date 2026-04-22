@@ -2167,8 +2167,8 @@ function resolveSessionUser(token = "", fallbackUser = null) {
   const tokenUser = restoreUserFromAccessToken(token);
   if (!normalizedFallback && !tokenUser) return null;
   return normalizeSessionUserObject({
-    ...(normalizedFallback || {}),
     ...(tokenUser || {}),
+    ...(normalizedFallback || {}),
   });
 }
 
@@ -8479,6 +8479,82 @@ function buildHomeV3RequestRows(rows = []) {
   `;
 }
 
+function buildHomeV3AttendanceCard({
+  briefing = null,
+  audience = "officer",
+  title = "출근/퇴근",
+  subtitle = "",
+  className = "",
+} = {}) {
+  const personal = briefing?.personal_summary || {};
+  const employeeName =
+    String(personal?.employee_name || state.user?.full_name || "").trim() ||
+    "사용자";
+  const statusLabel = formatHomeStatusLabel(personal?.today_status || "NONE");
+  const checkInLabel = formatAttendanceTime(personal?.check_in_at || "");
+  const siteLabel =
+    String(personal?.site_name || personal?.site_code || "").trim() ||
+    String(briefing?.scope_label || "").trim() ||
+    "근무지 확인";
+  const radiusLabel =
+    personal?.site_radius_meters || briefing?.selected_site_radius_meters
+      ? `반경 ${Number(personal?.site_radius_meters || briefing?.selected_site_radius_meters)}m`
+      : "";
+  const statusTone =
+    String(personal?.today_status || "").trim().toUpperCase() === "WORKING" ||
+    String(personal?.today_status || "").trim().toUpperCase() === "DONE"
+      ? "success"
+      : "warn";
+  return buildHomeV3Card({
+    title,
+    subtitle: subtitle || (audience === "supervisor" ? employeeName : ""),
+    className: `home-v3-attendance-card ${className}`,
+    bodyHtml: `
+      <div class="home-v3-attendance-compact">
+        <div class="home-v3-attendance-topline">
+          <span>${escapeHomeHtml(employeeName)}</span>
+          ${radiusLabel ? `<em>${escapeHomeHtml(radiusLabel)}</em>` : ""}
+        </div>
+        <div class="home-v3-map-tile"><i></i><span>${escapeHomeHtml(siteLabel)}</span></div>
+        <div class="home-v3-attendance-meta">
+          <span>출근 시간 <b>${escapeHomeHtml(checkInLabel)}</b></span>
+          <span>근무지 <b id="homeTodaySite">${escapeHomeHtml(siteLabel)}</b></span>
+        </div>
+        <div class="home-v3-mini-geo">
+          <span id="homeWorkStatusPrimary">${escapeHomeHtml(statusLabel)}</span>
+          <b id="homeWorkStatusPill" class="status-pill status-pill-${statusTone}">${escapeHomeHtml(statusLabel)}</b>
+          <em id="homeWorkStatusText">출근 상태를 확인 중입니다.</em>
+        </div>
+        <button
+          id="homeSitePickerBtn"
+          class="home-v3-site-picker"
+          type="button"
+          data-action="home-open-site-picker"
+          aria-haspopup="dialog"
+          aria-expanded="false"
+          aria-label="근무 현장 선택"
+        >${escapeHomeHtml(siteLabel)}</button>
+        <p id="homeSelectedSiteMeta" class="muted">${escapeHomeHtml(briefing?.scope_label || siteLabel)}</p>
+        <select id="homeSiteSelect" class="home-site-select-native" aria-hidden="true" tabindex="-1"></select>
+        <span id="homeTodayDate" class="hidden"></span>
+        <span id="homeTodayShiftTime" class="hidden"></span>
+        <span id="homeAutoCheckoutBadge" class="hidden"></span>
+        <span id="homeGeoStatusText" class="hidden"></span>
+        <span id="homeGeoStatusPill" class="hidden"></span>
+        <span id="homeGeoMeta" class="hidden"></span>
+        <div id="homeLocationPermissionCard" class="hidden"></div>
+        <div class="home-cta-grid home-v3-cta-grid">
+          <button class="btn btn-primary" type="button" data-action="home-attendance-toggle" id="homeAttendanceToggleBtn" aria-label="출근 또는 퇴근 처리">출근하기</button>
+          <button class="btn btn-secondary hidden" type="button" data-action="home-check-in-request" id="homeCheckInRequestBtn" aria-label="예외 출근 요청 작성">요청하기</button>
+          <button class="btn btn-secondary home-refresh-location-btn" type="button" data-action="home-refresh-location" id="homeRefreshLocationBtn" aria-label="현재 위치 다시 확인">${buildAzureTopbarIconSvg("sync")}<span class="sr-only">위치 재시도</span></button>
+          <div id="homePendingRequestBox" class="home-pending-request-box hidden" role="status" aria-live="polite">출근 요청 대기중</div>
+        </div>
+        <p id="homeActionHint" class="muted" role="status" aria-live="polite"></p>
+      </div>
+    `,
+  });
+}
+
 function buildHomeHqSurfaceHtml(briefing = null) {
   const ops = briefing?.ops_summary || {};
   const requestSummary =
@@ -8593,7 +8669,7 @@ function buildHomeSupervisorSurfaceHtml(briefing = null) {
         <div class="home-v3-page-meta"><span>${escapeHomeHtml(toDateLabel(briefing?.date || new Date()))}</span><button type="button" data-action="refresh-home">새로고침</button></div>
       </section>
       <section class="home-v3-grid home-v3-grid-super-top">
-        ${buildHomeSelfCardHtml({ audience: "supervisor", briefing })}
+        ${buildHomeV3AttendanceCard({ audience: "supervisor", briefing, title: "나의 근무 현황", subtitle: "오늘 근무지" })}
         ${buildHomeV3Card({
           title: "팀 출근 현황",
           subtitle: site.site_name || briefing?.scope_label || "",
@@ -8675,7 +8751,7 @@ function buildHomeOfficerSurfaceHtml(briefing = null) {
             <div class="home-v3-geo-line"><span>위치 상태</span><b id="homeOfficerStatusGeoText">정상</b></div>
           `,
         })}
-        ${buildHomeSelfCardHtml({ audience: "officer", briefing }).replace("home-dashboard-card-attendance", "home-dashboard-card-attendance home-v3-location-focus")}
+        ${buildHomeV3AttendanceCard({ audience: "officer", briefing, title: "위치기반 출퇴근", className: "home-v3-location-focus" })}
         ${buildHomeV3Card({
           title: "오늘 근무시간",
           route: ROUTE_ATTENDANCE,
@@ -8771,10 +8847,7 @@ function renderHomeAudienceSurface() {
   if (audience !== "hq") {
     renderHomeSiteOptions();
     renderHomeSitePickerSummary();
-    renderHomePolicySkeleton();
-    renderHomeGeoStatus();
     renderHomeWorkStatusCard();
-    renderHomeWeekStrip();
     updateHomeCtaState();
   } else if ($("#homeAttendanceToggleBtn")) {
     renderHomeWorkStatusCard();

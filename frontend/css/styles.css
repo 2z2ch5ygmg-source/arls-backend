@@ -67476,6 +67476,180 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   font-weight: 800;
 }
 
+#view-home .home-v3-attendance-card {
+  align-content: start;
+}
+
+#view-home .home-v3-attendance-compact {
+  display: grid;
+  gap: 10px;
+}
+
+#view-home .home-v3-attendance-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #5f6673;
+  font-size: 13px;
+}
+
+#view-home .home-v3-attendance-topline span {
+  color: #15181d;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+#view-home .home-v3-attendance-topline em {
+  color: #69707d;
+  font-style: normal;
+}
+
+#view-home .home-v3-attendance-card .home-v3-map-tile {
+  min-height: 112px;
+}
+
+#view-home .home-v3-attendance-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid #edf0f4;
+}
+
+#view-home .home-v3-attendance-meta span {
+  display: grid;
+  gap: 7px;
+  padding: 14px 16px 0 0;
+  color: #69707d;
+  font-size: 12px;
+}
+
+#view-home .home-v3-attendance-meta span + span {
+  padding-left: 16px;
+  border-left: 1px solid #edf0f4;
+}
+
+#view-home .home-v3-attendance-meta b {
+  overflow: hidden;
+  color: #15181d;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#view-home .home-v3-mini-geo {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-height: 22px;
+  color: #69707d;
+  font-size: 12px;
+}
+
+#view-home .home-v3-mini-geo > span {
+  color: #15181d;
+  font-weight: 800;
+}
+
+#view-home .home-v3-mini-geo em {
+  overflow: hidden;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#view-home .home-v3-site-picker {
+  overflow: hidden;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #15181d;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#view-home .home-v3-attendance-card #homeSelectedSiteMeta,
+#view-home .home-v3-attendance-card #homeActionHint {
+  min-height: 0;
+  margin: 0;
+  color: #69707d;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+#view-home .home-v3-attendance-card .home-v3-site-picker,
+#view-home .home-v3-attendance-card #homeSelectedSiteMeta,
+#view-home .home-v3-attendance-card #homeActionHint {
+  display: none !important;
+}
+
+#view-home .home-v3-attendance-card #homeActionHint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#view-home .home-v3-attendance-card .home-v3-cta-grid {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+}
+
+#view-home .home-v3-attendance-card .home-v3-cta-grid.has-request {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto !important;
+}
+
+#view-home .home-v3-attendance-card .home-refresh-location-btn {
+  width: 44px;
+  padding: 0 !important;
+}
+
+#view-home .home-v3-attendance-card .home-refresh-location-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+#view-home .home-v3-supervisor .home-v3-card,
+#view-home .home-v3-officer .home-v3-card {
+  padding: 16px 18px !important;
+}
+
+#view-home .home-v3-supervisor .home-v3-chart-line svg {
+  height: 158px;
+}
+
+#view-home .home-v3-supervisor .home-v3-donut-wrap {
+  grid-template-columns: 164px minmax(0, 1fr);
+  gap: 18px;
+}
+
+#view-home .home-v3-supervisor .home-v3-donut {
+  width: 150px;
+  height: 150px;
+}
+
+#view-home .home-v3-supervisor .home-v3-donut::after {
+  inset: 29px;
+}
+
+#view-home .home-v3-supervisor .home-v3-mini-stats span,
+#view-home .home-v3-supervisor .home-v3-status-tiles span {
+  min-height: 56px;
+  padding: 9px 8px;
+}
+
+#view-home .home-v3-officer .home-v3-attendance-card .home-v3-map-tile {
+  min-height: 136px;
+}
+
+#view-home .home-v3-officer .home-v3-card-body,
+#view-home .home-v3-supervisor .home-v3-card-body {
+  gap: 11px;
+}
+
 #view-home .home-v3-work-actions,
 #view-home .home-v3 .home-cta-grid {
   display: grid !important;
