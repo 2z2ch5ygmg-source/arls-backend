@@ -79,7 +79,7 @@
     />
     <link
       rel="stylesheet"
-      href="css/styles.css?v=20260422-finance-submit-meta-offset-01"
+      href="css/styles.css?v=20260422-calendar-month-fixes-10"
     />
     <link
       rel="stylesheet"
@@ -3524,7 +3524,14 @@
                     data-action="attendance-switch-section"
                     data-section="daily"
                   >
-                    날짜별
+                    <span class="attendance-tab-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path
+                          d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
+                        ></path>
+                      </svg>
+                    </span>
+                    <span>날짜별</span>
                   </button>
                   <button
                     class="btn btn-secondary workspace-tab"
@@ -3532,7 +3539,14 @@
                     data-action="attendance-switch-section"
                     data-section="period"
                   >
-                    기간별
+                    <span class="attendance-tab-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path
+                          d="M6 7h12M6 12h12M6 17h8"
+                        ></path>
+                      </svg>
+                    </span>
+                    <span>기간별</span>
                   </button>
                   <button
                     class="btn btn-secondary workspace-tab"
@@ -3540,7 +3554,14 @@
                     data-action="attendance-switch-section"
                     data-section="stats"
                   >
-                    통계
+                    <span class="attendance-tab-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path
+                          d="M5 19V9M12 19V5M19 19v-7"
+                        ></path>
+                      </svg>
+                    </span>
+                    <span>통계</span>
                   </button>
                 </div>
 
@@ -3689,22 +3710,6 @@
                       <div
                         class="attendance-ops-toolbar-group attendance-ops-toolbar-filters attendance-ops-toolbar-shared"
                       >
-                        <button
-                          id="attendanceEmployeeFilterTrigger"
-                          class="btn btn-secondary attendance-filter-trigger"
-                          type="button"
-                          data-action="attendance-open-employee-filter"
-                        >
-                          직원
-                        </button>
-                        <button
-                          id="attendanceSiteFilterTrigger"
-                          class="btn btn-secondary attendance-filter-trigger"
-                          type="button"
-                          data-action="attendance-open-site-filter"
-                        >
-                          근무지
-                        </button>
                         <label class="input-field attendance-ops-field">
                           <span>상태</span>
                           <select id="attendanceStatusSelect">
@@ -3718,6 +3723,15 @@
                             <option value="correction_pending">정정대기</option>
                           </select>
                         </label>
+                        <button
+                          id="attendanceAdvancedFilterTrigger"
+                          class="btn btn-secondary attendance-filter-trigger attendance-advanced-filter-trigger"
+                          type="button"
+                          data-action="attendance-open-advanced-filter"
+                          aria-haspopup="dialog"
+                        >
+                          필터
+                        </button>
                       </div>
                     </section>
                   </div>
@@ -3726,6 +3740,22 @@
                     class="hidden"
                     aria-hidden="true"
                   >
+                    <button
+                      id="attendanceEmployeeFilterTrigger"
+                      class="btn btn-secondary attendance-filter-trigger hidden"
+                      type="button"
+                      data-action="attendance-open-employee-filter"
+                    >
+                      직원
+                    </button>
+                    <button
+                      id="attendanceSiteFilterTrigger"
+                      class="btn btn-secondary attendance-filter-trigger hidden"
+                      type="button"
+                      data-action="attendance-open-site-filter"
+                    >
+                      근무지
+                    </button>
                     <select id="attendanceSiteSelect">
                       <option value="">전체 현장</option>
                     </select>
@@ -11141,7 +11171,7 @@
     <script src="config.js"></script>
     <script>
       window.__RG_ARLS_ASSET_BUILD_ID__ =
-        window.ENV_BUILD_ID || "20260422-finance-submit-meta-offset-01";
+        window.ENV_BUILD_ID || "20260422-calendar-month-fixes-10";
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
       window.ENV_BUILD_ID =
@@ -11450,7 +11480,7 @@
 
         window.addEventListener("load", () => {
           navigator.serviceWorker
-            .register("./sw.js?v=20260422-finance-submit-meta-offset-01", {
+            .register("./sw.js?v=20260422-calendar-month-fixes-10", {
               updateViaCache: "none",
             })
             .then((registration) => {

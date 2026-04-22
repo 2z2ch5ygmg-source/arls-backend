@@ -9760,12 +9760,13 @@ a:hover {
     padding-right: 0;
   }
 
-  #shell {
-    display: flex;
-    width: 100%;
-    gap: 16px;
-    align-items: flex-start;
-  }
+#shell {
+  display: flex;
+  width: 100%;
+  gap: 16px;
+  align-items: flex-start;
+  background: var(--ui-bg-surface);
+}
 
   .desktop-sidebar {
     width: 260px;
@@ -39123,9 +39124,10 @@ body[data-current-view="schedule"] .topbar.app-topbar {
   display: grid;
   grid-template-columns: 182px minmax(0, 1fr);
   gap: 8px;
-  align-items: start;
+  align-items: stretch;
   min-height: calc(100vh - 192px);
   height: calc(100vh - 192px);
+  width: 100%;
 }
 
 .calendar-outlook-sidebar {
@@ -39200,6 +39202,11 @@ body[data-current-view="schedule"] .topbar.app-topbar {
   color: #fff;
 }
 
+.calendar-outlook-sidebar .calendar-mini-month-cell.is-selected:not(.is-today) {
+  background: transparent;
+  color: #334155;
+}
+
 #view-calendar:fullscreen,
 #view-calendar.is-calendar-fullscreen {
   width: 100vw;
@@ -39242,6 +39249,7 @@ body[data-current-view="schedule"] .topbar.app-topbar {
 #view-calendar:fullscreen .calendar-workspace-root,
 #view-calendar.is-calendar-fullscreen .calendar-workspace-root {
   min-height: calc(100vh - 72px);
+  width: 100%;
 }
 
 #view-calendar:fullscreen .calendar-outlook-shell,
@@ -39252,6 +39260,7 @@ body[data-current-view="schedule"] .topbar.app-topbar {
   grid-template-columns: minmax(0, 1fr) !important;
   min-height: calc(100vh - 72px);
   height: calc(100vh - 72px);
+  width: 100%;
 }
 
 #view-calendar:fullscreen .calendar-toolbar-shell,
@@ -39288,18 +39297,48 @@ body[data-current-view="schedule"] .topbar.app-topbar {
   min-width: 0;
   min-height: 0;
   height: 100%;
+  width: 100%;
+}
+
+#view-calendar:fullscreen .calendar-outlook-main,
+#view-calendar.is-calendar-fullscreen .calendar-outlook-main,
+#view-calendar:fullscreen .calendar-surface,
+#view-calendar.is-calendar-fullscreen .calendar-surface,
+#view-calendar:fullscreen .calendar-surface-month,
+#view-calendar.is-calendar-fullscreen .calendar-surface-month,
+#view-calendar:fullscreen .calendar-month-outlook-weekdays,
+#view-calendar.is-calendar-fullscreen .calendar-month-outlook-weekdays,
+#view-calendar:fullscreen .calendar-month-outlook-grid,
+#view-calendar.is-calendar-fullscreen .calendar-month-outlook-grid {
+  width: 100% !important;
+  min-width: 0 !important;
 }
 
 .calendar-surface {
   overflow: hidden;
   min-height: 0;
   height: 100%;
+  width: 100%;
 }
 
 .calendar-surface-month {
   display: flex;
   flex-direction: column;
   overflow: auto;
+  width: 100%;
+  scrollbar-width: none;
+}
+
+.calendar-surface-month::-webkit-scrollbar,
+.calendar-selected-day-rail::-webkit-scrollbar,
+.calendar-timeline-body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.calendar-selected-day-rail,
+.calendar-timeline-body {
+  scrollbar-width: none;
 }
 
 .calendar-month-outlook-weekdays {
@@ -39331,6 +39370,7 @@ body[data-current-view="schedule"] .topbar.app-topbar {
   flex: 1 1 auto;
   min-height: 0;
   height: auto;
+  width: 100%;
   padding-bottom: 1px;
 }
 
@@ -39339,7 +39379,7 @@ body[data-current-view="schedule"] .topbar.app-topbar {
   display: flex;
   flex-direction: column;
   min-height: 124px;
-  padding: 38px 10px 10px;
+  padding: 48px 10px 10px;
   border-right: 1px solid rgba(15, 23, 42, 0.08);
   border-bottom: 1px solid rgba(15, 23, 42, 0.08);
   background: #fff;
@@ -39354,13 +39394,21 @@ body[data-current-view="schedule"] .topbar.app-topbar {
   background: var(--calendar-accent-strong);
 }
 
+.calendar-month-outlook-cell.is-selected:not(.is-today) {
+  background: #fff;
+}
+
+.calendar-month-outlook-cell.is-selected.is-outside:not(.is-today) {
+  background: #f8fafc;
+}
+
 .calendar-month-outlook-cell.is-today {
   background: var(--calendar-accent-stronger);
 }
 
 .calendar-month-outlook-date {
   position: absolute;
-  top: 10px;
+  top: 8px;
   left: 10px;
   width: auto;
   height: auto;
@@ -39385,21 +39433,22 @@ body[data-current-view="schedule"] .topbar.app-topbar {
 
 .calendar-month-outlook-events {
   display: grid;
-  gap: 6px;
-  margin-top: 0;
+  gap: 4px;
+  margin-top: 2px;
 }
 
 .calendar-month-outlook-event,
 .calendar-all-day-pill {
   display: block;
   width: 100%;
-  padding: 4px 7px;
+  padding: 3px 6px;
   border: 1px solid var(--calendar-accent-border-soft);
   border-left: 3px solid var(--calendar-event-accent, var(--calendar-accent));
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--calendar-accent-soft);
   color: #0f172a;
-  font-size: 11px;
+  font-size: 10px;
+  line-height: 1.25;
   font-weight: 700;
   text-align: left;
   white-space: nowrap;
@@ -66845,4 +66894,811 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   word-break: keep-all !important;
   line-height: 18px !important;
   font-size: 12px !important;
+}
+
+/* 2026-04 schedule family white work-plane unification */
+#view-schedule,
+#view-calendar {
+  background: var(--ui-bg-surface) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+
+#view-schedule {
+  gap: 0 !important;
+}
+
+#view-schedule > .schedule-page-head,
+#view-schedule > #schedulePermissionHint,
+#view-schedule > #scheduleMobileViewTabs,
+#view-schedule > #scheduleOpsToolbar,
+#view-schedule > #scheduleTabContent,
+#view-schedule > #scheduleMonthlyPanel,
+#view-schedule > #scheduleUploadPanel,
+#view-calendar > .workspace-head,
+#view-calendar > .calendar-workspace-toolbar,
+#view-calendar > .calendar-workspace-root {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-schedule .schedule-page-head {
+  margin-bottom: 0 !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+#view-schedule #schedulePermissionHint,
+#view-schedule.schedule-reportlike-shell #schedulePermissionHint,
+#view-schedule .schedule-mobile-view-tabs {
+  background: transparent !important;
+}
+
+#view-schedule .schedule-mobile-view-tabs {
+  border-radius: 0 !important;
+}
+
+#view-schedule .schedule-ops-toolbar {
+  margin-top: 0 !important;
+  padding: 12px 24px 14px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-schedule .schedule-ops-actions {
+  margin-top: 0 !important;
+}
+
+#view-schedule .schedule-calendar-surface,
+#view-schedule .schedule-calendar-surface.module-card,
+#view-schedule #scheduleMonthlyPanel,
+#view-schedule #scheduleMonthlyPanel .schedule-calendar-surface.module-card {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-schedule #scheduleMonthlyPanel {
+  padding: 16px 24px 24px !important;
+}
+
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel {
+  width: min(100%, 1480px) !important;
+  margin-inline: auto !important;
+  padding: 0 24px 24px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel > .schedule-upload-shell-head,
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel .schedule-upload-step-rail,
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas,
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas > .schedule-excel-workflow-section,
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas .schedule-upload-stage-shell,
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas .schedule-upload-stage-shell > .schedule-upload-step:not(.hidden),
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas [id$="ReviewStage"],
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas [id$="ApplyStage"],
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas [id$="PreviewStage"],
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas [id$="CompleteStage"],
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas .schedule-hq-site-selection-shell,
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas #scheduleSupportUploadSection,
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel .schedule-upload-review-shell,
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel .schedule-upload-apply-bar,
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel .schedule-upload-apply-actions,
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel .schedule-template-mapping-summary,
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel .schedule-mapping-manager-card,
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel .schedule-upload-placeholder,
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel .schedule-upload-summary-card,
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel .schedule-upload-meta-item,
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel .schedule-support-action-section,
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel .schedule-upload-guidance-box {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel > .schedule-upload-shell-head {
+  width: min(100%, 1180px) !important;
+  margin-inline: auto !important;
+  padding: 16px 0 12px !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+}
+
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel .schedule-upload-step-rail {
+  width: min(100%, 1180px) !important;
+  margin-inline: auto !important;
+  padding: 16px 0 12px !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+}
+
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas {
+  width: min(100%, 1180px) !important;
+  margin-inline: auto !important;
+  padding: 18px 0 0 !important;
+}
+
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas > .schedule-excel-workflow-section,
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas .schedule-upload-stage-shell > .schedule-upload-step:not(.hidden),
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas [id$="ReviewStage"],
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas [id$="ApplyStage"],
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas [id$="PreviewStage"],
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas [id$="CompleteStage"],
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas .schedule-hq-site-selection-shell,
+#view-schedule.schedule-upload-route-active #scheduleUploadMainCanvas #scheduleSupportUploadSection {
+  padding: 0 !important;
+  min-height: 0 !important;
+}
+
+#view-schedule.schedule-upload-route-active #scheduleUploadPanel .schedule-upload-apply-bar {
+  padding-top: 14px !important;
+  border-top: 1px solid var(--ui-border-subtle) !important;
+  position: static !important;
+}
+
+#view-calendar {
+  padding: 20px 24px 24px !important;
+}
+
+#view-calendar:fullscreen,
+#view-calendar.is-calendar-fullscreen {
+  background: var(--ui-bg-surface) !important;
+}
+
+#view-calendar .calendar-workspace-root {
+  background: transparent !important;
+}
+
+#view-calendar .calendar-outlook-shell {
+  gap: 0 !important;
+  background: transparent !important;
+}
+
+#view-calendar .calendar-outlook-sidebar {
+  margin-right: 16px !important;
+  padding: 10px 16px 10px 0 !important;
+  border: 0 !important;
+  border-right: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+#view-calendar .calendar-outlook-sidebar-panel,
+#view-calendar .calendar-surface,
+#view-calendar .calendar-center-card,
+#view-calendar .calendar-detail-panel,
+#view-calendar .calendar-sidebar-card {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-calendar .calendar-outlook-main {
+  padding: 0 16px !important;
+}
+
+#view-calendar .calendar-outlook-shell.is-day-rail-collapsed {
+  grid-template-columns: 182px minmax(0, 1fr) 22px !important;
+}
+
+#view-calendar .calendar-selected-day-rail {
+  position: relative;
+  padding: 14px 0 14px 16px !important;
+  border: 0 !important;
+  border-left: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+#view-calendar .calendar-selected-day-rail-content {
+  display: grid;
+  gap: 12px;
+}
+
+#view-calendar .calendar-selected-day-head {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  gap: 12px !important;
+}
+
+#view-calendar .calendar-selected-day-head-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+#view-calendar .calendar-selected-day-handle {
+  position: absolute;
+  top: 18px;
+  left: 0;
+  width: 20px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+#view-calendar .calendar-selected-day-handle.is-collapsed {
+  position: static;
+  width: 20px;
+  height: 48px;
+  align-self: start;
+  justify-self: center;
+  margin-top: 14px;
+}
+
+#view-calendar .calendar-selected-day-handle svg {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+
+@media (max-width: 1080px) {
+  #view-schedule .schedule-ops-toolbar {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  #view-schedule #scheduleMonthlyPanel,
+  #view-schedule.schedule-upload-route-active #scheduleUploadPanel {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  #view-calendar .calendar-outlook-shell {
+    gap: 14px !important;
+  }
+
+  #view-calendar .calendar-outlook-sidebar {
+    margin-right: 0 !important;
+    padding: 0 0 16px !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--ui-border-subtle) !important;
+  }
+
+  #view-calendar .calendar-outlook-main {
+    padding: 0 !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  #view-calendar .calendar-selected-day-rail {
+    padding: 16px 0 0 !important;
+    border-left: 0 !important;
+    border-top: 1px solid var(--ui-border-subtle) !important;
+  }
+
+  #view-calendar .calendar-selected-day-handle {
+    left: 0;
+    top: -10px;
+    right: 0;
+    width: 48px;
+    height: 20px;
+  }
+
+  #view-calendar .calendar-selected-day-handle.is-collapsed {
+    margin-top: 0;
+    width: 48px;
+    height: 20px;
+  }
+}
+
+/* 2026-04 targeted interaction polish */
+#view-schedule .schedule-simple-toggle {
+  border-color: rgba(249, 115, 22, 0.48) !important;
+  color: var(--ui-accent, #f97316) !important;
+}
+
+#view-schedule .schedule-simple-toggle-box {
+  border-color: rgba(249, 115, 22, 0.48) !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-wrap thead th:first-child,
+#view-schedule #scheduleTemplatePanel .table-wrap tbody td:first-child {
+  text-align: left !important;
+  padding-left: 24px !important;
+}
+
+#view-schedule #scheduleTemplatePanel .table-wrap tbody td:first-child .schedule-table-cell-stack {
+  justify-items: start !important;
+  text-align: left !important;
+}
+
+#view-home.home-view .home-dashboard-metric,
+#view-home.home-view .home-dashboard-card,
+#view-home.home-view .module-card.home-dashboard-card,
+#view-home.home-view .home-role-card,
+#view-home.home-view .home-deck,
+#view-home.home-view .home-attendance-hero,
+#view-home.home-view .home-attendance-meta-item,
+#view-home.home-view .home-site-picker,
+#view-home.home-view .home-geo-status,
+#view-home.home-view .home-permission-card,
+#view-home.home-view .home-compact-empty,
+#view-home.home-view .empty-state {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-home.home-view .home-dashboard-metric,
+#view-home.home-view .home-dashboard-card {
+  padding: 14px 18px !important;
+}
+
+#view-home.home-view .home-dashboard-card-head + .home-dashboard-card-body,
+#view-home.home-view .home-dashboard-split .home-dashboard-subsection + .home-dashboard-subsection {
+  padding-top: 14px !important;
+  border-top: 1px solid var(--ui-border-subtle) !important;
+  box-shadow: none !important;
+}
+
+#view-home.home-view .home-dashboard-card-body .empty-state,
+#view-home.home-view .home-dashboard-card-body .home-compact-empty,
+#view-home.home-view .home-dashboard-card-body [class*="empty-state"],
+#view-home.home-view .home-dashboard-card-body [class*="empty"],
+#view-home.home-view .home-dashboard-list > li,
+#view-home.home-view .compact-workspace-list > li {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-home.home-view .home-compact-empty::before,
+#view-home.home-view .empty-state::before,
+#view-home.home-view [class*="empty"]::before {
+  display: none !important;
+}
+
+/* 2026-04-22 Ralph: attendance daily work-list plane */
+#view-attendance #attendanceManagerShell {
+  gap: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-attendance #attendanceShellTopCard {
+  gap: 12px !important;
+  padding: 0 0 16px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-attendance #attendanceWorkspaceTabs {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  min-height: 40px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-attendance #attendanceWorkspaceTabs .workspace-tab {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  min-width: 0 !important;
+  min-height: 40px !important;
+  height: 40px !important;
+  padding: 0 16px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--ui-text-secondary) !important;
+  box-shadow: none !important;
+}
+
+#view-attendance #attendanceWorkspaceTabs .workspace-tab.active {
+  background: transparent !important;
+  color: var(--ui-accent) !important;
+  box-shadow: inset 0 -2px 0 var(--ui-accent) !important;
+}
+
+#view-attendance .attendance-tab-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+}
+
+#view-attendance .attendance-tab-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#view-attendance #attendanceOpsToolbar {
+  gap: 0 !important;
+  padding: 12px 0 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-attendance #attendanceOpsToolbar .attendance-ops-toolbar-main {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 10px !important;
+  min-width: 0 !important;
+}
+
+#view-attendance #attendanceOpsToolbar .attendance-filter-cluster {
+  flex: 0 0 auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-attendance #attendanceOpsToolbar .attendance-filter-cluster-shared {
+  flex: 0 0 auto !important;
+}
+
+#view-attendance[data-attendance-section="daily"] #attendanceToolbarCalendarFields,
+#view-attendance[data-attendance-section="daily"] #attendanceToolbarListFields,
+#view-attendance[data-attendance-section="daily"] #attendancePeriodListControls,
+#view-attendance[data-attendance-section="daily"] #attendancePeriodCalendarControls,
+#view-attendance:has(#attendanceWorkspaceTabs [data-section="daily"].active)
+  #attendanceToolbarCalendarFields,
+#view-attendance:has(#attendanceWorkspaceTabs [data-section="daily"].active)
+  #attendanceToolbarListFields,
+#view-attendance:has(#attendanceWorkspaceTabs [data-section="daily"].active)
+  #attendancePeriodListControls,
+#view-attendance:has(#attendanceWorkspaceTabs [data-section="daily"].active)
+  #attendancePeriodCalendarControls,
+#view-attendance[data-attendance-section="period"] #attendanceToolbarStatusFields,
+#view-attendance[data-attendance-section="period"] #attendanceToolbarListFields,
+#view-attendance[data-attendance-section="stats"] #attendanceToolbarStatusFields,
+#view-attendance[data-attendance-section="stats"] #attendanceToolbarCalendarFields {
+  display: none !important;
+}
+
+#view-attendance #attendanceOpsToolbar .attendance-ops-toolbar-group {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+#view-attendance #attendanceOpsToolbar .attendance-ops-field > span {
+  display: none !important;
+}
+
+#view-attendance #attendanceOpsToolbar input,
+#view-attendance #attendanceOpsToolbar select,
+#view-attendance #attendanceOpsToolbar .btn {
+  height: 40px !important;
+  min-height: 40px !important;
+  border-radius: 8px !important;
+}
+
+#view-attendance #attendanceStatusDateInput,
+#view-attendance #attendanceStatusSelect {
+  width: auto !important;
+  min-width: 152px !important;
+}
+
+#view-attendance .attendance-advanced-filter-trigger {
+  min-width: 84px !important;
+  justify-content: center !important;
+}
+
+#view-attendance .attendance-advanced-filter-trigger.is-active-filter {
+  border-color: rgba(249, 115, 22, 0.45) !important;
+  color: var(--ui-accent) !important;
+  background: rgba(249, 115, 22, 0.06) !important;
+}
+
+#view-attendance[data-attendance-section="daily"] #attendanceManagerWorkspace {
+  margin-top: 18px !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 18px !important;
+  align-items: start !important;
+}
+
+#view-attendance[data-attendance-section="daily"] #attendanceStatusPanel,
+#view-attendance[data-attendance-section="daily"] #attendanceListPanel,
+#view-attendance[data-attendance-section="daily"] #attendanceAdminDetailPanel,
+#view-attendance[data-attendance-section="daily"] #attendanceManagerKpiRack,
+#view-attendance[data-attendance-section="daily"] #attendanceExceptionQueueCard,
+#view-attendance[data-attendance-section="daily"] #attendanceStatusRecordCard,
+#view-attendance[data-attendance-section="daily"] #attendanceManagerTableCard,
+#view-attendance[data-attendance-section="daily"] .attendance-v2-host,
+#view-attendance[data-attendance-section="daily"] .attendance-v2-table-wrap,
+#view-attendance[data-attendance-section="daily"] .attendance-v2-queue-table,
+#view-attendance[data-attendance-section="daily"] .attendance-v2-inspector-shell {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-attendance[data-attendance-section="daily"] #attendanceStatusPanel,
+#view-attendance[data-attendance-section="daily"] #attendanceListPanel,
+#view-attendance[data-attendance-section="daily"] #attendanceAdminDetailPanel {
+  padding: 0 !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-section-copy,
+#view-attendance[data-attendance-section="daily"] .attendance-v2-card-icon {
+  display: none !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-section-head {
+  align-items: center !important;
+  gap: 12px !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-section-head h3 {
+  font-size: 18px !important;
+  line-height: 1.3 !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-summary-strip-queue-first {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0 !important;
+  padding: 8px 0 14px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-summary-item {
+  width: auto !important;
+  min-height: 30px !important;
+  align-items: baseline !important;
+  gap: 6px !important;
+  padding: 0 13px !important;
+  border: 0 !important;
+  border-left: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--ui-text-primary) !important;
+  box-shadow: none !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-summary-item:first-child {
+  padding-left: 0 !important;
+  border-left: 0 !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-summary-label,
+#view-attendance[data-attendance-section="daily"] .attendance-v2-card-label-text,
+#view-attendance[data-attendance-section="daily"] .attendance-v2-summary-meta {
+  color: var(--ui-text-secondary) !important;
+  font-size: 12px !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-summary-value {
+  color: var(--ui-text-primary) !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-summary-item.is-active,
+#view-attendance[data-attendance-section="daily"] .attendance-v2-summary-item.is-active * {
+  color: var(--ui-accent) !important;
+}
+
+#view-attendance[data-attendance-section="daily"] #attendanceStatusV2TableHost,
+#view-attendance[data-attendance-section="daily"] #attendanceStatusV2QueueHost,
+#view-attendance[data-attendance-section="daily"] #attendanceStatusV2InspectorHost {
+  padding-top: 18px !important;
+  border-top: 1px solid var(--ui-border-subtle) !important;
+}
+
+#view-attendance[data-attendance-section="daily"]
+  #attendanceManagerWorkspace.is-attendance-v2-status
+  #attendanceListPanel
+  > #attendanceStatusV2QueueHost {
+  display: grid !important;
+}
+
+#view-attendance[data-attendance-section="daily"] #attendanceStatusV2TableHost {
+  padding-top: 0 !important;
+  border-top: 0 !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-inspector-shell {
+  display: grid !important;
+  gap: 14px !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-inspector-actions {
+  display: flex !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-inspector-action {
+  min-height: 40px !important;
+  border-radius: 8px !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-detail-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0 22px !important;
+  border-top: 1px solid var(--ui-border-subtle) !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-detail-card,
+#view-attendance[data-attendance-section="daily"] .attendance-v2-note-panel {
+  min-height: 0 !important;
+  padding: 12px 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--ui-border-subtle) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-note-panel {
+  border-top: 0 !important;
+}
+
+#view-attendance[data-attendance-section="daily"] #attendanceStatusV2QueueHost:empty,
+#view-attendance[data-attendance-section="daily"] #attendanceStatusV2InspectorHost:empty {
+  display: none !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-table-wrap,
+#view-attendance[data-attendance-section="daily"] .attendance-v2-queue-table {
+  overflow-x: auto !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-table thead th,
+#view-attendance[data-attendance-section="daily"] .attendance-v2-queue-head {
+  background: #f8fafc !important;
+  color: var(--ui-text-secondary) !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-table tbody tr,
+#view-attendance[data-attendance-section="daily"] .attendance-v2-queue-row {
+  border-bottom: 1px solid rgba(226, 232, 240, 0.96) !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-table tbody tr {
+  cursor: pointer !important;
+}
+
+#view-attendance[data-attendance-section="daily"] .attendance-v2-table tbody tr.is-selected,
+#view-attendance[data-attendance-section="daily"] .attendance-v2-queue-row.is-selected {
+  background: rgba(249, 115, 22, 0.07) !important;
+  box-shadow: inset 2px 0 0 var(--ui-accent) !important;
+}
+
+.attendance-advanced-filter-sheet {
+  display: grid;
+  gap: 14px;
+}
+
+.attendance-advanced-filter-head {
+  display: grid;
+  gap: 4px;
+}
+
+.attendance-advanced-filter-head strong {
+  color: var(--ui-text-primary);
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.attendance-advanced-filter-list {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+.attendance-advanced-filter-row {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--ui-border-subtle);
+  background: transparent;
+  color: var(--ui-text-primary);
+  text-align: left;
+}
+
+.attendance-advanced-filter-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.attendance-advanced-filter-copy strong {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.attendance-advanced-filter-copy small {
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.attendance-advanced-filter-arrow {
+  color: var(--ui-text-tertiary);
+  font-size: 20px;
+  line-height: 1;
+}
+
+@media (max-width: 860px) {
+  #view-attendance #attendanceOpsToolbar .attendance-ops-toolbar-main {
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+  }
+
+  #view-attendance #attendanceOpsToolbar .attendance-ops-toolbar-main::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  #view-attendance #attendanceStatusDateInput,
+  #view-attendance #attendanceStatusSelect {
+    min-width: 138px !important;
+  }
+
+  #view-attendance[data-attendance-section="daily"] .attendance-v2-summary-strip-queue-first {
+    gap: 8px !important;
+    border-bottom: 0 !important;
+  }
+
+  #view-attendance[data-attendance-section="daily"] .attendance-v2-summary-item {
+    flex: 1 1 calc(50% - 8px) !important;
+    min-width: 142px !important;
+    padding: 8px 10px !important;
+    border: 1px solid var(--ui-border-subtle) !important;
+    border-radius: 8px !important;
+  }
+
+  #view-attendance[data-attendance-section="daily"] .attendance-v2-detail-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+  }
 }

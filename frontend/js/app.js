@@ -1307,7 +1307,10 @@ function createInitialCalendarState() {
     viewTab: "month",
     anchorDate: today,
     selectedDate: today,
+    selectedDateExplicit: false,
+    rangeShiftAnchorDate: "",
     fullscreen: false,
+    selectedDayRailCollapsed: false,
     workspace: null,
     loading: false,
     error: "",
@@ -62649,7 +62652,12 @@ function buildCalendarMonthDays(anchorDate = "", selectedDate = "") {
   const monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
   const gridStart = new Date(monthStart);
   gridStart.setDate(monthStart.getDate() - monthStart.getDay());
-  return Array.from({ length: 42 }, (_, index) => {
+  const monthEnd = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+  const gridEnd = new Date(monthEnd);
+  gridEnd.setDate(monthEnd.getDate() + (6 - monthEnd.getDay()));
+  const totalDays =
+    Math.floor((gridEnd.getTime() - gridStart.getTime()) / 86400000) + 1;
+  return Array.from({ length: totalDays }, (_, index) => {
     const current = new Date(gridStart);
     current.setDate(gridStart.getDate() + index);
     const dateKey = toLocalDateKey(current);
@@ -62677,6 +62685,65 @@ function getCalendarDateKeyFromValue(value = "") {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return toLocalDateKey(date);
+}
+
+function isCalendarSameMonth(dateKey = "", monthAnchor = "") {
+  const left = normalizeAttendanceDate(dateKey || "");
+  const right = normalizeAttendanceDate(monthAnchor || "");
+  if (!left || !right) return false;
+  return left.slice(0, 7) === right.slice(0, 7);
+}
+
+function getCalendarHighlightedDateKey(workspace = null) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const activeTab = normalizeCalendarViewTab(
+    calendarState.viewTab || workspace?.view || "month",
+  );
+  const anchorDate =
+    normalizeAttendanceDate(
+      calendarState.anchorDate ||
+        workspace?.anchor_date ||
+        calendarState.selectedDate ||
+        workspace?.selected_date ||
+        "",
+    ) || toLocalDateKey(new Date());
+  const selectedDate = normalizeAttendanceDate(
+    calendarState.selectedDate || workspace?.selected_date || "",
+  );
+  if (activeTab !== "month") {
+    return selectedDate || anchorDate;
+  }
+  const rangeShiftAnchor = normalizeAttendanceDate(
+    calendarState.rangeShiftAnchorDate || "",
+  );
+  if (rangeShiftAnchor && rangeShiftAnchor === anchorDate) {
+    return "";
+  }
+  if (
+    calendarState.selectedDateExplicit === true &&
+    selectedDate &&
+    isCalendarSameMonth(selectedDate, anchorDate)
+  ) {
+    return selectedDate;
+  }
+  const todayKey = toLocalDateKey(new Date());
+  if (isCalendarSameMonth(todayKey, anchorDate)) {
+    return todayKey;
+  }
+  return "";
+}
+
+function getCalendarTodayHighlightDateKey(workspace = null) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const anchorDate =
+    normalizeAttendanceDate(
+      calendarState.anchorDate ||
+        workspace?.anchor_date ||
+        workspace?.selected_date ||
+        "",
+    ) || toLocalDateKey(new Date());
+  const todayKey = toLocalDateKey(new Date());
+  return isCalendarSameMonth(todayKey, anchorDate) ? todayKey : "";
 }
 
 function formatCalendarDateTimeInputValue(value = "") {
@@ -63107,9 +63174,7 @@ function getCalendarSelectedEvent(workspace) {
     );
     if (matched) return matched;
   }
-  const selectedDate = String(
-    calendarState.selectedDate || workspace?.selected_date || "",
-  ).trim();
+  const selectedDate = String(getCalendarHighlightedDateKey(workspace) || "").trim();
   return (
     events.find(
       (item) => getCalendarDateKeyFromValue(item?.starts_at) === selectedDate,
@@ -63413,6 +63478,7 @@ function renderCalendarWorkspaceTabs() {
     const filterButtonDisabled =
       !Array.isArray(workspace?.containers) || !workspace.containers.length;
     const isFullscreen = Boolean(calendarState.fullscreen);
+    const dayRailCollapsed = Boolean(calendarState.selectedDayRailCollapsed);
     tabs.innerHTML = `
       <div class="calendar-toolbar-shell">
 	        <div class="calendar-toolbar-left">
@@ -63797,13 +63863,7 @@ function renderCalendarTimelineColumns(
       workspace?.selected_event?.id ||
       "",
   ).trim();
-  const selectedDate =
-    normalizeAttendanceDate(
-      ensureCalendarWorkspaceState().selectedDate ||
-        workspace?.selected_date ||
-        workspace?.anchor_date ||
-        "",
-    ) || "";
+  const selectedDate = getCalendarHighlightedDateKey(workspace);
   const hours = buildCalendarTimelineHours();
   const hourHeight = 52;
   const bodyHeight = hours.length * hourHeight;
@@ -64019,22 +64079,24 @@ function renderCalendarWeekShell(workspace, selectedContainer) {
 }
 
 function renderCalendarMonthShell(workspace, selectedContainer) {
-  const days = Array.isArray(workspace?.mini_month_days)
-    ? workspace.mini_month_days
-    : [];
+  const anchorDate =
+    normalizeAttendanceDate(
+      ensureCalendarWorkspaceState().anchorDate ||
+        workspace?.anchor_date ||
+        workspace?.selected_date ||
+        "",
+    ) || toLocalDateKey(new Date());
+  const days = buildCalendarMonthDays(
+    anchorDate,
+    getCalendarTodayHighlightDateKey(workspace) || anchorDate,
+  );
   const eventsByDate = groupCalendarEventsByDate(workspace?.events || []);
   const selectedEventId = String(
     ensureCalendarWorkspaceState().selectedEventId ||
       workspace?.selected_event?.id ||
       "",
   ).trim();
-  const selectedDate =
-    normalizeAttendanceDate(
-      ensureCalendarWorkspaceState().selectedDate ||
-        workspace?.selected_date ||
-        workspace?.anchor_date ||
-        "",
-    ) || "";
+  const selectedDate = getCalendarTodayHighlightDateKey(workspace);
   return `
     <section class="calendar-surface calendar-surface-month">
       <div class="calendar-month-outlook-weekdays">
@@ -64522,13 +64584,35 @@ function renderCalendarCenterSurface(workspace, selectedContainer) {
 
 function renderCalendarSelectedDayRail(workspace, selectedContainer) {
   const calendarState = ensureCalendarWorkspaceState();
-  const selectedDate =
-    normalizeAttendanceDate(
-      calendarState.selectedDate ||
-        workspace?.selected_date ||
-        workspace?.anchor_date ||
-        "",
-    ) || toLocalDateKey(new Date());
+  const selectedDate = getCalendarHighlightedDateKey(workspace);
+  if (!selectedDate) {
+    return `
+      <aside class="calendar-selected-day-rail" aria-label="선택 날짜 요약">
+        <div class="calendar-selected-day-head">
+          <div class="calendar-selected-day-head-main">
+            <span class="calendar-eyebrow">선택 날짜</span>
+            <strong>날짜를 선택하세요</strong>
+            <p>이 달에서는 날짜를 선택해야 상세가 표시됩니다.</p>
+          </div>
+          <button
+            class="calendar-selected-day-collapse"
+            type="button"
+            data-action="calendar-toggle-selected-day-rail"
+            aria-label="날짜 상세 접기"
+            title="날짜 상세 접기"
+          >
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M13 4l-6 6 6 6"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="calendar-selected-day-empty">
+          <strong>선택된 날짜 없음</strong>
+          <span>월 캘린더에서 날짜를 선택하면 일정 상세를 확인할 수 있습니다.</span>
+        </div>
+      </aside>
+    `;
+  }
   const eventsByDate = groupCalendarEventsByDate(workspace?.events || []);
   const rows = Array.isArray(eventsByDate[selectedDate])
     ? eventsByDate[selectedDate]
@@ -64546,10 +64630,24 @@ function renderCalendarSelectedDayRail(workspace, selectedContainer) {
       .trim() || "전체 캘린더";
   return `
     <aside class="calendar-selected-day-rail" aria-label="선택 날짜 요약">
+      <button
+        class="calendar-selected-day-handle"
+        type="button"
+        data-action="calendar-toggle-selected-day-rail"
+        aria-label="날짜 상세 접기"
+        title="날짜 상세 접기"
+      >
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M13 4l-6 6 6 6"></path>
+        </svg>
+      </button>
+      <div class="calendar-selected-day-rail-content">
       <div class="calendar-selected-day-head">
-        <span class="calendar-eyebrow">선택 날짜</span>
-        <strong>${escapeHtml(formatCalendarLongDateLabel(selectedDate))}</strong>
-        <p>${escapeHtml(containerLabel)} · ${rows.length}개 일정</p>
+        <div class="calendar-selected-day-head-main">
+          <span class="calendar-eyebrow">선택 날짜</span>
+          <strong>${escapeHtml(formatCalendarLongDateLabel(selectedDate))}</strong>
+          <p>${escapeHtml(containerLabel)} · ${rows.length}개 일정</p>
+        </div>
       </div>
       <div class="calendar-selected-day-chips" aria-label="선택 날짜 지표">
         <span class="calendar-inline-chip">${escapeHtml(`${rows.length}개`)}</span>
@@ -64584,7 +64682,24 @@ function renderCalendarSelectedDayRail(workspace, selectedContainer) {
           ? '<button class="btn btn-primary calendar-selected-day-create" type="button" data-action="calendar-new-event">새 일정 추가</button>'
           : ""
       }
+      </div>
     </aside>
+  `;
+}
+
+function renderCalendarSelectedDayRailHandle() {
+  return `
+    <button
+      class="calendar-selected-day-handle is-collapsed"
+      type="button"
+      data-action="calendar-toggle-selected-day-rail"
+      aria-label="날짜 상세 열기"
+      title="날짜 상세 열기"
+    >
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M7 4l6 6-6 6"></path>
+      </svg>
+    </button>
   `;
 }
 
@@ -65605,6 +65720,51 @@ function getCalendarEventRequestPath(eventId = "") {
   return appendTenantCodeQuery(path, getTenantCodeForScopedAdminApi());
 }
 
+function upsertCalendarWorkspaceEvent(workspace, savedEvent = null) {
+  if (!workspace || typeof workspace !== "object" || !savedEvent) return workspace;
+  const savedId = String(savedEvent?.id || "").trim();
+  const nextEvents = Array.isArray(workspace.events) ? [...workspace.events] : [];
+  const existingIndex = nextEvents.findIndex(
+    (item) => String(item?.id || "").trim() === savedId,
+  );
+  if (existingIndex >= 0) {
+    nextEvents[existingIndex] = {
+      ...nextEvents[existingIndex],
+      ...savedEvent,
+    };
+  } else {
+    nextEvents.push(savedEvent);
+  }
+  nextEvents.sort((left, right) => {
+    const leftTs = new Date(left?.starts_at || 0).getTime();
+    const rightTs = new Date(right?.starts_at || 0).getTime();
+    return leftTs - rightTs;
+  });
+  return {
+    ...workspace,
+    events: nextEvents,
+    selected_event: savedEvent,
+  };
+}
+
+function removeCalendarWorkspaceEvent(workspace, eventId = "") {
+  if (!workspace || typeof workspace !== "object") return workspace;
+  const key = String(eventId || "").trim();
+  if (!key) return workspace;
+  const nextEvents = (Array.isArray(workspace.events) ? workspace.events : []).filter(
+    (item) => String(item?.id || "").trim() !== key,
+  );
+  const selectedEvent =
+    String(workspace?.selected_event?.id || "").trim() === key
+      ? null
+      : workspace?.selected_event || null;
+  return {
+    ...workspace,
+    events: nextEvents,
+    selected_event: selectedEvent,
+  };
+}
+
 function getCalendarEventCommentsRequestPath(eventId = "") {
   const path = `/calendar/events/${encodeURIComponent(String(eventId || "").trim())}/comments`;
   return appendTenantCodeQuery(path, getTenantCodeForScopedAdminApi());
@@ -65634,15 +65794,27 @@ async function saveCalendarEventFromUi() {
     if (savedDateKey) {
       calendarState.selectedDate = savedDateKey;
       calendarState.anchorDate = savedDateKey;
+      calendarState.selectedDateExplicit = true;
+      calendarState.rangeShiftAnchorDate = "";
+    }
+    if (calendarState.workspace && typeof calendarState.workspace === "object") {
+      calendarState.workspace = syncCalendarWorkspaceSelection(
+        upsertCalendarWorkspaceEvent(calendarState.workspace, saved),
+        {
+          view: calendarState.viewTab || calendarState.workspace?.view || "month",
+          date: savedDateKey || calendarState.selectedDate || calendarState.anchorDate,
+        },
+      );
     }
     calendarState.draftEvent = null;
-    await loadCalendarWorkspace({ force: true });
+    renderCalendarWorkspace();
     closeCalendarEventModal();
     showToast(
       editorEvent.id ? "일정이 수정되었습니다." : "일정을 추가했습니다.",
       "success",
       2200,
     );
+    loadCalendarWorkspace({ force: true }).catch(() => {});
   } finally {
     calendarState.saving = false;
     renderCalendarWorkspace();
@@ -65660,11 +65832,24 @@ async function deleteSelectedCalendarEvent() {
     await apiRequest(getCalendarEventRequestPath(eventId), {
       method: "DELETE",
     });
+    if (calendarState.workspace && typeof calendarState.workspace === "object") {
+      calendarState.workspace = syncCalendarWorkspaceSelection(
+        removeCalendarWorkspaceEvent(calendarState.workspace, eventId),
+        {
+          view: calendarState.viewTab || calendarState.workspace?.view || "month",
+          date:
+            calendarState.selectedDate ||
+            calendarState.workspace?.selected_date ||
+            calendarState.anchorDate,
+        },
+      );
+    }
     calendarState.selectedEventId = "";
     calendarState.draftEvent = null;
-    await loadCalendarWorkspace({ force: true });
+    renderCalendarWorkspace();
     closeCalendarEventModal();
     showToast("일정을 삭제했습니다.", "success", 2200);
+    loadCalendarWorkspace({ force: true }).catch(() => {});
   } finally {
     calendarState.deleting = false;
     renderCalendarWorkspace();
@@ -66403,14 +66588,28 @@ async function loadCalendarPublicBookingPresenter() {
 }
 
 function renderCalendarLeftRail(workspace) {
+  const calendarState = ensureCalendarWorkspaceState();
+  const anchorDate =
+    normalizeAttendanceDate(
+      calendarState.anchorDate ||
+        workspace?.anchor_date ||
+        workspace?.selected_date ||
+        "",
+    ) || toLocalDateKey(new Date());
   return `
     <aside class="calendar-outlook-sidebar">
       <button class="btn btn-primary calendar-outlook-compose" type="button" data-action="calendar-new-event">새 일정</button>
       <section class="calendar-outlook-sidebar-panel">
         <div class="calendar-outlook-sidebar-head">
-          <strong>${escapeHtml(formatCalendarMiniMonthLabel(workspace?.anchor_date || workspace?.selected_date || ""))}</strong>
+          <strong>${escapeHtml(formatCalendarMiniMonthLabel(anchorDate))}</strong>
         </div>
-        ${renderCalendarMiniMonth(workspace?.mini_month_days || [], ensureCalendarWorkspaceState().selectedDate || workspace?.selected_date)}
+        ${renderCalendarMiniMonth(
+          buildCalendarMonthDays(
+            anchorDate,
+            getCalendarTodayHighlightDateKey(workspace) || anchorDate,
+          ),
+          getCalendarTodayHighlightDateKey(workspace),
+        )}
       </section>
     </aside>
   `;
@@ -66689,13 +66888,15 @@ function renderCalendarWorkspace() {
   }
   const selectedContainer = getCalendarSelectedContainer(workspace);
   const fullscreen = Boolean(calendarState.fullscreen);
+  const railVisible =
+    !fullscreen && !Boolean(calendarState.selectedDayRailCollapsed);
   root.innerHTML = `
-    <div class="calendar-outlook-shell ${fullscreen ? "is-fullscreen-calendar" : "has-selected-day-rail"}">
+    <div class="calendar-outlook-shell ${fullscreen ? "is-fullscreen-calendar" : railVisible ? "has-selected-day-rail" : "is-day-rail-collapsed"}">
       ${fullscreen ? "" : renderCalendarLeftRail(workspace)}
       <section class="calendar-outlook-main">
         ${renderCalendarCenterSurface(workspace, selectedContainer)}
       </section>
-      ${fullscreen ? "" : renderCalendarSelectedDayRail(workspace, selectedContainer)}
+      ${railVisible ? renderCalendarSelectedDayRail(workspace, selectedContainer) : !fullscreen ? renderCalendarSelectedDayRailHandle() : ""}
     </div>
   `;
   requestAnimationFrame(() => {
@@ -67889,6 +68090,9 @@ function serializeCalendarViewSnapshotPayload() {
       "viewTab",
       "anchorDate",
       "selectedDate",
+      "selectedDateExplicit",
+      "rangeShiftAnchorDate",
+      "selectedDayRailCollapsed",
       "workspace",
       "selectedContainerId",
       "selectedEventId",
@@ -67913,6 +68117,9 @@ function restoreCalendarViewSnapshotPayload(payload = {}) {
       "viewTab",
       "anchorDate",
       "selectedDate",
+      "selectedDateExplicit",
+      "rangeShiftAnchorDate",
+      "selectedDayRailCollapsed",
       "workspace",
       "selectedContainerId",
       "selectedEventId",
@@ -81870,6 +82077,7 @@ function renderAttendanceSupportSections(row = null) {
 function renderAttendanceFilterMeta() {
   const employeeTrigger = $("#attendanceEmployeeFilterTrigger");
   const siteTrigger = $("#attendanceSiteFilterTrigger");
+  const advancedTrigger = $("#attendanceAdvancedFilterTrigger");
   const statusSelect = $("#attendanceStatusSelect");
   const statusField =
     statusSelect instanceof HTMLElement
@@ -81932,6 +82140,24 @@ function renderAttendanceFilterMeta() {
     } else {
       siteTrigger.textContent = `근무지 ${siteTokens.length}`;
     }
+  }
+  if (advancedTrigger instanceof HTMLElement) {
+    const activeCount =
+      (hasEmployeeFilter ? employeeTokens.length : 0) +
+      (hasSiteFilter ? siteTokens.length : 0);
+    advancedTrigger.toggleAttribute("disabled", !hasScopedTenant);
+    advancedTrigger.title = hasScopedTenant
+      ? ""
+      : "조회 테넌트를 먼저 선택하세요.";
+    advancedTrigger.classList.toggle("is-active-filter", activeCount > 0);
+    advancedTrigger.textContent =
+      activeCount > 0 ? `필터 ${activeCount}` : "필터";
+    advancedTrigger.setAttribute(
+      "aria-label",
+      activeCount > 0
+        ? `직원 또는 근무지 필터 ${activeCount}개 적용됨`
+        : "직원 또는 근무지 필터 열기",
+    );
   }
   if (statusSelect instanceof HTMLSelectElement) {
     statusSelect.classList.toggle(
@@ -82180,7 +82406,84 @@ async function ensureAttendanceFilterOptionsLoaded() {
 }
 
 async function openAttendanceFilterSheet() {
-  await openAttendanceEmployeeFilterSheet();
+  await openAttendanceAdvancedFilterSheet();
+}
+
+function getAttendanceAdvancedFilterSummary() {
+  const employeeTokens = uniqAttendanceTokens(
+    state.attendanceView?.employeeFilterApplied || [],
+  );
+  const siteTokens = uniqAttendanceTokens(
+    state.attendanceView?.siteFilterApplied || [],
+  );
+  const employeeLabel = (() => {
+    if (!employeeTokens.length) return "전체 직원";
+    if (employeeTokens.length > 1) return `직원 ${employeeTokens.length}개 조건`;
+    const parsed = parseAttendanceFilterToken(employeeTokens[0]);
+    if (parsed.facet === "employee") {
+      return getAttendanceEmployeeDisplayLabel(parsed.value) || "직원 1명";
+    }
+    return parsed.value || "직원 1개 조건";
+  })();
+  const siteLabel = (() => {
+    if (!siteTokens.length) return "전체 근무지";
+    if (siteTokens.length > 1) return `근무지 ${siteTokens.length}개 조건`;
+    const parsed = parseAttendanceFilterToken(siteTokens[0]);
+    if (parsed.facet === "site") {
+      return getAttendanceSiteDisplayLabel(parsed.value) || "근무지 1곳";
+    }
+    return parsed.value || "근무지 1개 조건";
+  })();
+  return {
+    employeeLabel,
+    siteLabel,
+    activeCount: employeeTokens.length + siteTokens.length,
+  };
+}
+
+async function openAttendanceAdvancedFilterSheet() {
+  if (!canUseAttendanceManagerFilter()) return;
+  await ensureAttendanceFilterOptionsLoaded();
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  const summary = getAttendanceAdvancedFilterSummary();
+  const wrapper = document.createElement("div");
+  wrapper.className = "attendance-advanced-filter-sheet";
+  wrapper.innerHTML = `
+    <div class="attendance-advanced-filter-head">
+      <strong>조회 조건</strong>
+    </div>
+    <div class="attendance-advanced-filter-list">
+      <button type="button" class="attendance-advanced-filter-row" data-action="attendance-open-employee-filter">
+        <span class="attendance-advanced-filter-copy">
+          <strong>직원</strong>
+          <small>${escapeHtml(summary.employeeLabel)}</small>
+        </span>
+        <span class="attendance-advanced-filter-arrow" aria-hidden="true">›</span>
+      </button>
+      <button type="button" class="attendance-advanced-filter-row" data-action="attendance-open-site-filter">
+        <span class="attendance-advanced-filter-copy">
+          <strong>근무지</strong>
+          <small>${escapeHtml(summary.siteLabel)}</small>
+        </span>
+        <span class="attendance-advanced-filter-arrow" aria-hidden="true">›</span>
+      </button>
+    </div>
+  `;
+  openSheet({
+    title: "필터",
+    contentNode: wrapper,
+    layoutClass: "sheet-layout-attendance-picker",
+    actions: [
+      {
+        label: "초기화",
+        variant: "btn-secondary",
+        action: "attendance-clear-advanced-filter",
+      },
+      { label: "닫기", variant: "btn-primary", action: "sheet-close" },
+    ],
+  });
 }
 
 function getAttendancePickerRoleGroupLabel(item = null) {
@@ -82645,10 +82948,10 @@ function renderAttendanceWorkspaceHeader() {
     correctionBtn.classList.toggle("hidden", !showCorrection);
   }
   if (exportBtn instanceof HTMLElement) {
-    exportBtn.classList.add("hidden");
+    exportBtn.classList.remove("hidden");
   }
   if (refreshBtn instanceof HTMLElement) {
-    refreshBtn.classList.add("hidden");
+    refreshBtn.classList.remove("hidden");
   }
   if (actionsWrap instanceof HTMLElement) {
     const hasVisibleAction = [...actionsWrap.children].some(
@@ -82671,10 +82974,8 @@ function renderAttendanceWorkspaceTabs() {
   );
   const wrapper = $("#attendanceWorkspaceTabs");
   if (wrapper instanceof HTMLElement) {
-    wrapper.classList.toggle(
-      "hidden",
-      isDesktopViewport() && isManagerShellRole(),
-    );
+    wrapper.classList.remove("hidden");
+    wrapper.setAttribute("aria-hidden", "false");
     wrapper
       .querySelectorAll('[data-action="attendance-switch-section"]')
       .forEach((button) => {
@@ -95035,6 +95336,7 @@ function onScheduleSetViewMode(nextMode = "") {
   if (!isDesktopViewport()) {
     state.schedule.mobileListInitialized = true;
   }
+  syncScheduleRouteTabQuery(state.schedule.hqTab);
   renderScheduleMonthToolbar();
   renderScheduleHqTabs();
   renderScheduleCalendar();
@@ -97792,6 +98094,7 @@ function closeSheet() {
     sheet.classList.remove("sheet-layout-schedule-single-create");
     sheet.classList.remove("sheet-layout-calendar-event");
     sheet.classList.remove("sheet-layout-requests-filter");
+    sheet.classList.remove("sheet-layout-attendance-picker");
     sheet.classList.remove("sheet-layout-leave-employee-picker");
     sheet.classList.remove("sheet-layout-hr-approval-procedure");
   }
@@ -97855,6 +98158,7 @@ function openSheet({
   sheet.classList.remove("sheet-layout-schedule-single-create");
   sheet.classList.remove("sheet-layout-calendar-event");
   sheet.classList.remove("sheet-layout-requests-filter");
+  sheet.classList.remove("sheet-layout-attendance-picker");
   sheet.classList.remove("sheet-layout-leave-employee-picker");
   sheet.classList.remove("sheet-layout-hr-approval-procedure");
   if (layoutClass) {
@@ -104068,6 +104372,14 @@ function bindUiEvents() {
         return;
       }
 
+      if (action === "attendance-open-advanced-filter") {
+        runWithBusy(
+          () => openAttendanceAdvancedFilterSheet(),
+          "필터 준비 중...",
+        );
+        return;
+      }
+
       if (action === "attendance-open-employee-filter") {
         runWithBusy(
           () => openAttendanceEmployeeFilterSheet(),
@@ -104094,6 +104406,8 @@ function bindUiEvents() {
           state.attendanceView.employeeFilterDraft || [],
         );
         state.attendanceView.employeeCode = "";
+        attendanceStatusV2SelectedKey = null;
+        state.attendanceView.selectedManagerRowKey = "";
         persistAttendanceManagerPrefs();
         closeSheet();
         syncAttendanceManagerFilterInputs();
@@ -104124,6 +104438,8 @@ function bindUiEvents() {
           .filter(Boolean);
         state.attendanceView.siteCode =
           exactSiteTokens.length === 1 ? exactSiteTokens[0] : "";
+        attendanceStatusV2SelectedKey = null;
+        state.attendanceView.selectedManagerRowKey = "";
         persistAttendanceManagerPrefs();
         closeSheet();
         syncAttendanceManagerFilterInputs();
@@ -104144,6 +104460,29 @@ function bindUiEvents() {
         return;
       }
 
+      if (action === "attendance-clear-advanced-filter") {
+        if (!state.attendanceView) {
+          state.attendanceView = createInitialAttendanceViewState();
+        }
+        state.attendanceView.employeeCode = "";
+        state.attendanceView.employeeFilterApplied = [];
+        state.attendanceView.employeeFilterDraft = [];
+        state.attendanceView.siteCode = "";
+        state.attendanceView.siteFilterApplied = [];
+        state.attendanceView.siteFilterDraft = [];
+        attendanceStatusV2SelectedKey = null;
+        state.attendanceView.selectedManagerRowKey = "";
+        persistAttendanceManagerPrefs();
+        closeSheet();
+        syncAttendanceManagerFilterInputs();
+        renderAttendanceFilterMeta();
+        runWithBusy(
+          () => loadAttendanceView({ force: true }),
+          "필터 초기화 중...",
+        );
+        return;
+      }
+
       if (action === "attendance-shift-day") {
         const direction = Number(actionEl.dataset.direction || 0) || 0;
         const currentDate = new Date(`${getAttendanceActiveDate()}T00:00:00`);
@@ -104151,6 +104490,10 @@ function bindUiEvents() {
         setAttendanceActiveDate(toLocalDateKey(currentDate), {
           syncInput: false,
         });
+        attendanceStatusV2SelectedKey = null;
+        if (state.attendanceView) {
+          state.attendanceView.selectedManagerRowKey = "";
+        }
         syncAttendanceManagerFilterInputs();
         runWithBusy(
           () => loadAttendanceView({ force: true }),
@@ -105769,6 +106112,8 @@ function bindUiEvents() {
         if (calendarState.eventModalOpen) closeCalendarEventModal();
         calendarState.anchorDate = today;
         calendarState.selectedDate = today;
+        calendarState.selectedDateExplicit = true;
+        calendarState.rangeShiftAnchorDate = "";
         calendarState.filterOpen = false;
         if (
           calendarState.workspace &&
@@ -105801,7 +106146,16 @@ function bindUiEvents() {
           direction,
         );
         calendarState.anchorDate = nextDate;
-        calendarState.selectedDate = nextDate;
+        if ((calendarState.viewTab || "month") === "month") {
+          calendarState.selectedDate = "";
+          calendarState.rangeShiftAnchorDate = nextDate;
+          calendarState.selectedDateExplicit = false;
+          calendarState.selectedEventId = "";
+        } else {
+          calendarState.selectedDate = nextDate;
+          calendarState.rangeShiftAnchorDate = "";
+          calendarState.selectedDateExplicit = true;
+        }
         calendarState.filterOpen = false;
         if (
           calendarState.workspace &&
@@ -105816,11 +106170,21 @@ function bindUiEvents() {
           );
         }
         renderCalendarWorkspace();
-        loadCalendarWorkspace({ force: true, date: nextDate }).catch(
-          (error) => {
+        loadCalendarWorkspace({ force: true, date: nextDate })
+          .then(() => {
+            const latestState = ensureCalendarWorkspaceState();
+            if ((latestState.viewTab || "month") === "month") {
+              latestState.selectedDate = "";
+              latestState.selectedDateExplicit = false;
+              latestState.selectedEventId = "";
+              latestState.rangeShiftAnchorDate = nextDate;
+              renderCalendarWorkspaceTabs();
+              renderCalendarWorkspace();
+            }
+          })
+          .catch((error) => {
             console.error("[RG ARLS] calendar range shift failed", error);
-          },
-        );
+          });
         return;
       }
 
@@ -105828,6 +106192,16 @@ function bindUiEvents() {
         const calendarState = ensureCalendarWorkspaceState();
         calendarState.filterOpen = !calendarState.filterOpen;
         renderCalendarWorkspaceTabs();
+        return;
+      }
+
+      if (action === "calendar-toggle-selected-day-rail") {
+        const calendarState = ensureCalendarWorkspaceState();
+        calendarState.selectedDayRailCollapsed = !Boolean(
+          calendarState.selectedDayRailCollapsed,
+        );
+        renderCalendarWorkspaceTabs();
+        renderCalendarWorkspace();
         return;
       }
 
@@ -105878,6 +106252,8 @@ function bindUiEvents() {
         }
         calendarState.anchorDate = dateKey;
         calendarState.selectedDate = dateKey;
+        calendarState.selectedDateExplicit = true;
+        calendarState.rangeShiftAnchorDate = "";
         calendarState.selectedEventId = "";
         calendarState.draftEvent = null;
         calendarState.filterOpen = false;
@@ -105916,6 +106292,8 @@ function bindUiEvents() {
         if (selectedDateKey) {
           calendarState.selectedDate = selectedDateKey;
           calendarState.anchorDate = selectedDateKey;
+          calendarState.selectedDateExplicit = true;
+          calendarState.rangeShiftAnchorDate = "";
         }
         calendarState.draftEvent = null;
         renderCalendarWorkspace();
@@ -107780,6 +108158,10 @@ function bindUiEvents() {
         );
         if (nextDate) {
           setAttendanceActiveDate(nextDate, { syncInput: false });
+          attendanceStatusV2SelectedKey = null;
+          if (state.attendanceView) {
+            state.attendanceView.selectedManagerRowKey = "";
+          }
           syncAttendanceManagerFilterInputs();
           runActionSafely(
             loadAttendanceView({ force: true }),
@@ -107867,6 +108249,8 @@ function bindUiEvents() {
           statusSelect instanceof HTMLSelectElement
             ? normalizeAttendanceStatusFilter(statusSelect.value || "all")
             : "all";
+        attendanceStatusV2SelectedKey = null;
+        state.attendanceView.selectedManagerRowKey = "";
         renderAttendanceFilterMeta();
         runActionSafely(
           loadAttendanceView({ force: true }),
@@ -109624,17 +110008,13 @@ document.addEventListener("compositionend", (event) => {
               "attendanceCalendarV2SummaryHost",
               { beforeId: "attendanceCalendarSummaryStrip" },
             );
-    const queueHost =
-      tab === "status"
-        ? v2EnsureHost(
-            "attendanceExceptionQueueCard",
-            "attendanceStatusV2QueueHost",
-            { prepend: true },
-          )
-        : null;
     const tableHost =
       tab === "status" || tab === "list"
         ? v2EnsureHost("attendanceListPanel", "attendanceStatusV2TableHost")
+        : null;
+    const queueHost =
+      tab === "status"
+        ? v2EnsureHost("attendanceListPanel", "attendanceStatusV2QueueHost")
         : null;
     const inspectorHost =
       tab === "status" || tab === "list"
@@ -109648,6 +110028,23 @@ document.addEventListener("compositionend", (event) => {
     if (legacyRecord) {
       legacyRecord.hidden = true;
       legacyRecord.setAttribute("aria-hidden", "true");
+    }
+    const legacyTable = document.getElementById("attendanceManagerTableCard");
+    if (legacyTable) {
+      legacyTable.hidden = true;
+      legacyTable.setAttribute("aria-hidden", "true");
+    }
+    const legacyKpi = document.getElementById("attendanceManagerKpiRack");
+    if (legacyKpi) {
+      legacyKpi.hidden = true;
+      legacyKpi.setAttribute("aria-hidden", "true");
+    }
+    const legacyException = document.getElementById(
+      "attendanceExceptionQueueCard",
+    );
+    if (legacyException) {
+      legacyException.hidden = true;
+      legacyException.setAttribute("aria-hidden", "true");
     }
     return {
       workspace,
@@ -109679,6 +110076,23 @@ document.addEventListener("compositionend", (event) => {
     if (legacyRecord) {
       legacyRecord.hidden = false;
       legacyRecord.removeAttribute("aria-hidden");
+    }
+    const legacyTable = document.getElementById("attendanceManagerTableCard");
+    if (legacyTable) {
+      legacyTable.hidden = false;
+      legacyTable.removeAttribute("aria-hidden");
+    }
+    const legacyKpi = document.getElementById("attendanceManagerKpiRack");
+    if (legacyKpi) {
+      legacyKpi.hidden = false;
+      legacyKpi.removeAttribute("aria-hidden");
+    }
+    const legacyException = document.getElementById(
+      "attendanceExceptionQueueCard",
+    );
+    if (legacyException) {
+      legacyException.hidden = false;
+      legacyException.removeAttribute("aria-hidden");
     }
     [
       "attendanceStatusPanel",
@@ -110149,7 +110563,7 @@ document.addEventListener("compositionend", (event) => {
     const previewMode = filterKey !== "all";
     const title = previewMode
       ? `${v2FilterLabel(filterKey)} 목록`
-      : "우선 확인 예외";
+      : "예외 확인";
     if (loading) {
       return `
         <div class="attendance-v2-section-head">
@@ -110271,7 +110685,6 @@ document.addEventListener("compositionend", (event) => {
                 <th>특이사항</th>
                 <th>지각</th>
                 <th>조퇴</th>
-                <th>상세</th>
               </tr>
             </thead>
             <tbody>
@@ -110280,7 +110693,7 @@ document.addEventListener("compositionend", (event) => {
                 () => `
                 <tr class="attendance-v2-loading-table-row">
                   ${Array.from(
-                    { length: 9 },
+                    { length: 8 },
                     () => `
                     <td><span class="attendance-v2-skeleton-line is-wide"></span></td>
                   `,
@@ -110325,7 +110738,6 @@ document.addEventListener("compositionend", (event) => {
               <th>특이사항</th>
               <th>지각</th>
               <th>조퇴</th>
-              <th>상세</th>
             </tr>
           </thead>
           <tbody>
@@ -110359,14 +110771,13 @@ document.addEventListener("compositionend", (event) => {
                   <td>${v2SpecialBadgesMarkup(row)}</td>
                   <td>${escapeValue(row?.lateMinutesLabel || "-")}</td>
                   <td>${escapeValue(row?.earlyLeaveMinutesLabel || "-")}</td>
-                  <td><span class="attendance-v2-row-detail-link">상세</span></td>
                 </tr>
               `;
                     })
                     .join("")
                 : `
               <tr class="attendance-v2-empty-row${section === "period" ? " is-period" : ""}">
-                <td colspan="9" class="attendance-v2-empty-cell">
+                <td colspan="8" class="attendance-v2-empty-cell">
                   ${v2EmptyMarkup(
                     "기록이 없습니다.",
                     section === "period"
@@ -110419,25 +110830,7 @@ document.addEventListener("compositionend", (event) => {
       `;
     }
     if (!row) {
-      return `
-        <div class="attendance-v2-inspector-shell">
-          <div class="attendance-v2-section-head">
-            ${v2SectionTitleMarkup("선택 상세", {
-              iconKey: "file",
-              tone: "slate",
-            })}
-          </div>
-          ${v2EmptyMarkup(
-            "현재 선택된 기록이 없습니다.",
-            "예외 또는 기록 행을 선택하면 상세 판단을 바로 확인할 수 있습니다.",
-            {
-              iconKey: "file",
-              tone: "slate",
-              extraClass: "is-inspector",
-            },
-          )}
-        </div>
-      `;
+      return "";
     }
     const statusKey = v2StatusKey(row);
     const hasRequest = v2HasRequest(row);
@@ -110811,11 +111204,7 @@ document.addEventListener("compositionend", (event) => {
         detailPanel.style.setProperty("padding", "0", "important");
       }
       if (queueCard instanceof HTMLElement) {
-        queueCard.style.setProperty(
-          "display",
-          tab === "status" ? "grid" : "none",
-          "important",
-        );
+        queueCard.style.setProperty("display", "none", "important");
       }
 
       const activeRows = scopedRows.length ? scopedRows : rows;
@@ -110836,7 +111225,7 @@ document.addEventListener("compositionend", (event) => {
           "important",
         );
       }
-      if (detailPanel instanceof HTMLElement && !loading && !selectedRow) {
+      if (detailPanel instanceof HTMLElement && !selectedRow) {
         detailPanel.style.setProperty("display", "none", "important");
       } else if (detailPanel instanceof HTMLElement) {
         detailPanel.style.removeProperty("display");
