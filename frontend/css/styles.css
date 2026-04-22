@@ -67500,11 +67500,27 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 }
 
 #view-home .home-v3-map-tile.is-kakao-map .home-v3-map-fallback-label {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, 22px);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  display: none;
+}
+
+#view-home .home-v3-kakao-site-label {
+  display: inline-grid;
+  max-width: 148px;
+  min-height: 24px;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid rgba(251, 75, 20, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 247, 242, 0.94);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+  color: #fb4b14;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #view-home .home-v3-attendance-card {

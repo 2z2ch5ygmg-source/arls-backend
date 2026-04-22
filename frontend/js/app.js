@@ -8539,7 +8539,13 @@ async function renderHomeV3MiniMaps() {
         fillColor: "#fb4b14",
         fillOpacity: 0.18,
       });
-      entry = { map, siteMarker, userMarker, circle };
+      const labelOverlay = new kakaoMaps.CustomOverlay({
+        map,
+        position: sitePosition,
+        yAnchor: -0.05,
+        content: `<span class="home-v3-kakao-site-label">${escapeHomeHtml(String(host.dataset.siteLabel || "근무지"))}</span>`,
+      });
+      entry = { map, siteMarker, userMarker, circle, labelOverlay };
       homeMiniMapRuntime.entries.set(host, entry);
     }
 
@@ -8551,24 +8557,42 @@ async function renderHomeV3MiniMaps() {
     entry.circle.setPosition(sitePosition);
     entry.circle.setRadius(Number.isFinite(radius) && radius > 0 ? radius : 120);
     entry.circle.setMap(entry.map);
+    if (entry.labelOverlay) {
+      entry.labelOverlay.setPosition(sitePosition);
+      entry.labelOverlay.setContent(
+        `<span class="home-v3-kakao-site-label">${escapeHomeHtml(String(host.dataset.siteLabel || "근무지"))}</span>`,
+      );
+      entry.labelOverlay.setMap(entry.map);
+    }
 
     const hasUserPosition =
       state.home.position &&
       isValidLatLng(state.home.position.latitude, state.home.position.longitude);
     if (hasUserPosition) {
+      const distanceToSite = haversineMetersClient(
+        siteLat,
+        siteLng,
+        Number(state.home.position.latitude),
+        Number(state.home.position.longitude),
+      );
+      const userCloseEnough =
+        Number.isFinite(distanceToSite) &&
+        distanceToSite <= Math.max(Number.isFinite(radius) ? radius * 3 : 360, 300);
       const userPosition = new kakaoMaps.LatLng(
         Number(state.home.position.latitude),
         Number(state.home.position.longitude),
       );
-      entry.userMarker.setPosition(userPosition);
-      entry.userMarker.setMap(entry.map);
-      const bounds = new kakaoMaps.LatLngBounds();
-      bounds.extend(sitePosition);
-      bounds.extend(userPosition);
-      entry.map.setBounds(bounds);
+      if (userCloseEnough) {
+        entry.userMarker.setPosition(userPosition);
+        entry.userMarker.setMap(entry.map);
+      } else {
+        entry.userMarker.setMap(null);
+      }
     } else {
       entry.userMarker.setMap(null);
     }
+    entry.map.setCenter(sitePosition);
+    entry.map.setLevel(estimateKakaoMapLevelByRadius(radius));
 
     host.classList.add("is-kakao-map");
   });
