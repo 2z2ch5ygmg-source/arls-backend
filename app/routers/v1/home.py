@@ -139,7 +139,7 @@ def _lookup_site_row(conn, *, site_id: str | None = None, site_code: str | None 
     with conn.cursor() as cur:
         cur.execute(
             f"""
-            SELECT id, site_code, site_name
+            SELECT id, site_code, site_name, latitude, longitude, radius_meters
             FROM sites
             WHERE {" AND ".join(clauses)}
             LIMIT 1
@@ -381,10 +381,22 @@ def _build_personal_summary(
     )
     site_code = str(home_status.get("site_code") or user.get("site_code") or (fallback_site or {}).get("site_code") or "").strip().upper() or None
     site_name = str(home_status.get("site_name") or (fallback_site or {}).get("site_name") or "").strip() or None
+    if site_code and (
+        not fallback_site
+        or str(fallback_site.get("site_code") or "").strip().upper() != site_code
+    ):
+        fallback_site = _lookup_site_row(
+            conn,
+            site_code=site_code,
+            tenant_id=str(user["tenant_id"]),
+        ) or fallback_site
     return HomeBriefingPersonalSummaryOut(
         employee_name=str(user.get("full_name") or user.get("username") or "").strip() or None,
         site_code=site_code,
         site_name=site_name,
+        site_latitude=(float(fallback_site["latitude"]) if fallback_site and fallback_site.get("latitude") is not None else None),
+        site_longitude=(float(fallback_site["longitude"]) if fallback_site and fallback_site.get("longitude") is not None else None),
+        site_radius_meters=(float(fallback_site["radius_meters"]) if fallback_site and fallback_site.get("radius_meters") is not None else None),
         today_status=str(home_status.get("status") or "NONE").strip().upper() or "NONE",
         button_mode=str(home_status.get("button_mode") or "").strip().lower() or None,
         check_in_at=home_status.get("check_in_at"),

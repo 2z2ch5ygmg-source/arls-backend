@@ -2069,6 +2069,10 @@ const homeAttendanceCheckRuntime = {
   circle: null,
 };
 
+const homeMiniMapRuntime = {
+  entries: new WeakMap(),
+};
+
 let scheduleDataProvider = null;
 let employeesPresenterLastRefreshAt = 0;
 let orgPresenterLastRefreshAt = 0;
@@ -8479,6 +8483,97 @@ function buildHomeV3RequestRows(rows = []) {
   `;
 }
 
+async function renderHomeV3MiniMaps() {
+  const hosts = Array.from(
+    document.querySelectorAll('#view-home [data-home-mini-map="true"]'),
+  ).filter((el) => el instanceof HTMLElement);
+  if (!hosts.length) return;
+  const loaded = await ensureGoogleMapsSdkLoaded({
+    silent: true,
+    requirePlaces: false,
+  });
+  if (!loaded || !window.kakao?.maps?.Map) {
+    hosts.forEach((host) => host.classList.remove("is-kakao-map"));
+    return;
+  }
+
+  hosts.forEach((host) => {
+    const siteLat = Number(host.dataset.siteLat);
+    const siteLng = Number(host.dataset.siteLng);
+    const radius = Number(host.dataset.siteRadius || 120);
+    if (!isValidLatLng(siteLat, siteLng)) return;
+
+    const kakaoMaps = window.kakao.maps;
+    const sitePosition = new kakaoMaps.LatLng(siteLat, siteLng);
+    let entry = homeMiniMapRuntime.entries.get(host);
+    if (!entry) {
+      const mapNode = document.createElement("div");
+      mapNode.className = "home-v3-kakao-map-node";
+      host.prepend(mapNode);
+      const map = new kakaoMaps.Map(mapNode, {
+        center: sitePosition,
+        level: estimateKakaoMapLevelByRadius(radius),
+        draggable: false,
+        scrollwheel: false,
+        disableDoubleClick: true,
+        disableDoubleClickZoom: true,
+      });
+      map.setDraggable(false);
+      map.setZoomable(false);
+      const siteMarker = new kakaoMaps.Marker({
+        map,
+        position: sitePosition,
+        title: String(host.dataset.siteLabel || "근무지"),
+      });
+      const userMarker = new kakaoMaps.Marker({
+        position: sitePosition,
+        title: "현재 위치",
+      });
+      const circle = new kakaoMaps.Circle({
+        map,
+        center: sitePosition,
+        radius: Number.isFinite(radius) && radius > 0 ? radius : 120,
+        strokeWeight: 1,
+        strokeColor: "#fb4b14",
+        strokeOpacity: 0.65,
+        fillColor: "#fb4b14",
+        fillOpacity: 0.18,
+      });
+      entry = { map, siteMarker, userMarker, circle };
+      homeMiniMapRuntime.entries.set(host, entry);
+    }
+
+    entry.map.relayout();
+    entry.map.setCenter(sitePosition);
+    entry.map.setLevel(estimateKakaoMapLevelByRadius(radius));
+    entry.siteMarker.setPosition(sitePosition);
+    entry.siteMarker.setMap(entry.map);
+    entry.circle.setPosition(sitePosition);
+    entry.circle.setRadius(Number.isFinite(radius) && radius > 0 ? radius : 120);
+    entry.circle.setMap(entry.map);
+
+    const hasUserPosition =
+      state.home.position &&
+      isValidLatLng(state.home.position.latitude, state.home.position.longitude);
+    if (hasUserPosition) {
+      const userPosition = new kakaoMaps.LatLng(
+        Number(state.home.position.latitude),
+        Number(state.home.position.longitude),
+      );
+      entry.userMarker.setPosition(userPosition);
+      entry.userMarker.setMap(entry.map);
+      const bounds = new kakaoMaps.LatLngBounds();
+      bounds.extend(sitePosition);
+      bounds.extend(userPosition);
+      entry.map.setBounds(bounds);
+    } else {
+      entry.userMarker.setMap(null);
+    }
+
+    host.classList.add("is-kakao-map");
+  });
+}
+
 function buildHomeV3AttendanceCard({
   briefing = null,
   audience = "officer",
@@ -8500,6 +8595,13 @@ function buildHomeV3AttendanceCard({
     personal?.site_radius_meters || briefing?.selected_site_radius_meters
       ? `반경 ${Number(personal?.site_radius_meters || briefing?.selected_site_radius_meters)}m`
       : "";
+  const siteLatitude = Number(personal?.site_latitude);
+  const siteLongitude = Number(personal?.site_longitude);
+  const siteRadius = Number(personal?.site_radius_meters || 120);
+  const mapAttrs =
+    isValidLatLng(siteLatitude, siteLongitude)
+      ? `data-home-mini-map="true" data-site-lat="${siteLatitude}" data-site-lng="${siteLongitude}" data-site-radius="${Number.isFinite(siteRadius) ? siteRadius : 120}" data-site-label="${escapeHomeHtml(siteLabel)}"`
+      : "";
   const statusTone =
     String(personal?.today_status || "").trim().toUpperCase() === "WORKING" ||
     String(personal?.today_status || "").trim().toUpperCase() === "DONE"
@@ -8515,7 +8617,7 @@ function buildHomeV3AttendanceCard({
           <span>${escapeHomeHtml(employeeName)}</span>
           ${radiusLabel ? `<em>${escapeHomeHtml(radiusLabel)}</em>` : ""}
         </div>
-        <div class="home-v3-map-tile"><i></i><span>${escapeHomeHtml(siteLabel)}</span></div>
+        <div class="home-v3-map-tile" ${mapAttrs}><span class="home-v3-map-fallback-label">${escapeHomeHtml(siteLabel)}</span></div>
         <div class="home-v3-attendance-meta">
           <span>출근 시간 <b>${escapeHomeHtml(checkInLabel)}</b></span>
           <span>근무지 <b id="homeTodaySite">${escapeHomeHtml(siteLabel)}</b></span>
@@ -8575,6 +8677,14 @@ function buildHomeHqSurfaceHtml(briefing = null) {
     ? briefing.site_attendance_rows
     : [];
   const supportTotal = Number(support.total || 0);
+  const personalSiteLat = Number(personal.site_latitude);
+  const personalSiteLng = Number(personal.site_longitude);
+  const personalSiteRadius = Number(personal.site_radius_meters || 120);
+  const personalSiteLabel = personal.site_name || "SENTRIX 본사";
+  const hqMapAttrs =
+    isValidLatLng(personalSiteLat, personalSiteLng)
+      ? `data-home-mini-map="true" data-site-lat="${personalSiteLat}" data-site-lng="${personalSiteLng}" data-site-radius="${Number.isFinite(personalSiteRadius) ? personalSiteRadius : 120}" data-site-label="${escapeHomeHtml(personalSiteLabel)}"`
+      : "";
   return `
     <div class="home-v3 home-v3-hq">
       <section class="home-v3-page-head">
@@ -8599,7 +8709,7 @@ function buildHomeHqSurfaceHtml(briefing = null) {
               <span>${escapeHomeHtml(formatHomeStatusLabel(personal.today_status || "NONE"))}</span>
             </div>
             <div class="home-v3-two-cols"><span>출근 시간 <b>${escapeHomeHtml(formatAttendanceTime(personal.check_in_at || ""))}</b></span><span>근무지 <b>${escapeHomeHtml(personal.site_name || personal.site_code || "-")}</b></span></div>
-            <div class="home-v3-map-tile"><i></i><span>${escapeHomeHtml(personal.site_name || "SENTRIX 본사")}</span></div>
+            <div class="home-v3-map-tile" ${hqMapAttrs}><span class="home-v3-map-fallback-label">${escapeHomeHtml(personalSiteLabel)}</span></div>
             <div class="home-v3-work-actions"><button type="button" data-action="home-attendance-toggle" id="homeAttendanceToggleBtn">퇴근하기</button><button type="button" data-action="home-refresh-location" id="homeRefreshLocationBtn">출근 버튼 (재실행)</button><button class="hidden" type="button" data-action="home-check-in-request" id="homeCheckInRequestBtn">요청하기</button></div>
             <div class="home-cta-grid hidden"><div id="homePendingRequestBox" class="hidden"></div></div><p id="homeActionHint" class="muted"></p>
           `,
@@ -8853,6 +8963,7 @@ function renderHomeAudienceSurface() {
     renderHomeWorkStatusCard();
     updateHomeCtaState();
   }
+  void renderHomeV3MiniMaps();
 }
 
 function setTextToSelectors(selectors = [], text = "") {
@@ -15412,8 +15523,29 @@ function buildGoogleMapsEmbedUrl(latitude, longitude, radiusMeters = 120) {
   return `https://maps.google.com/maps?q=${encodeURIComponent(`${lat},${lng}`)}&z=${zoom}&output=embed`;
 }
 
+function estimateKakaoMapLevelByRadius(radiusMeters) {
+  const radius = Number(radiusMeters);
+  if (!Number.isFinite(radius) || radius <= 0) return 3;
+  if (radius <= 60) return 2;
+  if (radius <= 120) return 3;
+  if (radius <= 250) return 4;
+  if (radius <= 500) return 5;
+  if (radius <= 1000) return 6;
+  return 7;
+}
+
+function buildKakaoMapLinkUrl(latitude, longitude, label = "근무지") {
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  if (!isValidLatLng(lat, lng)) return "";
+  return `https://map.kakao.com/link/to/${encodeURIComponent(label || "근무지")},${lat},${lng}`;
+}
+
 function buildSiteMapPreviewUrl(latitude, longitude, radiusMeters = 120) {
-  return buildGoogleMapsEmbedUrl(latitude, longitude, radiusMeters) || "";
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  if (!isValidLatLng(lat, lng)) return "";
+  return buildKakaoMapLinkUrl(lat, lng, "근무지") || "";
 }
 
 const scheduleTabPanelRefs = {
@@ -39080,6 +39212,7 @@ function updateHomeCtaState() {
     toggleBtn.setAttribute("aria-label", "출근 기록 등록");
   }
   requestBtn.disabled = !showRequest;
+  void renderHomeV3MiniMaps();
   if (showPendingRequest) {
     setHomeActionHint("", "info");
     return;
@@ -39423,14 +39556,15 @@ function renderHomeAttendanceCheckView() {
 
 function updateHomeAttendanceCheckMapVisual() {
   const map = homeAttendanceCheckRuntime.map;
-  if (!map || !window.google?.maps) return;
+  if (!map || !window.kakao?.maps) return;
   const site = getHomeAttendanceCheckTargetSite();
   if (!site) return;
   const siteLat = Number(site.latitude);
   const siteLng = Number(site.longitude);
   if (!isValidLatLng(siteLat, siteLng)) return;
 
-  const siteCenter = { lat: siteLat, lng: siteLng };
+  const kakaoMaps = window.kakao.maps;
+  const siteCenter = new kakaoMaps.LatLng(siteLat, siteLng);
   const radius = Number(site.radius_meters);
   if (homeAttendanceCheckRuntime.siteMarker) {
     homeAttendanceCheckRuntime.siteMarker.setPosition(siteCenter);
@@ -39448,21 +39582,20 @@ function updateHomeAttendanceCheckMapVisual() {
     const hasUserPos = pos && isValidLatLng(pos.latitude, pos.longitude);
     homeAttendanceCheckRuntime.userMarker.setMap(hasUserPos ? map : null);
     if (hasUserPos) {
-      homeAttendanceCheckRuntime.userMarker.setPosition({
-        lat: Number(pos.latitude),
-        lng: Number(pos.longitude),
-      });
+      homeAttendanceCheckRuntime.userMarker.setPosition(
+        new kakaoMaps.LatLng(Number(pos.latitude), Number(pos.longitude)),
+      );
     }
   }
 
   if (pos && isValidLatLng(pos.latitude, pos.longitude)) {
-    const bounds = new window.google.maps.LatLngBounds();
+    const bounds = new kakaoMaps.LatLngBounds();
     bounds.extend(siteCenter);
-    bounds.extend({ lat: Number(pos.latitude), lng: Number(pos.longitude) });
-    map.fitBounds(bounds, 80);
+    bounds.extend(new kakaoMaps.LatLng(Number(pos.latitude), Number(pos.longitude)));
+    map.setBounds(bounds);
   } else {
     map.setCenter(siteCenter);
-    map.setZoom(16);
+    map.setLevel(estimateKakaoMapLevelByRadius(radius));
   }
 }
 
@@ -39474,14 +39607,14 @@ async function ensureHomeAttendanceCheckMapReady() {
     silent: true,
     requirePlaces: false,
   });
-  if (!loaded || !window.google?.maps?.Map) {
+  if (!loaded || !window.kakao?.maps?.Map) {
     await new Promise((resolve) => window.setTimeout(resolve, 350));
     loaded = await ensureGoogleMapsSdkLoaded({
       silent: true,
       requirePlaces: false,
     });
   }
-  if (!loaded || !window.google?.maps?.Map) {
+  if (!loaded || !window.kakao?.maps?.Map) {
     const site = getHomeAttendanceCheckTargetSite();
     const fallbackMessage = resolveHomeAttendanceMapFallbackMessage();
     logGoogleMapsSdkState("attendance:map-fallback", {
@@ -39500,31 +39633,23 @@ async function ensureHomeAttendanceCheckMapReady() {
 
   mapHost.innerHTML = "";
   clearHomeAttendanceCheckMapObjects();
-  homeAttendanceCheckRuntime.map = new window.google.maps.Map(mapHost, {
-    center: { ...SITE_MAP_DEFAULT_CENTER },
-    zoom: 15,
-    mapTypeControl: false,
-    fullscreenControl: false,
-    streetViewControl: false,
-    gestureHandling: "greedy",
+  const kakaoMaps = window.kakao.maps;
+  homeAttendanceCheckRuntime.map = new kakaoMaps.Map(mapHost, {
+    center: new kakaoMaps.LatLng(
+      SITE_MAP_DEFAULT_CENTER.lat,
+      SITE_MAP_DEFAULT_CENTER.lng,
+    ),
+    level: 4,
   });
-  homeAttendanceCheckRuntime.siteMarker = new window.google.maps.Marker({
+  homeAttendanceCheckRuntime.siteMarker = new kakaoMaps.Marker({
     map: homeAttendanceCheckRuntime.map,
     title: "지점 위치",
   });
-  homeAttendanceCheckRuntime.userMarker = new window.google.maps.Marker({
+  homeAttendanceCheckRuntime.userMarker = new kakaoMaps.Marker({
     map: homeAttendanceCheckRuntime.map,
     title: "내 위치",
-    icon: {
-      path: window.google.maps.SymbolPath.CIRCLE,
-      fillColor: "#2563eb",
-      fillOpacity: 0.95,
-      strokeColor: "#ffffff",
-      strokeWeight: 2,
-      scale: 7,
-    },
   });
-  homeAttendanceCheckRuntime.circle = new window.google.maps.Circle({
+  homeAttendanceCheckRuntime.circle = new kakaoMaps.Circle({
     map: homeAttendanceCheckRuntime.map,
     clickable: false,
     strokeColor: "#f97316",
@@ -41165,15 +41290,7 @@ function buildHomeExternalMapUrl(site) {
   const siteLat = Number(site?.latitude);
   const siteLng = Number(site?.longitude);
   if (!isValidLatLng(siteLat, siteLng)) return "";
-  const destination = `${siteLat},${siteLng}`;
-  if (
-    state.home.position &&
-    isValidLatLng(state.home.position.latitude, state.home.position.longitude)
-  ) {
-    const origin = `${state.home.position.latitude},${state.home.position.longitude}`;
-    return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=walking`;
-  }
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`;
+  return buildKakaoMapLinkUrl(siteLat, siteLng, getHomeSiteDisplayName(site));
 }
 
 function openHomeExternalMap(siteCode = "") {
@@ -41210,14 +41327,13 @@ function buildHomeMapSheetNode(site) {
   mapCard.className = "map-card";
   wrapper.appendChild(mapCard);
 
-  const iframe = document.createElement("iframe");
-  iframe.title = "home-site-map";
-  iframe.loading = "lazy";
-  iframe.referrerPolicy = "no-referrer-when-downgrade";
-  iframe.src =
-    buildGoogleMapsEmbedUrl(siteLat, siteLng, radius) ||
-    buildOpenStreetMapEmbedUrl(siteLat, siteLng, radius);
-  mapCard.appendChild(iframe);
+  const mapHost = document.createElement("div");
+  mapHost.id = "homeMapSheetKakaoMap";
+  mapHost.className = "home-map-sheet-kakao-map";
+  mapHost.dataset.siteLat = String(siteLat);
+  mapHost.dataset.siteLng = String(siteLng);
+  mapHost.dataset.siteRadius = String(Number.isFinite(radius) ? radius : 120);
+  mapCard.appendChild(mapHost);
 
   const labels = document.createElement("div");
   labels.className = "map-card-labels";
@@ -41282,6 +41398,59 @@ function buildHomeMapSheetNode(site) {
   return wrapper;
 }
 
+async function renderHomeMapSheetKakaoMap(site) {
+  const mapHost = $("#homeMapSheetKakaoMap");
+  if (!mapHost) return;
+  const siteLat = Number(site?.latitude);
+  const siteLng = Number(site?.longitude);
+  const radius = Number(site?.radius_meters);
+  if (!isValidLatLng(siteLat, siteLng)) return;
+  const loaded = await ensureGoogleMapsSdkLoaded({
+    silent: true,
+    requirePlaces: false,
+  });
+  if (!loaded || !window.kakao?.maps?.Map) return;
+  const kakaoMaps = window.kakao.maps;
+  const sitePosition = new kakaoMaps.LatLng(siteLat, siteLng);
+  const map = new kakaoMaps.Map(mapHost, {
+    center: sitePosition,
+    level: estimateKakaoMapLevelByRadius(radius),
+  });
+  new kakaoMaps.Marker({
+    map,
+    position: sitePosition,
+    title: getHomeSiteDisplayName(site),
+  });
+  new kakaoMaps.Circle({
+    map,
+    center: sitePosition,
+    radius: Number.isFinite(radius) && radius > 0 ? radius : 120,
+    strokeWeight: 2,
+    strokeColor: "#fb4b14",
+    strokeOpacity: 0.85,
+    fillColor: "#fb4b14",
+    fillOpacity: 0.18,
+  });
+  if (
+    state.home.position &&
+    isValidLatLng(state.home.position.latitude, state.home.position.longitude)
+  ) {
+    const userPosition = new kakaoMaps.LatLng(
+      Number(state.home.position.latitude),
+      Number(state.home.position.longitude),
+    );
+    new kakaoMaps.Marker({
+      map,
+      position: userPosition,
+      title: "현재 위치",
+    });
+    const bounds = new kakaoMaps.LatLngBounds();
+    bounds.extend(sitePosition);
+    bounds.extend(userPosition);
+    map.setBounds(bounds);
+  }
+}
+
 function onHomeMap() {
   const site = getSelectedHomeSite();
   if (!site) {
@@ -41301,6 +41470,7 @@ function onHomeMap() {
       { label: "닫기", variant: "btn-secondary", action: "sheet-close" },
     ],
   });
+  void renderHomeMapSheetKakaoMap(site);
 }
 
 async function onHomeWeekOpenDate(dateKey) {
@@ -54630,11 +54800,9 @@ async function waitForSiteMapHostReady(openSeq, maxFrames = 24) {
 }
 
 function refreshSiteGoogleMapLayout() {
-  if (!siteMapRuntime.map || !window.google?.maps) return;
+  if (!siteMapRuntime.map || !window.kakao?.maps) return;
   try {
-    if (window.google?.maps?.event?.trigger) {
-      window.google.maps.event.trigger(siteMapRuntime.map, "resize");
-    }
+    siteMapRuntime.map.relayout?.();
   } catch {
     // no-op
   }
@@ -54664,7 +54832,7 @@ function waitForGoogleMapsNamespace({
   const startedAt = Date.now();
   return new Promise((resolve) => {
     const checkReady = () => {
-      if (window.google?.maps) {
+      if (window.kakao?.maps?.Map) {
         resolve(true);
         return;
       }
@@ -54683,16 +54851,16 @@ function resolveHomeAttendanceMapFallbackMessage() {
     .trim()
     .toUpperCase();
   if (code === "AUTH_FAILURE") {
-    return "Google 지도 인증에 실패했습니다. API 키 리퍼러/권한 설정을 확인하세요.";
+    return "카카오맵 인증에 실패했습니다. JavaScript 키/도메인 설정을 확인하세요.";
   }
   if (code === "API_KEY_MISSING") {
-    return "Google Maps API 키가 설정되지 않아 기본 지도로 표시합니다.";
+    return "카카오맵 JavaScript 키가 설정되지 않아 기본 지도로 표시합니다.";
   }
   if (code === "SCRIPT_ERROR" || code === "SCRIPT_TIMEOUT") {
-    return "Google 지도 SDK 로딩에 실패해 기본 지도로 표시합니다.";
+    return "카카오맵 SDK 로딩에 실패해 기본 지도로 표시합니다.";
   }
   if (code === "MAPS_LIBRARY_UNAVAILABLE" || code === "MAPS_IMPORT_FAILED") {
-    return "Google 지도 라이브러리를 불러오지 못해 기본 지도로 표시합니다.";
+    return "카카오맵 라이브러리를 불러오지 못해 기본 지도로 표시합니다.";
   }
   if (code) {
     return `지도 SDK를 불러오지 못해 기본 지도로 표시합니다. (원인: ${code})`;
@@ -54720,26 +54888,26 @@ function resetSiteAddressSearchSession() {
 
 function resolveGoogleMapsApiKey() {
   const queryKey = String(
-    query.get("gmapsKey") || query.get("googleMapsKey") || "",
+    query.get("kakaoKey") || query.get("kakaoMapsKey") || "",
   ).trim();
   const inlineKey = String(
-    window.ENV_GOOGLE_MAPS_API_KEY || window.ENV_GOOGLE_PLACES_API_KEY || "",
+    window.ENV_KAKAO_JAVASCRIPT_KEY || "",
   ).trim();
   return queryKey || inlineKey;
 }
 
 function logGoogleMapsSdkState(context = "", extra = {}) {
   try {
-    const hasGoogle = Boolean(window.google);
-    const hasMaps = Boolean(window.google?.maps);
-    const hasPlaces = Boolean(window.google?.maps?.places);
-    const hasMapCtor = Boolean(window.google?.maps?.Map);
-    console.info("[RG ARLS][Maps]", {
+    const hasKakao = Boolean(window.kakao);
+    const hasMaps = Boolean(window.kakao?.maps);
+    const hasServices = Boolean(window.kakao?.maps?.services);
+    const hasMapCtor = Boolean(window.kakao?.maps?.Map);
+    console.info("[RG ARLS][KakaoMaps]", {
       context,
-      hasGoogle,
+      hasKakao,
       hasMaps,
       hasMapCtor,
-      hasPlaces,
+      hasServices,
       keyPresent: Boolean(resolveGoogleMapsApiKey()),
       authFailed: Boolean(siteMapRuntime.authFailed),
       lastErrorCode: siteMapRuntime.lastErrorCode || "",
@@ -54751,29 +54919,7 @@ function logGoogleMapsSdkState(context = "", extra = {}) {
 }
 
 function setupGoogleMapsAuthFailureHook() {
-  if (window.__RG_ARLS_GMAPS_AUTH_HOOK__ === true) return;
-  const previous =
-    typeof window.gm_authFailure === "function" ? window.gm_authFailure : null;
-  window.gm_authFailure = () => {
-    siteMapRuntime.authFailed = true;
-    setGoogleMapsRuntimeError(
-      "AUTH_FAILURE",
-      "Google 지도 인증에 실패했습니다.",
-    );
-    logGoogleMapsSdkState("gm_authFailure");
-    setSiteGoogleMapFallback(
-      "Google 지도 인증에 실패했습니다. API 키 제한(리퍼러/API)을 확인하세요.",
-      "error",
-    );
-    if (typeof previous === "function") {
-      try {
-        previous();
-      } catch {
-        // no-op
-      }
-    }
-  };
-  window.__RG_ARLS_GMAPS_AUTH_HOOK__ = true;
+  window.__RG_ARLS_KAKAO_MAPS_HOOK__ = true;
 }
 
 function getSiteEditorLatLng() {
@@ -54798,35 +54944,13 @@ async function ensureGoogleMapsSdkLoaded({
   logGoogleMapsSdkState("ensure:start");
 
   if (
-    window.google?.maps?.Map &&
-    (!requirePlaces || window.google?.maps?.places)
+    window.kakao?.maps?.Map &&
+    (!requirePlaces || window.kakao?.maps?.services)
   ) {
     siteMapRuntime.scriptLoaded = true;
     clearGoogleMapsRuntimeError();
     logGoogleMapsSdkState("ensure:already-loaded");
     return true;
-  }
-  if (
-    requirePlaces &&
-    window.google?.maps?.Map &&
-    !window.google?.maps?.places &&
-    typeof window.google?.maps?.importLibrary === "function"
-  ) {
-    try {
-      await window.google.maps.importLibrary("places");
-      if (window.google?.maps?.places) {
-        siteMapRuntime.scriptLoaded = true;
-        clearGoogleMapsRuntimeError();
-        logGoogleMapsSdkState("ensure:importLibrary-places-ok");
-        return true;
-      }
-    } catch (err) {
-      setGoogleMapsRuntimeError(
-        "PLACES_IMPORT_FAILED",
-        String(err?.message || "Google Places importLibrary 호출 실패"),
-      );
-      console.warn("[RG ARLS][Maps] importLibrary(places) failed", err);
-    }
   }
 
   if (!siteMapRuntime.scriptPromise) {
@@ -54834,11 +54958,11 @@ async function ensureGoogleMapsSdkLoaded({
     if (!apiKey) {
       setGoogleMapsRuntimeError(
         "API_KEY_MISSING",
-        "Google Maps API 키가 없습니다.",
+        "Kakao Maps JavaScript 키가 없습니다.",
       );
       if (!silent) {
         setSiteGoogleMapFallback(
-          "Google Maps API 키가 없어 지도 로딩을 건너뜁니다. 주소 직접 입력을 사용하세요.",
+          "카카오맵 JavaScript 키가 없어 지도 로딩을 건너뜁니다. 주소 직접 입력을 사용하세요.",
           "error",
         );
       }
@@ -54851,7 +54975,7 @@ async function ensureGoogleMapsSdkLoaded({
         done(
           false,
           "SCRIPT_TIMEOUT",
-          "Google Maps SDK 로드가 시간 내 완료되지 않았습니다.",
+          "Kakao Maps SDK 로드가 시간 내 완료되지 않았습니다.",
         );
       }, 12000);
       const done = (ok, reasonCode = "", reasonMessage = "") => {
@@ -54876,57 +55000,44 @@ async function ensureGoogleMapsSdkLoaded({
         resolve(ok);
       };
 
-      const existing = document.getElementById("rgArlsGoogleMapsSdk");
+      const existing = document.getElementById("rgArlsKakaoMapsSdk");
       if (existing) {
-        if (window.google?.maps) {
-          done(true);
+        if (window.kakao?.maps?.Map) {
+          window.kakao.maps.load(() => done(true));
           return;
         }
         existing.addEventListener(
           "load",
-          async () => {
-            const ready = await waitForGoogleMapsNamespace();
-            done(
-              ready,
-              ready ? "" : "SCRIPT_TIMEOUT",
-              ready
-                ? ""
-                : "Google Maps SDK 로드 이벤트 후 maps 네임스페이스 준비가 지연되었습니다.",
-            );
-          },
+          () =>
+            window.kakao?.maps?.load
+              ? window.kakao.maps.load(() => done(true))
+              : done(false, "SCRIPT_TIMEOUT", "Kakao Maps SDK 준비가 지연되었습니다."),
           { once: true },
         );
         existing.addEventListener(
           "error",
-          () =>
-            done(false, "SCRIPT_ERROR", "Google Maps SDK 스크립트 로드 실패"),
+          () => done(false, "SCRIPT_ERROR", "Kakao Maps SDK 스크립트 로드 실패"),
           { once: true },
         );
         return;
       }
 
       const script = document.createElement("script");
-      script.id = "rgArlsGoogleMapsSdk";
+      script.id = "rgArlsKakaoMapsSdk";
       script.async = true;
       script.defer = true;
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&v=weekly&loading=async`;
+      script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(apiKey)}&libraries=services&autoload=false`;
       script.addEventListener(
         "load",
-        async () => {
-          const ready = await waitForGoogleMapsNamespace();
-          done(
-            ready,
-            ready ? "" : "SCRIPT_TIMEOUT",
-            ready
-              ? ""
-              : "Google Maps SDK 로드 이벤트 후 maps 네임스페이스 준비가 지연되었습니다.",
-          );
-        },
+        () =>
+          window.kakao?.maps?.load
+            ? window.kakao.maps.load(() => done(true))
+            : done(false, "SCRIPT_TIMEOUT", "Kakao Maps SDK 준비가 지연되었습니다."),
         { once: true },
       );
       script.addEventListener(
         "error",
-        () => done(false, "SCRIPT_ERROR", "Google Maps SDK 스크립트 로드 실패"),
+        () => done(false, "SCRIPT_ERROR", "Kakao Maps SDK 스크립트 로드 실패"),
         { once: true },
       );
       document.head.appendChild(script);
@@ -54941,68 +55052,28 @@ async function ensureGoogleMapsSdkLoaded({
         .toUpperCase();
       const fallbackMessage =
         code === "AUTH_FAILURE"
-          ? "Google 지도 인증에 실패했습니다. API 키 제한(리퍼러/API)을 확인하세요."
-          : "Google Maps SDK 로드 실패. API 키/도메인 허용 설정을 확인하세요.";
+          ? "카카오맵 인증에 실패했습니다. JavaScript 키/도메인 설정을 확인하세요."
+          : "카카오맵 SDK 로드 실패. JavaScript 키/도메인 허용 설정을 확인하세요.";
       setSiteGoogleMapFallback(fallbackMessage, "error");
     }
     return false;
   }
 
-  if (!window.google?.maps?.Map) {
-    if (typeof window.google?.maps?.importLibrary === "function") {
-      try {
-        await window.google.maps.importLibrary("maps");
-      } catch (err) {
-        setGoogleMapsRuntimeError(
-          "MAPS_IMPORT_FAILED",
-          String(err?.message || "Google Maps importLibrary 호출 실패"),
-        );
-        console.warn("[RG ARLS][Maps] importLibrary(maps) failed", err);
-      }
-    }
-    if (!window.google?.maps?.Map) {
-      setGoogleMapsRuntimeError(
-        "MAPS_LIBRARY_UNAVAILABLE",
-        "Google Maps 라이브러리를 초기화하지 못했습니다.",
+  if (
+    !window.kakao?.maps?.Map ||
+    (requirePlaces && !window.kakao?.maps?.services)
+  ) {
+    setGoogleMapsRuntimeError(
+      "MAPS_LIBRARY_UNAVAILABLE",
+      "Kakao Maps 라이브러리를 초기화하지 못했습니다.",
+    );
+    if (!silent) {
+      setSiteGoogleMapFallback(
+        "카카오맵 라이브러리 로드 실패. JavaScript 키/도메인 설정을 확인하세요.",
+        "error",
       );
-      if (!silent) {
-        setSiteGoogleMapFallback(
-          "Google Maps 라이브러리 로드 실패. API 키/Maps JavaScript API 설정을 확인하세요.",
-          "error",
-        );
-      }
-      return false;
     }
-  }
-
-  if (requirePlaces && !window.google?.maps?.places) {
-    if (typeof window.google?.maps?.importLibrary === "function") {
-      try {
-        await window.google.maps.importLibrary("places");
-      } catch (err) {
-        setGoogleMapsRuntimeError(
-          "PLACES_IMPORT_FAILED",
-          String(err?.message || "Google Places importLibrary 호출 실패"),
-        );
-        console.warn(
-          "[RG ARLS][Maps] importLibrary(places) after sdk load failed",
-          err,
-        );
-      }
-    }
-    if (!window.google?.maps?.places) {
-      setGoogleMapsRuntimeError(
-        "PLACES_LIBRARY_UNAVAILABLE",
-        "Google Places 라이브러리를 초기화하지 못했습니다.",
-      );
-      if (!silent) {
-        setSiteGoogleMapFallback(
-          "Google Places 라이브러리 로드 실패. API 키/Places API 설정을 확인하세요.",
-          "error",
-        );
-      }
-      return false;
-    }
+    return false;
   }
 
   clearGoogleMapsRuntimeError();
@@ -55041,10 +55112,10 @@ function renderSiteAddressResults(results = []) {
     main.appendChild(title);
     const sub = document.createElement("div");
     sub.className = "list-row-sub";
-    const meta = [secondaryText, "구글 장소검색(신규)"]
+    const meta = [secondaryText, "카카오 장소검색"]
       .filter(Boolean)
       .join(" · ");
-    sub.textContent = meta || "구글 장소검색(신규)";
+    sub.textContent = meta || "카카오 장소검색";
     main.appendChild(sub);
     row.appendChild(main);
 
@@ -55114,7 +55185,7 @@ function mapSiteAddressSearchError(err) {
   ) {
     return {
       code: "REQUEST_DENIED",
-      message: "Places(New) 권한/키 제한/리퍼러 설정 문제",
+      message: "카카오맵/Local API 권한/키 제한 설정 문제",
     };
   }
   if (
@@ -55145,11 +55216,11 @@ function updateSiteMapPreview() {
   const latLng = getSiteEditorLatLng();
   const radius = getSiteEditorRadius();
 
-  if (!siteMapRuntime.map || !window.google?.maps) {
+  if (!siteMapRuntime.map || !window.kakao?.maps) {
     if (!resolveGoogleMapsApiKey()) {
       setSiteGoogleMapState(
         "error",
-        "Google Maps API 키를 설정하면 지도 미리보기가 활성화됩니다.",
+        "카카오맵 JavaScript 키를 설정하면 지도 미리보기가 활성화됩니다.",
       );
       return;
     }
@@ -55170,11 +55241,14 @@ function updateSiteMapPreview() {
   setSiteGoogleMapState("ready");
   const hasCoordinate = Boolean(latLng);
   const center = hasCoordinate
-    ? { lat: latLng.latitude, lng: latLng.longitude }
-    : { ...SITE_MAP_DEFAULT_CENTER };
-  const zoom = hasCoordinate ? estimateMapZoomByRadius(radius) : 12;
+    ? new window.kakao.maps.LatLng(latLng.latitude, latLng.longitude)
+    : new window.kakao.maps.LatLng(
+        SITE_MAP_DEFAULT_CENTER.lat,
+        SITE_MAP_DEFAULT_CENTER.lng,
+      );
+  const level = hasCoordinate ? estimateKakaoMapLevelByRadius(radius) : 6;
   siteMapRuntime.map.setCenter(center);
-  siteMapRuntime.map.setZoom(zoom);
+  siteMapRuntime.map.setLevel(level);
 
   if (siteMapRuntime.marker) {
     siteMapRuntime.marker.setMap(hasCoordinate ? siteMapRuntime.map : null);
@@ -55183,12 +55257,10 @@ function updateSiteMapPreview() {
   if (siteMapRuntime.circle) {
     siteMapRuntime.circle.setMap(hasCoordinate ? siteMapRuntime.map : null);
     if (hasCoordinate) {
-      siteMapRuntime.circle.setCenter(center);
+      siteMapRuntime.circle.setPosition(center);
       siteMapRuntime.circle.setRadius(radius);
       siteMapRuntime.circle.setOptions({
         strokeColor: "#f97316",
-        strokeOpacity: 0.86,
-        strokeWeight: 2,
         fillColor: "#f97316",
         fillOpacity: 0.2,
       });
@@ -55212,26 +55284,28 @@ async function ensureSiteGoogleMapReady({ silent = false } = {}) {
     siteMapRuntime.readyState = "error";
     return false;
   }
-  if (!window.google?.maps?.Map) {
+  if (!window.kakao?.maps?.Map) {
     siteMapRuntime.readyState = "error";
     return false;
   }
 
   if (!siteMapRuntime.map) {
-    siteMapRuntime.map = new window.google.maps.Map(mapHost, {
-      center: { ...SITE_MAP_DEFAULT_CENTER },
-      zoom: 14,
-      mapTypeControl: false,
-      fullscreenControl: false,
-      streetViewControl: false,
-      gestureHandling: "greedy",
+    const kakaoMaps = window.kakao.maps;
+    siteMapRuntime.map = new kakaoMaps.Map(mapHost, {
+      center: new kakaoMaps.LatLng(
+        SITE_MAP_DEFAULT_CENTER.lat,
+        SITE_MAP_DEFAULT_CENTER.lng,
+      ),
+      level: 4,
     });
-    siteMapRuntime.marker = new window.google.maps.Marker({
+    siteMapRuntime.map.setDraggable(true);
+    siteMapRuntime.map.setZoomable(true);
+    siteMapRuntime.marker = new kakaoMaps.Marker({
       map: siteMapRuntime.map,
       draggable: true,
       title: "현장 위치",
     });
-    siteMapRuntime.circle = new window.google.maps.Circle({
+    siteMapRuntime.circle = new kakaoMaps.Circle({
       map: siteMapRuntime.map,
       clickable: false,
       strokeColor: "#f97316",
@@ -55241,9 +55315,10 @@ async function ensureSiteGoogleMapReady({ silent = false } = {}) {
       fillOpacity: 0.2,
       radius: SITE_RADIUS_MIN_RECOMMENDED,
     });
-    siteMapRuntime.marker.addListener("dragend", (event) => {
-      const lat = Number(event?.latLng?.lat?.());
-      const lng = Number(event?.latLng?.lng?.());
+    kakaoMaps.event.addListener(siteMapRuntime.marker, "dragend", () => {
+      const position = siteMapRuntime.marker.getPosition();
+      const lat = Number(position?.getLat?.());
+      const lng = Number(position?.getLng?.());
       if (!isValidLatLng(lat, lng)) return;
       $("#siteLatitude").value = lat.toFixed(6);
       $("#siteLongitude").value = lng.toFixed(6);
@@ -55265,99 +55340,82 @@ async function searchSiteAddressByPlacesNew(queryText, limit = 5) {
   if (queryValue.length < SITE_ADDRESS_SEARCH_MIN_LENGTH) return [];
   const safeLimit = Math.min(10, Math.max(1, Number(limit) || 5));
 
-  if (!window.google?.maps?.importLibrary) {
-    const error = new Error("Places library not loaded");
+  if (!window.kakao?.maps?.services) {
+    const error = new Error("Kakao Maps services library not loaded");
     error.code = "REQUEST_DENIED";
     throw error;
   }
 
-  const placesLib = await window.google.maps.importLibrary("places");
-  const AutocompleteSuggestion =
-    placesLib?.AutocompleteSuggestion ||
-    window.google?.maps?.places?.AutocompleteSuggestion;
-  const AutocompleteSessionToken =
-    placesLib?.AutocompleteSessionToken ||
-    window.google?.maps?.places?.AutocompleteSessionToken;
-  if (
-    !AutocompleteSuggestion ||
-    typeof AutocompleteSuggestion.fetchAutocompleteSuggestions !== "function"
-  ) {
-    const error = new Error(
-      "Places(New) AutocompleteSuggestion is unavailable",
-    );
-    error.code = "REQUEST_DENIED";
-    throw error;
-  }
-
-  if (
-    !siteMapRuntime.placesSessionToken &&
-    typeof AutocompleteSessionToken === "function"
-  ) {
-    siteMapRuntime.placesSessionToken = new AutocompleteSessionToken();
-  }
-
-  const requestBase = {
-    input: queryValue,
-    sessionToken: siteMapRuntime.placesSessionToken || undefined,
-  };
-
-  let suggestions = [];
-  try {
-    const result = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
-      ...requestBase,
-      includedRegionCodes: ["KR"],
-    });
-    suggestions = Array.isArray(result?.suggestions) ? result.suggestions : [];
-  } catch (err) {
-    const message = String(err?.message || "").toUpperCase();
-    if (
-      message.includes("INCLUDEDREGIONCODES") ||
-      message.includes("INVALID_ARGUMENT")
-    ) {
-      const retryResult =
-        await AutocompleteSuggestion.fetchAutocompleteSuggestions(requestBase);
-      suggestions = Array.isArray(retryResult?.suggestions)
-        ? retryResult.suggestions
-        : [];
-    } else {
-      throw err;
-    }
-  }
+  const services = window.kakao.maps.services;
+  const keywordPlaces = new services.Places();
+  const geocoder = new services.Geocoder();
+  const keywordRows = await new Promise((resolve, reject) => {
+    keywordPlaces.keywordSearch(queryValue, (data, statusValue) => {
+      if (statusValue === services.Status.OK) {
+        resolve(Array.isArray(data) ? data : []);
+        return;
+      }
+      if (statusValue === services.Status.ZERO_RESULT) {
+        resolve([]);
+        return;
+      }
+      const error = new Error("Kakao keyword search failed");
+      error.code = "REQUEST_DENIED";
+      reject(error);
+    }, { size: safeLimit });
+  });
+  const addressRows = keywordRows.length
+    ? []
+    : await new Promise((resolve, reject) => {
+        geocoder.addressSearch(queryValue, (data, statusValue) => {
+          if (statusValue === services.Status.OK) {
+            resolve(Array.isArray(data) ? data : []);
+            return;
+          }
+          if (statusValue === services.Status.ZERO_RESULT) {
+            resolve([]);
+            return;
+          }
+          const error = new Error("Kakao address search failed");
+          error.code = "REQUEST_DENIED";
+          reject(error);
+        }, { size: safeLimit });
+      });
 
   const mapped = [];
   const dedupe = new Set();
   siteMapRuntime.suggestionMap.clear();
-  suggestions.forEach((suggestion, index) => {
+  [...keywordRows, ...addressRows].forEach((row, index) => {
     if (mapped.length >= safeLimit) return;
-    const prediction = suggestion?.placePrediction;
-    if (!prediction || typeof prediction.toPlace !== "function") return;
-
-    const mainText = String(
-      prediction?.text?.text || prediction?.mainText?.text || "",
-    ).trim();
+    const lat = Number(row?.y);
+    const lng = Number(row?.x);
+    if (!isValidLatLng(lat, lng)) return;
+    const placeName = String(row?.place_name || "").trim();
+    const mainText = placeName || String(row?.address_name || "").trim();
     const secondaryText = String(
-      prediction?.secondaryText?.text ||
-        prediction?.structuredFormat?.secondaryText?.text ||
-        "",
+      row?.road_address_name || row?.address_name || "",
     ).trim();
-    const formattedAddress = String(prediction?.text?.text || "").trim();
-    const placeId = String(prediction?.placeId || prediction?.id || "").trim();
-    const dedupeKey = `${placeId}|${mainText}|${secondaryText}`
+    const formattedAddress = secondaryText || mainText;
+    const placeId = String(row?.id || "").trim();
+    const dedupeKey = `${lat.toFixed(6)}|${lng.toFixed(6)}|${mainText}|${secondaryText}`
       .trim()
       .toLowerCase();
     if (dedupe.has(dedupeKey)) return;
     dedupe.add(dedupeKey);
 
-    const suggestionId = placeId || `suggestion-${Date.now()}-${index}`;
-    siteMapRuntime.suggestionMap.set(suggestionId, suggestion);
-    mapped.push({
+    const suggestionId = placeId || `kakao-${Date.now()}-${index}`;
+    const mappedItem = {
       suggestion_id: suggestionId,
       main_text: mainText || formattedAddress || "검색 결과",
       secondary_text: secondaryText,
       formatted_address: formattedAddress,
       place_id: placeId,
-      provider: "google_places_new",
-    });
+      latitude: lat,
+      longitude: lng,
+      provider: "kakao_maps",
+    };
+    siteMapRuntime.suggestionMap.set(suggestionId, mappedItem);
+    mapped.push(mappedItem);
   });
 
   return mapped;
@@ -55552,7 +55610,7 @@ async function ensureSiteMapReadyForEditorOpen(openSeq) {
     siteMapRuntime.readyState = "error";
     setSiteGoogleMapState(
       "error",
-      "Google 지도 로딩에 실패했습니다. 주소 직접 입력을 사용하세요.",
+      "카카오맵 로딩에 실패했습니다. 주소 직접 입력을 사용하세요.",
     );
     refreshSiteEditorPreview();
     return false;
@@ -97022,9 +97080,9 @@ async function onSiteAddressSearch({
   siteMapRuntime.searchSeq = searchSeq;
   try {
     await ensureSiteGoogleMapReady({ silent: true });
-    logGoogleMapsSdkState("search:places-new", {
-      hasGoogleMaps: Boolean(window.google?.maps),
-      hasGooglePlacesLibrary: Boolean(window.google?.maps?.places),
+    logGoogleMapsSdkState("search:kakao", {
+      hasKakaoMaps: Boolean(window.kakao?.maps),
+      hasKakaoServices: Boolean(window.kakao?.maps?.services),
     });
     const result = await searchSiteAddressByPlacesNew(q, 5);
     if (searchSeq !== siteMapRuntime.searchSeq) return;
@@ -97040,12 +97098,12 @@ async function onSiteAddressSearch({
     state.siteAddressResults = [];
     renderSiteAddressResults([]);
     const mappedError = mapSiteAddressSearchError(err);
-    console.warn("[RG ARLS][Maps][PlacesNew] search failed", {
+    console.warn("[RG ARLS][KakaoMaps] search failed", {
       code: mappedError.code,
       rawCode: err?.code || null,
       rawMessage: err?.message || null,
-      hasGoogleMaps: Boolean(window.google?.maps),
-      hasGooglePlacesLibrary: Boolean(window.google?.maps?.places),
+      hasKakaoMaps: Boolean(window.kakao?.maps),
+      hasKakaoServices: Boolean(window.kakao?.maps?.services),
     });
     showToast(mappedError.message, "error", 4200);
   }
@@ -97063,39 +97121,21 @@ async function onSiteAddressPick(
   if (selectedSuggestionId) {
     try {
       const suggestion = siteMapRuntime.suggestionMap.get(selectedSuggestionId);
-      const prediction = suggestion?.placePrediction;
-      if (!prediction || typeof prediction.toPlace !== "function") {
+      const lat = Number(suggestion?.latitude);
+      const lng = Number(suggestion?.longitude);
+      if (!suggestion || !isValidLatLng(lat, lng)) {
         const error = new Error("선택한 주소 예측 결과를 찾을 수 없습니다.");
         error.code = "ZERO_RESULTS";
         throw error;
       }
-      const place = prediction.toPlace();
-      await place.fetchFields({
-        fields: ["id", "displayName", "formattedAddress", "location"],
-      });
-      const lat = Number(place?.location?.lat?.());
-      const lng = Number(place?.location?.lng?.());
-      if (!isValidLatLng(lat, lng)) {
-        const error = new Error("선택한 장소 좌표를 가져오지 못했습니다.");
-        error.code = "ZERO_RESULTS";
-        throw error;
-      }
       const resolvedPlaceName = String(
-        place?.displayName?.text ||
-          place?.displayName ||
-          placeName ||
-          prediction?.text?.text ||
-          "",
+        suggestion?.main_text || placeName || "",
       ).trim();
       const resolvedAddress = String(
-        place?.formattedAddress ||
-          address ||
-          prediction?.text?.text ||
-          resolvedPlaceName ||
-          "",
+        suggestion?.formatted_address || address || resolvedPlaceName || "",
       ).trim();
       const resolvedPlaceId = String(
-        place?.id || prediction?.placeId || placeId || "",
+        suggestion?.place_id || placeId || "",
       ).trim();
 
       const ok = applySiteAddressSelection({
@@ -97110,11 +97150,10 @@ async function onSiteAddressPick(
         showToast("선택한 위치 좌표가 올바르지 않습니다.", "error");
         return;
       }
-      siteMapRuntime.placesSessionToken = null;
       return;
     } catch (err) {
       const mappedError = mapSiteAddressSearchError(err);
-      console.warn("[RG ARLS][Maps][PlacesNew] pick failed", {
+      console.warn("[RG ARLS][KakaoMaps] pick failed", {
         code: mappedError.code,
         rawCode: err?.code || null,
         rawMessage: err?.message || null,

@@ -112,6 +112,7 @@ class Settings:
     google_sheets_ingest_token = os.getenv("GOOGLE_SHEETS_INGEST_TOKEN", "").strip()
     google_sheets_service_account_json = _load_service_account_json()
     google_places_api_key = os.getenv("GOOGLE_PLACES_API_KEY", "").strip()
+    kakao_rest_api_key = os.getenv("KAKAO_REST_API_KEY", "").strip()
 
     attachment_storage_backend = os.getenv("ATTACHMENT_STORAGE_BACKEND", "database").strip().lower() or "database"
     attachment_blob_connection_string = os.getenv("ATTACHMENT_BLOB_CONNECTION_STRING", "").strip()

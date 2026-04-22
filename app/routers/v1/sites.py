@@ -5,6 +5,7 @@ import logging
 import math
 import uuid
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -32,7 +33,8 @@ router = APIRouter(prefix="/sites", tags=["sites"], dependencies=[Depends(apply_
 
 SITE_WRITE_ROLES = (ROLE_DEV, ROLE_BRANCH_MANAGER)
 SITE_READ_ROLES = SITE_WRITE_ROLES + (ROLE_EMPLOYEE,)
-GOOGLE_PLACES_TEXTSEARCH_NEW_URL = "https://places.googleapis.com/v1/places:searchText"
+KAKAO_KEYWORD_SEARCH_URL = "https://dapi.kakao.com/v2/local/search/keyword.json"
+KAKAO_ADDRESS_SEARCH_URL = "https://dapi.kakao.com/v2/local/search/address.json"
 logger = logging.getLogger(__name__)
 
 
@@ -434,66 +436,48 @@ def _normalize_site_payload(payload: SiteCreate | SiteUpdate, *, require_site_co
     }
 
 
-def _normalize_google_places_error(
-    *,
-    status_text: str | None = None,
-    message_text: str | None = None,
-    http_status: int | None = None,
-) -> tuple[str, str]:
-    status_code = str(status_text or "").strip().upper()
-    message = str(message_text or "").strip()
 
-    if status_code in {"PERMISSION_DENIED", "REQUEST_DENIED", "UNAUTHENTICATED"} or http_status in {401, 403}:
+def _normalize_kakao_local_error(
+    *,
+    http_status: int | None = None,
+    message_text: str | None = None,
+) -> tuple[str, str]:
+    message = str(message_text or "").strip()
+    if http_status in {401, 403}:
         return (
             "REQUEST_DENIED",
-            "Places API 권한/활성화/키 제한 문제입니다. Google Cloud 설정을 확인하세요.",
+            "Kakao Local API 권한/키 제한 문제입니다. Kakao Developers 설정을 확인하세요.",
         )
-    if status_code in {"RESOURCE_EXHAUSTED", "OVER_QUERY_LIMIT"} or http_status == 429:
+    if http_status == 429:
         return (
             "OVER_QUERY_LIMIT",
-            "Places API 요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.",
+            "Kakao Local API 요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.",
         )
-    if status_code in {"ZERO_RESULTS", "NOT_FOUND"}:
-        return ("ZERO_RESULTS", "검색 결과가 없습니다.")
-    if status_code in {"INVALID_ARGUMENT", "FAILED_PRECONDITION"}:
-        return (
-            "INVALID_REQUEST",
-            "주소 검색 요청 형식이 올바르지 않습니다. 검색어를 다시 확인해 주세요.",
-        )
-
-    return ("GOOGLE_PLACES_ERROR", message or "Google Places 검색 요청에 실패했습니다.")
+    if http_status and http_status >= 500:
+        return ("KAKAO_LOCAL_ERROR", "Kakao Local API 응답이 지연되고 있습니다.")
+    return ("KAKAO_LOCAL_ERROR", message or "Kakao Local 검색 요청에 실패했습니다.")
 
 
-def _search_geocode_google_places(query: str, limit: int) -> tuple[list[dict], dict | None]:
-    api_key = str(settings.google_places_api_key or "").strip()
+def _fetch_kakao_local(url: str, query: str, size: int) -> tuple[list[dict], dict | None]:
+    api_key = str(settings.kakao_rest_api_key or "").strip()
     if not api_key:
         return (
             [],
             {
                 "code": "REQUEST_DENIED",
-                "message": "Google Places API 키가 설정되지 않았습니다.",
+                "message": "Kakao REST API 키가 설정되지 않았습니다.",
             },
         )
 
-    body = json.dumps(
-        {
-            "textQuery": query,
-            "languageCode": "ko",
-            "regionCode": "KR",
-            "maxResultCount": limit,
-        }
-    ).encode("utf-8")
+    params = urlencode({"query": query, "size": max(1, min(size, 10))})
     req = Request(
-        GOOGLE_PLACES_TEXTSEARCH_NEW_URL,
-        data=body,
+        f"{url}?{params}",
         headers={
-            "Content-Type": "application/json",
             "Accept": "application/json",
-            "X-Goog-Api-Key": api_key,
-            "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location",
-            "User-Agent": "rg-arls-dev/1.0 (site-geofence-google-places)",
+            "Authorization": f"KakaoAK {api_key}",
+            "User-Agent": "rg-arls-dev/1.0 (site-geofence-kakao-local)",
         },
-        method="POST",
+        method="GET",
     )
     try:
         with urlopen(req, timeout=7) as resp:
@@ -504,92 +488,89 @@ def _search_geocode_google_places(query: str, limit: int) -> tuple[list[dict], d
             body_text = exc.read().decode("utf-8", errors="ignore")
         except Exception:
             body_text = ""
-        error_payload = {}
+        message_text = body_text
         if body_text:
             try:
-                error_payload = json.loads(body_text)
+                body_payload = json.loads(body_text)
+                message_text = str(body_payload.get("message") or body_text)
             except Exception:
-                error_payload = {}
-        error_obj = error_payload.get("error") if isinstance(error_payload, dict) else {}
-        status_text = (
-            error_obj.get("status")
-            if isinstance(error_obj, dict)
-            else None
-        )
-        message_text = (
-            error_obj.get("message")
-            if isinstance(error_obj, dict)
-            else body_text
-        )
-        code, message = _normalize_google_places_error(
-            status_text=status_text,
-            message_text=message_text,
+                message_text = body_text
+        code, message = _normalize_kakao_local_error(
             http_status=int(getattr(exc, "code", 0) or 0),
+            message_text=message_text,
         )
-        logger.warning("google places geocode request failed: code=%s status=%s http=%s", code, status_text, getattr(exc, "code", None))
+        logger.warning("kakao local request failed: code=%s http=%s", code, getattr(exc, "code", None))
         return ([], {"code": code, "message": message})
     except URLError as exc:
-        logger.warning("google places geocode url error: %s", exc)
+        logger.warning("kakao local url error: %s", exc)
         return (
             [],
             {
                 "code": "NETWORK_ERROR",
-                "message": "Google Places 네트워크 연결에 실패했습니다.",
+                "message": "Kakao Local 네트워크 연결에 실패했습니다.",
             },
         )
     except Exception as exc:
-        logger.warning("google places geocode request failed: %s", exc)
+        logger.warning("kakao local request failed: %s", exc)
         return (
             [],
             {
-                "code": "GOOGLE_PLACES_ERROR",
-                "message": "Google Places 검색 요청에 실패했습니다.",
+                "code": "KAKAO_LOCAL_ERROR",
+                "message": "Kakao Local 검색 요청에 실패했습니다.",
             },
         )
 
-    if isinstance(payload, dict) and payload.get("error"):
-        err = payload.get("error")
-        status_text = err.get("status") if isinstance(err, dict) else ""
-        message_text = err.get("message") if isinstance(err, dict) else str(err)
-        code, message = _normalize_google_places_error(status_text=status_text, message_text=message_text)
-        logger.warning("google places new api error=%s", err)
-        return ([], {"code": code, "message": message})
+    docs = payload.get("documents") if isinstance(payload, dict) else []
+    return (docs if isinstance(docs, list) else [], None)
 
+
+def _map_kakao_local_documents(rows: list[dict], *, provider: str, limit: int) -> list[dict]:
     results: list[dict] = []
     seen: set[tuple[float, float]] = set()
-    rows = payload.get("places") if isinstance(payload.get("places"), list) else []
     for row in rows:
-        location = row.get("location") if isinstance(row.get("location"), dict) else {}
         try:
-            latitude = float(location.get("latitude"))
-            longitude = float(location.get("longitude"))
+            latitude = float(row.get("y"))
+            longitude = float(row.get("x"))
         except Exception:
             continue
-
         dedup_key = (round(latitude, 6), round(longitude, 6))
         if dedup_key in seen:
             continue
         seen.add(dedup_key)
 
-        display_name_obj = row.get("displayName") if isinstance(row.get("displayName"), dict) else {}
-        place_name = str(display_name_obj.get("text") or "").strip()
-        formatted_address = str(row.get("formattedAddress") or "").strip()
-        display_name = " · ".join(part for part in [place_name, formatted_address] if part) or formatted_address or place_name
+        place_name = str(row.get("place_name") or "").strip()
+        road_address = str(row.get("road_address_name") or "").strip()
+        address_name = str(row.get("address_name") or "").strip()
+        formatted_address = road_address or address_name or place_name
+        display_name = " · ".join(part for part in [place_name, formatted_address] if part) or formatted_address
         results.append(
             {
                 "display_name": display_name,
-                "formatted_address": formatted_address or None,
-                "place_name": place_name or None,
-                "place_id": str(row.get("id") or "").strip() or None,
+                "formatted_address": formatted_address,
+                "place_name": place_name,
+                "place_id": str(row.get("id") or "").strip(),
                 "latitude": latitude,
                 "longitude": longitude,
-                "provider": "google_places",
+                "provider": provider,
             }
         )
         if len(results) >= limit:
             break
+    return results
 
-    return (results, None)
+
+def _search_geocode_kakao(query: str, limit: int) -> tuple[list[dict], dict | None]:
+    keyword_rows, keyword_error = _fetch_kakao_local(KAKAO_KEYWORD_SEARCH_URL, query, limit)
+    results = _map_kakao_local_documents(keyword_rows, provider="kakao_keyword", limit=limit)
+    if results:
+        return (results, None)
+
+    address_rows, address_error = _fetch_kakao_local(KAKAO_ADDRESS_SEARCH_URL, query, limit)
+    results = _map_kakao_local_documents(address_rows, provider="kakao_address", limit=limit)
+    if results:
+        return (results, None)
+
+    return ([], keyword_error or address_error)
 
 
 def _row_to_out(row) -> SiteOut:
@@ -821,12 +802,12 @@ def geocode_site_address(
         )
 
     query = q.strip()
-    google_results, google_error = _search_geocode_google_places(query, limit)
-    if google_results:
-        return google_results
+    kakao_results, kakao_error = _search_geocode_kakao(query, limit)
+    if kakao_results:
+        return kakao_results
 
-    if google_error:
-        error_code = str(google_error.get("code") or "").strip().upper()
+    if kakao_error:
+        error_code = str(kakao_error.get("code") or "").strip().upper()
         if error_code == "OVER_QUERY_LIMIT":
             http_status = status.HTTP_429_TOO_MANY_REQUESTS
         elif error_code == "REQUEST_DENIED":
@@ -840,8 +821,8 @@ def geocode_site_address(
         raise HTTPException(
             status_code=http_status,
             detail={
-                "code": error_code or "GOOGLE_PLACES_ERROR",
-                "message": str(google_error.get("message") or "Google Places 검색 요청에 실패했습니다."),
+                "code": error_code or "KAKAO_LOCAL_ERROR",
+                "message": str(kakao_error.get("message") or "Kakao Local 검색 요청에 실패했습니다."),
             },
         )
 

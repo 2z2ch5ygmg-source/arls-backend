@@ -2079,6 +2079,9 @@ class HomeBriefingPersonalSummaryOut(BaseModel):
     employee_name: Optional[str] = None
     site_code: Optional[str] = None
     site_name: Optional[str] = None
+    site_latitude: Optional[float] = None
+    site_longitude: Optional[float] = None
+    site_radius_meters: Optional[float] = None
     today_status: str = "NONE"
     button_mode: Optional[str] = None
     check_in_at: Optional[datetime] = None
