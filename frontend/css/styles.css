@@ -67642,12 +67642,33 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
 }
 
 #view-home .home-v3-officer .home-v3-attendance-card .home-v3-map-tile {
-  min-height: 136px;
+  min-height: 116px;
 }
 
 #view-home .home-v3-officer .home-v3-card-body,
 #view-home .home-v3-supervisor .home-v3-card-body {
   gap: 11px;
+}
+
+#view-home .home-v3-officer .home-v3-page-head-simple {
+  display: none;
+}
+
+#view-home .home-v3-officer .home-v3-grid-officer-hero .home-v3-card {
+  min-height: 320px !important;
+}
+
+#view-home .home-v3-officer .home-v3-mini-geo {
+  display: none;
+}
+
+#view-home .home-v3-officer .home-v3-week-table th,
+#view-home .home-v3-officer .home-v3-week-table td {
+  padding: 6px;
+}
+
+#view-home .home-v3-officer .home-v3-grid-officer-bottom .home-v3-card {
+  min-height: 296px !important;
 }
 
 #view-home .home-v3-work-actions,
