@@ -22607,6 +22607,8 @@ function renderScheduleReferenceBaseStage(step) {
   const warningRows = Number(preview.warning_rows || 0);
   const blockedRows = Number(preview.blocked_rows || preview.invalid_rows || 0);
   const applyDone = String(uploadUi.applyResult || "").includes("반영 완료");
+  const formatReferencePercent = (value, total) =>
+    total > 0 ? `${Math.round((Number(value || 0) / total) * 1000) / 10}%` : "0%";
 
   if (step === SCHEDULE_BASE_WIZARD_STEP_FILE) {
     return `
@@ -22625,7 +22627,6 @@ function renderScheduleReferenceBaseStage(step) {
           <div class="reference-selected-file">
             <span class="reference-excel-mini" aria-hidden="true"></span>
             <strong>${escapeHtml(fileName)}</strong>
-            <button type="button" class="reference-icon-button" aria-label="선택 파일 제거">×</button>
           </div>
           <p class="reference-muted">파일 형식 : .xlsx<br />최대 파일 크기 : 20MB</p>
         </div>
@@ -22654,19 +22655,18 @@ function renderScheduleReferenceBaseStage(step) {
       <section class="reference-upload-card">
         ${renderScheduleReferenceSummaryCards([
           { label: "파일 정보", value: fileName, meta: "업로드 파일" },
-          { label: "총 분석 행", value: `${totalRows || 1248}행` },
-          { label: "반영 가능", value: `${applicableRows || 1032}행`, meta: "82.7%", tone: "success" },
-          { label: "경고", value: `${warningRows || 156}행`, meta: "12.5%", tone: "warn" },
-          { label: "차단", value: `${blockedRows || 60}행`, meta: "4.8%", tone: "danger" },
+          { label: "총 분석 행", value: `${totalRows}행` },
+          { label: "반영 가능", value: `${applicableRows}행`, meta: formatReferencePercent(applicableRows, totalRows), tone: "success" },
+          { label: "경고", value: `${warningRows}행`, meta: formatReferencePercent(warningRows, totalRows), tone: "warn" },
+          { label: "차단", value: `${blockedRows}행`, meta: formatReferencePercent(blockedRows, totalRows), tone: "danger" },
         ])}
       </section>
       <section class="reference-upload-card">
         <div class="reference-card-head">
           <h3>행 미리보기 (기본 보기)</h3>
           <div class="reference-segment">
-            <button type="button" class="is-active">기본 보기 (차단만)</button>
-            <button type="button">전체 보기</button>
-            <button class="btn btn-secondary" type="button">엑셀 다운로드</button>
+            <button type="button" class="${uploadUi.previewMode === "all" ? "" : "is-active"}" data-action="schedule-preview-mode" data-mode="actionable" aria-pressed="${uploadUi.previewMode === "all" ? "false" : "true"}">기본 보기 (차단만)</button>
+            <button type="button" class="${uploadUi.previewMode === "all" ? "is-active" : ""}" data-action="schedule-preview-mode" data-mode="all" aria-pressed="${uploadUi.previewMode === "all" ? "true" : "false"}">전체 보기</button>
           </div>
         </div>
         ${renderScheduleReferenceBasePreviewTable()}
@@ -22689,21 +22689,20 @@ function renderScheduleReferenceBaseStage(step) {
           </div>
         </div>
         ${renderScheduleReferenceSummaryCards([
-          { label: "총 반영 행", value: `${applicableRows || 1032}행` },
-          { label: "성공", value: `${applicableRows || 1026}행`, meta: "99.4%", tone: "success" },
-          { label: "부분 반영", value: `${warningRows || 6}행`, meta: "0.6%", tone: "warn" },
+          { label: "총 반영 행", value: `${applicableRows + warningRows + (blockedRows && !applyDone ? blockedRows : 0)}행` },
+          { label: "성공", value: `${applyDone ? applicableRows : 0}행`, meta: formatReferencePercent(applyDone ? applicableRows : 0, Math.max(applicableRows + warningRows + blockedRows, 1)), tone: "success" },
+          { label: "부분 반영", value: `${warningRows}행`, meta: formatReferencePercent(warningRows, Math.max(applicableRows + warningRows + blockedRows, 1)), tone: "warn" },
           { label: "실패", value: `${blockedRows && !applyDone ? blockedRows : 0}행`, meta: "0%", tone: "danger" },
         ])}
       </section>
       <section class="reference-upload-card">
         <div class="reference-card-head">
           <h3>상세 결과</h3>
-          <button class="btn btn-secondary" type="button">상세 로그 보기</button>
         </div>
         <table class="reference-upload-table">
           <tbody>
-            <tr><td>성공</td><td>스케줄에 정상적으로 반영된 행</td><td>${applicableRows || 1026}</td><td><span class="reference-pill is-success">성공</span></td></tr>
-            <tr><td>부분 반영</td><td>일부 항목만 반영되어 추가 확인이 필요한 행</td><td>${warningRows || 6}</td><td><span class="reference-pill is-warn">부분 반영</span></td></tr>
+            <tr><td>성공</td><td>스케줄에 정상적으로 반영된 행</td><td>${applyDone ? applicableRows : 0}</td><td><span class="reference-pill is-success">성공</span></td></tr>
+            <tr><td>부분 반영</td><td>일부 항목만 반영되어 추가 확인이 필요한 행</td><td>${warningRows}</td><td><span class="reference-pill is-warn">부분 반영</span></td></tr>
             <tr><td>실패</td><td>반영되지 않은 행</td><td>${blockedRows && !applyDone ? blockedRows : 0}</td><td><span class="reference-pill is-danger">실패</span></td></tr>
           </tbody>
         </table>
@@ -22786,6 +22785,53 @@ function renderScheduleReferenceHqStage(step) {
   const reviewRows = Array.isArray(workspace.reviewRows)
     ? workspace.reviewRows
     : [];
+  const inspectResult =
+    workspace.inspectResult && typeof workspace.inspectResult === "object"
+      ? workspace.inspectResult
+      : null;
+  const inspectSummary =
+    inspectResult?.summary && typeof inspectResult.summary === "object"
+      ? inspectResult.summary
+      : {};
+  const hqBlockingRows = Number(
+    inspectSummary.blocking ??
+      inspectSummary.blocking_issue_count ??
+      reviewRows.filter((row) => row?.is_blocking).length,
+  );
+  const hqWarningRows = Number(
+    inspectSummary.approval_pending ??
+      inspectSummary.warning ??
+      inspectSummary.warning_issue_count ??
+      reviewRows.filter((row) => !row?.is_blocking).length,
+  );
+  const hqSuccessRows = Number(
+    inspectSummary.auto_approved ??
+      inspectSummary.applicable_rows ??
+      Math.max(reviewRows.length - hqBlockingRows, 0),
+  );
+  const hqTotalRows = Number(
+    inspectSummary.total_rows ||
+      inspectSummary.total ||
+      reviewRows.length ||
+      hqSuccessRows + hqWarningRows + hqBlockingRows,
+  );
+  const hqPercent = (value, total) =>
+    total > 0 ? `${Math.round((Number(value || 0) / total) * 1000) / 10}%` : "0%";
+  const hqApplyResult =
+    workspace.applyResult && typeof workspace.applyResult === "object"
+      ? workspace.applyResult
+      : {};
+  const hqAppliedRows = Number(
+    hqApplyResult.applied_count ||
+      hqApplyResult.applied_scope_count ||
+      hqApplyResult.handoff_success_count ||
+      0,
+  );
+  const hqSkippedRows = Number(
+    hqApplyResult.skipped_count ||
+      hqApplyResult.handoff_failed_count ||
+      0,
+  );
   if (step === SCHEDULE_HQ_WIZARD_STEP_UPLOAD) {
     return `
       <section class="reference-upload-card">
@@ -22816,20 +22862,19 @@ function renderScheduleReferenceHqStage(step) {
     return `
       <section class="reference-upload-card">
         ${renderScheduleReferenceSummaryCards([
-          { label: "전체", value: "1,248행" },
-          { label: "정상", value: "1,032행", meta: "82.7%", tone: "success" },
-          { label: "경고", value: "156행", meta: "12.5%", tone: "warn" },
-          { label: "오류(차단)", value: "60행", meta: "4.8%", tone: "danger" },
-          { label: "파일 상태", value: "분석 완료", tone: "success" },
+          { label: "전체", value: `${hqTotalRows}행` },
+          { label: "정상", value: `${hqSuccessRows}행`, meta: hqPercent(hqSuccessRows, hqTotalRows), tone: "success" },
+          { label: "경고", value: `${hqWarningRows}행`, meta: hqPercent(hqWarningRows, hqTotalRows), tone: "warn" },
+          { label: "오류(차단)", value: `${hqBlockingRows}행`, meta: hqPercent(hqBlockingRows, hqTotalRows), tone: "danger" },
+          { label: "파일 상태", value: inspectResult ? "분석 완료" : "검토 대기", tone: inspectResult ? "success" : "" },
         ])}
       </section>
       <section class="reference-upload-card">
         <div class="reference-card-head">
           <h3>행 미리보기 (기본 보기)</h3>
           <div class="reference-segment">
-            <button class="is-active" type="button">기본 보기</button>
-            <button type="button">전체 보기</button>
-            <button class="btn btn-secondary" type="button">엑셀 다운로드</button>
+            <button class="${workspace.previewMode === "all" ? "" : "is-active"}" type="button" data-action="schedule-support-hq-preview-mode" data-mode="actionable" aria-pressed="${workspace.previewMode === "all" ? "false" : "true"}">기본 보기</button>
+            <button class="${workspace.previewMode === "all" ? "is-active" : ""}" type="button" data-action="schedule-support-hq-preview-mode" data-mode="all" aria-pressed="${workspace.previewMode === "all" ? "true" : "false"}">전체 보기</button>
           </div>
         </div>
         <table class="reference-upload-table">
@@ -22875,23 +22920,22 @@ function renderScheduleReferenceHqStage(step) {
           </div>
         </div>
         ${renderScheduleReferenceSummaryCards([
-          { label: "총 반영 행", value: "1,032행" },
-          { label: "성공", value: "982행", meta: "95.2%", tone: "success" },
-          { label: "부분 반영", value: "38행", meta: "3.7%", tone: "warn" },
-          { label: "실패", value: "12행", meta: "1.1%", tone: "danger" },
-          { label: "반영 완료 시간", value: "2025-05-22 14:48:32" },
+          { label: "총 반영 행", value: `${hqAppliedRows + hqSkippedRows}행` },
+          { label: "성공", value: `${hqAppliedRows}행`, meta: hqPercent(hqAppliedRows, hqAppliedRows + hqSkippedRows), tone: "success" },
+          { label: "부분 반영", value: "0행", meta: "0%", tone: "warn" },
+          { label: "실패", value: `${hqSkippedRows}행`, meta: hqPercent(hqSkippedRows, hqAppliedRows + hqSkippedRows), tone: "danger" },
+          { label: "반영 완료 시간", value: hqApplyResult.applied_at ? formatProfileStatusDateTime(hqApplyResult.applied_at) : "-" },
         ])}
       </section>
       <section class="reference-upload-card">
         <div class="reference-card-head">
           <h3>상세 결과</h3>
-          <button class="btn btn-secondary" type="button">상세 로그 보기</button>
         </div>
         <table class="reference-upload-table">
           <tbody>
-            <tr><td>성공</td><td>정상적으로 반영된 행</td><td>982</td><td>95.2%</td><td><span class="reference-pill is-success">성공</span></td></tr>
-            <tr><td>부분 반영</td><td>추가 확인이 필요한 행</td><td>38</td><td>3.7%</td><td><span class="reference-pill is-warn">부분 반영</span></td></tr>
-            <tr><td>실패</td><td>반영되지 않은 행</td><td>12</td><td>1.1%</td><td><span class="reference-pill is-danger">실패</span></td></tr>
+            <tr><td>성공</td><td>정상적으로 반영된 행</td><td>${hqAppliedRows}</td><td>${hqPercent(hqAppliedRows, hqAppliedRows + hqSkippedRows)}</td><td><span class="reference-pill is-success">성공</span></td></tr>
+            <tr><td>부분 반영</td><td>추가 확인이 필요한 행</td><td>0</td><td>0%</td><td><span class="reference-pill is-warn">부분 반영</span></td></tr>
+            <tr><td>실패</td><td>반영되지 않은 행</td><td>${hqSkippedRows}</td><td>${hqPercent(hqSkippedRows, hqAppliedRows + hqSkippedRows)}</td><td><span class="reference-pill is-danger">실패</span></td></tr>
           </tbody>
         </table>
       </section>

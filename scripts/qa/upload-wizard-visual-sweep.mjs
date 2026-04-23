@@ -683,6 +683,13 @@ async function collectGeometry(page, flow) {
           },
         };
       });
+    const visibleButtons = Array.from(shell?.querySelectorAll("button") || [])
+      .filter(visible)
+      .map((button) => ({
+        label: String(button.textContent || "").trim(),
+        dataAction: button.dataset.action || "",
+        className: String(button.className || ""),
+      }));
     const visiblePanels = Array.from(document.querySelectorAll(".view:not(.hidden)"))
       .filter(visible)
       .map((node) => node.id || "unknown");
@@ -756,6 +763,11 @@ async function collectGeometry(page, flow) {
         actionCount: footerActions.length,
         allActionsHaveHooks: footerActions.every((item) => Boolean(item.dataAction)),
         clonedActionsAvoidDuplicateIds: footerActions.every((item) => !item.id),
+      },
+      visibleButtonDispatchEvidence: {
+        actionCount: visibleButtons.length,
+        allButtonsHaveHooks: visibleButtons.every((item) => Boolean(item.dataAction)),
+        inertButtons: visibleButtons.filter((item) => !item.dataAction),
       },
     };
   }, flow);
@@ -841,6 +853,8 @@ async function run() {
           geometry?.inCardActionEvidence?.rowWithinCard === true &&
           geometry?.inCardActionEvidence?.hasLeftPreviousWhenMultiple === true &&
           geometry?.inCardActionEvidence?.hasRightPrimary === true;
+        const visibleButtonsOk =
+          geometry?.visibleButtonDispatchEvidence?.allButtonsHaveHooks === true;
         const ok = Boolean(
           !error &&
           geometry?.shellBox &&
@@ -854,7 +868,8 @@ async function run() {
           consoleRows.length === 0 &&
           failedNetwork.length === 0 &&
           paginationOk &&
-          footerActionsOk,
+          footerActionsOk &&
+          visibleButtonsOk,
         );
         if (!ok) manifest.ok = false;
         manifest.entries.push({
