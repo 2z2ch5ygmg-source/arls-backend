@@ -233,6 +233,249 @@
   --sab: env(safe-area-inset-bottom, 0px);
 }
 
+/* 2026-04-23 ARLS upload wizard reference redesign */
+.topbar.app-topbar {
+  --app-topbar-height: 68px;
+  --app-topbar-padding-x: 24px;
+  --app-topbar-gap: 18px;
+  --app-topbar-wordmark-width: 234px;
+  --app-topbar-wordmark-height: 30px;
+  --app-topbar-icon-size: 42px;
+  grid-template-columns: auto auto minmax(0, 1fr) auto !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.topbar.app-topbar .hamburgerBtn {
+  display: none !important;
+}
+
+.topbar-page-title {
+  color: #111827 !important;
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+}
+
+.topbar-actions {
+  gap: 12px !important;
+}
+
+.topbar.app-topbar .icon-btn,
+.topbar-mail-btn,
+.topbar-help-btn,
+.topbar-profile-btn,
+.topbar-bell-btn {
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: #6b7280 !important;
+}
+
+.topbar.app-topbar .icon-btn:hover,
+.topbar.app-topbar .icon-btn:focus-visible {
+  background: #f3f4f6 !important;
+  color: #111827 !important;
+}
+
+.topbar-session-info {
+  max-width: 260px !important;
+  color: #111827 !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+}
+
+.topbar-theme-toggle {
+  width: 72px !important;
+  min-width: 72px !important;
+  height: 38px !important;
+}
+
+.topbar-theme-track {
+  border: 0 !important;
+  background: #ff4b14 !important;
+}
+
+.topbar-theme-thumb {
+  width: 30px !important;
+  height: 30px !important;
+}
+
+#view-schedule.schedule-upload-route-active {
+  background: #f8fafc !important;
+}
+
+#view-schedule.schedule-upload-route-active .workspace-head,
+#view-schedule.schedule-upload-route-active #scheduleCalendarFilterRow,
+#view-schedule.schedule-upload-route-active #scheduleOpsToolbar {
+  display: none !important;
+}
+
+#view-schedule #scheduleUploadPanel {
+  width: min(100%, 1520px) !important;
+  padding: 0 28px 0 !important;
+}
+
+#view-schedule #scheduleUploadPanel > .schedule-upload-shell-head {
+  width: min(100%, 1320px) !important;
+  padding-top: 28px !important;
+  display: grid !important;
+  gap: 8px !important;
+}
+
+#view-schedule #scheduleUploadHeaderTitle {
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+  color: #111827 !important;
+  font-size: 28px !important;
+  font-weight: 800 !important;
+}
+
+#view-schedule #scheduleUploadHeaderTitle::before {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 999px;
+  background: #ff4b14;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 800;
+  content: var(--schedule-upload-current-step, "1");
+}
+
+#view-schedule #scheduleUploadHeaderText {
+  display: block !important;
+  margin: 0 0 0 54px !important;
+  color: #4b5563 !important;
+  font-size: 14px !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-upload-step-rail {
+  width: min(100%, 1280px) !important;
+  padding: 28px 0 20px !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-upload-step-rail > div {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  overflow: visible !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-upload-step-rail > div::before {
+  top: 15px !important;
+  left: calc(12.5% + 15px) !important;
+  right: calc(12.5% + 15px) !important;
+  background: #d1d5db !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-upload-step-rail > div::after {
+  top: 15px !important;
+  left: calc(12.5% + 15px) !important;
+  background: #ff4b14 !important;
+}
+
+#view-schedule #scheduleUploadPanel button[data-step] {
+  min-width: 0 !important;
+  height: 68px !important;
+  min-height: 68px !important;
+  padding: 34px 8px 0 !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-wizard-step-marker {
+  width: 34px !important;
+  height: 34px !important;
+  border: 2px solid #d1d5db !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 6px #f8fafc !important;
+}
+
+#view-schedule #scheduleUploadPanel button[data-step].active .schedule-wizard-step-marker,
+#view-schedule #scheduleUploadPanel button[data-step][aria-current="step"] .schedule-wizard-step-marker {
+  border: 0 !important;
+  background: #ff4b14 !important;
+  color: #ffffff !important;
+}
+
+#view-schedule #scheduleUploadPanel button[data-step].is-complete .schedule-wizard-step-marker {
+  border-color: #ff4b14 !important;
+  background: #ffffff !important;
+  color: #ff4b14 !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-wizard-step-label {
+  color: #111827 !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+}
+
+#view-schedule #scheduleUploadMainCanvas {
+  width: min(100%, 1460px) !important;
+  padding: 0 0 88px !important;
+}
+
+#view-schedule #scheduleUploadMainCanvas > .schedule-excel-workflow-section,
+#view-schedule #scheduleUploadMainCanvas .schedule-upload-stage-shell > .schedule-upload-step:not(.hidden),
+#view-schedule #scheduleUploadMainCanvas [id$="ReviewStage"],
+#view-schedule #scheduleUploadMainCanvas [id$="ApplyStage"],
+#view-schedule #scheduleUploadMainCanvas [id$="PreviewStage"],
+#view-schedule #scheduleUploadMainCanvas [id$="CompleteStage"],
+#view-schedule #scheduleUploadMainCanvas .schedule-hq-site-selection-shell,
+#view-schedule #scheduleUploadMainCanvas #scheduleSupportUploadSection {
+  border: 1px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-upload-dropzone::before {
+  width: 56px;
+  height: 56px;
+  background: center / contain no-repeat url("../assets/excel-ref-tight.svg");
+  content: "";
+}
+
+#view-schedule #scheduleUploadPanel .schedule-upload-dropzone {
+  min-height: 178px !important;
+  border: 1px solid #dbeafe !important;
+  background: #ffffff !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-source-actions .btn-primary,
+#view-schedule #scheduleUploadPanel .schedule-upload-apply-actions .btn-primary {
+  min-width: 150px !important;
+  min-height: 48px !important;
+  border-color: #ff4b14 !important;
+  background: #ff4b14 !important;
+  color: #ffffff !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-source-actions .btn-secondary,
+#view-schedule #scheduleUploadPanel .schedule-upload-apply-actions .btn-secondary {
+  min-height: 48px !important;
+  border-color: #e5e7eb !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+@media (max-width: 900px) {
+  .topbar.app-topbar {
+    --app-topbar-padding-x: 12px;
+    --app-topbar-wordmark-width: 176px;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+  }
+
+  .topbar-page-title {
+    display: none !important;
+  }
+
+  #view-schedule #scheduleUploadPanel {
+    padding-inline: 16px !important;
+  }
+}
+
 html[data-platform-font="apple"] {
   --ui-font-family: var(--ui-font-family-apple);
 }
@@ -727,7 +970,7 @@ h3 {
   top: 0;
   z-index: var(--ui-z-topbar, 60);
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--app-topbar-gap);
   box-sizing: border-box;
@@ -777,6 +1020,18 @@ body[data-current-view="reports"] .shell-content {
     url("../assets/sentrix-hr-wordmark.png?v=20260324-arls-wordmark-fix-01");
 }
 
+.topbar-page-title {
+  min-width: 0;
+  overflow: hidden;
+  color: #111827;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .topbar-actions {
   display: inline-flex;
   align-items: center;
@@ -822,6 +1077,12 @@ body[data-current-view="reports"] .shell-content {
   background: transparent;
   box-shadow: none;
   color: var(--text-secondary);
+}
+
+.topbar-mail-btn svg,
+.topbar-help-btn svg {
+  width: 20px;
+  height: 20px;
 }
 
 .topbar.app-topbar .icon-btn:hover,
@@ -962,6 +1223,13 @@ body[data-current-view="reports"] .shell-content {
   width: 28px;
   height: 28px;
   background: center / contain no-repeat url("../assets/topbar-bell-icon.svg");
+}
+
+.topbar-session-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
 }
 
 :root[data-ui-theme="dark"] .topbar-profile-btn:hover,
@@ -40242,6 +40510,22 @@ body.calendar-public-shell #view-calendar-public {
   font-size: 22px !important;
   line-height: 1.35 !important;
   letter-spacing: 0 !important;
+}
+
+#view-schedule #scheduleUploadPanel.schedule-base-step-combined
+  #scheduleExcelWorkflowMappingSection {
+  border-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+#view-schedule #scheduleUploadPanel.schedule-base-step-combined
+  #scheduleExcelWorkflowBaseSection {
+  padding-top: 0 !important;
+}
+
+#view-schedule #scheduleUploadPanel.schedule-base-step-combined
+  [data-combined-hidden="true"] {
+  display: none !important;
 }
 
 #view-schedule #scheduleUploadPanel > div:nth-of-type(1) {

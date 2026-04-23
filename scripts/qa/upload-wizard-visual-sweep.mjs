@@ -24,7 +24,6 @@ const VIEWPORTS = Object.freeze({
 
 const ROUTE_STATES = Object.freeze([
   { route: "/schedules/upload", flow: "schedule", stateKey: "mapping" },
-  { route: "/schedules/upload", flow: "schedule", stateKey: "context" },
   { route: "/schedules/upload", flow: "schedule", stateKey: "file" },
   { route: "/schedules/upload", flow: "schedule", stateKey: "review" },
   { route: "/schedules/upload", flow: "schedule", stateKey: "review", paginationPage: 2 },

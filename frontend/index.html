@@ -113,12 +113,45 @@
             aria-label="Sentrix HR"
           ></span>
         </div>
+        <div id="topbarPageTitle" class="topbar-page-title" aria-live="polite">
+          홈
+        </div>
         <div class="topbar-actions">
           <div
             id="topbarSessionInfo"
             class="topbar-session-info hidden"
             aria-live="polite"
           ></div>
+          <button
+            id="btnTopbarMail"
+            class="icon-btn ui-btn--ghost topbar-mail-btn hidden"
+            type="button"
+            data-action="drawer-open-route"
+            data-route="/profile"
+            aria-label="메일/연동 설정 열기"
+            title="메일/연동 설정"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M4 6.5h16v11H4z"></path>
+              <path d="m4.5 7 7.5 6 7.5-6"></path>
+            </svg>
+            <span class="sr-only">메일/연동 설정</span>
+          </button>
+          <button
+            id="btnTopbarHelp"
+            class="icon-btn ui-btn--ghost topbar-help-btn hidden"
+            type="button"
+            data-action="drawer-help"
+            aria-label="도움말 열기"
+            title="도움말"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M9.7 9.2a2.5 2.5 0 0 1 4.55 1.4c0 1.85-2.25 2.15-2.25 3.7"></path>
+              <path d="M12 17h.01"></path>
+            </svg>
+            <span class="sr-only">도움말</span>
+          </button>
           <button
             id="btnTopbarProfile"
             class="icon-btn ui-btn--ghost topbar-profile-btn hidden"
@@ -4891,7 +4924,7 @@
                         type="button"
                         id="scheduleMappingNextBtn"
                         data-action="schedule-base-wizard-next"
-                        data-next-step="context"
+                        data-next-step="file"
                       >
                         다음
                       </button>
@@ -4954,6 +4987,7 @@
                               type="button"
                               data-action="schedule-base-wizard-prev"
                               data-prev-step="mapping"
+                              data-combined-hidden="true"
                             >
                               이전
                             </button>
@@ -5378,10 +5412,10 @@
                           class="btn btn-primary"
                           type="button"
 	                          id="scheduleHqExportNextBtn"
-	                          data-action="schedule-support-hq-download-start"
-	                          data-next-step="upload"
-	                        >
-	                          다운로드 시작
+                          data-action="schedule-support-hq-download-start"
+                          data-next-step="upload"
+                        >
+                          다음 단계
                         </button>
                       </div>
                     </div>

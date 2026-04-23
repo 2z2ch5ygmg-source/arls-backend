@@ -21276,24 +21276,23 @@ function getScheduleBaseWizardSteps() {
   return [
     {
       key: SCHEDULE_BASE_WIZARD_STEP_MAPPING,
-      label: "근무 템플릿",
+      label: "템플릿 / 대상 선택",
     },
-    { key: SCHEDULE_BASE_WIZARD_STEP_CONTEXT, label: "대상 선택" },
     {
       key: SCHEDULE_BASE_WIZARD_STEP_FILE,
       label: "파일 준비",
     },
-    { key: SCHEDULE_BASE_WIZARD_STEP_REVIEW, label: "반영 검토" },
-    { key: SCHEDULE_BASE_WIZARD_STEP_APPLY, label: "적용 완료" },
+    { key: SCHEDULE_BASE_WIZARD_STEP_REVIEW, label: "미리보기 / 이슈 검토" },
+    { key: SCHEDULE_BASE_WIZARD_STEP_APPLY, label: "반영 / 완료" },
   ];
 }
 
 function getScheduleHqWizardSteps() {
   return [
-    { key: SCHEDULE_HQ_WIZARD_STEP_EXPORT, label: "지점 파일 다운로드" },
-    { key: SCHEDULE_HQ_WIZARD_STEP_UPLOAD, label: "작성본 업로드" },
-    { key: SCHEDULE_HQ_WIZARD_STEP_PREVIEW, label: "미리보기" },
-    { key: SCHEDULE_HQ_WIZARD_STEP_COMPLETE, label: "업로드 완료" },
+    { key: SCHEDULE_HQ_WIZARD_STEP_EXPORT, label: "업로드 대상 선택" },
+    { key: SCHEDULE_HQ_WIZARD_STEP_UPLOAD, label: "파일 준비" },
+    { key: SCHEDULE_HQ_WIZARD_STEP_PREVIEW, label: "미리보기 / 검토" },
+    { key: SCHEDULE_HQ_WIZARD_STEP_COMPLETE, label: "반영 / 완료" },
   ];
 }
 
@@ -22066,6 +22065,7 @@ function ensureScheduleUploadStepStructure(button) {
 function renderScheduleUploadProgress(containerSelector, steps, activeStep) {
   const wrap = document.querySelector(containerSelector);
   if (!(wrap instanceof HTMLElement)) return;
+  const uploadPanel = $("#scheduleUploadPanel");
   wrap.classList.add(`${SCHEDULE_UPLOAD_FLOW_CLASS}__steps`);
   wrap.style.setProperty("display", "flex", "important");
   wrap.style.setProperty("flex-wrap", "nowrap", "important");
@@ -22075,6 +22075,12 @@ function renderScheduleUploadProgress(containerSelector, steps, activeStep) {
   wrap.style.setProperty("grid-template", "none", "important");
   wrap.style.setProperty("--schedule-upload-step-count", String(steps.length));
   const activeIndex = steps.findIndex((item) => item.key === activeStep);
+  if (uploadPanel instanceof HTMLElement) {
+    uploadPanel.style.setProperty(
+      "--schedule-upload-current-step",
+      `"${String(Math.max(1, activeIndex + 1))}"`,
+    );
+  }
   const progressPercent =
     steps.length > 0 && activeIndex >= 0
       ? Math.max(0, Math.min(100, (activeIndex / steps.length) * 100))
@@ -22086,15 +22092,28 @@ function renderScheduleUploadProgress(containerSelector, steps, activeStep) {
     const step = String(button?.dataset?.step || "")
       .trim()
       .toLowerCase();
-    const active = step === activeStep;
     const buttonIndex = steps.findIndex((item) => item.key === step);
+    if (buttonIndex < 0) {
+      button.classList.add("hidden");
+      button.setAttribute("aria-hidden", "true");
+      button.disabled = true;
+      return;
+    }
+    button.classList.remove("hidden");
+    button.setAttribute("aria-hidden", "false");
+    const stepConfig = steps[buttonIndex] || {};
+    const label = button.querySelector(`.${SCHEDULE_UPLOAD_STEP_LABEL_CLASS}`);
+    if (label instanceof HTMLElement) {
+      label.textContent = stepConfig.label || label.textContent || "";
+    }
+    const active = step === activeStep;
     const completed = buttonIndex >= 0 && activeIndex > buttonIndex;
     const stateName = active ? "active" : completed ? "complete" : "pending";
     const marker = button.querySelector(`.${SCHEDULE_UPLOAD_STEP_MARKER_CLASS}`);
     if (marker instanceof HTMLElement) {
       marker.textContent = completed
         ? "✓"
-        : String(button.dataset.stepIndex || buttonIndex + 1 || "");
+        : String(buttonIndex + 1 || "");
     }
     button.classList.add(`${SCHEDULE_UPLOAD_FLOW_CLASS}__step`);
     button.style.setProperty("display", "grid", "important");
@@ -22143,22 +22162,31 @@ function renderScheduleBaseWizardPages() {
     return;
   }
   const step = getScheduleBaseWizardStep();
+  const uploadPanel = $("#scheduleUploadPanel");
+  if (uploadPanel instanceof HTMLElement) {
+    uploadPanel.classList.toggle(
+      "schedule-base-step-combined",
+      step === SCHEDULE_BASE_WIZARD_STEP_MAPPING,
+    );
+  }
   toggleVisibility(
     "#scheduleExcelWorkflowMappingSection",
     step === SCHEDULE_BASE_WIZARD_STEP_MAPPING,
   );
   toggleVisibility(
     "#scheduleExcelWorkflowBaseSection",
-    step !== SCHEDULE_BASE_WIZARD_STEP_MAPPING,
+    true,
   );
   toggleVisibility(
     "#scheduleWriteControls",
     step === SCHEDULE_BASE_WIZARD_STEP_CONTEXT ||
-      step === SCHEDULE_BASE_WIZARD_STEP_FILE,
+      step === SCHEDULE_BASE_WIZARD_STEP_FILE ||
+      step === SCHEDULE_BASE_WIZARD_STEP_MAPPING,
   );
   toggleVisibility(
     "#scheduleBaseContextStage",
-    step === SCHEDULE_BASE_WIZARD_STEP_CONTEXT,
+    step === SCHEDULE_BASE_WIZARD_STEP_CONTEXT ||
+      step === SCHEDULE_BASE_WIZARD_STEP_MAPPING,
   );
   toggleVisibility(
     "#scheduleBaseFileStage",
@@ -22402,7 +22430,7 @@ function openScheduleUploadWorkflowSection(
     return;
   }
   if (normalizedSection === SCHEDULE_UPLOAD_WORKFLOW_BASE) {
-    setScheduleBaseWizardStep(SCHEDULE_BASE_WIZARD_STEP_CONTEXT, { scroll });
+    setScheduleBaseWizardStep(SCHEDULE_BASE_WIZARD_STEP_MAPPING, { scroll });
     return;
   }
   if (normalizedSection === SCHEDULE_UPLOAD_WORKFLOW_EXPORT) {
@@ -22687,14 +22715,56 @@ function renderScheduleUploadWorkspace() {
 
   syncScheduleImportStaleState();
   if (uploadHeaderTitle) {
+    const mode = getScheduleUploadWorkspaceMode();
+    const baseStep = getScheduleBaseWizardStep();
+    const hqStep = getScheduleHqWizardStep();
+    const titleMap =
+      mode === SCHEDULE_UPLOAD_MODE_HQ
+        ? {
+            [SCHEDULE_HQ_WIZARD_STEP_EXPORT]: "준비  |  업로드 대상 선택",
+            [SCHEDULE_HQ_WIZARD_STEP_UPLOAD]: "파일 준비  |  지원근무자 파일",
+            [SCHEDULE_HQ_WIZARD_STEP_PREVIEW]: "미리보기 / 검토  |  분석 결과 확인",
+            [SCHEDULE_HQ_WIZARD_STEP_COMPLETE]: "반영 / 완료",
+          }
+        : {
+            [SCHEDULE_BASE_WIZARD_STEP_MAPPING]: "준비  |  템플릿 / 대상 선택",
+            [SCHEDULE_BASE_WIZARD_STEP_FILE]: "파일 준비  |  월간 근무표 파일",
+            [SCHEDULE_BASE_WIZARD_STEP_REVIEW]: "미리보기 / 이슈 검토",
+            [SCHEDULE_BASE_WIZARD_STEP_APPLY]: "반영 / 완료",
+          };
     uploadHeaderTitle.textContent =
-      activeTopTab === SCHEDULE_TAB_HQ_UPLOAD
-        ? "지원근무자 업로드"
-        : "스케쥴 업로드";
+      titleMap[mode === SCHEDULE_UPLOAD_MODE_HQ ? hqStep : baseStep] ||
+      "업로드 마법사";
   }
   if (uploadHeaderText) {
-    uploadHeaderText.textContent = "";
-    uploadHeaderText.classList.add("hidden");
+    const mode = getScheduleUploadWorkspaceMode();
+    const baseStep = getScheduleBaseWizardStep();
+    const hqStep = getScheduleHqWizardStep();
+    const subtitleMap =
+      mode === SCHEDULE_UPLOAD_MODE_HQ
+        ? {
+            [SCHEDULE_HQ_WIZARD_STEP_EXPORT]:
+              "지원근무자 업로드를 위해, 스케줄을 업로드한 지점들의 파일을 먼저 다운로드하세요.",
+            [SCHEDULE_HQ_WIZARD_STEP_UPLOAD]:
+              "지원근무자 파일을 업로드하세요.",
+            [SCHEDULE_HQ_WIZARD_STEP_PREVIEW]:
+              "업로드한 파일을 분석한 결과를 확인하고, 반영 가능 여부를 검토하세요.",
+            [SCHEDULE_HQ_WIZARD_STEP_COMPLETE]:
+              "분석 결과를 실제 시스템에 반영하고 결과를 확인하세요.",
+          }
+        : {
+            [SCHEDULE_BASE_WIZARD_STEP_MAPPING]:
+              "업로드할 지점과 대상 월, 사용할 근무 템플릿을 선택하세요.",
+            [SCHEDULE_BASE_WIZARD_STEP_FILE]:
+              "작성된 월간 근무표 Excel 파일을 선택하고 분석을 시작하세요.",
+            [SCHEDULE_BASE_WIZARD_STEP_REVIEW]:
+              "분석 결과를 확인하고 반영 가능 여부를 검토하세요.",
+            [SCHEDULE_BASE_WIZARD_STEP_APPLY]:
+              "분석 결과를 실제 스케줄에 반영하고 결과를 확인하세요.",
+          };
+    uploadHeaderText.textContent =
+      subtitleMap[mode === SCHEDULE_UPLOAD_MODE_HQ ? hqStep : baseStep] || "";
+    uploadHeaderText.classList.toggle("hidden", !uploadHeaderText.textContent);
   }
   renderScheduleImportMappingProfileSummary();
   renderScheduleUploadWorkflowSections();
@@ -50137,14 +50207,22 @@ function syncWorkspaceRouteTabs() {
 
 function renderDesktopTopContext() {
   const contextEl = $("#topbarSessionInfo");
+  const titleEl = $("#topbarPageTitle");
   const userBtn = $("#btnTopbarProfile");
+  const mailBtn = $("#btnTopbarMail");
+  const helpBtn = $("#btnTopbarHelp");
   const themeToggleBtn = $("#btnTopbarThemeToggle");
   const visible = Boolean(state.user) && isDesktopViewport();
+  if (titleEl) {
+    titleEl.textContent = resolveTopbarPageTitle();
+  }
   if (!visible) {
     if (contextEl) {
       contextEl.textContent = "";
       contextEl.classList.add("hidden");
     }
+    if (mailBtn) mailBtn.classList.add("hidden");
+    if (helpBtn) helpBtn.classList.add("hidden");
     if (userBtn) {
       userBtn.classList.add("hidden");
       userBtn.setAttribute("aria-label", "내 정보 열기");
@@ -50167,9 +50245,13 @@ function renderDesktopTopContext() {
     .join(" · ");
 
   if (contextEl) {
-    contextEl.textContent = sessionText || roleText || userName;
+    contextEl.textContent = [userName, sessionText || roleText]
+      .filter(Boolean)
+      .join("  ");
     contextEl.classList.remove("hidden");
   }
+  if (mailBtn) mailBtn.classList.remove("hidden");
+  if (helpBtn) helpBtn.classList.remove("hidden");
   if (userBtn) {
     userBtn.classList.remove("hidden");
     userBtn.setAttribute("aria-label", `${userName} 프로필 열기`);
@@ -50181,6 +50263,26 @@ function renderDesktopTopContext() {
   }
   renderDesktopGlobalSearch();
   syncWorkspaceRouteTabs();
+}
+
+function resolveTopbarPageTitle() {
+  const route = normalizeRoutePath(
+    state.currentRoute || window.location.hash.replace(/^#/, "") || ROUTE_HOME,
+  );
+  if (route === ROUTE_SCHEDULE_UPLOAD || route === ROUTE_SCHEDULE_HQ_UPLOAD) {
+    return "업로드 마법사 (Wizard)";
+  }
+  if (route === ROUTE_HOME) return "홈";
+  if (route === ROUTE_SCHEDULE_LIST) return "스케줄";
+  if (route === ROUTE_ATTENDANCE) return "출퇴근";
+  if (route === ROUTE_LEAVE) return "휴가";
+  if (route === ROUTE_REQUESTS) return "요청 · 승인";
+  if (route === ROUTE_FEATURE_NOTICES) return "공지";
+  if (route === ROUTE_PROFILE) return "내 정보";
+  if (route === ROUTE_ADMIN_SITES) return "지점 관리";
+  if (route === ROUTE_ADMIN_EMPLOYEES) return "구성원";
+  if (route === ROUTE_REPORTS) return "보고 / Finance";
+  return "Sentrix HR";
 }
 
 function findSessionEmployeeDirectoryRow() {
@@ -87407,7 +87509,7 @@ function normalizeScheduleBaseWizardStep(value = "") {
     .trim()
     .toLowerCase();
   if (step === SCHEDULE_BASE_WIZARD_STEP_CONTEXT)
-    return SCHEDULE_BASE_WIZARD_STEP_CONTEXT;
+    return SCHEDULE_BASE_WIZARD_STEP_MAPPING;
   if (step === SCHEDULE_BASE_WIZARD_STEP_FILE)
     return SCHEDULE_BASE_WIZARD_STEP_FILE;
   if (step === SCHEDULE_BASE_WIZARD_STEP_REVIEW)

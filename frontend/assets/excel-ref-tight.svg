@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1536" height="1024" viewBox="0 0 1536 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgPaper" x1="500" y1="58" x2="1015" y2="913" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FAFAFA"/>
+      <stop offset="1" stop-color="#F2F2F2"/>
+    </linearGradient>
+
+    <linearGradient id="foldGrad" x1="908" y1="44" x2="1069" y2="237" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F0F1F3"/>
+      <stop offset="1" stop-color="#E4E5E7"/>
+    </linearGradient>
+
+    <linearGradient id="tileGrad" x1="400" y1="565" x2="699" y2="855" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1AA458"/>
+      <stop offset="1" stop-color="#0E6A33"/>
+    </linearGradient>
+
+    <linearGradient id="tilePane" x1="579" y1="564" x2="710" y2="867" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0D7A3B" stop-opacity="0"/>
+      <stop offset="1" stop-color="#09592A" stop-opacity="0.58"/>
+    </linearGradient>
+
+    <filter id="shadowDoc" x="440" y="24" width="650" height="930" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="8" flood-color="#000000" flood-opacity="0.16"/>
+    </filter>
+
+    <filter id="shadowTile" x="370" y="540" width="370" height="360" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#000000" flood-opacity="0.20"/>
+    </filter>
+
+    <filter id="shadowX" x="455" y="626" width="180" height="185" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000000" flood-opacity="0.14"/>
+    </filter>
+  </defs>
+
+  <rect width="1536" height="1024" fill="#F3F3F3"/>
+
+  <!-- document -->
+  <g filter="url(#shadowDoc)">
+    <path d="M560 44H907L1072 210V838C1072 883.287 1035.29 920 990 920H560C514.713 920 478 883.287 478 838V126C478 80.7127 514.713 44 560 44Z"
+      fill="url(#bgPaper)" stroke="#BFC0C2" stroke-width="5"/>
+    <path d="M907 44V180C907 203.196 925.804 222 949 222H1072"
+      fill="url(#foldGrad)"/>
+    <path d="M907 44V180C907 203.196 925.804 222 949 222H1072"
+      stroke="#BFC0C2" stroke-width="5" stroke-linejoin="round"/>
+    <!-- inner fold seam -->
+    <path d="M904 48V179C904 205.51 925.49 227 952 227H1067" stroke="#D5D6D8" stroke-width="2"/>
+  </g>
+
+  <!-- spreadsheet -->
+  <g>
+    <rect x="546" y="336" width="455" height="394" rx="14" fill="#F7F7F7" stroke="#BFC0C2" stroke-width="5"/>
+    <path d="M546 350C546 342.268 552.268 336 560 336H987C994.732 336 1001 342.268 1001 350V420H546V350Z" fill="#107C41"/>
+    <path d="M725.5 336V730" stroke="#BFC0C2" stroke-width="5"/>
+    <path d="M866.5 336V730" stroke="#BFC0C2" stroke-width="5"/>
+    <path d="M546 420.5H1001" stroke="#BFC0C2" stroke-width="5"/>
+    <path d="M546 494.5H1001" stroke="#BFC0C2" stroke-width="5"/>
+    <path d="M546 571.5H1001" stroke="#BFC0C2" stroke-width="5"/>
+    <path d="M546 651.5H1001" stroke="#BFC0C2" stroke-width="5"/>
+  </g>
+
+  <!-- excel tile -->
+  <g filter="url(#shadowTile)">
+    <rect x="401" y="564" width="308" height="303" rx="28" fill="url(#tileGrad)"/>
+    <path d="M579 564H709V867H579V564Z" fill="url(#tilePane)"/>
+  </g>
+
+  <!-- X -->
+  <g filter="url(#shadowX)">
+    <path d="M469 635H509.5L538.5 693L575 635H615L561.5 717.5L614 797H575.5L538 738.5L504.5 797H465L518 717.5L469 635Z" fill="#F1F1F1"/>
+  </g>
+</svg>
