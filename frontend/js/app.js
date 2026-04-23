@@ -22889,10 +22889,16 @@ function renderScheduleReferenceBaseStage(step) {
             <tr><td>실패</td><td>반영되지 않은 행</td><td>${blockedRows && !applyDone ? blockedRows : 0}</td><td>${formatReferencePercent(blockedRows && !applyDone ? blockedRows : 0, Math.max(applicableRows + warningRows + blockedRows, 1))}</td><td><span class="reference-pill is-danger">실패</span></td></tr>
           </tbody>
         </table>
+        <div class="reference-detail-actions">
+          <button class="btn btn-secondary" type="button" data-action="schedule-reference-download-summary">실패/부분 반영 행 다운로드</button>
+          <button class="btn btn-secondary" type="button" data-action="schedule-reference-view-log">상세 로그 보기</button>
+        </div>
       </section>
       <div class="reference-upload-actions schedule-source-actions">
         <button class="btn btn-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="review">이전</button>
-        <button class="btn btn-primary" type="button" data-action="apply-schedule">${applyDone ? "종료" : "반영 시작"}</button>
+        <div class="reference-upload-actions-right">
+          ${applyDone ? '<button class="btn btn-secondary" type="button" data-action="schedule-reference-restart">처음으로</button><button class="btn btn-primary" type="button" data-action="schedule-reference-finish">종료</button>' : '<button class="btn btn-primary" type="button" data-action="apply-schedule">반영 시작</button>'}
+        </div>
       </div>
     `;
   }
@@ -22998,14 +23004,21 @@ function renderScheduleReferenceHqStage(step) {
     workspace.applyResult && typeof workspace.applyResult === "object"
       ? workspace.applyResult
       : {};
+  const hqPartialRows = Number(
+    inspectSummary.approval_pending ??
+      inspectSummary.warning_issue_count ??
+      0,
+  );
   const hqAppliedRows = Number(
-    hqApplyResult.applied_count ||
+    inspectSummary.auto_approved ||
+      hqApplyResult.applied_count ||
       hqApplyResult.applied_scope_count ||
       hqApplyResult.handoff_success_count ||
       0,
   );
   const hqSkippedRows = Number(
-    hqApplyResult.skipped_count ||
+    inspectSummary.blocking ||
+      hqApplyResult.skipped_count ||
       hqApplyResult.handoff_failed_count ||
       0,
   );
@@ -23076,7 +23089,10 @@ function renderScheduleReferenceHqStage(step) {
       previewTab,
       previewQuery,
     );
-    const counts = getScheduleReferenceHqPreviewCounts(reviewRows);
+    const counts = getScheduleReferenceHqSummaryCounts(
+      inspectSummary,
+      getScheduleReferenceHqPreviewCounts(reviewRows),
+    );
     const pagination = getWizardPaginationModel(
       filteredRows,
       createWizardPaginationState({
@@ -23177,10 +23193,10 @@ function renderScheduleReferenceHqStage(step) {
           </div>
         </div>
         ${renderScheduleReferenceSummaryCards([
-          { label: "총 반영 행", value: `${hqAppliedRows + hqSkippedRows}행` },
-          { label: "성공", value: `${hqAppliedRows}행`, meta: hqPercent(hqAppliedRows, hqAppliedRows + hqSkippedRows), tone: "success" },
-          { label: "부분 반영", value: "0행", meta: "0%", tone: "warn" },
-          { label: "실패", value: `${hqSkippedRows}행`, meta: hqPercent(hqSkippedRows, hqAppliedRows + hqSkippedRows), tone: "danger" },
+          { label: "총 반영 행", value: `${hqAppliedRows + hqPartialRows + hqSkippedRows}행` },
+          { label: "성공", value: `${hqAppliedRows}행`, meta: hqPercent(hqAppliedRows, hqAppliedRows + hqPartialRows + hqSkippedRows), tone: "success" },
+          { label: "부분 반영", value: `${hqPartialRows}행`, meta: hqPercent(hqPartialRows, hqAppliedRows + hqPartialRows + hqSkippedRows), tone: "warn" },
+          { label: "실패", value: `${hqSkippedRows}행`, meta: hqPercent(hqSkippedRows, hqAppliedRows + hqPartialRows + hqSkippedRows), tone: "danger" },
           { label: "반영 완료 시간", value: hqApplyResult.applied_at ? formatProfileStatusDateTime(hqApplyResult.applied_at) : "-" },
         ])}
       </section>
@@ -23193,15 +23209,22 @@ function renderScheduleReferenceHqStage(step) {
             <tr><th>구분</th><th>내용</th><th>행 수</th><th>비율</th><th>결과</th></tr>
           </thead>
           <tbody>
-            <tr><td>성공</td><td>정상적으로 반영된 행</td><td>${hqAppliedRows}</td><td>${hqPercent(hqAppliedRows, hqAppliedRows + hqSkippedRows)}</td><td><span class="reference-pill is-success">성공</span></td></tr>
-            <tr><td>부분 반영</td><td>추가 확인이 필요한 행</td><td>0</td><td>0%</td><td><span class="reference-pill is-warn">부분 반영</span></td></tr>
-            <tr><td>실패</td><td>반영되지 않은 행</td><td>${hqSkippedRows}</td><td>${hqPercent(hqSkippedRows, hqAppliedRows + hqSkippedRows)}</td><td><span class="reference-pill is-danger">실패</span></td></tr>
+            <tr><td>성공</td><td>정상적으로 반영된 행</td><td>${hqAppliedRows}</td><td>${hqPercent(hqAppliedRows, hqAppliedRows + hqPartialRows + hqSkippedRows)}</td><td><span class="reference-pill is-success">성공</span></td></tr>
+            <tr><td>부분 반영</td><td>추가 확인이 필요한 행</td><td>${hqPartialRows}</td><td>${hqPercent(hqPartialRows, hqAppliedRows + hqPartialRows + hqSkippedRows)}</td><td><span class="reference-pill is-warn">부분 반영</span></td></tr>
+            <tr><td>실패</td><td>반영되지 않은 행</td><td>${hqSkippedRows}</td><td>${hqPercent(hqSkippedRows, hqAppliedRows + hqPartialRows + hqSkippedRows)}</td><td><span class="reference-pill is-danger">실패</span></td></tr>
           </tbody>
         </table>
+        <div class="reference-detail-actions">
+          <button class="btn btn-secondary" type="button" data-action="schedule-reference-hq-download-summary">실패/부분 반영 행 다운로드</button>
+          <button class="btn btn-secondary" type="button" data-action="schedule-reference-hq-view-log">상세 로그 보기</button>
+        </div>
       </section>
       <div class="reference-upload-actions schedule-source-actions">
         <button class="btn btn-secondary" type="button" data-action="schedule-hq-wizard-prev" data-prev-step="preview">이전</button>
-        <button class="btn btn-primary" type="button" data-action="schedule-hq-wizard-finish">종료</button>
+        <div class="reference-upload-actions-right">
+          <button class="btn btn-secondary" type="button" data-action="schedule-reference-hq-restart">처음으로</button>
+          <button class="btn btn-primary" type="button" data-action="schedule-reference-finish">종료</button>
+        </div>
       </div>
     `;
   }
@@ -25114,6 +25137,30 @@ function getScheduleReferenceHqPreviewCounts(rows = []) {
   };
 }
 
+function getScheduleReferenceHqSummaryCounts(summary = {}, fallback = {}) {
+  return {
+    all: Number(summary.total_rows || summary.total || fallback.all || 0),
+    valid: Number(
+      summary.auto_approved ??
+        summary.applicable_rows ??
+        fallback.valid ??
+        0,
+    ),
+    warn: Number(
+      summary.approval_pending ??
+        summary.warning_issue_count ??
+        fallback.warn ??
+        0,
+    ),
+    error: Number(
+      summary.blocking ??
+        summary.blocking_issue_count ??
+        fallback.error ??
+        0,
+    ),
+  };
+}
+
 function filterScheduleReferenceHqPreviewRows(rows = [], tab = "all", query = "") {
   const list = Array.isArray(rows) ? rows : [];
   const normalizedTab = normalizeScheduleReferenceHqPreviewTab(tab);
@@ -25293,8 +25340,11 @@ function buildScheduleSupportHqScopeAggregateKey(row) {
     .trim()
     .toUpperCase();
   const siteName = String(row?.site_name || "").trim();
-  const workDate = String(row?.work_date || "").trim();
+  const workDate = String(row?.work_date || row?.date || "").trim();
   const shiftKind = String(row?.shift_kind || "")
+    .trim()
+    .toLowerCase() ||
+    String(row?.duty_type || "")
     .trim()
     .toLowerCase();
   if (!sheetName || !workDate || !shiftKind) return "";
@@ -108225,6 +108275,86 @@ function bindUiEvents() {
         workspace.referencePreviewFilterOpen =
           !Boolean(workspace.referencePreviewFilterOpen);
         renderScheduleReferenceUploadWizard();
+        return;
+      }
+
+      if (action === "schedule-reference-restart") {
+        onScheduleResetUpload();
+        return;
+      }
+
+      if (action === "schedule-reference-hq-restart") {
+        setScheduleHqWizardStep(SCHEDULE_HQ_WIZARD_STEP_EXPORT, {
+          scroll: false,
+        });
+        return;
+      }
+
+      if (action === "schedule-reference-finish") {
+        runActionSafely(
+          navigateToRoute(ROUTE_SCHEDULE_LIST),
+          "스케줄 화면으로 이동하지 못했습니다.",
+        );
+        return;
+      }
+
+      if (action === "schedule-reference-view-log") {
+        showToast(
+          String(getScheduleUploadUiState().applyResult || "상세 로그가 준비되지 않았습니다.").trim(),
+          "info",
+          2800,
+        );
+        return;
+      }
+
+      if (action === "schedule-reference-hq-view-log") {
+        const workspace = ensureScheduleSupportHqWorkspaceState();
+        const message =
+          String(workspace.applyError || "").trim() ||
+          String(workspace.inspectError || "").trim() ||
+          String(workspace.successBanner?.message || "").trim() ||
+          "상세 로그가 준비되지 않았습니다.";
+        showToast(message, "info", 2800);
+        return;
+      }
+
+      if (action === "schedule-reference-download-summary") {
+        const preview = state.preview || {};
+        const totalRows = Number(preview.total_rows || preview.preview_rows?.length || 0);
+        const applicableRows = Number(preview.applicable_rows || preview.valid_rows || 0);
+        const warningRows = Number(preview.warning_rows || 0);
+        const blockedRows = Number(preview.blocked_rows || preview.invalid_rows || 0);
+        downloadCsvFile(
+          "schedule_upload_summary.csv",
+          ["구분", "내용", "행 수"],
+          [
+            ["성공", "스케줄에 정상적으로 반영된 행", `${applicableRows}`],
+            ["부분 반영", "일부 항목만 반영되어 추가 확인이 필요한 행", `${warningRows}`],
+            ["실패", "반영되지 않은 행", `${blockedRows}`],
+            ["전체", "총 분석 행", `${totalRows}`],
+          ],
+        );
+        showToast("요약 CSV를 다운로드했습니다.", "success", 2200);
+        return;
+      }
+
+      if (action === "schedule-reference-hq-download-summary") {
+        const workspace = ensureScheduleSupportHqWorkspaceState();
+        const summary =
+          workspace.inspectResult && typeof workspace.inspectResult.summary === "object"
+            ? workspace.inspectResult.summary
+            : {};
+        downloadCsvFile(
+          "support_upload_summary.csv",
+          ["구분", "내용", "행 수"],
+          [
+            ["성공", "정상적으로 반영된 행", `${Number(summary.auto_approved || workspace.applyResult?.applied_count || 0)}`],
+            ["부분 반영", "추가 확인이 필요한 행", `${Number(summary.approval_pending || 0)}`],
+            ["실패", "반영되지 않은 행", `${Number(summary.blocking || workspace.applyResult?.skipped_count || 0)}`],
+            ["전체", "총 분석 행", `${Number(summary.total_rows || 0)}`],
+          ],
+        );
+        showToast("요약 CSV를 다운로드했습니다.", "success", 2200);
         return;
       }
 

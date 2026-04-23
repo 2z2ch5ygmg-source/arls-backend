@@ -10216,6 +10216,13 @@ a:hover {
   padding-top: 18px;
 }
 
+.reference-upload-actions-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
 .reference-upload-actions .btn-primary {
   min-width: 150px;
   min-height: 50px;
@@ -10685,6 +10692,14 @@ a:hover {
 .reference-complete-card {
   grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
   align-items: center;
+}
+
+.reference-detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
 }
 
 .reference-complete-status {
