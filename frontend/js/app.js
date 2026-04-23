@@ -22495,8 +22495,12 @@ function renderScheduleReferenceStepper(steps, activeStep) {
     0,
     steps.findIndex((item) => item.key === activeStep),
   );
+  const trackProgressWidth =
+    steps.length > 1
+      ? (activeIndex / (steps.length - 1)) * (100 - 100 / steps.length)
+      : 0;
   return `
-    <div class="reference-upload-stepper" style="--reference-step-progress:${steps.length > 1 ? (activeIndex / (steps.length - 1)) * 100 : 0}%">
+    <div class="reference-upload-stepper" style="--reference-step-progress-width:${trackProgressWidth}%">
       ${steps
         .map((item, index) => {
           const completed = index < activeIndex;

@@ -10091,14 +10091,14 @@ a:hover {
   position: absolute;
   left: calc(96px + (100% - 192px) / 8);
   right: calc(96px + (100% - 192px) / 8);
-  top: 30px;
+  top: 32px;
   height: 2px;
   background: #d7dee9;
 }
 
 .reference-upload-stepper::after {
   right: auto;
-  width: calc((100% - 192px - ((100% - 192px) / 4)) * var(--reference-step-progress, 0) / 100);
+  width: var(--reference-step-progress-width, 0%);
   background: #ff4b14;
 }
 
@@ -10539,6 +10539,34 @@ a:hover {
 .reference-complete-card {
   grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
   align-items: center;
+}
+
+.reference-complete-status {
+  justify-content: flex-start !important;
+  gap: 26px !important;
+}
+
+.reference-complete-status .reference-check {
+  width: 72px;
+  height: 72px;
+  flex: 0 0 72px;
+  font-size: 34px;
+}
+
+.reference-complete-status h3 {
+  margin: 0 0 8px;
+  color: #16a34a;
+  font-size: 24px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.reference-complete-status p {
+  margin: 0;
+  color: #4b5563;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.45;
 }
 
 .reference-empty,
