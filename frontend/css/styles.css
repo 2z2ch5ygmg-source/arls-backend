@@ -10543,6 +10543,130 @@ a:hover {
   gap: 0;
 }
 
+.reference-preview-tabs {
+  display: inline-flex;
+  gap: 0;
+  align-items: center;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.reference-preview-tabs button {
+  min-height: 42px;
+  padding: 0 22px;
+  border: 0;
+  border-right: 1px solid #e5e7eb;
+  background: #fff;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.reference-preview-tabs button:last-child {
+  border-right: 0;
+}
+
+.reference-preview-tabs button.is-active {
+  color: #ff4b14;
+  box-shadow: inset 0 -2px 0 #ff4b14;
+}
+
+.reference-preview-toolbar {
+  align-items: center;
+}
+
+.reference-preview-searchbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.reference-preview-searchbox input {
+  width: 248px;
+  min-height: 42px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 14px;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.reference-icon-filter {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.reference-filter-popover {
+  display: none;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.reference-filter-popover.is-open {
+  display: flex;
+}
+
+.reference-filter-popover button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.reference-filter-popover button.is-active {
+  border-color: #ff4b14;
+  background: #fff7ed;
+  color: #ff4b14;
+}
+
+.reference-pagination-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.reference-pagination-pages {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.reference-pagination-pages button {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.reference-pagination-pages button.is-active {
+  border-color: #ff4b14;
+  color: #ff4b14;
+}
+
 .reference-segment button {
   min-height: 40px;
   border: 1px solid #e5e7eb;
@@ -10620,6 +10744,78 @@ a:hover {
 
   .reference-summary-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .reference-upload-stepper {
+    padding: 10px 8px 0 !important;
+  }
+
+  .reference-upload-stepper::before,
+  .reference-upload-stepper::after {
+    left: calc(100% / 8) !important;
+    right: calc(100% / 8) !important;
+    top: 27px !important;
+  }
+
+  .reference-upload-step {
+    gap: 6px !important;
+  }
+
+  .reference-upload-step span {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  .reference-upload-step strong {
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  .reference-preview-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .reference-preview-tabs button {
+    min-height: 38px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .reference-preview-toolbar {
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .reference-preview-searchbox {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .reference-preview-searchbox input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .reference-pagination-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .reference-complete-status {
+    gap: 16px !important;
+  }
+
+  .reference-complete-status .reference-check {
+    width: 56px;
+    height: 56px;
+    flex: 0 0 56px;
+    font-size: 28px;
   }
 }
 
