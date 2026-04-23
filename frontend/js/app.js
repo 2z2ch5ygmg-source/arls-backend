@@ -22564,6 +22564,31 @@ function renderScheduleReferenceBasePreviewTable() {
   `;
 }
 
+function renderScheduleReferenceTemplateRows() {
+  const sourceRows = Array.from(
+    document.querySelectorAll("#scheduleTemplateProfileTableBody tr"),
+  );
+  if (!sourceRows.length) {
+    return `<tr><td colspan="8">템플릿 라이브러리를 불러오는 중입니다.</td></tr>`;
+  }
+  return sourceRows
+    .slice(0, 6)
+    .map((row) => {
+      const cells = Array.from(row.querySelectorAll("th, td")).map((cell) =>
+        String(cell.textContent || "")
+          .replace(/\s+/g, " ")
+          .trim(),
+      );
+      const padded = Array.from({ length: 8 }, (_, index) => cells[index] || "-");
+      return `
+        <tr>
+          ${padded.map((value) => `<td>${escapeHtml(value)}</td>`).join("")}
+        </tr>
+      `;
+    })
+    .join("");
+}
+
 function renderScheduleReferenceSummaryCards(items = []) {
   return `
     <div class="reference-summary-strip">
@@ -22596,6 +22621,9 @@ function renderScheduleReferenceBaseStage(step) {
       .querySelector("#scheduleImportTenantSelectField")
       ?.classList?.contains("hidden");
   const monthValue = getScheduleReferenceFieldValue("#scheduleImportMonth");
+  const uploadableSiteCount = Array.from(
+    document.querySelectorAll("#scheduleImportSite option"),
+  ).filter((option) => option instanceof HTMLOptionElement && option.value && !option.disabled).length;
   const fileName = getScheduleReferenceText(
     "#scheduleImportFileName",
     "파일을 선택하세요",
@@ -22728,7 +22756,7 @@ function renderScheduleReferenceBaseStage(step) {
         <aside class="reference-info-box">
           <strong>권한 및 지점 안내</strong>
           <p>귀하는 아래 지점의 스케줄을 업로드할 수 있습니다.</p>
-          <p>업로드 가능한 지점: 12개</p>
+          <p>업로드 가능한 지점: ${uploadableSiteCount}개</p>
         </aside>
       </div>
     </section>
@@ -22750,11 +22778,7 @@ function renderScheduleReferenceBaseStage(step) {
       <h3>3. 템플릿 라이브러리</h3>
       <table class="reference-upload-table">
         <thead><tr><th>프로필명</th><th>설명</th><th>적용 범위</th><th>상태</th><th>기본 프로필</th><th>규칙 수</th><th>마지막 수정일</th><th>작업</th></tr></thead>
-        <tbody>
-          <tr><td>표준 근무 템플릿 v2.1</td><td>전 지점 공통 표준 템플릿</td><td>전체</td><td><span class="reference-pill is-success">활성</span></td><td>★</td><td>28</td><td>2025.04.28</td><td>•••</td></tr>
-          <tr><td>카페 전용 템플릿 v1.3</td><td>카페 매장 전용 템플릿</td><td>카페</td><td><span class="reference-pill is-success">활성</span></td><td>-</td><td>22</td><td>2025.03.12</td><td>•••</td></tr>
-          <tr><td>물류 전용 템플릿 v1.0</td><td>물류센터 전용 템플릿</td><td>물류</td><td><span class="reference-pill">비활성</span></td><td>-</td><td>24</td><td>2024.11.05</td><td>•••</td></tr>
-        </tbody>
+        <tbody>${renderScheduleReferenceTemplateRows()}</tbody>
       </table>
     </section>
     <div class="reference-upload-actions schedule-source-actions">
