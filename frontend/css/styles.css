@@ -10081,6 +10081,7 @@ a:hover {
   position: relative;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  isolation: isolate;
   gap: 0;
   padding: 14px 96px 4px;
 }
@@ -10091,15 +10092,32 @@ a:hover {
   position: absolute;
   left: calc(96px + (100% - 192px) / 8);
   right: calc(96px + (100% - 192px) / 8);
-  top: 32px;
+  top: 31px;
   height: 2px;
   background: #d7dee9;
+  z-index: 0;
 }
 
 .reference-upload-stepper::after {
   right: auto;
   width: var(--reference-step-progress-width, 0%);
   background: #ff4b14;
+}
+
+.reference-upload-stepper[data-active-index="0"]::after {
+  width: 0;
+}
+
+.reference-upload-stepper[data-active-index="1"]::after {
+  width: calc((100% - 192px) / 4);
+}
+
+.reference-upload-stepper[data-active-index="2"]::after {
+  width: calc((100% - 192px) / 2);
+}
+
+.reference-upload-stepper[data-active-index="3"]::after {
+  width: calc((100% - 192px) * 3 / 4);
 }
 
 .reference-upload-step {
@@ -10115,6 +10133,8 @@ a:hover {
 }
 
 .reference-upload-step span {
+  position: relative;
+  z-index: 1;
   display: inline-grid;
   width: 36px;
   height: 36px;
@@ -10140,6 +10160,8 @@ a:hover {
 }
 
 .reference-upload-step strong {
+  position: relative;
+  z-index: 1;
   color: #111827;
   font-size: 14px;
   font-weight: 800;
