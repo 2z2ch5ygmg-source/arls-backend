@@ -40528,6 +40528,12 @@ body.calendar-public-shell #view-calendar-public {
   display: none !important;
 }
 
+#view-schedule #scheduleUploadPanel.schedule-base-step-combined
+  #scheduleBaseContextStage
+  .schedule-source-actions {
+  display: none !important;
+}
+
 #view-schedule #scheduleUploadPanel > div:nth-of-type(1) {
   display: grid !important;
   gap: 18px !important;
