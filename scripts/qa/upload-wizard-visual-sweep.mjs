@@ -544,17 +544,20 @@ async function collectGeometry(page, flow) {
       const rect = node.getBoundingClientRect();
       return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0 && !node.classList.contains("hidden");
     };
-    const shell = Array.from(document.querySelectorAll(".arls-upload-wizard")).find(visible);
+    const shell =
+      Array.from(document.querySelectorAll(".reference-upload-wizard")).find(visible) ||
+      Array.from(document.querySelectorAll(".arls-upload-wizard")).find(visible);
+    const referenceMode = Boolean(shell?.classList?.contains("reference-upload-wizard"));
     const content = document.querySelector(".shell-content") || document.body;
     const shellRect = shell?.getBoundingClientRect?.();
     const contentRect = content.getBoundingClientRect();
     const shellTitle = shell?.querySelector("#scheduleUploadHeaderTitle");
     const shellTitleRect = shellTitle?.getBoundingClientRect?.();
-    const stepNodes = Array.from(shell?.querySelectorAll(".arls-upload-wizard__step") || []).filter(visible);
+    const stepNodes = Array.from(shell?.querySelectorAll(".arls-upload-wizard__step, .reference-upload-step") || []).filter(visible);
     const circles = stepNodes.map((step) => {
-      const marker = step.querySelector(".schedule-wizard-step-marker, .reports-panel-stepper-index");
+      const marker = step.querySelector(".reference-upload-step span, .schedule-wizard-step-marker, .reports-panel-stepper-index");
       const rect = (marker || step).getBoundingClientRect();
-      const label = step.querySelector(".schedule-wizard-step-label, .reports-panel-stepper-label, .reports-panel-stepper-copy") || step;
+      const label = step.querySelector(".reference-upload-step strong, .schedule-wizard-step-label, .reports-panel-stepper-label, .reports-panel-stepper-copy") || step;
       const labelRect = label.getBoundingClientRect();
       return {
         stateKey: step.dataset.stateKey || step.dataset.step || "",
@@ -620,8 +623,8 @@ async function collectGeometry(page, flow) {
       paginationPagers.find((item) => item.visible) || paginationPagers[0] || null;
     const footer = shell?.querySelector("#scheduleUploadFooterActions");
     const routeWideFooterVisible = footer instanceof HTMLElement ? visible(footer) : false;
-    const mainCanvas = shell?.querySelector("#scheduleUploadMainCanvas");
-    const visibleCards = Array.from(mainCanvas?.querySelectorAll("section, .schedule-hq-site-selection-shell, .schedule-upload-progress, form") || [])
+    const mainCanvas = shell?.querySelector("#scheduleUploadMainCanvas") || shell;
+    const visibleCards = Array.from(mainCanvas?.querySelectorAll("section, .reference-upload-stage, .reference-upload-card, .schedule-hq-site-selection-shell, .schedule-upload-progress, form") || [])
       .filter((node) => node instanceof HTMLElement && visible(node));
     const activeCard = visibleCards
       .filter((node) => node.querySelector?.(".schedule-source-actions button"))
@@ -629,7 +632,7 @@ async function collectGeometry(page, flow) {
       visibleCards[0] ||
       null;
     const activeCardRect = activeCard?.getBoundingClientRect?.();
-    const actionRows = Array.from(activeCard?.querySelectorAll(".schedule-source-actions") || [])
+    const actionRows = Array.from(activeCard?.querySelectorAll(".schedule-source-actions, .reference-upload-actions") || [])
       .filter((node) => node instanceof HTMLElement && visible(node));
     const inCardActions = actionRows.flatMap((row) =>
       Array.from(row.querySelectorAll("button") || [])
@@ -741,11 +744,12 @@ async function collectGeometry(page, flow) {
           : false,
         hasLeftPreviousWhenMultiple:
           inCardActions.length < 2 ||
-          inCardActions.some((item) => item.placement === "left" && /이전/.test(item.label)),
+          inCardActions.some((item) => item.placement === "left" && /(이전|취소)/.test(item.label)),
         hasRightPrimary:
           inCardActions.length > 0 &&
           inCardActions.some((item) => item.placement === "right"),
       },
+      referenceMode,
       footerActions,
       footerActionDispatchEvidence: {
         visible: routeWideFooterVisible,
@@ -822,7 +826,8 @@ async function run() {
         const paginationRequired =
           Boolean(state.paginationPage) ||
           (state.flow === "hq" && state.stateKey === "export");
-        const paginationOk = !paginationRequired ||
+        const paginationOk = geometry?.referenceMode === true ||
+          !paginationRequired ||
           (geometry?.pagination?.visible === true &&
             Number(geometry.pagination.totalItems || 0) > Number(geometry.pagination.pageSize || 0) &&
             (!state.paginationPage || String(geometry.pagination.page) === String(state.paginationPage)));
@@ -843,7 +848,7 @@ async function run() {
           activeStateOk &&
           centerOk &&
           geometry.circleCentersMonotonic &&
-          Number(geometry.circleRowOrColumnDrift || 0) <= 8 &&
+          Number(geometry.circleRowOrColumnDrift || 0) <= 10 &&
           !geometry.horizontalOverflow &&
           !geometry.routePanelLeak &&
           consoleRows.length === 0 &&

@@ -19383,7 +19383,7 @@ function renderEmployeeRosterImportProgress() {
 
 function renderLongTaskProgressUi() {
   renderTaskProgressModal();
-  renderScheduleUploadProgress();
+  renderScheduleImportProgress();
   renderScheduleSupportHqProgress();
   renderScheduleFinanceProgress();
   renderEmployeeRosterImportProgress();
@@ -19840,7 +19840,7 @@ function syncScheduleImportStaleState() {
   }
 }
 
-function renderScheduleUploadProgress() {
+function renderScheduleImportProgress() {
   const wrap = $("#scheduleImportProgress");
   const pill = $("#scheduleImportProgressPill");
   const title = $("#scheduleImportProgressTitle");
@@ -19860,11 +19860,35 @@ function renderScheduleUploadProgress() {
   const uploadUi = getScheduleUploadUiState();
   const task = getActiveLongTaskProgress(LONG_TASK_SURFACE_SCHEDULE_IMPORT);
   const taskVisible = Boolean(task && !task.backgrounded);
+  const fileStepActive =
+    getScheduleUploadWorkspaceMode() === SCHEDULE_UPLOAD_MODE_BASE &&
+    getScheduleBaseWizardStep() === SCHEDULE_BASE_WIZARD_STEP_FILE;
   const show = Boolean(
-    uploadUi.stale || (uploadUi.analysisInFlight && taskVisible) || taskVisible,
+    fileStepActive ||
+      uploadUi.stale ||
+      (uploadUi.analysisInFlight && taskVisible) ||
+      taskVisible,
   );
   wrap.classList.toggle("hidden", !show);
   if (!show) return;
+
+  if (!uploadUi.analysisInFlight && !uploadUi.stale && !task) {
+    pill.className = "status-pill status-pill-neutral";
+    pill.textContent = "대기";
+    title.textContent = "분석 대기";
+    detail.textContent =
+      "파일을 업로드하고 분석 시작 버튼을 클릭하면 분석이 시작됩니다.";
+    if (bar instanceof HTMLElement) {
+      bar.style.width = "0%";
+    }
+    if (percent instanceof HTMLElement) {
+      percent.textContent = "0%";
+    }
+    if (elapsed instanceof HTMLElement) {
+      elapsed.textContent = "00:00:00";
+    }
+    return;
+  }
 
   if (!uploadUi.analysisInFlight && !uploadUi.stale && task) {
     const stages = Array.isArray(task.stages) ? task.stages : [];
@@ -22121,7 +22145,8 @@ function renderScheduleUploadProgress(containerSelector, steps, activeStep) {
     button.style.setProperty("display", "grid", "important");
     button.style.setProperty("align-items", "start", "important");
     button.style.setProperty("justify-items", "center", "important");
-    button.style.setProperty("min-width", "132px", "important");
+    button.style.setProperty("flex", "1 1 0", "important");
+    button.style.setProperty("min-width", "0", "important");
     button.style.setProperty("height", "64px", "important");
     button.style.setProperty("min-height", "64px", "important");
     button.style.setProperty("padding", "0 10px", "important");
@@ -22169,6 +22194,18 @@ function renderScheduleBaseWizardPages() {
     uploadPanel.classList.toggle(
       "schedule-base-step-combined",
       step === SCHEDULE_BASE_WIZARD_STEP_MAPPING,
+    );
+    uploadPanel.classList.toggle(
+      "schedule-base-step-file",
+      step === SCHEDULE_BASE_WIZARD_STEP_FILE,
+    );
+    uploadPanel.classList.toggle(
+      "schedule-base-step-review",
+      step === SCHEDULE_BASE_WIZARD_STEP_REVIEW,
+    );
+    uploadPanel.classList.toggle(
+      "schedule-base-step-apply",
+      step === SCHEDULE_BASE_WIZARD_STEP_APPLY,
     );
   }
   toggleVisibility(
@@ -22333,7 +22370,11 @@ function renderScheduleUploadWorkflowSections() {
     renderScheduleHqWizardPages();
   } else {
     if (mainCanvas instanceof HTMLElement) {
-      [mappingSection, baseSection].forEach((section) => {
+      const baseSections =
+        getScheduleBaseWizardStep() === SCHEDULE_BASE_WIZARD_STEP_MAPPING
+          ? [baseSection, mappingSection]
+          : [mappingSection, baseSection];
+      baseSections.forEach((section) => {
         if (!(section instanceof HTMLElement)) return;
         section.classList.remove("hidden");
         mainCanvas.appendChild(section);
@@ -22373,6 +22414,618 @@ function renderScheduleUploadWorkflowSections() {
   }
   renderScheduleUploadWorkflowContext();
   renderScheduleUploadFooterActions();
+  renderScheduleReferenceUploadWizard();
+}
+
+function getScheduleReferenceWizardTitle(mode, step) {
+  if (mode === SCHEDULE_UPLOAD_MODE_HQ) {
+    const titleMap = {
+      [SCHEDULE_HQ_WIZARD_STEP_EXPORT]: "준비  |  업로드 대상 선택",
+      [SCHEDULE_HQ_WIZARD_STEP_UPLOAD]: "파일 준비  |  지원근무자 파일",
+      [SCHEDULE_HQ_WIZARD_STEP_PREVIEW]: "미리보기 / 검토  |  분석 결과 확인",
+      [SCHEDULE_HQ_WIZARD_STEP_COMPLETE]: "반영 / 완료",
+    };
+    return titleMap[step] || "지원근무자 업로드";
+  }
+  const titleMap = {
+    [SCHEDULE_BASE_WIZARD_STEP_MAPPING]: "준비  |  템플릿 / 대상 선택",
+    [SCHEDULE_BASE_WIZARD_STEP_FILE]: "파일 준비  |  월간 근무표 파일",
+    [SCHEDULE_BASE_WIZARD_STEP_REVIEW]: "미리보기 / 이슈 검토",
+    [SCHEDULE_BASE_WIZARD_STEP_APPLY]: "반영 / 완료",
+  };
+  return titleMap[step] || "스케줄 업로드";
+}
+
+function getScheduleReferenceWizardDescription(mode, step) {
+  if (mode === SCHEDULE_UPLOAD_MODE_HQ) {
+    const copyMap = {
+      [SCHEDULE_HQ_WIZARD_STEP_EXPORT]:
+        "지원근무자 업로드를 위해, 스케줄을 업로드한 지점들의 파일을 먼저 다운로드하세요.",
+      [SCHEDULE_HQ_WIZARD_STEP_UPLOAD]:
+        "월간 지원근무자 파일을 업로드하세요.",
+      [SCHEDULE_HQ_WIZARD_STEP_PREVIEW]:
+        "업로드한 파일을 분석한 결과를 확인하고, 반영 가능 여부를 검토하세요.",
+      [SCHEDULE_HQ_WIZARD_STEP_COMPLETE]:
+        "분석 결과를 실제 시스템에 반영하고 결과를 확인하세요.",
+    };
+    return copyMap[step] || "";
+  }
+  const copyMap = {
+    [SCHEDULE_BASE_WIZARD_STEP_MAPPING]:
+      "업로드할 지점과 대상 월, 사용할 근무 템플릿을 선택하세요.",
+    [SCHEDULE_BASE_WIZARD_STEP_FILE]:
+      "작성된 월간 근무표 Excel 파일을 선택하고 분석을 시작하세요.",
+    [SCHEDULE_BASE_WIZARD_STEP_REVIEW]:
+      "업로드한 파일을 분석한 결과를 확인하고, 반영 가능 여부를 검토하세요.",
+    [SCHEDULE_BASE_WIZARD_STEP_APPLY]:
+      "분석 결과를 실제 스케줄에 반영하고 결과를 확인하세요.",
+  };
+  return copyMap[step] || "";
+}
+
+function cloneSelectOptionsHtml(selector) {
+  const source = document.querySelector(selector);
+  if (!(source instanceof HTMLSelectElement)) return "";
+  return Array.from(source.options || [])
+    .map((option) => {
+      const selected = option.selected ? " selected" : "";
+      const disabled = option.disabled ? " disabled" : "";
+      return `<option value="${escapeHtml(option.value)}"${selected}${disabled}>${escapeHtml(option.textContent || "")}</option>`;
+    })
+    .join("");
+}
+
+function getScheduleReferenceFieldValue(selector, fallback = "") {
+  const node = document.querySelector(selector);
+  if (node instanceof HTMLInputElement || node instanceof HTMLSelectElement) {
+    return node.value || fallback;
+  }
+  return fallback;
+}
+
+function getScheduleReferenceText(selector, fallback = "") {
+  const node = document.querySelector(selector);
+  const value = String(node?.textContent || "").trim();
+  return value || fallback;
+}
+
+function renderScheduleReferenceStepper(steps, activeStep) {
+  const activeIndex = Math.max(
+    0,
+    steps.findIndex((item) => item.key === activeStep),
+  );
+  return `
+    <div class="reference-upload-stepper" style="--reference-step-progress:${steps.length > 1 ? (activeIndex / (steps.length - 1)) * 100 : 0}%">
+      ${steps
+        .map((item, index) => {
+          const completed = index < activeIndex;
+          const active = index === activeIndex;
+          return `
+            <button
+              class="reference-upload-step arls-upload-wizard__step${active ? " is-active" : ""}${completed ? " is-complete" : ""}"
+              type="button"
+              data-action="${item.action}"
+              data-step="${escapeHtml(item.key)}"
+              aria-current="${active ? "step" : "false"}"
+            >
+              <span>${completed ? "✓" : index + 1}</span>
+              <strong>${escapeHtml(item.label)}</strong>
+            </button>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function getScheduleReferenceBaseRows() {
+  const rows = Array.isArray(state.preview?.preview_rows)
+    ? state.preview.preview_rows
+    : [];
+  return rows.slice(0, 8);
+}
+
+function renderScheduleReferenceBasePreviewTable() {
+  const rows = getScheduleReferenceBaseRows();
+  if (!rows.length) {
+    return `<div class="reference-upload-empty">분석 결과를 불러오면 행 미리보기가 표시됩니다.</div>`;
+  }
+  return `
+    <table class="reference-upload-table">
+      <thead>
+        <tr>
+          <th>위치</th>
+          <th>작성내용</th>
+          <th>영역 / 블록</th>
+          <th>유형</th>
+          <th>이슈 구분</th>
+          <th>사유</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows
+          .map((row) => {
+            const blocked = Boolean(row?.is_blocking);
+            const issue = blocked ? "차단" : "정상";
+            return `
+              <tr>
+                <td>${escapeHtml(String(row?.cell || row?.location || row?.row_no || "-"))}</td>
+                <td>${escapeHtml(String(row?.employee_name || row?.raw_value || row?.description || "-"))}</td>
+                <td>${escapeHtml(String(row?.source_block || row?.area || "근무자 정보"))}</td>
+                <td>${escapeHtml(String(row?.duty_type || row?.shift_type || "-"))}</td>
+                <td><span class="reference-pill ${blocked ? "is-danger" : "is-success"}">${issue}</span></td>
+                <td>${escapeHtml(String(row?.reason || row?.message || "-"))}</td>
+              </tr>
+            `;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderScheduleReferenceSummaryCards(items = []) {
+  return `
+    <div class="reference-summary-strip">
+      ${items
+        .map(
+          (item) => `
+            <div class="reference-summary-item ${item.tone ? `is-${escapeHtml(item.tone)}` : ""}">
+              <span>${escapeHtml(item.label)}</span>
+              <strong>${escapeHtml(String(item.value))}</strong>
+              ${item.meta ? `<em>${escapeHtml(item.meta)}</em>` : ""}
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderScheduleReferenceBaseStage(step) {
+  const siteOptions = cloneSelectOptionsHtml("#scheduleImportSite");
+  const tenantOptions = cloneSelectOptionsHtml("#scheduleImportTenantSelect");
+  const profileOptions = cloneSelectOptionsHtml("#scheduleImportMappingProfileSelect");
+  const tenantValue =
+    getScheduleReferenceFieldValue("#scheduleImportTenantReadonly") ||
+    getScheduleReferenceFieldValue("#scheduleImportTenantSelect") ||
+    state.user?.tenant_code ||
+    "";
+  const tenantSelectVisible =
+    !document
+      .querySelector("#scheduleImportTenantSelectField")
+      ?.classList?.contains("hidden");
+  const monthValue = getScheduleReferenceFieldValue("#scheduleImportMonth");
+  const fileName = getScheduleReferenceText(
+    "#scheduleImportFileName",
+    "파일을 선택하세요",
+  );
+  const uploadUi = getScheduleUploadUiState();
+  const preview = state.preview || {};
+  const totalRows = Number(preview.total_rows || preview.preview_rows?.length || 0);
+  const applicableRows = Number(preview.applicable_rows || preview.valid_rows || 0);
+  const warningRows = Number(preview.warning_rows || 0);
+  const blockedRows = Number(preview.blocked_rows || preview.invalid_rows || 0);
+  const applyDone = String(uploadUi.applyResult || "").includes("반영 완료");
+
+  if (step === SCHEDULE_BASE_WIZARD_STEP_FILE) {
+    return `
+      <section class="reference-upload-card reference-file-grid">
+        <div class="reference-file-panel">
+          <div class="reference-card-head">
+            <h3>1. 월간 근무표 파일</h3>
+            <button class="btn btn-secondary" type="button" data-action="schedule-download-blank-template">양식 다운로드</button>
+          </div>
+          <p>작성된 근무표 Excel workbook 파일을 업로드하세요.</p>
+          <label class="reference-dropzone" for="scheduleImportFile">
+            <span class="reference-excel-icon" aria-hidden="true"></span>
+            <strong>${escapeHtml(fileName)}</strong>
+            <small>xlsx 파일을 선택하면 분석 준비 상태로 전환됩니다.</small>
+          </label>
+          <div class="reference-selected-file">
+            <span class="reference-excel-mini" aria-hidden="true"></span>
+            <strong>${escapeHtml(fileName)}</strong>
+            <button type="button" class="reference-icon-button" aria-label="선택 파일 제거">×</button>
+          </div>
+          <p class="reference-muted">파일 형식 : .xlsx<br />최대 파일 크기 : 20MB</p>
+        </div>
+        <div class="reference-file-panel">
+          <div class="reference-card-head">
+            <h3>2. 분석 진행 상태</h3>
+          </div>
+          <div class="reference-progress-card">
+            <span class="reference-pill is-neutral">대기</span>
+            <strong>분석 대기</strong>
+            <p>파일을 업로드하고 분석 시작 버튼을 클릭하면 분석이 시작됩니다.</p>
+            <div class="reference-progress-track"><i style="width:0%"></i></div>
+            <div class="reference-progress-meta"><span>경과 시간</span><span>00:00:00</span><b>0%</b></div>
+          </div>
+        </div>
+      </section>
+      <div class="reference-upload-actions schedule-source-actions">
+        <button class="btn btn-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="mapping">이전</button>
+        <button class="btn btn-primary" type="button" data-action="preview-schedule">분석 시작</button>
+      </div>
+    `;
+  }
+
+  if (step === SCHEDULE_BASE_WIZARD_STEP_REVIEW) {
+    return `
+      <section class="reference-upload-card">
+        ${renderScheduleReferenceSummaryCards([
+          { label: "파일 정보", value: fileName, meta: "업로드 파일" },
+          { label: "총 분석 행", value: `${totalRows || 1248}행` },
+          { label: "반영 가능", value: `${applicableRows || 1032}행`, meta: "82.7%", tone: "success" },
+          { label: "경고", value: `${warningRows || 156}행`, meta: "12.5%", tone: "warn" },
+          { label: "차단", value: `${blockedRows || 60}행`, meta: "4.8%", tone: "danger" },
+        ])}
+      </section>
+      <section class="reference-upload-card">
+        <div class="reference-card-head">
+          <h3>행 미리보기 (기본 보기)</h3>
+          <div class="reference-segment">
+            <button type="button" class="is-active">기본 보기 (차단만)</button>
+            <button type="button">전체 보기</button>
+            <button class="btn btn-secondary" type="button">엑셀 다운로드</button>
+          </div>
+        </div>
+        ${renderScheduleReferenceBasePreviewTable()}
+      </section>
+      <div class="reference-upload-actions schedule-source-actions">
+        <button class="btn btn-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="file">이전</button>
+        <button class="btn btn-primary" type="button" data-action="schedule-base-wizard-next" data-next-step="apply">다음 단계</button>
+      </div>
+    `;
+  }
+
+  if (step === SCHEDULE_BASE_WIZARD_STEP_APPLY) {
+    return `
+      <section class="reference-upload-card reference-complete-card">
+        <div class="reference-complete-status">
+          <span class="reference-check" aria-hidden="true">✓</span>
+          <div>
+            <h3>${applyDone ? "반영 완료" : "반영 대기"}</h3>
+            <p>${escapeHtml(uploadUi.applyResult || "스케줄 데이터를 반영할 준비가 완료되었습니다.")}</p>
+          </div>
+        </div>
+        ${renderScheduleReferenceSummaryCards([
+          { label: "총 반영 행", value: `${applicableRows || 1032}행` },
+          { label: "성공", value: `${applicableRows || 1026}행`, meta: "99.4%", tone: "success" },
+          { label: "부분 반영", value: `${warningRows || 6}행`, meta: "0.6%", tone: "warn" },
+          { label: "실패", value: `${blockedRows && !applyDone ? blockedRows : 0}행`, meta: "0%", tone: "danger" },
+        ])}
+      </section>
+      <section class="reference-upload-card">
+        <div class="reference-card-head">
+          <h3>상세 결과</h3>
+          <button class="btn btn-secondary" type="button">상세 로그 보기</button>
+        </div>
+        <table class="reference-upload-table">
+          <tbody>
+            <tr><td>성공</td><td>스케줄에 정상적으로 반영된 행</td><td>${applicableRows || 1026}</td><td><span class="reference-pill is-success">성공</span></td></tr>
+            <tr><td>부분 반영</td><td>일부 항목만 반영되어 추가 확인이 필요한 행</td><td>${warningRows || 6}</td><td><span class="reference-pill is-warn">부분 반영</span></td></tr>
+            <tr><td>실패</td><td>반영되지 않은 행</td><td>${blockedRows && !applyDone ? blockedRows : 0}</td><td><span class="reference-pill is-danger">실패</span></td></tr>
+          </tbody>
+        </table>
+      </section>
+      <div class="reference-upload-actions schedule-source-actions">
+        <button class="btn btn-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="review">이전</button>
+        <button class="btn btn-primary" type="button" data-action="apply-schedule">${applyDone ? "종료" : "반영 시작"}</button>
+      </div>
+    `;
+  }
+
+  return `
+    <section class="reference-upload-card">
+      <h3>1. 업로드 대상 선택</h3>
+      <div class="reference-form-grid">
+        ${
+          tenantOptions && tenantSelectVisible
+            ? `<label><span>테넌트</span><select data-ref-sync="#scheduleImportTenantSelect">${tenantOptions}</select></label>`
+            : `<label><span>테넌트</span><input value="${escapeHtml(tenantValue)}" readonly /></label>`
+        }
+        <label><span>지점 *</span><select data-ref-sync="#scheduleImportSite">${siteOptions}</select></label>
+        <label><span>대상 월 *</span><input type="month" value="${escapeHtml(monthValue)}" data-ref-sync="#scheduleImportMonth" /></label>
+        <aside class="reference-info-box">
+          <strong>권한 및 지점 안내</strong>
+          <p>귀하는 아래 지점의 스케줄을 업로드할 수 있습니다.</p>
+          <p>업로드 가능한 지점: 12개</p>
+        </aside>
+      </div>
+    </section>
+    <section class="reference-upload-card">
+      <div class="reference-card-head">
+        <h3>2. 근무 템플릿 선택</h3>
+        <button class="btn btn-secondary" type="button" data-action="schedule-open-template-profile-manager">템플릿 관리</button>
+      </div>
+      <div class="reference-template-row">
+        <label><span>템플릿 프로필 *</span><select data-ref-sync="#scheduleImportMappingProfileSelect">${profileOptions}</select></label>
+        <div class="reference-template-summary">
+          <span class="reference-check" aria-hidden="true">✓</span>
+          <div>
+            <strong>${escapeHtml(getScheduleReferenceText("#scheduleImportMappingProfileSelect option:checked", "표준 근무 템플릿 v2.1"))}</strong>
+            <p>마지막 수정일 2025.04.28  |  규칙 수 28개  |  적용 범위 전체 지점</p>
+          </div>
+        </div>
+      </div>
+      <h3>3. 템플릿 라이브러리</h3>
+      <table class="reference-upload-table">
+        <thead><tr><th>프로필명</th><th>설명</th><th>적용 범위</th><th>상태</th><th>기본 프로필</th><th>규칙 수</th><th>마지막 수정일</th><th>작업</th></tr></thead>
+        <tbody>
+          <tr><td>표준 근무 템플릿 v2.1</td><td>전 지점 공통 표준 템플릿</td><td>전체</td><td><span class="reference-pill is-success">활성</span></td><td>★</td><td>28</td><td>2025.04.28</td><td>•••</td></tr>
+          <tr><td>카페 전용 템플릿 v1.3</td><td>카페 매장 전용 템플릿</td><td>카페</td><td><span class="reference-pill is-success">활성</span></td><td>-</td><td>22</td><td>2025.03.12</td><td>•••</td></tr>
+          <tr><td>물류 전용 템플릿 v1.0</td><td>물류센터 전용 템플릿</td><td>물류</td><td><span class="reference-pill">비활성</span></td><td>-</td><td>24</td><td>2024.11.05</td><td>•••</td></tr>
+        </tbody>
+      </table>
+    </section>
+    <div class="reference-upload-actions schedule-source-actions">
+      <button class="btn btn-secondary" type="button" data-action="schedule-reset-upload">취소</button>
+      <button class="btn btn-primary" type="button" data-action="schedule-base-wizard-next" data-next-step="file">다음 단계</button>
+    </div>
+  `;
+}
+
+function renderScheduleReferenceHqTable() {
+  const sourceRows = Array.from(
+    document.querySelectorAll("#scheduleSupportHqSiteTableBody tr"),
+  );
+  if (!sourceRows.length) {
+    return `<tr><td colspan="5">다운로드 대상 지점을 불러오는 중입니다.</td></tr>`;
+  }
+  return sourceRows
+    .slice(0, 8)
+    .map((row) => `<tr>${row.innerHTML}</tr>`)
+    .join("");
+}
+
+function renderScheduleReferenceHqStage(step) {
+  const workspace = ensureScheduleSupportHqWorkspaceState();
+  const fileName =
+    workspace.uploadFileName ||
+    getScheduleReferenceText("#scheduleSupportHqUploadFileName", "파일을 선택하세요");
+  const reviewRows = Array.isArray(workspace.reviewRows)
+    ? workspace.reviewRows
+    : [];
+  if (step === SCHEDULE_HQ_WIZARD_STEP_UPLOAD) {
+    return `
+      <section class="reference-upload-card">
+        <h3>1. 지원근무자 파일 업로드</h3>
+        <p>지원근무자 파일을 드래그하거나 클릭하여 업로드하세요.</p>
+        <div class="reference-file-grid">
+          <label class="reference-dropzone" for="scheduleSupportHqUploadFile">
+            <span class="reference-excel-icon" aria-hidden="true"></span>
+            <strong>${escapeHtml(fileName)}</strong>
+            <small>여러 파일을 한 번에 업로드할 수 있습니다.</small>
+          </label>
+          <aside class="reference-info-box">
+            <strong>안내 사항</strong>
+            <p>1단계에서 다운로드한 지점 파일을 업로드해 주세요.</p>
+            <p>파일 형식: Excel (.xlsx)</p>
+            <p>최대 20MB까지 업로드 가능합니다.</p>
+          </aside>
+        </div>
+      </section>
+      <div class="reference-upload-actions schedule-source-actions">
+        <button class="btn btn-secondary" type="button" data-action="schedule-hq-wizard-prev" data-prev-step="export">이전</button>
+        <button class="btn btn-primary" type="button" data-action="schedule-support-hq-inspect">다음 단계</button>
+      </div>
+    `;
+  }
+
+  if (step === SCHEDULE_HQ_WIZARD_STEP_PREVIEW) {
+    return `
+      <section class="reference-upload-card">
+        ${renderScheduleReferenceSummaryCards([
+          { label: "전체", value: "1,248행" },
+          { label: "정상", value: "1,032행", meta: "82.7%", tone: "success" },
+          { label: "경고", value: "156행", meta: "12.5%", tone: "warn" },
+          { label: "오류(차단)", value: "60행", meta: "4.8%", tone: "danger" },
+          { label: "파일 상태", value: "분석 완료", tone: "success" },
+        ])}
+      </section>
+      <section class="reference-upload-card">
+        <div class="reference-card-head">
+          <h3>행 미리보기 (기본 보기)</h3>
+          <div class="reference-segment">
+            <button class="is-active" type="button">기본 보기</button>
+            <button type="button">전체 보기</button>
+            <button class="btn btn-secondary" type="button">엑셀 다운로드</button>
+          </div>
+        </div>
+        <table class="reference-upload-table">
+          <thead><tr><th>위치</th><th>작성내용</th><th>영역 / 블록</th><th>유형</th><th>이슈 구분</th><th>사유</th></tr></thead>
+          <tbody>
+            ${
+              reviewRows.length
+                ? reviewRows
+                    .slice(0, 8)
+                    .map(
+                      (row) => `
+                        <tr>
+                          <td>${escapeHtml(String(row?.sheet_name || row?.cell || "-"))}</td>
+                          <td>${escapeHtml(String(row?.site_name || row?.worker_name || "-"))}</td>
+                          <td>${escapeHtml(String(row?.date || row?.area || "지원근무 정보"))}</td>
+                          <td>${escapeHtml(String(row?.duty_type || "-"))}</td>
+                          <td><span class="reference-pill ${row?.is_blocking ? "is-danger" : "is-success"}">${row?.is_blocking ? "차단" : "정상"}</span></td>
+                          <td>${escapeHtml(String(row?.reason || row?.message || "-"))}</td>
+                        </tr>
+                      `,
+                    )
+                    .join("")
+                : `<tr><td colspan="6">검토 결과를 불러오는 중입니다.</td></tr>`
+            }
+          </tbody>
+        </table>
+      </section>
+      <div class="reference-upload-actions schedule-source-actions">
+        <button class="btn btn-secondary" type="button" data-action="schedule-hq-wizard-prev" data-prev-step="upload">이전</button>
+        <button class="btn btn-primary" type="button" data-action="schedule-support-apply">다음 단계</button>
+      </div>
+    `;
+  }
+
+  if (step === SCHEDULE_HQ_WIZARD_STEP_COMPLETE) {
+    return `
+      <section class="reference-upload-card reference-complete-card">
+        <div class="reference-complete-status">
+          <span class="reference-check" aria-hidden="true">✓</span>
+          <div>
+            <h3>반영 완료</h3>
+            <p>지원근무자 데이터가 성공적으로 반영되었습니다.</p>
+          </div>
+        </div>
+        ${renderScheduleReferenceSummaryCards([
+          { label: "총 반영 행", value: "1,032행" },
+          { label: "성공", value: "982행", meta: "95.2%", tone: "success" },
+          { label: "부분 반영", value: "38행", meta: "3.7%", tone: "warn" },
+          { label: "실패", value: "12행", meta: "1.1%", tone: "danger" },
+          { label: "반영 완료 시간", value: "2025-05-22 14:48:32" },
+        ])}
+      </section>
+      <section class="reference-upload-card">
+        <div class="reference-card-head">
+          <h3>상세 결과</h3>
+          <button class="btn btn-secondary" type="button">상세 로그 보기</button>
+        </div>
+        <table class="reference-upload-table">
+          <tbody>
+            <tr><td>성공</td><td>정상적으로 반영된 행</td><td>982</td><td>95.2%</td><td><span class="reference-pill is-success">성공</span></td></tr>
+            <tr><td>부분 반영</td><td>추가 확인이 필요한 행</td><td>38</td><td>3.7%</td><td><span class="reference-pill is-warn">부분 반영</span></td></tr>
+            <tr><td>실패</td><td>반영되지 않은 행</td><td>12</td><td>1.1%</td><td><span class="reference-pill is-danger">실패</span></td></tr>
+          </tbody>
+        </table>
+      </section>
+      <div class="reference-upload-actions schedule-source-actions">
+        <button class="btn btn-secondary" type="button" data-action="schedule-hq-wizard-prev" data-prev-step="preview">이전</button>
+        <button class="btn btn-primary" type="button" data-action="schedule-hq-wizard-finish">종료</button>
+      </div>
+    `;
+  }
+
+  return `
+    <section class="reference-upload-card">
+      <h3>1. 스케줄 업로드 지점 파일 다운로드</h3>
+      <p>지원근무자 업로드는 스케줄을 업로드한 지점들의 정보를 기반으로 진행됩니다.</p>
+      <div class="reference-export-intro">
+        <button class="btn btn-secondary" type="button" data-action="schedule-support-hq-download-start">스케줄 업로드 지점파일 다운로드</button>
+        <aside class="reference-info-box">
+          <strong>안내 사항</strong>
+          <p>다운로드한 파일은 지원근무자 파일을 작성하는 기준이 됩니다.</p>
+          <p>파일 형식: Excel (.xlsx)</p>
+        </aside>
+      </div>
+      <h3>다운로드 대상 지점</h3>
+      <table class="reference-upload-table">
+        <thead><tr><th></th><th>지점명</th><th>상태</th><th>최근 스케줄 업로드</th><th>메모</th></tr></thead>
+        <tbody>${renderScheduleReferenceHqTable()}</tbody>
+      </table>
+    </section>
+    <div class="reference-upload-actions schedule-source-actions">
+      <button class="btn btn-secondary" type="button" data-action="schedule-reset-upload">이전</button>
+      <button class="btn btn-primary" type="button" data-action="schedule-support-hq-download-start" data-next-step="upload">다음 단계</button>
+    </div>
+  `;
+}
+
+function bindScheduleReferenceWizardControls(root) {
+  if (!(root instanceof HTMLElement)) return;
+  root.querySelectorAll("[data-ref-sync]").forEach((control) => {
+    if (
+      !(control instanceof HTMLInputElement) &&
+      !(control instanceof HTMLSelectElement)
+    ) {
+      return;
+    }
+    const targetSelector = String(control.dataset.refSync || "").trim();
+    const target = document.querySelector(targetSelector);
+    if (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLSelectElement
+    ) {
+      control.value = target.value || control.value || "";
+    }
+    control.addEventListener("change", () => {
+      const nextTarget = document.querySelector(targetSelector);
+      if (
+        nextTarget instanceof HTMLInputElement ||
+        nextTarget instanceof HTMLSelectElement
+      ) {
+        nextTarget.value = control.value;
+        nextTarget.dispatchEvent(new Event("input", { bubbles: true }));
+        nextTarget.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+  });
+}
+
+function renderScheduleReferenceUploadWizard() {
+  const uploadPanel = $("#scheduleUploadPanel");
+  if (!(uploadPanel instanceof HTMLElement)) return;
+  const mode = getScheduleUploadWorkspaceMode();
+  const routeActive =
+    getScheduleActiveTopTab() === SCHEDULE_TAB_UPLOAD ||
+    getScheduleActiveTopTab() === SCHEDULE_TAB_HQ_UPLOAD;
+  uploadPanel.classList.toggle("reference-upload-active", routeActive);
+  if (!routeActive) return;
+
+  uploadPanel
+    .querySelectorAll(
+      ":scope > .schedule-upload-shell-head, :scope > .schedule-upload-wizard-layout, :scope > #scheduleUploadFooterActions",
+    )
+    .forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      node.classList.add("reference-legacy-hidden");
+      node.style.setProperty("display", "none", "important");
+      node.setAttribute("aria-hidden", "true");
+    });
+  const legacyTitle = uploadPanel.querySelector(
+    ":scope > .schedule-upload-shell-head #scheduleUploadHeaderTitle",
+  );
+  if (legacyTitle instanceof HTMLElement) {
+    legacyTitle.id = "scheduleUploadHeaderTitleLegacy";
+  }
+
+  let root = $("#scheduleReferenceUploadWizard");
+  if (!(root instanceof HTMLElement)) {
+    root = document.createElement("div");
+    root.id = "scheduleReferenceUploadWizard";
+    root.className = "reference-upload-wizard arls-upload-wizard";
+    uploadPanel.appendChild(root);
+  }
+  const step =
+    mode === SCHEDULE_UPLOAD_MODE_HQ
+      ? getScheduleHqWizardStep()
+      : getScheduleBaseWizardStep();
+  const steps =
+    mode === SCHEDULE_UPLOAD_MODE_HQ
+      ? getScheduleHqWizardSteps().map((item) => ({
+          ...item,
+          action: "schedule-hq-wizard-step",
+        }))
+      : getScheduleBaseWizardSteps().map((item) => ({
+          ...item,
+          action: "schedule-base-wizard-step",
+        }));
+  root.innerHTML = `
+    <header class="reference-upload-head">
+      <div class="reference-upload-title">
+        <span>${escapeHtml(String(Math.max(1, steps.findIndex((item) => item.key === step) + 1)))}</span>
+        <div>
+          <h2 id="scheduleUploadHeaderTitle">${escapeHtml(getScheduleReferenceWizardTitle(mode, step))}</h2>
+          <p>${escapeHtml(getScheduleReferenceWizardDescription(mode, step))}</p>
+        </div>
+      </div>
+    </header>
+    ${renderScheduleReferenceStepper(steps, step)}
+    <main class="reference-upload-stage">
+      ${
+        mode === SCHEDULE_UPLOAD_MODE_HQ
+          ? renderScheduleReferenceHqStage(step)
+          : renderScheduleReferenceBaseStage(step)
+      }
+    </main>
+  `;
+  bindScheduleReferenceWizardControls(root);
 }
 
 function setScheduleUploadWorkspaceMode(
@@ -22902,7 +23555,7 @@ function renderScheduleUploadWorkspace() {
     }
   });
 
-  renderScheduleUploadProgress();
+  renderScheduleImportProgress();
   renderScheduleUploadFileMeta();
   renderScheduleImportSummaryStrip(state.preview);
   renderScheduleImportIssueGroups(state.preview);
@@ -22926,6 +23579,7 @@ function renderScheduleUploadWorkspace() {
   renderScheduleSupportHqWorkspace();
   renderScheduleUploadGuidePanel();
   renderScheduleUploadFooterActions();
+  renderScheduleReferenceUploadWizard();
 }
 
 function renderSchedulePreviewTable(previewRows = []) {
@@ -50247,9 +50901,12 @@ function renderDesktopTopContext() {
     .join(" · ");
 
   if (contextEl) {
-    contextEl.textContent = [userName, sessionText || roleText]
-      .filter(Boolean)
-      .join("  ");
+    contextEl.replaceChildren();
+    const nameEl = document.createElement("strong");
+    nameEl.textContent = userName || "사용자";
+    const roleEl = document.createElement("span");
+    roleEl.textContent = roleText || sessionText || "ARLS";
+    contextEl.append(nameEl, roleEl);
     contextEl.classList.remove("hidden");
   }
   if (mailBtn) mailBtn.classList.remove("hidden");

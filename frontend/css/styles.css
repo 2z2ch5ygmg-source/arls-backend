@@ -9926,6 +9926,563 @@ a:hover {
   }
 }
 
+#view-schedule #scheduleUploadPanel.reference-upload-active {
+  width: min(100%, 1500px) !important;
+  margin-inline: auto !important;
+  padding: 0 28px !important;
+  background: transparent !important;
+}
+
+#view-schedule #scheduleUploadPanel.reference-upload-active > .schedule-upload-shell-head,
+#view-schedule #scheduleUploadPanel.reference-upload-active > .schedule-upload-wizard-layout,
+#view-schedule #scheduleUploadPanel.reference-upload-active > #scheduleUploadFooterActions {
+  display: none !important;
+}
+
+.reference-upload-wizard {
+  display: grid;
+  gap: 24px;
+  width: min(100%, 1360px);
+  margin-inline: auto;
+  padding: 28px 0 32px;
+  color: #111827;
+}
+
+.reference-upload-head {
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.reference-upload-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.reference-upload-title > span {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border-radius: 999px;
+  background: #ff4b14;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.reference-upload-title h2 {
+  display: block !important;
+  margin: 0 !important;
+  color: #111827 !important;
+  font-size: 24px !important;
+  font-weight: 800 !important;
+  line-height: 1.25 !important;
+  letter-spacing: 0 !important;
+}
+
+#scheduleReferenceUploadWizard #scheduleUploadHeaderTitle::before {
+  display: none !important;
+  content: none !important;
+}
+
+.reference-upload-title p {
+  margin: 8px 0 0;
+  color: #374151;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.reference-upload-stepper {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  padding: 14px 96px 4px;
+}
+
+.reference-upload-stepper::before,
+.reference-upload-stepper::after {
+  content: "";
+  position: absolute;
+  left: calc(96px + (100% - 192px) / 8);
+  right: calc(96px + (100% - 192px) / 8);
+  top: 30px;
+  height: 2px;
+  background: #d7dee9;
+}
+
+.reference-upload-stepper::after {
+  right: auto;
+  width: calc((100% - 192px - ((100% - 192px) / 4)) * var(--reference-step-progress, 0) / 100);
+  background: #ff4b14;
+}
+
+.reference-upload-step {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  color: #111827;
+  text-align: center;
+}
+
+.reference-upload-step span {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 2px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #94a3b8;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.reference-upload-step.is-active span {
+  border-color: #ff4b14;
+  background: #ff4b14;
+  color: #fff;
+}
+
+.reference-upload-step.is-complete span {
+  border-color: #ff4b14;
+  background: #fff;
+  color: #ff4b14;
+}
+
+.reference-upload-step strong {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: 0;
+  word-break: keep-all;
+}
+
+.reference-upload-stage {
+  display: grid;
+  gap: 14px;
+}
+
+.reference-upload-card {
+  display: grid;
+  gap: 18px;
+  padding: 24px 26px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.reference-upload-card h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.reference-upload-card p,
+.reference-muted {
+  margin: 0;
+  color: #4b5563;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.reference-card-head,
+.reference-upload-actions,
+.reference-complete-status,
+.reference-export-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.reference-upload-actions {
+  padding-top: 18px;
+}
+
+.reference-upload-actions .btn-primary {
+  min-width: 150px;
+  min-height: 50px;
+  border-radius: 6px;
+  background: #ff4b14;
+  border-color: #ff4b14;
+}
+
+.reference-upload-actions .btn-secondary {
+  min-width: 92px;
+  min-height: 50px;
+  border-radius: 6px;
+}
+
+.reference-form-grid {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(190px, 1fr) minmax(160px, 0.86fr) minmax(300px, 0.95fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.reference-form-grid label,
+.reference-template-row label {
+  display: grid;
+  gap: 8px;
+}
+
+.reference-form-grid span,
+.reference-template-row span {
+  color: #374151;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.reference-form-grid input,
+.reference-form-grid select,
+.reference-template-row select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #d7dee9;
+  border-radius: 6px;
+  background: #fff;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 0 14px;
+}
+
+.reference-info-box,
+.reference-template-summary {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  min-height: 96px;
+  padding: 18px 20px;
+  border: 1px solid #d7dee9;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.reference-info-box {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.reference-template-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 0.9fr);
+  gap: 28px;
+  align-items: stretch;
+}
+
+.reference-template-summary {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.reference-check {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #16a34a;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.reference-file-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.reference-file-panel {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-height: 360px;
+  padding: 24px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.reference-dropzone {
+  display: grid;
+  min-height: 190px;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px;
+  border: 1px dashed #d7dee9;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  text-align: center;
+  cursor: pointer;
+}
+
+.reference-excel-icon,
+.reference-excel-mini {
+  display: inline-block;
+  background: center / contain no-repeat url("../assets/excel-ref-tight.svg");
+}
+
+.reference-excel-icon {
+  width: 56px;
+  height: 56px;
+}
+
+.reference-excel-mini {
+  width: 34px;
+  height: 34px;
+}
+
+.reference-dropzone strong {
+  color: #111827;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.reference-dropzone small {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.reference-selected-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.reference-selected-file strong {
+  flex: 1;
+}
+
+.reference-icon-button {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  font-size: 24px;
+}
+
+.reference-progress-card {
+  display: grid;
+  align-content: center;
+  gap: 16px;
+  min-height: 220px;
+  padding: 24px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.reference-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf1f5;
+}
+
+.reference-progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #ff4b14;
+}
+
+.reference-progress-meta {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.reference-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+}
+
+.reference-summary-item {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-height: 90px;
+  padding: 12px 18px;
+  border-right: 1px solid #e5e7eb;
+}
+
+.reference-summary-item:last-child {
+  border-right: 0;
+}
+
+.reference-summary-item span {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.reference-summary-item strong {
+  color: #111827;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.reference-summary-item em {
+  color: #6b7280;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.reference-summary-item.is-success strong,
+.reference-pill.is-success {
+  color: #16a34a;
+}
+
+.reference-summary-item.is-warn strong,
+.reference-pill.is-warn {
+  color: #f97316;
+}
+
+.reference-summary-item.is-danger strong,
+.reference-pill.is-danger {
+  color: #ef4444;
+}
+
+.reference-upload-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+}
+
+.reference-upload-table th,
+.reference-upload-table td {
+  min-height: 48px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  color: #111827;
+  text-align: left;
+}
+
+.reference-upload-table th {
+  background: #f8fafc;
+  font-weight: 800;
+}
+
+.reference-upload-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.reference-pill {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: #f3f4f6;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.reference-pill.is-success {
+  background: #dcfce7;
+}
+
+.reference-pill.is-warn {
+  background: #fff7ed;
+}
+
+.reference-pill.is-danger {
+  background: #fee2e2;
+}
+
+.reference-segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+
+.reference-segment button {
+  min-height: 40px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  padding: 0 18px;
+  color: #111827;
+  font-weight: 800;
+}
+
+.reference-segment button.is-active {
+  border-color: #ff4b14;
+  background: #fff7ed;
+  color: #ff4b14;
+}
+
+.reference-complete-card {
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
+}
+
+.reference-empty,
+.reference-upload-empty {
+  padding: 22px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+@media (max-width: 900px) {
+  .reference-upload-stepper {
+    padding-inline: 10px;
+  }
+
+  .reference-upload-stepper::before,
+  .reference-upload-stepper::after {
+    left: calc(10px + (100% - 20px) / 8);
+    right: calc(10px + (100% - 20px) / 8);
+  }
+
+  .reference-form-grid,
+  .reference-template-row,
+  .reference-file-grid,
+  .reference-complete-card {
+    grid-template-columns: 1fr;
+  }
+
+  .reference-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 1023px) {
   :root {
     --radius-12: 10px;
@@ -40529,9 +41086,30 @@ body.calendar-public-shell #view-calendar-public {
 }
 
 #view-schedule #scheduleUploadPanel.schedule-base-step-combined
-  #scheduleBaseContextStage
-  .schedule-source-actions {
+  #scheduleExcelWorkflowMappingSection
+  .schedule-wizard-actions {
   display: none !important;
+}
+
+#view-schedule #scheduleUploadPanel.schedule-base-step-combined
+  #scheduleExcelWorkflowBaseSection::before {
+  content: "1. 업로드 대상 선택";
+  color: #111827;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+#view-schedule #scheduleUploadPanel.schedule-base-step-combined
+  #scheduleExcelWorkflowMappingSection::before {
+  content: "2. 근무 템플릿 선택";
+  color: #111827;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+#view-schedule #scheduleUploadPanel.schedule-base-step-combined
+  #scheduleImportProfileLibraryDetails summary::before {
+  content: "3. ";
 }
 
 #view-schedule #scheduleUploadPanel > div:nth-of-type(1) {
@@ -68887,5 +69465,349 @@ html[data-ui-theme="dark"] #view-profile .profile-settings-rail-item span {
   #view-attendance[data-attendance-section="daily"] .attendance-v2-detail-grid {
     grid-template-columns: 1fr !important;
     gap: 0 !important;
+  }
+}
+
+/* 2026-04-23 upload wizard Ralph visual parity pass */
+.topbar.app-topbar {
+  --app-topbar-height: 68px;
+  --app-topbar-icon-size: 38px;
+  grid-template-columns: 228px minmax(0, 1fr) auto !important;
+  gap: 0 !important;
+  height: 68px !important;
+  min-height: 68px !important;
+  padding: 0 !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+.topbar.app-topbar .hamburgerBtn {
+  display: none !important;
+}
+
+.topbar-brand {
+  width: 228px !important;
+  height: 68px !important;
+  padding-inline: 24px 20px !important;
+  border-right: 1px solid #e5e7eb !important;
+}
+
+.topbar-wordmark {
+  display: inline-flex !important;
+  width: auto !important;
+  height: 68px !important;
+  align-items: center !important;
+  gap: 10px !important;
+  background: none !important;
+}
+
+.topbar-wordmark::before {
+  content: "S";
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  color: #ff4b14;
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.topbar-wordmark::after {
+  content: "SENTRIX HR(ARLS)";
+  color: #111827;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.topbar-wordmark[aria-label] {
+  font-size: 0 !important;
+}
+
+.topbar-page-title {
+  padding-inline-start: 28px !important;
+  color: #111827 !important;
+  font-size: 21px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+}
+
+.topbar-actions {
+  gap: 8px !important;
+  padding-inline-end: 22px !important;
+}
+
+.topbar-bell-btn {
+  order: 1;
+}
+
+.topbar-mail-btn {
+  order: 2;
+}
+
+.topbar-help-btn {
+  order: 3;
+}
+
+.topbar-theme-toggle {
+  order: 4;
+  width: 66px !important;
+  min-width: 66px !important;
+  height: 36px !important;
+  margin-inline: 6px 8px !important;
+}
+
+.topbar-profile-btn {
+  order: 5;
+  position: relative !important;
+  width: 38px !important;
+  min-height: 38px !important;
+  height: 38px !important;
+  margin-inline-start: 12px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 999px !important;
+}
+
+.topbar-profile-btn::before {
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: 7px;
+  width: 1px;
+  height: 24px;
+  background: #e5e7eb;
+}
+
+.topbar-session-info {
+  order: 6;
+  position: relative !important;
+  display: grid !important;
+  gap: 1px !important;
+  min-width: 76px !important;
+  max-width: 160px !important;
+  padding-inline-end: 18px !important;
+  color: #111827 !important;
+  font-size: 0 !important;
+  line-height: 1.2 !important;
+}
+
+.topbar-session-info strong {
+  overflow: hidden;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-session-info span {
+  overflow: hidden;
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-session-info::after {
+  content: "⌄";
+  position: absolute;
+  right: 8px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.topbar.app-topbar .icon-btn,
+.topbar-bell-btn {
+  width: 38px !important;
+  min-height: 38px !important;
+  height: 38px !important;
+  color: #6b7280 !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+}
+
+.topbar-bell-btn .notif-badge,
+.topbar-mail-btn .notif-badge {
+  top: 0 !important;
+  right: 0 !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-upload-step-rail button[data-step] {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-wizard-step-label {
+  white-space: normal !important;
+  word-break: keep-all !important;
+}
+
+#view-schedule #scheduleUploadPanel.schedule-base-step-combined
+  #scheduleBaseContextStage
+  .schedule-source-actions {
+  display: none !important;
+}
+
+#view-schedule #scheduleUploadPanel.schedule-base-step-combined
+  #scheduleExcelWorkflowMappingSection
+  .schedule-wizard-actions {
+  display: flex !important;
+}
+
+#view-schedule #scheduleBaseFileStage:not(.hidden) {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr) !important;
+  gap: 14px !important;
+  align-items: stretch !important;
+}
+
+#view-schedule #scheduleBaseFileStage #scheduleImportForm,
+#view-schedule #scheduleBaseFileStage #scheduleImportProgress {
+  display: grid !important;
+  align-content: start !important;
+  gap: 16px !important;
+  min-height: 360px !important;
+  padding: 24px !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+}
+
+#view-schedule #scheduleUploadPanel.schedule-base-step-file
+  #scheduleExcelWorkflowBaseSection {
+  position: relative !important;
+  padding-bottom: 96px !important;
+}
+
+#view-schedule #scheduleUploadPanel.schedule-base-step-file
+  #scheduleImportForm
+  .schedule-upload-file-actions {
+  position: absolute !important;
+  left: 28px !important;
+  right: 28px !important;
+  bottom: 24px !important;
+  width: auto !important;
+  margin: 0 !important;
+}
+
+#view-schedule #scheduleBaseFileStage #scheduleImportForm .schedule-upload-file-card-head h4::before {
+  content: "1. ";
+}
+
+#view-schedule #scheduleBaseFileStage #scheduleImportProgress::before {
+  content: "2. 분석 진행 상태";
+  grid-column: 1 / -1;
+  color: #111827;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+#view-schedule #scheduleBaseFileStage #scheduleImportProgress > .status-pill {
+  justify-self: start !important;
+}
+
+#view-schedule #scheduleBaseFileStage #scheduleImportProgress .task-progress-main {
+  grid-column: 1 / -1;
+  align-self: center;
+  gap: 18px !important;
+  padding: 22px !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+}
+
+#view-schedule #scheduleUploadPanel .schedule-upload-dropzone {
+  min-height: 210px !important;
+  border: 1px dashed #d7dee9 !important;
+  background: #fff !important;
+}
+
+#view-schedule #scheduleSupportUploadSection .schedule-upload-file-row {
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.9fr) !important;
+  align-items: stretch !important;
+}
+
+#view-schedule #scheduleSupportUploadSection .schedule-upload-file-row::after {
+  content: "안내 사항\A• 1단계에서 다운로드한 지점 파일을 업로드해 주세요.\A• 파일 형식: Excel (.xlsx)\A• 최대 20MB까지 업로드 가능합니다.";
+  display: block;
+  min-height: 130px;
+  padding: 18px 20px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.8;
+  white-space: pre-line;
+}
+
+@media (max-width: 760px) {
+  .topbar.app-topbar {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    height: 60px !important;
+    min-height: 60px !important;
+  }
+
+  .topbar-brand {
+    width: auto !important;
+    height: 60px !important;
+    padding-inline: 14px !important;
+    border-right: 0 !important;
+  }
+
+  .topbar-wordmark {
+    height: 60px !important;
+  }
+
+  .topbar-wordmark::after {
+    font-size: 16px;
+  }
+
+  .topbar-page-title {
+    display: none !important;
+  }
+
+  .topbar-actions {
+    gap: 2px !important;
+    padding-inline-end: 8px !important;
+  }
+
+  .topbar-session-info {
+    display: none !important;
+  }
+
+  .topbar-theme-toggle {
+    width: 54px !important;
+    min-width: 54px !important;
+    height: 32px !important;
+    margin-inline: 0 !important;
+  }
+
+  #view-schedule #scheduleUploadPanel .schedule-upload-step-rail button[data-step] {
+    height: 58px !important;
+    min-height: 58px !important;
+    padding-inline: 2px !important;
+  }
+
+  #view-schedule #scheduleUploadPanel .schedule-wizard-step-label {
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+  }
+
+  #view-schedule #scheduleBaseFileStage:not(.hidden),
+  #view-schedule #scheduleSupportUploadSection .schedule-upload-file-row {
+    grid-template-columns: 1fr !important;
   }
 }
