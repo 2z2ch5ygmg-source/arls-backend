@@ -22682,12 +22682,13 @@ function renderScheduleReferenceBaseStage(step) {
   if (step === SCHEDULE_BASE_WIZARD_STEP_REVIEW) {
     return `
       <section class="reference-upload-card">
+        <h3>분석 요약</h3>
         ${renderScheduleReferenceSummaryCards([
-          { label: "파일 정보", value: fileName, meta: "업로드 파일" },
-          { label: "총 분석 행", value: `${totalRows}행` },
-          { label: "반영 가능", value: `${applicableRows}행`, meta: formatReferencePercent(applicableRows, totalRows), tone: "success" },
+          { label: "전체", value: `${totalRows}행` },
+          { label: "정상", value: `${applicableRows}행`, meta: formatReferencePercent(applicableRows, totalRows), tone: "success" },
           { label: "경고", value: `${warningRows}행`, meta: formatReferencePercent(warningRows, totalRows), tone: "warn" },
-          { label: "차단", value: `${blockedRows}행`, meta: formatReferencePercent(blockedRows, totalRows), tone: "danger" },
+          { label: "오류(차단)", value: `${blockedRows}행`, meta: formatReferencePercent(blockedRows, totalRows), tone: "danger" },
+          { label: "파일 상태", value: state.preview ? "분석 완료" : "검토 대기", tone: state.preview ? "success" : "" },
         ])}
       </section>
       <section class="reference-upload-card">
@@ -22729,10 +22730,13 @@ function renderScheduleReferenceBaseStage(step) {
           <h3>상세 결과</h3>
         </div>
         <table class="reference-upload-table">
+          <thead>
+            <tr><th>구분</th><th>내용</th><th>행 수</th><th>비율</th><th>결과</th></tr>
+          </thead>
           <tbody>
-            <tr><td>성공</td><td>스케줄에 정상적으로 반영된 행</td><td>${applyDone ? applicableRows : 0}</td><td><span class="reference-pill is-success">성공</span></td></tr>
-            <tr><td>부분 반영</td><td>일부 항목만 반영되어 추가 확인이 필요한 행</td><td>${warningRows}</td><td><span class="reference-pill is-warn">부분 반영</span></td></tr>
-            <tr><td>실패</td><td>반영되지 않은 행</td><td>${blockedRows && !applyDone ? blockedRows : 0}</td><td><span class="reference-pill is-danger">실패</span></td></tr>
+            <tr><td>성공</td><td>스케줄에 정상적으로 반영된 행</td><td>${applyDone ? applicableRows : 0}</td><td>${formatReferencePercent(applyDone ? applicableRows : 0, Math.max(applicableRows + warningRows + blockedRows, 1))}</td><td><span class="reference-pill is-success">성공</span></td></tr>
+            <tr><td>부분 반영</td><td>일부 항목만 반영되어 추가 확인이 필요한 행</td><td>${warningRows}</td><td>${formatReferencePercent(warningRows, Math.max(applicableRows + warningRows + blockedRows, 1))}</td><td><span class="reference-pill is-warn">부분 반영</span></td></tr>
+            <tr><td>실패</td><td>반영되지 않은 행</td><td>${blockedRows && !applyDone ? blockedRows : 0}</td><td>${formatReferencePercent(blockedRows && !applyDone ? blockedRows : 0, Math.max(applicableRows + warningRows + blockedRows, 1))}</td><td><span class="reference-pill is-danger">실패</span></td></tr>
           </tbody>
         </table>
       </section>
@@ -22917,6 +22921,7 @@ function renderScheduleReferenceHqStage(step) {
   if (step === SCHEDULE_HQ_WIZARD_STEP_PREVIEW) {
     return `
       <section class="reference-upload-card">
+        <h3>분석 요약</h3>
         ${renderScheduleReferenceSummaryCards([
           { label: "전체", value: `${hqTotalRows}행` },
           { label: "정상", value: `${hqSuccessRows}행`, meta: hqPercent(hqSuccessRows, hqTotalRows), tone: "success" },
@@ -22988,6 +22993,9 @@ function renderScheduleReferenceHqStage(step) {
           <h3>상세 결과</h3>
         </div>
         <table class="reference-upload-table">
+          <thead>
+            <tr><th>구분</th><th>내용</th><th>행 수</th><th>비율</th><th>결과</th></tr>
+          </thead>
           <tbody>
             <tr><td>성공</td><td>정상적으로 반영된 행</td><td>${hqAppliedRows}</td><td>${hqPercent(hqAppliedRows, hqAppliedRows + hqSkippedRows)}</td><td><span class="reference-pill is-success">성공</span></td></tr>
             <tr><td>부분 반영</td><td>추가 확인이 필요한 행</td><td>0</td><td>0%</td><td><span class="reference-pill is-warn">부분 반영</span></td></tr>

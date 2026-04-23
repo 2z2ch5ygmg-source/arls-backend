@@ -10059,7 +10059,7 @@ a:hover {
   margin: 0 !important;
   color: #111827 !important;
   font-size: 24px !important;
-  font-weight: 800 !important;
+  font-weight: 850 !important;
   line-height: 1.25 !important;
   letter-spacing: 0 !important;
 }
@@ -10073,6 +10073,7 @@ a:hover {
   margin: 8px 0 0;
   color: #374151;
   font-size: 14px;
+  font-weight: 600;
   line-height: 1.5;
 }
 
@@ -10165,8 +10166,8 @@ a:hover {
 .reference-upload-card h3 {
   margin: 0;
   color: #111827;
-  font-size: 18px;
-  font-weight: 800;
+  font-size: 19px;
+  font-weight: 850;
   line-height: 1.35;
 }
 
@@ -10175,6 +10176,7 @@ a:hover {
   margin: 0;
   color: #4b5563;
   font-size: 14px;
+  font-weight: 600;
   line-height: 1.55;
 }
 
@@ -10408,9 +10410,9 @@ a:hover {
 .reference-summary-item {
   display: grid;
   justify-items: center;
-  gap: 8px;
-  min-height: 90px;
-  padding: 12px 18px;
+  gap: 7px;
+  min-height: 82px;
+  padding: 11px 18px;
   border-right: 1px solid #e5e7eb;
 }
 
@@ -10421,20 +10423,23 @@ a:hover {
 .reference-summary-item span {
   color: #111827;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 850;
+  line-height: 1.25;
 }
 
 .reference-summary-item strong {
   color: #111827;
-  font-size: 26px;
-  font-weight: 800;
+  font-size: 29px;
+  font-weight: 850;
   line-height: 1;
 }
 
 .reference-summary-item em {
   color: #6b7280;
   font-style: normal;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .reference-summary-item.is-success strong,
@@ -10465,16 +10470,20 @@ a:hover {
 
 .reference-upload-table th,
 .reference-upload-table td {
-  min-height: 48px;
-  padding: 12px 16px;
+  height: 44px;
+  min-height: 44px;
+  padding: 10px 16px;
   border-bottom: 1px solid #e5e7eb;
   color: #111827;
   text-align: left;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .reference-upload-table th {
   background: #f8fafc;
-  font-weight: 800;
+  font-weight: 850;
+  color: #111827;
 }
 
 .reference-upload-table tr:last-child td {
@@ -10483,10 +10492,10 @@ a:hover {
 
 .reference-pill {
   display: inline-flex;
-  min-height: 26px;
+  min-height: 24px;
   align-items: center;
   justify-content: center;
-  padding: 0 10px;
+  padding: 0 9px;
   border-radius: 6px;
   background: #f3f4f6;
   color: #6b7280;
