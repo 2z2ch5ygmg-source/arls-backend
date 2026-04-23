@@ -476,6 +476,159 @@
   }
 }
 
+/* Strict reference shell for upload wizard routes. */
+body.reference-upload-route {
+  background: #f8f8fa !important;
+}
+
+body.reference-upload-route #app {
+  max-width: none !important;
+  width: 100% !important;
+  padding: 0 !important;
+}
+
+body.reference-upload-route #shell {
+  gap: 0 !important;
+  min-height: calc(100dvh - 68px) !important;
+  background: #f8f8fa !important;
+}
+
+body.reference-upload-route .topbar.app-topbar {
+  --app-topbar-height: 68px;
+  grid-template-columns: 293px minmax(0, 1fr) auto !important;
+  height: 68px !important;
+  min-height: 68px !important;
+}
+
+body.reference-upload-route .topbar-brand {
+  width: 293px !important;
+  height: 68px !important;
+  padding-inline: 24px !important;
+}
+
+body.reference-upload-route .topbar-page-title {
+  padding-inline-start: 28px !important;
+}
+
+body.reference-upload-route .desktop-sidebar {
+  width: 293px !important;
+  flex: 0 0 293px !important;
+  min-height: calc(100dvh - 68px) !important;
+  max-height: calc(100dvh - 68px) !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #000 !important;
+  box-shadow: none !important;
+}
+
+body.reference-upload-route .desktop-sidebar > * {
+  display: none !important;
+}
+
+body.reference-upload-route .shell-content {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  background: #f8f8fa !important;
+}
+
+body.reference-upload-route #view-schedule,
+body.reference-upload-route #scheduleTabContent,
+body.reference-upload-route #scheduleUploadPanel.reference-upload-active {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+body.reference-upload-route .reference-upload-wizard {
+  width: 100% !important;
+  max-width: none !important;
+  min-height: calc(100dvh - 68px) !important;
+  margin: 0 !important;
+  gap: 12px !important;
+  padding: 28px 28px 44px !important;
+  background: #f8f8fa !important;
+}
+
+body.reference-upload-route .reference-upload-head {
+  padding-bottom: 0 !important;
+}
+
+body.reference-upload-route .reference-upload-title h2 {
+  font-size: 24px !important;
+}
+
+body.reference-upload-route .reference-upload-stepper {
+  width: min(100%, 1120px) !important;
+  margin: 0 auto !important;
+  padding: 14px 0 2px !important;
+}
+
+body.reference-upload-route .reference-upload-stepper::before,
+body.reference-upload-route .reference-upload-stepper::after {
+  left: calc(100% / 8) !important;
+  right: calc(100% / 8) !important;
+}
+
+body.reference-upload-route .reference-upload-stage {
+  gap: 14px !important;
+}
+
+body.reference-upload-route .reference-upload-card {
+  padding: 24px 26px !important;
+  border-color: #e4e7ec !important;
+  border-radius: 8px !important;
+}
+
+body.reference-upload-route .reference-upload-wizard[data-mode="base"][data-step="mapping"]
+  .reference-upload-stepper {
+  display: none !important;
+}
+
+body.reference-upload-route .reference-upload-wizard[data-mode="base"][data-step="mapping"]
+  .reference-upload-stage {
+  margin-top: 12px !important;
+}
+
+body.reference-upload-route .reference-upload-wizard[data-mode="hq"] .reference-upload-title h2 {
+  font-size: 28px !important;
+}
+
+body.reference-upload-route .reference-upload-wizard[data-mode="hq"] .reference-upload-head {
+  border-bottom: 0 !important;
+}
+
+body.reference-upload-route .reference-upload-wizard[data-mode="hq"] {
+  padding: 30px 38px 44px !important;
+}
+
+body.reference-upload-route .reference-upload-wizard[data-mode="hq"] .reference-upload-stepper {
+  width: min(100%, 1120px) !important;
+  padding-top: 18px !important;
+}
+
+.reference-upload-file-list-head {
+  display: flex;
+  justify-content: flex-end;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.reference-info-strip {
+  min-height: 46px;
+  padding: 12px 16px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 html[data-platform-font="apple"] {
   --ui-font-family: var(--ui-font-family-apple);
 }

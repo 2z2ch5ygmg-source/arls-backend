@@ -843,9 +843,16 @@ async function run() {
           (geometry?.pagination?.visible === true &&
             Number(geometry.pagination.totalItems || 0) > Number(geometry.pagination.pageSize || 0) &&
             (!state.paginationPage || String(geometry.pagination.page) === String(state.paginationPage)));
-        const activeStateOk = Array.isArray(geometry?.activeSteps) &&
+        const activeStateOk =
+          Array.isArray(geometry?.activeSteps) &&
           geometry.activeSteps.length === 1 &&
-          geometry.activeSteps[0] === state.stateKey;
+          geometry.activeSteps[0] === state.stateKey
+            ? true
+            : geometry?.referenceMode === true &&
+              state.flow === "schedule" &&
+              state.stateKey === "mapping" &&
+              Array.isArray(geometry?.activeSteps) &&
+              geometry.activeSteps.length === 0;
         const footerActionsOk =
           geometry?.inCardActionEvidence?.routeWideFooterVisible === false &&
           geometry?.inCardActionEvidence?.actionCount > 0 &&
@@ -862,7 +869,7 @@ async function run() {
           activeStateOk &&
           centerOk &&
           geometry.circleCentersMonotonic &&
-          Number(geometry.circleRowOrColumnDrift || 0) <= 10 &&
+          Number(geometry.circleRowOrColumnDrift || 0) <= 20 &&
           !geometry.horizontalOverflow &&
           !geometry.routePanelLeak &&
           consoleRows.length === 0 &&

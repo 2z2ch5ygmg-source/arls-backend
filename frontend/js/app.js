@@ -22316,6 +22316,7 @@ function renderScheduleUploadWorkflowSections() {
   const uploadRouteActive =
     activeTopTab === SCHEDULE_TAB_UPLOAD ||
     activeTopTab === SCHEDULE_TAB_HQ_UPLOAD;
+  document.body.classList.toggle("reference-upload-route", uploadRouteActive);
   const scheduleView = $("#view-schedule");
   if (scheduleView instanceof HTMLElement) {
     scheduleView.classList.toggle("schedule-reportlike-shell", uploadRouteActive);
@@ -22509,7 +22510,7 @@ function renderScheduleReferenceStepper(steps, activeStep) {
               aria-current="${active ? "step" : "false"}"
             >
               <span>${completed ? "✓" : index + 1}</span>
-              <strong>${escapeHtml(item.label)}</strong>
+              <strong>${escapeHtml(item.referenceLabel || item.label)}</strong>
             </button>
           `;
         })
@@ -22857,6 +22858,9 @@ function renderScheduleReferenceHqStage(step) {
       0,
   );
   if (step === SCHEDULE_HQ_WIZARD_STEP_UPLOAD) {
+    const uploadRows = fileName && fileName !== "파일을 선택하세요"
+      ? [fileName]
+      : [];
     return `
       <section class="reference-upload-card">
         <h3>1. 지원근무자 파일 업로드</h3>
@@ -22874,6 +22878,34 @@ function renderScheduleReferenceHqStage(step) {
             <p>최대 20MB까지 업로드 가능합니다.</p>
           </aside>
         </div>
+        <h3>2. 업로드 파일 목록</h3>
+        <div class="reference-upload-file-list-head">
+          <span>총 ${uploadRows.length}개 파일</span>
+        </div>
+        <table class="reference-upload-table">
+          <thead><tr><th>파일명</th><th>파일 크기</th><th>업로드 일시</th><th>업로드자</th><th>상태</th><th>작업</th></tr></thead>
+          <tbody>
+            ${
+              uploadRows.length
+                ? uploadRows
+                    .map(
+                      (name) => `
+                        <tr>
+                          <td><span class="reference-excel-mini" aria-hidden="true"></span> ${escapeHtml(name)}</td>
+                          <td>-</td>
+                          <td>-</td>
+                          <td>${escapeHtml(String(state.user?.full_name || state.user?.name || state.user?.username || "-"))}</td>
+                          <td><span class="reference-pill is-success">업로드 완료</span></td>
+                          <td>-</td>
+                        </tr>
+                      `,
+                    )
+                    .join("")
+                : `<tr><td colspan="6">업로드된 파일이 없습니다.</td></tr>`
+            }
+          </tbody>
+        </table>
+        <div class="reference-info-strip">다음 단계로 진행하려면 최소 1개 이상의 파일을 업로드해야 합니다.</div>
       </section>
       <div class="reference-upload-actions schedule-source-actions">
         <button class="btn btn-secondary" type="button" data-action="schedule-hq-wizard-prev" data-prev-step="export">이전</button>
@@ -23068,12 +23100,23 @@ function renderScheduleReferenceUploadWizard() {
     mode === SCHEDULE_UPLOAD_MODE_HQ
       ? getScheduleHqWizardSteps().map((item) => ({
           ...item,
+          referenceLabel:
+            item.key === SCHEDULE_HQ_WIZARD_STEP_EXPORT
+              ? "준비"
+              : item.label,
           action: "schedule-hq-wizard-step",
         }))
       : getScheduleBaseWizardSteps().map((item) => ({
           ...item,
+          referenceLabel:
+            item.key === SCHEDULE_BASE_WIZARD_STEP_MAPPING
+              ? "준비"
+              : item.label,
           action: "schedule-base-wizard-step",
         }));
+  root.dataset.mode =
+    mode === SCHEDULE_UPLOAD_MODE_HQ ? SCHEDULE_UPLOAD_MODE_HQ : "base";
+  root.dataset.step = step;
   root.innerHTML = `
     <header class="reference-upload-head">
       <div class="reference-upload-title">
