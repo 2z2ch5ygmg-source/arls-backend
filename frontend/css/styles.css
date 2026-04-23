@@ -509,6 +509,34 @@ body.reference-upload-route
   #scheduleReferenceUploadWizard[data-mode="base"][data-step="mapping"]
   .reference-upload-stage {
   margin-top: 0 !important;
+  gap: 0 !important;
+  padding: 24px 26px !important;
+  border: 1px solid #e4e7ec !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+}
+
+body.reference-upload-route
+  #scheduleReferenceUploadWizard[data-mode="base"][data-step="mapping"]
+  .reference-upload-card {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+body.reference-upload-route
+  #scheduleReferenceUploadWizard[data-mode="base"][data-step="mapping"]
+  .reference-upload-card + .reference-upload-card {
+  margin-top: 30px !important;
+  padding-top: 30px !important;
+  border-top: 1px solid #e5e7eb !important;
+}
+
+body.reference-upload-route
+  #scheduleReferenceUploadWizard[data-mode="base"][data-step="mapping"]
+  .reference-upload-actions {
+  margin-top: 26px !important;
 }
 
 html[data-platform-font="apple"] {
