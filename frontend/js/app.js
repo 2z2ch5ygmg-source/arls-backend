@@ -22797,7 +22797,7 @@ function renderScheduleReferenceHqTable() {
     return `<tr><td colspan="5">다운로드 대상 지점을 불러오는 중입니다.</td></tr>`;
   }
   return sourceRows
-    .slice(0, 8)
+    .slice(0, 5)
     .map((row) => `<tr>${row.innerHTML}</tr>`)
     .join("");
 }
