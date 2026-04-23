@@ -22097,10 +22097,12 @@ function renderScheduleUploadProgress(containerSelector, steps, activeStep) {
       button.classList.add("hidden");
       button.setAttribute("aria-hidden", "true");
       button.disabled = true;
+      button.style.setProperty("display", "none", "important");
       return;
     }
     button.classList.remove("hidden");
     button.setAttribute("aria-hidden", "false");
+    button.style.removeProperty("display");
     const stepConfig = steps[buttonIndex] || {};
     const label = button.querySelector(`.${SCHEDULE_UPLOAD_STEP_LABEL_CLASS}`);
     if (label instanceof HTMLElement) {
