@@ -539,6 +539,24 @@ body.reference-upload-route
   margin-top: 26px !important;
 }
 
+body.reference-upload-route
+  #scheduleReferenceUploadWizard[data-mode="base"][data-step="file"]
+  .reference-file-panel {
+  min-height: 300px !important;
+}
+
+body.reference-upload-route
+  #scheduleReferenceUploadWizard[data-mode="base"][data-step="file"]
+  .reference-dropzone {
+  min-height: 150px !important;
+}
+
+body.reference-upload-route
+  #scheduleReferenceUploadWizard[data-mode="base"][data-step="file"]
+  .reference-upload-actions {
+  margin-top: 8px !important;
+}
+
 html[data-platform-font="apple"] {
   --ui-font-family: var(--ui-font-family-apple);
 }
