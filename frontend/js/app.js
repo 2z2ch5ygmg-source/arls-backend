@@ -1575,6 +1575,9 @@ function createInitialScheduleSupportHqWorkspaceState() {
     previewMode: "actionable",
     previewPage: 1,
     previewPageSize: 20,
+    referencePreviewTab: "all",
+    referencePreviewQuery: "",
+    referencePreviewFilterOpen: false,
     stale: false,
     staleFields: [],
     successBanner: null,
@@ -22958,13 +22961,11 @@ function renderScheduleReferenceHqStage(step) {
   const fileName =
     workspace.uploadFileName ||
     getScheduleReferenceText("#scheduleSupportHqUploadFileName", "파일을 선택하세요");
-  const reviewRows = Array.isArray(workspace.reviewRows)
-    ? workspace.reviewRows
-    : [];
   const inspectResult =
     workspace.inspectResult && typeof workspace.inspectResult === "object"
       ? workspace.inspectResult
       : null;
+  const reviewRows = buildScheduleSupportHqAggregatedPreviewRows(inspectResult);
   const inspectSummary =
     inspectResult?.summary && typeof inspectResult.summary === "object"
       ? inspectResult.summary
@@ -23066,6 +23067,35 @@ function renderScheduleReferenceHqStage(step) {
   }
 
   if (step === SCHEDULE_HQ_WIZARD_STEP_PREVIEW) {
+    const previewTab = normalizeScheduleReferenceHqPreviewTab(
+      workspace.referencePreviewTab,
+    );
+    const previewQuery = String(workspace.referencePreviewQuery || "").trim();
+    const filteredRows = filterScheduleReferenceHqPreviewRows(
+      reviewRows,
+      previewTab,
+      previewQuery,
+    );
+    const counts = getScheduleReferenceHqPreviewCounts(reviewRows);
+    const pagination = getWizardPaginationModel(
+      filteredRows,
+      createWizardPaginationState({
+        page: workspace.previewPage,
+        pageSize: 10,
+      }),
+    );
+    workspace.previewPage = pagination.page;
+    workspace.previewPageSize = pagination.pageSize;
+    const pageButtons = getWizardVisiblePageNumbers(
+      pagination.page,
+      pagination.totalPages,
+      5,
+    )
+      .map((page) => {
+        const active = page === pagination.page;
+        return `<button type="button" class="${active ? "is-active" : ""}" data-action="schedule-reference-hq-preview-page" data-page="${page}" aria-pressed="${active ? "true" : "false"}">${page}</button>`;
+      })
+      .join("");
     return `
       <section class="reference-upload-card">
         <h3>분석 요약</h3>
@@ -23078,37 +23108,56 @@ function renderScheduleReferenceHqStage(step) {
         ])}
       </section>
       <section class="reference-upload-card">
-        <div class="reference-card-head">
-          <h3>행 미리보기 (기본 보기)</h3>
-          <div class="reference-segment">
-            <button class="${workspace.previewMode === "all" ? "" : "is-active"}" type="button" data-action="schedule-support-hq-preview-mode" data-mode="actionable" aria-pressed="${workspace.previewMode === "all" ? "false" : "true"}">기본 보기</button>
-            <button class="${workspace.previewMode === "all" ? "is-active" : ""}" type="button" data-action="schedule-support-hq-preview-mode" data-mode="all" aria-pressed="${workspace.previewMode === "all" ? "true" : "false"}">전체 보기</button>
+        <div class="reference-preview-tabs">
+          <button type="button" class="${previewTab === "all" ? "is-active" : ""}" data-action="schedule-reference-hq-preview-tab" data-tab="all">전체 (${counts.all})</button>
+          <button type="button" class="${previewTab === "valid" ? "is-active" : ""}" data-action="schedule-reference-hq-preview-tab" data-tab="valid">정상 (${counts.valid})</button>
+          <button type="button" class="${previewTab === "warn" ? "is-active" : ""}" data-action="schedule-reference-hq-preview-tab" data-tab="warn">경고 (${counts.warn})</button>
+          <button type="button" class="${previewTab === "error" ? "is-active" : ""}" data-action="schedule-reference-hq-preview-tab" data-tab="error">오류 (${counts.error})</button>
+        </div>
+        <div class="reference-card-head reference-preview-toolbar">
+          <h3>행 미리보기</h3>
+          <div class="reference-preview-searchbox">
+            <input type="search" value="${escapeHtml(previewQuery)}" placeholder="직원명, 사번, 부서명 검색" data-action="schedule-reference-hq-preview-search" />
+            <button type="button" class="reference-icon-filter" data-action="schedule-reference-hq-preview-filter-toggle" aria-pressed="${workspace.referencePreviewFilterOpen ? "true" : "false"}">필터</button>
           </div>
         </div>
+        <div class="reference-filter-popover${workspace.referencePreviewFilterOpen ? " is-open" : ""}">
+          <button type="button" class="${previewTab === "all" ? "is-active" : ""}" data-action="schedule-reference-hq-preview-tab" data-tab="all">전체</button>
+          <button type="button" class="${previewTab === "valid" ? "is-active" : ""}" data-action="schedule-reference-hq-preview-tab" data-tab="valid">정상</button>
+          <button type="button" class="${previewTab === "warn" ? "is-active" : ""}" data-action="schedule-reference-hq-preview-tab" data-tab="warn">경고</button>
+          <button type="button" class="${previewTab === "error" ? "is-active" : ""}" data-action="schedule-reference-hq-preview-tab" data-tab="error">오류</button>
+        </div>
         <table class="reference-upload-table">
-          <thead><tr><th>위치</th><th>작성내용</th><th>영역 / 블록</th><th>유형</th><th>이슈 구분</th><th>사유</th></tr></thead>
+          <thead><tr><th>행 번호</th><th>상태</th><th>사번</th><th>이름</th><th>부서</th><th>지원근무 유형</th><th>지원일</th><th>사유</th><th>메시지</th></tr></thead>
           <tbody>
             ${
-              reviewRows.length
-                ? reviewRows
-                    .slice(0, 8)
+              pagination.visibleItems.length
+                ? pagination.visibleItems
                     .map(
-                      (row) => `
+                      (row, index) => `
                         <tr>
-                          <td>${escapeHtml(String(row?.sheet_name || row?.cell || "-"))}</td>
-                          <td>${escapeHtml(String(row?.site_name || row?.worker_name || "-"))}</td>
-                          <td>${escapeHtml(String(row?.date || row?.area || "지원근무 정보"))}</td>
-                          <td>${escapeHtml(String(row?.duty_type || "-"))}</td>
-                          <td><span class="reference-pill ${row?.is_blocking ? "is-danger" : "is-success"}">${row?.is_blocking ? "차단" : "정상"}</span></td>
-                          <td>${escapeHtml(String(row?.reason || row?.message || "-"))}</td>
+                          <td>${escapeHtml(String(pagination.startIndex + index + 1))}</td>
+                          <td><span class="reference-pill ${String(row?.display_status || row?.target_status || "").trim().toLowerCase()==="upload_blocked" ? "is-danger" : String(row?.display_status || row?.target_status || "").trim().toLowerCase()==="approval_pending" ? "is-warn" : "is-success"}">${String(row?.display_status || row?.target_status || "").trim().toLowerCase()==="upload_blocked" ? "오류" : String(row?.display_status || row?.target_status || "").trim().toLowerCase()==="approval_pending" ? "경고" : "정상"}</span></td>
+                          <td>${escapeHtml(String(row?.site_code || "-"))}</td>
+                          <td>${escapeHtml(String(row?.site_name || "-"))}</td>
+                          <td>${escapeHtml(String(row?.sheet_name || "-"))}</td>
+                          <td>${escapeHtml(String(row?.shift_kind || "-"))}</td>
+                          <td>${escapeHtml(String(row?.work_date || "-"))}</td>
+                          <td>${escapeHtml(String(row?.reason || "-"))}</td>
+                          <td>${escapeHtml(String(row?.worker_names || "-"))}</td>
                         </tr>
                       `,
                     )
                     .join("")
-                : `<tr><td colspan="6">검토 결과를 불러오는 중입니다.</td></tr>`
+                : `<tr><td colspan="9">조건에 맞는 항목이 없습니다.</td></tr>`
             }
           </tbody>
         </table>
+        <div class="reference-pagination-row">
+          <span>10개씩 보기</span>
+          <div class="reference-pagination-pages">${pageButtons}</div>
+          <span>총 ${pagination.totalItems}개 중 ${pagination.totalItems ? `${pagination.startIndex + 1}-${pagination.endIndex}` : "0-0"}</span>
+        </div>
       </section>
       <div class="reference-upload-actions schedule-source-actions">
         <button class="btn btn-secondary" type="button" data-action="schedule-hq-wizard-prev" data-prev-step="upload">이전</button>
@@ -25030,6 +25079,73 @@ function filterScheduleSupportHqAggregatedPreviewRows(
   return (Array.isArray(rows) ? rows : []).filter((row) =>
     isScheduleSupportHqAggregatedRowActionable(row),
   );
+}
+
+function normalizeScheduleReferenceHqPreviewTab(value = "") {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (["all", "valid", "warn", "error"].includes(normalized)) return normalized;
+  return "all";
+}
+
+function getScheduleReferenceHqPreviewCounts(rows = []) {
+  const list = Array.isArray(rows) ? rows : [];
+  return {
+    all: list.length,
+    valid: list.filter((row) => {
+      const status = String(row?.display_status || row?.target_status || "")
+        .trim()
+        .toLowerCase();
+      return status && status !== "upload_blocked" && status !== "approval_pending";
+    }).length,
+    warn: list.filter((row) => {
+      const status = String(row?.display_status || row?.target_status || "")
+        .trim()
+        .toLowerCase();
+      return status === "approval_pending";
+    }).length,
+    error: list.filter((row) => {
+      const status = String(row?.display_status || row?.target_status || "")
+        .trim()
+        .toLowerCase();
+      return status === "upload_blocked";
+    }).length,
+  };
+}
+
+function filterScheduleReferenceHqPreviewRows(rows = [], tab = "all", query = "") {
+  const list = Array.isArray(rows) ? rows : [];
+  const normalizedTab = normalizeScheduleReferenceHqPreviewTab(tab);
+  const normalizedQuery = String(query || "")
+    .trim()
+    .toLowerCase();
+  return list.filter((row) => {
+    const status = String(row?.display_status || row?.target_status || "")
+      .trim()
+      .toLowerCase();
+    if (normalizedTab === "valid") {
+      if (!status || status === "upload_blocked" || status === "approval_pending")
+        return false;
+    }
+    if (normalizedTab === "warn" && status !== "approval_pending") return false;
+    if (normalizedTab === "error" && status !== "upload_blocked") return false;
+    if (!normalizedQuery) return true;
+    const haystack = [
+      row?.sheet_name,
+      row?.site_name,
+      row?.site_code,
+      row?.work_date,
+      row?.worker_names,
+      row?.reason,
+      row?.display_status,
+      row?.target_status,
+      row?.shift_kind,
+    ]
+      .map((value) => String(value || "").trim().toLowerCase())
+      .join(" ");
+    return haystack.includes(normalizedQuery);
+  });
 }
 
 function buildScheduleSupportHqAggregatedPreviewRows(inspectResult) {
@@ -108085,6 +108201,33 @@ function bindUiEvents() {
         return;
       }
 
+      if (action === "schedule-reference-hq-preview-tab") {
+        const workspace = ensureScheduleSupportHqWorkspaceState();
+        workspace.referencePreviewTab = normalizeScheduleReferenceHqPreviewTab(
+          actionEl.dataset.tab || "",
+        );
+        workspace.previewPage = 1;
+        renderScheduleReferenceUploadWizard();
+        return;
+      }
+
+      if (action === "schedule-reference-hq-preview-page") {
+        const workspace = ensureScheduleSupportHqWorkspaceState();
+        const nextPage = Number.parseInt(String(actionEl.dataset.page || "1"), 10);
+        workspace.previewPage =
+          Number.isFinite(nextPage) && nextPage > 0 ? nextPage : 1;
+        renderScheduleReferenceUploadWizard();
+        return;
+      }
+
+      if (action === "schedule-reference-hq-preview-filter-toggle") {
+        const workspace = ensureScheduleSupportHqWorkspaceState();
+        workspace.referencePreviewFilterOpen =
+          !Boolean(workspace.referencePreviewFilterOpen);
+        renderScheduleReferenceUploadWizard();
+        return;
+      }
+
       if (action === "schedule-reference-preview-tab") {
         const uploadUi = getScheduleUploadUiState();
         uploadUi.referencePreviewTab = normalizeScheduleReferencePreviewTab(
@@ -108575,6 +108718,15 @@ function bindUiEvents() {
         uploadUi.referencePreviewQuery =
           target instanceof HTMLInputElement ? String(target.value || "") : "";
         uploadUi.previewPage = 1;
+        renderScheduleReferenceUploadWizard();
+        return;
+      }
+
+      if (targetAction === "schedule-reference-hq-preview-search") {
+        const workspace = ensureScheduleSupportHqWorkspaceState();
+        workspace.referencePreviewQuery =
+          target instanceof HTMLInputElement ? String(target.value || "") : "";
+        workspace.previewPage = 1;
         renderScheduleReferenceUploadWizard();
         return;
       }
