@@ -1,7 +1,7 @@
 {
   "name": "Sentrix HR",
   "short_name": "Sentrix HR",
-  "start_url": "/?api=https://arls-wonseo-prod-260402.azurewebsites.net",
+  "start_url": "/?api=https://rg-arls-backend.azurewebsites.net",
   "display": "standalone",
   "background_color": "#eef2ff",
   "theme_color": "#f97316",

@@ -20,7 +20,7 @@
 }
 
 /* 2026-04-15 phase 5: notice workspace cleanup */
-#view-notices.panel.card.view {
+#view-notices:has(.sentrix-announcement-workspace).panel.card.view {
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;

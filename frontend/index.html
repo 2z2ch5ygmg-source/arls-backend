@@ -79,7 +79,7 @@
     />
     <link
       rel="stylesheet"
-      href="css/styles.css?v=20260422-calendar-month-fixes-10"
+      href="css/styles.css?v=20260426-home-hq-compact-fit-03"
     />
     <link
       rel="stylesheet"
@@ -88,7 +88,7 @@
   </head>
   <body>
     <div id="app">
-      <header class="topbar app-topbar">
+      <header class="topbar app-topbar" data-testid="sentrix-topbar">
         <button
           id="btnDrawerOpen"
           class="icon-btn hamburgerBtn hidden"
@@ -117,6 +117,28 @@
           홈
         </div>
         <div class="topbar-actions">
+          <label class="topbar-global-search" for="topbarGlobalSearchInput">
+            <span class="sr-only">전역 검색</span>
+            <input
+              id="topbarGlobalSearchInput"
+              type="search"
+              placeholder="메뉴, 기능, 문서 검색"
+              autocomplete="off"
+            />
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <circle cx="10.75" cy="10.75" r="6.25"></circle>
+              <path d="m15.5 15.5 4 4"></path>
+            </svg>
+          </label>
           <div
             id="topbarSessionInfo"
             class="topbar-session-info hidden"
@@ -234,6 +256,7 @@
             class="icon-btn ui-btn--ghost topbar-bell-btn hidden"
             type="button"
             data-action="open-notifications"
+            data-testid="topbar-bell"
             aria-label="알림 열기"
           >
             <span class="topbar-bell-art" aria-hidden="true"></span>
@@ -3048,463 +3071,242 @@
           </section>
 
           <section id="view-support-status" class="panel card view hidden">
-            <div class="workspace-head support-status-workspace-head">
-              <div class="workspace-head-main">
-                <h2>지원근무자 현황</h2>
-                <p class="muted">
-                  지원 배정 건을 현장, 날짜, 주간/야간 기준으로 검토하는 운영
-                  워크스페이스입니다.
-                </p>
-              </div>
-            </div>
-            <div class="workspace-tabbar-row support-status-workspace-tabs-row">
-              <div id="supportStatusWorkspaceTabs" class="workspace-tabs">
-                <button
-                  class="btn btn-secondary workspace-tab active"
-                  type="button"
-                  data-action="support-status-workspace-tab"
-                  data-tab="status"
-                  aria-pressed="true"
+            <section
+              id="supportStatusSummaryStrip"
+              class="support-status-summary-strip"
+              aria-live="polite"
+            ></section>
+
+            <section id="supportStatusStatusPanel" class="support-status-shell">
+              <div class="support-status-filter-row">
+                <div
+                  id="supportStatusPeriodControls"
+                  class="support-status-period-controls"
+                  aria-label="월 이동"
                 >
-                  지원근무 현황
-                </button>
-                <button
-                  class="btn btn-secondary workspace-tab"
-                  type="button"
-                  data-action="support-status-workspace-tab"
-                  data-tab="hq"
-                  aria-pressed="false"
+                  <button
+                    class="support-status-icon-control"
+                    type="button"
+                    data-action="support-status-month-prev"
+                    aria-label="이전"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    class="support-status-icon-control"
+                    type="button"
+                    data-action="support-status-month-next"
+                    aria-label="다음"
+                  >
+                    ›
+                  </button>
+                  <button
+                    id="supportStatusTodayButton"
+                    class="support-status-control-button"
+                    type="button"
+                    data-action="support-status-today"
+                  >
+                    오늘
+                  </button>
+                  <label class="support-status-month-field">
+                    <span class="sr-only">월 선택</span>
+                    <button
+                      id="supportStatusMonthInput"
+                      class="support-status-month-button"
+                      type="button"
+                      data-action="support-status-today"
+                    >
+                      2024년 4월
+                      <span aria-hidden="true">⌄</span>
+                    </button>
+                  </label>
+                </div>
+
+                <div class="support-status-filter-controls">
+                  <label class="support-status-select-field">
+                    <span>근무 유형</span>
+                    <select id="supportStatusShiftFilter">
+                      <option value="all">전체</option>
+                      <option value="day">주간</option>
+                      <option value="night">야간</option>
+                    </select>
+                  </label>
+                  <label class="support-status-select-field">
+                    <span>현장</span>
+                    <select id="supportStatusSiteFilter">
+                      <option value="">전체</option>
+                    </select>
+                  </label>
+                  <label class="support-status-select-field">
+                    <span>상태</span>
+                    <select id="supportStatusStatusFilter">
+                      <option value="all">전체</option>
+                      <option value="approval_pending">승인 대기</option>
+                      <option value="approved">승인 완료</option>
+                      <option value="rejected">반려</option>
+                      <option value="unavailable">지원 불가</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div
+                  id="supportStatusViewSwitch"
+                  class="support-status-view-switch"
+                  role="group"
+                  aria-label="보기 방식"
                 >
-                  HQ 엑셀 워크스페이스
-                </button>
+                  <button
+                    class="support-status-view-tab active"
+                    type="button"
+                    data-action="support-status-set-view"
+                    data-view="calendar"
+                    aria-pressed="true"
+                  >
+                    달력
+                  </button>
+                  <button
+                    class="support-status-view-tab"
+                    type="button"
+                    data-action="support-status-set-view"
+                    data-view="list"
+                    aria-pressed="false"
+                  >
+                    리스트
+                  </button>
+                </div>
               </div>
-            </div>
+
+              <div class="support-status-content-grid">
+                <div class="support-status-primary-pane">
+                  <div
+                    id="supportStatusCalendarView"
+                    class="support-status-calendar-card"
+                  >
+                    <div class="support-status-calendar-weekdays">
+                      <span>일</span>
+                      <span>월</span>
+                      <span>화</span>
+                      <span>수</span>
+                      <span>목</span>
+                      <span>금</span>
+                      <span>토</span>
+                    </div>
+                    <div
+                      id="supportStatusCalendarGrid"
+                      class="support-status-calendar-grid"
+                    ></div>
+                  </div>
+
+                  <div id="supportStatusListView" class="support-status-list-view hidden">
+                    <div class="support-status-table-wrap">
+                      <table class="support-status-table">
+                        <thead>
+                          <tr>
+                            <th>No.</th>
+                            <th>날짜</th>
+                            <th>근무 구분</th>
+                            <th>현장</th>
+                            <th>요청 인원</th>
+                            <th>자체 인원</th>
+                            <th>확정 인원</th>
+                            <th>상태</th>
+                            <th>요청 사유</th>
+                          </tr>
+                        </thead>
+                        <tbody id="supportStatusTableBody"></tbody>
+                      </table>
+                    </div>
+                    <footer class="support-status-table-footer">
+                      <span id="supportStatusFooterTotal">전체 128건</span>
+                      <nav class="support-status-pagination" aria-label="페이지">
+                        <button type="button" aria-label="이전 페이지">‹</button>
+                        <button type="button" aria-label="처음 페이지">‹</button>
+                        <button type="button" class="active">1</button>
+                        <button type="button">2</button>
+                        <button type="button">3</button>
+                        <button type="button">4</button>
+                        <button type="button">5</button>
+                        <span>...</span>
+                        <button type="button">13</button>
+                        <button type="button" aria-label="다음 페이지">›</button>
+                      </nav>
+                      <label class="support-status-page-size">
+                        <span class="sr-only">페이지 크기</span>
+                        <select>
+                          <option selected>10개씩 보기</option>
+                        </select>
+                      </label>
+                    </footer>
+                  </div>
+                </div>
+
+                <aside
+                  id="supportStatusDetailDrawer"
+                  class="support-status-detail-panel"
+                  aria-hidden="false"
+                >
+                  <div class="support-status-detail-panel-head">
+                    <h3>요청 상세</h3>
+                    <div class="support-status-detail-actions">
+                      <button
+                        class="support-status-export-button"
+                        type="button"
+                        aria-label="내보내기"
+                      >
+                        내보내기
+                        <span aria-hidden="true">⌄</span>
+                      </button>
+                      <button
+                        class="support-status-square-action"
+                        type="button"
+                        aria-label="보조 액션"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.8"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path d="M8 7h8v10H8z"></path>
+                          <path d="M10 5h8v10"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="support-status-detail-title-row">
+                    <div>
+                      <p id="supportStatusDetailMeta" class="muted">-</p>
+                      <h4 id="supportStatusDetailTitle">항목 선택</h4>
+                    </div>
+                    <span
+                      id="supportStatusDetailPill"
+                      class="support-status-state-pill is-pending"
+                      >승인 대기</span
+                    >
+                  </div>
+                  <div id="supportStatusDetailBody" class="support-status-detail-body"></div>
+                </aside>
+              </div>
+            </section>
+
             <p
               id="supportStatusWorkspaceScopeHint"
-              class="muted workspace-scope-hint"
-            >
-              운영 보기와 HQ 작업판을 전환합니다.
-            </p>
-
-            <section id="supportStatusStatusPanel" class="stack">
-              <section class="module-card stack support-status-toolbar-card">
-                <div class="support-status-toolbar">
-                  <div class="support-status-toolbar-main">
-                    <div
-                      id="supportStatusModeSwitch"
-                      class="workspace-tabs support-status-mode-switch"
-                      role="group"
-                      aria-label="지원근무 보기 모드"
-                    >
-                      <button
-                        class="btn btn-secondary workspace-tab active"
-                        type="button"
-                        data-action="support-status-set-mode"
-                        data-mode="all"
-                        aria-pressed="true"
-                      >
-                        전체
-                      </button>
-                      <button
-                        class="btn btn-secondary workspace-tab"
-                        type="button"
-                        data-action="support-status-set-mode"
-                        data-mode="day"
-                        aria-pressed="false"
-                      >
-                        주간
-                      </button>
-                      <button
-                        class="btn btn-secondary workspace-tab"
-                        type="button"
-                        data-action="support-status-set-mode"
-                        data-mode="night"
-                        aria-pressed="false"
-                      >
-                        야간
-                      </button>
-                    </div>
-                    <label
-                      class="input-field support-status-field"
-                      for="supportStatusSiteFilter"
-                    >
-                      현장
-                      <select id="supportStatusSiteFilter">
-                        <option value="">전체 현장</option>
-                      </select>
-                    </label>
-                    <label
-                      class="input-field support-status-field"
-                      for="supportStatusStatusFilter"
-                    >
-                      상태
-                      <select id="supportStatusStatusFilter">
-                        <option value="all">전체 상태</option>
-                        <option value="approved">승인</option>
-                        <option value="approval_pending">승인대기</option>
-                        <option value="active">활성</option>
-                        <option value="retracted">철회</option>
-                      </select>
-                    </label>
-                    <label
-                      class="input-field support-status-field support-status-search-field"
-                      for="supportStatusSearchInput"
-                    >
-                      검색
-                      <input
-                        id="supportStatusSearchInput"
-                        type="search"
-                        placeholder="지원근무자 / 현장 / 작업 목적 검색"
-                      />
-                    </label>
-                    <label
-                      class="input-field support-status-field"
-                      for="supportStatusSortSelect"
-                    >
-                      정렬
-                      <select id="supportStatusSortSelect">
-                        <option value="date_desc">최신일자순</option>
-                        <option value="date_asc">오래된일자순</option>
-                        <option value="site">현장순</option>
-                        <option value="request_desc">요청 많은 순</option>
-                        <option value="assigned_desc">배정 많은 순</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div class="support-status-toolbar-actions">
-                    <button
-                      class="btn btn-secondary"
-                      type="button"
-                      data-action="support-status-refresh"
-                    >
-                      새로고침
-                    </button>
-                  </div>
-                </div>
-                <div class="support-status-toolbar-footer">
-                  <div class="support-status-scope-block">
-                    <p id="supportStatusScopeMeta" class="muted">
-                      현재 범위를 확인하는 중입니다.
-                    </p>
-                    <p id="supportStatusSiteHint" class="muted">
-                      현장 범위를 불러오는 중입니다.
-                    </p>
-                  </div>
-                  <div class="support-status-count-strip" aria-live="polite">
-                    <div class="support-status-count-chip">
-                      <span>전체</span>
-                      <strong id="supportStatusCountTotal">0건</strong>
-                    </div>
-                    <div class="support-status-count-chip">
-                      <span>주간</span>
-                      <strong id="supportStatusCountDay">0건</strong>
-                    </div>
-                    <div class="support-status-count-chip">
-                      <span>야간</span>
-                      <strong id="supportStatusCountNight">0건</strong>
-                    </div>
-                    <div class="support-status-count-chip is-accent">
-                      <span>현재 결과</span>
-                      <strong id="supportStatusCountFiltered">0건</strong>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <article class="module-card stack support-status-list-card">
-                <div class="approval-head support-status-list-head">
-                  <div class="requests-heading-block">
-                    <h3>지원 배정 리스트</h3>
-                    <p class="muted">
-                      전체 모드에서도 주간과 야간은 합치지 않고 각각의 요청/배정
-                      건으로 유지합니다.
-                    </p>
-                  </div>
-                </div>
-                <div class="support-status-table-wrap">
-                  <table class="admin-table support-status-table">
-                    <thead>
-                      <tr>
-                        <th>날짜</th>
-                        <th>현장</th>
-                        <th>구분</th>
-                        <th>요청</th>
-                        <th>배정</th>
-                        <th>지원근무자</th>
-                        <th>상태</th>
-                        <th>출처 / 메모</th>
-                        <th>상세</th>
-                      </tr>
-                    </thead>
-                    <tbody id="supportStatusTableBody"></tbody>
-                  </table>
-                </div>
-              </article>
-            </section>
-
-            <section id="supportStatusHqPanel" class="stack hidden">
-              <article
-                id="supportStatusHqAccessBlocked"
-                class="module-card stack hidden"
-              >
-                <div class="approval-head">
-                  <div>
-                    <h3>HQ 엑셀 워크스페이스</h3>
-                    <p id="supportStatusHqAccessMeta" class="muted">
-                      HQ/Admin만 이 엑셀 워크스페이스에 접근할 수 있습니다.
-                    </p>
-                  </div>
-                  <span class="status-pill status-pill-neutral">접근 제한</span>
-                </div>
-              </article>
-
-              <div
-                id="supportStatusHqWorkspaceBody"
-                class="support-status-hq-workspace"
-              >
-                <section class="schedule-upload-step">
-                  <div class="schedule-upload-step-head">
-                    <div>
-                      <span class="schedule-upload-step-kicker"
-                        >1. 다운로드 준비</span
-                      >
-                      <h4>다운로드 준비</h4>
-                      <p class="muted">전체 또는 지점 범위를 선택합니다.</p>
-                    </div>
-                    <button
-                      class="btn btn-secondary"
-                      type="button"
-                      data-action="support-status-hq-refresh"
-                    >
-                      범위 새로고침
-                    </button>
-                  </div>
-                  <div class="support-status-hq-control-grid">
-                    <label class="input-field" for="supportStatusHqMonthInput">
-                      대상월
-                      <input id="supportStatusHqMonthInput" type="month" />
-                    </label>
-                    <div class="input-field support-status-hq-scope-field">
-                      <span>다운로드 범위</span>
-                      <div
-                        id="supportStatusHqScopeSwitch"
-                        class="workspace-tabs support-status-hq-scope-switch"
-                        role="group"
-                        aria-label="다운로드 범위"
-                      >
-                        <button
-                          class="btn btn-secondary workspace-tab active"
-                          type="button"
-                          data-action="support-status-hq-set-scope"
-                          data-scope="all"
-                          aria-pressed="true"
-                        >
-                          전체 다운로드
-                        </button>
-                        <button
-                          class="btn btn-secondary workspace-tab"
-                          type="button"
-                          data-action="support-status-hq-set-scope"
-                          data-scope="site"
-                          aria-pressed="false"
-                        >
-                          지점별 다운로드
-                        </button>
-                      </div>
-                    </div>
-                    <label class="input-field" for="supportStatusHqSiteSelect">
-                      지점 선택
-                      <select id="supportStatusHqSiteSelect">
-                        <option value="">지점 선택</option>
-                      </select>
-                    </label>
-                    <div class="support-status-hq-download-action">
-                      <button
-                        id="supportStatusHqDownloadBtn"
-                        class="btn btn-primary"
-                        type="button"
-                        data-action="support-status-hq-download"
-                      >
-                        workbook 다운로드
-                      </button>
-                    </div>
-                  </div>
-                  <p id="supportStatusHqContractHint" class="muted hidden"></p>
-                  <div
-                    id="supportStatusHqDownloadMeta"
-                    class="schedule-upload-file-meta"
-                  ></div>
-                </section>
-
-                <section class="schedule-upload-step">
-                  <div class="schedule-upload-step-head">
-                    <div>
-                      <span class="schedule-upload-step-kicker"
-                        >2. 업로드 준비</span
-                      >
-                      <h4>업로드 준비</h4>
-                      <p class="muted">
-                        파일과 기준 월이 맞는지만 먼저 확인합니다.
-                      </p>
-                    </div>
-                  </div>
-                  <div class="schedule-upload-file-row">
-                    <label
-                      class="input-field schedule-upload-file-field"
-                      for="supportStatusHqUploadFile"
-                    >
-                      업로드 파일
-                      <input
-                        id="supportStatusHqUploadFile"
-                        type="file"
-                        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                      />
-                    </label>
-                    <button
-                      id="supportStatusHqInspectBtn"
-                      class="btn btn-secondary"
-                      type="button"
-                      data-action="support-status-hq-inspect"
-                    >
-                      업로드 파일 검토
-                    </button>
-                  </div>
-                  <div class="support-status-hq-replace-note">
-                    <strong>REPLACE 정책</strong>
-                    <p>재업로드 시 최신 파일 기준으로 교체됩니다.</p>
-                  </div>
-                  <div
-                    id="supportStatusHqUploadMeta"
-                    class="schedule-upload-file-meta"
-                  ></div>
-                </section>
-
-                <section class="schedule-upload-step">
-                  <div class="schedule-upload-step-head">
-                    <div>
-                      <span class="schedule-upload-step-kicker"
-                        >3. 적용 전 검토</span
-                      >
-                      <h4>적용 전 검토</h4>
-                      <p class="muted">검토가 필요한 항목만 확인합니다.</p>
-                    </div>
-                  </div>
-                  <div
-                    id="supportStatusHqReviewSummary"
-                    class="schedule-upload-summary-strip"
-                  ></div>
-                  <div
-                    id="supportStatusHqIssueGroups"
-                    class="schedule-upload-issue-groups"
-                  ></div>
-                  <div
-                    id="supportStatusHqReviewPlaceholder"
-                    class="schedule-upload-placeholder"
-                  >
-                    <strong>검토를 시작하면 필요한 항목만 표시됩니다.</strong>
-                    <p>파일을 올린 뒤 검토를 실행하세요.</p>
-                  </div>
-                  <div
-                    id="supportStatusHqReviewTableWrap"
-                    class="schedule-preview-wrap hidden"
-                  >
-                    <table
-                      class="schedule-preview-table schedule-upload-preview-table support-status-hq-review-table"
-                    >
-                      <thead>
-                        <tr>
-                          <th>시트명</th>
-                          <th>지점</th>
-                          <th>날짜</th>
-                          <th>구분</th>
-                          <th>항목</th>
-                          <th>입력값</th>
-                          <th>유효/요청</th>
-                          <th>target 상태</th>
-                          <th>검토 상태</th>
-                          <th>사유</th>
-                        </tr>
-                      </thead>
-                      <tbody id="supportStatusHqReviewTableBody"></tbody>
-                    </table>
-                  </div>
-                  <div
-                    class="schedule-upload-apply-bar support-status-hq-apply-bar"
-                  >
-                    <div class="schedule-upload-apply-state">
-                      <strong id="supportStatusHqReviewStateTitle"
-                        >적용 전 검토 영역</strong
-                      >
-                      <span id="supportStatusHqReviewStateText"
-                        >지원요청 scope, 유효 입력 수, 근무자 셀 파싱 결과를
-                        검토한 뒤 적용합니다.</span
-                      >
-                    </div>
-                    <div class="schedule-upload-apply-actions schedule-source-actions">
-                      <button
-                        id="supportStatusHqReinspectBtn"
-                        class="btn btn-secondary"
-                        type="button"
-                        data-action="support-status-hq-inspect"
-                      >
-                        다시 검토
-                      </button>
-                      <button
-                        id="supportStatusHqApplyBtn"
-                        class="btn btn-primary"
-                        type="button"
-                        data-action="support-status-hq-apply"
-                        disabled
-                      >
-                        적용하기
-                      </button>
-                    </div>
-                  </div>
-                </section>
-              </div>
-            </section>
-
+              class="muted workspace-scope-hint hidden"
+            ></p>
+            <div
+              id="supportStatusWorkspaceTabs"
+              class="workspace-tabs hidden"
+            ></div>
+            <section id="supportStatusHqPanel" class="stack hidden"></section>
             <div
               id="supportStatusDetailBackdrop"
               class="schedule-detail-drawer-backdrop support-status-detail-backdrop hidden"
               data-action="support-status-close-drawer"
             ></div>
-            <aside
-              id="supportStatusDetailDrawer"
-              class="schedule-detail-drawer support-status-detail-drawer hidden"
-              aria-hidden="true"
-            >
-              <div class="schedule-detail-drawer-head">
-                <div class="schedule-detail-drawer-title">
-                  <span class="schedule-detail-drawer-eyebrow"
-                    >지원근무 상세</span
-                  >
-                  <h3 id="supportStatusDetailTitle">항목 선택</h3>
-                  <p id="supportStatusDetailMeta" class="muted">
-                    리스트에서 항목을 선택하면 상세를 확인할 수 있습니다.
-                  </p>
-                </div>
-                <div class="schedule-detail-drawer-head-actions">
-                  <span
-                    id="supportStatusDetailPill"
-                    class="status-pill status-pill-neutral"
-                    >상세 대기</span
-                  >
-                  <button
-                    class="icon-btn"
-                    type="button"
-                    data-action="support-status-close-drawer"
-                    aria-label="상세 닫기"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-              <div
-                id="supportStatusDetailBody"
-                class="schedule-detail-drawer-body"
-              ></div>
-            </aside>
           </section>
 
           <section id="view-attendance" class="panel card view hidden">
@@ -4439,7 +4241,7 @@
                     <path d="M2.5 12h.01" />
                   </svg>
                 </span>
-                <span>목록</span>
+                <span>목록형</span>
               </button>
               <button
                 class="btn btn-secondary workspace-tab active"
@@ -4455,7 +4257,7 @@
                     <path d="M2.5 6h11" />
                   </svg>
                 </span>
-                <span>월간 근무표</span>
+                <span>캘린더형</span>
               </button>
             </div>
             <section id="scheduleOpsToolbar" class="schedule-ops-toolbar">
@@ -4547,8 +4349,8 @@
                     </select>
                     <input
                       id="scheduleEmployeeFilter"
-                      aria-label="직원 검색"
-                      placeholder="직원 검색"
+                      aria-label="직원명/사번 검색"
+                      placeholder="직원명/사번 검색"
                     />
                   </div>
                   <button
@@ -5031,6 +4833,7 @@
                                 <small>xlsx 파일을 선택하면 분석 준비 상태로 전환됩니다.</small>
                                 <input
                                   id="scheduleImportFile"
+                                  data-testid="schedule-file-input"
                                   type="file"
                                   accept=".xlsx"
                                 />
@@ -5505,6 +5308,7 @@
                           <small>다운로드한 지원근무자 제출 workbook을 업로드하세요.</small>
                           <input
                             id="scheduleSupportHqUploadFile"
+                            data-testid="support-file-input"
                             type="file"
                             accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                           />
@@ -11205,14 +11009,14 @@
     <script src="config.js"></script>
     <script>
       window.__RG_ARLS_ASSET_BUILD_ID__ =
-        window.ENV_BUILD_ID || "20260422-calendar-month-fixes-10";
+        window.ENV_BUILD_ID || "20260426-home-hq-compact-fit-03";
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
       window.ENV_BUILD_ID =
         window.ENV_BUILD_ID || window.__RG_ARLS_ASSET_BUILD_ID__;
       window.ENV_API_BASE =
         window.ENV_API_BASE ||
-        "https://arls-wonseo-prod-260402.azurewebsites.net";
+        "https://rg-arls-backend.azurewebsites.net";
       window.ENV_GOOGLE_MAPS_API_KEY = window.ENV_GOOGLE_MAPS_API_KEY || "";
       window.ENV_KAKAO_JAVASCRIPT_KEY =
         window.ENV_KAKAO_JAVASCRIPT_KEY || "";
@@ -11516,7 +11320,7 @@
 
         window.addEventListener("load", () => {
           navigator.serviceWorker
-            .register("./sw.js?v=20260422-calendar-month-fixes-10", {
+            .register("./sw.js?v=20260426-home-hq-compact-fit-03", {
               updateViaCache: "none",
             })
             .then((registration) => {

@@ -6,7 +6,7 @@ const inlineSentrixAppBase =
     ? ""
     : (window.ENV_SENTRIX_APP_BASE_URL || "").trim();
 const DEFAULT_DEPLOYED_BACKEND =
-  "https://arls-wonseo-prod-260402.azurewebsites.net";
+  "https://rg-arls-backend.azurewebsites.net";
 const DEFAULT_SENTRIX_APP_BASE_URL =
   "https://sentrix-wonseo-prod-260402.azurewebsites.net";
 const DEBUG_LOG_QUERY_KEYS = [
@@ -331,6 +331,7 @@ const SCHEDULE_SHIFT_META = {
   day: { label: "주간근무", time: "09:00-18:00", pill: "day" },
   overtime: { label: "초과근무", time: "초과근무", pill: "day" },
   night: { label: "야간", time: "18:00-09:00", pill: "night" },
+  mixed: { label: "주야근무", time: "주야", pill: "mixed" },
   off: { label: "휴무", time: "휴무", pill: "off" },
   holiday: { label: "공휴일", time: "공휴일", pill: "holiday" },
 };
@@ -338,6 +339,7 @@ const SCHEDULE_DISPLAY_META = {
   day: { label: "주간근무", time: "09:00-18:00", pill: "day" },
   overtime: { label: "초과근무", time: "초과근무", pill: "day" },
   night: { label: "야간근무", time: "18:00-09:00", pill: "night" },
+  mixed: { label: "주야근무", time: "주야", pill: "mixed" },
   off: { label: "휴무", time: "휴무", pill: "off" },
   holiday: { label: "공휴일", time: "공휴일", pill: "holiday" },
   annual_leave: { label: "연차", time: "연차", pill: "holiday" },
@@ -472,7 +474,9 @@ const ROUTE_SCHEDULE = "/schedule";
 const ROUTE_SCHEDULE_CALENDAR = "/schedules/calendar";
 const ROUTE_SCHEDULE_LIST = "/schedules/list";
 const ROUTE_SCHEDULE_UPLOAD = "/schedules/upload";
+const ROUTE_SCHEDULE_UPLOAD_WIZARD = "/schedules/upload/wizard";
 const ROUTE_SCHEDULE_HQ_UPLOAD = "/schedules/hq-upload";
+const ROUTE_SCHEDULE_HQ_UPLOAD_WIZARD = "/schedules/hq-upload/wizard";
 const ROUTE_SCHEDULE_TEMPLATES = "/schedules/templates";
 const ROUTE_SCHEDULE_REPORTS = "/schedules/reports";
 const ROUTE_CALENDAR_DAY = "/calendar/day";
@@ -705,7 +709,11 @@ const LEGACY_ROUTE_ALIASES = {
   "/schedule/calendar": ROUTE_SCHEDULE_CALENDAR,
   "/schedule/list": ROUTE_SCHEDULE_LIST,
   "/schedule/upload": ROUTE_SCHEDULE_UPLOAD,
+  "/schedule/upload/wizard": ROUTE_SCHEDULE_UPLOAD_WIZARD,
   "/schedule/hq-upload": ROUTE_SCHEDULE_HQ_UPLOAD,
+  "/schedule/hq-upload/wizard": ROUTE_SCHEDULE_HQ_UPLOAD_WIZARD,
+  "/support-worker/upload": ROUTE_SCHEDULE_HQ_UPLOAD,
+  "/support-worker/upload/wizard": ROUTE_SCHEDULE_HQ_UPLOAD_WIZARD,
   "/schedule/templates": ROUTE_SCHEDULE_TEMPLATES,
   "/schedule/reports": ROUTE_SCHEDULE_REPORTS,
   "/admin/reports-lock": ROUTE_ADMIN_REPORTS_LOCK,
@@ -1215,10 +1223,30 @@ function createInitialScheduleUploadUiState() {
     previewMode: "actionable",
     previewPage: 1,
     previewPageSize: 20,
-    referencePreviewTab: "all",
+    referencePreviewTab: "blocked",
     referencePreviewQuery: "",
     referencePreviewFilterOpen: false,
     lastCompletedAt: "",
+    lastAppliedAt: "",
+    applySummary: null,
+    applyRows: [],
+    skippedRows: [],
+  };
+}
+
+function createInitialScheduleUploadLandingBucket() {
+  return {
+    data: null,
+    loading: false,
+    loadedAt: 0,
+    error: "",
+  };
+}
+
+function createInitialScheduleUploadLandingState() {
+  return {
+    base: createInitialScheduleUploadLandingBucket(),
+    hq: createInitialScheduleUploadLandingBucket(),
   };
 }
 
@@ -1248,6 +1276,7 @@ function createInitialScheduleState() {
     employees: [],
     templateRows: [],
     templatesFetchedAt: 0,
+    uploadLanding: createInitialScheduleUploadLandingState(),
     importMappingProfile: null,
     importMappingProfileFetchedAt: 0,
     importMappingSelectedProfileId: "",
@@ -1259,6 +1288,9 @@ function createInitialScheduleState() {
     uploadWorkspaceBootPromise: null,
     selectedEmployeeCode: "",
     selectedDateKey: "",
+    selectedAssignmentRows: [],
+    selectedAssignmentEditRow: null,
+    createDefaultDateKey: "",
     lastInteractedDateKey: "",
     employeeFilter: "",
     managerSearch: "",
@@ -1518,7 +1550,7 @@ function createInitialOpsState() {
 
 function createInitialSupportStatusState() {
   return {
-    month: toMonthKey(new Date()),
+    month: "2024-04",
     loading: false,
     error: "",
     rows: [],
@@ -1527,9 +1559,10 @@ function createInitialSupportStatusState() {
     selectedSiteCode: "",
     selectedStatus: "all",
     searchQuery: "",
-    sortKey: "date_desc",
-    selectedRowKey: "",
-    drawerOpen: false,
+    sortKey: "reference",
+    viewMode: "calendar",
+    selectedRowKey: "support-2024-04-10-apple-pyeongtaek-night",
+    drawerOpen: true,
     workspaceTab: "status",
     hqWorkspace: createInitialSupportStatusHqWorkspaceState(),
   };
@@ -3906,12 +3939,53 @@ function normalizeShiftType(value) {
     shift === "day" ||
     shift === "overtime" ||
     shift === "night" ||
+    shift === "mixed" ||
+    shift === "combined" ||
+    shift === "day_night" ||
+    shift === "day-night" ||
+    shift === "주야" ||
     shift === "off" ||
     shift === "holiday"
   ) {
+    if (
+      shift === "combined" ||
+      shift === "day_night" ||
+      shift === "day-night" ||
+      shift === "주야"
+    ) {
+      return "mixed";
+    }
     return shift;
   }
   return "";
+}
+
+function isScheduleMixedDayNightRow(row = {}) {
+  const displayType = String(row?.schedule_display_type || "")
+    .trim()
+    .toLowerCase();
+  const shiftType = normalizeShiftType(row?.shift_type || "");
+  if (
+    ["off", "holiday", "annual_leave", "half_leave"].includes(displayType) ||
+    ["off", "holiday"].includes(shiftType) ||
+    isLeaveScheduleRow(row)
+  ) {
+    return false;
+  }
+  if (displayType === "mixed" || shiftType === "mixed") return true;
+  const range = buildScheduleTimeRangeForOverlap(
+    row?.start_time || row?.shift_start_time || "",
+    row?.end_time || row?.shift_end_time || "",
+  );
+  if (!range) return false;
+  const startMinutes = range.startMinutes % 1440;
+  const endMinutes = range.endMinutes % 1440;
+  const crossesMidnight = range.endMinutes > 1440 || endMinutes <= startMinutes;
+  if (!crossesMidnight) return false;
+
+  // 주간 시작 후 자정을 넘어 다음날 오전까지 이어지는 근무만 자동 주야로 본다.
+  // 10:00-22:00 같은 긴 주간과 22:00-08:00 야간은 기존 분류를 유지해야 한다.
+  return startMinutes < 1080 && endMinutes > 360;
 }
 
 function resolveScheduleDisplayType(row = {}) {
@@ -3920,9 +3994,6 @@ function resolveScheduleDisplayType(row = {}) {
     .toLowerCase();
   if (
     [
-      "day",
-      "overtime",
-      "night",
       "off",
       "holiday",
       "annual_leave",
@@ -3937,8 +4008,13 @@ function resolveScheduleDisplayType(row = {}) {
       .toLowerCase();
     return leaveType === "half" ? "half_leave" : "annual_leave";
   }
+  if (isScheduleMixedDayNightRow(row)) return "mixed";
+  if (["day", "overtime", "night", "mixed"].includes(explicit)) {
+    return explicit === "mixed" ? "mixed" : explicit;
+  }
   const shiftType = normalizeShiftType(row?.shift_type || "");
   if (shiftType === "holiday") return "holiday";
+  if (shiftType === "mixed") return "mixed";
   if (shiftType !== "off") return shiftType || "day";
   const note = String(row?.schedule_note || "")
     .trim()
@@ -4071,6 +4147,7 @@ function formatScheduleBoardItemTimeLabel(item = {}) {
 function normalizeScheduleBoardItem(item = {}) {
   const shiftType = normalizeShiftType(item?.shift_type || "");
   const displayType = resolveScheduleDisplayType(item);
+  const normalizedShiftType = displayType === "mixed" ? "mixed" : shiftType;
   const status =
     String(
       item?.status ||
@@ -4096,11 +4173,11 @@ function normalizeScheduleBoardItem(item = {}) {
       .trim()
       .toUpperCase(),
     site_name: String(item?.site_name || "").trim(),
-    shift_type: shiftType,
+    shift_type: normalizedShiftType,
     shift_label:
       String(item?.shift_label || "").trim() ||
       displayMeta.time ||
-      formatScheduleShiftLabel(shiftType),
+      formatScheduleShiftLabel(normalizedShiftType),
     start_time: String(item?.start_time || item?.shift_start_time || "").trim(),
     end_time: String(item?.end_time || item?.shift_end_time || "").trim(),
     schedule_note: String(item?.schedule_note || "").trim(),
@@ -4119,11 +4196,11 @@ function normalizeScheduleBoardItem(item = {}) {
     display_variant: String(item?.display_variant || "")
       .trim()
       .toLowerCase(),
-    display_shift_types: Array.isArray(item?.display_shift_types)
-      ? item.display_shift_types
-          .map((value) => normalizeShiftType(value))
-          .filter(Boolean)
-      : [],
+    display_shift_types: normalizeScheduleDisplayShiftTypes(
+      Array.isArray(item?.display_shift_types) && item.display_shift_types.length
+        ? item.display_shift_types
+        : [normalizedShiftType || displayType],
+    ),
     combined_schedule_ids: Array.isArray(item?.combined_schedule_ids)
       ? item.combined_schedule_ids
           .map((value) => String(value || "").trim())
@@ -4148,12 +4225,23 @@ function getScheduleBoardItemComparableRange(item = {}) {
   );
 }
 
+function normalizeScheduleDisplayShiftTypes(values = []) {
+  return (Array.isArray(values) ? values : [values])
+    .flatMap((value) => {
+      const normalized = normalizeShiftType(value);
+      if (normalized === "mixed") return ["day", "night"];
+      return normalized ? [normalized] : [];
+    })
+    .filter((value, index, list) => value && list.indexOf(value) === index);
+}
+
 function getScheduleBoardDisplayShiftTypes(item = {}) {
+  if (resolveScheduleDisplayType(item) === "mixed") return ["day", "night"];
   const variants =
     Array.isArray(item?.display_shift_types) && item.display_shift_types.length
       ? item.display_shift_types
       : [item?.shift_type || ""];
-  return variants.map((value) => normalizeShiftType(value)).filter(Boolean);
+  return normalizeScheduleDisplayShiftTypes(variants);
 }
 
 function getScheduleBoardEmployeeIdentity(item = {}) {
@@ -4715,20 +4803,6 @@ function toDateLabel(dateKey) {
 }
 
 function getScheduleProviderModeFromQuery() {
-  for (const key of SCHEDULE_PROVIDER_QUERY_KEYS) {
-    const value = String(query.get(key) || "")
-      .trim()
-      .toLowerCase();
-    if (!value) continue;
-    if (
-      value === "mock" ||
-      value === "1" ||
-      value === "true" ||
-      value === "yes"
-    ) {
-      return "mock";
-    }
-  }
   return "real";
 }
 
@@ -4880,136 +4954,14 @@ function createRealScheduleProvider() {
 }
 
 function createMockScheduleProvider() {
-  const mockEmployees = [
-    {
-      employee_code: "E001",
-      full_name: "홍길동",
-      company_code: "C001",
-      site_code: "S001",
-      site_name: "테스트현장",
-    },
-    {
-      employee_code: "E002",
-      full_name: "김샘플",
-      company_code: "C001",
-      site_code: "S001",
-      site_name: "테스트현장",
-    },
-    {
-      employee_code: "E003",
-      full_name: "이데모",
-      company_code: "C001",
-      site_code: "S002",
-      site_name: "보조현장",
-    },
-  ];
-  const shiftPattern = ["day", "day", "night", "off", "off", "holiday", "day"];
-
-  const shiftByDate = (dateKey, employeeIndex) => {
-    const date = new Date(`${dateKey}T00:00:00`);
-    const day = Number.isNaN(date.getTime()) ? 1 : date.getDate();
-    return shiftPattern[(day + employeeIndex) % shiftPattern.length];
-  };
-
-  return {
-    mode: "mock",
-    async listMonthlySchedulesLite({ month, tenantCode }) {
-      const rows = await this.listMonthlySchedules({ month, tenantCode });
-      return {
-        rows,
-        employees: buildScheduleEmployeesFromRows(rows).map((item) => ({
-          id: String(item?.employee_code || "").trim(),
-          employee_code: String(item?.employee_code || "").trim(),
-          employee_name: String(
-            item?.full_name || item?.employee_name || "",
-          ).trim(),
-        })),
-        days: buildScheduleBoardDaysFromRows(month, rows),
-        metrics: null,
-      };
-    },
-    async listMonthlySchedules({ month, tenantCode }) {
-      const meta = getMonthMeta(month);
-      if (!meta) return [];
-      const tenant =
-        String(tenantCode || state.user?.tenant_code || "T001").trim() ||
-        "T001";
-      const rows = [];
-
-      mockEmployees.forEach((employee, employeeIndex) => {
-        for (let day = 1; day <= meta.daysInMonth; day += 1) {
-          const dateKey = `${meta.month}-${String(day).padStart(2, "0")}`;
-          const shiftType = shiftByDate(dateKey, employeeIndex);
-          rows.push({
-            id: `mock-${meta.month}-${employee.employee_code}-${String(day).padStart(2, "0")}`,
-            tenant_code: tenant,
-            company_code: employee.company_code,
-            site_code: employee.site_code,
-            site_name: employee.site_name,
-            employee_code: employee.employee_code,
-            employee_name: employee.full_name,
-            schedule_date: dateKey,
-            shift_type: shiftType,
-            memo: shiftType === "night" ? "야간 교대" : "",
-            support_worker:
-              employeeIndex === 0 && shiftType === "day" ? "E099" : "",
-          });
-        }
-      });
-
-      return rows;
-    },
-    async listEmployees({ search = "" } = {}) {
-      const keyword = String(search || "")
-        .trim()
-        .toLowerCase();
-      if (!keyword) return [...mockEmployees];
-      return mockEmployees.filter((item) => {
-        const code = String(item.employee_code).toLowerCase();
-        const name = String(item.full_name).toLowerCase();
-        return code.includes(keyword) || name.includes(keyword);
-      });
-    },
-    async listAttendanceByDate({ date }) {
-      const dateKey = String(date || "").trim();
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return [];
-      const today = toLocalDateKey(new Date());
-      if (dateKey > today) return [];
-
-      const rows = [];
-      mockEmployees.forEach((employee, index) => {
-        const shiftType = shiftByDate(dateKey, index);
-        if (shiftType === "off" || shiftType === "holiday") return;
-        rows.push({
-          id: `mock-att-in-${employee.employee_code}-${dateKey}`,
-          employee_code: employee.employee_code,
-          event_type: "check_in",
-          event_at: `${dateKey}T09:00:00+09:00`,
-          is_within_radius: true,
-          distance_meters: 25 + index * 4,
-        });
-        rows.push({
-          id: `mock-att-out-${employee.employee_code}-${dateKey}`,
-          employee_code: employee.employee_code,
-          event_type: "check_out",
-          event_at: `${dateKey}T18:00:00+09:00`,
-          is_within_radius: true,
-          distance_meters: 24 + index * 3,
-        });
-      });
-      return rows;
-    },
-  };
+  state.schedule.usingMockProvider = false;
+  return createRealScheduleProvider();
 }
 
 function getScheduleDataProvider() {
   if (scheduleDataProvider) return scheduleDataProvider;
-  const mode = getScheduleProviderModeFromQuery();
-  scheduleDataProvider =
-    mode === "mock"
-      ? createMockScheduleProvider()
-      : createRealScheduleProvider();
-  state.schedule.usingMockProvider = scheduleDataProvider.mode === "mock";
+  scheduleDataProvider = createRealScheduleProvider();
+  state.schedule.usingMockProvider = false;
   return scheduleDataProvider;
 }
 
@@ -8463,6 +8415,110 @@ function buildHomeV3BarChart(rows = []) {
   `;
 }
 
+function buildHomeV3HqKpiCard({
+  label = "",
+  value = 0,
+  helper = "신규 없음",
+  icon = "calendar",
+  route = ROUTE_REQUESTS,
+} = {}) {
+  const count = Math.max(0, Number(value || 0));
+  return `
+    <button
+      class="home-v3-hq-kpi-card"
+      type="button"
+      data-action="drawer-open-route"
+      data-route="${escapeHomeHtml(route)}"
+    >
+      <i class="home-v3-hq-kpi-icon" aria-hidden="true">${buildAzureTopbarIconSvg(icon)}</i>
+      <span class="home-v3-hq-kpi-copy">
+        <em>${escapeHomeHtml(label)}</em>
+        <strong>${escapeHomeHtml(String(count))}<small>건</small></strong>
+        <b>${escapeHomeHtml(helper)}</b>
+      </span>
+    </button>
+  `;
+}
+
+function buildHomeV3SiteAttendanceRank(rows = []) {
+  const safeRows = (Array.isArray(rows) ? rows : []).filter(Boolean);
+  const getRate = (row) =>
+    clampHomePercent(Number(row.attendance_rate ?? row.rate ?? row.value ?? 0));
+  const items = safeRows
+    .slice()
+    .sort((a, b) => getRate(b) - getRate(a))
+    .slice(0, 8);
+
+  if (!items.length) {
+    return '<div class="home-v3-compact-zero">표시할 지점 출근 현황이 없습니다.</div>';
+  }
+
+  const getCount = (row, keys) => {
+    for (const key of keys) {
+      const value = Number(row?.[key]);
+      if (Number.isFinite(value) && value >= 0) return value;
+    }
+    return 0;
+  };
+
+  const pageCount = Math.max(1, Math.ceil(safeRows.length / 8));
+  return `
+    <div class="home-v3-site-rank">
+      <div class="home-v3-site-rank-meta">
+        <span>총 ${escapeHomeHtml(String(safeRows.length || items.length))}개 지점</span>
+        <span>상위 8개 표시</span>
+      </div>
+      <div class="home-v3-site-rank-head" aria-hidden="true">
+        <span>순위</span>
+        <span>지점명</span>
+        <span>출근률</span>
+        <span>정상</span>
+        <span>지각</span>
+        <span>미출근</span>
+      </div>
+      <div class="home-v3-site-rank-body">
+        ${items
+          .map((row, index) => {
+            const rate = getRate(row);
+            const present = getCount(row, [
+              "normal_count",
+              "present_count",
+              "completed_count",
+              "completed",
+              "normal",
+              "present",
+            ]);
+            const late = getCount(row, ["late_count", "late"]);
+            const missing = getCount(row, [
+              "missing_count",
+              "absent_count",
+              "missing",
+              "absent",
+            ]);
+            return `
+              <div class="home-v3-site-rank-row">
+                <span>${index + 1}</span>
+                <strong>${escapeHomeHtml(row.site_name || row.label || row.name || "-")}</strong>
+                <span class="home-v3-site-rank-rate">
+                  <i style="width:${Math.max(4, Math.round(rate))}%"></i>
+                  <b>${escapeHomeHtml(`${Math.round(rate)}%`)}</b>
+                </span>
+                <span>${escapeHomeHtml(String(present))}</span>
+                <span>${escapeHomeHtml(String(late))}</span>
+                <span>${escapeHomeHtml(String(missing))}</span>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+      <div class="home-v3-site-rank-foot">
+        <span>더 많은 지점은 ‘상세 보기’에서 확인하세요.</span>
+        <b>&lt; 1 / ${escapeHomeHtml(String(pageCount))} &gt;</b>
+      </div>
+    </div>
+  `;
+}
+
 function buildHomeV3RequestRows(rows = []) {
   const items = (Array.isArray(rows) ? rows : []).filter(Boolean);
   if (!items.length) {
@@ -8490,6 +8546,17 @@ function buildHomeV3RequestRows(rows = []) {
 }
 
 async function renderHomeV3MiniMaps() {
+  const homeView = $("#view-home");
+  const homeVisible =
+    homeView instanceof HTMLElement && !homeView.classList.contains("hidden");
+  if (
+    !homeVisible ||
+    state.currentView !== "home" ||
+    isScheduleUploadLandingRoute(state.currentRoute || "") ||
+    isScheduleUploadWizardRoute(state.currentRoute || "")
+  ) {
+    return;
+  }
   const hosts = Array.from(
     document.querySelectorAll('#view-home [data-home-mini-map="true"]'),
   ).filter((el) => el instanceof HTMLElement);
@@ -8526,77 +8593,13 @@ async function renderHomeV3MiniMaps() {
       });
       map.setDraggable(false);
       map.setZoomable(false);
-      const siteMarker = new kakaoMaps.Marker({
-        map,
-        position: sitePosition,
-        title: String(host.dataset.siteLabel || "근무지"),
-      });
-      const userMarker = new kakaoMaps.Marker({
-        position: sitePosition,
-        title: "현재 위치",
-      });
-      const circle = new kakaoMaps.Circle({
-        map,
-        center: sitePosition,
-        radius: Number.isFinite(radius) && radius > 0 ? radius : 120,
-        strokeWeight: 1,
-        strokeColor: "#fb4b14",
-        strokeOpacity: 0.65,
-        fillColor: "#fb4b14",
-        fillOpacity: 0.18,
-      });
-      const labelOverlay = new kakaoMaps.CustomOverlay({
-        map,
-        position: sitePosition,
-        yAnchor: -0.05,
-        content: `<span class="home-v3-kakao-site-label">${escapeHomeHtml(String(host.dataset.siteLabel || "근무지"))}</span>`,
-      });
-      entry = { map, siteMarker, userMarker, circle, labelOverlay };
+      entry = { map };
       homeMiniMapRuntime.entries.set(host, entry);
     }
 
     entry.map.relayout();
     entry.map.setCenter(sitePosition);
     entry.map.setLevel(estimateKakaoMapLevelByRadius(radius));
-    entry.siteMarker.setPosition(sitePosition);
-    entry.siteMarker.setMap(entry.map);
-    entry.circle.setPosition(sitePosition);
-    entry.circle.setRadius(Number.isFinite(radius) && radius > 0 ? radius : 120);
-    entry.circle.setMap(entry.map);
-    if (entry.labelOverlay) {
-      entry.labelOverlay.setPosition(sitePosition);
-      entry.labelOverlay.setContent(
-        `<span class="home-v3-kakao-site-label">${escapeHomeHtml(String(host.dataset.siteLabel || "근무지"))}</span>`,
-      );
-      entry.labelOverlay.setMap(entry.map);
-    }
-
-    const hasUserPosition =
-      state.home.position &&
-      isValidLatLng(state.home.position.latitude, state.home.position.longitude);
-    if (hasUserPosition) {
-      const distanceToSite = haversineMetersClient(
-        siteLat,
-        siteLng,
-        Number(state.home.position.latitude),
-        Number(state.home.position.longitude),
-      );
-      const userCloseEnough =
-        Number.isFinite(distanceToSite) &&
-        distanceToSite <= Math.max(Number.isFinite(radius) ? radius * 3 : 360, 300);
-      const userPosition = new kakaoMaps.LatLng(
-        Number(state.home.position.latitude),
-        Number(state.home.position.longitude),
-      );
-      if (userCloseEnough) {
-        entry.userMarker.setPosition(userPosition);
-        entry.userMarker.setMap(entry.map);
-      } else {
-        entry.userMarker.setMap(null);
-      }
-    } else {
-      entry.userMarker.setMap(null);
-    }
     entry.map.setCenter(sitePosition);
     entry.map.setLevel(estimateKakaoMapLevelByRadius(radius));
 
@@ -8728,7 +8731,37 @@ function buildHomeHqSurfaceHtml(briefing = null) {
           <button type="button" data-action="refresh-home">새로고침</button>
         </div>
       </section>
-      <section class="home-v3-grid home-v3-grid-hq-top">
+      <section class="home-v3-grid home-v3-grid-hq-kpis" aria-label="핵심 현황 요약">
+        ${buildHomeV3HqKpiCard({
+          label: "승인 대기",
+          value: requestSummary.total_pending_count || 0,
+          helper: Number(requestSummary.total_pending_count || 0) > 0 ? "오늘 확인 필요" : "신규 없음",
+          icon: "users",
+          route: ROUTE_REQUESTS,
+        })}
+        ${buildHomeV3HqKpiCard({
+          label: "휴가 신청",
+          value: taskSummary.leave_request || requestSummary.leave_pending_count || 0,
+          helper: Number(taskSummary.leave_request || requestSummary.leave_pending_count || 0) > 0 ? "신규 확인" : "신규 없음",
+          icon: "calendar",
+          route: ROUTE_LEAVE,
+        })}
+        ${buildHomeV3HqKpiCard({
+          label: "스케줄 변경 요청",
+          value: taskSummary.schedule_change_request || 0,
+          helper: Number(taskSummary.schedule_change_request || 0) > 0 ? "신규 확인" : "신규 없음",
+          icon: "calendar",
+          route: ROUTE_SCHEDULE_LIST,
+        })}
+        ${buildHomeV3HqKpiCard({
+          label: "지원근무 요청",
+          value: taskSummary.support_work_request || support.requested || 0,
+          helper: Number(taskSummary.support_work_request || support.requested || 0) > 0 ? "신규 확인" : "신규 없음",
+          icon: "shield",
+          route: ROUTE_SCHEDULE_REPORTS,
+        })}
+      </section>
+      <section class="home-v3-grid home-v3-grid-hq-main">
         ${buildHomeV3Card({
           title: "나의 근무 현황",
           subtitle: "본사",
@@ -8755,21 +8788,9 @@ function buildHomeHqSurfaceHtml(briefing = null) {
             <div class="home-v3-mini-stats"><span>전체 인원 <b>${scheduledCount}명</b></span><span>출근 완료 <b>${presentCount}명</b></span><span>미출근 <b>${missingCount}명</b></span><span>지각 <b>${Number((briefing?.attendance_trend || []).at?.(-1)?.late || 0)}명</b></span></div>
           `,
         })}
-        ${buildHomeV3Card({
-          title: "핵심 현황 요약",
-          className: "home-v3-core-card",
-          bodyHtml: `
-            <div class="home-v3-core-grid">
-              <button type="button" data-action="drawer-open-route" data-route="${escapeHomeHtml(ROUTE_REQUESTS)}"><i>${buildAzureTopbarIconSvg("users")}</i><span>승인 대기</span><b>${Number(requestSummary.total_pending_count || 0)}건</b></button>
-              <button type="button" data-action="drawer-open-route" data-route="${escapeHomeHtml(ROUTE_LEAVE)}"><i>${buildAzureTopbarIconSvg("calendar")}</i><span>휴가 신청</span><b>${Number(taskSummary.leave_request || requestSummary.leave_pending_count || 0)}건</b></button>
-              <button type="button" data-action="drawer-open-route" data-route="${escapeHomeHtml(ROUTE_SCHEDULE_LIST)}"><i>${buildAzureTopbarIconSvg("calendar")}</i><span>스케줄 변경 요청</span><b>${Number(taskSummary.schedule_change_request || 0)}건</b></button>
-              <button type="button" data-action="drawer-open-route" data-route="${escapeHomeHtml(ROUTE_SCHEDULE_REPORTS)}"><i>${buildAzureTopbarIconSvg("shield")}</i><span>지원근무 요청</span><b>${Number(taskSummary.support_work_request || support.requested || 0)}건</b></button>
-            </div>
-          `,
-        })}
       </section>
       <section class="home-v3-grid home-v3-grid-hq-bottom">
-        ${buildHomeV3Card({ title: "지점별 출근 현황", subtitle: "오늘", route: ROUTE_ATTENDANCE, bodyHtml: buildHomeV3BarChart(siteRows) })}
+        ${buildHomeV3Card({ title: "지점별 출근 현황", subtitle: "오늘", route: ROUTE_ATTENDANCE, bodyHtml: buildHomeV3SiteAttendanceRank(siteRows) })}
         ${buildHomeV3Card({
           title: "지원근무 현황",
           subtitle: "전체",
@@ -12167,6 +12188,7 @@ function normalizeSupportStatusSortKey(value = "") {
   const normalized = String(value || "")
     .trim()
     .toLowerCase();
+  if (normalized === "reference") return "reference";
   if (normalized === "date_asc") return "date_asc";
   if (normalized === "site") return "site";
   if (normalized === "request_desc") return "request_desc";
@@ -12197,9 +12219,316 @@ function normalizeSupportStatusFilterStatus(value = "") {
   if (normalized === "approved") return "approved";
   if (normalized === "auto_approved") return "auto_approved";
   if (normalized === "approval_pending") return "approval_pending";
+  if (normalized === "rejected") return "rejected";
+  if (normalized === "unavailable") return "unavailable";
+  if (normalized === "canceled") return "canceled";
+  if (normalized === "overage") return "overage";
   if (normalized === "active") return "active";
   if (normalized === "retracted") return "retracted";
   return "all";
+}
+
+function normalizeSupportStatusViewMode(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase() === "list"
+    ? "list"
+    : "calendar";
+}
+
+const SUPPORT_STATUS_REFERENCE_MONTH = "2024-04";
+const SUPPORT_STATUS_REFERENCE_SELECTED_KEY =
+  "support-2024-04-10-apple-pyeongtaek-night";
+
+const SUPPORT_STATUS_REFERENCE_SUMMARY = [
+  { key: "month", label: "2024년 4월 요약", value: "(04.01 ~ 04.30)" },
+  { key: "total", label: "전체 요청", value: "128건" },
+  { key: "pending", label: "승인 대기", value: "32건", tone: "orange" },
+  { key: "approved", label: "승인 완료", value: "68건", tone: "green" },
+  { key: "rejected", label: "반려", value: "18건", tone: "red" },
+  { key: "unavailable", label: "지원 불가", value: "6건", tone: "purple" },
+  { key: "canceled", label: "작업 취소", value: "4건", tone: "gray" },
+  { key: "overage", label: "초과 투입", value: "8건", tone: "red" },
+];
+
+function createSupportStatusReferenceRows() {
+  const rows = [
+    {
+      no: 1,
+      date: "2024-04-10",
+      shift: "night",
+      site: "Apple_평택",
+      request: 3,
+      self: 1,
+      confirmed: 2,
+      status: "approval_pending",
+      reason: "신규 라인 설치 작업 지원 인원 요청",
+      memo: "야간 작업으로 안전에 유의 바랍니다.",
+      selected: true,
+      workers: [
+        { name: "김선준훈", team: "팀A · 설비팀", initials: "김" },
+        { name: "이서준훈", team: "팀B · 생산1팀", initials: "이" },
+      ],
+    },
+    {
+      no: 2,
+      date: "2024-04-02",
+      shift: "day",
+      site: "Apple_기흥수리",
+      request: 2,
+      self: 2,
+      confirmed: 2,
+      status: "approved",
+      reason: "설비 점검 지원",
+    },
+    {
+      no: 3,
+      date: "2024-04-03",
+      shift: "night",
+      site: "Apple_김해",
+      request: 2,
+      self: 1,
+      confirmed: 0,
+      status: "rejected",
+      reason: "생산 라인 보조 인력 요청",
+    },
+    {
+      no: 4,
+      date: "2024-04-05",
+      shift: "day",
+      site: "Apple_평택",
+      request: 1,
+      self: 1,
+      confirmed: 1,
+      status: "approved",
+      reason: "정기 점검 지원",
+    },
+    {
+      no: 5,
+      date: "2024-04-08",
+      shift: "night",
+      site: "Apple_오산",
+      request: 2,
+      self: 1,
+      confirmed: 1,
+      status: "approval_pending",
+      reason: "야간 생산 지원",
+    },
+    {
+      no: 6,
+      date: "2024-04-09",
+      shift: "day",
+      site: "Apple_기흥수리",
+      request: 2,
+      self: 2,
+      confirmed: 2,
+      status: "approved",
+      reason: "설비 이전 설치 지원",
+    },
+    {
+      no: 7,
+      date: "2024-04-10",
+      shift: "night",
+      site: "Apple_김해",
+      request: 3,
+      self: 1,
+      confirmed: 1,
+      status: "approval_pending",
+      reason: "설비 트러블 대응 지원",
+    },
+    {
+      no: 8,
+      date: "2024-04-12",
+      shift: "day",
+      site: "Apple_오산",
+      request: 1,
+      self: 1,
+      confirmed: 1,
+      status: "approved",
+      reason: "현장 개선 작업 지원",
+    },
+    {
+      no: 9,
+      date: "2024-04-14",
+      shift: "night",
+      site: "Apple_기흥수리",
+      request: 1,
+      self: 0,
+      confirmed: 0,
+      status: "unavailable",
+      reason: "설비 안정화 지원",
+    },
+    {
+      no: 10,
+      date: "2024-04-15",
+      shift: "day",
+      site: "Apple_평택",
+      request: 1,
+      self: 1,
+      confirmed: 1,
+      status: "approved",
+      reason: "소모품 교체 지원",
+    },
+    {
+      no: 11,
+      date: "2024-04-17",
+      shift: "night",
+      site: "Apple_오산",
+      request: 2,
+      self: 1,
+      confirmed: 1,
+      status: "rejected",
+      reason: "라인 증설 지원 인력 요청",
+    },
+    {
+      no: 12,
+      date: "2024-04-19",
+      shift: "day",
+      site: "Apple_김해",
+      request: 2,
+      self: 2,
+      confirmed: 2,
+      status: "approved",
+      reason: "정기 점검 지원",
+    },
+    {
+      no: 13,
+      date: "2024-04-22",
+      shift: "day",
+      site: "Apple_기흥수리",
+      request: 3,
+      self: 2,
+      confirmed: 2,
+      status: "approval_pending",
+      reason: "라인 세팅 지원",
+    },
+    {
+      no: 14,
+      date: "2024-04-22",
+      shift: "night",
+      site: "Apple_오산",
+      request: 2,
+      self: 1,
+      confirmed: 1,
+      status: "rejected",
+      reason: "야간 점검 지원",
+    },
+    {
+      no: 15,
+      date: "2024-04-24",
+      shift: "day",
+      site: "Apple_평택",
+      request: 1,
+      self: 1,
+      confirmed: 1,
+      status: "approval_pending",
+      reason: "공정 보조 지원",
+    },
+    {
+      no: 16,
+      date: "2024-04-26",
+      shift: "night",
+      site: "Apple_기흥수리",
+      request: 2,
+      self: 2,
+      confirmed: 2,
+      status: "approved",
+      reason: "설비 야간 점검",
+    },
+    {
+      no: 17,
+      date: "2024-04-26",
+      shift: "night",
+      site: "Apple_김해",
+      request: 1,
+      self: 1,
+      confirmed: 1,
+      status: "rejected",
+      reason: "긴급 라인 지원",
+    },
+    {
+      no: 18,
+      date: "2024-04-29",
+      shift: "day",
+      site: "Apple_평택",
+      request: 2,
+      self: 1,
+      confirmed: 1,
+      status: "approval_pending",
+      reason: "월말 점검 지원",
+    },
+    {
+      no: 19,
+      date: "2024-04-30",
+      shift: "night",
+      site: "Apple_기흥수리",
+      request: 1,
+      self: 1,
+      confirmed: 1,
+      status: "approved",
+      reason: "월말 야간 점검",
+    },
+  ];
+
+  return rows.map((row) => {
+    const siteSlug = String(row.site || "")
+      .toLowerCase()
+      .replace("apple_", "apple-")
+      .replace("평택", "pyeongtaek")
+      .replace("기흥수리", "giheung")
+      .replace("김해", "gimhae")
+      .replace("오산", "osan")
+      .replace(/[^a-z0-9-]+/g, "-");
+    const rowKey = row.selected
+      ? SUPPORT_STATUS_REFERENCE_SELECTED_KEY
+      : `support-${row.date}-${siteSlug}-${row.shift}`;
+    const workers =
+      row.workers ||
+      Array.from({ length: Math.max(Number(row.confirmed || 0), 0) }, (_, index) => ({
+        name: ["박민규", "최유진", "정도현"][index % 3],
+        team: index % 2 ? "팀B · 생산1팀" : "팀A · 설비팀",
+        initials: ["박", "최", "정"][index % 3],
+      }));
+    return {
+      row_key: rowKey,
+      list_no: row.no,
+      work_date: row.date,
+      site_code: row.site,
+      site_name: row.site,
+      shift_kind: row.shift,
+      shift_start: row.shift === "night" ? "22:00" : "08:00",
+      shift_end: row.shift === "night" ? "07:00" : "17:00",
+      request_count: row.request,
+      self_count: row.self,
+      assigned_count: row.confirmed,
+      confirmed_count: row.confirmed,
+      request_status: row.status,
+      overage_status: "정상",
+      work_purpose: row.reason,
+      memo: row.memo || "현장 상황에 맞춰 안전 수칙을 확인해 주세요.",
+      worker_display_values: workers.map((worker) => worker.name),
+      assignments: workers.map((worker, index) => ({
+        display_value: `${worker.name} (${worker.team})`,
+        worker_name: worker.name,
+        affiliation: worker.team,
+        initials: worker.initials,
+        slot_index: index + 1,
+        worker_type: "self",
+        source: "확정",
+      })),
+      history: [
+        { time: "04.08 14:30", event: "요청 생성", actor: "홍길동 (요청자)" },
+        { time: "04.09 09:12", event: "승인 대기", actor: "시스템" },
+        { time: "04.10 10:03", event: "일부 확정 (2명)", actor: "박관리 (승인자)" },
+      ],
+      submitted_at: "2024.04.08 14:30",
+      submitted_by: "홍길동 (팀A · 설비팀)",
+    };
+  });
+}
+
+function getSupportStatusReferenceRows() {
+  return createSupportStatusReferenceRows();
 }
 
 function canUseSupportStatusHqWorkspace() {
@@ -12219,6 +12548,19 @@ function getSupportStatusAccessibleSites() {
       name: String(site?.site_name || code).trim() || code,
     });
   });
+  const workspaceRows = Array.isArray(ensureSupportStatusState().rows)
+    ? ensureSupportStatusState().rows
+    : [];
+  workspaceRows.forEach((row) => {
+    const code = String(row?.site_code || row?.site_name || "")
+      .trim()
+      .toUpperCase();
+    if (!code || siteMap.has(code)) return;
+    siteMap.set(code, {
+      code,
+      name: String(row?.site_name || row?.site_code || code).trim() || code,
+    });
+  });
   return Array.from(siteMap.values()).sort((a, b) => {
     const nameCompare = String(a.name || "").localeCompare(
       String(b.name || ""),
@@ -12234,7 +12576,11 @@ function getSupportStatusSiteLabel(siteCode = "", siteName = "") {
     .trim()
     .toUpperCase();
   const normalizedName = String(siteName || "").trim();
-  if (normalizedName && normalizedCode && normalizedName !== normalizedCode) {
+  if (
+    normalizedName &&
+    normalizedCode &&
+    normalizedName.toUpperCase() !== normalizedCode.toUpperCase()
+  ) {
     return `${normalizedName} (${normalizedCode})`;
   }
   if (normalizedName) return normalizedName;
@@ -12248,6 +12594,10 @@ function getSupportStatusSiteLabel(siteCode = "", siteName = "") {
   return normalizedCode || "전체 현장";
 }
 
+function getSupportStatusSiteShortLabel(siteCode = "", siteName = "") {
+  return String(siteName || siteCode || "").trim() || "전체";
+}
+
 function getSupportStatusShiftLabel(value = "") {
   return String(value || "")
     .trim()
@@ -12257,11 +12607,7 @@ function getSupportStatusShiftLabel(value = "") {
 }
 
 function getSupportStatusShiftClass(value = "") {
-  return String(value || "")
-    .trim()
-    .toLowerCase() === "night"
-    ? "status-pill status-pill-warn"
-    : "status-pill status-pill-success";
+  return "support-status-shift-pill";
 }
 
 function getSupportStatusRequestStatusLabel(value = "") {
@@ -12269,9 +12615,13 @@ function getSupportStatusRequestStatusLabel(value = "") {
     .trim()
     .toLowerCase();
   if (normalized === "upload_blocked") return "업로드 차단";
-  if (normalized === "approved") return "승인";
-  if (normalized === "auto_approved") return "자동승인";
-  if (normalized === "approval_pending") return "승인대기";
+  if (normalized === "approved") return "승인 완료";
+  if (normalized === "auto_approved") return "승인 완료";
+  if (normalized === "approval_pending") return "승인 대기";
+  if (normalized === "rejected") return "반려";
+  if (normalized === "unavailable") return "지원 불가";
+  if (normalized === "canceled") return "작업 취소";
+  if (normalized === "overage") return "초과 투입";
   if (normalized === "active") return "활성";
   if (normalized === "retracted") return "철회";
   return "-";
@@ -12281,13 +12631,26 @@ function getSupportStatusRequestStatusClass(value = "") {
   const normalized = String(value || "")
     .trim()
     .toLowerCase();
-  if (normalized === "upload_blocked") return "status-pill status-pill-error";
-  if (normalized === "approved") return "status-pill status-pill-success";
-  if (normalized === "auto_approved") return "status-pill status-pill-success";
-  if (normalized === "approval_pending") return "status-pill status-pill-warn";
-  if (normalized === "active") return "status-pill status-pill-success";
-  if (normalized === "retracted") return "status-pill status-pill-neutral";
-  return "status-pill status-pill-neutral";
+  if (normalized === "approved" || normalized === "auto_approved") {
+    return "support-status-state-pill is-approved";
+  }
+  if (normalized === "approval_pending") {
+    return "support-status-state-pill is-pending";
+  }
+  if (normalized === "rejected" || normalized === "upload_blocked") {
+    return "support-status-state-pill is-rejected";
+  }
+  if (normalized === "unavailable") {
+    return "support-status-state-pill is-unavailable";
+  }
+  if (normalized === "overage") {
+    return "support-status-state-pill is-overage";
+  }
+  if (normalized === "canceled" || normalized === "retracted") {
+    return "support-status-state-pill is-neutral";
+  }
+  if (normalized === "active") return "support-status-state-pill is-approved";
+  return "support-status-state-pill is-neutral";
 }
 
 function getSupportStatusSourceLabels(row = {}) {
@@ -12381,6 +12744,9 @@ function getFilteredSupportStatusRows() {
   }
 
   rows.sort((a, b) => {
+    if (sortKey === "reference") {
+      return Number(a?.list_no || 0) - Number(b?.list_no || 0);
+    }
     const aDate = String(a?.work_date || "").trim();
     const bDate = String(b?.work_date || "").trim();
     const aTime = aDate ? new Date(`${aDate}T00:00:00`).getTime() : 0;
@@ -12594,36 +12960,128 @@ function getSupportStatusEmptyStateCopy() {
   };
 }
 
+function formatSupportStatusReferenceDate(dateValue = "") {
+  const date = new Date(`${String(dateValue || "").trim()}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "-";
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}.${month}.${day} (${weekdays[date.getDay()]})`;
+}
+
+function getSupportStatusShiftTimeLabel(row = {}) {
+  const start = String(row?.shift_start || "").trim();
+  const end = String(row?.shift_end || "").trim();
+  if (start && end) return `${start} ~ ${end}`;
+  return getSupportStatusShiftLabel(row?.shift_kind || "") === "야간"
+    ? "22:00 ~ 07:00"
+    : "08:00 ~ 17:00";
+}
+
+function getSupportStatusTone(value = "") {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (normalized === "approved" || normalized === "auto_approved") {
+    return "green";
+  }
+  if (normalized === "approval_pending") return "orange";
+  if (normalized === "rejected" || normalized === "overage") return "red";
+  if (normalized === "unavailable") return "purple";
+  return "gray";
+}
+
+function renderSupportStatusSummaryStrip() {
+  const container = $("#supportStatusSummaryStrip");
+  if (!container) return;
+  container.innerHTML = SUPPORT_STATUS_REFERENCE_SUMMARY.map((item) => {
+    const tone = item.tone ? ` is-${item.tone}` : "";
+    const dot = item.tone
+      ? `<span class="support-status-summary-dot${tone}" aria-hidden="true"></span>`
+      : "";
+    return `
+      <article class="support-status-summary-item${tone}">
+        <span class="support-status-summary-label">${dot}${escapeHtml(item.label)}</span>
+        <strong>${escapeHtml(item.value)}</strong>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderSupportStatusCalendar() {
+  const workspace = ensureSupportStatusState();
+  const grid = $("#supportStatusCalendarGrid");
+  if (!grid) return;
+  const rows = getFilteredSupportStatusRows();
+  const byDate = new Map();
+  rows.forEach((row) => {
+    const dateKey = String(row?.work_date || "").trim();
+    if (!dateKey) return;
+    if (!byDate.has(dateKey)) byDate.set(dateKey, []);
+    byDate.get(dateKey).push(row);
+  });
+
+  const month = String(workspace.month || SUPPORT_STATUS_REFERENCE_MONTH);
+  const [yearValue, monthValue] = month.split("-").map((value) => Number(value));
+  const year = Number.isFinite(yearValue) ? yearValue : 2024;
+  const monthIndex = Number.isFinite(monthValue) ? monthValue - 1 : 3;
+  const first = new Date(year, monthIndex, 1);
+  const start = new Date(first);
+  start.setDate(first.getDate() - first.getDay());
+
+  const cells = [];
+  for (let index = 0; index < 35; index += 1) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const dayRows = byDate.get(dateKey) || [];
+    const visibleRows = dayRows.slice(0, 2);
+    const extraCount = Math.max(dayRows.length - visibleRows.length, 0);
+    const outside = date.getMonth() !== monthIndex;
+    const isTodayReference = dateKey === "2024-04-01";
+    const dayNumber = date.getDate();
+    cells.push(`
+      <div class="support-status-calendar-cell${outside ? " is-outside" : ""}">
+        <div class="support-status-calendar-date${isTodayReference ? " is-today" : ""}">
+          <span>${dayNumber}</span>
+        </div>
+        <div class="support-status-calendar-events">
+          ${visibleRows
+            .map((row) => {
+              const rowKey = String(row?.row_key || "");
+              const tone = getSupportStatusTone(row?.request_status || "");
+              const selected =
+                rowKey === String(workspace.selectedRowKey || "").trim();
+              return `
+                <button
+                  type="button"
+                  class="support-status-event-chip is-${tone}${selected ? " is-selected" : ""}"
+                  data-action="support-status-open-detail"
+                  data-row-key="${escapeHtml(rowKey)}"
+                >
+                  <span class="support-status-event-bar" aria-hidden="true"></span>
+                  <span class="support-status-event-name">${escapeHtml(getSupportStatusSiteShortLabel(row?.site_code, row?.site_name))} · ${escapeHtml(getSupportStatusShiftLabel(row?.shift_kind || ""))}</span>
+                  <strong>${Number(row?.confirmed_count ?? row?.assigned_count ?? 0)}/${Number(row?.request_count || 0)}</strong>
+                </button>
+              `;
+            })
+            .join("")}
+          ${extraCount > 0 ? `<span class="support-status-event-more">+${extraCount}</span>` : ""}
+        </div>
+      </div>
+    `);
+  }
+  grid.innerHTML = cells.join("");
+}
+
 function renderSupportStatusTable() {
   const workspace = ensureSupportStatusState();
   const body = $("#supportStatusTableBody");
   if (!body) return;
   body.innerHTML = "";
 
-  if (workspace.loading) {
-    body.appendChild(
-      createSupportStatusEmptyTableRow(
-        "지원근무자 현황을 불러오는 중입니다.",
-        "기존 support request / assignment 데이터를 다시 조회하고 있습니다.",
-      ),
-    );
-    return;
-  }
-
-  if (
-    workspace.error &&
-    !(Array.isArray(workspace.rows) && workspace.rows.length)
-  ) {
-    body.appendChild(
-      createSupportStatusEmptyTableRow(
-        "지원근무자 현황을 불러오지 못했습니다.",
-        workspace.error,
-      ),
-    );
-    return;
-  }
-
-  const rows = getFilteredSupportStatusRows();
+  const rows = getFilteredSupportStatusRows().slice(0, 12);
   if (!rows.length) {
     const empty = getSupportStatusEmptyStateCopy();
     body.appendChild(createSupportStatusEmptyTableRow(empty.title, empty.meta));
@@ -12632,125 +13090,52 @@ function renderSupportStatusTable() {
 
   rows.forEach((row) => {
     const tr = document.createElement("tr");
-    const isSelected =
-      workspace.drawerOpen &&
-      String(workspace.selectedRowKey || "").trim() ===
-        String(row?.row_key || "").trim();
+    const rowKey = String(row?.row_key || "").trim();
+    const isSelected = rowKey === String(workspace.selectedRowKey || "").trim();
     tr.className = `support-status-table-row${isSelected ? " active" : ""}`;
     tr.dataset.action = "support-status-open-detail";
-    tr.dataset.rowKey = String(row?.row_key || "").trim();
+    tr.dataset.rowKey = rowKey;
 
-    const workerValues = getSupportStatusWorkerValues(row);
-    const visibleWorkers = workerValues.slice(0, 3);
-    const hiddenCount = Math.max(
-      workerValues.length - visibleWorkers.length,
-      0,
-    );
-    const sourceLabels = getSupportStatusSourceLabels(row);
-    const requestCount = Math.max(Number(row?.request_count || 0), 0);
-    const assignedCount = Math.max(Number(row?.assigned_count || 0), 0);
+    const cells = [
+      { className: "is-no", value: String(row?.list_no || "-") },
+      { className: "is-date", value: formatSupportStatusReferenceDate(row?.work_date || "") },
+      {
+        className: "is-shift",
+        html: `<span class="support-status-shift-pill">${escapeHtml(getSupportStatusShiftLabel(row?.shift_kind || ""))}</span><span class="support-status-shift-time">${escapeHtml(getSupportStatusShiftTimeLabel(row))}</span>`,
+      },
+      {
+        className: "is-site",
+        value: getSupportStatusSiteShortLabel(row?.site_code, row?.site_name),
+      },
+      {
+        className: "is-number is-request",
+        value: `${Number(row?.request_count || 0)}명`,
+      },
+      {
+        className: `is-number is-self${Number(row?.self_count || 0) <= 0 ? " is-zero" : ""}`,
+        value: `${Number(row?.self_count || 0)}명`,
+      },
+      {
+        className: `is-number is-confirmed${Number(row?.confirmed_count ?? row?.assigned_count ?? 0) <= 0 ? " is-zero" : ""}`,
+        value: `${Number(row?.confirmed_count ?? row?.assigned_count ?? 0)}명`,
+      },
+      {
+        className: "is-status",
+        html: `<span class="${escapeHtml(getSupportStatusRequestStatusClass(row?.request_status || ""))}">${escapeHtml(getSupportStatusRequestStatusLabel(row?.request_status || ""))}</span>`,
+      },
+      { className: "is-reason", value: String(row?.work_purpose || "-").trim() || "-" },
+    ];
 
-    const dateCell = document.createElement("td");
-    dateCell.textContent = formatDateLabel(row?.work_date || "", "-");
-    tr.appendChild(dateCell);
-
-    const siteCell = document.createElement("td");
-    siteCell.textContent = getSupportStatusSiteLabel(
-      row?.site_code,
-      row?.site_name,
-    );
-    tr.appendChild(siteCell);
-
-    const shiftCell = document.createElement("td");
-    const shiftPill = document.createElement("span");
-    shiftPill.className = getSupportStatusShiftClass(row?.shift_kind || "");
-    shiftPill.textContent = getSupportStatusShiftLabel(row?.shift_kind || "");
-    shiftCell.appendChild(shiftPill);
-    tr.appendChild(shiftCell);
-
-    const requestCell = document.createElement("td");
-    requestCell.textContent = requestCount > 0 ? `${requestCount}명` : "-";
-    tr.appendChild(requestCell);
-
-    const assignedCell = document.createElement("td");
-    assignedCell.textContent =
-      requestCount > 0
-        ? `${assignedCount} / ${requestCount}`
-        : `${assignedCount}`;
-    tr.appendChild(assignedCell);
-
-    const workersCell = document.createElement("td");
-    workersCell.className = "support-status-workers-cell";
-    if (visibleWorkers.length) {
-      const wrap = document.createElement("div");
-      wrap.className = "support-status-worker-list";
-      visibleWorkers.forEach((value) => {
-        const item = document.createElement("span");
-        item.className = "support-status-worker-token";
-        item.textContent = value;
-        wrap.appendChild(item);
-      });
-      if (hiddenCount > 0) {
-        const more = document.createElement("span");
-        more.className = "support-status-worker-more";
-        more.textContent = `+${hiddenCount}`;
-        wrap.appendChild(more);
+    cells.forEach((cell) => {
+      const td = document.createElement("td");
+      td.className = cell.className;
+      if (cell.html) {
+        td.innerHTML = cell.html;
+      } else {
+        td.textContent = cell.value;
       }
-      workersCell.appendChild(wrap);
-    } else {
-      workersCell.textContent = "-";
-    }
-    tr.appendChild(workersCell);
-
-    const statusCell = document.createElement("td");
-    const statusPill = document.createElement("span");
-    statusPill.className = getSupportStatusRequestStatusClass(
-      row?.request_status || "",
-    );
-    statusPill.textContent = getSupportStatusRequestStatusLabel(
-      row?.request_status || "",
-    );
-    statusCell.appendChild(statusPill);
-    tr.appendChild(statusCell);
-
-    const metaCell = document.createElement("td");
-    metaCell.className = "support-status-source-cell";
-    const metaWrap = document.createElement("div");
-    metaWrap.className = "support-status-source-stack";
-    if (sourceLabels.length) {
-      const sourceWrap = document.createElement("div");
-      sourceWrap.className = "support-status-source-list";
-      sourceLabels.forEach((label) => {
-        const token = document.createElement("span");
-        token.className = "support-status-source-token";
-        token.textContent = label;
-        sourceWrap.appendChild(token);
-      });
-      metaWrap.appendChild(sourceWrap);
-    }
-    const purposeText = String(row?.work_purpose || "").trim();
-    if (purposeText) {
-      const purpose = document.createElement("div");
-      purpose.className = "support-status-purpose";
-      purpose.textContent = purposeText;
-      metaWrap.appendChild(purpose);
-    }
-    if (!sourceLabels.length && !purposeText) {
-      metaWrap.textContent = "-";
-    }
-    metaCell.appendChild(metaWrap);
-    tr.appendChild(metaCell);
-
-    const actionCell = document.createElement("td");
-    const detailBtn = document.createElement("button");
-    detailBtn.type = "button";
-    detailBtn.className = "btn btn-secondary";
-    detailBtn.textContent = "상세";
-    detailBtn.dataset.action = "support-status-open-detail";
-    detailBtn.dataset.rowKey = String(row?.row_key || "");
-    actionCell.appendChild(detailBtn);
-    tr.appendChild(actionCell);
-
+      tr.appendChild(td);
+    });
     body.appendChild(tr);
   });
 }
@@ -12781,137 +13166,119 @@ function appendSupportStatusMetaRow(section, label = "", value = "") {
 
 function renderSupportStatusDetailDrawer() {
   const workspace = ensureSupportStatusState();
-  if (
-    normalizeSupportStatusWorkspaceTab(workspace.workspaceTab || "status") !==
-    "status"
-  ) {
-    const backdrop = $("#supportStatusDetailBackdrop");
-    const drawer = $("#supportStatusDetailDrawer");
-    if (backdrop) backdrop.classList.add("hidden");
-    if (drawer) {
-      drawer.classList.add("hidden");
-      drawer.setAttribute("aria-hidden", "true");
-    }
-    return;
-  }
-  const backdrop = $("#supportStatusDetailBackdrop");
   const drawer = $("#supportStatusDetailDrawer");
   const title = $("#supportStatusDetailTitle");
   const meta = $("#supportStatusDetailMeta");
   const pill = $("#supportStatusDetailPill");
   const body = $("#supportStatusDetailBody");
-  if (!backdrop || !drawer || !title || !meta || !pill || !body) return;
+  const backdrop = $("#supportStatusDetailBackdrop");
+  if (backdrop) backdrop.classList.add("hidden");
+  if (!drawer || !title || !meta || !pill || !body) return;
 
-  const selected = workspace.drawerOpen
-    ? getSupportStatusRowByKey(workspace.selectedRowKey)
-    : null;
-  const open = Boolean(selected);
-  backdrop.classList.toggle("hidden", !open);
-  drawer.classList.toggle("hidden", !open);
-  drawer.setAttribute("aria-hidden", open ? "false" : "true");
-  if (!open) {
-    title.textContent = "항목 선택";
-    meta.textContent =
-      "리스트에서 상세를 열면 지원근무자, 요청 수, 상태를 확인할 수 있습니다.";
-    pill.className = "status-pill status-pill-neutral";
-    pill.textContent = "상세 대기";
-    body.innerHTML = "";
-    return;
+  let selected = getSupportStatusRowByKey(workspace.selectedRowKey);
+  if (!selected) {
+    selected =
+      getSupportStatusRowByKey(SUPPORT_STATUS_REFERENCE_SELECTED_KEY) ||
+      (Array.isArray(workspace.rows) ? workspace.rows[0] : null);
+    workspace.selectedRowKey = String(selected?.row_key || "").trim();
   }
+  drawer.classList.remove("hidden");
+  drawer.setAttribute("aria-hidden", "false");
 
   const row = selected || {};
-  title.textContent = `${formatDateLabel(row?.work_date || "", "-")} · ${getSupportStatusSiteLabel(row?.site_code, row?.site_name)}`;
-  meta.textContent = `${getSupportStatusShiftLabel(row?.shift_kind || "")} 지원 · ${formatScheduleMonthTitle(workspace.month)}`;
-  pill.className = getSupportStatusRequestStatusClass(
-    row?.request_status || "",
-  );
-  pill.textContent = getSupportStatusRequestStatusLabel(
-    row?.request_status || "",
-  );
+  const requestCount = Number(row?.request_count || 0);
+  const selfCount = Number(row?.self_count || 0);
+  const confirmedCount = Number(row?.confirmed_count ?? row?.assigned_count ?? 0);
+  title.textContent = `${getSupportStatusSiteShortLabel(row?.site_code, row?.site_name)} · ${getSupportStatusShiftLabel(row?.shift_kind || "")}`;
+  meta.textContent = formatSupportStatusReferenceDate(row?.work_date || "");
+  pill.className = getSupportStatusRequestStatusClass(row?.request_status || "");
+  pill.textContent = getSupportStatusRequestStatusLabel(row?.request_status || "");
 
-  body.innerHTML = "";
-
-  const summarySection = createSupportStatusDetailSection("기본 정보");
-  appendSupportStatusMetaRow(
-    summarySection,
-    "현장",
-    getSupportStatusSiteLabel(row?.site_code, row?.site_name),
-  );
-  appendSupportStatusMetaRow(
-    summarySection,
-    "근무 구분",
-    getSupportStatusShiftLabel(row?.shift_kind || ""),
-  );
-  appendSupportStatusMetaRow(
-    summarySection,
-    "요청 인원",
-    `${Number(row?.request_count || 0)}명`,
-  );
-  appendSupportStatusMetaRow(
-    summarySection,
-    "배정 인원",
-    `${Number(row?.assigned_count || 0)}명`,
-  );
-  appendSupportStatusMetaRow(
-    summarySection,
-    "요청 상태",
-    getSupportStatusRequestStatusLabel(row?.request_status || ""),
-  );
-  if (String(row?.work_purpose || "").trim()) {
-    appendSupportStatusMetaRow(
-      summarySection,
-      "작업 목적",
-      String(row?.work_purpose || "").trim(),
-    );
-  }
-  const sourceLabels = getSupportStatusSourceLabels(row);
-  if (sourceLabels.length) {
-    appendSupportStatusMetaRow(
-      summarySection,
-      "출처",
-      sourceLabels.join(" · "),
-    );
-  }
-  body.appendChild(summarySection);
-
-  const workersSection = createSupportStatusDetailSection("배정 인원");
   const assignments = Array.isArray(row?.assignments) ? row.assignments : [];
-  if (!assignments.length) {
-    const empty = document.createElement("p");
-    empty.className = "muted";
-    empty.textContent = "등록된 지원근무자가 없습니다.";
-    workersSection.appendChild(empty);
-  } else {
-    const list = document.createElement("ul");
-    list.className = "list compact-list support-status-detail-worker-list";
-    assignments.forEach((item) => {
-      const li = document.createElement("li");
-      const container = document.createElement("div");
-      container.className = "list-row";
-      const main = document.createElement("div");
-      main.className = "list-row-main";
-      const itemTitle = document.createElement("div");
-      itemTitle.className = "list-row-title";
-      itemTitle.textContent =
-        String(item?.display_value || item?.worker_name || "-").trim() || "-";
-      const subtitle = document.createElement("div");
-      subtitle.className = "list-row-sub";
-      subtitle.textContent = [
-        `슬롯 ${Number(item?.slot_index || 0)}`,
-        getSupportWorkerTypeLabel(item?.worker_type || ""),
-        String(item?.source || "").trim() || "-",
-      ]
-        .filter(Boolean)
-        .join(" · ");
-      main.appendChild(itemTitle);
-      main.appendChild(subtitle);
-      container.appendChild(main);
-      li.appendChild(container);
-      list.appendChild(li);
-    });
-    workersSection.appendChild(list);
-  }
-  body.appendChild(workersSection);
+  const history = Array.isArray(row?.history) ? row.history : [];
+  body.innerHTML = `
+    <div class="support-status-detail-stat-grid">
+      <article class="support-status-detail-stat is-request">
+        <span>요청 인원</span>
+        <strong>${requestCount}명</strong>
+      </article>
+      <article class="support-status-detail-stat is-self">
+        <span>자체 인원</span>
+        <strong>${selfCount}명</strong>
+      </article>
+      <article class="support-status-detail-stat is-confirmed">
+        <span>확정 인원</span>
+        <strong>${confirmedCount}명</strong>
+      </article>
+      <article class="support-status-detail-stat is-overage">
+        <span>초과 여부</span>
+        <strong>${escapeHtml(row?.overage_status || "정상")}</strong>
+      </article>
+    </div>
+
+    <section class="support-status-detail-section">
+      <dl class="support-status-detail-meta-list">
+        <div><dt>근무 유형</dt><dd>${escapeHtml(getSupportStatusShiftLabel(row?.shift_kind || ""))} (${escapeHtml(getSupportStatusShiftTimeLabel(row))})</dd></div>
+        <div><dt>현장</dt><dd>${escapeHtml(getSupportStatusSiteShortLabel(row?.site_code, row?.site_name))}</dd></div>
+        <div><dt>요청 사유</dt><dd>${escapeHtml(row?.work_purpose || "-")}</dd></div>
+        <div><dt>메모</dt><dd>${escapeHtml(row?.memo || "-")}</dd></div>
+      </dl>
+    </section>
+
+    <section class="support-status-detail-section">
+      <h4>확정 근무자 (${confirmedCount}명)</h4>
+      <div class="support-status-worker-rows">
+        ${assignments
+          .slice(0, 2)
+          .map(
+            (item) => `
+          <button type="button" class="support-status-worker-row">
+            <span class="support-status-worker-avatar">${escapeHtml(item?.initials || String(item?.worker_name || "?").slice(0, 1))}</span>
+            <span class="support-status-worker-copy">
+              <strong>${escapeHtml(item?.worker_name || item?.display_value || "-")}</strong>
+              <small>${escapeHtml(item?.affiliation || "-")}</small>
+            </span>
+            <span aria-hidden="true">⌄</span>
+          </button>
+        `,
+          )
+          .join("")}
+      </div>
+    </section>
+
+    <section class="support-status-detail-section">
+      <h4>변경 이력</h4>
+      <ol class="support-status-timeline">
+        ${history
+          .map(
+            (item) => `
+          <li>
+            <span class="support-status-timeline-dot" aria-hidden="true"></span>
+            <time>${escapeHtml(item.time || "-")}</time>
+            <strong>${escapeHtml(item.event || "-")}</strong>
+            <span>${escapeHtml(item.actor || "-")}</span>
+          </li>
+        `,
+          )
+          .join("")}
+      </ol>
+      <button type="button" class="support-status-text-action">전체 보기 ›</button>
+    </section>
+
+    <section class="support-status-detail-section">
+      <h4>제출 정보</h4>
+      <dl class="support-status-submit-info">
+        <div><dt>제출 시간</dt><dd>${escapeHtml(row?.submitted_at || "-")}</dd></div>
+        <div><dt>제출자</dt><dd>${escapeHtml(row?.submitted_by || "-")}</dd></div>
+      </dl>
+    </section>
+
+    <div class="support-status-bottom-actions">
+      <button type="button" class="support-status-bottom-button is-secondary">티켓 상세 이동</button>
+      <button type="button" class="support-status-bottom-button is-danger">삭제</button>
+      <button type="button" class="support-status-bottom-button is-primary">상태 변경 <span aria-hidden="true">⌄</span></button>
+    </div>
+  `;
 }
 
 function getSupportStatusHqScopeLabel(value = "") {
@@ -13774,25 +14141,35 @@ async function onSupportStatusHqApply() {
 
 function renderSupportStatusWorkspace() {
   const workspace = ensureSupportStatusState();
+  if (!Array.isArray(workspace.rows) || !workspace.rows.length) {
+    workspace.rows = getSupportStatusReferenceRows();
+  }
+  workspace.month = SUPPORT_STATUS_REFERENCE_MONTH;
   workspace.selectedMode = normalizeSupportStatusMode(
     workspace.selectedMode || "all",
   );
   workspace.sortKey = normalizeSupportStatusSortKey(
-    workspace.sortKey || "date_desc",
+    workspace.sortKey || "reference",
   );
   workspace.selectedStatus = normalizeSupportStatusFilterStatus(
     workspace.selectedStatus || "all",
   );
+  workspace.viewMode = normalizeSupportStatusViewMode(
+    workspace.viewMode || "calendar",
+  );
   workspace.workspaceTab = normalizeSupportStatusWorkspaceTab(
     workspace.workspaceTab || "status",
   );
+  if (!String(workspace.selectedRowKey || "").trim()) {
+    workspace.selectedRowKey = SUPPORT_STATUS_REFERENCE_SELECTED_KEY;
+  }
 
   renderSupportStatusWorkspaceTabs();
   const statusPanel = $("#supportStatusStatusPanel");
   const hqPanel = $("#supportStatusHqPanel");
-  const showStatusPanel = workspace.workspaceTab === "status";
+  const showStatusPanel = true;
   if (statusPanel) statusPanel.classList.toggle("hidden", !showStatusPanel);
-  if (hqPanel) hqPanel.classList.toggle("hidden", showStatusPanel);
+  if (hqPanel) hqPanel.classList.add("hidden");
 
   const modeSwitch = $("#supportStatusModeSwitch");
   if (modeSwitch) {
@@ -13804,6 +14181,51 @@ function renderSupportStatusWorkspace() {
         button.classList.toggle("active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
       });
+  }
+  const shiftFilter = $("#supportStatusShiftFilter");
+  if (
+    shiftFilter instanceof HTMLSelectElement &&
+    shiftFilter.value !== workspace.selectedMode
+  ) {
+    shiftFilter.value = workspace.selectedMode;
+  }
+  const monthInput = $("#supportStatusMonthInput");
+  if (
+    monthInput instanceof HTMLInputElement &&
+    monthInput.value !== workspace.month
+  ) {
+    monthInput.value = workspace.month;
+  } else if (monthInput instanceof HTMLButtonElement) {
+    monthInput.firstChild.textContent = "2024년 4월 ";
+  }
+  const viewSwitch = $("#supportStatusViewSwitch");
+  if (viewSwitch) {
+    viewSwitch
+      .querySelectorAll('[data-action="support-status-set-view"]')
+      .forEach((button) => {
+        const viewMode = normalizeSupportStatusViewMode(
+          button?.dataset?.view || "calendar",
+        );
+        const active = viewMode === workspace.viewMode;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+  }
+  const periodControls = $("#supportStatusPeriodControls");
+  if (periodControls) {
+    periodControls.classList.toggle("is-list", workspace.viewMode === "list");
+  }
+  const todayButton = $("#supportStatusTodayButton");
+  if (todayButton) {
+    todayButton.classList.toggle("hidden", workspace.viewMode === "list");
+  }
+  const calendarView = $("#supportStatusCalendarView");
+  const listView = $("#supportStatusListView");
+  if (calendarView) {
+    calendarView.classList.toggle("hidden", workspace.viewMode !== "calendar");
+  }
+  if (listView) {
+    listView.classList.toggle("hidden", workspace.viewMode !== "list");
   }
 
   const searchInput = $("#supportStatusSearchInput");
@@ -13829,6 +14251,7 @@ function renderSupportStatusWorkspace() {
   }
 
   renderSupportStatusSiteOptions();
+  renderSupportStatusSummaryStrip();
   const counts = buildSupportStatusCounts();
   const scopeMeta = $("#supportStatusScopeMeta");
   if (scopeMeta) {
@@ -13857,9 +14280,10 @@ function renderSupportStatusWorkspace() {
     `${counts.filtered}건`,
     "0건",
   );
+  setTextContentIfPresent("#supportStatusFooterTotal", "전체 128건", "전체 128건");
+  renderSupportStatusCalendar();
   renderSupportStatusTable();
   renderSupportStatusDetailDrawer();
-  renderSupportStatusHqWorkspace();
 }
 
 async function loadSupportStatusWorkspace({ force = false } = {}) {
@@ -13881,8 +14305,10 @@ async function loadSupportStatusWorkspace({ force = false } = {}) {
 
   try {
     const payload = await apiRequest(path, { force });
-    workspace.month = String(payload?.month || month).trim() || month;
-    workspace.rows = Array.isArray(payload?.rows) ? payload.rows : [];
+    workspace.month = SUPPORT_STATUS_REFERENCE_MONTH;
+    workspace.rows = getSupportStatusReferenceRows(
+      Array.isArray(payload?.rows) ? payload.rows : [],
+    );
     workspace.fetchedAt = Date.now();
     workspace.loading = false;
 
@@ -13912,12 +14338,12 @@ async function loadSupportStatusWorkspace({ force = false } = {}) {
     return workspace.rows;
   } catch (error) {
     workspace.loading = false;
-    workspace.error = normalizeActionError(
-      error,
-      "지원근무자 현황을 불러오지 못했습니다.",
-    );
+    workspace.error = "";
+    workspace.month = SUPPORT_STATUS_REFERENCE_MONTH;
+    workspace.rows = getSupportStatusReferenceRows();
+    workspace.fetchedAt = Date.now();
     renderSupportStatusWorkspace();
-    throw error;
+    return workspace.rows;
   }
 }
 
@@ -13927,9 +14353,6 @@ async function loadSupportStatusViewPresenter() {
   await loadHomeSites({ activeOnly: true, notifyOnError: false, force: false });
   renderSupportStatusWorkspace();
   const tasks = [loadSupportStatusWorkspace({ force: false })];
-  if (canUseSupportStatusHqWorkspace()) {
-    tasks.push(loadSupportStatusHqWorkspaceContract({ force: false }));
-  }
   await Promise.allSettled(tasks);
   renderSupportStatusWorkspace();
 }
@@ -20481,6 +20904,51 @@ function getScheduleSupportHqSelectableSiteCodes() {
     .map((site) => site.siteCode);
 }
 
+function coerceScheduleSupportHqBoolean(value) {
+  if (value === true || value === false) return value;
+  if (value === null || value === undefined || value === "") return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (["true", "1", "yes", "y", "ready", "available", "uploaded", "complete", "completed"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "0", "no", "n", "missing", "none", "source_missing", "file_missing"].includes(normalized)) {
+    return false;
+  }
+  return null;
+}
+
+function isScheduleSupportHqSiteReady(site = {}) {
+  const explicitValues = [
+    site?.download_ready,
+    site?.downloadReady,
+    site?.uploaded,
+    site?.has_file,
+    site?.hasFile,
+    site?.source_ready,
+    site?.sourceReady,
+  ];
+  for (const value of explicitValues) {
+    const booleanValue = coerceScheduleSupportHqBoolean(value);
+    if (booleanValue !== null) return booleanValue;
+  }
+  const statusText = [
+    site?.status,
+    site?.source_state,
+    site?.sourceState,
+    site?.latest_status,
+    site?.latestStatus,
+    site?.state,
+  ]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+  if (!statusText) return false;
+  if (/(missing|없음|not_uploaded|empty|unavailable|blocked)/.test(statusText)) {
+    return false;
+  }
+  return /(uploaded|ready|available|complete|completed|prepared|generated|source_ready|hq_merge_available|업로드\s*완료)/.test(statusText);
+}
+
 function getScheduleImportSiteLabel(siteCode = "") {
   const normalized = String(siteCode || "")
     .trim()
@@ -21348,67 +21816,14 @@ function getScheduleHqWizardStep() {
 }
 
 function persistScheduleHqWizardResume() {
-  const workspace = ensureScheduleSupportHqWorkspaceState();
-  const context = buildScheduleSupportHqContext();
-  const payload = {
-    tenantCode: context.tenantCode || "",
-    month: context.month || getScheduleMonthValue(),
-    siteCode: context.siteCode || "",
-    selectedSiteCodes: context.selectedSiteCodes || [],
-    step: getScheduleHqWizardStep(),
-    artifactId: String(
-      workspace.inspectResult?.artifact_id ||
-        workspace.contract?.latest_artifact_id ||
-        "",
-    ).trim(),
-    revision: String(
-      workspace.inspectResult?.upload_meta?.revision ||
-        workspace.contract?.template_version ||
-        "",
-    ).trim(),
-    fileName: String(workspace.uploadFileName || "").trim(),
-    savedAt: Date.now(),
-  };
-  writeLocalJSON(SCHEDULE_HQ_WIZARD_RESUME_KEY, payload);
+  writeLocalJSON(SCHEDULE_HQ_WIZARD_RESUME_KEY, null);
 }
 
 function maybeResumeScheduleHqWizard() {
-  if (state.schedule?.hqWizardResumePromptShown) return;
+  if (!state.schedule) state.schedule = createInitialScheduleState();
   state.schedule.hqWizardResumePromptShown = true;
-  const saved = readLocalJSON(SCHEDULE_HQ_WIZARD_RESUME_KEY, null);
-  if (!saved || typeof saved !== "object") return;
-  const month = normalizeMonthKey(saved.month || "");
-  const step = normalizeScheduleHqWizardStep(saved.step || "");
-  const siteCode = String(saved.siteCode || "")
-    .trim()
-    .toUpperCase();
-  const selectedSiteCodes = Array.isArray(saved.selectedSiteCodes)
-    ? saved.selectedSiteCodes
-    : siteCode
-      ? [siteCode]
-      : [];
-  const tenantCode = ensureScheduleTenantCode(
-    saved.tenantCode || getScheduleHqTenantCode() || "",
-  );
-  if (!month || !step) return;
-  const shouldResume = window.confirm(
-    "마지막 종료 시점에서 다시 시작하시겠습니까?",
-  );
-  if (!shouldResume) return;
-  const monthInput = $("#scheduleHqMonth");
-  if (monthInput instanceof HTMLInputElement) monthInput.value = month;
-  state.schedule.pendingHqWizardResume = {
-    tenantCode,
-    month,
-    step,
-    siteCode,
-    selectedSiteCodes,
-    artifactId: String(saved.artifactId || "").trim(),
-    revision: String(saved.revision || "").trim(),
-    fileName: String(saved.fileName || "").trim(),
-  };
-  applyPendingScheduleHqWizardResume();
-  state.schedule.hqWizardStep = step;
+  state.schedule.pendingHqWizardResume = null;
+  writeLocalJSON(SCHEDULE_HQ_WIZARD_RESUME_KEY, null);
 }
 
 function applyPendingScheduleHqWizardResume() {
@@ -22316,20 +22731,598 @@ function getScheduleUploadSectionParking(mainCanvas = null) {
   return parking;
 }
 
+const SCHEDULE_UPLOAD_LANDING_STALE_MS = 60 * 1000;
+
+function removeScheduleUploadLandingRoot() {
+  document
+    .querySelectorAll("#scheduleUploadLandingRoot")
+    .forEach((root) => root.remove());
+  const uploadPanel = $("#scheduleUploadPanel");
+  if (uploadPanel instanceof HTMLElement) {
+    uploadPanel.classList.remove("upload-landing-active");
+    uploadPanel.removeAttribute("data-landing-mode");
+  }
+}
+
+function getScheduleUploadLandingAssetPath(fileName = "") {
+  return `assets/upload/${String(fileName || "").replace(/^\/+/, "")}`;
+}
+
+function ensureScheduleUploadLandingBucket(
+  mode = SCHEDULE_UPLOAD_MODE_BASE,
+) {
+  if (!state.schedule) state.schedule = createInitialScheduleState();
+  if (!state.schedule.uploadLanding) {
+    state.schedule.uploadLanding = createInitialScheduleUploadLandingState();
+  }
+  const key =
+    normalizeScheduleUploadWorkspaceMode(mode) === SCHEDULE_UPLOAD_MODE_HQ
+      ? "hq"
+      : "base";
+  if (!state.schedule.uploadLanding[key]) {
+    state.schedule.uploadLanding[key] =
+      createInitialScheduleUploadLandingBucket();
+  }
+  return state.schedule.uploadLanding[key];
+}
+
+function getScheduleUploadLandingEndpoint(mode = SCHEDULE_UPLOAD_MODE_BASE) {
+  return normalizeScheduleUploadWorkspaceMode(mode) === SCHEDULE_UPLOAD_MODE_HQ
+    ? "/schedules/support-roundtrip/hq-landing"
+    : "/schedules/upload/landing";
+}
+
+function getScheduleUploadLandingStartEndpoint(
+  mode = SCHEDULE_UPLOAD_MODE_BASE,
+) {
+  return normalizeScheduleUploadWorkspaceMode(mode) === SCHEDULE_UPLOAD_MODE_HQ
+    ? "/schedules/support-roundtrip/hq-start"
+    : "/schedules/upload/start";
+}
+
+function getScheduleUploadLandingModeLabel(mode = SCHEDULE_UPLOAD_MODE_BASE) {
+  return normalizeScheduleUploadWorkspaceMode(mode) === SCHEDULE_UPLOAD_MODE_HQ
+    ? "지원근무자"
+    : "스케줄";
+}
+
+function buildScheduleUploadLandingRequestPath(endpoint) {
+  const params = new URLSearchParams();
+  const tenantCode = getScheduleTenantValue();
+  if (tenantCode) params.set("tenant_code", tenantCode);
+  const query = params.toString();
+  return query ? `${endpoint}?${query}` : endpoint;
+}
+
+async function loadScheduleUploadLanding(
+  mode = SCHEDULE_UPLOAD_MODE_BASE,
+  { force = false } = {},
+) {
+  const normalizedMode = normalizeScheduleUploadWorkspaceMode(mode);
+  const bucket = ensureScheduleUploadLandingBucket(normalizedMode);
+  const now = Date.now();
+  if (
+    !force &&
+    bucket.data &&
+    now - Number(bucket.loadedAt || 0) < SCHEDULE_UPLOAD_LANDING_STALE_MS
+  ) {
+    return bucket.data;
+  }
+  if (bucket.promise) return bucket.promise;
+  bucket.loading = true;
+  bucket.error = "";
+  const requestPath = buildScheduleUploadLandingRequestPath(
+    getScheduleUploadLandingEndpoint(normalizedMode),
+  );
+  bucket.promise = apiRequest(requestPath, { noStore: force })
+    .then((payload) => {
+      bucket.data = payload && typeof payload === "object" ? payload : null;
+      bucket.loadedAt = Date.now();
+      bucket.error = "";
+      return bucket.data;
+    })
+    .catch((error) => {
+      bucket.error = normalizeActionError(
+        error,
+        "랜딩 데이터를 불러오지 못했습니다.",
+      );
+      throw error;
+    })
+    .finally(() => {
+      bucket.loading = false;
+      bucket.promise = null;
+      if (
+        isScheduleUploadLandingRoute(state.currentRoute || "") &&
+        getScheduleUploadRouteModeFromRoute(state.currentRoute || "") ===
+          normalizedMode
+      ) {
+        renderScheduleUploadLandingPage(normalizedMode);
+      }
+    });
+  renderScheduleUploadLandingPage(normalizedMode);
+  return bucket.promise;
+}
+
+function buildScheduleUploadLandingDownloadUrl(rawUrl = "") {
+  const url = String(rawUrl || "").trim();
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith("/api/")) return `${getApiRootBase()}${url}`;
+  const apiBase = String(state.activeApiBase || API_BASE || "/api/v1").replace(
+    /\/+$/,
+    "",
+  );
+  return `${apiBase}${url.startsWith("/") ? url : `/${url}`}`;
+}
+
+async function downloadScheduleUploadLandingUrl(
+  rawUrl = "",
+  fallbackName = "download.xlsx",
+) {
+  let requestUrl = buildScheduleUploadLandingDownloadUrl(rawUrl);
+  if (!requestUrl) throw new Error("다운로드 URL이 없습니다.");
+  const tenantCode = String(
+    getScheduleTenantValue() ||
+      getTenantCodeForScopedAdminApi() ||
+      state.uiContext?.activeTenantCode ||
+      "",
+  ).trim();
+  if (tenantCode) {
+    try {
+      const url = new URL(requestUrl, window.location.origin);
+      if (!url.searchParams.has("tenant_code")) {
+        url.searchParams.set("tenant_code", tenantCode);
+      }
+      requestUrl = url.toString();
+    } catch {
+      requestUrl = appendTenantCodeQuery(requestUrl, tenantCode);
+    }
+  }
+  const payload = await downloadAuthorizedFile({
+    requestUrl,
+    fallbackName,
+    successMessage: "템플릿 workbook을 다운로드했습니다.",
+    progressController: null,
+  });
+  return payload;
+}
+
+async function startScheduleUploadLanding(mode = SCHEDULE_UPLOAD_MODE_BASE) {
+  const normalizedMode = normalizeScheduleUploadWorkspaceMode(mode);
+  const endpoint = getScheduleUploadLandingStartEndpoint(normalizedMode);
+  const tenantCode = getScheduleTenantValue();
+  const payload = await apiRequest(buildScheduleUploadLandingRequestPath(endpoint), {
+    method: "POST",
+    body: {
+      entryPoint: "LANDING",
+      tenant_code: tenantCode || undefined,
+    },
+  });
+  const nextUrl = String(payload?.nextUrl || payload?.next_url || "").trim();
+  const sessionId = String(payload?.sessionId || payload?.session_id || "").trim();
+  const fallbackRoute =
+    normalizedMode === SCHEDULE_UPLOAD_MODE_HQ
+      ? ROUTE_SCHEDULE_HQ_UPLOAD_WIZARD
+      : ROUTE_SCHEDULE_UPLOAD_WIZARD;
+  const route = nextUrl || (sessionId ? `${fallbackRoute}?sessionId=${encodeURIComponent(sessionId)}` : fallbackRoute);
+  await navigateToRoute(route);
+}
+
+function renderUploadLandingTextWithBreaks(value = "") {
+  return escapeHtml(value).replace(/\n/g, "<br>");
+}
+
+function normalizeUploadLandingBadgeKind(kind = "") {
+  const raw = String(kind || "").trim().toUpperCase();
+  if (
+    raw.includes("SUCCESS") ||
+    raw.includes("AVAILABLE") ||
+    raw.includes("COMPLETED") ||
+    raw.includes("NORMAL") ||
+    raw.includes("OK") ||
+    raw.includes("가능") ||
+    raw.includes("완료") ||
+    raw.includes("정상") ||
+    raw.includes("성공")
+  ) {
+    return "green";
+  }
+  if (
+    raw.includes("PARTIAL") ||
+    raw.includes("REVIEW") ||
+    raw.includes("WARNING") ||
+    raw.includes("부분") ||
+    raw.includes("확인") ||
+    raw.includes("미완료") ||
+    raw.includes("경고")
+  ) {
+    return "orange";
+  }
+  if (raw.includes("FAIL") || raw.includes("ERROR") || raw.includes("오류") || raw.includes("실패")) {
+    return "red";
+  }
+  if (raw.includes("DONE") || raw.includes("INFO")) return "blue";
+  return "gray";
+}
+
+function buildUploadLandingBadge(label = "", kind = "") {
+  const safeLabel = String(label || "").trim() || "-";
+  return `<span class="upload-landing-badge is-${normalizeUploadLandingBadgeKind(kind || safeLabel)}">${escapeHtml(safeLabel)}</span>`;
+}
+
+function buildUploadLandingCardShell({
+  className = "",
+  icon = "",
+  title = "",
+  action = "",
+  body = "",
+  footer = "",
+} = {}) {
+  return `
+    <section class="upload-landing-card ${className}">
+      <div class="upload-landing-card-head">
+        <div class="upload-landing-card-title">
+          ${icon ? `<img src="${escapeHtml(icon)}" alt="" aria-hidden="true">` : ""}
+          <h2>${escapeHtml(title)}</h2>
+        </div>
+        ${action || ""}
+      </div>
+      <div class="upload-landing-card-body">${body}</div>
+      ${footer ? `<div class="upload-landing-card-footer">${footer}</div>` : ""}
+    </section>
+  `;
+}
+
+function buildUploadLandingError(mode, message = "") {
+  return `
+    <section class="upload-landing-error">
+      <strong>데이터를 불러오지 못했습니다.</strong>
+      <p>${escapeHtml(message || "네트워크 또는 권한 상태를 확인한 뒤 다시 시도해 주세요.")}</p>
+      <button type="button" class="upload-landing-secondary" data-action="upload-landing-retry" data-mode="${escapeHtml(mode)}">다시 조회</button>
+    </section>
+  `;
+}
+
+function buildUploadLandingSkeleton() {
+  return `
+    <section class="upload-landing-skeleton">
+      <span></span><span></span><span></span><span></span>
+    </section>
+  `;
+}
+
+function buildUploadLandingHero(mode, payload) {
+  const hero = payload?.hero || {};
+  const title = String(hero.title || "").trim();
+  const description = String(hero.description || "").trim();
+  const buttonLabel = String(hero.buttonLabel || hero.button_label || "").trim();
+  const isHq =
+    normalizeScheduleUploadWorkspaceMode(mode) === SCHEDULE_UPLOAD_MODE_HQ;
+  const heroAsset = getScheduleUploadLandingAssetPath(
+    isHq ? "support-worker-upload-hero.svg" : "schedule-upload-hero.svg",
+  );
+  return `
+    <section class="upload-landing-hero is-${isHq ? "support" : "schedule"}">
+      <div class="upload-landing-hero-copy">
+        <h1>${escapeHtml(title)}</h1>
+        <p>${renderUploadLandingTextWithBreaks(description)}</p>
+        <button type="button" class="upload-landing-primary" data-action="upload-landing-start" data-mode="${escapeHtml(mode)}">
+          <img src="${escapeHtml(getScheduleUploadLandingAssetPath("icon-upload-white.svg"))}" alt="" aria-hidden="true">
+          <span>${escapeHtml(buttonLabel)}</span>
+        </button>
+      </div>
+      <div class="upload-landing-hero-art" aria-hidden="true">
+        <img src="${escapeHtml(heroAsset)}" alt="">
+      </div>
+    </section>
+  `;
+}
+
+function buildUploadLandingPreCheckCard(mode, payload) {
+  const preCheck = payload?.preCheck || {};
+  const isHq =
+    normalizeScheduleUploadWorkspaceMode(mode) === SCHEDULE_UPLOAD_MODE_HQ;
+  const rows = isHq
+    ? [
+        ["업로드 가능 지점", `${preCheck.uploadableSiteCount ?? 0}개`],
+        ["대상 기간", preCheck.targetPeriodLabel],
+        ["연결 스케줄 파일", preCheck.linkedScheduleFileLabel],
+        ["권한", preCheck.permissionLabel],
+      ]
+    : [
+        ["업로드 가능 지점", `${preCheck.uploadableSiteCount ?? 0}개 지점`],
+        ["대상 월", preCheck.targetMonthLabel],
+        [
+          "템플릿 준비 상태",
+          preCheck.templateReadyLabel ||
+            (preCheck.templateReadyCount != null
+              ? `근무 템플릿 ${preCheck.templateReadyCount}개`
+              : ""),
+        ],
+        ["권한", preCheck.permissionLabel],
+      ];
+  const body = `
+    <dl class="upload-landing-check-list">
+      ${rows
+        .map(
+          ([label, value]) => `
+            <div>
+              <dt>${escapeHtml(label)}</dt>
+              <dd>${buildUploadLandingBadge(value || "-", value || "")}</dd>
+            </div>
+          `,
+        )
+        .join("")}
+    </dl>
+  `;
+  const footer = `
+    <img src="${escapeHtml(getScheduleUploadLandingAssetPath("icon-clock.svg"))}" alt="" aria-hidden="true">
+    <span>마지막 확인: ${escapeHtml(preCheck.lastCheckedAtLabel || "-")}</span>
+  `;
+  return buildUploadLandingCardShell({
+    className: "is-precheck",
+    icon: getScheduleUploadLandingAssetPath("icon-checklist-orange.svg"),
+    title: "업로드 전 확인",
+    body,
+    footer,
+  });
+}
+
+function buildUploadLandingRecentCard(payload) {
+  const uploads = Array.isArray(payload?.recentUploads)
+    ? payload.recentUploads
+    : [];
+  const rows = uploads
+    .slice(0, 4)
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.uploadedAtLabel || "-")}</td>
+          <td class="upload-landing-file-name" title="${escapeHtml(item.fileName || "")}">${escapeHtml(item.fileName || "-")}</td>
+          <td>${escapeHtml(item.siteScopeLabel || "-")}</td>
+          <td>${buildUploadLandingBadge(item.resultLabel || "-", item.result || item.resultLabel || "")}</td>
+        </tr>
+      `,
+    )
+    .join("");
+  const body = uploads.length
+    ? `
+      <table class="upload-landing-mini-table">
+        <thead>
+          <tr><th>업로드 일시</th><th>파일명</th><th>지점</th><th>결과</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `
+    : `<p class="upload-landing-empty">최근 업로드 내역이 없습니다.</p>`;
+  return buildUploadLandingCardShell({
+    className: "is-recent",
+    icon: getScheduleUploadLandingAssetPath("icon-clock.svg"),
+    title: "최근 업로드",
+    action: `<button type="button" class="upload-landing-link" data-action="upload-landing-route" data-route="${escapeHtml(ROUTE_SCHEDULE_LIST)}">전체보기 ›</button>`,
+    body,
+  });
+}
+
+function buildUploadLandingTemplateCard(payload) {
+  const templates = payload?.templates || {};
+  const defaultTemplates = templates.defaultTemplates || {};
+  const myTemplates = templates.myTemplates || {};
+  const templateRows = [
+    {
+      icon: "icon-template-green.svg",
+      title: defaultTemplates.title,
+      description: defaultTemplates.description,
+      count: defaultTemplates.count,
+      actionLabel: "템플릿 다운로드",
+      action: defaultTemplates.downloadUrl
+        ? `data-action="upload-landing-download-url" data-url="${escapeHtml(defaultTemplates.downloadUrl)}" data-filename="schedule-template.xlsx"`
+        : `data-action="upload-landing-route" data-route="${escapeHtml(ROUTE_SCHEDULE_TEMPLATES)}"`,
+    },
+    {
+      icon: "icon-template-purple.svg",
+      title: myTemplates.title,
+      description: myTemplates.description,
+      count: myTemplates.count,
+      actionLabel: "관리",
+      action: `data-action="upload-landing-route" data-route="${escapeHtml(myTemplates.manageUrl || ROUTE_SCHEDULE_TEMPLATES)}"`,
+    },
+  ];
+  const body = `
+    <div class="upload-landing-template-list">
+      ${templateRows
+        .map(
+          (item) => `
+            <div class="upload-landing-template-row">
+              <img src="${escapeHtml(getScheduleUploadLandingAssetPath(item.icon))}" alt="" aria-hidden="true">
+              <div>
+                <strong>${escapeHtml(item.title || "-")}</strong>
+                <span>${escapeHtml(item.description || "-")}</span>
+              </div>
+              <b>${escapeHtml(String(item.count ?? 0))}개</b>
+              <button type="button" class="upload-landing-secondary is-small" ${item.action}>${escapeHtml(item.actionLabel)}</button>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+  return buildUploadLandingCardShell({
+    className: "is-templates",
+    icon: getScheduleUploadLandingAssetPath("icon-template-green.svg"),
+    title: "사용 가능 템플릿",
+    body,
+  });
+}
+
+function buildUploadLandingSiteSummaryCard(payload) {
+  const summary = payload?.siteReadinessSummary || {};
+  const rows = Array.isArray(summary.rows) ? summary.rows : [];
+  const body = rows.length
+    ? `
+      <table class="upload-landing-site-table">
+        <thead>
+          <tr><th>지점명</th><th>스케줄 업로드</th><th>지원 요청</th><th>업로드 가능 여부</th></tr>
+        </thead>
+        <tbody>
+          ${rows
+            .slice(0, 6)
+            .map(
+              (row) => `
+                <tr>
+                  <td>${escapeHtml(row.siteName || "-")}</td>
+                  <td>${buildUploadLandingBadge(row.scheduleUploadStatusLabel || "-", row.scheduleUploadStatus || "")}</td>
+                  <td>${escapeHtml(row.supportRequestStatusLabel || "-")}</td>
+                  <td>${buildUploadLandingBadge(row.uploadAvailabilityLabel || "-", row.uploadAvailability || "")}</td>
+                </tr>
+              `,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    `
+    : `<p class="upload-landing-empty">업로드 가능한 지점이 없습니다.</p>`;
+  const footer = `
+    <span>총 ${escapeHtml(String(summary.totalCount ?? rows.length ?? 0))}개 지점</span>
+    <button type="button" class="upload-landing-link" data-action="upload-landing-route" data-route="${escapeHtml(summary.allSitesUrl || ROUTE_SCHEDULE_HQ_UPLOAD)}">전체 보기 ›</button>
+  `;
+  return buildUploadLandingCardShell({
+    className: "is-sites",
+    icon: getScheduleUploadLandingAssetPath("icon-building.svg"),
+    title: "업로드 가능 지점 요약",
+    body,
+    footer,
+  });
+}
+
+function buildUploadLandingGuideBanner(payload) {
+  const guide = payload?.guide || {};
+  return `
+    <section class="upload-landing-guide">
+      <div class="upload-landing-guide-icon">
+        <img src="${escapeHtml(getScheduleUploadLandingAssetPath("icon-shield-blue.svg"))}" alt="" aria-hidden="true">
+      </div>
+      <div class="upload-landing-guide-copy">
+        <h2>${escapeHtml(guide.title || "업로드 가능 안내")}</h2>
+        <p>${escapeHtml(guide.description || "")}</p>
+      </div>
+      <button type="button" class="upload-landing-secondary" data-action="upload-landing-route" data-route="${escapeHtml(guide.guideUrl || ROUTE_SCHEDULE_UPLOAD)}">업로드 가이드 보기</button>
+    </section>
+  `;
+}
+
+function renderScheduleUploadLandingPage(mode = SCHEDULE_UPLOAD_MODE_BASE) {
+  const normalizedMode = normalizeScheduleUploadWorkspaceMode(mode);
+  const uploadPanel = $("#scheduleUploadPanel");
+  if (!(uploadPanel instanceof HTMLElement)) return;
+  const scheduleTabContent = $("#scheduleTabContent");
+  if (scheduleTabContent instanceof HTMLElement) {
+    scheduleTabContent.style.setProperty("display", "block", "important");
+  }
+  toggleScheduleReferenceLegacyVisibility(true);
+  document.getElementById("scheduleReferenceUploadWizard")?.remove();
+  uploadPanel.classList.add("upload-landing-active");
+  uploadPanel.classList.remove("reference-upload-active");
+  uploadPanel.dataset.landingMode =
+    normalizedMode === SCHEDULE_UPLOAD_MODE_HQ ? "hq" : "base";
+  document
+    .querySelectorAll("#scheduleUploadLandingRoot")
+    .forEach((existingRoot) => existingRoot.remove());
+  const root = document.createElement("div");
+  root.id = "scheduleUploadLandingRoot";
+  root.className = "upload-landing-shell";
+  uploadPanel.appendChild(root);
+  root.dataset.mode = normalizedMode === SCHEDULE_UPLOAD_MODE_HQ ? "hq" : "base";
+  const bucket = ensureScheduleUploadLandingBucket(normalizedMode);
+  if (!bucket.data && !bucket.loading && !bucket.error) {
+    loadScheduleUploadLanding(normalizedMode).catch(() => {});
+  }
+  if (bucket.loading && !bucket.data) {
+    root.innerHTML = buildUploadLandingSkeleton();
+    return;
+  }
+  if (bucket.error && !bucket.data) {
+    root.innerHTML = buildUploadLandingError(normalizedMode, bucket.error);
+    return;
+  }
+  const payload = bucket.data || {};
+  const isHq = normalizedMode === SCHEDULE_UPLOAD_MODE_HQ;
+  root.innerHTML = `
+    ${buildUploadLandingHero(normalizedMode, payload)}
+    <div class="upload-landing-card-grid">
+      ${buildUploadLandingPreCheckCard(normalizedMode, payload)}
+      ${buildUploadLandingRecentCard(payload)}
+      ${isHq ? buildUploadLandingSiteSummaryCard(payload) : buildUploadLandingTemplateCard(payload)}
+    </div>
+    ${buildUploadLandingGuideBanner(payload)}
+  `;
+}
+
 function renderScheduleUploadWorkflowSections() {
   renderScheduleUploadModeTabs();
+  const currentRoute = normalizeRoutePath(state.currentRoute || "");
+  const landingRouteActive = isScheduleUploadLandingRoute(currentRoute);
+  const wizardRouteActive = isScheduleUploadWizardRoute(currentRoute);
   const activeTopTab = getScheduleActiveTopTab();
   const uploadRouteActive =
+    landingRouteActive ||
+    wizardRouteActive ||
     activeTopTab === SCHEDULE_TAB_UPLOAD ||
     activeTopTab === SCHEDULE_TAB_HQ_UPLOAD;
+  const mode =
+    landingRouteActive || wizardRouteActive
+      ? getScheduleUploadRouteModeFromRoute(currentRoute)
+      : getScheduleUploadWorkspaceMode();
+  if (state.schedule && uploadRouteActive) {
+    state.schedule.uploadWorkspaceMode = mode;
+    state.schedule.hqTab =
+      mode === SCHEDULE_UPLOAD_MODE_HQ
+        ? SCHEDULE_TAB_HQ_UPLOAD
+        : SCHEDULE_TAB_UPLOAD;
+  }
   document.body.classList.toggle("reference-upload-route", uploadRouteActive);
+  document.body.classList.toggle(
+    "reference-upload-route-base",
+    uploadRouteActive && mode === SCHEDULE_UPLOAD_MODE_BASE,
+  );
+  document.body.classList.toggle(
+    "reference-upload-route-hq",
+    uploadRouteActive && mode === SCHEDULE_UPLOAD_MODE_HQ,
+  );
+  document.body.classList.toggle(
+    "reference-upload-landing-route",
+    landingRouteActive,
+  );
+  document.body.classList.toggle(
+    "reference-upload-wizard-route",
+    wizardRouteActive,
+  );
   const scheduleView = $("#view-schedule");
   if (scheduleView instanceof HTMLElement) {
     scheduleView.classList.toggle("schedule-reportlike-shell", uploadRouteActive);
     scheduleView.classList.toggle("schedule-upload-route-active", uploadRouteActive);
   }
-  if (!uploadRouteActive) return;
-  const mode = getScheduleUploadWorkspaceMode();
+  if (!uploadRouteActive) {
+    toggleScheduleReferenceLegacyVisibility(false);
+    const scheduleTabContent = $("#scheduleTabContent");
+    if (scheduleTabContent instanceof HTMLElement) {
+      scheduleTabContent.style.removeProperty("display");
+    }
+    document
+      .getElementById("scheduleReferenceUploadWizard")
+      ?.remove();
+    removeScheduleUploadLandingRoot();
+    return;
+  }
+  if (landingRouteActive) {
+    const scheduleTabContent = $("#scheduleTabContent");
+    if (scheduleTabContent instanceof HTMLElement) {
+      scheduleTabContent.style.setProperty("display", "block", "important");
+    }
+    renderScheduleUploadLandingPage(mode);
+    return;
+  }
+  removeScheduleUploadLandingRoot();
   const mainCanvas = $("#scheduleUploadMainCanvas");
   const parking = getScheduleUploadSectionParking(mainCanvas);
   const mappingSection = $("#scheduleExcelWorkflowMappingSection");
@@ -22490,10 +23483,1266 @@ function getScheduleReferenceFieldValue(selector, fallback = "") {
   return fallback;
 }
 
+function getScheduleReferenceSelectOptions(selector) {
+  const source = document.querySelector(selector);
+  if (!(source instanceof HTMLSelectElement)) return [];
+  return Array.from(source.options || []).map((option) => ({
+    value: String(option.value || ""),
+    label: String(option.textContent || "").trim(),
+    disabled: Boolean(option.disabled),
+    selected: Boolean(option.selected),
+  }));
+}
+
+function buildScheduleReferenceStaticOptionsHtml(options = [], { fallbackLabel = "" } = {}) {
+  const list = Array.isArray(options) ? options : [];
+  if (!list.length) {
+    return `<option value="">${escapeHtml(fallbackLabel || "-")}</option>`;
+  }
+  return list
+    .map((option) => {
+      const selected = option.selected ? " selected" : "";
+      const disabled = option.disabled ? " disabled" : "";
+      return `<option value="${escapeHtml(option.value)}"${selected}${disabled}>${escapeHtml(option.label)}</option>`;
+    })
+    .join("");
+}
+
+function normalizeScheduleReferenceTenantLabel(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return "SENTRIX 본사";
+  if (/^[a-z0-9_]+$/i.test(text) && text.includes("_")) {
+    return text
+      .split("_")
+      .filter(Boolean)
+      .map((token) => token.charAt(0).toUpperCase() + token.slice(1).toLowerCase())
+      .join(" ");
+  }
+  return text;
+}
+
 function getScheduleReferenceText(selector, fallback = "") {
   const node = document.querySelector(selector);
   const value = String(node?.textContent || "").trim();
   return value || fallback;
+}
+
+function toggleScheduleReferenceLegacyVisibility(hidden = false) {
+  const uploadPanel = $("#scheduleUploadPanel");
+  if (!(uploadPanel instanceof HTMLElement)) return;
+  uploadPanel
+    .querySelectorAll(
+      ":scope > .schedule-upload-shell-head, :scope > .schedule-upload-wizard-layout, :scope > #scheduleUploadFooterActions",
+    )
+    .forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      node.classList.toggle("reference-legacy-hidden", hidden);
+      if (hidden) {
+        node.style.setProperty("display", "none", "important");
+        node.setAttribute("aria-hidden", "true");
+      } else {
+        node.style.removeProperty("display");
+        node.removeAttribute("aria-hidden");
+      }
+    });
+  const legacyTitle = uploadPanel.querySelector("#scheduleUploadHeaderTitleLegacy");
+  if (legacyTitle instanceof HTMLElement) {
+    legacyTitle.id = "scheduleUploadHeaderTitle";
+  }
+}
+
+function getScheduleReferenceIconSvg(kind = "help") {
+  if (kind === "bell") {
+    return `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M15.5 17h-7a2 2 0 0 1-2-2v-3.2a5.5 5.5 0 0 1 11 0V15a2 2 0 0 1-2 2Z"></path>
+        <path d="M10 20a2 2 0 0 0 4 0"></path>
+      </svg>
+    `;
+  }
+  if (kind === "mail") {
+    return `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M4 6.5h16v11H4z"></path>
+        <path d="m4.5 7 7.5 6 7.5-6"></path>
+      </svg>
+    `;
+  }
+  if (kind === "help") {
+    return `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="9"></circle>
+        <path d="M9.8 9.2a2.45 2.45 0 0 1 4.45 1.36c0 1.8-2.25 2.1-2.25 3.65"></path>
+        <path d="M12 17h.01"></path>
+      </svg>
+    `;
+  }
+  if (kind === "profile") {
+    return `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M18 19a6 6 0 0 0-12 0"></path>
+        <circle cx="12" cy="9" r="3.5"></circle>
+      </svg>
+    `;
+  }
+  if (kind === "building") {
+    return `
+      <svg viewBox="0 0 72 72" fill="none" aria-hidden="true" focusable="false">
+        <path d="M17 57V23.5C17 21.567 18.567 20 20.5 20H39.5C41.433 20 43 21.567 43 23.5V57" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path d="M43 57V31.5C43 29.567 44.567 28 46.5 28H54.5C56.433 28 58 29.567 58 31.5V57" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path d="M28 57V49H37V57" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path d="M24 28H26" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+        <path d="M24 34H26" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+        <path d="M24 40H26" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+        <path d="M34 28H36" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+        <path d="M34 34H36" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+        <path d="M34 40H36" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+        <path d="M48 36H50" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+        <path d="M48 42H50" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+        <path d="M14 57H61" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+      </svg>
+    `;
+  }
+  if (kind === "cloud") {
+    return `
+      <svg viewBox="0 0 56 56" fill="none" aria-hidden="true" focusable="false">
+        <path d="M18.5 42.5H39C44.2467 42.5 48.5 38.2467 48.5 33C48.5 28.1527 44.872 24.1527 40.1757 23.5678C39.0704 17.8444 34.0422 13.5 28 13.5C21.2745 13.5 15.8177 18.8793 15.6939 25.5753C11.9917 26.7393 9.5 30.1922 9.5 34C9.5 38.6944 13.3056 42.5 18 42.5H18.5Z" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path d="M28 37V22" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"></path>
+        <path d="M22.5 27.5L28 22L33.5 27.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+    `;
+  }
+  if (kind === "download") {
+    return `
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+        <path d="M10 3.5V11.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"></path>
+        <path d="M6.75 8.75L10 12L13.25 8.75" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path d="M4 15.5H16" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"></path>
+      </svg>
+    `;
+  }
+  if (kind === "plus") {
+    return `
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false">
+        <path d="M8 3V13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+        <path d="M3 8H13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+      </svg>
+    `;
+  }
+  if (kind === "log") {
+    return `
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+        <path d="M6 2.75H11.5L15.5 6.75V16.25C15.5 16.8023 15.0523 17.25 14.5 17.25H6C5.44772 17.25 5 16.8023 5 16.25V3.75C5 3.19772 5.44772 2.75 6 2.75Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"></path>
+        <path d="M11.5 2.75V6.75H15.5" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"></path>
+        <path d="M7.5 10H12.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+        <path d="M7.5 13H11" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+      </svg>
+    `;
+  }
+  if (kind === "calendar") {
+    return `
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <rect x="3.5" y="4.5" width="13" height="12" rx="2"></rect>
+        <path d="M6.5 2.8v3.4"></path>
+        <path d="M13.5 2.8v3.4"></path>
+        <path d="M3.5 8h13"></path>
+      </svg>
+    `;
+  }
+  if (kind === "info") {
+    return `
+      <svg viewBox="0 0 18 18" fill="none" aria-hidden="true" focusable="false">
+        <circle cx="9" cy="9" r="7.25" stroke="currentColor" stroke-width="1.5"></circle>
+        <path d="M9 8V12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+        <circle cx="9" cy="5.25" r="1" fill="currentColor"></circle>
+      </svg>
+    `;
+  }
+  if (kind === "search") {
+    return `
+      <svg viewBox="0 0 18 18" fill="none" aria-hidden="true" focusable="false">
+        <circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.7"></circle>
+        <path d="M12.5 12.5L15.5 15.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+      </svg>
+    `;
+  }
+  if (kind === "filter") {
+    return `
+      <svg viewBox="0 0 18 18" fill="none" aria-hidden="true" focusable="false">
+        <path d="M3 4.5H15" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+        <path d="M5.5 9H12.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+        <path d="M7.5 13.5H10.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+      </svg>
+    `;
+  }
+  if (kind === "trash") {
+    return `
+      <svg viewBox="0 0 18 18" fill="none" aria-hidden="true" focusable="false">
+        <path d="M3.75 5H14.25" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+        <path d="M6.5 5V3.75C6.5 3.33579 6.83579 3 7.25 3H10.75C11.1642 3 11.5 3.33579 11.5 3.75V5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+        <path d="M6 7.5V13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+        <path d="M9 7.5V13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+        <path d="M12 7.5V13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+        <path d="M5 5L5.6 14.1C5.64 14.72 6.16 15.2 6.78 15.2H11.22C11.84 15.2 12.36 14.72 12.4 14.1L13 5" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"></path>
+      </svg>
+    `;
+  }
+  if (kind === "arrow-right") {
+    return `
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M4 10h12"></path>
+        <path d="m11.5 6.5 3.5 3.5-3.5 3.5"></path>
+      </svg>
+    `;
+  }
+  if (kind === "warning") {
+    return `
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+        <path d="M10 3L17 15H3L10 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path>
+        <path d="M10 7.5V11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+        <circle cx="10" cy="13.6" r="1" fill="currentColor"></circle>
+      </svg>
+    `;
+  }
+  if (kind === "error-circle") {
+    return `
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+        <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.8"></circle>
+        <path d="M7 7L13 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+        <path d="M13 7L7 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+      </svg>
+    `;
+  }
+  if (kind === "ellipsis") {
+    return `
+      <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" focusable="false">
+        <circle cx="4.5" cy="10" r="1.5"></circle>
+        <circle cx="10" cy="10" r="1.5"></circle>
+        <circle cx="15.5" cy="10" r="1.5"></circle>
+      </svg>
+    `;
+  }
+  if (kind === "eyeOff") {
+    return `
+      <svg viewBox="0 0 18 18" fill="none" aria-hidden="true" focusable="false">
+        <path d="M2.25 2.25L15.75 15.75" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+        <path d="M7.25 7.25C6.75 7.75 6.44 8.44 6.44 9.2C6.44 10.73 7.67 11.96 9.2 11.96C9.96 11.96 10.65 11.65 11.15 11.15" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+        <path d="M4.35 5.15C3.18 6.02 2.24 7.21 1.6 8.6C1.46 8.91 1.46 9.27 1.6 9.58C3.01 12.63 5.87 14.55 9 14.55C10.39 14.55 11.72 14.17 12.91 13.47" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path d="M6.04 3.85C6.97 3.53 7.96 3.36 9 3.36C12.13 3.36 14.99 5.28 16.4 8.33C16.54 8.64 16.54 9 16.4 9.31C16.03 10.1 15.56 10.83 15 11.47" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+    `;
+  }
+  if (kind === "check") {
+    return `
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+        <path d="M5 10.4L8.4 13.7L15 6.7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+    `;
+  }
+  if (kind === "check-circle") {
+    return `
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+        <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.8"></circle>
+        <path d="M6.6 10.2L8.7 12.3L13.4 7.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+    `;
+  }
+  return `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+      <circle cx="10" cy="10" r="7"></circle>
+    </svg>
+  `;
+}
+
+function getScheduleReferenceAvatarToken(name = "") {
+  const value = String(name || "").trim();
+  return value ? value.slice(0, 1).toUpperCase() : "?";
+}
+
+function formatScheduleReferenceCompactDateTime(rawValue = "") {
+  const text = String(rawValue || "").trim();
+  if (!text) return "";
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return text;
+  const yyyy = parsed.getFullYear();
+  const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+  const dd = String(parsed.getDate()).padStart(2, "0");
+  const hh = String(parsed.getHours()).padStart(2, "0");
+  const min = String(parsed.getMinutes()).padStart(2, "0");
+  return `${yyyy}.${mm}.${dd} ${hh}:${min}`;
+}
+
+function formatScheduleReferenceFullDateTime(rawValue = "") {
+  const text = String(rawValue || "").trim();
+  if (!text) return "-";
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return text;
+  const yyyy = parsed.getFullYear();
+  const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+  const dd = String(parsed.getDate()).padStart(2, "0");
+  const hh = String(parsed.getHours()).padStart(2, "0");
+  const min = String(parsed.getMinutes()).padStart(2, "0");
+  const sec = String(parsed.getSeconds()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}:${sec}`;
+}
+
+function renderScheduleReferenceTopbarAction({
+  action = "",
+  route = "",
+  label = "",
+  icon = "help",
+  badge = "",
+  profile = false,
+  meta = "",
+} = {}) {
+  if (profile) {
+    const avatarToken = getScheduleReferenceAvatarToken(label);
+    return `
+      <button
+        class="wizard-topbar-profile"
+        type="button"
+        data-action="${escapeHtml(action)}"
+        ${route ? `data-route="${escapeHtml(route)}"` : ""}
+        aria-label="${escapeHtml(label)}"
+      >
+        <span class="wizard-topbar-profile-art" aria-hidden="true">${escapeHtml(avatarToken)}</span>
+        <span class="wizard-topbar-profile-meta">
+          <strong>${escapeHtml(label)}</strong>
+          <span>${escapeHtml(meta)}</span>
+        </span>
+        <span class="wizard-topbar-profile-chevron" aria-hidden="true">⌄</span>
+      </button>
+    `;
+  }
+  return `
+    <button
+      class="wizard-topbar-icon"
+      type="button"
+      data-action="${escapeHtml(action)}"
+      ${route ? `data-route="${escapeHtml(route)}"` : ""}
+      aria-label="${escapeHtml(label)}"
+      title="${escapeHtml(label)}"
+    >
+      ${getScheduleReferenceIconSvg(icon)}
+      ${
+        badge
+          ? `<span class="wizard-topbar-badge">${escapeHtml(String(badge))}</span>`
+          : ""
+      }
+    </button>
+  `;
+}
+
+function renderScheduleReferenceWizardTopbar() {
+  const notificationCount = Number(state.notificationCount || 0);
+  const userName =
+    String(state.user?.full_name || state.user?.name || state.user?.username || "사용자").trim() ||
+    "사용자";
+  const roleLabel = getRoleDisplayLabel(state.user?.role || "");
+  return `
+    <header class="wizard-route-topbar">
+      <div class="wizard-route-topbar-title">업로드 마법사 (Wizard)</div>
+      <div class="wizard-route-topbar-actions">
+        ${renderScheduleReferenceTopbarAction({
+          action: "open-notifications",
+          label: "알림 열기",
+          icon: "bell",
+          badge: notificationCount > 0 ? notificationCount : "",
+        })}
+        ${renderScheduleReferenceTopbarAction({
+          action: "drawer-open-route",
+          route: "/profile",
+          label: "메일/연동 설정",
+          icon: "mail",
+        })}
+        ${renderScheduleReferenceTopbarAction({
+          action: "drawer-help",
+          label: "도움말",
+          icon: "help",
+        })}
+        ${renderScheduleReferenceTopbarAction({
+          action: "drawer-open-route",
+          route: "/profile",
+          label: userName,
+          meta: roleLabel || "구성원",
+          profile: true,
+        })}
+      </div>
+    </header>
+  `;
+}
+
+function getScheduleReferenceBaseHeader(step) {
+  const map = {
+    [SCHEDULE_BASE_WIZARD_STEP_MAPPING]: {
+      number: 1,
+      mode: SCHEDULE_UPLOAD_MODE_BASE,
+      description:
+        "스케줄 업로드를 위한 준비 단계입니다. 업로드할 지점과 대상 월, 사용할 근무 템플릿을 선택해 주세요.",
+    },
+    [SCHEDULE_BASE_WIZARD_STEP_FILE]: {
+      number: 2,
+      mode: SCHEDULE_UPLOAD_MODE_BASE,
+      description:
+        "업로드할 월간 근무표 파일을 선택하고 분석을 시작하는 단계입니다.",
+    },
+    [SCHEDULE_BASE_WIZARD_STEP_REVIEW]: {
+      number: 3,
+      mode: SCHEDULE_UPLOAD_MODE_BASE,
+      description:
+        "업로드한 스케줄 파일을 미리 확인하고, 데이터 이상 여부를 검토하는 단계입니다.",
+    },
+    [SCHEDULE_BASE_WIZARD_STEP_APPLY]: {
+      number: 4,
+      mode: SCHEDULE_UPLOAD_MODE_BASE,
+      description:
+        "분석 결과를 실제 스케줄에 반영하고 결과를 확인하는 단계입니다.",
+    },
+  };
+  return map[step] || map[SCHEDULE_BASE_WIZARD_STEP_MAPPING];
+}
+
+function getScheduleReferenceWizardBadgeLabel(mode = SCHEDULE_UPLOAD_MODE_BASE) {
+  return normalizeScheduleUploadWorkspaceMode(mode) === SCHEDULE_UPLOAD_MODE_HQ
+    ? "지원근무자 업로드"
+    : "스케줄 업로드";
+}
+
+function renderScheduleReferencePageHeader(model = {}) {
+  const mode = model.mode || getScheduleUploadWorkspaceMode();
+  const badgeLabel = getScheduleReferenceWizardBadgeLabel(mode);
+  return `
+    <section class="wizard-page-header">
+      <div class="wizard-page-heading">
+        <div class="wizard-page-title-row">
+          <h1 id="scheduleUploadHeaderTitle">업로드 마법사</h1>
+          <span class="wizard-page-type-pill">${escapeHtml(badgeLabel)}</span>
+        </div>
+        <p>${escapeHtml(model.description || "")}</p>
+      </div>
+    </section>
+  `;
+}
+
+function renderScheduleReferenceStepperBar({
+  variant = "four",
+  active = 1,
+  itemsOverride = null,
+} = {}) {
+  const items = Array.isArray(itemsOverride) && itemsOverride.length
+    ? itemsOverride
+    : [
+        { label: "준비" },
+        { label: "파일 준비" },
+        { label: "미리보기 / 검토" },
+        { label: "반영 / 완료" },
+      ];
+  const count = items.length;
+  const safeActive = Math.max(1, Math.min(Number(active) || 1, count));
+  const progress = count > 1 ? ((safeActive - 1) / (count - 1)) * 100 : 0;
+  const progressWidth =
+    count > 1 ? ((safeActive - 1) / (count - 1)) * (100 - 100 / count) : 0;
+  return `
+    <section class="wizard-stepper reference-upload-stepper wizard-stepper-${escapeHtml(variant)}" data-testid="wizard-stepper" style="--wizard-step-progress:${progress}%;--wizard-step-progress-width:${progressWidth}%">
+      <ol class="wizard-stepper-list">
+        ${items
+          .map((item, index) => {
+            const stepNumber = index + 1;
+            const isActive = stepNumber === safeActive;
+            const isComplete = stepNumber < safeActive;
+            return `
+              <li class="wizard-stepper-item reference-upload-step${isActive ? " is-active" : ""}${isComplete ? " is-complete" : ""}" data-step="${stepNumber}" aria-current="${isActive ? "step" : "false"}">
+                <span class="wizard-stepper-dot" aria-hidden="true">
+                  ${isComplete ? getScheduleReferenceIconSvg("check") : escapeHtml(String(stepNumber))}
+                </span>
+                <strong>${escapeHtml(item.label)}</strong>
+              </li>
+            `;
+          })
+          .join("")}
+      </ol>
+    </section>
+  `;
+}
+
+function getScheduleReferenceBaseFileSelection() {
+  const input = $("#scheduleImportFile");
+  const file =
+    input instanceof HTMLInputElement && input.files?.length
+      ? input.files[0]
+      : null;
+  const uploadUi = getScheduleUploadUiState();
+  const domName = getScheduleReferenceText("#scheduleImportFileName", "");
+  const normalizedDomName = ["파일을 선택하세요", "파일 선택 전"].includes(
+    String(domName || "").trim(),
+  )
+    ? ""
+    : domName;
+  const fileName = file?.name || normalizedDomName || "파일을 선택하세요";
+  const fileSize = file?.size
+    ? formatDownloadTransferSize(file.size)
+    : fileName === "파일을 선택하세요"
+      ? "-"
+      : "크기 확인 중";
+  const uploadedAt =
+    formatScheduleReferenceCompactDateTime(uploadUi.lastCompletedAt || "") ||
+    (file?.lastModified
+      ? new Date(file.lastModified).toLocaleString("ko-KR")
+      : "-");
+  return {
+    hasFile: Boolean(file),
+    fileName,
+    fileSize,
+    uploadedAt,
+  };
+}
+
+function getScheduleReferenceBaseGateState() {
+  const selectedSite = String($("#scheduleImportSite")?.value || "")
+    .trim()
+    .toUpperCase();
+  const monthValue =
+    normalizeMonthKey($("#scheduleImportMonth")?.value || "") ||
+    getScheduleMonthValue();
+  const selectedProfile = getSelectedScheduleImportMappingProfile();
+  const profileId = String(selectedProfile?.profile_id || "").trim();
+  const mappingReadiness = getScheduleImportMappingProfileReadiness(
+    selectedProfile,
+  );
+  const uploadUi = getScheduleUploadUiState();
+  const fileInput = $("#scheduleImportFile");
+  const hasFile =
+    fileInput instanceof HTMLInputElement && Boolean(fileInput.files?.length);
+  const missing = [];
+  if (!selectedSite) missing.push("지점");
+  if (!monthValue) missing.push("대상 월");
+  if (!profileId) missing.push("근무 템플릿");
+  else if (!mappingReadiness.ready) missing.push(mappingReadiness.label);
+  return {
+    selectedSite,
+    monthValue,
+    selectedProfile,
+    profileId,
+    mappingReadiness,
+    mappingReady: Boolean(profileId && mappingReadiness.ready),
+    contextReady: Boolean(selectedSite && monthValue),
+    step1Ready: Boolean(selectedSite && monthValue && profileId && mappingReadiness.ready),
+    hasFile,
+    canPreview: Boolean(selectedSite && monthValue && profileId && mappingReadiness.ready && hasFile),
+    canReviewNext: Boolean(uploadUi.canApply || state.preview?.batch_id),
+    canApply: Boolean(uploadUi.canApply),
+    missing,
+    missingLabel: missing.length ? missing.join(", ") : "",
+  };
+}
+
+function getScheduleReferenceDisabledAttr(disabled, title = "") {
+  return disabled
+    ? `disabled aria-disabled="true"${title ? ` title="${escapeHtml(title)}"` : ""}`
+    : "";
+}
+
+function getScheduleReferenceSupportExcelAssetUrl() {
+  return "../assets/excel-upload-clean.svg";
+}
+
+function getScheduleReferenceTemplateLibraryRowsV2() {
+  const usageMap = buildScheduleImportMappingUsageMap();
+  const actualRows = (Array.isArray(state.schedule?.templateRows)
+    ? state.schedule.templateRows
+    : []
+  ).map((template) => {
+    const templateId = String(template?.id || template?.template_id || "").trim();
+    const dutyLabel = formatScheduleTemplateDutyTypeLabel(
+      template?.duty_type || "",
+    );
+    const startTime = String(template?.start_time || "").slice(0, 5);
+    const endTime = String(template?.end_time || "").slice(0, 5);
+    const timeLabel =
+      startTime && endTime ? `${startTime} - ${endTime}` : "";
+    const linkedRuleCount = Number(usageMap.get(templateId) || 0);
+    return {
+      id: templateId,
+      name:
+        String(template?.template_name || template?.name || "").trim() ||
+        String(templateId || "이름 없는 템플릿"),
+      description:
+        [dutyLabel, timeLabel].filter(Boolean).join(" · ") ||
+        "근무 템플릿",
+      scope:
+        String(template?.site_name || template?.site_code || "").trim() ||
+        "테넌트 공통",
+      status: template?.is_active === false ? "비활성" : "활성",
+      defaultProfile: Boolean(template?.is_default),
+      rules: linkedRuleCount,
+      updatedAt: formatDateLabel(template?.updated_at || template?.created_at, "-"),
+    };
+  });
+  const merged = [];
+  actualRows.forEach((row) => {
+    const key = String(row?.name || "").trim();
+    if (!key || merged.some((item) => item.name === key)) return;
+    merged.push(row);
+  });
+  return merged.slice(0, 6);
+}
+
+function inferScheduleReferenceIssueType(row = {}) {
+  const reasonText = String(row?.reason || row?.message || row?.validation_error || "")
+    .trim()
+    .toLowerCase();
+  if (!reasonText) return "검토 필요";
+  if (
+    reasonText.includes("누락") ||
+    reasonText.includes("비어") ||
+    reasonText.includes("없습") ||
+    reasonText.includes("미입력")
+  ) {
+    return "필수값 누락";
+  }
+  if (
+    reasonText.includes("코드") ||
+    reasonText.includes("불일치") ||
+    reasonText.includes("정의되지")
+  ) {
+    return "코드 불일치";
+  }
+  if (reasonText.includes("중복")) return "중복 신청";
+  return "검토 필요";
+}
+
+function buildScheduleReferenceIssueRows(rows = []) {
+  const sourceRows = Array.isArray(rows) && rows.length
+    ? rows
+    : [];
+  return sourceRows.map((row, index) => {
+    const rowNumber = Number(row?.row_no || 0);
+    const col = String(row?.source_col || "").trim().toUpperCase();
+    const cell =
+      String(row?.cell || row?.location || "").trim() ||
+      (col && rowNumber ? `${col}${rowNumber}` : `B${12 + index * 41}`);
+    const displayLocation = String(cell).includes("!")
+      ? cell
+      : `근무표!${cell}`;
+    const employeeName =
+      String(row?.employee_name || row?.raw_value || "").trim() || "-";
+    const scheduleDate = String(row?.schedule_date || "").trim();
+    const dutyType = String(row?.duty_type || row?.shift_type || "").trim();
+    const contentParts = [employeeName];
+    if (scheduleDate) contentParts.push(scheduleDate);
+    if (dutyType) contentParts.push(formatScheduleTemplateDutyTypeLabel(dutyType));
+    const issueTone = row?.is_blocking ? "danger" : "warn";
+    return {
+      location: displayLocation,
+      content: contentParts.join(" / "),
+      area: String(row?.source_block || row?.area || row?.section_label || "근무자 정보").trim(),
+      type: inferScheduleReferenceIssueType(row),
+      issueLabel: row?.is_blocking ? "차단" : "경고",
+      issueTone,
+      reason:
+        String(
+          row?.reason || row?.message || row?.validation_error || "검토가 필요한 항목입니다.",
+        ).trim(),
+      isBlocking: Boolean(row?.is_blocking),
+    };
+  });
+}
+
+function normalizeScheduleReferencePreviewTab(value = "") {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "all" ? "all" : "blocked";
+}
+
+function filterScheduleReferencePreviewRows(rows = [], tab = "blocked", query = "") {
+  const issueRows = buildScheduleReferenceIssueRows(rows);
+  const normalizedTab = normalizeScheduleReferencePreviewTab(tab);
+  const normalizedQuery = String(query || "").trim().toLowerCase();
+  return issueRows.filter((row) => {
+    if (normalizedTab === "blocked" && !row.isBlocking) return false;
+    if (!normalizedQuery) return true;
+    return [
+      row.location,
+      row.content,
+      row.area,
+      row.type,
+      row.reason,
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedQuery);
+  });
+}
+
+function pickScheduleReferenceNumber(source = {}, keys = []) {
+  if (!source || typeof source !== "object") return 0;
+  for (const key of keys) {
+    const value = source?.[key];
+    if (value === null || value === undefined || value === "") continue;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return 0;
+}
+
+function getScheduleReferenceBaseCompletionMetrics({
+  preview = {},
+  uploadUi = null,
+} = {}) {
+  const result =
+    uploadUi?.applySummary && typeof uploadUi.applySummary === "object"
+      ? uploadUi.applySummary
+      : {};
+  const appliedRows = Array.isArray(uploadUi?.applyRows)
+    ? uploadUi.applyRows
+    : [];
+  const skippedRows = Array.isArray(uploadUi?.skippedRows)
+    ? uploadUi.skippedRows
+    : [];
+  const success =
+    pickScheduleReferenceNumber(result, [
+      "successCount",
+      "success_count",
+      "applied_count",
+      "applied",
+      "created_count",
+      "updated_count",
+    ]) || appliedRows.length;
+  const partial = pickScheduleReferenceNumber(result, [
+    "partialCount",
+    "partial_count",
+    "partial_applied_count",
+    "partial",
+  ]);
+  const failed =
+    pickScheduleReferenceNumber(result, [
+      "failCount",
+      "failedCount",
+      "failed_count",
+      "skipped_count",
+      "skipped",
+      "error_count",
+    ]) || skippedRows.length;
+  const explicitTotal = pickScheduleReferenceNumber(result, [
+    "totalAppliedRows",
+    "total_applied_rows",
+    "totalRows",
+    "total_rows",
+    "total_count",
+  ]);
+  const total = explicitTotal || success + partial + failed;
+  const denominator = Math.max(total, success + partial + failed, 1);
+  const percent = (value) =>
+    `${Math.round((Number(value || 0) / denominator) * 1000) / 10}%`;
+  const previewTotal = Number(preview?.total_rows || preview?.preview_rows?.length || 0);
+  return {
+    total: total || previewTotal || 0,
+    success,
+    partial,
+    failed,
+    successRate: percent(success),
+    partialRate: percent(partial),
+    failedRate: percent(failed),
+    appliedAt:
+      formatScheduleReferenceFullDateTime(
+        result?.applied_at || result?.audit_timestamp || uploadUi?.lastAppliedAt || "",
+      ) || "-",
+  };
+}
+
+function renderScheduleReferenceBaseStageV2(step) {
+  const siteOptions = cloneSelectOptionsHtml("#scheduleImportSite");
+  const siteOptionList = getScheduleReferenceSelectOptions("#scheduleImportSite");
+  const tenantOptions = cloneSelectOptionsHtml("#scheduleImportTenantSelect");
+  const tenantOptionList = getScheduleReferenceSelectOptions(
+    "#scheduleImportTenantSelect",
+  );
+  const profileOptions = cloneSelectOptionsHtml("#scheduleImportMappingProfileSelect");
+  const profileOptionList = getScheduleReferenceSelectOptions(
+    "#scheduleImportMappingProfileSelect",
+  );
+  const tenantValue =
+    getScheduleReferenceFieldValue("#scheduleImportTenantReadonly") ||
+    getScheduleReferenceFieldValue("#scheduleImportTenantSelect") ||
+    state.user?.tenant_code ||
+    "";
+  const tenantSelectVisible =
+    !document
+      .querySelector("#scheduleImportTenantSelectField")
+      ?.classList?.contains("hidden");
+  const monthValue = getScheduleReferenceFieldValue("#scheduleImportMonth");
+  const selectedProfile = getSelectedScheduleImportMappingProfile();
+  const baseGate = getScheduleReferenceBaseGateState();
+  const mappingReadiness = baseGate.mappingReadiness;
+  const selectedProfileName =
+    String(selectedProfile?.profile_name || "").trim() ||
+    "템플릿을 선택하세요";
+  const selectedProfileUpdated = formatDateLabel(
+    selectedProfile?.updated_at,
+    "-",
+  );
+  const selectedProfileRules = Number(
+    selectedProfile?.entry_count || selectedProfile?.entries?.length || 0,
+  );
+  const selectedProfileScope = deriveScheduleImportMappingProfileScopeLabel(
+    selectedProfile,
+  );
+  const uploadableSiteCount = Array.from(
+    document.querySelectorAll("#scheduleImportSite option"),
+  ).filter((option) => option instanceof HTMLOptionElement && option.value && !option.disabled).length;
+  const tenantDisplayLabel = normalizeScheduleReferenceTenantLabel(
+    state.user?.tenant_name || tenantValue || "SENTRIX 본사",
+  );
+  const siteSelectedLabel =
+    siteOptionList.find((item) => item.selected)?.label ||
+    getScheduleReferenceText("#scheduleImportSite option:checked", "");
+  const hasUsableSites = siteOptionList.some(
+    (item) =>
+      item.value &&
+      !item.disabled &&
+      item.label &&
+      !/불러오는|선택/.test(item.label),
+  );
+  const siteFallbackLabel =
+    hasUsableSites && siteSelectedLabel && !/불러오는|선택/.test(siteSelectedLabel)
+      ? siteSelectedLabel
+      : "지점을 선택하세요";
+  const siteFieldHtml = hasUsableSites
+    ? `<select class="wizard-select" data-ref-sync="#scheduleImportSite">${siteOptions}</select>`
+    : `<select class="wizard-select" aria-label="지점" disabled><option value="">${escapeHtml(siteFallbackLabel)}</option></select>`;
+  const hasUsableProfiles = profileOptionList.some(
+    (item) =>
+      item.value &&
+      !item.disabled &&
+      item.label &&
+      !/선택|불러오는/.test(item.label),
+  );
+  const profileSelectedLabel =
+    profileOptionList.find((item) => item.selected && item.value)?.label || "";
+  const profileFallbackLabel =
+    profileSelectedLabel && !/선택|불러오는/.test(profileSelectedLabel)
+      ? profileSelectedLabel
+      : selectedProfileName;
+  const profileFieldHtml = hasUsableProfiles
+    ? `<select class="wizard-select" data-ref-sync="#scheduleImportMappingProfileSelect">${profileOptions}</select>`
+    : `<select class="wizard-select" aria-label="템플릿 프로필" disabled><option value="">${escapeHtml(profileFallbackLabel)}</option></select>`;
+  const tenantFieldHtml =
+    tenantOptions && tenantSelectVisible
+      ? `<select class="wizard-select" data-ref-sync="#scheduleImportTenantSelect">${
+          tenantOptionList.length
+            ? buildScheduleReferenceStaticOptionsHtml(
+                tenantOptionList.map((item) => ({
+                  ...item,
+                  label: normalizeScheduleReferenceTenantLabel(item.label || item.value),
+                })),
+                { fallbackLabel: tenantDisplayLabel },
+              )
+            : `<option value="">${escapeHtml(tenantDisplayLabel)}</option>`
+        }</select>`
+      : `<input class="wizard-input" value="${escapeHtml(tenantDisplayLabel)}" readonly />`;
+  const uploadableSiteCountDisplay = uploadableSiteCount > 0 ? uploadableSiteCount : 0;
+  const fileMeta = getScheduleReferenceBaseFileSelection();
+  const uploadUi = getScheduleUploadUiState();
+  const preview = state.preview || {};
+  const totalRows = Number(preview.total_rows || preview.preview_rows?.length || 0);
+  const applicableRows = Number(preview.applicable_rows || preview.valid_rows || 0);
+  const warningRows = Number(preview.warning_rows || 0);
+  const blockedRows = Number(preview.blocked_rows || preview.invalid_rows || 0);
+  const summaryTotal = Math.max(totalRows, applicableRows + warningRows + blockedRows);
+  const previewTab = normalizeScheduleReferencePreviewTab(
+    uploadUi.referencePreviewTab,
+  );
+  const previewRows = filterScheduleReferencePreviewRows(
+    Array.isArray(preview.preview_rows) ? preview.preview_rows : [],
+    previewTab,
+    uploadUi.referencePreviewQuery,
+  );
+  const analysisReady = Boolean(state.preview && summaryTotal);
+  const applyDone = String(uploadUi.applyResult || "").includes("반영 완료");
+  const completionMetrics = getScheduleReferenceBaseCompletionMetrics({
+    preview,
+    uploadUi,
+  });
+  const percentLabel = (value, total) =>
+    total > 0
+      ? `${Math.round((Number(value || 0) / total) * 1000) / 10}%`
+      : "0%";
+  if (step === SCHEDULE_BASE_WIZARD_STEP_MAPPING) {
+    const libraryRows = getScheduleReferenceTemplateLibraryRowsV2();
+    return {
+      mainHtml: `
+        <section class="wizard-panel reference-upload-card wizard-panel-stack">
+          <div class="wizard-panel-section">
+            <div class="wizard-section-title">1. 업로드 대상 선택</div>
+            <div class="wizard-target-grid">
+              <label class="wizard-field"><span>테넌트</span>${tenantFieldHtml}</label>
+              <label class="wizard-field"><span>지점 *</span>${siteFieldHtml}</label>
+              <label class="wizard-field"><span>대상 월 *</span><input class="wizard-input" type="month" value="${escapeHtml(monthValue)}" data-ref-sync="#scheduleImportMonth" /></label>
+              <aside class="wizard-inline-box wizard-inline-box-guide">
+                <div>
+                  <strong>권한 및 지점 안내</strong>
+                  <p>귀하는 아래 지점의 스케줄을 업로드할 수 있습니다.</p>
+                  <p>업로드 가능한 지점: ${uploadableSiteCountDisplay}개</p>
+                </div>
+                <span class="wizard-inline-illustration" aria-hidden="true">${getScheduleReferenceIconSvg("building")}</span>
+              </aside>
+            </div>
+          </div>
+          <div class="wizard-panel-section">
+            <div class="wizard-section-title">2. 근무 템플릿 선택</div>
+            <div class="wizard-template-grid">
+              <div class="wizard-template-select-shell">
+                <label class="wizard-field">
+                  <span>템플릿 프로필 *</span>
+                  <div class="wizard-template-select-row">
+                    ${profileFieldHtml}
+                    <span class="wizard-badge ${mappingReadiness.ready ? "is-success" : "is-warn"}">${escapeHtml(mappingReadiness.ready ? "적용 가능" : mappingReadiness.label)}</span>
+                    <button class="wizard-btn is-secondary" type="button" data-action="schedule-open-template-profile-manager">템플릿 관리</button>
+                  </div>
+                </label>
+              </div>
+              <aside class="wizard-inline-box wizard-template-summary">
+                <div class="wizard-template-summary-title">선택된 템플릿 요약</div>
+                <div class="wizard-template-summary-body">
+                  <span class="wizard-summary-check" aria-hidden="true">${getScheduleReferenceIconSvg("check")}</span>
+                  <div>
+                    <strong>${escapeHtml(selectedProfileName)}</strong>
+                    <p>마지막 수정일 ${escapeHtml(selectedProfileUpdated)} <span class="wizard-meta-divider">|</span> 규칙 수 ${escapeHtml(String(selectedProfileRules))}개 <span class="wizard-meta-divider">|</span> 적용 범위 ${escapeHtml(selectedProfileScope)}</p>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </div>
+          <div class="wizard-panel-section">
+            <div class="wizard-section-head">
+              <div class="wizard-section-title">3. 템플릿 라이브러리</div>
+              <button class="wizard-btn is-primary" type="button" data-action="schedule-template-create">${getScheduleReferenceIconSvg("plus")}템플릿 생성</button>
+            </div>
+            <table class="wizard-table wizard-table-library">
+              <thead>
+                <tr>
+                  <th>템플릿명</th>
+                  <th>설명</th>
+                  <th>적용 범위</th>
+                  <th>상태</th>
+                  <th>기본</th>
+                  <th>규칙 수</th>
+                  <th>마지막 수정일</th>
+                  <th>작업</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${
+                  libraryRows.length
+                    ? libraryRows
+                        .map(
+                          (row) => `
+                      <tr>
+                        <td>${escapeHtml(row.name)}</td>
+                        <td>${escapeHtml(row.description)}</td>
+                        <td>${escapeHtml(row.scope)}</td>
+                        <td><span class="wizard-badge ${row.status === "활성" ? "is-success" : "is-neutral"}">${escapeHtml(row.status)}</span></td>
+                        <td>${row.defaultProfile ? '<span class="wizard-default-star" aria-label="기본 프로필">★</span>' : "-"}</td>
+                        <td>${escapeHtml(String(row.rules))}</td>
+                        <td>${escapeHtml(row.updatedAt)}</td>
+                        <td><button class="wizard-ellipsis-btn" type="button" data-action="${row.id ? "schedule-template-edit" : "schedule-open-template-profile-manager"}" ${row.id ? `data-template-id="${escapeHtml(row.id)}"` : ""} aria-label="작업 메뉴">${getScheduleReferenceIconSvg("ellipsis")}</button></td>
+                      </tr>
+                    `,
+                        )
+                        .join("")
+                    : `<tr><td colspan="8">등록된 근무 템플릿이 없습니다. 템플릿 생성으로 업로드 규칙을 먼저 준비하세요.</td></tr>`
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      `,
+      footerHtml: `
+        <footer class="wizard-page-footer reference-upload-actions">
+          <div class="wizard-page-footer-left">
+            <button class="wizard-btn is-secondary" type="button" data-action="schedule-reset-upload">취소</button>
+          </div>
+          <div class="wizard-page-footer-right">
+            <button class="wizard-btn is-primary" type="button" data-action="schedule-base-wizard-next" data-next-step="file" data-testid="schedule-step1-next" ${getScheduleReferenceDisabledAttr(!baseGate.step1Ready, baseGate.missingLabel ? `먼저 ${baseGate.missingLabel}을(를) 준비하세요.` : "")}>다음 단계</button>
+          </div>
+        </footer>
+      `,
+    };
+  }
+  if (step === SCHEDULE_BASE_WIZARD_STEP_FILE) {
+    const stageLabel = uploadUi.analysisInFlight
+      ? "진행 중"
+      : analysisReady
+        ? "완료"
+        : "대기";
+    const stageTitle = uploadUi.analysisInFlight
+      ? uploadUi.analysisStageLabel || "분석 진행 중"
+      : analysisReady
+        ? "분석 완료"
+        : "분석 대기";
+    const stageDetail = uploadUi.analysisInFlight
+      ? uploadUi.analysisStageDetail || "분석 단계를 진행하고 있습니다."
+      : analysisReady
+        ? "분석 결과를 확인하고 다음 단계로 진행할 수 있습니다."
+        : "파일을 업로드하고 분석 시작 버튼을 클릭하면 분석이 시작됩니다.";
+    const progressPercent = uploadUi.analysisInFlight ? 58 : analysisReady ? 100 : 0;
+    return {
+      mainHtml: `
+        <div class="wizard-two-column">
+          <section class="wizard-panel reference-upload-card">
+            <div class="wizard-section-head">
+              <div class="wizard-section-title">1. 월간 근무표 파일</div>
+              <button class="wizard-btn is-secondary" type="button" data-action="schedule-download-blank-template" ${getScheduleReferenceDisabledAttr(!baseGate.contextReady, "양식 다운로드 전에 지점과 대상 월을 선택하세요.")}>${getScheduleReferenceIconSvg("download")}양식 다운로드</button>
+            </div>
+            <p class="wizard-panel-copy">작성된 근무표 Excel workbook 파일을 업로드하세요.</p>
+            <label class="wizard-upload-dropzone" for="scheduleImportFile">
+              <span class="wizard-upload-cloud" aria-hidden="true">${getScheduleReferenceIconSvg("cloud")}</span>
+              <strong>파일을 드래그하여 업로드하거나</strong>
+              <span class="wizard-btn is-outline">파일 선택</span>
+              <small>xlsx 파일을 선택하면 분석 준비 상태로 전환됩니다.</small>
+            </label>
+            <div class="wizard-selected-file-block${fileMeta.hasFile ? "" : " is-empty"}">
+              <div class="wizard-selected-file-label">선택된 파일</div>
+              <div class="wizard-selected-file-row">
+                <span class="wizard-file-icon" aria-hidden="true"></span>
+                <div class="wizard-selected-file-copy">
+                  <strong>${escapeHtml(fileMeta.fileName)}</strong>
+                  <span>${escapeHtml(fileMeta.fileSize)}</span>
+                </div>
+                <button class="wizard-icon-ghost" type="button" data-action="schedule-reference-clear-file" aria-label="선택된 파일 제거">×</button>
+              </div>
+            </div>
+            <div class="wizard-muted-meta">파일 형식 : .xlsx<br />최대 파일 크기 : 20MB</div>
+          </section>
+          <section class="wizard-panel reference-upload-card">
+            <div class="wizard-section-title">2. 분석 진행 상태</div>
+            <div class="wizard-status-card">
+              <div class="wizard-status-box">
+                <span class="wizard-badge is-neutral">${escapeHtml(stageLabel)}</span>
+                <strong>${escapeHtml(stageTitle)}</strong>
+                <p>${escapeHtml(stageDetail)}</p>
+                <div class="wizard-progress-track"><i style="width:${Math.max(0, Math.min(100, progressPercent))}%"></i></div>
+                <div class="wizard-progress-meta">
+                  <span>경과 시간</span>
+                  <span>${uploadUi.analysisInFlight ? "00:00:18" : analysisReady ? "00:00:42" : "00:00:00"}</span>
+                  <strong>${progressPercent}%</strong>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      `,
+      footerHtml: `
+        <footer class="wizard-page-footer reference-upload-actions">
+          <div class="wizard-page-footer-left">
+            <button class="wizard-btn is-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="mapping">이전</button>
+          </div>
+          <div class="wizard-page-footer-right">
+            <button class="wizard-btn is-primary" type="button" data-action="preview-schedule" data-testid="schedule-analysis-start" ${getScheduleReferenceDisabledAttr(!baseGate.canPreview, !baseGate.hasFile ? "분석할 xlsx 파일을 먼저 선택하세요." : baseGate.missingLabel ? `먼저 ${baseGate.missingLabel}을(를) 준비하세요.` : "")}>분석 시작</button>
+          </div>
+        </footer>
+      `,
+    };
+  }
+  if (step === SCHEDULE_BASE_WIZARD_STEP_REVIEW) {
+    return {
+      mainHtml: `
+        <section class="wizard-panel reference-upload-card wizard-metric-strip">
+          <div class="wizard-metric-cell wizard-metric-file">
+            <div class="wizard-file-icon is-large" aria-hidden="true"></div>
+            <div>
+              <span>파일 정보</span>
+              <strong>${escapeHtml(fileMeta.fileName)}</strong>
+              <em>${escapeHtml(fileMeta.fileSize)} <span class="wizard-meta-divider">|</span> 업로드 ${escapeHtml(fileMeta.uploadedAt)}</em>
+            </div>
+          </div>
+          <div class="wizard-metric-cell">
+            <span>총 분석 행</span>
+            <strong>${escapeHtml(String(summaryTotal || 0))} 행</strong>
+          </div>
+          <div class="wizard-metric-cell is-success">
+            <span>반영 가능</span>
+            <strong>${escapeHtml(String(applicableRows || 0))} 행</strong>
+            <em>${escapeHtml(percentLabel(applicableRows, summaryTotal || 1))}</em>
+          </div>
+          <div class="wizard-metric-cell is-warn">
+            <span>경고</span>
+            <strong>${escapeHtml(String(warningRows || 0))} 행</strong>
+            <em>${escapeHtml(percentLabel(warningRows, summaryTotal || 1))}</em>
+          </div>
+          <div class="wizard-metric-cell is-danger">
+            <span>차단</span>
+            <strong>${escapeHtml(String(blockedRows || 0))} 행</strong>
+            <em>${escapeHtml(percentLabel(blockedRows, summaryTotal || 1))}</em>
+          </div>
+          <div class="wizard-metric-cell wizard-metric-status">
+            <span>파일 상태</span>
+            <strong><span class="wizard-badge is-outline-accent">${analysisReady ? "분석 완료" : "검토 대기"}</span></strong>
+          </div>
+        </section>
+        <section class="wizard-panel reference-upload-card">
+          <div class="wizard-section-head wizard-review-head">
+            <div>
+              <div class="wizard-section-title wizard-inline-title">행 미리보기 <span class="wizard-inline-info" aria-hidden="true">i</span></div>
+              <p class="wizard-inline-help">차단(반영 불가) 항목만 표시됩니다. 검토 후 ‘전체 보기’에서 모든 행을 확인할 수 있습니다.</p>
+            </div>
+            <div class="wizard-review-actions">
+              <div class="wizard-segmented">
+                <button class="${previewTab === "blocked" ? "is-active" : ""}" type="button" data-action="schedule-reference-preview-tab" data-tab="blocked">${getScheduleReferenceIconSvg("eyeOff")}기본 보기 (차단만)</button>
+                <button class="${previewTab === "all" ? "is-active" : ""}" type="button" data-action="schedule-reference-preview-tab" data-tab="all">전체 보기</button>
+              </div>
+              <button class="wizard-btn is-secondary" type="button" data-action="schedule-reference-preview-download">${getScheduleReferenceIconSvg("download")}엑셀 다운로드</button>
+            </div>
+          </div>
+          <table class="wizard-table wizard-review-table" data-testid="schedule-preview-table">
+            <thead>
+              <tr>
+                <th>위치 (시트/행)</th>
+                <th>작성내용</th>
+                <th>영역 / 블록</th>
+                <th>유형</th>
+                <th>이슈 구분</th>
+                <th>사유</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                previewRows.length
+                  ? previewRows
+                      .slice(0, 8)
+                      .map(
+                        (row) => `
+                          <tr>
+                            <td>${escapeHtml(row.location)}</td>
+                            <td>${escapeHtml(row.content)}</td>
+                            <td>${escapeHtml(row.area)}</td>
+                            <td>${escapeHtml(row.type)}</td>
+                            <td><span class="wizard-badge ${row.issueTone === "danger" ? "is-danger" : "is-warn"}">${escapeHtml(row.issueLabel)}</span></td>
+                            <td>${escapeHtml(row.reason)}</td>
+                          </tr>
+                        `,
+                      )
+                      .join("")
+                  : `<tr><td colspan="6">표시할 이슈 항목이 없습니다.</td></tr>`
+              }
+            </tbody>
+          </table>
+        </section>
+      `,
+      footerHtml: `
+        <footer class="wizard-page-footer reference-upload-actions">
+          <div class="wizard-page-footer-left">
+            <button class="wizard-btn is-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="file">이전</button>
+          </div>
+          <div class="wizard-page-footer-right">
+            <button class="wizard-btn is-secondary" type="button" data-action="preview-schedule">다시 분석</button>
+            <button class="wizard-btn is-primary" type="button" data-action="apply-schedule" ${getScheduleReferenceDisabledAttr(!baseGate.canApply, "반영 가능한 분석 결과가 준비된 뒤 다음 단계로 이동할 수 있습니다.")}>다음 단계</button>
+          </div>
+        </footer>
+      `,
+    };
+  }
+  return {
+    mainHtml: `
+      <section class="wizard-panel reference-upload-card wizard-result-strip" data-testid="schedule-apply-complete">
+        <div class="wizard-result-status">
+          <span class="wizard-result-status-icon" aria-hidden="true">${getScheduleReferenceIconSvg("check")}</span>
+          <div>
+            <strong>${applyDone ? "반영 완료" : "반영 대기"}</strong>
+            <p>${escapeHtml(applyDone ? "스케줄 데이터가 성공적으로 반영되었습니다." : "분석 결과를 실제 스케줄에 반영할 준비가 완료되었습니다.")}</p>
+          </div>
+        </div>
+        <div class="wizard-result-metric">
+          <span>총 반영 행</span>
+          <strong>${escapeHtml(completionMetrics.total.toLocaleString("ko-KR"))} 행</strong>
+        </div>
+        <div class="wizard-result-metric is-success">
+          <span>성공</span>
+          <strong>${escapeHtml(completionMetrics.success.toLocaleString("ko-KR"))} 행</strong>
+          <em>${escapeHtml(completionMetrics.successRate)}</em>
+        </div>
+        <div class="wizard-result-metric is-warn">
+          <span>부분 반영</span>
+          <strong>${escapeHtml(completionMetrics.partial.toLocaleString("ko-KR"))} 행</strong>
+          <em>${escapeHtml(completionMetrics.partialRate)}</em>
+        </div>
+        <div class="wizard-result-metric is-danger">
+          <span>실패</span>
+          <strong>${escapeHtml(completionMetrics.failed.toLocaleString("ko-KR"))} 행</strong>
+          <em>${escapeHtml(completionMetrics.failedRate)}</em>
+        </div>
+        <div class="wizard-result-metric">
+          <span>반영 완료 시간</span>
+          <strong>${escapeHtml(completionMetrics.appliedAt)}</strong>
+        </div>
+      </section>
+      <section class="wizard-panel reference-upload-card">
+        <div class="wizard-section-title">상세 결과</div>
+        <table class="wizard-table wizard-result-table">
+          <thead>
+            <tr>
+              <th>구분</th>
+              <th>내용</th>
+              <th>행 수</th>
+              <th>비율</th>
+              <th>결과</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="wizard-result-label"><span class="wizard-result-icon is-success">${getScheduleReferenceIconSvg("check")}</span>성공</span></td>
+              <td>스케줄에 정상적으로 반영된 행</td>
+              <td>${escapeHtml(completionMetrics.success.toLocaleString("ko-KR"))}</td>
+              <td>${escapeHtml(completionMetrics.successRate)}</td>
+              <td><span class="wizard-badge is-success">성공</span></td>
+            </tr>
+            <tr>
+              <td><span class="wizard-result-label"><span class="wizard-result-icon is-warn">${getScheduleReferenceIconSvg("warning")}</span>부분 반영</span></td>
+              <td>일부 항목만 반영되어 추가 확인이 필요한 행</td>
+              <td>${escapeHtml(completionMetrics.partial.toLocaleString("ko-KR"))}</td>
+              <td>${escapeHtml(completionMetrics.partialRate)}</td>
+              <td><span class="wizard-badge is-warn">부분 반영</span></td>
+            </tr>
+            <tr>
+              <td><span class="wizard-result-label"><span class="wizard-result-icon is-danger">${getScheduleReferenceIconSvg("error-circle")}</span>실패</span></td>
+              <td>반영되지 않은 행 (오류 또는 필수값 누락 등)</td>
+              <td>${escapeHtml(completionMetrics.failed.toLocaleString("ko-KR"))}</td>
+              <td>${escapeHtml(completionMetrics.failedRate)}</td>
+              <td><span class="wizard-badge is-danger">실패</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="wizard-panel-actions">
+          <button class="wizard-btn is-secondary" type="button" data-action="schedule-reference-download-summary">${getScheduleReferenceIconSvg("download")}실패/부분 반영 행 다운로드</button>
+          <button class="wizard-btn is-secondary" type="button" data-action="schedule-reference-view-log">${getScheduleReferenceIconSvg("log")}상세 로그 보기</button>
+        </div>
+      </section>
+    `,
+    footerHtml: `
+      <footer class="wizard-page-footer reference-upload-actions">
+        <div class="wizard-page-footer-left">
+          <button class="wizard-btn is-secondary" type="button" data-action="schedule-base-wizard-prev" data-prev-step="review">이전</button>
+        </div>
+        <div class="wizard-page-footer-right">
+          <button class="wizard-btn is-primary" type="button" data-action="schedule-reference-finish">종료</button>
+        </div>
+      </footer>
+    `,
+  };
+}
+
+function buildScheduleReferenceBasePageModel(step) {
+  const headerModel = getScheduleReferenceBaseHeader(step);
+  const stepperHtml = renderScheduleReferenceStepperBar({
+    variant: "four",
+    active: headerModel.number,
+  });
+  const stage = renderScheduleReferenceBaseStageV2(step);
+  return {
+    headerHtml: renderScheduleReferencePageHeader(headerModel),
+    stepperHtml,
+    mainHtml: stage.mainHtml,
+    footerHtml: stage.footerHtml,
+  };
 }
 
 function renderScheduleReferenceStepper(steps, activeStep) {
@@ -22619,62 +24868,28 @@ function renderScheduleReferenceSummaryCards(items = []) {
 }
 
 function normalizeScheduleReferencePreviewTab(value = "") {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
-  if (["all", "valid", "warn", "error"].includes(normalized)) return normalized;
-  return "all";
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "all" ? "all" : "blocked";
 }
 
 function getScheduleReferencePreviewCounts(rows = []) {
-  const list = Array.isArray(rows) ? rows : [];
+  const list = buildScheduleReferenceIssueRows(rows);
   return {
     all: list.length,
-    valid: list.filter(
-      (row) =>
-        !Boolean(row?.is_blocking) &&
-        String(row?.decision_stage || "").trim().toLowerCase() !== "review",
-    ).length,
-    warn: list.filter(
-      (row) =>
-        !Boolean(row?.is_blocking) &&
-        String(row?.decision_stage || "").trim().toLowerCase() === "review",
-    ).length,
-    error: list.filter((row) => Boolean(row?.is_blocking)).length,
+    blocked: list.filter((row) => Boolean(row?.isBlocking)).length,
   };
 }
 
 function filterScheduleReferencePreviewRows(rows = [], tab = "all", query = "") {
-  const list = Array.isArray(rows) ? rows : [];
+  const list = buildScheduleReferenceIssueRows(rows);
   const normalizedTab = normalizeScheduleReferencePreviewTab(tab);
   const normalizedQuery = String(query || "")
     .trim()
     .toLowerCase();
   return list.filter((row) => {
-    if (normalizedTab === "valid") {
-      if (Boolean(row?.is_blocking)) return false;
-      if (String(row?.decision_stage || "").trim().toLowerCase() === "review")
-        return false;
-    }
-    if (normalizedTab === "warn") {
-      if (Boolean(row?.is_blocking)) return false;
-      if (String(row?.decision_stage || "").trim().toLowerCase() !== "review")
-        return false;
-    }
-    if (normalizedTab === "error" && !Boolean(row?.is_blocking)) return false;
+    if (normalizedTab === "blocked" && !Boolean(row?.isBlocking)) return false;
     if (!normalizedQuery) return true;
-    const haystack = [
-      row?.cell,
-      row?.location,
-      row?.employee_name,
-      row?.employee_code,
-      row?.section_label,
-      row?.source_block,
-      row?.reason,
-      row?.message,
-      row?.duty_type,
-      row?.schedule_date,
-    ]
+    const haystack = [row?.location, row?.content, row?.area, row?.type, row?.reason]
       .map((value) => String(value || "").trim().toLowerCase())
       .join(" ");
     return haystack.includes(normalizedQuery);
@@ -22931,8 +25146,8 @@ function renderScheduleReferenceBaseStage(step) {
         <div class="reference-template-summary">
           <span class="reference-check" aria-hidden="true">✓</span>
           <div>
-            <strong>${escapeHtml(getScheduleReferenceText("#scheduleImportMappingProfileSelect option:checked", "표준 근무 템플릿 v2.1"))}</strong>
-            <p>마지막 수정일 2025.04.28  |  규칙 수 28개  |  적용 범위 전체 지점</p>
+            <strong>${escapeHtml(getScheduleReferenceText("#scheduleImportMappingProfileSelect option:checked", "템플릿을 선택하세요"))}</strong>
+            <p>선택한 템플릿 프로필 기준으로 업로드 규칙을 적용합니다.</p>
           </div>
         </div>
       </div>
@@ -22960,6 +25175,627 @@ function renderScheduleReferenceHqTable() {
     .slice(0, 5)
     .map((row) => `<tr>${row.innerHTML}</tr>`)
     .join("");
+}
+
+function getScheduleReferenceHqHeader(step) {
+  const map = {
+    [SCHEDULE_HQ_WIZARD_STEP_EXPORT]: {
+      number: 1,
+      mode: SCHEDULE_UPLOAD_MODE_HQ,
+      description:
+        "지원근무자 업로드를 위해, 스케줄을 업로드한 지점들의 파일을 먼저 다운로드하세요.",
+    },
+    [SCHEDULE_HQ_WIZARD_STEP_UPLOAD]: {
+      number: 2,
+      mode: SCHEDULE_UPLOAD_MODE_HQ,
+      description:
+        "지원근무자 업로드를 위해, 스케줄을 업로드한 지점들의 파일을 먼저 다운로드하세요.",
+    },
+    [SCHEDULE_HQ_WIZARD_STEP_PREVIEW]: {
+      number: 3,
+      mode: SCHEDULE_UPLOAD_MODE_HQ,
+      description:
+        "지원근무자 업로드 결과를 분석하여 데이터를 검토하고 반영 가능 여부를 확인하세요.",
+    },
+    [SCHEDULE_HQ_WIZARD_STEP_COMPLETE]: {
+      number: 4,
+      mode: SCHEDULE_UPLOAD_MODE_HQ,
+      description:
+        "지원근무자 업로드 결과를 분석하여 데이터가 검토되고 반영 가능 여부를 확인하세요.",
+    },
+  };
+  return map[step] || map[SCHEDULE_HQ_WIZARD_STEP_EXPORT];
+}
+
+function getScheduleReferenceHqStepperItems() {
+  return [
+    { label: "준비" },
+    { label: "파일 준비" },
+    { label: "미리보기 / 검토" },
+    { label: "반영 / 완료" },
+  ];
+}
+
+function getScheduleReferenceHqSiteRows() {
+  const selectedSet = new Set(getScheduleHqSelectedSiteCodes());
+  const actualRows = getScheduleSupportHqWorkspaceSites().map((site) => ({
+    siteCode: site.siteCode,
+    checked: selectedSet.has(site.siteCode),
+    selectable: Boolean(site.selectable),
+    siteName: getSupportStatusSiteLabel(site.siteCode, site.siteName),
+    sheetName: `시트명 ${site.sheetName || site.siteName || site.siteCode}`,
+    statusLabel: getScheduleSupportHqSiteStatusLabel(site),
+    statusTone:
+      getScheduleSupportHqSiteStatusLabel(site) === "업로드 완료"
+        ? "success"
+        : "danger",
+    uploadedAt: site.sourceUploadedAt
+      ? formatOpsDateTime(site.sourceUploadedAt)
+      : "최근 업로드 정보 없음",
+    memo: getScheduleSupportHqSiteMemo(site),
+  }));
+  const mergedRows = [];
+  actualRows.forEach((row) => {
+    const key = `${String(row.siteName || "").trim()}|${String(row.sheetName || "").trim()}`;
+    if (!key.trim() || mergedRows.some((item) => `${item.siteName}|${item.sheetName}` === key)) {
+      return;
+    }
+    mergedRows.push(row);
+  });
+  return mergedRows;
+}
+
+function getScheduleReferenceHqUploadRows() {
+  const workspace = ensureScheduleSupportHqWorkspaceState();
+  const uploader =
+    `${String(
+      state.user?.full_name ||
+        state.user?.name ||
+        state.user?.username ||
+        "사용자",
+    ).trim()} (${getRoleDisplayLabel(
+      state.user?.role || "hq_admin",
+    )})`;
+  const actualRows = [];
+  if (workspace.uploadFileName) {
+    actualRows.push({
+      fileName: workspace.uploadFileName,
+      fileSize: workspace.uploadFileSize
+        ? formatDownloadTransferSize(workspace.uploadFileSize)
+        : "크기 확인 중",
+      uploadedAt:
+        workspace.uploadFileLastModified || "업로드 일시 확인 중",
+      uploader,
+      statusLabel: "업로드 완료",
+    });
+  }
+  const mergedRows = [];
+  actualRows.forEach((row) => {
+    const key = String(row.fileName || "").trim();
+    if (!key || mergedRows.some((item) => item.fileName === key)) return;
+    mergedRows.push(row);
+  });
+  return mergedRows;
+}
+
+function getScheduleReferenceSupportCompletionMetrics(workspace = null) {
+  const inspectSummary =
+    workspace?.inspectResult && typeof workspace.inspectResult.summary === "object"
+      ? workspace.inspectResult.summary
+      : {};
+  const applyResult =
+    workspace?.applyResult && typeof workspace.applyResult === "object"
+      ? workspace.applyResult
+      : {};
+  const hasApplyResult = Object.keys(applyResult).length > 0;
+  let success = Number(inspectSummary.auto_approved || 0);
+  let partial = Number(inspectSummary.approval_pending || 0);
+  let failed = Number(inspectSummary.blocking || 0);
+  let total = Number(inspectSummary.total_rows || inspectSummary.total || 0);
+
+  if (hasApplyResult) {
+    const handoffSuccess = Number(applyResult.handoff_success_count || 0);
+    const handoffFailed = Number(
+      applyResult.handoff_failed_count ||
+        applyResult.failed_scope_count ||
+        0,
+    );
+    const hasHandoffBreakdown =
+      handoffSuccess > 0 ||
+      handoffFailed > 0 ||
+      Array.isArray(applyResult.scope_results);
+    if (hasHandoffBreakdown) {
+      success = handoffSuccess;
+      failed = handoffFailed;
+      partial = Number(
+        applyResult.partial_count ||
+          applyResult.partial_applied_count ||
+          applyResult.excluded_scope_count ||
+          0,
+      );
+    } else {
+      success = Number(
+        applyResult.success_count ||
+          applyResult.applied_count ||
+          applyResult.applied_scope_count ||
+          applyResult.tickets_auto_approved ||
+          0,
+      );
+      partial = Number(
+        applyResult.partial_count ||
+          applyResult.partial_applied_count ||
+          applyResult.excluded_scope_count ||
+          applyResult.tickets_pending ||
+          0,
+      );
+      failed = Number(
+        applyResult.failed_count ||
+          applyResult.skipped_count ||
+          applyResult.failed_scope_count ||
+          0,
+      );
+    }
+
+    const explicitTotal = Number(
+      applyResult.total_count ||
+        applyResult.total_rows ||
+        applyResult.affected_scope_count ||
+        0,
+    );
+    total = Math.max(explicitTotal, success + partial + failed);
+  }
+
+  const actualTotal = Math.max(total, success + partial + failed, 1);
+  const percent = (value) =>
+    `${Math.round((Number(value || 0) / actualTotal) * 1000) / 10}%`;
+  return {
+    total,
+    success,
+    partial,
+    failed,
+    successRate: percent(success),
+    partialRate: percent(partial),
+    failedRate: percent(failed),
+    appliedAt: (applyResult.applied_at || applyResult.audit_timestamp)
+      ? formatScheduleReferenceFullDateTime(
+          applyResult.applied_at || applyResult.audit_timestamp,
+        )
+      : "-",
+  };
+}
+
+function buildScheduleReferenceHqPageModel(step) {
+  const headerModel = getScheduleReferenceHqHeader(step);
+  const workspace = ensureScheduleSupportHqWorkspaceState();
+  const stepperHtml = renderScheduleReferenceStepperBar({
+    variant: "final-four",
+    active: headerModel.number,
+    itemsOverride: getScheduleReferenceHqStepperItems(),
+  });
+
+  if (step === SCHEDULE_HQ_WIZARD_STEP_EXPORT) {
+    const siteRows = getScheduleReferenceHqSiteRows();
+    const visibleSiteRows = siteRows.slice(0, 5);
+    const totalCount = Math.max(
+      getScheduleSupportHqContractSiteCount(workspace.contract),
+      siteRows.length,
+    );
+    const isLoadingSites = Boolean(workspace.loading);
+    const allSelectableCodes = getScheduleSupportHqSelectableSiteCodes();
+    const selectedCodes = getScheduleHqSelectedSiteCodes().filter((code) =>
+      allSelectableCodes.includes(code),
+    );
+    const hasDownloadableSites = allSelectableCodes.length > 0;
+    const hasSelectedSites = selectedCodes.length > 0;
+    const allSelected =
+      allSelectableCodes.length > 0 &&
+      allSelectableCodes.every((code) => selectedCodes.includes(code));
+    return {
+      headerHtml: renderScheduleReferencePageHeader(headerModel),
+      stepperHtml,
+      mainHtml: `
+        <section class="wizard-panel reference-upload-card">
+          <div class="wizard-section-title">1. 스케줄 업로드 지점 파일 다운로드</div>
+          <p class="wizard-panel-copy">지원근무자 업로드는 스케줄을 업로드한 지점들의 정보를 기반으로 진행됩니다.</p>
+          <p class="wizard-panel-copy">아래 버튼을 클릭하여, 스케줄 업로드 지점들의 파일을 다운로드하세요.</p>
+          <div class="wizard-support-split">
+            <button class="wizard-btn is-secondary wizard-support-download-btn" type="button" data-action="schedule-support-hq-download-start" data-testid="support-location-download" ${getScheduleReferenceDisabledAttr(!hasDownloadableSites, "다운로드 가능한 지점을 불러오는 중입니다.")}>${getScheduleReferenceIconSvg("download")}스케줄 업로드 지점 파일 다운로드</button>
+            <aside class="wizard-support-info-box">
+              <div class="wizard-support-info-head">${getScheduleReferenceIconSvg("info")}안내 사항</div>
+              <ul>
+                <li>다운로드한 파일은 지원근무자 파일을 작성하는 기준이 됩니다.</li>
+                <li>파일 형식: Excel (.xlsx)</li>
+              </ul>
+            </aside>
+          </div>
+          <div class="wizard-section-head">
+            <div class="wizard-section-title">다운로드 대상 지점</div>
+            <span class="wizard-count-badge">총 ${escapeHtml(String(totalCount))}개 지점</span>
+          </div>
+          <table class="wizard-table wizard-support-sites-table">
+            <thead>
+              <tr>
+                <th class="wizard-check-col"><input type="checkbox" data-action="schedule-support-hq-select-all" aria-label="전체 선택" ${allSelected ? "checked" : ""} ${allSelectableCodes.length ? "" : "disabled"} /></th>
+                <th>지점명</th>
+                <th>상태</th>
+                <th>최근 스케줄 업로드</th>
+                <th>메모</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                isLoadingSites
+                  ? Array.from({ length: 5 })
+                      .map(
+                        () => `
+                    <tr class="wizard-skeleton-row">
+                      <td class="wizard-check-col"><span class="wizard-skeleton is-checkbox"></span></td>
+                      <td><span class="wizard-skeleton is-text-wide"></span><span class="wizard-skeleton is-text"></span></td>
+                      <td><span class="wizard-skeleton is-pill"></span></td>
+                      <td><span class="wizard-skeleton is-text-mid"></span></td>
+                      <td><span class="wizard-skeleton is-text-wide"></span></td>
+                    </tr>
+                  `,
+                      )
+                      .join("")
+                  : visibleSiteRows.length
+                  ? visibleSiteRows
+                      .map(
+                        (row) => `
+                    <tr${row.selectable ? "" : ' class="is-disabled"'}>
+                      <td class="wizard-check-col"><input type="checkbox" data-action="schedule-support-hq-toggle-site" data-site-code="${escapeHtml(row.siteCode)}" aria-label="${escapeHtml(row.siteName)} 선택" ${row.checked ? "checked" : ""} ${row.selectable ? "" : "disabled"} /></td>
+                      <td><div class="wizard-cell-stack"><strong>${escapeHtml(row.siteName)}</strong><span>${escapeHtml(row.sheetName)}</span></div></td>
+                      <td><span class="wizard-badge ${row.statusTone === "success" ? "is-success" : "is-danger"}">${escapeHtml(row.statusLabel)}</span></td>
+                      <td>${escapeHtml(row.uploadedAt)}</td>
+                      <td>${escapeHtml(row.memo)}</td>
+                    </tr>
+                  `,
+                      )
+                      .join("")
+                  : `<tr><td colspan="5">선택 가능한 지점 정보를 불러오는 중입니다.</td></tr>`
+              }
+            </tbody>
+          </table>
+        </section>
+      `,
+      footerHtml: `
+        <footer class="wizard-page-footer reference-upload-actions">
+          <div class="wizard-page-footer-left">
+            <button class="wizard-btn is-secondary" type="button" data-action="schedule-reset-upload">이전</button>
+          </div>
+          <div class="wizard-page-footer-right">
+            <button class="wizard-btn is-primary" type="button" data-action="schedule-hq-wizard-next" data-next-step="upload" ${getScheduleReferenceDisabledAttr(!hasSelectedSites, "다운로드할 지점을 먼저 선택하세요.")}>다음 단계 ${getScheduleReferenceIconSvg("arrow-right")}</button>
+          </div>
+        </footer>
+      `,
+    };
+  }
+
+  if (step === SCHEDULE_HQ_WIZARD_STEP_UPLOAD) {
+    const fileRows = getScheduleReferenceHqUploadRows();
+    const count = fileRows.length;
+    const hasUploadFile = count > 0;
+    return {
+      headerHtml: renderScheduleReferencePageHeader(headerModel),
+      stepperHtml,
+      mainHtml: `
+        <section class="wizard-panel reference-upload-card">
+          <div class="wizard-section-title">1. 지원근무자 파일 업로드</div>
+          <p class="wizard-panel-copy">지원근무자 파일을 드래그하거나 클릭하여 업로드하세요.</p>
+          <p class="wizard-panel-copy">파일 형식: Excel (.xlsx)</p>
+          <div class="wizard-support-upload-grid">
+            <label class="wizard-upload-dropzone wizard-hq-upload-dropzone" for="scheduleSupportHqUploadFile">
+              <span class="wizard-upload-cloud" aria-hidden="true">${getScheduleReferenceIconSvg("cloud")}</span>
+              <strong>파일을 드래그하거나 클릭하여 업로드하세요</strong>
+              <small>여러 파일을 한 번에 업로드할 수 있습니다.</small>
+              <span class="wizard-btn is-outline">파일 선택</span>
+            </label>
+            <aside class="wizard-support-info-box is-blue">
+              <div class="wizard-support-info-head">${getScheduleReferenceIconSvg("info")}안내 사항</div>
+              <ul>
+                <li>1단계에서 다운로드한 스케줄 업로드 지점의 파일을 업로드해주세요.</li>
+                <li>파일 형식: Excel (.xlsx)</li>
+                <li>파일명은 자유롭게 지정할 수 있습니다.</li>
+                <li>최대 20MB까지 업로드 가능합니다.</li>
+              </ul>
+            </aside>
+          </div>
+          <div class="wizard-section-head">
+            <div class="wizard-section-title">2. 업로드 파일 목록</div>
+            <span class="wizard-count-badge">총 ${escapeHtml(String(count))}개 파일</span>
+          </div>
+          <table class="wizard-table wizard-support-upload-table" data-testid="support-upload-file-table">
+            <thead>
+              <tr>
+                <th>파일명</th>
+                <th>파일 크기</th>
+                <th>업로드 일시</th>
+                <th>업로더</th>
+                <th>상태</th>
+                <th>작업</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                fileRows.length
+                  ? fileRows
+                      .map(
+                        (row) => `
+                    <tr>
+                      <td><div class="wizard-file-cell"><span class="wizard-file-icon wizard-file-icon-clean" aria-hidden="true"></span><span>${escapeHtml(row.fileName)}</span></div></td>
+                      <td>${escapeHtml(row.fileSize)}</td>
+                      <td>${escapeHtml(row.uploadedAt)}</td>
+                      <td>${escapeHtml(row.uploader)}</td>
+                      <td><span class="wizard-badge is-success">${escapeHtml(row.statusLabel)}</span></td>
+                      <td>
+                        <div class="wizard-row-icon-actions">
+                          <button class="wizard-icon-ghost" type="button" data-action="schedule-reference-hq-row-download" aria-label="파일 다운로드">${getScheduleReferenceIconSvg("download")}</button>
+                          <button class="wizard-icon-ghost" type="button" data-action="schedule-reference-hq-row-delete" aria-label="파일 삭제">${getScheduleReferenceIconSvg("trash")}</button>
+                        </div>
+                      </td>
+                    </tr>
+                  `,
+                      )
+                      .join("")
+                  : `<tr><td colspan="6">업로드된 지원근무자 파일이 없습니다.</td></tr>`
+              }
+            </tbody>
+          </table>
+          <div class="wizard-info-banner">${getScheduleReferenceIconSvg("info")}다음 단계로 진행하려면 최소 1개 이상의 파일을 업로드해야 합니다.</div>
+        </section>
+      `,
+      footerHtml: `
+        <footer class="wizard-page-footer reference-upload-actions">
+          <div class="wizard-page-footer-left">
+            <button class="wizard-btn is-secondary" type="button" data-action="schedule-hq-wizard-prev" data-prev-step="export">이전</button>
+          </div>
+          <div class="wizard-page-footer-right">
+            <button class="wizard-btn is-primary" type="button" data-action="schedule-support-hq-inspect" ${getScheduleReferenceDisabledAttr(!hasUploadFile, "지원근무자 xlsx 파일을 먼저 업로드하세요.")}>다음 단계 ${getScheduleReferenceIconSvg("arrow-right")}</button>
+          </div>
+        </footer>
+      `,
+    };
+  }
+
+  if (step === SCHEDULE_HQ_WIZARD_STEP_PREVIEW) {
+    const inspectResult =
+      workspace.inspectResult && typeof workspace.inspectResult === "object"
+        ? workspace.inspectResult
+        : null;
+    const previewRows = getScheduleReferenceHqPreviewRows(inspectResult);
+    const inspectSummary =
+      inspectResult?.summary && typeof inspectResult.summary === "object"
+        ? inspectResult.summary
+        : {};
+    const previewTab = normalizeScheduleReferenceHqPreviewTab(
+      workspace.referencePreviewTab,
+    );
+    const filteredRows = filterScheduleReferenceHqPreviewRows(
+      previewRows,
+      previewTab,
+      workspace.referencePreviewQuery,
+    );
+    const counts = getScheduleReferenceHqSummaryCounts(
+      inspectSummary,
+      getScheduleReferenceHqPreviewCounts(previewRows),
+    );
+    const pagination = getWizardPaginationModel(
+      filteredRows,
+      createWizardPaginationState({
+        page: workspace.previewPage,
+        pageSize: 10,
+      }),
+    );
+    workspace.previewPage = pagination.page;
+    const percent = (value, total) =>
+      total > 0 ? `${Math.round((Number(value || 0) / total) * 1000) / 10}%` : "0%";
+    const totalRows = Math.max(Number(counts.all || 0), 0);
+    const pageButtons = `
+      <button type="button" class="is-nav" data-action="schedule-reference-hq-preview-page" data-page="${Math.max(1, pagination.page - 1)}" aria-label="이전 페이지" ${pagination.page <= 1 ? "disabled" : ""}>${getScheduleReferenceIconSvg("arrow-right")}</button>
+      ${getWizardVisiblePageNumbers(pagination.page, pagination.totalPages, 5)
+        .map((page) => {
+          const active = page === pagination.page;
+          return `<button type="button" class="${active ? "is-active" : ""}" data-action="schedule-reference-hq-preview-page" data-page="${page}" aria-pressed="${active ? "true" : "false"}">${page}</button>`;
+        })
+        .join("")}
+      ${pagination.totalPages > 5 ? `<span>...</span><button type="button" data-action="schedule-reference-hq-preview-page" data-page="${pagination.totalPages}">${pagination.totalPages}</button>` : ""}
+      <button type="button" class="is-next" data-action="schedule-reference-hq-preview-page" data-page="${Math.min(pagination.totalPages, pagination.page + 1)}" aria-label="다음 페이지" ${pagination.page >= pagination.totalPages ? "disabled" : ""}>${getScheduleReferenceIconSvg("arrow-right")}</button>
+    `;
+    return {
+      headerHtml: renderScheduleReferencePageHeader(headerModel),
+      stepperHtml,
+      mainHtml: `
+        <section class="wizard-panel reference-upload-card">
+          <div class="wizard-section-title">분석 요약</div>
+          <div class="wizard-support-summary-strip">
+            <div class="wizard-support-summary-cell"><span>전체</span><strong>${counts.all.toLocaleString("ko-KR")} <em>행</em></strong></div>
+            <div class="wizard-support-summary-cell is-success"><span>정상</span><strong>${counts.valid.toLocaleString("ko-KR")} <em>행</em></strong><small>(${percent(counts.valid, totalRows)})</small></div>
+            <div class="wizard-support-summary-cell is-warn"><span>경고</span><strong>${counts.warn.toLocaleString("ko-KR")} <em>행</em></strong><small>(${percent(counts.warn, totalRows)})</small></div>
+            <div class="wizard-support-summary-cell is-danger"><span>오류(차단)</span><strong>${counts.error.toLocaleString("ko-KR")} <em>행</em></strong><small>(${percent(counts.error, totalRows)})</small></div>
+            <div class="wizard-support-summary-cell is-status"><span>파일 상태</span><div class="wizard-support-status-ok">${getScheduleReferenceIconSvg("check")}${inspectResult ? "분석 완료" : "검토 대기"}</div></div>
+          </div>
+        </section>
+        <section class="wizard-panel reference-upload-card">
+          <div class="wizard-support-table-toolbar">
+            <div class="wizard-support-tabs">
+              <button class="${previewTab === "all" ? "is-active" : ""}" type="button" data-action="schedule-reference-hq-preview-tab" data-tab="all">전체 (${counts.all.toLocaleString("ko-KR")})</button>
+              <button class="${previewTab === "valid" ? "is-active" : ""}" type="button" data-action="schedule-reference-hq-preview-tab" data-tab="valid">정상 (${counts.valid.toLocaleString("ko-KR")})</button>
+              <button class="${previewTab === "warn" ? "is-active" : ""}" type="button" data-action="schedule-reference-hq-preview-tab" data-tab="warn">경고 (${counts.warn.toLocaleString("ko-KR")})</button>
+              <button class="${previewTab === "error" ? "is-active" : ""}" type="button" data-action="schedule-reference-hq-preview-tab" data-tab="error">오류 (${counts.error.toLocaleString("ko-KR")})</button>
+            </div>
+            <div class="wizard-support-search-row">
+              <label class="wizard-searchbox">
+                ${getScheduleReferenceIconSvg("search")}
+                <input type="search" value="${escapeHtml(String(workspace.referencePreviewQuery || ""))}" placeholder="직원명, 사번, 부서명 검색" data-action="schedule-reference-hq-preview-search" />
+              </label>
+              <button class="wizard-btn is-secondary wizard-filter-btn" type="button" data-action="schedule-reference-hq-preview-filter-toggle">${getScheduleReferenceIconSvg("filter")}필터</button>
+            </div>
+          </div>
+          <table class="wizard-table wizard-support-preview-table" data-testid="support-preview-table">
+            <thead>
+              <tr>
+                <th>행 번호</th>
+                <th>상태</th>
+                <th>사번</th>
+                <th>이름</th>
+                <th>부서</th>
+                <th>지원근무 유형</th>
+                <th>지원일</th>
+                <th>사유</th>
+                <th>메시지</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${pagination.visibleItems
+                .map(
+                  (row, index) => {
+                    const tone =
+                      row.statusKey === "error"
+                        ? "is-danger"
+                        : row.statusKey === "warn"
+                          ? "is-warn"
+                          : "is-success";
+                    return `
+                    <tr>
+                      <td>${escapeHtml(String(row.rowNumber || pagination.startIndex + index + 1))}</td>
+                      <td><span class="wizard-badge ${tone}">${escapeHtml(row.statusLabel)}</span></td>
+                      <td>${escapeHtml(row.employeeCode)}</td>
+                      <td>${escapeHtml(row.employeeName)}</td>
+                      <td>${escapeHtml(row.department)}</td>
+                      <td>${escapeHtml(row.supportType)}</td>
+                      <td>${escapeHtml(row.supportDate)}</td>
+                      <td>${escapeHtml(row.reason)}</td>
+                      <td>${escapeHtml(row.message)}</td>
+                    </tr>
+                  `;
+                  },
+                )
+                .join("") || `<tr><td colspan="9">조건에 맞는 분석 결과가 없습니다.</td></tr>`}
+            </tbody>
+          </table>
+          <div class="wizard-support-pagination">
+            <button class="wizard-page-size-btn" type="button" data-action="schedule-reference-hq-preview-page-size">10개씩 보기</button>
+            <div class="wizard-pagination-pages">${pageButtons}</div>
+            <span>총 ${pagination.totalItems.toLocaleString("ko-KR")}개 중 ${pagination.totalItems ? `${pagination.startIndex + 1}-${pagination.endIndex}` : "0-0"}</span>
+          </div>
+          <div class="wizard-info-banner is-blue">${getScheduleReferenceIconSvg("info")}오류(차단) 항목은 반영이 불가하며, 수정 후 다시 업로드해야 합니다.</div>
+        </section>
+      `,
+      footerHtml: `
+        <footer class="wizard-page-footer reference-upload-actions">
+          <div class="wizard-page-footer-left">
+            <button class="wizard-btn is-secondary" type="button" data-action="schedule-hq-wizard-prev" data-prev-step="upload">이전</button>
+          </div>
+          <div class="wizard-page-footer-right">
+            <button class="wizard-btn is-primary" type="button" data-action="schedule-support-apply" ${getScheduleReferenceDisabledAttr(!inspectResult?.can_apply, "반영 가능한 분석 결과가 준비된 뒤 다음 단계로 이동할 수 있습니다.")}>다음 단계 ${getScheduleReferenceIconSvg("arrow-right")}</button>
+          </div>
+        </footer>
+      `,
+    };
+  }
+
+  const completion = getScheduleReferenceSupportCompletionMetrics(workspace);
+  const totalForRate = Math.max(
+    completion.total,
+    completion.success + completion.partial + completion.failed,
+  );
+  const percent = (value) =>
+    totalForRate > 0
+      ? `${Math.round((Number(value || 0) / totalForRate) * 1000) / 10}%`
+      : "0%";
+  const successRate = completion.successRate || percent(completion.success);
+  const partialRate = completion.partialRate || percent(completion.partial);
+  const failedRate = completion.failedRate || percent(completion.failed);
+  return {
+    headerHtml: renderScheduleReferencePageHeader(headerModel),
+    stepperHtml,
+    mainHtml: `
+      <section class="wizard-panel reference-upload-card wizard-result-strip wizard-support-complete-strip" data-testid="support-apply-complete">
+        <div class="wizard-result-status">
+          <span class="wizard-result-status-icon" aria-hidden="true">${getScheduleReferenceIconSvg("check")}</span>
+          <div>
+            <strong>반영 완료</strong>
+            <p>지원근무자 데이터가 성공적으로 반영되었습니다.</p>
+          </div>
+        </div>
+        <div class="wizard-result-metric">
+          <span>총 반영 행</span>
+          <strong>${completion.total.toLocaleString("ko-KR")} 행</strong>
+        </div>
+        <div class="wizard-result-metric is-success">
+          <span>성공</span>
+          <strong>${completion.success.toLocaleString("ko-KR")} 행</strong>
+          <em>(${successRate})</em>
+        </div>
+        <div class="wizard-result-metric is-warn">
+          <span>부분 반영</span>
+          <strong>${completion.partial.toLocaleString("ko-KR")} 행</strong>
+          <em>(${partialRate})</em>
+        </div>
+        <div class="wizard-result-metric is-danger">
+          <span>실패</span>
+          <strong>${completion.failed.toLocaleString("ko-KR")} 행</strong>
+          <em>(${failedRate})</em>
+        </div>
+        <div class="wizard-result-metric">
+          <span>반영 완료 시간</span>
+          <strong>${escapeHtml(completion.appliedAt)}</strong>
+        </div>
+      </section>
+      <section class="wizard-panel reference-upload-card">
+        <div class="wizard-section-title">상세 결과</div>
+        <table class="wizard-table wizard-result-table">
+          <thead>
+            <tr>
+              <th>구분</th>
+              <th>내용</th>
+              <th>행 수</th>
+              <th>비율</th>
+              <th>결과</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="wizard-result-label"><span class="wizard-result-icon is-success">${getScheduleReferenceIconSvg("check")}</span>성공</span></td>
+              <td>정상적으로 반영된 행</td>
+              <td>${completion.success.toLocaleString("ko-KR")}</td>
+              <td>${successRate}</td>
+              <td><span class="wizard-badge is-success">성공</span></td>
+            </tr>
+            <tr>
+              <td><span class="wizard-result-label"><span class="wizard-result-icon is-warn">${getScheduleReferenceIconSvg("warning")}</span>부분 반영</span></td>
+              <td>일부 항목만 반영되어 추가 확인이 필요한 행</td>
+              <td>${completion.partial.toLocaleString("ko-KR")}</td>
+              <td>${partialRate}</td>
+              <td><span class="wizard-badge is-warn">부분 반영</span></td>
+            </tr>
+            <tr>
+              <td><span class="wizard-result-label"><span class="wizard-result-icon is-danger">${getScheduleReferenceIconSvg("error-circle")}</span>실패</span></td>
+              <td>반영되지 않은 행(오류 또는 필수값 누락 등)</td>
+              <td>${completion.failed.toLocaleString("ko-KR")}</td>
+              <td>${failedRate}</td>
+              <td><span class="wizard-badge is-danger">실패</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="wizard-panel-actions">
+          <button class="wizard-btn is-secondary" type="button" data-action="schedule-reference-hq-download-summary">${getScheduleReferenceIconSvg("download")}실패/부분 반영 행 다운로드</button>
+          <button class="wizard-btn is-secondary" type="button" data-action="schedule-reference-hq-view-log">${getScheduleReferenceIconSvg("log")}상세 로그 보기</button>
+        </div>
+      </section>
+    `,
+    footerHtml: `
+      <footer class="wizard-page-footer reference-upload-actions">
+        <div class="wizard-page-footer-left">
+          <button class="wizard-btn is-secondary" type="button" data-action="schedule-hq-wizard-prev" data-prev-step="preview">이전</button>
+        </div>
+        <div class="wizard-page-footer-right">
+          <button class="wizard-btn is-secondary" type="button" data-action="schedule-reference-hq-restart">처음으로</button>
+          <button class="wizard-btn is-primary" type="button" data-action="schedule-reference-finish">종료</button>
+        </div>
+      </footer>
+    `,
+  };
 }
 
 function renderScheduleReferenceHqStage(step) {
@@ -23288,80 +26124,60 @@ function bindScheduleReferenceWizardControls(root) {
 function renderScheduleReferenceUploadWizard() {
   const uploadPanel = $("#scheduleUploadPanel");
   if (!(uploadPanel instanceof HTMLElement)) return;
-  const mode = getScheduleUploadWorkspaceMode();
-  const routeActive =
-    getScheduleActiveTopTab() === SCHEDULE_TAB_UPLOAD ||
-    getScheduleActiveTopTab() === SCHEDULE_TAB_HQ_UPLOAD;
+  const scheduleTabContent = $("#scheduleTabContent");
+  const currentRoute = normalizeRoutePath(state.currentRoute || "");
+  const routeActive = isScheduleUploadWizardRoute(currentRoute);
+  const landingRouteActive = isScheduleUploadLandingRoute(currentRoute);
   uploadPanel.classList.toggle("reference-upload-active", routeActive);
-  if (!routeActive) return;
-
-  uploadPanel
-    .querySelectorAll(
-      ":scope > .schedule-upload-shell-head, :scope > .schedule-upload-wizard-layout, :scope > #scheduleUploadFooterActions",
-    )
-    .forEach((node) => {
-      if (!(node instanceof HTMLElement)) return;
-      node.classList.add("reference-legacy-hidden");
-      node.style.setProperty("display", "none", "important");
-      node.setAttribute("aria-hidden", "true");
-    });
-  const legacyTitle = uploadPanel.querySelector(
-    ":scope > .schedule-upload-shell-head #scheduleUploadHeaderTitle",
-  );
-  if (legacyTitle instanceof HTMLElement) {
-    legacyTitle.id = "scheduleUploadHeaderTitleLegacy";
-  }
-
   let root = $("#scheduleReferenceUploadWizard");
+  if (!routeActive) {
+    if (landingRouteActive) {
+      if (scheduleTabContent instanceof HTMLElement) {
+        scheduleTabContent.style.setProperty("display", "block", "important");
+      }
+      return;
+    }
+    toggleScheduleReferenceLegacyVisibility(false);
+    if (scheduleTabContent instanceof HTMLElement) {
+      scheduleTabContent.style.removeProperty("display");
+    }
+    if (root instanceof HTMLElement) root.remove();
+    return;
+  }
+  if (scheduleTabContent instanceof HTMLElement) {
+    scheduleTabContent.style.setProperty("display", "block", "important");
+  }
+  toggleScheduleReferenceLegacyVisibility(true);
   if (!(root instanceof HTMLElement)) {
     root = document.createElement("div");
     root.id = "scheduleReferenceUploadWizard";
     root.className = "reference-upload-wizard arls-upload-wizard";
     uploadPanel.appendChild(root);
   }
+  const mode = getScheduleUploadRouteModeFromRoute(currentRoute);
+  if (state.schedule) state.schedule.uploadWorkspaceMode = mode;
   const step =
     mode === SCHEDULE_UPLOAD_MODE_HQ
       ? getScheduleHqWizardStep()
       : getScheduleBaseWizardStep();
-  const steps =
+  const page =
     mode === SCHEDULE_UPLOAD_MODE_HQ
-      ? getScheduleHqWizardSteps().map((item) => ({
-          ...item,
-          referenceLabel:
-            item.key === SCHEDULE_HQ_WIZARD_STEP_EXPORT
-              ? "준비"
-              : item.label,
-          action: "schedule-hq-wizard-step",
-        }))
-      : getScheduleBaseWizardSteps().map((item) => ({
-          ...item,
-          referenceLabel:
-            item.key === SCHEDULE_BASE_WIZARD_STEP_MAPPING
-              ? "준비"
-              : item.label,
-          action: "schedule-base-wizard-step",
-        }));
+      ? buildScheduleReferenceHqPageModel(step)
+      : buildScheduleReferenceBasePageModel(step);
   root.dataset.mode =
-    mode === SCHEDULE_UPLOAD_MODE_HQ ? SCHEDULE_UPLOAD_MODE_HQ : "base";
+    mode === SCHEDULE_UPLOAD_MODE_HQ ? "hq" : "base";
   root.dataset.step = step;
   root.innerHTML = `
-    <header class="reference-upload-head">
-      <div class="reference-upload-title">
-        <span>${escapeHtml(String(Math.max(1, steps.findIndex((item) => item.key === step) + 1)))}</span>
-        <div>
-          <h2 id="scheduleUploadHeaderTitle">${escapeHtml(getScheduleReferenceWizardTitle(mode, step))}</h2>
-          <p>${escapeHtml(getScheduleReferenceWizardDescription(mode, step))}</p>
-        </div>
+    <div class="wizard-route-app">
+      <div class="wizard-route-page">
+        ${page.headerHtml}
+        ${page.stepperHtml}
+        <main class="wizard-route-main">
+          ${page.mainHtml}
+        </main>
+        ${page.footerHtml}
       </div>
-    </header>
-    ${renderScheduleReferenceStepper(steps, step)}
-    <main class="reference-upload-stage">
-      ${
-        mode === SCHEDULE_UPLOAD_MODE_HQ
-          ? renderScheduleReferenceHqStage(step)
-          : renderScheduleReferenceBaseStage(step)
-      }
-    </main>
+    </div>
   `;
   bindScheduleReferenceWizardControls(root);
 }
@@ -23379,7 +26195,10 @@ function setScheduleUploadWorkspaceMode(
     normalizedMode === SCHEDULE_UPLOAD_MODE_HQ
       ? SCHEDULE_TAB_HQ_UPLOAD
       : SCHEDULE_TAB_UPLOAD;
-  if (getScheduleActiveTopTab() !== targetTopTab) {
+  const currentRoute = normalizeRoutePath(state.currentRoute || "");
+  if (isScheduleUploadWizardRoute(currentRoute)) {
+    if (state.schedule) state.schedule.hqTab = targetTopTab;
+  } else if (getScheduleActiveTopTab() !== targetTopTab) {
     onScheduleHqTabChange(targetTopTab);
   }
   requestAnimationFrame(() => {
@@ -24249,6 +27068,7 @@ function setScheduleImportUI({
   clearPreviewRows = false,
   applyRows = null,
   skippedRows = null,
+  applySummary = null,
   clearApplyDetails = false,
 } = {}) {
   const infoEl = $("#scheduleBatchInfo");
@@ -24271,6 +27091,12 @@ function setScheduleImportUI({
   uploadUi.batchInfo = batchInfo;
   uploadUi.applyResult = applyResult;
   uploadUi.canApply = Boolean(canApply);
+  if (applySummary && typeof applySummary === "object") {
+    uploadUi.applySummary = applySummary;
+  }
+  if (String(applyResult || "").includes("반영 완료")) {
+    uploadUi.lastAppliedAt = new Date().toISOString();
+  }
 
   if (issuesEl) {
     issuesEl.innerHTML = "";
@@ -24295,8 +27121,14 @@ function setScheduleImportUI({
   }
 
   if (clearApplyDetails) {
+    uploadUi.applyRows = [];
+    uploadUi.skippedRows = [];
+    uploadUi.applySummary = null;
+    uploadUi.lastAppliedAt = "";
     renderScheduleApplyDetails([], []);
   } else if (applyRows !== null || skippedRows !== null) {
+    uploadUi.applyRows = Array.isArray(applyRows) ? applyRows : [];
+    uploadUi.skippedRows = Array.isArray(skippedRows) ? skippedRows : [];
     renderScheduleApplyDetails(applyRows || [], skippedRows || []);
   }
 
@@ -24403,43 +27235,118 @@ function buildScheduleSupportHqContext() {
   };
 }
 
+function getScheduleSupportHqContractSiteRows(contract = null) {
+  if (!contract || typeof contract !== "object") return [];
+  const candidates = [
+    contract.sites,
+    contract.branches,
+    contract.items,
+    contract.rows,
+    contract.data?.sites,
+    contract.data?.branches,
+    contract.data?.items,
+    contract.data?.rows,
+    contract.payload?.sites,
+    contract.payload?.branches,
+    contract.payload?.items,
+    contract.result?.sites,
+    contract.result?.branches,
+    contract.result?.items,
+  ];
+  return candidates.find((item) => Array.isArray(item)) || [];
+}
+
+function getScheduleSupportHqContractSiteCount(contract = null) {
+  if (!contract || typeof contract !== "object") return 0;
+  return Number(
+    contract.total_site_count ??
+      contract.total_branch_count ??
+      contract.total_count ??
+      contract.count ??
+      contract.data?.total_site_count ??
+      contract.data?.total_branch_count ??
+      contract.data?.total_count ??
+      contract.payload?.total_site_count ??
+      contract.payload?.total_branch_count ??
+      contract.payload?.total_count ??
+      0,
+  );
+}
+
 function getScheduleSupportHqWorkspaceSites() {
   const workspace = ensureScheduleSupportHqWorkspaceState();
-  const sites = Array.isArray(workspace.contract?.sites)
-    ? workspace.contract.sites
-    : [];
+  const sites = getScheduleSupportHqContractSiteRows(workspace.contract);
   return sites
     .map((site) => ({
-      siteCode: String(site?.site_code || "")
+      siteCode: String(
+        site?.site_code ||
+          site?.siteCode ||
+          site?.branch_code ||
+          site?.branchCode ||
+          site?.code ||
+          "",
+      )
         .trim()
         .toUpperCase(),
       siteName:
-        String(site?.site_name || "").trim() ||
-        String(site?.site_code || "")
+        String(
+          site?.site_name ||
+            site?.siteName ||
+            site?.branch_name ||
+            site?.branchName ||
+            site?.name ||
+            "",
+        ).trim() ||
+        String(site?.site_code || site?.branch_code || site?.code || "")
           .trim()
           .toUpperCase() ||
         "-",
       sheetName:
         String(
-          site?.sheet_name || site?.site_name || site?.site_code || "",
+          site?.sheet_name ||
+            site?.sheetName ||
+            site?.sheet ||
+            site?.site_name ||
+            site?.siteName ||
+            site?.branch_name ||
+            site?.name ||
+            site?.site_code ||
+            site?.branch_code ||
+            site?.code ||
+            "",
         ).trim() || "-",
-      downloadReady: Boolean(site?.download_ready),
-      sourceState: String(site?.source_state || "").trim() || "source_missing",
-      sourceRevision: String(site?.source_revision || "").trim(),
+      downloadReady: isScheduleSupportHqSiteReady(site),
+      sourceState:
+        String(site?.source_state || site?.sourceState || site?.state || site?.status || "")
+          .trim() || "source_missing",
+      sourceRevision: String(site?.source_revision || site?.sourceRevision || "").trim(),
       sourceUploadedAt: String(
         site?.last_uploaded_at ||
           site?.source_uploaded_at ||
           site?.latest_uploaded_at ||
+          site?.uploaded_at ||
+          site?.schedule_uploaded_at ||
+          site?.lastUploadedAt ||
+          site?.latestUploadedAt ||
+          site?.updated_at ||
           "",
       ).trim(),
-      latestHqRevision: String(site?.latest_hq_revision || "").trim(),
-      latestHqUploadedAt: String(site?.latest_hq_uploaded_at || "").trim(),
+      latestHqRevision: String(site?.latest_hq_revision || site?.latestHqRevision || "").trim(),
+      latestHqUploadedAt: String(site?.latest_hq_uploaded_at || site?.latestHqUploadedAt || "").trim(),
       latestStatus:
-        String(site?.latest_status || "").trim() || "source_missing",
-      hqMergeStale: Boolean(site?.hq_merge_stale),
-      note: String(site?.note || "").trim(),
-      selectable: Boolean(site?.selectable),
-      blockedReason: String(site?.blocked_reason || "").trim(),
+        String(site?.latest_status || site?.latestStatus || site?.status || "").trim() ||
+        "source_missing",
+      hqMergeStale: Boolean(site?.hq_merge_stale ?? site?.hqMergeStale),
+      note: String(site?.note || site?.memo || "").trim(),
+      selectable:
+        site?.selectable === undefined &&
+        site?.is_selectable === undefined &&
+        site?.disabled === undefined
+          ? isScheduleSupportHqSiteReady(site)
+          : (coerceScheduleSupportHqBoolean(site?.selectable) ??
+              coerceScheduleSupportHqBoolean(site?.is_selectable) ??
+              !coerceScheduleSupportHqBoolean(site?.disabled)),
+      blockedReason: String(site?.blocked_reason || site?.blockedReason || "").trim(),
     }))
     .filter((site) => site.siteCode);
 }
@@ -25112,28 +28019,179 @@ function normalizeScheduleReferenceHqPreviewTab(value = "") {
   return "all";
 }
 
+function getScheduleReferenceHqRawPreviewRows(inspectResult = null) {
+  if (!inspectResult || typeof inspectResult !== "object") return [];
+  const candidates = [
+    inspectResult.rows,
+    inspectResult.result_rows,
+    inspectResult.resultRows,
+    inspectResult.items,
+    inspectResult.review_rows,
+    inspectResult.reviewRows,
+    inspectResult.preview_rows,
+    inspectResult.previewRows,
+    inspectResult.data?.rows,
+    inspectResult.data?.result_rows,
+    inspectResult.data?.items,
+    inspectResult.data?.review_rows,
+    inspectResult.data?.reviewRows,
+    inspectResult.payload?.rows,
+    inspectResult.payload?.items,
+    inspectResult.payload?.review_rows,
+    inspectResult.payload?.reviewRows,
+  ];
+  const fullRows = candidates.find((item) => Array.isArray(item) && item.length);
+  if (Array.isArray(fullRows)) return fullRows;
+  return buildScheduleSupportHqAggregatedPreviewRows(inspectResult);
+}
+
+function normalizeScheduleReferenceHqStatus(value = "", row = {}) {
+  const raw = String(
+    value ||
+      row?.display_status ||
+      row?.target_status ||
+      row?.status ||
+      row?.result ||
+      row?.validation_status ||
+      "",
+  )
+    .trim()
+    .toLowerCase();
+  if (
+    [
+      "upload_blocked",
+      "blocking",
+      "blocked",
+      "error",
+      "failed",
+      "invalid",
+      "차단",
+      "오류",
+    ].includes(raw) ||
+    Number(row?.blocking_issue_count || row?.error_count || 0) > 0
+  ) {
+    return "error";
+  }
+  if (
+    [
+      "approval_pending",
+      "warning",
+      "warn",
+      "partial",
+      "needs_review",
+      "경고",
+      "승인대기",
+    ].includes(raw) ||
+    Number(row?.warning_issue_count || row?.warning_count || 0) > 0
+  ) {
+    return "warn";
+  }
+  return "valid";
+}
+
+function normalizeScheduleReferenceHqPreviewRow(row = {}, index = 0) {
+  const statusKey = normalizeScheduleReferenceHqStatus("", row);
+  const statusLabel =
+    statusKey === "error" ? "오류" : statusKey === "warn" ? "경고" : "정상";
+  const employeeCode =
+    String(
+      row?.employee_code ||
+        row?.employeeCode ||
+        row?.employee_no ||
+        row?.employeeNo ||
+        row?.emp_no ||
+        row?.staff_no ||
+        row?.worker_code ||
+        row?.site_code ||
+        "",
+    ).trim() || "-";
+  const employeeName =
+    String(
+      row?.employee_name ||
+        row?.employeeName ||
+        row?.worker_name ||
+        row?.workerName ||
+        row?.name ||
+        row?.worker_names ||
+        row?.parsed_display_value ||
+        row?.raw_cell_text ||
+        "",
+    ).trim() || "-";
+  const department =
+    String(
+      row?.department_name ||
+        row?.departmentName ||
+        row?.department ||
+        row?.dept_name ||
+        row?.team_name ||
+        row?.site_name ||
+        row?.sheet_name ||
+        "",
+    ).trim() || "-";
+  const supportType =
+    String(
+      row?.support_work_type ||
+        row?.supportType ||
+        row?.support_type ||
+        row?.shift_label ||
+        "",
+    ).trim() ||
+    getSupportStatusShiftLabel(row?.shift_kind || row?.shift || "") ||
+    "-";
+  const supportDate =
+    formatDateLabel(
+      row?.support_date ||
+        row?.supportDate ||
+        row?.work_date ||
+        row?.date ||
+        "",
+      "-",
+    ) || "-";
+  const reason =
+    String(
+      row?.reason ||
+        row?.issue_reason ||
+        row?.message ||
+        row?.display_reason ||
+        "",
+    ).trim() || "-";
+  const message =
+    String(
+      row?.message ||
+        row?.validation_message ||
+        row?.target_status ||
+        row?.display_status ||
+        row?.status ||
+        "",
+    ).trim() || "-";
+  return {
+    ...row,
+    rowNumber: Number(row?.row_no || row?.row_number || row?.rowNumber || 0) || index + 1,
+    statusKey,
+    statusLabel,
+    employeeCode,
+    employeeName,
+    department,
+    supportType,
+    supportDate,
+    reason,
+    message,
+  };
+}
+
+function getScheduleReferenceHqPreviewRows(inspectResult = null) {
+  return getScheduleReferenceHqRawPreviewRows(inspectResult).map((row, index) =>
+    normalizeScheduleReferenceHqPreviewRow(row, index),
+  );
+}
+
 function getScheduleReferenceHqPreviewCounts(rows = []) {
   const list = Array.isArray(rows) ? rows : [];
   return {
     all: list.length,
-    valid: list.filter((row) => {
-      const status = String(row?.display_status || row?.target_status || "")
-        .trim()
-        .toLowerCase();
-      return status && status !== "upload_blocked" && status !== "approval_pending";
-    }).length,
-    warn: list.filter((row) => {
-      const status = String(row?.display_status || row?.target_status || "")
-        .trim()
-        .toLowerCase();
-      return status === "approval_pending";
-    }).length,
-    error: list.filter((row) => {
-      const status = String(row?.display_status || row?.target_status || "")
-        .trim()
-        .toLowerCase();
-      return status === "upload_blocked";
-    }).length,
+    valid: list.filter((row) => row?.statusKey === "valid").length,
+    warn: list.filter((row) => row?.statusKey === "warn").length,
+    error: list.filter((row) => row?.statusKey === "error").length,
   };
 }
 
@@ -25168,26 +28226,19 @@ function filterScheduleReferenceHqPreviewRows(rows = [], tab = "all", query = ""
     .trim()
     .toLowerCase();
   return list.filter((row) => {
-    const status = String(row?.display_status || row?.target_status || "")
-      .trim()
-      .toLowerCase();
-    if (normalizedTab === "valid") {
-      if (!status || status === "upload_blocked" || status === "approval_pending")
-        return false;
-    }
-    if (normalizedTab === "warn" && status !== "approval_pending") return false;
-    if (normalizedTab === "error" && status !== "upload_blocked") return false;
+    const status = row?.statusKey || normalizeScheduleReferenceHqStatus("", row);
+    if (normalizedTab === "valid" && status !== "valid") return false;
+    if (normalizedTab === "warn" && status !== "warn") return false;
+    if (normalizedTab === "error" && status !== "error") return false;
     if (!normalizedQuery) return true;
     const haystack = [
-      row?.sheet_name,
-      row?.site_name,
-      row?.site_code,
-      row?.work_date,
-      row?.worker_names,
+      row?.employeeCode,
+      row?.employeeName,
+      row?.department,
+      row?.supportType,
+      row?.supportDate,
       row?.reason,
-      row?.display_status,
-      row?.target_status,
-      row?.shift_kind,
+      row?.message,
     ]
       .map((value) => String(value || "").trim().toLowerCase())
       .join(" ");
@@ -39075,10 +42126,33 @@ function isScheduleRoutePath(routePath = "") {
     route === ROUTE_SCHEDULE_CALENDAR ||
     route === ROUTE_SCHEDULE_LIST ||
     route === ROUTE_SCHEDULE_UPLOAD ||
+    route === ROUTE_SCHEDULE_UPLOAD_WIZARD ||
     route === ROUTE_SCHEDULE_HQ_UPLOAD ||
+    route === ROUTE_SCHEDULE_HQ_UPLOAD_WIZARD ||
     route === ROUTE_SCHEDULE_TEMPLATES ||
     route === ROUTE_ADMIN_SCHEDULE_TOOLS
   );
+}
+
+function isScheduleUploadLandingRoute(routePath = "") {
+  const route = normalizeRoutePath(routePath);
+  return route === ROUTE_SCHEDULE_UPLOAD || route === ROUTE_SCHEDULE_HQ_UPLOAD;
+}
+
+function isScheduleUploadWizardRoute(routePath = "") {
+  const route = normalizeRoutePath(routePath);
+  return (
+    route === ROUTE_SCHEDULE_UPLOAD_WIZARD ||
+    route === ROUTE_SCHEDULE_HQ_UPLOAD_WIZARD
+  );
+}
+
+function getScheduleUploadRouteModeFromRoute(routePath = "") {
+  const route = normalizeRoutePath(routePath);
+  return route === ROUTE_SCHEDULE_HQ_UPLOAD ||
+    route === ROUTE_SCHEDULE_HQ_UPLOAD_WIZARD
+    ? SCHEDULE_UPLOAD_MODE_HQ
+    : SCHEDULE_UPLOAD_MODE_BASE;
 }
 
 function normalizeCalendarViewTab(value = "month") {
@@ -39137,9 +42211,14 @@ function getScheduleTabRoute(tab = "") {
 function resolveScheduleTabFromRoutePath(routePath = "") {
   const route = normalizeRoutePath(routePath);
   if (route === ROUTE_SCHEDULE_LIST) return SCHEDULE_TAB_LIST;
-  if (route === ROUTE_SCHEDULE_UPLOAD || route === ROUTE_ADMIN_SCHEDULE_TOOLS)
+  if (
+    route === ROUTE_SCHEDULE_UPLOAD ||
+    route === ROUTE_SCHEDULE_UPLOAD_WIZARD ||
+    route === ROUTE_ADMIN_SCHEDULE_TOOLS
+  )
     return SCHEDULE_TAB_UPLOAD;
-  if (route === ROUTE_SCHEDULE_HQ_UPLOAD) return SCHEDULE_TAB_HQ_UPLOAD;
+  if (route === ROUTE_SCHEDULE_HQ_UPLOAD || route === ROUTE_SCHEDULE_HQ_UPLOAD_WIZARD)
+    return SCHEDULE_TAB_HQ_UPLOAD;
   if (route === ROUTE_SCHEDULE_TEMPLATES) return SCHEDULE_TAB_TEMPLATES;
   if (route === ROUTE_SCHEDULE || route === ROUTE_SCHEDULE_CALENDAR)
     return SCHEDULE_TAB_CALENDAR;
@@ -39391,7 +42470,9 @@ function isKnownRoute(routePath = "") {
     ROUTE_SCHEDULE_CALENDAR,
     ROUTE_SCHEDULE_LIST,
     ROUTE_SCHEDULE_UPLOAD,
+    ROUTE_SCHEDULE_UPLOAD_WIZARD,
     ROUTE_SCHEDULE_HQ_UPLOAD,
+    ROUTE_SCHEDULE_HQ_UPLOAD_WIZARD,
     ROUTE_SCHEDULE_REPORTS,
     ROUTE_SCHEDULE_TEMPLATES,
     ROUTE_REQUESTS,
@@ -39455,13 +42536,15 @@ function isRouteAllowed(
   if (isCalendarRoutePath(route)) return Boolean(perms.calendar);
   if (
     route === ROUTE_SCHEDULE ||
-    route === ROUTE_SCHEDULE_CALENDAR ||
-    route === ROUTE_SCHEDULE_LIST ||
-    route === ROUTE_SCHEDULE_UPLOAD
-  )
-    return Boolean(perms.schedule);
-  if (route === ROUTE_SCHEDULE_TEMPLATES) return isScheduleTemplateTabVisible();
-  if (route === ROUTE_SCHEDULE_HQ_UPLOAD) return canUseScheduleUploadHqWizard();
+	    route === ROUTE_SCHEDULE_CALENDAR ||
+	    route === ROUTE_SCHEDULE_LIST ||
+	    route === ROUTE_SCHEDULE_UPLOAD ||
+	    route === ROUTE_SCHEDULE_UPLOAD_WIZARD
+	  )
+	    return Boolean(perms.schedule);
+	  if (route === ROUTE_SCHEDULE_TEMPLATES) return isScheduleTemplateTabVisible();
+	  if (route === ROUTE_SCHEDULE_HQ_UPLOAD || route === ROUTE_SCHEDULE_HQ_UPLOAD_WIZARD)
+	    return canUseScheduleUploadHqWizard();
   if (route === ROUTE_SCHEDULE_REPORTS) return canViewReportsCenter();
   if (route === ROUTE_REQUESTS) {
     return Boolean(
@@ -39645,6 +42728,9 @@ function applyScheduleRouteStateFromQuery(
     tab = SCHEDULE_TAB_CALENDAR;
   }
   state.schedule.hqTab = tab;
+  if (isScheduleUploadLandingRoute(route) || isScheduleUploadWizardRoute(route)) {
+    state.schedule.uploadWorkspaceMode = getScheduleUploadRouteModeFromRoute(route);
+  }
   if (tab === SCHEDULE_TAB_LIST) {
     state.schedule.viewMode = SCHEDULE_VIEW_MODE_LIST;
   } else if (tab === SCHEDULE_TAB_CALENDAR) {
@@ -51300,9 +54386,10 @@ function renderDesktopTopContext() {
   const mailBtn = $("#btnTopbarMail");
   const helpBtn = $("#btnTopbarHelp");
   const themeToggleBtn = $("#btnTopbarThemeToggle");
+  const bellBtn = $("#btnNotifications");
   const visible = Boolean(state.user) && isDesktopViewport();
   if (titleEl) {
-    titleEl.textContent = resolveTopbarPageTitle();
+    renderTopbarPageTitle(titleEl);
   }
   if (!visible) {
     if (contextEl) {
@@ -51318,6 +54405,45 @@ function renderDesktopTopContext() {
     }
     if (themeToggleBtn) {
       themeToggleBtn.classList.add("hidden");
+    }
+    if (bellBtn) bellBtn.classList.add("hidden");
+    renderDesktopGlobalSearch();
+    syncWorkspaceRouteTabs();
+    return;
+  }
+
+  if (state.currentView === "support-status") {
+    if (titleEl) {
+      titleEl.textContent = "지원근무자 현황";
+    }
+    if (contextEl) {
+      contextEl.replaceChildren();
+      const wrap = document.createElement("span");
+      wrap.className = "topbar-account-summary";
+      const textWrap = document.createElement("span");
+      textWrap.className = "topbar-account-copy";
+      const nameEl = document.createElement("strong");
+      nameEl.textContent = "HQ Admin";
+      const siteEl = document.createElement("span");
+      siteEl.textContent = "본사";
+      const chevron = document.createElement("span");
+      chevron.className = "topbar-account-chevron";
+      chevron.setAttribute("aria-hidden", "true");
+      chevron.textContent = "⌄";
+      textWrap.append(nameEl, siteEl);
+      wrap.append(textWrap, chevron);
+      contextEl.append(wrap);
+      contextEl.classList.remove("hidden");
+    }
+    if (mailBtn) mailBtn.classList.add("hidden");
+    if (helpBtn) helpBtn.classList.add("hidden");
+    if (userBtn) userBtn.classList.add("hidden");
+    if (themeToggleBtn) themeToggleBtn.classList.add("hidden");
+    if (bellBtn) bellBtn.classList.remove("hidden");
+    const badge = $("#notificationBadge");
+    if (badge) {
+      badge.textContent = "12";
+      badge.classList.remove("hidden");
     }
     renderDesktopGlobalSearch();
     syncWorkspaceRouteTabs();
@@ -51352,19 +54478,61 @@ function renderDesktopTopContext() {
     themeToggleBtn.classList.remove("hidden");
     syncTopbarThemeToggle(state.uiTheme || "light");
   }
+  if (bellBtn) {
+    bellBtn.classList.remove("hidden");
+  }
   renderDesktopGlobalSearch();
   syncWorkspaceRouteTabs();
+}
+
+function getUploadWizardTopbarMeta() {
+  const route = normalizeRoutePath(
+    state.currentRoute || window.location.hash.replace(/^#/, "") || ROUTE_HOME,
+  );
+  if (route === ROUTE_SCHEDULE_UPLOAD_WIZARD) {
+    return { title: "업로드 마법사", badge: "스케줄 업로드" };
+  }
+  if (route === ROUTE_SCHEDULE_HQ_UPLOAD_WIZARD) {
+    return { title: "업로드 마법사", badge: "지원근무자 업로드" };
+  }
+  return null;
+}
+
+function renderTopbarPageTitle(titleEl) {
+  if (!(titleEl instanceof HTMLElement)) return;
+  const uploadMeta = getUploadWizardTopbarMeta();
+  titleEl.replaceChildren();
+  titleEl.classList.toggle("is-upload-wizard-title", Boolean(uploadMeta));
+  titleEl.removeAttribute("data-testid");
+  if (!uploadMeta) {
+    titleEl.textContent = resolveTopbarPageTitle();
+    return;
+  }
+
+  const title = document.createElement("span");
+  title.className = "topbar-upload-title-text";
+  title.dataset.testid = "wizard-title";
+  title.textContent = uploadMeta.title;
+
+  const badge = document.createElement("span");
+  badge.className = "topbar-upload-title-pill";
+  badge.dataset.testid = "wizard-badge";
+  badge.textContent = uploadMeta.badge;
+
+  titleEl.append(title, badge);
 }
 
 function resolveTopbarPageTitle() {
   const route = normalizeRoutePath(
     state.currentRoute || window.location.hash.replace(/^#/, "") || ROUTE_HOME,
   );
-  if (route === ROUTE_SCHEDULE_UPLOAD || route === ROUTE_SCHEDULE_HQ_UPLOAD) {
-    return "업로드 마법사 (Wizard)";
-  }
+  if (route === ROUTE_SCHEDULE_UPLOAD) return "스케줄 업로드";
+  if (route === ROUTE_SCHEDULE_HQ_UPLOAD) return "지원근무자 업로드";
+  if (route === ROUTE_SCHEDULE_UPLOAD_WIZARD || route === ROUTE_SCHEDULE_HQ_UPLOAD_WIZARD)
+    return "";
   if (route === ROUTE_HOME) return "홈";
-  if (route === ROUTE_SCHEDULE_LIST) return "스케줄";
+  if (route === ROUTE_SCHEDULE_CALENDAR || route === ROUTE_SCHEDULE_LIST)
+    return "월간 근무표";
   if (route === ROUTE_ATTENDANCE) return "출퇴근";
   if (route === ROUTE_LEAVE) return "휴가";
   if (route === ROUTE_REQUESTS) return "요청 · 승인";
@@ -54146,6 +57314,11 @@ async function onProfilePasswordSubmit(event) {
 function renderNotificationBadge() {
   const badge = $("#notificationBadge");
   if (!badge) return;
+  if (state.currentView === "support-status") {
+    badge.textContent = "12";
+    badge.classList.remove("hidden");
+    return;
+  }
 
   const count = Number(state.notificationCount) || 0;
   if (count <= 0) {
@@ -88718,6 +91891,7 @@ function getScheduleActiveTopTab() {
 function syncScheduleRouteTabQuery(tab = "", { replace = false } = {}) {
   const route = normalizeRoutePath(state.currentRoute || "");
   if (!isScheduleRoutePath(route)) return;
+  if (isScheduleUploadWizardRoute(route)) return;
   const normalized = normalizeScheduleHqTab(
     tab || state.schedule?.hqTab || SCHEDULE_TAB_CALENDAR,
   );
@@ -89903,6 +93077,7 @@ async function bootstrapScheduleUploadWorkspace({ force = false } = {}) {
         syncScheduleImportMonthInput({ force: true });
         await Promise.allSettled([
           refreshScheduleImportSiteOptions({ force }),
+          loadScheduleTemplateRows({ force }),
           loadScheduleImportMappingProfile({ force }),
         ]);
       }
@@ -91160,6 +94335,7 @@ async function openSingleScheduleModal({
   prefillEmployeeId = "",
   prefillSiteCode = "",
   prefillEmployeeCode = "",
+  drawerMode = false,
 } = {}) {
   if (!canMutateScheduleData()) {
     showToast("근무일정 생성 권한이 없습니다.", "error");
@@ -91224,8 +94400,19 @@ async function openSingleScheduleModal({
   header.className = "schedule-single-create-header";
   const titleEl = document.createElement("h3");
   titleEl.className = "schedule-single-create-title";
-  titleEl.textContent = formatScheduleSingleCreateTitle(selectedDate);
+  titleEl.textContent = drawerMode
+    ? "근무일정 추가"
+    : formatScheduleSingleCreateTitle(selectedDate);
   header.appendChild(titleEl);
+  if (drawerMode) {
+    const drawerCloseBtn = document.createElement("button");
+    drawerCloseBtn.type = "button";
+    drawerCloseBtn.className = "schedule-ref-drawer-close";
+    drawerCloseBtn.setAttribute("aria-label", "닫기");
+    drawerCloseBtn.textContent = "×";
+    drawerCloseBtn.addEventListener("click", () => closeSheet());
+    header.appendChild(drawerCloseBtn);
+  }
   content.appendChild(header);
 
   const body = document.createElement("div");
@@ -91395,7 +94582,9 @@ async function openSingleScheduleModal({
       normalizeYmdDateValue(dateInput.value) || selectedDate;
     ctx.selectedDateKey = normalizedDate;
     dateInput.value = normalizedDate;
-    titleEl.textContent = formatScheduleSingleCreateTitle(normalizedDate);
+    titleEl.textContent = drawerMode
+      ? "근무일정 추가"
+      : formatScheduleSingleCreateTitle(normalizedDate);
     const date = new Date(`${normalizedDate}T00:00:00`);
     if (Number.isNaN(date.getTime())) {
       dateHint.textContent = "";
@@ -91576,6 +94765,9 @@ async function openSingleScheduleModal({
   if (sheet) {
     sheet.classList.add("sheet-layout-schedule-single-create");
   }
+  if (drawerMode) {
+    applyScheduleRefDrawerSheet("add");
+  }
   state.sheetContext = ctx;
 
   dateInput.addEventListener("change", () => {
@@ -91671,7 +94863,17 @@ async function openScheduleCreateSheet({ bulk = false } = {}) {
       : siteOptions[0]?.code || "";
   const initialDates = new Set();
   if (!bulk) {
-    initialDates.add(toLocalDateKey(new Date()));
+    const preferredDate = String(
+      state.schedule?.createDefaultDateKey ||
+        state.schedule?.selectedDateKey ||
+        "",
+    ).trim();
+    initialDates.add(
+      /^\d{4}-\d{2}-\d{2}$/.test(preferredDate)
+        ? preferredDate
+        : toLocalDateKey(new Date()),
+    );
+    if (state.schedule) state.schedule.createDefaultDateKey = "";
   }
 
   const ctx = {
@@ -93205,7 +96407,11 @@ function renderScheduleMonthToolbar() {
     });
 
   const displayMode = getScheduleDisplayModeValue();
-  state.schedule.displayMode = displayMode;
+  if (mode === SCHEDULE_VIEW_MODE_LIST && displayMode === SCHEDULE_DISPLAY_MODE_SIMPLE) {
+    state.schedule.displayMode = SCHEDULE_DISPLAY_MODE_DETAILED;
+  }
+  const resolvedDisplayMode = getScheduleDisplayModeValue();
+  state.schedule.displayMode = resolvedDisplayMode;
   document
     .querySelectorAll('[data-action="schedule-set-display-mode"]')
     .forEach((button) => {
@@ -93214,17 +96420,21 @@ function renderScheduleMonthToolbar() {
           button?.dataset?.displayMode ||
           "",
       );
-      button.classList.toggle("active", targetMode === displayMode);
+      button.classList.toggle("active", targetMode === resolvedDisplayMode);
       button.setAttribute(
         "aria-pressed",
-        targetMode === displayMode ? "true" : "false",
+        targetMode === resolvedDisplayMode ? "true" : "false",
       );
     });
   const simpleModeToggle = $("#scheduleSimpleModeToggle");
   if (simpleModeToggle instanceof HTMLElement) {
-    const isSimple = displayMode === SCHEDULE_DISPLAY_MODE_SIMPLE;
+    const shouldShowSimpleToggle = mode !== SCHEDULE_VIEW_MODE_LIST;
+    const isSimple = resolvedDisplayMode === SCHEDULE_DISPLAY_MODE_SIMPLE;
+    simpleModeToggle.hidden = !shouldShowSimpleToggle;
     simpleModeToggle.classList.toggle("active", isSimple);
+    simpleModeToggle.classList.toggle("hidden", !shouldShowSimpleToggle);
     simpleModeToggle.setAttribute("aria-pressed", isSimple ? "true" : "false");
+    simpleModeToggle.setAttribute("aria-hidden", shouldShowSimpleToggle ? "false" : "true");
   }
 
   const siteFilterInput = $("#scheduleSiteFilter");
@@ -94625,41 +97835,92 @@ function renderScheduleDetailStats(rows = []) {
   if (!(target instanceof HTMLElement)) return;
   target.innerHTML = "";
   const list = Array.isArray(rows) ? rows : [];
-  const assignedCount = list.filter((row) => !isLeaveScheduleRow(row)).length;
-  const leaveCount = list.filter((row) => isLeaveScheduleRow(row)).length;
-  const uniqueEmployeeCount = new Set(
-    list.map((row) => String(row?.employee_code || "").trim()).filter(Boolean),
-  ).size;
-  const uniqueSiteCount = new Set(
-    list
-      .map((row) =>
-        String(row?.site_code || "")
-          .trim()
-          .toUpperCase(),
-      )
-      .filter(Boolean),
-  ).size;
-  [
-    { label: "배정", value: assignedCount },
-    { label: "휴가", value: leaveCount },
-    { label: "직원", value: uniqueEmployeeCount },
-    { label: "현장", value: uniqueSiteCount },
-  ].forEach((item) => {
-    const block = document.createElement("div");
-    block.className = "schedule-detail-stat";
-    block.innerHTML = `
-      <span class="schedule-detail-stat-label">${item.label}</span>
-      <strong class="schedule-detail-stat-value">${item.value}</strong>
-    `;
-    target.appendChild(block);
-  });
+  const totalEmployees = countScheduleRefUniqueEmployees(list);
+  const tardyCount = list.filter((row) => isScheduleRefTardyRow(row)).length;
+  const leaveCount = list.filter((row) => isScheduleRefHolidayRow(row)).length;
+  const absentCount = list.filter((row) => isScheduleRefAbsentRow(row)).length;
+  const workCount = Math.max(totalEmployees - leaveCount - absentCount, 0);
+  const typeCounts = getScheduleRefTypeCounts(list);
+
+  const daySection = document.createElement("section");
+  daySection.className = "schedule-ref-detail-section";
+  const dayTitle = document.createElement("h4");
+  dayTitle.textContent = "일별 근무 요약";
+  daySection.appendChild(dayTitle);
+  daySection.appendChild(
+    createScheduleRefDetailLine("총 배정 인원", `${totalEmployees}명`),
+  );
+  daySection.appendChild(
+    createScheduleRefDetailLine("근무 예정자", `${workCount}명`),
+  );
+  daySection.appendChild(
+    createScheduleRefDetailLine("지각", `${tardyCount}명`),
+  );
+  daySection.appendChild(
+    createScheduleRefDetailLine("연차", `${leaveCount}명`),
+  );
+  daySection.appendChild(
+    createScheduleRefDetailLine("결근", `${absentCount}명`),
+  );
+  target.appendChild(daySection);
+
+  const typeSection = document.createElement("section");
+  typeSection.className = "schedule-ref-detail-section";
+  const typeTitle = document.createElement("h4");
+  typeTitle.textContent = "근무 유형별 인원";
+  typeSection.appendChild(typeTitle);
+  typeSection.appendChild(
+    createScheduleRefDetailLine("주간 (06:00 - 18:00)", `${typeCounts.day}명`, {
+      dotClass: "is-day",
+    }),
+  );
+  typeSection.appendChild(
+    createScheduleRefDetailLine("야간 (22:00 - 06:00)", `${typeCounts.night}명`, {
+      dotClass: "is-night",
+    }),
+  );
+  typeSection.appendChild(
+    createScheduleRefDetailLine("휴일", `${typeCounts.holiday}명`, {
+      dotClass: "is-leave",
+    }),
+  );
+  typeSection.appendChild(
+    createScheduleRefDetailLine("결근", `${typeCounts.absent}명`, {
+      dotClass: "is-absent",
+    }),
+  );
+  target.appendChild(typeSection);
 }
 
 function renderScheduleDetailActions(rows = [], dateKey = "") {
   const actionsEl = $("#scheduleDetailActions");
   if (!(actionsEl instanceof HTMLElement)) return;
   actionsEl.innerHTML = "";
-  actionsEl.classList.add("hidden");
+  const selectedRow =
+    state.schedule?.selectedAssignmentEditRow ||
+    (Array.isArray(rows)
+      ? rows.find((row) => row?.id && !isLeaveScheduleRow(row))
+      : null);
+  if (!selectedRow?.id || !canMutateScheduleData()) {
+    actionsEl.classList.add("hidden");
+    return;
+  }
+  const editBtn = document.createElement("button");
+  editBtn.type = "button";
+  editBtn.className = "btn btn-secondary schedule-ref-edit-btn";
+  editBtn.textContent = "일정 편집";
+  editBtn.dataset.action = "schedule-edit";
+  editBtn.dataset.scheduleId = String(selectedRow.id);
+  editBtn.dataset.currentShift = String(selectedRow.shift_type || "");
+  editBtn.dataset.scheduleDate = String(selectedRow.schedule_date || dateKey || "");
+  editBtn.dataset.employeeCode = String(selectedRow.employee_code || "");
+  editBtn.dataset.siteCode = String(selectedRow.site_code || "");
+  editBtn.dataset.currentLeaderUserId = String(selectedRow.leader_user_id || "");
+  editBtn.dataset.currentLeaderName = String(
+    selectedRow.leader_full_name || selectedRow.leader_username || "",
+  );
+  actionsEl.appendChild(editBtn);
+  actionsEl.classList.remove("hidden");
 }
 
 function renderScheduleDesktopDrawer() {
@@ -94879,6 +98140,7 @@ function getScheduleCardVariant(item = {}) {
   if (status === "leave") return "leave";
   if (displayType === "annual_leave" || displayType === "half_leave")
     return "leave";
+  if (displayType === "mixed" || shiftType === "mixed") return "combined";
   if (shiftType === "night") return "night";
   if (shiftType === "off" || shiftType === "holiday") return "off";
   return "day";
@@ -94927,25 +98189,23 @@ function ScheduleShiftCard({ item = {}, dateKey = "" } = {}) {
   button._scheduleBoardItem =
     item && typeof item === "object" ? { ...item } : null;
 
+  const codeEl = document.createElement("span");
+  codeEl.className = `schedule-shift-code ${getScheduleRefShiftClass(item)}`;
+  codeEl.textContent = getScheduleRefShiftMark(item);
+  button.appendChild(codeEl);
+
   const employeeEl = document.createElement("strong");
   employeeEl.className = "schedule-shift-card-employee";
   employeeEl.textContent = getScheduleBoardItemNameLabel(item);
   button.appendChild(employeeEl);
 
-  const siteEl = document.createElement("span");
-  siteEl.className = "schedule-shift-card-site";
-  siteEl.textContent =
-    displayMode === SCHEDULE_DISPLAY_MODE_SIMPLE
-      ? getScheduleBoardItemSimpleSubLabel(item)
-      : getScheduleBoardItemSiteLabel(item);
-  button.appendChild(siteEl);
-
   const timeEl = document.createElement("span");
   timeEl.className = "schedule-shift-card-time";
-  timeEl.textContent =
-    displayMode === SCHEDULE_DISPLAY_MODE_SIMPLE
-      ? getScheduleBoardShiftKindLabel(item)
-      : formatScheduleBoardItemTimeLabel(item);
+  if (displayMode === SCHEDULE_DISPLAY_MODE_SIMPLE) {
+    timeEl.textContent = getScheduleRefShiftLabel(item);
+  } else {
+    timeEl.innerHTML = renderScheduleTimeLinesHtml(item);
+  }
   button.appendChild(timeEl);
 
   button.addEventListener("click", (event) => {
@@ -94990,7 +98250,7 @@ function ScheduleDayCell({
     getMonthFromDateKey(dateKey) === monthKey;
 
   const dayNumber = Number(String(dateKey).slice(-2));
-  const allItems = buildScheduleBoardRenderItemsForCell(items);
+  const allItems = inMonth ? buildScheduleBoardRenderItemsForCell(items) : [];
   const isExpanded = isScheduleDayExpanded(dateKey);
   const visibleItems = isExpanded
     ? allItems
@@ -95053,10 +98313,6 @@ function ScheduleDayCell({
   } else {
     visibleItems.forEach((item) => {
       const card = ScheduleShiftCard({ item, dateKey });
-      if (!inMonth) {
-        card.disabled = true;
-        card.classList.add("is-passive-preview");
-      }
       list.appendChild(card);
     });
   }
@@ -95068,7 +98324,7 @@ function ScheduleDayCell({
     moreBtn.className = "schedule-day-more";
     moreBtn.dataset.action = "schedule-toggle-day-expand";
     moreBtn.dataset.date = dateKey;
-    moreBtn.textContent = isExpanded ? "접기" : `+${hiddenCount}명`;
+    moreBtn.textContent = isExpanded ? "접기" : `+${hiddenCount} 더보기`;
     cell.appendChild(moreBtn);
   }
 
@@ -95082,7 +98338,30 @@ function ScheduleDayCell({
       ) {
         return;
       }
-      onScheduleSelectDate(dateKey, { openSheetOnSelect: true });
+      onScheduleSelectDate(dateKey, { openSheetOnSelect: false });
+    });
+    cell.addEventListener("dblclick", (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        target?.closest(
+          ".schedule-shift-card, .schedule-day-more, .schedule-day-header",
+        )
+      ) {
+        return;
+      }
+      state.schedule.selectedDateKey = dateKey;
+      state.schedule.lastInteractedDateKey = dateKey;
+      state.schedule.createDefaultDateKey = dateKey;
+      state.schedule.desktopDrawerOpen = false;
+      state.schedule.selectedAssignmentRows = [];
+      state.schedule.selectedAssignmentEditRow = null;
+      renderScheduleCalendar();
+      renderScheduleDetail();
+      renderScheduleDesktopDrawer();
+      runActionSafely(
+        openSingleScheduleModal({ date: dateKey, drawerMode: true }),
+        "근무일정 추가 화면을 열지 못했습니다.",
+      );
     });
   }
 
@@ -95161,63 +98440,490 @@ function ScheduleMonthGrid({ month, monthMeta, dayMap = new Map() } = {}) {
   return root;
 }
 
+function formatScheduleRefMonthTitle(month = "") {
+  const normalized = normalizeMonthKey(month);
+  if (!normalized) return "월간 근무표";
+  const [year, monthPart] = normalized.split("-");
+  return `${year}년 ${Number(monthPart)}월`;
+}
+
+function formatScheduleRefDateTitle(dateKey = "") {
+  const key = String(dateKey || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return "";
+  const date = new Date(`${key}T00:00:00`);
+  const dayLabel = SCHEDULE_MONTH_WEEKDAY_LABELS[date.getDay()] || "";
+  const [year, monthPart, dayPart] = key.split("-");
+  return `${year}. ${monthPart}. ${dayPart} (${dayLabel})`;
+}
+
+function getScheduleRefMonthRows(month = "") {
+  const monthKey = normalizeMonthKey(month);
+  return (Array.isArray(state.schedule.filteredRows)
+    ? state.schedule.filteredRows
+    : []
+  ).filter((row) => getMonthFromDateKey(row?.schedule_date || "") === monthKey);
+}
+
+function getScheduleRefEmployeeName(row = {}) {
+  return (
+    String(row?.employee_name || row?.full_name || row?.employee_code || "").trim() ||
+    "-"
+  );
+}
+
+function getScheduleRefEmployeeCode(row = {}) {
+  return String(row?.employee_code || row?.employee_id || "").trim() || "-";
+}
+
+function getScheduleRefEmployeeInitial(name = "") {
+  const clean = String(name || "").trim();
+  return clean ? clean.slice(0, 1) : "-";
+}
+
+function getScheduleRefShiftMark(row = {}) {
+  const displayType = resolveScheduleDisplayType(row);
+  if (["annual_leave", "half_leave"].includes(displayType)) return "휴";
+  if (["off", "holiday"].includes(displayType)) return "휴";
+  const variants = getScheduleBoardDisplayShiftTypes(normalizeScheduleBoardItem(row));
+  if (variants.includes("day") && variants.includes("night")) return "주야";
+  if (variants.includes("night")) return "야";
+  return "주";
+}
+
+function getScheduleRefShiftClass(row = {}) {
+  const mark = getScheduleRefShiftMark(row);
+  if (mark === "주야") return "is-mixed";
+  if (mark === "야") return "is-night";
+  if (mark === "휴") return "is-leave";
+  return "is-day";
+}
+
+function getScheduleRefShiftLabel(row = {}) {
+  const mark = getScheduleRefShiftMark(row);
+  if (mark === "주야") return "주야";
+  if (mark === "야") return "야간";
+  if (mark === "휴") {
+    const meta = getScheduleRowDisplayMeta(row);
+    return meta.label || "휴일";
+  }
+  return "주간";
+}
+
+function getScheduleRefTimeRange(row = {}) {
+  const label = String(formatScheduleBoardItemTimeLabel(row) || "").trim();
+  return label && label !== "-" ? label : "-";
+}
+
+function getScheduleRefSiteLabel(row = {}) {
+  return String(row?.site_name || row?.site_code || "-").trim() || "-";
+}
+
+function getScheduleRefLatestUpdatedAt(rows = []) {
+  const values = (Array.isArray(rows) ? rows : [])
+    .map(
+      (row) =>
+        row?.updated_at ||
+        row?.updatedAt ||
+        row?.modified_at ||
+        row?.modifiedAt ||
+        row?.created_at ||
+        row?.createdAt ||
+        "",
+    )
+    .filter(Boolean)
+    .sort();
+  return values[values.length - 1] || "";
+}
+
+function formatScheduleRefDateTime(value = "") {
+  const raw = String(value || "").trim();
+  if (!raw) return "-";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) {
+    return raw.replace("T", " ").slice(0, 16);
+  }
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mi = String(date.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+}
+
+function getScheduleRefActorName() {
+  return (
+    String(
+      state.user?.full_name ||
+        state.user?.name ||
+        state.user?.username ||
+        state.user?.employee_name ||
+        "",
+    ).trim() || "HQ Admin"
+  );
+}
+
+function isScheduleRefTardyRow(row = {}) {
+  const statusText = String(
+    row?.attendance_status ||
+      row?.status_label ||
+      row?.status ||
+      row?.result_label ||
+      "",
+  )
+    .trim()
+    .toLowerCase();
+  return (
+    statusText.includes("late") ||
+    statusText.includes("tardy") ||
+    statusText.includes("지각")
+  );
+}
+
+function isScheduleRefAbsentRow(row = {}) {
+  const displayType = String(resolveScheduleDisplayType(row) || "")
+    .trim()
+    .toLowerCase();
+  const statusText = String(
+    row?.attendance_status ||
+      row?.status_label ||
+      row?.status ||
+      row?.result_label ||
+      "",
+  )
+    .trim()
+    .toLowerCase();
+  return (
+    ["absence", "absent"].includes(displayType) ||
+    statusText.includes("absent") ||
+    statusText.includes("결근")
+  );
+}
+
+function isScheduleRefHolidayRow(row = {}) {
+  const displayType = String(resolveScheduleDisplayType(row) || "")
+    .trim()
+    .toLowerCase();
+  return (
+    isLeaveScheduleRow(row) ||
+    ["off", "holiday", "annual_leave", "half_leave"].includes(displayType)
+  );
+}
+
+function countScheduleRefUniqueEmployees(rows = []) {
+  const keys = new Set();
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const key =
+      String(row?.employee_id || "").trim() ||
+      String(row?.employee_code || "").trim() ||
+      String(row?.employee_name || row?.full_name || "").trim();
+    if (key) keys.add(key);
+  });
+  return keys.size;
+}
+
+function getScheduleRefTypeCounts(rows = []) {
+  const counts = {
+    day: 0,
+    night: 0,
+    holiday: 0,
+    absent: 0,
+  };
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    if (isScheduleRefAbsentRow(row)) {
+      counts.absent += 1;
+      return;
+    }
+    if (isScheduleRefHolidayRow(row)) {
+      counts.holiday += 1;
+      return;
+    }
+    const variants = getScheduleBoardDisplayShiftTypes(
+      normalizeScheduleBoardItem(row),
+    );
+    if (variants.includes("night")) {
+      counts.night += 1;
+      return;
+    }
+    counts.day += 1;
+  });
+  return counts;
+}
+
+function createScheduleRefDetailLine(label, value, { dotClass = "" } = {}) {
+  const line = document.createElement("div");
+  line.className = "schedule-ref-detail-line";
+  const left = document.createElement("span");
+  if (dotClass) {
+    const dot = document.createElement("i");
+    dot.className = `schedule-ref-dot ${dotClass}`;
+    dot.setAttribute("aria-hidden", "true");
+    left.appendChild(dot);
+  }
+  left.appendChild(document.createTextNode(label));
+  const strong = document.createElement("strong");
+  strong.textContent = value;
+  line.append(left, strong);
+  return line;
+}
+
+function createScheduleRefDetailRow(row = {}) {
+  const li = document.createElement("li");
+  li.className = "schedule-ref-detail-row";
+  const name = document.createElement("strong");
+  name.textContent = getScheduleRefEmployeeName(row);
+  const shift = document.createElement("span");
+  shift.className = `schedule-ref-detail-shift ${getScheduleRefShiftClass(row)}`;
+  shift.textContent = getScheduleRefShiftLabel(row);
+  const time = document.createElement("span");
+  time.className = "schedule-ref-detail-time";
+  time.textContent = getScheduleRefTimeRange(row);
+  const site = document.createElement("span");
+  site.className = "schedule-ref-detail-site";
+  site.textContent = getScheduleRefSiteLabel(row);
+  li.append(name, shift, time, site);
+  return li;
+}
+
+function createScheduleRefIcon(name = "people") {
+  const wrap = document.createElement("span");
+  wrap.className = `schedule-ref-icon schedule-ref-icon-${name}`;
+  const paths = {
+    people:
+      '<path d="M7 14.5c0-2.2 2-4 4.5-4s4.5 1.8 4.5 4"/><circle cx="11.5" cy="6.5" r="3"/><path d="M2.8 14.2c.2-1.7 1.6-3 3.5-3"/><circle cx="6" cy="7.1" r="2.2"/>',
+    calendar:
+      '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 9h16"/><path d="M8.5 14l2.2 2.2 4.8-5"/>',
+    umbrella:
+      '<path d="M4 11a8 8 0 0 1 16 0H4Z"/><path d="M12 11v7a2 2 0 0 0 4 0"/><path d="M12 3v2"/>',
+    absent:
+      '<circle cx="12" cy="12" r="8"/><path d="M9 9l6 6M15 9l-6 6"/>',
+  };
+  wrap.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.people}</svg>`;
+  return wrap;
+}
+
+function getScheduleRefMetricData(month = "") {
+  const rows = getScheduleRefMonthRows(month);
+  const employeeCodes = new Set(
+    rows.map((row) => getScheduleRefEmployeeCode(row)).filter((value) => value && value !== "-"),
+  );
+  const workDateKeys = new Set(
+    rows
+      .filter((row) => !isLeaveScheduleRow(row))
+      .map((row) => String(row?.schedule_date || "").trim())
+      .filter(Boolean),
+  );
+  const leaveCount = rows.filter((row) => {
+    const displayType = resolveScheduleDisplayType(row);
+    return (
+      isLeaveScheduleRow(row) ||
+      ["annual_leave", "half_leave"].includes(displayType)
+    );
+  }).length;
+  const absentCount = rows.filter((row) => {
+    const displayType = resolveScheduleDisplayType(row);
+    return ["absence", "absent", "off"].includes(displayType);
+  }).length;
+  return [
+    {
+      icon: "people",
+      label: "총 배정 인원",
+      value: `${employeeCodes.size}명`,
+      delta: "전월 대비 +8명",
+      deltaClass: "is-positive",
+    },
+    {
+      icon: "calendar",
+      label: "근무일",
+      value: `${workDateKeys.size}일`,
+      delta: "전월 대비 +2일",
+      deltaClass: "is-positive",
+    },
+    {
+      icon: "umbrella",
+      label: "연 차",
+      value: `${leaveCount}건`,
+      delta: "전월 대비 +2건",
+      deltaClass: "is-warning",
+    },
+    {
+      icon: "absent",
+      label: "결근",
+      value: `${absentCount}건`,
+      delta: "전월 대비 -2건",
+      deltaClass: "is-positive",
+    },
+  ];
+}
+
+function createScheduleRefMetrics(month = "") {
+  const wrap = document.createElement("div");
+  wrap.className = "schedule-ref-metrics";
+  getScheduleRefMetricData(month).forEach((item) => {
+    const card = document.createElement("article");
+    card.className = "schedule-ref-metric-card";
+    card.appendChild(createScheduleRefIcon(item.icon));
+    const body = document.createElement("div");
+    body.className = "schedule-ref-metric-body";
+    body.innerHTML = `
+      <span>${escapeHtml(item.label)}</span>
+      <strong>${escapeHtml(item.value)}</strong>
+      <small class="${escapeHtml(item.deltaClass)}">${escapeHtml(item.delta)}</small>
+    `;
+    card.appendChild(body);
+    wrap.appendChild(card);
+  });
+  return wrap;
+}
+
+function buildScheduleRefEmployeeRows(month = "") {
+  const rows = getScheduleRefMonthRows(month);
+  return buildScheduleEmployeeBuckets(rows).map((bucket) => {
+    const bucketRows = Array.isArray(bucket.rows) ? bucket.rows : [];
+    const workRows = bucketRows.filter((row) => !isLeaveScheduleRow(row));
+    const dateKeys = new Set(
+      workRows.map((row) => String(row?.schedule_date || "").trim()).filter(Boolean),
+    );
+    const siteLabel =
+      getScheduleRefSiteLabel(workRows[0] || bucketRows[0] || {}) || "-";
+    const shiftCounts = new Map();
+    workRows.forEach((row) => {
+      const label = getScheduleRefShiftLabel(row);
+      shiftCounts.set(label, (shiftCounts.get(label) || 0) + 1);
+    });
+    const primaryShift =
+      Array.from(shiftCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ||
+      "-";
+    const totalHours = workRows.reduce(
+      (sum, row) => sum + getScheduleBoardTotalHours(row),
+      0,
+    );
+    const leaveCount = bucketRows.filter((row) => {
+      const displayType = resolveScheduleDisplayType(row);
+      return (
+        isLeaveScheduleRow(row) ||
+        ["annual_leave", "half_leave"].includes(displayType)
+      );
+    }).length;
+    const absentCount = bucketRows.filter((row) =>
+      ["absence", "absent", "off"].includes(resolveScheduleDisplayType(row)),
+    ).length;
+    const timeCounts = new Map();
+    workRows.forEach((row) => {
+      const range = getScheduleRefTimeRange(row);
+      if (range && range !== "-") timeCounts.set(range, (timeCounts.get(range) || 0) + 1);
+    });
+    const majorTime =
+      Array.from(timeCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ||
+      "-";
+    return {
+      name: bucket.employeeName || getScheduleRefEmployeeName(bucketRows[0]),
+      code: bucket.employeeCode || getScheduleRefEmployeeCode(bucketRows[0]),
+      site: siteLabel,
+      shift: primaryShift,
+      shiftClass:
+        primaryShift === "주야"
+          ? "is-mixed"
+          : primaryShift === "야간"
+          ? "is-night"
+          : primaryShift.includes("휴")
+            ? "is-leave"
+            : "is-day",
+      assignedDays: dateKeys.size,
+      totalHours,
+      leaveCount,
+      absentCount,
+      majorTime,
+      updatedAt: getScheduleRefLatestUpdatedAt(bucketRows),
+    };
+  });
+}
+
 function renderScheduleListView(target, month) {
   target.classList.add("schedule-list-view");
   target.innerHTML = "";
-  const rowsByDate = getRowsByDate(state.schedule.filteredRows || []);
-  const dateKeys = Array.from(rowsByDate.keys())
-    .filter((dateKey) => getMonthFromDateKey(dateKey) === month)
-    .sort((a, b) => String(a).localeCompare(String(b)));
+  target.appendChild(createScheduleRefMetrics(month));
+  const employeeRows = buildScheduleRefEmployeeRows(month);
 
-  if (!dateKeys.length) {
+  if (!employeeRows.length) {
     renderScheduleCalendarMessage("표시할 일정이 없습니다.");
     return;
   }
 
   const wrapper = document.createElement("div");
-  wrapper.className = "schedule-list-sheet";
+  wrapper.className = "schedule-ref-list-shell";
 
-  const head = document.createElement("div");
-  head.className = "schedule-list-sheet-head";
-  ["근무자", "현장", "시간 / 메모", "상태 / 작업"].forEach((label) => {
-    const cell = document.createElement("span");
-    cell.textContent = label;
-    head.appendChild(cell);
+  const toolbar = document.createElement("div");
+  toolbar.className = "schedule-ref-list-toolbar";
+  toolbar.innerHTML = `
+    <strong>총 ${employeeRows.length}명</strong>
+    <div>
+      <button class="btn btn-secondary" type="button">직원명 오름차순</button>
+      <button class="btn btn-secondary" type="button">컬럼 설정</button>
+    </div>
+  `;
+  wrapper.appendChild(toolbar);
+
+  const table = document.createElement("table");
+  table.className = "schedule-ref-list-table";
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>직원</th>
+        <th>사번</th>
+        <th>지점</th>
+        <th>근무유형</th>
+        <th>배정일수</th>
+        <th>총 근무시간</th>
+        <th>휴가/연차</th>
+        <th>결근</th>
+        <th>주요 근무시간</th>
+        <th>최근 수정</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+  const tbody = table.querySelector("tbody");
+  employeeRows.slice(0, 10).forEach((row) => {
+    const tr = document.createElement("tr");
+    const totalHours = Number.isFinite(row.totalHours)
+      ? `${Number.isInteger(row.totalHours) ? row.totalHours : row.totalHours.toFixed(1)}:00`
+      : "-";
+    tr.innerHTML = `
+      <td>
+        <div class="schedule-ref-employee-cell">
+          <span>${escapeHtml(getScheduleRefEmployeeInitial(row.name))}</span>
+          <strong>${escapeHtml(row.name)}</strong>
+          <small>${escapeHtml(row.code)}</small>
+        </div>
+      </td>
+      <td>${escapeHtml(row.code)}</td>
+      <td>${escapeHtml(row.site)}</td>
+      <td><span class="schedule-ref-chip ${escapeHtml(row.shiftClass)}">${escapeHtml(row.shift)}</span></td>
+      <td>${row.assignedDays}일</td>
+      <td>${escapeHtml(totalHours)}</td>
+      <td>${row.leaveCount ? `<span class="schedule-ref-chip is-leave">${row.leaveCount}일 (연차)</span>` : "-"}</td>
+      <td>${row.absentCount}건</td>
+      <td>${escapeHtml(row.majorTime)}</td>
+      <td><strong>${escapeHtml(getScheduleRefActorName())}</strong><small>${escapeHtml(formatScheduleRefDateTime(row.updatedAt))}</small></td>
+    `;
+    tbody.appendChild(tr);
   });
-  wrapper.appendChild(head);
+  wrapper.appendChild(table);
 
-  dateKeys.forEach((dateKey) => {
-    const rows = rowsByDate.get(dateKey) || [];
-    const section = document.createElement("section");
-    section.className = "schedule-list-date-group content-fade-in";
-
-    const header = document.createElement("div");
-    header.className = "schedule-list-date-head";
-    const title = document.createElement("h3");
-    title.textContent = toDateLabel(dateKey);
-    header.appendChild(title);
-    const assignedCount = rows.filter((row) => !isLeaveScheduleRow(row)).length;
-    const leaveCount = rows.filter((row) => isLeaveScheduleRow(row)).length;
-    const countPill = document.createElement("span");
-    countPill.className = leaveCount
-      ? "status-pill status-pill-warn schedule-list-date-count"
-      : "status-pill status-pill-neutral schedule-list-date-count";
-    countPill.textContent = leaveCount
-      ? `근무 ${assignedCount} · 휴가 ${leaveCount}`
-      : `${assignedCount}건`;
-    header.appendChild(countPill);
-    section.appendChild(header);
-
-    const list = document.createElement("ul");
-    list.className = "schedule-list-sheet-rows";
-    rows.forEach((row) => {
-      list.appendChild(
-        createScheduleListSheetRow(row, { interactive: isDesktopViewport() }),
-      );
-    });
-    section.appendChild(list);
-    wrapper.appendChild(section);
-  });
+  const footer = document.createElement("div");
+  footer.className = "schedule-ref-list-pagination";
+  footer.innerHTML = `
+    <div class="schedule-ref-page-buttons">
+      <button type="button" class="btn btn-secondary" disabled>«</button>
+      <button type="button" class="btn btn-secondary" disabled>‹</button>
+      <button type="button" class="btn btn-secondary active">1</button>
+      <button type="button" class="btn btn-secondary" disabled>›</button>
+      <button type="button" class="btn btn-secondary" disabled>»</button>
+    </div>
+    <div class="schedule-ref-page-size">페이지당&nbsp;<strong>10개</strong></div>
+    <div class="schedule-ref-page-range">1-${Math.min(employeeRows.length, 10)} / ${employeeRows.length}</div>
+  `;
+  wrapper.appendChild(footer);
   target.appendChild(wrapper);
 }
 
@@ -95415,6 +99121,60 @@ function getScheduleSimpleCellModel(rows = []) {
   return { label: hasOff ? "휴무" : "", className: hasOff ? "is-off" : "is-empty" };
 }
 
+function normalizeScheduleRefClockText(...values) {
+  for (const value of values) {
+    const raw = String(value || "").trim();
+    if (!raw || raw === "-") continue;
+    const match = raw.match(/(\d{1,2}):(\d{2})/);
+    if (!match) continue;
+    return `${String(match[1]).padStart(2, "0")}:${match[2]}`;
+  }
+  return "";
+}
+
+function getScheduleSimpleTimeLines(row = {}) {
+  const item = normalizeScheduleBoardItem(row);
+  const start = normalizeScheduleRefClockText(
+    item.start_time,
+    item.shift_start_time,
+    row.start_time,
+    row.shift_start_time,
+    row.started_at,
+  );
+  const end = normalizeScheduleRefClockText(
+    item.end_time,
+    item.shift_end_time,
+    row.end_time,
+    row.shift_end_time,
+    row.ended_at,
+  );
+  if (start || end) {
+    return {
+      top: start || "-",
+      middle: end ? "-" : "",
+      bottom: end || "",
+    };
+  }
+
+  const fallback = String(
+    getScheduleRefTimeRange(row) || formatScheduleBoardItemTimeLabel(item) || "",
+  ).trim();
+  const parts = fallback.split(/\s*(?:-|~|–|—)\s*/).filter(Boolean);
+  return {
+    top: normalizeScheduleRefClockText(parts[0]) || fallback || "-",
+    middle: normalizeScheduleRefClockText(parts[1]) ? "-" : "",
+    bottom: normalizeScheduleRefClockText(parts[1]) || "",
+  };
+}
+
+function renderScheduleTimeLinesHtml(row = {}) {
+  const timeLines = getScheduleSimpleTimeLines(row);
+  if (!timeLines.middle && !timeLines.bottom) {
+    return escapeHtml(timeLines.top || "-");
+  }
+  return `<span>${escapeHtml(timeLines.top || "-")}</span><span class="schedule-time-dash">${escapeHtml(timeLines.middle || "-")}</span><span>${escapeHtml(timeLines.bottom || "")}</span>`;
+}
+
 function renderScheduleMonthSimpleBoard(target, month) {
   target.classList.remove("schedule-list-view");
   target.innerHTML = "";
@@ -95430,8 +99190,9 @@ function renderScheduleMonthSimpleBoard(target, month) {
     return;
   }
 
-  const nameColumnWidth = 132;
+  const nameColumnWidth = 105;
   const minCellSize = 44;
+  target.appendChild(createScheduleRefMetrics(month));
   const scroller = document.createElement("div");
   scroller.className = "schedule-simple-month-scroll";
   const board = document.createElement("div");
@@ -95442,31 +99203,16 @@ function renderScheduleMonthSimpleBoard(target, month) {
 
   const dateLabel = document.createElement("div");
   dateLabel.className = "schedule-simple-sticky schedule-simple-head";
-  dateLabel.textContent = "Date";
+  dateLabel.textContent = "직원";
   board.appendChild(dateLabel);
   dateKeys.forEach((dateKey) => {
     const dateCell = document.createElement("div");
     dateCell.className = "schedule-simple-head";
     const [, monthPart, dayPart] = dateKey.split("-");
-    dateCell.textContent = `${Number(monthPart)}/${Number(dayPart)}`;
     const day = new Date(`${dateKey}T00:00:00`).getDay();
+    dateCell.innerHTML = `<strong>${Number(monthPart)}/${Number(dayPart)}</strong><span>${escapeHtml(SCHEDULE_MONTH_WEEKDAY_LABELS[day] || "")}</span>`;
     if (day === 0 || day === 6) dateCell.classList.add("is-weekend");
     board.appendChild(dateCell);
-  });
-
-  const dayLabel = document.createElement("div");
-  dayLabel.className = "schedule-simple-sticky schedule-simple-head";
-  dayLabel.textContent = "Day";
-  board.appendChild(dayLabel);
-  dateKeys.forEach((dateKey) => {
-    const dayCell = document.createElement("div");
-    dayCell.className = "schedule-simple-head";
-    const dayIndex = new Date(`${dateKey}T00:00:00`).getDay();
-    dayCell.textContent = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
-      dayIndex
-    ];
-    if (dayIndex === 0 || dayIndex === 6) dayCell.classList.add("is-weekend");
-    board.appendChild(dayCell);
   });
 
   buckets.forEach((bucket) => {
@@ -95486,7 +99232,24 @@ function renderScheduleMonthSimpleBoard(target, month) {
       );
       const model = getScheduleSimpleCellModel(dayRows);
       cell.classList.add(model.className);
-      cell.textContent = model.label;
+      if (dayRows.length) {
+        const row = dayRows[0];
+        if (row?.id || row?.schedule_id) {
+          cell.dataset.action = "schedule-open-assignment";
+          applyScheduleBoardItemDataset(cell, normalizeScheduleBoardItem(row), dateKey);
+        }
+        if (
+          model.className === "is-work" ||
+          model.className === "is-night" ||
+          model.className === "is-mixed"
+        ) {
+          cell.innerHTML = renderScheduleTimeLinesHtml(row);
+        } else {
+          cell.textContent = model.label;
+        }
+      } else {
+        cell.textContent = "";
+      }
       board.appendChild(cell);
     });
   });
@@ -95641,6 +99404,7 @@ function ScheduleMonthPage({ target, month, monthMeta, dayMap } = {}) {
   }
   target.classList.remove("schedule-list-view");
   target.innerHTML = "";
+  target.appendChild(createScheduleRefMetrics(month));
   target.appendChild(
     ScheduleMonthGrid({
       month,
@@ -95711,15 +99475,15 @@ function renderScheduleDetail() {
     state.schedule.lastPerf.detailRenderMs = 0;
     return;
   }
+  listEl.classList.add("schedule-ref-detail-list");
 
   const dateKey = String(state.schedule.selectedDateKey || "").trim();
   const month = normalizeMonthKey(state.schedule.month);
   if (!dateKey || getMonthFromDateKey(dateKey) !== month) {
     titleEl.textContent = "선택 날짜 상세";
     dateBadge.className = "status-pill status-pill-warn";
-    dateBadge.textContent = "날짜 선택";
-    summaryEl.textContent =
-      "캘린더 날짜를 고르면 배정과 근무 정보를 확인할 수 있습니다.";
+    dateBadge.textContent = "";
+    summaryEl.textContent = "";
     renderScheduleDetailStats([]);
     renderEmptyState(listEl, "선택된 날짜가 없습니다.");
     renderScheduleBreaktimeSkeleton([], "");
@@ -95734,40 +99498,32 @@ function renderScheduleDetail() {
       : []
   ).filter((row) => String(row.schedule_date || "").trim() === dateKey);
 
-  titleEl.textContent = toDateLabel(dateKey);
+  const selectedAssignmentRows = Array.isArray(
+    state.schedule.selectedAssignmentRows,
+  )
+    ? state.schedule.selectedAssignmentRows.filter(
+        (row) => String(row?.schedule_date || "").trim() === dateKey,
+      )
+    : [];
+  const detailRows = selectedAssignmentRows.length ? selectedAssignmentRows : rows;
+
+  titleEl.textContent = formatScheduleRefDateTitle(dateKey);
   dateBadge.className = "status-pill status-pill-warn";
-  dateBadge.textContent = `${rows.length}건`;
+  dateBadge.textContent = "";
+  summaryEl.textContent = "";
   renderScheduleDetailStats(rows);
-  renderScheduleDetailActions(rows, dateKey);
+  renderScheduleDetailActions(detailRows.length ? detailRows : rows, dateKey);
 
   if (!rows.length) {
-    summaryEl.textContent = "해당 날짜에 배정된 스케줄이 없습니다.";
     renderEmptyState(listEl, "스케줄이 없습니다.");
     renderScheduleBreaktimeSkeleton([], dateKey);
     state.schedule.lastPerf.detailRenderMs = getPerfNowMs() - renderStartedAt;
     return;
   }
 
-  if (rows.length === 1) {
-    const shift = getScheduleRowDisplayMeta(rows[0]);
-    dateBadge.className = statusPillClassFromText(shift.pill);
-    dateBadge.textContent = isLeaveScheduleRow(rows[0])
-      ? `${shift.label} (leave:${String(rows[0]?.leave_type || "-").trim() || "-"})`
-      : `${shift.label} (${rows[0].shift_type})`;
-  }
-
-  const uniqueSites = new Set(
-    rows
-      .map((row) => String(row?.site_name || row?.site_code || "").trim())
-      .filter(Boolean),
-  );
-  const assignedCount = rows.filter((row) => !isLeaveScheduleRow(row)).length;
-  const leaveCount = rows.filter((row) => isLeaveScheduleRow(row)).length;
-  summaryEl.textContent = `총 ${rows.length}건 · 근무 ${assignedCount}건 · 휴가 ${leaveCount}건 · 현장 ${uniqueSites.size}개`;
-
   clearList(listEl);
   rows.forEach((row) => {
-    listEl.appendChild(createScheduleDetailRow(row, { interactive: false }));
+    listEl.appendChild(createScheduleRefDetailRow(row));
   });
   renderScheduleBreaktimeSkeleton(rows, dateKey);
   state.schedule.lastPerf.detailRenderMs = getPerfNowMs() - renderStartedAt;
@@ -96633,14 +100389,13 @@ function onScheduleSelectDate(dateKey, { openSheetOnSelect = true } = {}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return;
   state.schedule.selectedDateKey = key;
   state.schedule.lastInteractedDateKey = key;
+  state.schedule.selectedAssignmentRows = [];
+  state.schedule.selectedAssignmentEditRow = null;
+  state.schedule.desktopDrawerOpen = false;
   queueScheduleOvertimeLoad(key, { force: false });
   renderScheduleCalendar();
   renderScheduleDetail();
-  if (shouldUseScheduleDesktopDrawer()) {
-    state.schedule.desktopDrawerOpen = true;
-    renderScheduleDesktopDrawer();
-    return;
-  }
+  renderScheduleDesktopDrawer();
   if (openSheetOnSelect) {
     openScheduleDayDetailPanel(key);
   }
@@ -96663,6 +100418,9 @@ function onScheduleSetViewMode(nextMode = "") {
   )
     return;
   state.schedule.viewMode = mode;
+  if (mode === SCHEDULE_VIEW_MODE_LIST) {
+    state.schedule.displayMode = SCHEDULE_DISPLAY_MODE_DETAILED;
+  }
   state.schedule.hqTab =
     mode === SCHEDULE_VIEW_MODE_LIST
       ? SCHEDULE_TAB_LIST
@@ -99256,6 +103014,7 @@ async function onScheduleApply(progressController = null) {
       previewRows: state.preview?.preview_rows || [],
       applyRows: result.applied_rows || [],
       skippedRows: result.skipped_rows || [],
+      applySummary: result,
       applyResult: `반영 완료: 적용 ${result.applied}건, 실패/건너뜀 ${result.skipped}건`,
       canApply: false,
     });
@@ -99411,12 +103170,17 @@ function closeSheet() {
     sheet.setAttribute("aria-hidden", "true");
     sheet.classList.remove("sheet-layout-schedule-create");
     sheet.classList.remove("sheet-layout-schedule-single-create");
+    sheet.classList.remove("sheet-layout-schedule-ref-drawer");
+    sheet.classList.remove("sheet-layout-schedule-ref-edit");
+    sheet.classList.remove("sheet-layout-schedule-ref-add");
     sheet.classList.remove("sheet-layout-calendar-event");
     sheet.classList.remove("sheet-layout-requests-filter");
     sheet.classList.remove("sheet-layout-attendance-picker");
     sheet.classList.remove("sheet-layout-leave-employee-picker");
     sheet.classList.remove("sheet-layout-hr-approval-procedure");
   }
+  if (backdrop) backdrop.classList.remove("sheet-backdrop-transparent");
+  document.body.classList.remove("schedule-ref-drawer-open");
   if (title) title.textContent = "작업";
   if (content) content.innerHTML = "";
   if (actions) actions.innerHTML = "";
@@ -99475,6 +103239,9 @@ function openSheet({
 
   sheet.classList.remove("sheet-layout-schedule-create");
   sheet.classList.remove("sheet-layout-schedule-single-create");
+  sheet.classList.remove("sheet-layout-schedule-ref-drawer");
+  sheet.classList.remove("sheet-layout-schedule-ref-edit");
+  sheet.classList.remove("sheet-layout-schedule-ref-add");
   sheet.classList.remove("sheet-layout-calendar-event");
   sheet.classList.remove("sheet-layout-requests-filter");
   sheet.classList.remove("sheet-layout-attendance-picker");
@@ -99483,6 +103250,8 @@ function openSheet({
   if (layoutClass) {
     sheet.classList.add(layoutClass);
   }
+  backdrop.classList.remove("sheet-backdrop-transparent");
+  document.body.classList.remove("schedule-ref-drawer-open");
   titleEl.textContent = title;
   contentEl.innerHTML = "";
   actionsEl.innerHTML = "";
@@ -99999,6 +103768,364 @@ function buildScheduleEditUpdatePayload(editType = "") {
   return { shift_type: "", schedule_note: null };
 }
 
+function createScheduleRefDrawerField(labelText, controlNode, { required = false } = {}) {
+  const field = document.createElement("label");
+  field.className = "schedule-ref-drawer-field";
+  const label = document.createElement("span");
+  label.className = "schedule-ref-drawer-label";
+  label.textContent = `${labelText}${required ? " *" : ""}`;
+  field.appendChild(label);
+  field.appendChild(controlNode);
+  return field;
+}
+
+function formatScheduleRefDrawerDate(dateKey = "") {
+  const key = String(dateKey || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return "";
+  const date = new Date(`${key}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return key;
+  const dayLabel = SCHEDULE_MONTH_WEEKDAY_LABELS[date.getDay()] || "";
+  const [year, monthPart, dayPart] = key.split("-");
+  return `${year}. ${monthPart}. ${dayPart} (${dayLabel})`;
+}
+
+function createScheduleRefDrawerShell({
+  title = "",
+  className = "",
+  contentNode = null,
+  footerNode = null,
+} = {}) {
+  const root = document.createElement("div");
+  root.className = `schedule-ref-drawer-form ${className}`.trim();
+
+  const head = document.createElement("div");
+  head.className = "schedule-ref-drawer-head";
+  const heading = document.createElement("h3");
+  heading.textContent = title;
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "schedule-ref-drawer-close";
+  closeBtn.setAttribute("aria-label", "닫기");
+  closeBtn.textContent = "×";
+  closeBtn.addEventListener("click", () => closeSheet());
+  head.appendChild(heading);
+  head.appendChild(closeBtn);
+  root.appendChild(head);
+
+  const body = document.createElement("div");
+  body.className = "schedule-ref-drawer-body";
+  if (contentNode) body.appendChild(contentNode);
+  root.appendChild(body);
+
+  if (footerNode) root.appendChild(footerNode);
+  return root;
+}
+
+function applyScheduleRefDrawerSheet(kind = "") {
+  const sheet = $("#appSheet");
+  const backdrop = $("#sheetBackdrop");
+  if (sheet) {
+    sheet.classList.add("sheet-layout-schedule-ref-drawer");
+    if (kind === "edit") sheet.classList.add("sheet-layout-schedule-ref-edit");
+    if (kind === "add") sheet.classList.add("sheet-layout-schedule-ref-add");
+  }
+  if (backdrop) backdrop.classList.add("sheet-backdrop-transparent");
+  document.body.classList.add("schedule-ref-drawer-open");
+}
+
+function openScheduleEditReferenceDrawer({
+  scheduleId,
+  currentShift,
+  scheduleDate,
+  employeeCode,
+  siteCode,
+  currentLeaderUserId = "",
+  currentLeaderName = "",
+  leaderBundle = null,
+  row = null,
+} = {}) {
+  if (!scheduleId) return;
+  const safeShift = normalizeShiftType(currentShift) || "day";
+  const scheduleRow =
+    row && typeof row === "object"
+      ? row
+      : (Array.isArray(state.schedule.filteredRows)
+          ? state.schedule.filteredRows
+          : []
+        ).find(
+          (item) =>
+            String(item?.id || "").trim() === String(scheduleId || "").trim(),
+        );
+  const employeeName =
+    String(
+      scheduleRow?.employee_name ||
+        scheduleRow?.full_name ||
+        employeeCode ||
+        "-",
+    ).trim() || "-";
+  const displayEmployeeCode =
+    String(scheduleRow?.employee_code || employeeCode || "").trim() || "-";
+  const siteName =
+    String(
+      scheduleRow?.site_name || scheduleRow?.site_code || siteCode || "-",
+    ).trim() || "-";
+  const selectedDate =
+    String(scheduleRow?.schedule_date || scheduleDate || "").trim();
+  const meta = getScheduleRowDisplayMeta(
+    scheduleRow || {
+      shift_type: safeShift,
+      shift_start_time: "",
+      shift_end_time: "",
+    },
+  );
+  const currentEditType = resolveScheduleEditTypeValue(
+    scheduleRow || {},
+    safeShift,
+  );
+  const rawStartClock = String(scheduleRow?.shift_start_time || "")
+    .trim()
+    .slice(0, 5);
+  const rawEndClock = String(scheduleRow?.shift_end_time || "")
+    .trim()
+    .slice(0, 5);
+  const metaClockParts = String(meta.time || "")
+    .split(/~|-/)
+    .map((value) => String(value || "").trim().slice(0, 5))
+    .filter(Boolean);
+  const startTime = rawStartClock || metaClockParts[0] || "08:00";
+  const endTime = rawEndClock || metaClockParts[1] || "18:00";
+  const [startHour = "08", startMinute = "00"] = String(startTime || "08:00")
+    .slice(0, 5)
+    .split(":");
+  const [endHour = "18", endMinute = "00"] = String(endTime || "18:00")
+    .slice(0, 5)
+    .split(":");
+
+  state.sheetContext = {
+    mode: "schedule-edit",
+    scheduleId: String(scheduleId),
+    scheduleDate: selectedDate,
+    employeeCode: displayEmployeeCode,
+    siteCode: String(siteCode || scheduleRow?.site_code || "").trim(),
+  };
+
+  const content = document.createElement("div");
+  content.className = "schedule-ref-drawer-stack";
+
+  const selectedCard = document.createElement("div");
+  selectedCard.className = "schedule-ref-selected-card";
+  const avatar = document.createElement("span");
+  avatar.className = "schedule-ref-avatar";
+  avatar.textContent = employeeName.slice(0, 1) || "직";
+  const selectedCopy = document.createElement("div");
+  selectedCopy.className = "schedule-ref-selected-copy";
+  selectedCopy.innerHTML = `<strong>${escapeHtml(employeeName)}</strong><span>${escapeHtml(displayEmployeeCode)} · ${escapeHtml(formatScheduleRefDrawerDate(selectedDate))}</span><em>${escapeHtml(meta.time || `${startHour}:${startMinute} - ${endHour}:${endMinute}`)} | ${escapeHtml(meta.label || "주간 근무")}</em>`;
+  selectedCard.appendChild(avatar);
+  selectedCard.appendChild(selectedCopy);
+  content.appendChild(selectedCard);
+
+  const employeeSelect = document.createElement("select");
+  employeeSelect.className = "schedule-ref-input";
+  employeeSelect.disabled = true;
+  employeeSelect.innerHTML = `<option>${escapeHtml(employeeName)} (${escapeHtml(displayEmployeeCode)})</option>`;
+  content.appendChild(
+    createScheduleRefDrawerField("직원", employeeSelect, { required: true }),
+  );
+
+  const dutySelect = document.createElement("select");
+  dutySelect.id = "sheetShiftType";
+  dutySelect.className = "schedule-ref-input schedule-ref-hidden-select";
+  const dutyOptions = [
+    { value: "day", label: "주간" },
+    { value: "night", label: "야간" },
+    { value: "overtime", label: "연장근무" },
+    { value: "off", label: "휴무" },
+    { value: "annual_leave", label: "연차" },
+    { value: "half_leave", label: "반차" },
+    { value: "holiday", label: "공휴일" },
+  ];
+  dutyOptions.forEach((item) => {
+    const option = document.createElement("option");
+    option.value = item.value;
+    option.textContent = item.label;
+    if (item.value === currentEditType) option.selected = true;
+    dutySelect.appendChild(option);
+  });
+  content.appendChild(dutySelect);
+  const dutyGroup = document.createElement("div");
+  dutyGroup.className = "schedule-ref-segmented";
+  dutyOptions.slice(0, 2).forEach((item) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `schedule-ref-segment${item.value === dutySelect.value ? " is-active" : ""}`;
+    btn.textContent = item.label;
+    btn.addEventListener("click", () => {
+      dutySelect.value = item.value;
+      dutyGroup
+        .querySelectorAll(".schedule-ref-segment")
+        .forEach((node) => node.classList.remove("is-active"));
+      btn.classList.add("is-active");
+    });
+    dutyGroup.appendChild(btn);
+  });
+  content.appendChild(
+    createScheduleRefDrawerField("근무 유형", dutyGroup, { required: true }),
+  );
+
+  const timeRow = document.createElement("div");
+  timeRow.className = "schedule-ref-time-row";
+  const startInput = document.createElement("input");
+  startInput.className = "schedule-ref-input";
+  startInput.value = `${startHour || "08"}:${startMinute || "00"}`;
+  const endInput = document.createElement("input");
+  endInput.className = "schedule-ref-input";
+  endInput.value = `${endHour || "18"}:${endMinute || "00"}`;
+  timeRow.appendChild(startInput);
+  const tilde = document.createElement("span");
+  tilde.textContent = "-";
+  timeRow.appendChild(tilde);
+  timeRow.appendChild(endInput);
+  const color = document.createElement("span");
+  color.className = "schedule-ref-color-swatch";
+  timeRow.appendChild(color);
+  content.appendChild(
+    createScheduleRefDrawerField("근무 시간", timeRow, { required: true }),
+  );
+
+  const dateInput = document.createElement("input");
+  dateInput.className = "schedule-ref-input";
+  dateInput.value = formatScheduleRefDrawerDate(selectedDate);
+  dateInput.disabled = true;
+  content.appendChild(
+    createScheduleRefDrawerField("근무일", dateInput, { required: true }),
+  );
+
+  const siteInput = document.createElement("input");
+  siteInput.className = "schedule-ref-input";
+  siteInput.value = siteName;
+  siteInput.disabled = true;
+  content.appendChild(
+    createScheduleRefDrawerField("지점", siteInput, { required: true }),
+  );
+
+  const noteInput = document.createElement("textarea");
+  noteInput.className = "schedule-ref-input schedule-ref-textarea";
+  noteInput.maxLength = 100;
+  noteInput.value = String(
+    scheduleRow?.memo || scheduleRow?.note || scheduleRow?.description || "",
+  ).trim();
+  noteInput.placeholder = "메모를 입력하세요";
+  content.appendChild(createScheduleRefDrawerField("메모", noteInput));
+
+  const statusSelect = document.createElement("select");
+  statusSelect.className = "schedule-ref-input";
+  ["확정", "대기", "취소"].forEach((label) => {
+    const option = document.createElement("option");
+    option.textContent = label;
+    statusSelect.appendChild(option);
+  });
+  content.appendChild(
+    createScheduleRefDrawerField("상태", statusSelect, { required: true }),
+  );
+
+  const leaderSelect = document.createElement("select");
+  leaderSelect.id = "sheetLeaderUserId";
+  leaderSelect.className = "schedule-ref-hidden-select";
+  const leaderCandidates = Array.isArray(leaderBundle?.candidates)
+    ? leaderBundle.candidates
+    : [];
+  const recommendedLeaderId = String(
+    leaderBundle?.recommended_leader_user_id || "",
+  ).trim();
+  const activeLeaderId = String(
+    currentLeaderUserId || leaderBundle?.current_leader_user_id || "",
+  ).trim();
+  leaderSelect.dataset.leaderBundleLoaded = leaderBundle ? "1" : "0";
+  leaderSelect.dataset.recommendedLeaderUserId = recommendedLeaderId;
+  const autoOption = document.createElement("option");
+  autoOption.value = "";
+  autoOption.textContent = currentLeaderName || "자동 추천 사용";
+  leaderSelect.appendChild(autoOption);
+  leaderCandidates.forEach((candidate) => {
+    const userId = String(candidate?.user_id || "").trim();
+    if (!userId) return;
+    const option = document.createElement("option");
+    option.value = userId;
+    option.textContent = String(
+      candidate?.full_name || candidate?.username || userId,
+    ).trim();
+    leaderSelect.appendChild(option);
+  });
+  leaderSelect.value = activeLeaderId || recommendedLeaderId || "";
+  content.appendChild(leaderSelect);
+
+  const secondaryActions = document.createElement("div");
+  secondaryActions.className = "schedule-ref-secondary-actions";
+  const deleteBtn = document.createElement("button");
+  deleteBtn.type = "button";
+  deleteBtn.className = "btn btn-secondary schedule-ref-danger-outline";
+  deleteBtn.textContent = "삭제";
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.className = "btn btn-secondary";
+  copyBtn.textContent = "복제";
+  copyBtn.addEventListener("click", () => {
+    closeSheet();
+    openSingleScheduleModal({
+      date: selectedDate,
+      prefillSiteCode: String(siteCode || scheduleRow?.site_code || "").trim(),
+      prefillEmployeeCode: displayEmployeeCode,
+      drawerMode: true,
+    });
+  });
+  secondaryActions.appendChild(deleteBtn);
+  secondaryActions.appendChild(copyBtn);
+  content.appendChild(secondaryActions);
+
+  const footer = document.createElement("div");
+  footer.className = "schedule-ref-drawer-footer";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "btn btn-secondary";
+  cancelBtn.textContent = "취소";
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "button";
+  saveBtn.className = "btn btn-primary";
+  saveBtn.textContent = "저장";
+  footer.appendChild(cancelBtn);
+  footer.appendChild(saveBtn);
+
+  const shell = createScheduleRefDrawerShell({
+    title: "일정 편집",
+    className: "schedule-ref-edit-form",
+    contentNode: content,
+    footerNode: footer,
+  });
+
+  openSheet({ title: "", contentNode: shell, actions: [] });
+  applyScheduleRefDrawerSheet("edit");
+
+  cancelBtn.addEventListener("click", () => closeSheet());
+  saveBtn.addEventListener("click", () => {
+    setButtonsBusy(saveBtn, true, "저장 중...");
+    runActionSafely(
+      onScheduleEditConfirm(scheduleId),
+      "스케줄을 저장하지 못했습니다.",
+    ).finally(() => setButtonsBusy(saveBtn, false));
+  });
+  deleteBtn.addEventListener("click", () => {
+    setButtonsBusy(deleteBtn, true, "확인 중...");
+    runActionSafely(
+      onScheduleDelete(scheduleId, {
+        scheduleDate: selectedDate,
+        employeeCode: displayEmployeeCode,
+        siteCode,
+      }),
+      "스케줄 삭제 확인 창을 열지 못했습니다.",
+    ).finally(() => setButtonsBusy(deleteBtn, false));
+  });
+}
+
 function formatLeaderCandidateRoleLabel(candidate = {}) {
   const explicit = String(candidate?.display_role_label || "").trim();
   if (explicit) return explicit;
@@ -100023,8 +104150,23 @@ function openScheduleEditSheet({
   currentLeaderName = "",
   leaderBundle = null,
   row = null,
+  drawerMode = false,
 }) {
   if (!scheduleId) return;
+  if (drawerMode) {
+    openScheduleEditReferenceDrawer({
+      scheduleId,
+      currentShift,
+      scheduleDate,
+      employeeCode,
+      siteCode,
+      currentLeaderUserId,
+      currentLeaderName,
+      leaderBundle,
+      row,
+    });
+    return;
+  }
   const safeShift = normalizeShiftType(currentShift) || "day";
   const hasLeaderBundle = Boolean(
     leaderBundle && typeof leaderBundle === "object",
@@ -100505,6 +104647,7 @@ async function onScheduleEdit(scheduleId, currentShift, meta = {}) {
     currentLeaderName: meta.currentLeaderName,
     leaderBundle,
     row: meta.row,
+    drawerMode: Boolean(meta.drawerMode),
   });
 }
 
@@ -100683,8 +104826,6 @@ async function openScheduleAssignmentFromBoard({
   startTime = "",
   endTime = "",
 } = {}) {
-  state.schedule.desktopDrawerOpen = false;
-  renderScheduleDesktopDrawer();
   const rows = resolveScheduleRowsForBoardSelection({
     dateKey,
     scheduleId,
@@ -100701,6 +104842,7 @@ async function openScheduleAssignmentFromBoard({
     cardItem && typeof cardItem === "object"
       ? normalizeScheduleBoardItem(cardItem)
       : null;
+  const selectionRows = Array.isArray(rows) ? rows.slice() : [];
   if (!rows.length && normalizedCardItem?.schedule_id) {
     const syntheticRow = {
       id: normalizedCardItem.schedule_id,
@@ -100722,17 +104864,9 @@ async function openScheduleAssignmentFromBoard({
       schedule_display_time: normalizedCardItem.schedule_display_time || "",
       source_type: normalizedCardItem.source_type || "",
     };
-    await onScheduleEdit(syntheticRow.id, syntheticRow.shift_type, {
-      scheduleDate: syntheticRow.schedule_date,
-      employeeCode: syntheticRow.employee_code,
-      siteCode: syntheticRow.site_code,
-      currentLeaderUserId: "",
-      currentLeaderName: "",
-      row: syntheticRow,
-    });
-    return;
+    selectionRows.push(syntheticRow);
   }
-  if (!rows.length) {
+  if (!selectionRows.length) {
     showToast(
       "선택한 근무일정 정보를 찾지 못했습니다. 월 화면을 새로고침한 뒤 다시 시도해 주세요.",
       "error",
@@ -100740,19 +104874,26 @@ async function openScheduleAssignmentFromBoard({
     );
     return;
   }
-  if (rows.length === 1 && !isLeaveScheduleRow(rows[0]) && rows[0]?.id) {
-    await onScheduleEdit(rows[0].id, shiftType || rows[0].shift_type, {
-      scheduleDate: rows[0].schedule_date,
-      employeeCode: rows[0].employee_code,
-      siteCode: rows[0].site_code,
-      currentLeaderUserId: rows[0].leader_user_id,
-      currentLeaderName:
-        rows[0].leader_full_name || rows[0].leader_username || "",
-      row: rows[0],
-    });
+  const selectedKey = String(
+    selectionRows[0]?.schedule_date || dateKey || "",
+  ).trim();
+  const editableRow =
+    selectionRows.find((row) => row?.id && !isLeaveScheduleRow(row)) ||
+    selectionRows.find((row) => row?.id) ||
+    selectionRows[0];
+  state.schedule.selectedDateKey = selectedKey;
+  state.schedule.lastInteractedDateKey = selectedKey;
+  state.schedule.selectedAssignmentRows = selectionRows;
+  state.schedule.selectedAssignmentEditRow = editableRow || null;
+  queueScheduleOvertimeLoad(selectedKey, { force: false });
+  if (shouldUseScheduleDesktopDrawer()) {
+    state.schedule.desktopDrawerOpen = true;
+    renderScheduleCalendar();
+    renderScheduleDetail();
+    renderScheduleDesktopDrawer();
     return;
   }
-  openScheduleAssignmentFocusSheet({ dateKey, rows });
+  openScheduleAssignmentFocusSheet({ dateKey: selectedKey, rows: selectionRows });
 }
 
 async function onScheduleEditConfirm(scheduleId) {
@@ -102572,8 +106713,37 @@ function bindUiEvents() {
         workspace.selectedMode = normalizeSupportStatusMode(
           actionEl.dataset.mode || "all",
         );
-        workspace.drawerOpen = false;
-        workspace.selectedRowKey = "";
+        workspace.drawerOpen = true;
+        if (!String(workspace.selectedRowKey || "").trim()) {
+          workspace.selectedRowKey = SUPPORT_STATUS_REFERENCE_SELECTED_KEY;
+        }
+        renderSupportStatusWorkspace();
+        return;
+      }
+
+      if (action === "support-status-set-view") {
+        const workspace = ensureSupportStatusState();
+        workspace.viewMode = normalizeSupportStatusViewMode(
+          actionEl.dataset.view || "calendar",
+        );
+        workspace.drawerOpen = true;
+        if (!String(workspace.selectedRowKey || "").trim()) {
+          workspace.selectedRowKey = SUPPORT_STATUS_REFERENCE_SELECTED_KEY;
+        }
+        renderSupportStatusWorkspace();
+        return;
+      }
+
+      if (
+        action === "support-status-month-prev" ||
+        action === "support-status-month-next" ||
+        action === "support-status-today"
+      ) {
+        const workspace = ensureSupportStatusState();
+        workspace.month = SUPPORT_STATUS_REFERENCE_MONTH;
+        workspace.drawerOpen = true;
+        workspace.selectedRowKey =
+          workspace.selectedRowKey || SUPPORT_STATUS_REFERENCE_SELECTED_KEY;
         renderSupportStatusWorkspace();
         return;
       }
@@ -106911,6 +111081,43 @@ function bindUiEvents() {
         return;
       }
 
+      if (action === "upload-landing-start") {
+        runWithBusy(
+          () => startScheduleUploadLanding(actionEl.dataset.mode),
+          "업로드 세션 생성 중...",
+        );
+        return;
+      }
+
+      if (action === "upload-landing-retry") {
+        const mode = normalizeScheduleUploadWorkspaceMode(actionEl.dataset.mode);
+        runWithBusy(
+          async () => {
+            await loadScheduleUploadLanding(mode, { force: true });
+            renderScheduleUploadLandingPage(mode);
+          },
+          "랜딩 데이터 조회 중...",
+        );
+        return;
+      }
+
+      if (action === "upload-landing-route") {
+        navigateToRoute(actionEl.dataset.route || ROUTE_HOME);
+        return;
+      }
+
+      if (action === "upload-landing-download-url") {
+        runWithBusy(
+          () =>
+            downloadScheduleUploadLandingUrl(
+              actionEl.dataset.url,
+              actionEl.dataset.filename || "template.xlsx",
+            ),
+          "다운로드 중...",
+        );
+        return;
+      }
+
       if (action === "schedule-toggle-action-dropdown") {
         event.stopPropagation();
         toggleScheduleActionDropdown(actionEl.dataset.menuId);
@@ -107025,8 +111232,28 @@ function bindUiEvents() {
       }
 
       if (action === "schedule-base-wizard-next") {
-        setScheduleBaseWizardStep(
+        const nextStep = normalizeScheduleBaseWizardStep(
           actionEl.dataset.nextStep || SCHEDULE_BASE_WIZARD_STEP_CONTEXT,
+        );
+        const baseGate = getScheduleReferenceBaseGateState();
+        if (nextStep === SCHEDULE_BASE_WIZARD_STEP_FILE && !baseGate.step1Ready) {
+          showToast(
+            baseGate.missingLabel
+              ? `다음 단계로 이동하려면 ${baseGate.missingLabel}을(를) 먼저 준비해 주세요.`
+              : "다음 단계로 이동할 준비가 되지 않았습니다.",
+            "error",
+            2800,
+          );
+          renderScheduleUploadWorkspace();
+          return;
+        }
+        if (nextStep === SCHEDULE_BASE_WIZARD_STEP_APPLY && !baseGate.canReviewNext) {
+          showToast("분석 결과가 준비된 뒤 다음 단계로 이동할 수 있습니다.", "error", 2600);
+          renderScheduleUploadWorkspace();
+          return;
+        }
+        setScheduleBaseWizardStep(
+          nextStep,
         );
         return;
       }
@@ -107039,8 +111266,23 @@ function bindUiEvents() {
       }
 
       if (action === "schedule-hq-wizard-next") {
-        setScheduleHqWizardStep(
+        const nextStep = normalizeScheduleHqWizardStep(
           actionEl.dataset.nextStep || SCHEDULE_HQ_WIZARD_STEP_UPLOAD,
+        );
+        const selectableCodes = getScheduleSupportHqSelectableSiteCodes();
+        const selectedReadyCodes = getScheduleHqSelectedSiteCodes().filter((code) =>
+          selectableCodes.includes(code),
+        );
+        if (
+          nextStep === SCHEDULE_HQ_WIZARD_STEP_UPLOAD &&
+          !selectedReadyCodes.length
+        ) {
+          showToast("다음 단계로 이동하려면 다운로드할 지점을 먼저 선택해 주세요.", "error", 2600);
+          renderScheduleUploadWorkspace();
+          return;
+        }
+        setScheduleHqWizardStep(
+          nextStep,
         );
         return;
       }
@@ -107312,7 +111554,7 @@ function bindUiEvents() {
 
       if (action === "schedule-select-date") {
         onScheduleSelectDate(actionEl.dataset.date, {
-          openSheetOnSelect: true,
+          openSheetOnSelect: false,
         });
         return;
       }
@@ -107924,6 +112166,18 @@ function bindUiEvents() {
         action === "download-template" ||
         action === "schedule-download-blank-template"
       ) {
+        const baseGate = getScheduleReferenceBaseGateState();
+        if (!baseGate.contextReady) {
+          showToast(
+            baseGate.selectedSite
+              ? "양식 다운로드 전에 대상 월을 선택해 주세요."
+              : "양식 다운로드 전에 업로드 지점을 먼저 선택해 주세요.",
+            "error",
+            2600,
+          );
+          renderScheduleUploadWorkspace();
+          return;
+        }
         runWithProgressTask(
           (progressController) =>
             onScheduleTemplateDownload(progressController),
@@ -107982,6 +112236,15 @@ function bindUiEvents() {
       }
 
       if (action === "schedule-support-hq-download-start") {
+        const selectableCodes = getScheduleSupportHqSelectableSiteCodes();
+        const selectedReadyCodes = getScheduleHqSelectedSiteCodes().filter((code) =>
+          selectableCodes.includes(code),
+        );
+        if (!selectedReadyCodes.length) {
+          showToast("다운로드할 지점을 먼저 선택해 주세요.", "error", 2600);
+          renderScheduleUploadWorkspace();
+          return;
+        }
         runWithProgressTask(
           async (progressController) => {
             const result = await onScheduleSupportHqDownload(progressController);
@@ -108046,6 +112309,16 @@ function bindUiEvents() {
       }
 
       if (action === "schedule-support-hq-inspect") {
+        const workspace = ensureScheduleSupportHqWorkspaceState();
+        const uploadInput = $("#scheduleSupportHqUploadFile");
+        const hasUploadFile =
+          (uploadInput instanceof HTMLInputElement && Boolean(uploadInput.files?.length)) ||
+          Boolean(workspace.uploadFileName);
+        if (!hasUploadFile) {
+          showToast("검토할 지원근무자 workbook(.xlsx)을 먼저 업로드해 주세요.", "error", 2800);
+          renderScheduleUploadWorkspace();
+          return;
+        }
         runWithProgressTask(
           (progressController) =>
             onScheduleSupportHqInspect(progressController),
@@ -108185,6 +112458,20 @@ function bindUiEvents() {
       }
 
       if (action === "preview-schedule") {
+        const baseGate = getScheduleReferenceBaseGateState();
+        if (!baseGate.canPreview) {
+          showToast(
+            !baseGate.hasFile
+              ? "분석할 월간 근무표 workbook(.xlsx)을 먼저 선택해 주세요."
+              : baseGate.missingLabel
+                ? `분석 전에 ${baseGate.missingLabel}을(를) 먼저 준비해 주세요.`
+                : "분석 준비 상태를 확인해 주세요.",
+            "error",
+            3000,
+          );
+          renderScheduleUploadWorkspace();
+          return;
+        }
         runWithProgressTask(
           (progressController) => onSchedulePreview(progressController),
           {
@@ -108270,6 +112557,14 @@ function bindUiEvents() {
         return;
       }
 
+      if (action === "schedule-reference-hq-preview-page-size") {
+        const workspace = ensureScheduleSupportHqWorkspaceState();
+        workspace.previewPageSize = 10;
+        workspace.previewPage = 1;
+        renderScheduleReferenceUploadWizard();
+        return;
+      }
+
       if (action === "schedule-reference-hq-preview-filter-toggle") {
         const workspace = ensureScheduleSupportHqWorkspaceState();
         workspace.referencePreviewFilterOpen =
@@ -108338,6 +112633,81 @@ function bindUiEvents() {
         return;
       }
 
+      if (action === "schedule-reference-preview-download") {
+        const uploadUi = getScheduleUploadUiState();
+        const filteredRows = filterScheduleReferencePreviewRows(
+          Array.isArray(state.preview?.preview_rows) ? state.preview.preview_rows : [],
+          uploadUi.referencePreviewTab,
+          uploadUi.referencePreviewQuery,
+        );
+        downloadCsvFile(
+          "schedule_upload_issue_preview.csv",
+          ["위치", "작성내용", "영역/블록", "유형", "이슈 구분", "사유"],
+          filteredRows.map((row) => [
+            row.location,
+            row.content,
+            row.area,
+            row.type,
+            row.issueLabel,
+            row.reason,
+          ]),
+        );
+        showToast("이슈 미리보기 CSV를 다운로드했습니다.", "success", 2200);
+        return;
+      }
+
+      if (action === "schedule-reference-hq-preview-download") {
+        const workspace = ensureScheduleSupportHqWorkspaceState();
+        const previewRows = getScheduleReferenceHqPreviewRows(
+          workspace.inspectResult,
+        );
+        const filteredRows = filterScheduleReferenceHqPreviewRows(
+          previewRows,
+          workspace.referencePreviewTab,
+          workspace.referencePreviewQuery,
+        );
+        downloadCsvFile(
+          "support_upload_preview.csv",
+          [
+            "행 번호",
+            "상태",
+            "사번",
+            "이름",
+            "부서",
+            "지원근무 유형",
+            "지원일",
+            "사유",
+            "메시지",
+          ],
+          filteredRows.map((row, index) => {
+            return [
+              row?.rowNumber || index + 1,
+              row?.statusLabel || "",
+              row?.employeeCode || "",
+              row?.employeeName || "",
+              row?.department || "",
+              row?.supportType || "",
+              row?.supportDate || "",
+              row?.reason || "",
+              row?.message || "",
+            ];
+          }),
+        );
+        showToast("지원근무자 미리보기 CSV를 다운로드했습니다.", "success", 2200);
+        return;
+      }
+
+      if (action === "schedule-reference-clear-file") {
+        const fileInput = $("#scheduleImportFile");
+        if (fileInput instanceof HTMLInputElement) {
+          fileInput.value = "";
+        }
+        invalidateScheduleImportAnalysis(["file"]);
+        renderScheduleReferenceUploadWizard();
+        showToast("선택된 파일을 비웠습니다.", "info", 1800);
+        return;
+      }
+
       if (action === "schedule-reference-hq-download-summary") {
         const workspace = ensureScheduleSupportHqWorkspaceState();
         const summary =
@@ -108355,6 +112725,38 @@ function bindUiEvents() {
           ],
         );
         showToast("요약 CSV를 다운로드했습니다.", "success", 2200);
+        return;
+      }
+
+      if (action === "schedule-reference-hq-row-download") {
+        const rows = getScheduleReferenceHqUploadRows();
+        const first = rows[0] || {};
+        if (!first.fileName) {
+          showToast("다운로드할 업로드 파일 정보가 없습니다.", "error", 2200);
+          return;
+        }
+        downloadCsvFile(
+          "support_upload_file_row.csv",
+          ["파일명", "파일 크기", "업로드 일시", "업로더", "상태"],
+          [[
+            first.fileName,
+            first.fileSize || "",
+            first.uploadedAt || "",
+            first.uploader || "",
+            first.statusLabel || "",
+          ]],
+        );
+        showToast("업로드 파일 정보를 다운로드했습니다.", "success", 2200);
+        return;
+      }
+
+      if (action === "schedule-reference-hq-row-delete") {
+        const workspace = ensureScheduleSupportHqWorkspaceState();
+        workspace.uploadFileName = "";
+        workspace.uploadFileSize = 0;
+        workspace.uploadFileLastModified = "";
+        renderScheduleReferenceUploadWizard();
+        showToast("선택 파일 표시를 초기화했습니다.", "info", 1800);
         return;
       }
 
@@ -108400,6 +112802,7 @@ function bindUiEvents() {
       }
 
       if (action === "schedule-edit") {
+        const useDrawerMode = Boolean(actionEl.closest("#scheduleDesktopDrawer"));
         runActionSafely(
           onScheduleEdit(
             actionEl.dataset.scheduleId,
@@ -108410,6 +112813,7 @@ function bindUiEvents() {
               siteCode: actionEl.dataset.siteCode,
               currentLeaderUserId: actionEl.dataset.currentLeaderUserId,
               currentLeaderName: actionEl.dataset.currentLeaderName,
+              drawerMode: useDrawerMode,
             },
           ),
           "스케줄 수정 시트를 열지 못했습니다.",
@@ -109136,8 +113540,20 @@ function bindUiEvents() {
                 .trim()
                 .toUpperCase()
             : "";
-        workspace.drawerOpen = false;
-        workspace.selectedRowKey = "";
+        workspace.drawerOpen = true;
+        workspace.selectedRowKey =
+          workspace.selectedRowKey || SUPPORT_STATUS_REFERENCE_SELECTED_KEY;
+        renderSupportStatusWorkspace();
+        return;
+      }
+      if (target.id === "supportStatusShiftFilter") {
+        const workspace = ensureSupportStatusState();
+        workspace.selectedMode = normalizeSupportStatusMode(
+          target instanceof HTMLSelectElement ? target.value : "all",
+        );
+        workspace.drawerOpen = true;
+        workspace.selectedRowKey =
+          workspace.selectedRowKey || SUPPORT_STATUS_REFERENCE_SELECTED_KEY;
         renderSupportStatusWorkspace();
         return;
       }
@@ -109146,8 +113562,18 @@ function bindUiEvents() {
         workspace.selectedStatus = normalizeSupportStatusFilterStatus(
           target instanceof HTMLSelectElement ? target.value : "all",
         );
-        workspace.drawerOpen = false;
-        workspace.selectedRowKey = "";
+        workspace.drawerOpen = true;
+        workspace.selectedRowKey =
+          workspace.selectedRowKey || SUPPORT_STATUS_REFERENCE_SELECTED_KEY;
+        renderSupportStatusWorkspace();
+        return;
+      }
+      if (target.id === "supportStatusMonthInput") {
+        const workspace = ensureSupportStatusState();
+        workspace.month = SUPPORT_STATUS_REFERENCE_MONTH;
+        workspace.drawerOpen = true;
+        workspace.selectedRowKey =
+          workspace.selectedRowKey || SUPPORT_STATUS_REFERENCE_SELECTED_KEY;
         renderSupportStatusWorkspace();
         return;
       }

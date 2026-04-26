@@ -1,0 +1,28 @@
+<svg width="720" height="260" viewBox="0 0 720 260" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M46 205C102 123 167 97 242 128C314 158 367 73 445 70C551 66 610 113 672 202H46Z" fill="#F4F7FD"/>
+  <path d="M411 55H516C527 55 536 64 536 75V169C536 180 527 189 516 189H411C400 189 391 180 391 169V75C391 64 400 55 411 55Z" fill="white" stroke="#DDE3EE" stroke-width="2"/>
+  <path d="M391 75C391 64 400 55 411 55H516C527 55 536 64 536 75V98H391V75Z" fill="#FF7A2F"/>
+  <path d="M414 117H513M414 141H513M414 165H513" stroke="#E5EAF0" stroke-width="2"/>
+  <path d="M438 98V188M462 98V188M486 98V188" stroke="#E5EAF0" stroke-width="2"/>
+  <rect x="462" y="123" width="18" height="18" rx="3" fill="#FF6A1A"/>
+  <path d="M467 132L470 135L476 128" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="200" y="41" width="128" height="151" rx="10" fill="white" stroke="#DDE3EE" stroke-width="2"/>
+  <rect x="215" y="64" width="32" height="10" rx="3" fill="#E8EDF5"/>
+  <rect x="255" y="64" width="54" height="10" rx="3" fill="#E8EDF5"/>
+  <rect x="215" y="93" width="94" height="8" rx="3" fill="#E8EDF5"/>
+  <rect x="215" y="121" width="94" height="8" rx="3" fill="#E8EDF5"/>
+  <rect x="215" y="149" width="94" height="8" rx="3" fill="#E8EDF5"/>
+  <rect x="188" y="115" width="54" height="64" rx="8" fill="#35B654"/>
+  <path d="M202 128H228V166H202V128Z" fill="white" opacity=".18"/>
+  <path d="M201 146L212 146M201 156L224 156" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <text x="205" y="154" fill="white" font-family="Arial, sans-serif" font-weight="700" font-size="28">X</text>
+  <circle cx="360" cy="170" r="34" fill="#35B654"/>
+  <path d="M360 187V154" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <path d="M348 166L360 154L372 166" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="610" cy="170" r="35" fill="white" stroke="#DDE3EE" stroke-width="2"/>
+  <path d="M627 200C624 182 615 174 610 174C605 174 596 182 593 200" fill="#5A6475"/>
+  <circle cx="610" cy="153" r="12" fill="#5A6475"/>
+  <circle cx="645" cy="195" r="14" fill="#35B654"/>
+  <path d="M638 195L643 200L653 189" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M145 102C178 58 212 86 231 95" stroke="#B7C5DF" stroke-width="2" stroke-dasharray="7 7"/>
+</svg>
