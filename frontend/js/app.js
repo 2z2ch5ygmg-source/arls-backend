@@ -90650,7 +90650,7 @@ function buildAttendanceStatsReferenceChartSvg({
   const xLabelStep = pointCount > 18 ? 2 : 1;
   const gridRows = [100, 80, 60, 40, 20, 0];
   return `
-    <svg class="attendance-stats-ref-chart-svg" viewBox="0 0 ${chartWidth} ${chartHeight}" role="img" aria-label="출퇴근 통계 추이">
+    <svg class="attendance-stats-ref-chart-svg" viewBox="0 0 ${chartWidth} ${chartHeight}" preserveAspectRatio="none" role="img" aria-label="출퇴근 통계 추이">
       <defs>
         <linearGradient id="attendanceStatsRateFill" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stop-color="#ff4b14" stop-opacity="0.13"></stop>
