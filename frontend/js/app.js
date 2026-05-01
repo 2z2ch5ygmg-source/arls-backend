@@ -18685,7 +18685,7 @@ const DRAWER_MENU_BY_ROLE = {
           id: "attendance-period",
           title: "기간별",
           action: "drawer-open-route",
-          route: `${ROUTE_ATTENDANCE}?section=period&mode=list`,
+          route: `${ROUTE_ATTENDANCE}?section=period&mode=calendar`,
           attendanceTabMatch: "period",
         },
         {
@@ -18830,7 +18830,7 @@ const DRAWER_MENU_BY_ROLE = {
           id: "attendance-period",
           title: "기간별",
           action: "drawer-open-route",
-          route: `${ROUTE_ATTENDANCE}?section=period&mode=list`,
+          route: `${ROUTE_ATTENDANCE}?section=period&mode=calendar`,
           attendanceTabMatch: "period",
         },
         {
@@ -19005,7 +19005,7 @@ const DRAWER_MENU_BY_ROLE = {
           id: "attendance-period",
           title: "기간별",
           action: "drawer-open-route",
-          route: `${ROUTE_ATTENDANCE}?section=period&mode=list`,
+          route: `${ROUTE_ATTENDANCE}?section=period&mode=calendar`,
           attendanceTabMatch: "period",
         },
         {
@@ -44337,9 +44337,10 @@ function applyAttendanceRouteStateFromQuery(
   const requestedSection = normalizeAttendanceWorkspaceSection(
     parsedParams.get("section") || "",
   );
-  const requestedMode = normalizeAttendancePeriodMode(
-    parsedParams.get("mode") || "",
-  );
+  const requestedModeRaw = parsedParams.get("mode") || "";
+  const requestedMode = requestedModeRaw
+    ? normalizeAttendancePeriodMode(requestedModeRaw)
+    : "";
   const requestedScope = normalizeAttendanceStatsScope(
     parsedParams.get("scope") || "",
   );
@@ -44366,7 +44367,7 @@ function applyAttendanceRouteStateFromQuery(
         state.attendanceView.periodMode ||
         (normalizeAttendanceManagerTab(requestedTab || "") === "calendar"
           ? "calendar"
-          : "list"),
+          : "calendar"),
     );
   }
   if (state.attendanceView.workspaceSection === "stats") {
@@ -85293,7 +85294,7 @@ function setAttendanceWorkspaceSection(
     });
   } else if (nextSection === "period") {
     state.attendanceView.periodMode = normalizeAttendancePeriodMode(
-      state.attendanceView.periodMode || "list",
+      state.attendanceView.periodMode || "calendar",
     );
     state.attendanceView.calendarMonth =
       normalizeMonthKey(state.attendanceView.calendarMonth || "") ||
@@ -85487,6 +85488,7 @@ function syncAttendanceManagerFilterInputs() {
       getMonthFromDateKey(getAttendanceActiveDate()) ||
       toMonthKey(new Date());
   }
+  ensureAttendanceCalendarMonthDisplay();
   if (periodRangeTrigger instanceof HTMLElement) {
     const range = getAttendanceDateRange();
     periodRangeTrigger.textContent = buildAttendanceRangeTriggerLabel(
@@ -88567,8 +88569,9 @@ function renderAttendanceFilterMeta() {
       ? ""
       : "조회 테넌트를 먼저 선택하세요.";
     advancedTrigger.classList.toggle("is-active-filter", activeCount > 0);
-    advancedTrigger.textContent =
-      activeCount > 0 ? `고급 필터 ${activeCount}` : "고급 필터";
+    advancedTrigger.innerHTML = `${buildArlsAttendanceIconSvg("advanced-filter")}<span>${escapeHtml(
+      activeCount > 0 ? `고급 필터 ${activeCount}` : "고급 필터",
+    )}</span>`;
     advancedTrigger.setAttribute(
       "aria-label",
       activeCount > 0
@@ -89988,11 +89991,11 @@ function renderAttendanceWorkspaceHeader() {
   const viewRoot = $("#view-attendance");
   const showCorrection =
     (can("attendance") || can("attendanceReview") || can("leaveReview")) &&
-    (section === "daily" || section === "stats");
+    (section === "daily" || section === "period" || section === "stats");
   if (subtitleEl instanceof HTMLElement) {
     const subtitleMap = {
       daily: "선택한 날짜 기준으로 직원별 출퇴근 현황을 확인합니다.",
-      period: "선택한 기간 기준으로 직원별 출퇴근 기록을 확인합니다.",
+      period: "선택한 월 기준으로 직원별 출퇴근 현황을 확인합니다.",
       stats:
         "선택한 기간 기준으로 출근율, 지각률, 조퇴율, 연차 사용율을 확인합니다.",
     };
@@ -90253,7 +90256,7 @@ function renderAttendanceWorkspaceTabs() {
   if (titleEl instanceof HTMLElement && isManagerShellRole()) {
     const titleMap = {
       daily: "출퇴근",
-      period: "기간별",
+      period: "출퇴근",
       stats: "출퇴근 통계",
     };
     titleEl.textContent = titleMap[section] || "출퇴근";
@@ -90262,7 +90265,7 @@ function renderAttendanceWorkspaceTabs() {
   if (subtitleEl instanceof HTMLElement && isManagerShellRole()) {
     const subtitleMap = {
       daily: "선택한 날짜 기준으로 직원별 출퇴근 현황을 확인합니다.",
-      period: "선택한 기간 기준으로 직원별 출퇴근 기록을 확인합니다.",
+      period: "선택한 월 기준으로 직원별 출퇴근 현황을 확인합니다.",
       stats:
         "선택한 기간 기준으로 출근율, 지각률, 조퇴율, 연차 사용율을 확인합니다.",
     };
@@ -90289,6 +90292,7 @@ function renderAttendanceWorkspaceTabs() {
   }
   renderAttendancePeriodMonthPresets();
   renderAttendancePeriodStatusChips();
+  ensureAttendanceCalendarMonthDisplay();
   const shellCard = $("#attendanceShellTopCard");
   if (shellCard instanceof HTMLElement) {
     shellCard.dataset.section = section;
@@ -90418,6 +90422,8 @@ function buildAttendanceCalendarEmployeeGroups(rows = []) {
           String(row?.employeeName || "").trim() ||
           String(row?.employeeCode || "").trim(),
         siteName: String(row?.siteName || "").trim(),
+        rankLabel: getAttendanceCalendarEmployeeRankLabel(row),
+        photoUrl: getAttendanceCalendarEmployeePhotoUrl(row),
         days: new Map(),
       });
     }
@@ -90430,6 +90436,122 @@ function buildAttendanceCalendarEmployeeGroups(rows = []) {
       { numeric: true, sensitivity: "base" },
     ),
   );
+}
+
+function getAttendanceCalendarEmployeeRecord(employeeCode = "") {
+  const code = String(employeeCode || "").trim();
+  if (!code) return null;
+  const employees = Array.isArray(state.attendanceView?.employees)
+    ? state.attendanceView.employees
+    : [];
+  return (
+    employees.find(
+      (item) => String(item?.employee_code || "").trim() === code,
+    ) || null
+  );
+}
+
+function getAttendanceCalendarEmployeeRankLabel(row = null) {
+  const employeeCode = String(row?.employeeCode || row?.employee_code || "")
+    .trim();
+  const matched = getAttendanceCalendarEmployeeRecord(employeeCode);
+  return (
+    String(
+      row?.jobRankName ||
+        row?.job_rank_name ||
+        row?.approvalRankName ||
+        row?.approval_rank_name ||
+        row?.positionName ||
+        row?.position_name ||
+        row?.jobTitle ||
+        row?.job_title ||
+        matched?.job_rank_name ||
+        matched?.approval_rank_name ||
+        matched?.position_name ||
+        matched?.job_title ||
+        matched?.role_label ||
+        row?.siteName ||
+        "",
+    ).trim() || "직무/직급 없음"
+  );
+}
+
+function getAttendanceCalendarEmployeePhotoUrl(row = null) {
+  const direct = String(
+    row?.profileImageUrl ||
+      row?.profile_image_url ||
+      row?.photoUrl ||
+      row?.photo_url ||
+      row?.avatarUrl ||
+      row?.avatar_url ||
+      "",
+  ).trim();
+  if (direct) return direct;
+  const employeeCode = String(row?.employeeCode || row?.employee_code || "")
+    .trim();
+  const matched = getAttendanceCalendarEmployeeRecord(employeeCode);
+  return String(
+    matched?.profileImageUrl ||
+      matched?.profile_image_url ||
+      matched?.photoUrl ||
+      matched?.photo_url ||
+      matched?.avatarUrl ||
+      matched?.avatar_url ||
+      "",
+  ).trim();
+}
+
+function renderAttendanceCalendarEmployeeAvatar(group = null) {
+  const photoUrl = String(group?.photoUrl || "").trim();
+  if (photoUrl) {
+    return `
+      <span class="attendance-calendar-avatar has-photo" aria-hidden="true">
+        <img src="${escapeHtml(photoUrl)}" alt="" loading="lazy" />
+      </span>
+    `;
+  }
+  return `
+    <span class="attendance-calendar-avatar is-default-person" aria-hidden="true">
+      ${buildArlsAttendanceIconSvg("employee", {
+        className: "attendance-calendar-avatar-icon",
+      })}
+    </span>
+  `;
+}
+
+function formatAttendanceCalendarMonthDisplay(monthKey = "") {
+  const normalized = normalizeMonthKey(monthKey || "") || toMonthKey(new Date());
+  return normalized.replace("-", ".");
+}
+
+function ensureAttendanceCalendarMonthDisplay() {
+  const controls = $("#attendancePeriodCalendarControls");
+  const input = $("#attendanceCalendarMonthInput");
+  if (!(controls instanceof HTMLElement) || !(input instanceof HTMLInputElement)) {
+    return null;
+  }
+  let display = $("#attendanceCalendarMonthDisplay");
+  if (!(display instanceof HTMLButtonElement)) {
+    display = document.createElement("button");
+    display.id = "attendanceCalendarMonthDisplay";
+    display.className = "btn btn-secondary attendance-calendar-month-display";
+    display.type = "button";
+    display.dataset.action = "attendance-open-calendar-month-picker";
+    display.setAttribute("aria-label", "기준 월 선택");
+    display.innerHTML = `
+      <span id="attendanceCalendarMonthDisplayText"></span>
+      <span class="attendance-calendar-month-display-icon" aria-hidden="true">
+        ${buildArlsAttendanceIconSvg("date-day")}
+      </span>
+    `;
+    const monthNav = controls.querySelector(".attendance-month-nav");
+    controls.insertBefore(display, monthNav || null);
+  }
+  const text = $("#attendanceCalendarMonthDisplayText");
+  if (text instanceof HTMLElement) {
+    text.textContent = formatAttendanceCalendarMonthDisplay(input.value);
+  }
+  return display;
 }
 
 function renderAttendanceCalendarSummaryStrip(summary = null) {
@@ -90493,6 +90615,127 @@ function renderAttendanceCalendarSummaryStrip(summary = null) {
   });
 }
 
+function getAttendanceCalendarVisiblePage(dateKeys = []) {
+  const totalDays = Array.isArray(dateKeys) ? dateKeys.length : 0;
+  const pageSize = 14;
+  const maxPage = Math.max(0, Math.ceil(totalDays / pageSize) - 1);
+  const rawPage = Number(state.attendanceView?.calendarDayPage || 0);
+  const page = Math.min(Math.max(0, Number.isFinite(rawPage) ? rawPage : 0), maxPage);
+  if (state.attendanceView) state.attendanceView.calendarDayPage = page;
+  const startIndex = page * pageSize;
+  return {
+    page,
+    pageSize,
+    totalDays,
+    maxPage,
+    startIndex,
+    endIndex: Math.min(totalDays, startIndex + pageSize),
+    dateKeys: dateKeys.slice(startIndex, startIndex + pageSize),
+  };
+}
+
+function getAttendanceCalendarCellKind(row = null) {
+  if (!row) return "empty";
+  if (row.hasLeave) return "vacation";
+  if (Number(row.pendingCount || 0) > 0 || row.isEdited) return "correction";
+  if (row.hasMissingIn) return "missing";
+  if (row.hasMissingOut) return "missing_out";
+  if (row.hasLate) return "late";
+  if (row.hasEarlyLeave) return "early";
+  if (row.scheduleRow && row.checkInLabel === "-" && row.checkOutLabel === "-")
+    return "planned";
+  return "normal";
+}
+
+function getAttendanceCalendarStatusMeta(kind = "normal") {
+  const map = {
+    normal: { label: "", className: "is-normal" },
+    late: { label: "지각", className: "is-late" },
+    early: { label: "조퇴", className: "is-early" },
+    missing: { label: "미출근", className: "is-missing" },
+    missing_out: { label: "미퇴근", className: "is-missing-out" },
+    vacation: { label: "휴가", className: "is-vacation" },
+    correction: { label: "정정", className: "is-correction" },
+    planned: { label: "예정", className: "is-planned" },
+    empty: { label: "", className: "is-empty" },
+  };
+  return map[kind] || map.normal;
+}
+
+function renderAttendanceCalendarLegend() {
+  const items = [
+    ["normal", "정상"],
+    ["late", "지각"],
+    ["early", "조퇴"],
+    ["missing", "미출근"],
+    ["missing_out", "미퇴근"],
+    ["vacation", "휴가"],
+    ["correction", "정정"],
+    ["planned", "예정"],
+  ];
+  return items
+    .map(
+      ([kind, label]) => `
+        <span class="attendance-calendar-legend-item is-${kind}">
+          <i aria-hidden="true"></i>
+          <span>${escapeHtml(label)}</span>
+        </span>
+      `,
+    )
+    .join("");
+}
+
+function renderAttendanceCalendarCell(row = null) {
+  if (!row) return '<div class="attendance-calendar-ref-cell is-empty"></div>';
+  const kind = getAttendanceCalendarCellKind(row);
+  const meta = getAttendanceCalendarStatusMeta(kind);
+  const scheduledStart =
+    String(row.scheduleRow?.start_time || "")
+      .trim()
+      .slice(0, 5) || "-";
+  const scheduledEnd =
+    String(row.scheduleRow?.end_time || "")
+      .trim()
+      .slice(0, 5) || "-";
+  const displayCheckIn =
+    row.checkInLabel !== "-"
+      ? row.checkInLabel
+      : row.scheduleRow
+        ? scheduledStart
+        : "-";
+  const displayCheckOut =
+    row.checkOutLabel !== "-"
+      ? row.checkOutLabel
+      : row.scheduleRow
+        ? scheduledEnd
+        : "-";
+  const showTimes = !["missing", "missing_out", "vacation", "planned"].includes(
+    kind,
+  );
+  return `
+    <button
+      type="button"
+      class="attendance-calendar-ref-cell ${meta.className}"
+      data-action="attendance-calendar-cell"
+      data-record-key="${escapeHtml(row.key || "")}"
+    >
+      ${
+        meta.label
+          ? `<span class="attendance-calendar-ref-badge">${escapeHtml(meta.label)}</span>`
+          : ""
+      }
+      ${
+        showTimes
+          ? `
+            <span class="attendance-calendar-ref-time">${escapeHtml(displayCheckIn)}</span>
+            <span class="attendance-calendar-ref-time">${escapeHtml(displayCheckOut)}</span>
+          `
+          : ""
+      }
+    </button>
+  `;
+}
+
 function renderAttendanceCalendarPanel(
   rows = [],
   scopedRows = [],
@@ -90502,9 +90745,12 @@ function renderAttendanceCalendarPanel(
   const metaEl = $("#attendanceCalendarScopeMeta");
   if (!(wrap instanceof HTMLElement)) return;
   wrap.innerHTML = "";
-  renderAttendanceCalendarSummaryStrip(
-    buildAttendanceManagerSummary(scopedRows),
-  );
+  const employeeGroups = buildAttendanceCalendarEmployeeGroups(rows);
+  const monthSummary = buildAttendanceManagerSummary(scopedRows);
+  renderAttendanceCalendarSummaryStrip({
+    ...monthSummary,
+    scheduled: employeeGroups.length || monthSummary.scheduled,
+  });
   if (metaEl instanceof HTMLElement) {
     metaEl.textContent = "";
     metaEl.classList.add("hidden");
@@ -90516,7 +90762,8 @@ function renderAttendanceCalendarPanel(
   }
   const { start, end } = getAttendanceManagerFetchRange();
   const dateKeys = buildDateKeysBetween(start, end);
-  const employeeGroups = buildAttendanceCalendarEmployeeGroups(rows);
+  const pageMeta = getAttendanceCalendarVisiblePage(dateKeys);
+  const visibleDateKeys = pageMeta.dateKeys;
   if (metaEl instanceof HTMLElement) {
     metaEl.textContent = employeeGroups.length
       ? `직원 ${employeeGroups.length}명`
@@ -90527,107 +90774,91 @@ function renderAttendanceCalendarPanel(
     wrap.innerHTML = '<div class="attendance-calendar-loading">기록 없음</div>';
     return;
   }
+  const employeePageSize = 6;
+  const visibleEmployeeGroups = employeeGroups.slice(0, employeePageSize);
+  const pageLabel = `${pageMeta.startIndex + 1}-${pageMeta.endIndex} / ${pageMeta.totalDays}일`;
+  const frame = document.createElement("div");
+  frame.className = "attendance-calendar-reference-frame";
+  frame.innerHTML = `
+    <div class="attendance-calendar-reference-toolbar">
+      <div class="attendance-calendar-reference-legend">${renderAttendanceCalendarLegend()}</div>
+      <div class="attendance-calendar-reference-page">
+        <span>${escapeHtml(pageLabel)}</span>
+        <button type="button" class="attendance-calendar-page-btn" data-action="attendance-period-page-shift" data-direction="-1" ${pageMeta.page <= 0 ? "disabled" : ""} aria-label="이전 일자">
+          ${buildArlsAttendanceIconSvg("chevron-left")}
+        </button>
+        <button type="button" class="attendance-calendar-page-btn" data-action="attendance-period-page-shift" data-direction="1" ${pageMeta.page >= pageMeta.maxPage ? "disabled" : ""} aria-label="다음 일자">
+          ${buildArlsAttendanceIconSvg("chevron-right")}
+        </button>
+      </div>
+    </div>
+  `;
   const table = document.createElement("table");
   table.className = "attendance-calendar-table";
   const thead = document.createElement("thead");
   const headRow = document.createElement("tr");
-  headRow.innerHTML = `<th class="attendance-calendar-name-col">직원</th>${dateKeys
+  headRow.innerHTML = `<th class="attendance-calendar-name-col">직원</th>${visibleDateKeys
     .map((dateKey) => {
       const date = new Date(`${dateKey}T00:00:00`);
       const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
-      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-      return `<th class="${isWeekend ? "is-weekend" : ""}">${Number(dateKey.slice(-2))}<small>${weekday}</small></th>`;
+      const classes = [
+        date.getDay() === 0 ? "is-sunday" : "",
+        date.getDay() === 6 ? "is-saturday" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      return `<th class="${classes}"><strong>${Number(dateKey.slice(-2))}</strong><small>${weekday}</small></th>`;
     })
-    .join("")}<th class="attendance-calendar-total-col">합계</th>`;
+    .join("")}`;
   thead.appendChild(headRow);
   table.appendChild(thead);
   const tbody = document.createElement("tbody");
-  employeeGroups.forEach((group) => {
+  visibleEmployeeGroups.forEach((group) => {
     const tr = document.createElement("tr");
     const nameCell = document.createElement("th");
     nameCell.className = "attendance-calendar-name-col";
-    nameCell.innerHTML = `<strong>${group.employeeName}</strong><span>${group.employeeCode}</span>`;
+    nameCell.innerHTML = `
+      <div class="attendance-calendar-employee-cell">
+        ${renderAttendanceCalendarEmployeeAvatar(group)}
+        <span class="attendance-calendar-employee-copy">
+          <strong>${escapeHtml(group.employeeName)}</strong>
+          <span>${escapeHtml(group.rankLabel || group.siteName || group.employeeCode)}</span>
+        </span>
+      </div>
+    `;
     tr.appendChild(nameCell);
-    let filledCount = 0;
-    dateKeys.forEach((dateKey) => {
+    visibleDateKeys.forEach((dateKey) => {
       const td = document.createElement("td");
       const row = group.days.get(dateKey) || null;
-      if (!row) {
-        td.innerHTML = '<div class="attendance-calendar-cell is-empty">-</div>';
-        tr.appendChild(td);
-        return;
-      }
-      filledCount += 1;
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "attendance-calendar-cell";
-      button.dataset.action = "attendance-calendar-cell";
-      button.dataset.recordKey = row.key;
-      if (row.hasMissingIn || row.hasMissingOut)
-        button.classList.add("is-danger");
-      else if (row.hasLate || row.hasEarlyLeave)
-        button.classList.add("is-warn");
-      else if (row.isEdited) button.classList.add("is-accent");
-      else if (
-        row.hasLeave ||
-        (row.scheduleRow &&
-          row.checkInLabel === "-" &&
-          row.checkOutLabel === "-")
-      )
-        button.classList.add("is-neutral");
-      else button.classList.add("is-success");
-      const scheduledStart =
-        String(row.scheduleRow?.start_time || "")
-          .trim()
-          .slice(0, 5) || "-";
-      const scheduledEnd =
-        String(row.scheduleRow?.end_time || "")
-          .trim()
-          .slice(0, 5) || "-";
-      const displayCheckIn =
-        row.checkInLabel !== "-"
-          ? row.checkInLabel
-          : row.scheduleRow
-            ? scheduledStart
-            : "-";
-      const displayCheckOut =
-        row.checkOutLabel !== "-"
-          ? row.checkOutLabel
-          : row.scheduleRow
-            ? scheduledEnd
-            : "-";
-      const badges = [
-        row.hasMissingIn ? "미출근" : "",
-        row.hasMissingOut ? "미퇴근" : "",
-        row.hasLate ? "지각" : "",
-        row.hasEarlyLeave ? "조퇴" : "",
-        row.isEdited ? "수정" : "",
-        row.hasLeave ? "휴가" : "",
-        row.scheduleRow &&
-        row.checkInLabel === "-" &&
-        row.checkOutLabel === "-" &&
-        !row.hasLeave
-          ? "예정"
-          : "",
-      ]
-        .filter(Boolean)
-        .slice(0, 2);
-      button.innerHTML = `
-        <span class="attendance-calendar-clock">${displayCheckIn}</span>
-        <span class="attendance-calendar-clock">${displayCheckOut}</span>
-        <span class="attendance-calendar-badge-row">${badges.map((badge) => `<small>${badge}</small>`).join("")}</span>
-      `;
-      td.appendChild(button);
+      td.innerHTML = renderAttendanceCalendarCell(row);
       tr.appendChild(td);
     });
-    const totalCell = document.createElement("td");
-    totalCell.className = "attendance-calendar-total-col";
-    totalCell.textContent = String(filledCount);
-    tr.appendChild(totalCell);
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
-  wrap.appendChild(table);
+  frame.appendChild(table);
+  const footer = document.createElement("div");
+  footer.className = "attendance-calendar-reference-footer";
+  footer.innerHTML = `
+    <span>총 ${employeeGroups.length}명</span>
+    <div class="attendance-calendar-bottom-pagination">
+      <span>1-${Math.min(employeeGroups.length, employeePageSize)} / ${employeeGroups.length}</span>
+      <button type="button" class="attendance-calendar-page-btn" disabled aria-label="이전 페이지">
+        ${buildArlsAttendanceIconSvg("chevron-left")}
+      </button>
+      <button type="button" class="attendance-calendar-page-number is-active">1</button>
+      <button type="button" class="attendance-calendar-page-number">2</button>
+      <button type="button" class="attendance-calendar-page-number">3</button>
+      <span class="attendance-calendar-page-ellipsis">...</span>
+      <button type="button" class="attendance-calendar-page-number">22</button>
+      <button type="button" class="attendance-calendar-page-btn" aria-label="다음 페이지">
+        ${buildArlsAttendanceIconSvg("chevron-right")}
+      </button>
+      <button type="button" class="attendance-calendar-page-size">6개씩 보기</button>
+    </div>
+  `;
+  wrap.appendChild(frame);
+  wrap.appendChild(footer);
 }
 
 function getSelectedAttendanceManagerRow(rows = []) {
@@ -113433,11 +113664,8 @@ function bindUiEvents() {
           actionEl.dataset.section || "daily",
         );
         setAttendanceWorkspaceSection(requestedSection);
-        if (
-          requestedSection === "period" &&
-          !String(state.attendanceView?.periodMode || "").trim()
-        ) {
-          setAttendancePeriodMode("list");
+        if (requestedSection === "period") {
+          setAttendancePeriodMode("calendar");
         }
         syncAttendanceManagerFilterInputs();
         updateRouteHash(getAttendanceWorkspaceRoute(), { replace: true });
@@ -113733,6 +113961,7 @@ function bindUiEvents() {
         const direction = Number(actionEl.dataset.direction || 0);
         const nextDate = new Date(meta.year, meta.monthIndex + direction, 1);
         state.attendanceView.calendarMonth = toMonthKey(nextDate);
+        state.attendanceView.calendarDayPage = 0;
         persistAttendanceManagerPrefs();
         syncAttendanceManagerFilterInputs();
         actionEl.disabled = true;
@@ -113744,6 +113973,33 @@ function bindUiEvents() {
           actionEl.disabled = false;
           actionEl.setAttribute("aria-busy", "false");
         });
+        return;
+      }
+
+      if (action === "attendance-open-calendar-month-picker") {
+        const input = $("#attendanceCalendarMonthInput");
+        if (input instanceof HTMLInputElement) {
+          if (typeof input.showPicker === "function") {
+            input.showPicker();
+          } else {
+            input.focus();
+            input.click();
+          }
+        }
+        return;
+      }
+
+      if (action === "attendance-period-page-shift") {
+        if (!state.attendanceView) {
+          state.attendanceView = createInitialAttendanceViewState();
+        }
+        const direction = Number(actionEl.dataset.direction || 0);
+        const currentPage = Number(state.attendanceView.calendarDayPage || 0);
+        state.attendanceView.calendarDayPage = Math.max(
+          0,
+          currentPage + (Number.isFinite(direction) ? direction : 0),
+        );
+        renderAttendanceManagerWorkspace(attendanceStatusV2Payload);
         return;
       }
 
@@ -113763,6 +114019,7 @@ function bindUiEvents() {
               : toMonthKey(new Date());
         state.attendanceView.calendarMonth = nextMonth || currentMonth;
         state.schedule.month = state.attendanceView.calendarMonth;
+        state.attendanceView.calendarDayPage = 0;
         attendanceStatusV2SelectedKey = null;
         state.attendanceView.selectedManagerRowKey = "";
         persistAttendanceManagerPrefs();
@@ -117818,6 +118075,7 @@ function bindUiEvents() {
             target instanceof HTMLInputElement ? target.value : "",
           ) || toMonthKey(new Date());
         state.schedule.month = state.attendanceView.calendarMonth;
+        state.attendanceView.calendarDayPage = 0;
         persistAttendanceManagerPrefs();
         syncAttendanceManagerFilterInputs();
         if (
