@@ -89347,12 +89347,13 @@ function renderAttendanceWorkspaceHeader() {
   const viewRoot = $("#view-attendance");
   const showCorrection =
     (can("attendance") || can("attendanceReview") || can("leaveReview")) &&
-    section === "daily";
+    (section === "daily" || section === "stats");
   if (subtitleEl instanceof HTMLElement) {
     const subtitleMap = {
       daily: "선택한 날짜 기준으로 직원별 출퇴근 현황을 확인합니다.",
       period: "선택한 기간 기준으로 직원별 출퇴근 기록을 확인합니다.",
-      stats: "선택한 기간 기준으로 출퇴근 통계를 확인합니다.",
+      stats:
+        "선택한 기간 기준으로 출근율, 지각률, 조퇴율, 연차 사용율을 확인합니다.",
     };
     subtitleEl.textContent = subtitleMap[section] || "";
     subtitleEl.classList.toggle("hidden", !subtitleEl.textContent);
@@ -89455,16 +89456,30 @@ function renderAttendanceManagerInfoBar() {
     Number(state.attendanceView?.managerSummary?.correction || 0),
   );
   if (bar instanceof HTMLElement) {
-    const visible = isManager && section === "daily";
+    const visible = isManager && (section === "daily" || section === "stats");
     bar.classList.toggle("hidden", !visible);
     bar.setAttribute("aria-hidden", visible ? "false" : "true");
   }
   if (text instanceof HTMLElement) {
     text.textContent =
-      "관리자 권한으로 조회 전체의 출퇴근 기록, 예외, 설정 대기 건을 확인할 수 있습니다.";
+      section === "stats"
+        ? "리더 권한으로 전체 기간의 출퇴근 기록, 예외, 의무 대기 등을 확인할 수 있습니다."
+        : "관리자 권한으로 조회 전체의 출퇴근 기록, 예외, 설정 대기 건을 확인할 수 있습니다.";
   }
-  if (pending instanceof HTMLElement) {
-    pending.textContent = `${pendingCount}건`;
+  const sideLabel = bar?.querySelector?.(".attendance-manager-info-side-label");
+  const sideStatus = bar?.querySelector?.(".attendance-manager-info-side-status");
+  if (sideLabel instanceof HTMLElement) {
+    sideLabel.textContent = section === "stats" ? "검증 인사" : "권한 안내";
+  }
+  if (sideStatus instanceof HTMLElement) {
+    sideStatus.innerHTML =
+      section === "stats"
+        ? '알림 대기 <strong id="attendanceManagerPendingCount"></strong>'
+        : '설정 대기 <strong id="attendanceManagerPendingCount"></strong>';
+  }
+  const nextPending = $("#attendanceManagerPendingCount");
+  if (nextPending instanceof HTMLElement) {
+    nextPending.textContent = `${pendingCount}건`;
   }
 }
 
@@ -89495,9 +89510,20 @@ function renderAttendanceWorkspaceTabs() {
     const titleMap = {
       daily: "출퇴근",
       period: "기간별",
-      stats: "통계",
+      stats: "출퇴근 통계",
     };
     titleEl.textContent = titleMap[section] || "출퇴근";
+  }
+  const subtitleEl = $("#attendanceWorkspaceSubtitle");
+  if (subtitleEl instanceof HTMLElement && isManagerShellRole()) {
+    const subtitleMap = {
+      daily: "선택한 날짜 기준으로 직원별 출퇴근 현황을 확인합니다.",
+      period: "선택한 기간 기준으로 직원별 출퇴근 기록을 확인합니다.",
+      stats:
+        "선택한 기간 기준으로 출근율, 지각률, 조퇴율, 연차 사용율을 확인합니다.",
+    };
+    subtitleEl.textContent = subtitleMap[section] || "";
+    subtitleEl.classList.toggle("hidden", !subtitleEl.textContent);
   }
   const subnav = $("#attendanceWorkspaceSubnav");
   if (subnav instanceof HTMLElement) {
@@ -90127,17 +90153,25 @@ function buildAttendanceStatsDaySnapshot(rows = []) {
   const workingTarget = Math.max(0, Number(dashboard.workingTarget || 0));
   const rowCount = Math.max(0, list.length);
   const baseDenominator = workingTarget || rowCount || 1;
+  const checkedIn = Math.max(0, Number(dashboard.checkedIn || 0));
+  const lateCount = Math.max(0, Number(dashboard.late || 0));
+  const earlyCount = Math.max(0, Number(dashboard.earlyLeave || 0));
+  const leaveCount = Math.max(0, Number(dashboard.leaveCount || 0));
+  const correctionCount = Math.max(0, Number(dashboard.correctionNeeded || 0));
   return {
     workingTarget,
     rowCount,
+    checkedIn,
+    lateCount,
+    earlyCount,
+    leaveCount,
+    correctionCount,
     attendanceRate: Math.round(Number(dashboard.attendanceRate || 0) * 10) / 10,
     lateRate:
-      Math.round((Number(dashboard.late || 0) / baseDenominator) * 100 * 10) /
-      10,
+      Math.round((lateCount / baseDenominator) * 100 * 10) / 10,
     earlyRate:
-      Math.round(
-        (Number(dashboard.earlyLeave || 0) / baseDenominator) * 100 * 10,
-      ) / 10,
+      Math.round((earlyCount / baseDenominator) * 100 * 10) / 10,
+    leaveRate: Math.round((leaveCount / baseDenominator) * 100 * 10) / 10,
     specialRate: Math.round((specialCount / baseDenominator) * 100 * 10) / 10,
     specialCount,
   };
@@ -90385,6 +90419,288 @@ function buildAttendanceStatsLineSvg({
   `;
 }
 
+function formatAttendanceStatsPlainDate(rawValue = "") {
+  const dateKey = normalizeAttendanceDate(rawValue);
+  if (!dateKey) return "-";
+  return dateKey.replaceAll("-", ".");
+}
+
+function formatAttendanceStatsAxisDate(rawValue = "") {
+  const dateKey = normalizeAttendanceDate(rawValue);
+  if (!dateKey) return "";
+  return dateKey.slice(5).replace("-", ".");
+}
+
+function formatAttendanceStatsRangeCompact(startRaw = "", endRaw = "") {
+  const start = normalizeAttendanceDate(startRaw);
+  const end = normalizeAttendanceDate(endRaw);
+  if (!start || !end) return "기간 선택";
+  if (start === end) return formatAttendanceStatsPlainDate(start);
+  return `${formatAttendanceStatsPlainDate(start)} ~ ${formatAttendanceStatsPlainDate(end)}`;
+}
+
+function formatAttendanceStatsCount(value = 0, unit = "명") {
+  return `${Math.max(0, Math.round(Number(value) || 0))}${unit}`;
+}
+
+function applyAttendanceStatsQuickRange(presetRaw = "month") {
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  const preset = String(presetRaw || "")
+    .trim()
+    .toLowerCase();
+  const today = new Date();
+  let startDate = new Date(today);
+  let endDate = new Date(today);
+  if (preset === "previous-week") {
+    const currentWeek = getCurrentWeekDates(today);
+    startDate = new Date(currentWeek[0]);
+    startDate.setDate(startDate.getDate() - 7);
+    endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 6);
+  } else if (preset === "last-30") {
+    startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - 29);
+  } else {
+    startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+  }
+  state.attendanceView.statsStartDate = toLocalDateKey(startDate);
+  state.attendanceView.statsEndDate = toLocalDateKey(endDate);
+  state.attendanceView.statsPreset = preset || "month";
+  persistAttendanceManagerPrefs();
+  syncAttendanceManagerFilterInputs();
+}
+
+function averageAttendanceStatsValue(values = []) {
+  const list = (Array.isArray(values) ? values : [])
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+  if (!list.length) return 0;
+  return list.reduce((sum, value) => sum + value, 0) / list.length;
+}
+
+function buildAttendanceStatsReferenceModel(rows = []) {
+  const { dateKeys, rowsByDate } = buildAttendanceStatsBuckets(rows);
+  const snapshots = dateKeys.map((dateKey) => ({
+    dateKey,
+    label: formatAttendanceStatsAxisDate(dateKey),
+    snapshot: buildAttendanceStatsDaySnapshot(rowsByDate.get(dateKey) || []),
+  }));
+  const sum = (key) =>
+    snapshots.reduce(
+      (total, item) => total + Math.max(0, Number(item.snapshot?.[key] || 0)),
+      0,
+    );
+  const avg = (key) =>
+    averageAttendanceStatsValue(
+      snapshots.map((item) => Number(item.snapshot?.[key] || 0)),
+    );
+  const avgTarget = Math.round(avg("workingTarget"));
+  const avgCheckedIn = Math.round(avg("checkedIn"));
+  const avgLate = Math.round(avg("lateCount"));
+  const avgEarly = Math.round(avg("earlyCount"));
+  const avgLeave = Math.round(avg("leaveCount"));
+  const totalTarget = sum("workingTarget") || snapshots.length || 1;
+  const totalCheckedIn = sum("checkedIn");
+  const totalLate = sum("lateCount");
+  const totalEarly = sum("earlyCount");
+  const totalLeave = sum("leaveCount");
+  const totalCorrection = sum("correctionCount");
+  const weightedRate = (value) =>
+    Math.round((Number(value || 0) / Math.max(1, totalTarget)) * 1000) / 10;
+  const attendanceRate = weightedRate(totalCheckedIn);
+  const lateRate = weightedRate(totalLate);
+  const earlyRate = weightedRate(totalEarly);
+  const leaveRate = weightedRate(totalLeave);
+  const labels = snapshots.map((item) => item.label);
+  const series = [
+    {
+      key: "attendance",
+      label: "출근율",
+      color: "#ff4b14",
+      values: snapshots.map((item) => item.snapshot.attendanceRate),
+      fill: true,
+    },
+    {
+      key: "late",
+      label: "지각률",
+      color: "#1f2937",
+      values: snapshots.map((item) => item.snapshot.lateRate),
+    },
+    {
+      key: "early",
+      label: "조퇴율",
+      color: "#174dff",
+      values: snapshots.map((item) => item.snapshot.earlyRate),
+    },
+    {
+      key: "leave",
+      label: "연차 사용율",
+      color: "#8b5cf6",
+      values: snapshots.map((item) => item.snapshot.leaveRate),
+    },
+  ];
+  const tableRows = snapshots.map((item) => {
+    const snapshot = item.snapshot;
+    return {
+      date: formatAttendanceStatsPlainDate(item.dateKey),
+      target: snapshot.workingTarget,
+      checkedIn: snapshot.checkedIn,
+      attendanceRate: snapshot.attendanceRate,
+      late: snapshot.lateCount,
+      lateRate: snapshot.lateRate,
+      early: snapshot.earlyCount,
+      earlyRate: snapshot.earlyRate,
+      leave: snapshot.leaveCount,
+      leaveRate: snapshot.leaveRate,
+      correction: snapshot.correctionCount,
+    };
+  });
+  return {
+    labels,
+    series,
+    tableRows,
+    pageRows: tableRows.slice(0, 6),
+    totalDays: tableRows.length,
+    cards: [
+      {
+        key: "attendance",
+        icon: "employee",
+        label: "출근율",
+        value: `${attendanceRate.toFixed(1)}%`,
+        meta: `평균 ${formatAttendanceStatsCount(avgCheckedIn)} / ${formatAttendanceStatsCount(avgTarget)}`,
+        tone: "orange",
+      },
+      {
+        key: "late",
+        icon: "clock",
+        label: "지각률",
+        value: `${lateRate.toFixed(1)}%`,
+        meta: `평균 ${formatAttendanceStatsCount(avgLate)} / ${formatAttendanceStatsCount(avgTarget)}`,
+        tone: "dark",
+      },
+      {
+        key: "early",
+        icon: "early-leave",
+        label: "조퇴율",
+        value: `${earlyRate.toFixed(1)}%`,
+        meta: `평균 ${formatAttendanceStatsCount(avgEarly)} / ${formatAttendanceStatsCount(avgTarget)}`,
+        tone: "blue",
+      },
+      {
+        key: "leave",
+        icon: "date-day",
+        label: "연차 사용율",
+        value: `${leaveRate.toFixed(1)}%`,
+        meta: `평균 ${formatAttendanceStatsCount(avgLeave)} / ${formatAttendanceStatsCount(avgTarget)}`,
+        tone: "navy",
+      },
+      {
+        key: "correction",
+        icon: "correction-pending",
+        label: "점검 대기",
+        value: `${formatAttendanceStatsCount(totalCorrection, "건")}`,
+        meta: "유의 필요",
+        tone: "orange",
+      },
+    ],
+  };
+}
+
+function buildAttendanceStatsReferenceChartSvg({
+  labels = [],
+  series = [],
+} = {}) {
+  const chartWidth = 1440;
+  const chartHeight = 300;
+  const padding = { top: 22, right: 24, bottom: 40, left: 66 };
+  const innerWidth = chartWidth - padding.left - padding.right;
+  const innerHeight = chartHeight - padding.top - padding.bottom;
+  const safeLabels = Array.isArray(labels) ? labels : [];
+  const safeSeries = Array.isArray(series) ? series : [];
+  const pointCount = Math.max(
+    1,
+    safeLabels.length,
+    ...safeSeries.map((item) => (Array.isArray(item.values) ? item.values.length : 0)),
+  );
+  const xForIndex = (index) =>
+    padding.left + (innerWidth / Math.max(1, pointCount - 1)) * index;
+  const yForValue = (value) => {
+    const ratio = Math.max(0, Math.min(100, Number(value) || 0)) / 100;
+    return padding.top + innerHeight - ratio * innerHeight;
+  };
+  const pathForValues = (values = []) => {
+    const list = Array.isArray(values) ? values : [];
+    if (!list.length) return "";
+    return list
+      .map((value, index) => {
+        const command = index === 0 ? "M" : "L";
+        return `${command}${xForIndex(index).toFixed(2)} ${yForValue(value).toFixed(2)}`;
+      })
+      .join(" ");
+  };
+  const areaForValues = (values = []) => {
+    const path = pathForValues(values);
+    if (!path) return "";
+    const lastIndex = Math.max(0, values.length - 1);
+    const baseline = padding.top + innerHeight;
+    return `${path} L${xForIndex(lastIndex).toFixed(2)} ${baseline.toFixed(2)} L${xForIndex(0).toFixed(2)} ${baseline.toFixed(2)} Z`;
+  };
+  const xLabelStep = pointCount > 18 ? 2 : 1;
+  const gridRows = [100, 80, 60, 40, 20, 0];
+  return `
+    <svg class="attendance-stats-ref-chart-svg" viewBox="0 0 ${chartWidth} ${chartHeight}" role="img" aria-label="출퇴근 통계 추이">
+      <defs>
+        <linearGradient id="attendanceStatsRateFill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="#ff4b14" stop-opacity="0.13"></stop>
+          <stop offset="100%" stop-color="#ff4b14" stop-opacity="0"></stop>
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="${chartWidth}" height="${chartHeight}" fill="#fff"></rect>
+      ${gridRows
+        .map((value) => {
+          const y = yForValue(value);
+          return `
+            <g>
+              <text x="${padding.left - 14}" y="${y + 5}" text-anchor="end" class="attendance-stats-ref-axis-label">${value}%</text>
+              <line x1="${padding.left}" y1="${y}" x2="${chartWidth - padding.right}" y2="${y}" class="attendance-stats-ref-grid-line"></line>
+            </g>
+          `;
+        })
+        .join("")}
+      <line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${padding.top + innerHeight}" class="attendance-stats-ref-axis-line"></line>
+      <line x1="${padding.left}" y1="${padding.top + innerHeight}" x2="${chartWidth - padding.right}" y2="${padding.top + innerHeight}" class="attendance-stats-ref-axis-line"></line>
+      ${safeSeries
+        .map((item) => {
+          const values = Array.isArray(item.values) ? item.values : [];
+          const path = pathForValues(values);
+          if (!path) return "";
+          const area = item.fill ? areaForValues(values) : "";
+          return `
+            ${area ? `<path d="${area}" fill="url(#attendanceStatsRateFill)"></path>` : ""}
+            <path d="${path}" fill="none" stroke="${escapeHtml(item.color || "#ff4b14")}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            ${values
+              .map(
+                (value, index) => `
+                  <circle cx="${xForIndex(index).toFixed(2)}" cy="${yForValue(value).toFixed(2)}" r="3.1" fill="#ffffff" stroke="${escapeHtml(item.color || "#ff4b14")}" stroke-width="2"></circle>
+                `,
+              )
+              .join("")}
+          `;
+        })
+        .join("")}
+      ${safeLabels
+        .map((label, index) =>
+          index % xLabelStep === 0
+            ? `<text x="${xForIndex(index)}" y="${chartHeight - 10}" text-anchor="middle" class="attendance-stats-ref-axis-label attendance-stats-ref-x-label">${escapeHtml(label)}</text>`
+            : "",
+        )
+        .join("")}
+    </svg>
+  `;
+}
+
 function renderAttendancePeriodCalendarWorkspace({ loading = false } = {}) {
   const summaryHost = $("#attendancePeriodCalendarSummaryHost");
   const target = $("#attendancePeriodCalendarGrid");
@@ -90550,153 +90866,239 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
   const scope = normalizeAttendanceStatsScope(
     state.attendanceView?.statsScope || "attendance",
   );
-  const attendanceMetric = normalizeAttendanceStatsAttendanceMetric(
-    state.attendanceView?.statsAttendanceMetric || "rate",
-  );
-  const staffMetric = normalizeAttendanceStatsStaffMetric(
-    state.attendanceView?.statsStaffMetric || "weekday",
-  );
   const start =
     normalizeAttendanceDate(state.attendanceView?.statsStartDate || "") || "";
   const end =
     normalizeAttendanceDate(state.attendanceView?.statsEndDate || "") || "";
-  const dataset =
-    scope === "attendance"
-      ? buildAttendanceStatsAttendanceMetricSeries(rows, attendanceMetric)
-      : buildAttendanceStatsStaffMetricSeries(rows, staffMetric);
-  const values = Array.isArray(dataset.values)
-    ? dataset.values.map((value) => Number(value) || 0)
-    : [];
-  const hasNonZeroValues = values.some((value) => value > 0);
-  const peakValue = values.length ? Math.max(...values) : 0;
-  const averageValue = values.length
-    ? values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length)
-    : 0;
-  const totalValue = values.reduce((sum, value) => sum + value, 0);
-  const valueSuffix = dataset.percent === false ? "" : "%";
-  const summaryTiles = [
-    {
-      label: "최대",
-      value: `${Math.round(peakValue * 10) / 10}${valueSuffix}`,
-    },
-    {
-      label: "평균",
-      value: `${Math.round(averageValue * 10) / 10}${valueSuffix}`,
-    },
-    {
-      label: "누적",
-      value: `${Math.round(totalValue * 10) / 10}${valueSuffix}`,
-    },
-    { label: "구간 수", value: `${dataset.labels.length}` },
-  ];
-  const detailHeader = ["비율", ...dataset.labels];
-  const detailRows = [
-    [
-      dataset.legend[0]?.label || dataset.title,
-      ...dataset.values.map((value) => `${(Number(value) || 0).toFixed(1)}%`),
-    ],
-  ];
-  const svgMarkup = buildAttendanceStatsLineSvg({
-    labels: dataset.labels,
-    values: dataset.values,
-    color: dataset.legend?.[0]?.color || "#2563eb",
-    percent: dataset.percent !== false,
+  const model = buildAttendanceStatsReferenceModel(rows);
+  const svgMarkup = buildAttendanceStatsReferenceChartSvg({
+    labels: model.labels,
+    series: model.series,
   });
-  const emptyOverlayHtml = hasNonZeroValues
-    ? ""
-    : `
-      <div class="attendance-stats-empty-inline" role="status">
-        <strong>표시할 통계가 없습니다.</strong>
-        <span>선택한 조건에서 집계 가능한 출퇴근 데이터가 없습니다.</span>
-      </div>
-    `;
-  const summaryTilesHtml = `
-    <div class="attendance-stats-summary-strip">
-      ${summaryTiles
-        .map(
-          (item) => `
-        <article class="attendance-stats-summary-item">
-          <span>${escapeHtml(item.label)}</span>
-          <strong>${escapeHtml(item.value)}</strong>
-        </article>
-      `,
-        )
-        .join("")}
-    </div>
-  `;
-  const legendHtml = `
-    <div class="attendance-stats-legend">
-      ${dataset.legend
-        .map(
-          (item) => `
-        <div class="attendance-stats-legend-item">
-          <span class="attendance-stats-legend-swatch" style="background:${escapeHtml(item.color || "#ff7a1a")}"></span>
-          <span>${escapeHtml(item.label)}</span>
-        </div>
-      `,
-        )
-        .join("")}
-    </div>
-  `;
-  const detailTableHtml = `
-    <div class="attendance-stats-card-head attendance-stats-table-head">
-      <div>
-        <h4>세부 지표</h4>
-      </div>
-    </div>
-    <div class="attendance-stats-table-wrap attendance-stats-table-wrap-wide">
-      <table class="attendance-stats-table attendance-stats-table-wide">
-        <thead>
-          <tr>${detailHeader
-            .map((label) => `<th>${escapeHtml(label)}</th>`)
-            .join("")}</tr>
-        </thead>
-        <tbody>
-          ${detailRows
-            .map(
-              (row) =>
-                `<tr>${row
-                  .map((cell) => `<td>${escapeHtml(cell)}</td>`)
-                  .join("")}</tr>`,
-            )
-            .join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
+  const metricTabs = [
+    {
+      scope: "attendance",
+      label: "출퇴근 통계",
+      action: "attendance-switch-stats-scope",
+    },
+    {
+      scope: "staff-ratio",
+      label: "근무 적법 비율",
+      action: "attendance-switch-stats-scope",
+    },
+  ];
+  const quickRanges = [
+    { preset: "previous-week", label: "이전 주" },
+    { preset: "month", label: "이번 달" },
+    { preset: "last-30", label: "직전 30일" },
+  ];
+  const csvHeader = [
+    "일자",
+    "근무 대상",
+    "출근 완료",
+    "출근율",
+    "지각",
+    "지각률",
+    "조퇴",
+    "조퇴율",
+    "연차",
+    "연차 사용율",
+    "점검 대기",
+  ];
+  const csvRows = model.tableRows.map((row) => [
+    row.date,
+    `${row.target}명`,
+    `${row.checkedIn}명`,
+    `${row.attendanceRate.toFixed(1)}%`,
+    `${row.late}명`,
+    `${row.lateRate.toFixed(1)}%`,
+    `${row.early}명`,
+    `${row.earlyRate.toFixed(1)}%`,
+    `${row.leave}명`,
+    `${row.leaveRate.toFixed(1)}%`,
+    `${row.correction}건`,
+  ]);
+  const rangeLabel = formatAttendanceStatsRangeCompact(start, end);
+  const startLabel = formatAttendanceStatsPlainDate(start);
+  const endLabel = formatAttendanceStatsPlainDate(end);
+  const pageEnd = Math.min(6, model.totalDays);
   state.attendanceView.__statsExport = {
-    fileStem: dataset.fileStem,
-    header: dataset.tableHeader,
-    rows: dataset.tableRows,
+    fileStem: scope === "attendance" ? "attendance_stats" : "attendance_staff_ratio",
+    header: csvHeader,
+    rows: csvRows,
     svgMarkup,
   };
   panel.innerHTML = `
-    <div class="attendance-stats-shell">
-      <section class="attendance-stats-card attendance-stats-card-primary attendance-stats-card-composed">
-        <div class="attendance-stats-card-head">
-          <div>
-            <h4>${escapeHtml(dataset.title)}</h4>
-          </div>
-          <div class="attendance-stats-head-side">
-            <span class="attendance-stats-meta">${escapeHtml(start && end ? `${start} ~ ${end}` : "조회 범위 없음")}</span>
+    <div class="attendance-stats-ref-shell">
+      <div class="attendance-stats-ref-segment" role="tablist" aria-label="통계 종류">
+        ${metricTabs
+          .map(
+            (tab) => `
+              <button
+                type="button"
+                class="attendance-stats-ref-segment-btn${scope === tab.scope ? " is-active" : ""}"
+                data-action="${tab.action}"
+                data-scope="${tab.scope}"
+                aria-pressed="${scope === tab.scope ? "true" : "false"}"
+              >${escapeHtml(tab.label)}</button>
+            `,
+          )
+          .join("")}
+      </div>
+      <div class="attendance-stats-ref-filterbar">
+        <div class="attendance-stats-ref-filter-left">
+          <button
+            type="button"
+            class="attendance-stats-ref-date-btn"
+            data-action="attendance-open-range-sheet"
+            data-target="stats"
+          >
+            <span>${escapeHtml(startLabel)}</span>
+            ${buildArlsAttendanceIconSvg("date-day", { className: "attendance-stats-ref-date-icon" })}
+          </button>
+          <span class="attendance-stats-ref-date-separator">~</span>
+          <button
+            type="button"
+            class="attendance-stats-ref-date-btn"
+            data-action="attendance-open-range-sheet"
+            data-target="stats"
+          >
+            <span>${escapeHtml(endLabel)}</span>
+            ${buildArlsAttendanceIconSvg("date-day", { className: "attendance-stats-ref-date-icon" })}
+          </button>
+          ${quickRanges
+            .map(
+              (item) => `
+                <button
+                  type="button"
+                  class="attendance-stats-ref-preset"
+                  data-action="attendance-stats-quick-range"
+                  data-preset="${escapeHtml(item.preset)}"
+                >${escapeHtml(item.label)}</button>
+              `,
+            )
+            .join("")}
+        </div>
+        <div class="attendance-stats-ref-filter-right">
+          <label class="attendance-stats-ref-unit-select">
+            <span>집계 단위</span>
+            <select aria-label="집계 단위">
+              <option value="day">일별</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            class="attendance-stats-ref-filter-btn"
+            data-action="attendance-open-advanced-filter"
+          >
+            ${buildArlsAttendanceIconSvg("advanced-filter")}
+            <span>고급 필터</span>
+          </button>
+        </div>
+      </div>
+      <section class="attendance-stats-ref-kpis" aria-label="통계 요약">
+        ${model.cards
+          .map(
+            (card) => `
+              <article class="attendance-stats-ref-kpi is-${escapeHtml(card.tone)}">
+                <div class="attendance-stats-ref-kpi-icon">
+                  ${buildArlsAttendanceIconSvg(card.icon)}
+                </div>
+                <div class="attendance-stats-ref-kpi-copy">
+                  <span>${escapeHtml(card.label)}</span>
+                  <strong>${escapeHtml(card.value)}</strong>
+                  <em>${escapeHtml(card.meta)}</em>
+                </div>
+              </article>
+            `,
+          )
+          .join("")}
+      </section>
+      <section class="attendance-stats-ref-chart-card">
+        <div class="attendance-stats-ref-section-head">
+          <h3>출퇴근 추이</h3>
+          <div class="attendance-stats-ref-legend">
+            ${model.series
+              .map(
+                (item) => `
+                  <span>
+                    <i style="--legend-color:${escapeHtml(item.color)}"></i>
+                    ${escapeHtml(item.label)}
+                  </span>
+                `,
+              )
+              .join("")}
           </div>
         </div>
-        <div class="attendance-stats-composed-shell">
-          <div class="attendance-stats-main-graph">
-            ${summaryTilesHtml}
-            <div class="attendance-stats-chart-shell${hasNonZeroValues ? "" : " is-empty"}">
-              <div class="attendance-stats-chart-wrap" data-export-name="${escapeHtml(dataset.fileStem)}">
-                ${svgMarkup}
-                ${emptyOverlayHtml}
-              </div>
-            </div>
-            ${legendHtml}
-          </div>
-          <section class="attendance-stats-detail-panel attendance-stats-side-card attendance-stats-side-card-table">
-            ${detailTableHtml}
-          </section>
+        <div class="attendance-stats-ref-chart-wrap" data-export-name="attendance_stats">
+          ${svgMarkup}
         </div>
       </section>
+      <section class="attendance-stats-ref-table-card">
+        <div class="attendance-stats-ref-section-head">
+          <h3>일자별 세부 지표</h3>
+        </div>
+        <div class="attendance-stats-ref-table-wrap">
+          <table class="attendance-stats-ref-table">
+            <thead>
+              <tr>
+                <th>일자</th>
+                <th>근무 대상</th>
+                <th>출근 완료</th>
+                <th>출근율</th>
+                <th>지각</th>
+                <th>지각률</th>
+                <th>조퇴</th>
+                <th>조퇴율</th>
+                <th>연차</th>
+                <th>연차 사용율</th>
+                <th>점검 대기</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                model.pageRows.length
+                  ? model.pageRows
+                      .map(
+                        (row) => `
+                          <tr>
+                            <td>${escapeHtml(row.date)}</td>
+                            <td>${row.target}명</td>
+                            <td>${row.checkedIn}명</td>
+                            <td class="is-accent">${row.attendanceRate.toFixed(1)}%</td>
+                            <td>${row.late}명</td>
+                            <td>${row.lateRate.toFixed(1)}%</td>
+                            <td>${row.early}명</td>
+                            <td class="is-blue">${row.earlyRate.toFixed(1)}%</td>
+                            <td>${row.leave}명</td>
+                            <td>${row.leaveRate.toFixed(1)}%</td>
+                            <td class="is-accent">${row.correction}건</td>
+                          </tr>
+                        `,
+                      )
+                      .join("")
+                  : `<tr><td colspan="11">표시할 일자별 통계가 없습니다.</td></tr>`
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="attendance-stats-ref-pagination" aria-label="일자별 세부 지표 페이지">
+          <span>${model.totalDays ? `1-${pageEnd} / ${model.totalDays}` : "0 / 0"}</span>
+          <button type="button" disabled aria-label="이전 페이지">${buildArlsAttendanceIconSvg("chevron-left")}</button>
+          <button type="button" class="is-active">1</button>
+          <button type="button">2</button>
+          <button type="button">3</button>
+          <button type="button">4</button>
+          <button type="button">5</button>
+          <button type="button" aria-label="다음 페이지">${buildArlsAttendanceIconSvg("chevron-right")}</button>
+          <label>
+            <select aria-label="페이지당 행 수">
+              <option selected>10개</option>
+            </select>
+          </label>
+        </div>
+      </section>
+      <span class="attendance-stats-ref-range" aria-hidden="true">${escapeHtml(rangeLabel)}</span>
     </div>
   `;
 }
@@ -112388,6 +112790,17 @@ function bindUiEvents() {
         syncAttendanceManagerFilterInputs();
         updateRouteHash(getAttendanceWorkspaceRoute(), { replace: true });
         renderAttendanceViewFromCache();
+        return;
+      }
+
+      if (action === "attendance-stats-quick-range") {
+        applyAttendanceStatsQuickRange(actionEl.dataset.preset || "month");
+        updateRouteHash(getAttendanceWorkspaceRoute(), { replace: true });
+        renderAttendanceViewFromCache();
+        runActionSafely(
+          loadAttendanceView({ force: true }),
+          "출퇴근 통계 조회 중 오류가 발생했습니다.",
+        );
         return;
       }
 
