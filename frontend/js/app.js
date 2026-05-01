@@ -20023,6 +20023,7 @@ function formatInt(value) {
 function isModalToastContext() {
   if (document.body.classList.contains("sheet-modal-open")) return true;
   const overlaySelectors = [
+    "#attendanceAdvancedFilterModalRoot",
     "#sheetBackdrop",
     "#confirmBackdrop",
     "#noticesPollModalBackdrop",
@@ -59086,6 +59087,9 @@ function syncBodyScrollLocks() {
   const taskProgressVisible = !(
     $("#taskProgressModal")?.classList.contains("hidden") ?? true
   );
+  const attendanceAdvancedFilterVisible = Boolean(
+    $("#attendanceAdvancedFilterModalRoot"),
+  );
 
   document.body.classList.toggle("drawer-open", drawerVisible);
   document.body.classList.toggle(
@@ -59093,7 +59097,8 @@ function syncBodyScrollLocks() {
     sheetVisible ||
       confirmVisible ||
       noticesPollModalVisible ||
-      taskProgressVisible,
+      taskProgressVisible ||
+      attendanceAdvancedFilterVisible,
   );
 }
 
@@ -88821,6 +88826,654 @@ async function openAttendanceFilterSheet() {
   await openAttendanceAdvancedFilterSheet();
 }
 
+function getAttendanceAdvancedFilterModalState() {
+  if (!state.attendanceView) {
+    state.attendanceView = createInitialAttendanceViewState();
+  }
+  if (
+    !state.attendanceView.advancedFilterModal ||
+    typeof state.attendanceView.advancedFilterModal !== "object"
+  ) {
+    state.attendanceView.advancedFilterModal = {
+      tab: "site",
+      siteTokens: [],
+      employeeTokens: [],
+      siteQuery: "",
+      employeeQuery: "",
+    };
+  }
+  return state.attendanceView.advancedFilterModal;
+}
+
+function getAttendanceEmployeeSiteCode(item = null) {
+  const directCode = String(
+    item?.site_code ||
+      item?.siteCode ||
+      item?.assigned_site_code ||
+      item?.workplace_code ||
+      "",
+  )
+    .trim()
+    .toUpperCase();
+  if (directCode) return directCode;
+  const siteId = String(item?.site_id || item?.siteId || "").trim();
+  if (siteId) {
+    const sites = Array.isArray(state.attendanceView?.sites)
+      ? state.attendanceView.sites
+      : [];
+    const siteMatch = sites.find(
+      (site) => String(site?.id || site?.site_id || "").trim() === siteId,
+    );
+    const matchedCode = String(siteMatch?.site_code || "")
+      .trim()
+      .toUpperCase();
+    if (matchedCode) return matchedCode;
+  }
+  const siteName = String(item?.site_name || item?.siteName || "").trim();
+  if (siteName) {
+    const sites = Array.isArray(state.attendanceView?.sites)
+      ? state.attendanceView.sites
+      : [];
+    const siteMatch = sites.find(
+      (site) =>
+        String(site?.site_name || site?.name || "")
+          .trim()
+          .toLowerCase() === siteName.toLowerCase(),
+    );
+    const matchedCode = String(siteMatch?.site_code || "")
+      .trim()
+      .toUpperCase();
+    if (matchedCode) return matchedCode;
+  }
+  return "";
+}
+
+function getAttendanceAdvancedFilterDraftSiteCodes() {
+  return uniqAttendanceTokens(
+    getAttendanceAdvancedFilterModalState().siteTokens || [],
+  )
+    .map((token) => parseAttendanceFilterToken(token))
+    .filter((item) => item.facet === "site" && item.value)
+    .map((item) =>
+      String(item.value || "")
+        .trim()
+        .toUpperCase(),
+    )
+    .filter(Boolean);
+}
+
+function getAttendanceAdvancedFilterDraftEmployeeCodes() {
+  return uniqAttendanceTokens(
+    getAttendanceAdvancedFilterModalState().employeeTokens || [],
+  )
+    .map((token) => parseAttendanceFilterToken(token))
+    .filter((item) => item.facet === "employee" && item.value)
+    .map((item) => String(item.value || "").trim())
+    .filter(Boolean);
+}
+
+function getAttendanceAdvancedFilterSelectedSites() {
+  const selected = new Set(getAttendanceAdvancedFilterDraftSiteCodes());
+  const sites = Array.isArray(state.attendanceView?.sites)
+    ? state.attendanceView.sites
+    : [];
+  return sites
+    .map((site) => {
+      const siteCode = String(site?.site_code || "")
+        .trim()
+        .toUpperCase();
+      if (!siteCode || !selected.has(siteCode)) return null;
+      return {
+        siteCode,
+        siteName:
+          String(site?.site_name || site?.name || siteCode).trim() ||
+          siteCode,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) =>
+      String(left.siteName || "").localeCompare(
+        String(right.siteName || ""),
+        "ko",
+        { numeric: true, sensitivity: "base" },
+      ),
+    );
+}
+
+function getAttendanceAdvancedFilterSelectedEmployees() {
+  const selected = new Set(getAttendanceAdvancedFilterDraftEmployeeCodes());
+  if (!selected.size) return [];
+  const employees = Array.isArray(state.attendanceView?.employees)
+    ? state.attendanceView.employees
+    : [];
+  return employees.filter((item) =>
+    selected.has(String(item?.employee_code || "").trim()),
+  );
+}
+
+function getAttendanceAdvancedFilterEmployeesForSites(query = "") {
+  const selectedSites = new Set(getAttendanceAdvancedFilterDraftSiteCodes());
+  if (!selectedSites.size) return [];
+  const normalizedQuery = String(query || "")
+    .trim()
+    .toLowerCase();
+  const employees = Array.isArray(state.attendanceView?.employees)
+    ? state.attendanceView.employees
+    : [];
+  return employees
+    .map((item) => {
+      const employeeCode = String(item?.employee_code || "").trim();
+      if (!employeeCode) return null;
+      const employeeName =
+        String(item?.full_name || item?.employee_name || item?.name || "")
+          .trim() || employeeCode;
+      const siteCode = getAttendanceEmployeeSiteCode(item);
+      if (!siteCode || !selectedSites.has(siteCode)) return null;
+      const siteLabel = getAttendanceSiteDisplayLabel(siteCode) || siteCode;
+      const roleGroup = getAttendanceAdvancedFilterRoleGroupLabel(item);
+      const rankLabel = getAttendanceEmployeeRankLabel(item);
+      const haystack =
+        `${employeeName} ${employeeCode} ${siteCode} ${siteLabel} ${roleGroup} ${rankLabel}`.toLowerCase();
+      if (normalizedQuery && !haystack.includes(normalizedQuery)) return null;
+      return {
+        token: `employee:${employeeCode}`,
+        employeeCode,
+        employeeName,
+        siteCode,
+        siteLabel,
+        roleGroup,
+        rankLabel,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) =>
+      String(left.employeeName || "").localeCompare(
+        String(right.employeeName || ""),
+        "ko",
+        { numeric: true, sensitivity: "base" },
+      ),
+    );
+}
+
+function getAttendanceAdvancedFilterRoleGroupLabel(item = null) {
+  const label = getAttendancePickerRoleGroupLabel(item);
+  return label === "Officer" ? "Staff" : label;
+}
+
+function getAttendanceAdvancedFilterRoleOrder(label = "") {
+  const normalized = String(label || "")
+    .trim()
+    .toLowerCase();
+  if (normalized === "hq") return 0;
+  if (normalized === "supervisor") return 1;
+  if (normalized === "vice supervisor") return 2;
+  if (normalized === "staff" || normalized === "officer") return 3;
+  return 9;
+}
+
+function buildAttendanceAdvancedFilterEmployeeGroups(query = "") {
+  const groups = new Map();
+  getAttendanceAdvancedFilterEmployeesForSites(query).forEach((item) => {
+    if (!groups.has(item.roleGroup)) groups.set(item.roleGroup, []);
+    groups.get(item.roleGroup).push(item);
+  });
+  return [...groups.entries()]
+    .sort((left, right) => {
+      const orderDiff =
+        getAttendanceAdvancedFilterRoleOrder(left[0]) -
+        getAttendanceAdvancedFilterRoleOrder(right[0]);
+      if (orderDiff !== 0) return orderDiff;
+      return String(left[0] || "").localeCompare(String(right[0] || ""), "ko", {
+        numeric: true,
+        sensitivity: "base",
+      });
+    })
+    .map(([label, items]) => ({
+      label,
+      items,
+    }));
+}
+
+function pruneAttendanceAdvancedFilterEmployeesForSelectedSites() {
+  const modalState = getAttendanceAdvancedFilterModalState();
+  const selectedSites = new Set(getAttendanceAdvancedFilterDraftSiteCodes());
+  if (!selectedSites.size) {
+    modalState.employeeTokens = [];
+    return;
+  }
+  const employees = Array.isArray(state.attendanceView?.employees)
+    ? state.attendanceView.employees
+    : [];
+  const allowedEmployeeCodes = new Set(
+    employees
+      .filter((item) => selectedSites.has(getAttendanceEmployeeSiteCode(item)))
+      .map((item) => String(item?.employee_code || "").trim())
+      .filter(Boolean),
+  );
+  modalState.employeeTokens = uniqAttendanceTokens(
+    modalState.employeeTokens || [],
+  ).filter((token) => {
+    const parsed = parseAttendanceFilterToken(token);
+    return (
+      parsed.facet === "employee" && allowedEmployeeCodes.has(parsed.value)
+    );
+  });
+}
+
+function closeAttendanceAdvancedFilterModal() {
+  const root = $("#attendanceAdvancedFilterModalRoot");
+  if (root instanceof HTMLElement) {
+    const modal = root.querySelector(".attendance-advanced-filter-modal");
+    moveFocusOutsideHiddenContainer(modal || root, $("#attendanceAdvancedFilterTrigger"));
+    root.remove();
+  }
+  if (state.attendanceView?.advancedFilterModal) {
+    state.attendanceView.advancedFilterModal = null;
+  }
+  syncBodyScrollLocks();
+}
+
+function renderAttendanceAdvancedFilterModal() {
+  const root = $("#attendanceAdvancedFilterModalRoot");
+  if (!(root instanceof HTMLElement)) return;
+  const modalState = getAttendanceAdvancedFilterModalState();
+  const activeTab = modalState.tab === "employee" ? "employee" : "site";
+  const siteQuery = String(modalState.siteQuery || "");
+  const employeeQuery = String(modalState.employeeQuery || "");
+  const selectedSiteCodes = new Set(getAttendanceAdvancedFilterDraftSiteCodes());
+  const selectedEmployeeCodes = new Set(
+    getAttendanceAdvancedFilterDraftEmployeeCodes(),
+  );
+  const selectedSites = getAttendanceAdvancedFilterSelectedSites();
+  const siteRows = buildAttendanceSitePickerRows(siteQuery);
+  const allVisibleSitesSelected =
+    siteRows.length > 0 &&
+    siteRows.every((row) => selectedSiteCodes.has(row.siteCode));
+  const selectedEmployees = getAttendanceAdvancedFilterSelectedEmployees();
+  const scopedEmployees = getAttendanceAdvancedFilterEmployeesForSites();
+  const employeeGroups = buildAttendanceAdvancedFilterEmployeeGroups(
+    employeeQuery,
+  );
+  const allVisibleEmployees = employeeGroups.flatMap((group) => group.items);
+  const allVisibleEmployeesSelected =
+    allVisibleEmployees.length > 0 &&
+    allVisibleEmployees.every((item) =>
+      selectedEmployeeCodes.has(item.employeeCode),
+    );
+  const selectedSiteNames = selectedSites.map((site) => site.siteName);
+  const selectedEmployeeCount = selectedEmployeeCodes.size;
+  const renderTab = (tab, label) => `
+    <button
+      type="button"
+      class="attendance-advanced-filter-tab${activeTab === tab ? " is-active" : ""}"
+      data-role="advanced-filter-tab"
+      data-tab="${tab}"
+      aria-pressed="${activeTab === tab ? "true" : "false"}"
+    >${label}</button>
+  `;
+  const renderSitePills = (sites) =>
+    sites.length
+      ? sites
+          .map(
+            (site) => `
+              <span class="attendance-advanced-filter-pill">${escapeHtml(site.siteName)}</span>
+            `,
+          )
+          .join("")
+      : '<span class="attendance-advanced-filter-empty-text">없음</span>';
+  const siteTabMarkup = `
+    <div class="attendance-advanced-filter-main">
+      <section class="attendance-advanced-filter-list-panel">
+        <div class="attendance-advanced-filter-tabs is-inside">
+          ${renderTab("site", "근무지")}
+          ${renderTab("employee", "직원")}
+        </div>
+        <label class="attendance-advanced-filter-search">
+          ${buildArlsAttendanceIconSvg("search")}
+          <input type="search" value="${escapeHtml(siteQuery)}" placeholder="근무지 검색" data-role="advanced-filter-site-query" />
+        </label>
+        <label class="attendance-advanced-filter-select-all">
+          <input type="checkbox" data-role="advanced-filter-all-sites" ${allVisibleSitesSelected ? "checked" : ""} />
+          <span>전체 선택</span>
+          <em>${selectedSiteCodes.size}개 선택</em>
+        </label>
+        <div class="attendance-advanced-filter-scroll">
+          ${
+            siteRows.length
+              ? siteRows
+                  .map(
+                    (row) => `
+                      <label class="attendance-advanced-filter-check-row${selectedSiteCodes.has(row.siteCode) ? " is-selected" : ""}">
+                        <input type="checkbox" data-role="advanced-filter-site" value="${escapeHtml(row.siteCode)}" ${selectedSiteCodes.has(row.siteCode) ? "checked" : ""} />
+                        <span>${escapeHtml(row.siteName)}</span>
+                      </label>
+                    `,
+                  )
+                  .join("")
+              : '<div class="attendance-advanced-filter-list-empty">선택 가능한 근무지가 없습니다.</div>'
+          }
+        </div>
+      </section>
+      <aside class="attendance-advanced-filter-side">
+        <section class="attendance-advanced-filter-side-section">
+          <h3>선택 상세</h3>
+          <div class="attendance-advanced-filter-side-card">
+            <strong>선택된 근무지 <em>${selectedSiteCodes.size}곳</em></strong>
+            <div class="attendance-advanced-filter-selected-stack">
+              ${
+                selectedSites.length
+                  ? selectedSites
+                      .map(
+                        (site) => `
+                          <span>${escapeHtml(site.siteName)}</span>
+                        `,
+                      )
+                      .join("")
+                  : '<span class="is-muted">선택된 근무지가 없습니다.</span>'
+              }
+            </div>
+          </div>
+        </section>
+        <section class="attendance-advanced-filter-side-section">
+          <h3>적용 범위</h3>
+          <p>선택한 근무지의 소속 직원만 직원 탭에서 표시됩니다.</p>
+          <div class="attendance-advanced-filter-side-card is-compact">
+            <div><span>포함 직원 수</span><strong>총 ${scopedEmployees.length}명</strong></div>
+            <div><span>선택 기준</span><strong>근무지 소속</strong></div>
+          </div>
+        </section>
+        <section class="attendance-advanced-filter-side-section">
+          <h3>안내</h3>
+          <div class="attendance-advanced-filter-note-box">
+            직원 탭으로 이동하면 선택된 근무지에 소속된 직원만 권한별로 그룹화되어 표시됩니다.
+          </div>
+        </section>
+      </aside>
+    </div>
+  `;
+  const employeeTabMarkup = `
+    <div class="attendance-advanced-filter-tabs">
+      ${renderTab("site", "근무지")}
+      ${renderTab("employee", "직원")}
+    </div>
+    ${
+      selectedSites.length
+        ? `
+          <div class="attendance-advanced-filter-selected-sites">
+            <strong>선택된 근무지</strong>
+            ${renderSitePills(selectedSites)}
+            <span>에 소속된 직원만 표시됩니다.</span>
+          </div>
+        `
+        : ""
+    }
+    <div class="attendance-advanced-filter-main">
+      <section class="attendance-advanced-filter-list-panel">
+        ${
+          selectedSites.length
+            ? `
+              <label class="attendance-advanced-filter-search">
+                ${buildArlsAttendanceIconSvg("search")}
+                <input type="search" value="${escapeHtml(employeeQuery)}" placeholder="직원명 검색" data-role="advanced-filter-employee-query" />
+              </label>
+              <label class="attendance-advanced-filter-select-all">
+                <input type="checkbox" data-role="advanced-filter-all-employees" ${allVisibleEmployeesSelected ? "checked" : ""} />
+                <span>전체 선택</span>
+              </label>
+              <div class="attendance-advanced-filter-scroll">
+                ${
+                  employeeGroups.length
+                    ? employeeGroups
+                        .map(
+                          (group) => `
+                            <section class="attendance-advanced-filter-employee-group">
+                              <h4>${escapeHtml(group.label)} <span>(${group.items.length})</span></h4>
+                              <div>
+                                ${group.items
+                                  .map(
+                                    (item) => `
+                                      <label class="attendance-advanced-filter-check-row${selectedEmployeeCodes.has(item.employeeCode) ? " is-selected" : ""}">
+                                        <input type="checkbox" data-role="advanced-filter-employee" value="${escapeHtml(item.employeeCode)}" ${selectedEmployeeCodes.has(item.employeeCode) ? "checked" : ""} />
+                                        <span>${escapeHtml(item.employeeName)}</span>
+                                      </label>
+                                    `,
+                                  )
+                                  .join("")}
+                              </div>
+                            </section>
+                          `,
+                        )
+                        .join("")
+                    : '<div class="attendance-advanced-filter-list-empty">조건에 맞는 직원이 없습니다.</div>'
+                }
+              </div>
+            `
+            : `
+              <div class="attendance-advanced-filter-empty-state">
+                <div class="attendance-advanced-filter-empty-icon">
+                  ${buildArlsAttendanceIconSvg("workplace-pin")}
+                  ${buildArlsAttendanceIconSvg("permission-info")}
+                </div>
+                <strong>선택된 근무지가 없습니다</strong>
+                <span>근무지에서 지점을 선택해 주세요</span>
+              </div>
+            `
+        }
+      </section>
+      <aside class="attendance-advanced-filter-side">
+        ${
+          selectedSites.length
+            ? `
+              <section class="attendance-advanced-filter-side-section">
+                <h3>선택 상세</h3>
+                <div class="attendance-advanced-filter-side-caption">선택된 근무지</div>
+                <div class="attendance-advanced-filter-pill-row">${renderSitePills(selectedSites)}</div>
+                <div class="attendance-advanced-filter-side-info">
+                  ${buildArlsAttendanceIconSvg("permission-info")}
+                  <span>선택된 근무지에 소속된 직원만 표시됩니다.</span>
+                </div>
+                <div class="attendance-advanced-filter-side-card is-compact">
+                  <div><span>선택 직원 수</span><strong>${selectedEmployeeCount}명</strong></div>
+                  <div><span>정렬 기준</span><strong>권한별 그룹</strong></div>
+                </div>
+              </section>
+              <section class="attendance-advanced-filter-side-section">
+                <h3>안내</h3>
+                <ul class="attendance-advanced-filter-guide-list">
+                  <li>선택된 근무지에 소속된 직원만 목록에 표시됩니다.</li>
+                  <li>권한(역할)별 그룹 순서로 정렬되며, 각 그룹은 접거나 펼칠 수 있습니다.</li>
+                  <li>전체 선택은 목록 상단에 위치합니다.</li>
+                </ul>
+              </section>
+            `
+            : `
+              <section class="attendance-advanced-filter-side-section is-empty-only">
+                <h3>선택된 근무지</h3>
+                <strong class="attendance-advanced-filter-empty-title">없음</strong>
+                <p>근무지 탭에서 근무지를 선택하면 직원 필터를 사용할 수 있습니다.</p>
+              </section>
+            `
+        }
+      </aside>
+    </div>
+  `;
+
+  root.innerHTML = `
+    <div class="attendance-advanced-filter-backdrop" data-role="advanced-filter-backdrop"></div>
+    <section
+      class="attendance-advanced-filter-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="attendanceAdvancedFilterTitle"
+    >
+      <header class="attendance-advanced-filter-modal-head">
+        <div>
+          <h2 id="attendanceAdvancedFilterTitle">고급 필터</h2>
+          <p>근무지와 직원을 기준으로 조회 대상을 좁힙니다.</p>
+        </div>
+        <button type="button" class="attendance-advanced-filter-close" data-role="advanced-filter-close" aria-label="닫기">
+          ${buildArlsAttendanceIconSvg("close")}
+        </button>
+      </header>
+      <div class="attendance-advanced-filter-modal-body">
+        ${activeTab === "site" ? siteTabMarkup : employeeTabMarkup}
+      </div>
+      <footer class="attendance-advanced-filter-actions">
+        <button type="button" class="attendance-advanced-filter-btn is-secondary" data-role="advanced-filter-reset">초기화</button>
+        <div>
+          <button type="button" class="attendance-advanced-filter-btn is-secondary" data-role="advanced-filter-cancel">취소</button>
+          <button type="button" class="attendance-advanced-filter-btn is-primary" data-role="advanced-filter-apply">적용</button>
+        </div>
+      </footer>
+    </section>
+  `;
+
+  const modal = root.querySelector(".attendance-advanced-filter-modal");
+  const allSitesCheckbox = root.querySelector(
+    '[data-role="advanced-filter-all-sites"]',
+  );
+  if (allSitesCheckbox instanceof HTMLInputElement) {
+    allSitesCheckbox.indeterminate =
+      selectedSiteCodes.size > 0 && !allVisibleSitesSelected;
+  }
+  const allEmployeesCheckbox = root.querySelector(
+    '[data-role="advanced-filter-all-employees"]',
+  );
+  if (allEmployeesCheckbox instanceof HTMLInputElement) {
+    allEmployeesCheckbox.indeterminate =
+      selectedEmployeeCodes.size > 0 && !allVisibleEmployeesSelected;
+  }
+
+  root.querySelectorAll('[data-role="advanced-filter-tab"]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      modalState.tab = btn.dataset.tab === "employee" ? "employee" : "site";
+      renderAttendanceAdvancedFilterModal();
+    });
+  });
+  root
+    .querySelector('[data-role="advanced-filter-close"]')
+    ?.addEventListener("click", closeAttendanceAdvancedFilterModal);
+  root
+    .querySelector('[data-role="advanced-filter-cancel"]')
+    ?.addEventListener("click", closeAttendanceAdvancedFilterModal);
+  root
+    .querySelector('[data-role="advanced-filter-backdrop"]')
+    ?.addEventListener("click", closeAttendanceAdvancedFilterModal);
+  root
+    .querySelector('[data-role="advanced-filter-reset"]')
+    ?.addEventListener("click", () => {
+      modalState.siteTokens = [];
+      modalState.employeeTokens = [];
+      modalState.siteQuery = "";
+      modalState.employeeQuery = "";
+      renderAttendanceAdvancedFilterModal();
+    });
+  root
+    .querySelector('[data-role="advanced-filter-site-query"]')
+    ?.addEventListener("input", (event) => {
+      modalState.siteQuery = String(event.target?.value || "");
+      renderAttendanceAdvancedFilterModal();
+    });
+  root
+    .querySelector('[data-role="advanced-filter-employee-query"]')
+    ?.addEventListener("input", (event) => {
+      modalState.employeeQuery = String(event.target?.value || "");
+      renderAttendanceAdvancedFilterModal();
+    });
+  root
+    .querySelector('[data-role="advanced-filter-all-sites"]')
+    ?.addEventListener("change", (event) => {
+      const checked = Boolean(event.target?.checked);
+      const next = new Set(modalState.siteTokens || []);
+      siteRows.forEach((row) => {
+        const token = `site:${row.siteCode}`;
+        if (checked) next.add(token);
+        else next.delete(token);
+      });
+      modalState.siteTokens = uniqAttendanceTokens([...next]);
+      pruneAttendanceAdvancedFilterEmployeesForSelectedSites();
+      renderAttendanceAdvancedFilterModal();
+    });
+  root
+    .querySelectorAll('[data-role="advanced-filter-site"]')
+    .forEach((checkbox) => {
+      checkbox.addEventListener("change", () => {
+        const siteCode = String(checkbox.value || "")
+          .trim()
+          .toUpperCase();
+        if (!siteCode) return;
+        const token = `site:${siteCode}`;
+        const next = new Set(modalState.siteTokens || []);
+        if (checkbox.checked) next.add(token);
+        else next.delete(token);
+        modalState.siteTokens = uniqAttendanceTokens([...next]);
+        pruneAttendanceAdvancedFilterEmployeesForSelectedSites();
+        renderAttendanceAdvancedFilterModal();
+      });
+    });
+  root
+    .querySelector('[data-role="advanced-filter-all-employees"]')
+    ?.addEventListener("change", (event) => {
+      const checked = Boolean(event.target?.checked);
+      const next = new Set(modalState.employeeTokens || []);
+      allVisibleEmployees.forEach((item) => {
+        const token = `employee:${item.employeeCode}`;
+        if (checked) next.add(token);
+        else next.delete(token);
+      });
+      modalState.employeeTokens = uniqAttendanceTokens([...next]);
+      renderAttendanceAdvancedFilterModal();
+    });
+  root
+    .querySelectorAll('[data-role="advanced-filter-employee"]')
+    .forEach((checkbox) => {
+      checkbox.addEventListener("change", () => {
+        const employeeCode = String(checkbox.value || "").trim();
+        if (!employeeCode) return;
+        const token = `employee:${employeeCode}`;
+        const next = new Set(modalState.employeeTokens || []);
+        if (checkbox.checked) next.add(token);
+        else next.delete(token);
+        modalState.employeeTokens = uniqAttendanceTokens([...next]);
+        renderAttendanceAdvancedFilterModal();
+      });
+    });
+  root
+    .querySelector('[data-role="advanced-filter-apply"]')
+    ?.addEventListener("click", () => {
+      const appliedSiteTokens = uniqAttendanceTokens(modalState.siteTokens || []);
+      const appliedEmployeeTokens = uniqAttendanceTokens(
+        modalState.employeeTokens || [],
+      );
+      state.attendanceView.siteFilterApplied = appliedSiteTokens;
+      state.attendanceView.siteFilterDraft = [...appliedSiteTokens];
+      state.attendanceView.employeeFilterApplied = appliedEmployeeTokens;
+      state.attendanceView.employeeFilterDraft = [...appliedEmployeeTokens];
+      const exactSiteCodes = getAttendanceAdvancedFilterDraftSiteCodes();
+      state.attendanceView.siteCode =
+        exactSiteCodes.length === 1 ? exactSiteCodes[0] : "";
+      state.attendanceView.employeeCode = "";
+      attendanceStatusV2SelectedKey = null;
+      state.attendanceView.selectedManagerRowKey = "";
+      persistAttendanceManagerPrefs();
+      closeAttendanceAdvancedFilterModal();
+      syncAttendanceManagerFilterInputs();
+      renderAttendanceFilterMeta();
+      runWithBusy(
+        () => loadAttendanceView({ force: true }),
+        "필터 적용 중...",
+      );
+    });
+
+  if (modal instanceof HTMLElement) {
+    const focusTarget =
+      modal.querySelector(".attendance-advanced-filter-close") || modal;
+    requestAnimationFrame(() => {
+      if (focusTarget instanceof HTMLElement) focusTarget.focus();
+    });
+  }
+}
+
 function getAttendanceAdvancedFilterSummary() {
   const employeeTokens = uniqAttendanceTokens(
     state.attendanceView?.employeeFilterApplied || [],
@@ -88859,43 +89512,31 @@ async function openAttendanceAdvancedFilterSheet() {
   if (!state.attendanceView) {
     state.attendanceView = createInitialAttendanceViewState();
   }
-  const summary = getAttendanceAdvancedFilterSummary();
-  const wrapper = document.createElement("div");
-  wrapper.className = "attendance-advanced-filter-sheet";
-  wrapper.innerHTML = `
-    <div class="attendance-advanced-filter-head">
-      <strong>조회 조건</strong>
-    </div>
-    <div class="attendance-advanced-filter-list">
-      <button type="button" class="attendance-advanced-filter-row" data-action="attendance-open-employee-filter">
-        <span class="attendance-advanced-filter-copy">
-          <strong>직원</strong>
-          <small>${escapeHtml(summary.employeeLabel)}</small>
-        </span>
-        <span class="attendance-advanced-filter-arrow" aria-hidden="true">›</span>
-      </button>
-      <button type="button" class="attendance-advanced-filter-row" data-action="attendance-open-site-filter">
-        <span class="attendance-advanced-filter-copy">
-          <strong>근무지</strong>
-          <small>${escapeHtml(summary.siteLabel)}</small>
-        </span>
-        <span class="attendance-advanced-filter-arrow" aria-hidden="true">›</span>
-      </button>
-    </div>
-  `;
-  openSheet({
-    title: "필터",
-    contentNode: wrapper,
-    layoutClass: "sheet-layout-attendance-picker",
-    actions: [
-      {
-        label: "초기화",
-        variant: "btn-secondary",
-        action: "attendance-clear-advanced-filter",
-      },
-      { label: "닫기", variant: "btn-primary", action: "sheet-close" },
-    ],
-  });
+  closeSheet();
+  closeAttendanceAdvancedFilterModal();
+  const modalState = getAttendanceAdvancedFilterModalState();
+  const appliedSiteCodes = resolveAttendanceAppliedSiteCodes(
+    state.attendanceView.siteFilterApplied || [],
+  );
+  const appliedEmployeeCodes = resolveAttendanceAppliedEmployeeCodes(
+    state.attendanceView.employeeFilterApplied || [],
+  );
+  modalState.tab = "site";
+  modalState.siteTokens = uniqAttendanceTokens(
+    appliedSiteCodes.map((siteCode) => `site:${siteCode}`),
+  );
+  modalState.employeeTokens = uniqAttendanceTokens(
+    appliedEmployeeCodes.map((employeeCode) => `employee:${employeeCode}`),
+  );
+  modalState.siteQuery = "";
+  modalState.employeeQuery = "";
+  pruneAttendanceAdvancedFilterEmployeesForSelectedSites();
+  const root = document.createElement("div");
+  root.id = "attendanceAdvancedFilterModalRoot";
+  root.className = "attendance-advanced-filter-root";
+  document.body.appendChild(root);
+  syncBodyScrollLocks();
+  renderAttendanceAdvancedFilterModal();
 }
 
 function getAttendancePickerRoleGroupLabel(item = null) {
@@ -118101,6 +118742,10 @@ function bindUiEvents() {
         );
         if (confirmOpen) {
           closeConfirmDialog();
+          return;
+        }
+        if ($("#attendanceAdvancedFilterModalRoot")) {
+          closeAttendanceAdvancedFilterModal();
           return;
         }
         closeSheet();
