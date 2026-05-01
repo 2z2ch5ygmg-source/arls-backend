@@ -83293,6 +83293,194 @@ body.auth-view-active #authView {
   }
 }
 
+@media (max-width: 760px) {
+  #view-attendance[data-attendance-section="daily"] {
+    padding: 18px 16px 88px !important;
+  }
+
+  #view-attendance .attendance-workspace-head {
+    display: grid !important;
+    gap: 12px !important;
+  }
+
+  #view-attendance .attendance-workspace-head .workspace-head-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    width: 100% !important;
+  }
+
+  #view-attendance .attendance-workspace-head .workspace-head-actions .btn {
+    min-width: 0 !important;
+    padding: 0 12px !important;
+    white-space: nowrap !important;
+  }
+
+  #view-attendance .attendance-workspace-head .workspace-head-actions .btn:last-child {
+    grid-column: 1 / -1 !important;
+  }
+
+  #view-attendance .attendance-manager-info-bar {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 10px !important;
+    min-height: 0 !important;
+    padding: 14px !important;
+  }
+
+  #view-attendance .attendance-manager-info-copy {
+    grid-template-columns: 24px minmax(0, 1fr) !important;
+    align-items: flex-start !important;
+    font-size: 13px !important;
+    line-height: 1.45 !important;
+  }
+
+  #view-attendance #attendanceManagerInfoText {
+    overflow-wrap: anywhere !important;
+    word-break: keep-all !important;
+  }
+
+  #view-attendance .attendance-manager-info-side {
+    justify-content: flex-start !important;
+    gap: 14px !important;
+    font-size: 13px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpis {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpi {
+    grid-template-columns: 54px minmax(0, 1fr) !important;
+    min-height: 86px !important;
+    padding: 14px 16px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpi-icon {
+    width: 46px !important;
+    height: 46px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpi-icon svg,
+  #view-attendance .attendance-daily-ref-kpi-icon .attendance-daily-ref-pack-icon {
+    width: 42px !important;
+    height: 42px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpi-copy {
+    gap: 4px !important;
+    min-width: 0 !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpi-copy span,
+  #view-attendance .attendance-daily-ref-kpi-copy em,
+  #view-attendance .attendance-daily-ref-kpi-copy strong,
+  #view-attendance .attendance-daily-ref-kpi-copy strong small {
+    white-space: nowrap !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpi-copy span {
+    font-size: 14px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpi-copy strong {
+    font-size: 24px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-block-head {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    padding: 14px 16px 12px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-inline-stats {
+    gap: 12px !important;
+    font-size: 13px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-head-link {
+    white-space: nowrap !important;
+  }
+
+  #view-attendance .attendance-daily-ref-table-card {
+    min-width: 0 !important;
+  }
+
+  #view-attendance .attendance-daily-ref-table-wrap {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  #view-attendance .attendance-daily-ref-table {
+    min-width: 720px !important;
+    table-layout: auto !important;
+  }
+
+  #view-attendance .attendance-daily-ref-table th,
+  #view-attendance .attendance-daily-ref-table td {
+    height: 52px !important;
+    padding: 0 12px !important;
+    white-space: nowrap !important;
+  }
+
+  #view-attendance .attendance-daily-ref-employee {
+    grid-template-columns: 34px minmax(108px, 1fr) !important;
+  }
+
+  #view-attendance .attendance-daily-ref-employee-copy strong,
+  #view-attendance .attendance-daily-ref-employee-copy em {
+    white-space: nowrap !important;
+  }
+
+  #view-attendance[data-attendance-section="period"] {
+    padding: 18px 16px 88px !important;
+  }
+
+  #view-attendance[data-attendance-section="period"] #attendanceWorkspaceTabs,
+  #view-attendance[data-attendance-section="period"]
+    #attendanceOpsToolbar
+    .attendance-ops-toolbar-main {
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+  }
+
+  #view-attendance[data-attendance-section="period"] #attendanceWorkspaceTabs::-webkit-scrollbar,
+  #view-attendance[data-attendance-section="period"]
+    #attendanceOpsToolbar
+    .attendance-ops-toolbar-main::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  #view-attendance[data-attendance-section="period"]
+    #attendanceOpsToolbar
+    .attendance-ops-toolbar-main {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+  }
+
+  #view-attendance[data-attendance-section="period"]
+    #attendanceCalendarPanel.is-attendance-v2-calendar
+    #attendanceCalendarSummaryStrip {
+    display: flex !important;
+    gap: 10px !important;
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+  }
+
+  #view-attendance[data-attendance-section="period"]
+    #attendanceCalendarPanel.is-attendance-v2-calendar
+    #attendanceCalendarSummaryStrip::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  #view-attendance[data-attendance-section="period"]
+    #attendanceCalendarPanel.is-attendance-v2-calendar
+    .attendance-calendar-summary-chip {
+    min-width: 148px !important;
+  }
+}
+
 /* 2026-05-01 home operational metrics clipping guard */
 #view-home .home-metric-tiles:not(.home-metric-tiles-compact) {
   align-items: stretch !important;
@@ -85791,6 +85979,146 @@ body.reports-finance-submit-route
 
   #view-attendance .attendance-daily-ref-main {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  #view-attendance[data-attendance-section="daily"] {
+    padding: 18px 16px 88px !important;
+  }
+
+  #view-attendance .attendance-workspace-head {
+    display: grid !important;
+    gap: 12px !important;
+  }
+
+  #view-attendance .attendance-workspace-head .workspace-head-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    width: 100% !important;
+  }
+
+  #view-attendance .attendance-workspace-head .workspace-head-actions .btn {
+    min-width: 0 !important;
+    padding: 0 12px !important;
+    white-space: nowrap !important;
+  }
+
+  #view-attendance .attendance-workspace-head .workspace-head-actions .btn:last-child {
+    grid-column: 1 / -1 !important;
+  }
+
+  #view-attendance .attendance-manager-info-bar {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 10px !important;
+    min-height: 0 !important;
+    padding: 14px !important;
+  }
+
+  #view-attendance .attendance-manager-info-copy {
+    grid-template-columns: 24px minmax(0, 1fr) !important;
+    align-items: flex-start !important;
+    font-size: 13px !important;
+    line-height: 1.45 !important;
+  }
+
+  #view-attendance #attendanceManagerInfoText {
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+  }
+
+  #view-attendance .attendance-manager-info-side {
+    justify-content: flex-start !important;
+    gap: 14px !important;
+    font-size: 13px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpis {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpi {
+    grid-template-columns: 54px minmax(0, 1fr) !important;
+    min-height: 86px !important;
+    padding: 14px 16px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpi-icon {
+    width: 46px !important;
+    height: 46px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpi-icon svg,
+  #view-attendance .attendance-daily-ref-kpi-icon .attendance-daily-ref-pack-icon {
+    width: 42px !important;
+    height: 42px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpi-copy {
+    gap: 4px !important;
+    min-width: 0 !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpi-copy span,
+  #view-attendance .attendance-daily-ref-kpi-copy em,
+  #view-attendance .attendance-daily-ref-kpi-copy strong,
+  #view-attendance .attendance-daily-ref-kpi-copy strong small {
+    white-space: nowrap !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpi-copy span {
+    font-size: 14px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-kpi-copy strong {
+    font-size: 24px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-block-head {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    padding: 14px 16px 12px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-inline-stats {
+    gap: 12px !important;
+    font-size: 13px !important;
+  }
+
+  #view-attendance .attendance-daily-ref-head-link {
+    white-space: nowrap !important;
+  }
+
+  #view-attendance .attendance-daily-ref-table-card {
+    min-width: 0 !important;
+  }
+
+  #view-attendance .attendance-daily-ref-table-wrap {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  #view-attendance .attendance-daily-ref-table {
+    min-width: 720px !important;
+    table-layout: auto !important;
+  }
+
+  #view-attendance .attendance-daily-ref-table th,
+  #view-attendance .attendance-daily-ref-table td {
+    height: 52px !important;
+    padding: 0 12px !important;
+    white-space: nowrap !important;
+  }
+
+  #view-attendance .attendance-daily-ref-employee {
+    grid-template-columns: 34px minmax(108px, 1fr) !important;
+  }
+
+  #view-attendance .attendance-daily-ref-employee-copy strong,
+  #view-attendance .attendance-daily-ref-employee-copy em {
+    white-space: nowrap !important;
   }
 }
 
