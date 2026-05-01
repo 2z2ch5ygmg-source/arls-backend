@@ -90027,6 +90027,8 @@ function renderAttendanceWorkspaceHeader() {
   renderAttendanceManagerInfoBar();
   renderAttendanceDailyDateDisplay();
   renderAttendanceDailyStatusChips();
+  renderAttendancePeriodMonthPresets();
+  renderAttendancePeriodStatusChips();
 }
 
 function getAttendanceDailyQuickFilterConfig() {
@@ -90077,6 +90079,107 @@ function renderAttendanceDailyStatusChips() {
         <button
           type="button"
           class="attendance-daily-status-chip${activeValue === item.value ? " is-active" : ""}"
+          data-action="attendance-status-chip"
+          data-value="${escapeHtml(item.value)}"
+          aria-pressed="${activeValue === item.value ? "true" : "false"}"
+        >${escapeHtml(item.label)}</button>
+      `,
+    )
+    .join("");
+}
+
+function getAttendancePeriodQuickFilterConfig() {
+  return [
+    { value: "all", label: "전체" },
+    { value: "late", label: "지각" },
+    { value: "early_leave", label: "조퇴" },
+    { value: "missing_in", label: "미출근" },
+    { value: "missing_out", label: "미퇴근" },
+    { value: "correction_pending", label: "정정대기" },
+  ];
+}
+
+function ensureAttendancePeriodStatusChipsHost() {
+  const toolbar = $("#attendanceToolbarCalendarFields");
+  if (!(toolbar instanceof HTMLElement)) return null;
+  let host = $("#attendancePeriodStatusChips");
+  if (!(host instanceof HTMLElement)) {
+    host = document.createElement("div");
+    host.id = "attendancePeriodStatusChips";
+    host.className = "attendance-period-status-chips hidden";
+    host.setAttribute("role", "tablist");
+    host.setAttribute("aria-label", "기간별 출퇴근 상태 빠른 필터");
+    toolbar.appendChild(host);
+  }
+  return host;
+}
+
+function ensureAttendancePeriodMonthPresetsHost() {
+  const toolbar = $("#attendanceToolbarCalendarFields");
+  if (!(toolbar instanceof HTMLElement)) return null;
+  let host = $("#attendancePeriodMonthPresets");
+  if (!(host instanceof HTMLElement)) {
+    host = document.createElement("div");
+    host.id = "attendancePeriodMonthPresets";
+    host.className = "attendance-period-month-presets hidden";
+    toolbar.appendChild(host);
+  }
+  return host;
+}
+
+function renderAttendancePeriodMonthPresets() {
+  const host = ensureAttendancePeriodMonthPresetsHost();
+  if (!(host instanceof HTMLElement)) return;
+  const section = getAttendanceWorkspaceSection();
+  const periodMode = normalizeAttendancePeriodMode(
+    state.attendanceView?.periodMode || "list",
+  );
+  const visible = section === "period" && periodMode === "calendar";
+  host.classList.toggle("hidden", !visible);
+  host.setAttribute("aria-hidden", visible ? "false" : "true");
+  if (!visible) {
+    host.innerHTML = "";
+    return;
+  }
+  const presets = [
+    { preset: "current", label: "이번 달" },
+    { preset: "previous", label: "직전 월" },
+    { preset: "next", label: "다음 월" },
+  ];
+  host.innerHTML = presets
+    .map(
+      (item) => `
+        <button
+          type="button"
+          class="attendance-period-month-preset"
+          data-action="attendance-period-month-preset"
+          data-preset="${escapeHtml(item.preset)}"
+        >${escapeHtml(item.label)}</button>
+      `,
+    )
+    .join("");
+}
+
+function renderAttendancePeriodStatusChips() {
+  const host = ensureAttendancePeriodStatusChipsHost();
+  if (!(host instanceof HTMLElement)) return;
+  const section = getAttendanceWorkspaceSection();
+  const visible = section === "period";
+  host.classList.toggle("hidden", !visible);
+  host.setAttribute("aria-hidden", visible ? "false" : "true");
+  if (!visible) {
+    host.innerHTML = "";
+    return;
+  }
+  const activeValue = normalizeAttendanceStatusFilter(
+    state.attendanceView?.statusFilter || "all",
+  );
+  host.innerHTML = getAttendancePeriodQuickFilterConfig()
+    .map(
+      (item) => `
+        <button
+          type="button"
+          class="attendance-period-status-chip${activeValue === item.value ? " is-active" : ""}"
           data-action="attendance-status-chip"
           data-value="${escapeHtml(item.value)}"
           aria-pressed="${activeValue === item.value ? "true" : "false"}"
@@ -90184,6 +90287,8 @@ function renderAttendanceWorkspaceTabs() {
         button.setAttribute("aria-pressed", active ? "true" : "false");
       });
   }
+  renderAttendancePeriodMonthPresets();
+  renderAttendancePeriodStatusChips();
   const shellCard = $("#attendanceShellTopCard");
   if (shellCard instanceof HTMLElement) {
     shellCard.dataset.section = section;
@@ -90372,14 +90477,17 @@ function renderAttendanceCalendarSummaryStrip(summary = null) {
   ];
   items.forEach((item) => {
     const chip = document.createElement("span");
+    const unit = item.label === "정정 대기" ? "건" : "명";
     chip.className = "attendance-calendar-summary-chip";
     chip.dataset.tone = item.tone || "neutral";
     chip.innerHTML = `
-      <span class="attendance-calendar-summary-label">
+      <span class="attendance-calendar-summary-icon" aria-hidden="true">
         ${buildArlsAttendanceIconSvg(item.icon || "attendance-clock")}
-        <span>${item.label}</span>
       </span>
-      <strong>${Math.max(0, Number(item.value || 0))}</strong>
+      <span class="attendance-calendar-summary-copy">
+        <span class="attendance-calendar-summary-label">${item.label}</span>
+        <strong>${Math.max(0, Number(item.value || 0))}<small>${unit}</small></strong>
+      </span>
     `;
     target.appendChild(chip);
   });
@@ -113291,6 +113399,7 @@ function bindUiEvents() {
         attendanceStatusV2SelectedKey = null;
         state.attendanceView.selectedManagerRowKey = "";
         renderAttendanceDailyStatusChips();
+        renderAttendancePeriodStatusChips();
         renderAttendanceFilterMeta();
         runActionSafely(
           loadAttendanceView({ force: true }),
@@ -113624,6 +113733,38 @@ function bindUiEvents() {
         const direction = Number(actionEl.dataset.direction || 0);
         const nextDate = new Date(meta.year, meta.monthIndex + direction, 1);
         state.attendanceView.calendarMonth = toMonthKey(nextDate);
+        persistAttendanceManagerPrefs();
+        syncAttendanceManagerFilterInputs();
+        actionEl.disabled = true;
+        actionEl.setAttribute("aria-busy", "true");
+        runActionSafely(
+          loadAttendanceView({ force: true }),
+          "월간 출퇴근 기록 조회 중 오류가 발생했습니다.",
+        ).finally(() => {
+          actionEl.disabled = false;
+          actionEl.setAttribute("aria-busy", "false");
+        });
+        return;
+      }
+
+      if (action === "attendance-period-month-preset") {
+        if (!state.attendanceView) {
+          state.attendanceView = createInitialAttendanceViewState();
+        }
+        const currentMonth =
+          normalizeMonthKey(state.attendanceView.calendarMonth || "") ||
+          toMonthKey(new Date());
+        const preset = String(actionEl.dataset.preset || "current").trim();
+        const nextMonth =
+          preset === "previous"
+            ? shiftMonthKey(currentMonth, -1)
+            : preset === "next"
+              ? shiftMonthKey(currentMonth, 1)
+              : toMonthKey(new Date());
+        state.attendanceView.calendarMonth = nextMonth || currentMonth;
+        state.schedule.month = state.attendanceView.calendarMonth;
+        attendanceStatusV2SelectedKey = null;
+        state.attendanceView.selectedManagerRowKey = "";
         persistAttendanceManagerPrefs();
         syncAttendanceManagerFilterInputs();
         actionEl.disabled = true;

@@ -3946,6 +3946,43 @@ body:has(#authView:not(.hidden)) #app {
 
 @media (max-width: 1380px) {
   #view-attendance[data-attendance-section="period"]
+    #attendanceOpsToolbar
+    .attendance-ops-toolbar-main {
+    flex-wrap: wrap !important;
+    row-gap: 10px !important;
+    overflow: visible !important;
+  }
+
+  #view-attendance[data-attendance-section="period"]
+    #attendanceOpsToolbar
+    .attendance-filter-cluster-period {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+  }
+
+  #view-attendance[data-attendance-section="period"]
+    #attendanceToolbarCalendarFields {
+    flex-wrap: wrap !important;
+    row-gap: 10px !important;
+  }
+
+  #view-attendance[data-attendance-section="period"]
+    #attendancePeriodModeInlineTabs {
+    margin-left: 0 !important;
+  }
+
+  #view-attendance[data-attendance-section="period"]
+    #attendancePeriodStatusChips {
+    flex: 0 0 auto !important;
+  }
+
+  #view-attendance[data-attendance-section="period"]
+    #attendanceOpsToolbar
+    .attendance-filter-cluster-shared {
+    margin-left: auto !important;
+  }
+
+  #view-attendance[data-attendance-section="period"]
     #attendanceCalendarPanel.is-attendance-v2-calendar
     #attendanceCalendarSummaryStrip {
     grid-template-columns: repeat(3, minmax(150px, 1fr)) !important;
@@ -84226,10 +84263,10 @@ body.auth-view-active #authView {
 #view-attendance[data-attendance-section="period"]
   #attendancePeriodModeInlineTabs
   .attendance-inline-mode-tab {
-  min-width: 92px !important;
+  min-width: 86px !important;
   height: 44px !important;
   min-height: 44px !important;
-  padding: 0 18px !important;
+  padding: 0 14px !important;
   border: 0 !important;
   border-left: 1px solid #e5e7eb !important;
   border-radius: 0 !important;
@@ -84576,7 +84613,390 @@ body.auth-view-active #authView {
   height: 58% !important;
 }
 
+/* 2026-05-01 attendance period topbar reference alignment */
+#view-attendance[data-attendance-section="period"] > .attendance-workspace-head {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 18px !important;
+  padding-bottom: 18px !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  > .attendance-workspace-head
+  .workspace-head-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+}
+
+#view-attendance[data-attendance-section="period"] #attendanceOpsToolbar {
+  padding: 18px 0 0 !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendanceOpsToolbar
+  .attendance-ops-toolbar-main {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  overflow: visible !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendanceOpsToolbar
+  .attendance-filter-cluster {
+  display: flex !important;
+  align-items: center !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendanceOpsToolbar
+  .attendance-filter-cluster-period {
+  flex: 1 1 auto !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendanceOpsToolbar
+  .attendance-filter-cluster-shared {
+  flex: 0 0 auto !important;
+}
+
+#view-attendance[data-attendance-section="period"] #attendanceToolbarStatusFields,
+#view-attendance[data-attendance-section="period"] #attendanceToolbarListFields {
+  display: none !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendanceToolbarCalendarFields {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  flex-wrap: nowrap !important;
+}
+
+#view-attendance[data-attendance-section="period"][data-attendance-period-mode="calendar"]
+  #attendancePeriodListControls,
+#view-attendance[data-attendance-section="period"][data-attendance-period-mode="list"]
+  #attendancePeriodCalendarControls,
+#view-attendance[data-attendance-section="period"] #attendancePeriodListControls.hidden,
+#view-attendance[data-attendance-section="period"] #attendancePeriodCalendarControls.hidden,
+#view-attendance[data-attendance-section="period"] #attendancePeriodMonthPresets.hidden,
+#view-attendance[data-attendance-section="period"] #attendancePeriodStatusChips.hidden {
+  display: none !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendancePeriodCalendarControls,
+#view-attendance[data-attendance-section="period"]
+  #attendancePeriodListControls {
+  order: 1 !important;
+  flex: 0 0 auto !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+#view-attendance[data-attendance-section="period"][data-attendance-period-mode="calendar"]
+  #attendancePeriodCalendarControls,
+#view-attendance[data-attendance-section="period"][data-attendance-period-mode="list"]
+  #attendancePeriodListControls {
+  display: flex !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendancePeriodCalendarControls
+  .attendance-ops-field-month {
+  order: 2 !important;
+  display: block !important;
+  flex: 0 0 140px !important;
+  width: 140px !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendancePeriodCalendarControls
+  .attendance-ops-field-month
+  > span {
+  display: none !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendancePeriodCalendarControls
+  .attendance-month-nav {
+  display: contents !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendancePeriodCalendarControls
+  .attendance-month-nav
+  .btn[data-direction="-1"] {
+  order: 1 !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendancePeriodCalendarControls
+  .attendance-month-nav
+  .btn[data-direction="1"] {
+  order: 3 !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendancePeriodCalendarControls
+  input[type="month"] {
+  width: 140px !important;
+  min-width: 140px !important;
+  height: 44px !important;
+  padding: 0 14px !important;
+  border: 1px solid #dbe3ec !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #111827 !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  text-align: center !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendancePeriodMonthPresets {
+  order: 2 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  flex: 0 0 auto !important;
+  gap: 6px !important;
+  margin-left: 8px !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  .attendance-period-month-preset {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 44px !important;
+  min-width: 76px !important;
+  padding: 0 14px !important;
+  border: 1px solid #dbe3ec !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #111827 !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendancePeriodStatusChips {
+  order: 3 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
+  height: 44px !important;
+  margin-left: 8px !important;
+  border: 1px solid #dbe3ec !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  background: #fff !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  .attendance-period-status-chip {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 42px !important;
+  min-width: 62px !important;
+  padding: 0 14px !important;
+  border: 0 !important;
+  border-right: 1px solid #e5e7eb !important;
+  border-radius: 0 !important;
+  background: #fff !important;
+  color: #111827 !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  .attendance-period-status-chip:last-child {
+  border-right: 0 !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  .attendance-period-status-chip.is-active {
+  background: #fff7ed !important;
+  color: #fb4b14 !important;
+  box-shadow: inset 0 0 0 1px rgba(251, 75, 20, 0.24) !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendancePeriodModeInlineTabs {
+  order: 4 !important;
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendanceAdvancedFilterTrigger {
+  flex: 0 0 auto !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendancePeriodModeInlineTabs
+  .attendance-inline-mode-tab
+  .arls-attendance-icon,
+#view-attendance[data-attendance-section="period"]
+  #attendanceAdvancedFilterTrigger
+  .arls-attendance-icon {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendanceCalendarPanel.is-attendance-v2-calendar
+  .attendance-grid-head {
+  display: none !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendanceCalendarPanel.is-attendance-v2-calendar
+  .attendance-calendar-summary-chip {
+  display: grid !important;
+  grid-template-columns: 48px minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 14px !important;
+  min-height: 82px !important;
+  padding: 14px 18px !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendanceCalendarPanel.is-attendance-v2-calendar
+  .attendance-calendar-summary-icon {
+  display: grid !important;
+  place-items: center !important;
+  width: 48px !important;
+  height: 48px !important;
+  color: #111827 !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendanceCalendarPanel.is-attendance-v2-calendar
+  .attendance-calendar-summary-icon
+  .arls-attendance-icon {
+  width: 44px !important;
+  height: 44px !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendanceCalendarPanel.is-attendance-v2-calendar
+  .attendance-calendar-summary-copy {
+  display: grid !important;
+  min-width: 0 !important;
+  gap: 5px !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendanceCalendarPanel.is-attendance-v2-calendar
+  .attendance-calendar-summary-label {
+  display: block !important;
+  color: #111827 !important;
+  font-size: 14px !important;
+  line-height: 18px !important;
+  font-weight: 800 !important;
+  white-space: nowrap !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendanceCalendarPanel.is-attendance-v2-calendar
+  .attendance-calendar-summary-copy
+  strong {
+  display: inline-flex !important;
+  align-items: baseline !important;
+  gap: 2px !important;
+  color: #111827 !important;
+  font-size: 24px !important;
+  line-height: 1.08 !important;
+  font-weight: 850 !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendanceCalendarPanel.is-attendance-v2-calendar
+  .attendance-calendar-summary-copy
+  strong
+  small {
+  color: inherit !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+  font-weight: 800 !important;
+}
+
+#view-attendance[data-attendance-section="period"]
+  #attendanceCalendarPanel.is-attendance-v2-calendar
+  .attendance-calendar-summary-chip[data-tone="danger"]
+  .attendance-calendar-summary-copy
+  strong,
+#view-attendance[data-attendance-section="period"]
+  #attendanceCalendarPanel.is-attendance-v2-calendar
+  .attendance-calendar-summary-chip[data-tone="warn"]
+  .attendance-calendar-summary-copy
+  strong,
+#view-attendance[data-attendance-section="period"]
+  #attendanceCalendarPanel.is-attendance-v2-calendar
+  .attendance-calendar-summary-chip[data-tone="accent"]
+  .attendance-calendar-summary-copy
+  strong {
+  color: #fb4b14 !important;
+}
+
 @media (max-width: 1380px) {
+  #view-attendance[data-attendance-section="period"]
+    #attendanceOpsToolbar
+    .attendance-ops-toolbar-main {
+    flex-wrap: wrap !important;
+    row-gap: 10px !important;
+    overflow: visible !important;
+  }
+
+  #view-attendance[data-attendance-section="period"]
+    #attendanceOpsToolbar
+    .attendance-filter-cluster-period {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+  }
+
+  #view-attendance[data-attendance-section="period"]
+    #attendanceToolbarCalendarFields {
+    flex-wrap: wrap !important;
+    row-gap: 10px !important;
+  }
+
+  #view-attendance[data-attendance-section="period"]
+    #attendancePeriodModeInlineTabs {
+    margin-left: 0 !important;
+  }
+
+  #view-attendance[data-attendance-section="period"]
+    #attendancePeriodStatusChips {
+    flex: 0 0 auto !important;
+  }
+
+  #view-attendance[data-attendance-section="period"]
+    #attendanceOpsToolbar
+    .attendance-filter-cluster-shared {
+    margin-left: auto !important;
+  }
+
   #view-attendance[data-attendance-section="period"]
     #attendanceCalendarPanel.is-attendance-v2-calendar
     #attendanceCalendarSummaryStrip {
