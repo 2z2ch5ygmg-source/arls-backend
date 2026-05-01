@@ -90883,7 +90883,7 @@ function renderAttendanceStatsWorkspace(rows = [], { loading = false } = {}) {
     },
     {
       scope: "staff-ratio",
-      label: "근무 적법 비율",
+      label: "근무 직원 비율",
       action: "attendance-switch-stats-scope",
     },
   ];
