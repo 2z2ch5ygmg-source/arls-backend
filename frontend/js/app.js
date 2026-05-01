@@ -247,22 +247,37 @@ const VIEW_SNAPSHOT_STORAGE_PREFIX = "rg-arls-view-snapshot:";
 const VIEW_SNAPSHOT_DEFAULT_MAX_BYTES = 1024 * 1024;
 const VIEW_SNAPSHOT_EMPLOYEES_MAX_BYTES = 800000;
 const VIEW_SNAPSHOT_PERSIST_DEBOUNCE_MS = 140;
+const SCHEDULE_FAST_RESTORE_TTL_MS = 5 * 60 * 1000;
+const SCHEDULE_LITE_STORAGE_PREFIX = "rg-arls-schedule-lite:";
+const SCHEDULE_UPLOAD_LANDING_STORAGE_PREFIX =
+  "rg-arls-schedule-upload-landing:";
 const VIEW_PREWARM_DELAY_MS = 1500;
 const VIEW_PREWARM_CONCURRENCY = 1;
 const TENANT_CHECK_DEBOUNCE_MS = 320;
 const TENANT_CHECK_REQUEST_TIMEOUT_MS = 4500;
 const TENANT_CODE_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 const GEO_ACCURACY_WARN_METERS = 120;
+const HOME_LOCATION_FAST_OPTIONS = {
+  enableHighAccuracy: false,
+  maximumAge: 180000,
+  timeout: 3000,
+};
 const HOME_LOCATION_OPTIONS = {
   enableHighAccuracy: true,
-  maximumAge: 15000,
-  timeout: 9000,
+  maximumAge: 60000,
+  timeout: 5000,
 };
 const HOME_LOCATION_RETRY_OPTIONS = {
   enableHighAccuracy: false,
-  maximumAge: 120000,
-  timeout: 15000,
+  maximumAge: 300000,
+  timeout: 4000,
 };
+const HOME_LOCATION_WATCH_OPTIONS = {
+  enableHighAccuracy: true,
+  maximumAge: 5000,
+  timeout: 10000,
+};
+const HOME_GEOFENCE_CACHE_TTL_MS = 5 * 60 * 1000;
 const HOME_WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
 const SCHEDULE_WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
 const SCHEDULE_MONTH_WEEKDAY_LABELS = [
@@ -321,9 +336,10 @@ const IN_APP_NOTIFICATION_CACHE_KEY = "rg-arls-in-app-notifications";
 const SITE_WIFI_SSID_CACHE_KEY = "rg-arls-site-wifi-ssid-cache";
 const IN_APP_NOTIFICATION_LIMIT = 30;
 const HOME_SHIFT_META = {
-  day: { label: "근무", time: "09:00-18:00", pill: "day" },
+  day: { label: "근무", time: "09:00 - 18:00", pill: "day" },
   overtime: { label: "초과근무", time: "초과근무", pill: "day" },
-  night: { label: "야간", time: "18:00-09:00", pill: "night" },
+  night: { label: "야간", time: "18:00 - 09:00", pill: "night" },
+  mixed: { label: "주야", time: "10:00 - 08:00", pill: "mixed" },
   off: { label: "휴무", time: "휴무", pill: "off" },
   holiday: { label: "공휴일", time: "공휴일", pill: "holiday" },
 };
@@ -747,6 +763,8 @@ let pendingHomeDataRefresh = null;
 let pendingHomeBriefingDeferredRefresh = null;
 let pendingLeaveViewPresenterRefresh = null;
 let pendingScheduleViewPresenterRefresh = null;
+let scheduleFastWarmupTimer = 0;
+let scheduleFastWarmupSignature = "";
 const ROADMAP_ITEMS_P1 = [
   {
     code: "correction-request",
@@ -993,7 +1011,7 @@ function createInitialAttendanceViewState() {
     rangeEnd: today,
     rangePreset: "today",
     workspaceSection: "daily",
-    periodMode: "list",
+    periodMode: "calendar",
     statsScope: "attendance",
     statsAttendanceMetric: "rate",
     statsStaffMetric: "weekday",
@@ -1276,6 +1294,8 @@ function createInitialScheduleState() {
     employees: [],
     templateRows: [],
     templatesFetchedAt: 0,
+    templateListFilter: "all",
+    templateListSearch: "",
     uploadLanding: createInitialScheduleUploadLandingState(),
     importMappingProfile: null,
     importMappingProfileFetchedAt: 0,
@@ -1638,6 +1658,9 @@ function createInitialReportsState() {
     financeDownloadSelectedSiteCodes: [],
     financeDownloadPage: 1,
     financeDownloadPageSize: 10,
+    financeDownloadSearch: "",
+    financeDownloadStatusFilter: "all",
+    financeDownloadDetailOpen: false,
     supportStep: "overview",
     month: toMonthKey(new Date()),
     appleStatus: null,
@@ -2106,10 +2129,13 @@ const homeAttendanceCheckRuntime = {
   siteMarker: null,
   userMarker: null,
   circle: null,
+  geofenceCache: new Map(),
 };
 
 const homeMiniMapRuntime = {
   entries: new WeakMap(),
+  watchId: null,
+  watchProvider: "",
 };
 
 let scheduleDataProvider = null;
@@ -4144,6 +4170,101 @@ function formatScheduleBoardItemTimeLabel(item = {}) {
   );
 }
 
+function formatHomeClockToken(value = "") {
+  const match = String(value ?? "")
+    .trim()
+    .match(/(\d{1,2}):([0-5]\d)/);
+  if (!match) return "";
+  return `${String(Number(match[1])).padStart(2, "0")}:${match[2]}`;
+}
+
+function formatHomeTimeRange(startValue = "", endValue = "") {
+  const start = formatHomeClockToken(startValue);
+  const end = formatHomeClockToken(endValue);
+  return start && end ? `${start} - ${end}` : "";
+}
+
+function extractHomeTimeRangeLabel(value = "") {
+  const matches = Array.from(
+    String(value ?? "").matchAll(/(?:^|[^\d])(\d{1,2}):([0-5]\d)(?=$|[^\d])/g),
+  ).map((match) => `${String(Number(match[1])).padStart(2, "0")}:${match[2]}`);
+  if (matches.length >= 2) {
+    return `${matches[0]} - ${matches[1]}`;
+  }
+  return "";
+}
+
+function getHomeShiftMetaTimeLabel(shiftType = "") {
+  const normalized = normalizeShiftType(shiftType);
+  const meta = HOME_SHIFT_META[normalized] || null;
+  if (!meta) return "";
+  return extractHomeTimeRangeLabel(meta.time) || meta.time || "";
+}
+
+function resolveHomePersonalScheduleLabel(personal = {}, todayEntry = null) {
+  const explicitRange =
+    formatHomeTimeRange(
+      personal?.start_time ||
+        personal?.shift_start_time ||
+        personal?.scheduled_start_time ||
+        personal?.work_start_time ||
+        personal?.next_shift_start_time ||
+        personal?.shift_start_at ||
+        personal?.start_at ||
+        todayEntry?.start_time ||
+        todayEntry?.shift_start_time ||
+        todayEntry?.scheduled_start_time ||
+        todayEntry?.startTime ||
+        todayEntry?.shiftStartAt,
+      personal?.end_time ||
+        personal?.shift_end_time ||
+        personal?.scheduled_end_time ||
+        personal?.work_end_time ||
+        personal?.next_shift_end_time ||
+        personal?.shift_end_at ||
+        personal?.end_at ||
+        todayEntry?.end_time ||
+        todayEntry?.shift_end_time ||
+        todayEntry?.scheduled_end_time ||
+        todayEntry?.endTime ||
+        todayEntry?.shiftEndAt,
+    ) || "";
+  if (explicitRange) return explicitRange;
+
+  const rawLabel = String(
+    personal?.next_shift_label ||
+      personal?.shift_label ||
+      personal?.schedule_label ||
+      personal?.today_shift_label ||
+      todayEntry?.schedule_display_time ||
+      todayEntry?.shift_label ||
+      "",
+  ).trim();
+  const labelRange = extractHomeTimeRangeLabel(rawLabel);
+  if (labelRange) return labelRange;
+
+  const labelKey = rawLabel.toLowerCase();
+  if (
+    labelKey.includes("주야") ||
+    labelKey.includes("day_night") ||
+    labelKey.includes("day-night") ||
+    labelKey.includes("mixed")
+  ) {
+    return getHomeShiftMetaTimeLabel("mixed") || "-";
+  }
+  if (labelKey.includes("야간") || labelKey.includes("night")) {
+    return getHomeShiftMetaTimeLabel("night") || "-";
+  }
+  if (labelKey.includes("주간") || labelKey.includes("day")) {
+    return getHomeShiftMetaTimeLabel("day") || "-";
+  }
+
+  const metaRange = getHomeShiftMetaTimeLabel(
+    personal?.shift_type || todayEntry?.shiftType || todayEntry?.shift_type || "",
+  );
+  return metaRange || rawLabel || "-";
+}
+
 function normalizeScheduleBoardItem(item = {}) {
   const shiftType = normalizeShiftType(item?.shift_type || "");
   const displayType = resolveScheduleDisplayType(item);
@@ -5036,6 +5157,178 @@ function getScheduleCacheKey(month, tenantCode) {
   return `${providerMode}:${tenant}:${normalizedMonth}`;
 }
 
+function clearSessionStorageEntriesByPrefix(prefix = "") {
+  if (!hasSessionStorageSupport()) return;
+  const normalizedPrefix = String(prefix || "").trim();
+  if (!normalizedPrefix) return;
+  try {
+    const keys = [];
+    for (let index = 0; index < window.sessionStorage.length; index += 1) {
+      const key = String(window.sessionStorage.key(index) || "").trim();
+      if (key.startsWith(normalizedPrefix)) {
+        keys.push(key);
+      }
+    }
+    keys.forEach((key) => {
+      window.sessionStorage.removeItem(key);
+    });
+  } catch {
+    // no-op
+  }
+}
+
+function buildScheduleLiteStorageKey(month, tenantCode) {
+  const cacheKey = getScheduleCacheKey(month, tenantCode);
+  if (!cacheKey) return "";
+  return `${SCHEDULE_LITE_STORAGE_PREFIX}${encodeURIComponent(cacheKey)}`;
+}
+
+function readStoredScheduleLiteCache(month, tenantCode) {
+  if (!hasSessionStorageSupport()) return null;
+  const storageKey = buildScheduleLiteStorageKey(month, tenantCode);
+  if (!storageKey) return null;
+  try {
+    const raw = window.sessionStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const cachedAt = Number(parsed?.cachedAt || 0);
+    if (
+      !Number.isFinite(cachedAt) ||
+      Date.now() - cachedAt > SCHEDULE_FAST_RESTORE_TTL_MS
+    ) {
+      window.sessionStorage.removeItem(storageKey);
+      return null;
+    }
+    return {
+      rows: Array.isArray(parsed?.rows) ? parsed.rows : [],
+      employees: Array.isArray(parsed?.employees) ? parsed.employees : [],
+      days: Array.isArray(parsed?.days) ? parsed.days : [],
+      metrics:
+        parsed?.metrics && typeof parsed.metrics === "object"
+          ? parsed.metrics
+          : null,
+      cachedAt,
+    };
+  } catch {
+    try {
+      window.sessionStorage.removeItem(storageKey);
+    } catch {
+      // no-op
+    }
+    return null;
+  }
+}
+
+function writeStoredScheduleLiteCache(month, tenantCode, payload = {}) {
+  if (!hasSessionStorageSupport()) return false;
+  const storageKey = buildScheduleLiteStorageKey(month, tenantCode);
+  if (!storageKey) return false;
+  const record = {
+    rows: Array.isArray(payload?.rows) ? payload.rows : [],
+    employees: Array.isArray(payload?.employees) ? payload.employees : [],
+    days: Array.isArray(payload?.days) ? payload.days : [],
+    metrics:
+      payload?.metrics && typeof payload.metrics === "object"
+        ? payload.metrics
+        : null,
+    cachedAt: Number(payload?.cachedAt || Date.now()) || Date.now(),
+  };
+  try {
+    window.sessionStorage.setItem(storageKey, JSON.stringify(record));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function setScheduleLiteCacheEntry(month, tenantCode, payload = {}) {
+  const cacheKey = getScheduleCacheKey(month, tenantCode);
+  if (!cacheKey) return;
+  if (!(state.schedule.liteCacheByMonth instanceof Map)) {
+    state.schedule.liteCacheByMonth = new Map();
+  }
+  const normalizedPayload = {
+    rows: Array.isArray(payload?.rows) ? payload.rows : [],
+    employees: Array.isArray(payload?.employees) ? payload.employees : [],
+    days: Array.isArray(payload?.days) ? payload.days : [],
+    metrics:
+      payload?.metrics && typeof payload.metrics === "object"
+        ? payload.metrics
+        : null,
+    cachedAt: Number(payload?.cachedAt || Date.now()) || Date.now(),
+  };
+  state.schedule.liteCacheByMonth.set(cacheKey, normalizedPayload);
+  writeStoredScheduleLiteCache(month, tenantCode, normalizedPayload);
+}
+
+function buildScheduleUploadLandingStorageKey(
+  mode = SCHEDULE_UPLOAD_MODE_BASE,
+  tenantCode = "",
+) {
+  const normalizedMode =
+    normalizeScheduleUploadWorkspaceMode(mode) === SCHEDULE_UPLOAD_MODE_HQ
+      ? "hq"
+      : "base";
+  const normalizedTenant = ensureScheduleTenantCode(tenantCode || "");
+  return `${SCHEDULE_UPLOAD_LANDING_STORAGE_PREFIX}${normalizedMode}:${encodeURIComponent(normalizedTenant || "default")}`;
+}
+
+function readStoredScheduleUploadLanding(mode = SCHEDULE_UPLOAD_MODE_BASE) {
+  if (!hasSessionStorageSupport()) return null;
+  const storageKey = buildScheduleUploadLandingStorageKey(
+    mode,
+    getScheduleTenantValue(),
+  );
+  if (!storageKey) return null;
+  try {
+    const raw = window.sessionStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const loadedAt = Number(parsed?.loadedAt || 0);
+    if (
+      !Number.isFinite(loadedAt) ||
+      Date.now() - loadedAt > SCHEDULE_FAST_RESTORE_TTL_MS
+    ) {
+      window.sessionStorage.removeItem(storageKey);
+      return null;
+    }
+    return {
+      data: parsed?.data && typeof parsed.data === "object" ? parsed.data : null,
+      loadedAt,
+    };
+  } catch {
+    try {
+      window.sessionStorage.removeItem(storageKey);
+    } catch {
+      // no-op
+    }
+    return null;
+  }
+}
+
+function writeStoredScheduleUploadLanding(
+  mode = SCHEDULE_UPLOAD_MODE_BASE,
+  payload = null,
+  loadedAt = Date.now(),
+) {
+  if (!hasSessionStorageSupport()) return false;
+  const storageKey = buildScheduleUploadLandingStorageKey(
+    mode,
+    getScheduleTenantValue(),
+  );
+  if (!storageKey) return false;
+  const record = {
+    data: payload && typeof payload === "object" ? payload : null,
+    loadedAt: Number(loadedAt || Date.now()) || Date.now(),
+  };
+  try {
+    window.sessionStorage.setItem(storageKey, JSON.stringify(record));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function invalidateScheduleCache() {
   if (!(state.schedule.liteCacheByMonth instanceof Map)) {
     state.schedule.liteCacheByMonth = new Map();
@@ -5044,9 +5337,10 @@ function invalidateScheduleCache() {
   }
   if (!(state.schedule.cacheByMonth instanceof Map)) {
     state.schedule.cacheByMonth = new Map();
-    return;
+  } else {
+    state.schedule.cacheByMonth.clear();
   }
-  state.schedule.cacheByMonth.clear();
+  clearSessionStorageEntriesByPrefix(SCHEDULE_LITE_STORAGE_PREFIX);
 }
 
 function invalidateScheduleMonthCache(month, tenantCode) {
@@ -5056,6 +5350,14 @@ function invalidateScheduleMonthCache(month, tenantCode) {
   }
   if (cacheKey && state.schedule.cacheByMonth instanceof Map) {
     state.schedule.cacheByMonth.delete(cacheKey);
+  }
+  const storageKey = buildScheduleLiteStorageKey(month, tenantCode);
+  if (storageKey && hasSessionStorageSupport()) {
+    try {
+      window.sessionStorage.removeItem(storageKey);
+    } catch {
+      // no-op
+    }
   }
 }
 
@@ -5106,7 +5408,7 @@ function syncScheduleCurrentMonthCaches(month, tenantCode) {
     rows,
     cachedAt: Date.now(),
   });
-  state.schedule.liteCacheByMonth.set(cacheKey, {
+  setScheduleLiteCacheEntry(normalizedMonth, normalizedTenant, {
     rows,
     employees,
     days,
@@ -5199,19 +5501,16 @@ async function refreshScheduleBoardLiteInBackground({ force = true } = {}) {
   });
 
   if (currentLiteSignature === nextLiteSignature) {
-    state.schedule.liteCacheByMonth.set(
-      getScheduleCacheKey(month, tenantCode),
-      {
-        rows: liteRows,
-        employees: liteEmployees,
-        days: liteDays,
-        metrics:
-          liteBundle?.metrics && typeof liteBundle.metrics === "object"
-            ? liteBundle.metrics
-            : null,
-        cachedAt: Date.now(),
-      },
-    );
+    setScheduleLiteCacheEntry(month, tenantCode, {
+      rows: liteRows,
+      employees: liteEmployees,
+      days: liteDays,
+      metrics:
+        liteBundle?.metrics && typeof liteBundle.metrics === "object"
+          ? liteBundle.metrics
+          : null,
+      cachedAt: Date.now(),
+    });
     return false;
   }
 
@@ -5283,16 +5582,13 @@ async function refreshScheduleBoardLiteInBackground({ force = true } = {}) {
       rows: detailedRows,
       cachedAt: Date.now(),
     });
-    state.schedule.liteCacheByMonth.set(
-      getScheduleCacheKey(month, tenantCode),
-      {
-        rows: detailedRows,
-        employees: nextEmployees,
-        days: nextBoardDays,
-        metrics: null,
-        cachedAt: Date.now(),
-      },
-    );
+    setScheduleLiteCacheEntry(month, tenantCode, {
+      rows: detailedRows,
+      employees: nextEmployees,
+      days: nextBoardDays,
+      metrics: null,
+      cachedAt: Date.now(),
+    });
     return false;
   }
 
@@ -5733,6 +6029,26 @@ async function loadMonthlyScheduleLiteWithCache({
     }
   }
 
+  if (!force) {
+    const stored = readStoredScheduleLiteCache(normalizedMonth, normalizedTenant);
+    const storedAt = Number(stored?.cachedAt || 0);
+    const isStoredFresh =
+      Number.isFinite(storedAt) &&
+      Date.now() - storedAt < SCHEDULE_FAST_RESTORE_TTL_MS;
+    if (isStoredFresh) {
+      setScheduleLiteCacheEntry(normalizedMonth, normalizedTenant, stored);
+      return {
+        rows: Array.isArray(stored?.rows) ? stored.rows : [],
+        employees: Array.isArray(stored?.employees) ? stored.employees : [],
+        days: Array.isArray(stored?.days) ? stored.days : [],
+        metrics:
+          stored?.metrics && typeof stored.metrics === "object"
+            ? stored.metrics
+            : null,
+      };
+    }
+  }
+
   const provider = getScheduleDataProvider();
   const fetched = await provider.listMonthlySchedulesLite({
     month: normalizedMonth,
@@ -5768,7 +6084,7 @@ async function loadMonthlyScheduleLiteWithCache({
         : null,
     cachedAt: Date.now(),
   };
-  state.schedule.liteCacheByMonth.set(cacheKey, payload);
+  setScheduleLiteCacheEntry(normalizedMonth, normalizedTenant, payload);
   return {
     rows,
     employees,
@@ -6028,6 +6344,63 @@ function getHomeSiteDisplayName(site) {
   return code || name || "현장";
 }
 
+function buildHomePersonalSiteFallback(personal = {}) {
+  if (!personal || typeof personal !== "object") return null;
+  const siteCode = String(personal.site_code || "")
+    .trim()
+    .toUpperCase();
+  if (!siteCode) return null;
+  const latitude = Number(personal.site_latitude ?? personal.latitude);
+  const longitude = Number(personal.site_longitude ?? personal.longitude);
+  const radius = Number(personal.site_radius_meters ?? personal.radius_meters);
+  return {
+    id: String(personal.site_id || personal.siteId || siteCode).trim() || siteCode,
+    site_code: siteCode,
+    site_name: String(personal.site_name || siteCode).trim() || siteCode,
+    latitude: Number.isFinite(latitude) ? latitude : null,
+    longitude: Number.isFinite(longitude) ? longitude : null,
+    radius_meters: Number.isFinite(radius) && radius > 0 ? radius : 120,
+    _source: "home_personal_summary",
+  };
+}
+
+function syncHomePersonalSiteFromBriefing(personal = {}) {
+  const fallbackSite = buildHomePersonalSiteFallback(personal);
+  if (!fallbackSite) return false;
+  const sites = Array.isArray(state.home.sites) ? state.home.sites.slice() : [];
+  const index = sites.findIndex(
+    (site) =>
+      String(site?.site_code || "")
+        .trim()
+        .toUpperCase() === fallbackSite.site_code,
+  );
+  if (index >= 0) {
+    const current = sites[index] || {};
+    sites[index] = {
+      ...fallbackSite,
+      ...current,
+      latitude: isValidLatLng(Number(current.latitude), Number(current.longitude))
+        ? current.latitude
+        : fallbackSite.latitude,
+      longitude: isValidLatLng(Number(current.latitude), Number(current.longitude))
+        ? current.longitude
+        : fallbackSite.longitude,
+      radius_meters:
+        Number.isFinite(Number(current.radius_meters)) &&
+        Number(current.radius_meters) > 0
+          ? current.radius_meters
+          : fallbackSite.radius_meters,
+    };
+  } else {
+    sites.unshift(fallbackSite);
+  }
+  state.home.sites = sites;
+  if (!String(state.home.selectedSiteCode || "").trim()) {
+    state.home.selectedSiteCode = fallbackSite.site_code;
+  }
+  return true;
+}
+
 function renderHomeSitePickerSummary() {
   const pickerBtn = $("#homeSitePickerBtn");
   const metaEl = $("#homeSelectedSiteMeta");
@@ -6133,7 +6506,11 @@ function renderHomeWorkStatusCard() {
   const hasStatusSite = Boolean(statusSiteLabel);
   const siteDisplayText = hasSelectedSite
     ? getHomeSiteDisplayName(selectedSite)
-    : statusSiteLabel || "현장 선택 필요";
+    : statusSiteLabel ||
+      (siteEl instanceof HTMLElement
+        ? String(siteEl.dataset.homeWorkFallbackSite || "").trim()
+        : "") ||
+      "현장 선택 필요";
   const hasPendingRequest = Boolean(state.attendanceRequest.pendingId);
   const todayStatus = normalizeHomeAttendanceStatus(
     state.home.todayStatus || "",
@@ -6166,7 +6543,13 @@ function renderHomeWorkStatusCard() {
     detailText = "근무 현장를 선택하면 오늘 상태가 갱신됩니다.";
   }
 
-  const showStatusPill = todayStatus !== "NONE";
+  const keepStatusPillWhenNone =
+    pillEl instanceof HTMLElement &&
+    pillEl.dataset.homeWorkShowWhenNone === "true";
+  const useScheduleTimeOnly =
+    shiftTimeEl instanceof HTMLElement &&
+    shiftTimeEl.dataset.homeWorkScheduleValue === "true";
+  const showStatusPill = todayStatus !== "NONE" || keepStatusPillWhenNone;
   if (heroEl) {
     heroEl.classList.remove("is-missing", "is-working", "is-done");
     if (todayStatus === "NONE") {
@@ -6198,15 +6581,22 @@ function renderHomeWorkStatusCard() {
     siteEl.textContent = siteDisplayText;
   }
   if (shiftTimeEl) {
+    const fallbackSchedule =
+      shiftTimeEl instanceof HTMLElement
+        ? String(shiftTimeEl.dataset.homeWorkFallbackSchedule || "").trim()
+        : "";
+    const metaSchedule = getHomeShiftMetaTimeLabel(shiftType) || shiftMeta.time;
     if (todayStatus === "DONE") {
       shiftTimeEl.textContent = `출근 ${checkInTime} · 퇴근 ${checkOutTime}`;
     } else if (todayStatus === "WORKING") {
       shiftTimeEl.textContent =
         checkInTime !== "-" ? `출근 ${checkInTime}` : "출근중";
     } else if (!hasSelectedSite && !hasStatusSite) {
-      shiftTimeEl.textContent = "-";
+      shiftTimeEl.textContent = fallbackSchedule || "-";
     } else {
-      shiftTimeEl.textContent = `${shiftMeta.label} · ${shiftMeta.time}`;
+      shiftTimeEl.textContent = useScheduleTimeOnly
+        ? fallbackSchedule || metaSchedule || "-"
+        : `${shiftMeta.label} · ${shiftMeta.time}`;
     }
   }
 }
@@ -6572,6 +6962,16 @@ function resolveHomeQueueIndicatorTone(row = null, fallbackTone = "neutral") {
   return normalizeHomeVisualTone(fallbackTone);
 }
 
+function buildHomeRealtimeQueueIconSvg() {
+  return `
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3.2" y="4" width="11.6" height="9.2" rx="2.2" stroke="currentColor" stroke-width="1.55"/>
+      <path d="M6.1 7.05h5.8M6.1 9.25h3.7" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/>
+      <path d="M12.25 2.85h2.2M13.35 1.75v2.2" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"/>
+    </svg>
+  `;
+}
+
 function buildHomeQueueListHtml(
   rows = [],
   {
@@ -6606,12 +7006,31 @@ function buildHomeQueueListHtml(
             row?.pillTone || row?.pill_tone || "neutral",
           ).trim();
           const visualTone = resolveHomeQueueIndicatorTone(row, pillTone);
+          const rowIconKey = String(row?.iconKey || row?.icon_key || "").trim();
+          const isRealtime = Boolean(
+            row?.isRealtime || row?.is_realtime || row?.channel === "soc",
+          );
+          const titleOnly = Boolean(
+            row?.titleOnly ||
+              row?.title_only ||
+              row?.compactTitleOnly ||
+              row?.compact_title_only,
+          );
           const actionAttrs = buildHomeActionAttrs({
             route: row?.route,
             view: row?.view,
           });
           const isClickable = Boolean(actionAttrs);
           const rowTag = isClickable ? "button" : "div";
+          const rowClass = [
+            "home-queue-row",
+            isClickable ? "is-clickable" : "",
+            rowIconKey ? "has-icon" : "",
+            isRealtime ? "is-realtime" : "",
+            titleOnly ? "is-title-only" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
           const metaCluster =
             valueLabel || pillLabel
               ? `
@@ -6629,23 +7048,39 @@ function buildHomeQueueListHtml(
                 </span>
               `
               : "";
+          const iconMarkup = isRealtime
+            ? buildHomeRealtimeQueueIconSvg()
+            : buildAzureTopbarIconSvg(rowIconKey);
+          const iconClass = [
+            "home-queue-row-icon",
+            `is-${escapeHomeHtml(visualTone)}`,
+            isRealtime ? "is-realtime-icon" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          const leadingVisual = rowIconKey || isRealtime
+            ? `<span class="${iconClass}" aria-hidden="true">${iconMarkup}</span>`
+            : `<span class="home-queue-row-indicator is-${escapeHomeHtml(visualTone)}" aria-hidden="true"></span>`;
+          const subtitleText = titleOnly
+            ? ""
+            : String(row?.subtitle || "").trim();
           return `
             <li>
               <${rowTag}
-                class="home-queue-row${isClickable ? " is-clickable" : ""}"
+                class="${escapeHomeHtml(rowClass)}"
                 ${isClickable ? `type="button" ${actionAttrs}` : ""}
               >
               <div class="home-queue-copy">
                 <div class="home-queue-header-row">
                   <div class="home-queue-title-row">
-                    <span class="home-queue-row-indicator is-${escapeHomeHtml(visualTone)}" aria-hidden="true"></span>
+                    ${leadingVisual}
                     <strong>${escapeHomeHtml(row?.title || "-")}</strong>
                   </div>
                   ${metaCluster}
                 </div>
                 ${
-                  String(row?.subtitle || "").trim()
-                    ? `<span class="home-queue-subtitle">${escapeHomeHtml(row?.subtitle || "")}</span>`
+                  subtitleText
+                    ? `<span class="home-queue-subtitle">${escapeHomeHtml(subtitleText)}</span>`
                     : ""
                 }
               </div>
@@ -8442,14 +8877,7 @@ function buildHomeV3HqKpiCard({
 
 function buildHomeV3SiteAttendanceRank(rows = []) {
   const safeRows = (Array.isArray(rows) ? rows : []).filter(Boolean);
-  const getRate = (row) =>
-    clampHomePercent(Number(row.attendance_rate ?? row.rate ?? row.value ?? 0));
-  const items = safeRows
-    .slice()
-    .sort((a, b) => getRate(b) - getRate(a))
-    .slice(0, 8);
-
-  if (!items.length) {
+  if (!safeRows.length) {
     return '<div class="home-v3-compact-zero">표시할 지점 출근 현황이 없습니다.</div>';
   }
 
@@ -8461,60 +8889,62 @@ function buildHomeV3SiteAttendanceRank(rows = []) {
     return 0;
   };
 
-  const pageCount = Math.max(1, Math.ceil(safeRows.length / 8));
+  const bodyRowsHtml = safeRows
+    .map((row) => {
+      const total = getCount(row, [
+        "scheduled",
+        "scheduled_count",
+        "total_count",
+        "total",
+        "headcount",
+      ]);
+      const present = getCount(row, [
+        "present",
+        "present_count",
+        "completed_count",
+        "completed",
+        "normal_count",
+        "normal",
+      ]);
+      const missing = getCount(row, [
+        "missing",
+        "missing_count",
+        "absent_count",
+        "absent",
+      ]);
+      const late = getCount(row, ["late", "late_count"]);
+      const rate = clampHomePercent(
+        total > 0
+          ? (present / total) * 100
+          : Number(row.attendance_rate ?? row.rate ?? row.value ?? 0),
+      );
+      return `
+        <div class="home-v3-site-attendance-row" role="row">
+          <strong role="cell">${escapeHomeHtml(row.site_name || row.label || row.name || "-")}</strong>
+          <span role="cell">${escapeHomeHtml(String(total))}명</span>
+          <span role="cell">${escapeHomeHtml(String(present))}명</span>
+          <span role="cell">${escapeHomeHtml(String(missing))}명</span>
+          <span role="cell">${escapeHomeHtml(String(late))}명</span>
+          <b role="cell">${escapeHomeHtml(`${Math.round(rate)}%`)}</b>
+        </div>
+      `;
+    })
+    .join("");
+
   return `
-    <div class="home-v3-site-rank">
-      <div class="home-v3-site-rank-meta">
-        <span>총 ${escapeHomeHtml(String(safeRows.length || items.length))}개 지점</span>
-        <span>상위 8개 표시</span>
+    <div class="home-v3-site-rank home-v3-site-attendance-ref">
+      <div class="home-v3-site-attendance-table" role="table" aria-label="지점별 출근 현황">
+        <div class="home-v3-site-attendance-head" role="row">
+          <span role="columnheader">지점</span>
+          <span role="columnheader">전체 인원</span>
+          <span role="columnheader">출근 완료</span>
+          <span role="columnheader">미출근</span>
+          <span role="columnheader">지각</span>
+          <span role="columnheader">출근율</span>
+        </div>
+        ${bodyRowsHtml}
       </div>
-      <div class="home-v3-site-rank-head" aria-hidden="true">
-        <span>순위</span>
-        <span>지점명</span>
-        <span>출근률</span>
-        <span>정상</span>
-        <span>지각</span>
-        <span>미출근</span>
-      </div>
-      <div class="home-v3-site-rank-body">
-        ${items
-          .map((row, index) => {
-            const rate = getRate(row);
-            const present = getCount(row, [
-              "normal_count",
-              "present_count",
-              "completed_count",
-              "completed",
-              "normal",
-              "present",
-            ]);
-            const late = getCount(row, ["late_count", "late"]);
-            const missing = getCount(row, [
-              "missing_count",
-              "absent_count",
-              "missing",
-              "absent",
-            ]);
-            return `
-              <div class="home-v3-site-rank-row">
-                <span>${index + 1}</span>
-                <strong>${escapeHomeHtml(row.site_name || row.label || row.name || "-")}</strong>
-                <span class="home-v3-site-rank-rate">
-                  <i style="width:${Math.max(4, Math.round(rate))}%"></i>
-                  <b>${escapeHomeHtml(`${Math.round(rate)}%`)}</b>
-                </span>
-                <span>${escapeHomeHtml(String(present))}</span>
-                <span>${escapeHomeHtml(String(late))}</span>
-                <span>${escapeHomeHtml(String(missing))}</span>
-              </div>
-            `;
-          })
-          .join("")}
-      </div>
-      <div class="home-v3-site-rank-foot">
-        <span>더 많은 지점은 ‘상세 보기’에서 확인하세요.</span>
-        <b>&lt; 1 / ${escapeHomeHtml(String(pageCount))} &gt;</b>
-      </div>
+      <p class="home-v3-site-attendance-note">* 출근율 = 출근 완료 / 전체 인원 · 총 ${escapeHomeHtml(String(safeRows.length))}개 지점</p>
     </div>
   `;
 }
@@ -8543,6 +8973,184 @@ function buildHomeV3RequestRows(rows = []) {
         .join("")}
     </ul>
   `;
+}
+
+function buildHomeV3NoticeRows(rows = []) {
+  const items = (Array.isArray(rows) ? rows : []).filter(Boolean).slice(0, 3);
+  if (!items.length) {
+    return `
+      <div class="home-v3-notice-ref-list">
+        <button class="home-v3-notice-ref-row is-empty" type="button" data-action="drawer-open-route" data-route="${escapeHomeHtml(ROUTE_FEATURE_NOTICES)}">
+          <span class="home-v3-notice-ref-dot" aria-hidden="true"></span>
+          <strong>등록된 공지사항이 없습니다.</strong>
+          <time>-</time>
+        </button>
+      </div>
+    `;
+  }
+  return `
+    <div class="home-v3-notice-ref-list">
+      ${items
+        .map((row) => {
+          const title = String(row?.title || "-").trim() || "-";
+          const dateLabel =
+            _compactHomeDateLabel(row?.published_at || row?.created_at || "") ||
+            formatHomeBriefingDate(row?.published_at || row?.created_at || "") ||
+            "-";
+          return `
+            <button class="home-v3-notice-ref-row" type="button" data-action="drawer-open-route" data-route="${escapeHomeHtml(row?.route || ROUTE_FEATURE_NOTICES)}">
+              <span class="home-v3-notice-ref-dot" aria-hidden="true"></span>
+              <strong>${escapeHomeHtml(title)}</strong>
+              <time>${escapeHomeHtml(dateLabel)}</time>
+            </button>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function getHomeMapCurrentPosition() {
+  const pos = state.home?.position;
+  if (!pos || !isValidLatLng(Number(pos.latitude), Number(pos.longitude))) {
+    return null;
+  }
+  return {
+    latitude: Number(pos.latitude),
+    longitude: Number(pos.longitude),
+  };
+}
+
+function buildHomeMapSitePinContent(label = "근무지") {
+  return `
+    <span class="home-v3-map-site-pin">
+      <span class="home-v3-map-site-pin-head" aria-hidden="true"></span>
+      <span class="home-v3-map-site-label">${escapeHomeHtml(label || "근무지")}</span>
+    </span>
+  `;
+}
+
+function buildHomeMapUserMarkerContent() {
+  return '<span class="home-v3-map-user-marker" aria-label="내 위치"></span>';
+}
+
+function createHomeKakaoMapOverlays(kakaoMaps, map, siteLabel = "근무지") {
+  const siteOverlay =
+    typeof kakaoMaps.CustomOverlay === "function"
+      ? new kakaoMaps.CustomOverlay({
+          map,
+          content: buildHomeMapSitePinContent(siteLabel),
+          xAnchor: 0.5,
+          yAnchor: 1,
+          zIndex: 4,
+        })
+      : new kakaoMaps.Marker({ map, title: siteLabel });
+  const userOverlay =
+    typeof kakaoMaps.CustomOverlay === "function"
+      ? new kakaoMaps.CustomOverlay({
+          content: buildHomeMapUserMarkerContent(),
+          xAnchor: 0.5,
+          yAnchor: 0.5,
+          zIndex: 5,
+        })
+      : new kakaoMaps.Marker({ title: "내 위치" });
+  const circle = new kakaoMaps.Circle({
+    map,
+    clickable: false,
+    strokeColor: "#fb4b14",
+    strokeOpacity: 0.9,
+    strokeWeight: 2,
+    fillColor: "#fb4b14",
+    fillOpacity: 0.18,
+    radius: 120,
+  });
+  return { siteOverlay, userOverlay, circle };
+}
+
+function setKakaoCircleCenter(circle, position) {
+  if (!circle || !position) return false;
+  if (typeof circle.setPosition === "function") {
+    circle.setPosition(position);
+    return true;
+  }
+  if (typeof circle.setCenter === "function") {
+    circle.setCenter(position);
+    return true;
+  }
+  if (typeof circle.setOptions === "function") {
+    circle.setOptions({ center: position, position });
+    return true;
+  }
+  return false;
+}
+
+function extendKakaoBoundsByRadius(bounds, kakaoMaps, latitude, longitude, radius) {
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  const radiusMeters = Number(radius);
+  if (!bounds || !kakaoMaps || !isValidLatLng(lat, lng)) return;
+  bounds.extend(new kakaoMaps.LatLng(lat, lng));
+  if (!Number.isFinite(radiusMeters) || radiusMeters <= 0) return;
+  const latDelta = radiusMeters / 111320;
+  const lngDenominator = 111320 * Math.cos((lat * Math.PI) / 180);
+  const lngDelta = radiusMeters / Math.max(Math.abs(lngDenominator), 1);
+  bounds.extend(new kakaoMaps.LatLng(lat + latDelta, lng + lngDelta));
+  bounds.extend(new kakaoMaps.LatLng(lat - latDelta, lng - lngDelta));
+}
+
+function syncHomeKakaoGeofenceMap({
+  map,
+  kakaoMaps,
+  site,
+  overlays,
+  position = getHomeMapCurrentPosition(),
+  siteLabel = "",
+  interactive = false,
+} = {}) {
+  if (!map || !kakaoMaps || !site || !overlays) return false;
+  const siteLat = Number(site.latitude);
+  const siteLng = Number(site.longitude);
+  if (!isValidLatLng(siteLat, siteLng)) return false;
+
+  const radius = Number(site.radius_meters);
+  const label = siteLabel || getHomeSiteDisplayName(site);
+  const sitePosition = new kakaoMaps.LatLng(siteLat, siteLng);
+  const userPosition =
+    position && isValidLatLng(position.latitude, position.longitude)
+      ? new kakaoMaps.LatLng(Number(position.latitude), Number(position.longitude))
+      : null;
+
+  map.relayout?.();
+  if (typeof map.setDraggable === "function") map.setDraggable(Boolean(interactive));
+  if (typeof map.setZoomable === "function") map.setZoomable(Boolean(interactive));
+
+  if (typeof overlays.siteOverlay.setContent === "function") {
+    overlays.siteOverlay.setContent(buildHomeMapSitePinContent(label));
+  }
+  overlays.siteOverlay.setPosition(sitePosition);
+  overlays.siteOverlay.setMap(map);
+
+  setKakaoCircleCenter(overlays.circle, sitePosition);
+  overlays.circle.setRadius(Number.isFinite(radius) && radius > 0 ? radius : 120);
+  overlays.circle.setMap(map);
+
+  if (userPosition) {
+    overlays.userOverlay.setPosition(userPosition);
+    overlays.userOverlay.setMap(map);
+  } else {
+    overlays.userOverlay.setMap(null);
+  }
+
+  if (userPosition) {
+    const bounds = new kakaoMaps.LatLngBounds();
+    extendKakaoBoundsByRadius(bounds, kakaoMaps, siteLat, siteLng, radius);
+    bounds.extend(userPosition);
+    map.setBounds(bounds);
+  } else {
+    map.setCenter(sitePosition);
+    map.setLevel(estimateKakaoMapLevelByRadius(radius));
+  }
+  return true;
 }
 
 async function renderHomeV3MiniMaps() {
@@ -8577,14 +9185,21 @@ async function renderHomeV3MiniMaps() {
     if (!isValidLatLng(siteLat, siteLng)) return;
 
     const kakaoMaps = window.kakao.maps;
-    const sitePosition = new kakaoMaps.LatLng(siteLat, siteLng);
+    const site = {
+      latitude: siteLat,
+      longitude: siteLng,
+      radius_meters: Number.isFinite(radius) ? radius : 120,
+      site_code: "",
+      site_name: String(host.dataset.siteLabel || "").trim(),
+    };
+    const siteLabel = String(host.dataset.siteLabel || "").trim() || "근무지";
     let entry = homeMiniMapRuntime.entries.get(host);
     if (!entry) {
       const mapNode = document.createElement("div");
       mapNode.className = "home-v3-kakao-map-node";
       host.prepend(mapNode);
       const map = new kakaoMaps.Map(mapNode, {
-        center: sitePosition,
+        center: new kakaoMaps.LatLng(siteLat, siteLng),
         level: estimateKakaoMapLevelByRadius(radius),
         draggable: false,
         scrollwheel: false,
@@ -8593,17 +9208,26 @@ async function renderHomeV3MiniMaps() {
       });
       map.setDraggable(false);
       map.setZoomable(false);
-      entry = { map };
+      entry = {
+        map,
+        overlays: createHomeKakaoMapOverlays(kakaoMaps, map, siteLabel),
+      };
       homeMiniMapRuntime.entries.set(host, entry);
     }
 
-    entry.map.relayout();
-    entry.map.setCenter(sitePosition);
-    entry.map.setLevel(estimateKakaoMapLevelByRadius(radius));
-    entry.map.setCenter(sitePosition);
-    entry.map.setLevel(estimateKakaoMapLevelByRadius(radius));
-
-    host.classList.add("is-kakao-map");
+    if (
+      syncHomeKakaoGeofenceMap({
+        map: entry.map,
+        kakaoMaps,
+        site,
+        overlays: entry.overlays,
+        siteLabel,
+        interactive: false,
+      })
+    ) {
+      host.classList.add("is-kakao-map");
+      host.classList.toggle("has-current-position", Boolean(getHomeMapCurrentPosition()));
+    }
   });
 }
 
@@ -8650,7 +9274,7 @@ function buildHomeV3AttendanceCard({
           <span>${escapeHomeHtml(employeeName)}</span>
           ${radiusLabel ? `<em>${escapeHomeHtml(radiusLabel)}</em>` : ""}
         </div>
-        <div class="home-v3-map-tile" ${mapAttrs}><span class="home-v3-map-fallback-label">${escapeHomeHtml(siteLabel)}</span></div>
+        <button class="home-v3-map-tile" type="button" data-action="home-map" aria-label="현재 위치와 근무지 지도 크게 보기" ${mapAttrs}><span class="home-v3-map-fallback-label">${escapeHomeHtml(siteLabel)}</span></button>
         <div class="home-v3-attendance-meta">
           <span>출근 시간 <b>${escapeHomeHtml(checkInLabel)}</b></span>
           <span>근무지 <b id="homeTodaySite">${escapeHomeHtml(siteLabel)}</b></span>
@@ -8705,19 +9329,66 @@ function buildHomeHqSurfaceHtml(briefing = null) {
     Number(ops?.attendance_rate || 0) ||
       (presentCount / Math.max(1, scheduledCount)) * 100,
   );
-  const noticeRows = buildHomeNoticeQueueRows(briefing, { limit: 3 });
+  const noticeRows = Array.isArray(briefing?.notice_rows)
+    ? briefing.notice_rows.slice(0, 3)
+    : [];
   const siteRows = Array.isArray(briefing?.site_attendance_rows)
     ? briefing.site_attendance_rows
     : [];
   const supportTotal = Number(support.total || 0);
-  const personalSiteLat = Number(personal.site_latitude);
-  const personalSiteLng = Number(personal.site_longitude);
-  const personalSiteRadius = Number(personal.site_radius_meters || 120);
-  const personalSiteLabel = personal.site_name || "SENTRIX 본사";
+  const selectedHomeSite = getSelectedHomeSite();
+  const homeTodayKey = toLocalDateKey(new Date());
+  const personalTodayEntry = (
+    Array.isArray(state.home.weekEntries) ? state.home.weekEntries : []
+  ).find((item) => String(item?.dateKey || item?.date_key || "") === homeTodayKey);
+  const personalSiteLat = Number(
+    personal.site_latitude ??
+      personal.latitude ??
+      selectedHomeSite?.site_latitude ??
+      selectedHomeSite?.latitude,
+  );
+  const personalSiteLng = Number(
+    personal.site_longitude ??
+      personal.longitude ??
+      selectedHomeSite?.site_longitude ??
+      selectedHomeSite?.longitude,
+  );
+  const personalSiteRadius = Number(
+    personal.site_radius_meters ??
+      personal.radius_meters ??
+      selectedHomeSite?.site_radius_meters ??
+      selectedHomeSite?.radius_meters ??
+      120,
+  );
+  const personalSiteLabel =
+    String(
+      personal.site_name ||
+        selectedHomeSite?.site_name ||
+        personal.site_code ||
+        selectedHomeSite?.site_code ||
+        "근무지",
+    ).trim() || "근무지";
   const hqMapAttrs =
     isValidLatLng(personalSiteLat, personalSiteLng)
       ? `data-home-mini-map="true" data-site-lat="${personalSiteLat}" data-site-lng="${personalSiteLng}" data-site-radius="${Number.isFinite(personalSiteRadius) ? personalSiteRadius : 120}" data-site-label="${escapeHomeHtml(personalSiteLabel)}"`
       : "";
+  const personalStatusLabel = formatHomeStatusLabel(
+    personal.today_status || "NONE",
+  );
+  const personalNowLabel = formatAttendanceTime(
+    personal.check_in_at || new Date().toISOString(),
+  );
+  const personalScheduleLabel = resolveHomePersonalScheduleLabel(
+    personal,
+    personalTodayEntry,
+  );
+  const personalWorkSiteLabel =
+    personal.site_name ||
+    selectedHomeSite?.site_name ||
+    personal.site_code ||
+    selectedHomeSite?.site_code ||
+    personalSiteLabel ||
+    "-";
   return `
     <div class="home-v3 home-v3-hq">
       <section class="home-v3-page-head">
@@ -8767,14 +9438,44 @@ function buildHomeHqSurfaceHtml(briefing = null) {
           subtitle: "본사",
           className: "home-v3-work-card",
           bodyHtml: `
-            <div class="home-v3-work-time">
-              <strong>${escapeHomeHtml(formatAttendanceTime(personal.check_in_at || new Date().toISOString()))}</strong>
-              <span>${escapeHomeHtml(formatHomeStatusLabel(personal.today_status || "NONE"))}</span>
+            <div class="home-v3-work-reference-card">
+              <div class="home-v3-work-status-row">
+                <b id="homeWorkStatusPill" class="status-pill status-pill-warn" data-home-work-show-when-none="true">${escapeHomeHtml(personalStatusLabel)}</b>
+                <strong class="home-v3-work-current-time">${escapeHomeHtml(personalNowLabel)}</strong>
+                <span class="home-v3-work-current-note">오늘 기준</span>
+                <span id="homeWorkStatusPrimary" class="sr-only">${escapeHomeHtml(personalStatusLabel)}</span>
+                <span id="homeWorkStatusText" class="sr-only">${escapeHomeHtml(personalStatusLabel)}</span>
+              </div>
+              <div class="home-v3-work-reference-grid">
+                <div class="home-v3-work-info-table" aria-label="근무 정보">
+                  <div class="home-v3-work-info-row">
+                    <span class="home-v3-work-info-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none"><path d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 12.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4Z" stroke="currentColor" stroke-width="1.9"/></svg>
+                    </span>
+                    <span class="home-v3-work-info-label">근무지</span>
+                    <b id="homeTodaySite" data-home-work-fallback-site="${escapeHomeHtml(personalWorkSiteLabel)}">${escapeHomeHtml(personalWorkSiteLabel)}</b>
+                  </div>
+                  <div class="home-v3-work-info-row">
+                    <span class="home-v3-work-info-icon" aria-hidden="true">${buildAzureTopbarIconSvg("clock")}</span>
+                    <span class="home-v3-work-info-label">예정 근무</span>
+                    <b id="homeTodayShiftTime" data-home-work-schedule-value="true" data-home-work-fallback-schedule="${escapeHomeHtml(personalScheduleLabel)}">${escapeHomeHtml(personalScheduleLabel)}</b>
+                  </div>
+                  <div class="home-v3-work-info-row">
+                    <span class="home-v3-work-info-icon" aria-hidden="true">${buildAzureTopbarIconSvg("shield")}</span>
+                    <span class="home-v3-work-info-label">근무 방식</span>
+                    <b>위치 인증</b>
+                  </div>
+                </div>
+                <button class="home-v3-map-tile home-v3-work-map" type="button" data-action="home-map" aria-label="현재 위치와 근무지 지도 크게 보기" ${hqMapAttrs}><span class="home-v3-map-fallback-label">${escapeHomeHtml(personalSiteLabel)}</span></button>
+              </div>
+              <div class="home-v3-work-actions home-cta-grid home-v3-work-reference-actions">
+                <button class="btn btn-primary" type="button" data-action="home-attendance-toggle" id="homeAttendanceToggleBtn">출근하기</button>
+                <button class="btn btn-secondary hidden" type="button" data-action="home-check-in-request" id="homeCheckInRequestBtn">요청하기</button>
+                <button class="btn btn-secondary" type="button" data-action="home-refresh-location" id="homeRefreshLocationBtn">출근 버튼 (재실행)</button>
+                <div id="homePendingRequestBox" class="home-pending-request-box hidden" role="status" aria-live="polite">출근 요청 대기중</div>
+              </div>
+              <p id="homeActionHint" class="muted" role="status" aria-live="polite"></p>
             </div>
-            <div class="home-v3-two-cols"><span>출근 시간 <b>${escapeHomeHtml(formatAttendanceTime(personal.check_in_at || ""))}</b></span><span>근무지 <b>${escapeHomeHtml(personal.site_name || personal.site_code || "-")}</b></span></div>
-            <div class="home-v3-map-tile" ${hqMapAttrs}><span class="home-v3-map-fallback-label">${escapeHomeHtml(personalSiteLabel)}</span></div>
-            <div class="home-v3-work-actions"><button type="button" data-action="home-attendance-toggle" id="homeAttendanceToggleBtn">퇴근하기</button><button type="button" data-action="home-refresh-location" id="homeRefreshLocationBtn">출근 버튼 (재실행)</button><button class="hidden" type="button" data-action="home-check-in-request" id="homeCheckInRequestBtn">요청하기</button></div>
-            <div class="home-cta-grid hidden"><div id="homePendingRequestBox" class="hidden"></div></div><p id="homeActionHint" class="muted"></p>
           `,
         })}
         ${buildHomeV3Card({
@@ -8790,7 +9491,7 @@ function buildHomeHqSurfaceHtml(briefing = null) {
         })}
       </section>
       <section class="home-v3-grid home-v3-grid-hq-bottom">
-        ${buildHomeV3Card({ title: "지점별 출근 현황", subtitle: "오늘", route: ROUTE_ATTENDANCE, bodyHtml: buildHomeV3SiteAttendanceRank(siteRows) })}
+        ${buildHomeV3Card({ title: "지점별 출근 현황", className: "home-v3-site-attendance-card", bodyHtml: buildHomeV3SiteAttendanceRank(siteRows) })}
         ${buildHomeV3Card({
           title: "지원근무 현황",
           subtitle: "전체",
@@ -8804,7 +9505,8 @@ function buildHomeHqSurfaceHtml(briefing = null) {
         })}
         ${buildHomeV3Card({
           title: "공지사항",
-          bodyHtml: buildHomeV3RequestRows(noticeRows.map((row) => ({ ...row, route: ROUTE_FEATURE_NOTICES }))),
+          className: "home-v3-notice-ref-card",
+          bodyHtml: buildHomeV3NoticeRows(noticeRows.map((row) => ({ ...row, route: ROUTE_FEATURE_NOTICES }))),
           actionLabel: "전체 보기",
         })}
       </section>
@@ -10925,6 +11627,129 @@ function renderOpsSummary() {
   renderHomeManagerDashboard();
 }
 
+function normalizeOpsWorkspaceTitle(value = "") {
+  if (value == null || typeof value === "object") return "";
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isGenericOpsWorkspaceTitle(value = "") {
+  const normalized = normalizeOpsWorkspaceTitle(value);
+  if (!normalized) return true;
+  return /^(신규\s*)?(사건|티켓|보고|알림)(\s*(발생|생성|등록))?$/i.test(
+    normalized,
+  );
+}
+
+function stripOpsWorkspaceGenericTitlePrefix(value = "") {
+  const normalized = normalizeOpsWorkspaceTitle(value);
+  if (!normalized) return "";
+  return normalized
+    .replace(
+      /^(신규\s*)?(사건|티켓|보고|알림)\s*(발생|생성|등록)?\s*[:：\-–—|]\s*/i,
+      "",
+    )
+    .replace(
+      /^\[(신규\s*)?(사건|티켓|보고|알림)(\s*(발생|생성|등록))?\]\s*/i,
+      "",
+    )
+    .trim();
+}
+
+function resolveOpsWorkspaceReportTitle(row = {}) {
+  const titleKeys = [
+    "display_title",
+    "displayTitle",
+    "document_title",
+    "documentTitle",
+    "workspace_title",
+    "workspaceTitle",
+    "alarm_title",
+    "alarmTitle",
+    "report_title",
+    "reportTitle",
+    "report_name",
+    "reportName",
+    "report_subject",
+    "reportSubject",
+    "incident_title",
+    "incidentTitle",
+    "ticket_title",
+    "ticketTitle",
+    "alert_title",
+    "alertTitle",
+    "title",
+    "subject",
+    "summary",
+    "name",
+    "body",
+    "content",
+    "report_label",
+    "reportLabel",
+    "ticket_name",
+    "ticketName",
+    "event_name",
+    "eventName",
+  ];
+  const detailKeys = ["message", "detail", "description"];
+  const nestedKeys = [
+    "payload",
+    "data",
+    "meta",
+    "metadata",
+    "raw",
+    "event",
+    "report",
+    "ticket",
+    "attributes",
+    "properties",
+  ];
+  const collectTitleCandidates = (source, keys, depth = 0) => {
+    const seen = new WeakSet();
+    const visit = (node, currentDepth) => {
+      if (!node || typeof node !== "object" || currentDepth > 3) return [];
+      if (seen.has(node)) return [];
+      seen.add(node);
+      const values = [];
+      keys.forEach((key) => {
+        if (!Object.prototype.hasOwnProperty.call(node, key)) return;
+        const normalized = normalizeOpsWorkspaceTitle(node[key]);
+        if (normalized) {
+          const stripped = stripOpsWorkspaceGenericTitlePrefix(normalized);
+          if (stripped && stripped !== normalized) values.push(stripped);
+          values.push(normalized);
+        }
+      });
+      nestedKeys.forEach((key) => {
+        const nested = node[key];
+        if (Array.isArray(nested)) {
+          nested.slice(0, 4).forEach((item) => {
+            values.push(...visit(item, currentDepth + 1));
+          });
+          return;
+        }
+        values.push(...visit(nested, currentDepth + 1));
+      });
+      return values;
+    };
+    return visit(source, depth);
+  };
+  const candidates = [
+    ...collectTitleCandidates(row, titleKeys),
+    ...collectTitleCandidates(row, detailKeys),
+  ];
+  const reportTitle = candidates.find(
+    (candidate) => !isGenericOpsWorkspaceTitle(candidate),
+  );
+  if (reportTitle) return reportTitle;
+  const eventType = normalizeOpsWorkspaceTitle(
+    row?.event_type || row?.eventType || "SOC 이벤트",
+  );
+  const ticket = normalizeOpsWorkspaceTitle(row?.ticket_id || row?.ticketId);
+  return ticket ? `${eventType} #${ticket}` : eventType || "SOC 이벤트";
+}
+
 function buildOpsWorkspaceLogRows() {
   const rows = [];
   const socEvents = Array.isArray(state.integration?.socEvents)
@@ -10936,17 +11761,25 @@ function buildOpsWorkspaceLogRows() {
       row?.received_at || row?.occurred_at || row?.created_at || "",
     ).trim();
     const status = String(row?.status || "pending").trim();
-    const eventType = String(row?.event_type || "SOC 이벤트").trim();
     const ticket = String(row?.ticket_id || "").trim();
     const detail = String(row?.message || row?.detail || "").trim();
+    const reportTitle = resolveOpsWorkspaceReportTitle(row);
     rows.push({
       key,
       channel: "soc",
       at,
-      title: `${eventType}${ticket ? ` #${ticket}` : ""}`,
-      subtitle: `${formatOpsDateTime(at) || "-"} · ${getUiStatusLabel(status)}`,
+      title: reportTitle,
+      subtitle: [formatOpsDateTime(at), getUiStatusLabel(status), ticket ? `#${ticket}` : ""]
+        .filter(Boolean)
+        .join(" · "),
       pill: status || "pending",
-      detail: detail || "상세 메시지 없음",
+      detail:
+      detail && normalizeOpsWorkspaceTitle(detail) !== reportTitle
+          ? detail
+          : "상세 메시지 없음",
+      iconKey: "realtime",
+      isRealtime: true,
+      compactTitleOnly: true,
     });
   });
 
@@ -11595,11 +12428,20 @@ function buildOpsLogRows(target = "") {
     const socRows = Array.isArray(state.integration.socEvents)
       ? state.integration.socEvents
       : [];
-    return socRows.slice(0, 20).map((row) => ({
-      title: `${String(row?.event_type || "SOC 이벤트").trim()} · ${getUiStatusLabel(String(row?.status || "pending").trim())}`,
-      subtitle: `${String(row?.ticket_id || "-")} · ${formatOpsDateTime(row?.received_at || row?.occurred_at || row?.created_at || "") || "-"}`,
-      pill: String(row?.status || "pending").trim(),
-    }));
+    return socRows.slice(0, 20).map((row) => {
+      const status = String(row?.status || "pending").trim();
+      const ticket = String(row?.ticket_id || "").trim();
+      const at = String(
+        row?.received_at || row?.occurred_at || row?.created_at || "",
+      ).trim();
+      return {
+        title: resolveOpsWorkspaceReportTitle(row),
+        subtitle: [ticket ? `#${ticket}` : "", formatOpsDateTime(at) || ""]
+          .filter(Boolean)
+          .join(" · "),
+        pill: status,
+      };
+    });
   }
   if (normalizedTarget === "sheets") {
     const sheetRows = Array.isArray(state.integration.sheetLogs)
@@ -14405,7 +15247,7 @@ function queueScheduleViewPresenterRefresh() {
   if (pendingScheduleViewPresenterRefresh) {
     return null;
   }
-  const task = loadSchedule({ force: false });
+  const task = loadSchedule({ force: false, deferDetailHydration: true });
   pendingScheduleViewPresenterRefresh = task;
   task.finally(() => {
     if (pendingScheduleViewPresenterRefresh === task) {
@@ -14457,13 +15299,15 @@ function applyAppleTenantScopedUiVisibility() {
 
 function getReportsAvailableTabs() {
   const tabs = [];
-  if (canViewReportsFinanceTab()) tabs.push("finance");
   if (canViewReportsFinanceDownloadTab()) tabs.push("finance-download");
+  if (canViewReportsFinanceTab()) tabs.push("finance");
   return tabs.length ? tabs : ["finance"];
 }
 
 function getDefaultReportsViewTab() {
-  return getReportsAvailableTabs()[0] || "finance";
+  const tabs = getReportsAvailableTabs();
+  if (tabs.includes("finance-download")) return "finance-download";
+  return tabs[0] || "finance";
 }
 
 function getReportsMonthValue() {
@@ -14561,7 +15405,7 @@ function isReportsPanelActive(panelName = "") {
   const current = normalizeReportsViewTab(
     state.reports?.viewTab || getDefaultReportsViewTab(),
   );
-  return normalizeReportsViewTab(panelName) === current;
+  return normalizeReportsPanelName(panelName) === current;
 }
 
 function setReportsWizardStep(
@@ -14841,7 +15685,8 @@ function getReportsFinanceDownloadStatusPillClass(status = "") {
   const normalized = String(status || "")
     .trim()
     .toLowerCase();
-  if (normalized === "uploaded") return "status-pill status-pill-success";
+  if (normalized === "uploaded" || normalized === "reuploaded")
+    return "status-pill status-pill-success";
   if (normalized === "stale" || normalized === "review_required")
     return "status-pill status-pill-warning";
   return "status-pill status-pill-neutral";
@@ -14862,7 +15707,8 @@ function getReportsFinanceWorkflowStatusLabel(row = {}) {
   if (status === "reuploaded") return "재업로드됨";
   if (status === "stale") return "재업로드 필요";
   if (status === "review_required") return "검토 필요";
-  return "-";
+  if (row?.uploaded) return "정상";
+  return "미업로드";
 }
 
 function getReportsFinanceDownloadAvailabilityPillClass(
@@ -14871,6 +15717,232 @@ function getReportsFinanceDownloadAvailabilityPillClass(
   return downloadEnabled
     ? "status-pill status-pill-success"
     : "status-pill status-pill-neutral";
+}
+
+function normalizeReportsFinanceDownloadStatusFilter(value = "all") {
+  const normalized = String(value || "all")
+    .trim()
+    .toLowerCase();
+  return ["all", "uploaded", "missing", "stale"].includes(normalized)
+    ? normalized
+    : "all";
+}
+
+function isReportsFinanceDownloadStaleRow(row = {}) {
+  const status = String(row?.status || "")
+    .trim()
+    .toLowerCase();
+  return status === "stale";
+}
+
+function getReportsFinanceDownloadRows() {
+  const workspace =
+    state.reports?.financeDownloadWorkspace &&
+    typeof state.reports.financeDownloadWorkspace === "object"
+      ? state.reports.financeDownloadWorkspace
+      : null;
+  return Array.isArray(workspace?.sites) ? workspace.sites : [];
+}
+
+function getReportsFinanceDownloadFilteredRows(rows = getReportsFinanceDownloadRows()) {
+  const query = String(state.reports?.financeDownloadSearch || "")
+    .trim()
+    .toLowerCase();
+  const filter = normalizeReportsFinanceDownloadStatusFilter(
+    state.reports?.financeDownloadStatusFilter || "all",
+  );
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const uploaded = Boolean(row?.uploaded);
+    const stale = isReportsFinanceDownloadStaleRow(row);
+    if (filter === "uploaded" && !uploaded) return false;
+    if (filter === "missing" && uploaded) return false;
+    if (filter === "stale" && !stale) return false;
+    if (!query) return true;
+    const haystack = [
+      row?.site_name,
+      row?.site_code,
+      row?.status_label,
+      getReportsFinanceWorkflowStatusLabel(row),
+      row?.final_uploaded_by,
+      row?.active_final_filename,
+      getReportsFinanceDownloadNote(row),
+    ]
+      .map((value) => String(value || "").toLowerCase())
+      .join(" ");
+    return haystack.includes(query);
+  });
+}
+
+function formatReportsFinanceDownloadMetric(count = 0, suffix = "개 지점") {
+  const value = Number(count);
+  if (!Number.isFinite(value)) return "-";
+  return `${value.toLocaleString("ko-KR")}${suffix ? ` ${suffix}` : ""}`;
+}
+
+function formatReportsFinanceDownloadRate(count = 0, total = 0) {
+  const numericCount = Number(count);
+  const numericTotal = Number(total);
+  if (!Number.isFinite(numericCount) || !Number.isFinite(numericTotal) || numericTotal <= 0) {
+    return "전체 지점의 -";
+  }
+  const rate = Math.round((numericCount / numericTotal) * 100);
+  return `전체 지점의 ${rate}%`;
+}
+
+function getFiniteFinanceDownloadCount(value, fallback = 0) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(0, numeric);
+}
+
+function formatReportsFinanceIntroCount(value = 0) {
+  const numeric = Number(value);
+  const safeValue = Number.isFinite(numeric) ? Math.max(0, numeric) : 0;
+  return `${safeValue.toLocaleString("ko-KR")}개`;
+}
+
+function formatReportsFinanceIntroSiteCount(value = 0) {
+  const numeric = Number(value);
+  const safeValue = Number.isFinite(numeric) ? Math.max(0, numeric) : 0;
+  return `${safeValue.toLocaleString("ko-KR")}개 지점`;
+}
+
+function formatReportsFinanceIntroDateTime(value = "") {
+  const date = new Date(String(value || ""));
+  if (Number.isNaN(date.getTime())) return "-";
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
+  )} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function renderReportsFinanceDownloadIntroWorkspace({
+  workspace = null,
+  rows = [],
+  totalSiteCount = 0,
+  downloadableCount = 0,
+  normalCount = 0,
+  staleCount = 0,
+  missingCount = 0,
+  loading = false,
+  errorMessage = "",
+} = {}) {
+  const recentBody = $("#financeDownloadIntroRecentBody");
+  setTextContentIfPresent(
+    "#financeDownloadIntroMonth",
+    formatScheduleMonthTitle(workspace?.month || getReportsMonthValue()),
+    "-",
+  );
+  setTextContentIfPresent(
+    "#financeDownloadIntroDownloadable",
+    loading && !rows.length
+      ? "확인 중"
+      : formatReportsFinanceIntroSiteCount(downloadableCount),
+    "-",
+  );
+  setTextContentIfPresent(
+    "#financeDownloadIntroPermission",
+    canViewReportsFinanceDownloadTab() ? "HQ 다운로드 가능" : "권한 없음",
+    "-",
+  );
+  setTextContentIfPresent(
+    "#financeDownloadIntroCheckedAt",
+    loading && !rows.length
+      ? "확인 중"
+      : formatReportsFinanceIntroDateTime(workspace?.generated_at || ""),
+    "-",
+  );
+  setTextContentIfPresent(
+    "#financeDownloadIntroNormal",
+    formatReportsFinanceIntroCount(normalCount),
+    "-",
+  );
+  setTextContentIfPresent(
+    "#financeDownloadIntroStale",
+    formatReportsFinanceIntroCount(staleCount),
+    "-",
+  );
+  setTextContentIfPresent(
+    "#financeDownloadIntroMissing",
+    formatReportsFinanceIntroCount(
+      totalSiteCount > 0 ? missingCount : Math.max(0, rows.length - normalCount),
+    ),
+    "-",
+  );
+
+  if (!(recentBody instanceof HTMLElement)) return;
+  recentBody.innerHTML = "";
+
+  if (loading && !rows.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 3;
+    td.textContent = "최근 업로드를 불러오는 중입니다.";
+    tr.appendChild(td);
+    recentBody.appendChild(tr);
+    return;
+  }
+
+  if (errorMessage && !rows.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 3;
+    td.textContent = errorMessage;
+    tr.appendChild(td);
+    recentBody.appendChild(tr);
+    return;
+  }
+
+  const recentRows = rows
+    .filter((row) => row?.uploaded && row?.final_uploaded_at)
+    .slice()
+    .sort((left, right) => {
+      const leftTime = new Date(String(left?.final_uploaded_at || "")).getTime();
+      const rightTime = new Date(String(right?.final_uploaded_at || "")).getTime();
+      return (
+        (Number.isFinite(rightTime) ? rightTime : 0) -
+        (Number.isFinite(leftTime) ? leftTime : 0)
+      );
+    })
+    .slice(0, 4);
+
+  if (!recentRows.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 3;
+    td.textContent = "최근 업로드된 파일이 없습니다.";
+    tr.appendChild(td);
+    recentBody.appendChild(tr);
+    return;
+  }
+
+  recentRows.forEach((row) => {
+    const tr = document.createElement("tr");
+    const uploadedAt = document.createElement("td");
+    uploadedAt.textContent = formatReportsFinanceIntroDateTime(
+      row.final_uploaded_at,
+    );
+    const site = document.createElement("td");
+    site.textContent =
+      String(row?.site_name || row?.site_code || "-").trim() || "-";
+    const result = document.createElement("td");
+    const pill = document.createElement("span");
+    const isStale = isReportsFinanceDownloadStaleRow(row);
+    pill.className = isStale
+      ? "status-pill status-pill-warning"
+      : "status-pill status-pill-success";
+    pill.textContent = isStale ? "재업로드 필요" : "정상";
+    result.appendChild(pill);
+    tr.append(uploadedAt, site, result);
+    recentBody.appendChild(tr);
+  });
+}
+
+function createFinanceDownloadInlineSvg(pathMarkup = "", className = "") {
+  const span = document.createElement("span");
+  span.className = className;
+  span.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${pathMarkup}</svg>`;
+  return span;
 }
 
 function renderReportsFinanceDownloadWorkspace() {
@@ -14891,13 +15963,20 @@ function renderReportsFinanceDownloadWorkspace() {
     typeof state.reports.financeDownloadWorkspace === "object"
       ? state.reports.financeDownloadWorkspace
       : null;
-  const rows = Array.isArray(workspace?.sites) ? workspace.sites : [];
+  const rows = getReportsFinanceDownloadRows();
+  const filteredRows = getReportsFinanceDownloadFilteredRows(rows);
+  const introView = $("#financeDownloadIntroView");
+  const detailView = $("#financeDownloadDetailView");
+  const detailOpen = Boolean(state.reports.financeDownloadDetailOpen);
   const tableBody = $("#financeDownloadTableBody");
   const summary = $("#financeDownloadSummary");
   const selectionHint = $("#financeDownloadSelectionHint");
   const inlineMeta = panel.querySelector(".reports-finance-inline-meta");
   const downloadBtn = $("#financeDownloadPrimaryBtn");
   const selectAllToggle = $("#financeDownloadSelectAllToggle");
+  const searchInput = $("#financeDownloadSearchInput");
+  const statusFilter = $("#financeDownloadStatusFilter");
+  const pageSizeSelect = $("#financeDownloadPageSizeSelect");
   const pager = $("#financeDownloadPager");
   const pagerSummary = $("#financeDownloadPagerSummary");
   const pagerRange = $("#financeDownloadPagerRange");
@@ -14905,7 +15984,7 @@ function renderReportsFinanceDownloadWorkspace() {
   const loading = Boolean(state.reports.financeDownloadLoading);
   const errorMessage = String(state.reports.financeDownloadError || "").trim();
   const pagination = getWizardPaginationModel(
-    rows,
+    filteredRows,
     createWizardPaginationState({
       page: state.reports.financeDownloadPage,
       pageSize: state.reports.financeDownloadPageSize,
@@ -14914,6 +15993,124 @@ function renderReportsFinanceDownloadWorkspace() {
   state.reports.financeDownloadPage = pagination.page;
   state.reports.financeDownloadPageSize = pagination.pageSize;
   const visibleRows = pagination.visibleItems;
+  const totalSiteCount = Math.max(
+    Number(workspace?.total_site_count || 0),
+    rows.length,
+  );
+  const uploadedCount = getFiniteFinanceDownloadCount(
+    workspace?.uploaded_site_count,
+    rows.filter((row) => Boolean(row?.uploaded)).length,
+  );
+  const staleCount = getFiniteFinanceDownloadCount(
+    workspace?.stale_site_count,
+    rows.filter((row) => isReportsFinanceDownloadStaleRow(row)).length,
+  );
+  const downloadableCount = getFiniteFinanceDownloadCount(
+    workspace?.downloadable_site_count,
+    rows.filter((row) => Boolean(row?.download_enabled)).length,
+  );
+  const normalCount = rows.filter(
+    (row) => Boolean(row?.uploaded) && !isReportsFinanceDownloadStaleRow(row),
+  ).length;
+  const missingCount = getFiniteFinanceDownloadCount(
+    workspace?.missing_site_count,
+    Math.max(0, totalSiteCount - uploadedCount),
+  );
+
+  if (introView instanceof HTMLElement) {
+    introView.classList.toggle("hidden", detailOpen);
+  }
+  if (detailView instanceof HTMLElement) {
+    detailView.classList.toggle("hidden", !detailOpen);
+  }
+
+  renderReportsFinanceDownloadIntroWorkspace({
+    workspace,
+    rows,
+    totalSiteCount,
+    downloadableCount,
+    normalCount,
+    staleCount,
+    missingCount,
+    loading,
+    errorMessage,
+  });
+
+  setTextContentIfPresent(
+    "#financeDownloadMonthDisplay",
+    formatScheduleMonthTitle(workspace?.month || getReportsMonthValue()),
+    "-",
+  );
+
+  setTextContentIfPresent(
+    "#financeDownloadMetricUploaded",
+    formatReportsFinanceDownloadMetric(uploadedCount),
+    "-",
+  );
+  setTextContentIfPresent(
+    "#financeDownloadMetricMissing",
+    formatReportsFinanceDownloadMetric(missingCount),
+    "-",
+  );
+  setTextContentIfPresent(
+    "#financeDownloadMetricStale",
+    formatReportsFinanceDownloadMetric(staleCount),
+    "-",
+  );
+  setTextContentIfPresent(
+    "#financeDownloadMetricUploadedRate",
+    formatReportsFinanceDownloadRate(uploadedCount, totalSiteCount),
+    "-",
+  );
+  setTextContentIfPresent(
+    "#financeDownloadMetricMissingRate",
+    formatReportsFinanceDownloadRate(missingCount, totalSiteCount),
+    "-",
+  );
+  setTextContentIfPresent(
+    "#financeDownloadMetricStaleRate",
+    formatReportsFinanceDownloadRate(staleCount, totalSiteCount),
+    "-",
+  );
+
+  if (
+    searchInput instanceof HTMLInputElement &&
+    searchInput.value !== String(state.reports.financeDownloadSearch || "")
+  ) {
+    searchInput.value = String(state.reports.financeDownloadSearch || "");
+  }
+  if (searchInput instanceof HTMLInputElement) {
+    searchInput.oninput = () => {
+      state.reports.financeDownloadSearch = searchInput.value;
+      state.reports.financeDownloadPage = 1;
+      renderReportsFinanceDownloadWorkspace();
+    };
+  }
+  if (statusFilter instanceof HTMLSelectElement) {
+    const filter = normalizeReportsFinanceDownloadStatusFilter(
+      state.reports.financeDownloadStatusFilter || "all",
+    );
+    if (statusFilter.value !== filter) statusFilter.value = filter;
+    statusFilter.onchange = () => {
+      state.reports.financeDownloadStatusFilter =
+        normalizeReportsFinanceDownloadStatusFilter(statusFilter.value);
+      state.reports.financeDownloadPage = 1;
+      renderReportsFinanceDownloadWorkspace();
+    };
+  }
+  if (pageSizeSelect instanceof HTMLSelectElement) {
+    const pageSizeValue = String(state.reports.financeDownloadPageSize || 10);
+    if (pageSizeSelect.value !== pageSizeValue) {
+      pageSizeSelect.value = pageSizeValue;
+    }
+    pageSizeSelect.onchange = () => {
+      const nextPageSize = Number.parseInt(pageSizeSelect.value || "10", 10);
+      state.reports.financeDownloadPageSize =
+        Number.isFinite(nextPageSize) && nextPageSize > 0 ? nextPageSize : 10;
+      state.reports.financeDownloadPage = 1;
+      renderReportsFinanceDownloadWorkspace();
+    };
+  }
 
   if (summary instanceof HTMLElement) {
     summary.textContent = "";
@@ -14947,7 +16144,7 @@ function renderReportsFinanceDownloadWorkspace() {
     const tr = document.createElement("tr");
     tr.className = "admin-table-empty-row";
     const td = document.createElement("td");
-    td.colSpan = 7;
+    td.colSpan = 10;
     td.textContent = "업로드 현황을 불러오는 중입니다.";
     tr.appendChild(td);
     tableBody.appendChild(tr);
@@ -14958,7 +16155,7 @@ function renderReportsFinanceDownloadWorkspace() {
     const tr = document.createElement("tr");
     tr.className = "admin-table-empty-row";
     const td = document.createElement("td");
-    td.colSpan = 7;
+    td.colSpan = 10;
     td.textContent = errorMessage;
     tr.appendChild(td);
     tableBody.appendChild(tr);
@@ -14969,11 +16166,21 @@ function renderReportsFinanceDownloadWorkspace() {
     const tr = document.createElement("tr");
     tr.className = "admin-table-empty-row";
     const td = document.createElement("td");
-    td.colSpan = 7;
+    td.colSpan = 10;
     td.textContent = "표시할 다운로드 대상이 없습니다.";
     tr.appendChild(td);
     tableBody.appendChild(tr);
     return;
+  }
+
+  if (!visibleRows.length) {
+    const tr = document.createElement("tr");
+    tr.className = "admin-table-empty-row";
+    const td = document.createElement("td");
+    td.colSpan = 10;
+    td.textContent = "검색 조건에 맞는 지점이 없습니다.";
+    tr.appendChild(td);
+    tableBody.appendChild(tr);
   }
 
   visibleRows.forEach((row) => {
@@ -14983,6 +16190,15 @@ function renderReportsFinanceDownloadWorkspace() {
     const tr = document.createElement("tr");
     tr.className = "reports-finance-download-row";
     tr.dataset.siteCode = siteCode;
+
+    const starCell = document.createElement("td");
+    starCell.className = "finance-download-star-cell";
+    starCell.appendChild(
+      createFinanceDownloadInlineSvg(
+        '<path d="m12 3.8 2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6L7.1 19l.9-5.5-4-3.9 5.5-.8L12 3.8Z" />',
+        "finance-download-star-icon",
+      ),
+    );
 
     const siteCell = document.createElement("td");
     const siteMain = document.createElement("div");
@@ -14999,19 +16215,12 @@ function renderReportsFinanceDownloadWorkspace() {
 
     const statusCell = document.createElement("td");
     const statusLabel = getReportsFinanceWorkflowStatusLabel(row);
-    if (statusLabel === "-") {
-      const muted = document.createElement("span");
-      muted.className = "muted";
-      muted.textContent = "-";
-      statusCell.appendChild(muted);
-    } else {
-      const statusPill = document.createElement("span");
-      statusPill.className = getReportsFinanceDownloadStatusPillClass(
-        row?.status,
-      );
-      statusPill.textContent = statusLabel;
-      statusCell.appendChild(statusPill);
-    }
+    const statusPill = document.createElement("span");
+    statusPill.className = getReportsFinanceDownloadStatusPillClass(
+      row?.uploaded ? row?.status || "uploaded" : "",
+    );
+    statusPill.textContent = statusLabel;
+    statusCell.appendChild(statusPill);
 
     const uploadedAtCell = document.createElement("td");
     uploadedAtCell.textContent = row?.final_uploaded_at
@@ -15022,13 +16231,35 @@ function renderReportsFinanceDownloadWorkspace() {
     uploadedByCell.textContent =
       String(row?.final_uploaded_by || "-").trim() || "-";
 
+    const fileCell = document.createElement("td");
+    const fileName = String(row?.active_final_filename || "").trim();
+    if (fileName) {
+      const fileWrap = document.createElement("span");
+      fileWrap.className = "reports-finance-download-file-name";
+      const fileIcon = document.createElement("span");
+      fileIcon.className = "finance-download-excel-icon";
+      fileIcon.textContent = "X";
+      const fileText = document.createElement("span");
+      fileText.textContent = fileName;
+      fileWrap.append(fileIcon, fileText);
+      fileCell.appendChild(fileWrap);
+    } else {
+      fileCell.textContent = "-";
+    }
+
     const downloadCell = document.createElement("td");
     const downloadButton = document.createElement("button");
     downloadButton.type = "button";
-    downloadButton.className = "btn btn-secondary";
+    downloadButton.className = "btn btn-secondary finance-download-row-btn";
     downloadButton.dataset.action = "reports-finance-download-run";
     downloadButton.dataset.siteCode = siteCode;
-    downloadButton.textContent = "다운로드";
+    downloadButton.appendChild(
+      createFinanceDownloadInlineSvg(
+        '<path d="M12 4v10" /><path d="m8 10 4 4 4-4" /><path d="M5 19h14" />',
+        "finance-download-row-btn-icon",
+      ),
+    );
+    downloadButton.append(document.createTextNode("다운로드"));
     downloadButton.disabled = !row?.download_enabled;
     if (!row?.download_enabled) {
       downloadButton.title =
@@ -15039,26 +16270,38 @@ function renderReportsFinanceDownloadWorkspace() {
     const noteCell = document.createElement("td");
     noteCell.textContent = getReportsFinanceDownloadNote(row) || "-";
 
+    const menuCell = document.createElement("td");
+    menuCell.className = "finance-download-menu-cell";
+    menuCell.appendChild(
+      createFinanceDownloadInlineSvg(
+        '<circle cx="12" cy="5" r="1.2" fill="currentColor" /><circle cx="12" cy="12" r="1.2" fill="currentColor" /><circle cx="12" cy="19" r="1.2" fill="currentColor" />',
+        "finance-download-kebab-icon",
+      ),
+    );
+
     tr.append(
+      starCell,
       siteCell,
       uploadCell,
       statusCell,
       uploadedAtCell,
       uploadedByCell,
+      fileCell,
       downloadCell,
       noteCell,
+      menuCell,
     );
     tableBody.appendChild(tr);
   });
   if (pager instanceof HTMLElement) {
-    pager.classList.toggle("hidden", rows.length <= pagination.pageSize);
+    pager.classList.toggle("hidden", filteredRows.length <= 0);
     pager.dataset.page = String(pagination.page);
     pager.dataset.pageSize = String(pagination.pageSize);
     pager.dataset.totalItems = String(pagination.totalItems);
     pager.dataset.totalPages = String(pagination.totalPages);
   }
   if (pagerSummary instanceof HTMLElement) {
-    pagerSummary.textContent = `${pagination.page} / ${pagination.totalPages}페이지`;
+    pagerSummary.textContent = `${pagination.page} / ${pagination.totalPages} 페이지`;
   }
   if (pagerRange instanceof HTMLElement) {
     const start = pagination.totalItems ? pagination.startIndex + 1 : 0;
@@ -15636,6 +16879,14 @@ function renderReportsWorkspacePanels() {
   if (tab === "support") tab = "finance";
   if (!state.reports) state.reports = createInitialReportsState();
   state.reports.viewTab = tab;
+  const reportsView = $("#view-reports");
+  if (reportsView instanceof HTMLElement) {
+    reportsView.classList.toggle("finance-download-active", tab === "finance-download");
+  }
+  document.body.classList.toggle(
+    "reports-finance-submit-route",
+    state.currentView === "reports" && tab === "finance",
+  );
 
   if (tabs) {
     if (tabbarRow instanceof HTMLElement) {
@@ -15662,7 +16913,7 @@ function renderReportsWorkspacePanels() {
     document.querySelectorAll("#view-reports [data-reports-panel]"),
   );
   panels.forEach((panel) => {
-    const panelType = normalizeReportsViewTab(
+    const panelType = normalizeReportsPanelName(
       panel?.dataset?.reportsPanel || getDefaultReportsViewTab(),
     );
     panel.classList.toggle("hidden", panelType !== tab);
@@ -15693,6 +16944,21 @@ function renderReportsWorkspacePanels() {
   renderReportsFinanceDownloadWorkspace();
   renderReportsContextSummary();
   queueViewSnapshotPersist("reports");
+}
+
+function resetInactiveReportsSurface() {
+  const reportsView = $("#view-reports");
+  if (reportsView instanceof HTMLElement) {
+    reportsView.classList.remove("finance-download-active");
+  }
+  document.body.classList.remove("reports-finance-submit-route");
+  document
+    .querySelectorAll("#view-reports [data-reports-panel]")
+    .forEach((panel) => {
+      if (panel instanceof HTMLElement) {
+        panel.classList.add("hidden");
+      }
+    });
 }
 
 function getActiveReportsViewTab() {
@@ -16624,6 +17890,108 @@ function normalizeAzureTopbarLabel(value = "") {
     .trim();
 }
 
+const ARLS_ATTENDANCE_ICON_SPRITE_PATH =
+  "assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg";
+
+const ARLS_ATTENDANCE_ICON_NAMES = new Set([
+  "absent",
+  "accuracy-target",
+  "advanced-filter",
+  "attendance-clock",
+  "chart-legend",
+  "check-in",
+  "check-out",
+  "chevron-left",
+  "chevron-right",
+  "clock",
+  "close",
+  "correction-edit",
+  "correction-pending",
+  "csv-download",
+  "date-day",
+  "detail-panel",
+  "device-meta",
+  "distance-route",
+  "early-leave",
+  "employee",
+  "employees",
+  "exception-alert",
+  "export-download",
+  "filter",
+  "geofence",
+  "image-download",
+  "late",
+  "map",
+  "missing-checkout",
+  "on-time",
+  "period-calendar",
+  "period-list",
+  "permission-info",
+  "photo-attachment",
+  "refresh",
+  "request-approval",
+  "schedule",
+  "search",
+  "sort",
+  "stats-line",
+  "status-dot",
+  "timeline",
+  "vacation",
+  "workplace-pin",
+]);
+
+function normalizeArlsAttendanceIconName(iconName = "attendance-clock") {
+  const normalized = String(iconName || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^arls-/, "");
+  return ARLS_ATTENDANCE_ICON_NAMES.has(normalized)
+    ? normalized
+    : "attendance-clock";
+}
+
+function resolveArlsAttendanceIconName(iconKey = "attendance-clock") {
+  const mapped = {
+    activity: "attendance-clock",
+    calendar: "period-calendar",
+    chart: "stats-line",
+    check: "on-time",
+    clock: "clock",
+    download: "export-download",
+    edit: "correction-edit",
+    file: "detail-panel",
+    grid: "chart-legend",
+    history: "timeline",
+    list: "period-list",
+    search: "search",
+    shield: "geofence",
+    sync: "refresh",
+    users: "employees",
+  };
+  const key = String(iconKey || "").trim().toLowerCase();
+  return normalizeArlsAttendanceIconName(mapped[key] || key);
+}
+
+function buildArlsAttendanceIconSvg(
+  iconName = "attendance-clock",
+  { className = "" } = {},
+) {
+  const name = normalizeArlsAttendanceIconName(iconName);
+  const safeClassName = String(className || "")
+    .split(/\s+/)
+    .map((item) => item.trim().replace(/[^a-zA-Z0-9_-]/g, ""))
+    .filter(Boolean)
+    .join(" ");
+  const classAttr = ["arls-attendance-icon", safeClassName]
+    .filter(Boolean)
+    .join(" ");
+  return `
+    <svg class="${classAttr}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+      <use href="${ARLS_ATTENDANCE_ICON_SPRITE_PATH}#arls-${name}"></use>
+    </svg>
+  `;
+}
+
 function buildAzureTopbarIconSvg(iconKey = "grid") {
   const pathsByIcon = {
     activity: `
@@ -16697,6 +18065,12 @@ function buildAzureTopbarIconSvg(iconKey = "grid") {
     `,
     message: `
       <path d="M3.2 4.2h9.6a1.6 1.6 0 0 1 1.6 1.6v4.5a1.6 1.6 0 0 1-1.6 1.6H7.2L4 14v-2.1H3.2a1.6 1.6 0 0 1-1.6-1.6V5.8a1.6 1.6 0 0 1 1.6-1.6z" />
+    `,
+    report: `
+      <path d="M4.3 2.8h4.5l3 3v6.5a1.5 1.5 0 0 1-1.5 1.5H5.8a1.5 1.5 0 0 1-1.5-1.5z" />
+      <path d="M8.8 2.8v3h3" />
+      <path d="M6.4 8.2h3.2M6.4 10.7h2.7" />
+      <path d="M11.1 11.2 13.5 13.6" />
     `,
     settings: `
       <circle cx="8" cy="8" r="2.1" />
@@ -18582,7 +19956,17 @@ function isArlsAnnouncementRouteActive() {
 
 function installArlsAnnouncementWorkspaceAdapter() {
   window.__RG_ARLS_ANNOUNCEMENTS_ADAPTER__ = {
-    api: (path, options = {}) => apiRootRequest(path, options),
+    api: (path, options = {}) => {
+      const normalizedPath = String(path || "").trim();
+      const suppressUnauthorizedRedirect =
+        Object.prototype.hasOwnProperty.call(options, "suppressUnauthorizedRedirect")
+          ? Boolean(options.suppressUnauthorizedRedirect)
+          : normalizedPath.startsWith("/api/announcements");
+      return apiRootRequest(path, {
+        ...options,
+        suppressUnauthorizedRedirect,
+      });
+    },
     canManageAnnouncements: () => canManageNotices(),
     canViewAnnouncements: () => isViewAllowed("notices", getRolePermissions()),
     confirm: (message) => askArlsAnnouncementConfirm(message),
@@ -20634,9 +22018,32 @@ function getScheduleBaseTenantCode() {
   );
 }
 
+function getScheduleTemplateWorkspaceTenantCode() {
+  const activeTab = getScheduleActiveTopTab();
+  if (activeTab === SCHEDULE_TAB_TEMPLATES) {
+    return ensureScheduleTenantCode(
+      getScheduleTenantValue() || getScheduleBaseTenantCode() || "",
+    );
+  }
+  return getScheduleBaseTenantCode();
+}
+
 function getScheduleBaseTenantName() {
   const tenantCode = getScheduleBaseTenantCode();
   return resolveTenantNameByCode(tenantCode) || tenantCode || "테넌트 확인";
+}
+
+function resetScheduleTemplateWorkspaceState() {
+  if (!state.schedule || typeof state.schedule !== "object") {
+    state.schedule = createInitialScheduleState();
+    return;
+  }
+  state.schedule.templateRows = [];
+  state.schedule.templatesFetchedAt = 0;
+  state.schedule.importMappingProfile = null;
+  state.schedule.importMappingProfileFetchedAt = 0;
+  state.schedule.importMappingSelectedProfileId = "";
+  state.schedule.importMappingTemplateDeleteNotice = "";
 }
 
 function ensureScheduleSupportHqWorkspaceDefaults() {
@@ -22763,7 +24170,16 @@ function ensureScheduleUploadLandingBucket(
     state.schedule.uploadLanding[key] =
       createInitialScheduleUploadLandingBucket();
   }
-  return state.schedule.uploadLanding[key];
+  const bucket = state.schedule.uploadLanding[key];
+  if (!bucket.data && !bucket.loading && !bucket.loadedAt) {
+    const stored = readStoredScheduleUploadLanding(mode);
+    if (stored?.data) {
+      bucket.data = stored.data;
+      bucket.loadedAt = Number(stored.loadedAt || 0) || Date.now();
+      bucket.error = "";
+    }
+  }
+  return bucket;
 }
 
 function getScheduleUploadLandingEndpoint(mode = SCHEDULE_UPLOAD_MODE_BASE) {
@@ -22819,6 +24235,11 @@ async function loadScheduleUploadLanding(
       bucket.data = payload && typeof payload === "object" ? payload : null;
       bucket.loadedAt = Date.now();
       bucket.error = "";
+      writeStoredScheduleUploadLanding(
+        normalizedMode,
+        bucket.data,
+        bucket.loadedAt,
+      );
       return bucket.data;
     })
     .catch((error) => {
@@ -23264,11 +24685,15 @@ function renderScheduleUploadWorkflowSections() {
   const landingRouteActive = isScheduleUploadLandingRoute(currentRoute);
   const wizardRouteActive = isScheduleUploadWizardRoute(currentRoute);
   const activeTopTab = getScheduleActiveTopTab();
+  const scheduleViewActive =
+    state.currentView === "schedule" ||
+    document.body.dataset.currentView === "schedule";
   const uploadRouteActive =
-    landingRouteActive ||
-    wizardRouteActive ||
-    activeTopTab === SCHEDULE_TAB_UPLOAD ||
-    activeTopTab === SCHEDULE_TAB_HQ_UPLOAD;
+    scheduleViewActive &&
+    (landingRouteActive ||
+      wizardRouteActive ||
+      activeTopTab === SCHEDULE_TAB_UPLOAD ||
+      activeTopTab === SCHEDULE_TAB_HQ_UPLOAD);
   const mode =
     landingRouteActive || wizardRouteActive
       ? getScheduleUploadRouteModeFromRoute(currentRoute)
@@ -23415,6 +24840,30 @@ function renderScheduleUploadWorkflowSections() {
   renderScheduleUploadWorkflowContext();
   renderScheduleUploadFooterActions();
   renderScheduleReferenceUploadWizard();
+}
+
+function resetInactiveScheduleUploadSurface() {
+  document.body.classList.remove(
+    "reference-upload-route",
+    "reference-upload-route-base",
+    "reference-upload-route-hq",
+    "reference-upload-landing-route",
+    "reference-upload-wizard-route",
+  );
+  const scheduleView = $("#view-schedule");
+  if (scheduleView instanceof HTMLElement) {
+    scheduleView.classList.remove(
+      "schedule-reportlike-shell",
+      "schedule-upload-route-active",
+    );
+  }
+  const scheduleTabContent = $("#scheduleTabContent");
+  if (scheduleTabContent instanceof HTMLElement) {
+    scheduleTabContent.style.removeProperty("display");
+  }
+  toggleScheduleReferenceLegacyVisibility(false);
+  removeScheduleUploadLandingRoot();
+  document.getElementById("scheduleReferenceUploadWizard")?.remove();
 }
 
 function getScheduleReferenceWizardTitle(mode, step) {
@@ -32108,6 +33557,119 @@ function clearHomeAttendanceCheckWatch() {
   }
 }
 
+function clearHomeRealtimeLocationWatch() {
+  const watchId = homeMiniMapRuntime.watchId;
+  const provider = homeMiniMapRuntime.watchProvider;
+  if (!watchId && watchId !== 0) {
+    homeMiniMapRuntime.watchId = null;
+    homeMiniMapRuntime.watchProvider = "";
+    return;
+  }
+
+  try {
+    if (provider === "capacitor") {
+      const plugin = getGeolocationPlugin();
+      if (plugin && typeof plugin.clearWatch === "function") {
+        plugin.clearWatch({ id: String(watchId) }).catch(() => {
+          // no-op
+        });
+      }
+    } else if (
+      navigator.geolocation &&
+      typeof navigator.geolocation.clearWatch === "function"
+    ) {
+      navigator.geolocation.clearWatch(Number(watchId));
+    }
+  } catch {
+    // no-op
+  } finally {
+    homeMiniMapRuntime.watchId = null;
+    homeMiniMapRuntime.watchProvider = "";
+  }
+}
+
+function applyHomeRealtimePosition(coords, { source = "watch" } = {}) {
+  const latitude = Number(coords?.latitude);
+  const longitude = Number(coords?.longitude);
+  const accuracy = Number(coords?.accuracy);
+  if (!isValidLatLng(latitude, longitude)) return false;
+  state.home.position = { latitude, longitude };
+  state.home.positionAccuracy = Number.isFinite(accuracy) ? accuracy : null;
+  debugAuditLog("home_location_update", {
+    source,
+    accuracy_meters: state.home.positionAccuracy,
+  });
+  evaluateHomeGeofence();
+  updateAttendanceRequestMetaUI();
+  checkAttendanceRequestReadiness();
+  void renderHomeV3MiniMaps();
+  return true;
+}
+
+async function startHomeRealtimeLocationWatch() {
+  if (!hasGeolocationCapability()) return false;
+  if (!["home", "checkin-request"].includes(state.currentView)) return false;
+  if (homeMiniMapRuntime.watchId || homeMiniMapRuntime.watchId === 0) {
+    return true;
+  }
+
+  const onPosition = (coords) => {
+    if (!["home", "checkin-request"].includes(state.currentView)) {
+      clearHomeRealtimeLocationWatch();
+      return;
+    }
+    applyHomeRealtimePosition(coords, { source: "watch" });
+  };
+  const onError = (error) => {
+    if (isGeolocationDeniedError(error)) {
+      state.home.geoStatus = "permission";
+      clearHomeRealtimeLocationWatch();
+    } else if (!state.home.position) {
+      state.home.geoStatus = "error";
+    }
+    renderHomeGeoStatus();
+    updateHomeCtaState();
+  };
+
+  if (isCapacitorNativeRuntime()) {
+    const plugin = getGeolocationPlugin();
+    if (plugin && typeof plugin.watchPosition === "function") {
+      const watchResult = plugin.watchPosition(
+        HOME_LOCATION_WATCH_OPTIONS,
+        (position, error) => {
+          if (error) {
+            onError(error);
+            return;
+          }
+          onPosition(position?.coords || null);
+        },
+      );
+      const resolvedId =
+        typeof watchResult?.then === "function"
+          ? await watchResult
+          : watchResult;
+      homeMiniMapRuntime.watchId = resolvedId;
+      homeMiniMapRuntime.watchProvider = "capacitor";
+      return true;
+    }
+  }
+
+  if (
+    navigator.geolocation &&
+    typeof navigator.geolocation.watchPosition === "function"
+  ) {
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => onPosition(position?.coords || null),
+      onError,
+      HOME_LOCATION_WATCH_OPTIONS,
+    );
+    homeMiniMapRuntime.watchId = watchId;
+    homeMiniMapRuntime.watchProvider = "web";
+    return true;
+  }
+  return false;
+}
+
 function getReminderPrefStorageKey() {
   if (!state.user) return REMINDER_PREF_KEY;
   const tenant = String(state.user.tenant_code || "tenant")
@@ -34606,6 +36168,14 @@ function normalizeReportsViewTab(value = "") {
     return "finance-download";
   if (tab === "support" && available.includes("support")) return "support";
   return available[0] || "finance";
+}
+
+function normalizeReportsPanelName(value = "") {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (normalized === "finance-download") return "finance-download";
+  return "finance";
 }
 
 function normalizeNoticeCategory(value = "") {
@@ -38182,6 +39752,7 @@ function applyHomeBriefingPayload(payload = null) {
   state.home.briefingError = "";
   writeCachedHomeBriefing(state.home.briefing);
   if (payload?.personal_summary && typeof payload.personal_summary === "object") {
+    syncHomePersonalSiteFromBriefing(payload.personal_summary);
     applyHomeTodayStatus({
       status: payload.personal_summary.today_status,
       button_mode: payload.personal_summary.button_mode,
@@ -38745,7 +40316,13 @@ function setReportsViewTab(value = "", { syncRoute = false } = {}) {
   if (next === "finance" && previous !== "finance") {
     setReportsFinanceView("overview");
   }
+  if (next === "finance-download" && previous !== "finance-download") {
+    state.reports.financeDownloadDetailOpen = false;
+  }
   renderReportsWorkspacePanels();
+  if (next === "finance" || next === "finance-download") {
+    queueWorkspaceScrollReset();
+  }
   if (next === "finance-download" && canViewReportsFinanceDownloadTab()) {
     runActionSafely(
       loadReportsFinanceDownloadWorkspace(),
@@ -42822,7 +44399,9 @@ function applyReportsRouteStateFromQuery(
   )
     return;
   const fallbackTab =
-    route === ROUTE_REPORTS_FINANCE_DOWNLOAD ? "finance-download" : "finance";
+    route === ROUTE_REPORTS_FINANCE_DOWNLOAD
+      ? "finance-download"
+      : getDefaultReportsViewTab();
   setReportsViewTab(parsedParams.get("tab") || fallbackTab);
 }
 
@@ -42967,6 +44546,15 @@ async function navigateToRoute(
   const requestedReportsTab = String(parsedParams.get("tab") || "")
     .trim()
     .toLowerCase();
+  if (
+    route === ROUTE_REPORTS &&
+    requestedReportsTab === "finance" &&
+    canViewReportsFinanceDownloadTab() &&
+    !canViewReportsFinanceTab()
+  ) {
+    parsedParams.delete("tab");
+    route = ROUTE_REPORTS_FINANCE_DOWNLOAD;
+  }
   if (route === ROUTE_REPORTS && requestedReportsTab === "finance-download") {
     parsedParams.delete("tab");
     route = ROUTE_REPORTS_FINANCE_DOWNLOAD;
@@ -43298,6 +44886,7 @@ function isViewAllowed(view, perms = getRolePermissions()) {
     .toLowerCase();
   if (raw === "calendar-public") return true;
   if (raw === "attendance-check") return Boolean(perms.attendanceWrite);
+  if (raw === "checkin-request") return Boolean(perms.attendanceWrite);
   if (raw === "attendance")
     return Boolean(
       perms.attendance || perms.attendanceWrite || perms.attendanceReview,
@@ -43619,6 +45208,13 @@ function updateHomeCtaState() {
     );
     return;
   }
+  if (canCheckIn) {
+    setHomeActionHint(
+      "반경 내 위치가 확인되었습니다. 출근하기를 눌러 주세요.",
+      "success",
+    );
+    return;
+  }
   if (todayStatus === "DONE") {
     setHomeActionHint("오늘 출근/퇴근이 완료되었습니다.", "success");
     return;
@@ -43930,7 +45526,7 @@ function updateHomeAttendanceCheckMapVisual() {
     homeAttendanceCheckRuntime.siteMarker.setPosition(siteCenter);
   }
   if (homeAttendanceCheckRuntime.circle) {
-    homeAttendanceCheckRuntime.circle.setCenter(siteCenter);
+    setKakaoCircleCenter(homeAttendanceCheckRuntime.circle, siteCenter);
     if (Number.isFinite(radius) && radius > 0) {
       homeAttendanceCheckRuntime.circle.setRadius(radius);
     }
@@ -44027,16 +45623,34 @@ async function ensureHomeAttendanceCheckMapReady() {
 async function fetchSiteGeofenceById(siteId = "") {
   const id = String(siteId || "").trim();
   if (!id) return null;
+  const cached = homeAttendanceCheckRuntime.geofenceCache.get(id);
+  if (
+    cached &&
+    Date.now() - Number(cached.cachedAt || 0) < HOME_GEOFENCE_CACHE_TTL_MS
+  ) {
+    return cached.value;
+  }
   try {
     const result = await apiRequest(
       `/sites/${encodeURIComponent(id)}/geofence`,
     );
     if (!result || typeof result !== "object") return null;
-    return {
+    const value = {
       lat: Number(result.lat),
       lng: Number(result.lng),
       radiusM: Number(result.radius_m),
     };
+    if (
+      Number.isFinite(value.lat) &&
+      Number.isFinite(value.lng) &&
+      Number.isFinite(value.radiusM)
+    ) {
+      homeAttendanceCheckRuntime.geofenceCache.set(id, {
+        cachedAt: Date.now(),
+        value,
+      });
+    }
+    return value;
   } catch {
     return null;
   }
@@ -44044,12 +45658,13 @@ async function fetchSiteGeofenceById(siteId = "") {
 
 async function refreshHomeAttendanceCheckByCurrentPosition({
   forceToast = false,
+  locationOptions = HOME_LOCATION_OPTIONS,
 } = {}) {
   const check = ensureHomeAttendanceCheckState();
   check.loading = true;
   renderHomeAttendanceCheckView();
   try {
-    const position = await getCurrentPositionWithRetry(HOME_LOCATION_OPTIONS);
+    const position = await getCurrentPositionWithRetry(locationOptions);
     check.position = {
       latitude: Number(position.coords.latitude),
       longitude: Number(position.coords.longitude),
@@ -44093,7 +45708,9 @@ async function refreshHomeAttendanceCheckByCurrentPosition({
   }
 }
 
-async function startHomeAttendanceCheckWatch() {
+async function startHomeAttendanceCheckWatch({
+  initialOptions = HOME_LOCATION_OPTIONS,
+} = {}) {
   const check = ensureHomeAttendanceCheckState();
   clearHomeAttendanceCheckWatch();
 
@@ -44111,7 +45728,10 @@ async function startHomeAttendanceCheckWatch() {
     return;
   }
 
-  await refreshHomeAttendanceCheckByCurrentPosition({ forceToast: false });
+  await refreshHomeAttendanceCheckByCurrentPosition({
+    forceToast: false,
+    locationOptions: initialOptions,
+  });
 
   const onPosition = (coords) => {
     if (!coords) return;
@@ -44150,7 +45770,7 @@ async function startHomeAttendanceCheckWatch() {
     const plugin = getGeolocationPlugin();
     if (plugin && typeof plugin.watchPosition === "function") {
       const watchResult = plugin.watchPosition(
-        { ...HOME_LOCATION_OPTIONS, timeout: 10000, maximumAge: 0 },
+        { ...HOME_LOCATION_OPTIONS, timeout: 6000, maximumAge: 30000 },
         (position, error) => {
           if (error) {
             onError(error);
@@ -44176,7 +45796,7 @@ async function startHomeAttendanceCheckWatch() {
     const watchId = navigator.geolocation.watchPosition(
       (position) => onPosition(position?.coords || null),
       onError,
-      { ...HOME_LOCATION_OPTIONS, maximumAge: 0, timeout: 10000 },
+      { ...HOME_LOCATION_OPTIONS, maximumAge: 30000, timeout: 6000 },
     );
     homeAttendanceCheckRuntime.watchId = watchId;
     homeAttendanceCheckRuntime.watchProvider = "web";
@@ -44243,28 +45863,78 @@ async function openHomeAttendanceCheckView(eventType = "check_in") {
   check.loading = true;
   check.busy = false;
 
-  const geofence = await fetchSiteGeofenceById(check.siteId);
-  if (
-    geofence &&
-    Number.isFinite(geofence.lat) &&
-    Number.isFinite(geofence.lng) &&
-    Number.isFinite(geofence.radiusM)
-  ) {
+  const applyFetchedGeofence = (geofence) => {
+    if (
+      !geofence ||
+      !Number.isFinite(geofence.lat) ||
+      !Number.isFinite(geofence.lng) ||
+      !Number.isFinite(geofence.radiusM)
+    ) {
+      return false;
+    }
     site.latitude = geofence.lat;
     site.longitude = geofence.lng;
     site.radius_meters = geofence.radiusM;
     check.radiusMeters = geofence.radiusM;
-  }
+    computeHomeAttendanceCheckRange();
+    if (state.currentView === "attendance-check" && check.active) {
+      updateHomeAttendanceCheckMapVisual();
+      renderHomeAttendanceCheckView();
+    }
+    return true;
+  };
+  const geofenceTask = fetchSiteGeofenceById(check.siteId)
+    .then(applyFetchedGeofence)
+    .catch((error) => {
+      console.warn("[RG ARLS] attendance geofence preload failed", error);
+      return false;
+    });
 
   computeHomeAttendanceCheckRange();
   renderHomeAttendanceCheckView();
   await showView("attendance-check", { skipRouteSync: true });
-  await ensureHomeAttendanceCheckMapReady();
-  updateHomeAttendanceCheckMapVisual();
-  await startHomeAttendanceCheckWatch();
-  check.loading = false;
-  computeHomeAttendanceCheckRange();
-  renderHomeAttendanceCheckView();
+  const mapTask = ensureHomeAttendanceCheckMapReady()
+    .then(() => updateHomeAttendanceCheckMapVisual())
+    .catch((error) => {
+      console.warn("[RG ARLS] attendance map preload failed", error);
+      return false;
+    });
+
+  const locationTask = startHomeAttendanceCheckWatch({
+      initialOptions: HOME_LOCATION_FAST_OPTIONS,
+    })
+      .then(() => true)
+      .catch((error) => {
+        console.warn("[RG ARLS] attendance location warmup failed", error);
+        if (state.currentView === "attendance-check" && check.active) {
+          check.status = isGeolocationDeniedError(error)
+            ? "permission"
+            : check.status;
+          renderHomeAttendanceCheckView();
+        }
+        return false;
+      });
+
+  void Promise.allSettled([geofenceTask, mapTask, locationTask])
+    .then(() => {
+      if (state.currentView !== "attendance-check" || !check.active) return;
+      check.loading = false;
+      computeHomeAttendanceCheckRange();
+      updateHomeAttendanceCheckMapVisual();
+      renderHomeAttendanceCheckView();
+    })
+    .catch((error) => {
+      console.error("[RG ARLS] attendance request preparation failed", error);
+      if (state.currentView === "attendance-check" && check.active) {
+        check.status = isGeolocationDeniedError(error) ? "permission" : "error";
+      }
+    })
+    .finally(() => {
+      if (state.currentView !== "attendance-check" || !check.active) return;
+      check.loading = false;
+      computeHomeAttendanceCheckRange();
+      renderHomeAttendanceCheckView();
+    });
   return true;
 }
 
@@ -44608,7 +46278,10 @@ async function getGeolocationPermissionState() {
   }
 }
 
-async function requestHomeLocation({ forceToast = false } = {}) {
+async function requestHomeLocation({
+  forceToast = false,
+  locationOptions = HOME_LOCATION_OPTIONS,
+} = {}) {
   if (!hasGeolocationCapability()) {
     state.home.geoStatus = "error";
     state.home.position = null;
@@ -44654,7 +46327,9 @@ async function requestHomeLocation({ forceToast = false } = {}) {
   }
 
   try {
-    const position = await getCurrentPositionWithRetry(HOME_LOCATION_OPTIONS);
+    const position = await getCurrentPositionWithRetry(
+      locationOptions || HOME_LOCATION_OPTIONS,
+    );
     state.home.position = {
       latitude: Number(position.coords.latitude),
       longitude: Number(position.coords.longitude),
@@ -44668,6 +46343,7 @@ async function requestHomeLocation({ forceToast = false } = {}) {
     evaluateHomeGeofence();
     updateAttendanceRequestMetaUI();
     checkAttendanceRequestReadiness();
+    void startHomeRealtimeLocationWatch();
     if (forceToast)
       showToast("현재 위치를 다시 확인했습니다.", "success", 1800);
     return true;
@@ -44681,6 +46357,7 @@ async function requestHomeLocation({ forceToast = false } = {}) {
     state.home.position = null;
     state.home.positionAccuracy = null;
     state.home.geoStatus = denied ? "permission" : "error";
+    if (denied) clearHomeRealtimeLocationWatch();
     renderHomeGeoStatus();
     updateHomeCtaState();
     updateAttendanceRequestMetaUI();
@@ -45210,16 +46887,22 @@ async function loadHomeData({ quiet = false, force = false } = {}) {
         );
       }
     }
-  } else {
+  } else if (!state.home.briefing?.personal_summary) {
     state.home.todayRecords = [];
     syncOutsideAttendanceNotification(0);
     applyHomeTodayStatus({ status: "NONE", button_mode: "check_in" });
+  } else {
+    updateHomeCtaState();
   }
   markHomeCriticalUiReady({
     apiMs: getPerfNowMs() - homeCoreApiStartedAt,
   });
 
   const backgroundJobs = [];
+
+  if (can("attendance")) {
+    backgroundJobs.push(runLocationTask());
+  }
 
   if (!isHqAudience) {
     backgroundJobs.push(
@@ -45305,8 +46988,6 @@ async function loadHomeData({ quiet = false, force = false } = {}) {
         }
       })(),
     );
-
-    backgroundJobs.push(runLocationTask());
   } else {
     renderOpsSummary();
   }
@@ -45771,47 +47452,20 @@ async function renderHomeMapSheetKakaoMap(site) {
   });
   if (!loaded || !window.kakao?.maps?.Map) return;
   const kakaoMaps = window.kakao.maps;
-  const sitePosition = new kakaoMaps.LatLng(siteLat, siteLng);
   const map = new kakaoMaps.Map(mapHost, {
-    center: sitePosition,
+    center: new kakaoMaps.LatLng(siteLat, siteLng),
     level: estimateKakaoMapLevelByRadius(radius),
   });
-  new kakaoMaps.Marker({
+  syncHomeKakaoGeofenceMap({
     map,
-    position: sitePosition,
-    title: getHomeSiteDisplayName(site),
+    kakaoMaps,
+    site,
+    overlays: createHomeKakaoMapOverlays(kakaoMaps, map, getHomeSiteDisplayName(site)),
+    interactive: true,
   });
-  new kakaoMaps.Circle({
-    map,
-    center: sitePosition,
-    radius: Number.isFinite(radius) && radius > 0 ? radius : 120,
-    strokeWeight: 2,
-    strokeColor: "#fb4b14",
-    strokeOpacity: 0.85,
-    fillColor: "#fb4b14",
-    fillOpacity: 0.18,
-  });
-  if (
-    state.home.position &&
-    isValidLatLng(state.home.position.latitude, state.home.position.longitude)
-  ) {
-    const userPosition = new kakaoMaps.LatLng(
-      Number(state.home.position.latitude),
-      Number(state.home.position.longitude),
-    );
-    new kakaoMaps.Marker({
-      map,
-      position: userPosition,
-      title: "현재 위치",
-    });
-    const bounds = new kakaoMaps.LatLngBounds();
-    bounds.extend(sitePosition);
-    bounds.extend(userPosition);
-    map.setBounds(bounds);
-  }
 }
 
-function onHomeMap() {
+async function onHomeMap() {
   const site = getSelectedHomeSite();
   if (!site) {
     showToast("근무 현장를 먼저 선택해 주세요.", "error");
@@ -45826,11 +47480,18 @@ function onHomeMap() {
   openSheet({
     title: "지도에서 보기",
     contentNode: buildHomeMapSheetNode(site),
+    layoutClass: "sheet-layout-home-map",
     actions: [
       { label: "닫기", variant: "btn-secondary", action: "sheet-close" },
     ],
   });
-  void renderHomeMapSheetKakaoMap(site);
+  await renderHomeMapSheetKakaoMap(site);
+  if (!getHomeMapCurrentPosition() && can("attendance")) {
+    void requestHomeLocation({
+      forceToast: false,
+      locationOptions: HOME_LOCATION_FAST_OPTIONS,
+    }).then(() => renderHomeMapSheetKakaoMap(site));
+  }
 }
 
 async function onHomeWeekOpenDate(dateKey) {
@@ -51043,6 +52704,39 @@ function checkAttendanceRequestReadiness() {
   statusEl.textContent = "요청 전송 조건을 확인하세요.";
 }
 
+function syncAttendanceRequestLocationFromHome(compose = null) {
+  const currentCompose = compose || getAttendanceRequestComposeContext();
+  if (
+    Number.isFinite(Number(currentCompose.latitude)) &&
+    Number.isFinite(Number(currentCompose.longitude))
+  ) {
+    return false;
+  }
+  const position = state.home.position;
+  if (
+    !position ||
+    !isValidLatLng(Number(position.latitude), Number(position.longitude))
+  ) {
+    return false;
+  }
+  setAttendanceRequestComposeContext(
+    {
+      latitude: Number(position.latitude),
+      longitude: Number(position.longitude),
+      accuracyMeters: Number.isFinite(Number(state.home.positionAccuracy))
+        ? Number(state.home.positionAccuracy)
+        : null,
+      distanceMeters: Number.isFinite(Number(state.home.geoDistance))
+        ? Number(state.home.geoDistance)
+        : null,
+      inRange: state.home.geoStatus === "within",
+      requestedAt: currentCompose.requestedAt || new Date().toISOString(),
+    },
+    { syncDraft: false },
+  );
+  return true;
+}
+
 async function loadAttendanceRequestView() {
   const compose = getAttendanceRequestComposeContext();
   const requestType = normalizeAttendanceRequestType(compose.requestType);
@@ -51055,39 +52749,7 @@ async function loadAttendanceRequestView() {
   if (submitBtn) {
     submitBtn.textContent = "요청 제출";
   }
-  if (
-    (!Number.isFinite(Number(compose.latitude)) ||
-      !Number.isFinite(Number(compose.longitude))) &&
-    !state.home.position &&
-    state.home.geoStatus !== "permission"
-  ) {
-    await requestHomeLocation();
-  }
-  if (
-    (!Number.isFinite(Number(compose.latitude)) ||
-      !Number.isFinite(Number(compose.longitude))) &&
-    state.home.position &&
-    isValidLatLng(
-      Number(state.home.position.latitude),
-      Number(state.home.position.longitude),
-    )
-  ) {
-    setAttendanceRequestComposeContext(
-      {
-        latitude: Number(state.home.position.latitude),
-        longitude: Number(state.home.position.longitude),
-        accuracyMeters: Number.isFinite(Number(state.home.positionAccuracy))
-          ? Number(state.home.positionAccuracy)
-          : null,
-        distanceMeters: Number.isFinite(Number(state.home.geoDistance))
-          ? Number(state.home.geoDistance)
-          : null,
-        inRange: state.home.geoStatus === "within",
-        requestedAt: compose.requestedAt || new Date().toISOString(),
-      },
-      { syncDraft: false },
-    );
-  }
+  syncAttendanceRequestLocationFromHome(compose);
   const fileInput = $("#requestPhotos");
   const files =
     fileInput instanceof HTMLInputElement && fileInput.files
@@ -51097,8 +52759,39 @@ async function loadAttendanceRequestView() {
   applyAttendanceRequestDraft();
   updateAttendanceRequestMetaUI();
   checkAttendanceRequestReadiness();
-  await loadAttendanceRequestHistory();
-  checkAttendanceRequestReadiness();
+  const currentCompose = getAttendanceRequestComposeContext();
+  const needsLocationRefresh =
+    (!Number.isFinite(Number(currentCompose.latitude)) ||
+      !Number.isFinite(Number(currentCompose.longitude))) &&
+    !state.home.position &&
+    state.home.geoStatus !== "permission";
+  if (needsLocationRefresh) {
+    setInlineStatus(
+      "#attendanceRequestStatus",
+      "위치 정보를 확인하는 중입니다. 입력은 먼저 진행할 수 있습니다.",
+      "info",
+    );
+    void requestHomeLocation({
+      locationOptions: HOME_LOCATION_FAST_OPTIONS,
+    })
+      .then(() => {
+        syncAttendanceRequestLocationFromHome();
+        updateAttendanceRequestMetaUI();
+        checkAttendanceRequestReadiness();
+      })
+      .catch((error) => {
+        console.error("[RG ARLS] attendance request location refresh failed", error);
+        updateAttendanceRequestMetaUI();
+        checkAttendanceRequestReadiness();
+      });
+  }
+  void loadAttendanceRequestHistory()
+    .then(() => {
+      checkAttendanceRequestReadiness();
+    })
+    .catch((error) => {
+      console.error("[RG ARLS] attendance request history failed", error);
+    });
 }
 
 function buildAttendanceRequestPayload() {
@@ -51216,9 +52909,13 @@ async function onSubmitAttendanceRequest() {
         payload.site_code,
       ),
     );
-    await loadAttendanceRequestHistory();
+    void loadAttendanceRequestHistory().catch((error) => {
+      console.error("[RG ARLS] attendance request history refresh failed", error);
+    });
     await showView("home");
-    await loadHomeData({ force: true, quiet: true });
+    void loadHomeData({ force: true, quiet: true }).catch((error) => {
+      console.error("[RG ARLS] home refresh after request failed", error);
+    });
   } catch (err) {
     writeAttendanceRequestDraft({
       reasonCode: payload.reason_code,
@@ -51280,7 +52977,7 @@ async function onCancelAttendanceRequest() {
 }
 
 function onRequestOpenMap() {
-  onHomeMap();
+  void onHomeMap();
 }
 
 function getDevTenantContextStorageKey() {
@@ -51907,6 +53604,7 @@ function setDevTenantContext(
     state.devAdmin.selectedTenantId = code === "MASTER" ? "" : resolvedTenantId;
     state.sites = [];
     state.siteCatalog = [];
+    resetScheduleTemplateWorkspaceState();
     persistDevTenantContext();
     applyTenantContextToFormFields();
     renderTenantContextBadge();
@@ -54531,6 +56229,7 @@ function resolveTopbarPageTitle() {
   if (route === ROUTE_SCHEDULE_UPLOAD_WIZARD || route === ROUTE_SCHEDULE_HQ_UPLOAD_WIZARD)
     return "";
   if (route === ROUTE_HOME) return "홈";
+  if (route === ROUTE_SCHEDULE_TEMPLATES) return "근무 템플릿";
   if (route === ROUTE_SCHEDULE_CALENDAR || route === ROUTE_SCHEDULE_LIST)
     return "월간 근무표";
   if (route === ROUTE_ATTENDANCE) return "출퇴근";
@@ -54540,6 +56239,7 @@ function resolveTopbarPageTitle() {
   if (route === ROUTE_PROFILE) return "내 정보";
   if (route === ROUTE_ADMIN_SITES) return "지점 관리";
   if (route === ROUTE_ADMIN_EMPLOYEES) return "구성원";
+  if (route === ROUTE_REPORTS_FINANCE_DOWNLOAD) return "보고 / Finance";
   if (route === ROUTE_REPORTS) return "보고 / Finance";
   return "Sentrix HR";
 }
@@ -58070,6 +59770,11 @@ function clearSession() {
   });
   tokenRefreshPromise = null;
   tokenRefreshPromiseToken = "";
+  if (scheduleFastWarmupTimer) {
+    clearTimeout(scheduleFastWarmupTimer);
+  }
+  scheduleFastWarmupTimer = 0;
+  scheduleFastWarmupSignature = "";
   state.token = "";
   state.refreshToken = "";
   state.user = null;
@@ -58137,6 +59842,8 @@ function clearSession() {
   } catch {
     // no-op
   }
+  clearSessionStorageEntriesByPrefix(SCHEDULE_LITE_STORAGE_PREFIX);
+  clearSessionStorageEntriesByPrefix(SCHEDULE_UPLOAD_LANDING_STORAGE_PREFIX);
   clearAllStoredViewSnapshots();
   clearAttendanceManagerSnapshot();
   persistStoredAuthTokens("", "");
@@ -58236,6 +59943,8 @@ function showAuthPanel() {
   if (shell) shell.classList.add("hidden");
   if (menuBtn) menuBtn.classList.add("hidden");
   if (notifBtn) notifBtn.classList.add("hidden");
+  document.body.classList.add("auth-view-active");
+  document.body.dataset.currentView = "auth";
   document.body.classList.remove("calendar-public-shell");
   state.currentRoute = ROUTE_LOGIN;
   updateRouteHash(ROUTE_LOGIN, { replace: true });
@@ -58287,6 +59996,7 @@ function showShellPanel(options = {}) {
   if (shell) shell.classList.remove("hidden");
   if (menuBtn) menuBtn.classList.remove("hidden");
   if (notifBtn) notifBtn.classList.remove("hidden");
+  document.body.classList.remove("auth-view-active");
   document.body.classList.remove("calendar-public-shell");
   closeConfirmDialog({ restoreFocus: false });
 
@@ -58373,6 +60083,9 @@ function showShellPanel(options = {}) {
   renderMasterConsoleSummary();
   renderNotificationBadge();
   applyRoleUI();
+  if (!deferSessionSideEffects) {
+    queueScheduleFastWarmup({ delayMs: 0 });
+  }
 }
 
 function showPublicShellPanel() {
@@ -58389,6 +60102,7 @@ function showPublicShellPanel() {
   if (notifBtn) notifBtn.classList.add("hidden");
   if (topProfileBtn) topProfileBtn.classList.add("hidden");
   if (topThemeBtn) topThemeBtn.classList.remove("hidden");
+  document.body.classList.remove("auth-view-active");
   document.body.classList.add("calendar-public-shell");
   closeConfirmDialog({ restoreFocus: false });
   closeDrawer();
@@ -58487,7 +60201,8 @@ async function hydrateSession({ background = false } = {}) {
     hasAccessToken: Boolean(state.token),
     hasRefreshToken: Boolean(state.refreshToken),
   });
-  const shouldPreferStoredAccessToken = background && Boolean(state.token);
+  const shouldPreferStoredAccessToken =
+    Boolean(state.token) && !isAccessTokenNearExpiry(state.token, 180);
   if (state.refreshToken && !shouldPreferStoredAccessToken) {
     const refreshed = await requestTokenRefresh({
       allowSoftFailureWithAccessToken: background,
@@ -58507,7 +60222,7 @@ async function hydrateSession({ background = false } = {}) {
     }
   } else if (state.refreshToken && shouldPreferStoredAccessToken) {
     console.info(
-      "[RG ARLS][Auth] skipped eager refresh during background hydrate because stored access token exists",
+      "[RG ARLS][Auth] skipped eager refresh during hydrate because stored access token is still valid",
     );
   }
   if (hasHydrateSessionBeenSuperseded()) {
@@ -58522,6 +60237,34 @@ async function hydrateSession({ background = false } = {}) {
     showAuthPanel();
     return false;
   }
+  let restoredShellBeforeServerValidation = false;
+  const shouldNavigateAfterAuth =
+    !background ||
+    !state.currentRoute ||
+    normalizeRoutePath(state.currentRoute) === ROUTE_LOGIN;
+  const initialRoute =
+    requestedRoute && requestedRoute !== ROUTE_LOGIN
+      ? requestedRouteRaw
+      : consumePendingRouteAfterLogin() || resolvePostLoginDefaultRoute();
+  if (
+    shouldPreferStoredAccessToken &&
+    state.user &&
+    shouldNavigateAfterAuth
+  ) {
+    setAuthStatus(AUTH_STATUS_AUTHENTICATED);
+    showShellPanel();
+    restoredShellBeforeServerValidation = true;
+    if (!isScheduleRoutePath(initialRoute || "")) {
+      queueScheduleFastWarmup({ delayMs: 0 });
+    }
+    await navigateToRoute(initialRoute, {
+      replace: true,
+      silentDeniedModal: true,
+    });
+    state.pendingRouteAfterLogin = DEFAULT_AUTH_ROUTE;
+    ensurePolling();
+    restartScheduleLiveRefreshAfterAuth();
+  }
   try {
     const me = await apiRequest("/auth/me", {
       suppressUnauthorizedRedirect: true,
@@ -58535,25 +60278,26 @@ async function hydrateSession({ background = false } = {}) {
     state.user = resolveSessionUser(state.token, me);
     persistSession();
     setAuthStatus(AUTH_STATUS_AUTHENTICATED);
-    showShellPanel();
-    await syncServerInAppNotifications({ force: true, showToasts: false });
-    const shouldNavigateAfterAuth =
-      !background ||
-      !state.currentRoute ||
-      normalizeRoutePath(state.currentRoute) === ROUTE_LOGIN;
-    if (shouldNavigateAfterAuth) {
-      const initialRoute =
-        requestedRoute && requestedRoute !== ROUTE_LOGIN
-          ? requestedRouteRaw
-          : consumePendingRouteAfterLogin() || resolvePostLoginDefaultRoute();
+    if (!restoredShellBeforeServerValidation) {
+      showShellPanel();
+      if (!isScheduleRoutePath(initialRoute || "")) {
+        queueScheduleFastWarmup({ delayMs: 0 });
+      }
+    }
+    if (shouldNavigateAfterAuth && !restoredShellBeforeServerValidation) {
       await navigateToRoute(initialRoute, {
         replace: true,
         silentDeniedModal: true,
       });
+      state.pendingRouteAfterLogin = DEFAULT_AUTH_ROUTE;
     }
-    state.pendingRouteAfterLogin = DEFAULT_AUTH_ROUTE;
     ensurePolling();
     restartScheduleLiveRefreshAfterAuth();
+    syncServerInAppNotifications({ force: true, showToasts: false }).catch(
+      (err) => {
+        console.warn("[RG ARLS] notification sync after hydrate failed", err);
+      },
+    );
     return true;
   } catch (err) {
     if (err?.staleAuthSession || hasHydrateSessionBeenSuperseded()) {
@@ -61420,6 +63164,76 @@ function resetWorkspaceScrollPosition() {
   document.body.scrollTop = 0;
 }
 
+function queueWorkspaceScrollReset() {
+  resetWorkspaceScrollPosition();
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(resetWorkspaceScrollPosition);
+  }
+  setTimeout(resetWorkspaceScrollPosition, 80);
+}
+
+const PRIMARY_VIEW_PANEL_NAMES = Object.freeze([
+  "home",
+  "attendance-check",
+  "ops",
+  "support-status",
+  "reports",
+  "checkin-request",
+  "requests",
+  "leave",
+  "notices",
+  "hr",
+  "attendance",
+  "calendar",
+  "calendar-public",
+  "schedule",
+  "profile",
+  "roadmap",
+  "dev-console",
+  "employees",
+  "org",
+]);
+
+function enforcePrimaryViewPanelVisibility(activeView = state.currentView) {
+  const panelTarget = mapLegacyViewName(activeView || state.currentView || "");
+  PRIMARY_VIEW_PANEL_NAMES.forEach((view) => {
+    const panel = $(`#view-${view}`);
+    if (!panel) return;
+    const isTarget = view === panelTarget;
+    panel.classList.toggle("hidden", !isTarget);
+    panel.setAttribute("aria-hidden", isTarget ? "false" : "true");
+  });
+}
+
+function queuePrimaryViewPanelVisibilityGuard(activeView = state.currentView) {
+  enforcePrimaryViewPanelVisibility(activeView);
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => enforcePrimaryViewPanelVisibility(activeView));
+  }
+  setTimeout(() => enforcePrimaryViewPanelVisibility(activeView), 80);
+  setTimeout(() => enforcePrimaryViewPanelVisibility(activeView), 300);
+}
+
+function renderImmediateViewShell(viewName = "") {
+  try {
+    if (viewName === "calendar") {
+      renderCalendarWorkspace();
+      return;
+    }
+    if (viewName === "profile") {
+      renderProfileSummary();
+      renderProfileWorkspaceSegments();
+      renderReminderSettings();
+      renderProfileThemeState();
+    }
+  } catch (error) {
+    console.error("[RG ARLS] immediate view shell render failed", {
+      viewName,
+      error,
+    });
+  }
+}
+
 function showView(
   name,
   {
@@ -61454,36 +63268,20 @@ function showView(
     resetHomeAttendanceCheckState();
     setHomeAttendanceCheckMapFallback("");
   }
+  if (!["home", "checkin-request"].includes(targetView)) {
+    clearHomeRealtimeLocationWatch();
+  }
   if (previousView === "schedule" && targetView !== "schedule") {
     cancelScheduleEmployeeListChunkRender();
   }
-  const panelTarget = targetView;
-  [
-    "home",
-    "attendance-check",
-    "ops",
-    "support-status",
-    "reports",
-    "checkin-request",
-    "requests",
-    "leave",
-    "notices",
-    "hr",
-    "attendance",
-    "calendar",
-    "calendar-public",
-    "schedule",
-    "profile",
-    "roadmap",
-    "dev-console",
-    "employees",
-    "org",
-  ].forEach((view) => {
-    const panel = $(`#view-${view}`);
-    if (!panel) return;
-    const isTarget = view === panelTarget;
-    panel.classList.toggle("hidden", !isTarget);
-  });
+  enforcePrimaryViewPanelVisibility(targetView);
+  if (targetView !== "reports") {
+    resetInactiveReportsSurface();
+  }
+  if (targetView !== "schedule") {
+    resetInactiveScheduleUploadSurface();
+  }
+  queuePrimaryViewPanelVisibilityGuard(targetView);
   if (targetView === "calendar-public") {
     showPublicShellPanel();
   } else if (state.user) {
@@ -61558,7 +63356,9 @@ function showView(
       viewName: targetView,
     });
   });
-  resetWorkspaceScrollPosition();
+  queueWorkspaceScrollReset();
+  renderImmediateViewShell(targetView);
+  queuePrimaryViewPanelVisibilityGuard(targetView);
 
   applyDesktopRouteLayout(state.currentRoute);
   renderDesktopTopContext();
@@ -61610,6 +63410,7 @@ function showView(
           cacheKey: dataCacheKey,
         })
       ) {
+        queuePrimaryViewPanelVisibilityGuard(targetView);
         decorateAzureTopbarTabs(document);
         ensurePolling();
         ensureScheduleLiveRefresh();
@@ -62301,9 +64102,7 @@ async function loadScheduleViewPresenter() {
     viewName: "schedule",
   });
   const task = queueScheduleViewPresenterRefresh();
-  ensureScheduleLiveRefresh({
-    immediate: hasCachedRows && isScheduleBoardTab(getScheduleActiveTopTab()),
-  });
+  ensureScheduleLiveRefresh();
   if (task) {
     task.catch((error) => {
       console.error("[RG ARLS] schedule presenter refresh failed", error);
@@ -62321,12 +64120,22 @@ function runProfilePresenterRefresh(task, fallbackMessage) {
 }
 
 async function loadProfileViewPresenter() {
-  renderProfileSummary();
-  renderProfileWorkspaceSegments();
-  resetProfilePasswordForm();
-  setInlineStatus("#profilePasswordStatus", "", "info");
-  renderReminderSettings();
-  renderProfileThemeState();
+  try {
+    renderProfileSummary();
+    renderProfileWorkspaceSegments();
+    resetProfilePasswordForm();
+    setInlineStatus("#profilePasswordStatus", "", "info");
+    renderReminderSettings();
+    renderProfileThemeState();
+    setViewRuntimeHint("profile", "", "info");
+  } catch (error) {
+    console.error("[RG ARLS] profile workspace initial render failed", error);
+    setViewRuntimeHint(
+      "profile",
+      normalizeActionError(error, "설정 화면을 표시하지 못했습니다."),
+      "error",
+    );
+  }
   runProfilePresenterRefresh(
     (async () => {
       await refreshReminderPermissionState();
@@ -63459,19 +65268,32 @@ function ensureAnnouncementWorkspaceModuleLoaded() {
 }
 
 async function loadNoticesViewPresenter() {
-  const contextReady = await ensureNoticesTenantContext();
-  if (!contextReady) {
-    setViewRuntimeHint("notices", "작업회사를 먼저 선택해 주세요.", "info");
-    return ensureNoticesState();
+  renderNoticesView();
+  const noticesState = ensureNoticesState();
+  try {
+    const contextReady = await ensureNoticesTenantContext();
+    if (!contextReady) {
+      setViewRuntimeHint("notices", "작업회사를 먼저 선택해 주세요.", "info");
+      renderNoticesView();
+      return noticesState;
+    }
+    await ensureAnnouncementWorkspaceModuleLoaded();
+    installArlsAnnouncementWorkspaceAdapter();
+    if (typeof window.applyAnnouncementRouteState === "function") {
+      await window.applyAnnouncementRouteState();
+    } else if (typeof window.openAnnouncementsPage === "function") {
+      await window.openAnnouncementsPage({ syncRoute: false });
+    }
+    renderNoticesView();
+  } catch (error) {
+    console.error("[RG ARLS] notices workspace load failed", error);
+    noticesState.error = normalizeActionError(
+      error,
+      "공지사항을 불러오지 못했습니다.",
+    );
+    renderNoticesView();
   }
-  await ensureAnnouncementWorkspaceModuleLoaded();
-  installArlsAnnouncementWorkspaceAdapter();
-  if (typeof window.applyAnnouncementRouteState === "function") {
-    await window.applyAnnouncementRouteState();
-  } else if (typeof window.openAnnouncementsPage === "function") {
-    await window.openAnnouncementsPage({ syncRoute: false });
-  }
-  return ensureNoticesState();
+  return noticesState;
 }
 
 async function loadRoadmapViewPresenter() {
@@ -71625,7 +73447,17 @@ async function loadCalendarViewPresenter() {
       "month",
   );
   renderCalendarWorkspace();
-  return loadCalendarWorkspace({ force: false });
+  try {
+    return await loadCalendarWorkspace({ force: false });
+  } catch (error) {
+    console.error("[RG ARLS] calendar workspace load failed", error);
+    calendarState.error = normalizeActionError(
+      error,
+      "캘린더 데이터를 불러오지 못했습니다.",
+    );
+    renderCalendarWorkspace();
+    return calendarState;
+  }
 }
 
 async function loadOrgViewPresenter() {
@@ -72491,6 +74323,7 @@ function serializeScheduleViewSnapshotPayload() {
         "employees",
         "templateRows",
         "templatesFetchedAt",
+        "uploadLanding",
         "importMappingProfile",
         "importMappingProfileFetchedAt",
         "importMappingSelectedProfileId",
@@ -72550,6 +74383,7 @@ function restoreScheduleViewSnapshotPayload(payload = {}) {
       "employees",
       "templateRows",
       "templatesFetchedAt",
+      "uploadLanding",
       "importMappingProfile",
       "importMappingProfileFetchedAt",
       "importMappingSelectedProfileId",
@@ -73252,6 +75086,74 @@ function buildViewPrewarmTargets() {
   );
 }
 
+function getScheduleFastWarmupSignature() {
+  if (!state.user || !can("schedule")) return "";
+  const tenantCode = ensureScheduleTenantCode(getScheduleTenantValue());
+  const month =
+    normalizeMonthKey(state.schedule?.month || getScheduleMonthValue()) ||
+    toMonthKey(new Date());
+  if (!tenantCode || !month) return "";
+  return [
+    getViewPrewarmSignature(),
+    month,
+    tenantCode,
+    canOpenScheduleUploadWorkspace() ? "base" : "no-base",
+    canUseScheduleUploadHqWizard() ? "hq" : "no-hq",
+  ].join("|");
+}
+
+async function runScheduleFastWarmup(expectedSignature = "") {
+  if (!expectedSignature || getScheduleFastWarmupSignature() !== expectedSignature)
+    return;
+  if (normalizeViewSnapshotName(state.currentView || "") === "schedule") return;
+  const month =
+    normalizeMonthKey(state.schedule?.month || getScheduleMonthValue()) ||
+    toMonthKey(new Date());
+  const tenantCode = ensureScheduleTenantCode(getScheduleTenantValue());
+  if (!tenantCode || !month) return;
+  const tasks = [
+    loadMonthlyScheduleLiteWithCache({
+      month,
+      tenantCode,
+      force: false,
+    }).catch(() => null),
+  ];
+  if (canOpenScheduleUploadWorkspace()) {
+    tasks.push(
+      loadScheduleUploadLanding(SCHEDULE_UPLOAD_MODE_BASE, {
+        force: false,
+      }).catch(() => null),
+    );
+  }
+  if (canUseScheduleUploadHqWizard()) {
+    tasks.push(
+      loadScheduleUploadLanding(SCHEDULE_UPLOAD_MODE_HQ, {
+        force: false,
+      }).catch(() => null),
+    );
+  }
+  await Promise.allSettled(tasks);
+}
+
+function queueScheduleFastWarmup({ delayMs = 120 } = {}) {
+  const signature = getScheduleFastWarmupSignature();
+  if (!signature) return;
+  if (scheduleFastWarmupTimer) {
+    clearTimeout(scheduleFastWarmupTimer);
+    scheduleFastWarmupTimer = 0;
+  }
+  if (scheduleFastWarmupSignature === signature) return;
+  scheduleFastWarmupSignature = signature;
+  scheduleFastWarmupTimer = window.setTimeout(() => {
+    scheduleFastWarmupTimer = 0;
+    runScheduleFastWarmup(signature).catch((error) => {
+      console.debug?.("[RG ARLS] schedule fast warmup skipped", {
+        message: String(error?.message || error || "unknown"),
+      });
+    });
+  }, Math.max(0, Number(delayMs || 0)));
+}
+
 function queuePostLoginViewPrewarm({ delayMs = VIEW_PREWARM_DELAY_MS } = {}) {
   const signature = getViewPrewarmSignature();
   if (!signature) return;
@@ -73274,6 +75176,7 @@ function queuePostLoginViewPrewarm({ delayMs = VIEW_PREWARM_DELAY_MS } = {}) {
     running: false,
     lastQueuedAt: Date.now(),
   };
+  queueScheduleFastWarmup();
 }
 
 async function runPostLoginViewPrewarm(expectedSignature = "") {
@@ -84529,7 +86432,7 @@ function renderAttendanceCompactEmpty(
   li.innerHTML = `
     <div class="attendance-compact-empty">
       <div class="attendance-compact-empty-icon" aria-hidden="true">
-        ${buildAzureTopbarIconSvg("file")}
+        ${buildArlsAttendanceIconSvg("detail-panel")}
       </div>
       <div class="attendance-compact-empty-title">${title}</div>
       ${description ? `<div class="attendance-compact-empty-description">${description}</div>` : ""}
@@ -86660,7 +88563,7 @@ function renderAttendanceFilterMeta() {
       : "조회 테넌트를 먼저 선택하세요.";
     advancedTrigger.classList.toggle("is-active-filter", activeCount > 0);
     advancedTrigger.textContent =
-      activeCount > 0 ? `필터 ${activeCount}` : "필터";
+      activeCount > 0 ? `고급 필터 ${activeCount}` : "고급 필터";
     advancedTrigger.setAttribute(
       "aria-label",
       activeCount > 0
@@ -87429,10 +89332,6 @@ async function onAttendanceGoCorrection({ missingOnly = false } = {}) {
 
 function renderAttendanceWorkspaceHeader() {
   const subtitleEl = $("#attendanceWorkspaceSubtitle");
-  if (subtitleEl instanceof HTMLElement) {
-    subtitleEl.textContent = "";
-    subtitleEl.classList.add("hidden");
-  }
   const section = getAttendanceWorkspaceSection();
   const periodMode = normalizeAttendancePeriodMode(
     state.attendanceView?.periodMode || "list",
@@ -87449,6 +89348,15 @@ function renderAttendanceWorkspaceHeader() {
   const showCorrection =
     (can("attendance") || can("attendanceReview") || can("leaveReview")) &&
     section === "daily";
+  if (subtitleEl instanceof HTMLElement) {
+    const subtitleMap = {
+      daily: "선택한 날짜 기준으로 직원별 출퇴근 현황을 확인합니다.",
+      period: "선택한 기간 기준으로 직원별 출퇴근 기록을 확인합니다.",
+      stats: "선택한 기간 기준으로 출퇴근 통계를 확인합니다.",
+    };
+    subtitleEl.textContent = subtitleMap[section] || "";
+    subtitleEl.classList.toggle("hidden", !subtitleEl.textContent);
+  }
   if (viewRoot instanceof HTMLElement) {
     viewRoot.dataset.attendanceSection = section;
     viewRoot.dataset.attendancePeriodMode = periodMode;
@@ -87473,6 +89381,90 @@ function renderAttendanceWorkspaceHeader() {
   if (attendanceView instanceof HTMLElement) {
     attendanceView.dataset.attendanceSection = section;
     attendanceView.dataset.attendancePeriodMode = periodMode;
+  }
+  renderAttendanceManagerInfoBar();
+  renderAttendanceDailyDateDisplay();
+  renderAttendanceDailyStatusChips();
+}
+
+function getAttendanceDailyQuickFilterConfig() {
+  return [
+    { value: "all", label: "전체" },
+    { value: "normal", label: "정상" },
+    { value: "late", label: "지각" },
+    { value: "missing_in", label: "미출근" },
+    { value: "correction_pending", label: "정정대기" },
+  ];
+}
+
+function renderAttendanceDailyDateDisplay() {
+  const displayBtn = $("#attendanceStatusDateDisplay");
+  const displayText = $("#attendanceStatusDateDisplayText");
+  const section = getAttendanceWorkspaceSection();
+  if (displayBtn instanceof HTMLElement) {
+    displayBtn.classList.toggle("hidden", section !== "daily");
+  }
+  if (!(displayText instanceof HTMLElement)) return;
+  const value = getAttendanceActiveDate();
+  displayText.textContent = formatAttendanceControlDateLabel(value) || "-";
+}
+
+function renderAttendanceDailyStatusChips() {
+  const host = $("#attendanceDailyStatusChips");
+  const statusSelect = $("#attendanceStatusSelect");
+  const statusField =
+    statusSelect instanceof HTMLElement
+      ? statusSelect.closest(".attendance-ops-field")
+      : null;
+  const section = getAttendanceWorkspaceSection();
+  if (!(host instanceof HTMLElement)) return;
+  host.classList.toggle("hidden", section !== "daily");
+  if (statusField instanceof HTMLElement) {
+    statusField.classList.toggle("hidden", section === "daily");
+  }
+  if (section !== "daily") {
+    host.innerHTML = "";
+    return;
+  }
+  const activeValue = normalizeAttendanceStatusFilter(
+    state.attendanceView?.statusFilter || "all",
+  );
+  host.innerHTML = getAttendanceDailyQuickFilterConfig()
+    .map(
+      (item) => `
+        <button
+          type="button"
+          class="attendance-daily-status-chip${activeValue === item.value ? " is-active" : ""}"
+          data-action="attendance-status-chip"
+          data-value="${escapeHtml(item.value)}"
+          aria-pressed="${activeValue === item.value ? "true" : "false"}"
+        >${escapeHtml(item.label)}</button>
+      `,
+    )
+    .join("");
+}
+
+function renderAttendanceManagerInfoBar() {
+  const bar = $("#attendanceManagerInfoBar");
+  const text = $("#attendanceManagerInfoText");
+  const pending = $("#attendanceManagerPendingCount");
+  const isManager = isManagerShellRole();
+  const section = getAttendanceWorkspaceSection();
+  const pendingCount = Math.max(
+    0,
+    Number(state.attendanceView?.managerSummary?.correction || 0),
+  );
+  if (bar instanceof HTMLElement) {
+    const visible = isManager && section === "daily";
+    bar.classList.toggle("hidden", !visible);
+    bar.setAttribute("aria-hidden", visible ? "false" : "true");
+  }
+  if (text instanceof HTMLElement) {
+    text.textContent =
+      "관리자 권한으로 조회 전체의 출퇴근 기록, 예외, 설정 대기 건을 확인할 수 있습니다.";
+  }
+  if (pending instanceof HTMLElement) {
+    pending.textContent = `${pendingCount}건`;
   }
 }
 
@@ -87501,9 +89493,9 @@ function renderAttendanceWorkspaceTabs() {
   );
   if (titleEl instanceof HTMLElement && isManagerShellRole()) {
     const titleMap = {
-      daily: "출퇴근 날짜별",
-      period: "출퇴근 기간별",
-      stats: "출퇴근 통계",
+      daily: "출퇴근",
+      period: "기간별",
+      stats: "통계",
     };
     titleEl.textContent = titleMap[section] || "출퇴근";
   }
@@ -87537,6 +89529,17 @@ function renderAttendanceToolbarVisibility() {
   const periodMode = normalizeAttendancePeriodMode(
     state.attendanceView?.periodMode || "list",
   );
+  const toolbar = $("#attendanceOpsToolbar");
+  if (toolbar instanceof HTMLElement) {
+    toolbar.classList.toggle(
+      "is-attendance-period-list",
+      section === "period" && periodMode === "list",
+    );
+    toolbar.classList.toggle(
+      "is-attendance-period-calendar",
+      section === "period" && periodMode === "calendar",
+    );
+  }
   toggleVisibility("#attendanceToolbarStatusFields", section === "daily");
   toggleVisibility("#attendanceToolbarCalendarFields", section === "period");
   toggleVisibility("#attendanceToolbarListFields", section === "stats");
@@ -87673,18 +89676,44 @@ function renderAttendanceCalendarSummaryStrip(summary = null) {
           correctionPending: 0,
         };
   const items = [
-    { label: "근무 대상", value: counts.scheduled, tone: "neutral" },
-    { label: "미출근", value: counts.missingIn, tone: "danger" },
-    { label: "미퇴근", value: counts.missingOut, tone: "warn" },
-    { label: "지각", value: counts.late, tone: "warn" },
-    { label: "조퇴", value: counts.earlyLeave, tone: "warn" },
-    { label: "정정 대기", value: counts.correctionPending, tone: "accent" },
+    {
+      label: "근무 대상",
+      value: counts.scheduled,
+      tone: "neutral",
+      icon: "employees",
+    },
+    { label: "미출근", value: counts.missingIn, tone: "danger", icon: "absent" },
+    {
+      label: "미퇴근",
+      value: counts.missingOut,
+      tone: "warn",
+      icon: "missing-checkout",
+    },
+    { label: "지각", value: counts.late, tone: "warn", icon: "late" },
+    {
+      label: "조퇴",
+      value: counts.earlyLeave,
+      tone: "warn",
+      icon: "early-leave",
+    },
+    {
+      label: "정정 대기",
+      value: counts.correctionPending,
+      tone: "accent",
+      icon: "correction-pending",
+    },
   ];
   items.forEach((item) => {
     const chip = document.createElement("span");
     chip.className = "attendance-calendar-summary-chip";
     chip.dataset.tone = item.tone || "neutral";
-    chip.innerHTML = `<span>${item.label}</span><strong>${Math.max(0, Number(item.value || 0))}</strong>`;
+    chip.innerHTML = `
+      <span class="attendance-calendar-summary-label">
+        ${buildArlsAttendanceIconSvg(item.icon || "attendance-clock")}
+        <span>${item.label}</span>
+      </span>
+      <strong>${Math.max(0, Number(item.value || 0))}</strong>
+    `;
     target.appendChild(chip);
   });
 }
@@ -88154,7 +90183,7 @@ function buildAttendanceStatsAttendanceMetricSeries(
   return {
     title: titleMap[normalizedMetric] || "출퇴근 통계",
     description:
-      descriptionMap[normalizedMetric] || "기간별 출퇴근 흐름입니다.",
+      descriptionMap[normalizedMetric] || "기간별 흐름입니다.",
     labels,
     rawLabels: dateKeys,
     values,
@@ -88362,31 +90391,24 @@ function renderAttendancePeriodCalendarWorkspace({ loading = false } = {}) {
   const month =
     normalizeMonthKey(state.attendanceView?.calendarMonth || "") ||
     toMonthKey(new Date());
+  const rows = getFilteredAttendanceManagerRows(
+    getAttendanceManagerRowsForCurrentQuery(),
+    { applyStatus: true },
+  );
+  const scopedRows = getFilteredAttendanceManagerRows(
+    getAttendanceManagerRowsForCurrentQuery(),
+    { applyStatus: false },
+  );
   state.schedule.month = month;
-  toggleVisibility("#attendanceCalendarSummaryStrip", false);
-  toggleVisibility("#attendanceCalendarGridWrap", false);
-  toggleVisibility("#attendancePeriodCalendarSummaryHost", true);
-  toggleVisibility("#attendancePeriodCalendarGrid", true);
+  toggleVisibility("#attendanceCalendarSummaryStrip", true);
+  toggleVisibility("#attendanceCalendarGridWrap", true);
+  toggleVisibility("#attendancePeriodCalendarSummaryHost", false);
+  toggleVisibility("#attendancePeriodCalendarGrid", false);
   if (summaryHost instanceof HTMLElement) {
-    summaryHost.innerHTML = `
-      <div class="attendance-period-calendar-note">
-        <div class="attendance-period-calendar-note-copy">
-          <strong>기간별 캘린더</strong>
-          <span>${escapeHtml(month)} · 월간 근무표와 동일한 shared 캘린더</span>
-        </div>
-        <div class="attendance-period-calendar-note-meta">
-          <span class="attendance-period-calendar-chip">실시간 반영</span>
-          <span class="attendance-period-calendar-chip is-muted">근무 템플릿 연동</span>
-        </div>
-      </div>
-    `;
+    summaryHost.innerHTML = "";
   }
-  if (!(target instanceof HTMLElement)) return;
-  if (loading && !Array.isArray(state.schedule?.rows).length) {
-    renderScheduleCalendarSkeleton();
-    return;
-  }
-  renderScheduleCalendar();
+  if (target instanceof HTMLElement) target.innerHTML = "";
+  renderAttendanceCalendarPanel(rows, scopedRows, { loading });
 }
 
 function renderAttendanceStatsPanelTabs() {
@@ -91610,7 +93632,13 @@ function canMutateScheduleData() {
 function canReadScheduleTemplateData() {
   if (getScheduleDataProvider().mode !== "real") return false;
   const role = normalizeRoleValue(state.user?.role || "");
-  return role === "developer" || role === "hq_admin" || isMasterDeveloperAccount();
+  return (
+    role === "developer" ||
+    role === "hq_admin" ||
+    role === "supervisor" ||
+    role === "vice_supervisor" ||
+    isMasterDeveloperAccount()
+  );
 }
 
 function canUseScheduleSupportRoundtripSource() {
@@ -91690,7 +93718,11 @@ function canViewScheduleReportsWorkspace() {
 }
 
 function canViewReportsFinanceTab() {
-  return canViewReportsWizardRole() && canViewScheduleFinanceSubmission();
+  return (
+    canViewReportsWizardRole() &&
+    canViewScheduleFinanceSubmission() &&
+    !canViewReportsFinanceDownloadTab()
+  );
 }
 
 function canViewReportsSupportTab() {
@@ -91911,6 +93943,174 @@ function formatScheduleTemplateDutyTypeLabel(value = "") {
   if (duty === "overtime") return "초과근무";
   if (duty === "night") return "야간근무";
   return duty || "-";
+}
+
+function normalizeScheduleTemplateListFilter(value = "") {
+  const filter = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (filter === "day" || filter === "night" || filter === "overtime") {
+    return filter;
+  }
+  return "all";
+}
+
+function getScheduleTemplateListFilter() {
+  const filter = normalizeScheduleTemplateListFilter(
+    state.schedule?.templateListFilter || "",
+  );
+  if (state.schedule) state.schedule.templateListFilter = filter;
+  return filter;
+}
+
+function setScheduleTemplateListFilter(value = "") {
+  if (!state.schedule) return;
+  state.schedule.templateListFilter = normalizeScheduleTemplateListFilter(value);
+}
+
+function getScheduleTemplateSearchQuery() {
+  const query = String(state.schedule?.templateListSearch || "").trim();
+  if (state.schedule) state.schedule.templateListSearch = query;
+  return query;
+}
+
+function setScheduleTemplateSearchQuery(value = "") {
+  if (!state.schedule) return;
+  state.schedule.templateListSearch = String(value || "").trim();
+}
+
+function getScheduleTemplateDutyKey(row = {}) {
+  return normalizeShiftType(row?.duty_type || row?.shift_type || row?.type || "");
+}
+
+function doesScheduleTemplateMatchFilter(row = {}, filter = "all") {
+  const normalizedFilter = normalizeScheduleTemplateListFilter(filter);
+  if (normalizedFilter === "all") return true;
+  return getScheduleTemplateDutyKey(row) === normalizedFilter;
+}
+
+function doesScheduleTemplateMatchSearch(row = {}, query = "") {
+  const normalizedQuery = String(query || "")
+    .trim()
+    .toLowerCase();
+  if (!normalizedQuery) return true;
+  const haystack = [
+    row?.template_name,
+    row?.site_name,
+    row?.site_code,
+    formatScheduleTemplateDutyTypeLabel(row?.duty_type),
+    formatScheduleTemplateTimeRange(row),
+  ]
+    .map((item) => String(item || "").toLowerCase())
+    .join(" ");
+  return haystack.includes(normalizedQuery);
+}
+
+function getScheduleTemplateFilteredRows(rows = []) {
+  const filter = getScheduleTemplateListFilter();
+  const query = getScheduleTemplateSearchQuery();
+  return (Array.isArray(rows) ? rows : []).filter(
+    (row) =>
+      doesScheduleTemplateMatchFilter(row, filter) &&
+      doesScheduleTemplateMatchSearch(row, query),
+  );
+}
+
+function getScheduleTemplateConnectionCount(row = {}, usageMap = new Map()) {
+  const directValue =
+    row?.connection_count ??
+    row?.connections_count ??
+    row?.usage_count ??
+    row?.linked_count ??
+    row?.mapping_count ??
+    row?.profile_count;
+  const directNumber = Number(directValue);
+  if (Number.isFinite(directNumber) && directNumber > 0) {
+    return directNumber;
+  }
+  const templateId = String(row?.id || "").trim();
+  const mappedNumber = Number(templateId ? usageMap.get(templateId) || 0 : 0);
+  return Number.isFinite(mappedNumber) && mappedNumber > 0 ? mappedNumber : 0;
+}
+
+function getScheduleTemplateSummaryIconSvg(type = "all") {
+  if (type === "day") {
+    return '<svg viewBox="0 0 28 28" focusable="false"><path d="M8 4.5v4M20 4.5v4M5.5 10.5h17M7 6.5h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2Z"/><path d="M10 15.2h8M10 19h5"/></svg>';
+  }
+  if (type === "night") {
+    return '<svg viewBox="0 0 28 28" focusable="false"><path d="M19.8 18.8A8.4 8.4 0 0 1 9.2 8.2 8.5 8.5 0 1 0 19.8 18.8Z"/></svg>';
+  }
+  if (type === "overtime") {
+    return '<svg viewBox="0 0 28 28" focusable="false"><circle cx="14" cy="14" r="9.5"/><path d="M14 8.5v6l4 2.4"/></svg>';
+  }
+  return '<svg viewBox="0 0 28 28" focusable="false"><path d="m14 4.5 8 4.4-8 4.4-8-4.4 8-4.4Z"/><path d="m6 13.5 8 4.4 8-4.4"/><path d="m6 18.1 8 4.4 8-4.4"/></svg>';
+}
+
+function renderScheduleTemplateSummaryCards(rows = []) {
+  const container = $("#scheduleTemplateSummaryCards");
+  if (!(container instanceof HTMLElement)) return;
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const counts = {
+    all: safeRows.length,
+    day: safeRows.filter((row) => getScheduleTemplateDutyKey(row) === "day")
+      .length,
+    night: safeRows.filter((row) => getScheduleTemplateDutyKey(row) === "night")
+      .length,
+    overtime: safeRows.filter(
+      (row) => getScheduleTemplateDutyKey(row) === "overtime",
+    ).length,
+  };
+  const cards = [
+    { key: "all", label: "전체 템플릿" },
+    { key: "day", label: "주간근무" },
+    { key: "night", label: "야간근무" },
+    { key: "overtime", label: "초과근무" },
+  ];
+  container.innerHTML = "";
+  cards.forEach((card) => {
+    const article = document.createElement("article");
+    article.className = `schedule-template-summary-card is-${card.key}`;
+    const icon = document.createElement("span");
+    icon.className = "schedule-template-summary-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.innerHTML = getScheduleTemplateSummaryIconSvg(card.key);
+    const text = document.createElement("div");
+    text.className = "schedule-template-summary-copy";
+    const label = document.createElement("span");
+    label.className = "schedule-template-summary-label";
+    label.textContent = card.label;
+    const value = document.createElement("strong");
+    value.className = "schedule-template-summary-value";
+    value.textContent = `${Number(counts[card.key] || 0).toLocaleString("ko-KR")}개`;
+    text.append(label, value);
+    article.append(icon, text);
+    container.appendChild(article);
+  });
+}
+
+function syncScheduleTemplateToolbarState() {
+  const input = $("#scheduleTemplateSearchInput");
+  if (input instanceof HTMLInputElement) {
+    input.value = state.schedule?.templateListSearch || "";
+    if (input.dataset.boundScheduleTemplateSearch !== "true") {
+      input.dataset.boundScheduleTemplateSearch = "true";
+      input.addEventListener("input", () => {
+        setScheduleTemplateSearchQuery(input.value);
+        renderScheduleTemplateTable();
+      });
+    }
+  }
+
+  const activeFilter = getScheduleTemplateListFilter();
+  document
+    .querySelectorAll('[data-action="schedule-template-filter"]')
+    .forEach((button) => {
+      if (!(button instanceof HTMLButtonElement)) return;
+      const filter = normalizeScheduleTemplateListFilter(button.dataset.filter);
+      const active = filter === activeFilter;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
 }
 
 const SCHEDULE_CREATE_TEMPLATE_DUTY_ORDER = ["day", "overtime", "night"];
@@ -92864,6 +95064,8 @@ function renderScheduleTemplateTable() {
     ? state.schedule.templateRows
     : [];
   const usageMap = buildScheduleImportMappingUsageMap();
+  renderScheduleTemplateSummaryCards(rows);
+  syncScheduleTemplateToolbarState();
   if (!rows.length) {
     const tr = document.createElement("tr");
     tr.className = "admin-table-empty-row";
@@ -92879,10 +95081,26 @@ function renderScheduleTemplateTable() {
     return;
   }
 
-  rows.forEach((row) => {
+  const visibleRows = getScheduleTemplateFilteredRows(rows);
+  if (!visibleRows.length) {
+    const tr = document.createElement("tr");
+    tr.className = "admin-table-empty-row";
+    const td = document.createElement("td");
+    td.colSpan = 7;
+    td.textContent = "조건에 맞는 근무 템플릿이 없습니다.";
+    tr.appendChild(td);
+    tableBody.appendChild(tr);
+    if (statusEl) {
+      statusEl.textContent = "";
+      statusEl.classList.add("hidden");
+    }
+    return;
+  }
+
+  visibleRows.forEach((row) => {
     const tr = document.createElement("tr");
     const templateId = String(row?.id || "").trim();
-    const usageCount = Number(usageMap.get(templateId) || 0);
+    const usageCount = getScheduleTemplateConnectionCount(row, usageMap);
 
     const nameTd = document.createElement("td");
     nameTd.appendChild(
@@ -92924,7 +95142,7 @@ function renderScheduleTemplateTable() {
     if (canWrite) {
       const editBtn = document.createElement("button");
       editBtn.type = "button";
-      editBtn.className = "btn btn-secondary";
+      editBtn.className = "btn btn-secondary schedule-template-row-btn";
       editBtn.dataset.action = "schedule-template-edit";
       editBtn.dataset.templateId = templateId;
       editBtn.textContent = "수정";
@@ -92932,7 +95150,7 @@ function renderScheduleTemplateTable() {
 
       const duplicateBtn = document.createElement("button");
       duplicateBtn.type = "button";
-      duplicateBtn.className = "btn btn-secondary";
+      duplicateBtn.className = "btn btn-secondary schedule-template-row-btn";
       duplicateBtn.dataset.action = "schedule-template-duplicate";
       duplicateBtn.dataset.templateId = templateId;
       duplicateBtn.textContent = "복제";
@@ -92940,7 +95158,8 @@ function renderScheduleTemplateTable() {
 
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
-      deleteBtn.className = "btn btn-destructive";
+      deleteBtn.className =
+        "btn btn-destructive schedule-template-row-btn is-danger";
       deleteBtn.dataset.action = "schedule-template-delete";
       deleteBtn.dataset.templateId = templateId;
       deleteBtn.textContent = "삭제";
@@ -92969,6 +95188,12 @@ function renderScheduleTemplateTable() {
 
 async function loadScheduleTemplateRows({ force = false } = {}) {
   if (!canReadScheduleTemplateData()) return [];
+  if (
+    canSelectScheduleWorkflowTenant() &&
+    getScheduleActiveTopTab() === SCHEDULE_TAB_TEMPLATES
+  ) {
+    await ensureDevWorkingTenantContext({ silentToast: true });
+  }
   const statusEl = $("#scheduleTemplateStatus");
   const now = Date.now();
   const isFresh =
@@ -92987,7 +95212,13 @@ async function loadScheduleTemplateRows({ force = false } = {}) {
     statusEl.classList.remove("hidden");
   }
   const params = new URLSearchParams();
-  params.set("tenant_code", getScheduleBaseTenantCode());
+  const tenantCode = getScheduleTemplateWorkspaceTenantCode();
+  if (!tenantCode) {
+    resetScheduleTemplateWorkspaceState();
+    renderScheduleTemplateTable();
+    return [];
+  }
+  params.set("tenant_code", tenantCode);
   const siteFilterCode = String($("#scheduleSiteFilter")?.value || "").trim();
   if (siteFilterCode && siteFilterCode.toLowerCase() !== "all") {
     params.set("site_code", siteFilterCode);
@@ -93009,6 +95240,12 @@ async function loadScheduleImportMappingProfile({ force = false } = {}) {
     state.schedule.importMappingSelectedProfileId = "";
     return null;
   }
+  if (
+    canSelectScheduleWorkflowTenant() &&
+    getScheduleActiveTopTab() === SCHEDULE_TAB_TEMPLATES
+  ) {
+    await ensureDevWorkingTenantContext({ silentToast: true });
+  }
   const now = Date.now();
   const cached = state.schedule?.importMappingProfile;
   const fetchedAt = Number(state.schedule?.importMappingProfileFetchedAt || 0);
@@ -93021,8 +95258,17 @@ async function loadScheduleImportMappingProfile({ force = false } = {}) {
     renderScheduleImportMappingProfileManager();
     return cached;
   }
+  const tenantCode = getScheduleTemplateWorkspaceTenantCode();
+  if (!tenantCode) {
+    state.schedule.importMappingProfile = null;
+    state.schedule.importMappingProfileFetchedAt = 0;
+    state.schedule.importMappingSelectedProfileId = "";
+    renderScheduleImportMappingProfileSummary();
+    renderScheduleImportMappingProfileManager();
+    return null;
+  }
   const profile = await apiRequest(
-    `/schedules/import-mapping-profile?tenant_code=${encodeURIComponent(getScheduleBaseTenantCode())}`,
+    `/schedules/import-mapping-profile?tenant_code=${encodeURIComponent(tenantCode)}`,
   );
   state.schedule.importMappingProfile =
     profile && typeof profile === "object" ? profile : null;
@@ -93381,7 +95627,7 @@ async function onScheduleImportMappingSave() {
   }
 
   const savedProfile = await apiRequest(
-    `/schedules/import-mapping-profile?tenant_code=${encodeURIComponent(getScheduleBaseTenantCode())}`,
+    `/schedules/import-mapping-profile?tenant_code=${encodeURIComponent(getScheduleTemplateWorkspaceTenantCode())}`,
     {
       method: "PUT",
       body: {
@@ -93419,7 +95665,7 @@ async function onScheduleImportMappingDelete(profileId, profileName) {
     return;
   }
   const query = new URLSearchParams();
-  query.set("tenant_code", getScheduleBaseTenantCode());
+  query.set("tenant_code", getScheduleTemplateWorkspaceTenantCode());
   query.set("profile_id", normalizedProfileId);
   await apiRequest(`/schedules/import-mapping-profile?${query.toString()}`, {
     method: "DELETE",
@@ -96483,7 +98729,6 @@ function buildScheduleToolbarMetaText() {
   const siteFilter = getScheduleSiteFilterValue();
   const shiftFilter = getScheduleShiftFilterValue();
   const employeeFilter = getScheduleEmployeeFilterValue();
-  const showLeaveRows = getScheduleShowLeaveRowsValue();
   if (siteFilter === "all") {
     parts.push("전체 지점");
   } else {
@@ -96499,11 +98744,10 @@ function buildScheduleToolbarMetaText() {
   }
   parts.push(
     shiftFilter === "all"
-      ? "전체 근무"
+      ? "전체 근무유형"
       : `${getScheduleShiftMeta(shiftFilter).label}`,
   );
   parts.push(employeeFilter ? `직원 검색: ${employeeFilter}` : "전체 직원");
-  parts.push(showLeaveRows ? "휴가 표시" : "휴가 숨김");
   return parts.join(" · ");
 }
 
@@ -96513,8 +98757,9 @@ function buildScheduleToolbarSummary(month = "") {
   const rows = Array.isArray(state.schedule.filteredRows)
     ? state.schedule.filteredRows
     : [];
-  const assignedCount = rows.filter((row) => !isLeaveScheduleRow(row)).length;
-  const leaveCount = rows.filter((row) => isLeaveScheduleRow(row)).length;
+  const assignedCount = rows.filter((row) =>
+    isScheduleCalendarDisplayItem(row),
+  ).length;
   let emptyDays = 0;
   if (monthMeta) {
     const dayMap = getScheduleBoardDayMap(normalizedMonth);
@@ -96532,7 +98777,6 @@ function buildScheduleToolbarSummary(month = "") {
   }
   return [
     { label: "배정", value: String(assignedCount) },
-    { label: "휴가", value: String(leaveCount) },
     { label: "미배정 일자", value: String(emptyDays) },
   ];
 }
@@ -96540,9 +98784,8 @@ function buildScheduleToolbarSummary(month = "") {
 function renderScheduleOpsToolbar() {
   const activeTab = getScheduleActiveTopTab();
   const isBoardTab = isScheduleBoardTab(activeTab);
-  const isTemplateTab = activeTab === SCHEDULE_TAB_TEMPLATES;
   toggleVisibility("#scheduleOpsToolbar", isBoardTab);
-  toggleVisibility("#scheduleActionMenuRow", isBoardTab || isTemplateTab);
+  toggleVisibility("#scheduleActionMenuRow", isBoardTab);
 
   const metaEl = $("#scheduleToolbarMeta");
   if (metaEl instanceof HTMLElement) {
@@ -96573,11 +98816,7 @@ function renderScheduleOpsToolbar() {
   document
     .querySelectorAll("#scheduleActionMenuRow .schedule-template-page-action")
     .forEach((node) => {
-      const managerOnly = node.classList.contains("shell-manager-only");
-      node.classList.toggle(
-        "hidden",
-        !isTemplateTab || (managerOnly && !canWrite),
-      );
+      node.classList.add("hidden");
     });
 }
 
@@ -96626,7 +98865,7 @@ function renderScheduleFilterOptions() {
       if (!shiftType) return;
       shiftValues.add(shiftType);
     });
-    shiftSelect.innerHTML = '<option value="all">전체 근무</option>';
+    shiftSelect.innerHTML = '<option value="all">전체 근무유형</option>';
     Array.from(shiftValues)
       .sort((a, b) => String(a).localeCompare(String(b)))
       .forEach((shiftType) => {
@@ -97752,6 +99991,7 @@ function renderScheduleCalendarMessage(message) {
   if (!target) return;
   target.innerHTML = "";
   target.classList.remove("schedule-list-view");
+  target.classList.remove("schedule-simple-matrix-active");
   setAriaBusy(target, false);
   const box = document.createElement("div");
   box.className = "schedule-calendar-empty";
@@ -97764,6 +100004,7 @@ function renderScheduleCalendarSkeleton() {
   if (!target) return;
   target.innerHTML = "";
   target.classList.remove("schedule-list-view");
+  target.classList.remove("schedule-simple-matrix-active");
   setAriaBusy(target, true);
 
   const weekdayRow = document.createElement("div");
@@ -97817,16 +100058,78 @@ function shouldUseScheduleDesktopDrawer() {
   return isDesktopViewport() && isScheduleBoardTab(getScheduleActiveTopTab());
 }
 
+function focusScheduleDesktopDrawerReturnTarget(drawer) {
+  if (!(drawer instanceof HTMLElement)) return;
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || !drawer.contains(active)) return;
+
+  const dateKey = String(
+    state.schedule.selectedDateKey || state.schedule.lastInteractedDateKey || "",
+  ).trim();
+  const dateCell = dateKey
+    ? Array.from(document.querySelectorAll(".schedule-calendar-cell[data-date]")).find(
+        (cell) =>
+          cell instanceof HTMLElement &&
+          String(cell.dataset.date || "") === dateKey,
+      )
+    : null;
+  const focusTarget =
+    (dateCell instanceof HTMLElement && dateCell) ||
+    $("#scheduleCalendarGrid") ||
+    $("#scheduleMonthlyPanel") ||
+    $("#view-schedule");
+
+  if (focusTarget instanceof HTMLElement) {
+    const previousTabIndex = focusTarget.getAttribute("tabindex");
+    if (previousTabIndex === null) {
+      focusTarget.setAttribute("tabindex", "-1");
+    }
+    try {
+      focusTarget.focus({ preventScroll: true });
+    } catch {
+      focusTarget.focus();
+    }
+    if (previousTabIndex === null) {
+      window.setTimeout(() => {
+        focusTarget.removeAttribute("tabindex");
+      }, 0);
+    }
+    return;
+  }
+
+  active.blur();
+}
+
 function setScheduleDesktopDrawerOpen(open = false) {
   state.schedule.desktopDrawerOpen = Boolean(open);
   const drawer = $("#scheduleDesktopDrawer");
   const backdrop = $("#scheduleDesktopDrawerBackdrop");
+  const workspace = $("#scheduleCalendarWorkspace");
+  const monthlyPanel = $("#scheduleMonthlyPanel");
+  const scheduleView = $("#view-schedule");
   if (drawer instanceof HTMLElement) {
-    drawer.classList.toggle("hidden", !open);
-    drawer.setAttribute("aria-hidden", open ? "false" : "true");
+    if (open) {
+      drawer.removeAttribute("inert");
+      drawer.classList.remove("hidden");
+      drawer.setAttribute("aria-hidden", "false");
+    } else {
+      focusScheduleDesktopDrawerReturnTarget(drawer);
+      drawer.setAttribute("inert", "");
+      drawer.classList.add("hidden");
+      drawer.setAttribute("aria-hidden", "true");
+    }
   }
   if (backdrop instanceof HTMLElement) {
     backdrop.classList.toggle("hidden", !open);
+  }
+  if (workspace instanceof HTMLElement) {
+    workspace.classList.toggle("is-detail-open", Boolean(open));
+  }
+  if (monthlyPanel instanceof HTMLElement) {
+    monthlyPanel.classList.toggle("schedule-detail-inline-open", Boolean(open));
+  }
+  if (scheduleView instanceof HTMLElement) {
+    scheduleView.classList.toggle("schedule-detail-inline-open", Boolean(open));
   }
 }
 
@@ -97834,12 +100137,13 @@ function renderScheduleDetailStats(rows = []) {
   const target = $("#scheduleDetailStats");
   if (!(target instanceof HTMLElement)) return;
   target.innerHTML = "";
-  const list = Array.isArray(rows) ? rows : [];
+  const list = (Array.isArray(rows) ? rows : []).filter((row) =>
+    isScheduleCalendarDisplayItem(row),
+  );
   const totalEmployees = countScheduleRefUniqueEmployees(list);
   const tardyCount = list.filter((row) => isScheduleRefTardyRow(row)).length;
-  const leaveCount = list.filter((row) => isScheduleRefHolidayRow(row)).length;
   const absentCount = list.filter((row) => isScheduleRefAbsentRow(row)).length;
-  const workCount = Math.max(totalEmployees - leaveCount - absentCount, 0);
+  const workCount = Math.max(totalEmployees - absentCount, 0);
   const typeCounts = getScheduleRefTypeCounts(list);
 
   const daySection = document.createElement("section");
@@ -97855,9 +100159,6 @@ function renderScheduleDetailStats(rows = []) {
   );
   daySection.appendChild(
     createScheduleRefDetailLine("지각", `${tardyCount}명`),
-  );
-  daySection.appendChild(
-    createScheduleRefDetailLine("연차", `${leaveCount}명`),
   );
   daySection.appendChild(
     createScheduleRefDetailLine("결근", `${absentCount}명`),
@@ -97877,11 +100178,6 @@ function renderScheduleDetailStats(rows = []) {
   typeSection.appendChild(
     createScheduleRefDetailLine("야간 (22:00 - 06:00)", `${typeCounts.night}명`, {
       dotClass: "is-night",
-    }),
-  );
-  typeSection.appendChild(
-    createScheduleRefDetailLine("휴일", `${typeCounts.holiday}명`, {
-      dotClass: "is-leave",
     }),
   );
   typeSection.appendChild(
@@ -98029,7 +100325,8 @@ function getScheduleBoardDayMap(month) {
         items: buildScheduleBoardRenderItemsForCell(
           (Array.isArray(day?.items) ? day.items : [])
             .map((item) => normalizeScheduleBoardItem(item))
-            .filter((item) => isScheduleBoardItemVisible(item)),
+            .filter((item) => isScheduleBoardItemVisible(item))
+            .filter((item) => isScheduleCalendarDisplayItem(item)),
         ),
       },
     ]),
@@ -98181,6 +100478,7 @@ function ScheduleShiftCard({ item = {}, dateKey = "" } = {}) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = `schedule-shift-card schedule-shift-card-${getScheduleCardVariant(item)}`;
+  button.classList.toggle("is-alert", isScheduleRefAlertRow(item));
   button.classList.toggle(
     "is-simple",
     displayMode === SCHEDULE_DISPLAY_MODE_SIMPLE,
@@ -98204,7 +100502,7 @@ function ScheduleShiftCard({ item = {}, dateKey = "" } = {}) {
   if (displayMode === SCHEDULE_DISPLAY_MODE_SIMPLE) {
     timeEl.textContent = getScheduleRefShiftLabel(item);
   } else {
-    timeEl.innerHTML = renderScheduleTimeLinesHtml(item);
+    timeEl.textContent = formatScheduleBoardItemTimeLabel(item);
   }
   button.appendChild(timeEl);
 
@@ -98250,7 +100548,11 @@ function ScheduleDayCell({
     getMonthFromDateKey(dateKey) === monthKey;
 
   const dayNumber = Number(String(dateKey).slice(-2));
-  const allItems = inMonth ? buildScheduleBoardRenderItemsForCell(items) : [];
+  const allItems = buildScheduleBoardRenderItemsForCell(
+    (Array.isArray(items) ? items : []).filter((item) =>
+      isScheduleCalendarDisplayItem(item),
+    ),
+  );
   const isExpanded = isScheduleDayExpanded(dateKey);
   const visibleItems = isExpanded
     ? allItems
@@ -98484,9 +100786,13 @@ function getScheduleRefShiftMark(row = {}) {
   const displayType = resolveScheduleDisplayType(row);
   if (["annual_leave", "half_leave"].includes(displayType)) return "휴";
   if (["off", "holiday"].includes(displayType)) return "휴";
-  const variants = getScheduleBoardDisplayShiftTypes(normalizeScheduleBoardItem(row));
+  const item = normalizeScheduleBoardItem(row);
+  const variants = getScheduleBoardDisplayShiftTypes(item);
   if (variants.includes("day") && variants.includes("night")) return "주야";
   if (variants.includes("night")) return "야";
+  if (!variants.includes("day") && getScheduleBoardTotalHours(item) <= 0) {
+    return isScheduleRefAlertRow(row) ? "" : "주";
+  }
   return "주";
 }
 
@@ -98599,6 +100905,32 @@ function isScheduleRefAbsentRow(row = {}) {
   );
 }
 
+function isScheduleRefAlertRow(row = {}) {
+  return isScheduleRefTardyRow(row) || isScheduleRefAbsentRow(row);
+}
+
+function isScheduleCalendarDisplayItem(row = {}) {
+  if (isScheduleRefAlertRow(row)) return true;
+  const displayType = String(resolveScheduleDisplayType(row) || "")
+    .trim()
+    .toLowerCase();
+  if (
+    isLeaveScheduleRow(row) ||
+    ["off", "holiday", "annual_leave", "half_leave"].includes(displayType)
+  ) {
+    return false;
+  }
+  const item = normalizeScheduleBoardItem(row);
+  const variants = getScheduleBoardDisplayShiftTypes(item);
+  return (
+    variants.includes("day") ||
+    variants.includes("night") ||
+    variants.includes("overtime") ||
+    variants.includes("mixed") ||
+    getScheduleBoardTotalHours(item) > 0
+  );
+}
+
 function isScheduleRefHolidayRow(row = {}) {
   const displayType = String(resolveScheduleDisplayType(row) || "")
     .trim()
@@ -98669,8 +101001,14 @@ function createScheduleRefDetailLine(label, value, { dotClass = "" } = {}) {
 function createScheduleRefDetailRow(row = {}) {
   const li = document.createElement("li");
   li.className = "schedule-ref-detail-row";
+  const employeeName = getScheduleRefEmployeeName(row);
+  const avatar = document.createElement("span");
+  avatar.className = "schedule-ref-detail-avatar";
+  avatar.setAttribute("aria-hidden", "true");
+  avatar.textContent = String(employeeName || "-").trim().slice(0, 1) || "-";
   const name = document.createElement("strong");
-  name.textContent = getScheduleRefEmployeeName(row);
+  name.className = "schedule-ref-detail-name";
+  name.textContent = employeeName;
   const shift = document.createElement("span");
   shift.className = `schedule-ref-detail-shift ${getScheduleRefShiftClass(row)}`;
   shift.textContent = getScheduleRefShiftLabel(row);
@@ -98680,7 +101018,7 @@ function createScheduleRefDetailRow(row = {}) {
   const site = document.createElement("span");
   site.className = "schedule-ref-detail-site";
   site.textContent = getScheduleRefSiteLabel(row);
-  li.append(name, shift, time, site);
+  li.append(avatar, name, shift, time, site);
   return li;
 }
 
@@ -98776,10 +101114,12 @@ function createScheduleRefMetrics(month = "") {
 }
 
 function buildScheduleRefEmployeeRows(month = "") {
-  const rows = getScheduleRefMonthRows(month);
+  const rows = getScheduleRefMonthRows(month).filter((row) =>
+    isScheduleCalendarDisplayItem(row),
+  );
   return buildScheduleEmployeeBuckets(rows).map((bucket) => {
     const bucketRows = Array.isArray(bucket.rows) ? bucket.rows : [];
-    const workRows = bucketRows.filter((row) => !isLeaveScheduleRow(row));
+    const workRows = bucketRows.filter((row) => isScheduleCalendarDisplayItem(row));
     const dateKeys = new Set(
       workRows.map((row) => String(row?.schedule_date || "").trim()).filter(Boolean),
     );
@@ -98787,7 +101127,7 @@ function buildScheduleRefEmployeeRows(month = "") {
       getScheduleRefSiteLabel(workRows[0] || bucketRows[0] || {}) || "-";
     const shiftCounts = new Map();
     workRows.forEach((row) => {
-      const label = getScheduleRefShiftLabel(row);
+      const label = getScheduleRefShiftMark(row);
       shiftCounts.set(label, (shiftCounts.get(label) || 0) + 1);
     });
     const primaryShift =
@@ -98797,13 +101137,6 @@ function buildScheduleRefEmployeeRows(month = "") {
       (sum, row) => sum + getScheduleBoardTotalHours(row),
       0,
     );
-    const leaveCount = bucketRows.filter((row) => {
-      const displayType = resolveScheduleDisplayType(row);
-      return (
-        isLeaveScheduleRow(row) ||
-        ["annual_leave", "half_leave"].includes(displayType)
-      );
-    }).length;
     const absentCount = bucketRows.filter((row) =>
       ["absence", "absent", "off"].includes(resolveScheduleDisplayType(row)),
     ).length;
@@ -98823,14 +101156,11 @@ function buildScheduleRefEmployeeRows(month = "") {
       shiftClass:
         primaryShift === "주야"
           ? "is-mixed"
-          : primaryShift === "야간"
+          : primaryShift === "야"
           ? "is-night"
-          : primaryShift.includes("휴")
-            ? "is-leave"
-            : "is-day",
+          : "is-day",
       assignedDays: dateKeys.size,
       totalHours,
-      leaveCount,
       absentCount,
       majorTime,
       updatedAt: getScheduleRefLatestUpdatedAt(bucketRows),
@@ -98874,7 +101204,6 @@ function renderScheduleListView(target, month) {
         <th>근무유형</th>
         <th>배정일수</th>
         <th>총 근무시간</th>
-        <th>휴가/연차</th>
         <th>결근</th>
         <th>주요 근무시간</th>
         <th>최근 수정</th>
@@ -98901,7 +101230,6 @@ function renderScheduleListView(target, month) {
       <td><span class="schedule-ref-chip ${escapeHtml(row.shiftClass)}">${escapeHtml(row.shift)}</span></td>
       <td>${row.assignedDays}일</td>
       <td>${escapeHtml(totalHours)}</td>
-      <td>${row.leaveCount ? `<span class="schedule-ref-chip is-leave">${row.leaveCount}일 (연차)</span>` : "-"}</td>
       <td>${row.absentCount}건</td>
       <td>${escapeHtml(row.majorTime)}</td>
       <td><strong>${escapeHtml(getScheduleRefActorName())}</strong><small>${escapeHtml(formatScheduleRefDateTime(row.updatedAt))}</small></td>
@@ -98995,6 +101323,10 @@ function createScheduleBoardAssignmentButton(
   const button = document.createElement("button");
   button.type = "button";
   button.className = `${className} schedule-shift-card-${getScheduleCardVariant(item)}`;
+  button.classList.toggle(
+    "is-alert",
+    isScheduleRefAlertRow(row) || isScheduleRefAlertRow(item),
+  );
   button.dataset.action = "schedule-open-assignment";
   applyScheduleBoardItemDataset(button, item, dateKey);
   const title = document.createElement("strong");
@@ -99020,7 +101352,9 @@ function renderScheduleWeekBoard(target, month) {
     : [];
   const weekDateKeys = getScheduleBoardWeekDateKeys(month);
   const buckets = buildScheduleEmployeeBuckets(
-    rows.filter((row) => weekDateKeys.includes(String(row?.schedule_date || ""))),
+    rows
+      .filter((row) => weekDateKeys.includes(String(row?.schedule_date || "")))
+      .filter((row) => isScheduleCalendarDisplayItem(row)),
   );
   if (!buckets.length) {
     renderScheduleCalendarMessage("이번 주에 표시할 일정이 없습니다.");
@@ -99082,16 +101416,12 @@ function getScheduleMonthDateKeys(month = "") {
 }
 
 function getScheduleSimpleCellModel(rows = []) {
-  const list = Array.isArray(rows) ? rows : [];
+  const list = (Array.isArray(rows) ? rows : []).filter((row) =>
+    isScheduleCalendarDisplayItem(row),
+  );
   if (!list.length) return { label: "", className: "is-empty" };
-  const hasAnnual = list.some(
-    (row) => resolveScheduleDisplayType(row) === "annual_leave",
-  );
-  if (hasAnnual) return { label: "연차", className: "is-leave" };
-  const hasHalf = list.some(
-    (row) => resolveScheduleDisplayType(row) === "half_leave",
-  );
-  if (hasHalf) return { label: "반차", className: "is-leave" };
+  const hasAlert = list.some((row) => isScheduleRefAlertRow(row));
+  const alertClass = hasAlert ? " is-alert" : "";
   const hasNight = list.some((row) =>
     getScheduleBoardDisplayShiftTypes(normalizeScheduleBoardItem(row)).includes(
       "night",
@@ -99103,22 +101433,20 @@ function getScheduleSimpleCellModel(rows = []) {
     );
     return variants.includes("day") || variants.includes("overtime");
   });
-  if (hasDay && hasNight) return { label: "주야", className: "is-mixed" };
-  if (hasNight) return { label: "야간", className: "is-night" };
+  if (hasDay && hasNight)
+    return { label: "주야", className: `is-mixed${alertClass}` };
+  if (hasNight) return { label: "야", className: `is-night${alertClass}` };
   const workHours = list.reduce(
     (sum, row) => sum + getScheduleBoardTotalHours(row),
     0,
   );
-  if (workHours > 0) {
-    const label = Number.isInteger(workHours)
-      ? String(workHours)
-      : workHours.toFixed(1).replace(/\.0$/, "");
-    return { label, className: "is-work" };
+  if (hasDay || workHours > 0) {
+    return { label: "주", className: `is-work${alertClass}` };
   }
-  const hasOff = list.some((row) =>
-    ["off", "holiday"].includes(resolveScheduleDisplayType(row)),
-  );
-  return { label: hasOff ? "휴무" : "", className: hasOff ? "is-off" : "is-empty" };
+  if (hasAlert) {
+    return { label: "", className: "is-alert" };
+  }
+  return { label: "", className: "is-empty" };
 }
 
 function normalizeScheduleRefClockText(...values) {
@@ -99167,109 +101495,230 @@ function getScheduleSimpleTimeLines(row = {}) {
   };
 }
 
-function renderScheduleTimeLinesHtml(row = {}) {
-  const timeLines = getScheduleSimpleTimeLines(row);
-  if (!timeLines.middle && !timeLines.bottom) {
-    return escapeHtml(timeLines.top || "-");
+function isScheduleSimpleMonthDisplayRow(row = {}) {
+  const displayType = String(resolveScheduleDisplayType(row) || "")
+    .trim()
+    .toLowerCase();
+  if (isScheduleRefAlertRow(row)) return true;
+  if (
+    isLeaveScheduleRow(row) ||
+    displayType === "annual_leave" ||
+    displayType === "half_leave"
+  ) {
+    return true;
   }
-  return `<span>${escapeHtml(timeLines.top || "-")}</span><span class="schedule-time-dash">${escapeHtml(timeLines.middle || "-")}</span><span>${escapeHtml(timeLines.bottom || "")}</span>`;
+  if (displayType === "off" || displayType === "holiday") return false;
+  return isScheduleCalendarDisplayItem(row);
 }
 
-function renderScheduleMonthSimpleBoard(target, month) {
+function getScheduleSimpleMonthCellRows(bucket = {}, dateKey = "") {
+  const key = String(dateKey || "").trim();
+  return (Array.isArray(bucket?.rows) ? bucket.rows : [])
+    .filter((row) => String(row?.schedule_date || "").trim() === key)
+    .filter((row) => isScheduleSimpleMonthDisplayRow(row));
+}
+
+function pickScheduleSimpleMonthCellRow(rows = []) {
+  const list = Array.isArray(rows) ? rows : [];
+  return (
+    list.find((row) => {
+      const displayType = resolveScheduleDisplayType(row);
+      return (
+        isLeaveScheduleRow(row) ||
+        displayType === "annual_leave" ||
+        displayType === "half_leave"
+      );
+    }) ||
+    list.find((row) => isScheduleRefAlertRow(row)) ||
+    list.find((row) => isScheduleCalendarDisplayItem(row)) ||
+    list[0] ||
+    null
+  );
+}
+
+function getScheduleSimpleMonthLeaveCell(row = {}) {
+  const displayType = String(resolveScheduleDisplayType(row) || "")
+    .trim()
+    .toLowerCase();
+  const explicitLabel = String(
+    row?.schedule_display_label ||
+      row?.leave_label ||
+      row?.display_label ||
+      getScheduleRowDisplayMeta(row).label ||
+      "",
+  ).trim();
+  const note = String(row?.schedule_note || row?.memo || row?.reason || "").trim();
+  const combinedText = `${explicitLabel} ${note}`.toLowerCase();
+  const isVacation =
+    displayType === "half_leave" ||
+    combinedText.includes("휴가") ||
+    combinedText.includes("vacation");
+  if (isVacation && !combinedText.includes("연차")) {
+    return { label: "휴가", className: "is-leave" };
+  }
+  return { label: "연차", className: "is-annual" };
+}
+
+function getScheduleSimpleMonthCellModel(rows = []) {
+  const row = pickScheduleSimpleMonthCellRow(rows);
+  if (!row) {
+    return {
+      row: null,
+      label: "",
+      className: "is-empty",
+      timeLines: null,
+    };
+  }
+  if (isScheduleRefAbsentRow(row)) {
+    return {
+      row,
+      label: "결근",
+      className: "is-alert",
+      timeLines: null,
+    };
+  }
+  const displayType = String(resolveScheduleDisplayType(row) || "")
+    .trim()
+    .toLowerCase();
+  if (
+    isLeaveScheduleRow(row) ||
+    displayType === "annual_leave" ||
+    displayType === "half_leave"
+  ) {
+    const leaveCell = getScheduleSimpleMonthLeaveCell(row);
+    return {
+      row,
+      label: leaveCell.label,
+      className: leaveCell.className,
+      timeLines: null,
+    };
+  }
+  if (displayType === "off" || displayType === "holiday") {
+    return {
+      row: null,
+      label: "",
+      className: "is-empty",
+      timeLines: null,
+    };
+  }
+  const variant = getScheduleCardVariant(normalizeScheduleBoardItem(row));
+  return {
+    row,
+    label: "",
+    className:
+      variant === "night" ? "is-night" : variant === "combined" ? "is-mixed" : "is-work",
+    timeLines: getScheduleSimpleTimeLines(row),
+  };
+}
+
+function createScheduleSimpleMatrixCell(model = {}, dateKey = "") {
+  const row = model?.row || null;
+  const cell = document.createElement("button");
+  cell.type = "button";
+  cell.className = `schedule-simple-cell ${model?.className || "is-empty"}`;
+  cell.dataset.date = dateKey;
+  if (row) {
+    cell.dataset.action = "schedule-open-assignment";
+    applyScheduleBoardItemDataset(cell, normalizeScheduleBoardItem(row), dateKey);
+  } else {
+    cell.dataset.action = "schedule-select-date";
+  }
+
+  if (model?.timeLines) {
+    const top = document.createElement("span");
+    top.textContent = model.timeLines.top || "-";
+    const middle = document.createElement("span");
+    middle.className = "schedule-time-dash";
+    middle.textContent = model.timeLines.middle || "-";
+    const bottom = document.createElement("span");
+    bottom.textContent = model.timeLines.bottom || "";
+    cell.append(top, middle, bottom);
+  } else if (model?.label) {
+    const label = document.createElement("span");
+    label.className = "schedule-simple-leave-label";
+    label.textContent = model.label;
+    cell.appendChild(label);
+  }
+  return cell;
+}
+
+function renderScheduleMonthSimpleBoard(target, month, dayMap = new Map()) {
   target.classList.remove("schedule-list-view");
+  target.classList.add("schedule-simple-matrix-active");
   target.innerHTML = "";
   const monthKey = normalizeMonthKey(month);
   const dateKeys = getScheduleMonthDateKeys(monthKey);
-  const rows = (Array.isArray(state.schedule.filteredRows)
-    ? state.schedule.filteredRows
-    : []
-  ).filter((row) => getMonthFromDateKey(row?.schedule_date || "") === monthKey);
-  const buckets = buildScheduleEmployeeBuckets(rows);
-  if (!dateKeys.length || !buckets.length) {
-    renderScheduleCalendarMessage("간단 표기할 일정이 없습니다.");
+  if (!dateKeys.length) {
+    renderScheduleCalendarMessage("간단 보기로 표시할 일정이 없습니다.");
     return;
   }
 
-  const nameColumnWidth = 105;
-  const minCellSize = 44;
   target.appendChild(createScheduleRefMetrics(month));
-  const scroller = document.createElement("div");
-  scroller.className = "schedule-simple-month-scroll";
-  const board = document.createElement("div");
-  board.className = "schedule-simple-month-board";
-  board.style.setProperty("--schedule-simple-day-count", String(dateKeys.length));
-  board.style.setProperty("--schedule-simple-name-w", `${nameColumnWidth}px`);
-  board.style.setProperty("--schedule-simple-day-w", `${minCellSize}px`);
 
-  const dateLabel = document.createElement("div");
-  dateLabel.className = "schedule-simple-sticky schedule-simple-head";
-  dateLabel.textContent = "직원";
-  board.appendChild(dateLabel);
+  const displayRows = (Array.isArray(state.schedule.filteredRows)
+    ? state.schedule.filteredRows
+    : []
+  ).filter(
+    (row) =>
+      getMonthFromDateKey(row?.schedule_date || "") === monthKey &&
+      isScheduleSimpleMonthDisplayRow(row),
+  );
+  const buckets = buildScheduleEmployeeBuckets(displayRows);
+  if (!buckets.length) {
+    renderScheduleCalendarMessage("간단 보기로 표시할 일정이 없습니다.");
+    return;
+  }
+
+  const scroll = document.createElement("div");
+  scroll.className = "schedule-simple-month-scroll";
+  const table = document.createElement("div");
+  table.className = "schedule-simple-month-board";
+  table.style.setProperty("--schedule-simple-day-count", String(dateKeys.length));
+  const simpleNameWidth = 88;
+  const simpleMinCell = 44;
+  table.style.setProperty("--schedule-simple-name-w", `${simpleNameWidth}px`);
+  table.style.setProperty("--schedule-simple-min-cell", `${simpleMinCell}px`);
+  table.style.minWidth = `${simpleNameWidth + dateKeys.length * simpleMinCell}px`;
+
+  const corner = document.createElement("div");
+  corner.className =
+    "schedule-simple-head schedule-simple-sticky schedule-simple-employee-head";
+  corner.textContent = "직원";
+  table.appendChild(corner);
+
   dateKeys.forEach((dateKey) => {
-    const dateCell = document.createElement("div");
-    dateCell.className = "schedule-simple-head";
-    const [, monthPart, dayPart] = dateKey.split("-");
-    const day = new Date(`${dateKey}T00:00:00`).getDay();
-    dateCell.innerHTML = `<strong>${Number(monthPart)}/${Number(dayPart)}</strong><span>${escapeHtml(SCHEDULE_MONTH_WEEKDAY_LABELS[day] || "")}</span>`;
-    if (day === 0 || day === 6) dateCell.classList.add("is-weekend");
-    board.appendChild(dateCell);
+    const date = new Date(`${dateKey}T00:00:00`);
+    const day = date.getDay();
+    const head = document.createElement("div");
+    head.className = "schedule-simple-head";
+    if (day === 0 || day === 6) head.classList.add("is-weekend");
+    const dateLabel = document.createElement("strong");
+    dateLabel.textContent = `${date.getMonth() + 1}/${date.getDate()}`;
+    const weekday = document.createElement("span");
+    weekday.textContent = SCHEDULE_MONTH_WEEKDAY_LABELS[day] || "";
+    head.append(dateLabel, weekday);
+    table.appendChild(head);
   });
 
   buckets.forEach((bucket) => {
     const employee = document.createElement("div");
-    employee.className = "schedule-simple-sticky schedule-simple-employee";
-    const name = bucket.employeeName || bucket.employeeCode || "-";
-    employee.innerHTML = `<strong>${escapeHtml(name)}</strong><span>${escapeHtml(bucket.employeeCode || "")}</span>`;
-    board.appendChild(employee);
+    employee.className = "schedule-simple-employee schedule-simple-sticky";
+    const name = document.createElement("strong");
+    name.textContent = bucket.employeeName || bucket.employeeCode || "-";
+    const code = document.createElement("span");
+    code.textContent = bucket.employeeCode || bucket.siteCode || "";
+    employee.append(name, code);
+    table.appendChild(employee);
+
     dateKeys.forEach((dateKey) => {
-      const cell = document.createElement("button");
-      cell.type = "button";
-      cell.className = "schedule-simple-cell";
-      cell.dataset.action = "schedule-select-date";
-      cell.dataset.date = dateKey;
-      const dayRows = bucket.rows.filter(
-        (row) => String(row?.schedule_date || "").trim() === dateKey,
-      );
-      const model = getScheduleSimpleCellModel(dayRows);
-      cell.classList.add(model.className);
-      if (dayRows.length) {
-        const row = dayRows[0];
-        if (row?.id || row?.schedule_id) {
-          cell.dataset.action = "schedule-open-assignment";
-          applyScheduleBoardItemDataset(cell, normalizeScheduleBoardItem(row), dateKey);
-        }
-        if (
-          model.className === "is-work" ||
-          model.className === "is-night" ||
-          model.className === "is-mixed"
-        ) {
-          cell.innerHTML = renderScheduleTimeLinesHtml(row);
-        } else {
-          cell.textContent = model.label;
-        }
-      } else {
-        cell.textContent = "";
-      }
-      board.appendChild(cell);
+      const cellRows = getScheduleSimpleMonthCellRows(bucket, dateKey);
+      const model = getScheduleSimpleMonthCellModel(cellRows);
+      table.appendChild(createScheduleSimpleMatrixCell(model, dateKey));
     });
   });
 
-  scroller.appendChild(board);
-  target.appendChild(scroller);
-  const syncCellSize = () => {
-    const availableWidth = Math.max(
-      0,
-      Number(scroller.getBoundingClientRect?.().width || scroller.clientWidth || 0),
-    );
-    const fitCellSize =
-      dateKeys.length > 0
-        ? Math.floor((availableWidth - nameColumnWidth) / dateKeys.length)
-        : minCellSize;
-    const cellSize = Math.max(minCellSize, fitCellSize || minCellSize);
-    board.style.setProperty("--schedule-simple-day-w", `${cellSize}px`);
-  };
-  syncCellSize();
-  requestAnimationFrame(syncCellSize);
+  scroll.appendChild(table);
+  target.appendChild(scroll);
 }
 
 function getScheduleTimelineRangePercent(row = {}) {
@@ -99287,7 +101736,11 @@ function getScheduleTimelineRangePercent(row = {}) {
 }
 
 function renderScheduleDaySimpleBoard(target, rows = []) {
-  const buckets = buildScheduleEmployeeBuckets(rows);
+  const buckets = buildScheduleEmployeeBuckets(
+    (Array.isArray(rows) ? rows : []).filter((row) =>
+      isScheduleCalendarDisplayItem(row),
+    ),
+  );
   const table = document.createElement("div");
   table.className = "schedule-day-simple-board schedule-axis-board";
   ["직원", "근무유형", "총 시간", "현장"].forEach((label) => {
@@ -99326,7 +101779,9 @@ function renderScheduleDayBoard(target, month) {
   const rows = (Array.isArray(state.schedule.filteredRows)
     ? state.schedule.filteredRows
     : []
-  ).filter((row) => String(row?.schedule_date || "").trim() === dateKey);
+  )
+    .filter((row) => String(row?.schedule_date || "").trim() === dateKey)
+    .filter((row) => isScheduleCalendarDisplayItem(row));
   if (!rows.length) {
     renderScheduleCalendarMessage(`${toDateLabel(dateKey)} 일정이 없습니다.`);
     return;
@@ -99385,12 +101840,16 @@ function renderScheduleDayBoard(target, month) {
 
 function ScheduleMonthPage({ target, month, monthMeta, dayMap } = {}) {
   const viewMode = getScheduleViewModeValue();
+  const isSimpleMonth =
+    viewMode !== SCHEDULE_VIEW_MODE_LIST &&
+    getScheduleDisplayModeValue() === SCHEDULE_DISPLAY_MODE_SIMPLE;
+  target.classList.toggle("schedule-simple-matrix-active", isSimpleMonth);
   if (viewMode === SCHEDULE_VIEW_MODE_LIST) {
     renderScheduleListView(target, month);
     return;
   }
-  if (getScheduleDisplayModeValue() === SCHEDULE_DISPLAY_MODE_SIMPLE) {
-    renderScheduleMonthSimpleBoard(target, month);
+  if (isSimpleMonth) {
+    renderScheduleMonthSimpleBoard(target, month, dayMap);
     return;
   }
   const boardMode = getScheduleBoardViewModeValue();
@@ -99496,13 +101955,17 @@ function renderScheduleDetail() {
     Array.isArray(state.schedule.filteredRows)
       ? state.schedule.filteredRows
       : []
-  ).filter((row) => String(row.schedule_date || "").trim() === dateKey);
+  )
+    .filter((row) => String(row.schedule_date || "").trim() === dateKey)
+    .filter((row) => isScheduleCalendarDisplayItem(row));
 
   const selectedAssignmentRows = Array.isArray(
     state.schedule.selectedAssignmentRows,
   )
     ? state.schedule.selectedAssignmentRows.filter(
-        (row) => String(row?.schedule_date || "").trim() === dateKey,
+        (row) =>
+          String(row?.schedule_date || "").trim() === dateKey &&
+          isScheduleCalendarDisplayItem(row),
       )
     : [];
   const detailRows = selectedAssignmentRows.length ? selectedAssignmentRows : rows;
@@ -100694,7 +103157,7 @@ async function loadSchedule({
 
     const gridRenderStartedAt = getPerfNowMs();
     renderScheduleAll();
-    ensureScheduleLiveRefresh({ immediate: !deferDetailHydration });
+    ensureScheduleLiveRefresh();
     queueViewSnapshotPersist("schedule", { allowInactive: true });
     const gridRenderElapsedMs = getPerfNowMs() - gridRenderStartedAt;
     const monthSwitchGridReadyMs =
@@ -100822,7 +103285,7 @@ async function loadSchedule({
 
       const detailRenderStartedAt = getPerfNowMs();
       renderScheduleAll();
-      ensureScheduleLiveRefresh({ immediate: !deferDetailHydration });
+      ensureScheduleLiveRefresh();
       queueViewSnapshotPersist("schedule", { allowInactive: true });
       const detailRenderElapsedMs = getPerfNowMs() - detailRenderStartedAt;
       const monthSwitchDetailReadyMs =
@@ -101405,7 +103868,7 @@ function ensureScheduleLiveRefresh({ immediate = false } = {}) {
 function restartScheduleLiveRefreshAfterAuth() {
   if (!isScheduleLiveRefreshEnabled()) return;
   stopScheduleLiveRefresh();
-  ensureScheduleLiveRefresh({ immediate: true });
+  ensureScheduleLiveRefresh();
 }
 
 function scheduleNextPollingCycle(delayMs = state.pollDelayMs) {
@@ -103176,6 +105639,7 @@ function closeSheet() {
     sheet.classList.remove("sheet-layout-calendar-event");
     sheet.classList.remove("sheet-layout-requests-filter");
     sheet.classList.remove("sheet-layout-attendance-picker");
+    sheet.classList.remove("sheet-layout-home-map");
     sheet.classList.remove("sheet-layout-leave-employee-picker");
     sheet.classList.remove("sheet-layout-hr-approval-procedure");
   }
@@ -103245,6 +105709,7 @@ function openSheet({
   sheet.classList.remove("sheet-layout-calendar-event");
   sheet.classList.remove("sheet-layout-requests-filter");
   sheet.classList.remove("sheet-layout-attendance-picker");
+  sheet.classList.remove("sheet-layout-home-map");
   sheet.classList.remove("sheet-layout-leave-employee-picker");
   sheet.classList.remove("sheet-layout-hr-approval-procedure");
   if (layoutClass) {
@@ -106421,6 +108886,7 @@ function bindUiEvents() {
         resetScheduleFinancePreview();
         state.schedule.financeStatus = null;
         renderScheduleFinanceSubmissionStatus();
+        queueWorkspaceScrollReset();
         runActionSafely(
           loadScheduleFinanceSubmissionStatus(),
           "Finance 제출 상태를 불러오지 못했습니다.",
@@ -106431,6 +108897,7 @@ function bindUiEvents() {
       if (action === "reports-finance-back-overview") {
         setReportsFinanceView("overview");
         renderScheduleFinanceSubmissionStatus();
+        queueWorkspaceScrollReset();
         return;
       }
 
@@ -106443,6 +108910,7 @@ function bindUiEvents() {
         if (index > 0) {
           setReportsFinanceStep(order[index - 1]);
           renderScheduleFinanceSubmissionStatus();
+          queueWorkspaceScrollReset();
         }
         return;
       }
@@ -106456,6 +108924,7 @@ function bindUiEvents() {
         if (index >= 0 && index < order.length - 1) {
           setReportsFinanceStep(order[index + 1]);
           renderScheduleFinanceSubmissionStatus();
+          queueWorkspaceScrollReset();
         }
         return;
       }
@@ -106503,11 +108972,16 @@ function bindUiEvents() {
         return;
       }
 
+      if (action === "reports-finance-download-open-detail") {
+        if (!state.reports) state.reports = createInitialReportsState();
+        state.reports.financeDownloadDetailOpen = true;
+        renderReportsFinanceDownloadWorkspace();
+        return;
+      }
+
       if (action === "reports-finance-download-page") {
         if (!state.reports) state.reports = createInitialReportsState();
-        const rows = Array.isArray(state.reports?.financeDownloadWorkspace?.sites)
-          ? state.reports.financeDownloadWorkspace.sites
-          : [];
+        const rows = getReportsFinanceDownloadFilteredRows();
         const current = getWizardPaginationModel(
           rows,
           createWizardPaginationState({
@@ -108465,7 +110939,7 @@ function bindUiEvents() {
       }
 
       if (action === "home-map") {
-        onHomeMap();
+        runActionSafely(onHomeMap(), "지도를 열지 못했습니다.");
         return;
       }
 
@@ -109746,6 +112220,62 @@ function bindUiEvents() {
         return;
       }
 
+      if (action === "attendance-open-date-picker") {
+        const input = $("#attendanceStatusDateInput");
+        if (input instanceof HTMLInputElement) {
+          input.focus();
+          if (typeof input.showPicker === "function") {
+            input.showPicker();
+          } else {
+            input.click();
+          }
+        }
+        return;
+      }
+
+      if (action === "attendance-status-chip") {
+        if (!state.attendanceView) {
+          state.attendanceView = createInitialAttendanceViewState();
+        }
+        const nextFilter = normalizeAttendanceStatusFilter(
+          actionEl.dataset.value || "all",
+        );
+        state.attendanceView.statusFilter = nextFilter;
+        const statusSelect = $("#attendanceStatusSelect");
+        if (statusSelect instanceof HTMLSelectElement) {
+          statusSelect.value = nextFilter;
+        }
+        attendanceStatusV2SelectedKey = null;
+        state.attendanceView.selectedManagerRowKey = "";
+        renderAttendanceDailyStatusChips();
+        renderAttendanceFilterMeta();
+        runActionSafely(
+          loadAttendanceView({ force: true }),
+          "출퇴근 필터 조회 중 오류가 발생했습니다.",
+        );
+        return;
+      }
+
+      if (action === "attendance-daily-toggle-more") {
+        if (!state.attendanceView) {
+          state.attendanceView = createInitialAttendanceViewState();
+        }
+        state.attendanceView.managerDailyExpanded = !Boolean(
+          state.attendanceView.managerDailyExpanded,
+        );
+        renderAttendanceManagerWorkspace(attendanceStatusV2Payload);
+        return;
+      }
+
+      if (action === "attendance-daily-close-detail") {
+        attendanceStatusV2SelectedKey = null;
+        if (state.attendanceView) {
+          state.attendanceView.selectedManagerRowKey = "";
+        }
+        renderAttendanceManagerWorkspace(attendanceStatusV2Payload);
+        return;
+      }
+
       if (action === "attendance-switch-section") {
         const requestedSection = normalizeAttendanceWorkspaceSection(
           actionEl.dataset.section || "daily",
@@ -109984,10 +112514,15 @@ function bindUiEvents() {
           state.attendanceView.selectedManagerRowKey = "";
         }
         syncAttendanceManagerFilterInputs();
-        runWithBusy(
-          () => loadAttendanceView({ force: true }),
-          "날짜 이동 중...",
-        );
+        actionEl.disabled = true;
+        actionEl.setAttribute("aria-busy", "true");
+        runActionSafely(
+          loadAttendanceView({ force: true }),
+          "출퇴근 현황 조회 중 오류가 발생했습니다.",
+        ).finally(() => {
+          actionEl.disabled = false;
+          actionEl.setAttribute("aria-busy", "false");
+        });
         return;
       }
 
@@ -110037,10 +112572,15 @@ function bindUiEvents() {
         state.attendanceView.calendarMonth = toMonthKey(nextDate);
         persistAttendanceManagerPrefs();
         syncAttendanceManagerFilterInputs();
-        runWithBusy(
-          () => loadAttendanceView({ force: true }),
-          "월간 기록 조회 중...",
-        );
+        actionEl.disabled = true;
+        actionEl.setAttribute("aria-busy", "true");
+        runActionSafely(
+          loadAttendanceView({ force: true }),
+          "월간 출퇴근 기록 조회 중 오류가 발생했습니다.",
+        ).finally(() => {
+          actionEl.disabled = false;
+          actionEl.setAttribute("aria-busy", "false");
+        });
         return;
       }
 
@@ -111382,6 +113922,12 @@ function bindUiEvents() {
         return;
       }
 
+      if (action === "schedule-template-filter") {
+        setScheduleTemplateListFilter(actionEl.dataset.filter);
+        renderScheduleTemplateTable();
+        return;
+      }
+
       if (action === "schedule-template-owner-tab") {
         setScheduleTemplateOwnerTab(actionEl.dataset.tab);
         return;
@@ -112378,6 +114924,7 @@ function bindUiEvents() {
           actionEl.dataset.tab,
         );
         renderScheduleFinanceSubmissionStatus();
+        queueWorkspaceScrollReset();
         return;
       }
 
@@ -113889,9 +116436,7 @@ function bindUiEvents() {
           target instanceof HTMLSelectElement
             ? ensureScheduleTenantCode(target.value || "")
             : state.schedule.tenantCode;
-        state.schedule.importMappingProfile = null;
-        state.schedule.importMappingProfileFetchedAt = 0;
-        state.schedule.importMappingSelectedProfileId = "";
+        resetScheduleTemplateWorkspaceState();
         if (!getScheduleUploadUiState().analysisInFlight) {
           invalidateScheduleImportAnalysis([
             "tenant",
@@ -113903,6 +116448,7 @@ function bindUiEvents() {
         runActionSafely(
           Promise.allSettled([
             refreshScheduleImportSiteOptions({ force: true }),
+            loadScheduleTemplateRows({ force: true }),
             loadScheduleImportMappingProfile({ force: true }),
           ]).then(() => {
             renderScheduleUploadWorkspace();
@@ -116068,7 +118614,7 @@ document.addEventListener("compositionend", (event) => {
   ) {
     return `
       <span class="attendance-v2-card-icon is-${escapeValue(light ? "light" : v2IconTone(tone))}" aria-hidden="true">
-        ${buildAzureTopbarIconSvg(iconKey || "grid")}
+        ${buildArlsAttendanceIconSvg(resolveArlsAttendanceIconName(iconKey || "grid"))}
       </span>
     `;
   }
@@ -116100,6 +118646,431 @@ document.addEventListener("compositionend", (event) => {
               ? `<span>${escapeValue(description)}</span>`
               : ""
           }
+        </div>
+      </div>
+    `;
+  }
+
+  function v2DailyReferenceStatusBadge(row) {
+    const key = v2StatusKey(row);
+    const labelMap = {
+      complete: "정상",
+      late: "지각",
+      early: "조퇴",
+      missing: "미출근",
+      missing_out: "미퇴근",
+      correction: "정정대기",
+      leave: "휴가",
+      upcoming: "출근 전",
+      normal: "정상",
+    };
+    const toneMap = {
+      complete: "success",
+      late: "warning",
+      early: "warning",
+      missing: "danger",
+      missing_out: "danger",
+      correction: "warning",
+      leave: "neutral",
+      upcoming: "neutral",
+      normal: "success",
+    };
+    return {
+      key,
+      label: labelMap[key] || v2StatusLabel(row),
+      tone: toneMap[key] || "neutral",
+    };
+  }
+
+  function v2DailyReferenceIssueText(row) {
+    const late = String(row?.lateMinutesLabel || "").trim();
+    const early = String(row?.earlyLeaveMinutesLabel || "").trim();
+    if (late && late !== "-") return `${late} 지각`;
+    if (early && early !== "-") return `${early} 조퇴`;
+    const reason = String(v2Reason(row) || "").trim();
+    if (
+      !reason ||
+      reason === "-" ||
+      reason === "판별 기준 정보가 없습니다."
+    ) {
+      if (v2StatusKey(row) === "missing") return "출근 기록 없음";
+      if (v2StatusKey(row) === "missing_out") return "퇴근 기록 없음";
+      return "-";
+    }
+    return reason;
+  }
+
+  function buildAttendanceDailyReferenceIcon(kind = "users") {
+    const icons = {
+      users: "employees",
+      missing: "absent",
+      pending: "correction-pending",
+    };
+    return buildArlsAttendanceIconSvg(icons[kind] || icons.users, {
+      className: "attendance-daily-ref-pack-icon",
+    });
+  }
+
+  function v2PersonFallbackIconMarkup() {
+    return buildArlsAttendanceIconSvg("employee", {
+      className: "attendance-avatar-fallback-icon",
+    });
+  }
+
+  function v2PhotoUrl(row = null) {
+    const direct = String(
+      row?.profileImageUrl ||
+        row?.profile_image_url ||
+        row?.photoUrl ||
+        row?.photo_url ||
+        row?.avatarUrl ||
+        row?.avatar_url ||
+        "",
+    ).trim();
+    if (direct) return direct;
+    const employeeCode = String(v2EmployeeCode(row) || "").trim();
+    const employees = Array.isArray(state.attendanceView?.employees)
+      ? state.attendanceView.employees
+      : [];
+    const matched = employees.find(
+      (item) => String(item?.employee_code || "").trim() === employeeCode,
+    );
+    return String(
+      matched?.profileImageUrl ||
+        matched?.profile_image_url ||
+        matched?.photoUrl ||
+        matched?.photo_url ||
+        matched?.avatarUrl ||
+        matched?.avatar_url ||
+        "",
+    ).trim();
+  }
+
+  function v2AvatarMarkup(row = null, className = "attendance-daily-ref-avatar") {
+    const photoUrl = v2PhotoUrl(row);
+    if (photoUrl) {
+      return `
+        <span class="${escapeValue(className)} has-photo" aria-hidden="true">
+          <img src="${escapeValue(photoUrl)}" alt="" loading="lazy" />
+        </span>
+      `;
+    }
+    return `
+      <span class="${escapeValue(className)} is-default-person" aria-hidden="true">
+        ${v2PersonFallbackIconMarkup()}
+      </span>
+    `;
+  }
+
+  function formatAttendanceDailyThresholdText(row) {
+    const start = String(row?.scheduleRow?.start_time || "").trim().slice(0, 5);
+    const lateThreshold = normalizeAttendanceThresholdMinutes(
+      state.attendanceView?.lateThresholdMinutes,
+    );
+    const baseMinutes = getAttendanceComparableMinutes(start);
+    if (!Number.isFinite(baseMinutes)) return "-";
+    const total = baseMinutes + lateThreshold;
+    const hh = String(Math.floor(total / 60)).padStart(2, "0");
+    const mm = String(total % 60).padStart(2, "0");
+    return `${hh}:${mm} 이후`;
+  }
+
+  function formatAttendanceDailyAccuracyText(value) {
+    const accuracy = Number(value);
+    return Number.isFinite(accuracy) ? `${Math.round(accuracy)}m 이내` : "-";
+  }
+
+  function buildAttendanceDailyTimelineMarkup(row) {
+    const events = [];
+    const rawRecords = Array.isArray(row?.rawRecords) ? row.rawRecords : [];
+    rawRecords.forEach((item) => {
+      const eventType = String(item?.event_type || "").trim().toLowerCase();
+      const label =
+        eventType === "check_in"
+          ? "출근 기록"
+          : eventType === "check_out"
+            ? "퇴근 기록"
+            : "근태 기록";
+      const at = formatAttendanceTime(item?.event_at || "");
+      if (at && at !== "-") {
+        events.push({ time: at, label });
+      }
+    });
+    if (!events.length) {
+      const start = String(row?.scheduleRow?.start_time || "").trim().slice(0, 5);
+      if (start) {
+        events.push({ time: start, label: "예정 근무 시작" });
+      }
+    }
+    if (
+      row?.scheduleRow &&
+      v2StatusKey(row) === "late" &&
+      row?.lateMinutesLabel &&
+      row.lateMinutesLabel !== "-"
+    ) {
+      events.push({
+        time: formatAttendanceTime(row?.firstCheckIn?.event_at || "") || "-",
+        label: `지각 ${row.lateMinutesLabel}`,
+      });
+    }
+    return events
+      .slice(0, 4)
+      .map(
+        (item) => `
+          <li>
+            <span class="attendance-daily-ref-timeline-dot" aria-hidden="true"></span>
+            <strong>${escapeValue(item.time)}</strong>
+            <span>${escapeValue(item.label)}</span>
+          </li>
+        `,
+      )
+      .join("");
+  }
+
+  function v2DailyReferenceSummaryCards(summary = {}) {
+    const target = Math.max(0, Number(summary.target || 0));
+    const complete = Math.max(0, Number(summary.complete || 0));
+    const missing = Math.max(0, Number(summary.missing || 0));
+    const correction = Math.max(0, Number(summary.correction || 0));
+    const rate = clampHomePercent(
+      target > 0 ? (complete / Math.max(1, target)) * 100 : 0,
+    );
+    return `
+      <section class="attendance-daily-ref-kpis" aria-label="날짜별 요약">
+        <article class="attendance-daily-ref-kpi is-rate">
+          <div class="attendance-daily-ref-kpi-icon is-rate">
+            <svg viewBox="0 0 44 44" aria-hidden="true" focusable="false">
+              <circle cx="22" cy="22" r="16" class="track"></circle>
+              <circle
+                cx="22"
+                cy="22"
+                r="16"
+                class="value"
+                style="stroke-dasharray:${Math.round((rate / 100) * 100)} 999"
+              ></circle>
+            </svg>
+          </div>
+          <div class="attendance-daily-ref-kpi-copy">
+            <span>출근율</span>
+            <strong>${rate}%</strong>
+            <em>${complete} / ${target}</em>
+          </div>
+        </article>
+        <article class="attendance-daily-ref-kpi">
+          <div class="attendance-daily-ref-kpi-icon">${buildAttendanceDailyReferenceIcon("users")}</div>
+          <div class="attendance-daily-ref-kpi-copy">
+            <span>근무 대상</span>
+            <strong>${target}<small>명</small></strong>
+          </div>
+        </article>
+        <article class="attendance-daily-ref-kpi">
+          <div class="attendance-daily-ref-kpi-icon">${buildAttendanceDailyReferenceIcon("missing")}</div>
+          <div class="attendance-daily-ref-kpi-copy">
+            <span>미출근</span>
+            <strong class="is-danger">${missing}<small>명</small></strong>
+          </div>
+        </article>
+        <article class="attendance-daily-ref-kpi">
+          <div class="attendance-daily-ref-kpi-icon">${buildAttendanceDailyReferenceIcon("pending")}</div>
+          <div class="attendance-daily-ref-kpi-copy">
+            <span>정정 대기</span>
+            <strong class="is-warning">${correction}<small>건</small></strong>
+          </div>
+        </article>
+      </section>
+    `;
+  }
+
+  function v2DailyReferenceRows(summary = {}, filteredRows = [], queueRows = []) {
+    const expanded = Boolean(state.attendanceView?.managerDailyExpanded);
+    const sourceRows = queueRows.length ? queueRows.map((item) => item.row) : filteredRows;
+    const visibleRows = expanded ? sourceRows : sourceRows.slice(0, 6);
+    const rowsHtml = visibleRows
+      .map((row, index) => {
+        const badge = v2DailyReferenceStatusBadge(row);
+        const rowKey = v2RowKey(row, index);
+        return `
+          <tr class="${rowKey === attendanceStatusV2SelectedKey ? "is-selected" : ""}" data-row-key="${escapeValue(rowKey)}" tabindex="0">
+            <td>
+              <div class="attendance-daily-ref-employee">
+                ${v2AvatarMarkup(row, "attendance-daily-ref-avatar")}
+                <span class="attendance-daily-ref-employee-copy">
+                  <strong>${escapeValue(v2Name(row))}</strong>
+                  <em>${escapeValue(v2Role(row))}</em>
+                </span>
+              </div>
+            </td>
+            <td>${escapeValue(v2Site(row))}</td>
+            <td>${escapeValue(v2Schedule(row))}</td>
+            <td>${escapeValue(v2ActualIn(row) === "-" ? "-" : v2ActualIn(row))}</td>
+            <td>${escapeValue(v2ActualOut(row) === "-" ? "-" : v2ActualOut(row))}</td>
+            <td><span class="attendance-daily-ref-pill is-${escapeValue(badge.tone)}">${escapeValue(badge.label)}</span></td>
+            <td>${escapeValue(v2DailyReferenceIssueText(row))}</td>
+          </tr>
+        `;
+      })
+      .join("");
+    const missing = Math.max(0, Number(summary.missing || 0));
+    const late = Math.max(0, Number(summary.late || 0));
+    const correction = Math.max(0, Number(summary.correction || 0));
+    const total = sourceRows.length;
+    return `
+      <section class="attendance-daily-ref-table-card">
+        <div class="attendance-daily-ref-block-head">
+          <div class="attendance-daily-ref-block-title">
+            <h3>오늘 확인 필요</h3>
+            <div class="attendance-daily-ref-inline-stats">
+              <span><i class="is-danger"></i>미출근 ${missing}명</span>
+              <span><i class="is-warning"></i>지각 ${late}명</span>
+              <span><i class="is-warning"></i>정정 대기 ${correction}건</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="attendance-daily-ref-head-link"
+            data-action="attendance-daily-toggle-more"
+            aria-expanded="${expanded ? "true" : "false"}"
+          >
+            ${expanded ? "접기" : "더보기"}
+          </button>
+        </div>
+        <div class="attendance-daily-ref-table-wrap">
+          <table class="attendance-daily-ref-table">
+            <thead>
+              <tr>
+                <th>직원</th>
+                <th>근무지</th>
+                <th>예정 근무</th>
+                <th>출근</th>
+                <th>퇴근</th>
+                <th>상태</th>
+                <th>특이사항</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                rowsHtml ||
+                `<tr class="attendance-daily-ref-empty"><td colspan="7">표시할 직원 기록이 없습니다.</td></tr>`
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="attendance-daily-ref-table-foot">
+          <span>총 ${total}명</span>
+        </div>
+      </section>
+    `;
+  }
+
+  function v2DailyReferenceDetail(selectedRow = null) {
+    if (!selectedRow) return "";
+    const badge = v2DailyReferenceStatusBadge(selectedRow);
+    const firstCheckIn = selectedRow?.firstCheckIn || null;
+    const lastCheckOut = selectedRow?.lastCheckOut || null;
+    const checkInLocation = v2Text(
+      firstCheckIn?.location_label,
+      firstCheckIn?.location,
+      firstCheckIn?.address,
+      selectedRow?.siteName,
+      "-",
+    );
+    const checkOutLocation = v2Text(
+      lastCheckOut?.location_label,
+      lastCheckOut?.location,
+      lastCheckOut?.address,
+      selectedRow?.siteName,
+      "-",
+    );
+    const distanceLabel = escapeValue(selectedRow?.distanceLabel || "-");
+    const accuracyLabel = escapeValue(
+      formatAttendanceDailyAccuracyText(
+        firstCheckIn?.accuracy_meters || firstCheckIn?.accuracyMeters,
+      ),
+    );
+    const requestState =
+      Number(selectedRow?.pendingCount || 0) > 0
+        ? escapeValue(selectedRow?.correctionState || `대기 ${selectedRow.pendingCount}건`)
+        : "정정 요청 없음";
+    return `
+      <section class="attendance-daily-ref-detail-card">
+        <div class="attendance-daily-ref-detail-top">
+          <div class="attendance-daily-ref-detail-head">
+            ${v2AvatarMarkup(selectedRow, "attendance-daily-ref-detail-avatar")}
+            <div class="attendance-daily-ref-detail-title">
+              <strong>${escapeValue(v2Name(selectedRow))}</strong>
+              <span>${escapeValue(v2Role(selectedRow))} <i></i> ${escapeValue(v2Site(selectedRow))}</span>
+            </div>
+          </div>
+          <button type="button" class="attendance-daily-ref-detail-close" data-action="attendance-daily-close-detail" aria-label="상세 닫기">×</button>
+        </div>
+        <span class="attendance-daily-ref-pill is-${escapeValue(badge.tone)} is-standalone">${escapeValue(badge.label)}</span>
+        <div class="attendance-daily-ref-detail-summary">
+          <article><span>예정 근무</span><strong>${escapeValue(v2Schedule(selectedRow))}</strong></article>
+          <article><span>실제 기록</span><strong>${escapeValue(v2Actual(selectedRow).replace(' / ', ' - '))}</strong></article>
+          <article><span>특이사항</span><strong>${escapeValue(v2DailyReferenceIssueText(selectedRow))}</strong></article>
+        </div>
+        <section class="attendance-daily-ref-detail-section">
+          <header><h4>기본 정보</h4></header>
+          <dl class="attendance-daily-ref-detail-grid">
+            <div><dt>출근</dt><dd>${escapeValue(v2ActualIn(selectedRow))}</dd></div>
+            <div><dt>근무시간</dt><dd>${escapeValue(selectedRow?.workHours || "-")}</dd></div>
+            <div><dt>퇴근</dt><dd>${escapeValue(v2ActualOut(selectedRow))}</dd></div>
+            <div><dt>근무지</dt><dd>${escapeValue(v2Site(selectedRow))}</dd></div>
+          </dl>
+        </section>
+        <section class="attendance-daily-ref-detail-section">
+          <header><h4>위치 정보</h4></header>
+          <dl class="attendance-daily-ref-detail-grid">
+            <div><dt>출근 위치</dt><dd>${escapeValue(checkInLocation)}</dd></div>
+            <div><dt>퇴근 위치</dt><dd>${escapeValue(checkOutLocation)}</dd></div>
+            <div><dt>반경 / 거리</dt><dd>${distanceLabel}</dd></div>
+            <div><dt>위치 정확도</dt><dd>${accuracyLabel}</dd></div>
+          </dl>
+        </section>
+        <section class="attendance-daily-ref-detail-section">
+          <header><h4>변경 포인트</h4></header>
+          <div class="attendance-daily-ref-change-grid">
+            <article>
+              <span>기준 기준</span>
+              <strong>${escapeValue(formatAttendanceDailyThresholdText(selectedRow))}</strong>
+            </article>
+            <article class="is-highlight">
+              <span>실제 지각</span>
+              <strong>${escapeValue(selectedRow?.lateMinutesLabel || "-")}</strong>
+            </article>
+            <article>
+              <span>정정 요청 상태</span>
+              <strong>${requestState}</strong>
+            </article>
+          </div>
+        </section>
+        <section class="attendance-daily-ref-detail-section">
+          <header><h4>타임라인</h4></header>
+          <ul class="attendance-daily-ref-timeline">
+            ${buildAttendanceDailyTimelineMarkup(selectedRow)}
+          </ul>
+        </section>
+        <button
+          type="button"
+          class="attendance-daily-ref-detail-action"
+          data-inspector-action="correction"
+        >정정 요청</button>
+      </section>
+    `;
+  }
+
+  function v2DailyReferenceMarkup({
+    summary = {},
+    filteredRows = [],
+    queueRows = [],
+    selectedRow = null,
+  } = {}) {
+    return `
+      <div class="attendance-daily-ref-shell">
+        ${v2DailyReferenceSummaryCards(summary)}
+        <div class="attendance-daily-ref-main${selectedRow ? " has-detail" : ""}">
+          ${v2DailyReferenceRows(summary, filteredRows, queueRows)}
+          ${v2DailyReferenceDetail(selectedRow)}
         </div>
       </div>
     `;
@@ -116200,7 +119171,7 @@ document.addEventListener("compositionend", (event) => {
         return `
           <div class="attendance-v2-section-head attendance-v2-section-head-period">
             ${v2SectionTitleMarkup(
-              periodMode === "calendar" ? "기간별 캘린더" : "기간별 출퇴근",
+              "기간별",
               {
                 iconKey: periodMode === "calendar" ? "calendar" : "list",
                 tone: "slate",
@@ -116353,7 +119324,7 @@ document.addEventListener("compositionend", (event) => {
         <div class="attendance-v2-section-head attendance-v2-section-head-period">
           <div class="attendance-v2-headline-block">
             ${v2SectionTitleMarkup(
-              periodMode === "calendar" ? "기간별 캘린더" : "기간별 출퇴근",
+              "기간별",
               {
                 iconKey: periodMode === "calendar" ? "calendar" : "list",
                 tone: "slate",
@@ -116562,7 +119533,7 @@ document.addEventListener("compositionend", (event) => {
       return `
         <div class="attendance-v2-section-head">
           ${v2SectionTitleMarkup(
-            section === "period" ? "기간별 출퇴근" : "직원별 출퇴근 기록",
+            section === "period" ? "기간별" : "직원별 출퇴근 기록",
             {
               iconKey: section === "period" ? "calendar" : "users",
               tone: section === "period" ? "slate" : "orange",
@@ -116606,7 +119577,7 @@ document.addEventListener("compositionend", (event) => {
     return `
       <div class="attendance-v2-section-head${section === "period" ? " attendance-v2-section-head-period" : ""}">
         ${v2SectionTitleMarkup(
-          section === "period" ? "기간별 출퇴근" : "직원별 출퇴근 기록",
+          section === "period" ? "기간별" : "직원별 출퇴근 기록",
           {
             iconKey: section === "period" ? "calendar" : "users",
             tone: section === "period" ? "slate" : "orange",
@@ -117110,7 +120081,11 @@ document.addEventListener("compositionend", (event) => {
         v2RowMatchesFilter(row, attendanceStatusV2FilterKey),
       );
       const queueRows = v2QueueRows(filteredRows, attendanceStatusV2FilterKey);
-      const selectedRow = v2ResolveSelectedRow(filteredRows, queueRows);
+      const section =
+        typeof getAttendanceWorkspaceSection === "function"
+          ? getAttendanceWorkspaceSection()
+          : "daily";
+      let selectedRow = v2ResolveSelectedRow(filteredRows, queueRows);
       if (shell.workspace instanceof HTMLElement) {
         shell.workspace.classList.toggle(
           "is-attendance-v2-no-selection",
@@ -117135,6 +120110,51 @@ document.addEventListener("compositionend", (event) => {
         );
         state.attendanceView.selectedManagerRowKey =
           attendanceStatusV2SelectedKey || "";
+      }
+
+      if (section === "daily" && tab === "status") {
+        if (shell.workspace instanceof HTMLElement) {
+          shell.workspace.style.setProperty("display", "grid", "important");
+          shell.workspace.style.setProperty(
+            "grid-template-columns",
+            "minmax(0, 1fr)",
+            "important",
+          );
+          shell.workspace.style.setProperty("gap", "0", "important");
+        }
+        if (statusPanel instanceof HTMLElement) {
+          statusPanel.hidden = false;
+          statusPanel.removeAttribute("aria-hidden");
+          statusPanel.style.setProperty("display", "block", "important");
+          statusPanel.style.setProperty("grid-column", "1", "important");
+          statusPanel.style.setProperty("grid-row", "1", "important");
+          statusPanel.style.setProperty("padding", "0", "important");
+        }
+        if (listPanel instanceof HTMLElement) {
+          listPanel.style.setProperty("display", "none", "important");
+        }
+        if (detailPanel instanceof HTMLElement) {
+          detailPanel.style.setProperty("display", "none", "important");
+        }
+        if (shell.summaryHost) {
+          shell.summaryHost.setAttribute("aria-busy", loading ? "true" : "false");
+          shell.summaryHost.innerHTML = v2DailyReferenceMarkup({
+            summary,
+            filteredRows,
+            queueRows,
+            selectedRow,
+          });
+          v2BindSelection(shell.summaryHost);
+        }
+        if (shell.queueHost) shell.queueHost.innerHTML = "";
+        if (shell.tableHost) shell.tableHost.innerHTML = "";
+        if (shell.inspectorHost) shell.inspectorHost.innerHTML = "";
+        renderAttendanceManagerInfoBar();
+        const exportBtn = $("#attendanceExportBtn");
+        if (exportBtn instanceof HTMLButtonElement) {
+          exportBtn.disabled = !rows.length;
+        }
+        return;
       }
 
       if (shell.summaryHost) {

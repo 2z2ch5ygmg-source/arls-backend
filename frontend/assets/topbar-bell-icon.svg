@@ -1,36 +1,5 @@
-<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bellBody" x1="28" y1="24" x2="100" y2="118" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFD95A"/>
-      <stop offset="0.42" stop-color="#FFB41F"/>
-      <stop offset="1" stop-color="#FF6A00"/>
-    </linearGradient>
-    <linearGradient id="bellLip" x1="15" y1="83" x2="113" y2="106" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FF8C1A"/>
-      <stop offset="0.5" stop-color="#FFC943"/>
-      <stop offset="1" stop-color="#FF8F12"/>
-    </linearGradient>
-    <linearGradient id="bellInner" x1="30" y1="100" x2="97" y2="123" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#D93C00"/>
-      <stop offset="1" stop-color="#FF5F00"/>
-    </linearGradient>
-    <linearGradient id="bellTop" x1="50" y1="9" x2="79" y2="36" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFD960"/>
-      <stop offset="1" stop-color="#FF840B"/>
-    </linearGradient>
-    <linearGradient id="clapper" x1="50" y1="98" x2="78" y2="121" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFBE33"/>
-      <stop offset="1" stop-color="#FF7A00"/>
-    </linearGradient>
-  </defs>
-  <path d="M53 12C53 7.58172 56.5817 4 61 4H67C71.4183 4 75 7.58172 75 12V24H53V12Z" fill="url(#bellTop)"/>
-  <path d="M42 19C42 14.5817 45.5817 11 50 11H78C82.4183 11 86 14.5817 86 19V34H42V19Z" fill="url(#bellTop)"/>
-  <path d="M64 18C40.2518 18 21 37.2518 21 61V74.4782C21 84.1811 17.1374 93.4866 10.2635 100.348L8 102.607V106C8 112.627 13.3726 118 20 118H108C114.627 118 120 112.627 120 106V102.607L117.737 100.348C110.863 93.4866 107 84.1811 107 74.4782V61C107 37.2518 87.7482 18 64 18Z" fill="url(#bellBody)"/>
-  <path d="M18 92C28 85.5 45 82 64 82C83 82 100 85.5 110 92C117.5 96.5 122 101 122 106C122 112.627 116.627 118 110 118H18C11.3726 118 6 112.627 6 106C6 101 10.5 96.5 18 92Z" fill="url(#bellLip)"/>
-  <ellipse cx="64" cy="106.5" rx="45.5" ry="11.5" fill="url(#bellInner)"/>
-  <path d="M50 102C50 97.5817 53.5817 94 58 94H70C74.4183 94 78 97.5817 78 102V108C78 116.837 70.8366 124 62 124H66C57.1634 124 50 116.837 50 108V102Z" fill="url(#clapper)"/>
-  <path d="M91 31C99.8175 39.9338 104.25 51.3247 104.25 65.1729V73.5303C104.25 83.9032 108.085 93.9093 115.025 101.637" stroke="#F59D11" stroke-width="4.5" stroke-linecap="round"/>
-  <path d="M29 104C38.8104 109.744 50.9201 113 64 113C77.0799 113 89.1896 109.744 99 104" stroke="#FFCF4E" stroke-width="4" stroke-linecap="round"/>
-  <path d="M85 34C92.7558 40.868 96.75 49.7751 96.75 60.7211C96.75 78.1132 81.5314 92.2143 64 92.2143" stroke="rgba(255,255,255,0.32)" stroke-width="8" stroke-linecap="round"/>
-  <path d="M80 32C84.3531 35.8683 87 41.0188 87 47" stroke="rgba(255,255,255,0.22)" stroke-width="4.5" stroke-linecap="round"/>
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M36 58C36 42.536 48.536 30 64 30C79.464 30 92 42.536 92 58V72.7C92 82.409 95.858 91.72 102.728 98.592L104 99.864V106H24V99.864L25.272 98.592C32.142 91.72 36 82.409 36 72.7V58Z" stroke="#667085" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M54 106C55.474 111.812 59.438 116 64 116C68.562 116 72.526 111.812 74 106" stroke="#667085" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M58 30V24C58 20.686 60.686 18 64 18C67.314 18 70 20.686 70 24V30" stroke="#667085" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

@@ -5706,9 +5706,13 @@
       }
       setCompatAnnouncements(rows);
     } catch (error) {
-      workspace.rows = [];
+      const fallbackRows =
+        Array.isArray(workspace.rows) && workspace.rows.length
+          ? workspace.rows
+          : getCompatNoticeRows();
+      workspace.rows = fallbackRows;
       workspace.error = String(error?.message || "").trim() || "공지 목록을 불러오지 못했습니다.";
-      setCompatAnnouncements([]);
+      setCompatAnnouncements(fallbackRows);
     } finally {
       workspace.loading = false;
       if (typeof markNotificationSyncNow === "function") {

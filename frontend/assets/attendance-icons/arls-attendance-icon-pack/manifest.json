@@ -1,0 +1,278 @@
+{
+  "name": "ARLS Attendance Icon Pack",
+  "version": "1.0.0",
+  "viewBox": "0 0 24 24",
+  "style": {
+    "fill": "none",
+    "stroke": "currentColor",
+    "strokeWidth": 2.2,
+    "strokeLinecap": "round",
+    "strokeLinejoin": "round"
+  },
+  "icons": [
+    {
+      "file": "svg/absent.svg",
+      "name": "absent",
+      "ko": "미출근",
+      "category": "status"
+    },
+    {
+      "file": "svg/accuracy-target.svg",
+      "name": "accuracy-target",
+      "ko": "위치 정확도",
+      "category": "location"
+    },
+    {
+      "file": "svg/advanced-filter.svg",
+      "name": "advanced-filter",
+      "ko": "고급 필터",
+      "category": "control"
+    },
+    {
+      "file": "svg/attendance-clock.svg",
+      "name": "attendance-clock",
+      "ko": "출퇴근",
+      "category": "navigation"
+    },
+    {
+      "file": "svg/chart-legend.svg",
+      "name": "chart-legend",
+      "ko": "범례",
+      "category": "stats"
+    },
+    {
+      "file": "svg/check-in.svg",
+      "name": "check-in",
+      "ko": "출근",
+      "category": "attendance"
+    },
+    {
+      "file": "svg/check-out.svg",
+      "name": "check-out",
+      "ko": "퇴근",
+      "category": "attendance"
+    },
+    {
+      "file": "svg/chevron-left.svg",
+      "name": "chevron-left",
+      "ko": "이전",
+      "category": "control"
+    },
+    {
+      "file": "svg/chevron-right.svg",
+      "name": "chevron-right",
+      "ko": "다음",
+      "category": "control"
+    },
+    {
+      "file": "svg/clock.svg",
+      "name": "clock",
+      "ko": "시간",
+      "category": "common"
+    },
+    {
+      "file": "svg/close.svg",
+      "name": "close",
+      "ko": "닫기",
+      "category": "control"
+    },
+    {
+      "file": "svg/correction-edit.svg",
+      "name": "correction-edit",
+      "ko": "정정",
+      "category": "status"
+    },
+    {
+      "file": "svg/correction-pending.svg",
+      "name": "correction-pending",
+      "ko": "정정 대기",
+      "category": "status"
+    },
+    {
+      "file": "svg/csv-download.svg",
+      "name": "csv-download",
+      "ko": "CSV 다운로드",
+      "category": "download"
+    },
+    {
+      "file": "svg/date-day.svg",
+      "name": "date-day",
+      "ko": "날짜별",
+      "category": "navigation"
+    },
+    {
+      "file": "svg/detail-panel.svg",
+      "name": "detail-panel",
+      "ko": "상세 패널",
+      "category": "layout"
+    },
+    {
+      "file": "svg/device-meta.svg",
+      "name": "device-meta",
+      "ko": "디바이스 메타",
+      "category": "request"
+    },
+    {
+      "file": "svg/distance-route.svg",
+      "name": "distance-route",
+      "ko": "거리",
+      "category": "location"
+    },
+    {
+      "file": "svg/early-leave.svg",
+      "name": "early-leave",
+      "ko": "조퇴",
+      "category": "status"
+    },
+    {
+      "file": "svg/employee.svg",
+      "name": "employee",
+      "ko": "직원",
+      "category": "people"
+    },
+    {
+      "file": "svg/employees.svg",
+      "name": "employees",
+      "ko": "근무 대상",
+      "category": "people"
+    },
+    {
+      "file": "svg/exception-alert.svg",
+      "name": "exception-alert",
+      "ko": "예외 확인",
+      "category": "status"
+    },
+    {
+      "file": "svg/export-download.svg",
+      "name": "export-download",
+      "ko": "내보내기",
+      "category": "action"
+    },
+    {
+      "file": "svg/filter.svg",
+      "name": "filter",
+      "ko": "필터",
+      "category": "control"
+    },
+    {
+      "file": "svg/geofence.svg",
+      "name": "geofence",
+      "ko": "지오펜스/반경",
+      "category": "location"
+    },
+    {
+      "file": "svg/image-download.svg",
+      "name": "image-download",
+      "ko": "차트 이미지 다운로드",
+      "category": "download"
+    },
+    {
+      "file": "svg/late.svg",
+      "name": "late",
+      "ko": "지각",
+      "category": "status"
+    },
+    {
+      "file": "svg/map.svg",
+      "name": "map",
+      "ko": "지도",
+      "category": "location"
+    },
+    {
+      "file": "svg/missing-checkout.svg",
+      "name": "missing-checkout",
+      "ko": "미퇴근",
+      "category": "status"
+    },
+    {
+      "file": "svg/on-time.svg",
+      "name": "on-time",
+      "ko": "정상",
+      "category": "status"
+    },
+    {
+      "file": "svg/period-calendar.svg",
+      "name": "period-calendar",
+      "ko": "기간별 캘린더",
+      "category": "navigation"
+    },
+    {
+      "file": "svg/period-list.svg",
+      "name": "period-list",
+      "ko": "기간별 리스트",
+      "category": "navigation"
+    },
+    {
+      "file": "svg/permission-info.svg",
+      "name": "permission-info",
+      "ko": "권한 안내",
+      "category": "system"
+    },
+    {
+      "file": "svg/photo-attachment.svg",
+      "name": "photo-attachment",
+      "ko": "첨부 사진",
+      "category": "request"
+    },
+    {
+      "file": "svg/refresh.svg",
+      "name": "refresh",
+      "ko": "새로고침",
+      "category": "action"
+    },
+    {
+      "file": "svg/request-approval.svg",
+      "name": "request-approval",
+      "ko": "요청·승인",
+      "category": "action"
+    },
+    {
+      "file": "svg/schedule.svg",
+      "name": "schedule",
+      "ko": "스케줄",
+      "category": "attendance"
+    },
+    {
+      "file": "svg/search.svg",
+      "name": "search",
+      "ko": "조회/검색",
+      "category": "control"
+    },
+    {
+      "file": "svg/sort.svg",
+      "name": "sort",
+      "ko": "정렬",
+      "category": "control"
+    },
+    {
+      "file": "svg/stats-line.svg",
+      "name": "stats-line",
+      "ko": "통계",
+      "category": "navigation"
+    },
+    {
+      "file": "svg/status-dot.svg",
+      "name": "status-dot",
+      "ko": "상태 점",
+      "category": "status"
+    },
+    {
+      "file": "svg/timeline.svg",
+      "name": "timeline",
+      "ko": "타임라인",
+      "category": "layout"
+    },
+    {
+      "file": "svg/vacation.svg",
+      "name": "vacation",
+      "ko": "휴가",
+      "category": "status"
+    },
+    {
+      "file": "svg/workplace-pin.svg",
+      "name": "workplace-pin",
+      "ko": "근무지",
+      "category": "location"
+    }
+  ]
+}

@@ -79,7 +79,7 @@
     />
     <link
       rel="stylesheet"
-      href="css/styles.css?v=20260426-home-hq-compact-fit-03"
+      href="css/styles.css?v=20260428-finance-intro-entry-01"
     />
     <link
       rel="stylesheet"
@@ -3313,6 +3313,10 @@
             <div class="workspace-head attendance-workspace-head">
               <div class="workspace-head-main">
                 <h2>출퇴근</h2>
+                <p
+                  id="attendanceWorkspaceSubtitle"
+                  class="muted attendance-workspace-subtitle hidden"
+                ></p>
               </div>
               <div class="workspace-head-actions">
                 <button
@@ -3321,7 +3325,12 @@
                   data-action="attendance-go-correction"
                   id="attendanceCorrectionBtn"
                 >
-                  요청·승인
+                  <span class="attendance-button-icon" aria-hidden="true">
+                    <svg class="arls-attendance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                      <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-request-approval"></use>
+                    </svg>
+                  </span>
+                  <span>요청·승인</span>
                 </button>
                 <button
                   class="btn btn-secondary"
@@ -3329,14 +3338,24 @@
                   data-action="attendance-export-records"
                   id="attendanceExportBtn"
                 >
-                  내보내기
+                  <span class="attendance-button-icon" aria-hidden="true">
+                    <svg class="arls-attendance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                      <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-export-download"></use>
+                    </svg>
+                  </span>
+                  <span>내보내기</span>
                 </button>
                 <button
                   class="btn btn-secondary"
                   type="button"
                   data-action="attendance-refresh"
                 >
-                  새로고침
+                  <span class="attendance-button-icon" aria-hidden="true">
+                    <svg class="arls-attendance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                      <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-refresh"></use>
+                    </svg>
+                  </span>
+                  <span>새로고침</span>
                 </button>
               </div>
             </div>
@@ -3344,6 +3363,28 @@
               id="attendanceViewPermissionHint"
               class="muted permission-hint hidden"
             ></p>
+            <section
+              id="attendanceManagerInfoBar"
+              class="attendance-manager-info-bar hidden"
+              aria-live="polite"
+            >
+              <div class="attendance-manager-info-copy">
+                <span class="attendance-manager-info-icon" aria-hidden="true">
+                  <svg class="arls-attendance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                    <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-permission-info"></use>
+                  </svg>
+                </span>
+                <span id="attendanceManagerInfoText"
+                  >관리자 권한으로 조회 전체의 출퇴근 기록, 예외, 설정 대기 건을 확인할 수 있습니다.</span
+                >
+              </div>
+              <div class="attendance-manager-info-side">
+                <span class="attendance-manager-info-side-label">권한 안내</span>
+                <span class="attendance-manager-info-side-status"
+                  >설정 대기 <strong id="attendanceManagerPendingCount">0건</strong></span
+                >
+              </div>
+            </section>
             <section id="attendanceManagerShell" class="stack hidden">
               <section
                 id="attendanceShellTopCard"
@@ -3360,10 +3401,8 @@
                     data-section="daily"
                   >
                     <span class="attendance-tab-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" focusable="false">
-                        <path
-                          d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
-                        ></path>
+                      <svg class="arls-attendance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                        <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-date-day"></use>
                       </svg>
                     </span>
                     <span>날짜별</span>
@@ -3375,10 +3414,8 @@
                     data-section="period"
                   >
                     <span class="attendance-tab-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" focusable="false">
-                        <path
-                          d="M6 7h12M6 12h12M6 17h8"
-                        ></path>
+                      <svg class="arls-attendance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                        <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-period-list"></use>
                       </svg>
                     </span>
                     <span>기간별</span>
@@ -3390,10 +3427,8 @@
                     data-section="stats"
                   >
                     <span class="attendance-tab-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" focusable="false">
-                        <path
-                          d="M5 19V9M12 19V5M19 19v-7"
-                        ></path>
+                      <svg class="arls-attendance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                        <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-stats-line"></use>
                       </svg>
                     </span>
                     <span>통계</span>
@@ -3418,12 +3453,30 @@
                         id="attendanceToolbarStatusFields"
                         class="attendance-ops-toolbar-group attendance-toolbar-view attendance-toolbar-daily"
                       >
-                        <label
-                          class="input-field attendance-ops-field attendance-ops-field-date"
-                        >
-                          <span>날짜</span>
-                          <input id="attendanceStatusDateInput" type="date" />
-                        </label>
+                        <div class="attendance-date-control">
+                          <button
+                            id="attendanceStatusDateDisplay"
+                            class="btn btn-secondary attendance-date-display"
+                            type="button"
+                            data-action="attendance-open-date-picker"
+                            aria-label="날짜 선택"
+                          >
+                            <span id="attendanceStatusDateDisplayText">-</span>
+                            <span
+                              class="attendance-date-display-icon"
+                              aria-hidden="true"
+                            >
+                              <svg class="arls-attendance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                                <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-date-day"></use>
+                              </svg>
+                            </span>
+                          </button>
+                          <input
+                            id="attendanceStatusDateInput"
+                            class="attendance-date-native-input"
+                            type="date"
+                          />
+                        </div>
                         <div class="attendance-month-nav">
                           <button
                             class="btn btn-secondary attendance-nav-minimal"
@@ -3432,7 +3485,9 @@
                             data-direction="-1"
                             aria-label="이전 날짜"
                           >
-                            &lt;
+                            <svg class="arls-attendance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+                              <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-chevron-left"></use>
+                            </svg>
                           </button>
                           <button
                             class="btn btn-secondary attendance-nav-minimal"
@@ -3441,7 +3496,9 @@
                             data-direction="1"
                             aria-label="다음 날짜"
                           >
-                            &gt;
+                            <svg class="arls-attendance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+                              <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-chevron-right"></use>
+                            </svg>
                           </button>
                         </div>
                       </div>
@@ -3462,7 +3519,10 @@
                             data-action="attendance-switch-period-mode"
                             data-mode="list"
                           >
-                            리스트
+                            <svg class="arls-attendance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+                              <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-period-list"></use>
+                            </svg>
+                            <span>리스트</span>
                           </button>
                           <button
                             class="btn btn-secondary attendance-inline-mode-tab"
@@ -3470,7 +3530,10 @@
                             data-action="attendance-switch-period-mode"
                             data-mode="calendar"
                           >
-                            캘린더
+                            <svg class="arls-attendance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+                              <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-period-calendar"></use>
+                            </svg>
+                            <span>캘린더</span>
                           </button>
                         </div>
                         <div
@@ -3508,7 +3571,9 @@
                               data-direction="-1"
                               aria-label="이전 월"
                             >
-                              &lt;
+                              <svg class="arls-attendance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+                                <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-chevron-left"></use>
+                              </svg>
                             </button>
                             <button
                               class="btn btn-secondary attendance-nav-minimal"
@@ -3517,7 +3582,9 @@
                               data-direction="1"
                               aria-label="다음 월"
                             >
-                              &gt;
+                              <svg class="arls-attendance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+                                <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-chevron-right"></use>
+                              </svg>
                             </button>
                           </div>
                         </div>
@@ -3545,6 +3612,12 @@
                       <div
                         class="attendance-ops-toolbar-group attendance-ops-toolbar-filters attendance-ops-toolbar-shared"
                       >
+                        <div
+                          id="attendanceDailyStatusChips"
+                          class="attendance-daily-status-chips"
+                          role="tablist"
+                          aria-label="출퇴근 상태 빠른 필터"
+                        ></div>
                         <label class="input-field attendance-ops-field">
                           <span>상태</span>
                           <select id="attendanceStatusSelect">
@@ -3565,7 +3638,10 @@
                           data-action="attendance-open-advanced-filter"
                           aria-haspopup="dialog"
                         >
-                          필터
+                          <svg class="arls-attendance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+                            <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-advanced-filter"></use>
+                          </svg>
+                          <span>고급 필터</span>
                         </button>
                       </div>
                     </section>
@@ -3956,7 +4032,7 @@
               >
                 <div class="approval-head attendance-grid-head">
                   <div class="requests-heading-block">
-                    <h3>기간별 캘린더</h3>
+                    <h3>기간별</h3>
                   </div>
                   <div class="attendance-grid-head-actions">
                     <p
@@ -4272,16 +4348,11 @@
                     >
                       <span aria-hidden="true">←</span>
                     </button>
-                    <button
-                      class="btn btn-secondary schedule-month-trigger"
-                      type="button"
-                      data-action="schedule-jump-today"
-                      aria-label="오늘 날짜로 이동"
-                    >
+                    <div class="schedule-month-trigger schedule-month-label">
                       <span id="scheduleMonthTitle" class="schedule-month-title"
                         >월간 일정</span
                       >
-                    </button>
+                    </div>
                     <button
                       class="btn btn-secondary btn-icon schedule-nav-arrow"
                       type="button"
@@ -4289,6 +4360,15 @@
                       aria-label="다음 달 스케줄 보기"
                     >
                       <span aria-hidden="true">→</span>
+                    </button>
+                    <button
+                      class="btn btn-secondary schedule-today-button"
+                      type="button"
+                      data-action="schedule-jump-today"
+                      aria-label="오늘 날짜로 이동"
+                    >
+                      <span class="schedule-today-icon" aria-hidden="true"></span>
+                      <span>오늘</span>
                     </button>
                     <span
                       id="scheduleMonthNavStatus"
@@ -4361,7 +4441,7 @@
                     aria-pressed="false"
                   >
                     <span class="schedule-simple-toggle-box" aria-hidden="true"></span>
-                    <span>간단 표기</span>
+                    <span>간단 보기</span>
                   </button>
                 </div>
               </div>
@@ -4405,81 +4485,86 @@
                 <input id="scheduleExportCompany" />
                 <input id="scheduleExportSite" />
               </div>
-              <article class="module-card stack schedule-calendar-surface">
-                <div
-                  id="scheduleCalendarGrid"
-                  class="schedule-calendar-grid"
-                  aria-live="polite"
-                  aria-busy="false"
-                ></div>
-              </article>
-            </div>
-
-            <div
-              id="scheduleDesktopDrawerBackdrop"
-              class="schedule-detail-drawer-backdrop hidden"
-              data-action="schedule-close-drawer"
-            ></div>
-            <aside
-              id="scheduleDesktopDrawer"
-              class="schedule-detail-drawer hidden"
-              aria-hidden="true"
-            >
-              <div class="schedule-detail-drawer-head">
-                <div class="schedule-detail-drawer-title">
-                  <span class="schedule-detail-drawer-eyebrow">날짜 요약</span>
-                  <h3 id="scheduleDetailTitle">선택 날짜 상세</h3>
-                  <p id="scheduleDetailSummary" class="muted">
-                    날짜를 고르면 배정과 근무 정보를 바로 확인할 수 있습니다.
-                  </p>
-                </div>
-                <div class="schedule-detail-drawer-head-actions">
-                  <span
-                    id="scheduleDetailDateBadge"
-                    class="status-pill status-pill-warn"
-                    >날짜 선택</span
-                  >
-                  <button
-                    class="icon-btn"
-                    type="button"
-                    data-action="schedule-close-drawer"
-                    aria-label="상세 닫기"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-              <div class="schedule-detail-drawer-body">
-                <div
-                  id="scheduleDetailStats"
-                  class="schedule-detail-stats"
-                ></div>
-                <section class="schedule-detail-section">
-                  <div class="approval-head">
-                    <h3>배정 현황</h3>
-                  </div>
-                  <ul id="scheduleDetailList" class="list"></ul>
-                </section>
-                <section class="schedule-detail-section">
-                  <div class="approval-head">
-                    <h3>근무 정보</h3>
-                    <span
-                      id="scheduleBreakPolicyPill"
-                      class="status-pill status-pill-warn"
-                      >날짜 선택</span
-                    >
-                  </div>
-                  <p id="scheduleBreakSummary" class="muted">
-                    날짜를 선택하면 해당 일자의 근무 정보와 휴가 상태를 함께
-                    보여줍니다.
-                  </p>
-                </section>
-              </div>
               <div
-                id="scheduleDetailActions"
-                class="schedule-detail-actions hidden"
-              ></div>
-            </aside>
+                id="scheduleCalendarWorkspace"
+                class="schedule-calendar-workspace"
+              >
+                <article class="module-card stack schedule-calendar-surface">
+                  <div
+                    id="scheduleCalendarGrid"
+                    class="schedule-calendar-grid"
+                    aria-live="polite"
+                    aria-busy="false"
+                  ></div>
+                </article>
+                <div
+                  id="scheduleDesktopDrawerBackdrop"
+                  class="schedule-detail-drawer-backdrop hidden"
+                  data-action="schedule-close-drawer"
+                ></div>
+                <aside
+                  id="scheduleDesktopDrawer"
+                  class="schedule-detail-drawer hidden"
+                  aria-hidden="true"
+                  inert
+                >
+                  <div class="schedule-detail-drawer-head">
+                    <div class="schedule-detail-drawer-title">
+                      <span class="schedule-detail-drawer-eyebrow">날짜 요약</span>
+                      <h3 id="scheduleDetailTitle">선택 날짜 상세</h3>
+                      <p id="scheduleDetailSummary" class="muted">
+                        날짜를 고르면 배정과 근무 정보를 바로 확인할 수 있습니다.
+                      </p>
+                    </div>
+                    <div class="schedule-detail-drawer-head-actions">
+                      <span
+                        id="scheduleDetailDateBadge"
+                        class="status-pill status-pill-warn"
+                        >날짜 선택</span
+                      >
+                      <button
+                        class="icon-btn"
+                        type="button"
+                        data-action="schedule-close-drawer"
+                        aria-label="상세 닫기"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                  <div class="schedule-detail-drawer-body">
+                    <div
+                      id="scheduleDetailStats"
+                      class="schedule-detail-stats"
+                    ></div>
+                    <section class="schedule-detail-section">
+                      <div class="approval-head">
+                        <h3>배정 현황</h3>
+                      </div>
+                      <ul id="scheduleDetailList" class="list"></ul>
+                    </section>
+                    <section class="schedule-detail-section">
+                      <div class="approval-head">
+                        <h3>근무 정보</h3>
+                        <span
+                          id="scheduleBreakPolicyPill"
+                          class="status-pill status-pill-warn"
+                          >날짜 선택</span
+                        >
+                      </div>
+                      <p id="scheduleBreakSummary" class="muted">
+                        날짜를 선택하면 해당 일자의 근무 정보와 휴가 상태를 함께
+                        보여줍니다.
+                      </p>
+                    </section>
+                  </div>
+                  <div
+                    id="scheduleDetailActions"
+                    class="schedule-detail-actions hidden"
+                  ></div>
+                </aside>
+              </div>
+            </div>
 
               <div
                 id="scheduleUploadPanel"
@@ -5543,7 +5628,7 @@
                       class="btn btn-primary"
                       type="button"
                       data-action="drawer-open-route"
-                      data-route="/reports?tab=finance"
+                      data-route="/reports/finance-download"
                     >
                       보고 열기
                     </button>
@@ -5556,31 +5641,89 @@
               id="scheduleTemplatePanel"
               class="stack hidden schedule-tab-panel schedule-template-surface"
             >
-              <div class="approval-head">
-                <div>
-                  <h3>근무 템플릿</h3>
-                </div>
-                <div class="quick-actions">
-                  <button
-                    class="btn btn-secondary"
-                    type="button"
-                    data-action="schedule-template-refresh"
+              <div
+                id="scheduleTemplateSummaryCards"
+                class="schedule-template-summary-grid"
+                aria-label="근무 템플릿 요약"
+              ></div>
+              <section
+                id="scheduleTemplateTemplatesSection"
+                class="schedule-template-owner-panel"
+              >
+                <div class="schedule-template-toolbar">
+                  <label
+                    class="schedule-template-search-field"
+                    for="scheduleTemplateSearchInput"
                   >
-                    새로고침
-                  </button>
+                    <span class="sr-only">템플릿명 검색</span>
+                    <input
+                      id="scheduleTemplateSearchInput"
+                      type="search"
+                      placeholder="템플릿명 검색"
+                      autocomplete="off"
+                    />
+                    <span class="schedule-template-search-icon" aria-hidden="true">
+                      <svg viewBox="0 0 20 20" focusable="false">
+                        <circle cx="9" cy="9" r="5.6"></circle>
+                        <path d="M13.2 13.2 17 17"></path>
+                      </svg>
+                    </span>
+                  </label>
+                  <div
+                    id="scheduleTemplateFilterGroup"
+                    class="schedule-template-filter-group"
+                    role="tablist"
+                    aria-label="템플릿 구분 필터"
+                  >
+                    <button
+                      class="schedule-template-filter-btn is-active"
+                      type="button"
+                      role="tab"
+                      aria-selected="true"
+                      data-action="schedule-template-filter"
+                      data-filter="all"
+                    >
+                      전체
+                    </button>
+                    <button
+                      class="schedule-template-filter-btn"
+                      type="button"
+                      role="tab"
+                      aria-selected="false"
+                      data-action="schedule-template-filter"
+                      data-filter="day"
+                    >
+                      주간
+                    </button>
+                    <button
+                      class="schedule-template-filter-btn"
+                      type="button"
+                      role="tab"
+                      aria-selected="false"
+                      data-action="schedule-template-filter"
+                      data-filter="night"
+                    >
+                      야간
+                    </button>
+                    <button
+                      class="schedule-template-filter-btn"
+                      type="button"
+                      role="tab"
+                      aria-selected="false"
+                      data-action="schedule-template-filter"
+                      data-filter="overtime"
+                    >
+                      초과
+                    </button>
+                  </div>
                   <button
-                    class="btn btn-primary"
+                    class="btn btn-primary schedule-template-create-btn"
                     type="button"
                     data-action="schedule-template-create"
                   >
                     템플릿 생성
                   </button>
                 </div>
-              </div>
-              <section
-                id="scheduleTemplateTemplatesSection"
-                class="schedule-template-owner-panel"
-              >
                 <p id="scheduleTemplateStatus" class="muted hidden">
                   근무 템플릿 목록을 불러오는 중입니다.
                 </p>
@@ -8007,78 +8150,367 @@
               class="reports-finance-download-panel hidden"
               data-reports-panel="finance-download"
             >
-              <div class="reports-finance-download-header">
-                <div class="reports-finance-download-copy">
-                  <div class="reports-finance-download-title-row">
-                    <div>
-                      <h3>Finance 다운로드</h3>
+              <header class="finance-download-page-head">
+                <h2>Finance 다운로드</h2>
+                <p>
+                  Supervisor가 업로드한 지점별 근무표 파일을 확인하고 HQ에서
+                  다운로드할 수 있습니다.
+                </p>
+              </header>
+
+              <div
+                id="financeDownloadIntroView"
+                class="finance-download-intro-view"
+              >
+                <section
+                  class="finance-download-intro-hero"
+                  aria-label="Finance 다운로드 시작"
+                >
+                  <div class="finance-download-intro-hero__copy">
+                    <h3>Finance 다운로드를 시작해보세요</h3>
+                    <p>
+                      지점별 업로드 상태를 확인하고,<br />
+                      최신 근무표 파일을 HQ에서 다운로드할 수 있습니다.
+                    </p>
+                    <button
+                      id="financeDownloadOpenDetailBtn"
+                      class="btn btn-primary finance-download-open-btn"
+                      type="button"
+                      data-action="reports-finance-download-open-detail"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M12 4v10" />
+                        <path d="m8 10 4 4 4-4" />
+                        <path d="M5 19h14" />
+                      </svg>
+                      Finance 다운로드 열기
+                    </button>
+                  </div>
+                  <div
+                    class="finance-download-intro-illustration"
+                    aria-hidden="true"
+                  >
+                    <span class="finance-intro-doc">
+                      <span></span><span></span><span></span>
+                    </span>
+                    <span class="finance-intro-excel">X</span>
+                    <span class="finance-intro-download">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 4v12" />
+                        <path d="m7 11 5 5 5-5" />
+                      </svg>
+                    </span>
+                    <span class="finance-intro-calendar">
+                      <span></span><span></span><span></span><span></span>
+                    </span>
+                    <span class="finance-intro-user"></span>
+                  </div>
+                </section>
+
+                <section
+                  class="finance-download-intro-grid"
+                  aria-label="Finance 다운로드 요약"
+                >
+                  <article class="finance-download-intro-card finance-download-precheck-card">
+                    <header>
+                      <span class="finance-download-intro-icon is-list">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <path d="M8 6h12" />
+                          <path d="M8 12h12" />
+                          <path d="M8 18h12" />
+                          <path d="m3 6 1 1 2-2" />
+                          <path d="m3 12 1 1 2-2" />
+                          <path d="m3 18 1 1 2-2" />
+                        </svg>
+                      </span>
+                      <h3>다운로드 전 확인</h3>
+                    </header>
+                    <dl class="finance-download-precheck-list">
+                      <div>
+                        <dt>대상 월</dt>
+                        <dd id="financeDownloadIntroMonth">-</dd>
+                      </div>
+                      <div>
+                        <dt>다운로드 가능 지점</dt>
+                        <dd id="financeDownloadIntroDownloadable">-</dd>
+                      </div>
+                      <div>
+                        <dt>권한</dt>
+                        <dd id="financeDownloadIntroPermission">-</dd>
+                      </div>
+                      <div>
+                        <dt>마지막 확인</dt>
+                        <dd id="financeDownloadIntroCheckedAt">-</dd>
+                      </div>
+                    </dl>
+                  </article>
+
+                  <article class="finance-download-intro-card finance-download-recent-card">
+                    <header>
+                      <span class="finance-download-intro-icon is-clock">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <circle cx="12" cy="12" r="8" />
+                          <path d="M12 7v5l3 2" />
+                        </svg>
+                      </span>
+                      <h3>최근 업로드</h3>
+                    </header>
+                    <div class="finance-download-recent-table-wrap">
+                      <table class="finance-download-recent-table">
+                        <thead>
+                          <tr>
+                            <th>업로드 일시</th>
+                            <th>지점명</th>
+                            <th>결과</th>
+                          </tr>
+                        </thead>
+                        <tbody id="financeDownloadIntroRecentBody">
+                          <tr>
+                            <td colspan="3">최근 업로드를 불러오는 중입니다.</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
+                  </article>
+
+                  <article class="finance-download-intro-card finance-download-availability-card">
+                    <header>
+                      <span class="finance-download-intro-icon is-download">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <path d="M12 4v10" />
+                          <path d="m8 10 4 4 4-4" />
+                          <path d="M5 19h14" />
+                        </svg>
+                      </span>
+                      <h3>다운로드 가능 상태</h3>
+                    </header>
+                    <div class="finance-download-status-stack">
+                      <div>
+                        <span>정상 업로드</span>
+                        <strong id="financeDownloadIntroNormal">-</strong>
+                      </div>
+                      <div>
+                        <span>재업로드 필요</span>
+                        <strong id="financeDownloadIntroStale">-</strong>
+                      </div>
+                      <div>
+                        <span>미업로드</span>
+                        <strong id="financeDownloadIntroMissing">-</strong>
+                      </div>
+                    </div>
+                    <p>업로드 상태를 기준으로 HQ 다운로드 가능 여부를 판단합니다.</p>
+                  </article>
+                </section>
+
+                <section class="finance-download-intro-guide" aria-label="다운로드 안내">
+                  <div class="finance-download-guide__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z" />
+                      <path d="m8.8 12 2.1 2.1 4.4-5" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3>다운로드 안내</h3>
+                    <p>
+                      최신 업로드 파일만 HQ에서 다운로드할 수 있습니다.<br />
+                      재업로드 필요 상태는 최신본 확인 후 다시 업로드해야 합니다.
+                    </p>
+                  </div>
+                  <button class="btn btn-secondary" type="button">
+                    가이드 보기
+                    <span aria-hidden="true">↗</span>
+                  </button>
+                </section>
+              </div>
+
+              <div
+                id="financeDownloadDetailView"
+                class="finance-download-detail-view hidden"
+              >
+              <section class="finance-download-hero" aria-label="Finance 다운로드 안내">
+                <div class="finance-download-hero__copy">
+                  <h3>월별 업로드 현황을 한눈에 확인하세요</h3>
+                  <p>
+                    지점별 업로드 상태와 최신 파일을 빠르게 확인하고 관리할
+                    수 있습니다.
+                  </p>
+                </div>
+                <div class="finance-download-hero__aside">
+                  <div class="finance-download-month-card">
+                    <span>대상 월</span>
+                    <div
+                      id="financeDownloadHeaderContextMount"
+                      class="reports-finance-download-context"
+                    ></div>
+                    <span
+                      id="financeDownloadMonthDisplay"
+                      class="finance-download-month-display"
+                      aria-hidden="true"
+                      >-</span
+                    >
+                  </div>
+                  <div class="finance-download-illustration" aria-hidden="true">
+                    <span class="finance-illus-card finance-illus-card--file">
+                      <span class="finance-illus-x">X</span>
+                    </span>
+                    <span class="finance-illus-upload">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 17V7" />
+                        <path d="M8 11l4-4 4 4" />
+                        <path d="M5 19h14" />
+                      </svg>
+                    </span>
+                    <span class="finance-illus-card finance-illus-card--sheet">
+                      <span></span><span></span><span></span>
+                    </span>
+                    <span class="finance-illus-user"></span>
                   </div>
                 </div>
-                <div class="reports-finance-download-actions">
-                  <div
-                    id="financeDownloadHeaderContextMount"
-                    class="reports-finance-download-context"
-                  ></div>
-                  <button
-                    class="btn btn-primary"
-                    type="button"
-                    id="financeDownloadPrimaryBtn"
-                    data-action="reports-finance-download-run"
-                  >
-                    다운로드
-                  </button>
+              </section>
+
+              <section class="finance-download-metrics" aria-label="Finance 다운로드 요약">
+                <article class="finance-download-metric-card is-uploaded">
+                  <div class="finance-download-metric-icon">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M12 4v11" />
+                      <path d="M8 8l4-4 4 4" />
+                      <path d="M5 18h14" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span>업로드 완료</span>
+                    <strong id="financeDownloadMetricUploaded">-</strong>
+                    <small id="financeDownloadMetricUploadedRate">-</small>
+                  </div>
+                </article>
+                <article class="finance-download-metric-card is-missing">
+                  <div class="finance-download-metric-icon">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M7 17a4 4 0 0 1 .5-7.97A5 5 0 0 1 17 10.5a3.5 3.5 0 0 1-.5 6.96" />
+                      <path d="M12 13v6" />
+                      <path d="M9.5 16.5 12 19l2.5-2.5" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span>미업로드</span>
+                    <strong id="financeDownloadMetricMissing">-</strong>
+                    <small id="financeDownloadMetricMissingRate">-</small>
+                  </div>
+                </article>
+                <article class="finance-download-metric-card is-stale">
+                  <div class="finance-download-metric-icon">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M18 8a7 7 0 1 0 1 7" />
+                      <path d="M18 4v4h-4" />
+                      <path d="M12 8v5l3 2" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span>재업로드 필요</span>
+                    <strong id="financeDownloadMetricStale">-</strong>
+                    <small id="financeDownloadMetricStaleRate">-</small>
+                  </div>
+                </article>
+              </section>
+
+              <section class="finance-download-table-card" aria-label="지점별 업로드 현황">
+                <div class="finance-download-table-head">
+                  <h3>지점별 업로드 현황</h3>
+                  <div class="finance-download-table-controls">
+                    <label class="finance-download-search">
+                      <span class="sr-only">지점명 검색</span>
+                      <input
+                        id="financeDownloadSearchInput"
+                        type="search"
+                        placeholder="지점명 검색"
+                      />
+                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <circle cx="11" cy="11" r="6" />
+                        <path d="M16 16l4 4" />
+                      </svg>
+                    </label>
+                    <label class="finance-download-filter">
+                      <span class="sr-only">상태 필터</span>
+                      <select id="financeDownloadStatusFilter">
+                        <option value="all">상태 전체</option>
+                        <option value="uploaded">업로드 완료</option>
+                        <option value="missing">미업로드</option>
+                        <option value="stale">재업로드 필요</option>
+                      </select>
+                    </label>
+                  </div>
                 </div>
-              </div>
-              <div
-                class="reports-finance-inline-meta reports-finance-download-meta"
-              >
-                <p id="financeDownloadSummary" class="muted">
-                  지점별 업로드 현황을 불러오는 중입니다.
-                </p>
-                <p id="financeDownloadSelectionHint" class="muted">
-                  업로드 완료된 지점을 선택하면 원본 파일 다운로드가
-                  활성화됩니다.
-                </p>
-              </div>
-              <div class="table-wrap reports-finance-download-table-wrap">
-                <table class="admin-table reports-finance-download-table">
-                  <thead>
-                    <tr>
-                      <th>지점명</th>
-                      <th>업로드 여부</th>
-                      <th>상태</th>
-                      <th>최종 업로드 일시</th>
-                      <th>보고자</th>
-                      <th>다운로드</th>
-                      <th>비고</th>
-                    </tr>
-                  </thead>
-                  <tbody id="financeDownloadTableBody">
-                    <tr class="admin-table-empty-row">
-                      <td colspan="7">
-                        지점별 업로드 현황을 불러오는 중입니다.
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div
-                id="financeDownloadPager"
-                class="arls-upload-wizard__pager reports-finance-pager hidden"
-                aria-label="Finance 다운로드 지점 페이지"
-              >
-                <div class="arls-upload-wizard__pager-summary">
-                  <strong id="financeDownloadPagerSummary">1페이지</strong>
-                  <span id="financeDownloadPagerRange"
-                    >표시할 지점이 없습니다.</span
-                  >
+                <div class="table-wrap reports-finance-download-table-wrap">
+                  <table class="admin-table reports-finance-download-table">
+                    <thead>
+                      <tr>
+                        <th class="finance-download-star-col"></th>
+                        <th>지점명</th>
+                        <th>업로드 여부</th>
+                        <th>상태</th>
+                        <th>최종 업로드 일시</th>
+                        <th>보고자</th>
+                        <th>파일</th>
+                        <th>다운로드</th>
+                        <th>비고</th>
+                        <th class="finance-download-menu-col"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="financeDownloadTableBody">
+                      <tr class="admin-table-empty-row">
+                        <td colspan="10">
+                          지점별 업로드 현황을 불러오는 중입니다.
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
                 <div
-                  id="financeDownloadPageButtons"
-                  class="arls-upload-wizard__pager-actions"
-                  aria-label="Finance 다운로드 지점 페이지 번호"
-                ></div>
+                  id="financeDownloadPager"
+                  class="arls-upload-wizard__pager reports-finance-pager hidden"
+                  aria-label="Finance 다운로드 지점 페이지"
+                >
+                  <div class="arls-upload-wizard__pager-summary">
+                    <strong id="financeDownloadPagerSummary">1페이지</strong>
+                    <span id="financeDownloadPagerRange"
+                      >표시할 지점이 없습니다.</span
+                    >
+                  </div>
+                  <div
+                    id="financeDownloadPageButtons"
+                    class="arls-upload-wizard__pager-actions"
+                    aria-label="Finance 다운로드 지점 페이지 번호"
+                  ></div>
+                  <label class="finance-download-page-size">
+                    <span class="sr-only">페이지당 표시 개수</span>
+                    <select id="financeDownloadPageSizeSelect">
+                      <option value="10">10개씩 보기</option>
+                      <option value="20">20개씩 보기</option>
+                      <option value="50">50개씩 보기</option>
+                    </select>
+                  </label>
+                </div>
+              </section>
+
+              <section class="finance-download-guide" aria-label="다운로드 안내">
+                <div class="finance-download-guide__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z" />
+                    <path d="m8.8 12 2.1 2.1 4.4-5" />
+                  </svg>
+                </div>
+                <div>
+                  <h3>다운로드 안내</h3>
+                  <p>
+                    업로드된 최신 파일만 HQ에서 다운로드할 수 있습니다.
+                    재업로드 필요 상태는 최신본 확인 후 다시 업로드해야 합니다.
+                  </p>
+                </div>
+                <button class="btn btn-secondary" type="button">
+                  가이드 보기
+                  <span aria-hidden="true">↗</span>
+                </button>
+              </section>
               </div>
             </article>
           </section>
@@ -11009,7 +11441,7 @@
     <script src="config.js"></script>
     <script>
       window.__RG_ARLS_ASSET_BUILD_ID__ =
-        window.ENV_BUILD_ID || "20260426-home-hq-compact-fit-03";
+        window.ENV_BUILD_ID || "20260428-finance-intro-entry-01";
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
       window.ENV_BUILD_ID =
@@ -11320,7 +11752,7 @@
 
         window.addEventListener("load", () => {
           navigator.serviceWorker
-            .register("./sw.js?v=20260426-home-hq-compact-fit-03", {
+            .register("./sw.js?v=20260428-finance-intro-entry-01", {
               updateViaCache: "none",
             })
             .then((registration) => {

@@ -1,5 +1,5 @@
 window.ENV_API_BASE = window.ENV_API_BASE || 'https://rg-arls-backend.azurewebsites.net';
-window.ENV_BUILD_ID = window.ENV_BUILD_ID || '20260426-home-hq-compact-fit-03';
+window.ENV_BUILD_ID = window.ENV_BUILD_ID || '20260428-finance-intro-entry-01';
 window.ENV_GOOGLE_MAPS_API_KEY = window.ENV_GOOGLE_MAPS_API_KEY || '';
 window.ENV_KAKAO_JAVASCRIPT_KEY = window.ENV_KAKAO_JAVASCRIPT_KEY || '';
 window.ENV_SENTRIX_APP_BASE_URL = window.ENV_SENTRIX_APP_BASE_URL || 'https://sentrix-wonseo-prod-260402.azurewebsites.net';

@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="arls-attendance-clock" viewBox="0 0 24 24">
+    <title>출퇴근</title>
+    <circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/><path d="M5 4.5 3.5 6"/><path d="M19 4.5 20.5 6"/>
+  </symbol>
+  <symbol id="arls-date-day" viewBox="0 0 24 24">
+    <title>날짜별</title>
+    <rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4"/><path d="M16 3v4"/><path d="M4 10h16"/><path d="M9 15h6"/>
+  </symbol>
+  <symbol id="arls-period-list" viewBox="0 0 24 24">
+    <title>기간별 리스트</title>
+    <path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/>
+  </symbol>
+  <symbol id="arls-period-calendar" viewBox="0 0 24 24">
+    <title>기간별 캘린더</title>
+    <rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M7 2.5v4"/><path d="M17 2.5v4"/><path d="M3 9h18"/><path d="M7.5 13h2"/><path d="M11 13h2"/><path d="M14.5 13h2"/><path d="M7.5 17h2"/><path d="M11 17h2"/>
+  </symbol>
+  <symbol id="arls-stats-line" viewBox="0 0 24 24">
+    <title>통계</title>
+    <path d="M4 19V5"/><path d="M4 19h18"/><path d="M7 15l4-4 3 2 5-7"/><path d="M7 15h.01"/><path d="M11 11h.01"/><path d="M14 13h.01"/><path d="M19 6h.01"/>
+  </symbol>
+  <symbol id="arls-request-approval" viewBox="0 0 24 24">
+    <title>요청·승인</title>
+    <rect x="4" y="3" width="13" height="18" rx="2"/><path d="M8 7h5"/><path d="M8 11h5"/><path d="M8 15h3"/><path d="M15.5 17.5 18 20l4-5"/>
+  </symbol>
+  <symbol id="arls-export-download" viewBox="0 0 24 24">
+    <title>내보내기</title>
+    <path d="M12 3v11"/><path d="m8 10 4 4 4-4"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/>
+  </symbol>
+  <symbol id="arls-refresh" viewBox="0 0 24 24">
+    <title>새로고침</title>
+    <path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M18 9a7 7 0 0 0-11.8-3.2L4 8"/><path d="M6 15a7 7 0 0 0 11.8 3.2L20 16"/>
+  </symbol>
+  <symbol id="arls-permission-info" viewBox="0 0 24 24">
+    <title>권한 안내</title>
+    <circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/>
+  </symbol>
+  <symbol id="arls-filter" viewBox="0 0 24 24">
+    <title>필터</title>
+    <path d="M4 5h16"/><path d="M7 12h10"/><path d="M10 19h4"/>
+  </symbol>
+  <symbol id="arls-advanced-filter" viewBox="0 0 24 24">
+    <title>고급 필터</title>
+    <path d="M4 5h16"/><path d="M7 12h10"/><path d="M10 19h4"/><circle cx="8" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+  </symbol>
+  <symbol id="arls-sort" viewBox="0 0 24 24">
+    <title>정렬</title>
+    <path d="M7 4v16"/><path d="m4 7 3-3 3 3"/><path d="M17 20V4"/><path d="m14 17 3 3 3-3"/>
+  </symbol>
+  <symbol id="arls-employee" viewBox="0 0 24 24">
+    <title>직원</title>
+    <circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/>
+  </symbol>
+  <symbol id="arls-employees" viewBox="0 0 24 24">
+    <title>근무 대상</title>
+    <circle cx="9" cy="8" r="3.5"/><path d="M3.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="10" r="2.5"/><path d="M16.5 15.5a5 5 0 0 1 4.5 4.5"/>
+  </symbol>
+  <symbol id="arls-workplace-pin" viewBox="0 0 24 24">
+    <title>근무지</title>
+    <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>
+  </symbol>
+  <symbol id="arls-schedule" viewBox="0 0 24 24">
+    <title>스케줄</title>
+    <rect x="4" y="4" width="16" height="18" rx="2"/><path d="M8 2.5v4"/><path d="M16 2.5v4"/><path d="M4 9h16"/><path d="M8 14h4"/><path d="M8 18h7"/>
+  </symbol>
+  <symbol id="arls-check-in" viewBox="0 0 24 24">
+    <title>출근</title>
+    <path d="M4 12h11"/><path d="m11 8 4 4-4 4"/><path d="M20 4v16"/><path d="M20 4h-6"/><path d="M20 20h-6"/>
+  </symbol>
+  <symbol id="arls-check-out" viewBox="0 0 24 24">
+    <title>퇴근</title>
+    <path d="M20 12H9"/><path d="m13 8-4 4 4 4"/><path d="M4 4v16"/><path d="M4 4h6"/><path d="M4 20h6"/>
+  </symbol>
+  <symbol id="arls-on-time" viewBox="0 0 24 24">
+    <title>정상</title>
+    <circle cx="12" cy="12" r="9"/><path d="m8 12.5 3 3 5-6"/>
+  </symbol>
+  <symbol id="arls-late" viewBox="0 0 24 24">
+    <title>지각</title>
+    <circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/><path d="M8 3.5 6.5 5"/><path d="M16 3.5 17.5 5"/>
+  </symbol>
+  <symbol id="arls-early-leave" viewBox="0 0 24 24">
+    <title>조퇴</title>
+    <path d="M4 12h12"/><path d="m12 8 4 4-4 4"/><path d="M20 5v14"/><path d="M6 5h8"/><path d="M6 19h8"/>
+  </symbol>
+  <symbol id="arls-absent" viewBox="0 0 24 24">
+    <title>미출근</title>
+    <circle cx="11" cy="8" r="4"/><path d="M4 21a7 7 0 0 1 9.5-6.5"/><path d="M17 17l4 4"/><path d="M21 17l-4 4"/>
+  </symbol>
+  <symbol id="arls-missing-checkout" viewBox="0 0 24 24">
+    <title>미퇴근</title>
+    <circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><path d="M8 16h8"/><path d="M16 16l3 3"/>
+  </symbol>
+  <symbol id="arls-correction-pending" viewBox="0 0 24 24">
+    <title>정정 대기</title>
+    <rect x="5" y="3" width="12" height="18" rx="2"/><path d="M8 7h6"/><path d="M8 11h5"/><path d="M8 15h3"/><path d="M17 15.5h3"/><path d="M18.5 14v3"/>
+  </symbol>
+  <symbol id="arls-correction-edit" viewBox="0 0 24 24">
+    <title>정정</title>
+    <path d="M5 20h4l10-10a2.8 2.8 0 0 0-4-4L5 16v4Z"/><path d="M13.5 7.5l4 4"/><path d="M4 22h16"/>
+  </symbol>
+  <symbol id="arls-vacation" viewBox="0 0 24 24">
+    <title>휴가</title>
+    <path d="M3 20c2.5-1.5 5.5-1.5 8 0s5.5 1.5 8 0"/><path d="M12 19V9"/><path d="M5 10c2.5-4 8.5-4 11 0"/><path d="M12 9c.5-3 2-5 4-6"/><path d="M12 9c-1-2.5-2.5-4-5-5"/>
+  </symbol>
+  <symbol id="arls-exception-alert" viewBox="0 0 24 24">
+    <title>예외 확인</title>
+    <path d="M12 3 22 20H2L12 3Z"/><path d="M12 9v5"/><path d="M12 17h.01"/>
+  </symbol>
+  <symbol id="arls-detail-panel" viewBox="0 0 24 24">
+    <title>상세 패널</title>
+    <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 4v16"/><path d="M6 8h1"/><path d="M6 12h1"/><path d="M13 8h5"/><path d="M13 12h5"/><path d="M13 16h3"/>
+  </symbol>
+  <symbol id="arls-geofence" viewBox="0 0 24 24">
+    <title>지오펜스/반경</title>
+    <circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/>
+  </symbol>
+  <symbol id="arls-distance-route" viewBox="0 0 24 24">
+    <title>거리</title>
+    <circle cx="5" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 6h5a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8"/>
+  </symbol>
+  <symbol id="arls-accuracy-target" viewBox="0 0 24 24">
+    <title>위치 정확도</title>
+    <circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/>
+  </symbol>
+  <symbol id="arls-timeline" viewBox="0 0 24 24">
+    <title>타임라인</title>
+    <path d="M7 4v16"/><circle cx="7" cy="6" r="2"/><circle cx="7" cy="12" r="2"/><circle cx="7" cy="18" r="2"/><path d="M11 6h8"/><path d="M11 12h8"/><path d="M11 18h8"/>
+  </symbol>
+  <symbol id="arls-map" viewBox="0 0 24 24">
+    <title>지도</title>
+    <path d="M9 18 3 21V6l6-3 6 3 6-3v15l-6 3-6-3Z"/><path d="M9 3v15"/><path d="M15 6v15"/>
+  </symbol>
+  <symbol id="arls-photo-attachment" viewBox="0 0 24 24">
+    <title>첨부 사진</title>
+    <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 5l1.5-2h5L16 5"/><circle cx="12" cy="13" r="4"/><path d="M18 9h.01"/>
+  </symbol>
+  <symbol id="arls-device-meta" viewBox="0 0 24 24">
+    <title>디바이스 메타</title>
+    <rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18h4"/><path d="M10 6h4"/>
+  </symbol>
+  <symbol id="arls-csv-download" viewBox="0 0 24 24">
+    <title>CSV 다운로드</title>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/><path d="M8 13h8"/><path d="M8 17h5"/>
+  </symbol>
+  <symbol id="arls-image-download" viewBox="0 0 24 24">
+    <title>차트 이미지 다운로드</title>
+    <rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m4 16 4.5-4.5 3.5 3.5 2-2 3 3"/><path d="M12 20v-6"/><path d="m9 17 3 3 3-3"/>
+  </symbol>
+  <symbol id="arls-chart-legend" viewBox="0 0 24 24">
+    <title>범례</title>
+    <path d="M4 7h.01"/><path d="M8 7h12"/><path d="M4 12h.01"/><path d="M8 12h12"/><path d="M4 17h.01"/><path d="M8 17h12"/>
+  </symbol>
+  <symbol id="arls-clock" viewBox="0 0 24 24">
+    <title>시간</title>
+    <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+  </symbol>
+  <symbol id="arls-chevron-left" viewBox="0 0 24 24">
+    <title>이전</title>
+    <path d="m15 18-6-6 6-6"/>
+  </symbol>
+  <symbol id="arls-chevron-right" viewBox="0 0 24 24">
+    <title>다음</title>
+    <path d="m9 18 6-6-6-6"/>
+  </symbol>
+  <symbol id="arls-close" viewBox="0 0 24 24">
+    <title>닫기</title>
+    <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+  </symbol>
+  <symbol id="arls-search" viewBox="0 0 24 24">
+    <title>조회/검색</title>
+    <circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/>
+  </symbol>
+  <symbol id="arls-status-dot" viewBox="0 0 24 24">
+    <title>상태 점</title>
+    <circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/>
+  </symbol>
+</svg>
