@@ -99159,6 +99159,10 @@ body[data-current-view="leave"] .shell-content {
   width: 100%;
 }
 
+#view-profile #profileReferenceSettingsRoot.profile-reference-signature-active .profile-reference-actions {
+  display: none;
+}
+
 #view-profile .profile-reference-section {
   width: 100%;
   min-width: 0;
@@ -99239,6 +99243,52 @@ body[data-current-view="leave"] .shell-content {
   border: 1px dashed #c8d2df;
   border-radius: 6px;
   background: #fff;
+}
+
+#view-profile .profile-signature-add-card {
+  padding: 0;
+  color: #0f172a;
+  cursor: pointer;
+  font: inherit;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+#view-profile #profileSignatureCard.is-empty .profile-signature-add-card:hover,
+#view-profile #profileSignatureCard.is-empty .profile-signature-add-card:focus-visible {
+  border-color: #ff5a1f;
+  background: #fff8f3;
+  box-shadow: 0 12px 28px rgba(255, 77, 22, 0.1);
+  outline: none;
+}
+
+#view-profile .profile-reference-signature-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #ff4d16;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+#view-profile .profile-signature-add-icon {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 77, 22, 0.3);
+  border-radius: 999px;
+  background: #fff4ee;
+  color: #ff4d16;
+}
+
+#view-profile .profile-signature-add-icon svg {
+  width: 22px;
+  height: 22px;
 }
 
 #view-profile .profile-reference-signature-box .profile-signature-panel {
@@ -99367,6 +99417,63 @@ body[data-current-view="leave"] .shell-content {
 
 #view-profile .profile-reference-signature #profileSignatureStatus:empty {
   display: none;
+}
+
+.modal-sheet.sheet-layout-profile-signature {
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  width: min(760px, calc(100vw - 40px));
+  max-height: min(620px, calc(100vh - 48px));
+  max-height: min(620px, calc(100dvh - 48px));
+  border-radius: 16px;
+  transform: translate(-50%, -50%);
+}
+
+.modal-sheet.sheet-layout-profile-signature.hidden {
+  transform: translate(-50%, calc(-50% + 18px));
+}
+
+.modal-sheet.sheet-layout-profile-signature .sheet-content {
+  overflow: visible;
+}
+
+.modal-sheet.sheet-layout-profile-signature .sheet-actions {
+  justify-content: flex-end;
+}
+
+.profile-signature-modal {
+  display: grid;
+  gap: 14px;
+}
+
+.profile-signature-modal-canvas-wrap {
+  position: relative;
+  height: 260px;
+  overflow: hidden;
+  border: 1px dashed #c8d2df;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.profile-signature-modal-canvas-wrap canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.profile-signature-modal-tools {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.profile-signature-modal-hint {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 #view-profile .btn-outline-orange {
