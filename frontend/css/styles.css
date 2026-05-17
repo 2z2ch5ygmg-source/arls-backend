@@ -101778,3 +101778,78 @@ body[data-current-view="leave"] .shell-content {
     min-height: 84px;
   }
 }
+
+/* 2026-05-17: approval procedure title/empty-state correction */
+#view-hr[data-hr-layout="manage"] .hr-approval-procedure-page-head {
+  display: none !important;
+}
+
+.hr-procedure-summary-card.is-empty .hr-procedure-summary-head {
+  border-bottom: 0;
+}
+
+.hr-procedure-summary-card.is-empty .hr-procedure-flow {
+  min-height: 300px;
+  align-items: center;
+  justify-content: center;
+  padding: 38px 24px 48px;
+}
+
+.hr-procedure-main-empty {
+  min-height: 210px;
+  border: 0;
+  background: transparent;
+  gap: 12px;
+}
+
+.hr-procedure-main-empty-icon {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 999px;
+  background: #fff1ed;
+  color: #ff4f1a;
+}
+
+.hr-procedure-main-empty-icon svg {
+  width: 25px;
+  height: 25px;
+  stroke-width: 1.9;
+}
+
+.hr-procedure-main-empty strong {
+  font-size: 18px;
+  line-height: 26px;
+}
+
+.hr-procedure-config-empty {
+  display: grid;
+  min-height: 150px;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: #64748b;
+  text-align: center;
+}
+
+.hr-procedure-config-empty svg {
+  width: 30px;
+  height: 30px;
+  color: #ff4f1a;
+  stroke-width: 1.8;
+}
+
+.hr-procedure-config-empty strong {
+  color: #0f172a;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 900;
+}
+
+.hr-procedure-config-empty span {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+}
